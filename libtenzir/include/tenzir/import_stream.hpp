@@ -71,6 +71,7 @@ private:
 
 } // namespace detail
 
+// TODO: This is probably not the right abstraction.
 class import_stream {
 public:
   static auto make(caf::scheduled_actor& self, const node_actor& node)
@@ -89,9 +90,8 @@ public:
     return import_stream{self, importer};
   }
 
-  import_stream(caf::scheduled_actor* self,
-                stream_sink_actor<table_slice> sink) {
-    self_state_ = std::make_shared<self_state>();
+  import_stream(caf::scheduled_actor* self, importer_actor importer) {
+    self_state_ = std::make_shared<self_state>(self, std::move(importer));
     source_state_ = std::make_shared<detail::import_source_state>();
     source_ = caf::detail::make_stream_source<detail::import_source_driver>(
       self, source_state_, [self_state = self_state_](caf::error err) {
@@ -107,7 +107,7 @@ public:
         self_state->result = std::move(err);
       });
     // TODO: Use proper name.
-    source_->add_outbound_path(sink,
+    source_->add_outbound_path(self_state_->importer,
                                std::make_tuple(std::string{"import_stream"}));
     for (const auto& plugin : plugins::get<analyzer_plugin>()) {
       // We can safely assert that the analyzer was already initialized. The
@@ -182,11 +182,32 @@ public:
     return {};
   }
 
+  auto flush() -> caf::error {
+    TENZIR_ASSERT_CHEAP(self_state_);
+    auto blocking_self = caf::scoped_actor{self_state_->self->system()};
+    auto error = caf::error{};
+    blocking_self->request(self_state_->importer, caf::infinite, atom::flush_v)
+      .receive(
+        []() {
+          // nop
+        },
+        [&](const caf::error& err) {
+          error = err;
+        });
+    return error;
+  }
+
 private:
   struct self_state {
+    self_state(caf::scheduled_actor* self, importer_actor importer)
+      : self{self}, importer{std::move(importer)} {
+    }
+
     bool observed = false;
     std::optional<caf::error> result;
     std::function<void(caf::error)> callback;
+    caf::scheduled_actor* self;
+    importer_actor importer;
   };
 
   detail::import_source_driver::source_ptr_type source_;
