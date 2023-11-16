@@ -10,7 +10,7 @@ minor or patch releases.
 ## Synopsis
 
 ```
-show <aspect> [options]
+show [<aspect>]
 ```
 
 ## Description
@@ -45,6 +45,8 @@ look at what's going on:
   available from the `/serve` API endpoint.
 - `types`: shows all known types at a remote node.
 
+When no aspect is not specified, all are shown.
+
 ## Examples
 
 Show all available connectors and formats:
@@ -71,4 +73,10 @@ Show the version of a remote node:
 
 ```
 remote show version
+```
+
+Show all aspects of a remote node:
+
+```
+show
 ```
