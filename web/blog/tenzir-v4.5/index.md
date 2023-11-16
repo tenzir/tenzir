@@ -36,19 +36,19 @@ queries by ensuring that only relevant partitions get loaded into memory.
 
 We've now added additional sketches for types `bool`, `time`, `duration`,
 `int64`, `uint64`, and `double` to accelerate a broader range of queries. For
-eaxmple, this query now runs faster:
+example, this query now runs faster:
 
 ```
 export
 | where :time > 1 hour ago && dest_port == 80
 ```
 
-## The API as Operator
+## The Rest API as an Operator
 
-We exposed the API as a new operator called
+We exposed [the Rest API](/api) as a new operator called
 [`api`](/next/operators/sources/api). The benefit primarily materializes for
-developers who can now rapidly prototype integrations by using the app or
-`tenzir` command line tool, without having to do spin up the integrated web
+developers, who can now rapidly prototype integrations by using the app or
+`tenzir` command line tool, without having to spin up the integrated web
 server and do gymnastics with `curl` and `jq`.
 
 For example, to list all pipelines that were created through the API:
@@ -82,14 +82,14 @@ risk.
 ## This & That
 
 - When you deploy a demo node at [app.tenzir.com](https://app.tenzir.com), it
-  now starts up faster, the pre-loaded pipelines come with labels, and have been
-  ported to use the native connector API instead of relying on cURL for setup.
+  now starts up faster, and the pre-loaded pipelines come with labels and have been
+  ported to use the new `api` operator instead of relying on `curl` for setup.
 
 - It is now possible to reference nested records in many operators that wrangle
   data, such as `select`, `extend`, `put`, and `replace`.
 
-  The `summarize` operator now yields a result even if it receives no input
-  (assuming there is no grouping with by). For example, `summarize
+- The `summarize` operator now yields a result even if it receives no input
+  (assuming there is no grouping with `by`). For example, `summarize
   num=count(foo)` returns `{"num": 0}` instead of returning nothing.
 
 - The `import` operator now flushes events to disk automatically before
