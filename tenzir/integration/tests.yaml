@@ -1158,3 +1158,19 @@ tests:
       - command: exec 'from - read json | chart donuttt value=b'
         input: data/json/all-types.json
         expected_result: error
+
+  Yield Operator:
+    tags: [pipelines]
+    steps:
+      - command: exec 'read suricata | yield dns'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | yield dns.foo'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | yield dns.answers'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | yield dns.answers[]'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | yield dns.answers[].ttl'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | yield dns.answers[].soa'
+        input: data/suricata/rrdata-eve.json
