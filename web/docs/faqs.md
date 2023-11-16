@@ -29,7 +29,7 @@ plugins.
 The Tenzir stack also consists of a cloud platform and web app, accessible via
 [app.tenzir.com](https://app.tenzir.com). Both of these components are not
 openly available. The platform is the *control plane* that manages the nodes and
-pipelines, where as the nodes are the *data plane* for compute and storage.
+pipelines, whereas the nodes are the *data plane* for compute and storage.
 
 ## Can Tenzir see my data?
 
