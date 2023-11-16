@@ -1,7 +1,7 @@
 ---
 title: Tenzir v4.5
 authors: [dominiklohmann]
-date: 2023-11-17
+date: 2023-11-16
 tags: [release, operators, expression, index, api, demo-node]
 comments: true
 ---
@@ -40,7 +40,7 @@ eaxmple, this query now runs faster:
 
 ```
 export
-| where :timestamp > 1 hour ago && dest_port == 80
+| where :time > 1 hour ago && dest_port == 80
 ```
 
 ## The API as Operator
@@ -51,16 +51,26 @@ developers who can now rapidly prototype integrations by using the app or
 `tenzir` command line tool, without having to do spin up the integrated web
 server and do gymnastics with `curl` and `jq`.
 
-TODO: provide an example
+For example, to list all pipelines that were created through the API:
 
-## Fine-Grained Operator Block Lists
+```
+api /pipeline/list
+```
 
-We made it easier to disallow potentially unsafe operators. The new
-`tenzir.disable-plugins` option is a list of names of plugins to explicitly
-forbid from being used. For example, adding `export` will prohibit use of the
-`export` operator builtin, thereby disabling the ability to run historical
-queries. This method allows for a more fine-grained control than the coarse
-`tenzir.allow-unsafe-pipelines` option.
+This creates a new pipeline and starts it immediately:
+
+```
+api /pipeline/create '{"name": "Suricata Import", "definition": "from file /tmp/eve.sock read suricata", "autostart": {"created": true}}'
+```
+
+## Fine-Grained Operator, Format, and Connector Block Lists
+
+We made it easier to disallow potentially unsafe operators, formats, and
+connectors. The new `tenzir.disable-plugins` option is a list of names of
+plugins to explicitly forbid from being used. For example, adding `export` will
+prohibit use of the `export` operator builtin, thereby disabling the ability to
+run historical queries. This method allows for a more fine-grained control than
+the coarse `tenzir.allow-unsafe-pipelines` option.
 
 Why does it matter? Well, when running pipelines in a node, some operators allow
 you to fully interact with the system through a pipeline. The
@@ -73,13 +83,14 @@ risk.
 
 - When you deploy a demo node at [app.tenzir.com](https://app.tenzir.com), it
   now starts up faster, the pre-loaded pipelines come with labels, and have been
-  ported to use the native connector API instead of relying on cURL.
+  ported to use the native connector API instead of relying on cURL for setup.
 
 - It is now possible to reference nested records in many operators that wrangle
   data, such as `select`, `extend`, `put`, and `replace`.
 
-- The `summarize` operator now behaves more like other data frame processing
-  engine and TODO.
+  The `summarize` operator now yields a result even if it receives no input
+  (assuming there is no grouping with by). For example, `summarize
+  num=count(foo)` returns `{"num": 0}` instead of returning nothing.
 
 - The `import` operator now flushes events to disk automatically before
   returning, ensuring that they are available immediately for subsequent uses of
