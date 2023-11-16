@@ -9,6 +9,8 @@
 #include "tenzir/format/arrow.hpp"
 
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/narrow.hpp"
+#include "tenzir/detail/posix.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/type.hpp"
 
@@ -72,7 +74,6 @@ bool writer::schema(const std::shared_ptr<::arrow::Schema>& schema) {
 
 arrow_istream_wrapper::arrow_istream_wrapper(std::shared_ptr<std::istream> input)
   : input_(std::move(input)), pos_(0) {
-  set_mode(::arrow::io::FileMode::READ);
 }
 
 ::arrow::Status arrow_istream_wrapper::Close() {
@@ -100,6 +101,45 @@ arrow_istream_wrapper::Read(int64_t nbytes, void* out) {
 
 ::arrow::Result<std::shared_ptr<::arrow::Buffer>>
 arrow_istream_wrapper::Read(int64_t nbytes) {
+  ARROW_ASSIGN_OR_RAISE(auto buffer, ::arrow::AllocateResizableBuffer(nbytes));
+  ARROW_ASSIGN_OR_RAISE(int64_t bytes_read,
+                        Read(nbytes, buffer->mutable_data()));
+  ARROW_RETURN_NOT_OK(buffer->Resize(bytes_read, false));
+  buffer->ZeroPadding();
+  return std::move(buffer);
+}
+
+arrow_fd_wrapper::arrow_fd_wrapper(int fd) : fd_{fd} {
+}
+
+::arrow::Status arrow_fd_wrapper::Close() {
+  int result = ::close(fd_);
+  fd_ = -1;
+  if (result != 0)
+    return ::arrow::Status::IOError("close(2): ", std::strerror(errno));
+  return ::arrow::Status::OK();
+}
+
+auto arrow_fd_wrapper::closed() const -> bool {
+  return fd_ == -1;
+}
+
+auto arrow_fd_wrapper::Tell() const -> ::arrow::Result<int64_t> {
+  return pos_;
+}
+
+auto arrow_fd_wrapper::Read(int64_t nbytes, void* out)
+  -> ::arrow::Result<int64_t> {
+  auto bytes_read = detail::read(fd_, out, nbytes);
+  if (!bytes_read)
+    return ::arrow::Status::IOError(fmt::to_string(bytes_read.error()));
+  auto sbytes = detail::narrow_cast<int64_t>(*bytes_read);
+  pos_ += sbytes;
+  return sbytes;
+}
+
+auto arrow_fd_wrapper::Read(int64_t nbytes)
+  -> ::arrow::Result<std::shared_ptr<::arrow::Buffer>> {
   ARROW_ASSIGN_OR_RAISE(auto buffer, ::arrow::AllocateResizableBuffer(nbytes));
   ARROW_ASSIGN_OR_RAISE(int64_t bytes_read,
                         Read(nbytes, buffer->mutable_data()));

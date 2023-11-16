@@ -83,6 +83,27 @@ private:
   int64_t pos_;
 };
 
+/// Arrow InputStream API implementation over a file descriptor.
+class arrow_fd_wrapper : public ::arrow::io::InputStream {
+public:
+  explicit arrow_fd_wrapper(int fd);
+
+  auto Close() -> ::arrow::Status override;
+
+  auto closed() const -> bool override;
+
+  auto Tell() const -> ::arrow::Result<int64_t> override;
+
+  auto Read(int64_t nbytes, void* out) -> ::arrow::Result<int64_t> override;
+
+  auto Read(int64_t nbytes)
+    -> ::arrow::Result<std::shared_ptr<::arrow::Buffer>> override;
+
+private:
+  int fd_ = -1;
+  int64_t pos_ = 0;
+};
+
 class reader final : public tenzir::format::reader {
 public:
   /// Constructs an Arrow IPC reader.
