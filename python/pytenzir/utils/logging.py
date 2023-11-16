@@ -1,14 +1,11 @@
 import logging
 import sys
 
-import coloredlogs
-
 from pytenzir.utils.config import create as create_config, Config
 
 
 def configure(config: Config, logger: logging.Logger):
     fmt = "%(asctime)s %(name)s %(levelname)-7s %(message)s"
-    colored_formatter = coloredlogs.ColoredFormatter(fmt)
     plain_formatter = logging.Formatter(fmt)
     if config.get("file-verbosity") != "quiet":
         fh = logging.FileHandler(config.get("log-file"))
@@ -23,7 +20,7 @@ def configure(config: Config, logger: logging.Logger):
         ch.setLevel(ch_level)
         if logger.level > ch_level or logger.level == 0:
             logger.setLevel(ch_level)
-        ch.setFormatter(colored_formatter)
+        ch.setFormatter(plain_formatter)
         logger.addHandler(ch)
 
     class ShutdownHandler(logging.Handler):
@@ -34,7 +31,7 @@ def configure(config: Config, logger: logging.Logger):
             sys.exit(1)
 
     sh = ShutdownHandler(level=50)
-    sh.setFormatter(colored_formatter)
+    sh.setFormatter(plain_formatter)
     logger.addHandler(sh)
 
 
