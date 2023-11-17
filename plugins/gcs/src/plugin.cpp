@@ -278,6 +278,10 @@ public:
   auto name() const -> std::string override {
     return "gcs";
   }
+
+  auto supported_uri_scheme() const -> std::string override {
+    return "gs";
+  }
 };
 
 } // namespace tenzir::plugins::gcs

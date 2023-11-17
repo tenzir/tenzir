@@ -6,9 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
+#include <tenzir/detail/loader_saver_resolver.hpp>
 #include <tenzir/diagnostics.hpp>
-#include <tenzir/parser_interface.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql/fwd.hpp>
 #include <tenzir/tql/parser.hpp>
@@ -146,11 +145,23 @@ auto parse_default_parser(std::string definition)
   return parser;
 }
 
-[[noreturn]] void throw_loader_not_found(const located<std::string>& x) {
+template <typename String>
+[[noreturn]] void
+throw_loader_not_found(const located<String>& x, bool use_uri_schemes) {
   auto available = std::vector<std::string>{};
   for (auto const* p : plugins::get<loader_parser_plugin>()) {
-    available.push_back(p->name());
+    if (use_uri_schemes) {
+      available.push_back(p->supported_uri_scheme());
+    } else {
+      available.push_back(p->name());
+    }
   }
+  if (use_uri_schemes)
+    diagnostic::error("loader for `{}` scheme could not be found", x.inner)
+      .primary(x.source)
+      .hint("must be one of {}", fmt::join(available, ", "))
+      .docs("https://docs.tenzir.com/next/connectors")
+      .throw_();
   diagnostic::error("loader `{}` could not be found", x.inner)
     .primary(x.source)
     .hint("must be one of {}", fmt::join(available, ", "))
@@ -170,6 +181,23 @@ auto parse_default_parser(std::string definition)
     .throw_();
 }
 
+auto get_loader(parser_interface& p, const char* usage, const char* docs)
+  -> std::unique_ptr<plugin_loader> {
+  auto l_name = p.accept_shell_arg();
+  if (not l_name) {
+    diagnostic::error("expected loader name")
+      .primary(p.current_span())
+      .usage(usage)
+      .docs(docs)
+      .throw_();
+  }
+  auto [loader, name, is_uri] = detail::resolve_loader(p, *l_name);
+  if (not loader) {
+    throw_loader_not_found(name, is_uri);
+  }
+  return std::move(loader);
+}
+
 class from_plugin final : public virtual operator_parser_plugin {
 public:
   auto signature() const -> operator_signature override {
@@ -183,20 +211,8 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "from <loader> <args>... [read <parser> <args>...]";
     auto docs = "https://docs.tenzir.com/next/operators/sources/from";
-    auto l_name = p.accept_shell_arg();
-    if (!l_name) {
-      diagnostic::error("expected loader name")
-        .primary(p.current_span())
-        .usage(usage)
-        .docs(docs)
-        .throw_();
-    }
-    auto l_plugin = plugins::find<loader_parser_plugin>(l_name->inner);
-    if (!l_plugin) {
-      throw_loader_not_found(*l_name);
-    }
     auto q = until_keyword_parser{"read", p};
-    auto loader = l_plugin->parse_loader(q);
+    auto loader = get_loader(q, usage, docs);
     TENZIR_DIAG_ASSERT(loader);
     TENZIR_DIAG_ASSERT(q.at_end());
     auto parser = std::unique_ptr<plugin_parser>{};
@@ -236,19 +252,7 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "load <loader> <args>...";
     auto docs = "https://docs.tenzir.com/next/operators/sources/load";
-    auto name = p.accept_shell_arg();
-    if (!name) {
-      diagnostic::error("expected loader name", p.current_span())
-        .primary(p.current_span())
-        .usage(usage)
-        .docs(docs)
-        .throw_();
-    }
-    auto plugin = plugins::find<loader_parser_plugin>(name->inner);
-    if (!plugin) {
-      throw_loader_not_found(*name);
-    }
-    auto loader = plugin->parse_loader(p);
+    auto loader = get_loader(p, usage, docs);
     TENZIR_DIAG_ASSERT(loader);
     return std::make_unique<load_operator>(std::move(loader));
   }

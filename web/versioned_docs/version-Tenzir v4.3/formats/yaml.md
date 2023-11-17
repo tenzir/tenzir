@@ -1,4 +1,4 @@
-# json
+# yaml
 
 Reads and writes YAML.
 

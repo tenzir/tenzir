@@ -392,6 +392,18 @@ component_plugin_actor analyzer_plugin::make_component(
   return analyzer(node);
 }
 
+// -- loader plugin -----------------------------------------------------------
+
+auto loader_parser_plugin::supported_uri_scheme() const -> std::string {
+  return this->name();
+}
+
+// -- saver plugin ------------------------------------------------------------
+
+auto saver_parser_plugin::supported_uri_scheme() const -> std::string {
+  return this->name();
+}
+
 // -- store plugin -------------------------------------------------------------
 
 caf::expected<store_actor_plugin::builder_and_header>
