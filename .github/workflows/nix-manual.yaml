@@ -91,19 +91,6 @@ jobs:
               else
                 empty
               end,
-              if ${{ inputs.build-cm }} then
-                {
-                  "name": "tenzir-cm",
-                  "static": true,
-                  "upload-package-to-github": false,
-                  "package-stores": [
-                    "gcs:tenzir-dist-private/packages/manual"
-                  ],
-                  "image-registries": []
-                }
-              else
-                empty
-              end,
               if ${{ inputs.build-ee }} then
                 {
                   "name": "tenzir-ee",
