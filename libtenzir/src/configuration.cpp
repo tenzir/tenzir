@@ -463,13 +463,25 @@ caf::error configuration::parse(int argc, char** argv) {
       }
       return std::nullopt;
     };
+#ifdef TENZIR_MACOS
+#  define HOME_CACHE_PATH "Library", "Caches", "tenzir"
+#else
+#  define HOME_CACHE_PATH ".cache", "tenzir"
+#endif
     auto& value = (*config)["tenzir.cache-directory"];
     if (auto x = env_path_writable("XDG_CACHE_HOME", "tenzir")) {
       value = x->string();
-    } else if (auto x = env_path_writable("HOME", ".cache", "tenzir")) {
+    } else if (auto x = env_path_writable("XDG_HOME_DIR", HOME_CACHE_PATH)) {
+      value = x->string();
+    } else if (auto x = env_path_writable("HOME", HOME_CACHE_PATH)) {
       value = x->string();
     } else {
-      value = std::filesystem::temp_directory_path() / "tenzir" / "cache";
+      auto ec = std::error_code{};
+      auto tmp = std::filesystem::temp_directory_path(ec);
+      if (ec)
+        return caf::make_error(ec::filesystem_error,
+                               "failed to determine temp_directory_path");
+      value = tmp / "tenzir" / "cache";
     }
   }
   // From here on, we go into CAF land with the goal to put the configuration

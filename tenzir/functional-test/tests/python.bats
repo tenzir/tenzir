@@ -1,4 +1,6 @@
-: "${BATS_TEST_TIMEOUT:=20}"
+# We set a generous timeout because the first test that is running
+# has to setup the virtualenv for the operator.
+: "${BATS_TEST_TIMEOUT:=120}"
 
 setup() {
   bats_load_library bats-support
@@ -105,7 +107,7 @@ END
         import requests
         payload = {"a": self.a, "b": self.b}
         # Override Accept-Encoding for this test since this varies between the
-        # versions of `requests` used in various CI environments.
+        # versions of requests used in various CI environments.
         requests.post("http://127.0.0.1:$port", headers={"Accept-Encoding": "gzip, deflate, br"}, data=payload)'
     | discard
 END

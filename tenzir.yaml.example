@@ -22,8 +22,11 @@ tenzir:
   # Defaults to one of the following paths, selecting the first that is
   # available:
   #   - $XDG_CACHE_HOME
-  #   - $XDG_HOME_DIR/.cache/tenzir or
-  #   - $TMPDIR/tenzir/cache
+  #   - $XDG_HOME_DIR/.cache/tenzir (linux) or $XDG_HOME_DIR/Libraries/caches/tenzir (mac)
+  #   - $HOME/.cache/tenzir (linux) or $HOME/Libraries/caches/tenzir (mac)
+  #   - $TEMPORARY_DIRECTORY/tenzir/cache
+  # To determine $TEMPORARY_DIRECTORY, the values of TMPDIR, TMP, TEMP, TEMPDIR are
+  # checked in that order, and as a last resort "/tmp" is used.
   #cache-directory:
 
   # The file system path used for log files.
