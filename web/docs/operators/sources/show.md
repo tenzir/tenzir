@@ -69,12 +69,6 @@ show fields
 show partitions
 ```
 
-Show the version of a remote node:
-
-```
-remote show version
-```
-
 Show all aspects of a remote node:
 
 ```
