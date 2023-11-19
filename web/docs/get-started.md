@@ -1,27 +1,38 @@
 # Get Started
 
-:::info What is Tenzir?
-Tenzir is a distributed platform for processing and storing security event data
-in a pipeline dataflow model.
-:::
+Tenzir is a platform for processing and storing security event data
+in a pipeline dataflow model. The Tenzir stack has three key components:
 
-![How does it work?](how-does-it-work.excalidraw.svg)
+1. **Pipeline Executor**: Translates a pipeline expressed in the [Tenzir Query
+   Language (TQL)](language.md) into a dataflow graph and runs it. The `tenzir`
+   binary is the stand-alone executor.
+2. **Node**: Hosts multiple pipelines that run concurrently. A node also has
+   an storage engine with a thin layer of indexing on top of the raw
+   Parquet/Feather partitions. The `tenzir-node` binary spawns a node.
+3. **Platform**: Manages nodes and global user data. Nodes connect to the
+   platform and you can manage them through [app.tenzir.com][app].
+
+The diagram below shows how these components relate:
+
+![Tenzir Moving Parts](moving-parts.excalidraw.svg)
+
+[app]: https://app.tenzir.com
 
 ## Create a free account
 
 Create an account for the best user experience. Everyone can freely use
 the [Community Edition](https://tenzir.com/pricing).
 
-1. Go to [app.tenzir.com](https://app.tenzir.com)
+1. Go to [app.tenzir.com][app]
 2. Sign in with your identity provider or create an account
 
 There are no strings attached: you can always delete your account via *Account*
 → *Delete Account*. You do not have to create an account if you just want to use
 the command line interface and do not need pipeline management features.
 
-## Explore the demo environment
+## Explore the demo node
 
-Let's run a few example [pipelines](pipelines.md) by copying the below examples
+Let's run a few example pipelines by copying the below examples
 and pasting them into the [Explorer](https://app.tenzir.com/explorer). We
 pre-loaded the demo node in the app with [Zeek](https://zeek.org) and
 [Suricata](https://suricata.io) logs derived from the M57 dataset that we also
