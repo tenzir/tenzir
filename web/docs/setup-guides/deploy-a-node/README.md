@@ -14,7 +14,7 @@ Visit the [configurator](https://app.tenzir.com/configurator) to download a
 entered for your node. Then run:
 
 ```bash
-docker compose -f docker-compose.NODE.yaml up --detach
+docker compose -f docker-compose.NODE.yaml up
 ```
 
 Set [environment variables](../../command-line.md#environment-variables) to
