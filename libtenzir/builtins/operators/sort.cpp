@@ -98,31 +98,35 @@ private:
       caf::get<record_type>(schema).resolve_key(key_));
     if (not key_path->second.has_value()) {
       ctrl.warn(caf::make_error(ec::invalid_configuration,
-                                fmt::format("sort key {} does not apply to "
-                                            "schema {}; events of this "
-                                            "schema will not be sorted",
+                                fmt::format("sort key `{}` does not apply to "
+                                            "schema `{}`; events of this "
+                                            "schema will be discarded",
                                             key_, schema)));
+      return key_path->second;
     }
     auto current_key_type
-      = key_path->second
-          ? caf::get<record_type>(schema).field(*key_path->second).type.prune()
-          : type{};
-    if (not key_type_ && current_key_type) {
+      = caf::get<record_type>(schema).field(*key_path->second).type.prune();
+    if (caf::holds_alternative<subnet_type>(current_key_type)) {
       // TODO: Sorting in Arrow using arrow::compute::SortIndices is not
       // supported for extension types. We can fall back to the storage array
       // for all types but subnet, which has a nested extension type.
-      if (caf::holds_alternative<subnet_type>(current_key_type)) {
-        key_path->second = std::nullopt;
-      } else {
-        key_type_ = current_key_type;
-      }
+      ctrl.warn(caf::make_error(
+        ec::invalid_configuration,
+        fmt::format("sort key `{}` resolves to unsupported type `subnet` for "
+                    "schema `{}`; events of this schema will be discarded",
+                    key_, schema)));
+      key_path->second = std::nullopt;
+      return key_path->second;
+    }
+    if (not key_type_) {
+      key_type_ = current_key_type;
     } else if (key_type_ != current_key_type) {
       ctrl.warn(caf::make_error(
         ec::invalid_configuration,
-        fmt::format("sort key {} resolved to type {} for schema {}, but "
-                    "resolved to {} for a previous schema; events of this "
-                    "schema will not be sorted",
-                    key_, current_key_type, schema, key_type_)));
+        fmt::format("sort key `{}` resolved to type `{}` for schema `{}`, but "
+                    "to `{}` for a previous schema; events of this "
+                    "schema will be discarded",
+                    key_, current_key_type, schema, *key_type_)));
       key_path->second = std::nullopt;
     }
     return key_path->second;
@@ -151,7 +155,7 @@ private:
   std::unordered_map<type, std::optional<offset>> key_field_path_ = {};
 
   /// The type of the sorted-by field.
-  type key_type_ = {};
+  std::optional<type> key_type_ = {};
 };
 
 class sort_operator final : public crtp_operator<sort_operator> {
