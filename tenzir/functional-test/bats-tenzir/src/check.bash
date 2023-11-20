@@ -5,6 +5,7 @@
 check() {
   local expect_error=0
   local sort_output=0
+  local with_stderr=0
   local args=()
   if [[ -v step_nr_ ]]; then
     step_nr_=$(( step_nr_ + 1 ))
@@ -20,6 +21,10 @@ check() {
       '!')
         shift # past argument
         expect_error=1
+        ;;
+      --with-stderr)
+        with_stderr=1
+        shift # past argument
         ;;
       --sort)
         sort_output=1
@@ -43,10 +48,14 @@ check() {
         ;;
     esac
   done
+  run_flags=()
   if [ $expect_error = 1 ]; then
-    run_flags="!"
+    run_flags+=("!")
   else
-    run_flags="-0"
+    run_flags+=("-0")
+  fi
+  if [ $with_stderr = 0 ]; then
+    run_flags+=("--separate-stderr")
   fi
   compare_or_update() {
     local file_ref_dir ref_path
@@ -94,12 +103,12 @@ check() {
   debug 1 "running: ${args[*]}"
   if [ -n "${process_group}" ]; then
     {
-      run "${run_flags}" --separate-stderr -- "${args[@]}" 3>&-
+      run "${run_flags[@]}" -- "${args[@]}" 3>&-
       compare_or_update
     } &
     eval "$process_group+=(\"$!\")"
   else
-    run "${run_flags}" --separate-stderr -- "${args[@]}"
+    run "${run_flags[@]}" -- "${args[@]}"
     compare_or_update
   fi
 }

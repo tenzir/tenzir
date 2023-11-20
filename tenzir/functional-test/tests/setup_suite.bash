@@ -15,7 +15,11 @@ export BATS_LIB_PATH=${BATS_LIB_PATH:+${BATS_LIB_PATH}:}${SCRIPT_DIR}/..
 BATS_SUITE_DIRNAME="${BATS_TEST_DIRNAME}"
 export BATS_SUITE_DIRNAME
 
-unset "${!TENZIR@}"
+# Normalize the environment unless `BATS_KEEP_ENVIRONMENT` is set.
+if [[ ! -n ${BATS_KEEP_ENVIRONMENT} ]]; then
+  unset $(printenv | grep -o '^TENZIR[^=]*' | paste -s -)
+fi
+
 # Enable bare mode so settings in ~/.config/tenzir or the build configuration
 # have no effect.
 export TENZIR_BARE_MODE=1

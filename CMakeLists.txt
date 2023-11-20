@@ -824,6 +824,61 @@ if (TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS
     COMPONENT Runtime)
 endif ()
 
+# -- python bindings ----------------------------------------------------------
+
+option(TENZIR_ENABLE_PYTHON_BINDINGS
+       "Build Python bindings (requires poetry)" ON)
+add_feature_info("TENZIR_ENABLE_PYTHON_BINDINGS" TENZIR_ENABLE_PYTHON_BINDINGS
+                 "build Python bindings (requires poetry).")
+if (TENZIR_ENABLE_PYTHON_BINDINGS)
+  find_program(POETRY_PATH poetry)
+  if (NOT POETRY_PATH)
+    message(
+      FATAL_ERROR
+        "Cannot find 'poetry' in PATH, which is required for building Tenzir Python bindings"
+    )
+  endif ()
+  # Poetry has no support for specifying a working directory for the build
+  # command, so in order to make the installation not modify the source directory
+  # we need to copy the Python bindings in their entirety into the build directory
+  # first.
+  set(TENZIR_PYTHON_BINARY_DIR "${CMAKE_BINARY_DIR}/share/tenzir/python")
+  set(TENZIR_PYTHON_WHEEL
+    "${TENZIR_PYTHON_BINARY_DIR}/pytenzir-${TENZIR_VERSION_MAJOR}.${TENZIR_VERSION_MINOR}.${TENZIR_VERSION_PATCH}-py3-none-any.whl")
+  file(
+    WRITE "${CMAKE_CURRENT_BINARY_DIR}/build-wheel.cmake"
+    "\
+    cmake_minimum_required(VERSION 3.19...3.24 FATAL_ERROR)
+    file(REMOVE_RECURSE \"${CMAKE_CURRENT_BINARY_DIR}/python\")
+    file(
+      COPY \"${CMAKE_CURRENT_SOURCE_DIR}/python/\"
+      DESTINATION \"${CMAKE_CURRENT_BINARY_DIR}/python\"
+      REGEX \"/dist/\" EXCLUDE)
+    # Poetry evaluates the top-level gitignore, which leads it to ignore
+    # everything in case the install prefix is in an ignored path. Setting the
+    # git directory explicitly works around the issue.
+    set(ENV{GIT_DIR} \"/dev/null\")
+    execute_process(
+      COMMAND \"${POETRY_PATH}\" build --no-interaction --format=wheel -vvv
+      WORKING_DIRECTORY \"${CMAKE_CURRENT_BINARY_DIR}/python\"
+      COMMAND_ERROR_IS_FATAL ANY)
+    file(
+      GLOB _wheel
+      \"${CMAKE_CURRENT_BINARY_DIR}/python/dist/*.whl\")
+    file(MAKE_DIRECTORY \"${CMAKE_BINARY_DIR}/share/tenzir/python\")
+    file(COPY_FILE \"\${_wheel}\" \"${TENZIR_PYTHON_WHEEL}\")")
+  add_custom_command(
+    OUTPUT "${TENZIR_PYTHON_WHEEL}"
+    COMMAND ${CMAKE_COMMAND} -P
+            "${CMAKE_CURRENT_BINARY_DIR}/build-wheel.cmake"
+    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/python)
+  add_custom_target(tenzir-python-wheel DEPENDS "${TENZIR_PYTHON_WHEEL}")
+  install(
+    DIRECTORY "${TENZIR_PYTHON_BINARY_DIR}"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir"
+    COMPONENT Runtime)
+endif ()
+
 # -- add subdirectories --------------------------------------------------------
 
 add_subdirectory(libtenzir)
@@ -925,79 +980,6 @@ install(
         "${CMAKE_CURRENT_SOURCE_DIR}/README.md"
   DESTINATION "${CMAKE_INSTALL_DOCDIR}"
   COMPONENT Runtime)
-
-# -- python bindings ----------------------------------------------------------
-
-option(TENZIR_ENABLE_PYTHON_BINDINGS
-       "Install Python bindings (requires poetry)" ON)
-add_feature_info("TENZIR_ENABLE_PYTHON_BINDINGS" TENZIR_ENABLE_PYTHON_BINDINGS
-                 "install Python bindings (requires poetry).")
-# Currently, we install all dependencies for the Python bindings alongside the
-# Python bindings by default. We are not sure whether this is a good choice, or
-# whether it works well with the Nix sandbox, so this may change in the future.
-cmake_dependent_option(
-  TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES
-  "Install Python bindings with dependencies" ON
-  "TENZIR_ENABLE_PYTHON_BINDINGS" OFF)
-add_feature_info(
-  "TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES"
-  TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES
-  "install Python bindings with dependencies.")
-if (TENZIR_ENABLE_PYTHON_BINDINGS)
-  find_program(POETRY_PATH poetry)
-  if (NOT POETRY_PATH)
-    message(
-      FATAL_ERROR
-        "Cannot find 'poetry' in PATH, which is required for installing Tenzir Python bindings"
-    )
-  endif ()
-  # Poetry has no support for specifying a working directory for the build
-  # command, so in order to make the installation not modify the source directory
-  # we need to copy the Python bindings in their entirety into the build directory
-  # first.
-  unset(TENZIR_POETRY_EXTRA_INSTALL_ARGS)
-  if (NOT TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES)
-    list(APPEND TENZIR_POETRY_EXTRA_INSTALL_ARGS "--no-deps")
-  endif ()
-  install(
-    CODE "
-    cmake_minimum_required(VERSION 3.19...3.24 FATAL_ERROR)
-    file(REMOVE_RECURSE \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/tenzir/python\")
-    file(MAKE_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/tenzir/python\")
-    file(
-      COPY \"${CMAKE_CURRENT_SOURCE_DIR}/python/\"
-      DESTINATION \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/tenzir/python\")
-    # Poetry evaluates the top-level gitignore, which leads it to ignore
-    # everything in case the install prefix is in an ignored path. Setting the
-    # git directory explicitly works around the issue.
-    set(ENV{GIT_DIR} \"/dev/null\")
-    execute_process(
-      COMMAND \"${POETRY_PATH}\" build --no-interaction --format=wheel -vvv
-      WORKING_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/tenzir/python\"
-      COMMAND_ERROR_IS_FATAL ANY)
-    file(
-      GLOB TENZIR_PYTHON_WHL
-      \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/tenzir/python/dist/*.whl\")
-    file(
-      GLOB TENZIR_OLD_INSTALLED_BINS
-      \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/*\")
-    execute_process(
-      COMMAND \"${POETRY_PATH}\" run pip install
-        ${TENZIR_POETRY_EXTRA_INSTALL_ARGS}
-        --prefix \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}\"
-        \"\${TENZIR_PYTHON_WHL}\"
-      WORKING_DIRECTORY \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_DATADIR}/tenzir/python\"
-      COMMAND_ERROR_IS_FATAL ANY)
-    file(
-      GLOB TENZIR_NEW_INSTALLED_BINS
-      \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/*\")
-    foreach (bin IN LISTS TENZIR_NEW_INSTALLED_BINS)
-      if (NOT \"\${bin}\" IN_LIST TENZIR_OLD_INSTALLED_BINS)
-        file(REMOVE \"\${bin}\")
-      endif ()
-    endforeach ()"
-    COMPONENT Runtime)
-endif ()
 
 # -- packaging -----------------------------------------------------------------
 

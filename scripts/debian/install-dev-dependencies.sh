@@ -47,6 +47,7 @@ apt-get -y --no-install-recommends install \
     python3-pip \
     python3-venv \
     robin-map-dev \
+    socat \
     software-properties-common \
     wget \
     yara
