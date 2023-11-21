@@ -1182,3 +1182,23 @@ tests:
         input: data/syslog/syslog.log
       - command: exec 'from - read syslog'
         input: data/syslog/syslog-rfc3164.log
+
+  Parse CEF in JSON in JSON from Lines:
+    tags: [pipelines]
+    steps:
+      - command: exec 'read lines'
+        input: data/json/cef-in-json-in-json.json
+      - command: exec 'read lines | parse line json'
+        input: data/json/cef-in-json-in-json.json
+      - command: exec 'read lines | parse line json | parse foo --into result json'
+        input: data/json/cef-in-json-in-json.json
+      - command: exec 'read lines | parse line json | parse foo --into result json | parse result.baz cef'
+        input: data/json/cef-in-json-in-json.json
+
+  Parse CEF over syslog:
+    tags: [pipelines]
+    steps:
+      - command: exec 'read syslog'
+        input: data/syslog/cef-over-syslog.log
+      - command: exec 'read syslog | parse content --into result cef'
+        input: data/syslog/cef-over-syslog.log

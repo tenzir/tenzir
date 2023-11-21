@@ -461,6 +461,16 @@ public:
     -> std::optional<generator<table_slice>>
     = 0;
 
+  /// Apply the parser to an array of strings.
+  ///
+  /// The default implementation of creates a new parser with `instantiate()`
+  /// for every single string.
+  ///
+  /// @post `input->length() == result_array->length()`
+  auto parse_strings(std::shared_ptr<arrow::StringArray> input,
+                     operator_control_plane& ctrl) const
+    -> std::vector<std::pair<type, std::shared_ptr<arrow::Array>>>;
+
   /// Implement ordering optimization for parsers. See
   /// `operator_base::optimize(...)` for details. The default implementation
   /// does not optimize.
