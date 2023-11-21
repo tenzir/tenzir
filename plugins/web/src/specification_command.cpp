@@ -41,6 +41,10 @@ Metrics:
                 - events
               description: The unit of the input data.
               example: bytes
+            internal:
+              type: boolean
+              description: Whether the operator's ingress is internal.
+              example: false
             num_elements:
               type: integer
               description: The total amount of elements that entered the pipeline source.
@@ -72,6 +76,10 @@ Metrics:
                 - events
               description: The unit of the output data.
               example: bytes
+            internal:
+              type: boolean
+              description: Whether the operator's egress is internal.
+              example: false
             num_elements:
               type: integer
               description: The total amount of elements that entered the pipeline sink.
