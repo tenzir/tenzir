@@ -175,12 +175,17 @@ struct operator_measurement {
   // Approximate byte amount for events, exact byte amount for bytes.
   uint64_t num_approx_bytes = {};
 
+  // Whether this metric is considered internal or not; only external metrics
+  // may be counted for ingress and egress.
+  bool internal = {};
+
   template <class Inspector>
   friend auto inspect(Inspector& f, operator_measurement& x) -> bool {
     return f.object(x).pretty_name("metric").fields(
       f.field("unit", x.unit), f.field("num_elements", x.num_elements),
       f.field("num_batches", x.num_batches),
-      f.field("num_approx_bytes", x.num_approx_bytes));
+      f.field("num_approx_bytes", x.num_approx_bytes),
+      f.field("internal", x.internal));
   }
 };
 
@@ -334,6 +339,12 @@ public:
     return false;
   }
 
+  /// Returns whether is considered "internal," i.e., whether its metrics count
+  /// as ingress or egress or not.
+  virtual auto internal() const -> bool {
+    return false;
+  }
+
   /// Retrieve the output type of this operator for a given input.
   ///
   /// The default implementation will try to instantiate the operator and then
@@ -461,6 +472,10 @@ public:
 
   auto detached() const -> bool override {
     die("pipeline::detached() must not be called");
+  }
+
+  auto internal() const -> bool override {
+    die("pipeline::internal() must not be called");
   }
 
   auto instantiate(operator_input input, operator_control_plane& control) const
