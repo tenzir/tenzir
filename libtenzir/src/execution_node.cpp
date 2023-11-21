@@ -895,11 +895,11 @@ auto exec_node(
   self->state.metrics->values.inbound_measurement.unit
     = operator_type_name<Input>();
   self->state.metrics->values.inbound_measurement.internal
-    = std::is_void_v<Input> && self->state.op->internal();
+    = not std::is_void_v<Input> or self->state.op->internal();
   self->state.metrics->values.outbound_measurement.unit
     = operator_type_name<Output>();
   self->state.metrics->values.outbound_measurement.internal
-    = std::is_void_v<Output> && self->state.op->internal();
+    = not std::is_void_v<Output> or self->state.op->internal();
   self->state.ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
     self, std::move(diagnostic_handler), has_terminal);
   // The node actor must be set when the operator is not a source.
