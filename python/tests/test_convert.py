@@ -1,8 +1,8 @@
 import pyarrow as pa
 import numpy as np
 import pytest
-import pytenzir.utils.arrow as vua
-import pytenzir
+import tenzir.utils.arrow as vua
+import tenzir
 
 new_array = vua.extension_array
 
@@ -67,7 +67,7 @@ def extension_types_batch() -> pa.RecordBatch:
 async def test_arrow_dict_to_json_dict_native_types():
     native_dict = native_types_batch().to_pylist()[0]
 
-    assert pytenzir.arrow_dict_to_json_dict(native_dict) == {
+    assert tenzir.arrow_dict_to_json_dict(native_dict) == {
         "NullArray": None,
         "BooleanArray": True,
         "Int8Array": 1,
@@ -103,7 +103,7 @@ async def test_arrow_dict_to_json_dict_native_types():
 async def test_arrow_dict_to_json_dict_extension_types():
     extension_dict = extension_types_batch().to_pylist()[0]
 
-    assert pytenzir.arrow_dict_to_json_dict(extension_dict) == {
+    assert tenzir.arrow_dict_to_json_dict(extension_dict) == {
         "tenzir.ip": "10.1.21.165",
         "tenzir.subnet": "10.1.20.0/25",
         "tenzir.enumeration": "foo",

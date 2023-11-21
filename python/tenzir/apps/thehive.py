@@ -7,9 +7,9 @@ import time
 from typing import Optional
 
 import aiohttp
-import pytenzir.utils.logging as logging
+import tenzir.utils.logging as logging
 
-from pytenzir import Tenzir, ExportMode, to_json_rows
+from tenzir import Tenzir, ExportMode, to_json_rows
 
 logger = logging.get("tenzir.thehive.app")
 

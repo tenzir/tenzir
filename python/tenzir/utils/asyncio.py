@@ -20,9 +20,9 @@ Example:
 import asyncio
 from signal import SIGINT, SIGTERM, SIGHUP
 
-import pytenzir.utils.logging
+import tenzir.utils.logging
 
-logger = pytenzir.utils.logging.get(__name__)
+logger = tenzir.utils.logging.get(__name__)
 
 
 async def shutdown(loop, signal=None):

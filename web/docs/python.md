@@ -16,7 +16,7 @@ notice.
 Use `pip` to install Tenzir:
 
 ```bash
-pip install pytenzir[module]
+pip install tenzir[module]
 ```
 
 ## Use the Tenzir Python library
@@ -29,7 +29,7 @@ The following snippet illustrates a small script to query Tenzir.
 #!/usr/bin/env python3
 
 import asyncio
-from pytenzir import Tenzir, to_json_rows
+from tenzir import Tenzir, to_json_rows
 
 async def example():
     tenzir = Tenzir()

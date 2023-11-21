@@ -28,8 +28,8 @@ in
       # To build libcaf_openssl with bundled CAF.
       buildInputs = [pkgs.openssl];
       shellHook = ''
-        # Use editable mode for python code part of the python operator.
-        # This makes changes to the pytenzir code observable in the operator
+        # Use editable mode for python code part of the python operator. This
+        # makes changes to the python code observable in the python operator
         # without needing to rebuild the wheel.
         export TENZIR_PLUGINS__PYTHON__IMPLICIT_REQUIREMENTS="-e $PWD/python"
       '';
