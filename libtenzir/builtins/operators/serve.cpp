@@ -103,6 +103,10 @@ constexpr auto SPEC_V0 = R"_(
                 type: integer
                 example: 50
                 description: The maximum number of events returned. If unset, the number is unlimited.
+              min_events:
+                type: integer
+                example: 50
+                description: Wait for this number of events before returning. If unset, the number is unlimited.
               timeout:
                 type: string
                 example: "100ms"
@@ -192,16 +196,21 @@ using serve_manager_actor = typed_actor_fwd<
   // Get slices from the buffer for the given access token, returning the next
   // access token and the desired number of events.
   auto(atom::get, std::string serve_id, std::string continuation_token,
-       uint64_t limit, duration timeout)
+       uint64_t min_events, duration timeout, uint64_t max_events)
     ->caf::result<std::tuple<std::string, std::vector<table_slice>>>>
   // Conform to the protocol of the COMPONENT PLUGIN actor interface.
   ::extend_with<component_plugin_actor>::unwrap;
 
+struct request_limits {
+  uint64_t max_events = defaults::api::serve::max_events;
+  uint64_t min_events = defaults::api::serve::min_events;
+  duration timeout = defaults::api::serve::timeout;
+};
+
 struct serve_request {
   std::string serve_id = {};
   std::string continuation_token = {};
-  uint64_t limit = defaults::api::serve::max_events;
-  duration timeout = defaults::api::serve::timeout;
+  request_limits limits = {};
 };
 
 /// A single serve operator as observed by the serve-manager.
@@ -225,6 +234,7 @@ struct managed_serve_operator {
   std::vector<table_slice> buffer = {};
   uint64_t buffer_size = 1 << 16;
   uint64_t requested = {};
+  uint64_t min_events = {};
 
   /// The number of delivered results. Tracked only for the status output and
   /// not used otherwise.
@@ -253,7 +263,8 @@ struct managed_serve_operator {
     }
     // Avoid delivering too early, i.e., when we don't yet have enough events.
     const auto return_underful = stop_rp.pending() or force_underful;
-    if (not return_underful and rows(buffer) < requested) {
+    if (not return_underful and rows(buffer) < min_events
+        and rows(buffer) < requested) {
       return false;
     }
     // Cut the results buffer.
@@ -430,8 +441,9 @@ struct serve_manager_state {
     }
     if (not found->continuation_token.empty()
         and found->last_continuation_token == request.continuation_token) {
-      return std::make_tuple(found->continuation_token,
-                             split(found->last_results, request.limit).first);
+      return std::make_tuple(
+        found->continuation_token,
+        split(found->last_results, request.limits.max_events).first);
     }
     if (found->continuation_token != request.continuation_token) {
       return caf::make_error(
@@ -449,13 +461,14 @@ struct serve_manager_state {
     }
     found->get_rp = self->make_response_promise<
       std::tuple<std::string, std::vector<table_slice>>>();
-    found->requested = request.limit;
+    found->requested = request.limits.max_events;
+    found->min_events = request.limits.min_events;
     const auto delivered = found->try_deliver_results(false);
     if (delivered) {
       return found->get_rp;
     }
     found->delayed_attempt = detail::weak_run_delayed(
-      self, request.timeout,
+      self, request.limits.timeout,
       [this, continuation_token = request.continuation_token]() mutable {
         const auto found
           = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
@@ -530,14 +543,16 @@ auto serve_manager(
       return self->state.put(std::move(serve_id), std::move(slice));
     },
     [self](atom::get, std::string& serve_id, std::string& continuation_token,
-           uint64_t limit, duration timeout)
+           uint64_t min_events, duration timeout, uint64_t max_events)
       -> caf::result<std::tuple<std::string, std::vector<table_slice>>> {
-      return self->state.get({
-        .serve_id = std::move(serve_id),
-        .continuation_token = std::move(continuation_token),
-        .limit = limit,
-        .timeout = timeout,
-      });
+      return self->state.get(
+        {.serve_id = std::move(serve_id),
+         .continuation_token = std::move(continuation_token),
+         .limits = {
+           .max_events = max_events,
+           .min_events = min_events,
+           .timeout = timeout,
+         }});
     },
     [self](atom::status, status_verbosity verbosity,
            duration) -> caf::result<record> {
@@ -602,7 +617,18 @@ struct serve_handler_state {
                                               max_events.error(), params))};
     }
     if (*max_events) {
-      result.limit = **max_events;
+      result.limits.max_events = **max_events;
+    }
+    auto min_events = try_get<uint64_t>(params, "min_events");
+    if (not min_events) {
+      return parse_error{
+        .message = "failed to read min_events",
+        .detail = caf::make_error(ec::invalid_argument,
+                                  fmt::format("parameter: {}; got params {}",
+                                              max_events.error(), params))};
+    }
+    if (*min_events) {
+      result.limits.min_events = **min_events;
     }
     auto timeout = try_get<duration>(params, "timeout");
     if (not timeout) {
@@ -622,7 +648,7 @@ struct serve_handler_state {
         return parse_error{.message = std::move(message),
                            .detail = std::move(detail)};
       }
-      result.timeout = **timeout;
+      result.limits.timeout = **timeout;
     }
     return result;
   }
@@ -703,7 +729,8 @@ struct serve_handler_state {
     auto rp = self->make_response_promise<rest_response>();
     self
       ->request(serve_manager, caf::infinite, atom::get_v, request.serve_id,
-                request.continuation_token, request.limit, request.timeout)
+                request.continuation_token, request.limits.min_events,
+                request.limits.timeout, request.limits.max_events)
       .then(
         [rp](const std::tuple<std::string, std::vector<table_slice>>&
                result) mutable {
@@ -950,6 +977,7 @@ public:
           {"serve_id", string_type{}},
           {"continuation_token", string_type{}},
           {"max_events", uint64_type{}},
+          {"min_events", uint64_type{}},
           {"timeout", duration_type{}},
         },
         .version = api_version::v0,
