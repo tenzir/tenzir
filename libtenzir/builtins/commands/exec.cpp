@@ -24,30 +24,39 @@ namespace tenzir::plugins::exec {
 namespace {
 
 struct exec_config {
-  bool no_implicit = false;
+  std::string implicit_bytes_source = "load file -";
+  std::string implicit_events_source = "from stdin read json";
+  std::string implicit_bytes_sink = "save file -";
+  std::string implicit_events_sink = "to stdout write json";
   bool dump_ast = false;
   bool dump_diagnostics = false;
   bool dump_metrics = false;
 };
 
-auto add_implicit_source_and_sink(pipeline pipe) -> caf::expected<pipeline> {
+auto add_implicit_source_and_sink(pipeline pipe, exec_config config)
+  -> caf::expected<pipeline> {
   if (pipe.infer_type<void>()) {
     // Don't add implicit source.
-  } else if (pipe.infer_type<chunk_ptr>()) {
-    auto op = pipeline::internal_parse_as_operator("load file -");
+  } else if (pipe.infer_type<chunk_ptr>()
+             && !config.implicit_bytes_source.empty()) {
+    auto op
+      = pipeline::internal_parse_as_operator(config.implicit_bytes_source);
     if (not op) {
-      return caf::make_error(ec::logic_error,
-                             fmt::format("failed to prepend implicit "
-                                         "'load file -': {}",
-                                         op.error()));
+      return caf::make_error(
+        ec::logic_error, fmt::format("failed to prepend implicit "
+                                     "'{}': {}",
+                                     config.implicit_bytes_source, op.error()));
     }
     pipe.prepend(std::move(*op));
-  } else if (pipe.infer_type<table_slice>()) {
-    auto op = pipeline::internal_parse_as_operator("from stdin read json");
+  } else if (pipe.infer_type<table_slice>()
+             && !config.implicit_events_source.empty()) {
+    auto op
+      = pipeline::internal_parse_as_operator(config.implicit_events_source);
     if (not op) {
       return caf::make_error(ec::logic_error,
                              fmt::format("failed to prepend implicit "
-                                         "'from stdin read json': {}",
+                                         "'{}': {}",
+                                         config.implicit_events_source,
                                          op.error()));
     }
     pipe.prepend(std::move(*op));
@@ -65,22 +74,22 @@ auto add_implicit_source_and_sink(pipeline pipe) -> caf::expected<pipeline> {
   }
   if (out->is<void>()) {
     // Pipeline is already closed, nothing to do here.
-  } else if (out->is<chunk_ptr>()) {
-    auto op = pipeline::internal_parse_as_operator("save file -");
+  } else if (out->is<chunk_ptr>() && !config.implicit_bytes_sink.empty()) {
+    auto op = pipeline::internal_parse_as_operator(config.implicit_bytes_sink);
     if (not op) {
-      return caf::make_error(ec::logic_error,
-                             fmt::format("failed to append implicit "
-                                         "'save file -': {}",
-                                         op.error()));
+      return caf::make_error(
+        ec::logic_error, fmt::format("failed to append implicit "
+                                     "'{}': {}",
+                                     config.implicit_bytes_sink, op.error()));
     }
     pipe.append(std::move(*op));
-  } else if (out->is<table_slice>()) {
-    auto op = pipeline::internal_parse_as_operator("to stdout write json");
+  } else if (out->is<table_slice>() && !config.implicit_events_sink.empty()) {
+    auto op = pipeline::internal_parse_as_operator(config.implicit_events_sink);
     if (not op) {
-      return caf::make_error(ec::logic_error,
-                             fmt::format("failed to append implicit 'to stdout "
-                                         "write json': {}",
-                                         op.error()));
+      return caf::make_error(
+        ec::logic_error, fmt::format("failed to append implicit "
+                                     "'{}': {}",
+                                     config.implicit_events_sink, op.error()));
     }
     pipe.append(std::move(*op));
   }
@@ -178,13 +187,11 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
   // If the pipeline ends with events, we implicitly write the output as JSON
   // to stdout, and if it ends with bytes, we implicitly write those bytes to
   // stdout.
-  if (not cfg.no_implicit) {
-    auto implicit_pipe = add_implicit_source_and_sink(std::move(pipe));
-    if (not implicit_pipe) {
-      return std::move(implicit_pipe.error());
-    }
-    pipe = std::move(*implicit_pipe);
+  auto implicit_pipe = add_implicit_source_and_sink(std::move(pipe), cfg);
+  if (not implicit_pipe) {
+    return std::move(implicit_pipe.error());
   }
+  pipe = std::move(*implicit_pipe);
   pipe = pipe.optimize_if_closed();
   auto self = caf::scoped_actor{sys};
   auto result = caf::expected<void>{};
@@ -321,7 +328,16 @@ auto exec_command(const invocation& inv, caf::actor_system& sys)
   cfg.dump_metrics
     = caf::get_or(inv.options, "tenzir.exec.dump-metrics", false);
   auto as_file = caf::get_or(inv.options, "tenzir.exec.file", false);
-  cfg.no_implicit = caf::get_or(inv.options, "tenzir.exec.no-implicit", false);
+  cfg.implicit_bytes_sink = caf::get_or(
+    inv.options, "tenzir.exec.implicit-bytes-sink", cfg.implicit_bytes_sink);
+  cfg.implicit_events_sink = caf::get_or(
+    inv.options, "tenzir.exec.implicit-events-sink", cfg.implicit_events_sink);
+  cfg.implicit_bytes_source
+    = caf::get_or(inv.options, "tenzir.exec.implicit-bytes-source",
+                  cfg.implicit_bytes_source);
+  cfg.implicit_events_source
+    = caf::get_or(inv.options, "tenzir.exec.implicit-events-source",
+                  cfg.implicit_events_source);
   auto filename = std::string{};
   auto content = std::string{};
   if (as_file) {
@@ -370,7 +386,18 @@ public:
                    "print all diagnostics to stdout before exiting")
         .add<bool>("dump-metrics",
                    "print all diagnostics to stderr before exiting")
-        .add<bool>("no-implicit", "disable implicit source and sink"));
+        .add<std::string>("implicit-bytes-sink",
+                          "implicit sink for pipelines ending in bytes "
+                          "(default: 'save file -')")
+        .add<std::string>("implicit-events-sink",
+                          "implicit sink for pipelines ending in events "
+                          "(default: 'to stdout write json'")
+        .add<std::string>("implicit-bytes-source",
+                          "implicit source for pipelines starting with bytes "
+                          "(default: 'load file -')")
+        .add<std::string>("implicit-events-source",
+                          "implicit source for pipelines starting with events "
+                          "(default: 'from stdin read json'"));
     auto factory = command::factory{
       {"exec",
        [=](const invocation& inv, caf::actor_system& sys) -> caf::message {
