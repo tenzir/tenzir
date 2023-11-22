@@ -101,16 +101,18 @@ constexpr auto SPEC_V0 = R"_(
                 description: The continuation token that was returned with the last response. For the initial request this is null.
               max_events:
                 type: integer
-                example: 50
-                description: The maximum number of events returned. If unset, the number is unlimited.
+                example: 1024
+                default: 1024
+                description: The maximum number of events returned.
               min_events:
                 type: integer
-                example: 50
-                description: Wait for this number of events before returning. If unset, the number is unlimited.
+                example: 1
+                default: 1
+                description: Wait for this number of events before returning.
               timeout:
                 type: string
-                example: "100ms"
-                default: "100ms"
+                example: "2000ms"
+                default: "2000ms"
                 description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 5 seconds.
     responses:
       200:
