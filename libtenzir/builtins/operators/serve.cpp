@@ -961,7 +961,7 @@ public:
     return node->spawn(serve_manager);
   }
 
-  auto openapi_specification(api_version version) const -> data override {
+  auto openapi_endpoints(api_version version) const -> data override {
     if (version != api_version::v0)
       return tenzir::record{};
     auto result = from_yaml(SPEC_V0);

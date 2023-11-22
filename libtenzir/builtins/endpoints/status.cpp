@@ -137,7 +137,7 @@ class plugin final : public virtual rest_endpoint_plugin {
     return "api-status";
   };
 
-  [[nodiscard]] auto openapi_specification(api_version version) const
+  [[nodiscard]] auto openapi_endpoints(api_version version) const
     -> data override {
     if (version != api_version::v0)
       return tenzir::record{};
