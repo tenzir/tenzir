@@ -1,2 +1,0 @@
-cortexutils==2.1.0
-pytenzir[module]
