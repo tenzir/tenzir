@@ -20,45 +20,9 @@ namespace tenzir {
 namespace format {
 namespace syslog {
 
-namespace {
-
-type make_rfc5424_type() {
-  return type{
-    "syslog.rfc5424",
-    record_type{{
-      {"facility", uint64_type{}},
-      {"severity", uint64_type{}},
-      {"version", uint64_type{}},
-      {"ts", type{"timestamp", time_type{}}},
-      {"hostname", string_type{}},
-      {"app_name", string_type{}},
-      {"process_id", string_type{}},
-      {"message_id", string_type{}},
-      // TODO: The index is currently incapable of handling map_type. Hence, the
-      // structured_data is disabled.
-      // {"structered_data", map_type{
-      //   string_type{}.name("id"),
-      //   map_type{string_type{}.name("key"),
-      //   string_type{}.name("value")}.name("params")},
-      // },
-      {"message", string_type{}},
-    }},
-  };
-}
-
-type make_unknown_type() {
-  // clang-format off
-  return type{"syslog.unknown", record_type{{
-    {"syslog_message", string_type{}}
-  }},};
-  // clang-format on
-}
-
-} // namespace
-
 reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
   : super(options),
-    syslog_rfc5424_type_{make_rfc5424_type()},
+    syslog_rfc5424_type_{make_syslog_type()},
     syslog_unkown_type_{make_unknown_type()} {
   if (in != nullptr)
     reset(std::move(in));
