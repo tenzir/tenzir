@@ -6,14 +6,24 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/data.hpp>
+#include <tenzir/detail/range_map.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/project.hpp>
+#include <tenzir/table_slice.hpp>
+#include <tenzir/table_slice_builder.hpp>
+#include <tenzir/type.hpp>
 #include <tenzir/typed_array.hpp>
 
 #include <arrow/array.h>
+#include <arrow/array/builder_primitive.h>
+#include <arrow/type.h>
+#include <caf/sum_type.hpp>
 #include <tsl/robin_map.h>
 
+#include <chrono>
 #include <string>
 
 namespace tenzir::plugins::hashtable_context {
@@ -25,17 +35,59 @@ public:
   /// Emits context information for every event in `slice` in order.
   auto apply(table_slice slice, record parameters) const
     -> caf::expected<typed_array> override {
-    (void)parameters;
-    auto builder = arrow::StringBuilder{};
-    for (size_t i = 0; i < slice.rows(); ++i) {
-      auto ok = builder.Append("unimplemented");
-      if (!ok.ok())
-        return caf::make_error(ec::unimplemented, ":sad:");
+    // fields are in parameters
+    if (not caf::holds_alternative<record_type>(slice.schema())) {
+      return typed_array{null_type{}, {}};
     }
-    auto ok = builder.Finish();
-    if (!ok.ok())
-      return caf::make_error(ec::unimplemented, ":sad:");
-    return typed_array{string_type{}, ok.ValueUnsafe()};
+    auto resolved_slice = resolve_enumerations(slice);
+    auto t = caf::get<record_type>(resolved_slice.schema());
+    auto found_indicators = std::vector<table_slice>{};
+    auto array = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+    for (const auto& row : values(t, *array)) {
+      for (const auto& a : *row) {
+        if (not parameters.empty()
+            and not parameters.contains(std::string{a.first})) {
+          continue;
+        }
+        if (auto it = offset_table.find(a.second); it != offset_table.end()) {
+          found_indicators.emplace_back(*slice_table.lookup(it->second));
+        }
+      }
+      if (not found_indicators.empty()) {
+        // schema: context & timestamp of hit
+        const auto result_schema = type{
+          "tenzir.context.hit",
+          record_type{
+            {"event", found_indicators.front().schema()},
+            {"timestamp", type{duration_type{}}},
+          },
+        };
+        auto result_builder = resolved_slice.schema().make_arrow_builder(
+          arrow::default_memory_pool());
+        for (const auto& row :
+             values(caf::get<record_type>(resolved_slice.schema()), *array)) {
+          const auto append_row_result
+            = caf::get<arrow::StructBuilder>(*result_builder).Append();
+          TENZIR_ASSERT(append_row_result.ok());
+          const auto append_event_result = append_builder(
+            caf::get<record_type>(resolved_slice.schema()),
+            caf::get<arrow::StructBuilder>(
+              *caf::get<arrow::StructBuilder>(*result_builder).field_builder(0)),
+            *row);
+          TENZIR_ASSERT(append_event_result.ok());
+          const auto append_indicators_result = append_builder(
+            duration_type{},
+            caf::get<arrow::NumericBuilder<arrow::DurationType>>(
+              *caf::get<arrow::StructBuilder>(*result_builder).child_builder(1)),
+            caf::get<view<duration>>(make_data_view(
+              std::chrono::system_clock::now().time_since_epoch())));
+          TENZIR_ASSERT(append_indicators_result.ok());
+        }
+        auto result = result_builder->Finish().ValueOrDie();
+        return typed_array{result_schema, result};
+      }
+    }
+    return typed_array{null_type{}, {}};
   }
 
   /// Inspects the context.
