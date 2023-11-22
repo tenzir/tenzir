@@ -773,7 +773,7 @@ public:
   virtual auto status(status_verbosity v) const -> record = 0;
 
   /// Updates the context.
-  virtual auto update(table_slice slice, record parameters) -> caf::error = 0;
+  virtual auto update(table_slice slice, record parameters) -> record = 0;
 };
 
 class context_plugin : public virtual plugin {

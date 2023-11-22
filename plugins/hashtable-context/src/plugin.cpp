@@ -45,14 +45,42 @@ public:
   }
 
   /// Updates the context.
-  auto update(table_slice slice, record parameters) -> caf::error override {
-    (void)slice;
-    (void)parameters;
-    return caf::none;
+  auto update(table_slice slice, record parameters) -> record override {
+    // context does stuff on its own with slice & parameters
+    if (parameters.contains("clear")) {
+      auto* clear = get_if<bool>(&parameters, "clear");
+      if (clear and *clear) {
+        current_offset = 0;
+        offset_table.clear();
+        slice_table.clear();
+      }
+    }
+    // slice schema for this update is:
+    /*
+        {
+          "key": string,
+          "context" : data,
+          "retire": bool,
+        }
+        all of them arrays
+        if not = diagnostic & ignore.
+    */
+    auto t = caf::get<record_type>(slice.schema());
+    auto array = to_record_batch(slice)->ToStructArray().ValueOrDie();
+    for (auto i = current_offset; i < (current_offset + slice.rows()); ++i) {
+      auto v = slice.at(0, i);
+      offset_table[materialize(v)] = i;
+    }
+    slice_table.insert(current_offset, current_offset + slice.rows(), slice);
+    current_offset += slice.rows();
+
+    return {{"updated", slice.rows()}};
   }
 
 private:
-  tsl::robin_map<data, data> table;
+  tsl::robin_map<data, size_t> offset_table;
+  detail::range_map<size_t, table_slice> slice_table;
+  size_t current_offset = 0;
 };
 
 class plugin : public virtual context_plugin {

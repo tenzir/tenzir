@@ -57,10 +57,10 @@ public:
   }
 
   /// Updates the context.
-  auto update(table_slice slice, record parameters) -> caf::error override {
+  auto update(table_slice slice, record parameters) -> record override {
     (void)slice;
     (void)parameters;
-    return caf::none;
+    return {};
   }
 
 private:
