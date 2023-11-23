@@ -19,11 +19,15 @@
 #include <string>
 #include <vector>
 
+#undef linux
+#undef unix
+
 namespace tenzir {
 
 /// An operating system process.
 struct process {
   std::string name;
+  std::string command_line;
   uint32_t pid;
   uint32_t ppid;
   uid_t uid;
@@ -41,6 +45,7 @@ struct process {
 /// A network socket.
 struct socket {
   uint32_t pid;
+  std::string process_name;
   int protocol;
   ip local_addr;
   uint16_t local_port;
@@ -70,7 +75,9 @@ public:
 
 protected:
   virtual auto fetch_processes() -> std::vector<process> = 0;
-  virtual auto sockets_for(uint32_t pid) -> std::vector<socket> = 0;
+  virtual auto fetch_sockets() -> std::vector<socket> = 0;
+
+  // virtual auto sockets_for(uint32_t pid) -> std::vector<socket> = 0;
 };
 
 #if TENZIR_LINUX
@@ -83,8 +90,7 @@ public:
   ~linux() final;
 
   auto fetch_processes() -> std::vector<process> final;
-
-  auto sockets_for(uint32_t pid) -> std::vector<socket> final;
+  auto fetch_sockets() -> std::vector<socket> final;
 
 private:
   linux();
@@ -103,8 +109,9 @@ public:
   ~darwin() final;
 
   auto fetch_processes() -> std::vector<process> final;
+  auto fetch_sockets() -> std::vector<socket> final;
 
-  auto sockets_for(uint32_t pid) -> std::vector<socket> final;
+  auto sockets_for(uint32_t pid) -> std::vector<socket>;
 
 private:
   darwin();

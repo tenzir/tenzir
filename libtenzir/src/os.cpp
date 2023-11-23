@@ -36,6 +36,7 @@ auto process_type() -> type {
     "tenzir.process",
     record_type{
       {"name", string_type{}},
+      {"command_line", string_type{}},
       {"pid", uint64_type{}},
       {"ppid", uint64_type{}},
       {"uid", uint64_type{}},
@@ -80,8 +81,9 @@ auto os::make() -> std::unique_ptr<os> {
 auto os::processes() -> table_slice {
   auto builder = table_slice_builder{process_type()};
   for (const auto& proc : fetch_processes()) {
-    auto okay = builder.add(proc.name, proc.pid, proc.ppid, proc.uid, proc.gid,
-                            proc.ruid, proc.rgid, proc.priority, proc.startup);
+    auto okay = builder.add(proc.name, proc.command_line, proc.pid, proc.ppid,
+                            proc.uid, proc.gid, proc.ruid, proc.rgid,
+                            proc.priority, proc.startup);
     okay = builder.add(proc.vsize ? make_view(*proc.vsize) : data_view{});
     TENZIR_ASSERT(okay);
     okay = builder.add(proc.rsize ? make_view(*proc.rsize) : data_view{});
@@ -96,17 +98,15 @@ auto os::processes() -> table_slice {
 
 auto os::sockets() -> table_slice {
   auto builder = table_slice_builder{socket_type()};
-  for (const auto& proc : fetch_processes()) {
-    auto pid = detail::narrow_cast<uint32_t>(proc.pid);
-    for (const auto& socket : sockets_for(pid)) {
-      auto okay = builder.add(uint64_t{proc.pid}, proc.name,
-                              detail::narrow_cast<uint64_t>(socket.protocol),
-                              socket.local_addr, uint64_t{socket.local_port},
-                              socket.remote_addr, uint64_t{socket.remote_port},
-                              not socket.state.empty() ? make_view(socket.state)
-                                                       : data_view{});
-      TENZIR_ASSERT(okay);
-    }
+  // for (const auto& proc : fetch_processes()) {
+  for (const auto& socket : fetch_sockets()) {
+    auto okay = builder.add(socket.pid, socket.process_name,
+                            detail::narrow_cast<uint64_t>(socket.protocol),
+                            socket.local_addr, uint64_t{socket.local_port},
+                            socket.remote_addr, uint64_t{socket.remote_port},
+                            not socket.state.empty() ? make_view(socket.state)
+                                                     : data_view{});
+    TENZIR_ASSERT(okay);
   }
   return builder.finish();
 }
@@ -120,7 +120,7 @@ struct linux::state {
 
 auto linux::make() -> std::unique_ptr<linux> {
   auto result = std::unique_ptr<linux>{new linux};
-  result.clock_tick = sysconf(_SC_CLK_TCK);
+  result->state_->clock_tick = sysconf(_SC_CLK_TCK);
   return result;
 }
 
@@ -138,8 +138,10 @@ auto linux::fetch_processes() -> std::vector<process> {
       try {
         auto stat = task.get_stat();
         auto status = task.get_status();
+        auto command_line = detail::join(task.get_cmdline(), " ");
         auto proc = process{
           .name = task.get_comm(),
+          .command_line = std::move(command_line),
           .pid = detail::narrow_cast<uint32_t>(task.id()),
           .ppid = detail::narrow_cast<uint32_t>(stat.ppid),
           .uid = detail::narrow_cast<uid_t>(status.uid.effective),
@@ -200,9 +202,11 @@ auto to_string(pfs::net_socket::net_state state) -> std::string {
   return {};
 }
 
-auto to_socket(const pfs::net_socket& s, uint32_t pid, int protocol) -> socket {
+auto to_socket(const pfs::net_socket& s, uint32_t pid, std::string comm,
+               int protocol) -> socket {
   auto result = socket{};
   result.pid = pid;
+  result.process_name = std::move(comm);
   result.protocol = protocol;
   if (auto addr = to<ip>(s.local_ip.to_string()))
     result.local_addr = *addr;
@@ -210,20 +214,58 @@ auto to_socket(const pfs::net_socket& s, uint32_t pid, int protocol) -> socket {
   if (auto addr = to<ip>(s.remote_ip.to_string()))
     result.remote_addr = *addr;
   result.remote_port = s.remote_port;
-  result.state = to_string(s.net_state);
+  result.state = to_string(s.socket_net_state);
+  return result;
 }
 
 } // namespace
 
-auto linux::sockets_for(uint32_t pid) -> std::vector<socket> {
+// The algorithm for the `fetch_sockets()` implementation was taken
+// from zeek-agent-v2 [1], written by Rob Sommer.
+// TODO: Consider using the netlink API to list sockets instead.
+// [1]:
+// https://github.com/zeek/zeek-agent-v2/blob/main/src/tables/sockets/sockets.linux.cc
+auto linux::fetch_sockets() -> std::vector<socket> {
   auto result = std::vector<socket>{};
-  auto add = [&](auto&& sockets, int proto) {
-    for (const auto& socket : sockets)
-      result.push_back(to_socket(socket, pid, proto));
+  // First build up a global map inode -> pid
+  struct pid_name_pair {
+    pid_t pid;
+    std::string name;
   };
-  auto net = state_->procfs.get_net(detail::narrow_cast<int>(pid));
+  auto processes = std::unordered_map<ino_t, pid_name_pair>{};
+  for (const auto& process : state_->procfs.get_processes()) {
+    try {
+      for (const auto& [id, fd] : process.get_fds()) {
+        try {
+          auto inode = fd.get_target_stat().st_ino;
+          auto pid = process.id();
+          auto comm = process.get_comm();
+          // auto cmdline = process.get_cmdline();
+          // TENZIR_WARN("cmdline: {}", cmdline);
+          processes.emplace(inode, pid_name_pair{
+                                     .pid = pid,
+                                     .name = std::move(comm),
+                                   });
+        } catch (const std::system_error& e) {
+          // Some processes won't exist anymore since we got the pid; ignore.
+          continue;
+        }
+      }
+    } catch (const std::exception& e) {
+      // Ignore permission errors etc.
+    }
+  }
+  // Go through the global list of sockets and use the built map
+  // to associate socket -> pid.
+  auto add = [&](auto&& sockets, int proto) {
+    for (const auto& pfs_socket : sockets) {
+      auto pd = processes[pfs_socket.inode];
+      result.emplace_back(to_socket(pfs_socket, pd.pid, pd.name, proto));
+    }
+  };
+  auto net = state_->procfs.get_net();
   add(net.get_icmp(), IPPROTO_ICMP);
-  add(net.get_icmp6(), IPPROTO_ICMP6);
+  add(net.get_icmp6(), IPPROTO_ICMPV6);
   add(net.get_raw(), IPPROTO_RAW);
   add(net.get_raw6(), IPPROTO_RAW);
   add(net.get_tcp(), IPPROTO_TCP);
@@ -354,6 +396,18 @@ auto socket_state_to_string(auto proto, auto state) -> std::string_view {
 }
 
 } // namespace
+
+auto darwin::fetch_sockets() -> std::vector<socket> {
+  auto result = std::vector<socket>{};
+  for (const auto& proc : fetch_processes()) {
+    auto pid = detail::narrow_cast<uint32_t>(proc.pid);
+    for (auto sockets : sockets_for(pid)) {
+      result.insert(result.end(), std::make_move_iterator(sockets.begin()),
+                    std::make_move_iterator(sockets.end()));
+    }
+  }
+  return builder.finish();
+}
 
 auto darwin::sockets_for(uint32_t pid) -> std::vector<socket> {
   auto p = detail::narrow_cast<pid_t>(pid);
