@@ -9,6 +9,8 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/range_map.hpp>
+#include <tenzir/fbs/data.hpp>
+#include <tenzir/flatbuffer.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/project.hpp>
@@ -33,21 +35,36 @@ namespace tenzir::plugins::hashtable_context {
 
 namespace {
 
-class ctx : public virtual context {
+class ctx final : public virtual context {
 public:
+  ctx() noexcept = default;
+
+  explicit ctx(tsl::robin_map<data, data> context_entries) noexcept
+    : context_entries{std::move(context_entries)} {
+    // nop
+  }
+
   /// Emits context information for every event in `slice` in order.
   auto apply(table_slice slice, record parameters) const
     -> caf::expected<std::vector<typed_array>> override {
-    // TODO: Support more than 1 field if required (ASAP actually). More complex.
     auto resolved_slice = resolve_enumerations(slice);
-    auto field_name = caf::get_if<std::string>(&parameters["field"]);
-    if (!field_name) {
-      // todo return null array of length slice.rows().
-      // Or decide what to do here ...
+    auto field_name = std::optional<std::string>{};
+    for (const auto& [key, value] : parameters) {
+      if (key == "field") {
+        const auto* str = caf::get_if<std::string>(&value);
+        if (not str) {
+          return caf::make_error(ec::invalid_argument,
+                                 "invalid argument type for `field`: expected "
+                                 "a string");
+        }
+        field_name = *str;
+        continue;
+      }
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("invalid argument `{}`", key));
     }
-    if (field_name->empty()) {
-      // todo return null array of length slice.rows().
-      // Or decide what to do here ...
+    if (not field_name) {
+      return caf::make_error(ec::invalid_argument, "missing argument `field`");
     }
     auto field_builder = series_builder{};
     auto column_offset
@@ -61,13 +78,11 @@ public:
     auto [type, slice_array] = column_offset->get(resolved_slice);
     for (auto value : values(type, *slice_array)) {
       if (auto it = context_entries.find(value); it != context_entries.end()) {
-        // match
         auto r = field_builder.record();
         r.field("key", it->first);
         r.field("context", it->second);
         r.field("timestamp", std::chrono::system_clock::now());
       } else {
-        // no match
         field_builder.null();
       }
     }
@@ -100,32 +115,34 @@ public:
       }
     }
     if (slice.rows() == 0) {
-      TENZIR_INFO("got an empty slice");
+      // We can ignore empty slices.
       return record{};
     }
-    // slice schema for this update is:
-    /*
-        {
-          "key": string,
-          "context" : data,
-          "retire": bool,
-        }
-    */
-    const auto& t = caf::get<record_type>(slice.schema());
-    auto k = t.resolve_key("key");
-    auto c = t.resolve_key("context");
-
-    auto [k_type, k_slice_array] = k->get(slice);
-    auto [c_type, c_slice_array] = c->get(slice);
-    auto k_val = values(k_type, *k_slice_array);
-    auto c_val = values(c_type, *c_slice_array);
-    auto k_it = k_val.begin();
-    auto c_it = c_val.begin();
-    while (k_it != k_val.end() or c_it != c_val.end()) {
-      context_entries.emplace(materialize(*k_it), materialize(*c_it));
-      ++k_it;
-      ++c_it;
+    const auto& layout = caf::get<record_type>(slice.schema());
+    auto key_column = layout.resolve_key("key");
+    if (not key_column) {
+      // If there's no key column then we cannot do much.
+      return record{};
     }
+    auto [key_type, key_array] = key_column->get(slice);
+    auto context_column = layout.resolve_key("context");
+    auto context_type = type{};
+    auto context_array = std::static_pointer_cast<arrow::Array>(
+      std::make_shared<arrow::NullArray>(slice.rows()));
+    if (context_column) {
+      std::tie(context_type, context_array) = context_column->get(slice);
+    }
+    auto key_values = values(key_type, *key_array);
+    auto context_values = values(context_type, *context_array);
+    auto key_it = key_values.begin();
+    auto context_it = context_values.begin();
+    while (key_it != key_values.end()) {
+      TENZIR_ASSERT_CHEAP(context_it != context_values.end());
+      context_entries.emplace(materialize(*key_it), materialize(*context_it));
+      ++key_it;
+      ++context_it;
+    }
+    TENZIR_ASSERT_CHEAP(context_it == context_values.end());
     return record{{"updated", slice.rows()}};
   }
 
@@ -139,7 +156,34 @@ public:
   }
 
   auto save() const -> caf::expected<chunk_ptr> override {
-    return ec::unimplemented;
+    // We save the context by formatting into a record of this format:
+    //   [{key: key, value: value}, ...]
+    auto builder = flatbuffers::FlatBufferBuilder{};
+    auto value_offsets = std::vector<flatbuffers::Offset<fbs::Data>>{};
+    value_offsets.reserve(context_entries.size());
+    for (const auto& [key, value] : context_entries) {
+      auto field_offsets
+        = std::vector<flatbuffers::Offset<fbs::data::RecordField>>{};
+      field_offsets.reserve(2);
+      const auto key_key_offset = builder.CreateSharedString("key");
+      const auto key_value_offset = pack(builder, key);
+      field_offsets.emplace_back(fbs::data::CreateRecordField(
+        builder, key_key_offset, key_value_offset));
+      const auto value_key_offset = builder.CreateSharedString("value");
+      const auto value_value_offset = pack(builder, value);
+      field_offsets.emplace_back(fbs::data::CreateRecordField(
+        builder, value_key_offset, value_value_offset));
+      const auto record_offset
+        = fbs::data::CreateRecordDirect(builder, &field_offsets);
+      value_offsets.emplace_back(fbs::CreateData(
+        builder, fbs::data::Data::record, record_offset.Union()));
+    }
+    const auto list_offset
+      = fbs::data::CreateListDirect(builder, &value_offsets);
+    const auto data_offset
+      = fbs::CreateData(builder, fbs::data::Data::list, list_offset.Union());
+    fbs::FinishDataBuffer(builder, data_offset);
+    return chunk::make(builder.Release());
   }
 
 private:
@@ -166,8 +210,15 @@ class plugin : public virtual context_plugin {
 
   auto load_context(chunk_ptr serialized) const
     -> caf::expected<std::unique_ptr<context>> override {
-    // do something...
-    return std::make_unique<ctx>();
+    auto fb = flatbuffer<fbs::Data>::make(std::move(serialized));
+    if (not fb) {
+      return caf::make_error(
+        ec::serialization_error,
+        fmt::format("failed to deserialize hashtbale context: {}", fb.error()));
+    }
+    // FIXME: reconstruct context_entries from fb
+    auto context_entries = tsl::robin_map<data, data>{};
+    return std::make_unique<ctx>(std::move(context_entries));
   }
 };
 
