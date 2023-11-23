@@ -98,7 +98,7 @@ struct record_printer : printer_base<record_printer> {
   template <class Iterator>
   bool print(Iterator& out, const record& xs) const {
     auto kvp = printers::str << ": " << printers::data;
-    auto p = '<' << (kvp % ", ") << '>';
+    auto p = '{' << (kvp % ", ") << '}';
     return p.print(out, xs);
   }
 };

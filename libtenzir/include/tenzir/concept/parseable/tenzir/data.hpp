@@ -71,11 +71,11 @@ private:
     // with named fields. Allowing a mixture of both would mean we'd
     // have to deal with ambiguous inputs.
     auto record_parser =
-        '<' >> ~as<record>(named_field % ',') >> trailing_comma >> '>'
+        '{' >> ~as<record>(named_field % ',') >> trailing_comma >> '}'
         // Creating a record with repeated field names technically violates
         // the consistency of the underlying stable_map. We live with that
         // until record is refactored into a proper type (FIXME).
-      | ('<' >> (unnamed_field % ',') >> trailing_comma >> '>')
+      | ('{' >> (unnamed_field % ',') >> trailing_comma >> '}')
         ->* [](record::vector_type&& xs) {
           return record::make_unsafe(std::move(xs));
         };
