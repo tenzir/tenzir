@@ -16,6 +16,7 @@
 #include <tenzir/detail/overload.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/type.hpp>
 
@@ -145,6 +146,19 @@ public:
 
   auto name() const -> std::string override {
     return std::string{operator_name(Mode)};
+  }
+
+  // Put can also be used as a source.
+  auto operator()(operator_control_plane& ctrl) const -> generator<table_slice>
+    requires(Mode == mode::put)
+  {
+    auto builder = series_builder{};
+    // We need to add a single field here as `put` uses transform_columns
+    // internally, which does not support empty records.
+    builder.data(record{{"DO_NOT_USE_OR_YOU_WILL_BE_FIRED", caf::none}});
+    auto slices = builder.finish_as_table_slice("tenzir.put");
+    TENZIR_ASSERT_CHEAP(slices.size() == 1);
+    co_yield (*this)(slices[0], ctrl);
   }
 
   auto operator()(const table_slice& slice, operator_control_plane& ctrl) const
@@ -279,7 +293,11 @@ template <mode Mode>
 class plugin final : public virtual operator_plugin<put_extend_operator<Mode>> {
 public:
   auto signature() const -> operator_signature override {
-    return {.transformation = true};
+    return {
+      .source = (Mode == mode::put),
+      .transformation = true,
+      .sink = false,
+    };
   }
 
   auto make_operator(std::string_view pipeline) const

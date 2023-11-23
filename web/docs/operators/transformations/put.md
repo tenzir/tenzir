@@ -16,6 +16,11 @@ All other fields are removed from the input.
 The difference between `put` and [`extend`](extend.md) is that `put` drops all
 fields not explicitly specified, whereas `extend` only appends fields.
 
+:::info Put can also be used as a source
+The `put` operator can also be used as a source operator to inject an event into
+a pipeline.
+:::
+
 ### `<field[=operand]>`
 
 The `field` describes the name of the field to select. The extended form with an
