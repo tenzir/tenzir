@@ -766,7 +766,7 @@ public:
 
   /// Emits context information for every event in `slice` in order.
   virtual auto apply(table_slice slice, record parameters) const
-    -> caf::expected<typed_array>
+    -> caf::expected<std::vector<typed_array>>
     = 0;
 
   /// Inspects the context.

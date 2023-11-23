@@ -12,18 +12,21 @@
 #include <tenzir/fwd.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/project.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/type.hpp>
 #include <tenzir/typed_array.hpp>
 
 #include <arrow/array.h>
+#include <arrow/array/array_base.h>
 #include <arrow/array/builder_primitive.h>
 #include <arrow/type.h>
 #include <caf/sum_type.hpp>
 #include <tsl/robin_map.h>
 
 #include <chrono>
+#include <memory>
 #include <string>
 
 namespace tenzir::plugins::hashtable_context {
@@ -34,76 +37,41 @@ class ctx : public virtual context {
 public:
   /// Emits context information for every event in `slice` in order.
   auto apply(table_slice slice, record parameters) const
-    -> caf::expected<typed_array> override {
-    // fields are in parameters
-    if (not caf::holds_alternative<record_type>(slice.schema())) {
-      return typed_array{null_type{}, {}};
-    }
+    -> caf::expected<std::vector<typed_array>> override {
+    // TODO: Support more than 1 field if required (ASAP actually). More complex.
     auto resolved_slice = resolve_enumerations(slice);
-    auto t = caf::get<record_type>(resolved_slice.schema());
-    auto found_indicators = std::vector<table_slice>{};
-    auto array = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
-
-    auto fields = caf::get_if<list>(&parameters["fields"]);
-    if (!fields) {
+    auto field_name = caf::get_if<std::string>(&parameters["field"]);
+    if (!field_name) {
       // todo return null array of length slice.rows().
       // Or decide what to do here ...
     }
-    for (auto field : *fields) {
-      auto column_offset = caf::get<record_type>(slice.schema()).resolve_prefix(caf::get<std::string>(field));
-      auto [type, array] = column.get(resolved_slice);
-      for (auto value : values(type, *array)) {
-        if (auto it = offset_table.find(value); it != offset_table.end()) {
+    if (field_name->empty()) {
+      // todo return null array of length slice.rows().
+      // Or decide what to do here ...
+    }
+    auto field_builder = series_builder{};
+    auto column_offset
+      = caf::get<record_type>(slice.schema()).resolve_key(*field_name);
+    if (not column_offset) {
+      for (auto i = size_t{0}; i < slice.rows(); ++i) {
+        field_builder.null();
+      }
+      return field_builder.finish();
+    }
+    auto [type, slice_array] = column_offset->get(resolved_slice);
+    for (auto value : values(type, *slice_array)) {
+      if (auto it = context_entries.find(value); it != context_entries.end()) {
+        // match
+        auto r = field_builder.record();
+        r.field("key", it->first);
+        r.field("context", it->second);
+        r.field("timestamp", std::chrono::system_clock::now());
+      } else {
+        // no match
+        field_builder.null();
       }
     }
-    for (const auto& row : values(t, *array)) {
-      for (const auto& a : *row) {
-        if (not parameters.empty()
-            and not parameters.contains(std::string{a.first})) {
-          continue;
-        }
-        if (auto it = offset_table.find(a.second); it != offset_table.end()) {
-          found_indicators.emplace_back(*slice_table.lookup(it->second));
-        }
-      }
-      if (not found_indicators.empty()) {
-        // schema: context & timestamp of hit
-        const auto result_schema = type{
-          "tenzir.context.hit",
-          record_type{
-            {"event", list_type{found_indicators.front().schema()}},
-            {"timestamp", type{duration_type{}}},
-          },
-        };
-        builder = series_builder{};
-        auto guard = builder.record();
-        guard.field("context", 
-        //auto result_builder = resolved_slice.schema().make_arrow_builder(
-        //  arrow::default_memory_pool());
-        for (const auto& row :
-             values(caf::get<record_type>(resolved_slice.schema()), *array)) {
-          const auto append_row_result
-            = caf::get<arrow::StructBuilder>(*result_builder).Append();
-          TENZIR_ASSERT(append_row_result.ok());
-          const auto append_event_result = append_builder(
-            caf::get<record_type>(resolved_slice.schema()),
-            caf::get<arrow::StructBuilder>(
-              *caf::get<arrow::StructBuilder>(*result_builder).field_builder(0)),
-            *row);
-          TENZIR_ASSERT(append_event_result.ok());
-          const auto append_indicators_result = append_builder(
-            duration_type{},
-            caf::get<arrow::NumericBuilder<arrow::DurationType>>(
-              *caf::get<arrow::StructBuilder>(*result_builder).child_builder(1)),
-            caf::get<view<duration>>(make_data_view(
-              std::chrono::system_clock::now().time_since_epoch())));
-          TENZIR_ASSERT(append_indicators_result.ok());
-        }
-        auto result = result_builder->Finish().ValueOrDie();
-        return typed_array{result_schema, result};
-      }
-    }
-    return typed_array{null_type{}, {}};
+    return field_builder.finish();
   }
 
   /// Inspects the context.
@@ -120,6 +88,7 @@ public:
       if (clear and *clear) {
         current_offset = 0;
         offset_table.clear();
+        context_entries.clear();
         slice_table.clear();
       }
     }
@@ -137,8 +106,6 @@ public:
         all of them arrays
         if not = diagnostic & ignore.
     */
-    //auto t = caf::get<record_type>(slice.schema());
-    //auto array = to_record_batch(slice)->ToStructArray().ValueOrDie();
     for (auto i = current_offset; i < (current_offset + slice.rows()); ++i) {
       auto v = slice.at(0, i);
       offset_table[materialize(v)] = i;
@@ -154,18 +121,17 @@ public:
     return ec::unimplemented;
   }
 
-  auto update(record parameters)
-    -> caf::expected<record> override {
+  auto update(record parameters) -> caf::expected<record> override {
     return ec::unimplemented;
   }
 
-  auto save() const
-    -> caf::expected<chunk_ptr> override {
+  auto save() const -> caf::expected<chunk_ptr> override {
     return ec::unimplemented;
   }
 
 private:
   tsl::robin_map<data, size_t> offset_table;
+  tsl::robin_map<data, record> context_entries;
   detail::range_map<size_t, table_slice> slice_table;
   size_t current_offset = 0;
 };

@@ -486,6 +486,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::table_slice_column>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::uuid>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::partition_info>))
+  TENZIR_ADD_TYPE_ID((std::vector<tenzir::typed_array>))
   TENZIR_ADD_TYPE_ID(
     (std::unordered_map<tenzir::uuid, tenzir::partition_synopsis_ptr>))
   TENZIR_ADD_TYPE_ID((std::unordered_map<tenzir::type, //
