@@ -390,13 +390,17 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
           " initialize the libtenzir/aux/pfs submodule")
     endif ()
     add_subdirectory(aux/pfs)
+    export(
+      EXPORT pfsTargets
+      FILE pfs-config.cmake
+      NAMESPACE pfs::)
     add_library(pfs::pfs ALIAS pfs)
     dependency_summary("pfs" "${CMAKE_CURRENT_SOURCE_DIR}/aux/pfs"
                        "Dependencies")
   else ()
     dependency_summary("pfs" pfs::pfs "Dependencies")
   endif ()
-  target_link_libraries(libtenzir PRIVATE pfs::pfs)
+  target_link_libraries(libtenzir PRIVATE pfs)
 endif()
 
 # Link against a backtrace library.
