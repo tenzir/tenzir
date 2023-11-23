@@ -17,5 +17,5 @@
     "version for releases that contain major format changes to the on-disk",
     "layout of Tenzir's partitions."
   ],
-  "tenzir-partition-version": 2
+  "tenzir-partition-version": 3
 }
