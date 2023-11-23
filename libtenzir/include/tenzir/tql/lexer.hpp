@@ -42,6 +42,9 @@ TENZIR_ENUM(
   error);
 
 struct token {
+  token(token_kind kind, size_t end) : kind{kind}, end{end} {
+  }
+
   token_kind kind;
   size_t end;
 };
@@ -51,10 +54,11 @@ auto lex(std::string_view content) -> std::vector<token>;
 struct parse_tree {
   struct node {
     // TODO: Enum instead of string.
+    /// What this parse tree node represents.
     std::string kind;
     size_t begin{};
     size_t end{};
-    // 0 means nothing
+    /// Linked list of parse tree nodes. 0 means nothing.
     size_t first_child = 0;
     size_t right_sibling = 0;
 

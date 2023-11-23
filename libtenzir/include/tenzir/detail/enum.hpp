@@ -32,19 +32,19 @@
 /// `std::string_view`).
 #define TENZIR_ENUM(name, ...)                                                 \
   enum class name { __VA_ARGS__ };                                             \
-  inline auto to_string(name x)->std::string_view {                            \
+  inline auto to_string(name x) -> std::string_view {                          \
     switch (x) {                                                               \
       using enum name;                                                         \
       TENZIR_PP_FOR(TENZIR_ENUM_CASE, __VA_ARGS__)                             \
     }                                                                          \
   }                                                                            \
-  inline auto from_string_impl(tenzir::tag<name>, std::string_view str)        \
-    ->std::optional<name> {                                                    \
+  inline auto adl_from_string(tenzir::tag<name>, std::string_view str)         \
+    -> std::optional<name> {                                                   \
     using enum name;                                                           \
     TENZIR_PP_FOR(TENZIR_ENUM_CHECK, __VA_ARGS__);                             \
     return std::nullopt;                                                       \
   }                                                                            \
-  auto inspect(auto& f, name& x)->bool {                                       \
+  auto inspect(auto& f, name& x) -> bool {                                     \
     return tenzir::detail::inspect_enum_str(                                   \
       f, x, {TENZIR_PP_FOR(TENZIR_ENUM_STR, __VA_ARGS__)});                    \
   }                                                                            \
@@ -53,9 +53,9 @@
 namespace tenzir {
 
 template <class T>
-  requires requires { from_string_impl(tag_v<T>, std::string_view{}); }
+  requires requires { adl_from_string(tag_v<T>, std::string_view{}); }
 auto from_string(std::string_view str) -> std::optional<T> {
-  return from_string_impl(tag_v<T>, str);
+  return adl_from_string(tag_v<T>, str);
 }
 
 } // namespace tenzir
