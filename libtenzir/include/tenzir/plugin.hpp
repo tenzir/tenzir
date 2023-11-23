@@ -770,10 +770,17 @@ public:
     = 0;
 
   /// Inspects the context.
-  virtual auto status(status_verbosity v) const -> record = 0;
+  virtual auto show() const -> record = 0;
 
   /// Updates the context.
-  virtual auto update(table_slice slice, record parameters) -> record = 0;
+  virtual auto update(table_slice events, record parameters)
+    -> caf::exptected<record>
+    = 0;
+
+  /// Updates the context.
+  virtual auto update(chunk_ptr bytes, record parameters)
+    -> caf::exptected<record>
+    = 0;
 };
 
 class context_plugin : public virtual plugin {
@@ -782,6 +789,9 @@ public:
   [[nodiscard]] virtual auto make_context(record parameters) const
     -> caf::expected<std::unique_ptr<context>>
     = 0;
+  [[nodiscard]] virtual auto context_name() const -> std::string {
+    return name();
+  };
 };
 
 // -- aspect plugin ------------------------------------------------------------

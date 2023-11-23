@@ -57,10 +57,20 @@ public:
   }
 
   /// Updates the context.
-  auto update(table_slice slice, record parameters) -> record override {
-    (void)slice;
+  auto update(table_slice events, record parameters)
+    -> caf::expected<record> override {
+    (void)events;
     (void)parameters;
     return {};
+  }
+
+  /// Updates the context.
+  auto update(chunk_ptr bytes, record parameters)
+    -> caf::expected<record> override {
+    (void)bytes;
+    (void)parameters;
+    return caf::error(ec::unimplemented,
+                      "constants-context can not be updated with bytes");
   }
 
 private:
@@ -77,6 +87,10 @@ class plugin : public virtual context_plugin {
 
   auto name() const -> std::string override {
     return "constants-context";
+  }
+
+  auto context_name() const -> std::string override {
+    return "constants";
   }
 
   auto make_context(record fields) const
