@@ -43,6 +43,19 @@ public:
     auto t = caf::get<record_type>(resolved_slice.schema());
     auto found_indicators = std::vector<table_slice>{};
     auto array = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+
+    auto fields = caf::get_if<list>(&parameters["fields"]);
+    if (!fields) {
+      // todo return null array of length slice.rows().
+      // Or decide what to do here ...
+    }
+    for (auto field : *fields) {
+      auto column_offset = caf::get<record_type>(slice.schema()).resolve_prefix(caf::get<std::string>(field));
+      auto [type, array] = column.get(resolved_slice);
+      for (auto value : values(type, *array)) {
+        if (auto it = offset_table.find(value); it != offset_table.end()) {
+      }
+    }
     for (const auto& row : values(t, *array)) {
       for (const auto& a : *row) {
         if (not parameters.empty()
@@ -58,12 +71,15 @@ public:
         const auto result_schema = type{
           "tenzir.context.hit",
           record_type{
-            {"event", found_indicators.front().schema()},
+            {"event", list_type{found_indicators.front().schema()}},
             {"timestamp", type{duration_type{}}},
           },
         };
-        auto result_builder = resolved_slice.schema().make_arrow_builder(
-          arrow::default_memory_pool());
+        builder = series_builder{};
+        auto guard = builder.record();
+        guard.field("context", 
+        //auto result_builder = resolved_slice.schema().make_arrow_builder(
+        //  arrow::default_memory_pool());
         for (const auto& row :
              values(caf::get<record_type>(resolved_slice.schema()), *array)) {
           const auto append_row_result
@@ -91,13 +107,13 @@ public:
   }
 
   /// Inspects the context.
-  auto status(status_verbosity verbosity) const -> record override {
-    (void)verbosity;
+  auto show() const -> record override {
     return record{{"TODO", "unimplemented"}};
   }
 
   /// Updates the context.
-  auto update(table_slice slice, record parameters) -> record override {
+  auto update(table_slice slice, record parameters)
+    -> caf::expected<record> override {
     // context does stuff on its own with slice & parameters
     if (parameters.contains("clear")) {
       auto* clear = get_if<bool>(&parameters, "clear");
@@ -106,6 +122,10 @@ public:
         offset_table.clear();
         slice_table.clear();
       }
+    }
+    if (slice.rows() == 0) {
+      TENZIR_INFO("got an empty slice");
+      return record{};
     }
     // slice schema for this update is:
     /*
@@ -117,8 +137,8 @@ public:
         all of them arrays
         if not = diagnostic & ignore.
     */
-    auto t = caf::get<record_type>(slice.schema());
-    auto array = to_record_batch(slice)->ToStructArray().ValueOrDie();
+    //auto t = caf::get<record_type>(slice.schema());
+    //auto array = to_record_batch(slice)->ToStructArray().ValueOrDie();
     for (auto i = current_offset; i < (current_offset + slice.rows()); ++i) {
       auto v = slice.at(0, i);
       offset_table[materialize(v)] = i;
@@ -126,7 +146,22 @@ public:
     slice_table.insert(current_offset, current_offset + slice.rows(), slice);
     current_offset += slice.rows();
 
-    return {{"updated", slice.rows()}};
+    return record{{"updated", slice.rows()}};
+  }
+
+  auto update(chunk_ptr bytes, record parameters)
+    -> caf::expected<record> override {
+    return ec::unimplemented;
+  }
+
+  auto update(record parameters)
+    -> caf::expected<record> override {
+    return ec::unimplemented;
+  }
+
+  auto save() const
+    -> caf::expected<chunk_ptr> override {
+    return ec::unimplemented;
   }
 
 private:
@@ -150,6 +185,12 @@ class plugin : public virtual context_plugin {
   auto make_context(record parameters) const
     -> caf::expected<std::unique_ptr<context>> override {
     (void)parameters;
+    return std::make_unique<ctx>();
+  }
+
+  auto load_context(chunk_ptr serialized) const
+    -> caf::expected<std::unique_ptr<context>> override {
+    // do something...
     return std::make_unique<ctx>();
   }
 };

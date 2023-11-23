@@ -2,7 +2,7 @@
   inherit (pkgs) lib;
   inherit (pkgs.stdenv.hostPlatform) isStatic;
 in
-  pkgs.mkShell ({
+  pkgs.mkShell.override {stdenv = pkgs.gcc13Stdenv;} ({
       name = "tenzir-dev";
       hardeningDisable = ["fortify"] ++ lib.optional isStatic "pic";
       inputsFrom = [pkgs.tenzir-de];

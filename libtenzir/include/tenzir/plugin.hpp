@@ -774,19 +774,29 @@ public:
 
   /// Updates the context.
   virtual auto update(table_slice events, record parameters)
-    -> caf::exptected<record>
+    -> caf::expected<record>
     = 0;
 
   /// Updates the context.
   virtual auto update(chunk_ptr bytes, record parameters)
-    -> caf::exptected<record>
+    -> caf::expected<record>
     = 0;
+
+  /// Updates the context.
+  virtual auto update(record parameters) -> caf::expected<record> = 0;
+
+  // Serializes a context for persistance.
+  virtual auto save() const -> caf::expected<chunk_ptr> = 0;
 };
 
 class context_plugin : public virtual plugin {
 public:
-  /// Create a context
+  /// Create a context.
   [[nodiscard]] virtual auto make_context(record parameters) const
+    -> caf::expected<std::unique_ptr<context>>
+    = 0;
+  // Load a context.
+  [[nodiscard]] virtual auto load_context(chunk_ptr serialized) const
     -> caf::expected<std::unique_ptr<context>>
     = 0;
   [[nodiscard]] virtual auto context_name() const -> std::string {
