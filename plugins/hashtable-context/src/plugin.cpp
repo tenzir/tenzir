@@ -86,10 +86,7 @@ public:
     if (parameters.contains("clear")) {
       auto* clear = get_if<bool>(&parameters, "clear");
       if (clear and *clear) {
-        current_offset = 0;
-        offset_table.clear();
         context_entries.clear();
-        slice_table.clear();
       }
     }
     if (slice.rows() == 0) {
@@ -103,16 +100,22 @@ public:
           "context" : data,
           "retire": bool,
         }
-        all of them arrays
-        if not = diagnostic & ignore.
     */
-    for (auto i = current_offset; i < (current_offset + slice.rows()); ++i) {
-      auto v = slice.at(0, i);
-      offset_table[materialize(v)] = i;
-    }
-    slice_table.insert(current_offset, current_offset + slice.rows(), slice);
-    current_offset += slice.rows();
+    const auto& t = caf::get<record_type>(slice.schema());
+    auto k = t.resolve_key("key");
+    auto c = t.resolve_key("context");
 
+    auto [k_type, k_slice_array] = k->get(slice);
+    auto [c_type, c_slice_array] = c->get(slice);
+    auto k_val = values(k_type, *k_slice_array);
+    auto c_val = values(c_type, *c_slice_array);
+    auto k_it = k_val.begin();
+    auto c_it = c_val.begin();
+    while (k_it != k_val.end() or c_it != c_val.end()) {
+      context_entries.emplace(materialize(*k_it), materialize(*c_it));
+      ++k_it;
+      ++c_it;
+    }
     return record{{"updated", slice.rows()}};
   }
 
@@ -130,10 +133,7 @@ public:
   }
 
 private:
-  tsl::robin_map<data, size_t> offset_table;
-  tsl::robin_map<data, record> context_entries;
-  detail::range_map<size_t, table_slice> slice_table;
-  size_t current_offset = 0;
+  tsl::robin_map<data, data> context_entries;
 };
 
 class plugin : public virtual context_plugin {
