@@ -76,7 +76,17 @@ public:
 
   /// Inspects the context.
   auto show() const -> record override {
-    return record{{"TODO", "unimplemented"}};
+    auto entries = list{};
+    for (const auto& [key, context] : context_entries) {
+      entries.push_back(record{
+        {"key", key},
+        {"context", context},
+      });
+    }
+    return record{
+      {"num_entries", context_entries.size()},
+      {"entries", std::move(entries)}, // TODO: is this too verbose?
+    };
   }
 
   /// Updates the context.
