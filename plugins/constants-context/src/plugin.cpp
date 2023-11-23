@@ -31,7 +31,7 @@ public:
 
   /// Emits context information for every event in `slice` in order.
   auto apply(table_slice slice, record parameters) const
-    -> caf::expected<typed_array> override {
+    -> caf::expected<std::vector<typed_array>> override {
     (void)parameters;
     const auto fields_schema
       = caf::get<record_type>(type::infer(fields).value_or(type{}));
@@ -47,8 +47,11 @@ public:
     auto ok = builder->Finish();
     if (!ok.ok())
       return caf::make_error(ec::unimplemented, ":sad:");
-    return typed_array{std::move(fields_schema), ok.ValueUnsafe()};
+    return std::vector{
+      typed_array{std::move(fields_schema), ok.MoveValueUnsafe()},
+    };
   }
+
   /// Inspects the context.
   auto show() const -> record override {
     return record{{"TODO", "unimplemented"}};
@@ -78,8 +81,7 @@ public:
                            "constants-context can not be updated with void");
   }
 
-  auto save() const
-    -> caf::expected<chunk_ptr> override {
+  auto save() const -> caf::expected<chunk_ptr> override {
     return ec::unimplemented;
   }
 
