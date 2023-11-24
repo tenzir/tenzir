@@ -13,10 +13,10 @@
 #include "tenzir/config.hpp"
 #include "tenzir/table_slice_builder.hpp"
 
-#include <algorithm>
-
 #if TENZIR_LINUX
 #  include <pfs/procfs.hpp>
+
+#  include <exception>
 #elif TENZIR_MACOS
 #  include <mach/mach_time.h>
 
@@ -25,9 +25,8 @@
 
 // The current state of the implementation is highly experimental. It's a POC to
 // for some demos, in order to show that it's possible to get endpoint data if
-// need be. The code is basically taking inspiration from Zeek Agent v2 at
-// https://github.com/zeek/zeek-agent-v2/ and making it fit into Tenzir. None of
-// this has been tested extensively.
+// need be. The code is takes inspiration from Zeek Agent v2 at
+// https://github.com/zeek/zeek-agent-v2/ and adapts it to fit into Tenzir.
 
 namespace tenzir {
 
@@ -98,7 +97,6 @@ auto os::processes() -> table_slice {
 
 auto os::sockets() -> table_slice {
   auto builder = table_slice_builder{socket_type()};
-  // for (const auto& proc : fetch_processes()) {
   for (const auto& socket : fetch_sockets()) {
     auto okay = builder.add(socket.pid, socket.process_name,
                             detail::narrow_cast<uint64_t>(socket.protocol),
@@ -220,14 +218,10 @@ auto to_socket(const pfs::net_socket& s, uint32_t pid, std::string comm,
 
 } // namespace
 
-// The algorithm for the `fetch_sockets()` implementation was taken
-// from zeek-agent-v2 [1], written by Rob Sommer.
 // TODO: Consider using the netlink API to list sockets instead.
-// [1]:
-// https://github.com/zeek/zeek-agent-v2/blob/main/src/tables/sockets/sockets.linux.cc
 auto linux::fetch_sockets() -> std::vector<socket> {
   auto result = std::vector<socket>{};
-  // First build up a global map inode -> pid
+  // First build up a global map inode -> pid.
   struct pid_name_pair {
     pid_t pid;
     std::string name;
@@ -239,20 +233,17 @@ auto linux::fetch_sockets() -> std::vector<socket> {
         try {
           auto inode = fd.get_target_stat().st_ino;
           auto pid = process.id();
-          auto comm = process.get_comm();
-          // auto cmdline = process.get_cmdline();
-          // TENZIR_WARN("cmdline: {}", cmdline);
           processes.emplace(inode, pid_name_pair{
                                      .pid = pid,
-                                     .name = std::move(comm),
+                                     .name = process.get_comm(),
                                    });
-        } catch (const std::system_error& e) {
-          // Some processes won't exist anymore since we got the pid; ignore.
+        } catch (const std::system_error&) {
+          // Ignore no longer existent processes.
           continue;
         }
       }
-    } catch (const std::exception& e) {
-      // Ignore permission errors etc.
+    } catch (const std::exception&) {
+      // Ignore permission errors.
     }
   }
   // Go through the global list of sockets and use the built map
@@ -401,12 +392,11 @@ auto darwin::fetch_sockets() -> std::vector<socket> {
   auto result = std::vector<socket>{};
   for (const auto& proc : fetch_processes()) {
     auto pid = detail::narrow_cast<uint32_t>(proc.pid);
-    for (auto sockets : sockets_for(pid)) {
-      result.insert(result.end(), std::make_move_iterator(sockets.begin()),
-                    std::make_move_iterator(sockets.end()));
-    }
+    auto sockets = sockets_for(pid);
+    result.insert(result.end(), std::make_move_iterator(sockets.begin()),
+                  std::make_move_iterator(sockets.end()));
   }
-  return builder.finish();
+  return result;
 }
 
 auto darwin::sockets_for(uint32_t pid) -> std::vector<socket> {

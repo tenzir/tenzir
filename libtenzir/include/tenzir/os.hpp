@@ -19,9 +19,6 @@
 #include <string>
 #include <vector>
 
-#undef linux
-#undef unix
-
 namespace tenzir {
 
 /// An operating system process.
@@ -76,8 +73,6 @@ public:
 protected:
   virtual auto fetch_processes() -> std::vector<process> = 0;
   virtual auto fetch_sockets() -> std::vector<socket> = 0;
-
-  // virtual auto sockets_for(uint32_t pid) -> std::vector<socket> = 0;
 };
 
 #if TENZIR_LINUX
@@ -111,10 +106,10 @@ public:
   auto fetch_processes() -> std::vector<process> final;
   auto fetch_sockets() -> std::vector<socket> final;
 
-  auto sockets_for(uint32_t pid) -> std::vector<socket>;
-
 private:
   darwin();
+
+  auto sockets_for(uint32_t pid) -> std::vector<socket>;
 
   struct state;
   std::unique_ptr<state> state_;
