@@ -31,7 +31,7 @@
 #include <memory>
 #include <string>
 
-namespace tenzir::plugins::hashtable_context {
+namespace tenzir::plugins::lookup_table_context {
 
 namespace {
 
@@ -199,7 +199,7 @@ class plugin : public virtual context_plugin {
   }
 
   auto name() const -> std::string override {
-    return "hashtable-context";
+    return "lookup-table-context";
   }
 
   auto make_context(record parameters) const
@@ -224,6 +224,6 @@ class plugin : public virtual context_plugin {
 
 } // namespace
 
-} // namespace tenzir::plugins::hashtable_context
+} // namespace tenzir::plugins::lookup_table_context
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::hashtable_context::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::lookup_table_context::plugin)
