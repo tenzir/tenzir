@@ -47,6 +47,9 @@ in {
             exec ${lib.getBin prev.buildPackages.darwin.cctools}/bin/${stdenv.cc.targetPrefix}libtool $@
           '')
         ];
+        patches = (orig.patches or []) ++ [
+          ./fix-protobuf-dep.patch
+        ];
         buildInputs = orig.buildInputs ++ [final.sqlite];
         cmakeFlags =
           orig.cmakeFlags
