@@ -13,6 +13,8 @@ security budgets, limiting resources for proactive defense measures. To address
 this, businesses must seek innovative technologies to efficiently manage and
 analyze data.
 
+![Optimize SIEM Costs](optimize-siem-costs.excalidraw.svg)
+
 Tenzir's innovative Security Data Pipelines provide a cost-effective solution to
 help businesses reduce their expenses and optimize their cybersecurity
 infrastructure while maintaining comprehensive protection.
