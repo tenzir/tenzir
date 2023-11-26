@@ -27,7 +27,7 @@ steps:
 4. Select *Cloud-hosted demo node*
 5. Follow the guided tour after the node becomes available
 
-## A quick guided tour
+## A quick tour
 
 Let's run a few example pipelines by copying the below examples
 and pasting them into the [Explorer](https://app.tenzir.com/explorer). We
