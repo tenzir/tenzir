@@ -126,7 +126,7 @@ re-implementing data acquisition partially. Few SOCs have the required data
 engineering inhouse to scale this, which leads to buying a *second* SIEM-ish
 system capable of the analytics.
 
-[SIEM Offloading](use-cases/siem-offloading.md) is a valid use
+[SIEM Offloading](use-cases/optimize-siem-costs.md) is a valid use
 case, but it's duct tape from an architectural perspective.
 :::
 

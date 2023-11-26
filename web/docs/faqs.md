@@ -45,11 +45,10 @@ browser to the platform:
 
 To date, we connect these two channels at the platform. This means we *could*
 interpose on data that travels from the node to the app, for example, when
-interacting with the [Explorer](setup-guides/use-the-app/README.md#explorer). However,
-data privacy is of utmost importance to our users. We are mission-driven company
-with strong ethics. Our engineering follows state-of-the-art
-infrastructure-as-code practices and we are performing security audits to ensure
-that our code quality meets the highest standards.
+interacting with the Explorer. However, data privacy is of utmost importance to
+our users. We are mission-driven company with strong ethics. Our engineering
+follows state-of-the-art infrastructure-as-code practices and we are performing
+security audits to ensure that our code quality meets the highest standards.
 
 We have plans to make this a single, end-to-end encrypted channel, so that we
 no longer have the theoretical ability to interpose on the data transfer between

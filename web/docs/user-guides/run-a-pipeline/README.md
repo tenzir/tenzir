@@ -13,8 +13,8 @@ A [pipeline](../../pipelines.md) is a chain of operators that begins with a
 
 ## In the app
 
-You run a pipeline in the [app](../../setup-guides/use-the-app/README.md) by
-writing it in the editor and hitting the *Run* button.
+You run a pipeline in the [app](https://app.tenzir.com) by writing it in the
+editor and hitting the *Run* button.
 
 The following invariants apply:
 
