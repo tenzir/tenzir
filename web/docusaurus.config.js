@@ -296,10 +296,6 @@ async function createConfig() {
                   label: 'LinkedIn',
                   href: 'https://www.linkedin.com/company/tenzir',
                 },
-                {
-                  label: 'Newsletter',
-                  href: '/newsletter',
-                },
               ],
             },
             {
