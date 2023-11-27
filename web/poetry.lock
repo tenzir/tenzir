@@ -148,13 +148,13 @@ files = [
 
 [[package]]
 name = "bash-kernel"
-version = "0.9.1"
+version = "0.9.3"
 description = "A bash kernel for Jupyter"
 optional = false
 python-versions = "*"
 files = [
-    {file = "bash_kernel-0.9.1-py2.py3-none-any.whl", hash = "sha256:eeadf594bd54005250dbbad23e38cca620efada8090e4375d31b9b2e056f2541"},
-    {file = "bash_kernel-0.9.1.tar.gz", hash = "sha256:0183d53e360ff9b68471052a9a289a81621732516b034e278e9720b5d15a162b"},
+    {file = "bash_kernel-0.9.3-py2.py3-none-any.whl", hash = "sha256:71297892a8c4edd4633aa42d4bccf662f147438e375b4093b6a3261321715099"},
+    {file = "bash_kernel-0.9.3.tar.gz", hash = "sha256:9f7a03811ca7d9cb1fbff8082237cf0450b97182252fd0b80587a16b65e66d58"},
 ]
 
 [package.dependencies]
@@ -1786,4 +1786,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "e7b9c3b14338c24ba63ffc75948354ecc270cdc892b9e2767db36761671384b3"
+content-hash = "30ea495c52e2c246c0679305af08b153370fff8af51edf7bd587f12ef56694b8"
