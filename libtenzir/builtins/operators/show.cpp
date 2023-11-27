@@ -61,6 +61,10 @@ public:
     return true;
   }
 
+  auto internal() const -> bool override {
+    return true;
+  }
+
   auto location() const -> operator_location override {
     if (const auto* plugin = get()) {
       return plugin->location();
