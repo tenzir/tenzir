@@ -1187,3 +1187,11 @@ tests:
         input: data/syslog/syslog.log
       - command: exec 'from - read syslog'
         input: data/syslog/syslog-rfc3164.log
+
+  CSV with comments:
+    tags: [pipelines, csv]
+    steps:
+      - command: exec 'from - read csv --allow-comments'
+        input: data/csv/ipblocklist.csv
+      - command: exec 'from - read xsv , --allow-comments'
+        input: data/csv/ipblocklist.csv
