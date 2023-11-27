@@ -34,7 +34,7 @@ if (NOT TARGET fluentbit::fluentbit)
       list(APPEND _link_libs PkgConfig::PC_MUSL_FTS)
     endif ()
     if (APPLE)
-      list(APPEND _link_libs resolv)
+      list(APPEND _link_libs resolv "-framework IOKit")
     endif ()
     set_property(
       TARGET fluentbit::fluentbit

@@ -6,6 +6,10 @@
   inherit (final) lib;
   inherit (final.stdenv.hostPlatform) isLinux isDarwin isStatic;
   stdenv = final.stdenv;
+  overrideAttrsIf = pred: package: f:
+    if !pred
+    then package
+    else package.overrideAttrs f;
 in {
   google-cloud-cpp =
     if !isStatic
@@ -140,9 +144,19 @@ in {
     echo "stub-${name}: $@" >&2
   '';
   fluent-bit =
-    if !isStatic
-    then prev.fluent-bit
-    else prev.fluent-bit.overrideAttrs (orig: {
+    let
+      fluent-bit' = overrideAttrsIf isDarwin prev.fluent-bit
+      (orig: {
+        buildInputs = (orig.buildInputs or []) ++ (with prev.darwin.apple_sdk.frameworks; [Foundation IOKit]);
+        # The name "kIOMainPortDefault" has been introduced in a a later SDK
+        # version.
+        cmakeFlags = (orig.cmakeFlags or []) ++ [
+          "-DCMAKE_C_FLAGS=\"-DkIOMainPortDefault=kIOMasterPortDefault\""
+        ];
+      });
+    in
+    overrideAttrsIf isStatic fluent-bit'
+     (orig: {
       outputs = ["out"];
       nativeBuildInputs = orig.nativeBuildInputs ++ [(final.mkStub "ldconfig")];
       # Neither systemd nor postgresql have a working static build.
@@ -150,13 +164,11 @@ in {
         final.openssl
         final.libyaml
       ] ++ lib.optionals isLinux [ final.musl-fts ];
-      cmakeFlags = [
-        "-DFLB_RELEASE=ON"
+      cmakeFlags = (orig.cmakeFlags or []) ++ [
         "-DFLB_BINARY=OFF"
         "-DFLB_SHARED_LIB=OFF"
-        "-DFLB_METRICS=ON"
-        "-DFLB_HTTP_SERVER=ON"
         "-DFLB_LUAJIT=OFF"
+        "-DFLB_OUT_PGSQL=OFF"
       ];
       # The build scaffold of fluent-bit doesn't install static libraries, so we
       # work around it by just copying them from the build directory. The
