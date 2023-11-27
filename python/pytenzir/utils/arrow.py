@@ -3,12 +3,21 @@ import sys
 import json
 import itertools
 import copy
-from datetime import datetime
+from datetime import datetime, timedelta
 from types import MappingProxyType
 from typing import Iterable, Optional, Sequence, SupportsBytes, SupportsIndex, TypeAlias
 
 import pyarrow as pa
 
+try:
+    from pandas import Timestamp, Timedelta
+except ImportError:
+    # Create dummy classes so we can safely test
+    # `isinstance(x, Timestamp)` below.
+    class Timestamp():
+        pass
+    class Timedelta():
+        pass
 
 class IPScalar(pa.ExtensionScalar):
     def as_py(self: "IPScalar") -> ip.IPv4Address | ip.IPv6Address | None:
@@ -338,8 +347,10 @@ def infer_type(obj: TenzirType) -> pa.DataType:
         return pa.int64()
     if isinstance(obj, float):
         return pa.float64()
-    if isinstance(obj, datetime):
+    if isinstance(obj, datetime) or isinstance(obj, Timestamp):
         return pa.timestamp("ns")
+    if isinstance(obj, timedelta) or isinstance(obj, Timedelta):
+        return pa.duration("ns")
     if obj is None:
         return pa.null()
     if isinstance(obj, bytes):
