@@ -238,6 +238,7 @@ struct query_context;
 struct query_cursor;
 struct query_status;
 struct report;
+struct resource;
 struct rest_endpoint;
 struct rest_response;
 struct schema_statistics;
@@ -465,6 +466,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::query_cursor))
   TENZIR_ADD_TYPE_ID((tenzir::query_status))
   TENZIR_ADD_TYPE_ID((tenzir::report))
+  TENZIR_ADD_TYPE_ID((tenzir::resource))
   TENZIR_ADD_TYPE_ID((tenzir::keep_original_partition))
   TENZIR_ADD_TYPE_ID((tenzir::status_verbosity))
   TENZIR_ADD_TYPE_ID((tenzir::catalog_lookup_result))

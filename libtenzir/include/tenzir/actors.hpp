@@ -118,7 +118,10 @@ using default_passive_store_actor = typed_actor_fwd<
   ::extend_with<store_actor>::unwrap;
 
 /// The STORE BUILDER actor interface.
-using store_builder_actor = typed_actor_fwd<>::extend_with<store_actor>
+using store_builder_actor
+  = typed_actor_fwd<auto(atom::persist)->caf::result<resource>>
+  // Conform to the protocol of the STORE actor.
+  ::extend_with<store_actor>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the STATUS CLIENT actor.

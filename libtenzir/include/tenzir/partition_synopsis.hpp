@@ -12,6 +12,7 @@
 #include "tenzir/fbs/partition_synopsis.hpp"
 #include "tenzir/index_config.hpp"
 #include "tenzir/qualified_record_field.hpp"
+#include "tenzir/resource.hpp"
 #include "tenzir/synopsis.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/uuid.hpp"
@@ -50,6 +51,15 @@ struct partition_synopsis final : public caf::ref_counted {
   /// @returns A best-effort estimate of the amount of memory used by this
   ///          synopsis.
   size_t memusage() const;
+
+  // Information about the raw data storage.
+  resource store_file = {};
+
+  // Information about the dense indexes.
+  resource indexes_file = {};
+
+  // Information about the sparse indexes.
+  resource sketches_file = {};
 
   // Number of events in the partition.
   uint64_t events = 0;

@@ -380,6 +380,14 @@ default_active_store_actor::behavior_type default_active_store(
       self->state.erased = true;
       return num_events;
     },
+    [self](atom::persist) -> caf::result<resource> {
+      if (const auto* res = std::get_if<resource>(&self->state.file)) {
+        return *res;
+      }
+      auto rp = self->make_response_promise<resource>();
+      self->state.file = rp;
+      return rp;
+    },
     [self](caf::stream<table_slice> stream)
       -> caf::result<caf::inbound_stream_slot<table_slice>> {
       struct stream_state {
@@ -422,6 +430,24 @@ default_active_store_actor::behavior_type default_active_store(
             self->quit(std::move(chunk.error()));
             return;
           }
+          std::visit(detail::overload(
+                       [&](std::monostate) {
+                         self->state.file = resource{
+                           .url = fmt::format("file://{}", self->state.path),
+                           .size = (*chunk)->size(),
+                         };
+                       },
+                       [&](const resource&) {
+                         TENZIR_ASSERT(false);
+                       },
+                       [&](caf::typed_response_promise<resource>& rp) {
+                         TENZIR_ASSERT(rp.pending());
+                         rp.deliver(resource{
+                           .url = fmt::format("file://{}", self->state.path),
+                           .size = (*chunk)->size(),
+                         });
+                       }),
+                     self->state.file);
           self
             ->request(self->state.filesystem, caf::infinite, atom::write_v,
                       self->state.path, std::move(*chunk))

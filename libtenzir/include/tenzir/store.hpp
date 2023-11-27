@@ -12,10 +12,13 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/generator.hpp"
+#include "tenzir/resource.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
+
+#include <variant>
 
 namespace tenzir {
 
@@ -129,6 +132,8 @@ default_passive_store_actor::behavior_type default_passive_store(
 struct default_active_store_state {
   static constexpr auto name = "active-store";
 
+  std::variant<std::monostate, resource, caf::typed_response_promise<resource>>
+    file = {};
   default_active_store_actor::pointer self = {};
   filesystem_actor filesystem = {};
   accountant_actor accountant = {};

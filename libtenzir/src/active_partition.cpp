@@ -37,6 +37,7 @@
 #include "tenzir/plugin.hpp"
 #include "tenzir/qualified_record_field.hpp"
 #include "tenzir/report.hpp"
+#include "tenzir/resource.hpp"
 #include "tenzir/shutdown.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/synopsis.hpp"
@@ -146,6 +147,10 @@ void serialize(
   // correctly (if a bit slower) when the write fails.
   if (auto ps_chunk
       = serialize_partition_synopsis(*self->state.data.synopsis)) {
+    self->state.data.synopsis.unshared().sketches_file = {
+      .url = fmt::format("file://{}", *self->state.synopsis_path),
+      .size = ps_chunk->size(),
+    };
     self
       ->request(self->state.filesystem, caf::infinite, atom::write_v,
                 *self->state.synopsis_path, std::move(ps_chunk))
@@ -166,6 +171,10 @@ void serialize(
   TENZIR_DEBUG("{} persists partition with a total size of "
                "{} bytes",
                *self, (*partition)->size());
+  self->state.data.synopsis.unshared().indexes_file = {
+    .url = fmt::format("file://{}", *self->state.persist_path),
+    .size = (*partition)->size(),
+  };
   // TODO: Add a proper timeout.
   self
     ->request(self->state.filesystem, caf::infinite, atom::write_v,
@@ -503,17 +512,39 @@ active_partition_actor::behavior_type active_partition(
     [self](atom::subscribe, atom::flush, const flush_listener_actor& listener) {
       self->state.add_flush_listener(listener);
     },
-    [self](atom::persist, const std::filesystem::path& part_dir,
-           const std::filesystem::path& synopsis_dir)
+    [self](atom::persist, const std::filesystem::path& part_path,
+           const std::filesystem::path& synopsis_path)
       -> caf::result<partition_synopsis_ptr> {
       TENZIR_DEBUG("{} got persist atom", *self);
       // Ensure that the response promise has not already been initialized.
       TENZIR_ASSERT(!self->state.persistence_promise.source());
-      self->state.persist_path = part_dir;
-      self->state.synopsis_path = synopsis_dir;
+      self->state.persist_path = part_path;
+      self->state.synopsis_path = synopsis_path;
       self->state.persisted_indexers = 0;
       self->state.persistence_promise
         = self->make_response_promise<partition_synopsis_ptr>();
+      self->request(self->state.store_builder, caf::infinite, atom::persist_v)
+        .then(
+          [self](resource& store_file) {
+            self->state.data.synopsis.unshared().store_file
+              = std::move(store_file);
+            auto& indexers = self->state.indexers;
+            auto valid_count
+              = std::count_if(indexers.begin(), indexers.end(), [](auto& idx) {
+                  return idx.second != nullptr;
+                });
+            if (self->state.persistence_promise.pending()
+                && self->state.persisted_indexers
+                     == detail::narrow_cast<size_t>(valid_count)) {
+              serialize(self);
+            }
+          },
+          [self](caf::error err) {
+            TENZIR_ERROR("{} failed to get the store info {}", *self, err);
+            if (self->state.persistence_promise.pending()) {
+              self->state.persistence_promise.deliver(std::move(err));
+            }
+          });
       self->send(self, atom::internal_v, atom::persist_v, atom::resume_v);
       return self->state.persistence_promise;
     },
@@ -545,7 +576,8 @@ active_partition_actor::behavior_type active_partition(
           });
 
       if (0u == valid_count) {
-        serialize(self);
+        // We call serialize from the response handler of persist request to the
+        // store in this case.
         return {};
       }
       TENZIR_DEBUG("{} sends 'snapshot' to {} indexers", *self, valid_count);
@@ -577,6 +609,10 @@ active_partition_actor::behavior_type active_partition(
                   "{} waits for more chunks after receiving {} out of "
                   "{}",
                   *self, self->state.persisted_indexers, valid_count);
+                return;
+              }
+              if (self->state.data.synopsis->store_file.url.empty()) {
+                TENZIR_DEBUG("{} waits for the store to persist", *self);
                 return;
               }
               serialize(self);

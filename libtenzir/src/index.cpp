@@ -534,6 +534,39 @@ caf::error index_state::load_from_disk() {
         = *ps_flatbuffer->partition_synopsis_as_legacy();
       if (auto error = unpack(synopsis_legacy, ps.unshared()))
         return error;
+      // Add partition file sizes.
+      {
+        uint64_t bitmap_file_size = std::filesystem::file_size(part_path, err);
+        if (err) {
+          TENZIR_WARN("failed to get the size of the partition index file at "
+                      "{}: {}",
+                      part_path, err.message());
+          bitmap_file_size = 0u;
+        }
+        ps.unshared().indexes_file = {
+          .url = fmt::format("file://{}", canonical(part_path)),
+          .size = bitmap_file_size,
+        };
+        ps.unshared().sketches_file = {
+          .url = fmt::format("file://{}", canonical(synopsis_path)),
+          .size = chunk->get()->size(),
+        };
+        // We just assume the store file path, currently feather is the only
+        // existing implementation.
+        auto store_path
+          = dir / ".." / "archive" / fmt::format("{}.feather", partition_uuid);
+        auto store_size = std::filesystem::file_size(store_path, err);
+        if (err) {
+          TENZIR_WARN("failed to get the size of the partition store file at "
+                      "{}: {}",
+                      store_path, err.message());
+          store_size = 0u;
+        }
+        ps.unshared().store_file = {
+          .url = fmt::format("file://{}", canonical(store_path)),
+          .size = store_size,
+        };
+      }
       persisted_partitions.emplace(partition_uuid);
       synopses->emplace(partition_uuid, std::move(ps));
       return caf::none;
@@ -695,11 +728,11 @@ void index_state::decommission_active_partition(
   unpersisted[id] = {type, actor};
   active_partitions.erase(active_partition);
   // Persist active partition asynchronously.
-  const auto part_dir = partition_path(id);
-  const auto synopsis_dir = partition_synopsis_path(id);
+  const auto part_path = partition_path(id);
+  const auto synopsis_path = partition_synopsis_path(id);
   TENZIR_VERBOSE("{} persists active partition {} to {}", *self, schema,
-                 part_dir);
-  self->request(actor, caf::infinite, atom::persist_v, part_dir, synopsis_dir)
+                 part_path);
+  self->request(actor, caf::infinite, atom::persist_v, part_path, synopsis_path)
     .then(
       [=, this](partition_synopsis_ptr& ps) {
         TENZIR_VERBOSE("{} successfully persisted partition {} {}", *self,
