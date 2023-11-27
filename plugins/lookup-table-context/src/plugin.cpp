@@ -143,7 +143,7 @@ public:
       ++context_it;
     }
     TENZIR_ASSERT_CHEAP(context_it == context_values.end());
-    return record{{"updated", slice.rows()}};
+    return show();
   }
 
   auto update(chunk_ptr bytes, record parameters)
