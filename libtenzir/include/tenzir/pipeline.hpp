@@ -175,17 +175,12 @@ struct operator_measurement {
   // Approximate byte amount for events, exact byte amount for bytes.
   uint64_t num_approx_bytes = {};
 
-  // Whether this metric is considered internal or not; only external metrics
-  // may be counted for ingress and egress.
-  bool internal = {};
-
   template <class Inspector>
   friend auto inspect(Inspector& f, operator_measurement& x) -> bool {
     return f.object(x).pretty_name("metric").fields(
       f.field("unit", x.unit), f.field("num_elements", x.num_elements),
       f.field("num_batches", x.num_batches),
-      f.field("num_approx_bytes", x.num_approx_bytes),
-      f.field("internal", x.internal));
+      f.field("num_approx_bytes", x.num_approx_bytes));
   }
 };
 
@@ -205,6 +200,10 @@ struct [[nodiscard]] metric {
   uint64_t num_runs_processing_input = {};
   uint64_t num_runs_processing_output = {};
 
+  // Whether this metric is considered internal or not; only external metrics
+  // may be counted for ingress and egress.
+  bool internal = {};
+
   template <class Inspector>
   friend auto inspect(Inspector& f, metric& x) -> bool {
     return f.object(x).pretty_name("metric").fields(
@@ -219,7 +218,8 @@ struct [[nodiscard]] metric {
       f.field("num_runs", x.num_runs),
       f.field("num_runs_processing", x.num_runs_processing),
       f.field("num_runs_processing_input", x.num_runs_processing_input),
-      f.field("num_runs_processing_output", x.num_runs_processing_output));
+      f.field("num_runs_processing_output", x.num_runs_processing_output),
+      f.field("internal", x.internal));
   }
 };
 
