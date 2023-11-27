@@ -24,6 +24,10 @@ auto parse(std::string source, diagnostic_handler& diag)
 /// No diagnostics will be emitted, no locations will be set.
 auto parse_internal(std::string source) -> caf::expected<pipeline>;
 
+/// Parse a pipeline (without locations) and also return the diagnostics.
+auto parse_internal_with_diags(std::string source)
+  -> std::pair<std::optional<pipeline>, std::vector<diagnostic>>;
+
 /// No locations will be set.
 auto make_parser_interface(std::string source, diagnostic_handler& diag)
   -> std::unique_ptr<parser_interface>;
