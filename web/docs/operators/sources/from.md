@@ -15,9 +15,18 @@ from <connector> [read <format>]
 The `from` operator produces events at the beginning of a pipeline by bringing
 together a [connector][connectors] and a [format][formats].
 
-All connectors have a default format. This enables a shorter syntax, e.g.,
-`from stdin` uses the `json` format, while `from file foo.csv` uses the `csv`
-format.
+If given something that looks like a path to a file, the connector can pick
+out a format automatically based on the file extension or the file name.
+This enables a shorter syntax, e.g., `from https://example.com/file.yml`
+uses the `yaml` format. All connectors also have a default format,
+which will be used if the format can't be determined by the path.
+For most connectors, this default format is `json`. So, for example,
+`from stdin` uses the `json` format.
+
+Additionally, if a file extension indicating compression can be found,
+[`decompress`](../transformations/decompress.md) is automatically used.
+For example, `from myfile.json.gz` is automatically gzip-decompressed
+and parsed as json, i.e., `load myfile.json.gz | decompress gzip | read json`.
 
 The `from` operator is a pipeline under the hood. For most cases, it is equal to
 `load <connector> | read <format>`. However, for some combinations of

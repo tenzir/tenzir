@@ -14,7 +14,7 @@
 #include <tenzir/detail/env.hpp>
 #include <tenzir/detail/fdinbuf.hpp>
 #include <tenzir/detail/fdoutbuf.hpp>
-#include <tenzir/detail/file_path_to_parser.hpp>
+#include <tenzir/detail/file_path_to_plugin_name.hpp>
 #include <tenzir/detail/posix.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/diagnostics.hpp>
@@ -355,7 +355,11 @@ public:
   }
 
   auto default_parser() const -> std::string override {
-    return detail::file_path_to_parser(args_.path.inner);
+    auto name
+      = detail::file_path_to_plugin_name(args_.path.inner).value_or("json");
+    if (!plugins::find<parser_parser_plugin>(name))
+      return "json";
+    return name;
   }
 
   friend auto inspect(auto& f, file_loader& x) -> bool {
