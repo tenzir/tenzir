@@ -34,6 +34,7 @@ The records `input` and `output` have the following schema:
 |`unit`|`string`|The type of the elements, which is `void`, `bytes` or `events`.|
 |`elements`|`uint64`|Number of elements that were seen during the collection period.|
 |`approx_bytes`|`uint64`|An approximation for the number of bytes transmitted.|
+|`internal`|`bool`|True if the data flow is considered to internal to Tenzir.|
 
 ### Examples
 
