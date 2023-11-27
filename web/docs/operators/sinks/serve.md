@@ -34,7 +34,7 @@ operator errors when receiving a duplicate serve id.
 
 ## Examples
 
-Read a Zeek conn.log, 100 events at a time:
+### Read a Zeek conn.log, 100 events at a time:
 
 ```bash
 tenzir 'from file path/to/conn.log read zeek-tsv | serve zeek-conn-logs'
@@ -54,3 +54,22 @@ expired.
 Subsequent results for further events must specify a continuation token. The
 token is included in the response under `next_continuation_token` if there are
 further events to be retrieved from the endpoint.
+
+### Wait for an initial event
+
+This pipeline will produce 10 events after 3 seconds of doing nothing.
+
+```bash
+tenzir "shell \"sleep 3; jq --null-input '{foo: 1}'\" | read json | repeat 10 | serve slow-events"
+```
+
+```bash
+curl \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"serve_id": "slow-events", "continuation_token": null, "timeout": "5s", "min_events": 1}' \
+  http://localhost:5160/api/v0/serve
+```
+
+The call to `/serve` will wait up to 5 seconds for the first event from the pipeline arriving at the serve operator,
+and return immediately once the first event arrives.

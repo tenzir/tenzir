@@ -180,10 +180,10 @@ def test_pack_subnetv4():
     expected = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff\n\x01\x00\x00"
     from_obj = vua.pack_subnet(ipaddress.IPv4Network("10.1.0.0/16"))
     assert from_obj[0] == expected
-    assert from_obj[1] == 16
+    assert from_obj[1] == 112
     from_str = vua.pack_subnet("10.1.0.0/16")
     assert from_str[0] == expected
-    assert from_str[1] == 16
+    assert from_str[1] == 112
 
 
 def test_pack_subnetv6():

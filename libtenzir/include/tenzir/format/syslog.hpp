@@ -86,7 +86,9 @@ struct header_parser : parser_base<header_parser> {
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
     using parsers::printable, parsers::rep;
-    auto is_prival = [](uint16_t in) { return in <= 191; };
+    auto is_prival = [](uint16_t in) {
+      return in <= 191;
+    };
     auto to_facility_and_severity = [&](uint16_t in) {
       // Retrieve facillity and severity from prival.
       if constexpr (!std::is_same_v<Attribute, unused_type>) {
@@ -97,7 +99,9 @@ struct header_parser : parser_base<header_parser> {
     auto prival = ignore(
       integral_parser<uint16_t, 3>{}.with(is_prival)->*to_facility_and_severity);
     auto pri = '<' >> prival >> '>';
-    auto is_version = [](uint16_t in) { return in > 0; };
+    auto is_version = [](uint16_t in) {
+      return in > 0;
+    };
     auto version = integral_parser<uint16_t, 3>{}.with(is_version);
     auto hostname = maybe_null(rep(printable - ' ', 1, 255));
     auto app_name = maybe_null(rep(printable - ' ', 1, 48));
@@ -249,6 +253,133 @@ struct message_parser : parser_base<message_parser> {
       return p(f, l, x.hdr, x.data, x.msg);
   }
 };
+
+/// A legacy (RFC 3164) Syslog message.
+struct legacy_message {
+  std::optional<uint16_t> facility;
+  std::optional<uint16_t> severity;
+  std::string timestamp;
+  std::string host;
+  std::string tag;
+  std::string content;
+};
+
+/// Parser for legacy Syslog messages.
+/// @relates legacy_message
+struct legacy_message_parser : parser_base<legacy_message_parser> {
+  using attribute = legacy_message;
+
+  template <typename Iterator, typename Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+    using namespace parsers;
+    using namespace parser_literals;
+    const auto is_prival = [](uint16_t in) {
+      return in <= 191;
+    };
+    const auto to_facility_and_severity = [&](uint16_t in) {
+      if constexpr (!std::is_same_v<Attribute, unused_type>) {
+        x.facility = in / 8;
+        x.severity = in % 8;
+      }
+    };
+    const auto prival = ignore(
+      integral_parser<uint16_t, 3>{}.with(is_prival)->*to_facility_and_severity);
+    const auto priority_parser = '<' >> prival >> '>';
+    const auto word = +(parsers::printable - space);
+    const auto ws = +space;
+    const auto wsignore = ignore(ws);
+    const auto is_month = [](const std::string& mon) {
+      return mon == "Jan" || mon == "Feb" || mon == "Mar" || mon == "Apr"
+             || mon == "May" || mon == "Jun" || mon == "Jul" || mon == "Aug"
+             || mon == "Sep" || mon == "Oct" || mon == "Nov" || mon == "Dec";
+    };
+    const auto is_day = [&](const std::string& day) -> bool {
+      const auto p = integral_parser<uint16_t, 2, 1>{}.with([](uint16_t day) {
+        return day <= 31;
+      });
+      auto sv = std::string_view{day};
+      const auto* f = sv.begin();
+      const auto* const l = sv.end();
+      return p(f, l, unused) && f == l;
+    };
+    const auto is_time = [&](const std::string& time) -> bool {
+      const auto hour_parser
+        = integral_parser<uint16_t, 2, 2>{}.with([](uint16_t hour) {
+            return hour <= 23;
+          });
+      const auto minsec_parser
+        = integral_parser<uint16_t, 2, 2>{}.with([](uint16_t x) {
+            return x <= 59;
+          });
+      const auto p
+        = hour_parser >> ':' >> minsec_parser >> ':' >> minsec_parser;
+      auto sv = std::string_view{time};
+      const auto* f = sv.begin();
+      const auto* const l = sv.end();
+      return p(f, l, unused) && f == l;
+    };
+    const auto timestamp_parser
+      = (word.with(is_month) >> ws >> word.with(is_day) >> ws
+         >> word.with(is_time))
+          ->*[](std::tuple<std::string, std::string, std::string, std::string,
+                           std::string>
+                  x) {
+                return fmt::to_string(fmt::join(x, ""));
+              };
+    const auto tag_parser = +(parsers::printable - ':');
+    const auto content_parser = ~(ignore(*space) >> *parsers::printable);
+    // clang-format off
+    const auto p = ~(priority_parser >> wsignore)
+                   >> timestamp_parser >> wsignore    // timestamp
+                   >> word >> wsignore                // host
+                   >> tag_parser >> ':'               // tag
+                   >> content_parser;                 // content
+    // clang-format on
+    if constexpr (std::is_same_v<Attribute, unused_type>)
+      return p(f, l, unused);
+    else
+      return p(f, l, x.timestamp, x.host, x.tag, x.content);
+  }
+};
+
+inline type make_syslog_type() {
+  return type{
+    "syslog.rfc5424",
+    record_type{{
+      {"facility", uint64_type{}},
+      {"severity", uint64_type{}},
+      {"version", uint64_type{}},
+      {"timestamp", time_type{}},
+      {"hostname", string_type{}},
+      {"app_name", string_type{}},
+      {"process_id", string_type{}},
+      {"message_id", string_type{}},
+      // TODO: The index is currently incapable of handling map_type. Hence, the
+      // structured_data is disabled.
+      // {"structured_data",
+      //  map_type{type{"id", string_type{}},
+      //           type{"params", map_type{type{"key", string_type{}},
+      //                                   type{"value", string_type{}}}}}},
+      {"message", string_type{}},
+    }},
+  };
+}
+
+inline type make_legacy_syslog_type() {
+  return type{"syslog.rfc3164", record_type{{{"facility", uint64_type{}},
+                                             {"severity", uint64_type{}},
+                                             {"timestamp", string_type{}},
+                                             {"hostname", string_type{}},
+                                             {"tag", string_type{}},
+                                             {"content", string_type{}}}}};
+}
+
+inline type make_unknown_type() {
+  return type{
+    "syslog.unknown",
+    record_type{{{"syslog_message", string_type{}}}},
+  };
+}
 
 /// A reader for Syslog messages.
 class reader : public multi_schema_reader {

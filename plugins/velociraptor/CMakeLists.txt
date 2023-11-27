@@ -34,6 +34,7 @@ add_library(velociraptor-proto STATIC
 if (NOT TENZIR_ENABLE_STATIC_EXECUTABLE)
   set_property(TARGET velociraptor-proto PROPERTY POSITION_INDEPENDENT_CODE ON)
 endif ()
+target_compile_features(velociraptor-proto PRIVATE cxx_std_20)
 target_link_libraries(velociraptor-proto PUBLIC protobuf::libprotobuf
                                                 gRPC::grpc++)
 dependency_summary("protobuf" protobuf::libprotobuf "Dependencies")

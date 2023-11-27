@@ -208,7 +208,7 @@ types of events, each of which have their own schemas. Multi-schema dataflows
 require automatic schema inference at parse time, which all our parsers support.
 
 This behavior is different from engines that work with structured data where
-operators typically work with fixed set of tables. While Schema-less systems,
+operators typically work with fixed set of tables. While schema-less systems,
 such as document-oriented databases, offer more simplicity, their
 one-record-at-a-time processing comes at the cost of performance. In the
 spectrum of performance and ease of use, Tenzir therefore [fills a

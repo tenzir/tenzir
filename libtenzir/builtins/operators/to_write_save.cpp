@@ -9,6 +9,7 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
+#include <tenzir/detail/loader_saver_resolver.hpp>
 #include <tenzir/element_type.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/parser_interface.hpp>
@@ -40,11 +41,23 @@ namespace {
     .throw_();
 }
 
-[[noreturn]] void throw_saver_not_found(const located<std::string>& x) {
+template <typename String>
+[[noreturn]] void
+throw_saver_not_found(const located<String>& x, bool use_uri_schemes) {
   auto available = std::vector<std::string>{};
   for (auto p : plugins::get<saver_parser_plugin>()) {
-    available.push_back(p->name());
+    if (use_uri_schemes) {
+      available.push_back(p->supported_uri_scheme());
+    } else {
+      available.push_back(p->name());
+    }
   }
+  if (use_uri_schemes)
+    diagnostic::error("saver for `{}` scheme could not be found", x.inner)
+      .primary(x.source)
+      .hint("must be one of {}", fmt::join(available, ", "))
+      .docs("https://docs.tenzir.com/next/connectors")
+      .throw_();
   diagnostic::error("saver `{}` could not be found", x.inner)
     .primary(x.source)
     .hint("must be one of {}", fmt::join(available, ", "))
@@ -236,6 +249,23 @@ private:
   std::unique_ptr<plugin_saver> saver_;
 };
 
+auto get_saver(parser_interface& p, const char* usage, const char* docs)
+  -> std::unique_ptr<plugin_saver> {
+  auto s_name = p.accept_shell_arg();
+  if (not s_name) {
+    diagnostic::error("expected saver name")
+      .primary(p.current_span())
+      .usage(usage)
+      .docs(docs)
+      .throw_();
+  }
+  auto [saver, name, is_uri] = detail::resolve_saver(p, *s_name);
+  if (not saver) {
+    throw_saver_not_found(name, is_uri);
+  }
+  return std::move(saver);
+}
+
 class save_plugin final : public virtual operator_plugin<save_operator> {
 public:
   auto signature() const -> operator_signature override {
@@ -245,19 +275,7 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "save <saver> <args>...";
     auto docs = "https://docs.tenzir.com/next/operators/sinks/save";
-    auto name = p.accept_shell_arg();
-    if (!name) {
-      diagnostic::error("expected saver name", p.current_span())
-        .primary(p.current_span())
-        .usage(usage)
-        .docs(docs)
-        .throw_();
-    }
-    auto plugin = plugins::find<saver_parser_plugin>(name->inner);
-    if (!plugin) {
-      throw_saver_not_found(*name);
-    }
-    auto saver = plugin->parse_saver(p);
+    auto saver = get_saver(p, usage, docs);
     TENZIR_DIAG_ASSERT(saver);
     return std::make_unique<save_operator>(std::move(saver));
   }
@@ -368,20 +386,8 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "to <saver> <args>... [write <printer> <args>...]";
     auto docs = "https://docs.tenzir.com/next/operators/sinks/to";
-    auto l_name = p.accept_shell_arg();
-    if (!l_name) {
-      diagnostic::error("expected saver name")
-        .primary(p.current_span())
-        .usage(usage)
-        .docs(docs)
-        .throw_();
-    }
-    auto l_plugin = plugins::find<saver_parser_plugin>(l_name->inner);
-    if (!l_plugin) {
-      throw_saver_not_found(*l_name);
-    }
     auto q = until_keyword_parser{"write", p};
-    auto saver = l_plugin->parse_saver(q);
+    auto saver = get_saver(q, usage, docs);
     TENZIR_DIAG_ASSERT(saver);
     TENZIR_DIAG_ASSERT(q.at_end());
     auto printer = std::unique_ptr<plugin_printer>{};

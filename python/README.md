@@ -15,7 +15,7 @@ To get started, clone the Tenzir repository and install the Python package via
 ```bash
 git clone https://github.com/tenzir/tenzir.git
 cd tenzir/python
-poetry install
+poetry install -E module
 ```
 
 ## Development

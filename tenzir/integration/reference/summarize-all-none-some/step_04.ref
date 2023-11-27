@@ -1,4 +1,8 @@
 {
+  "id.orig_h": null,
+  "x": null
+}
+{
   "id.orig_h": "213.32.39.37",
   "x": null
 }
@@ -84,10 +88,6 @@
 }
 {
   "id.orig_h": "106.75.22.216",
-  "x": null
-}
-{
-  "id.orig_h": null,
   "x": null
 }
 warning: aggregation column `y` does not exist for schema `tenzir.json`

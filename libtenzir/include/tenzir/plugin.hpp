@@ -434,6 +434,8 @@ public:
   virtual auto parse_loader(parser_interface& p) const
     -> std::unique_ptr<plugin_loader>
     = 0;
+
+  virtual auto supported_uri_scheme() const -> std::string;
 };
 
 using loader_serialization_plugin = serialization_plugin<plugin_loader>;
@@ -586,6 +588,8 @@ public:
   virtual auto parse_saver(parser_interface& p) const
     -> std::unique_ptr<plugin_saver>
     = 0;
+
+  virtual auto supported_uri_scheme() const -> std::string;
 };
 
 using saver_serialization_plugin = serialization_plugin<plugin_saver>;
@@ -609,6 +613,9 @@ public:
   /// function.
   [[nodiscard]] virtual caf::expected<std::unique_ptr<aggregation_function>>
   make_aggregation_function(const type& input_type) const = 0;
+
+  /// Return the value that should be used if there is no input.
+  virtual auto aggregation_default() const -> data = 0;
 };
 
 // -- language plugin ---------------------------------------------------
@@ -976,41 +983,41 @@ extern const char* TENZIR_PLUGIN_VERSION;
 #else
 
 #  define TENZIR_REGISTER_PLUGIN(name)                                         \
-    extern "C" auto tenzir_plugin_create()->::tenzir::plugin* {                \
+    extern "C" auto tenzir_plugin_create() -> ::tenzir::plugin* {              \
       /* NOLINTNEXTLINE(cppcoreguidelines-owning-memory) */                    \
       return new (name);                                                       \
     }                                                                          \
     extern "C" auto tenzir_plugin_destroy(class ::tenzir::plugin* plugin)      \
-      ->void {                                                                 \
+      -> void {                                                                \
       /* NOLINTNEXTLINE(cppcoreguidelines-owning-memory) */                    \
       delete plugin;                                                           \
     }                                                                          \
-    extern "C" auto tenzir_plugin_version()->const char* {                     \
+    extern "C" auto tenzir_plugin_version() -> const char* {                   \
       return TENZIR_PLUGIN_VERSION;                                            \
     }                                                                          \
-    extern "C" auto tenzir_libtenzir_version()->const char* {                  \
+    extern "C" auto tenzir_libtenzir_version() -> const char* {                \
       return ::tenzir::version::version;                                       \
     }                                                                          \
-    extern "C" auto tenzir_libtenzir_build_tree_hash()->const char* {          \
+    extern "C" auto tenzir_libtenzir_build_tree_hash() -> const char* {        \
       return ::tenzir::version::build::tree_hash;                              \
     }
 
 #  define TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                         \
-    extern "C" auto tenzir_plugin_register_type_id_block()->void {             \
+    extern "C" auto tenzir_plugin_register_type_id_block() -> void {           \
       caf::init_global_meta_objects<::caf::id_block::name>();                  \
     }                                                                          \
     extern "C" auto tenzir_plugin_type_id_block()                              \
-      ->::tenzir::plugin_type_id_block {                                       \
+      -> ::tenzir::plugin_type_id_block {                                      \
       return {::caf::id_block::name::begin, ::caf::id_block::name::end};       \
     }
 
 #  define TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK_2(name1, name2)                 \
-    extern "C" auto tenzir_plugin_register_type_id_block()->void {             \
+    extern "C" auto tenzir_plugin_register_type_id_block() -> void {           \
       caf::init_global_meta_objects<::caf::id_block::name1>();                 \
       caf::init_global_meta_objects<::caf::id_block::name2>();                 \
     }                                                                          \
     extern "C" auto tenzir_plugin_type_id_block()                              \
-      ->::tenzir::plugin_type_id_block {                                       \
+      -> ::tenzir::plugin_type_id_block {                                      \
       return {::caf::id_block::name1::begin < ::caf::id_block::name2::begin    \
                 ? ::caf::id_block::name1::begin                                \
                 : ::caf::id_block::name2::begin,                               \

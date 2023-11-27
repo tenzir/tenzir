@@ -57,7 +57,6 @@ void attach_result_stream(
   struct stream_state {
     exporter_actor self;
     exporter_actor::stateful_pointer<exporter_state> self_ptr{nullptr};
-    size_t num_shipped = 0;
   };
   self->state.result_stream = // [formatting]
     caf::attach_stream_source(
@@ -70,7 +69,7 @@ void attach_result_stream(
         auto& results = state.self_ptr->state.sink_buffer;
         (void)hint; // We could consider using `hint`.
         if (!results.empty()) {
-          state.num_shipped += results.front().rows();
+          state.self_ptr->state.num_shipped += results.front().rows();
           out.push(std::move(results.front()));
           results.pop_front();
         }
@@ -82,22 +81,6 @@ void attach_result_stream(
                             == state.self_ptr->state.executor.end()
                           && state.self_ptr->state.sink_buffer.empty();
         if (should_end) {
-          if (state.self_ptr->state.accountant) {
-            caf::timespan runtime
-              = std::chrono::system_clock::now() - state.self_ptr->state.start;
-            auto r = report {
-              .data = {
-                {"exporter.hits.runtime", runtime},
-                {"exporter.shipped", state.num_shipped},
-              },
-              .metadata =
-                metrics_metadata{
-                  {"query",
-                   fmt::to_string(state.self_ptr->state.query_context.id)}},
-            };
-            state.self_ptr->send(state.self_ptr->state.accountant,
-                                 atom::metrics_v, std::move(r));
-          }
           shutdown_stream(state.self_ptr->state.result_stream);
         }
         return should_end;
@@ -299,10 +282,26 @@ private:
 
 } // namespace
 
+exporter_state::~exporter_state() noexcept {
+  caf::timespan runtime = std::chrono::system_clock::now() - start;
+  auto r = report {
+    .data = {
+      {"exporter.hits.runtime", runtime},
+      {"exporter.shipped", num_shipped},
+    },
+    .metadata =
+      metrics_metadata{
+        {"query",
+         fmt::to_string(query_context.id)}},
+  };
+  self->send(accountant, atom::metrics_v, std::move(r));
+}
+
 auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
               query_options options, pipeline pipe, index_actor index)
   -> exporter_actor::behavior_type {
   TENZIR_DEBUG("spawned {} with pipeline {}", *self, pipe);
+  self->state.self = self;
   self->state.pipeline_str = pipe.to_string();
   auto expr = expression{};
   std::tie(expr, pipe) = pipe.optimize_into_filter();
@@ -346,7 +345,7 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
   return {
     [self](atom::set, accountant_actor accountant) {
       self->state.accountant = std::move(accountant);
-      self->send(self->state.accountant, atom::announce_v, self->name());
+      self->send(accountant, atom::announce_v, self->name());
     },
     [self](atom::sink, caf::actor& sink) -> caf::result<void> {
       if (self->state.sink) {

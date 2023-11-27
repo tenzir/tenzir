@@ -59,6 +59,10 @@ class plugin : public virtual aggregation_function_plugin {
   make_aggregation_function(const type& input_type) const override {
     return std::make_unique<count_function>(input_type);
   }
+
+  auto aggregation_default() const -> data override {
+    return uint64_t{0};
+  }
 };
 
 } // namespace

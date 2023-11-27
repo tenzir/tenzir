@@ -1,8 +1,6 @@
-error: loader `a/b/c.json` could not be found
+error: the file `a/b/c.json` does not exist
  --> <input>:1:6
   |
 1 | from a/b/c.json read json
   |      ^^^^^^^^^^ 
   |
-  = hint: must be one of -, file, ftp, ftps, http, https, s3, stdin
-  = docs: https://docs.tenzir.com/next/connectors

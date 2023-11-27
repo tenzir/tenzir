@@ -222,7 +222,7 @@ read json
 Write JSON without empty fields to a file:
 
 ```
-write json --omit-empty to file /tmp/result.json
+to file /tmp/result.json write json --omit-empty
 ```
 
 Print NDJSON to stdout:

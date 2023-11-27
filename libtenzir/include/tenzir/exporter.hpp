@@ -32,12 +32,16 @@ struct exporter_state {
   /// -- constructor -----------------------------------------------------------
 
   exporter_state() = default;
+  ~exporter_state() noexcept;
 
   /// -- constants -------------------------------------------------------------
 
   static inline const char* name = "exporter";
 
   // -- member variables -------------------------------------------------------
+
+  /// A pointer to the parent actor.
+  exporter_actor::pointer self = {};
 
   /// Stores the query.
   struct query_context query_context = {};
@@ -60,6 +64,9 @@ struct exporter_state {
 
   /// Stores the time point for when this actor got started via 'run'.
   std::chrono::system_clock::time_point start = {};
+
+  /// Stores the number of events shipped in total for metrics.
+  size_t num_shipped = 0;
 
   /// Stores various meta information about the progress we made on the query.
   struct query_status query_status = {};

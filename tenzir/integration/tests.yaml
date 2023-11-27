@@ -77,6 +77,22 @@ tests:
       - command: exec --dump-ast "local remote local pass"
       - command: exec --dump-ast "where :ip == 1.2.3.4"
       - command: exec --dump-ast "to file xyz.json"
+      - command: exec "from @./data/json/all-types.json read json"
+      - command: exec "from file://@./data/json/all-types.json read json"
+      - command: exec "from file:///foo.json read json"
+        expected_result: error
+      - command: exec "from scheme://foo.json read json"
+        expected_result: error
+      - command: exec "from scheme:foo.json read json"
+        expected_result: error
+      - command: exec "load file foo.json | read json"
+        expected_result: error
+      - command: exec "load file | read json"
+        expected_result: error
+      - command: exec "load ./file | read json"
+        expected_result: error
+      - command: exec "load filee | read json"
+        expected_result: error
 
   Conn log counting:
     tags: [node, counting, zeek]
@@ -1051,7 +1067,7 @@ tests:
     tags: [pipeline]
     steps:
       - command: exec 'from file @./tests.yaml | put tags=tests.YAML.tags, steps=tests.YAML.steps'
-      - command: exec 'show config | drop tenzir.config | write yaml'
+      - command: exec 'show config | drop tenzir.config | drop tenzir.cache-directory | write yaml'
       - command: exec 'from file @./data/zeek/zeek.json read zeek-json | head 5 | write yaml'
       - command: exec 'show plugins | where name == "yaml" | repeat 10 | write yaml | read yaml'
 
@@ -1142,3 +1158,27 @@ tests:
       - command: exec 'from - read json | chart donuttt value=b'
         input: data/json/all-types.json
         expected_result: error
+
+  Yield Operator:
+    tags: [pipelines]
+    steps:
+      - command: exec 'read suricata | yield dns'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | yield dns.foo'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | yield dns.answers'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | yield dns.answers[]'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | yield dns.answers[].ttl'
+        input: data/suricata/rrdata-eve.json
+      - command: exec 'read suricata | yield dns.answers[].soa'
+        input: data/suricata/rrdata-eve.json
+
+  Syslog format:
+    tags: [pipelines, syslog]
+    steps:
+      - command: exec 'from - read syslog'
+        input: data/syslog/syslog.log
+      - command: exec 'from - read syslog'
+        input: data/syslog/syslog-rfc3164.log

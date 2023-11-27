@@ -28,6 +28,7 @@ brew install \
     protobuf \
     rsync \
     simdjson \
+    socat \
     spdlog \
     tcpdump \
     xxhash \

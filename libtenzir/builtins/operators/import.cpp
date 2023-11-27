@@ -104,6 +104,10 @@ public:
   auto location() const -> operator_location override {
     return operator_location::remote;
   }
+
+  auto internal() const -> bool override {
+    return true;
+  }
 };
 
 class plugin final : public virtual operator_plugin<import_operator> {

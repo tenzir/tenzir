@@ -22,6 +22,44 @@ to <connector> [write <format>]
 
 If the format is omitted, the default depends on the connector.
 
+Alternatively, instead of a connector, the `from` and `to` operators
+can take a URI or a filesystem path directly:
+
+```
+from <uri> [read <format>]
+from <path> [read <format>]
+
+to <uri> [write <format>]
+to <path> [write <format>]
+```
+
+When given a URI, the scheme is used to determine the connector to use.
+For example, if the URI scheme is `http`, the [`http`](connectors/http.md) connector is used.
+The [`gcs`](connectors/gcs.md) connector is an exception, as it will get used if the URI scheme is `gs`.
+
+```
+from https://example.com/foo.json
+from https https://example.com/foo.json
+from https example.com/foo.json
+
+from gs://bucket/logs/log.json
+from gcs gs://bucket/logs/log.json
+```
+
+When given a filesystem a path, the [`file`](connectors/file.md) connector is used implicitly.
+To disambiguate between a relative filesystem path without any slashes or a file extension, and
+a connector name, the path must contain at least one character that doesn't conform to the pattern `[A-Za-z0-9-_]`.
+If the input conforms to that pattern, it's assumed to be a connector name.
+
+```
+# Parsed as a filesystem path
+from /tmp/plugin.json
+# `plugin` is parsed as a connector name
+from plugin
+# `./plugin` is parsed as a filesystem path, again (contains a `.` and a `/`)
+from ./plugin
+```
+
 Tenzir ships with the following connectors:
 
 import DocCardList from '@theme/DocCardList';

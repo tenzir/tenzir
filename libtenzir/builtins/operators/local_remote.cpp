@@ -67,6 +67,10 @@ public:
     return op_->detached();
   }
 
+  auto internal() const -> bool override {
+    return op_->internal();
+  }
+
   auto infer_type_impl(operator_type input) const
     -> caf::expected<operator_type> override {
     return op_->infer_type(input);

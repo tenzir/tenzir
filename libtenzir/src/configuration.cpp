@@ -436,6 +436,54 @@ caf::error configuration::parse(int argc, char** argv) {
   *config = flatten(*config);
   if (auto err = merge_environment(*config))
     return err;
+  // Set some defaults that can only be derived at runtime.
+  if (!config->contains("tenzir.cache-directory")) {
+    auto env_path_writable
+      = [&](std::string_view key,
+            auto... suffix) -> std::optional<std::filesystem::path> {
+      auto x = detail::getenv(key);
+      if (!x)
+        return std::nullopt;
+      auto path = (std::filesystem::path{*x} / ... / suffix);
+      std::error_code ec;
+      if (std::filesystem::exists(path, ec)) {
+        if (std::filesystem::is_directory(path, ec)) {
+          if (::access(path.string().c_str(), R_OK | W_OK | X_OK) == 0) {
+            return path;
+          }
+          return std::nullopt;
+        }
+        return std::nullopt;
+      }
+      // Try to create.
+      ec = {};
+      std::filesystem::create_directory(path, ec);
+      if (!ec) {
+        return path;
+      }
+      return std::nullopt;
+    };
+#ifdef TENZIR_MACOS
+#  define HOME_CACHE_PATH "Library", "Caches", "tenzir"
+#else
+#  define HOME_CACHE_PATH ".cache", "tenzir"
+#endif
+    auto& value = (*config)["tenzir.cache-directory"];
+    if (auto x = env_path_writable("XDG_CACHE_HOME", "tenzir")) {
+      value = x->string();
+    } else if (auto x = env_path_writable("XDG_HOME_DIR", HOME_CACHE_PATH)) {
+      value = x->string();
+    } else if (auto x = env_path_writable("HOME", HOME_CACHE_PATH)) {
+      value = x->string();
+    } else {
+      auto ec = std::error_code{};
+      auto tmp = std::filesystem::temp_directory_path(ec);
+      if (ec)
+        return caf::make_error(ec::filesystem_error,
+                               "failed to determine temp_directory_path");
+      value = tmp / "tenzir" / "cache";
+    }
+  }
   // From here on, we go into CAF land with the goal to put the configuration
   // into the members of this actor_system_config instance.
   auto settings = to_settings(std::move(*config));

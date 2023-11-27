@@ -230,6 +230,10 @@ public:
     return operator_location::remote;
   }
 
+  auto internal() const -> bool override {
+    return true;
+  }
+
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     (void)order;
