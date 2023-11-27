@@ -69,6 +69,10 @@ public:
       auto event = builder.record();
       event.field("uuid").data(fmt::to_string(synopsis.uuid));
       event.field("memusage").data(synopsis.synopsis->memusage());
+      event.field("diskusage")
+        .data(synopsis.synopsis->store_file.size
+              + synopsis.synopsis->indexes_file.size
+              + synopsis.synopsis->sketches_file.size);
       event.field("events").data(synopsis.synopsis->events);
       event.field("min_import_time").data(synopsis.synopsis->min_import_time);
       event.field("max_import_time").data(synopsis.synopsis->max_import_time);
@@ -78,6 +82,14 @@ public:
         .data(synopsis.synopsis->schema.make_fingerprint());
       event.field("internal")
         .data(synopsis.synopsis->schema.attribute("internal").has_value());
+      auto add_resource = [&](std::string_view key, const resource& value) {
+        auto x = event.field(key).record();
+        x.field("url").data(value.url);
+        x.field("size").data(value.size);
+      };
+      add_resource("store", synopsis.synopsis->store_file);
+      add_resource("indexes", synopsis.synopsis->indexes_file);
+      add_resource("sketches", synopsis.synopsis->sketches_file);
       if ((i + 1) % max_rows == 0) {
         for (auto&& result :
              builder.finish_as_table_slice("tenzir.partition")) {
