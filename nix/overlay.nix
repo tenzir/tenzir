@@ -35,16 +35,24 @@ in {
         ];
       });
   arrow-cpp =
-    if !isStatic
-    then prev.arrow-cpp
-    else
-      (prev.arrow-cpp.override {
+    let
+      arrow-cpp' = prev.arrow-cpp.overrideAttrs (orig: {
+        buildInputs = orig.buildInputs ++ [final.bzip2];
+        cmakeFlags =
+          orig.cmakeFlags
+          ++ [
+            "-DARROW_WITH_BZ2=ON"
+          ];
+      });
+    in
+    overrideAttrsIf isStatic
+      (arrow-cpp'.override {
         enableShared = false;
         google-cloud-cpp = final.google-cloud-cpp.override {
           apis = [ "storage" ];
         };
       })
-      .overrideAttrs (orig: {
+      (orig: {
         nativeBuildInputs = orig.nativeBuildInputs ++ lib.optionals isDarwin [
           (prev.buildPackages.writeScriptBin "libtool" ''
             #!${stdenv.shell}
