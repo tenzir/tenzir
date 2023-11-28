@@ -30,16 +30,6 @@
       "upload-package-to-github": true,
       "package-stores": [],
       "image-registries": []
-    },
-    {
-      "name": "tenzir-ee",
-      "gha-runner-labels": ["macOS", "ARM64"],
-      "static": true,
-      "upload-package-to-github": false,
-      "package-stores": [
-        "gcs:tenzir-dist-private/packages/main"
-      ],
-      "image-registries": []
     }
   ]
 }

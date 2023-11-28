@@ -189,13 +189,6 @@
               "unknown" = "ranlib";
             }."${compilerName}";
           in [
-            #"-DCMAKE_EXE_LINKER_FLAGS=\"-fuse-ld=lld\""
-            #"-DCMAKE_MODULE_LINKER_FLAGS=\"-fuse-ld=lld\""
-            #"-DCMAKE_SHARED_LINKER_FLAGS=\"-fuse-ld=lld\""
-            #"-DCMAKE_C_COMPILER_AR=${ar}"
-            #"-DCMAKE_CXX_COMPILER_AR=${ar}"
-            #"-DCMAKE_C_COMPILER_RANLIB=${ranlib}"
-            #"-DCMAKE_CXX_COMPILER_RANLIB=${ranlib}"
             # Want's to install into the users home, but that would be the
             # builder in the Nix context, and that doesn't make sense.
             "-DTENZIR_ENABLE_INIT_SYSTEM_INTEGRATION=OFF"
@@ -219,8 +212,6 @@
           "fortify"
           "pic"
         ];
-
-        #env.DYLD_LIBRARY_PATH = lib.optionalString stdenv.isDarwin "${lib.getLib stdenv.cc.cc.libllvm.out}/lib";
 
         postBuild = lib.optionalString isStatic ''
           ${pkgsBuildHost.nukeReferences}/bin/nuke-refs bin/*
@@ -271,7 +262,7 @@
           maintainers = with maintainers; [tobim];
         };
       }
-      # Buggy on darwin?
+      # allowedRequisites does not work on darwin.
       // lib.optionalAttrs (isStatic && stdenv.isLinux) {
         allowedRequisites = ["out"];
       }
