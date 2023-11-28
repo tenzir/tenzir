@@ -467,8 +467,8 @@ public:
   /// for every single string.
   ///
   /// @post `input->length() == result_array->length()`
-  auto parse_strings(std::shared_ptr<arrow::StringArray> input,
-                     operator_control_plane& ctrl) const
+  virtual auto parse_strings(std::shared_ptr<arrow::StringArray> input,
+                             operator_control_plane& ctrl) const
     -> std::vector<std::pair<type, std::shared_ptr<arrow::Array>>>;
 
   /// Implement ordering optimization for parsers. See
