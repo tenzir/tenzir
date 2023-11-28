@@ -11,6 +11,7 @@
         "CMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY": "OFF",
         "CMAKE_FIND_USE_PACKAGE_REGISTRY": "OFF",
         "CMAKE_OSX_SYSROOT": "",
+        "_MAC_DEPENDENCY_PATHS": "DISABLED",
         "TENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO": "OFF",
         "TENZIR_ENABLE_BUNDLED_CAF": "OFF",
         "TENZIR_ENABLE_DEVELOPER_MODE": "ON",
@@ -146,7 +147,7 @@
       }
     },
     {
-      "name": "nix-static",
+      "name": "nix-gcc-static",
       "inherits": ["nix-base"],
       "hidden": true,
       "cacheVariables": {
@@ -161,8 +162,53 @@
       }
     },
     {
+      "name": "nix-clang-static",
+      "inherits": ["nix-base"],
+      "hidden": true,
+      "cacheVariables": {
+        "BUILD_SHARED_LIBS": "OFF",
+        "BUILD_TESTING": "OFF",
+        "CMAKE_C_COMPILER": "aarch64-apple-darwin-cc",
+        "CMAKE_CXX_COMPILER": "aarch64-apple-darwin-c++",
+        "TENZIR_ENABLE_JEMALLOC": "OFF",
+        "TENZIR_ENABLE_UNIT_TESTS": "OFF",
+        "TENZIR_ENABLE_STATIC_EXECUTABLE": "ON"
+      }
+    },
+    {
+      "name": "nix-clang-static-debug",
+      "inherits": ["nix-clang-static"],
+      "displayName": "Nix GCC Static Debug Config",
+      "binaryDir": "${sourceDir}/build/clang-static/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/clang-static/debug"
+      }
+    },
+    {
+      "name": "nix-clang-static-relwithdebinfo",
+      "inherits": ["nix-clang-static"],
+      "displayName": "Nix GCC Static RelWithDebInfo Config",
+      "binaryDir": "${sourceDir}/build/clang-static/relwithdebinfo",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/clang-static/relwithdebinfo"
+      }
+    },
+    {
+      "name": "nix-clang-static-release",
+      "inherits": ["nix-clang-static"],
+      "displayName": "Nix GCC Static Release Config",
+      "binaryDir": "${sourceDir}/build/clang-static/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install/clang-static/release",
+        "CMAKE_INTERPROCEDURAL_OPTIMIZATION": "OFF"
+      }
+    },
+    {
       "name": "nix-gcc-static-debug",
-      "inherits": ["nix-static"],
+      "inherits": ["nix-gcc-static"],
       "displayName": "Nix GCC Static Debug Config",
       "binaryDir": "${sourceDir}/build/gcc-static/debug",
       "cacheVariables": {
@@ -172,7 +218,7 @@
     },
     {
       "name": "nix-gcc-static-relwithdebinfo",
-      "inherits": ["nix-static"],
+      "inherits": ["nix-gcc-static"],
       "displayName": "Nix GCC Static RelWithDebInfo Config",
       "binaryDir": "${sourceDir}/build/gcc-static/relwithdebinfo",
       "cacheVariables": {
@@ -182,7 +228,7 @@
     },
     {
       "name": "nix-gcc-static-release",
-      "inherits": ["nix-static"],
+      "inherits": ["nix-gcc-static"],
       "displayName": "Nix GCC Static Release Config",
       "binaryDir": "${sourceDir}/build/gcc-static/release",
       "cacheVariables": {

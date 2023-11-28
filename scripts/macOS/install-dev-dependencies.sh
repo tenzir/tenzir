@@ -21,6 +21,7 @@ brew install \
     libunwind-headers \
     llvm \
     ninja \
+    node \
     openssl \
     pandoc \
     pkg-config \

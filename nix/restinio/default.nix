@@ -7,6 +7,7 @@
   fmt,
   asio,
   openssl,
+  zlib,
 }: let
   pname = "restinio";
   version = "v.0.6.17";
@@ -43,6 +44,7 @@ in
       fmt
       asio
       openssl
+      zlib
     ];
 
     meta = with lib; {

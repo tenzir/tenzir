@@ -23,6 +23,7 @@ operator instantiation.
 |`source`|`bool`|True if this is the first operator in the pipeline.|
 |`transformation`|`bool`|True if this is neither the first nor the last operator.|
 |`sink`|`bool`|True if this is the last operator in the pipeline.|
+|`internal`|`bool`|True if the data flow is considered to internal to Tenzir.|
 |`timestamp`|`time`|The time when this event was emitted (immediately after the collection period).|
 |`input`|`record`|Measurement of the incoming data stream.|
 |`output`|`record`|Measurement of the outgoing data stream.|
@@ -34,7 +35,6 @@ The records `input` and `output` have the following schema:
 |`unit`|`string`|The type of the elements, which is `void`, `bytes` or `events`.|
 |`elements`|`uint64`|Number of elements that were seen during the collection period.|
 |`approx_bytes`|`uint64`|An approximation for the number of bytes transmitted.|
-|`internal`|`bool`|True if the data flow is considered to internal to Tenzir.|
 
 ### Examples
 
