@@ -114,26 +114,29 @@ public:
         context_entries.clear();
       }
     }
+    if (not parameters.contains("key")) {
+      return caf::make_error(ec::invalid_argument, "missing 'key' parameter");
+    }
     if (slice.rows() == 0) {
       // We can ignore empty slices.
       return record{};
     }
     const auto& layout = caf::get<record_type>(slice.schema());
-    auto key_column = layout.resolve_key("key");
+    auto* key_field = caf::get_if<std::string>(&parameters["key"]);
+    if (not key_field) {
+      return caf::make_error(ec::invalid_argument,
+                             "invalid 'key' parameter; 'key' must be a string");
+    }
+    auto key_column = layout.resolve_key(*key_field);
     if (not key_column) {
       // If there's no key column then we cannot do much.
       return record{};
     }
     auto [key_type, key_array] = key_column->get(slice);
-    auto context_column = layout.resolve_key("context");
-    auto context_type = type{};
     auto context_array = std::static_pointer_cast<arrow::Array>(
-      std::make_shared<arrow::NullArray>(slice.rows()));
-    if (context_column) {
-      std::tie(context_type, context_array) = context_column->get(slice);
-    }
+      to_record_batch(slice)->ToStructArray().ValueOrDie());
     auto key_values = values(key_type, *key_array);
-    auto context_values = values(context_type, *context_array);
+    auto context_values = values(slice.schema(), *context_array);
     auto key_it = key_values.begin();
     auto context_it = context_values.begin();
     while (key_it != key_values.end()) {
@@ -146,12 +149,11 @@ public:
     return show();
   }
 
-  auto update(chunk_ptr bytes, record parameters)
-    -> caf::expected<record> override {
+  auto update(chunk_ptr, record) -> caf::expected<record> override {
     return ec::unimplemented;
   }
 
-  auto update(record parameters) -> caf::expected<record> override {
+  auto update(record) -> caf::expected<record> override {
     return ec::unimplemented;
   }
 
@@ -202,9 +204,8 @@ class plugin : public virtual context_plugin {
     return "lookup-table-context";
   }
 
-  auto make_context(record parameters) const
+  auto make_context(record) const
     -> caf::expected<std::unique_ptr<context>> override {
-    (void)parameters;
     return std::make_unique<ctx>();
   }
 
@@ -212,12 +213,64 @@ class plugin : public virtual context_plugin {
     -> caf::expected<std::unique_ptr<context>> override {
     auto fb = flatbuffer<fbs::Data>::make(std::move(serialized));
     if (not fb) {
-      return caf::make_error(
-        ec::serialization_error,
-        fmt::format("failed to deserialize hashtbale context: {}", fb.error()));
+      return caf::make_error(ec::serialization_error,
+                             fmt::format("failed to deserialize lookup table "
+                                         "context: {}",
+                                         fb.error()));
     }
-    // FIXME: reconstruct context_entries from fb
     auto context_entries = tsl::robin_map<data, data>{};
+    auto* list = fb.value()->data_as_list();
+    if (not list) {
+      return caf::make_error(ec::serialization_error,
+                             "failed to deserialize lookup table "
+                             "context: no valid list value for "
+                             "serialized context entry list");
+    }
+    if (const auto* list = fb.value()->data_as_list()) {
+      if (not list->values()) {
+        return caf::make_error(ec::serialization_error,
+                               "failed to deserialize lookup table "
+                               "context: missing or invalid values for "
+                               "context entry in serialized entry list");
+      }
+      for (const auto* list_value : *list->values()) {
+        const auto* record = list_value->data_as_record();
+        if (not record) {
+          return caf::make_error(ec::serialization_error,
+                                 "failed to deserialize lookup table "
+                                 "context: invalid type for "
+                                 "context entry in serialized entry list, "
+                                 "entry must be a record");
+        }
+        if (not record->fields() or record->fields()->size() != 2) {
+          return caf::make_error(ec::serialization_error,
+                                 "failed to deserialize lookup table "
+                                 "context: invalid or missing value for "
+                                 "context entry in serialized entry list, "
+                                 "entry must be a record {key, value}");
+        }
+        data key;
+        data value;
+        auto err = unpack(*record->fields()->Get(0)->data(), key);
+        if (err) {
+          return caf::make_error(ec::serialization_error,
+                                 fmt::format("failed to deserialize lookup "
+                                             "table "
+                                             "context: invalid key: {}",
+                                             err));
+        }
+        err = unpack(*record->fields()->Get(1)->data(), value);
+        if (err) {
+          return caf::make_error(ec::serialization_error,
+                                 fmt::format("failed to deserialize lookup "
+                                             "table "
+                                             "context: invalid value: {}",
+                                             err));
+        }
+        context_entries.emplace(std::move(key), std::move(value));
+      }
+    }
+
     return std::make_unique<ctx>(std::move(context_entries));
   }
 };

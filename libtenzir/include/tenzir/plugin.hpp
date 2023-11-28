@@ -785,7 +785,7 @@ public:
   /// Updates the context.
   virtual auto update(record parameters) -> caf::expected<record> = 0;
 
-  // Serializes a context for persistance.
+  // Serializes a context for persistence.
   virtual auto save() const -> caf::expected<chunk_ptr> = 0;
 };
 
