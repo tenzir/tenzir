@@ -644,11 +644,12 @@ auto aspect_plugin::aspect_name() const -> std::string {
 auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
                                   operator_control_plane& ctrl) const
   -> std::vector<std::pair<type, std::shared_ptr<arrow::Array>>> {
-  // TODO: Concatenating finished table slices here is probably very bad
-  // performance. For example, we have to concatenate new table slices.
+  // TODO: Collecting finished table slices here is very bad for performance.
+  // For example, we have to concatenate new table slices. But there are also
+  // many questions with regards to semantics. This should be either completely
+  // rewritten or replaced with a different mechanism after the revamp.
   auto output = std::vector<table_slice>{};
   auto append_null = [&] {
-    // TODO: This is a very expensive and bad.
     if (output.empty()) {
       auto schema = type{"tenzir.unknown", record_type{}};
       output.emplace_back(arrow::RecordBatch::Make(schema.to_arrow_schema(), 1,
@@ -692,14 +693,11 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
                    .begin(),
                  slices.end());
     if (slices.size() != 1) {
-      // TODO: Diagnostics?
       append_null();
       continue;
     }
     auto slice = std::move(slices[0]);
     if (slice.rows() != 1) {
-      // TODO: We don't know whether the parser has emitted a diagnostic for
-      // this, and it's unclear whether we want to do so.
       append_null();
       continue;
     }

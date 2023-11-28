@@ -120,9 +120,11 @@ public:
       auto next = int64_t{0};
       for (auto& [result_ty, result] : results) {
         auto new_fields = collect(schema.fields());
-        // TODO: Check for overwriting.
+        // TODO: Some fields could be overwritten. We currently do not check for
+        // this, which can lead to having the multiple fields with the same name.
         if (into_) {
-          // TODO: Consider respecting dots.
+          // TODO: We might want to respect dots, such that `--into foo.bar`
+          // inserts into the `bar` field of the `foo` record.
           new_fields.emplace_back(into_->inner, result_ty);
         } else {
           auto result_rec = caf::get_if<record_type>(&result_ty);
@@ -134,18 +136,16 @@ public:
               .emit(ctrl.diagnostics());
             co_return;
           }
-          // TODO: This could be optimized.
-          auto add_fields = collect(result_rec->fields());
-          new_fields.insert(new_fields.end(), add_fields.begin(),
-                            add_fields.end());
+          new_fields.reserve(new_fields.size() + result_rec->num_fields());
+          for (auto field : result_rec->fields()) {
+            new_fields.push_back(std::move(field));
+          }
         }
-        // TODO: Is this what we want?
         auto new_type = type{slice.schema().name(), record_type{new_fields},
                              collect(slice.schema().attributes())};
         auto new_children = std::vector<std::shared_ptr<arrow::Array>>{};
         new_children.reserve(children.size());
         for (auto& child : children) {
-          // TODO: Do not add overwritten!
           new_children.push_back(
             child->SliceSafe(next, result->length()).ValueOrDie());
         }
