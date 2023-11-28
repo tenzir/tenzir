@@ -15,77 +15,91 @@ in {
     if !isStatic
     then prev.google-cloud-cpp
     else
-    prev.google-cloud-cpp.overrideAttrs (orig: {
-        buildInputs = orig.buildInputs ++ [ final.gbenchmark ];
+      prev.google-cloud-cpp.overrideAttrs (orig: {
+        buildInputs = orig.buildInputs ++ [final.gbenchmark];
         propagatedNativeBuildInputs = (orig.propagatedNativeBuildInputs or []) ++ [prev.buildPackages.pkg-config];
-        patches = (orig.patches or []) ++ [
-          ./google-cloud-cpp/0001-Use-pkg-config-to-find-CURL.patch
-        ];
+        patches =
+          (orig.patches or [])
+          ++ [
+            ./google-cloud-cpp/0001-Use-pkg-config-to-find-CURL.patch
+          ];
       });
   aws-c-cal =
     if !isStatic
     then prev.aws-c-cal
     else
       prev.aws-c-cal.overrideAttrs (orig: {
-        patches = (orig.patches or []) ++ [
-          (prev.fetchpatch {
-            url = "https://github.com/awslabs/aws-c-cal/commit/ee46efc3dd0cf300ff4ec89cc2d79f1b0fe1c8cb.patch";
-            sha256 = "sha256-bFc0Mqt0Ho3i3xGHiQitP35dQgPd9Wthkyb1TT/nRYs=";
-          })
-        ];
-      });
-  arrow-cpp =
-    let
-      arrow-cpp' = prev.arrow-cpp.overrideAttrs (orig: {
-        buildInputs = orig.buildInputs ++ [final.bzip2];
-        cmakeFlags =
-          orig.cmakeFlags
+        patches =
+          (orig.patches or [])
           ++ [
-            "-DARROW_WITH_BZ2=ON"
+            (prev.fetchpatch {
+              url = "https://github.com/awslabs/aws-c-cal/commit/ee46efc3dd0cf300ff4ec89cc2d79f1b0fe1c8cb.patch";
+              sha256 = "sha256-bFc0Mqt0Ho3i3xGHiQitP35dQgPd9Wthkyb1TT/nRYs=";
+            })
           ];
       });
-    in
+  arrow-cpp = let
+    arrow-cpp' = prev.arrow-cpp.overrideAttrs (orig: {
+      buildInputs = orig.buildInputs ++ [final.bzip2];
+      cmakeFlags =
+        orig.cmakeFlags
+        ++ [
+          "-DARROW_WITH_BZ2=ON"
+        ];
+    });
+  in
     overrideAttrsIf isStatic
-      (arrow-cpp'.override {
-        enableShared = false;
-        google-cloud-cpp = final.google-cloud-cpp.override {
-          apis = [ "storage" ];
-        };
-      })
-      (orig: {
-        nativeBuildInputs = orig.nativeBuildInputs ++ lib.optionals isDarwin [
+    (
+      if !isStatic
+      then arrow-cpp'
+      else
+        arrow-cpp'.override {
+          enableShared = false;
+          google-cloud-cpp = final.google-cloud-cpp.override {
+            apis = ["storage"];
+          };
+        }
+    )
+    (orig: {
+      nativeBuildInputs =
+        orig.nativeBuildInputs
+        ++ lib.optionals isDarwin [
           (prev.buildPackages.writeScriptBin "libtool" ''
             #!${stdenv.shell}
             exec ${lib.getBin prev.buildPackages.darwin.cctools}/bin/${stdenv.cc.targetPrefix}libtool $@
           '')
         ];
-        patches = (orig.patches or []) ++ [
+      patches =
+        (orig.patches or [])
+        ++ [
           ./fix-protobuf-dep.patch
         ];
-        buildInputs = orig.buildInputs ++ [final.sqlite];
-        cmakeFlags =
-          orig.cmakeFlags
-          ++ [
-            # Needed for correct dependency resolution, should be the default...
-            "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
-            # Backtrace doesn't build in static mode, need to investigate.
-            "-DARROW_WITH_BACKTRACE=OFF"
-            "-DARROW_BUILD_TESTS=OFF"
-          ];
-        doCheck = false;
-        doInstallCheck = false;
-      });
+      buildInputs = orig.buildInputs ++ [final.sqlite];
+      cmakeFlags =
+        orig.cmakeFlags
+        ++ [
+          # Needed for correct dependency resolution, should be the default...
+          "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
+          # Backtrace doesn't build in static mode, need to investigate.
+          "-DARROW_WITH_BACKTRACE=OFF"
+          "-DARROW_BUILD_TESTS=OFF"
+        ];
+      doCheck = false;
+      doInstallCheck = false;
+    });
   zeromq =
     if !isStatic
     then prev.zeromq
     else
-    prev.zeromq.overrideAttrs (orig: {
-      cmakeFlags = orig.cmakeFlags ++ [
-        "-DBUILD_SHARED=OFF"
-        "-DBUILD_STATIC=ON"
-        "-DBUILD_TESTS=OFF"
-      ];
-    });
+      prev.zeromq.overrideAttrs (orig: {
+        cmakeFlags =
+          orig.cmakeFlags
+          ++ [
+            "-DBUILD_SHARED=OFF"
+            "-DBUILD_STATIC=ON"
+            "-DBUILD_TESTS=OFF"
+          ];
+      });
   grpc =
     if !isStatic
     then prev.grpc
@@ -140,44 +154,53 @@ in {
     nativeBuildInputs = orig.nativeBuildInputs ++ [prev.buildPackages.cmake];
     # The cmake config file doesn't find them if they are not propagated.
     propagatedBuildInputs = orig.buildInputs;
-    cmakeFlags = lib.optionals isStatic [
-      "-DRDKAFKA_BUILD_STATIC=ON"
-      # The interceptor tests library is hard-coded to SHARED.
-      "-DRDKAFKA_BUILD_TESTS=OFF"
-    ] ++ lib.optionals stdenv.cc.isClang [
-      "-DRDKAFKA_BUILD_TESTS=OFF"
-    ];
+    cmakeFlags =
+      lib.optionals isStatic [
+        "-DRDKAFKA_BUILD_STATIC=ON"
+        # The interceptor tests library is hard-coded to SHARED.
+        "-DRDKAFKA_BUILD_TESTS=OFF"
+      ]
+      ++ lib.optionals stdenv.cc.isClang [
+        "-DRDKAFKA_BUILD_TESTS=OFF"
+      ];
   });
-  mkStub = name: prev.writeShellScriptBin name ''
-    echo "stub-${name}: $@" >&2
-  '';
-  fluent-bit =
-    let
-      fluent-bit' = overrideAttrsIf isDarwin prev.fluent-bit
+  mkStub = name:
+    prev.writeShellScriptBin name ''
+      echo "stub-${name}: $@" >&2
+    '';
+  fluent-bit = let
+    fluent-bit' =
+      overrideAttrsIf isDarwin prev.fluent-bit
       (orig: {
         buildInputs = (orig.buildInputs or []) ++ (with prev.darwin.apple_sdk.frameworks; [Foundation IOKit]);
         # The name "kIOMainPortDefault" has been introduced in a a later SDK
         # version.
-        cmakeFlags = (orig.cmakeFlags or []) ++ [
-          "-DCMAKE_C_FLAGS=\"-DkIOMainPortDefault=kIOMasterPortDefault\""
-        ];
+        cmakeFlags =
+          (orig.cmakeFlags or [])
+          ++ [
+            "-DCMAKE_C_FLAGS=\"-DkIOMainPortDefault=kIOMasterPortDefault\""
+          ];
       });
-    in
+  in
     overrideAttrsIf isStatic fluent-bit'
-     (orig: {
+    (orig: {
       outputs = ["out"];
       nativeBuildInputs = orig.nativeBuildInputs ++ [(final.mkStub "ldconfig")];
       # Neither systemd nor postgresql have a working static build.
-      propagatedBuildInputs = [
-        final.openssl
-        final.libyaml
-      ] ++ lib.optionals isLinux [ final.musl-fts ];
-      cmakeFlags = (orig.cmakeFlags or []) ++ [
-        "-DFLB_BINARY=OFF"
-        "-DFLB_SHARED_LIB=OFF"
-        "-DFLB_LUAJIT=OFF"
-        "-DFLB_OUT_PGSQL=OFF"
-      ];
+      propagatedBuildInputs =
+        [
+          final.openssl
+          final.libyaml
+        ]
+        ++ lib.optionals isLinux [final.musl-fts];
+      cmakeFlags =
+        (orig.cmakeFlags or [])
+        ++ [
+          "-DFLB_BINARY=OFF"
+          "-DFLB_SHARED_LIB=OFF"
+          "-DFLB_LUAJIT=OFF"
+          "-DFLB_OUT_PGSQL=OFF"
+        ];
       # The build scaffold of fluent-bit doesn't install static libraries, so we
       # work around it by just copying them from the build directory. The
       # blacklist is hand-written and prevents the inclusion of duplicates in
@@ -190,7 +213,6 @@ in {
           "librdkafka.a"
           "libxxhash.a"
         ];
-
       in ''
         set -x
         mkdir -p $out/lib
@@ -202,9 +224,10 @@ in {
   yara =
     if !isStatic
     then prev.yara
-    else prev.yara.overrideAttrs (orig: {
-      NIX_CFLAGS_LINK="-lz";
-    });
+    else
+      prev.yara.overrideAttrs (orig: {
+        NIX_CFLAGS_LINK = "-lz";
+      });
   restinio = final.callPackage ./restinio {};
   caf = let
     source = builtins.fromJSON (builtins.readFile ./caf/source.json);
@@ -240,7 +263,8 @@ in {
             "-DCAF_ENABLE_TESTING=OFF"
             "-DOPENSSL_USE_STATIC_LIBS=TRUE"
             "-DCMAKE_POLICY_DEFAULT_CMP0069=NEW"
-          ] ++ lib.optionals isLinux [
+          ]
+          ++ lib.optionals isLinux [
             "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
           ];
         hardeningDisable = [
@@ -336,8 +360,10 @@ in {
       p.bats-support
       p.bats-assert
     ]);
-  in [ bats prev.curl prev.jq prev.socat ];
-  pythonPackagesExtensions = prev.pythonPackagesExtensions ++ [
+  in [bats prev.curl prev.jq prev.socat];
+  pythonPackagesExtensions =
+    prev.pythonPackagesExtensions
+    ++ [
       (
         python-final: python-prev: {
           dynaconf = python-final.callPackage ./dynaconf {};
