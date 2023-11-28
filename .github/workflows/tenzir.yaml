@@ -609,6 +609,19 @@ jobs:
             cxx: g++-12
             dependencies-script-path: scripts/debian/install-dev-dependencies.sh
             cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON
+            bundled-plugins:
+              # We enable the web and fluent-bit plugins here, because:
+              #  * web: Is needed as a dependency of the pipeline-manager, and
+              #    plugin dependency graphs cannot the modeled with the current
+              #    plugin API.
+              #  * fluent-bit: The plugin library links to libfluent-bit.so, which
+              #    is built by upstream without support for `dlopen()`, the
+              #    integrated build method used here works around that by linking
+              #    libfluent-bit.so to libtenzir.so directly. The alternative
+              #    workaround of using LD_PRELOAD for the standalone plugin build
+              #    does not work in the GitHub Actions Runner.
+              - plugins/web
+              - plugins/fluent-bit
           - os: macos-latest
             container: null
             name: macOS
@@ -617,6 +630,20 @@ jobs:
             cxx: clang++
             dependencies-script-path: scripts/macOS/install-dev-dependencies.sh
             cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON
+            bundled-plugins:
+              # rabbitmq-c is not packaged in homebrew.
+              #- plugins/amqp
+              - plugins/fluent-bit
+              - plugins/gcs
+              - plugins/kafka
+              - plugins/nic
+              - plugins/parquet
+              - plugins/sigma
+              - plugins/velociraptor
+              - plugins/web
+              - plugins/yara
+              - plugins/zmq
+              - contrib/tenzir-plugins/*
     env:
       BUILD_DIR: build
       CC: ${{ matrix.tenzir.cc }}
@@ -713,24 +740,13 @@ jobs:
           # a warning. We accept this drawback because the package we generate
           # here is built specifically as input for the plugin CI jobs and not
           # suitable for general use.
-          ###
-          # We enable the web and fluent-bit plugins here, because:
-          #  * web: Is needed as a dependency of the pipeline-manager, and
-          #    plugin dependency graphs cannot the modeled with the current
-          #    plugin API.
-          #  * fluent-bit: The plugin library links to libfluent-bit.so, which
-          #    is built by upstream without support for `dlopen()`, the
-          #    integrated build method used here works around that by linking
-          #    libfluent-bit.so to libtenzir.so directly. The alternative
-          #    workaround of using LD_PRELOAD for the standalone plugin build
-          #    does not work in the GitHub Actions Runner.
           cmake -B "$BUILD_DIR" \
             -DCMAKE_BUILD_TYPE:STRING="${{ github.event_name == 'pull_request' && 'CI' || 'Release' }}" \
             -DCMAKE_INSTALL_PREFIX:STRING="${PWD}/opt/tenzir" \
             -DCPACK_GENERATOR:STRING=TGZ \
             -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
             -DCPACK_PACKAGING_INSTALL_PREFIX:STRING="/" \
-            -DTENZIR_PLUGINS:STRING="plugins/web;plugins/fluent-bit" \
+            -DTENZIR_PLUGINS:STRING="${{ join(matrix.tenzir.bundled-plugins, ';') }}" \
             ${{ needs.configure.outputs.cmake-version-args }} \
             ${{ matrix.tenzir.cmake-extra-flags }}
       - name: Compile All Targets
@@ -819,11 +835,6 @@ jobs:
             cc: gcc-12
             cxx: g++-12
             package-suffix: Release-GCC
-          - os: macos-latest
-            name: macOS
-            cc: clang
-            cxx: clang++
-            package-suffix: Release-Clang
         plugin:
           - name: AMQP
             target: amqp
@@ -874,28 +885,6 @@ jobs:
           - name: ZeroMQ
             target: zmq
             path: plugins/zmq
-        exclude:
-          - {setup: {os: macos-latest}, plugin: {name: AMQP}}
-          - {setup: {os: macos-latest}, plugin: {name: Compaction}}
-          # Disable proprietary and example plugins on macOS to shorten CI
-          # turnaround. GitHub does not run more than 5 jobs in parallel on
-          # macOS.
-          - {setup: {os: macos-latest}, plugin: {name: Example Analyzer}}
-          - {setup: {os: macos-latest}, plugin: {name: Example Pipeline Operator}}
-          - {setup: {os: macos-latest}, plugin: {name: GCS}}
-          - {setup: {os: macos-latest}, plugin: {name: Kafka}}
-          - {setup: {os: macos-latest}, plugin: {name: Inventory}}
-          - {setup: {os: macos-latest}, plugin: {name: Matcher}}
-          - {setup: {os: macos-latest}, plugin: {name: Netflow}}
-          # Disable the Parquet plugin because trying
-          # to use it on the macOS CI runners crashes because of an illegal
-          # instruction as of Arrow 10.0.0.
-          - {setup: {os: macos-latest}, plugin: {name: Parquet}}
-          - {setup: {os: macos-latest}, plugin: {name: Pipeline Manager}}
-          - {setup: {os: macos-latest}, plugin: {name: Sigma}}
-          - {setup: {os: macos-latest}, plugin: {name: Velociraptor}}
-          - {setup: {os: macos-latest}, plugin: {name: Yara}}
-          - {setup: {os: macos-latest}, plugin: {name: ZeroMQ}}
     env:
       INSTALL_DIR: "${{ github.workspace }}/_install"
       BUILD_DIR: "${{ github.workspace }}/_build"
@@ -938,19 +927,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Setup Python
-        if: ${{ matrix.setup.os == 'macos-latest' }}
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.9"
-      - name: Install Dependencies (macOS)
-        if: ${{ matrix.setup.os == 'macos-latest' }}
-        run: |
-          brew install \
-            ${{ join(matrix.setup.mac-dependencies, ' ') }} \
-            curl
-          ./scripts/macOS/install-dev-dependencies.sh
-          python3 -m pip install --upgrade pip
       - name: Install Dependencies (Debian)
         if: ${{ matrix.setup.os == 'ubuntu-20.04' }}
         run: |
@@ -991,14 +967,6 @@ jobs:
           mkdir "${INSTALL_DIR}"
           tar -C "${INSTALL_DIR}" -xzvf "${PACKAGE_NAME}.tar.gz"
           echo "${INSTALL_DIR}/bin" >> $GITHUB_PATH
-      - name: Setup Homebrew Clang
-        if: ${{ matrix.setup.os == 'macos-latest' }}
-        run: |
-          llvm_root="$(brew --prefix llvm)"
-          echo "${llvm_root}/bin" >> $GITHUB_PATH
-          echo "LDFLAGS=-Wl,-rpath,${llvm_root}" >> $GITHUB_ENV
-          echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
-          echo "CXXFLAGS=-isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
       - name: Configure Build
         env:
           TENZIR_DIR: "${{ env.INSTALL_DIR }}"
