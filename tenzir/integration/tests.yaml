@@ -1224,6 +1224,23 @@ tests:
       - command: exec 'read syslog | parse content cef'
         input: data/syslog/cef-over-syslog.log
 
+  Parse with Grok:
+    tags: [pipelines]
+    steps:
+      - command: exec 'show version | put version="v4.5.0-71-gae887a0ca3-dirty" | parse version grok "%{GREEDYDATA:version}"'
+      - command: exec 'show version | put version="v4.5.0-71-gae887a0ca3-dirty" | parse version grok "v%{INT:major:int}\.%{INT:minor:int}\.%{INT:patch:int}(-%{INT:tweak:int}-%{DATA:ref}(-%{DATA:extra})?)?"'
+      - command: exec 'show version | put version="v4.5.0-71-gae887a0ca3-dirty" | parse version grok --indexed-captures "v%{INT:major:int}\.%{INT:minor:int}\.%{INT:patch:int}(-%{INT:tweak}-%{DATA:ref}(-%{DATA:extra})?)?"'
+      - command: exec 'show version | put version="v4.5.0-71-gae887a0ca3-dirty" | parse version grok "v(?<major>[0-9]+)\.(?<rest>.*)"'
+      - command: exec 'show version | put version="v4.5.0-71-gae887a0ca3-dirty" | parse version grok --pattern-definitions "VERSION %{INT:major:int}\.%{INT:minor:int}\.%{INT:patch:int}" "v%{VERSION}(-%{INT:tweak:int}-%{DATA:ref}(-%{DATA:extra})?)?"'
+      - command: exec 'show version | put url="https://example.com/test.txt?foo=bar" | parse url grok --include-unnamed "%{URI}"'
+      - command: |
+          exec 'read lines | parse line grok "(<%{NONNEGINT:priority}>\s*)?%{SYSLOGTIMESTAMP:timestamp} (%{HOSTNAME:hostname}/%{IPV4:hostip}|%{WORD:host}) %{SYSLOGPROG}:%{GREEDYDATA:message}"'
+        input: data/syslog/syslog-rfc3164.log
+      - command: |
+          exec 'read lines | parse line grok --include-unnamed "(<%{NONNEGINT:priority}>\s*)?%{SYSLOGTIMESTAMP:timestamp} (%{HOSTNAME:hostname}/%{IPV4:hostip}|%{WORD:host}) %{SYSLOGPROG}:%{GREEDYDATA:message}"'
+        input: data/syslog/syslog-rfc3164.log
+      - command: exec 'show version | put version="v4.5.0-71-gae887a0ca3-dirty" | parse version grok "%{TIMESTAMP_ISO8601}"'
+
   CSV with comments:
     tags: [pipelines, csv]
     steps:

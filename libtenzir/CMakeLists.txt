@@ -343,7 +343,7 @@ string(APPEND TENZIR_FIND_DEPENDENCY_LIST
 dependency_summary("Boost" Boost::headers "Dependencies")
 
 # Link against re2.
-target_link_libraries(libtenzir PRIVATE re2::re2)
+target_link_libraries(libtenzir PUBLIC re2::re2)
 dependency_summary("re2" re2::re2 "Dependencies")
 
 # Link against fast_float
