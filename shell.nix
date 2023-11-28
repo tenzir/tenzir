@@ -9,8 +9,11 @@ in
       nativeBuildInputs =
         [
           pkgs.ccache
-          pkgs.speeve
           pkgs.clang-tools_16
+          pkgs.cmake-format
+          pkgs.speeve
+          pkgs.poetry
+          pkgs.python3Packages.spdx-tools
         ] ++ pkgs.tenzir-functional-test-deps
           ++ pkgs.tenzir-integration-test-deps
           ++ lib.optionals (!(pkgs.stdenv.hostPlatform.useLLVM or false)) [
@@ -18,10 +21,9 @@ in
           pkgs.clang_16
           # Bintools come with a wrapped lld for faster linking.
           pkgs.llvmPackages_16.bintools
-          pkgs.cmake-format
+        ] # Temporarily only on Linux.
+          ++ lib.optionals pkgs.stdenv.isLinux [
           pkgs.pandoc
-          pkgs.poetry
-          pkgs.python3Packages.spdx-tools
         ];
       # To build libcaf_openssl with bundled CAF.
       buildInputs = [pkgs.openssl];
