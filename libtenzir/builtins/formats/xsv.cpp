@@ -284,9 +284,6 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
             };
             return detail::unescape(in, unescaper);
           })
-          .with([](const std::string& in) {
-            return !in.empty();
-          })
         >> &(args.field_sep | parsers::eoi))
        | *(parsers::any - args.field_sep));
   auto split_parser = (string_value_parser % args.field_sep);
