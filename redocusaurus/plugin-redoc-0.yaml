@@ -643,7 +643,9 @@ paths:
       summary: Return data from a pipeline
       description: >-
         Returns events from an existing pipeline. The pipeline definition must
-        include a serve operator.
+        include a serve operator. By default, the endpoint performs long polling
+        (`timeout: 2s`) and returns events as soon as they are available
+        (`min_events: 1`).
       requestBody:
         description: Body for the serve endpoint
         required: true
