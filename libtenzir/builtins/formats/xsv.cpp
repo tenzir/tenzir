@@ -261,34 +261,33 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
   }
   if (not header)
     co_return;
-  auto string_value_parser
-    = ((parsers::qqstr
-          .then([](std::string in) {
-            static auto unescaper = [](auto& f, auto l, auto out) {
-              if (*f != '\\') { // Skip every non-escape character.
-                *out++ = *f++;
-                return true;
-              }
-              if (l - f < 2)
-                return false;
-              switch (auto c = *++f) {
-                case '\\':
-                  *out++ = '\\';
-                  break;
-                case '"':
-                  *out++ = '"';
-                  break;
-              }
-              ++f;
-              return true;
-            };
-            return detail::unescape(in, unescaper);
-          })
-        >> &(args.field_sep | parsers::eoi))
+  const auto qqstring_value_parser = parsers::qqstr.then([](std::string in) {
+    static auto unescaper = [](auto& f, auto l, auto out) {
+      if (*f != '\\') { // Skip every non-escape character.
+        *out++ = *f++;
+        return true;
+      }
+      if (l - f < 2)
+        return false;
+      switch (auto c = *++f) {
+        case '\\':
+          *out++ = '\\';
+          break;
+        case '"':
+          *out++ = '"';
+          break;
+      }
+      ++f;
+      return true;
+    };
+    return detail::unescape(in, unescaper);
+  });
+  const auto string_value_parser
+    = ((qqstring_value_parser >> &(args.field_sep | parsers::eoi))
        | *(parsers::any - args.field_sep));
-  auto split_parser = (string_value_parser % args.field_sep);
+  auto header_parser = (string_value_parser % args.field_sep);
   auto fields = std::vector<std::string>{};
-  if (!split_parser(*header, fields)) {
+  if (!header_parser(*header, fields)) {
     ctrl.abort(
       caf::make_error(ec::parse_error, fmt::format("{0} parser failed to parse "
                                                    "header of {0} input",
@@ -320,8 +319,37 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
     if (args.allow_comments && line->front() == '#') {
       continue;
     }
-    auto values = std::vector<std::string>{};
-    if (!split_parser(*line, values)) {
+    const auto single_value_delimiter
+      = (parsers::eoi | args.list_sep | args.field_sep);
+    const auto single_value_parser
+      = (parsers::lit{args.null_value} >> &single_value_delimiter)
+          .then([](std::string) {
+            return data{};
+          })
+        | (parsers::data >> &single_value_delimiter).with([](const data& d) {
+            return caf::visit(
+              []<class T>(const T&) {
+                return not detail::is_any_v<T, pattern, std::string, list,
+                                            record>;
+              },
+              d);
+          })
+        | (qqstring_value_parser >> &single_value_delimiter
+           | *(parsers::any - single_value_delimiter))
+            .then([](std::string str) {
+              return data{std::move(str)};
+            });
+    const auto value_parser = (single_value_parser % args.list_sep)
+                                .then([](std::vector<data> values) -> data {
+                                  TENZIR_ASSERT_CHEAP(not values.empty());
+                                  if (values.size() == 1) {
+                                    return std::move(values[0]);
+                                  }
+                                  return values;
+                                });
+    auto values_parser = (value_parser % args.field_sep);
+    auto values = std::vector<data>{};
+    if (!values_parser(*line, values)) {
       ctrl.warn(
         caf::make_error(ec::parse_error, fmt::format("{} parser skipped line: "
                                                      "parsing line failed",
@@ -338,40 +366,7 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
     }
     auto row = b.record();
     for (const auto& [field, value] : detail::zip(fields, values)) {
-      // TODO: Instead of the data parser, parse just non-container types, and
-      // respect the list separator and null value options for creating lists.
-      auto parsed = data{};
-      const auto value_parser
-        = (parsers::str{args.null_value} >> parsers::eoi).then([](std::string) {
-            return data{};
-          })
-          | (parsers::data >> parsers::eoi).with([](const data& d) {
-              return caf::visit(
-                []<class T>(const T&) {
-                  return not detail::is_any_v<T, pattern, std::string, list,
-                                              record>;
-                },
-                d);
-            })
-          | (string_value_parser >> parsers::eoi).then([](std::string str) {
-              return data{std::move(str)};
-            });
-      const auto parser = (value_parser % args.list_sep)
-                            .then([](std::vector<data> values) -> data {
-                              TENZIR_ASSERT_CHEAP(not values.empty());
-                              if (values.size() == 1) {
-                                return std::move(values[0]);
-                              }
-                              return values;
-                            });
-      if (not parser(value, parsed)) {
-        diagnostic::warning("failed to parse value '{}'", value)
-          .note("skipping line")
-          .emit(ctrl.diagnostics());
-        b.remove_last();
-        break;
-      }
-      auto result = row.field(field).try_data(parsed);
+      auto result = row.field(field).try_data(value);
       if (not result) {
         ctrl.warn(result.error());
       }

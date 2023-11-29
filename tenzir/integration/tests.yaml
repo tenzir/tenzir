@@ -1205,3 +1205,5 @@ tests:
         input: data/xsv/sample.ssv
       - command: exec 'read tsv | extend schema=#schema | write tsv'
         input: data/xsv/sample.tsv
+      - command: exec 'read csv'
+        input: data/xsv/nulls-and-escaping.csv
