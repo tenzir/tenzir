@@ -43,7 +43,7 @@ namespace tenzir::plugins::python {
 namespace {
 
 auto PYTHON_SCAFFOLD = R"_(
-from pytenzir.tools.python_operator_executor import main
+from tenzir.tools.python_operator_executor import main
 
 main()
 )_";
@@ -318,7 +318,7 @@ public:
                              / "python" / "venvs";
     auto implicit_requirements_default = std::string{
       detail::install_datadir() / "python"
-      / fmt::format("pytenzir-{}.{}.{}-py3-none-any.whl[operator]",
+      / fmt::format("tenzir-{}.{}.{}-py3-none-any.whl[operator]",
                     version::major, version::minor, version::patch)};
     config.implicit_requirements = get_or(
       plugin_config, "implicit-requirements", implicit_requirements_default);

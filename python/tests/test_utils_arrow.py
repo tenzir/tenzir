@@ -2,7 +2,7 @@ import json
 import ipaddress
 import pyarrow as pa
 
-import pytenzir.utils.arrow as vua
+import tenzir.utils.arrow as vua
 
 
 def test_ip_ip_extension_type():

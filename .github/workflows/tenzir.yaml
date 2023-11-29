@@ -189,7 +189,7 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
             echo "::notice Enabling release jobs"
             run_all_checks
-            # Publish pytenzir to Pypi.
+            # Publish tenzir to Pypi.
             echo "run-python-package=true" >> $GITHUB_OUTPUT
             exit 0
           fi
