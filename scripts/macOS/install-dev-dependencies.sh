@@ -3,7 +3,7 @@
 set -euo pipefail
 
 brew --version
-brew install \
+brew install --overwrite \
     apache-arrow \
     bash \
     boost \
@@ -21,7 +21,6 @@ brew install \
     libunwind-headers \
     llvm \
     ninja \
-    node \
     openssl \
     pandoc \
     pkg-config \
