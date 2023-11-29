@@ -150,11 +150,13 @@ public:
   }
 
   auto update(chunk_ptr, record) -> caf::expected<record> override {
-    return ec::unimplemented;
+    return caf::make_error(ec::unimplemented, "lookup-table context can not be "
+                                              "updated with bytes");
   }
 
   auto update(record) -> caf::expected<record> override {
-    return ec::unimplemented;
+    return caf::make_error(ec::unimplemented,
+                           "lookup-table context can not be updated with void");
   }
 
   auto save() const -> caf::expected<chunk_ptr> override {
