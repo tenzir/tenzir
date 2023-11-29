@@ -1195,3 +1195,13 @@ tests:
         input: data/csv/ipblocklist.csv
       - command: exec 'from - read xsv , --allow-comments'
         input: data/csv/ipblocklist.csv
+
+  XSV Format:
+    tags: [pipelines, xsv]
+    steps:
+      - command: exec 'read csv | extend schema=#schema | write csv'
+        input: data/xsv/sample.csv
+      - command: exec 'read ssv | extend schema=#schema | write ssv'
+        input: data/xsv/sample.ssv
+      - command: exec 'read tsv | extend schema=#schema | write tsv'
+        input: data/xsv/sample.tsv
