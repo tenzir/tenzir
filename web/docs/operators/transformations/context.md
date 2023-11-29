@@ -22,7 +22,7 @@ The `enrich` operator is an alias of `context apply`.
 #### Synopsis
 
 ```
-context apply <name> [parameters]
+context apply [<new_name>=]<name> [--key[=]value, ...]
 ```
 
 ### `update`
@@ -32,7 +32,7 @@ Updates a context with new data.
 #### Synopsis
 
 ```
-context update <name> [parameters]
+context update <name> [--key[=]value, ...]
 ```
 
 ## Examples
@@ -44,12 +44,12 @@ blocklist](https://feodotracker.abuse.ch/downloads/ipblocklist.json), using the
 
 ```
 from https://feodotracker.abuse.ch/downloads/ipblocklist.json read json
---arrays-of-objects | context update mytable key="ip_address" clear=true
+--arrays-of-objects | context update mytable --clear --key=ip_address
 ```
 
 Apply the `lookup-table` context "mytable" to events, using the `src_ip` field
 as the field to compare the context key against.
 
 ```
-export | enrich mytable field="src_ip" | where mytable.key != null
+export | enrich mytable --field=src_ip | where mytable.key != null
 ```

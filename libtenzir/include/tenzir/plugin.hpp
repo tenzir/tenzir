@@ -762,10 +762,13 @@ public:
 
 class context {
 public:
+  using parameter_map
+    = std::unordered_map<std::string, std::optional<std::string>>;
+
   virtual ~context() noexcept = default;
 
   /// Emits context information for every event in `slice` in order.
-  virtual auto apply(table_slice slice, record parameters) const
+  virtual auto apply(table_slice slice, parameter_map parameters) const
     -> caf::expected<std::vector<typed_array>>
     = 0;
 
@@ -773,17 +776,17 @@ public:
   virtual auto show() const -> record = 0;
 
   /// Updates the context.
-  virtual auto update(table_slice events, record parameters)
+  virtual auto update(table_slice events, parameter_map parameters)
     -> caf::expected<record>
     = 0;
 
   /// Updates the context.
-  virtual auto update(chunk_ptr bytes, record parameters)
+  virtual auto update(chunk_ptr bytes, parameter_map parameters)
     -> caf::expected<record>
     = 0;
 
   /// Updates the context.
-  virtual auto update(record parameters) -> caf::expected<record> = 0;
+  virtual auto update(parameter_map parameters) -> caf::expected<record> = 0;
 
   // Serializes a context for persistence.
   virtual auto save() const -> caf::expected<chunk_ptr> = 0;
@@ -792,7 +795,8 @@ public:
 class context_plugin : public virtual plugin {
 public:
   /// Create a context.
-  [[nodiscard]] virtual auto make_context(record parameters) const
+  [[nodiscard]] virtual auto
+  make_context(context::parameter_map parameters) const
     -> caf::expected<std::unique_ptr<context>>
     = 0;
   // Load a context.

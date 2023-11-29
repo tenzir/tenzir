@@ -20,7 +20,7 @@ The schema of that event is specific to the context type.
 #### Synopsis
 
 ```
-context create <name> --type=<context-type> [key=value]
+context create <name> <context-type> [--key[=]value]
 ```
 
 ### `delete`
@@ -38,5 +38,5 @@ context delete <name>
 Create a `lookup-table` context called "mytable".
 
 ```
-context create mytable --type=lookup-table
+context create mytable lookup-table
 ```

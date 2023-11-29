@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/concept/parseable/numeric/bool.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/range_map.hpp>
 #include <tenzir/fbs/data.hpp>
@@ -45,19 +46,18 @@ public:
   }
 
   /// Emits context information for every event in `slice` in order.
-  auto apply(table_slice slice, record parameters) const
+  auto apply(table_slice slice, context::parameter_map parameters) const
     -> caf::expected<std::vector<typed_array>> override {
     auto resolved_slice = resolve_enumerations(slice);
     auto field_name = std::optional<std::string>{};
     for (const auto& [key, value] : parameters) {
       if (key == "field") {
-        const auto* str = caf::get_if<std::string>(&value);
-        if (not str) {
+        if (not value) {
           return caf::make_error(ec::invalid_argument,
                                  "invalid argument type for `field`: expected "
                                  "a string");
         }
-        field_name = *str;
+        field_name = *value;
         continue;
       }
       return caf::make_error(ec::invalid_argument,
@@ -105,24 +105,34 @@ public:
   }
 
   /// Updates the context.
-  auto update(table_slice slice, record parameters)
+  auto update(table_slice slice, context::parameter_map parameters)
     -> caf::expected<record> override {
     // context does stuff on its own with slice & parameters
     if (parameters.contains("clear")) {
-      auto* clear = get_if<bool>(&parameters, "clear");
-      if (clear and *clear) {
+      auto clear = parameters["clear"];
+      if (not clear or (clear and clear->empty())) {
         context_entries.clear();
+      } else if (clear) {
+        auto clear_v = false;
+        if (not parsers::boolean(*clear, clear_v)) {
+          return caf::make_error(ec::invalid_argument,
+                                 "value for 'clear' key needs to be a valid "
+                                 "boolean <true/false>");
+        }
+        if (clear_v) {
+          context_entries.clear();
+        }
       }
-    }
-    if (not parameters.contains("key")) {
-      return caf::make_error(ec::invalid_argument, "missing 'key' parameter");
     }
     if (slice.rows() == 0) {
       // We can ignore empty slices.
       return record{};
     }
+    if (not parameters.contains("key")) {
+      return caf::make_error(ec::invalid_argument, "missing 'key' parameter");
+    }
     const auto& layout = caf::get<record_type>(slice.schema());
-    auto* key_field = caf::get_if<std::string>(&parameters["key"]);
+    auto key_field = parameters["key"];
     if (not key_field) {
       return caf::make_error(ec::invalid_argument,
                              "invalid 'key' parameter; 'key' must be a string");
@@ -149,12 +159,13 @@ public:
     return show();
   }
 
-  auto update(chunk_ptr, record) -> caf::expected<record> override {
+  auto update(chunk_ptr, context::parameter_map)
+    -> caf::expected<record> override {
     return caf::make_error(ec::unimplemented, "lookup-table context can not be "
                                               "updated with bytes");
   }
 
-  auto update(record) -> caf::expected<record> override {
+  auto update(context::parameter_map) -> caf::expected<record> override {
     return caf::make_error(ec::unimplemented,
                            "lookup-table context can not be updated with void");
   }
@@ -206,7 +217,7 @@ class plugin : public virtual context_plugin {
     return "lookup-table";
   }
 
-  auto make_context(record) const
+  auto make_context(context::parameter_map) const
     -> caf::expected<std::unique_ptr<context>> override {
     return std::make_unique<ctx>();
   }
