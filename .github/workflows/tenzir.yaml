@@ -631,18 +631,7 @@ jobs:
             dependencies-script-path: scripts/macOS/install-dev-dependencies.sh
             cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON
             bundled-plugins:
-              # rabbitmq-c is not packaged in homebrew.
-              #- plugins/amqp
-              - plugins/fluent-bit
-              - plugins/gcs
-              - plugins/kafka
-              - plugins/nic
-              - plugins/parquet
-              - plugins/sigma
-              - plugins/velociraptor
-              - plugins/web
-              - plugins/yara
-              - plugins/zmq
+              - plugins/*
               - contrib/tenzir-plugins/*
     env:
       BUILD_DIR: build
