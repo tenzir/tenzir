@@ -1,6 +1,6 @@
 [
   "compaction"
-  "contextualizer"
+  "context"
   "inventory"
   "matcher"
   "netflow"

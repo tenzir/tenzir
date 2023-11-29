@@ -34,7 +34,7 @@ public:
     const auto* context_plugin
       = plugins::find<operator_parser_plugin>("context");
     if (not context_plugin) {
-      diagnostic::error("`contextualizer` plugin is required")
+      diagnostic::error("`context` plugin is required")
         .note("from `enrich`")
         .throw_();
     }

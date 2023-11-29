@@ -1,4 +1,4 @@
-The closed-source `contextualizer` plugin offers a backend functionality for
+The closed-source `context` plugin offers a backend functionality for
 finding matches between data sets.
 
 The open-source `lookup-table-context` plugin is a hashtable-based
