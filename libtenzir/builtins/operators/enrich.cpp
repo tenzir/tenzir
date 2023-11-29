@@ -31,11 +31,10 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     const auto token = located<std::string>{"apply", location::unknown};
     auto context_pi = prepend_token{token, p};
-    // FIXME: what if context doesn't exist?
     const auto* context_plugin
       = plugins::find<operator_parser_plugin>("context");
     if (not context_plugin) {
-      diagnostic::error("`context` plugin is required")
+      diagnostic::error("`contextualizer` plugin is required")
         .note("from `enrich`")
         .throw_();
     }
