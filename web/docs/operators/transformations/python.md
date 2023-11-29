@@ -39,7 +39,7 @@ them from `self`. When new fields are added, it is required that the new field h
 the same type for every row of the event.
 
 By default, the tenzir node executing the pipeline creates a virtual environment
-into which the `pytenzir` package is installed. This behavior can be turned off
+into which the `tenzir` python package is installed. This behavior can be turned off
 in the node configuration using the `plugin.python.create-venvs` boolean option.
 
 The `--requirements` flag can be used to pass additional package dependencies in

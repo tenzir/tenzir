@@ -15,15 +15,16 @@ Parsers and printers interact with their corresponding dual from a
 
 ![Format](formats/format.excalidraw.svg)
 
-Formats appear as an argument to the [`read`](operators/sources/from.md) and
-[`write`](operators/sinks/to.md) operators:
+Formats appear as an argument to the [`read`](operators/transformations/read.md)
+and [`write`](operators/transformations/write.md) operators:
 
 ```
-read <format> [from <connector>]
-write <format> [to <connector>]
-```
+read <format>
+write <format>
 
-If the connector is omitted, the default is `stdin` or `stdout`.
+from <connector> [read <format>]
+to <connector> [write <format>]
+```
 
 Tenzir ships with the following formats:
 

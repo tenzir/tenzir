@@ -105,6 +105,9 @@ then
   echo "flake inputs, or use your preferred method to include third-party"
   echo "modules on classic NixOS."
   exit 0
+elif [ "${platform}" = "macOS" ]
+then
+  package_url="https://storage.googleapis.com/tenzir-dist-public/packages/main/macOS/tenzir-static-latest.pkg"
 else
   echo "We do not offer pre-built packages for ${platform}." \
       "Your options:"
@@ -198,6 +201,15 @@ then
   confirm
   action "Unpacking tarball"
   eval "${cmd1}"
+elif [ "${platform}" = "macOS" ]
+then
+  cmd1="sudo installer -pkg \"${tmpdir}/${package}\" -target /"
+  echo "This script is about to run the following command:"
+  echo
+  echo "  - ${cmd1}"
+  confirm
+  action "Installing Tenzir"
+  eval "${cmd1}"
 fi
 
 # Test the installation.
@@ -211,7 +223,7 @@ echo "You're all set! Next steps:"
 echo
 echo "  - Ensure that ${bold}${prefix}/bin${normal} is in your \$PATH"
 echo "  - Run a pipeline via ${green}tenzir <pipeline>${normal}"
-if [ "${platform}" = "Linux" ]
+if [ "${platform}" = "Linux" ] || [ "${platform}" = "macOS" ]
 then
   echo "  - Spawn a node via ${green}tenzir-node${normal}"
 fi

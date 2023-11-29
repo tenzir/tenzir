@@ -129,25 +129,8 @@ private:
   std::unique_ptr<plugin_parser> parser_;
 };
 
-/// @throws `diagnostic`
-auto parse_default_parser(std::string definition)
-  -> std::unique_ptr<plugin_parser> {
-  // We discard all diagnostics emitted for the default parser because the
-  // source has not been written by the user.
-  auto diag = null_diagnostic_handler{};
-  auto p = tql::make_parser_interface(std::move(definition), diag);
-  auto p_name = p->accept_identifier();
-  TENZIR_DIAG_ASSERT(p_name);
-  auto const* p_plugin = plugins::find<parser_parser_plugin>(p_name->name);
-  TENZIR_DIAG_ASSERT(p_plugin);
-  auto parser = p_plugin->parse_parser(*p);
-  TENZIR_DIAG_ASSERT(parser);
-  return parser;
-}
-
-template <typename String>
 [[noreturn]] void
-throw_loader_not_found(const located<String>& x, bool use_uri_schemes) {
+throw_loader_not_found(located<std::string_view> x, bool use_uri_schemes) {
   auto available = std::vector<std::string>{};
   for (auto const* p : plugins::get<loader_parser_plugin>()) {
     if (use_uri_schemes) {
@@ -169,7 +152,7 @@ throw_loader_not_found(const located<String>& x, bool use_uri_schemes) {
     .throw_();
 }
 
-[[noreturn]] void throw_parser_not_found(const located<std::string>& x) {
+[[noreturn]] void throw_parser_not_found(located<std::string_view> x) {
   auto available = std::vector<std::string>{};
   for (auto p : plugins::get<parser_parser_plugin>()) {
     available.push_back(p->name());
@@ -182,7 +165,7 @@ throw_loader_not_found(const located<String>& x, bool use_uri_schemes) {
 }
 
 auto get_loader(parser_interface& p, const char* usage, const char* docs)
-  -> std::unique_ptr<plugin_loader> {
+  -> std::pair<std::unique_ptr<plugin_loader>, located<std::string>> {
   auto l_name = p.accept_shell_arg();
   if (not l_name) {
     diagnostic::error("expected loader name")
@@ -191,11 +174,11 @@ auto get_loader(parser_interface& p, const char* usage, const char* docs)
       .docs(docs)
       .throw_();
   }
-  auto [loader, name, is_uri] = detail::resolve_loader(p, *l_name);
+  auto [loader, name, path, is_uri] = detail::resolve_loader(p, *l_name);
   if (not loader) {
     throw_loader_not_found(name, is_uri);
   }
-  return std::move(loader);
+  return {std::move(loader), std::move(path)};
 }
 
 class from_plugin final : public virtual operator_parser_plugin {
@@ -212,13 +195,16 @@ public:
     auto usage = "from <loader> <args>... [read <parser> <args>...]";
     auto docs = "https://docs.tenzir.com/next/operators/sources/from";
     auto q = until_keyword_parser{"read", p};
-    auto loader = get_loader(q, usage, docs);
+    auto [loader, loader_path] = get_loader(q, usage, docs);
     TENZIR_DIAG_ASSERT(loader);
     TENZIR_DIAG_ASSERT(q.at_end());
+    auto decompress = operator_ptr{};
     auto parser = std::unique_ptr<plugin_parser>{};
     if (p.at_end()) {
-      parser = parse_default_parser(loader->default_parser());
+      std::tie(decompress, parser)
+        = detail::resolve_parser(loader_path, loader->default_parser());
     } else {
+      decompress = detail::resolve_decompressor(loader_path);
       auto read = p.accept_identifier();
       TENZIR_DIAG_ASSERT(read && read->name == "read");
       auto p_name = p.accept_shell_arg();
@@ -238,6 +224,8 @@ public:
     }
     auto ops = std::vector<operator_ptr>{};
     ops.push_back(std::make_unique<load_operator>(std::move(loader)));
+    if (decompress)
+      ops.push_back(std::move(decompress));
     ops.push_back(std::make_unique<class read_operator>(std::move(parser)));
     return std::make_unique<pipeline>(std::move(ops));
   }
@@ -252,7 +240,7 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "load <loader> <args>...";
     auto docs = "https://docs.tenzir.com/next/operators/sources/load";
-    auto loader = get_loader(p, usage, docs);
+    auto [loader, _] = get_loader(p, usage, docs);
     TENZIR_DIAG_ASSERT(loader);
     return std::make_unique<load_operator>(std::move(loader));
   }

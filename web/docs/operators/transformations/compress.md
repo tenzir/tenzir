@@ -13,6 +13,10 @@ compress [--level=<level>] <codec>
 The `compress` operator compresses bytes in a pipeline incrementally with a
 known codec.
 
+The `compress` operator is invoked automatically as a part of [`to`](../sinks/to.md)
+if the resulting file has a file extension indicating compression.
+This behavior can be circumvented by using [`save`](../sinks/save.md) directly.
+
 :::note Streaming Compression
 The operator uses [Apache Arrow's compression
 utilities][apache-arrow-compression] under the hood, and transparently supports

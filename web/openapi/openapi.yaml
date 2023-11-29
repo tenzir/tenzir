@@ -585,7 +585,7 @@ paths:
   /serve:
     post:
       summary: Return data from a pipeline
-      description: Returns events from an existing pipeline. The pipeline definition must include a serve operator.
+      description: "Returns events from an existing pipeline. The pipeline definition must include a serve operator. By default, the endpoint performs long polling (`timeout: 2s`) and returns events as soon as they are available (`min_events: 1`)."
       requestBody:
         description: Body for the serve endpoint
         required: true
@@ -606,12 +606,18 @@ paths:
                   description: The continuation token that was returned with the last response. For the initial request this is null.
                 max_events:
                   type: integer
-                  example: 50
-                  description: The maximum number of events returned. If unset, the number is unlimited.
+                  example: 1024
+                  default: 1024
+                  description: The maximum number of events returned.
+                min_events:
+                  type: integer
+                  example: 1
+                  default: 1
+                  description: Wait for this number of events before returning.
                 timeout:
                   type: string
-                  example: 100.0ms
-                  default: 100.0ms
+                  example: 2.0s
+                  default: 2.0s
                   description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 5 seconds.
       responses:
         200:

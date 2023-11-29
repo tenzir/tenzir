@@ -4,5 +4,5 @@ error: unexpected positional argument
 1 | show version 42
   |              ^^ 
   |
-  = usage: show <aspect>
+  = usage: show [<aspect>]
   = docs: https://docs.tenzir.com/next/operators/sources/show

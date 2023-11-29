@@ -172,12 +172,16 @@ namespace serve {
 /// is kept available after being fetched for the first time.
 inline constexpr std::chrono::seconds retention_time = std::chrono::minutes{1};
 
-/// Number of events returned.
-inline constexpr uint64_t max_events = 64;
+/// Threshold number of events to wait for .
+inline constexpr uint64_t min_events = 1;
 
-/// The amount of time to wait for additional events.
+/// Number of events returned.
+inline constexpr uint64_t max_events = 1024;
+
+/// The maximum amount of time to wait for additional having at least
+/// `min_events`.
 inline constexpr std::chrono::milliseconds timeout
-  = std::chrono::milliseconds{100};
+  = std::chrono::milliseconds{2000};
 
 /// The maximum timeout that can be requested by the client.
 inline constexpr std::chrono::seconds max_timeout = std::chrono::seconds{5};

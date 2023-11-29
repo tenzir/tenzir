@@ -9,7 +9,7 @@
     ];
   };
 
-  inputs.nixpkgs.url = "github:nixos/nixpkgs/78058d810644f5ed276804ce7ea9e82d92bee293";
+  inputs.nixpkgs.url = "github:nixos/nixpkgs/7086fd448fbe174a8c05a87a475bedd704520b68";
   inputs.flake-compat.url = "github:edolstra/flake-compat";
   inputs.flake-compat.flake = false;
   inputs.flake-utils.url = "github:numtide/flake-utils";
@@ -33,7 +33,7 @@
         };
       };
     }
-    // flake-utils.lib.eachSystem ["x86_64-linux" "x86_64-darwin"] (
+    // flake-utils.lib.eachSystem ["x86_64-linux" "x86_64-darwin" "aarch64-darwin" ] (
       system: let
         overlay = import ./nix/overlay.nix {inherit inputs versionShortOverride versionLongOverride;};
         pkgs = nixpkgs.legacyPackages."${system}".appendOverlays [overlay];

@@ -2,9 +2,9 @@ import asyncio
 import copy
 import subprocess
 
-import pytenzir.utils.logging
+import tenzir.utils.logging
 
-logger = pytenzir.utils.logging.get(__name__)
+logger = tenzir.utils.logging.get(__name__)
 
 
 class CLI:

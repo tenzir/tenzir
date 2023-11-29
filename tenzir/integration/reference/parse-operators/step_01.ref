@@ -4,5 +4,5 @@ error: unknown option `--tev`
 1 | show version --tev
   |              ^^^^^ 
   |
-  = usage: show <aspect>
+  = usage: show [<aspect>]
   = docs: https://docs.tenzir.com/next/operators/sources/show

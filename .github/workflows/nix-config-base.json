@@ -2,6 +2,7 @@
   "editions": [
     {
       "name": "tenzir",
+      "gha-runner-labels": ["ubuntu-latest"],
       "static": true,
       "upload-package-to-github": true,
       "package-stores": [
@@ -14,11 +15,20 @@
     },
     {
       "name": "tenzir-ee",
+      "gha-runner-labels": ["ubuntu-latest"],
       "static": true,
       "upload-package-to-github": false,
       "package-stores": [
         "gcs:tenzir-dist-private/packages/main"
       ],
+      "image-registries": []
+    },
+    {
+      "name": "tenzir",
+      "gha-runner-labels": ["macOS", "ARM64"],
+      "static": true,
+      "upload-package-to-github": true,
+      "package-stores": [],
       "image-registries": []
     }
   ]

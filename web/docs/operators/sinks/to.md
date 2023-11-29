@@ -15,9 +15,18 @@ to <connector> [write <format>]
 The `to` operator consumes events at the end of a pipeline by bringing together
 a [connector][connectors] and a [format][formats].
 
-All connectors have a default format, which depends on the connector. This enables
-a shorter syntax, e.g., `to stdout` uses the `json` format, while `to file foo.csv`
-uses the `csv` format.
+If given something that looks like a path to a file, the connector can pick
+out a format automatically based on the file extension or the file name.
+This enables a shorter syntax, e.g., `to ./file.csv` uses the `csv` format.
+All connectors also have a default format, which will be used
+if the format can't be determined by the path. For most connectors,
+this default format is `json`.
+So, for example, `to stdin` uses the `json` format.
+
+Additionally, if a file extension indicating compression can be found,
+[`compress`](../transformations/compress.md) is automatically used.
+For example, `to myfile.json.gz` is automatically gzip-compressed and
+formatted as json, i.e., `write json | compress gzip | save myfile.json.gz`.
 
 The `to` operator is a pipeline under the hood. For most cases, it is equal to
 `write <format> | save <connector>`. However, for some combinations of

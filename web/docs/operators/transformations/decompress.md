@@ -14,6 +14,10 @@ The `decompress` operator decompresses bytes in a pipeline incrementally with a
 known codec. The operator supports decompressing multiple concatenated streams
 of the same codec transparently.
 
+The `decompress` operator is invoked automatically as a part of [`from`](../sources/from.md)
+if the source file has a file extension indicating compression.
+This behavior can be circumvented by using [`load`](../sources/load.md) directly.
+
 :::note Streaming Decompression
 The operator uses [Apache Arrow's compression
 utilities][apache-arrow-compression] under the hood, and transparently supports
@@ -36,6 +40,9 @@ An identifier of the codec to use. Currently supported are `brotli`, `bz2`,
 Import Suricata events from a Zstd-compressed file:
 
 ```
+from eve.json.zst
+| import
+
 load file eve.json.zst
 | decompress zstd
 | read suricata
@@ -45,6 +52,9 @@ load file eve.json.zst
 Convert a Zstd-compressed file into an LZ4-compressed file:
 
 ```
+from in.zst
+| to out.lz4
+
 load file in.zst
 | decompress zstd
 | compress lz4

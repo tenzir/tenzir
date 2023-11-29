@@ -13,10 +13,9 @@
 
 namespace tenzir {
 
-template <typename String>
 class prepend_token final : public parser_interface {
 public:
-  prepend_token(located<String> token, parser_interface& next)
+  prepend_token(located<std::string_view> token, parser_interface& next)
     : token_{std::move(token)}, next_{next} {
   }
   prepend_token(std::nullopt_t, parser_interface& next)
@@ -101,7 +100,7 @@ private:
     return {std::string{token_->inner}, token_->source};
   }
 
-  std::optional<located<String>> token_;
+  std::optional<located<std::string_view>> token_;
   parser_interface& next_;
 };
 
