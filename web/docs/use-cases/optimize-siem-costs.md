@@ -44,7 +44,7 @@ costs consuming a sizable portion of security budgets. This financial burden not
 only limits organizations' ability to invest in essential security measures but
 also impedes their ability to proactively defend against ever-evolving threats.
 
-Cyber-attacks have become progressively more sophisticated and diverse, and
+Cyber attacks have become progressively more sophisticated and diverse, and
 threat actors are constantly adapting and improving their tactics, techniques
 and procedures (TTPs). Defenders must chase a moving target to keep up and be
 able to detect and respond to potential eventualities across a porous and
