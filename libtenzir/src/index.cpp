@@ -552,7 +552,7 @@ caf::error index_state::load_from_disk() {
     });
   if (num_outdated > 0) {
     TENZIR_WARN("{} detected {}/{} outdated partitions; consider running "
-                "'tenzir "
+                "'tenzir-ctl "
                 "rebuild' to upgrade existing partitions in the background",
                 *self, num_outdated, synopses->size());
   }
@@ -1321,39 +1321,36 @@ index(index_actor::stateful_pointer<index_state> self,
     self->send(self->state.accountant, atom::announce_v, self->name());
   if (self->state.accountant
       || self->state.active_partition_timeout.count() > 0) {
-    detail::weak_run_delayed_loop(
-      self, defaults::telemetry_rate, [self] {
-        if (self->state.accountant)
-          self->state.send_report();
-        if (self->state.active_partition_timeout.count() > 0) {
-          auto decommissioned = std::vector<type>{};
-          for (const auto& [schema, active_partition] :
-               self->state.active_partitions) {
-            if (active_partition.spawn_time
-                  + self->state.active_partition_timeout
-                < std::chrono::steady_clock::now()) {
-              decommissioned.push_back(schema);
-            }
-          }
-          if (!decommissioned.empty()) {
-            for (const auto& schema : decommissioned) {
-              auto active_partition
-                = self->state.active_partitions.find(schema);
-              TENZIR_ASSERT(active_partition
-                            != self->state.active_partitions.end());
-              TENZIR_VERBOSE("{} flushes active partition {} with {}/{} events "
-                             "after {} timeout",
-                             *self, schema,
-                             self->state.partition_capacity
-                               - active_partition->second.capacity,
-                             self->state.partition_capacity,
-                             data{self->state.active_partition_timeout});
-              self->state.decommission_active_partition(schema, {});
-            }
-            self->state.flush_to_disk();
+    detail::weak_run_delayed_loop(self, defaults::telemetry_rate, [self] {
+      if (self->state.accountant)
+        self->state.send_report();
+      if (self->state.active_partition_timeout.count() > 0) {
+        auto decommissioned = std::vector<type>{};
+        for (const auto& [schema, active_partition] :
+             self->state.active_partitions) {
+          if (active_partition.spawn_time + self->state.active_partition_timeout
+              < std::chrono::steady_clock::now()) {
+            decommissioned.push_back(schema);
           }
         }
-      });
+        if (!decommissioned.empty()) {
+          for (const auto& schema : decommissioned) {
+            auto active_partition = self->state.active_partitions.find(schema);
+            TENZIR_ASSERT(active_partition
+                          != self->state.active_partitions.end());
+            TENZIR_VERBOSE("{} flushes active partition {} with {}/{} events "
+                           "after {} timeout",
+                           *self, schema,
+                           self->state.partition_capacity
+                             - active_partition->second.capacity,
+                           self->state.partition_capacity,
+                           data{self->state.active_partition_timeout});
+            self->state.decommission_active_partition(schema, {});
+          }
+          self->state.flush_to_disk();
+        }
+      }
+    });
   }
   return {
     [self](atom::done, uuid partition_id) {
