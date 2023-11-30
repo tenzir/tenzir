@@ -138,12 +138,13 @@ class plugin final : public virtual rest_endpoint_plugin {
   };
 
   [[nodiscard]] auto openapi_endpoints(api_version version) const
-    -> data override {
+    -> record override {
     if (version != api_version::v0)
       return tenzir::record{};
     auto result = from_yaml(SPEC_V0);
     TENZIR_ASSERT(result);
-    return *result;
+    TENZIR_ASSERT(caf::holds_alternative<record>(*result));
+    return caf::get<record>(*result);
   }
 
   /// List of API endpoints provided by this plugin.

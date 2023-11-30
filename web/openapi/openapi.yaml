@@ -606,7 +606,6 @@ paths:
                   description: The continuation token that was returned with the last response. For the initial request this is null.
                 max_events:
                   type: integer
-<<<<<<< HEAD
                   example: 1024
                   default: 1024
                   description: The maximum number of events returned.
@@ -615,17 +614,6 @@ paths:
                   example: 1
                   default: 1
                   description: Wait for this number of events before returning.
-||||||| parent of c16225492a (Allow rest plugins to define their own openAPI schemas)
-                  example: 50
-                  description: The maximum number of events returned. If unset, the number is unlimited.
-=======
-                  example: 50
-                  description: The maximum number of events returned. If unset, the number is unlimited.
-                min_events:
-                  type: integer
-                  example: 50
-                  description: Wait for this number of events before returning. If unset, the number is unlimited.
->>>>>>> c16225492a (Allow rest plugins to define their own openAPI schemas)
                 timeout:
                   type: string
                   example: 2.0s

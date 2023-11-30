@@ -15,12 +15,10 @@ auto openapi_record() -> record {
   auto schemas = record{};
   for (auto const* plugin : plugins::get<rest_endpoint_plugin>()) {
     auto spec = plugin->openapi_endpoints();
-    TENZIR_ASSERT_CHEAP(caf::holds_alternative<record>(spec));
-    for (auto& [key, value] : caf::get<record>(spec))
+    for (auto& [key, value] : spec)
       paths.emplace(key, value);
-    if (auto schemas_spec = plugin->openapi_schemas()) {
-      TENZIR_ASSERT_CHEAP(caf::holds_alternative<record>(*schemas_spec));
-      for (auto& [key, value] : caf::get<record>(*schemas_spec))
+    if (auto schemas_spec = plugin->openapi_schemas(); !schemas_spec.empty()) {
+      for (auto& [key, value] : schemas_spec)
         schemas.emplace(key, value);
     }
   }
