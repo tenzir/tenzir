@@ -8,7 +8,7 @@ setup() {
 }
 
 @test "connecting" {
- coproc NC { exec echo foo | nc -l -N 127.0.0.1 8000 ; }
+ coproc NC { exec echo foo | ncat -l 127.0.0.1 8000 ; }
  check tenzir "load tcp://127.0.0.1:8000"
 }
 
