@@ -76,7 +76,7 @@ public:
       return field_builder.finish();
     }
     auto [type, slice_array] = column_offset->get(resolved_slice);
-    for (auto value : values(type, *slice_array)) {
+    for (const auto& value : values(type, *slice_array)) {
       if (auto it = context_entries.find(value); it != context_entries.end()) {
         auto r = field_builder.record();
         r.field("key", it->first);
@@ -206,10 +206,7 @@ private:
 };
 
 class plugin : public virtual context_plugin {
-  auto initialize(const record& plugin_config, const record& global_config)
-    -> caf::error override {
-    (void)plugin_config;
-    (void)global_config;
+  auto initialize(const record&, const record&) -> caf::error override {
     return caf::none;
   }
 
@@ -232,7 +229,7 @@ class plugin : public virtual context_plugin {
                                          fb.error()));
     }
     auto context_entries = tsl::robin_map<data, data>{};
-    auto* list = fb.value()->data_as_list();
+    const auto* list = fb.value()->data_as_list();
     if (not list) {
       return caf::make_error(ec::serialization_error,
                              "failed to deserialize lookup table "
