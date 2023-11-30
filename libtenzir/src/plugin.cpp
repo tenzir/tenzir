@@ -673,8 +673,7 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
       append_null();
       continue;
     }
-    auto bytes = std::span<const std::byte>{
-      reinterpret_cast<const std::byte*>(str->data()), str->size()};
+    auto bytes = as_bytes(*str);
     auto chunk = chunk::make(bytes, []() noexcept {});
     auto instance = instantiate(
       [](chunk_ptr chunk) -> generator<chunk_ptr> {
@@ -686,12 +685,9 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
       continue;
     }
     auto slices = collect(std::move(*instance));
-    slices.erase(std::ranges::remove_if(slices,
-                                        [](table_slice& x) {
-                                          return x.rows() == 0;
-                                        })
-                   .begin(),
-                 slices.end());
+    std::erase_if(slices, [](table_slice& x) {
+      return x.rows() == 0;
+    });
     if (slices.size() != 1) {
       append_null();
       continue;
