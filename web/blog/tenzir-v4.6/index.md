@@ -77,11 +77,9 @@ how Tenzir makes enrichments easy. Stay tuned!
 Want to read CEF over Syslog from TCP? Not a problem with four all-new features
 of Tenzir v4.6—are you able to spot all four?
 
-FIXME: Why is `content --into content` not the default?
-
 ```
 from tcp://localhost:514 read syslog
-| parse content --into content cef
+| parse content cef
 ```
 
 Here's an example input and output:
@@ -152,7 +150,7 @@ you can finally spend more time working with your data than onboarding it.
 
 ## Rapid Prototyping with the Python Operator
 
-The `python` operator allows for modying events using Python. Here are soom cool
+The `python` operator allows for modying events using Python. Here are some cool
 things that we've done in the first days of playing with the operator:
 
 ```text {0} title="Calculate the square root of a field"
