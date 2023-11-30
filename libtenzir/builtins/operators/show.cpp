@@ -20,7 +20,7 @@ namespace tenzir::plugins::show {
 namespace {
 
 struct operator_args {
-  located<std::string> aspect;
+  std::optional<located<std::string>> aspect;
 
   friend auto inspect(auto& f, operator_args& x) -> bool {
     return f.object(x)
@@ -39,7 +39,18 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    return get()->show(ctrl);
+    if (auto plugin = get()) {
+      return plugin->show(ctrl);
+    }
+    return
+      [](operator_control_plane& ctrl,
+         std::vector<const aspect_plugin*> plugins) -> generator<table_slice> {
+        for (const auto* plugin : plugins) {
+          for (auto&& slice : plugin->show(ctrl)) {
+            co_yield std::move(slice);
+          }
+        }
+      }(ctrl, get_all());
   }
 
   auto name() const -> std::string override {
@@ -50,8 +61,15 @@ public:
     return true;
   }
 
+  auto internal() const -> bool override {
+    return true;
+  }
+
   auto location() const -> operator_location override {
-    return get()->location();
+    if (const auto* plugin = get()) {
+      return plugin->location();
+    }
+    return operator_location::remote;
   }
 
   auto optimize(expression const& filter, event_order order) const
@@ -67,12 +85,17 @@ public:
 
 private:
   auto get() const -> const aspect_plugin* {
-    const auto* plugin = plugins::find<aspect_plugin>(aspect_plugin_);
-    TENZIR_ASSERT_CHEAP(plugin != nullptr);
-    return plugin;
+    if (aspect_plugin_) {
+      return plugins::find<aspect_plugin>(*aspect_plugin_);
+    }
+    return nullptr;
   }
 
-  std::string aspect_plugin_;
+  auto get_all() const -> std::vector<const aspect_plugin*> {
+    return collect(plugins::get<aspect_plugin>());
+  }
+
+  std::optional<std::string> aspect_plugin_;
 };
 
 class plugin final : public virtual operator_plugin<show_operator> {
@@ -87,19 +110,22 @@ public:
     operator_args args;
     parser.add(args.aspect, "<aspect>");
     parser.parse(p);
-    auto available = std::map<std::string, std::string>{};
-    for (const auto& aspect : collect(plugins::get<aspect_plugin>()))
-      available.emplace(aspect->aspect_name(), aspect->name());
-    if (not available.contains(args.aspect.inner)) {
-      auto aspects = std::vector<std::string>{};
-      for (const auto& [aspect_name, plugin_name] : available)
-        aspects.push_back(aspect_name);
-      diagnostic::error("aspect `{}` could not be found", args.aspect.inner)
-        .primary(args.aspect.source)
-        .hint("must be one of {}", fmt::join(aspects, ", "))
-        .throw_();
+    if (args.aspect) {
+      auto available = std::map<std::string, std::string>{};
+      for (const auto& aspect : collect(plugins::get<aspect_plugin>()))
+        available.emplace(aspect->aspect_name(), aspect->name());
+      if (not available.contains(args.aspect->inner)) {
+        auto aspects = std::vector<std::string>{};
+        for (const auto& [aspect_name, plugin_name] : available)
+          aspects.push_back(aspect_name);
+        diagnostic::error("aspect `{}` could not be found", args.aspect->inner)
+          .primary(args.aspect->source)
+          .hint("must be one of {}", fmt::join(aspects, ", "))
+          .throw_();
+      }
+      return std::make_unique<show_operator>(available[args.aspect->inner]);
     }
-    return std::make_unique<show_operator>(available[args.aspect.inner]);
+    return std::make_unique<show_operator>();
   }
 };
 

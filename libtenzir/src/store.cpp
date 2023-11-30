@@ -99,7 +99,7 @@ handle_query(const auto& self, const query_context& query_context) {
             }
             rp.deliver(it->second.num_hits);
             self->send(it->second.sink, it->second.num_hits);
-            const auto runtime
+            const duration runtime
               = std::chrono::steady_clock::now() - it->second.start;
             const auto id_str = fmt::to_string(query_id);
             self->send(self->state.accountant, atom::metrics_v,
@@ -159,7 +159,7 @@ handle_query(const auto& self, const query_context& query_context) {
               return;
             }
             rp.deliver(it->second.num_hits);
-            const auto runtime
+            const duration runtime
               = std::chrono::steady_clock::now() - it->second.start;
             const auto id_str = fmt::to_string(query_id);
             self->send(self->state.accountant, atom::metrics_v,
@@ -257,7 +257,7 @@ default_passive_store_actor::behavior_type default_passive_store(
     .await(
       [self, start](chunk_ptr& chunk) {
         auto load_error = self->state.store->load(std::move(chunk));
-        auto startup_duration = std::chrono::steady_clock::now() - start;
+        duration startup_duration = std::chrono::steady_clock::now() - start;
         self->send(self->state.accountant, atom::metrics_v,
                    "passive-store.init.runtime", startup_duration,
                    metrics_metadata{

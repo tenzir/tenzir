@@ -7,8 +7,9 @@
     pname,
     tenzir-source,
     cmake,
-    cmake-format,
+    ninja,
     pkg-config,
+    lld,
     git,
     boost,
     caf,
@@ -46,7 +47,7 @@
     disableTests ? true,
     pkgsBuildHost,
   }: let
-    inherit (stdenv.hostPlatform) isStatic;
+    inherit (stdenv.hostPlatform) isMusl isStatic;
 
     versionLongOverride' = lib.removePrefix "v" versionLongOverride;
     versionShortOverride' = lib.removePrefix "v" versionShortOverride;
@@ -71,8 +72,12 @@
         "plugins/sigma"
         "plugins/velociraptor"
         "plugins/web"
-        "plugins/yara"
         "plugins/zmq"
+      ]
+      # Temporarily disable yara on the static mac build because of issues
+      # building protobufc.
+      ++ lib.optionals (!(stdenv.isDarwin && isStatic)) [
+        "plugins/yara"
       ]
       ++ extraPlugins';
   in
@@ -93,8 +98,11 @@
 
         nativeBuildInputs = [
           cmake
+          ninja
           dpkg
           protobuf
+        ] ++ lib.optionals stdenv.isDarwin [
+          lld
         ];
         propagatedNativeBuildInputs = [pkg-config];
         buildInputs = [
@@ -110,6 +118,7 @@
           cppzmq
           re2
           restinio
+        ] ++ lib.optionals (!(stdenv.isDarwin && isStatic)) [
           yara
         ];
         propagatedBuildInputs = [
@@ -118,11 +127,12 @@
           caf
           curl
           flatbuffers
-          jemalloc
           robin-map
           simdjson
           spdlog
           xxHash
+        ] ++ lib.optionals isMusl [
+          jemalloc
         ];
 
         cmakeFlags =
@@ -132,13 +142,9 @@
             "-DTENZIR_EDITION_NAME=${lib.toUpper pname}"
             "-DTENZIR_VERSION_TAG=v${versionLong}"
             "-DTENZIR_VERSION_SHORT=v${versionShort}"
-            "-DTENZIR_ENABLE_RELOCATABLE_INSTALLATIONS=${
-              if isStatic
-              then "ON"
-              else "OFF"
-            }"
+            "-DTENZIR_ENABLE_RELOCATABLE_INSTALLATIONS=${lib.boolToString isStatic}"
             "-DTENZIR_ENABLE_BACKTRACE=ON"
-            "-DTENZIR_ENABLE_JEMALLOC=ON"
+            "-DTENZIR_ENABLE_JEMALLOC=${lib.boolToString isMusl}"
             "-DTENZIR_ENABLE_MANPAGES=OFF"
             "-DTENZIR_ENABLE_PYTHON_BINDINGS=OFF"
             "-DTENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
@@ -147,10 +153,11 @@
           ]
           ++ lib.optionals isStatic [
             "-DBUILD_SHARED_LIBS:BOOL=OFF"
-            "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
-            "-DCPACK_GENERATOR=TGZ;DEB"
+            #"-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
+            "-DCPACK_GENERATOR=${if stdenv.isDarwin then "productbuild" else "TGZ;DEB"}"
             "-DTENZIR_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
             "-DTENZIR_PACKAGE_FILE_NAME_SUFFIX=static"
+            "-DTENZIR_ENABLE_BACKTRACE=${lib.boolToString (!stdenv.isDarwin)}"
           ]
           ++ lib.optionals stdenv.hostPlatform.isx86_64 [
             "-DTENZIR_ENABLE_SSE3_INSTRUCTIONS=ON"
@@ -161,10 +168,45 @@
             "-DTENZIR_ENABLE_AVX_INSTRUCTIONS=OFF"
             "-DTENZIR_ENABLE_AVX2_INSTRUCTIONS=OFF"
           ]
+          ++ lib.optionals stdenv.isDarwin (
+          let
+            compilerName =
+              if stdenv.cc.isClang
+              then "clang"
+              else if stdenv.cc.isGNU
+              then "gcc"
+              else "unknown";
+            # ar with lto support
+            ar = stdenv.cc.bintools.targetPrefix + {
+              "clang" = "ar";
+              "gcc" = "gcc-ar";
+              "unknown" = "ar";
+            }."${compilerName}";
+            # ranlib with lto support
+            ranlib = stdenv.cc.bintools.targetPrefix + {
+              "clang" = "ranlib";
+              "gcc" = "gcc-ranlib";
+              "unknown" = "ranlib";
+            }."${compilerName}";
+          in [
+            # Want's to install into the users home, but that would be the
+            # builder in the Nix context, and that doesn't make sense.
+            "-DTENZIR_ENABLE_INIT_SYSTEM_INTEGRATION=OFF"
+          ])
           ++ lib.optionals disableTests [
             "-DTENZIR_ENABLE_UNIT_TESTS=OFF"
           ]
           ++ extraCmakeFlags;
+
+        # TODO: Fix LTO on darwin by passing these commands by their original
+        # executable names "llvm-ar" and "llvm-ranlib". Should work with
+        # `readlink -f $AR` to find the correct ones.
+        #preConfigure = lib.optionalString stdenv.isDarwin ''
+        #  cmakeFlagsArray+=("-DCMAKE_C_COMPILER_AR=$(command -v $AR)")
+        #  cmakeFlagsArray+=("-DCMAKE_CXX_COMPILER_AR=$(command -v $AR)")
+        #  cmakeFlagsArray+=("-DCMAKE_C_COMPILER_RANLIB=$(command -v $RANLIB)")
+        #  cmakeFlagsArray+=("-DCMAKE_CXX_COMPILER_RANLIB=$(command -v $RANLIB)")
+        #'';
 
         hardeningDisable = lib.optionals isStatic [
           "fortify"
@@ -174,8 +216,6 @@
         postBuild = lib.optionalString isStatic ''
           ${pkgsBuildHost.nukeReferences}/bin/nuke-refs bin/*
         '';
-        allowedRequisites = lib.optionals isStatic ["out"];
-
         fixupPhase = lib.optionalString isStatic ''
           rm -rf $out/nix-support
         '';
@@ -222,9 +262,16 @@
           maintainers = with maintainers; [tobim];
         };
       }
+      # allowedRequisites does not work on darwin.
+      // lib.optionalAttrs (isStatic && stdenv.isLinux) {
+        allowedRequisites = ["out"];
+      }
       // lib.optionalAttrs isStatic {
+        __noChroot = stdenv.isDarwin;
+
         installPhase = ''
           runHook preInstall
+          PATH=$PATH:/usr/bin
           cmake --install . --component Runtime
           cmakeFlagsArray+=(
             "-UCMAKE_INSTALL_BINDIR"
@@ -242,7 +289,8 @@
           echo "cmake flags: $cmakeFlags ''${cmakeFlagsArray[@]}"
           cmake "$cmakeDir" $cmakeFlags "''${cmakeFlagsArray[@]}"
           cmake --build . --target package
-          install -m 644 -Dt $package package/*.deb package/*.tar.gz
+          rm -rf package/_CPack_Packages
+          install -m 644 -Dt $package package/*
           runHook postInstall
         '';
       });

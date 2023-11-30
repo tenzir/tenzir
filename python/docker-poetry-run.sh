@@ -16,7 +16,7 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
 DOCKER_BUILDKIT=1 docker build \
     --build-arg TENZIR_VERSION=${TENZIR_CONTAINER_REF:-latest} \
     --build-arg TENZIR_CONTAINER_REGISTRY=${TENZIR_CONTAINER_REGISTRY:-docker.io} \
-    --file ../docker/dev/Dockerfile \
+    --file ../docker/poetry/Dockerfile \
     --tag tenzir/tenzir-python-script \
     $SCRIPT_DIR/..
 

@@ -18,13 +18,13 @@ import pyarrow as pa
 from box import Box
 from box.box_list import BoxList
 
-from pytenzir.utils.arrow import extension_array, infer_type
+from tenzir.utils.arrow import extension_array, infer_type
 
 """
 NOTE: This script is used by and developed alongside the built-in `python`
 pipeline operator in libtenzir, and has little use outside of that narrow use-case.
 
-The intended use case for this is to use the pytenzir sources directly
+The intended use case for this is to use the tenzir sources directly
 while developing. That can be done conveniently with
 ```bash
 export TENZIR_PLUGINS__PYTHON__IMPLICIT_REQUIREMENTS="-e /path/to/tenzir/python[operator]"

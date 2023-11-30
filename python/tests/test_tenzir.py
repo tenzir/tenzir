@@ -1,13 +1,13 @@
-from pytenzir import Tenzir, ExportMode, collect_pyarrow, to_json_rows, VastRow
-import pytenzir.utils.logging
-import pytenzir.utils.asyncio
+from tenzir import Tenzir, ExportMode, collect_pyarrow, to_json_rows, VastRow
+import tenzir.utils.logging
+import tenzir.utils.asyncio
 import asyncio
 from asyncio.subprocess import PIPE
 import os
 import pytest
 import shutil
 
-logger = pytenzir.utils.logging.get("tenzir.test")
+logger = tenzir.utils.logging.get("tenzir.test")
 
 if "TENZIR_PYTHON_INTEGRATION" not in os.environ:
     # Tests in this module require access to integration test files and the Tenzir binary
@@ -20,7 +20,7 @@ if "TENZIR_PYTHON_INTEGRATION" not in os.environ:
 @pytest.fixture()
 async def endpoint():
     test = os.environ.get("PYTEST_CURRENT_TEST").split(":")[-1].split(" ")[0]
-    test_db_dir = "/tmp/pytenzir-test/" + test
+    test_db_dir = "/tmp/tenzir-test/" + test
     if os.path.isdir(test_db_dir):
         shutil.rmtree(test_db_dir)
     proc = await asyncio.create_subprocess_exec(
