@@ -33,13 +33,16 @@ public:
     auto buffer = std::vector<table_slice>{};
     auto total_buffered = size_t{0};
     for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
       total_buffered += slice.rows();
       buffer.push_back(std::move(slice));
       while (total_buffered - buffer.front().rows() >= limit_) {
         total_buffered -= buffer.front().rows();
         buffer.erase(buffer.begin());
       }
-      co_yield {};
     }
     if (buffer.empty())
       co_return;
