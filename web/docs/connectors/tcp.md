@@ -5,7 +5,7 @@ Loads bytes from a TCP or TLS connection.
 ## Synopsis
 
 ```
-tcp [--listen] [-k] [--tls] [--certfile] [--keyfile] <uri>
+tcp [-l] [-k] [--tls] [--certfile] [--keyfile] <endpoint>
 ```
 
 ## Description
@@ -15,17 +15,17 @@ The `tcp` loader establishes a TCP or TLS connection and reads bytes from it.
 It can either connect to a remote endpoint, or listen on a given address and
 wait for incoming connections.
 
-### `<uri>`
+### `<endpoint>`
 
 The address of the remote endpoint, or the bind address if `--listen` is
 specified.
 
-### `--listen`
+### `-l,--listen`
 
 Ignore any predefined credentials and try to load/save with anonymous
 credentials.
 
-### `--keep-listening`
+### `-k,--keep-listening`
 
 When a connection is closed, wait for another incoming connection instead of
 closing the pipeline. Requires `--listen`.

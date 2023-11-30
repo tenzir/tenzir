@@ -46,9 +46,12 @@ struct tcp_bridge_state {
   std::shared_ptr<boost::asio::io_context> io_ctx = {};
 
   // The TCP socket holding our connection.
+  // (always exists, but wrapped in an optional because `socket`
+  //  isn't default-constructible)
   std::optional<boost::asio::ip::tcp::socket> socket = {};
 
   // TLS stream wrapping `socket` if we're in TLS mode.
+  std::optional<boost::asio::ssl::context> ssl_ctx = {};
   std::optional<boost::asio::ssl::stream<boost::asio::ip::tcp::socket&>>
     tls_socket = {};
 
@@ -64,20 +67,6 @@ struct tcp_bridge_state {
   // Storage for incoming data.
   std::vector<char> read_buffer = {};
 };
-
-auto make_actor_local_callback(auto* self, auto&& fn) {
-  return [weak_hdl = caf::actor_cast<caf::weak_actor_ptr>(self),
-          fn = std::forward<decltype(fn)>(fn)](auto&&... args) {
-    if (auto hdl = weak_hdl.lock()) {
-      caf::anon_send(
-        caf::actor_cast<caf::actor>(hdl),
-        caf::make_action(
-          [fn, args = std::make_tuple(std::forward<decltype(args)>(args)...)] {
-            std::apply(fn, args);
-          }));
-    }
-  };
-}
 
 auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
   -> tcp_bridge_actor::behavior_type {
@@ -110,11 +99,13 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
                                            hostname, ec.message()));
       }
       if (tls) {
-        boost::asio::ssl::context ctx(boost::asio::ssl::context::tls_client);
-        ctx.set_default_verify_paths();
-        ctx.set_verify_mode(boost::asio::ssl::verify_peer
-                            | boost::asio::ssl::verify_fail_if_no_peer_cert);
-        self->state.tls_socket.emplace(*self->state.socket, ctx);
+        self->state.ssl_ctx.emplace(boost::asio::ssl::context::tls_client);
+        self->state.ssl_ctx->set_default_verify_paths();
+        self->state.ssl_ctx->set_verify_mode(
+          boost::asio::ssl::verify_peer
+          | boost::asio::ssl::verify_fail_if_no_peer_cert);
+        self->state.tls_socket.emplace(*self->state.socket,
+                                       *self->state.ssl_ctx);
         if (SSL_set1_host(self->state.tls_socket->native_handle(),
                           hostname.c_str())
             != 1)
@@ -122,9 +113,7 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
                                  "failed to enable host name verification");
         if (!SSL_set_tlsext_host_name(self->state.tls_socket->native_handle(),
                                       hostname.c_str())) {
-          return caf::make_error(ec::system_error,
-                                 fmt::format("failed to set SNI: {}",
-                                             ::ERR_get_error()));
+          return caf::make_error(ec::system_error, "failed to set SNI");
         }
       }
       self->state.connection_rp = self->make_response_promise<void>();
@@ -195,13 +184,15 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
                 }
                 self->state.socket.emplace(std::move(peer));
                 if (!certfile.empty()) {
-                  boost::asio::ssl::context ctx(
+                  self->state.ssl_ctx.emplace(
                     boost::asio::ssl::context::tls_server);
-                  ctx.use_certificate_chain_file(certfile);
-                  ctx.use_private_key_file(keyfile,
-                                           boost::asio::ssl::context::pem);
-                  ctx.set_verify_mode(boost::asio::ssl::verify_none);
-                  self->state.tls_socket.emplace(*self->state.socket, ctx);
+                  self->state.ssl_ctx->use_certificate_chain_file(certfile);
+                  self->state.ssl_ctx->use_private_key_file(
+                    keyfile, boost::asio::ssl::context::pem);
+                  self->state.ssl_ctx->set_verify_mode(
+                    boost::asio::ssl::verify_none);
+                  self->state.tls_socket.emplace(*self->state.socket,
+                                                 *self->state.ssl_ctx);
                   auto server_context = boost::asio::ssl::stream<
                     boost::asio::ip::tcp::socket>::server;
                   self->state.tls_socket->handshake(server_context, ec);
@@ -397,7 +388,7 @@ public:
     auto tls = bool{};
     auto listen = bool{};
     auto keep_listening = bool{};
-    parser.add(uri, "<uri>");
+    parser.add(uri, "<endpoint>");
     parser.add("--tls", tls);
     parser.add("-l,--listen", listen);
     parser.add("-k,--keep-listening", keep_listening);
@@ -406,12 +397,16 @@ public:
     parser.parse(p);
     remove_scheme(uri);
     auto split = detail::split(uri, ":", 1);
-    TENZIR_DIAG_ASSERT(split.size() == 2);
+    if (split.size() != 2) {
+      diagnostic::error("malformed endpoint")
+        .hint("format must be 'tcp://address:port'")
+        .throw_();
+    }
     if (keep_listening && !listen) {
-      TENZIR_DIAG_ASSERT(!"-k requires -l");
+      diagnostic::error("-k requires -l").throw_();
     }
     if (tls && listen && (certfile.empty() || keyfile.empty())) {
-      TENZIR_DIAG_ASSERT(!"missing certfile or keyfile");
+      diagnostic::error("missing certfile or keyfile").throw_();
     }
     if (!tls && (!certfile.empty() || !keyfile.empty())) {
       TENZIR_WARN("keyfile and certfile arguments will be ignored since "
