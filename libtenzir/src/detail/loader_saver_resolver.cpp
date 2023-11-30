@@ -105,7 +105,7 @@ auto make_located_string_view(located<std::string_view> src, size_t pos = 0,
 }
 
 template <typename Plugin>
-struct try_plugin_by_uri_result {
+struct try_plugin_by_url_result {
   const Plugin* plugin{nullptr};
   located<std::string_view> scheme{};
   located<std::string_view> non_scheme{};
@@ -114,7 +114,7 @@ struct try_plugin_by_uri_result {
   [[nodiscard]] bool plugin_found() const {
     return plugin != nullptr;
   }
-  [[nodiscard]] bool valid_uri_parsed() const {
+  [[nodiscard]] bool valid_url_parsed() const {
     return !scheme.inner.empty();
   }
 };
@@ -128,16 +128,17 @@ auto find_plugin_by_scheme(std::string_view scheme) -> const Plugin* {
 }
 
 template <typename Plugin>
-auto try_plugin_by_uri(located<std::string_view> src)
-  -> try_plugin_by_uri_result<Plugin> {
-  // Not using caf::uri for anything else but checking for URI validity
+auto try_plugin_by_url(located<std::string_view> src)
+  -> try_plugin_by_url_result<Plugin> {
+  // Not using caf::uri for anything else but checking for URL validity
   // This is because it makes the interaction with located<...> very difficult
+  // TODO: We don't want to allow just any URIs, only URLs
   if (!caf::uri::can_parse(src.inner))
     return {};
-  // In a valid URI, the first ':' is guaranteed to separate the scheme from
+  // In a valid URL, the first ':' is guaranteed to separate the scheme from
   // the rest
   TENZIR_ASSERT(src.inner.find(':') != std::string::npos);
-  try_plugin_by_uri_result<Plugin> result{};
+  try_plugin_by_url_result<Plugin> result{};
   auto scheme_len = src.inner.find(':');
   result.scheme = make_located_string_view(src, 0, scheme_len);
   auto non_scheme_offset = scheme_len + 1;
@@ -160,31 +161,31 @@ template <typename ParserPlugin, typename Plugin, typename Parse>
 auto resolve_loader_saver_impl(parser_interface& parser,
                                located<std::string_view> name, Parse&& parse)
   -> resolve_loader_saver_result<Plugin> {
-  if (auto uri = try_plugin_by_uri<ParserPlugin>(name); uri.plugin_found()) {
-    // Valid URI, with a matching plugin name
-    if (uri.scheme.inner == uri.plugin->name()) {
-      // URI scheme is identical to the plugin name:
-      // Pass the URI along _without_ the scheme
-      // This is to support URIs like file://foo,
+  if (auto url = try_plugin_by_url<ParserPlugin>(name); url.plugin_found()) {
+    // Valid URL, with a matching plugin name
+    if (url.scheme.inner == url.plugin->name()) {
+      // URL scheme is identical to the plugin name:
+      // Pass the URL along _without_ the scheme
+      // This is to support URLs like file://foo,
       // which will be transformed to `file foo`
-      auto r = prepend_token{uri.non_scheme, parser};
-      auto parsed = parse(uri.plugin, r);
+      auto r = prepend_token{url.non_scheme, parser};
+      auto parsed = parse(url.plugin, r);
       TENZIR_DIAG_ASSERT(r.at_end());
-      return {std::move(parsed), uri.scheme, located<std::string>{uri.path},
+      return {std::move(parsed), url.scheme, located<std::string>{url.path},
               true};
     }
-    // URI scheme is different from the plugin name:
-    // Assume that the URI scheme is special, and needs to be passed along
+    // URL scheme is different from the plugin name:
+    // Assume that the URL scheme is special, and needs to be passed along
     // This is to support the `gcs`-connector, which needs
     // the `gs://` scheme
     auto r = prepend_token{name, parser};
-    auto parsed = parse(uri.plugin, r);
+    auto parsed = parse(url.plugin, r);
     TENZIR_DIAG_ASSERT(r.at_end());
-    return {std::move(parsed), uri.scheme, located<std::string>{uri.path},
+    return {std::move(parsed), url.scheme, located<std::string>{url.path},
             true};
-  } else if (uri.valid_uri_parsed()) {
-    // Valid URI, but no matching plugin name -> error
-    return {nullptr, uri.scheme, {}, true};
+  } else if (url.valid_url_parsed()) {
+    // Valid URL, but no matching plugin name -> error
+    return {nullptr, url.scheme, {}, true};
   }
   // Check if `name` could be a valid plugin name
   if (parsers::plugin_name(name.inner)) {
@@ -198,7 +199,7 @@ auto resolve_loader_saver_impl(parser_interface& parser,
     return {nullptr, name, {}, false};
   }
   // Try `file` loader, may be a path,
-  // since it's not a URI or a valid plugin name
+  // since it's not a URL or a valid plugin name
   auto plugin = plugins::find<ParserPlugin>("file");
   TENZIR_DIAG_ASSERT(plugin);
   auto r = prepend_token{name, parser};
