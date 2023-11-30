@@ -961,12 +961,13 @@ public:
     return node->spawn(serve_manager);
   }
 
-  auto openapi_specification(api_version version) const -> data override {
+  auto openapi_endpoints(api_version version) const -> record override {
     if (version != api_version::v0)
       return tenzir::record{};
     auto result = from_yaml(SPEC_V0);
     TENZIR_ASSERT(result);
-    return *result;
+    TENZIR_ASSERT(caf::holds_alternative<record>(*result));
+    return caf::get<record>(*result);
   }
 
   auto rest_endpoints() const -> const std::vector<rest_endpoint>& override {
