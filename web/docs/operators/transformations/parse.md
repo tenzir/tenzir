@@ -1,25 +1,22 @@
 # parse
 
-Applies a parser to the string stored in the given field.
+Applies a parser to the string stored in a given field.
 
 :::caution Experimental
-This operator might not behave optimally in some cases. For example, when using
-the `json` parser, the string is expected to be a valid record. Strings that
-represent non-record types are not yet supported with this format.
+This operator is experimental and may change at any time. There are known issues
+which will be addressed in an upcoming release. Stay tuned!
 :::
 
 ## Synopsis
 
 ```
-parse <input> [--into <output>] <parser> <args>...
+parse <input> <parser> <args>...
 ```
 
 ## Description
 
-The `parse` operator parses a given `<input>` field of type `string` and adds
-the result to the event. If `--into <output>` is given, the result is stored in
-the given field. Otherwise, the result must be a record, and its fields are
-stored directly in the event.
+The `parse` operator parses a given `<input>` field of type `string` and
+replaces this field with the result.
 
 ## Examples
 
@@ -27,5 +24,5 @@ Parse [CEF](../../formats/cef.md) from the Syslog messages stored in `test.log`,
 returning only the result from CEF parser.
 
 ```
-from test.log read syslog | parse content --into result cef | yield result
+from test.log read syslog | parse content cef | yield content
 ```

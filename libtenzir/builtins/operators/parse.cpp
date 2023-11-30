@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/operator_control_plane.hpp>
 #include <tenzir/plugin.hpp>
@@ -34,29 +35,12 @@ public:
           .throw_();
       }
       input_ = std::move(*input);
-      auto into_or_name = p.accept_shell_arg();
-      if (not into_or_name) {
-        diagnostic::error("expected `--into <output>` or parser name")
+      auto parser_name_ = p.accept_shell_arg();
+      if (not parser_name_) {
+        diagnostic::error("expected parser name")
           .primary(p.current_span())
           .throw_();
       }
-      if (into_or_name->inner == "--into") {
-        into_ = p.accept_shell_arg();
-        if (not into_) {
-          diagnostic::error("expected output field name")
-            .primary(p.current_span())
-            .throw_();
-        }
-        parser_name_ = p.accept_shell_arg();
-        if (not parser_name_) {
-          diagnostic::error("expected parser name")
-            .primary(p.current_span())
-            .throw_();
-        }
-      } else {
-        parser_name_ = std::move(into_or_name);
-      }
-      TENZIR_ASSERT_CHEAP(parser_name_);
       parser = plugins::find<parser_parser_plugin>(parser_name_->inner);
       if (not parser) {
         diagnostic::error("parser `{}` was not found", parser_name_->inner)
@@ -71,7 +55,7 @@ public:
     } catch (diagnostic& d) {
       std::move(d)
         .modify()
-        .usage("parse <input> [--into <output>] <parser> <args>...")
+        .usage("parse <input> <parser> <args>...")
         .docs("https://docs.tenzir.com/next/operators/transformations/parse")
         .throw_();
     }
@@ -119,50 +103,20 @@ public:
         = batch->ToStructArray().ValueOrDie()->Flatten().ValueOrDie();
       auto next = int64_t{0};
       for (auto& [result_ty, result] : results) {
-        auto new_fields = collect(schema.fields());
-        // TODO: Some fields could be overwritten. We currently do not check for
-        // this, which can lead to having the multiple fields with the same name.
-        if (into_) {
-          // TODO: We might want to respect dots, such that `--into foo.bar`
-          // inserts into the `bar` field of the `foo` record.
-          new_fields.emplace_back(into_->inner, result_ty);
-        } else {
-          auto result_rec = caf::get_if<record_type>(&result_ty);
-          if (not result_rec) {
-            diagnostic::error("parser `{}` returned `{}`, which requires "
-                              "`--into`",
-                              parser_name_->inner, result_ty.kind())
-              .primary(parser_name_->source)
-              .emit(ctrl.diagnostics());
-            co_return;
-          }
-          new_fields.reserve(new_fields.size() + result_rec->num_fields());
-          for (auto field : result_rec->fields()) {
-            new_fields.push_back(std::move(field));
-          }
-        }
-        auto new_type = type{slice.schema().name(), record_type{new_fields},
-                             collect(slice.schema().attributes())};
-        auto new_children = std::vector<std::shared_ptr<arrow::Array>>{};
-        new_children.reserve(children.size());
-        for (auto& child : children) {
-          new_children.push_back(
-            child->SliceSafe(next, result->length()).ValueOrDie());
-        }
-        if (into_) {
-          new_children.push_back(result);
-        } else {
-          auto result_struct = dynamic_cast<arrow::StructArray*>(result.get());
-          TENZIR_ASSERT_CHEAP(result_struct);
-          auto new_fields = result_struct->Flatten().ValueOrDie();
-          new_children.insert(new_children.end(), new_fields.begin(),
-                              new_fields.end());
-        }
-        auto new_batch
-          = arrow::RecordBatch::Make(new_type.to_arrow_schema(),
-                                     result->length(), std::move(new_children));
-        co_yield table_slice{new_batch, std::move(new_type)};
+        auto sub = subslice(slice, next, next + result->length());
         next += result->length();
+        co_yield transform_columns(
+          sub, std::vector<indexed_transformation>{
+                 indexed_transformation{
+                   *index,
+                   [&](struct record_type::field field,
+                       const std::shared_ptr<arrow::Array>&)
+                     -> indexed_transformation::result_type {
+                     field.type = result_ty;
+                     return {{field, result}};
+                   },
+                 },
+               });
       }
     }
   }
@@ -182,7 +136,6 @@ public:
     // well with the `.object()` DSL.
     return f.begin_object(caf::invalid_type_id, "parse_operator")
            && f.begin_field("input") && f.apply(x.input_) && f.end_field()
-           && f.begin_field("into") && f.apply(x.into_) && f.end_field()
            && f.begin_field("parser_name") && f.apply(x.parser_name_)
            && f.end_field() && f.begin_field("parser")
            && plugin_inspect(f, x.parser_) && f.end_field() && f.end_object();
@@ -190,7 +143,6 @@ public:
 
 private:
   located<std::string> input_;
-  std::optional<located<std::string>> into_;
   std::optional<located<std::string>> parser_name_;
   std::unique_ptr<plugin_parser> parser_;
 };

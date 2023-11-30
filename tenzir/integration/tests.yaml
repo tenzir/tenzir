@@ -1190,9 +1190,9 @@ tests:
         input: data/json/cef-in-json-in-json.json
       - command: exec 'read lines | parse line json'
         input: data/json/cef-in-json-in-json.json
-      - command: exec 'read lines | parse line json | parse foo --into result json'
+      - command: exec 'read lines | parse line json | parse line.foo json'
         input: data/json/cef-in-json-in-json.json
-      - command: exec 'read lines | parse line json | parse foo --into result json | parse result.baz cef'
+      - command: exec 'read lines | parse line json | parse line.foo json | parse line.foo.baz cef'
         input: data/json/cef-in-json-in-json.json
 
   Parse CEF over syslog:
@@ -1200,5 +1200,5 @@ tests:
     steps:
       - command: exec 'read syslog'
         input: data/syslog/cef-over-syslog.log
-      - command: exec 'read syslog | parse content --into result cef'
+      - command: exec 'read syslog | parse content cef'
         input: data/syslog/cef-over-syslog.log
