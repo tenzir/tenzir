@@ -831,6 +831,9 @@ jobs:
           - name: Compaction
             target: compaction
             path: contrib/tenzir-plugins/compaction
+          - name: Context
+            target: context
+            path: contrib/tenzir-plugins/context
           - name: Example Analyzer
             target: example-analyzer
             path: examples/plugins/analyzer
