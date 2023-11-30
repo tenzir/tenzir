@@ -106,14 +106,14 @@ public:
         auto sub = subslice(slice, next, next + result->length());
         next += result->length();
         co_yield transform_columns(
-          sub, std::vector<indexed_transformation>{
-                 indexed_transformation{
+          sub, {
+                 {
                    *index,
                    [&](struct record_type::field field,
                        const std::shared_ptr<arrow::Array>&)
                      -> indexed_transformation::result_type {
                      field.type = result_ty;
-                     return {{field, result}};
+                     return {{std::move(field), result}};
                    },
                  },
                });
