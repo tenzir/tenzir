@@ -1193,8 +1193,6 @@ tests:
     steps:
       - command: exec 'from - read csv --allow-comments'
         input: data/csv/ipblocklist.csv
-      - command: exec 'from - read xsv , --allow-comments'
-        input: data/csv/ipblocklist.csv
 
   XSV Format:
     tags: [pipelines, xsv]

@@ -48,7 +48,7 @@ struct xsv_options {
     auto list_sep_str = located<std::string>{};
     auto null_value = located<std::string>{};
     if (is_parser) {
-      parser.add(allow_comments, "--allow-comments");
+      parser.add("--allow-comments", allow_comments);
     }
     parser.add(field_sep_str, "<field-sep>");
     parser.add(list_sep_str, "<list-sep>");
@@ -491,13 +491,16 @@ class configured_xsv_plugin final : public virtual parser_parser_plugin,
 public:
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
-    argument_parser{name()}.parse(p);
+    auto parser = argument_parser{name()};
+    bool allow_comments = {};
+    parser.add("--allow-comments", allow_comments);
+    parser.parse(p);
     return std::make_unique<xsv_parser>(xsv_options{
       .name = std::string{Name.str()},
       .field_sep = Sep,
       .list_sep = ListSep,
       .null_value = std::string{Null.str()},
-      .allow_comments = true,
+      .allow_comments = allow_comments,
     });
   }
 
