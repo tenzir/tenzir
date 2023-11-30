@@ -166,25 +166,29 @@ struct xsv_printer_impl {
 } // namespace
 
 auto parse_impl(generator<std::optional<std::string_view>> lines,
-                operator_control_plane& ctrl, char sep, std::string name)
-  -> generator<table_slice> {
+                operator_control_plane& ctrl, char sep, bool allow_comments,
+                std::string name) -> generator<table_slice> {
   auto last_finish = std::chrono::steady_clock::now();
   // Parse header.
   auto it = lines.begin();
   auto header = std::optional<std::string_view>{};
   while (it != lines.end()) {
-    header = *it;
+    auto line = *it;
     ++it;
-    if (not header) {
+    if (not line) {
       co_yield {};
       continue;
     }
-    if (not header->empty()) {
-      break;
-    }
+    if (line->empty())
+      continue;
+    if (allow_comments && line->front() == '#')
+      continue;
+    header = line;
+    break;
   }
-  if (!header || header->empty())
+  if (not header)
     co_return;
+  TENZIR_ASSERT(!header->empty());
   auto split_parser
     = (((parsers::qqstr
            .then([](std::string in) {
@@ -243,6 +247,9 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
     if (line->empty()) {
       continue;
     }
+    if (allow_comments && line->front() == '#') {
+      continue;
+    }
     auto values = std::vector<std::string>{};
     if (!split_parser(*line, values)) {
       ctrl.warn(
@@ -282,7 +289,8 @@ class xsv_parser final : public plugin_parser {
 public:
   xsv_parser() = default;
 
-  explicit xsv_parser(char sep) : sep_{sep} {
+  explicit xsv_parser(char sep, bool allow_comments)
+    : sep_{sep}, allow_comments_{allow_comments} {
   }
 
   auto name() const -> std::string override {
@@ -292,15 +300,18 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    return parse_impl(to_lines(std::move(input)), ctrl, sep_, "xsv");
+    return parse_impl(to_lines(std::move(input)), ctrl, sep_, allow_comments_,
+                      "xsv");
   }
 
   friend auto inspect(auto& f, xsv_parser& x) -> bool {
-    return f.apply(x.sep_);
+    return f.object(x).fields(f.field("sep", x.sep_),
+                              f.field("allow_comments", x.allow_comments_));
   }
 
 private:
   char sep_{};
+  bool allow_comments_{false};
 };
 
 class xsv_printer final : public plugin_printer {
@@ -380,16 +391,18 @@ public:
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
     auto sep_str = located<std::string>{};
+    bool allow_comments = false;
     auto parser = argument_parser{"xsv", "https://docs.tenzir.com/next/"
                                          "formats/xsv"};
     parser.add(sep_str, "<sep>");
+    parser.add("--allow-comments", allow_comments);
     parser.parse(p);
     auto sep = to_xsv_sep(sep_str.inner);
     if (!sep) {
       // TODO: Improve error message.
       diagnostic::error("{}", sep.error()).primary(sep_str.source).throw_();
     }
-    return std::make_unique<xsv_parser>(*sep);
+    return std::make_unique<xsv_parser>(*sep, allow_comments);
   }
 
   auto parse_printer(parser_interface& p) const
@@ -450,8 +463,14 @@ class configured_xsv_plugin final : public virtual parser_parser_plugin,
 public:
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
-    argument_parser{name()}.parse(p);
-    return std::make_unique<xsv_parser>(Sep);
+    auto parser
+      = argument_parser{name(), fmt::format("https://docs.tenzir.com/next/"
+                                            "formats/{}",
+                                            name())};
+    bool allow_comments = false;
+    parser.add("--allow-comments", allow_comments);
+    parser.parse(p);
+    return std::make_unique<xsv_parser>(Sep, allow_comments);
   }
 
   auto parse_printer(parser_interface& p) const

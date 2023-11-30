@@ -53,11 +53,10 @@ TEST(OpenAPI specs) {
        tenzir::plugins::get<tenzir::rest_endpoint_plugin>()) {
     MESSAGE("verifying spec for plugin " << rest_plugin->name());
     auto endpoints = rest_plugin->rest_endpoints();
-    auto spec = rest_plugin->openapi_specification(version);
-    REQUIRE(caf::holds_alternative<tenzir::record>(spec));
-    auto spec_record = caf::get<tenzir::record>(spec);
+    auto spec = rest_plugin->openapi_endpoints(version);
+    REQUIRE(!spec.empty());
     auto endpoint_methods = size_t{0ull};
-    for (auto const& [key, value] : spec_record) {
+    for (auto const& [key, value] : spec) {
       auto path = to_express_format(key);
       auto endpoints_it = std::find_if(endpoints.begin(), endpoints.end(),
                                        [&](auto const& endpoint) {

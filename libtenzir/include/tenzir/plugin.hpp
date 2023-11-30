@@ -641,12 +641,22 @@ public:
 // request path.
 class rest_endpoint_plugin : public virtual plugin {
 public:
-  /// OpenAPI spec for the plugin endpoints.
-  /// @returns A `tenzir::data` object that is a record containing entries for
-  /// the `paths` element of an OpenAPI spec.
+  /// OpenAPI description of the plugin endpoints.
+  /// @returns A record containing entries for the `paths` element of an
+  ///          OpenAPI spec.
   [[nodiscard]] virtual auto
-  openapi_specification(api_version version = api_version::latest) const -> data
+  openapi_endpoints(api_version version = api_version::latest) const -> record
     = 0;
+
+  /// OpenAPI description of the schemas used by the plugin endpoints, if any.
+  /// @returns A record containing entries for the `schemas` element of an
+  ///          OpenAPI spec. The record may be empty if the plugin defines
+  ///          no custom schemas.
+  [[nodiscard]] virtual auto
+  openapi_schemas(api_version /*version*/ = api_version::latest) const
+    -> record {
+    return record{};
+  }
 
   /// List of API endpoints provided by this plugin.
   [[nodiscard]] virtual auto rest_endpoints() const
