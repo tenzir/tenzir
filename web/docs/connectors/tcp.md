@@ -48,30 +48,31 @@ Ignored unless `--tls` is also specified.
 
 ### Connect
 
-Read tcp data from a plain TCP endpoint:
+Read raw bytes by connecting to a TCP endpoint:
 ```
 load tcp://127.0.0.1:8000
 ```
 
-To test this locally, one could spin up a local server like this:
+Test this locally by spinning up a local server with netcat:
 
-```
+```bash
 echo foo | nc -N -l 127.0.0.1 8000
 ```
 
 ### Listen
 
 Listen on localhost and wait for incoming TLS connections:
+
 ```
 load tcp://127.0.0.1:4000 --listen --certfile ./key_and_cert.pem --keyfile ./key_and_cert.pem -k
 ```
 
-This example uses a self-signed certificate that can be generated like this:
-```
-openssl req -x509 -newkey rsa:2048 -keyout key_and_cert.pem -out key_and_cert.pem -days 365 -nodes
-```
+The above example uses a self-signed certificate that can be generated like this:
 
-The endpoint can be tested locally using a command like:
-```
+```bash
+openssl req -x509 -newkey rsa:2048 -keyout key_and_cert.pem -out key_and_cert.pem -days 365 -nodes
+
+Test the endpoint locally by issuing a TLS connection:
+```bash
 openssl s_client 127.0.0.1:4000
 ```
