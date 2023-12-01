@@ -7,14 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
-#include <tenzir/concept/parseable/string/char_class.hpp>
-#include <tenzir/concept/parseable/tenzir/pipeline.hpp>
-#include <tenzir/error.hpp>
-#include <tenzir/logger.hpp>
-#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
-
-#include <arrow/type.h>
 
 namespace tenzir::plugins::pass {
 

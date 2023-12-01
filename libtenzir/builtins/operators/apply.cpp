@@ -63,7 +63,9 @@ public:
           }
         }
       }
-      diagnostic::error("could not find `{}`", path)
+      // The call to `std::filesystem::path::string` is necessary to prevent
+      // quotes in older versions of `fmt`.
+      diagnostic::error("could not find `{}`", path.string())
         .primary(file.source)
         .throw_();
     });
@@ -71,8 +73,8 @@ public:
     // nice error message.
     auto content = detail::load_contents(completed_path);
     if (not content) {
-      diagnostic::error("failed to read from file `{}`: {}", completed_path,
-                        content.error())
+      diagnostic::error("failed to read from file `{}`: {}",
+                        completed_path.string(), content.error())
         .primary(file.source)
         .throw_();
     }
@@ -83,7 +85,7 @@ public:
         std::move(diags[0])
           .modify()
           .primary(file.source)
-          .note("while parsing `{}`", completed_path)
+          .note("while parsing `{}`", completed_path.string())
           .throw_();
       } else {
         diagnostic::error("failed to parse `{}`: {}", file.inner, diags)
