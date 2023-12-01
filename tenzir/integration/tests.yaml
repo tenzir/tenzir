@@ -99,6 +99,20 @@ tests:
       - command: exec "from @./data/suricata/eve.json | head 2"
       - command: exec "from @./data/zeek/http.log.gz read zeek-tsv | head 2"
 
+  Apply operator:
+    tags: [pipelines]
+    steps:
+      - command: exec "apply @./queries/some_source | write json"
+      - command: exec "apply @./queries/some_source.tql | write json"
+      - command: exec "apply /tmp/does_not_exist"
+        expected_result: error
+      - command: exec "apply does_not_exist.tql"
+        expected_result: error
+      # This test works, but it includes the path to the file in the error
+      # message, which makes the output change.
+      # - command: exec "apply @./queries/from_unknown_file.tql"
+      #   expected_result: error
+
   Conn log counting:
     tags: [node, counting, zeek]
     steps:

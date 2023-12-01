@@ -618,15 +618,21 @@ auto parse(std::string source, diagnostic_handler& diag)
 }
 
 auto parse_internal(std::string source) -> caf::expected<pipeline> {
+  auto [pipe, diags] = parse_internal_with_diags(std::move(source));
+  if (not pipe) {
+    return caf::make_error(ec::parse_error,
+                           fmt::format("could not parse pipeline: {}", diags));
+  }
+  return std::move(*pipe);
+}
+
+auto parse_internal_with_diags(std::string source)
+  -> std::pair<std::optional<pipeline>, std::vector<diagnostic>> {
   auto diag = collecting_diagnostic_handler{};
   auto recursed = std::unordered_set<std::string>{};
   auto ops = parser{std::move(source), diag, true, recursed}.parse();
-  if (!ops) {
-    return caf::make_error(ec::parse_error,
-                           fmt::format("could not parse pipeline: {}",
-                                       std::move(diag).collect()));
-  }
-  return to_pipeline(std::move(*ops));
+  return {ops ? to_pipeline(std::move(*ops)) : std::optional<pipeline>{},
+          std::move(diag).collect()};
 }
 
 void set_operator_aliases(std::unordered_map<std::string, std::string> map) {
