@@ -515,14 +515,16 @@ class parser_base {
 public:
   parser_base(operator_control_plane& ctrl, std::optional<selector> selector,
               std::optional<type> schema, std::vector<type> schemas,
-              bool no_infer, bool preserve_order, bool raw)
+              bool no_infer, bool preserve_order, bool raw,
+              bool arrays_of_objects)
     : ctrl_{ctrl},
       selector_{std::move(selector)},
       schema_{std::move(schema)},
       schemas_{std::move(schemas)},
       no_infer_{no_infer},
       preserve_order{preserve_order},
-      raw_{raw} {
+      raw_{raw},
+      arrays_of_objects_{arrays_of_objects} {
   }
 
 protected:
@@ -622,6 +624,7 @@ protected:
   bool no_infer_ = false;
   bool preserve_order = true;
   bool raw_ = false;
+  bool arrays_of_objects_ = false;
   simdjson::ondemand::parser parser_;
   // TODO: change max table slice size to be fetched from options.
   int64_t max_table_slice_rows_ = defaults::import::table_slice_size;
@@ -742,13 +745,35 @@ public:
           }
       }
       auto& builder = state.get_active_entry().builder;
-      auto row = builder.record();
-      auto success = doc_parser{doc_it.source(), this->ctrl_, no_infer_, raw_}
-                       .parse_object(doc.value_unsafe(), row);
-      if (not success) {
-        // We already reported the issue.
-        builder.remove_last();
-        continue;
+      if (arrays_of_objects_) {
+        auto arr = doc.value_unsafe().get_array();
+        if (arr.error()) {
+          state.abort_requested = true;
+          this->ctrl_.abort(caf::make_error(
+            ec::parse_error, fmt::format("expected an array of objects: {}",
+                                         error_message(err))));
+          co_return;
+        }
+        for (auto&& elem : arr.value_unsafe()) {
+          auto row = builder.record();
+          auto success
+            = doc_parser{doc_it.source(), this->ctrl_, no_infer_, raw_}
+                .parse_object(elem.value_unsafe(), row);
+          if (not success) {
+            // We already reported the issue.
+            builder.remove_last();
+            continue;
+          }
+        }
+      } else {
+        auto row = builder.record();
+        auto success = doc_parser{doc_it.source(), this->ctrl_, no_infer_, raw_}
+                         .parse_object(doc.value_unsafe(), row);
+        if (not success) {
+          // We already reported the issue.
+          builder.remove_last();
+          continue;
+        }
       }
       if (auto slices = this->handle_max_rows(state))
         for (auto& slice : *slices) {
@@ -864,6 +889,7 @@ struct parser_args {
   bool use_ndjson_mode = false;
   bool preserve_order = true;
   bool raw = false;
+  bool arrays_of_objects = false;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, parser_args& x) -> bool {
@@ -874,7 +900,8 @@ struct parser_args {
               f.field("no_infer", x.no_infer),
               f.field("use_ndjson_mode", x.use_ndjson_mode),
               f.field("preserve_order", x.preserve_order),
-              f.field("raw", x.raw));
+              f.field("raw", x.raw),
+              f.field("arrays_of_objects", x.arrays_of_objects));
   }
 };
 
@@ -921,11 +948,17 @@ public:
         diagnostic::error("failed to find schema `{}`", args_.schema->inner)
           .primary(args_.schema->source)
           // TODO: Refer to the show operator once we have that.
-          .note("use `tenzir-ctl show schemas` to show all available schemas")
+          .note("use `tenzir show schemas` to show all available schemas")
           .emit(ctrl.diagnostics());
         return {};
       }
       schema = *found;
+    }
+    if (args_.use_ndjson_mode and args_.arrays_of_objects) {
+      diagnostic::error(
+        "options `--ndjson` and `--arrays-of-objects` are incompatible")
+        .emit(ctrl.diagnostics());
+      return {};
     }
     if (args_.use_ndjson_mode) {
       return make_parser(to_padded_lines(std::move(input)), ctrl,
@@ -938,6 +971,7 @@ public:
                            args_.no_infer.has_value(),
                            args_.preserve_order,
                            args_.raw,
+                           args_.arrays_of_objects,
                          });
     }
     return make_parser(std::move(input), ctrl, args_.unnest_separator, schema,
@@ -950,6 +984,7 @@ public:
                          args_.no_infer.has_value(),
                          args_.preserve_order,
                          args_.raw,
+                         args_.arrays_of_objects,
                        });
   }
 
@@ -1074,6 +1109,7 @@ public:
     add_common_options_to_parser(parser, args);
     parser.add("--ndjson", args.use_ndjson_mode);
     parser.add("--raw", args.raw);
+    parser.add("--arrays-of-objects", args.arrays_of_objects);
     parser.parse(p);
     if (selector) {
       args.selector = parse_selector(selector->inner, selector->source);

@@ -45,6 +45,7 @@ public:
       TENZIR_ADD_PLUGIN_TYPE(aspect);
       TENZIR_ADD_PLUGIN_TYPE(component);
       TENZIR_ADD_PLUGIN_TYPE(command);
+      TENZIR_ADD_PLUGIN_TYPE(context);
       TENZIR_ADD_PLUGIN_TYPE(loader_parser);
       TENZIR_ADD_PLUGIN_TYPE(loader_serialization);
       TENZIR_ADD_PLUGIN_TYPE(operator_parser);

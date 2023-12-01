@@ -9,92 +9,12 @@
 #include <tenzir/concept/parseable/tenzir/identifier.hpp>
 #include <tenzir/detail/file_path_to_plugin_name.hpp>
 #include <tenzir/detail/loader_saver_resolver.hpp>
+#include <tenzir/prepend_token.hpp>
 #include <tenzir/tql/parser.hpp>
 
 namespace tenzir::detail {
 
 namespace {
-
-class prepend_token final : public parser_interface {
-public:
-  prepend_token(located<std::string_view> token, parser_interface& next)
-    : token_{token}, next_{next} {
-  }
-  prepend_token(std::nullopt_t, parser_interface& next)
-    : token_{std::nullopt}, next_{next} {
-  }
-
-  auto accept_shell_arg() -> std::optional<located<std::string>> override {
-    if (token_) {
-      auto tmp = located<std::string>{*token_};
-      token_ = std::nullopt;
-      return tmp;
-    }
-    return next_.accept_shell_arg();
-  }
-
-  auto peek_shell_arg() -> std::optional<located<std::string>> override {
-    if (token_) {
-      return located<std::string>{*token_};
-    }
-    return next_.peek_shell_arg();
-  }
-
-  auto accept_identifier() -> std::optional<identifier> override {
-    TENZIR_ASSERT(not token_);
-    return next_.accept_identifier();
-  }
-
-  auto peek_identifier() -> std::optional<identifier> override {
-    TENZIR_ASSERT(not token_);
-    return next_.peek_identifier();
-  }
-
-  auto accept_equals() -> std::optional<location> override {
-    TENZIR_ASSERT(not token_);
-    return next_.accept_equals();
-  }
-
-  auto accept_char(char c) -> std::optional<location> override {
-    TENZIR_ASSERT(not token_);
-    return next_.accept_char(c);
-  }
-
-  auto parse_operator() -> located<operator_ptr> override {
-    TENZIR_ASSERT(not token_);
-    return next_.parse_operator();
-  }
-
-  auto parse_expression() -> tql::expression override {
-    TENZIR_ASSERT(not token_);
-    return next_.parse_expression();
-  }
-
-  auto parse_legacy_expression() -> located<expression> override {
-    TENZIR_ASSERT(not token_);
-    return next_.parse_legacy_expression();
-  }
-
-  auto parse_extractor() -> tql::extractor override {
-    TENZIR_ASSERT(not token_);
-    return next_.parse_extractor();
-  }
-
-  auto at_end() -> bool override {
-    return not token_ && next_.at_end();
-  }
-
-  auto current_span() -> location override {
-    if (token_) {
-      return token_->source;
-    }
-    return next_.current_span();
-  }
-
-private:
-  std::optional<located<std::string_view>> token_;
-  parser_interface& next_;
-};
 
 auto make_located_string_view(located<std::string_view> src, size_t pos = 0,
                               size_t count = std::string_view::npos)

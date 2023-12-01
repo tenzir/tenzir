@@ -17,6 +17,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/pp.hpp"
 #include "tenzir/detail/weak_handle.hpp"
+#include "tenzir/expression.hpp"
 #include "tenzir/http_api.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
@@ -755,6 +756,66 @@ private:
 
   auto parse_printer(parser_interface& p) const
     -> std::unique_ptr<plugin_printer> final;
+};
+
+// -- lookup table plugin -----------
+
+class lookup_table_plugin : public virtual plugin {
+public:
+  virtual auto apply_lookup(std::vector<table_slice> slices,
+                            std::unordered_set<std::string> fields,
+                            record indicators) const -> std::vector<table_slice>
+    = 0;
+};
+
+// -- context plugin -----------------------------------------------------------
+
+class context {
+public:
+  using parameter_map
+    = std::unordered_map<std::string, std::optional<std::string>>;
+
+  virtual ~context() noexcept = default;
+
+  /// Emits context information for every event in `slice` in order.
+  virtual auto apply(table_slice slice, parameter_map parameters) const
+    -> caf::expected<std::vector<typed_array>>
+    = 0;
+
+  /// Inspects the context.
+  virtual auto show() const -> record = 0;
+
+  /// Updates the context.
+  virtual auto update(table_slice events, parameter_map parameters)
+    -> caf::expected<record>
+    = 0;
+
+  /// Updates the context.
+  virtual auto update(chunk_ptr bytes, parameter_map parameters)
+    -> caf::expected<record>
+    = 0;
+
+  /// Updates the context.
+  virtual auto update(parameter_map parameters) -> caf::expected<record> = 0;
+
+  // Serializes a context for persistence.
+  virtual auto save() const -> caf::expected<chunk_ptr> = 0;
+};
+
+class context_plugin : public virtual plugin {
+public:
+  /// Create a context.
+  [[nodiscard]] virtual auto
+  make_context(context::parameter_map parameters) const
+    -> caf::expected<std::unique_ptr<context>>
+    = 0;
+  // Load a context.
+  [[nodiscard]] virtual auto load_context(chunk_ptr serialized) const
+    -> caf::expected<std::unique_ptr<context>>
+    = 0;
+  [[nodiscard]] virtual auto context_name() const -> std::string {
+    return name();
+  };
 };
 
 // -- aspect plugin ------------------------------------------------------------
