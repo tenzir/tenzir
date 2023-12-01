@@ -439,8 +439,12 @@ store_plugin::make_store(accountant_actor accountant, filesystem_actor fs,
     return caf::make_error(ec::invalid_argument, "header must have size of "
                                                  "single uuid");
   const auto id = uuid{header.subspan<0, uuid::num_bytes>()};
-  auto path
-    = std::filesystem::path{"archive"} / fmt::format("{}.{}", id, name());
+  auto db_dir = std::filesystem::path{
+    caf::get_or(content(fs->home_system().config()), "tenzir.db-directory",
+                defaults::db_directory.data())};
+  std::error_code err{};
+  const auto abs_dir = std::filesystem::absolute(db_dir, err);
+  auto path = abs_dir / "archive" / fmt::format("{}.{}", id, name());
   return fs->home_system().spawn<caf::lazy_init>(default_passive_store,
                                                  std::move(*store), fs,
                                                  std::move(accountant),
