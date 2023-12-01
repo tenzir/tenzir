@@ -267,58 +267,75 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
       auto extract_expr = detail::overload{
         [&](const meta_extractor& lhs,
             const data& d) -> catalog_lookup_result::candidate_info {
-          if (lhs.kind == meta_extractor::schema) {
-            // We don't have to look into the synopses for type queries, just
-            // at the schema names.
-            catalog_lookup_result::candidate_info result;
-            for (const auto& [part_id, part_syn] : partition_synopses) {
-              for (const auto& [fqf, _] : part_syn->field_synopses_) {
-                // TODO: provide an overload for view of evaluate() so that
-                // we can use string_view here. Fortunately type names are
-                // short, so we're probably not hitting the allocator due to
-                // SSO.
-                if (evaluate(std::string{fqf.schema_name()}, x.op, d)) {
-                  result.partition_infos.emplace_back(part_id, *part_syn);
-                  break;
+          switch (lhs.kind) {
+            case meta_extractor::schema: {
+              // We don't have to look into the synopses for type queries, just
+              // at the schema names.
+              catalog_lookup_result::candidate_info result;
+              for (const auto& [part_id, part_syn] : partition_synopses) {
+                for (const auto& [fqf, _] : part_syn->field_synopses_) {
+                  // TODO: provide an overload for view of evaluate() so that
+                  // we can use string_view here. Fortunately type names are
+                  // short, so we're probably not hitting the allocator due to
+                  // SSO.
+                  if (evaluate(std::string{fqf.schema_name()}, x.op, d)) {
+                    result.partition_infos.emplace_back(part_id, *part_syn);
+                    break;
+                  }
                 }
               }
+              TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
+                                           result.partition_infos.end()));
+              return result;
             }
-            TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                         result.partition_infos.end()));
-            return result;
-          }
-          if (lhs.kind == meta_extractor::schema_id) {
-            auto result = catalog_lookup_result::candidate_info{};
-            for (const auto& [part_id, part_syn] : partition_synopses) {
-              TENZIR_ASSERT(part_syn->schema == schema);
-            }
-            if (evaluate(schema.make_fingerprint(), x.op, d)) {
+            case meta_extractor::schema_id: {
+              auto result = catalog_lookup_result::candidate_info{};
               for (const auto& [part_id, part_syn] : partition_synopses) {
-                result.partition_infos.emplace_back(part_id, *part_syn);
+                TENZIR_ASSERT(part_syn->schema == schema);
               }
+              if (evaluate(schema.make_fingerprint(), x.op, d)) {
+                for (const auto& [part_id, part_syn] : partition_synopses) {
+                  result.partition_infos.emplace_back(part_id, *part_syn);
+                }
+              }
+              TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
+                                           result.partition_infos.end()));
+              return result;
             }
-            TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                         result.partition_infos.end()));
-            return result;
-          }
-          if (lhs.kind == meta_extractor::import_time) {
-            catalog_lookup_result::candidate_info result;
-            for (const auto& [part_id, part_syn] : partition_synopses) {
-              TENZIR_ASSERT(
-                part_syn->min_import_time <= part_syn->max_import_time,
-                "encountered empty or moved-from partition synopsis");
-              auto ts = time_synopsis{
-                part_syn->min_import_time,
-                part_syn->max_import_time,
+            case meta_extractor::import_time: {
+              catalog_lookup_result::candidate_info result;
+              for (const auto& [part_id, part_syn] : partition_synopses) {
+                TENZIR_ASSERT(
+                  part_syn->min_import_time <= part_syn->max_import_time,
+                  "encountered empty or moved-from partition synopsis");
+                auto ts = time_synopsis{
+                  part_syn->min_import_time,
+                  part_syn->max_import_time,
+                };
+                auto add = ts.lookup(x.op, caf::get<tenzir::time>(d));
+                if (!add || *add) {
+                  result.partition_infos.emplace_back(part_id, *part_syn);
+                }
+              }
+              TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
+                                           result.partition_infos.end()));
+              return result;
+            }
+            case meta_extractor::internal: {
+              auto result = catalog_lookup_result::candidate_info{};
+              for (const auto& [part_id, part_syn] : partition_synopses) {
+                auto internal = false;
+                if (part_syn->schema) {
+                  internal = part_syn->schema.attribute("internal").has_value();
+                }
+                if (evaluate(internal, x.op, d)) {
+                  result.partition_infos.emplace_back(part_id, *part_syn);
+                }
               };
-              auto add = ts.lookup(x.op, caf::get<tenzir::time>(d));
-              if (!add || *add) {
-                result.partition_infos.emplace_back(part_id, *part_syn);
-              }
+              TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
+                                           result.partition_infos.end()));
+              return result;
             }
-            TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                         result.partition_infos.end()));
-            return result;
           }
           TENZIR_WARN("{} cannot process meta extractor: {}",
                       detail::pretty_type_name(this), lhs.kind);

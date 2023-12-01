@@ -40,9 +40,7 @@ public:
   auto show(operator_control_plane&) const -> generator<table_slice> override {
     auto builder = series_builder{};
     builder.data(make_view(config_));
-    for (auto&& slice : builder.finish_as_table_slice("tenzir.config")) {
-      co_yield std::move(slice);
-    }
+    co_yield builder.finish_assert_one_slice("tenzir.config");
   }
 
 private:

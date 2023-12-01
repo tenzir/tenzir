@@ -35,7 +35,7 @@ class expression;
 
 /// Extracts meta data from an event.
 struct meta_extractor : detail::totally_ordered<meta_extractor> {
-  enum kind { schema, schema_id, import_time };
+  enum kind { schema, schema_id, import_time, internal };
 
   explicit meta_extractor() = default;
 
@@ -526,6 +526,8 @@ struct formatter<enum tenzir::meta_extractor::kind> {
         return fmt::format_to(ctx.out(), "#schema_id");
       case tenzir::meta_extractor::kind::import_time:
         return fmt::format_to(ctx.out(), "#import_time");
+      case tenzir::meta_extractor::kind::internal:
+        return fmt::format_to(ctx.out(), "#internal");
     }
     tenzir::die("unreachable");
   }
