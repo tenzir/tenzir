@@ -21,6 +21,7 @@ brew install --overwrite \
     libunwind-headers \
     llvm \
     ninja \
+    nmap \
     openssl \
     pandoc \
     pkg-config \

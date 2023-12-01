@@ -164,11 +164,11 @@ struct rebuilder_state {
     if (run && !run->options.automatic)
       return caf::make_error(
         ec::invalid_argument,
-        fmt::format("{} refuses to start rebuild while a rebuild is still "
-                    "ongoing ({}/{} done); consider running 'tenzir rebuild "
-                    "stop'",
-                    *self, run->statistics.num_completed,
-                    run->statistics.num_total));
+        fmt::format(
+          "{} refuses to start rebuild while a rebuild is still "
+          "ongoing ({}/{} done); consider running 'tenzir-ctl rebuild "
+          "stop'",
+          *self, run->statistics.num_completed, run->statistics.num_total));
     if (!options.automatic && run && run->options.automatic) {
       auto rp = self->make_response_promise<void>();
       self

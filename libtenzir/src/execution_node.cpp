@@ -900,8 +900,8 @@ auto exec_node(
   // internal as they cannot transport data outside of the pipeline.
   self->state.metrics->values.internal
     = self->state.op->internal()
-      or (not std::is_same_v<Input, std::monostate>
-          and not std::is_same_v<Output, std::monostate>);
+      and (std::is_same_v<Input, std::monostate>
+           or std::is_same_v<Output, std::monostate>);
   self->state.ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
     self, std::move(diagnostic_handler), has_terminal);
   // The node actor must be set when the operator is not a source.

@@ -105,6 +105,13 @@ Use only the raw JSON types. This means that all strings are parsed as `string`,
 irrespective of whether they are a valid `ip`, `duration`, etc. Also, since JSON
 only has one generic number type, all numbers are parsed with the `double` type.
 
+### `--arrays-of-objects` (Parser)
+
+Parse arrays of objects, with every object in the outermost arrays resulting in
+one event each. This is particularly useful when interfacing with REST APIs,
+which often yield large arrays of objects instead of newline-delimited JSON
+objects.
+
 ### `--c|--compact-output` (Printer)
 
 Switch to line-delimited JSON output (JSONL/NDJSON).

@@ -42,6 +42,8 @@ public:
 
   virtual auto parse_extractor() -> tql::extractor = 0;
 
+  virtual auto parse_data() -> located<data> = 0;
+
   virtual auto at_end() -> bool = 0;
 
   virtual auto current_span() -> location = 0;
@@ -119,6 +121,13 @@ public:
 
   auto parse_extractor() -> tql::extractor override {
     return p_.parse_extractor();
+  }
+
+  auto parse_data() -> located<tenzir::data> override {
+    if (at_end()) {
+      diagnostic::error("expected data").primary(current_span()).throw_();
+    }
+    return p_.parse_data();
   }
 
   auto at_end() -> bool override {

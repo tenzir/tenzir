@@ -1,0 +1,6 @@
+error: could not find `/tmp/does_not_exist.tql`
+ --> <input>:1:7
+  |
+1 | apply /tmp/does_not_exist
+  |       ^^^^^^^^^^^^^^^^^^^ 
+  |

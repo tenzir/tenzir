@@ -5,7 +5,7 @@ Produces events by combining a [connector][connectors] and a [format][formats].
 ## Synopsis
 
 ```
-from <uri> [read <format>]
+from <url> [read <format>]
 from <path> [read <format>]
 from <connector> [read <format>]
 ```
@@ -70,8 +70,8 @@ from file path/to/eve.json
 from file path/to/eve.json read suricata
 ```
 
-Read bytes from the URI `https://example.com/data.json` over HTTPS and parse them as JSON.
-Note that when `from` is passed a URI directly, the `https` connector is automatically used.
+Read bytes from the URL `https://example.com/data.json` over HTTPS and parse them as JSON.
+Note that when `from` is passed a URL directly, the `https` connector is automatically used.
 
 ```
 from https://example.com/data.json read json
