@@ -61,15 +61,19 @@ def upload_packages [
       cp -v $tgz ./packages/tarball
     }
     if $git_tag != null {
-      cp ($debs | get 0) $"($name)-amd64-linux.deb"
-      print $"::attaching ($name)-amd64-linux.deb to ($git_tag)"
-      gh release upload $git_tag $"($name)-amd64-linux.deb" --clobber
-      cp ($pkgs | get 0) $"($name)-arm64-darwin.pkg"
-      print $"::attaching ($name)-arm64-darwin.pkg to ($git_tag)"
-      gh release upload $git_tag $"($name)-arm64-darwin.pkg" --clobber
-      cp ($tgzs | get 0) $"($name)-x86_64-linux.tar.gz"
-      print $"::attaching ($name)-x86_64-linux.tar.gz to ($git_tag)"
-      gh release upload $git_tag $"($name)-x86_64-linux.tar.gz" --clobber
+      if $os == "Linux" {
+        cp ($debs | get 0) $"($name)-amd64-linux.deb"
+        print $"::attaching ($name)-amd64-linux.deb to ($git_tag)"
+        gh release upload $git_tag $"($name)-amd64-linux.deb" --clobber
+        cp ($tgzs | get 0) $"($name)-x86_64-linux.tar.gz"
+        print $"::attaching ($name)-x86_64-linux.tar.gz to ($git_tag)"
+        gh release upload $git_tag $"($name)-x86_64-linux.tar.gz" --clobber
+      }
+      if $os == "Darwin" {
+        cp ($pkgs | get 0) $"($name)-arm64-darwin.pkg"
+        print $"::attaching ($name)-arm64-darwin.pkg to ($git_tag)"
+        gh release upload $git_tag $"($name)-arm64-darwin.pkg" --clobber
+      }
     }
   }
 }
