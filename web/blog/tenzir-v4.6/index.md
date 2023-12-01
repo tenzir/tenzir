@@ -74,7 +74,7 @@ how Tenzir makes enrichments easy. Stay tuned!
 
 ## Onboard Data Faster Than Ever
 
-Want to read CEF over Syslog from TCP? Not a problem with four all-new features
+Want to read CEF over syslog from TCP? Not a problem with four all-new features
 of Tenzir v4.6—are you able to spot all four?
 
 ```
@@ -120,7 +120,7 @@ Nov 13 16:59:59 host123 FOO: CEF:0|FORCEPOINT|Firewall|6.6.1|0|Generic|0|deviceE
 `from`, `load`, `to` and `save` now support working with URLs and paths
 directly, and no longer require specifying a connector and format explicitly.
 Additionally, they now support automatic compression and decompression.
-  
+
 For example, this pipeline reads events from a Zeek TSV log file in the local
 file system, and stores them as Zstd-compressed CSV file in an S3 bucket:
 
@@ -129,29 +129,28 @@ file system, and stores them as Zstd-compressed CSV file in an S3 bucket:
 ### TCP Connector
 
 Acquire data over TCP (or TLS) directly with the new `tcp` loader. Use the
-`--tls` option to read from TLS instead, and `--bind` to open a server rather
+`--tls` option to read from TLS instead, and `--listen` to open a server rather
 than connect as a client.
 
 ### Syslog Format
 
-Read Syslog RFC 3164 and RFC 5424 with the new `syslog` parser. The parser
-automatically disambiguates between the two common Syslog standards.
+Read syslog RFC 3164 and RFC 5424 with the new `syslog` parser. The parser
+automatically disambiguates between the two common syslog standards.
 
 ### Parse Operator
 
 Use the `parse` operator to structurally decompose fields with any parser. This
-enables parsing of structured data embedded as strings in structured data of
-another format.
+enables parsing of structured data embedded as strings inside another format.
 
 Onboarding custom data sources is a pain for every SOC operations team. We've
-seen CSV where some columns are NDJSON, CEF in Syslog, and grok patterns in CEF
-in Syslog. With the `parse` operator, this no longer has to be as painful, and
+seen CSV where some columns are NDJSON, CEF in syslog, and grok patterns in CEF
+in syslog. With the `parse` operator, this no longer has to be as painful, and
 you can finally spend more time working with your data than onboarding it.
 
 ## Rapid Prototyping with the Python Operator
 
-The `python` operator allows for modying events using Python. Here are some cool
-things that we've done in the first days of playing with the operator:
+The `python` operator allows for modifying events using Python. Here are some
+cool things that we've done in the first days of playing with the operator:
 
 ```text {0} title="Calculate the square root of a field"
 python '
@@ -179,7 +178,7 @@ where #schema == "suricata.flow"
 :::caution Renamed Python Package
 As part of this release, we completely remodeled our Python package and renamed
 it from `pytenzir` to `tenzir`. The old package continues to work, but is
-depecated and no longer maintained.
+deprecated and no longer maintained.
 :::
 
 ## Long-Poll Support for Serve
@@ -224,6 +223,11 @@ is best explained visually:
 
 - Use the `show` operator without any arguments to see all aspects of a node
   instead of just the specified aspect.
+
+- The new `apply` operator includes a pipeline defined in an external file. For
+  example, `apply frobnify` will search for a file named `frobnify.tql`, first
+  in the current directory, and then in the `apply/` sub-directories of the
+  config directory of Tenzir.
 
 We provide a full list of changes [in our changelog](/changelog#v460).
 
