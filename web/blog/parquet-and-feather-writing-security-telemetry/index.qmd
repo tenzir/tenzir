@@ -252,7 +252,9 @@ cleaned <- unified |>
   filter(schema %in% schemas_gt100k)
 
 # Helper function to format numbers with SI unit suffixes.
-fmt_si <- function(x) scales::label_number_si(accuracy = 0.1)(x)
+fmt_short <- function(x) {
+  scales::label_number(scale_cut = cut_short_scale(), accuracy = 0.1)(x)
+}
 ```
 
 ### Schemas
@@ -564,8 +566,8 @@ compression ratio in this region pretty constant across schemas. There's also no
 noticeable difference between Zstd level 1, 9, and 19.
 
 If we take pick a single point, e.g., `zeek.conn` with
-`r schemas |> filter(schema == "zeek.conn") |> pull(n) |> fmt_si()` events, we
-can confirm that the relative performance matches the results of our analysis
+`r schemas |> filter(schema == "zeek.conn") |> pull(n) |> fmt_short()` events,
+we can confirm that the relative performance matches the results of our analysis
 above:
 
 ```{r}

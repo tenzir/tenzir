@@ -5,10 +5,10 @@ Reads and writes lines with separated values.
 ## Synopsis
 
 ```
-csv
-ssv
-tsv
-xsv <field-sep> <list-sep> <null-value>
+csv [--allow-comments]
+ssv [--allow-comments]
+tsv [--allow-comments]
+xsv <field-sep> <list-sep> <null-value> [--allow-comments]
 ```
 
 ## Description
@@ -62,6 +62,10 @@ Specifies the string that separates list elements *within* a field.
 ### `<null-value>`
 
 Specifies the string that denotes an absent value.
+
+### `--allow-comments`
+
+Treat lines beginning with `'#'` as comments.
 
 ## Examples
 

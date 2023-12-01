@@ -307,11 +307,7 @@ caf::expected<caf::settings> to_settings(record config) {
   return to<caf::settings>(config);
 }
 
-} // namespace
-
-std::vector<std::filesystem::path>
-config_dirs(const caf::actor_system_config& config) {
-  const auto bare_mode = caf::get_or(config.content, "tenzir.bare-mode", false);
+auto config_dirs(bool bare_mode) -> std::vector<std::filesystem::path> {
   if (bare_mode)
     return {};
   auto result = std::vector<std::filesystem::path>{};
@@ -324,6 +320,18 @@ config_dirs(const caf::actor_system_config& config) {
   }
   result.push_back(detail::install_configdir());
   return result;
+}
+
+} // namespace
+
+std::vector<std::filesystem::path>
+config_dirs(const caf::actor_system_config& config) {
+  return config_dirs(caf::get_or(config.content, "tenzir.bare-mode", false));
+}
+
+auto config_dirs(const record& cfg) -> std::vector<std::filesystem::path> {
+  auto fallback = false;
+  return config_dirs(get_or(cfg, "tenzir.bare-mode", fallback));
 }
 
 const std::vector<std::filesystem::path>& loaded_config_files() {
@@ -352,10 +360,10 @@ configuration::configuration() {
   factory<synopsis>::initialize();
   factory<value_index>::initialize();
   // Register Arrow extension types.
-  auto register_extension_types =
-    []<concrete_type... Ts>(caf::detail::type_list<Ts...>) {
-    (static_cast<void>(Ts::arrow_type::register_extension()), ...);
-  };
+  auto register_extension_types
+    = []<concrete_type... Ts>(caf::detail::type_list<Ts...>) {
+        (static_cast<void>(Ts::arrow_type::register_extension()), ...);
+      };
   register_extension_types(
     caf::detail::tl_filter_t<concrete_types, has_extension_type>{});
 }

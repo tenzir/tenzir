@@ -99,6 +99,20 @@ tests:
       - command: exec "from @./data/suricata/eve.json | head 2"
       - command: exec "from @./data/zeek/http.log.gz read zeek-tsv | head 2"
 
+  Apply operator:
+    tags: [pipelines]
+    steps:
+      - command: exec "apply @./queries/some_source | write json"
+      - command: exec "apply @./queries/some_source.tql | write json"
+      - command: exec "apply /tmp/does_not_exist"
+        expected_result: error
+      - command: exec "apply does_not_exist.tql"
+        expected_result: error
+      # This test works, but it includes the path to the file in the error
+      # message, which makes the output change.
+      # - command: exec "apply @./queries/from_unknown_file.tql"
+      #   expected_result: error
+
   Conn log counting:
     tags: [node, counting, zeek]
     steps:
@@ -1187,3 +1201,21 @@ tests:
         input: data/syslog/syslog.log
       - command: exec 'from - read syslog'
         input: data/syslog/syslog-rfc3164.log
+
+  CSV with comments:
+    tags: [pipelines, csv]
+    steps:
+      - command: exec 'from - read csv --allow-comments'
+        input: data/csv/ipblocklist.csv
+
+  XSV Format:
+    tags: [pipelines, xsv]
+    steps:
+      - command: exec 'read csv | extend schema=#schema | write csv'
+        input: data/xsv/sample.csv
+      - command: exec 'read ssv | extend schema=#schema | write ssv'
+        input: data/xsv/sample.ssv
+      - command: exec 'read tsv | extend schema=#schema | write tsv'
+        input: data/xsv/sample.tsv
+      - command: exec 'read csv'
+        input: data/xsv/nulls-and-escaping.csv

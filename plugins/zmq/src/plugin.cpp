@@ -28,13 +28,13 @@ constexpr auto default_endpoint = "tcp://127.0.0.1:5555";
 struct saver_args {
   std::optional<located<std::string>> endpoint;
   std::optional<location> connect;
-  std::optional<location> bind;
+  std::optional<location> listen;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, saver_args& x) -> bool {
     return f.object(x)
       .pretty_name("saver_args")
-      .fields(f.field("endpoint", x.endpoint), f.field("bind", x.bind),
+      .fields(f.field("endpoint", x.endpoint), f.field("listen", x.listen),
               f.field("connect", x.connect));
   }
 };
@@ -43,14 +43,14 @@ struct loader_args {
   std::optional<located<std::string>> endpoint;
   std::optional<located<std::string>> filter;
   std::optional<location> connect;
-  std::optional<location> bind;
+  std::optional<location> listen;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, loader_args& x) -> bool {
     return f.object(x)
       .pretty_name("loader_args")
       .fields(f.field("endpoint", x.endpoint), f.field("filter", x.filter),
-              f.field("bind", x.bind), f.field("connect", x.connect));
+              f.field("listen", x.listen), f.field("connect", x.connect));
   }
 };
 
@@ -158,8 +158,8 @@ public:
     try {
       auto result = engine{::zmq::socket_type::sub};
       auto endpoint = args.endpoint ? args.endpoint->inner : default_endpoint;
-      if (args.bind)
-        result.bind(endpoint);
+      if (args.listen)
+        result.listen(endpoint);
       else
         result.connect(endpoint);
       auto filter = args.filter ? args.filter->inner : "";
@@ -177,7 +177,7 @@ public:
       if (args.connect)
         result.connect(endpoint);
       else
-        result.bind(endpoint);
+        result.listen(endpoint);
       return result;
     } catch (const ::zmq::error_t& e) {
       return make_error(e);
@@ -293,8 +293,8 @@ private:
     socket_.set(::zmq::sockopt::linger, 0);
   }
 
-  void bind(const std::string& endpoint) {
-    TENZIR_VERBOSE("binding to endpoint {}", endpoint);
+  void listen(const std::string& endpoint) {
+    TENZIR_VERBOSE("listening to endpoint {}", endpoint);
     socket_.bind(endpoint);
   }
 
@@ -369,8 +369,8 @@ public:
     result += fmt::format(" {}", args_.endpoint);
     if (args_.filter)
       result += fmt::format(" --filter {}", args_.filter->inner);
-    if (args_.bind)
-      result += " --bind";
+    if (args_.listen)
+      result += " --listen";
     if (args_.connect)
       result += " --connect";
     return result;
@@ -441,14 +441,14 @@ public:
     auto args = loader_args{};
     parser.add(args.endpoint, "<endpoint>");
     parser.add("-f,--filter", args.filter, "<prefix>");
-    parser.add("-b,--bind", args.bind);
+    parser.add("-l,--listen", args.listen);
     parser.add("-c,--connect", args.connect);
     parser.parse(p);
-    if (args.bind && args.connect)
-      diagnostic::error("both --bind and --connect provided")
-        .primary(*args.bind)
+    if (args.listen && args.connect)
+      diagnostic::error("both --listen and --connect provided")
+        .primary(*args.listen)
         .primary(*args.connect)
-        .hint("--bind and --connect are mutually exclusive")
+        .hint("--listen and --connect are mutually exclusive")
         .throw_();
     if (args.endpoint && args.endpoint->inner.find("://") == std::string::npos)
       args.endpoint->inner = fmt::format("tcp://{}", args.endpoint->inner);
@@ -462,14 +462,14 @@ public:
       fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
     auto args = saver_args{};
     parser.add(args.endpoint, "<endpoint>");
-    parser.add("-b,--bind", args.bind);
+    parser.add("-l,--listen", args.listen);
     parser.add("-c,--connect", args.connect);
     parser.parse(p);
-    if (args.bind && args.connect)
-      diagnostic::error("both --bind and --connect provided")
-        .primary(*args.bind)
+    if (args.listen && args.connect)
+      diagnostic::error("both --listen and --connect provided")
+        .primary(*args.listen)
         .primary(*args.connect)
-        .hint("--bind and --connect are mutually exclusive")
+        .hint("--listen and --connect are mutually exclusive")
         .throw_();
     if (args.endpoint
         and not std::regex_match(args.endpoint->inner,

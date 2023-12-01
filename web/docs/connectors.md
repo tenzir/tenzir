@@ -23,19 +23,19 @@ to <connector> [write <format>]
 If the format is omitted, the default depends on the connector.
 
 Alternatively, instead of a connector, the `from` and `to` operators
-can take a URI or a filesystem path directly:
+can take a URL or a filesystem path directly:
 
 ```
-from <uri> [read <format>]
+from <url> [read <format>]
 from <path> [read <format>]
 
-to <uri> [write <format>]
+to <url> [write <format>]
 to <path> [write <format>]
 ```
 
-When given a URI, the scheme is used to determine the connector to use.
-For example, if the URI scheme is `http`, the [`http`](connectors/http.md) connector is used.
-The [`gcs`](connectors/gcs.md) connector is an exception, as it will get used if the URI scheme is `gs`.
+When given a URL, the scheme is used to determine the connector to use.
+For example, if the URL scheme is `http`, the [`http`](connectors/http.md) connector is used.
+The [`gcs`](connectors/gcs.md) connector is an exception, as it will get used if the URL scheme is `gs`.
 
 ```
 from https://example.com/foo.json

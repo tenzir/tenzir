@@ -7,13 +7,13 @@ from enum import Enum, auto
 from typing import AsyncIterable
 
 import pyarrow as pa
-import pytenzir.utils.arrow
-import pytenzir.utils.config
-import pytenzir.utils.logging
+import tenzir.utils.arrow
+import tenzir.utils.config
+import tenzir.utils.logging
 
 from .cli import CLI
 
-logger = pytenzir.utils.logging.get(__name__)
+logger = tenzir.utils.logging.get(__name__)
 
 
 class ExportMode(Enum):

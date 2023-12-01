@@ -81,7 +81,7 @@ constexpr auto SPEC_V0 = R"_(
 /serve:
   post:
     summary: Return data from a pipeline
-    description: Returns events from an existing pipeline. The pipeline definition must include a serve operator.
+    description: "Returns events from an existing pipeline. The pipeline definition must include a serve operator. By default, the endpoint performs long polling (`timeout: 2s`) and returns events as soon as they are available (`min_events: 1`)."
     requestBody:
       description: Body for the serve endpoint
       required: true
@@ -960,12 +960,13 @@ public:
     return node->spawn(serve_manager);
   }
 
-  auto openapi_specification(api_version version) const -> data override {
+  auto openapi_endpoints(api_version version) const -> record override {
     if (version != api_version::v0)
       return tenzir::record{};
     auto result = from_yaml(SPEC_V0);
     TENZIR_ASSERT(result);
-    return *result;
+    TENZIR_ASSERT(caf::holds_alternative<record>(*result));
+    return caf::get<record>(*result);
   }
 
   auto rest_endpoints() const -> const std::vector<rest_endpoint>& override {

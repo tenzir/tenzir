@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "pytenzir"
+name = "tenzir"
 version = "4.5.0"
 description = "A security telemetry engine for detection and response"
 authors = ["Tenzir <engineering@tenzir.com>"]
@@ -45,8 +45,8 @@ operator = ["python-box", "pandas"]
 thehive = ["module", "aiohttp"]
 
 [tool.poetry.scripts]
-app-thehive-run = { callable = "pytenzir.apps.thehive:run", extras = ["thehive"] }
-app-thehive-count-alerts = { callable = "pytenzir.apps.thehive:count_alerts", extras = ["thehive"] }
+app-thehive-run = { callable = "tenzir.apps.thehive:run", extras = ["thehive"] }
+app-thehive-count-alerts = { callable = "tenzir.apps.thehive:count_alerts", extras = ["thehive"] }
 
 [tool.mypy]
 python_version = "3.10"

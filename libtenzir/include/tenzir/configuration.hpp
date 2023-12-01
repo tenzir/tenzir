@@ -10,6 +10,8 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/aliases.hpp"
+
 #include <caf/actor_system_config.hpp>
 
 #include <filesystem>
@@ -22,6 +24,8 @@ namespace tenzir {
 /// @param cfg The actor system config to introspect.
 std::vector<std::filesystem::path>
 config_dirs(const caf::actor_system_config& cfg);
+
+auto config_dirs(const record& cfg) -> std::vector<std::filesystem::path>;
 
 /// @returns The loaded config files of the application.
 /// @note This function is not threadsafe.

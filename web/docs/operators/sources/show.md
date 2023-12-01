@@ -26,6 +26,7 @@ Available aspects:
 
 - `config`: shows all current configuration options.
 - `connectors`: shows all available [connectors](../../connectors.md).
+- `contexts`: shows all available contexts.
 - `fields`: shows all fields of existing tables at a remote node.
 - `formats`: shows all available [formats](../../formats.md).
 - `nics`: shows all network interfaces for the [`nic`](../../connectors/nic.md)
