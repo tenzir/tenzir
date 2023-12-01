@@ -1,4 +1,4 @@
-When using `from <URI>` and `to <URI>` without specifying the format explicitly
+When using `from <URL>` and `to <URL>` without specifying the format explicitly
 using a `read`/`write` argument, the default format is determined by the file
 extension for all loaders and savers, if possible. Previously, that was only
 done when using the `file` loader/saver. Additionally, if the file name would

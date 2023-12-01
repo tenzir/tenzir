@@ -10,7 +10,7 @@ operator. Only use this if you need to operate on raw bytes.
 ## Synopsis
 
 ```
-load <uri>
+load <url>
 load <path>
 load <connector>
 ```
@@ -38,7 +38,7 @@ Read bytes from stdin:
 load stdin
 ```
 
-Read bytes from the URI `https://example.com/file.json`:
+Read bytes from the URL `https://example.com/file.json`:
 
 ```
 load https://example.com/file.json

@@ -44,7 +44,7 @@ credentials.
 ## Examples
 
 Read JSON from an object `log.json` in the folder `logs` in `bucket`.
-Note how the `gcs` loader is used automatically, when the URI scheme is `gs://`.
+Note how the `gcs` loader is used automatically, when the URL scheme is `gs://`.
 
 ```
 from gcs gs://bucket/logs/log.json
