@@ -105,7 +105,7 @@ public:
       for (auto& [result_ty, result] : results) {
         auto sub = subslice(slice, next, next + result->length());
         next += result->length();
-        co_yield transform_columns(
+        auto final_result = transform_columns(
           sub, {
                  {
                    *index,
@@ -117,6 +117,7 @@ public:
                    },
                  },
                });
+        co_yield std::move(final_result);
       }
     }
   }
