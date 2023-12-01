@@ -61,6 +61,7 @@ def upload_packages [
       cp -v $tgz ./packages/tarball
     }
     if $git_tag != null {
+      let os = (uname -s)
       if $os == "Linux" {
         cp ($debs | get 0) $"($name)-amd64-linux.deb"
         print $"::attaching ($name)-amd64-linux.deb to ($git_tag)"
