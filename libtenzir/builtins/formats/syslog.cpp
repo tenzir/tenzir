@@ -82,7 +82,8 @@ auto impl(generator<std::optional<std::string_view>> lines,
       }
       if (not builder->add(legacy_msg.facility, legacy_msg.severity,
                            legacy_msg.timestamp, legacy_msg.host,
-                           legacy_msg.tag, legacy_msg.content)) {
+                           legacy_msg.app_name, legacy_msg.process_id,
+                           legacy_msg.content, legacy_msg.message)) {
         diagnostic::error(
           "syslog parser (RFC 3164) failed to produce table slice")
           .note("line number {}", line_nr)

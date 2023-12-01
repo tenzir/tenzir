@@ -52,7 +52,7 @@ is currently not included in the resulting schema.
 Here's an example of a syslog message in RFC 3164 format:
 
 ```
-<34> Nov 16 14:55:56 mymachine PROGRAM: Freeform message
+<34>Nov 16 14:55:56 mymachine PROGRAM: Freeform message
 ```
 
 With this input, the parser will produce the following output, with the schema name `syslog.rfc3164`:
@@ -63,8 +63,10 @@ With this input, the parser will produce the following output, with the schema n
   "severity": 2,
   "timestamp": "Nov 16 14:55:56",
   "hostname": "mymachine",
-  "tag": "PROGRAM",
-  "content": "Freeform message"
+  "app_name": "PROGRAM",
+  "process_id": null,
+  "content": "Freeform message",
+  "message": "PROGRAM: Freeform message"
 }
 ```
 

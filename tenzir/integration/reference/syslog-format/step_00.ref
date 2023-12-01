@@ -54,7 +54,14 @@
   "message": null
 }
 {
-  "syslog_message": "2003-10-11T22:14:15.003Z mymachineexamplecom evntslog - ID47 [exampleSDID@32473 iut=\"5\" eventSource=\"Applic\\\\ation\" eventID=\"1011\"][examplePriority@32473 class=\"high\"]"
+  "facility": null,
+  "severity": null,
+  "timestamp": "2003-10-11T22:14:15.003000",
+  "hostname": "mymachineexamplecom",
+  "app_name": null,
+  "process_id": null,
+  "content": "evntslog - ID47 [exampleSDID@32473 iut=\"5\" eventSource=\"Applic\\\\ation\" eventID=\"1011\"][examplePriority@32473 class=\"high\"]",
+  "message": "evntslog - ID47 [exampleSDID@32473 iut=\"5\" eventSource=\"Applic\\\\ation\" eventID=\"1011\"][examplePriority@32473 class=\"high\"]"
 }
 {
   "facility": 5,
