@@ -4,13 +4,29 @@ sidebar_position: 2
 
 # Build a Security Data Lake
 
+:::info Terminology: Data Warehouse → Data Lake → Data Lakehouse
+**Data warehouses** are systems primarily for structured data, excelling in
+decision support and business intelligence applications, with coupled storage
+and compute, but less suited for unstructured or semi-structured data. **Data
+lakes** emerged as repositories for raw data in various formats, including
+unstructured data; they decouple storage and compute, offering flexibility and
+scalability but lack critical features like transaction support. **Data
+lakehouses** combine the strengths of both, with data warehouse-like structures
+and management features on top of low-cost cloud storage. They support
+unstructured and structured data, diverse workloads, and maintain a decoupled
+architecture while integrating key features of data warehouses.
+
+Data lake and lakehouse are often used interchangeably as open-source lakehouse
+metadata layers like [Delta Lake](https://delta.io),
+[Iceberg](https://iceberg.apache.org), and [Hudi](https://hudi.apache.org)
+emerge.
+:::
+
 A security data lake is an intriguing value proposition. If well-architected, it
 can lead to a highly cost-efficient and scalable telemetry engine. As
 organizations become more comfortable storing massive amounts of sensitive data
-in the public cloud, [data
-gravity](https://ventureinsecurity.net/p/more-musings-on-data-gravity-platform)
-increases and renders the nearby compute services for security-centric workloads
-highly attractive.
+in the public cloud, [data gravity][haleliuk23-04] increases and renders the
+nearby compute services for security-centric workloads highly attractive.
 
 However, building security data lake is a non-trivial engineering undertaking.
 Most detection and response workloads rely on structured data, requiring
@@ -58,14 +74,6 @@ However, building such a lake is heavy lifting and [can fail in many
 ways][chuvakin22-10]. A key challenge is the translation of the complex security
 use cases to the abstractions provided by a data lake.
 
-:::info  Theseus Ship: Building yet another SIEM?
-With a data lake as engine, centralized logging through ETL pipelines, and
-custom-built detection and response use cases on top, the outcome closely
-resembles a Security Information and Event Management (SIEM). When the entire
-breadth of SIEM use cases is in fact desirable, it's worthwhile pausing and
-reflecting on the mission of the endeavor.
-:::
-
 ### Forgetting the security transport layer
 
 Populating a security data lake requires a flexible collection, transformation,
@@ -100,29 +108,27 @@ correlation can cheaply run the ETL layer itself.
 
 At their core, data lakes store data typically in columnar form, e.g., [Apache
 Parquet](https://parquet.apache.org). This raw table format has several
-limitations that "lakehouse layers" attempt to fix, such as schema evolution,
-time travel, partitioning, compaction, and record deletion. [Delta
-Lake](https://delta.io), [Iceberg](https://iceberg.apache.org), and
-[Hudi](https://hudi.apache.org) are prominent open-source examples.
+limitations that lakehouse metadata layers attempt to fix, such as schema
+evolution, time travel, partitioning, compaction, and record deletion.
 
-A big part of a data lake architecture is that storage and compute are
-decoupled. When building on top of open at-rest formats, like Parquet, this
-allows for choice of processing engine, e.g., [DuckDB](https://duckdb.org),
+A big part of a lake architecture is that storage and compute are decoupled.
+When building on top of open at-rest formats, like Parquet, this allows for
+choice of popular processing engines, e.g., [DuckDB](https://duckdb.org),
 [Clickhouse](https://clickhouse.com), or [polars](https://pola.rs). The
-decoupling benefits also apply to the highly integrated closed stacks of cloud
-services, which in fact can be more cost-efficient to operate when engineering
-resources are scarce.
+decoupling benefits naturally apply to the highly integrated cloud provider
+services, which can be operated more cost-efficiently when engineering resources
+are scarce.
 
-But even with a lakehouse in place, making it *security* is non-trivial. For
-example, managing schemas are still hard, despite schema evolution. What a lake
-provides as abstraction for evolving schema is a monotonically increasing
-version. This linear time travel feature supports querying data at a given time,
-but that's not what we want for manual threat hunting and automatic
-retrospective detection. Instead, we want to query *all compatible* data. In
-other words, today's linear schema evolution is not suitable for typical
-detection and response workloads and requires custom engineering.
+But even with a lake in place, making it *security* is non-trivial. For example,
+managing schemas are still hard, despite schema evolution. What a lake provides
+as abstraction for evolving schema is a monotonically increasing version. This
+linear time travel feature supports querying data at a given time, but that's
+not what we want for manual threat hunting and automatic retrospective
+detection. Instead, we want to query *all compatible* data. In other words,
+today's linear schema evolution is not suitable for typical detection and
+response workloads and requires custom engineering.
 
-## Solution: Tenzir as Security Data Lake Transport Layer
+## Solution: Tenzir as a building block for your Security Data Lake
 
 Tenzir's Security Data Pipelines provide the ETL layer for your lake, taking
 care of data collection, reshaping, filtering, and normalization. Tenzir
@@ -160,6 +166,10 @@ The high customizability via plugins supports implementing your own operators,
 e.g., to deploy machine-learning models for in-band inference, perform feature
 extraction to obtain word/sentence/graph/image embeddings, or simply
 integrate a third-party library via C++ or Python.
+
+In summary, Tenzir is much more than just connecting sources and sinks. You get
+a vehicle for executing security-specific workloads at a location of your
+choice.
 
 ### Full control over data normalization
 
@@ -217,8 +227,8 @@ solutions from the data ecosystem.
   Actually…][chuvakin22-10]. October 21, 2022.
 
 - Ross Haleliuk. [More musings on data gravity, platform play, and the growing
-  role of data lakes and cloud providers in
-  cybersecurity](https://ventureinsecurity.net/p/more-musings-on-data-gravity-platform). April 17, 2023.
+  role of data lakes and cloud providers in cybersecurity][haleliuk23-04]. April
+  17, 2023.
 
 - Ross Haleliuk. [Security is about data: how different approaches are fighting
   for security data and what the cybersecurity data stack of the future is
@@ -229,11 +239,6 @@ solutions from the data ecosystem.
   Monitoring](https://jacknaglieri.substack.com/p/the-transition-from-monolithic-siems).
   October 23, 2023.
 
-- Oliver Rochford. [What evolves never dies: Why SIEM will eat your data lake in
-  the long
-  run](https://www.linkedin.com/pulse/what-evolves-never-dies-why-siem-eat-your-data-lake-long-rochford/).
-  October 3, 2023.
-
 [chuvakin22-10]: https://medium.com/anton-on-security/why-your-security-data-lake-project-will-well-actually-78e0e360c292
-
+[haleliuk23-04]: https://ventureinsecurity.net/p/more-musings-on-data-gravity-platform
 [haleliuk23-09]: https://ventureinsecurity.net/p/security-is-about-data-how-different
