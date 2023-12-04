@@ -2,7 +2,7 @@
 title: Contextualization Made Simple
 authors: [mavam]
 date: 2023-12-05
-tags: [context, enrich, node, pipelines]
+tags: [context, enrich, node, pipelines, suricata, threat-intel, iocs]
 comments: true
 ---
 
@@ -29,7 +29,7 @@ what we really need.
 1. **Dynamic context state updates**. In security, we're especially interested
    in use cases where the enrichment context is dynamic and changes over time.
    For example, the threat landscape is often represented in the form of
-   observables, IoCs, or TTPs. Their utility quickly decays over time. Many
+   observables, IOCs, or TTPs. Their utility quickly decays over time. Many
    indicators are only useful for a couple of days, as attacker infrastructure
    can be ephemeral and change rapidly. As a result, we need the ability to
    change our context state to keep a useful representation.
@@ -51,15 +51,16 @@ A corollary of (3) is that we would like to support various *lookup modes*:
 
 We define these lookup modes as follows:
 
-1. **In-band**. The context data is colocated with the dataflow where it should
+1. **In-band**. The context data is co-located with the dataflow where it should
    act upon. This is especially important for high-velocity dataflows where
-   there's a small time budget to perform an enrichment . For example, we've
-   seen network monitors like Zeek and Suricata links produce structured logs at
-   250k EPS, which would mean that enrichment cannot take more than 4
-   microseconds per event.
+   there's a small time budget to perform an enrichment. For example, we've seen
+   network monitors like [Zeek](https://zeek.org) and
+   [Suricata](https://suricata.io) links produce structured logs at 250k EPS,
+   which would mean that enrichment cannot take more than 4 microseconds
+   per event.
 2. **Out-of-band**. The context data is far away from the to-be-contextualized
    dataflow. We encounter this mode when the context is intellectual property,
-   when the context state is massive and maintenance is complex,  or when it's
+   when the context state is massive and maintenance is complex, or when it's
    created on-the-fly based on request by a service. A REST API is the most
    common example.
 3. **Hybrid**. When both performance matters and state is not possible to ship
@@ -79,23 +80,18 @@ We define these lookup modes as follows:
 As principled engineers, we took those requirements to the drawing board and
 built a solution that meets all of them. Two foundations of the Tenzir
 architecture made it possible to arrive at an elegant solution that results in a
-simple yet powerful user experience : (1) a pipeline-based data flow model, and
+simple-yet-powerful user experience: (1) a pipeline-based data flow model, and
 (2) the ability to manage state at continuously running Tenzir nodes. Let's walk
 through a typical use case that explains the building blocks.
 
 :::info Example Scenario
 During a compromise assessment, the security engineer Pada Wan is tasked with
-finding out whether the constituency  performs any connections to known
-command-and-control servers. As an intelligence-driven trained mind, Pada
-identifies that  threat actors targeting the constituency use the malware
-families Dridex, Heodo (aka Emotet), TrickBot, QakBot (aka QuakBot / Qbot) and
-BazarLoader (aka BazarBackdoor). Pada then finds the OSINT feed [Feodo
-Tracker](https://feodotracker.abuse.ch/) that tracks attacker infrastructure of
-these malware families.
-
-The organization uses a combination of Zeek and Suricata to monitor their
-networks. Pada now wants to leverage flow logs to identify possible connections
-to botnets. How do they bring the Feodo data to the network logs?
+finding out whether the constituency initiates any connections to known
+command-and-control servers. Pada takes the
+[ThreatFox](https://threatfox.abuse.ch/) OSINT feed, a community malware where
+practioners can share IOCs containing IPs, domains, URLs, and hashes. Pada's
+organization uses Suricata to monitor their networks and now wants to leverage
+DNS logs to identify possible lookups to known attacker infrastructure.
 
 Pada, follwing first principles, remembers: *"Through a pipeline strong and wise,
 safe the constituency will stay, hmm."*
@@ -103,89 +99,241 @@ safe the constituency will stay, hmm."*
 
 ### Create a context
 
-Let's first create a **context** instance. This requires a running Tenzir node.
+First create a **context** in a Tenzir node by running the following pipeline:
 
 ```
-context create feodo --type=lookup-table
+context create threatfox lookup-table
 ```
 
-The `context` operator manages context instances. The **context type** here is
-`lookup-table`, which is a key-value mapping where the key is used to perform
-the context lookup and the value can be any structured additional data.
+This yields the following output:
 
-### Populate the context
+```json
+{
+  "num_entries": 0,
+  "name": "threatfox"
+}
+```
 
-Next we fill the context with the contents of the Feodo blocklist:
+The `context` operator manages context instances. It takes a context name and
+type as positional arguments. The `lookup-table` type is a key-value mapping
+where a key is used to perform the context lookup and the value can be any
+structured additional data.
+
+### Load data into the context
+
+Next we fill the context with the contents of the ThreatFox feed. Here's the how
+we query the API with a HTTP POST request:
 
 ```
-load https://feodotracker.abuse.ch/downloads/ipblocklist_recommended.json
-| parse json
-| context update feodo
+from https://threatfox-api.abuse.ch/api/v1/ query=get_iocs days:=1
+```
+
+The response looks as follows:
+
+```json
+{
+  "query_status": "ok",
+  "data": [
+    {
+      "id": "1209500",
+      "ioc": "8.219.229.99:4433",
+      "threat_type": "botnet_cc",
+      "threat_type_desc": "Indicator that identifies a botnet command&control server (C&C)",
+      "ioc_type": "ip:port",
+      "ioc_type_desc": "ip:port combination that is used for botnet Command&control (C&C)",
+      "malware": "win.cobalt_strike",
+      "malware_printable": "Cobalt Strike",
+      "malware_alias": "Agentemis,BEACON,CobaltStrike,cobeacon",
+      "malware_malpedia": "https://malpedia.caad.fkie.fraunhofer.de/details/win.cobalt_strike",
+      "confidence_level": 80,
+      "first_seen": "2023-12-04 16:00:16 UTC",
+      "last_seen": null,
+      "reference": null,
+      "reporter": "malpulse",
+      "tags": null
+    },
+    {
+    ..
+    },
+    {
+    ..
+    }
+  ]
+}
+```
+
+Unfortunately the data is not yet in right shape yet. We need one IOC event per
+lookup table entry, but the above is one giant event with all IOCs in the nested
+`data` array. We can get to the desired shape with the
+[`yield`](/operators/transformations/yield) operator hoists the array elements
+into top-level events. Let's take a look at one of the events:
+
+```
+from https://threatfox-api.abuse.ch/api/v1/ query=get_iocs days:=1
+| yield data[]
+| head 1
+```
+
+```json
+{
+  "id": "1209500",
+  "ioc": "8.219.229.99:4433",
+  "threat_type": "botnet_cc",
+  "threat_type_desc": "Indicator that identifies a botnet command&control server (C&C)",
+  "ioc_type": "ip:port",
+  "ioc_type_desc": "ip:port combination that is used for botnet Command&control (C&C)",
+  "malware": "win.cobalt_strike",
+  "malware_printable": "Cobalt Strike",
+  "malware_alias": "Agentemis,BEACON,CobaltStrike,cobeacon",
+  "malware_malpedia": "https://malpedia.caad.fkie.fraunhofer.de/details/win.cobalt_strike",
+  "confidence_level": 80,
+  "first_seen": "2023-12-04 16:00:16 UTC",
+  "last_seen": null,
+  "reference": null,
+  "reporter": "malpulse",
+  "tags": null
+}
+```
+
+Yes, this is something the `context` update can work with. Now that the data is
+in the right shape, all we need is piping it to `context update`:
+
+```
+from https://threatfox-api.abuse.ch/api/v1/ query=get_iocs days:=1
+| yield data[]
+| where ioc_type == "domain"
+| context update threatfox --key ioc
 ```
 
 This outputs:
 
 ```json
-{"to": "do"}
+{
+  "num_entries": 57,
+  "name": "threatfox"
+}
 ```
 
-The result means that XXX entries have been added successfully to the context
-in. We can always inspect existings contexts using `shows contexts`:
+That is, 57 entries have been added successfully to the `threatfox` context.
+
+### Enrich with the context
+
+We've now loaded the context and can use it in other pipelines. As we're in a
+compromise assessment as example, we're interested in a realtime view of the
+network traffic. So we'd like to hook the feed of all flow logs streaming into a
+Tenzir node. Let's say we have a Suricata `eve.json` file that we follow
+continuously and import into a running node:
 
 ```
-show contexts
-| where #schema == "tenzir.context.lookup-table"
-| yield entries[]
-```
-
-### Use the context
-
-We've now preloaded the context and can use it in any other pipeline. As we're
-in a compromise assessment as example, we're interested in a realtime view of
-the network traffic. So we'd like to hook the feed of all flow logs streaming
-into a Tenzir node:
-
-```
-export --live
-| where #schema == "suricata.flow"
-| enrich feodo key=dest_ip
-| where key != null
-| fluent-bit slack webhook=IR_TEAM_SLACK_CHANNEL_URL
-```
-
-This pipeline hooks into the full feed using [`export
---live`](/operators/sources/export), selects the Suricata flow events using
-[]`where`](/operators/transformations/where), and pushes that subset through
-`feodo` context using the [`enrich`](/next/operators/transformations/enrich)
-operator. The [`fluent-bit`](/operators/sinks/fluent-bit) operator closes the
-pipeline by forwarding the matching events to the Slack channel of the
-incident response team.
-
-For `export --live` to actually produce something, you need to have set up an ingest pipeline of this form previously:
-
-```
-from /path/to/eve.sock --uds read suricata
+from file --follow /suricata/eve.json read suricata
 | import
 ```
 
-## Summary
+Now we hook into the DNS live feed for enrichment, keep only the matches, and
+forward them to a Slack channel via [`fluent-bit`](/operators/sinks/fluent-bit):
+
+```
+export --live
+| where #schema == "suricata.dns"
+| enrich threatfox --field dns.rrname
+| where threatfox.key != null
+| fluent-bit slack webhook=IR_TEAM_SLACK_CHANNEL_URL
+```
+
+In more detail:
+- `export --live` hooks into the import data feed at the node
+- `where #schema == "suricata.dns"` restricts the feed to Suricata DNS events
+- `enrich threatfox --field dns.rrname` joins the lookup table with the RR name
+  of the DNS request
+- `where threatfox.key != null ` ignores non-matching enrichments
+- `fluent-bit slack webhook=IR_TEAM_SLACK_CHANNEL_URL` sends the events to a
+  Slack channel
+
+One such matching enrichment may looks like this:
+
+```json
+{
+  "timestamp": "2021-11-17T16:57:42.389824",
+  "flow_id": 1542499730911936,
+  "pcap_cnt": 3167,
+  "vlan": null,
+  "in_iface": null,
+  "src_ip": "45.85.90.164",
+  "src_port": 56462,
+  "dest_ip": "198.71.247.91",
+  "dest_port": 53,
+  "proto": "UDP",
+  "event_type": "dns",
+  "community_id": null,
+  "dns": {
+    "version": null,
+    "type": "query",
+    "id": 1,
+    "flags": null,
+    "qr": null,
+    "rd": null,
+    "ra": null,
+    "aa": null,
+    "tc": null,
+    "rrname": "bza.fartit.com",
+    "rrtype": "RRSIG",
+    "rcode": null,
+    "ttl": null,
+    "tx_id": 0,
+    "grouped": null,
+    "answers": null
+  },
+  "threatfox": {
+    "key": "bza.fartit.com",
+    "context": {
+      "id": "1209087",
+      "ioc": "bza.fartit.com",
+      "threat_type": "payload_delivery",
+      "threat_type_desc": "Indicator that identifies a malware distribution server (payload delivery)",
+      "ioc_type": "domain",
+      "ioc_type_desc": "Domain name that delivers a malware payload",
+      "malware": "apk.irata",
+      "malware_printable": "IRATA",
+      "malware_alias": null,
+      "malware_malpedia": "https://malpedia.caad.fkie.fraunhofer.de/details/apk.irata",
+      "confidence_level": 100,
+      "first_seen": "2023-12-03 14:05:20 UTC",
+      "last_seen": null,
+      "reference": "",
+      "reporter": "onecert_ir",
+      "tags": [
+        "irata"
+      ]
+    },
+    "timestamp": "2023-12-04T13:52:49.043157"
+  }
+}
+```
+
+Note the new field `threatfox` that is the context name. The `key` that matched
+has the value `bza.fartit.com`, which is also `dns.rrname`. There's also a
+`timestamp` field when the enrichment took place, and the full data that we
+loaded into the context under a given key.
+
+### Summary
 
 Let's recap what we did:
 
-1. Create a context via `context create` that is a lookup table
-2. Populate the context via `context update` with the Feodo blocklist
-3. Use the context via `enrich`
-4. Forward the matches to a Slack channel.
+1. Create a context via `context create` that is a lookup table.
+2. Populate the context via `context update` with the ThreatFox OSINT feed.
+3. Use the context via `enrich` to filter matching events.
+4. Forward the enriched events to a Slack channel.
 
-The `enrich` pipeline uses a lookup table to perform an in-band enrichment that
-does not incur any noticeable performance overhead. We can visuallize this
-pipeline as follows:
+The `enrich` pipeline uses a lookup table to perform an in-band enrichment. Our
+first measurements indicate that there is no noticeable performance overhead.
+
+We can visualize this pipeline as follows:
 
 ![Contextualization Example](contextualization-example.excalidraw.svg)
 
 ## Comparison
 
-How is this diffeerent to others, e.g., Splunk, Elastic, and Sentinel? If you
+How is this different to others, e.g., Splunk, Elastic, and Sentinel? If you
 don't recall how these three work, go back to our [previous blog
 post](/blog/enrichment-complexity-in-the-wild).
 
@@ -201,7 +349,7 @@ post](/blog/enrichment-complexity-in-the-wild).
 
 3. **Extensibility**. This blog post showed only one context type, the lookup
    table. This covers the most common enrichment scenario. But you can implement
-   your own context types. A context plugin recieves the full pipeline dataflow,
+   your own context types. A context plugin receives the full pipeline dataflow,
    and as a developer, you get [Apache Arrow](https://arrow.apache.org) record
    batches. This columnar representation works seamlessly with many data tools.
 
