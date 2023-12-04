@@ -1,7 +1,7 @@
 ---
 title: Contextualization Made Simple
 authors: [mavam]
-date: 2023-12-05
+date: 2023-12-07
 tags: [context, enrich, node, pipelines, suricata, threat-intel, iocs]
 comments: true
 ---
