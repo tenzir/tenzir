@@ -15,7 +15,7 @@
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql/parser.hpp>
-#include <tenzir/tql2/lexer.hpp>
+#include <tenzir/tql2/parser.hpp>
 
 #include <caf/detail/stringification_inspector.hpp>
 #include <caf/json_writer.hpp>
@@ -35,6 +35,7 @@ struct exec_config {
   bool dump_ast = false;
   bool dump_diagnostics = false;
   bool dump_metrics = false;
+  bool tql2 = false;
 };
 
 auto add_implicit_source_and_sink(pipeline pipe, exec_config config)
@@ -266,21 +267,8 @@ void dump_diagnostics_to_stdout(std::span<const diagnostic> diagnostics,
   }
 }
 
-void print_node(std::span<tql2::parse_tree::node> nodes, size_t index,
-                size_t indent = 0) {
-  TENZIR_ASSERT(index < nodes.size());
-  auto& node = nodes[index];
-  fmt::print("{: >{}}", "", indent);
-  fmt::print("{} @ {}..{}\n", node.kind, node.begin, node.end);
-  auto child = node.first_child;
-  while (child) {
-    print_node(nodes, child, indent + 2);
-    child = nodes[child].right_sibling;
-  }
-}
-
-auto exec_impl(std::string content, std::unique_ptr<diagnostic_handler> diag,
-               const exec_config& cfg, caf::actor_system& sys)
+auto exec_impl2(std::string content, std::unique_ptr<diagnostic_handler> diag,
+                const exec_config& cfg, caf::actor_system& sys)
   -> caf::expected<void> {
   auto tokens = tql2::lex(content);
   if (cfg.dump_tokens) {
@@ -304,14 +292,23 @@ auto exec_impl(std::string content, std::unique_ptr<diagnostic_handler> diag,
       return {};
     }
   }
-  auto parsed = tql2::parse(tokens);
-  TENZIR_ASSERT(!parsed.nodes.empty());
+  auto parsed = tql2::parse(tokens, content, *diag);
+  if (diag->has_seen_error()) {
+    return ec::silent;
+  }
   if (cfg.dump_ast) {
-    print_node(parsed.nodes, 0);
+    fmt::println("{:#?}", parsed);
     return {};
   }
   return ec::unimplemented;
-#if 0
+}
+
+auto exec_impl(std::string content, std::unique_ptr<diagnostic_handler> diag,
+               const exec_config& cfg, caf::actor_system& sys)
+  -> caf::expected<void> {
+  if (cfg.tql2) {
+    return exec_impl2(std::move(content), std::move(diag), cfg, sys);
+  }
   auto parsed = tql::parse(std::move(content), *diag);
   if (not parsed) {
     return ec::silent;
@@ -324,7 +321,6 @@ auto exec_impl(std::string content, std::unique_ptr<diagnostic_handler> diag,
   }
   return exec_pipeline(tql::to_pipeline(std::move(*parsed)), sys,
                        std::move(diag), cfg);
-#endif
 }
 
 class diagnostic_handler_ref final : public diagnostic_handler {
@@ -365,6 +361,7 @@ auto exec_command(const invocation& inv, caf::actor_system& sys)
   cfg.implicit_events_source
     = caf::get_or(inv.options, "tenzir.exec.implicit-events-source",
                   cfg.implicit_events_source);
+  cfg.tql2 = caf::get_or(inv.options, "tenzir.exec.tql2", cfg.tql2);
   auto filename = std::string{};
   auto content = std::string{};
   if (as_file) {
@@ -426,7 +423,8 @@ public:
                           "(default: 'load file -')")
         .add<std::string>("implicit-events-source",
                           "implicit source for pipelines starting with events "
-                          "(default: 'from stdin read json'"));
+                          "(default: 'from stdin read json'")
+        .add<bool>("tql2", "use TQL version 2 (experimental)"));
     auto factory = command::factory{
       {"exec",
        [=](const invocation& inv, caf::actor_system& sys) -> caf::message {

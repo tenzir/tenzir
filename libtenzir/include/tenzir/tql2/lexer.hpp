@@ -18,9 +18,20 @@
 
 namespace tenzir::tql2 {
 
+namespace experiment {
+
+struct identifier : std::string {};
+struct integer : std::string {};
+enum class simple { lpar, rpar };
+struct token : variant<identifier, integer, simple> {};
+
+} // namespace experiment
+
 TENZIR_ENUM(
   /// TODO
   token_kind,
+  // keywords,
+  this_, // TODO
   // basics
   identifier,
   // ??
@@ -28,12 +39,12 @@ TENZIR_ENUM(
   // literals
   integer, real, true_, false_, null, string,
   // operators
-  pipe, logical_or, greater, dot, minus,
+  pipe, logical_or, greater, dot, minus, cmp_equals,
   // other punctuation
-  assign, equals, comma,
+  equal, comma, colon,
   // parenthesis
-  lpar, rpar,
-  // newlines
+  lpar, rpar, lbrace, rbrace,
+  // newline
   newline,
   // trivia
   whitespace, delim_comment, line_comment,
@@ -50,46 +61,17 @@ struct token {
 
 auto lex(std::string_view content) -> std::vector<token>;
 
-struct parse_tree {
-  struct node {
-    // TODO: Enum instead of string.
-    /// What this parse tree node represents.
-    std::string kind;
-    size_t begin{};
-    size_t end{};
-    /// Linked list of parse tree nodes. 0 means nothing.
-    size_t first_child = 0;
-    size_t right_sibling = 0;
-
-    friend auto inspect(auto& f, node& x) -> bool {
-      return f.object(x).fields(f.field("kind", x.kind),
-                                f.field("begin", x.begin),
-                                f.field("end", x.end),
-                                f.field("first_child", x.first_child),
-                                f.field("right_sibling", x.right_sibling));
-    }
-  };
-
-  std::vector<node> nodes;
-};
-
-auto parse(std::span<token> tokens) -> parse_tree;
-
 } // namespace tenzir::tql2
 
-template <>
-struct tenzir::enable_default_formatter<tenzir::tql2::parse_tree::node>
-  : std::true_type {};
+// template <>
+// struct fmt::formatter<tenzir::tql2::token> {
+//   constexpr auto parse(format_parse_context& ctx)
+//     -> format_parse_context::iterator {
+//     return ctx.begin();
+//   }
 
-template <>
-struct fmt::formatter<tenzir::tql2::token> {
-  constexpr auto parse(format_parse_context& ctx)
-    -> format_parse_context::iterator {
-    return ctx.begin();
-  }
-
-  auto format(const tenzir::tql2::token& x, format_context& ctx) const
-    -> format_context::iterator {
-    return fmt::format_to(ctx.out(), "{}:{}", to_string(x.kind), x.end);
-  }
-};
+//   auto format(const tenzir::tql2::token& x, format_context& ctx) const
+//     -> format_context::iterator {
+//     return fmt::format_to(ctx.out(), "{}:{}", to_string(x.kind), x.end);
+//   }
+// };

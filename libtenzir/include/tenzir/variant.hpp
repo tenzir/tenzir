@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/error.hpp"
 
@@ -25,8 +26,22 @@ class variant : public std::variant<Ts...> {
 public:
   using std::variant<Ts...>::variant;
 
+  template <class T>
+  static constexpr auto can_have = (std::same_as<T, Ts> || ...);
+
   template <class Inspector>
-  friend auto inspect(Inspector& f, variant& x) {
+  friend auto inspect(Inspector& f, variant& x) -> bool {
+    if (auto dbg = as_debug_writer(f)) {
+      return x.match([&]<class T>(const T& y) {
+        auto full_name = caf::detail::pretty_type_name(typeid(T));
+        auto name = full_name;
+        auto index = name.find_last_of('.');
+        if (index != std::string::npos) {
+          name = name.substr(index + 1);
+        }
+        return dbg->prepend("{} ", name) && dbg->apply(y);
+      });
+    }
     // Unlike `caf::inspector_access<std::variant<Ts...>>::apply(f, x)`, this
     // implementation does not need a CAF type-id, and it also works for
     // `caf::json_writer`. We use index-based serialization if the inspector
