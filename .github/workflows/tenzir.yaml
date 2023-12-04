@@ -828,58 +828,61 @@ jobs:
             cxx: g++-12
             package-suffix: Release-GCC
         plugin:
+          - name: Multiple
+            target: multiple
+            paths: [contrib/tenzir-plugins/matcher, contrib/tenzir-plugins/pipeline_manager, contrib/tenzir-plugins/context]
           - name: AMQP
             target: amqp
-            path: plugins/amqp
+            paths: [plugins/amqp]
           - name: Compaction
             target: compaction
-            path: contrib/tenzir-plugins/compaction
+            paths: [contrib/tenzir-plugins/compaction]
           - name: Context
             target: context
-            path: contrib/tenzir-plugins/context
+            paths: [contrib/tenzir-plugins/context]
           - name: Example Analyzer
             target: example-analyzer
-            path: examples/plugins/analyzer
+            paths: [examples/plugins/analyzer]
             debian-dependencies:
           - name: Kafka
             target: kafka
-            path: plugins/kafka
+            paths: [plugins/kafka]
           # - name: Inventory
           #   target: inventory
           #   path: contrib/tenzir-plugins/inventory
           - name: NIC
             target: nic
-            path: plugins/nic
+            paths: [plugins/nic]
           - name: Matcher
             target: matcher
-            path: contrib/tenzir-plugins/matcher
+            paths: [contrib/tenzir-plugins/matcher]
           - name: Netflow
             target: netflow
-            path: contrib/tenzir-plugins/netflow
+            paths: [contrib/tenzir-plugins/netflow]
           - name: Parquet
             target: parquet
-            path: plugins/parquet
+            paths: [plugins/parquet]
           # The pipeline manager integration tests require that the web
           # plugin exists, which is why we're building the web plugin
           # already in the main Tenzir job.
           - name: Pipeline Manager
             target: pipeline-manager
-            path: contrib/tenzir-plugins/pipeline_manager
+            paths: [contrib/tenzir-plugins/pipeline_manager]
           - name: Platform
             target: platform
-            path: contrib/tenzir-plugins/platform
+            paths: [contrib/tenzir-plugins/platform]
           - name: Sigma
             target: sigma
-            path: plugins/sigma
+            paths: [plugins/sigma]
           - name: Velociraptor
             target: velociraptor
-            path: plugins/velociraptor
+            paths: [plugins/velociraptor]
           - name: Yara
             target: yara
-            path: plugins/yara
+            paths: [plugins/yara]
           - name: ZeroMQ
             target: zmq
-            path: plugins/zmq
+            paths: [plugins/zmq]
     env:
       INSTALL_DIR: "${{ github.workspace }}/_install"
       BUILD_DIR: "${{ github.workspace }}/_build"
@@ -969,7 +972,7 @@ jobs:
           python3 --version
           python3 -m pip --version
           cmake --version
-          cmake -S '${{ matrix.plugin.path }}' -B "$BUILD_DIR"
+          for i in ${{ matrix.plugin.paths }}; do cmake -S $i -B "$BUILD_DIR"; done
       - name: Build
         run: |
           cmake --build "$BUILD_DIR" --target all --parallel
