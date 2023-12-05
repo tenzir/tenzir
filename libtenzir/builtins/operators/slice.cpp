@@ -119,6 +119,9 @@ public:
     for (auto&& slice : buffer) {
       const auto clamped_begin = std::max(int64_t{0}, begin - offset);
       offset += slice.rows();
+      if (clamped_begin >= static_cast<int64_t>(slice.rows())) {
+        continue;
+      }
       auto result = subslice(slice, clamped_begin, slice.rows());
       if (result.rows() > 0) {
         co_yield std::move(result);
@@ -151,12 +154,15 @@ public:
       const auto clamped_begin = std::max(int64_t{0}, begin - offset);
       const auto clamped_end
         = std::min(static_cast<int64_t>(slice.rows()), end - offset);
+      offset += slice.rows();
+      if (clamped_begin >= static_cast<int64_t>(slice.rows())) {
+        continue;
+      }
       auto result = subslice(slice, clamped_begin, clamped_end);
       if (result.rows() == 0) {
         break;
       }
       co_yield std::move(result);
-      offset += slice.rows();
     }
   }
 
