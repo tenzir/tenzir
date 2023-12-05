@@ -3,7 +3,7 @@
 set -e
 
 if [ "$1" = "configure" ]; then
-	mkdir -p /var/lib/tenzir
+    mkdir -p /var/lib/tenzir
     if ! getent passwd tenzir >/dev/null; then
         adduser \
             --system --group --no-create-home --home /var/lib/tenzir \
@@ -26,37 +26,39 @@ if [ "$1" = "configure" ] ; then
   if [ -d /run/systemd/system ]; then
     # Link the service into systemd's default service directory to make
     # it known.
-	  /usr/bin/systemctl link /opt/tenzir/lib/systemd/system/tenzir-node.service
+    /usr/bin/systemctl link /opt/tenzir/lib/systemd/system/tenzir-node.service
   fi
 fi
 
 # Automatically added by dh_installsystemd/13.3.4
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
-	# This will only remove masks created by d-s-h on package removal.
-	deb-systemd-helper unmask 'tenzir-node.service' >/dev/null || true
+    if [ -x "/usr/bin/deb-systemd-helper" ]; then
+        # This will only remove masks created by d-s-h on package removal.
+        deb-systemd-helper unmask 'tenzir-node.service' >/dev/null || true
 
-	# was-enabled defaults to true, so new installations run enable.
-	if deb-systemd-helper --quiet was-enabled 'tenzir-node.service'; then
-		# Enables the unit on first installation, creates new
-		# symlinks on upgrades if the unit file has changed.
-		deb-systemd-helper enable 'tenzir-node.service' >/dev/null || true
-	else
-		# Update the statefile to add new symlinks (if any), which need to be
-		# cleaned up on purge. Also remove old symlinks.
-		deb-systemd-helper update-state 'tenzir-node.service' >/dev/null || true
-	fi
+        # was-enabled defaults to true, so new installations run enable.
+        if deb-systemd-helper --quiet was-enabled 'tenzir-node.service'; then
+            # Enables the unit on first installation, creates new
+            # symlinks on upgrades if the unit file has changed.
+            deb-systemd-helper enable '/opt/tenzir/lib/systemd/system/tenzir-node.service' >/dev/null || true
+        else
+            # Update the statefile to add new symlinks (if any), which need to be
+            # cleaned up on purge. Also remove old symlinks.
+            deb-systemd-helper update-state '/opt/tenzir/lib/systemd/system/tenzir-node.service' >/dev/null || true
+        fi
+    fi
 fi
 # End automatically added section
 # Automatically added by dh_installsystemd/13.3.4
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
-	if [ -d /run/systemd/system ]; then
-		/usr/bin/systemctl --system daemon-reload >/dev/null || true
-		if [ -n "$2" ]; then
-			_dh_action=restart
-		else
-			_dh_action=start
-		fi
-		deb-systemd-invoke $_dh_action 'tenzir-node.service' >/dev/null || true
-	fi
+    if [ -d /run/systemd/system ]; then
+        /usr/bin/systemctl --system daemon-reload >/dev/null || true
+        if [ -n "$2" ]; then
+            _dh_action=restart
+        else
+            _dh_action=start
+        fi
+        deb-systemd-invoke $_dh_action 'tenzir-node.service' >/dev/null || true
+    fi
 fi
 # End automatically added section
