@@ -153,7 +153,7 @@ struct pipeline {
   std::vector<step> steps;
 
   friend auto inspect(auto& f, pipeline& x) -> bool {
-    return f.object(x).fields(f.field("steps", x.steps));
+    return f.apply(x.steps);
   }
 };
 
