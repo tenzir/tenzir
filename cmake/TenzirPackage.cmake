@@ -70,10 +70,7 @@ endif ()
 set(CPACK_INSTALLED_DIRECTORIES "/var/lib/tenzir" "/var/log/tenzir")
 
 set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
-
-set(CPACK_DEBIAN_PACKAGE_PROVIDES "tenzir")
-set(CPACK_DEBIAN_PACKAGE_CONFLICTS "tenzir")
-set(CPACK_DEBIAN_PACKAGE_REPLACES "tenzir")
+set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "ca-certificates")
 
 set(CPACK_DEBIAN_COMPRESSION_TYPE "gzip")
 set(CPACK_DEBIAN_PACKAGE_SECTION "contrib/database")
