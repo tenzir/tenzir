@@ -245,7 +245,7 @@ In more detail:
 - `where #schema == "suricata.dns"` restricts the feed to Suricata DNS events
 - `enrich threatfox --field dns.rrname` joins the lookup table with the RR name
   of the DNS request
-- `where threatfox.key != null ` ignores non-matching enrichments
+- `where threatfox.key != null` ignores non-matching enrichments
 - `fluent-bit slack webhook=IR_TEAM_SLACK_CHANNEL_URL` sends the events to a
   Slack channel
 
@@ -353,8 +353,8 @@ post](/blog/enrichment-complexity-in-the-wild).
    and as a developer, you get [Apache Arrow](https://arrow.apache.org) record
    batches. This columnar representation works seamlessly with many data tools.
 
-Stay tuned for more context plugins. Up next on our roadmap are two other
-in-band context types: a Bloom filter and a
+Stay tuned for more context plugins. Up next on our roadmap are three other
+in-band context types: a Bloom filter, Sigma rules, and a
 [MaxMind](https://github.com/maxmind/libmaxminddb)-based GeoIP context.
 
 You can try all of this yourself by heading over to
