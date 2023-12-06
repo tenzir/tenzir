@@ -49,10 +49,6 @@ SystemCallErrorNumber=EPERM
 # service specifics
 TimeoutStopSec=600
 WorkingDirectory=/var/lib/tenzir
-# Setting paths here so they can be kept in sync with the access permissions
-# easily. These values can still be overridden in the config files.
-Environment="TENZIR_CACHE_DIRECTORY=/var/cache/tenzir"
-Environment="TENZIR_DB_DIRECTORY=/var/lib/tenzir"
 ExecStart=@CMAKE_INSTALL_FULL_BINDIR@/tenzir-node
 
 [Install]
