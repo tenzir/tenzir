@@ -14,6 +14,8 @@ The semantics of the `head` operator are the same of the equivalent Unix tool:
 process a fixed number of events from the input. The operator terminates
 after it has reached its limit.
 
+`head <limit>` is a short-hand notation for [`slice --end <limit>`](slice.md).
+
 ### `<limit>`
 
 An unsigned integer denoting how many events to keep.
