@@ -35,6 +35,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <span>
 #include <type_traits>
 #include <vector>
@@ -780,6 +781,12 @@ public:
   using parameter_map
     = std::unordered_map<std::string, std::optional<std::string>>;
 
+  struct update_result {
+    record update_info;
+    // What does this do?
+    std::function<caf::expected<expression>(parameter_map)> make_query = {};
+  };
+
   virtual ~context() noexcept = default;
 
   /// Emits context information for every event in `slice` in order.
@@ -792,16 +799,17 @@ public:
 
   /// Updates the context.
   virtual auto update(table_slice events, parameter_map parameters)
-    -> caf::expected<record>
+    -> caf::expected<update_result>
     = 0;
 
   /// Updates the context.
   virtual auto update(chunk_ptr bytes, parameter_map parameters)
-    -> caf::expected<record>
+    -> caf::expected<update_result>
     = 0;
 
   /// Updates the context.
-  virtual auto update(parameter_map parameters) -> caf::expected<record> = 0;
+  virtual auto update(parameter_map parameters) -> caf::expected<update_result>
+    = 0;
 
   // Serializes a context for persistence.
   virtual auto save() const -> caf::expected<chunk_ptr> = 0;
@@ -1074,41 +1082,41 @@ extern const char* TENZIR_PLUGIN_VERSION;
 #else
 
 #  define TENZIR_REGISTER_PLUGIN(name)                                         \
-    extern "C" auto tenzir_plugin_create() -> ::tenzir::plugin* {              \
+    extern "C" auto tenzir_plugin_create()->::tenzir::plugin* {                \
       /* NOLINTNEXTLINE(cppcoreguidelines-owning-memory) */                    \
       return new (name);                                                       \
     }                                                                          \
     extern "C" auto tenzir_plugin_destroy(class ::tenzir::plugin* plugin)      \
-      -> void {                                                                \
+      ->void {                                                                 \
       /* NOLINTNEXTLINE(cppcoreguidelines-owning-memory) */                    \
       delete plugin;                                                           \
     }                                                                          \
-    extern "C" auto tenzir_plugin_version() -> const char* {                   \
+    extern "C" auto tenzir_plugin_version()->const char* {                     \
       return TENZIR_PLUGIN_VERSION;                                            \
     }                                                                          \
-    extern "C" auto tenzir_libtenzir_version() -> const char* {                \
+    extern "C" auto tenzir_libtenzir_version()->const char* {                  \
       return ::tenzir::version::version;                                       \
     }                                                                          \
-    extern "C" auto tenzir_libtenzir_build_tree_hash() -> const char* {        \
+    extern "C" auto tenzir_libtenzir_build_tree_hash()->const char* {          \
       return ::tenzir::version::build::tree_hash;                              \
     }
 
 #  define TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                         \
-    extern "C" auto tenzir_plugin_register_type_id_block() -> void {           \
+    extern "C" auto tenzir_plugin_register_type_id_block()->void {             \
       caf::init_global_meta_objects<::caf::id_block::name>();                  \
     }                                                                          \
     extern "C" auto tenzir_plugin_type_id_block()                              \
-      -> ::tenzir::plugin_type_id_block {                                      \
+      ->::tenzir::plugin_type_id_block {                                       \
       return {::caf::id_block::name::begin, ::caf::id_block::name::end};       \
     }
 
 #  define TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK_2(name1, name2)                 \
-    extern "C" auto tenzir_plugin_register_type_id_block() -> void {           \
+    extern "C" auto tenzir_plugin_register_type_id_block()->void {             \
       caf::init_global_meta_objects<::caf::id_block::name1>();                 \
       caf::init_global_meta_objects<::caf::id_block::name2>();                 \
     }                                                                          \
     extern "C" auto tenzir_plugin_type_id_block()                              \
-      -> ::tenzir::plugin_type_id_block {                                      \
+      ->::tenzir::plugin_type_id_block {                                       \
       return {::caf::id_block::name1::begin < ::caf::id_block::name2::begin    \
                 ? ::caf::id_block::name1::begin                                \
                 : ::caf::id_block::name2::begin,                               \

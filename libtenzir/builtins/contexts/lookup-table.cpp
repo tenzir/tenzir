@@ -6,6 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/collect.hpp"
+#include "tenzir/expression.hpp"
+#include "tenzir/operator.hpp"
+
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/concept/parseable/numeric/bool.hpp>
 #include <tenzir/data.hpp>
@@ -25,6 +29,7 @@
 #include <arrow/array/array_base.h>
 #include <arrow/array/builder_primitive.h>
 #include <arrow/type.h>
+#include <caf/error.hpp>
 #include <caf/sum_type.hpp>
 #include <tsl/robin_map.h>
 
@@ -96,7 +101,7 @@ public:
 
   /// Updates the context.
   auto update(table_slice slice, context::parameter_map parameters)
-    -> caf::expected<record> override {
+    -> caf::expected<update_result> override {
     // context does stuff on its own with slice & parameters
     if (parameters.contains("clear")) {
       auto clear = parameters["clear"];
@@ -114,10 +119,7 @@ public:
         }
       }
     }
-    if (slice.rows() == 0) {
-      // We can ignore empty slices.
-      return record{};
-    }
+    TENZIR_ASSERT_CHEAP(slice.rows() != 0);
     if (not parameters.contains("key")) {
       return caf::make_error(ec::invalid_argument, "missing 'key' parameter");
     }
@@ -130,32 +132,51 @@ public:
     auto key_column = layout.resolve_key(*key_field);
     if (not key_column) {
       // If there's no key column then we cannot do much.
-      return record{};
+      return update_result{record{}};
     }
     auto [key_type, key_array] = key_column->get(slice);
     auto context_array = std::static_pointer_cast<arrow::Array>(
       to_record_batch(slice)->ToStructArray().ValueOrDie());
     auto key_values = values(key_type, *key_array);
+    auto key_values_list = list{};
     auto context_values = values(slice.schema(), *context_array);
     auto key_it = key_values.begin();
     auto context_it = context_values.begin();
     while (key_it != key_values.end()) {
       TENZIR_ASSERT_CHEAP(context_it != context_values.end());
-      context_entries.emplace(materialize(*key_it), materialize(*context_it));
+      auto materialized_key = materialize(*key_it);
+      context_entries.emplace(materialized_key, materialize(*context_it));
+      key_values_list.emplace_back(materialized_key);
       ++key_it;
       ++context_it;
     }
     TENZIR_ASSERT_CHEAP(context_it == context_values.end());
-    return show();
+    auto query_f = [key_values_list = std::move(key_values_list)](
+                     parameter_map params) -> caf::expected<expression> {
+      auto column = params["field"];
+      if (not column) {
+        return caf::make_error(ec::invalid_argument,
+                               "missing 'field' parameter");
+      }
+      return expression{
+        predicate{
+          field_extractor(*column),
+          relational_operator::in,
+          data{key_values_list},
+        },
+      };
+    };
+    return update_result{.update_info = show(),
+                         .make_query = std::move(query_f)};
   }
 
   auto update(chunk_ptr, context::parameter_map)
-    -> caf::expected<record> override {
+    -> caf::expected<update_result> override {
     return caf::make_error(ec::unimplemented, "lookup-table context can not be "
                                               "updated with bytes");
   }
 
-  auto update(context::parameter_map) -> caf::expected<record> override {
+  auto update(context::parameter_map) -> caf::expected<update_result> override {
     return caf::make_error(ec::unimplemented,
                            "lookup-table context can not be updated with void");
   }
