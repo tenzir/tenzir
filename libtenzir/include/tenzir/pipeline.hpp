@@ -736,10 +736,10 @@ auto make_local_executor(pipeline p) -> generator<caf::expected<void>>;
 
 template <class T>
   requires(std::is_base_of_v<tenzir::operator_base, T>)
-struct enable_default_formatter<T> : std::true_type {};
+inline constexpr auto enable_default_formatter<T> = true;
 
 template <>
-struct enable_default_formatter<operator_ptr> : std::true_type {};
+inline constexpr auto enable_default_formatter<operator_ptr> = true;
 
 } // namespace tenzir
 

@@ -68,7 +68,7 @@ struct diagnostic_annotation {
 };
 
 template <>
-struct enable_default_formatter<diagnostic_annotation> : std::true_type {};
+inline constexpr auto enable_default_formatter<diagnostic_annotation> = true;
 
 enum class diagnostic_note_kind {
   /// Generic note, not further specified.
@@ -105,7 +105,7 @@ struct diagnostic_note {
 };
 
 template <>
-struct enable_default_formatter<diagnostic_note> : std::true_type {};
+inline constexpr auto enable_default_formatter<diagnostic_note> = true;
 
 /// A structured representation of a compiler diagnostic.
 struct [[nodiscard]] diagnostic {
@@ -148,7 +148,7 @@ struct [[nodiscard]] diagnostic {
 };
 
 template <>
-struct enable_default_formatter<diagnostic> : std::true_type {};
+inline constexpr auto enable_default_formatter<diagnostic> = true;
 
 /// Utility class to construct a `diagnostic`.
 class [[nodiscard]] diagnostic_builder {

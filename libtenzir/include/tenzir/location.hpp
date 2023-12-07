@@ -61,7 +61,7 @@ struct location {
 inline const location location::unknown = location{};
 
 template <>
-struct enable_default_formatter<location> : std::true_type {};
+inline constexpr auto enable_default_formatter<location> = true;
 
 /// Provides a `T` together with a `location`.
 template <class T>
@@ -122,6 +122,6 @@ template <class T>
 located(T, location) -> located<T>;
 
 template <class T>
-struct enable_default_formatter<located<T>> : std::true_type {};
+inline constexpr auto enable_default_formatter<located<T>> = true;
 
 } // namespace tenzir

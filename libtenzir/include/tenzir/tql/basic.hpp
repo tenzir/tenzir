@@ -30,6 +30,6 @@ struct identifier {
 };
 
 template <>
-struct enable_default_formatter<identifier> : std::true_type {};
+inline constexpr auto enable_default_formatter<identifier> = true;
 
 } // namespace tenzir

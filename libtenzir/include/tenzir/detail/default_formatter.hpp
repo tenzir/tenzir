@@ -26,7 +26,7 @@ namespace tenzir {
 /// To enable the default formatter for a type `T`, supply a specialization of
 /// `enable_default_formatter` with a `::value` member that is `true`.
 template <class T>
-struct enable_default_formatter : std::false_type {};
+inline constexpr auto enable_default_formatter = false;
 
 namespace detail {
 
@@ -87,12 +87,12 @@ private:
 };
 
 template <class T>
-struct enable_default_formatter<use_default_formatter<T>> : std::true_type {};
+inline constexpr auto enable_default_formatter<use_default_formatter<T>> = true;
 
 } // namespace tenzir
 
 template <class T>
-  requires(tenzir::enable_default_formatter<T>::value)
+  requires(tenzir::enable_default_formatter<T>)
 struct fmt::formatter<T> {
   enum { normal, debug, pretty_debug } mode = normal;
 
