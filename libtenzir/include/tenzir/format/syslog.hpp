@@ -328,13 +328,11 @@ struct legacy_message_parser : parser_base<legacy_message_parser> {
               };
     const auto tag_parser = +(parsers::printable - ':');
     const auto content_parser = ~(ignore(*space) >> *parsers::printable);
-    // clang-format off
-    const auto p = ~(priority_parser >> wsignore)
-                   >> timestamp_parser >> wsignore    // timestamp
-                   >> word >> wsignore                // host
-                   >> tag_parser >> ':'               // tag
-                   >> content_parser;                 // content
-    // clang-format on
+    const auto p = ~(priority_parser >> ignore(*space)) // priority
+                   >> timestamp_parser >> wsignore      // timestamp
+                   >> word >> wsignore                  // host
+                   >> tag_parser >> ':'                 // tag
+                   >> content_parser;                   // content
     if constexpr (std::is_same_v<Attribute, unused_type>)
       return p(f, l, unused);
     else
