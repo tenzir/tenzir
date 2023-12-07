@@ -25,6 +25,7 @@ operator instantiation.
 |`sink`|`bool`|True if this is the last operator in the pipeline.|
 |`internal`|`bool`|True if the data flow is considered to internal to Tenzir.|
 |`timestamp`|`time`|The time when this event was emitted (immediately after the collection period).|
+|`duration`|`duration`|The timespan over which this data was collected.|
 |`input`|`record`|Measurement of the incoming data stream.|
 |`output`|`record`|Measurement of the outgoing data stream.|
 
