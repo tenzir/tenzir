@@ -13,7 +13,7 @@ tail [<limit>]
 The semantics of the `tail` operator are the same of the equivalent Unix tool:
 consume all input and only display the last *N* events.
 
-`tail <limit>` is a short-hand notation for [`slice --begin -<limit>`](slice.md).
+`tail <limit>` is a shorthand notation for [`slice --begin -<limit>`](slice.md).
 
 ### `<limit>`
 
