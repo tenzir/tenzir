@@ -46,14 +46,14 @@ auto stringify(fmt::format_context::iterator out, const T& x) {
 }
 
 template <class T>
-constexpr bool can_stringify
-  = not std::is_same_v<decltype(tenzir::detail::stringify(
-                         std::declval<fmt::format_context::iterator>(),
-                         std::declval<T>())),
-                       void>;
+concept can_stringify
+  = not std::same_as<decltype(tenzir::detail::stringify(
+                       std::declval<fmt::format_context::iterator>(),
+                       std::declval<T>())),
+                     void>;
 
 template <class T>
-constexpr bool can_inspect = not std::is_same_v<
+concept can_inspect = not std::same_as<
   decltype(caf::inspect_access_type<tenzir::debug_writer, T>()),
   caf::inspector_access_type::none>;
 
