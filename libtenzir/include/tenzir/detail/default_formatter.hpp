@@ -117,9 +117,9 @@ struct fmt::formatter<T> {
     }
     // TODO: Do we want make `{}` use `inspect` if there is no `to_string`?
     if (mode == normal) {
-      if (not can_stringify && not can_inspect) {
+      if (not can_stringify) {
         throw fmt::format_error{
-          "the `{}` format specifier requires `to_string` or `inspect`"};
+          "the `{}` format specifier requires `to_string`"};
       }
     } else {
       if (not can_inspect) {

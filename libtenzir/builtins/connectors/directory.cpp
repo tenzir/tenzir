@@ -81,7 +81,7 @@ public:
     try {
       parsed = p->parse_saver(*pi);
     } catch (diagnostic& d) {
-      return caf::make_error(ec::unspecified, fmt::to_string(d));
+      return caf::make_error(ec::unspecified, fmt::format("{:?}", d));
     }
     auto file_saver = parsed->instantiate(ctrl, std::move(info));
     if (not file_saver)
