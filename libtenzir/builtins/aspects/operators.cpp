@@ -37,7 +37,7 @@ public:
     // Add operator plugins.
     for (const auto* plugin : plugins::get<operator_parser_plugin>()) {
       auto event = builder.record();
-      auto signature = plugin->signature();
+      const auto signature = plugin->signature();
       event.field("name", plugin->name());
       event.field("definition").null();
       event.field("source", signature.source);
@@ -60,18 +60,12 @@ public:
         continue;
       }
       auto event = builder.record();
+      const auto signature = op->infer_signature();
       event.field("name", udo);
       event.field("definition", *def_str);
-      const auto void_output = op->infer_type<void>();
-      const auto bytes_output = op->infer_type<chunk_ptr>();
-      const auto events_output = op->infer_type<table_slice>();
-      event.field("source", static_cast<bool>(void_output));
-      event.field("transformation",
-                  (bytes_output and not bytes_output->is<void>())
-                    or (events_output and not events_output->is<void>()));
-      event.field("sink", (void_output and void_output->is<void>())
-                            or (bytes_output and bytes_output->is<void>())
-                            or (events_output and events_output->is<void>()));
+      event.field("source", signature.source);
+      event.field("transformation", signature.transformation);
+      event.field("sink", signature.sink);
     }
     co_yield builder.finish_assert_one_slice("tenzir.operator");
   }
