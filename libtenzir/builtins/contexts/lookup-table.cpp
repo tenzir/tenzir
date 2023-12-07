@@ -6,17 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/collect.hpp"
-#include "tenzir/expression.hpp"
-#include "tenzir/operator.hpp"
-
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/concept/parseable/numeric/bool.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/range_map.hpp>
+#include <tenzir/expression.hpp>
 #include <tenzir/fbs/data.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/fwd.hpp>
+#include <tenzir/operator.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/project.hpp>
 #include <tenzir/series_builder.hpp>

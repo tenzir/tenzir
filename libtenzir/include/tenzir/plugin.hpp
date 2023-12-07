@@ -781,9 +781,10 @@ public:
   using parameter_map
     = std::unordered_map<std::string, std::optional<std::string>>;
 
+  /// Information about a context update that gets propagated to live lookups.
   struct update_result {
     record update_info;
-    // What does this do?
+    // Function for emitting an updated expression. Used for retroactive lookups.
     std::function<caf::expected<expression>(parameter_map)> make_query = {};
   };
 
