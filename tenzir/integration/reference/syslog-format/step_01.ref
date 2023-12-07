@@ -23,6 +23,22 @@
   "content": "Freeform message"
 }
 {
+  "facility": 4,
+  "severity": 2,
+  "timestamp": "Nov 16 14:55:56",
+  "hostname": "mymachine/10.1.1.16",
+  "tag": "OTHERPROGRAM",
+  "content": "Freeform message"
+}
+{
+  "facility": 4,
+  "severity": 2,
+  "timestamp": "Oct 11 22:14:15",
+  "hostname": "mymachine",
+  "tag": "su",
+  "content": "'su root' failed for lonvick on /dev/pts/8"
+}
+{
   "facility": null,
   "severity": null,
   "timestamp": "Dec  6 15:56:57",

@@ -3,42 +3,7 @@
 set -e
 
 if [ "$1" = "configure" ]; then
-  # Provide an opt-out mechanism for the automatic migration.
-  if ! [ -f /var/lib/vast/disable-migration ]; then
-    if getent passwd vast >/dev/null; then
-      echo "Detected previous VAST installation and enabling trace mode for the migration"
-      set -x
-    fi
-    # Migrate user and group.
-    if ! getent passwd tenzir >/dev/null; then
-      if getent passwd vast >/dev/null; then
-        usermod -l tenzir vast
-        usermod -d /var/lib/tenzir tenzir || true
-        groupmod -n tenzir vast
-      fi
-    fi
-    # Copy vast.yaml to tenzir.yaml.
-    if [ -f /opt/vast/etc/vast/vast.yaml ] && ! [ -f /opt/tenzir/etc/tenzir/tenzir.yaml ]; then
-      mkdir -p /opt/tenzir/etc/tenzir
-      cp /opt/vast/etc/vast/vast.yaml /opt/tenzir/etc/tenzir/tenzir.yaml
-    fi
-    explicit_db_dir=0
-    if grep -q '^\s\+db-directory:' /opt/vast/etc/vast/vast.yaml > /dev/null 2>&1; then
-      explicit_db_dir=1
-    fi
-    # Move db-directory if is not set explicitly.
-    if [ "$explicit_db_dir" = 0 ] && [ -d /var/lib/vast ] && ! [ -f /var/lib/vast/MOVED-TO-VAR-LIB-TENZIR ] && ! [ -d /var/lib/tenzir ]; then
-      mv /var/lib/vast /var/lib/tenzir
-      mkdir /var/lib/vast
-      touch /var/lib/vast/MOVED-TO-VAR-LIB-TENZIR
-      # Also adjust the inner /var/lib/tenzir/vast.db directory in case it exists.
-      if [ -d /var/lib/tenzir/vast.db ]; then
-        mv /var/lib/tenzir/vast.db /var/lib/tenzir/tenzir.db
-      fi
-    fi
-    set +x
-  fi
-	mkdir -p /var/lib/tenzir
+    mkdir -p /var/lib/tenzir
     if ! getent passwd tenzir >/dev/null; then
         adduser \
             --system --group --no-create-home --home /var/lib/tenzir \
@@ -58,49 +23,42 @@ if [ "$1" = "configure" ]; then
 fi
 
 if [ "$1" = "configure" ] ; then
-	# Delete all lines referencing /var/lib/vast if it doesn't exist. This works
-	# around restrictive behavior in systemd, which refuses to start the unit if
-	# a ReadWritePath does not exist.
-  if ! [ -d /var/lib/vast ]; then
-    sed -i '/\/var\/lib\/vast/d' /opt/tenzir/lib/systemd/system/tenzir-node.service
-  fi
-	if ! [ -d /var/log/vast ]; then
-		sed -i '/\/var\/log\/vast/d' /opt/tenzir/lib/systemd/system/tenzir-node.service
-	fi
   if [ -d /run/systemd/system ]; then
     # Link the service into systemd's default service directory to make
     # it known.
-	  /usr/bin/systemctl link /opt/tenzir/lib/systemd/system/tenzir-node.service
+    /usr/bin/systemctl link /opt/tenzir/lib/systemd/system/tenzir-node.service
   fi
 fi
 
 # Automatically added by dh_installsystemd/13.3.4
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
-	# This will only remove masks created by d-s-h on package removal.
-	deb-systemd-helper unmask 'tenzir-node.service' >/dev/null || true
+    if [ -x "/usr/bin/deb-systemd-helper" ]; then
+        # This will only remove masks created by d-s-h on package removal.
+        deb-systemd-helper unmask 'tenzir-node.service' >/dev/null || true
 
-	# was-enabled defaults to true, so new installations run enable.
-	if deb-systemd-helper --quiet was-enabled 'tenzir-node.service'; then
-		# Enables the unit on first installation, creates new
-		# symlinks on upgrades if the unit file has changed.
-		deb-systemd-helper enable 'tenzir-node.service' >/dev/null || true
-	else
-		# Update the statefile to add new symlinks (if any), which need to be
-		# cleaned up on purge. Also remove old symlinks.
-		deb-systemd-helper update-state 'tenzir-node.service' >/dev/null || true
-	fi
+        # was-enabled defaults to true, so new installations run enable.
+        if deb-systemd-helper --quiet was-enabled 'tenzir-node.service'; then
+            # Enables the unit on first installation, creates new
+            # symlinks on upgrades if the unit file has changed.
+            deb-systemd-helper enable '/opt/tenzir/lib/systemd/system/tenzir-node.service' >/dev/null || true
+        else
+            # Update the statefile to add new symlinks (if any), which need to be
+            # cleaned up on purge. Also remove old symlinks.
+            deb-systemd-helper update-state '/opt/tenzir/lib/systemd/system/tenzir-node.service' >/dev/null || true
+        fi
+    fi
 fi
 # End automatically added section
 # Automatically added by dh_installsystemd/13.3.4
 if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
-	if [ -d /run/systemd/system ]; then
-		/usr/bin/systemctl --system daemon-reload >/dev/null || true
-		if [ -n "$2" ]; then
-			_dh_action=restart
-		else
-			_dh_action=start
-		fi
-		deb-systemd-invoke $_dh_action 'tenzir-node.service' >/dev/null || true
-	fi
+    if [ -d /run/systemd/system ]; then
+        /usr/bin/systemctl --system daemon-reload >/dev/null || true
+        if [ -n "$2" ]; then
+            _dh_action=restart
+        else
+            _dh_action=start
+        fi
+        deb-systemd-invoke $_dh_action 'tenzir-node.service' >/dev/null || true
+    fi
 fi
 # End automatically added section

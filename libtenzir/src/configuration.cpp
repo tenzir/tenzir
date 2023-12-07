@@ -444,6 +444,28 @@ caf::error configuration::parse(int argc, char** argv) {
   *config = flatten(*config);
   if (auto err = merge_environment(*config))
     return err;
+  // Fallback handling for system default paths that may be provided by the
+  // runtime system and should win over the build-time defaults but loose if set
+  // via any other method.
+  if (!config->contains("tenzir.db-directory")) {
+    // Provided by systemd when StateDirectory= is set in the unit.
+    if (auto state_directory = detail::getenv("STATE_DIRECTORY")) {
+      (*config)["tenzir.db-directory"] = std::string{*state_directory};
+    }
+  }
+  if (!config->contains("tenzir.log-directory")) {
+    // Provided by systemd when LogsDirectory= is set in the unit.
+    if (auto log_directory = detail::getenv("LOGS_DIRECTORY")) {
+      (*config)["tenzir.log-file"]
+        = fmt::format("{}/server.log", *log_directory);
+    }
+  }
+  if (!config->contains("tenzir.cache-directory")) {
+    // Provided by systemd when CacheDirectory= is set in the unit.
+    if (auto cache_directory = detail::getenv("CACHE_DIRECTORY")) {
+      (*config)["tenzir.cache-directory"] = std::string{*cache_directory};
+    }
+  }
   // Set some defaults that can only be derived at runtime.
   if (!config->contains("tenzir.cache-directory")) {
     auto env_path_writable

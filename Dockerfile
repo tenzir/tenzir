@@ -208,6 +208,7 @@ RUN cmake -S contrib/tenzir-plugins/platform -B build-platform -G Ninja \
 
 FROM tenzir-de AS tenzir-ce
 
+COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
 COPY --from=matcher-plugin --chown=tenzir:tenzir /plugin/matcher /
 COPY --from=netflow-plugin --chown=tenzir:tenzir /plugin/netflow /
 COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline_manager /

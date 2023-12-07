@@ -221,7 +221,8 @@ public:
         out->SetOutputCharset(YAML::EscapeNonAscii); // restrict to ASCII output
         out->SetNullFormat(YAML::LowerNull);
         out->SetIndent(2);
-        for (const auto& row : values(input_type, *array)) {
+        for (const auto& row :
+             values(caf::get<record_type>(resolved_slice.schema()), *array)) {
           TENZIR_ASSERT_CHEAP(row);
           print_document(*out, *row);
         }
