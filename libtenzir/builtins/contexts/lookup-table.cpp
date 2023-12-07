@@ -65,8 +65,6 @@ public:
         field_name = *value;
         continue;
       }
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("invalid argument `{}`", key));
     }
     if (not field_name) {
       return caf::make_error(ec::invalid_argument, "missing argument `field`");
