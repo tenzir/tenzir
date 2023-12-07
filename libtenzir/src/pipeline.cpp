@@ -108,58 +108,6 @@ pipeline::pipeline(std::vector<operator_ptr> operators) {
   }
 }
 
-auto pipeline::deserialize_op(deserializer f) -> operator_ptr {
-  return std::visit(
-    [](auto& f) -> operator_ptr {
-      auto name = std::string{};
-      if (!f.get().apply(name)) {
-        return nullptr;
-      }
-      if (name == pipeline{}.name()) {
-        // There is no pipeline plugin (maybe there should be?), so we
-        // special-case this here.
-        auto pipe = std::make_unique<pipeline>();
-        if (!f.get().apply(*pipe)) {
-          return nullptr;
-        }
-        return pipe;
-      }
-      auto const* p = plugins::find<operator_serialization_plugin>(name);
-      if (!p) {
-        f.get().set_error(
-          caf::make_error(ec::serialization_error,
-                          fmt::format("could not find plugin `{}`", name)));
-        return nullptr;
-      }
-      auto op = operator_ptr{};
-      p->deserialize(f, op);
-      if (!op) {
-        f.get().set_error(
-          caf::make_error(ec::serialization_error,
-                          fmt::format("plugin `{}` returned nullptr: {}",
-                                      p->name(), f.get().get_error())));
-        return nullptr;
-      }
-      return op;
-    },
-    f);
-}
-
-auto pipeline::serialize_op(const operator_base& op, serializer f) -> bool {
-  return std::visit(
-    [&](auto& f) {
-      auto name = op.name();
-      auto const* p = plugins::find<operator_serialization_plugin>(name);
-      if (!p) {
-        f.get().set_error(
-          caf::make_error(ec::serialization_error, "could not find plugin"));
-        return false;
-      }
-      return f.get().apply(name) && p->serialize(f, op);
-    },
-    f);
-}
-
 auto pipeline::parse(std::string source, diagnostic_handler& diag)
   -> std::optional<pipeline> {
   auto parsed = tql::parse(std::move(source), diag);

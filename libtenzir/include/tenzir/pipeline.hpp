@@ -489,28 +489,11 @@ public:
       }
       x.operators_.reserve(ops);
       for (auto i = size_t{0}; i < ops; ++i) {
-        auto array_size = size_t{};
-        if (!f.begin_associative_array(array_size)) {
-          return false;
-        }
-        if (array_size != 1) {
-          f.set_error(caf::make_error(ec::serialization_error,
-                                      fmt::format("invalid array size of {}",
-                                                  array_size)));
-          return false;
-        }
-        auto plugin_name = std::string{};
-        if (!f.begin_key_value_pair()) {
-          return false;
-        }
-        auto op = deserialize_op(f);
-        if (!op) {
+        auto op = operator_ptr{};
+        if (not plugin_inspect(f, op)) {
           return false;
         }
         x.operators_.push_back(std::move(op));
-        if (!(f.end_key_value_pair() && f.end_associative_array())) {
-          return false;
-        }
       }
       return f.end_sequence();
     } else {
@@ -531,10 +514,6 @@ public:
   }
 
 private:
-  static auto deserialize_op(deserializer f) -> operator_ptr;
-
-  static auto serialize_op(const operator_base& op, serializer f) -> bool;
-
   std::vector<operator_ptr> operators_;
 };
 
