@@ -184,9 +184,6 @@ add_library(tenzir::libtenzir_builtins ALIAS libtenzir_builtins)
 target_link_libraries(libtenzir PRIVATE libtenzir_internal)
 target_link_libraries(libtenzir_builtins PRIVATE libtenzir libtenzir_internal)
 
-set_target_properties(libtenzir PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE
-                                           ON)
-
 # Set the libtenzir SOVERSION to '<256 * (major + 7) + minor>.<patch>' to indicate
 # that libtenzir is considered to have an unstable API and ABI. The +7 is a
 # remnant of Tenzir using CalVer before 2022, with the last CalVer release having
@@ -239,7 +236,7 @@ target_compile_definitions(
   PUBLIC # Allow null pointer input when hashing data of length greater 0.
          # TODO: Remove this when requiring xxHash >= 0.8.1.
          XXH_ACCEPT_NULL_INPUT_POINTER=1)
-find_package(xxhash REQUIRED)
+find_package(xxhash MODULE REQUIRED)
 provide_find_module(xxhash)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(xxhash REQUIRED)")
 target_link_libraries(libtenzir PUBLIC xxhash::xxhash_header_only)

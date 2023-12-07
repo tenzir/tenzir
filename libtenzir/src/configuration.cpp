@@ -307,11 +307,7 @@ caf::expected<caf::settings> to_settings(record config) {
   return to<caf::settings>(config);
 }
 
-} // namespace
-
-std::vector<std::filesystem::path>
-config_dirs(const caf::actor_system_config& config) {
-  const auto bare_mode = caf::get_or(config.content, "tenzir.bare-mode", false);
+auto config_dirs(bool bare_mode) -> std::vector<std::filesystem::path> {
   if (bare_mode)
     return {};
   auto result = std::vector<std::filesystem::path>{};
@@ -324,6 +320,18 @@ config_dirs(const caf::actor_system_config& config) {
   }
   result.push_back(detail::install_configdir());
   return result;
+}
+
+} // namespace
+
+std::vector<std::filesystem::path>
+config_dirs(const caf::actor_system_config& config) {
+  return config_dirs(caf::get_or(config.content, "tenzir.bare-mode", false));
+}
+
+auto config_dirs(const record& cfg) -> std::vector<std::filesystem::path> {
+  auto fallback = false;
+  return config_dirs(get_or(cfg, "tenzir.bare-mode", fallback));
 }
 
 const std::vector<std::filesystem::path>& loaded_config_files() {
@@ -352,10 +360,10 @@ configuration::configuration() {
   factory<synopsis>::initialize();
   factory<value_index>::initialize();
   // Register Arrow extension types.
-  auto register_extension_types =
-    []<concrete_type... Ts>(caf::detail::type_list<Ts...>) {
-    (static_cast<void>(Ts::arrow_type::register_extension()), ...);
-  };
+  auto register_extension_types
+    = []<concrete_type... Ts>(caf::detail::type_list<Ts...>) {
+        (static_cast<void>(Ts::arrow_type::register_extension()), ...);
+      };
   register_extension_types(
     caf::detail::tl_filter_t<concrete_types, has_extension_type>{});
 }
@@ -436,6 +444,28 @@ caf::error configuration::parse(int argc, char** argv) {
   *config = flatten(*config);
   if (auto err = merge_environment(*config))
     return err;
+  // Fallback handling for system default paths that may be provided by the
+  // runtime system and should win over the build-time defaults but loose if set
+  // via any other method.
+  if (!config->contains("tenzir.db-directory")) {
+    // Provided by systemd when StateDirectory= is set in the unit.
+    if (auto state_directory = detail::getenv("STATE_DIRECTORY")) {
+      (*config)["tenzir.db-directory"] = std::string{*state_directory};
+    }
+  }
+  if (!config->contains("tenzir.log-directory")) {
+    // Provided by systemd when LogsDirectory= is set in the unit.
+    if (auto log_directory = detail::getenv("LOGS_DIRECTORY")) {
+      (*config)["tenzir.log-file"]
+        = fmt::format("{}/server.log", *log_directory);
+    }
+  }
+  if (!config->contains("tenzir.cache-directory")) {
+    // Provided by systemd when CacheDirectory= is set in the unit.
+    if (auto cache_directory = detail::getenv("CACHE_DIRECTORY")) {
+      (*config)["tenzir.cache-directory"] = std::string{*cache_directory};
+    }
+  }
   // Set some defaults that can only be derived at runtime.
   if (!config->contains("tenzir.cache-directory")) {
     auto env_path_writable

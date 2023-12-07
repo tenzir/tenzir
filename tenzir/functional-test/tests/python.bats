@@ -233,3 +233,12 @@ END
         self.did_not_have_answers = True"
 END
 }
+
+@test "python operator timestamps" {
+  DATADIR="$(dirname "$BATS_SUITE_DIRNAME")/data"
+  check tenzir -f /dev/stdin << END
+    from file $DATADIR/suricata/eve.json read suricata
+    | where #schema == "suricata.flow"
+    | python "self.flow.duration = self.flow.end - self.flow.start"
+END
+}

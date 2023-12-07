@@ -11,6 +11,97 @@ security:
       []
 components:
   schemas:
+    Annotation:
+      type: object
+      properties:
+        primary:
+          type: boolean
+        text:
+          type: string
+          example: this option does not exist
+          description: A potentially empty label.
+        source:
+          $ref: "#/components/schemas/Location"
+    CreateParameters:
+      type: object
+      required:
+        - definition
+      properties:
+        definition:
+          type: string
+          example: export | where foo | publish /bar
+          description: The pipeline definition.
+        name:
+          type: string
+          description: The human-readable name of the pipeline.
+          default: "[an auto-generated id]"
+          example: zeek-monitoring-pipeline
+        hidden:
+          type: boolean
+          description: "A flag specifying whether this pipeline is hidden.\nHidden pipelines are not persisted and will not show up in the /pipeline/list endpoint response.\n"
+          default: false
+          example: false
+        ttl:
+          type: string
+          description: "A duration string specifying the maximum time for this pipeline to exist. No value means the pipeline is allowed to exist forever.\nThis parameter must be defined if the `hidden` parameter is true.\n"
+          default: ~
+          example: 5.0m
+        autostart:
+          $ref: "#/components/schemas/PipelineAutostart"
+        autodelete:
+          $ref: "#/components/schemas/PipelineAutodelete"
+    Diagnostic:
+      type: object
+      properties:
+        severity:
+          type: string
+          enum:
+            - error
+            - warning
+            - note
+        message:
+          type: string
+          example: unknown option `--frobnify`
+        annotation:
+          type: array
+          items:
+            $ref: "#/components/schemas/Annotation"
+        notes:
+          type: array
+          items:
+            $ref: "#/components/schemas/Note"
+        rendered:
+          type: string
+          example: "\x1b[1m\x1b[31merror\x1b[39m: unknown option `--frobnify`\x1b[0m\n"
+    Diagnostics:
+      type: array
+      items:
+        $ref: "#/components/schemas/Diagnostic"
+    LaunchParameters:
+      allOf:
+        - $ref: "#/components/schemas/CreateParameters"
+        - type: object
+          required:
+            - serve_id
+          properties:
+            serve_id:
+              type: string
+              description: The identifier for the `server` operator.
+              example: 4ada2434-32asfe2s
+            serve_buffer_size:
+              type: integer
+              description: The maximum number of events to keep in the `serve` operator.
+              example: 4000
+    Location:
+      type: object
+      description: A region in the source code, defined by byte offsets.
+      properties:
+        begin:
+          type: number
+          example: 42
+        end:
+          type: number
+          example: 48
     Metrics:
       type: object
       description: Information about pipeline data ingress and egress.
@@ -89,87 +180,6 @@ components:
                   type: number
                   description: The total duration of the pipeline sink data processing in seconds.
                   example: 1.452123512
-    CreateParameters:
-      type: object
-      required:
-        - definition
-      properties:
-        definition:
-          type: string
-          example: export | where foo | publish /bar
-          description: The pipeline definition.
-        name:
-          type: string
-          description: The human-readable name of the pipeline.
-          default: "[an auto-generated id]"
-          example: zeek-monitoring-pipeline
-        hidden:
-          type: boolean
-          description: "A flag specifying whether this pipeline is hidden.\nHidden pipelines are not persisted and will not show up in the /pipeline/list endpoint response.\n"
-          default: false
-          example: false
-        ttl:
-          type: string
-          description: "A duration string specifying the maximum time for this pipeline to exist. No value means the pipeline is allowed to exist forever.\nThis parameter must be defined if the `hidden` parameter is true.\n"
-          default: ~
-          example: 5.0m
-        autostart:
-          $ref: "#/components/schemas/PipelineAutostart"
-        autodelete:
-          $ref: "#/components/schemas/PipelineAutodelete"
-    LaunchParameters:
-      allOf:
-        - $ref: "#/components/schemas/CreateParameters"
-        - type: object
-          required:
-            - serve_id
-          properties:
-            serve_id:
-              type: string
-              description: The identifier for the `server` operator.
-              example: 4ada2434-32asfe2s
-            serve_buffer_size:
-              type: integer
-              description: The maximum number of events to keep in the `serve` operator.
-              example: 4000
-    Diagnostics:
-      type: array
-      items:
-        $ref: "#/components/schemas/Diagnostic"
-    Diagnostic:
-      type: object
-      properties:
-        severity:
-          type: string
-          enum:
-            - error
-            - warning
-            - note
-        message:
-          type: string
-          example: unknown option `--frobnify`
-        annotation:
-          type: array
-          items:
-            $ref: "#/components/schemas/Annotation"
-        notes:
-          type: array
-          items:
-            $ref: "#/components/schemas/Note"
-        rendered:
-          type: string
-          example: "\x1b[1m\x1b[31merror\x1b[39m: unknown option `--frobnify`\x1b[0m\n"
-    Annotation:
-      type: object
-      properties:
-        primary:
-          type: boolean
-        text:
-          type: string
-          example: this option does not exist
-          description: A potentially empty label.
-        source:
-          $ref: "#/components/schemas/Location"
     Note:
       type: object
       properties:
@@ -184,32 +194,25 @@ components:
         message:
           type: string
           example: file <path> [-f|--follow] [-m|--mmap] [-t|--timeout <duration>]
-    Location:
+    PipelineAutodelete:
       type: object
-      description: A region in the source code, defined by byte offsets.
+      description: Flags that specify on which state to delete the pipeline.
       properties:
-        begin:
-          type: number
-          example: 42
-        end:
-          type: number
-          example: 48
-    PipelineLabel:
-      type: object
-      properties:
-        text:
-          type: string
-          description: The pipeline label text.
-          example: zeek
-        color:
-          type: string
-          description: The pipeline label color.
-          example: 3F1A24
-    PipelineLabels:
-      type: array
-      description: The user-provided labels for this pipeline.
-      items:
-        $ref: "#/components/schemas/PipelineLabel"
+        completed:
+          type: boolean
+          description: Autodelete the pipeline upon completion.
+          default: false
+          example: false
+        failed:
+          type: boolean
+          description: Autodelete the pipeline upon failure.
+          default: false
+          example: true
+        stopped:
+          type: boolean
+          description: Autodelete the pipeline when it stops before completing.
+          default: false
+          example: false
     PipelineAutostart:
       type: object
       description: Flags that specify on which state to restart the pipeline.
@@ -234,25 +237,6 @@ components:
           description: Autostart the pipeline when it stops before completing.
           default: false
           example: true
-    PipelineAutodelete:
-      type: object
-      description: Flags that specify on which state to delete the pipeline.
-      properties:
-        completed:
-          type: boolean
-          description: Autodelete the pipeline upon completion.
-          default: false
-          example: false
-        failed:
-          type: boolean
-          description: Autodelete the pipeline upon failure.
-          default: false
-          example: true
-        stopped:
-          type: boolean
-          description: Autodelete the pipeline when it stops before completing.
-          default: false
-          example: false
     PipelineInfo:
       type: object
       properties:
@@ -290,6 +274,22 @@ components:
           type: integer
           description: If a TTL exists for this pipeline, the remaining TTL in nanoseconds.
           example: 23400569058
+    PipelineLabel:
+      type: object
+      properties:
+        text:
+          type: string
+          description: The pipeline label text.
+          example: zeek
+        color:
+          type: string
+          description: The pipeline label color.
+          example: 3F1A24
+    PipelineLabels:
+      type: array
+      description: The user-provided labels for this pipeline.
+      items:
+        $ref: "#/components/schemas/PipelineLabel"
   securitySchemes:
     TenzirToken:
       type: apiKey
@@ -585,7 +585,7 @@ paths:
   /serve:
     post:
       summary: Return data from a pipeline
-      description: Returns events from an existing pipeline. The pipeline definition must include a serve operator.
+      description: "Returns events from an existing pipeline. The pipeline definition must include a serve operator. By default, the endpoint performs long polling (`timeout: 2s`) and returns events as soon as they are available (`min_events: 1`)."
       requestBody:
         description: Body for the serve endpoint
         required: true
@@ -606,12 +606,18 @@ paths:
                   description: The continuation token that was returned with the last response. For the initial request this is null.
                 max_events:
                   type: integer
-                  example: 50
-                  description: The maximum number of events returned. If unset, the number is unlimited.
+                  example: 1024
+                  default: 1024
+                  description: The maximum number of events returned.
+                min_events:
+                  type: integer
+                  example: 1
+                  default: 1
+                  description: Wait for this number of events before returning.
                 timeout:
                   type: string
-                  example: 100.0ms
-                  default: 100.0ms
+                  example: 2.0s
+                  default: 2.0s
                   description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 5 seconds.
       responses:
         200:

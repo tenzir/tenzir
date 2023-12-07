@@ -36,6 +36,7 @@ TENZIR_CAF_ATOM_ALIAS(subscribe)
 CAF_BEGIN_TYPE_ID_BLOCK(tenzir_atoms, caf::id_block::tenzir_types::end)
 
   // Generic atoms.
+  TENZIR_ADD_ATOM(accept, "accept")
   TENZIR_ADD_ATOM(announce, "announce")
   TENZIR_ADD_ATOM(apply, "apply")
   TENZIR_ADD_ATOM(candidates, "candidates")

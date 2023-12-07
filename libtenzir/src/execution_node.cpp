@@ -701,7 +701,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
           = metrics->values.outbound_measurement.num_elements;
       } else {
         metrics->values.outbound_measurement.num_approx_bytes
-          = num_approx_bytes(lhs);
+          += num_approx_bytes(lhs);
       }
       this->outbound_buffer = std::move(rhs);
       this->outbound_buffer_size
@@ -866,7 +866,7 @@ struct exec_node_state : inbound_state_mixin<Input>,
         = metrics->values.inbound_measurement.num_elements;
     } else {
       metrics->values.inbound_measurement.num_approx_bytes
-        = num_approx_bytes(input);
+        += num_approx_bytes(input);
     }
     this->inbound_buffer.insert(this->inbound_buffer.end(),
                                 std::make_move_iterator(input.begin()),
@@ -894,12 +894,14 @@ auto exec_node(
   self->state.metrics->values.operator_name = self->state.op->name();
   self->state.metrics->values.inbound_measurement.unit
     = operator_type_name<Input>();
-  self->state.metrics->values.inbound_measurement.internal
-    = not std::is_void_v<Input> or self->state.op->internal();
   self->state.metrics->values.outbound_measurement.unit
     = operator_type_name<Output>();
-  self->state.metrics->values.outbound_measurement.internal
-    = not std::is_void_v<Output> or self->state.op->internal();
+  // We make an exception here for transformations, which are always considered
+  // internal as they cannot transport data outside of the pipeline.
+  self->state.metrics->values.internal
+    = self->state.op->internal()
+      and (std::is_same_v<Input, std::monostate>
+           or std::is_same_v<Output, std::monostate>);
   self->state.ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
     self, std::move(diagnostic_handler), has_terminal);
   // The node actor must be set when the operator is not a source.

@@ -13,6 +13,7 @@
 
 #include "tenzir/active_partition.hpp"
 #include "tenzir/actors.hpp"
+#include "tenzir/expression.hpp"
 #include "tenzir/passive_partition.hpp"
 #include "tenzir/time_synopsis.hpp"
 #include "tenzir/type.hpp"
@@ -74,6 +75,12 @@ fetch_indexer(const PartitionState& state, const meta_extractor& ex,
     } else {
       for (const auto& [_, ids] : state.type_ids())
         row_ids |= ids;
+    }
+  } else if (ex.kind == meta_extractor::internal) {
+    // TODO: Actually take the internal flag into account. For now, we just
+    // return all stored ids.
+    for (const auto& [_, ids] : state.type_ids()) {
+      row_ids |= ids;
     }
   } else {
     TENZIR_WARN("{} got unsupported attribute: {}", *state.self, ex.kind);

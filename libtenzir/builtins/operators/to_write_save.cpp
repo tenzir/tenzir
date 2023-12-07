@@ -29,7 +29,7 @@ namespace tenzir::plugins::write_to_print_save {
 
 namespace {
 
-[[noreturn]] void throw_printer_not_found(const located<std::string>& x) {
+[[noreturn]] void throw_printer_not_found(located<std::string_view> x) {
   auto available = std::vector<std::string>{};
   for (auto const* p : plugins::get<printer_parser_plugin>()) {
     available.push_back(p->name());
@@ -41,9 +41,8 @@ namespace {
     .throw_();
 }
 
-template <typename String>
 [[noreturn]] void
-throw_saver_not_found(const located<String>& x, bool use_uri_schemes) {
+throw_saver_not_found(located<std::string_view> x, bool use_uri_schemes) {
   auto available = std::vector<std::string>{};
   for (auto p : plugins::get<saver_parser_plugin>()) {
     if (use_uri_schemes) {
@@ -250,7 +249,7 @@ private:
 };
 
 auto get_saver(parser_interface& p, const char* usage, const char* docs)
-  -> std::unique_ptr<plugin_saver> {
+  -> std::pair<std::unique_ptr<plugin_saver>, located<std::string>> {
   auto s_name = p.accept_shell_arg();
   if (not s_name) {
     diagnostic::error("expected saver name")
@@ -259,11 +258,11 @@ auto get_saver(parser_interface& p, const char* usage, const char* docs)
       .docs(docs)
       .throw_();
   }
-  auto [saver, name, is_uri] = detail::resolve_saver(p, *s_name);
+  auto [saver, name, path, is_uri] = detail::resolve_saver(p, *s_name);
   if (not saver) {
     throw_saver_not_found(name, is_uri);
   }
-  return std::move(saver);
+  return {std::move(saver), std::move(path)};
 }
 
 class save_plugin final : public virtual operator_plugin<save_operator> {
@@ -275,7 +274,7 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "save <saver> <args>...";
     auto docs = "https://docs.tenzir.com/next/operators/sinks/save";
-    auto saver = get_saver(p, usage, docs);
+    auto [saver, _] = get_saver(p, usage, docs);
     TENZIR_DIAG_ASSERT(saver);
     return std::make_unique<save_operator>(std::move(saver));
   }
@@ -357,22 +356,6 @@ private:
   std::unique_ptr<plugin_saver> saver_;
 };
 
-/// @throws `diagnostic`
-auto parse_default_printer(std::string definition)
-  -> std::unique_ptr<plugin_printer> {
-  // We discard all diagnostics emitted for the default parser because the
-  // source has not been written by the user.
-  auto diag = null_diagnostic_handler{};
-  auto p = tql::make_parser_interface(std::move(definition), diag);
-  auto p_name = p->accept_identifier();
-  TENZIR_DIAG_ASSERT(p_name);
-  auto const* p_plugin = plugins::find<printer_parser_plugin>(p_name->name);
-  TENZIR_DIAG_ASSERT(p_plugin);
-  auto printer = p_plugin->parse_printer(*p);
-  TENZIR_DIAG_ASSERT(printer);
-  return printer;
-}
-
 class to_plugin final : public virtual operator_parser_plugin {
 public:
   auto name() const -> std::string override {
@@ -387,13 +370,16 @@ public:
     auto usage = "to <saver> <args>... [write <printer> <args>...]";
     auto docs = "https://docs.tenzir.com/next/operators/sinks/to";
     auto q = until_keyword_parser{"write", p};
-    auto saver = get_saver(q, usage, docs);
+    auto [saver, saver_path] = get_saver(q, usage, docs);
     TENZIR_DIAG_ASSERT(saver);
     TENZIR_DIAG_ASSERT(q.at_end());
+    auto compress = operator_ptr{};
     auto printer = std::unique_ptr<plugin_printer>{};
     if (p.at_end()) {
-      printer = parse_default_printer(saver->default_printer());
+      std::tie(compress, printer)
+        = detail::resolve_printer(saver_path, saver->default_printer());
     } else {
+      compress = detail::resolve_compressor(saver_path);
       auto read = p.accept_identifier();
       TENZIR_DIAG_ASSERT(read && read->name == "write");
       auto p_name = p.accept_shell_arg();
@@ -418,12 +404,14 @@ public:
     // but `saver->is_joining()` is true. The implementation of `write_operator`
     // contains the necessary check that it is only passed one single schema in
     // that case, and it otherwise aborts the execution.
-    if (not saver->is_joining()) {
+    if (not saver->is_joining() && not compress) {
       return std::make_unique<write_and_save_operator>(std::move(printer),
                                                        std::move(saver));
     }
     auto ops = std::vector<operator_ptr>{};
     ops.push_back(std::make_unique<write_operator>(std::move(printer)));
+    if (compress)
+      ops.push_back(std::move(compress));
     ops.push_back(std::make_unique<save_operator>(std::move(saver)));
     return std::make_unique<pipeline>(std::move(ops));
   }

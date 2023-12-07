@@ -40,9 +40,7 @@ public:
       for (auto&& [name, value] : slice.schema().attributes()) {
         r.field(name).data(value);
       }
-      for (auto&& out : b.finish_as_table_slice("tenzir.attributes")) {
-        co_yield std::move(out);
-      }
+      co_yield b.finish_assert_one_slice("tenzir.attributes");
     }
   }
 

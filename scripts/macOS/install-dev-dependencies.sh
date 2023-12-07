@@ -3,7 +3,7 @@
 set -euo pipefail
 
 brew --version
-brew install \
+brew install --overwrite \
     apache-arrow \
     bash \
     boost \
@@ -21,11 +21,13 @@ brew install \
     libunwind-headers \
     llvm \
     ninja \
+    nmap \
     openssl \
     pandoc \
     pkg-config \
     poetry \
     protobuf \
+    rabbitmq-c \
     rsync \
     simdjson \
     socat \
@@ -33,4 +35,5 @@ brew install \
     tcpdump \
     xxhash \
     yaml-cpp \
+    yara \
     yarn

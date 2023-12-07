@@ -23,6 +23,7 @@ def upload_packages [
 ] {
   let pkg_dir = (nix --accept-flake-config --print-build-logs build $".#($name)^package" --no-link --print-out-paths)
   let debs = (glob $"($pkg_dir)/*.deb")
+  let pkgs = (glob $"($pkg_dir)/*.pkg")
   let tgzs = (glob $"($pkg_dir)/*.tar.gz")
   for store in $package_stores {
     let type = ($store | split row ':' | get 0)
@@ -43,6 +44,7 @@ def upload_packages [
         }
       }
       do $run "debian" $debs
+      do $run "macOS" $pkgs
       do $run "tarball" $tgzs
     }
   }
@@ -52,16 +54,27 @@ def upload_packages [
     for deb in $debs {
       cp -v $deb ./packages/debian
     }
+    for pkg in $pkgs {
+      cp -v $pkg ./packages/macOS
+    }
     for tgz in $tgzs {
       cp -v $tgz ./packages/tarball
     }
     if $git_tag != null {
-      cp ($debs | get 0) $"($name)-amd64-linux.deb"
-      print $"::attaching ($name)-amd64-linux.deb to ($git_tag)"
-      gh release upload $git_tag $"($name)-amd64-linux.deb" --clobber
-      cp ($tgzs | get 0) $"($name)-x86_64-linux.tar.gz"
-      print $"::attaching ($name)-x86_64-linux.tar.gz to ($git_tag)"
-      gh release upload $git_tag $"($name)-x86_64-linux.tar.gz" --clobber
+      let os = (uname -s)
+      if $os == "Linux" {
+        cp ($debs | get 0) $"($name)-amd64-linux.deb"
+        print $"::attaching ($name)-amd64-linux.deb to ($git_tag)"
+        gh release upload $git_tag $"($name)-amd64-linux.deb" --clobber
+        cp ($tgzs | get 0) $"($name)-x86_64-linux.tar.gz"
+        print $"::attaching ($name)-x86_64-linux.tar.gz to ($git_tag)"
+        gh release upload $git_tag $"($name)-x86_64-linux.tar.gz" --clobber
+      }
+      if $os == "Darwin" {
+        cp ($pkgs | get 0) $"($name)-arm64-darwin.pkg"
+        print $"::attaching ($name)-arm64-darwin.pkg to ($git_tag)"
+        gh release upload $git_tag $"($name)-arm64-darwin.pkg" --clobber
+      }
     }
   }
 }
@@ -71,7 +84,8 @@ def push_images [
   image_registries: list<string>
   container_tags # annotation breaks in nu 0.78 : list<string>
 ] {
-  if ($image_registries == [] or $container_tags == []) {
+  let os = (uname -s)
+  if ($os != "Linux" or $image_registries == [] or $container_tags == []) {
     return
   }
   # We always push two images: `tenzir` and `tenzir-node`.

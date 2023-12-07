@@ -1,2 +1,2 @@
 error: !! parse_error: parser input ended with incomplete object
- = note: from `read "json", parser_args(null, null, "", null, false, true, false)`
+ = note: from `read "json", parser_args(null, null, "", null, false, true, false, false)`

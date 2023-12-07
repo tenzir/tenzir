@@ -229,6 +229,9 @@ endif ()
 
 # -- optimizations -------------------------------------------------------------
 
+option(CMAKE_INTERPROCEDURAL_OPTIMIZATION_Release
+       "Enable link time optimizations for the Release build" ON)
+
 option(TENZIR_ENABLE_AUTO_VECTORIZATION "Enable SSE instructions" ON)
 add_feature_info(
   "TENZIR_ENABLE_AUTO_VECTORIZATION" TENZIR_ENABLE_AUTO_VECTORIZATION
@@ -392,8 +395,12 @@ cmake_dependent_option(
 add_feature_info("TENZIR_ENABLE_STATIC_EXECUTABLE"
                  TENZIR_ENABLE_STATIC_EXECUTABLE "link Tenzir statically.")
 if (TENZIR_ENABLE_STATIC_EXECUTABLE)
-  target_link_libraries(libtenzir_internal INTERFACE -static-libgcc
-                                                     -static-libstdc++ -static)
+  # Not desired on darwin.
+  if ("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
+    # This works with clang as well, so we don't need an extra condition here.
+    target_link_libraries(libtenzir_internal INTERFACE -static-libgcc
+                                                       -static-libstdc++ -static)
+  endif ()
 endif ()
 
 if (TENZIR_ENABLE_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
@@ -480,9 +487,6 @@ add_feature_info("TENZIR_ENABLE_JEMALLOC" TENZIR_ENABLE_JEMALLOC
                  "use jemalloc instead of libc malloc.")
 if (TENZIR_ENABLE_JEMALLOC)
   find_package(jemalloc REQUIRED)
-  provide_find_module(jemalloc)
-  string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(jemalloc REQUIRED)")
-  target_link_libraries(libtenzir_internal INTERFACE jemalloc::jemalloc_)
   dependency_summary("jemalloc" jemalloc::jemalloc_ "Dependencies")
 endif ()
 
@@ -844,7 +848,7 @@ if (TENZIR_ENABLE_PYTHON_BINDINGS)
   # first.
   set(TENZIR_PYTHON_BINARY_DIR "${CMAKE_BINARY_DIR}/share/tenzir/python")
   set(TENZIR_PYTHON_WHEEL
-    "${TENZIR_PYTHON_BINARY_DIR}/pytenzir-${TENZIR_VERSION_MAJOR}.${TENZIR_VERSION_MINOR}.${TENZIR_VERSION_PATCH}-py3-none-any.whl")
+    "${TENZIR_PYTHON_BINARY_DIR}/tenzir-${TENZIR_VERSION_MAJOR}.${TENZIR_VERSION_MINOR}.${TENZIR_VERSION_PATCH}-py3-none-any.whl")
   file(
     WRITE "${CMAKE_CURRENT_BINARY_DIR}/build-wheel.cmake"
     "\

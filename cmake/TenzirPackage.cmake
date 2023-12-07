@@ -62,15 +62,15 @@ endif ()
 set(CPACK_PACKAGE_DIRECTORY "package")
 set(CPACK_VERBATIM_VARIABLES ON)
 
-set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
-set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+# TODO: Must be html files for productbuild.
+if (NOT APPLE)
+  set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+  set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+endif ()
 set(CPACK_INSTALLED_DIRECTORIES "/var/lib/tenzir" "/var/log/tenzir")
 
 set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
-
-set(CPACK_DEBIAN_PACKAGE_PROVIDES "tenzir")
-set(CPACK_DEBIAN_PACKAGE_CONFLICTS "tenzir")
-set(CPACK_DEBIAN_PACKAGE_REPLACES "tenzir")
+set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "ca-certificates")
 
 set(CPACK_DEBIAN_COMPRESSION_TYPE "gzip")
 set(CPACK_DEBIAN_PACKAGE_SECTION "contrib/database")
@@ -101,6 +101,7 @@ set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE)
 # https://cmake.org/cmake/help/latest/module/CPackComponent.html#variable:CPACK_%3CGENNAME%3E_COMPONENT_INSTALL
 set(CPACK_DEB_COMPONENT_INSTALL ON)
 set(CPACK_ARCHIVE_COMPONENT_INSTALL ON)
+set(CPACK_PRODUCTBUILD_COMPONENT_INSTALL ON)
 
 # Set up CPack as configured above. Note that the calls to cpack_add_component
 # must come _after_ the CPack include, while the variables must be set _before_

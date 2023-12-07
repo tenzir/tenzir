@@ -9,7 +9,9 @@
 #include "tenzir/plugin.hpp"
 
 #include "tenzir/argument_parser.hpp"
+#include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/chunk.hpp"
+#include "tenzir/collect.hpp"
 #include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/config.hpp"
 #include "tenzir/configuration.hpp"
@@ -26,6 +28,7 @@
 #include "tenzir/store.hpp"
 #include "tenzir/uuid.hpp"
 
+#include <arrow/api.h>
 #include <caf/actor_system_config.hpp>
 #include <caf/expected.hpp>
 
@@ -634,6 +637,80 @@ auto store_plugin::deserialize(inspector& f,
 
 auto aspect_plugin::aspect_name() const -> std::string {
   return name();
+}
+
+// -- parser plugin ------------------------------------------------------------
+
+auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
+                                  operator_control_plane& ctrl) const
+  -> std::vector<std::pair<type, std::shared_ptr<arrow::Array>>> {
+  // TODO: Collecting finished table slices here is very bad for performance.
+  // For example, we have to concatenate new table slices. But there are also
+  // many questions with regards to semantics. This should be either completely
+  // rewritten or replaced with a different mechanism after the revamp.
+  auto output = std::vector<table_slice>{};
+  auto append_null = [&] {
+    if (output.empty()) {
+      auto schema = type{"tenzir.unknown", record_type{}};
+      output.emplace_back(arrow::RecordBatch::Make(schema.to_arrow_schema(), 1,
+                                                   arrow::ArrayVector{}),
+                          schema);
+      return;
+    }
+    auto& last = output.back();
+    auto null_builder = caf::get<record_type>(last.schema())
+                          .make_arrow_builder(arrow::default_memory_pool());
+    TENZIR_ASSERT_CHEAP(null_builder->AppendNull().ok());
+    auto null_array = std::shared_ptr<arrow::StructArray>{};
+    TENZIR_ASSERT_CHEAP(null_builder->Finish(&null_array).ok());
+    auto null_batch = arrow::RecordBatch::Make(
+      last.schema().to_arrow_schema(), 1, null_array->Flatten().ValueOrDie());
+    last
+      = concatenate({std::move(last), table_slice{null_batch, last.schema()}});
+  };
+  for (auto str : values(string_type{}, *input)) {
+    if (not str) {
+      append_null();
+      continue;
+    }
+    auto bytes = as_bytes(*str);
+    auto chunk = chunk::make(bytes, []() noexcept {});
+    auto instance = instantiate(
+      [](chunk_ptr chunk) -> generator<chunk_ptr> {
+        co_yield std::move(chunk);
+      }(std::move(chunk)),
+      ctrl);
+    if (not instance) {
+      append_null();
+      continue;
+    }
+    auto slices = collect(std::move(*instance));
+    std::erase_if(slices, [](table_slice& x) {
+      return x.rows() == 0;
+    });
+    if (slices.size() != 1) {
+      append_null();
+      continue;
+    }
+    auto slice = std::move(slices[0]);
+    if (slice.rows() != 1) {
+      append_null();
+      continue;
+    }
+    // TODO: Requiring exact schema equality will often produce tiny batches.
+    if (not output.empty() && output.back().schema() == slice.schema()) {
+      output.back() = concatenate({std::move(output.back()), std::move(slice)});
+    } else {
+      output.push_back(std::move(slice));
+    }
+  }
+  auto result = std::vector<std::pair<type, std::shared_ptr<arrow::Array>>>{};
+  result.reserve(output.size());
+  for (auto&& slice : output) {
+    result.emplace_back(slice.schema(),
+                        to_record_batch(slice)->ToStructArray().ValueOrDie());
+  }
+  return result;
 }
 
 // -- plugin_ptr ---------------------------------------------------------------

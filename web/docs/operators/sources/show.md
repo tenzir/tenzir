@@ -10,7 +10,7 @@ minor or patch releases.
 ## Synopsis
 
 ```
-show <aspect> [options]
+show [<aspect>]
 ```
 
 ## Description
@@ -26,6 +26,7 @@ Available aspects:
 
 - `config`: shows all current configuration options.
 - `connectors`: shows all available [connectors](../../connectors.md).
+- `contexts`: shows all available contexts.
 - `fields`: shows all fields of existing tables at a remote node.
 - `formats`: shows all available [formats](../../formats.md).
 - `nics`: shows all network interfaces for the [`nic`](../../connectors/nic.md)
@@ -46,6 +47,8 @@ look at what's going on:
 - `serves` shows all pipelines with the `serve` sink operator currently
   available from the `/serve` API endpoint.
 - `types`: shows all known types at a remote node.
+
+When no aspect is specified, all are shown.
 
 ## Examples
 
@@ -69,10 +72,10 @@ show fields
 show partitions
 ```
 
-Show the version of a remote node:
+Show all aspects of a remote node:
 
 ```
-remote show version
+show
 ```
 
 Show process ID, local, and remote IP address of all sockets:

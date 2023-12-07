@@ -156,6 +156,14 @@ RUN cmake -S contrib/tenzir-plugins/compaction -B build-compaction -G Ninja \
       DESTDIR=/plugin/compaction cmake --install build-compaction --strip --component Runtime && \
       rm -rf build-compaction
 
+FROM plugins-source AS context-plugin
+
+RUN cmake -S contrib/tenzir-plugins/context -B build-context -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-context --parallel && \
+      DESTDIR=/plugin/context cmake --install build-context --strip --component Runtime && \
+      rm -rf build-context
+
 # FROM plugins-source AS inventory-plugin
 #
 # RUN cmake -S contrib/tenzir-plugins/inventory -B build-inventory -G Ninja \
@@ -200,6 +208,7 @@ RUN cmake -S contrib/tenzir-plugins/platform -B build-platform -G Ninja \
 
 FROM tenzir-de AS tenzir-ce
 
+COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
 COPY --from=matcher-plugin --chown=tenzir:tenzir /plugin/matcher /
 COPY --from=netflow-plugin --chown=tenzir:tenzir /plugin/netflow /
 COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline_manager /
@@ -235,6 +244,7 @@ ENTRYPOINT ["tenzir-node"]
 FROM tenzir-ce AS tenzir-ee
 
 COPY --from=compaction-plugin --chown=tenzir:tenzir /plugin/compaction /
+COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
 
 # -- tenzir-node-ee ------------------------------------------------------------
 
