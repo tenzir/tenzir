@@ -163,15 +163,19 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
       auto resolver_entry = *endpoints.begin();
       auto endpoint = resolver_entry.endpoint();
       // Create a new acceptor and bind to provided endpoint.
-      self->state.acceptor.emplace(*self->state.io_ctx);
-      self->state.acceptor->open(endpoint.protocol(), ec);
-      auto reuse_address = boost::asio::socket_base::reuse_address(true);
-      self->state.acceptor->set_option(reuse_address, ec);
-      self->state.acceptor->bind(endpoint, ec);
-      auto backlog = boost::asio::socket_base::max_connections;
-      self->state.acceptor->listen(backlog, ec);
-      if (ec)
-        return caf::make_error(ec::system_error, "failed to bind to endpoint");
+      try {
+        self->state.acceptor.emplace(*self->state.io_ctx);
+        self->state.acceptor->open(endpoint.protocol());
+        auto reuse_address = boost::asio::socket_base::reuse_address(true);
+        self->state.acceptor->set_option(reuse_address);
+        self->state.acceptor->bind(endpoint);
+        auto backlog = boost::asio::socket_base::max_connections;
+        self->state.acceptor->listen(backlog);
+      } catch (std::exception& e) {
+        return caf::make_error(ec::system_error,
+                               fmt::format("failed to bind to endpoint: {}",
+                                           e.what()));
+      }
       TENZIR_VERBOSE("tcp operator listening on endpoint {}:{}",
                      endpoint.address().to_string(), endpoint.port());
       self->state.connection_rp = self->make_response_promise<void>();
