@@ -363,14 +363,6 @@ public:
 
 // -- operator plugin ----------------------------------------------------------
 
-/// Describes the signature of an operator.
-/// @relates operator_parser_plugin
-struct operator_signature {
-  bool source{false};
-  bool transformation{false};
-  bool sink{false};
-};
-
 /// Deriving from this plugin will add an operator with the name of this plugin
 /// to the pipeline parser. Derive from this class when you want to introduce an
 /// alias to existing operators. This plugin itself does not add a new operator,
