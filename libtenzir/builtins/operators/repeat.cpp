@@ -61,12 +61,6 @@ public:
     }
   }
 
-  auto to_string() const -> std::string override {
-    if (repetitions_ == std::numeric_limits<uint64_t>::max())
-      return "repeat";
-    return fmt::format("repeat {}", repetitions_);
-  }
-
   auto name() const -> std::string override {
     return "repeat";
   }

@@ -13,6 +13,7 @@
 #include <tenzir/concept/parseable/tenzir/expression.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/concept/parseable/to.hpp>
+#include <tenzir/detail/debug_writer.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/expression.hpp>
@@ -98,10 +99,6 @@ public:
     return {};
   }
 
-  auto to_string() const -> std::string override {
-    return fmt::format("where {}", expr_.inner);
-  };
-
   auto name() const -> std::string override {
     return "where";
   }
@@ -117,6 +114,9 @@ public:
   }
 
   friend auto inspect(auto& f, where_operator& x) -> bool {
+    if (auto dbg = as_debug_writer(f)) {
+      return dbg->fmt_value("({} @ {:?})", x.expr_.inner, x.expr_.source);
+    }
     return f.apply(x.expr_);
   }
 

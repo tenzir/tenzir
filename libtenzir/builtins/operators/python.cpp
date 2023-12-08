@@ -268,10 +268,6 @@ public:
     return execute(std::move(input), ctrl);
   }
 
-  auto to_string() const -> std::string override {
-    return code_;
-  }
-
   auto name() const -> std::string override {
     return "python";
   }

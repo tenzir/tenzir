@@ -335,21 +335,6 @@ public:
     return make(timeout, fd_wrapper{fd, true}, args_.follow.has_value());
   }
 
-  auto to_string() const -> std::string override {
-    auto result = std::string{"file "};
-    result += escape_operator_arg(args_.path.inner);
-    if (args_.follow) {
-      result += " --follow";
-    }
-    if (args_.mmap) {
-      result += " --mmap";
-    }
-    if (args_.timeout) {
-      result += fmt::format(" --timeout {}", *args_.timeout);
-    }
-    return result;
-  }
-
   auto name() const -> std::string override {
     return "file";
   }

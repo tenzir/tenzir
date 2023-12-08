@@ -58,7 +58,7 @@ public:
     class handler final : public diagnostic_handler {
     public:
       void emit(diagnostic d) override {
-        TENZIR_WARN("got diagnostic: {}", d);
+        TENZIR_WARN("got diagnostic: {:?}", d);
         error_ |= d.severity == severity::error;
       }
 
@@ -106,49 +106,6 @@ pipeline::pipeline(std::vector<operator_ptr> operators) {
       operators_.push_back(std::move(op));
     }
   }
-}
-
-auto pipeline::deserialize_op(inspector& f) -> operator_ptr {
-  auto name = std::string{};
-  if (!f.apply(name)) {
-    return nullptr;
-  }
-  if (name == pipeline{}.name()) {
-    // There is no pipeline plugin (maybe there should be?), so we
-    // special-case this here.
-    auto pipe = std::make_unique<pipeline>();
-    if (!f.apply(*pipe)) {
-      return nullptr;
-    }
-    return pipe;
-  }
-  auto const* p = plugins::find<operator_serialization_plugin>(name);
-  if (!p) {
-    f.set_error(
-      caf::make_error(ec::serialization_error,
-                      fmt::format("could not find plugin `{}`", name)));
-    return nullptr;
-  }
-  auto op = operator_ptr{};
-  p->deserialize(f, op);
-  if (!op) {
-    f.set_error(caf::make_error(ec::serialization_error,
-                                fmt::format("plugin `{}` returned nullptr: {}",
-                                            p->name(), f.get_error())));
-    return nullptr;
-  }
-  return op;
-}
-
-auto pipeline::serialize_op(const operator_base& op, inspector& f) -> bool {
-  auto name = op.name();
-  auto const* p = plugins::find<operator_serialization_plugin>(name);
-  if (!p) {
-    f.set_error(
-      caf::make_error(ec::serialization_error, "could not find plugin"));
-    return false;
-  }
-  return f.apply(name) && p->serialize(f, op);
 }
 
 auto pipeline::parse(std::string source, diagnostic_handler& diag)
@@ -210,7 +167,7 @@ auto pipeline::optimize_if_closed() const -> pipeline {
     // This could also be an assertion as it always points to an error in the
     // operator implementation, but we try to continue with the original
     // pipeline here.
-    TENZIR_ERROR("optimize on closed pipeline `{}` returned expression `{}`",
+    TENZIR_ERROR("optimize on closed pipeline `{:?}` returned expression `{}`",
                  *this, filter);
     return *this;
   }
@@ -283,17 +240,10 @@ auto pipeline::copy() const -> operator_ptr {
   return copied;
 }
 
-auto pipeline::to_string() const -> std::string {
-  if (operators_.empty()) {
-    return "pass";
-  }
-  return fmt::to_string(fmt::join(operators_, " | "));
-}
-
 auto pipeline::instantiate(operator_input input,
                            operator_control_plane& control) const
   -> caf::expected<operator_output> {
-  TENZIR_DEBUG("instantiating '{}' for {}", *this, operator_type_name(input));
+  TENZIR_DEBUG("instantiating '{:?}' for {}", *this, operator_type_name(input));
   if (operators_.empty()) {
     auto f = detail::overload{
       [](std::monostate) -> operator_output {
@@ -333,36 +283,28 @@ auto pipeline::instantiate(operator_input input,
 }
 
 auto operator_base::copy() const -> operator_ptr {
-  // TODO
   auto p = plugins::find<operator_serialization_plugin>(name());
-  TENZIR_ASSERT(p);
+  if (not p) {
+    TENZIR_ERROR("could not find serialization plugin `{}`", name());
+    TENZIR_ASSERT_CHEAP(false);
+  }
   auto buffer = caf::byte_buffer{};
-  auto serializer = caf::binary_serializer{nullptr, buffer};
-  auto f = inspector{serializer};
+  auto f = caf::binary_serializer{nullptr, buffer};
   auto success = p->serialize(f, *this);
-  TENZIR_ASSERT(success);
-  auto deserializer = caf::binary_deserializer{nullptr, buffer};
-  f = inspector{deserializer};
+  if (not success) {
+    TENZIR_ERROR("failed to serialize `{}` operator: {}", name(),
+                 f.get_error());
+    TENZIR_ASSERT_CHEAP(false);
+  }
+  auto g = caf::binary_deserializer{nullptr, buffer};
   auto copy = operator_ptr{};
-  p->deserialize(f, copy);
-  TENZIR_ASSERT(copy);
+  p->deserialize(g, copy);
+  if (not copy) {
+    TENZIR_ERROR("failed to deserialize `{}` operator: {}", name(),
+                 g.get_error());
+    TENZIR_ASSERT_CHEAP(false);
+  }
   return copy;
-}
-
-auto operator_base::to_string() const -> std::string {
-  // TODO: Improve this output, perhaps by using JSON and rendering some field
-  // type, for instance expressions, as strings.
-  auto s = std::string{};
-  auto f = caf::detail::stringification_inspector{s};
-  auto g = inspector{f};
-  auto const* p = plugins::find<operator_serialization_plugin>(name());
-  if (!p) {
-    return fmt::format("{} <error: plugin not found>", name());
-  }
-  if (!p->serialize(g, *this)) {
-    return fmt::format("{} <error: serialize failed>", name());
-  }
-  return fmt::format("{} {}", name(), s);
 }
 
 auto operator_base::infer_signature() const -> operator_signature {
@@ -416,7 +358,7 @@ auto pipeline::infer_type_impl(operator_type input) const
     if (!first && current.is<void>()) {
       return caf::make_error(ec::type_clash, fmt::format("pipeline continues "
                                                          "with '{}' after sink",
-                                                         op->to_string()));
+                                                         op->name()));
     }
     auto next = op->infer_type(current);
     if (!next) {
@@ -467,28 +409,12 @@ auto pipeline::operator=(pipeline const& other) -> pipeline& {
   return *this;
 }
 
-auto inspector::is_loading() -> bool {
-  return std::visit(
-    [&]<class Inspector>(std::reference_wrapper<Inspector>) {
-      return Inspector::is_loading;
-    },
-    *this);
-}
-
-void inspector::set_error(caf::error e) {
+auto detail::serialize_op(serializer f, const operator_base& x) -> bool {
   return std::visit(
     [&](auto& f) {
-      f.get().set_error(e);
+      return plugin_serialize(f.get(), x);
     },
-    *this);
-}
-
-auto inspector::get_error() const -> const caf::error& {
-  return std::visit(
-    [](auto&& f) -> const caf::error& {
-      return f.get().get_error();
-    },
-    *this);
+    f);
 }
 
 } // namespace tenzir

@@ -1,2 +1,2 @@
 error: !! invalid_argument: put operator requires lists to have a homogeneous element type
- = note: from `put foo=["true", false]`
+ = note: from `put`

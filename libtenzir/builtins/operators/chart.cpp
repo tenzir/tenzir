@@ -43,10 +43,6 @@ public:
     return "chart";
   }
 
-  auto to_string() const -> std::string override {
-    return fmt::format("{} {}", name(), helper_.get_config().to_string());
-  }
-
   auto optimize(const expression& filter, event_order order) const
     -> optimize_result override {
     (void)filter;

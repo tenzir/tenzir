@@ -782,31 +782,6 @@ public:
     }
   }
 
-  auto to_string() const -> std::string override {
-    auto result = fmt::format("summarize");
-    bool first = true;
-    for (auto& aggr : config_.aggregations) {
-      auto rhs = fmt::format("{}({})", aggr.function->name(), aggr.input);
-      if (first) {
-        first = false;
-        result += ' ';
-      } else {
-        result += ", ";
-      }
-      if (rhs == aggr.output) {
-        result += fmt::format("{}", aggr.output, rhs);
-      } else {
-        result += fmt::format("{}={}", aggr.output, rhs);
-      }
-    }
-    result
-      += fmt::format(" by {}", fmt::join(config_.group_by_extractors, ", "));
-    if (config_.time_resolution) {
-      result += fmt::format(" resolution {}", *config_.time_resolution);
-    }
-    return result;
-  }
-
   auto name() const -> std::string override {
     return "summarize";
   }

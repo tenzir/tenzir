@@ -96,31 +96,6 @@ public:
     }
   }
 
-  auto to_string() const -> std::string override {
-    if (field_ == default_field_name)
-      return "enumerate";
-    // We may want to factor this so that it can be used by other operators.
-    auto escaper = [](auto& f, auto out) {
-      auto escape_char = [](char c, auto out) {
-        *out++ = '\\';
-        *out++ = c;
-      };
-      switch (*f) {
-        default:
-          *out++ = *f++;
-          return;
-        case '\\':
-          escape_char('\\', out);
-          break;
-        case '"':
-          escape_char('"', out);
-          break;
-      }
-      ++f;
-    };
-    return fmt::format("enumerate \"{}\"", detail::escape(field_, escaper));
-  }
-
   auto name() const -> std::string override {
     return "enumerate";
   }

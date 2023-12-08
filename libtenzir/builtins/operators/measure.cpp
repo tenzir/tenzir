@@ -113,11 +113,6 @@ public:
       co_yield builder.finish();
   }
 
-  auto to_string() const -> std::string override {
-    return fmt::format("measure{}{}", real_time_ ? " --real-time" : "",
-                       cumulative_ ? " --cumulative" : "");
-  }
-
   auto name() const -> std::string override {
     return "measure";
   }

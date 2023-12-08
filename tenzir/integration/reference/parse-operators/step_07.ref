@@ -1,3 +1,5 @@
-slice tenzir.plugin.slice.slice_operator(null, *42)
------
-located("<pipeline>", [[["slice", tenzir.plugin.slice.slice_operator(null, *42)]]], location(0, 7))
+pipeline [
+  slice {
+    end: 42
+  }
+] @ 0..7

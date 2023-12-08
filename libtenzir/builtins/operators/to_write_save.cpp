@@ -113,8 +113,7 @@ public:
             ec::logic_error,
             fmt::format("'{}' does not support heterogeneous outputs; cannot "
                         "initialize for '{}' after '{}'",
-                        to_string(), printer_->name(), slice.schema(),
-                        state->second)));
+                        printer_->name(), slice.schema(), state->second)));
           co_return;
         }
         for (auto&& chunk : state->first->process(std::move(slice))) {
