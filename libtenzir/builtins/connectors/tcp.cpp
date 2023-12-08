@@ -343,8 +343,6 @@ public:
             .request(tcp_bridge, caf::infinite, atom::read_v, uint64_t{65536})
             .await(
               [&](chunk_ptr& chunk) {
-                TENZIR_DEBUG("tcp operator produces {} bytes of data",
-                             chunk->size());
                 result = std::move(chunk);
               },
               [&](const caf::error& err) {
