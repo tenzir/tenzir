@@ -365,6 +365,20 @@ auto operator_base::to_string() const -> std::string {
   return fmt::format("{} {}", name(), s);
 }
 
+auto operator_base::infer_signature() const -> operator_signature {
+  const auto void_output = infer_type<void>();
+  const auto bytes_output = infer_type<chunk_ptr>();
+  const auto events_output = infer_type<table_slice>();
+  return {
+    .source = static_cast<bool>(void_output),
+    .transformation = (bytes_output and not bytes_output->is<void>())
+                      or (events_output and not events_output->is<void>()),
+    .sink = (void_output and void_output->is<void>())
+            or (bytes_output and bytes_output->is<void>())
+            or (events_output and events_output->is<void>()),
+  };
+}
+
 auto operator_base::infer_type_impl(operator_type input) const
   -> caf::expected<operator_type> {
   auto ctrl = local_control_plane{};

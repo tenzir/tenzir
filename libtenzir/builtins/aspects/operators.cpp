@@ -8,27 +8,21 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/table_slice_builder.hpp>
+#include <tenzir/series_builder.hpp>
 
 namespace tenzir::plugins::operators {
 
 namespace {
 
-/// A type that represents an operator.
-auto operator_type() -> type {
-  return type{
-    "tenzir.operator",
-    record_type{
-      {"name", string_type{}},
-      {"source", bool_type{}},
-      {"transformation", bool_type{}},
-      {"sink", bool_type{}},
-    },
-  };
-}
-
 class plugin final : public virtual aspect_plugin {
 public:
+  auto initialize(const record& plugin_config, const record& global_config)
+    -> caf::error override {
+    (void)plugin_config;
+    udos_ = get_or(global_config, "tenzir.operators", udos_);
+    return {};
+  }
+
   auto name() const -> std::string override {
     return "operators";
   }
@@ -39,18 +33,45 @@ public:
 
   auto show(operator_control_plane& ctrl) const
     -> generator<table_slice> override {
-    auto builder = table_slice_builder{operator_type()};
+    auto builder = series_builder{};
+    // Add operator plugins.
     for (const auto* plugin : plugins::get<operator_parser_plugin>()) {
-      auto signature = plugin->signature();
-      if (not(builder.add(plugin->name()) && builder.add(signature.source)
-              && builder.add(signature.transformation)
-              && builder.add(signature.sink))) {
-        diagnostic::error("failed to add operator").emit(ctrl.diagnostics());
-        co_return;
-      }
+      auto event = builder.record();
+      const auto signature = plugin->signature();
+      event.field("name", plugin->name());
+      event.field("definition").null();
+      event.field("source", signature.source);
+      event.field("transformation", signature.transformation);
+      event.field("sink", signature.sink);
     }
-    co_yield builder.finish();
+    // Add user-defined operators.
+    for (const auto& [udo, definition] : udos_) {
+      auto def_str = caf::get_if<std::string>(&definition);
+      if (not def_str) {
+        // Invalid UDOs are just ignored for `show operators`, as we don't care
+        // about them here.
+        continue;
+      }
+      auto op = pipeline::internal_parse(*def_str);
+      if (not op) {
+        diagnostic::warning("user-defined operator `{}` failed to parse: {}",
+                            udo, op.error())
+          .emit(ctrl.diagnostics());
+        continue;
+      }
+      auto event = builder.record();
+      const auto signature = op->infer_signature();
+      event.field("name", udo);
+      event.field("definition", *def_str);
+      event.field("source", signature.source);
+      event.field("transformation", signature.transformation);
+      event.field("sink", signature.sink);
+    }
+    co_yield builder.finish_assert_one_slice("tenzir.operator");
   }
+
+private:
+  record udos_ = {};
 };
 
 } // namespace

@@ -129,6 +129,14 @@ auto inspect(auto& f, operator_location& x) {
   return detail::inspect_enum(f, x);
 }
 
+/// Describes the signature of an operator.
+/// @relates operator_parser_plugin
+struct operator_signature {
+  bool source = false;
+  bool transformation = false;
+  bool sink = false;
+};
+
 // TODO: Consider splitting this up and use alias instead.
 struct inspector
   : std::variant<std::reference_wrapper<caf::serializer>,
@@ -377,6 +385,9 @@ public:
     }
     return {};
   }
+
+  /// Infers the "signature" of a pipeline.
+  auto infer_signature() const -> operator_signature;
 
 protected:
   virtual auto infer_type_impl(operator_type input) const
