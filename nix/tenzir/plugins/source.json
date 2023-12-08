@@ -4,6 +4,5 @@
   "ref": "main",
   "submodules": true,
   "shallow": true,
-  "allRefs": true,
-  "rev": "286862d56748144b426e59319b0f9bc4e5ef9fba"
+  "rev": "a326b62509519165678b717bffd593722e1c5ddb"
 }
