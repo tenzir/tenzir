@@ -1,1 +1,5 @@
-head 42 @ 0..7
+pipeline [
+  slice {
+    end: 42
+  }
+] @ 0..7

@@ -1240,3 +1240,17 @@ tests:
         input: data/xsv/sample.tsv
       - command: exec 'read csv'
         input: data/xsv/nulls-and-escaping.csv
+
+  Slice:
+    tags: [pipelines, xsv]
+    steps:
+      - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin 1'
+      - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin -1'
+      - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --end 1'
+      - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --end -1'
+      - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin 1 --end 1'
+      - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin 1 --end 2'
+      - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin 1 --end -1'
+      - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin -1 --end 1'
+      - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin -1 --end -1'
+      - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin -2 --end -1'
