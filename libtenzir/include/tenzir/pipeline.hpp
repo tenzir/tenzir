@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/table_slice.hpp"
@@ -126,33 +127,25 @@ enum class operator_location {
 };
 
 auto inspect(auto& f, operator_location& x) {
-  return detail::inspect_enum(f, x);
+  return detail::inspect_enum_str(f, x, {"local", "remote", "anywhere"});
 }
 
-// TODO: Consider splitting this up and use alias instead.
-struct inspector
-  : std::variant<std::reference_wrapper<caf::serializer>,
-                 std::reference_wrapper<caf::deserializer>,
-                 std::reference_wrapper<caf::binary_serializer>,
-                 std::reference_wrapper<caf::binary_deserializer>,
-                 std::reference_wrapper<caf::detail::stringification_inspector>> {
-  using variant::variant;
-
-  auto is_loading() -> bool;
-
-  void set_error(caf::error e);
-
-  auto get_error() const -> const caf::error&;
-
-  template <class T>
-  [[nodiscard]] auto apply(T& x) -> bool {
-    return std::visit(
-      [&](auto& f) -> bool {
-        return f.get().apply(x);
-      },
-      *this);
-  }
+/// Describes the signature of an operator.
+/// @relates operator_parser_plugin
+struct operator_signature {
+  bool source = false;
+  bool transformation = false;
+  bool sink = false;
 };
+
+using serializer
+  = std::variant<std::reference_wrapper<caf::serializer>,
+                 std::reference_wrapper<caf::binary_serializer>,
+                 std::reference_wrapper<caf::detail::stringification_inspector>>;
+
+using deserializer
+  = std::variant<std::reference_wrapper<caf::deserializer>,
+                 std::reference_wrapper<caf::binary_deserializer>>;
 
 /// See `operator_base::optimize` for a description of this.
 enum class event_order {
@@ -250,11 +243,6 @@ public:
   /// Copies the underlying pipeline operator. The default implementation is
   /// derived from `inspect()` and requires that it does not fail.
   virtual auto copy() const -> operator_ptr;
-
-  /// Returns a textual representation of this operator for display and
-  /// debugging purposes. Note that this representation is not necessarily
-  /// parseable. The default implementation yields "<name> <stringification>".
-  virtual auto to_string() const -> std::string;
 
   /// Optimizes the operator for a given filter and event order.
   ///
@@ -378,10 +366,25 @@ public:
     return {};
   }
 
+  /// Infers the "signature" of a pipeline.
+  auto infer_signature() const -> operator_signature;
+
 protected:
   virtual auto infer_type_impl(operator_type input) const
     -> caf::expected<operator_type>;
 };
+
+namespace detail {
+
+auto serialize_op(serializer f, const operator_base& x) -> bool;
+
+} // namespace detail
+
+template <class Inspector>
+auto inspect(Inspector& f, const operator_base& x) -> bool {
+  static_assert(std::constructible_from<serializer, Inspector&>);
+  return detail::serialize_op(f, x);
+}
 
 /// The result of calling `operator_base::optimize(...)`.
 ///
@@ -483,15 +486,12 @@ public:
 
   auto copy() const -> operator_ptr override;
 
-  auto to_string() const -> std::string override;
-
   auto infer_type_impl(operator_type input) const
     -> caf::expected<operator_type> override;
 
   /// Support the CAF type inspection API.
   template <class Inspector>
   friend auto inspect(Inspector& f, pipeline& x) -> bool {
-    // TODO: Replace asserts with checks once CAF reports inspection errors.
     if constexpr (Inspector::is_loading) {
       x.operators_.clear();
       auto ops = size_t{};
@@ -500,40 +500,19 @@ public:
       }
       x.operators_.reserve(ops);
       for (auto i = size_t{0}; i < ops; ++i) {
-        auto array_size = size_t{};
-        if (!f.begin_associative_array(array_size)) {
-          return false;
-        }
-        if (array_size != 1) {
-          f.set_error(caf::make_error(ec::serialization_error,
-                                      fmt::format("invalid array size of {}",
-                                                  array_size)));
-          return false;
-        }
-        auto plugin_name = std::string{};
-        if (!f.begin_key_value_pair()) {
-          return false;
-        }
-        auto g = inspector{f};
-        auto op = deserialize_op(g);
-        if (!op) {
+        auto op = operator_ptr{};
+        if (not plugin_inspect(f, op)) {
           return false;
         }
         x.operators_.push_back(std::move(op));
-        if (!(f.end_key_value_pair() && f.end_associative_array())) {
-          return false;
-        }
       }
       return f.end_sequence();
     } else {
       if (!f.begin_sequence(x.operators_.size())) {
         return false;
       }
-      for (const auto& op : x.operators_) {
-        auto g = inspector{f};
-        if (!(f.begin_associative_array(1) && f.begin_key_value_pair()
-              && serialize_op(*op, g) && f.end_key_value_pair()
-              && f.end_associative_array())) {
+      for (auto& op : x.operators_) {
+        if (not plugin_inspect(f, op)) {
           return false;
         }
       }
@@ -542,26 +521,14 @@ public:
   }
 
   auto name() const -> std::string override {
-    // TODO: Not anymore?
-    // Normally, there must be a `operator_serialization_plugin` with this name.
-    // However, pipelines are a special exception to this rule right now.
-    return "<pipeline>";
+    return "pipeline";
   }
 
 private:
-  static auto deserialize_op(inspector& f) -> operator_ptr;
-
-  static auto serialize_op(const operator_base& op, inspector& f) -> bool;
-
   std::vector<operator_ptr> operators_;
 };
 
 inline auto inspect(auto& f, operator_ptr& x) -> bool {
-  // TODO: Is this the best way to do it?
-  // TENZIR_ASSERT(x);
-  // if (auto* pipe = dynamic_cast<pipeline*>(x.get())) {
-  //   return f.apply(*pipe);
-  // }
   return plugin_inspect(f, x);
 }
 
@@ -597,7 +564,7 @@ public:
         } else {
           return caf::make_error(ec::type_clash,
                                  fmt::format("'{}' cannot be used as a source",
-                                             to_string()));
+                                             name()));
         }
       },
       [&]<class Input>(
@@ -778,35 +745,14 @@ public:
 /// pipeline on the current thread.
 auto make_local_executor(pipeline p) -> generator<caf::expected<void>>;
 
-} // namespace tenzir
-
 template <class T>
-struct fmt::formatter<
-  T, char, std::enable_if_t<std::is_base_of_v<tenzir::operator_base, T>>> {
-  constexpr auto parse(format_parse_context& ctx) {
-    return ctx.begin();
-  }
-
-  template <class FormatContext>
-  auto format(const tenzir::operator_base& value, FormatContext& ctx) const {
-    auto str = value.to_string();
-    return std::copy(str.begin(), str.end(), ctx.out());
-  }
-};
+  requires(std::is_base_of_v<tenzir::operator_base, T>)
+inline constexpr auto enable_default_formatter<T> = true;
 
 template <>
-struct fmt::formatter<tenzir::operator_ptr> {
-  constexpr auto parse(format_parse_context& ctx) {
-    return ctx.begin();
-  }
+inline constexpr auto enable_default_formatter<operator_ptr> = true;
 
-  template <class FormatContext>
-  auto format(const tenzir::operator_ptr& value, FormatContext& ctx) const {
-    if (value) {
-      return fmt::formatter<tenzir::operator_base>{}.format(*value, ctx);
-    } else {
-      auto str = std::string_view{"nullptr"};
-      return std::copy(str.begin(), str.end(), ctx.out());
-    }
-  }
-};
+} // namespace tenzir
+
+// This is needed for `plugin_inspect`.
+#include "tenzir/plugin.hpp" // IWYU pragma: keep

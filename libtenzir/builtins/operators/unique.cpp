@@ -54,10 +54,6 @@ public:
     }
   }
 
-  auto to_string() const -> std::string override {
-    return "unique";
-  }
-
   auto name() const -> std::string override {
     return "unique";
   }

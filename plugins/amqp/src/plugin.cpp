@@ -544,10 +544,6 @@ public:
     return make(ctrl, args_, config_);
   }
 
-  auto to_string() const -> std::string override {
-    return {};
-  }
-
   auto name() const -> std::string override {
     return "amqp";
   }

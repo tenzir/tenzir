@@ -160,12 +160,25 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
           ec::system_error, fmt::format("failed to resolve host {}, service {}",
                                         hostname, service));
       }
-      self->state.connection_rp = self->make_response_promise<void>();
       auto resolver_entry = *endpoints.begin();
       auto endpoint = resolver_entry.endpoint();
+      // Create a new acceptor and bind to provided endpoint.
+      try {
+        self->state.acceptor.emplace(*self->state.io_ctx);
+        self->state.acceptor->open(endpoint.protocol());
+        auto reuse_address = boost::asio::socket_base::reuse_address(true);
+        self->state.acceptor->set_option(reuse_address);
+        self->state.acceptor->bind(endpoint);
+        auto backlog = boost::asio::socket_base::max_connections;
+        self->state.acceptor->listen(backlog);
+      } catch (std::exception& e) {
+        return caf::make_error(ec::system_error,
+                               fmt::format("failed to bind to endpoint: {}",
+                                           e.what()));
+      }
       TENZIR_VERBOSE("tcp operator listening on endpoint {}:{}",
                      endpoint.address().to_string(), endpoint.port());
-      self->state.acceptor.emplace(*self->state.io_ctx, endpoint);
+      self->state.connection_rp = self->make_response_promise<void>();
       self->state.acceptor->async_accept(
         [self, certfile, keyfile,
          weak_hdl = caf::actor_cast<caf::weak_actor_ptr>(self)](
@@ -330,8 +343,6 @@ public:
             .request(tcp_bridge, caf::infinite, atom::read_v, uint64_t{65536})
             .await(
               [&](chunk_ptr& chunk) {
-                TENZIR_DEBUG("tcp operator produces {} bytes of data",
-                             chunk->size());
                 result = std::move(chunk);
               },
               [&](const caf::error& err) {
@@ -357,11 +368,6 @@ public:
     return f.object(x)
       .pretty_name("tenzir.plugins.tcp.loader")
       .fields(f.field("args", x.args_));
-  }
-
-  // Remove once the base class has this function removed.
-  auto to_string() const -> std::string override {
-    return "tcp";
   }
 
 private:

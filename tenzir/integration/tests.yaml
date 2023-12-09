@@ -98,6 +98,7 @@ tests:
       - command: exec "from @./data/json/dns.log.json.gz read json | head 2"
       - command: exec "from @./data/suricata/eve.json | head 2"
       - command: exec "from @./data/zeek/http.log.gz read zeek-tsv | head 2"
+      - command: exec --dump-ast "from a/b/c.json | where xyz == 123 | to foo.csv"
 
   Apply operator:
     tags: [pipelines]
@@ -1239,3 +1240,17 @@ tests:
         input: data/xsv/sample.tsv
       - command: exec 'read csv'
         input: data/xsv/nulls-and-escaping.csv
+
+  Slice:
+    tags: [pipelines, xsv]
+    steps:
+      - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin 1'
+      - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin -1'
+      - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --end 1'
+      - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --end -1'
+      - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin 1 --end 1'
+      - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin 1 --end 2'
+      - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin 1 --end -1'
+      - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin -1 --end 1'
+      - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin -1 --end -1'
+      - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin -2 --end -1'

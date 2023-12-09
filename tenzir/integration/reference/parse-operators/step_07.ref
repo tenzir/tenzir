@@ -1,3 +1,5 @@
-head 42
------
-located("head", 42, location(0, 7))
+pipeline [
+  slice {
+    end: 42
+  }
+] @ 0..7

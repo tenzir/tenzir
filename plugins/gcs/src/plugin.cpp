@@ -119,15 +119,6 @@ public:
       }(args_, ctrl);
   }
 
-  auto to_string() const -> std::string override {
-    auto result = name();
-    if (args_.anonymous) {
-      result += " --anonymous";
-    }
-    result += fmt::format(" {}", args_.uri.inner);
-    return result;
-  }
-
   auto name() const -> std::string override {
     return "gcs";
   }

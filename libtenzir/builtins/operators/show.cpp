@@ -19,16 +19,6 @@ namespace tenzir::plugins::show {
 
 namespace {
 
-struct operator_args {
-  std::optional<located<std::string>> aspect;
-
-  friend auto inspect(auto& f, operator_args& x) -> bool {
-    return f.object(x)
-      .pretty_name("operator_args")
-      .fields(f.field("aspect", x.aspect));
-  }
-};
-
 class show_operator final : public crtp_operator<show_operator> {
 public:
   show_operator() = default;
@@ -104,23 +94,23 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser = argument_parser{"show", "https://docs.tenzir.com/next/"
                                           "operators/sources/show"};
-    operator_args args;
-    parser.add(args.aspect, "<aspect>");
+    auto aspect = std::optional<located<std::string>>{};
+    parser.add(aspect, "<aspect>");
     parser.parse(p);
-    if (args.aspect) {
+    if (aspect) {
       auto available = std::map<std::string, std::string>{};
       for (const auto& aspect : collect(plugins::get<aspect_plugin>()))
         available.emplace(aspect->aspect_name(), aspect->name());
-      if (not available.contains(args.aspect->inner)) {
+      if (not available.contains(aspect->inner)) {
         auto aspects = std::vector<std::string>{};
         for (const auto& [aspect_name, plugin_name] : available)
           aspects.push_back(aspect_name);
-        diagnostic::error("aspect `{}` could not be found", args.aspect->inner)
-          .primary(args.aspect->source)
+        diagnostic::error("aspect `{}` could not be found", aspect->inner)
+          .primary(aspect->source)
           .hint("must be one of {}", fmt::join(aspects, ", "))
           .throw_();
       }
-      return std::make_unique<show_operator>(available[args.aspect->inner]);
+      return std::make_unique<show_operator>(available[aspect->inner]);
     }
     return std::make_unique<show_operator>();
   }

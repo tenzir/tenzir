@@ -88,7 +88,7 @@ public:
           .note("while parsing `{}`", completed_path.string())
           .throw_();
       } else {
-        diagnostic::error("failed to parse `{}`: {}", file.inner, diags)
+        diagnostic::error("failed to parse `{}`: {::?}", file.inner, diags)
           .primary(file.source)
           .throw_();
       }

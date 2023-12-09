@@ -94,7 +94,7 @@ jobs:
       - name: Inject Slug Variables
         uses: rlespinasse/github-slug-action@v4
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v1
+        uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
@@ -684,7 +684,7 @@ jobs:
         run: ./${{ matrix.tenzir.dependencies-script-path }}
       - name: Setup Python
         if: ${{ matrix.tenzir.name == 'macOS' }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - name: Install Nix
@@ -794,7 +794,7 @@ jobs:
           if-no-files-found: error
       - name: Authenticate to Google Cloud
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        uses: google-github-actions/auth@v1
+        uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
@@ -946,7 +946,7 @@ jobs:
           name: "${{ env.PACKAGE_NAME }}.tar.gz"
       - name: Authenticate to Google Cloud
         if: ${{ needs.configure.outputs.run-tenzir == 'false' }}
-        uses: google-github-actions/auth@v1
+        uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
@@ -1028,7 +1028,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
       - name: Setup Poetry image
@@ -1067,7 +1067,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.10
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: "3.10"
       - name: Setup Poetry image

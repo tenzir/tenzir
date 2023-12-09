@@ -49,10 +49,6 @@ public:
     }
   }
 
-  auto to_string() const -> std::string override {
-    return fmt::format("flatten '{}'", separator_);
-  }
-
   auto name() const -> std::string override {
     return "flatten";
   }

@@ -13,6 +13,7 @@
 #include "tenzir/concept/printable/print.hpp"
 #include "tenzir/concept/printable/tenzir/json_printer_options.hpp"
 #include "tenzir/defaults.hpp"
+#include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/detail/type_traits.hpp"

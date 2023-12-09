@@ -300,9 +300,9 @@ exporter_state::~exporter_state() noexcept {
 auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
               query_options options, pipeline pipe, index_actor index)
   -> exporter_actor::behavior_type {
-  TENZIR_DEBUG("spawned {} with pipeline {}", *self, pipe);
+  TENZIR_DEBUG("spawned {} with pipeline {:?}", *self, pipe);
   self->state.self = self;
-  self->state.pipeline_str = pipe.to_string();
+  self->state.pipeline_str = fmt::format("{:?}", pipe);
   auto expr = expression{};
   std::tie(expr, pipe) = pipe.optimize_into_filter();
   auto normalized = normalize_and_validate(std::move(expr));
@@ -316,7 +316,7 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
   expr = std::move(*normalized);
   pipe.prepend(std::make_unique<exporter_source>(self));
   pipe.append(std::make_unique<exporter_sink>(self));
-  TENZIR_DEBUG("{} uses filter {} and pipeline {}", *self, expr, pipe);
+  TENZIR_DEBUG("{} uses filter {} and pipeline {:?}", *self, expr, pipe);
   self->state.options = options;
   self->state.query_context
     = tenzir::query_context::make_extract("export", self, std::move(expr));
