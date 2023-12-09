@@ -81,8 +81,5 @@ We currently have the following override files:
 |docker/compose/quarto.yaml|Build the Quarto image and run Bash inside.|
 |docker/compose/quarto.bind.yaml|Bind mound the Tenzir respository.|
 |docker/compose/quarto.tenzir.yaml|Apply settings to connect to the Tenzir service.|
-|docker/compose/thehive.yaml|Start TheHive/Cortex with a basic initial setup.|
-|docker/compose/thehive.tenzir.yaml|Integrate the Analyzer with the Tenzir service.|
-|docker/compose/thehive.app.yaml|Start an integration app for Suricata alerts.|
 |docker/compose/misp.yaml|Start MISP with a basic initial setup.|
 |docker/compose/misp.proxy.yaml|Add a reverse proxy for dynamic hostnames.|

@@ -767,7 +767,6 @@ multidict = ">=4.0"
 [extras]
 module = ["numpy"]
 operator = ["pandas", "python-box"]
-thehive = ["aiohttp"]
 
 [metadata]
 lock-version = "2.0"
