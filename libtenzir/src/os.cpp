@@ -70,9 +70,9 @@ auto socket_type() -> type {
 
 auto os::make() -> std::unique_ptr<os> {
 #if TENZIR_LINUX
-  return linux::make();
+  return linux_os::make();
 #elif TENZIR_MACOS
-  return darwin::make();
+  return darwin_os::make();
 #endif
   return nullptr;
 }
@@ -111,23 +111,23 @@ auto os::sockets() -> table_slice {
 
 #if TENZIR_LINUX
 
-struct linux::state {
+struct linux_os::state {
   uint64_t clock_tick{};
   pfs::procfs procfs{};
 };
 
-auto linux::make() -> std::unique_ptr<linux> {
-  auto result = std::unique_ptr<linux>{new linux};
+auto linux_os::make() -> std::unique_ptr<linux_os> {
+  auto result = std::unique_ptr<linux_os>(new linux_os);
   result->state_->clock_tick = sysconf(_SC_CLK_TCK);
   return result;
 }
 
-linux::linux() : state_{std::make_unique<state>()} {
+linux_os::linux_os() : state_{std::make_unique<state>()} {
 }
 
-linux::~linux() = default;
+linux_os::~linux_os() = default;
 
-auto linux::fetch_processes() -> std::vector<process> {
+auto linux_os::fetch_processes() -> std::vector<process> {
   auto result = std::vector<process>{};
   try {
     auto tasks = state_->procfs.get_processes();
@@ -219,7 +219,7 @@ auto to_socket(const pfs::net_socket& s, uint32_t pid, std::string comm,
 } // namespace
 
 // TODO: Consider using the netlink API to list sockets instead.
-auto linux::fetch_sockets() -> std::vector<socket> {
+auto linux_os::fetch_sockets() -> std::vector<socket> {
   auto result = std::vector<socket>{};
   // First build up a global map inode -> pid.
   struct pid_name_pair {
@@ -270,12 +270,12 @@ auto linux::fetch_sockets() -> std::vector<socket> {
 
 #elif TENZIR_MACOS
 
-struct darwin::state {
+struct darwin_os::state {
   struct mach_timebase_info timebase {};
 };
 
-auto darwin::make() -> std::unique_ptr<darwin> {
-  auto result = std::unique_ptr<darwin>{new darwin};
+auto darwin_os::make() -> std::unique_ptr<darwin_os> {
+  auto result = std::unique_ptr<darwin_os>(new darwin_os);
   if (mach_timebase_info(&result->state_->timebase) != KERN_SUCCESS) {
     TENZIR_ERROR("failed to get MACH timebase");
     return nullptr;
@@ -283,12 +283,12 @@ auto darwin::make() -> std::unique_ptr<darwin> {
   return result;
 }
 
-darwin::darwin() : state_{std::make_unique<state>()} {
+darwin_os::darwin_os() : state_{std::make_unique<state>()} {
 }
 
-darwin::~darwin() = default;
+darwin_os::~darwin_os() = default;
 
-auto darwin::fetch_processes() -> std::vector<process> {
+auto darwin_os::fetch_processes() -> std::vector<process> {
   auto num_procs = proc_listpids(PROC_ALL_PIDS, 0, nullptr, 0);
   std::vector<pid_t> pids;
   pids.resize(num_procs);
@@ -388,7 +388,7 @@ auto socket_state_to_string(auto proto, auto state) -> std::string_view {
 
 } // namespace
 
-auto darwin::fetch_sockets() -> std::vector<socket> {
+auto darwin_os::fetch_sockets() -> std::vector<socket> {
   auto result = std::vector<socket>{};
   for (const auto& proc : fetch_processes()) {
     auto pid = detail::narrow_cast<uint32_t>(proc.pid);
@@ -399,7 +399,7 @@ auto darwin::fetch_sockets() -> std::vector<socket> {
   return result;
 }
 
-auto darwin::sockets_for(uint32_t pid) -> std::vector<socket> {
+auto darwin_os::sockets_for(uint32_t pid) -> std::vector<socket> {
   auto p = detail::narrow_cast<pid_t>(pid);
   auto n = proc_pidinfo(p, PROC_PIDLISTFDS, 0, nullptr, 0);
   auto fds = std::vector<proc_fdinfo>{};

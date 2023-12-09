@@ -77,18 +77,18 @@ protected:
 
 #if TENZIR_LINUX
 
-/// An abstraction of Linux.
-class linux final : public os {
+/// An abstraction of linux_os.
+class linux_os final : public os {
 public:
-  static auto make() -> std::unique_ptr<linux>;
+  static auto make() -> std::unique_ptr<linux_os>;
 
-  ~linux() final;
+  ~linux_os() final;
 
   auto fetch_processes() -> std::vector<process> final;
   auto fetch_sockets() -> std::vector<socket> final;
 
 private:
-  linux();
+  linux_os();
 
   struct state;
   std::unique_ptr<state> state_;
@@ -97,17 +97,17 @@ private:
 #elif TENZIR_MACOS
 
 /// An abstraction of macOS.
-class darwin final : public os {
+class darwin_os final : public os {
 public:
-  static auto make() -> std::unique_ptr<darwin>;
+  static auto make() -> std::unique_ptr<darwin_os>;
 
-  ~darwin() final;
+  ~darwin_os() final;
 
   auto fetch_processes() -> std::vector<process> final;
   auto fetch_sockets() -> std::vector<socket> final;
 
 private:
-  darwin();
+  darwin_os();
 
   auto sockets_for(uint32_t pid) -> std::vector<socket>;
 
