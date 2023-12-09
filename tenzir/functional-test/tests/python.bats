@@ -29,7 +29,7 @@ teardown() {
 
 @test "simple field access" {
   check tenzir -f /dev/stdin << END
-    show version
+    version
     | put a=1, b=2
     | python "self.c = self.a + self.b"
 END
@@ -37,7 +37,7 @@ END
 
 @test "nested struct support" {
   check tenzir -f /dev/stdin << END
-    show version
+    version
     | put a.b=1, b=2
     | unflatten
     | python '
@@ -49,7 +49,7 @@ END
 
 @test "empty output throws" {
   check ! --with-stderr tenzir -f /dev/stdin << END
-    show version
+    version
     | put a.b=1, b=2
     | python 'self.clear()'
 END
@@ -57,7 +57,7 @@ END
 
 @test "python operator nested passthrough" {
   check tenzir -f /dev/stdin << END
-    show version
+    version
     | put a.b = 2
     | unflatten
     | python "pass"
@@ -66,7 +66,7 @@ END
 
 @test "python operator nested modification" {
   check tenzir -f /dev/stdin << END
-    show version
+    version
     | put a.b = 2
     | unflatten
     | python "self.a.b = 3"
@@ -75,7 +75,7 @@ END
 
 @test "python operator nested deep modification" {
   check tenzir -f /dev/stdin << END
-    show version
+    version
     | put a.b.c = 2
     | unflatten
     | python "self.original_c = self.a.b.c; self.a.b.c = 3"
@@ -84,7 +84,7 @@ END
 
 @test "python operator nested addition" {
   check tenzir -f /dev/stdin << END
-    show version
+    version
     | put a.b = 2
     | unflatten
     | python "self.a.c = 2 * self.a.b"
@@ -101,7 +101,7 @@ END
 
 @test "python operator requirements statement" {
   check tenzir -f /dev/stdin << END
-    show version
+    version
     | put a=1, b=2
     | python --requirements 'requests' '
         import requests
