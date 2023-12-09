@@ -1,6 +1,6 @@
 # processes
 
-Shows a snapshot of open processes.
+Shows a snapshot of running processes.
 
 ## Synopsis
 
@@ -10,7 +10,7 @@ processes
 
 ## Description
 
-The `processes` operator shows a snapshot of all currently open processes.
+The `processes` operator shows a snapshot of all currently running processes.
 
 ## Examples
 
