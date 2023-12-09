@@ -66,9 +66,6 @@ public:
   }
 
   auto location() const -> operator_location override {
-    if (const auto* plugin = get()) {
-      return plugin->location();
-    }
     return operator_location::remote;
   }
 

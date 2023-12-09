@@ -152,10 +152,6 @@ public:
     return "fields";
   }
 
-  auto location() const -> operator_location override {
-    return operator_location::remote;
-  }
-
   auto show(operator_control_plane& ctrl) const
     -> generator<table_slice> override {
     // TODO: Some of the the requests this operator makes are blocking, so

@@ -35,10 +35,6 @@ public:
     return "connectors";
   }
 
-  auto location() const -> operator_location override {
-    return operator_location::anywhere;
-  }
-
   auto show(operator_control_plane& ctrl) const
     -> generator<table_slice> override {
     auto loaders = collect(plugins::get<loader_parser_plugin>());

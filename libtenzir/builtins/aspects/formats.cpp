@@ -35,10 +35,6 @@ public:
     return "formats";
   }
 
-  auto location() const -> operator_location override {
-    return operator_location::anywhere;
-  }
-
   auto show(operator_control_plane& ctrl) const
     -> generator<table_slice> override {
     auto parsers = collect(plugins::get<parser_parser_plugin>());
