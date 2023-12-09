@@ -4,24 +4,6 @@ sidebar_position: 2
 
 # Build a Security Data Lake
 
-:::info Terminology: Data Warehouse → Data Lake → Data Lakehouse
-**Data warehouses** are systems primarily for structured data, excelling in
-decision support and business intelligence applications, with coupled storage
-and compute, but less suited for unstructured or semi-structured data. **Data
-lakes** emerged as repositories for raw data in various formats, including
-unstructured data; they decouple storage and compute, offering flexibility and
-scalability but lack critical features like transaction support. **Data
-lakehouses** combine the strengths of both, with data warehouse-like structures
-and management features on top of low-cost cloud storage. They support
-unstructured and structured data, diverse workloads, and maintain a decoupled
-architecture while integrating key features of data warehouses.
-
-Data lake and lakehouse are often used interchangeably as open-source lakehouse
-metadata layers like [Delta Lake](https://delta.io),
-[Iceberg](https://iceberg.apache.org), and [Hudi](https://hudi.apache.org)
-emerge.
-:::
-
 A security data lake is an intriguing value proposition. If well-architected, it
 can lead to a highly cost-efficient and scalable telemetry engine. As
 organizations become more comfortable storing massive amounts of sensitive data
@@ -55,6 +37,22 @@ various detection, investigation, and response functions.
 - Tenzir provides several building blocks for specific security use cases, such
   as YARA and Sigma executing, or retro matching of indicators, that can run
   efficiently on top of a data lake.
+:::
+
+:::info Terminology: Data Warehouse → Data Lake → Data Lakehouse
+**Data warehouses** are systems primarily for structured data, excelling in
+decision support and business intelligence applications, with coupled storage
+and compute, but less suited for unstructured or semi-structured data. **Data
+lakes** emerged as repositories for raw data in various formats, including
+unstructured data; they decouple storage and compute, offering flexibility and
+scalability but lack critical features like transaction support. **Data
+lakehouses** combine the strengths of both, with data warehouse-like structures
+and management features on top of low-cost cloud storage. They support
+unstructured and structured data, diverse workloads, and maintain a decoupled
+architecture while integrating key features of data warehouses. Data lake and
+lakehouse are often used interchangeably in the context of open-source layers
+like [Delta Lake](https://delta.io), [Iceberg](https://iceberg.apache.org), and
+[Hudi](https://hudi.apache.org).
 :::
 
 ## Problem: Skyrocketing security data
@@ -128,7 +126,7 @@ detection. Instead, we want to query *all compatible* data. In other words,
 today's linear schema evolution is not suitable for typical detection and
 response workloads and requires custom engineering.
 
-## Solution: Tenzir as a building block for your Security Data Lake
+## Solution: Tenzir as ETL for your Security Data Lake
 
 Tenzir's Security Data Pipelines provide the ETL layer for your lake, taking
 care of data collection, reshaping, filtering, and normalization. Tenzir
