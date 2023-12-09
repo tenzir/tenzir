@@ -75,7 +75,6 @@ jobs:
       run-docker-tenzir: ${{ steps.configure.outputs.run-docker-tenzir }}
       docker-config: ${{ steps.docker.outputs.docker-config }}
       run-docker-compose: ${{ steps.configure.outputs.run-docker-compose }}
-      run-tenzir-thehive-app: ${{ steps.configure.outputs.run-tenzir-thehive-app }}
       run-example-notebooks: ${{ steps.configure.outputs.run-example-notebooks }}
       run-regression-tests: ${{ steps.configure.outputs.run-regression-tests }}
       run-tenzir-nix: ${{ steps.configure.outputs.run-tenzir-nix }}
@@ -170,7 +169,6 @@ jobs:
           echo "run-docs=false" >> $GITHUB_OUTPUT
           echo "run-docker-tenzir=false" >> $GITHUB_OUTPUT
           echo "run-docker-compose=false" >> $GITHUB_OUTPUT
-          echo "run-tenzir-thehive-app=false" >> $GITHUB_OUTPUT
           echo "run-tenzir-nix=false" >> $GITHUB_OUTPUT
           echo "run-tenzir=false" >> $GITHUB_OUTPUT
           echo "run-tenzir-plugins=false" >> $GITHUB_OUTPUT
@@ -184,7 +182,6 @@ jobs:
             echo "run-docs=true" >> $GITHUB_OUTPUT; \
             echo "run-docker-tenzir=true" >> $GITHUB_OUTPUT; \
             echo "run-docker-compose=true" >> $GITHUB_OUTPUT; \
-            echo "run-tenzir-thehive-app=true" >> $GITHUB_OUTPUT
             echo "run-tenzir-nix=true" >> $GITHUB_OUTPUT; \
             echo "run-tenzir=true" >> $GITHUB_OUTPUT; \
             echo "run-tenzir-plugins=true" >> $GITHUB_OUTPUT;'
@@ -245,7 +242,6 @@ jobs:
             "docker/" "Dockerfile" ".dockerignore" \
             ".github/workflows/docker.yaml" \
             ".github/workflows/docker-config-base.json"
-          run_if_changed_default tenzir-thehive-app $run_docker_compose
           run_docker_tenzir="$(any ${run_docker_compose} ${run_docs} ${run_python})"
           run_if_changed_default docker-tenzir $run_docker_tenzir
           run_if_changed_default regression-tests $run_docker_tenzir
@@ -523,37 +519,6 @@ jobs:
       - name: Run Tenzir Tests
         run: |
           docker/test
-
-  tenzir-thehive-app:
-    needs:
-      - docker-tenzir
-      - configure
-    if: ${{ needs.configure.outputs.run-tenzir-thehive-app == 'true' }}
-    name: Tenzir TheHive App
-    runs-on: ubuntu-20.04
-    env:
-      DOCKER_BUILDKIT: 1
-      TENZIR_CONTAINER_REGISTRY: ghcr.io
-      TENZIR_CONTAINER_REF: ${{ needs.configure.outputs.tenzir-container-ref }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Run Cortex Neuron & TheHive Tests
-        run: |
-          # TheHive likes to fail to start up, so for now the test is intentionally
-          # disabled.
-          docker/thehive/tenzir-cortex-neuron/tests/run service && docker/thehive/test ||
-            echo "::warning title=Tenzir TheHive App test failure::Test failed, check logs for details"
 
   example-notebooks:
     needs:
@@ -1091,7 +1056,6 @@ jobs:
       - docker-tenzir
       - docker-compose
       - docs
-      - tenzir-thehive-app
       - example-notebooks
       - python
       - python-package
