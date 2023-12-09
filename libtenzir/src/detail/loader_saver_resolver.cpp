@@ -186,7 +186,7 @@ auto resolve_compression_operator(std::string_view op_name,
                                   std::string_view type) -> operator_ptr {
   if (type.empty())
     return nullptr;
-  auto plugin = plugins::find<operator_parser_plugin>(op_name);
+  auto plugin = plugins::find_operator(op_name);
   TENZIR_DIAG_ASSERT(plugin);
   auto diag = null_diagnostic_handler{};
   auto p = tql::make_parser_interface(std::string{type}, diag);

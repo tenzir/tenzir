@@ -37,7 +37,7 @@ auto parse(std::string_view repr, const record& config,
                                          repr));
     }
     // 2a. find plugin using operator name
-    const auto* plugin = plugins::find<operator_parser_plugin>(operator_name);
+    const auto* plugin = plugins::find_operator(operator_name);
     // 2b. find alias definition in `tenzir.operators`
     const auto* definition = static_cast<const std::string*>(nullptr);
     auto used_config_key = std::string{};

@@ -31,8 +31,7 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     const auto token = located<std::string>{"apply", location::unknown};
     auto context_pi = prepend_token{token, p};
-    const auto* context_plugin
-      = plugins::find<operator_parser_plugin>("context");
+    const auto* context_plugin = plugins::find_operator("context");
     if (not context_plugin) {
       diagnostic::error("`context` plugin is required")
         .note("from `enrich`")
