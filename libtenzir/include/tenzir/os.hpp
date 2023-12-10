@@ -24,7 +24,7 @@ namespace tenzir {
 /// An operating system process.
 struct process {
   std::string name;
-  std::string command_line;
+  std::vector<std::string> command_line;
   uint32_t pid;
   uint32_t ppid;
   uid_t uid;

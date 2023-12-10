@@ -11,7 +11,7 @@
 #include "tenzir/concept/parseable/tenzir/ip.hpp"
 #include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/config.hpp"
-#include "tenzir/table_slice_builder.hpp"
+#include "tenzir/series_builder.hpp"
 
 #if TENZIR_LINUX
 #  include <pfs/procfs.hpp>
@@ -35,7 +35,7 @@ auto process_type() -> type {
     "tenzir.process",
     record_type{
       {"name", string_type{}},
-      {"command_line", string_type{}},
+      {"command_line", list_type{string_type{}}},
       {"pid", uint64_type{}},
       {"ppid", uint64_type{}},
       {"uid", uint64_type{}},
@@ -60,9 +60,9 @@ auto socket_type() -> type {
       {"process", string_type{}},
       {"protocol", uint64_type{}},
       {"local_addr", ip_type{}},
-      {"local_port", uint64_type{}},
+      {"local_port", type{"port", uint64_type{}}},
       {"remote_addr", ip_type{}},
-      {"remote_port", uint64_type{}},
+      {"remote_port", type{"port", uint64_type{}}},
       {"state", string_type{}},
     },
   };
@@ -78,35 +78,58 @@ auto os::make() -> std::unique_ptr<os> {
 }
 
 auto os::processes() -> table_slice {
-  auto builder = table_slice_builder{process_type()};
+  auto builder = series_builder{process_type()};
   for (const auto& proc : fetch_processes()) {
-    auto okay = builder.add(proc.name, proc.command_line, proc.pid, proc.ppid,
-                            proc.uid, proc.gid, proc.ruid, proc.rgid,
-                            proc.priority, proc.startup);
-    okay = builder.add(proc.vsize ? make_view(*proc.vsize) : data_view{});
-    TENZIR_ASSERT(okay);
-    okay = builder.add(proc.rsize ? make_view(*proc.rsize) : data_view{});
-    TENZIR_ASSERT(okay);
-    okay = builder.add(proc.utime ? make_view(*proc.utime) : data_view{});
-    TENZIR_ASSERT(okay);
-    okay = builder.add(proc.stime ? make_view(*proc.stime) : data_view{});
-    TENZIR_ASSERT(okay);
+    auto event = builder.record();
+    event.field("name", proc.name);
+    if (not proc.command_line.empty()) {
+      auto cli = event.field("command_line").list();
+      for (const auto& arg : proc.command_line) {
+        cli.data(arg);
+      }
+    }
+    event.field("pid", static_cast<uint64_t>(proc.pid));
+    event.field("ppid", static_cast<uint64_t>(proc.ppid));
+    event.field("uid", static_cast<uint64_t>(proc.uid));
+    event.field("gid", static_cast<uint64_t>(proc.gid));
+    event.field("ruid", static_cast<uint64_t>(proc.ruid));
+    event.field("rgid", static_cast<uint64_t>(proc.rgid));
+    event.field("priority", proc.priority);
+    event.field("startup", proc.startup);
+    if (proc.vsize) {
+      event.field("vsize", *proc.vsize);
+    }
+    if (proc.rsize) {
+      event.field("rsize", *proc.rsize);
+    }
+    if (proc.utime) {
+      event.field("utime", *proc.utime);
+    }
+    if (proc.stime) {
+      event.field("stime", *proc.stime);
+    }
   }
-  return builder.finish();
+  return builder.finish_assert_one_slice();
 }
 
 auto os::sockets() -> table_slice {
-  auto builder = table_slice_builder{socket_type()};
+  auto builder = series_builder{socket_type()};
   for (const auto& socket : fetch_sockets()) {
-    auto okay = builder.add(socket.pid, socket.process_name,
-                            detail::narrow_cast<uint64_t>(socket.protocol),
-                            socket.local_addr, uint64_t{socket.local_port},
-                            socket.remote_addr, uint64_t{socket.remote_port},
-                            not socket.state.empty() ? make_view(socket.state)
-                                                     : data_view{});
-    TENZIR_ASSERT(okay);
+    auto event = builder.record();
+    event.field("pid", static_cast<uint64_t>(socket.pid));
+    if (not socket.process_name.empty()) {
+      event.field("process", socket.process_name);
+    }
+    event.field("protocol", static_cast<uint64_t>(socket.protocol));
+    event.field("local_addr", socket.local_addr);
+    event.field("local_port", static_cast<uint64_t>(socket.local_port));
+    event.field("remote_addr", socket.remote_addr);
+    event.field("remote_port", static_cast<uint64_t>(socket.remote_port));
+    if (not socket.state.empty()) {
+      event.field("state", socket.state);
+    }
   }
-  return builder.finish();
+  return builder.finish_assert_one_slice();
 }
 
 #if TENZIR_LINUX
@@ -136,7 +159,7 @@ auto linux_os::fetch_processes() -> std::vector<process> {
       try {
         auto stat = task.get_stat();
         auto status = task.get_status();
-        auto command_line = detail::join(task.get_cmdline(), " ");
+        auto command_line = task.get_cmdline();
         auto proc = process{
           .name = task.get_comm(),
           .command_line = std::move(command_line),
