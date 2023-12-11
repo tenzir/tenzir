@@ -127,7 +127,7 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
         [self, weak_hdl = caf::actor_cast<caf::weak_actor_ptr>(self)](
           boost::system::error_code ec,
           const boost::asio::ip::tcp::endpoint& endpoint) {
-          TENZIR_VERBOSE("tcp operator connected to {}",
+          TENZIR_VERBOSE("tcp connector connected to {}",
                          endpoint.address().to_string());
           if (auto hdl = weak_hdl.lock()) {
             caf::anon_send(
@@ -181,14 +181,14 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
                                fmt::format("failed to bind to endpoint: {}",
                                            e.what()));
       }
-      TENZIR_VERBOSE("tcp operator listening on endpoint {}:{}",
+      TENZIR_VERBOSE("tcp connector listens on endpoint {}:{}",
                      endpoint.address().to_string(), endpoint.port());
       self->state.connection_rp = self->make_response_promise<void>();
       self->state.acceptor->async_accept(
         [self, certfile, keyfile,
          weak_hdl = caf::actor_cast<caf::weak_actor_ptr>(self)](
           boost::system::error_code ec, boost::asio::ip::tcp::socket peer) {
-          TENZIR_VERBOSE("tcp operator accepted incoming request");
+          TENZIR_VERBOSE("tcp connector accepted incoming request");
           if (auto hdl = weak_hdl.lock()) {
             caf::anon_send(
               caf::actor_cast<caf::actor>(hdl),
@@ -425,7 +425,7 @@ public:
                 result = std::move(chunk);
               },
               [&](const caf::error& err) {
-                TENZIR_DEBUG("tcp operator encountered error: {}", err);
+                TENZIR_DEBUG("tcp connector encountered error: {}", err);
                 running = false;
               });
           co_yield std::exchange(result, {});
@@ -453,7 +453,93 @@ private:
   loader_args args_;
 };
 
-class plugin final : public virtual loader_plugin<loader> {
+class saver final : public plugin_saver {
+public:
+  saver() = default;
+
+  explicit saver(saver_args args) : args_{std::move(args)} {
+  }
+
+  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
+    -> caf::expected<std::function<void(chunk_ptr)>> override {
+    if (not args_.tls) {
+      if (args_.tls_certfile and not args_.tls_certfile->empty()) {
+        diagnostic::warning("certificate provided, but TLS disabled")
+          .hint("add --tls to use an encrypted connection")
+          .emit(ctrl.diagnostics());
+      }
+      if (args_.tls_keyfile and not args_.tls_keyfile->empty()) {
+        diagnostic::warning("keyfile provided, but TLS disabled")
+          .hint("add --tls to use an encrypted connection")
+          .emit(ctrl.diagnostics());
+      }
+    }
+    auto tcp_bridge = ctrl.self().spawn(make_tcp_bridge);
+    if (not args_.listen) {
+      ctrl.self()
+        .request(tcp_bridge, caf::infinite, atom::connect_v, args_.tls,
+                 args_.hostname, args_.port)
+        .await(
+          [&]() {
+            // nop
+          },
+          [&](const caf::error& err) {
+            diagnostic::error("failed to connect: {}", err)
+              .emit(ctrl.diagnostics());
+          });
+    } else {
+      ctrl.self()
+        .request(tcp_bridge, caf::infinite, atom::accept_v, args_.hostname,
+                 args_.port, args_.tls_certfile.value_or(std::string{}),
+                 args_.tls_keyfile.value_or(std::string{}))
+        .await(
+          [&]() {
+            // nop
+          },
+          [&](const caf::error& err) {
+            diagnostic::error("failed to listen: {}", err)
+              .emit(ctrl.diagnostics());
+          });
+    }
+    return [&ctrl, tcp_bridge](chunk_ptr chunk) mutable {
+      if (not chunk || chunk->size() == 0)
+        return;
+      ctrl.self()
+        .request(tcp_bridge, caf::infinite, atom::write_v, std::move(chunk))
+        .await(
+          [&]() {
+            // nop
+          },
+          [&](const caf::error& err) {
+            diagnostic::error("tcp connector encountered error: {}", err)
+              .emit(ctrl.diagnostics());
+          });
+    };
+  }
+
+  auto name() const -> std::string override {
+    return "tcp";
+  }
+
+  auto default_printer() const -> std::string override {
+    return "json";
+  }
+
+  auto is_joining() const -> bool override {
+    return true;
+  }
+
+  friend auto inspect(auto& f, saver& x) -> bool {
+    return f.object(x).pretty_name("saver").fields(
+      f.field("args", x.args_), f.field("initialized", x.initialized_));
+  }
+
+private:
+  saver_args args_;
+  bool initialized_ = false;
+};
+
+class plugin final : public virtual loader_plugin<loader>, saver_plugin<saver> {
   /// Auto-completes a scheme-less URI with the scheme from this plugin.
   static auto remove_scheme(std::string& uri) {
     if (uri.starts_with("tcp://")) {
@@ -466,6 +552,12 @@ public:
     -> std::unique_ptr<plugin_loader> override {
     auto args = parse_args<loader_args>(p);
     return std::make_unique<loader>(std::move(args));
+  }
+
+  auto parse_saver(parser_interface& p) const
+    -> std::unique_ptr<plugin_saver> override {
+    auto args = parse_args<saver_args>(p);
+    return std::make_unique<saver>(std::move(args));
   }
 
   template <class Args>
