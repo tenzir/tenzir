@@ -1,40 +1,50 @@
 # Get Started
 
-:::info What is Tenzir?
-Tenzir is a distributed platform for processing and storing security event data
-in a pipeline dataflow model.
-:::
+Tenzir is a platform for processing and storing security event data
+in a pipeline dataflow model. The Tenzir consists of pipelines, nodes, and the
+platform:
 
-![How does it work?](how-does-it-work.excalidraw.svg)
+1. **Pipeline**: A dataflow that consists of operators for producing,
+   transforming, and consuming data. The `tenzir` binary runs a pipeline.
+2. **Node**: Hosts concurrently running pipelines. A node also has a
+   storage engine with a thin layer of indexing on top of raw Parquet/Feather
+   partitions. The `tenzir-node` binary spawns a node.
+3. **Platform**: Manages nodes and global user data. Nodes connect to the
+   platform and you can manage them through [app.tenzir.com][app].
 
-## Create a free account
+![Tenzir Moving Parts](moving-parts.excalidraw.svg)
 
-Create an account for the best user experience. Everyone can freely use
-the [Community Edition](https://tenzir.com/pricing).
+[app]: https://app.tenzir.com
 
-1. Go to [app.tenzir.com](https://app.tenzir.com)
-2. Sign in with your identity provider or create an account
+## Explore the demo node
 
-There are no strings attached: you can always delete your account via *Account*
-→ *Delete Account*. You do not have to create an account if you just want to use
-the command line interface and do not need pipeline management features.
+The easiest way to get started is try it out yourself. It takes just a few
+steps:
 
-## Explore the demo environment
+1. [Create a free account](setup-guides/setup-an-account.md)
+2. Go to the [Overview](https://app.tenzir.com/overview) page
+3. Create a demo node by clicking the *Add* button in the nodes pane
+4. Select *Cloud-hosted demo node*
+5. Follow the guided tour after the node becomes available
 
-Let's run a few example [pipelines](pipelines.md) by copying the below examples
+## A quick tour
+
+Let's run a few example pipelines by copying the below examples
 and pasting them into the [Explorer](https://app.tenzir.com/explorer). We
-pre-loaded the demo node in the app with [Zeek](https://zeek.org) and
+pre-loaded the demo node with [Zeek](https://zeek.org) and
 [Suricata](https://suricata.io) logs derived from the M57 dataset that we also
 use in our [user guides](user-guides.md).
 
-Our first pipeline uses [`export`](operators/sources/export.md) to emit all data
-stored at the demo node. We pipe the output to
-[`taste`](operators/transformations/taste.md) to get a sample of 10 events per
-unique schema:
+Start with:
 
 ```
 export | taste
 ```
+
+This pipeline uses [`export`](operators/sources/export.md) to emit all data
+stored at the demo node. We pipe the output to
+[`taste`](operators/transformations/taste.md) to get a sample of 10 events per
+unique schema:
 
 <details>
 <summary>Output</summary>
@@ -134,13 +144,13 @@ invoking `tenzir <pipeline>` on the [command line](command-line.md) or
 
 </details>
 
-The `export` operator is a [source](operators/sources/README.md) that only
+The `export` operator is a [source](operators/sources/README.md) that
 produces data, `taste` is a
 [transformation](operators/transformations/README.md) that consumes and produces
-data, and there are [sinks](operators/sinks/README.md) that only consume data.
+data, and there are [sinks](operators/sinks/README.md) that consume data.
 Either you do not provide a sink (like above) and can click the *Run* button to
-see the results in the app, or you provide a sink and click the *Deploy* button
-to make it run continuously.
+see the results in the app, or you provide a sink to deploy the pipeline
+continuously.
 
 Now filter the data with [`where`](operators/transformations/where.md) to only
 look at Suricata alerts:
@@ -378,19 +388,10 @@ material.
 Ready to bring your data to the table? Then continue reading to learn how to
 deploy your own node.
 
-## Onboard your own node
+## Up next
 
-Adding a node takes just few minutes:
-
-1. Visit the [configurator](https://app.tenzir.com/configurator).
-2. Download a configuration file for your node.
-3. Install your node by follow the [deployment
-   instructions](setup-guides/deploy-a-node/README.md).
-
-## Up Next
-
-Now that you got a first impression of Tenzir pipelines, and perhaps already
-a node of your own, dive deeper by
+Now that you got a first impression of Tenzir pipelines, [onboard your own
+node](setup-guides/deploy-a-node/README.md) and dive deeper by
 
 - following the [user guides](user-guides.md) with step-by-step tutorials of
   common use cases

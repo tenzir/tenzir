@@ -1,12 +1,12 @@
 # User Guides
 
-The user guides walk you through various examples that illustrate how to use use
-Tenzir in practice.
+The user guides walk you through hands-on examples that illustrate how to use
+Tenzir.
 
 ## Datasets
 
-Throughout our guides, we use publicly available datasets for a reproducible
-experience.
+Throughout our guides, we use publicly available datasets so that you can follow
+along.
 
 ### M57
 

@@ -192,10 +192,6 @@ const sidebars = {
       id: 'target-audience',
     },
     {
-      type: 'doc',
-      id: 'vision',
-    },
-    {
       type: 'category',
       label: 'Use Cases',
       link: {

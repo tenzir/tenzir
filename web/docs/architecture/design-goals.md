@@ -83,12 +83,12 @@ cases and to filter out less useful data.
 
 ### Natively Scalable Runtime
 
-[We envision](../vision.md) a distributed system that can perform the
-same processing centralized in the cloud and deep at the edge. CPU, memory, and
-storage have drastically different forms along this spectrum. Our goal is to
-deploy the same engine across the entire spectrum, but with different pluggable
-components and varying configurations that can adapt to the local environment.
-That is, the system should scale vertically as well as horizontally.
+We envision a distributed system that can perform the same processing
+centralized in the cloud and deep at the edge. CPU, memory, and storage have
+drastically different forms along this spectrum. Our goal is to deploy the same
+engine across the entire spectrum, but with different pluggable components and
+varying configurations that can adapt to the local environment. That is, the
+system should scale vertically as well as horizontally.
 
 ### Separate Read and Write Path
 

@@ -36,8 +36,6 @@ Web user interface to access [platform](#platform) at
 The app is a web application that partially runs in the user's browser. It is
 written in [Svelte](https://svelte.dev/).
 
-- [Use the app](./setup-guides/use-the-app/README.md)
-
 ## Catalog
 
 Maintains [partition](#partition) ownership and metadata.
@@ -89,7 +87,6 @@ The `tenzir-node` binary starts a node in a dedicated server process that
 listens on TCP port 5158.
 
 - [Deploy a node](./setup-guides/deploy-a-node/README.md)
-- [Use the app](./setup-guides/use-the-app/README.md) to manage a node
 - Use the [REST API](./rest-api.md) to manage a node
 - [Import into a node](./user-guides/import-into-a-node.md)
 - [Export from a node](./user-guides/export-from-a-node.md)
@@ -136,8 +133,6 @@ Combines a set of [operators](#operator) into a dataflow graph.
 
 Control plane for nodes and pipelines, accessible through [app](#app) at
 [app.tenzir.com](https://app.tenzir.com).
-
-- [Use the app](./setup-guides/use-the-app/README.md)
 
 ## Schema
 

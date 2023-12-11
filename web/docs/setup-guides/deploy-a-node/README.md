@@ -4,32 +4,44 @@ A *node* is a managed service for pipelines and storage.
 
 ## Install a node
 
-Choose between [Docker](#docker), [Linux](#linux), and [macOS](#macos)
-installation instructions.
+Start at [app.tenzir.com](https://app.tenzir.com) and click *Add* in the nodes
+pane. Then select your platform.
 
 ### Docker
 
-Visit the [configurator](https://app.tenzir.com/configurator) to download a
-`docker-compose.NODE.yaml` configuration file where `NODE` is the name you
-entered for your node. Then run:
+We provide Docker images and a Docker Compose file for a container setup.
+Install a node as follows:
 
-```bash
-docker compose -f docker-compose.NODE.yaml up --detach
-```
+1. Enter a name for your node and click the download button to obtain the
+   `docker-compose.NODE.yaml` configuration file where `NODE` is the name you
+   entered for your node.
+2. Run
+   ```bash
+   docker compose -f docker-compose.NODE.yaml up
+   ```
 
-Set [environment variables](../../command-line.md#environment-variables) to
-adjust the configuration.
+Edit the Docker Compose file and change [environment
+variables](../../command-line.md#environment-variables) to adjust the
+configuration.
 
 ### Linux
 
-Use our installer to install a binary package on any Linux distribution:
+We offer a native deployment on various Linux distributions.
+Install a node as follows:
 
-```bash
-curl https://get.tenzir.app | sh
-```
+1. Enter a name for your node and click the download button to obtain a
+   `platform.yaml` configuration file.
+2. Move the `platform.yaml` to `<sysconfdir>/tenzir/plugin/platform.yaml` so
+   that the node can find it during startup where `<sysconfdir>` might be
+   `/etc`. See the [configuration files
+   documentation](../../command-line.md#configuration-files) for more options.
+3. Run our installer to install a binary package on any Linux distribution:
+   ```bash
+   curl https://get.tenzir.app | sh
+   ```
 
-The shell script asks for confirmation before performing the installation. If
-you prefer a manual installation you can also perform the installer steps
+The installer script asks for confirmation before performing the installation.
+If you prefer a manual installation you can also perform the installer steps
 yourself.
 
 import Tabs from '@theme/Tabs';
