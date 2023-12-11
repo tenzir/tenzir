@@ -4,8 +4,8 @@ A *node* is a managed service for pipelines and storage.
 
 ## Install a node
 
-Start at [app.tenzir.com](https://app.tenzir.com) and click *Add* in nodes pane.
-Then select your platform.
+Start at [app.tenzir.com](https://app.tenzir.com) and click *Add* in the nodes
+pane. Then select your platform.
 
 ### Docker
 

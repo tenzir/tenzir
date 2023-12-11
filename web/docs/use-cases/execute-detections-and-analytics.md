@@ -90,7 +90,7 @@ datasets.
 
 For example, an engine must handle the continuous churn of observables
 that describe the ever-changing threat landscape, and use that dataset for
-continuous live and retro matching. This "background radiation" alone puts a
+continuous live and retro detection. This "background radiation" alone puts a
 growing pressure the historical and live data event feeds that require a
 carefully designed data architecture. On top of that come threat hunting and
 incident response workloads. Orchestrating these workloads Without deep data
