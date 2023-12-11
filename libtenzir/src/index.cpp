@@ -507,6 +507,20 @@ caf::error index_state::load_from_disk() {
   TENZIR_DEBUG("{} deletes {} orphaned mdx files", *self, orphans.size());
   for (auto& orphan : orphans)
     std::filesystem::remove(dir / fmt::format("{}.mdx", orphan), err);
+  // We build an in-memory representation of the archive folder for quicker
+  // lookup when we add file paths to the in-memory synopsis.
+  const auto store_map = [&] {
+    auto result = std::map<uuid, std::filesystem::path>{};
+    auto store_path = dir / ".." / "archive";
+    for (auto const& store_file :
+         std::filesystem::directory_iterator{store_path}) {
+      tenzir::uuid store_uuid{};
+      if (!parsers::uuid(store_file.path().stem().string(), store_uuid))
+        continue;
+      result.emplace(store_uuid, store_file.path());
+    }
+    return result;
+  }();
   // Now try to load the partitions - with a progress indicator.
   for (size_t idx = 0; idx < partitions.size(); ++idx) {
     auto partition_uuid = partitions[idx];
@@ -551,10 +565,18 @@ caf::error index_state::load_from_disk() {
           .url = fmt::format("file://{}", canonical(synopsis_path)),
           .size = chunk->get()->size(),
         };
-        // We just assume the store file path, currently feather is the only
-        // existing implementation.
-        auto store_path
-          = dir / ".." / "archive" / fmt::format("{}.feather", partition_uuid);
+        auto f = store_map.find(partition_uuid);
+        if (f == store_map.end()) {
+          // For completeness sake we could open the partition and look if the
+          // data is somewhere else entirely, but no known implementation ever
+          // deviated from the default path scheme, so we assume filesystem
+          // corruption here.
+          return add_context(ec::no_such_file,
+                             "discarding partition {} due to a missing store "
+                             "file",
+                             partition_uuid);
+        }
+        auto store_path = f->second;
         auto store_size = std::filesystem::file_size(store_path, err);
         if (err) {
           TENZIR_WARN("failed to get the size of the partition store file at "
