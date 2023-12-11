@@ -36,8 +36,10 @@ using tcp_bridge_actor = caf::typed_actor<
   auto(atom::accept, std::string hostname, std::string port,
        std::string tls_certfile, std::string tls_keyfile)
     ->caf::result<void>,
-  // Read up to the number of events from the TCP endpoint.
-  auto(atom::read, uint64_t buffer_size)->caf::result<chunk_ptr>>;
+  // Read up to the number of bytes from the socket.
+  auto(atom::read, uint64_t buffer_size)->caf::result<chunk_ptr>,
+  // Write a chunk to the socket.
+  auto(atom::write, chunk_ptr chunk)->caf::result<void>>;
 
 struct tcp_bridge_state {
   static constexpr auto name = "tcp-loader-bridge";
@@ -63,6 +65,9 @@ struct tcp_bridge_state {
 
   // Promise that is delivered whenever new data arrives.
   caf::typed_response_promise<chunk_ptr> read_rp = {};
+
+  // Promise that is delivered whenever new data is sent.
+  caf::typed_response_promise<void> write_rp = {};
 
   // Storage for incoming data.
   std::vector<char> read_buffer = {};
@@ -267,6 +272,53 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
         self->state.socket->async_read_some(asio_buffer, on_read);
       }
       return self->state.read_rp;
+    },
+    [self](atom::write, chunk_ptr chunk) -> caf::result<void> {
+      if (self->state.connection_rp.pending()) {
+        return caf::make_error(ec::logic_error,
+                               fmt::format("{} cannot write while a connect "
+                                           "request is pending",
+                                           *self));
+      }
+      if (self->state.write_rp.pending()) {
+        return caf::make_error(ec::logic_error,
+                               fmt::format("{} cannot write while a write "
+                                           "request is pending",
+                                           *self));
+      }
+      self->state.write_rp = self->make_response_promise<void>();
+      auto on_write = [self, chunk,
+                       weak_hdl = caf::actor_cast<caf::weak_actor_ptr>(self)](
+                        boost::system::error_code ec, size_t length) {
+        if (auto hdl = weak_hdl.lock()) {
+          caf::anon_send(caf::actor_cast<caf::actor>(hdl),
+                         caf::make_action([self, chunk, ec, length] {
+                           if (ec) {
+                             self->state.write_rp.deliver(caf::make_error(
+                               ec::system_error,
+                               fmt::format("failed to write to TCP socket: {}",
+                                           ec.message())));
+                             return;
+                           }
+                           if (length < chunk->size()) {
+                             auto remainder = chunk->slice(length);
+                             self->state.write_rp.delegate(
+                               static_cast<tcp_bridge_actor>(self),
+                               atom::write_v, std::move(remainder));
+                             return;
+                           }
+                           TENZIR_ASSERT(length == chunk->size());
+                           self->state.write_rp.deliver();
+                         }));
+        }
+      };
+      auto asio_buffer = boost::asio::buffer(chunk->data(), chunk->size());
+      if (self->state.tls_socket) {
+        self->state.tls_socket->async_write_some(asio_buffer, on_write);
+      } else {
+        self->state.socket->async_write_some(asio_buffer, on_write);
+      }
+      return self->state.write_rp;
     },
   };
 }
