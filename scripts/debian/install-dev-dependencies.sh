@@ -37,7 +37,9 @@ apt-get -y --no-install-recommends install \
     libyaml-cpp-dev \
     libyara-dev \
     lsb-release \
+    lsof \
     ncat \
+    nmap \
     ninja-build \
     pandoc \
     pkg-config \
