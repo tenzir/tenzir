@@ -9,8 +9,8 @@
     cmake,
     ninja,
     pkg-config,
+    poetry,
     lld,
-    git,
     boost,
     caf,
     curl,
@@ -101,6 +101,7 @@
           ninja
           dpkg
           protobuf
+          poetry
         ] ++ lib.optionals stdenv.isDarwin [
           lld
         ];
@@ -135,6 +136,7 @@
           jemalloc
         ];
 
+        env.POETRY_VIRTUALENVS_IN_PROJECT = 1;
         cmakeFlags =
           [
             "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
@@ -146,7 +148,6 @@
             "-DTENZIR_ENABLE_BACKTRACE=ON"
             "-DTENZIR_ENABLE_JEMALLOC=${lib.boolToString isMusl}"
             "-DTENZIR_ENABLE_MANPAGES=OFF"
-            "-DTENZIR_ENABLE_PYTHON_BINDINGS=OFF"
             "-DTENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
             "-DTENZIR_ENABLE_FLUENT_BIT_SO_WORKAROUNDS=OFF"
             "-DTENZIR_PLUGINS=${lib.concatStringsSep ";" bundledPlugins}"
