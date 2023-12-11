@@ -21,11 +21,11 @@ setup() {
 }
 
 @test "fluent-bit works as a sink" {
-  check tenzir 'show operators | fluent-bit null'
+  check tenzir 'version | fluent-bit null'
 }
 
 @test "Use fluent-bit to count to 10" {
   run -0 --separate-stderr \
-    tenzir 'show operators | head | fluent-bit counter'
+    tenzir 'version | repeat | head | fluent-bit counter'
   { check cut -d , -f 2; } <<< "$output"
 }
