@@ -98,6 +98,18 @@ public:
     parser.add(aspect, "<aspect>");
     parser.parse(p);
     if (aspect) {
+      // We moved `show version` to `version` when we made the `show` operator
+      // always report a remote location for consistency. This makes it less of
+      // a breaking change.
+      if (aspect->inner == "version") {
+        auto op = pipeline::internal_parse_as_operator("version");
+        if (not op) {
+          diagnostic::error("failed to parse `version` operator: {}",
+                            op.error())
+            .throw_();
+        }
+        return std::move(*op);
+      }
       auto available = std::map<std::string, std::string>{};
       for (const auto& aspect : collect(plugins::get<aspect_plugin>()))
         available.emplace(aspect->aspect_name(), aspect->name());
