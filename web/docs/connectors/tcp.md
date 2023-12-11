@@ -32,11 +32,11 @@ bind address when using `--listen`.
 
 ### `-c,--connect` (Loader)
 
-Connect to `<endpoint>` instead of listen at it.
+Connect to `<endpoint>` instead of listening at it.
 
 ### `-l,--listen` (Saver)
 
-Listen at `<endpoint>` instead of connect to it.
+Listen at `<endpoint>` instead of connecting to it.
 
 ### `-o,--once`
 
