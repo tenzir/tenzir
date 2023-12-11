@@ -271,44 +271,82 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
   };
 }
 
-struct tcp_loader_args {
-  template <class Inspector>
-  friend auto inspect(Inspector& f, tcp_loader_args& x) -> bool {
-    return f.object(x)
-      .pretty_name("tenzir.plugins.tcp.tcp_loader_args")
-      .fields(f.field("hostname", x.hostname), f.field("port", x.port),
-              f.field("tls", x.tls), f.field("listen", x.listen),
-              f.field("keep_listening", x.keep_listening),
-              f.field("tls_certfile", x.tls_certfile),
-              f.field("tls_keyfile", x.tls_keyfile));
-  }
-
+struct connector_args {
   std::string hostname = {};
   std::string port = {};
-  bool listen = false;
-  bool keep_listening = false;
+  bool once = false;
   bool tls = false;
   std::optional<std::string> tls_certfile = {};
   std::optional<std::string> tls_keyfile = {};
+};
+
+struct loader_args : connector_args {
+  template <class Inspector>
+  friend auto inspect(Inspector& f, loader_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("tenzir.plugins.tcp.loader_args")
+      .fields(f.field("hostname", x.hostname), f.field("port", x.port),
+              f.field("once", x.once), f.field("connect", x.connect),
+              f.field("tls", x.tls), f.field("tls_certfile", x.tls_certfile),
+              f.field("tls_keyfile", x.tls_keyfile));
+  }
+
+  bool connect = false;
+};
+
+struct saver_args : connector_args {
+  template <class Inspector>
+  friend auto inspect(Inspector& f, saver_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("tenzir.plugins.tcp.saver_args")
+      .fields(f.field("hostname", x.hostname), f.field("port", x.port),
+              f.field("once", x.once), f.field("listen", x.listen),
+              f.field("tls", x.tls), f.field("tls_certfile", x.tls_certfile),
+              f.field("tls_keyfile", x.tls_keyfile));
+  }
+
+  bool listen = false;
 };
 
 class loader final : public plugin_loader {
 public:
   loader() = default;
 
-  explicit loader(tcp_loader_args args) : args_{std::move(args)} {
+  explicit loader(loader_args args) : args_{std::move(args)} {
   }
 
   auto instantiate(operator_control_plane& ctrl) const
     -> std::optional<generator<chunk_ptr>> override {
+    if (not args_.tls) {
+      if (args_.tls_certfile and not args_.tls_certfile->empty()) {
+        diagnostic::warning("certificate provided, but TLS disabled")
+          .hint("add --tls to use an encrypted connection")
+          .emit(ctrl.diagnostics());
+      }
+      if (args_.tls_keyfile and not args_.tls_keyfile->empty()) {
+        diagnostic::warning("keyfile provided, but TLS disabled")
+          .hint("add --tls to use an encrypted connection")
+          .emit(ctrl.diagnostics());
+      }
+    }
     auto make
-      = [](tcp_loader_args args,
+      = [](loader_args args,
            operator_control_plane& ctrl) mutable -> generator<chunk_ptr> {
       auto tcp_bridge = ctrl.self().spawn(make_tcp_bridge);
       do {
-        // Establish connection, either by listening on a socket or by
-        // connecting to a remote endpoint.
-        if (args.listen) {
+        if (args.connect) {
+          ctrl.self()
+            .request(tcp_bridge, caf::infinite, atom::connect_v, args.tls,
+                     args.hostname, args.port)
+            .await(
+              [&]() {
+                // nop
+              },
+              [&](const caf::error& err) {
+                diagnostic::error("failed to connect: {}", err)
+                  .emit(ctrl.diagnostics());
+              });
+        } else {
           ctrl.self()
             .request(tcp_bridge, caf::infinite, atom::accept_v, args.hostname,
                      args.port, args.tls_certfile.value_or(std::string{}),
@@ -321,26 +359,15 @@ public:
                 diagnostic::error("failed to listen: {}", err)
                   .emit(ctrl.diagnostics());
               });
-        } else {
-          ctrl.self()
-            .request(tcp_bridge, caf::infinite, atom::connect_v, args.tls,
-                     args.hostname, args.port)
-            .await(
-              [&]() {
-                // nop
-              },
-              [&](const caf::error& err) {
-                diagnostic::error("failed to connect: {}", err)
-                  .emit(ctrl.diagnostics());
-              });
         }
         co_yield {};
         // Read and forward incoming data.
         auto result = chunk_ptr{};
         auto running = true;
         while (running) {
+          constexpr auto buffer_size = uint64_t{65'536};
           ctrl.self()
-            .request(tcp_bridge, caf::infinite, atom::read_v, uint64_t{65536})
+            .request(tcp_bridge, caf::infinite, atom::read_v, buffer_size)
             .await(
               [&](chunk_ptr& chunk) {
                 result = std::move(chunk);
@@ -351,7 +378,7 @@ public:
               });
           co_yield std::exchange(result, {});
         }
-      } while (args.keep_listening);
+      } while (not args.once);
     };
     return make(args_, ctrl);
   }
@@ -371,11 +398,11 @@ public:
   }
 
 private:
-  tcp_loader_args args_;
+  loader_args args_;
 };
 
 class plugin final : public virtual loader_plugin<loader> {
-  /// Auto-completes a scheme-less uri with the schem from this plugin.
+  /// Auto-completes a scheme-less URI with the scheme from this plugin.
   static auto remove_scheme(std::string& uri) {
     if (uri.starts_with("tcp://")) {
       uri = std::move(uri).substr(6);
@@ -385,49 +412,54 @@ class plugin final : public virtual loader_plugin<loader> {
 public:
   auto parse_loader(parser_interface& p) const
     -> std::unique_ptr<plugin_loader> override {
+    auto args = parse_args<loader_args>(p);
+    return std::make_unique<loader>(std::move(args));
+  }
+
+  template <class Args>
+  auto parse_args(parser_interface& p) const -> Args {
     auto parser = argument_parser{
       name(),
       fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
-    auto uri = std::string{};
-    auto certfile = std::string{};
-    auto keyfile = std::string{};
-    auto tls = bool{};
-    auto listen = bool{};
-    auto keep_listening = bool{};
+    auto args = Args{};
+    auto uri = located<std::string>{};
     parser.add(uri, "<endpoint>");
-    parser.add("--tls", tls);
-    parser.add("-l,--listen", listen);
-    parser.add("-k,--keep-listening", keep_listening);
-    parser.add("--certfile", certfile, "TLS certificate");
-    parser.add("--keyfile", keyfile, "TLS private key");
+    if constexpr (std::is_same_v<Args, loader_args>) {
+      parser.add("-c,--connect", args.connect);
+    } else if constexpr (std::is_same_v<Args, saver_args>) {
+      parser.add("-l,--listen", args.listen);
+    }
+    parser.add("-o,--once", args.once);
+    parser.add("--tls", args.tls);
+    parser.add("--certfile", args.tls_certfile, "TLS certificate");
+    parser.add("--keyfile", args.tls_keyfile, "TLS private key");
     parser.parse(p);
-    remove_scheme(uri);
-    auto split = detail::split(uri, ":", 1);
+    remove_scheme(uri.inner);
+    auto split = detail::split(uri.inner, ":", 1);
     if (split.size() != 2) {
       diagnostic::error("malformed endpoint")
+        .primary(uri.source)
         .hint("format must be 'tcp://address:port'")
         .throw_();
+    } else {
+      args.hostname = std::string{split[0]};
+      args.port = std::string{split[1]};
     }
-    if (keep_listening && !listen) {
-      diagnostic::error("-k requires -l").throw_();
+    if constexpr (std::is_same_v<Args, loader_args>) {
+      if (not args.connect and args.tls) {
+        if (not args.tls_certfile or args.tls_certfile->empty()) {
+          diagnostic::error("invalid TLS settings")
+            .hint("missing --certfile")
+            .throw_();
+        }
+        if (not args.tls_keyfile or args.tls_keyfile->empty()) {
+          diagnostic::error("invalid TLS settings")
+            .hint("missing --keyfile")
+            .throw_();
+        }
+      }
     }
-    if (tls && listen && (certfile.empty() || keyfile.empty())) {
-      diagnostic::error("missing certfile or keyfile").throw_();
-    }
-    if (!tls && (!certfile.empty() || !keyfile.empty())) {
-      TENZIR_WARN("keyfile and certfile arguments will be ignored since "
-                  "'--tls' was not specified");
-    }
-    auto args = tcp_loader_args{
-      .hostname = std::string{split[0]},
-      .port = std::string{split[1]},
-      .listen = listen,
-      .keep_listening = keep_listening,
-      .tls = tls,
-      .tls_certfile = certfile,
-      .tls_keyfile = keyfile,
-    };
-    return std::make_unique<loader>(std::move(args));
+    return args;
   }
 
   auto name() const -> std::string override {
