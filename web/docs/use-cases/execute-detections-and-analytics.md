@@ -122,12 +122,12 @@ streamlined findings for easy-button consumption.
 
 The *Sec* in SecDataOps refers to security data, and detection is fundamental
 operation on it. Tenzir features dedicated operators for executing detections,
-such as [`yara`](../operators/transformations/yara.md) or
-[`sigma`](../operators/transformations/sigma.md). If Tenzir does not support a
+such as [`yara`](../operators/yara.md) or
+[`sigma`](../operators/sigma.md). If Tenzir does not support a
 specific rule engine or detection format, you can extend implement your own
 operator in C++ that may depend on custom third party libraries.
 
-There's also a generic [`python`](../operators/transformations/python.md)
+There's also a generic [`python`](../operators/python.md)
 operator for integrating arbitrary third-party analytics on structured data.
 Given the dominance of Python in the data science community, turn-key
 transition to security data enables a much more efficient detection engineering

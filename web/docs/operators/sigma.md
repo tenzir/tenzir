@@ -24,7 +24,7 @@ wraps the input record into a new record along with the matching rule. The
 operator discards all events that do not match the provided rules.
 
 For each rule, the operator transpiles the YAML into an
-[expression](../../language/expressions.md) and instantiates a
+[expression](../language/expressions.md) and instantiates a
 [`where`](where.md) operator, followed by [`put`](put.md) to generate an output.
 Here's how the transpilation works. The Sigma rule YAML format requires a
 `detection` attribute that includes a map of named sub-expression called *search

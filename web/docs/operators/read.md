@@ -15,7 +15,7 @@ format.
 
 ### `<format>`
 
-The [format](../../formats.md) used to convert raw bytes into events.
+The [format](../formats.md) used to convert raw bytes into events.
 
 Some formats have format-specific options. Please refer to the documentation of
 the individual formats for more information.

@@ -2,11 +2,6 @@
 
 Returns information about the Tenzir node:
 
-:::caution Experimental
-This operator is experimental and subject to change without notice, even in
-minor or patch releases.
-:::
-
 ## Synopsis
 
 ```
@@ -25,7 +20,7 @@ Describes the part of Tenzir to look at.
 Available aspects:
 
 - `config`: shows all current configuration options.
-- `connectors`: shows all available [connectors](../../connectors.md).
+- `connectors`: shows all available [connectors](../connectors.md).
 - `contexts`: shows all available contexts.
 - `formats`: shows all available [formats](../../formats.md).
 - `operators`: shows all available [operators](../../operators.md).

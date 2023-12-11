@@ -2,7 +2,7 @@
 sidebar_position: 4
 ---
 
-# User-Defined
+# User-Defined Operators
 
 ## Operator Aliases
 

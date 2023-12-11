@@ -221,9 +221,9 @@ to the data.
 In a decentralized architecture, a critical capability is bringing the detection
 to the data rather than the data to (centralized) detections. Tenzir ships with
 ready-made pipeline operators to run detections and analytics, e.g.,
-[YARA](../operators/transformations/yara.md),
-[Sigma](../operators/transformations/sigma.md), or
-[Python](../operators/transformations/python.md). Deploying pipelines at Tenzir
+[YARA](../operators/yara.md),
+[Sigma](../operators/sigma.md), or
+[Python](../operators/python.md). Deploying pipelines at Tenzir
 nodes spread over the infrastructure yields a federated execution engine that
 can be fueled with detection content.
 

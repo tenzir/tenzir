@@ -1,6 +1,6 @@
 # import
 
-Imports events into a Tenzir node. The dual to [`export`](../sources/export.md).
+Imports events into a Tenzir node. The dual to [`export`](export.md).
 
 ## Synopsis
 

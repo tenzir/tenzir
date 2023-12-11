@@ -2,7 +2,7 @@
 sidebar_position: 5
 ---
 
-# Modifiers
+# Operator Modifiers
 
 Operator modifiers are keywords that may occur before an operator.
 

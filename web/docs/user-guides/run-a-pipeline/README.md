@@ -6,9 +6,9 @@ sidebar_position: 0
 
 :::tip What is a pipeline?
 A [pipeline](../../pipelines.md) is a chain of operators that begins with a
-[source](../../operators/sources/README.md), optionally includes
-[transformations](../../operators/sinks/README.md) in the middle, and ends in a
-[sink](../../operators/sinks/README.md).
+[source](../../operators/README.md), optionally includes
+[transformations](../../operators/README.md) in the middle, and ends in a
+[sink](../../operators/README.md).
 :::
 
 ## In the app
@@ -25,8 +25,8 @@ The diagram below illustrates these mechanics:
 
 ![Pipeline in the Browser](pipeline-browser.excalidraw.svg)
 
-For example, write [`version`](../../operators/sources/version.md) and click
-*Run* to see a single event arrive.
+For example, write [`version`](../../operators/version.md) and click *Run* to
+see a single event arrive.
 
 ## On the command line
 
@@ -43,7 +43,7 @@ The diagram below illustrates these mechanics:
 
 ![Pipeline on the command line](pipeline-cli.excalidraw.svg)
 
-For example, run [`tenzir 'version'`](../../operators/sources/show.md) to
+For example, run [`tenzir 'version'`](../../operators/version.md) to
 see a single event rendered as JSON:
 
 ```json
@@ -53,7 +53,7 @@ see a single event rendered as JSON:
 ```
 
 You could also render it differently by passing a different
-[format](../../formats.md) to the [`write`](../../operators/transformations/write.md)
+[format](../../formats.md) to the [`write`](../../operators/write.md)
 operator, or by inferring the format from the file extension:
 
 ```bash

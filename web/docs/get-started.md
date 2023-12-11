@@ -41,9 +41,9 @@ Start with:
 export | taste
 ```
 
-This pipeline uses [`export`](operators/sources/export.md) to emit all data
+This pipeline uses [`export`](operators/export.md) to emit all data
 stored at the demo node. We pipe the output to
-[`taste`](operators/transformations/taste.md) to get a sample of 10 events per
+[`taste`](operators/taste.md) to get a sample of 10 events per
 unique schema:
 
 <details>
@@ -144,15 +144,15 @@ invoking `tenzir <pipeline>` on the [command line](command-line.md) or
 
 </details>
 
-The `export` operator is a [source](operators/sources/README.md) that
+The `export` operator is a [source](operators/README.md) that
 produces data, `taste` is a
-[transformation](operators/transformations/README.md) that consumes and produces
-data, and there are [sinks](operators/sinks/README.md) that consume data.
+[transformation](operators/README.md) that consumes and produces
+data, and there are [sinks](operators/README.md) that consume data.
 Either you do not provide a sink (like above) and can click the *Run* button to
 see the results in the app, or you provide a sink to deploy the pipeline
 continuously.
 
-Now filter the data with [`where`](operators/transformations/where.md) to only
+Now filter the data with [`where`](operators/where.md) to only
 look at Suricata alerts:
 
 ```
@@ -331,7 +331,7 @@ The above example extracts connections from the subnet 10.10.5.0/25 that either
 have sent more than 1 MiB or lasted longer than 30 minutes.
 
 Aside from filtering, you can also perform aggregations with
-[`summarize`](operators/transformations/summarize.md):
+[`summarize`](operators/summarize.md):
 
 ```
 export
@@ -359,8 +359,8 @@ export
 
 </details>
 
-For counting field values, [`top`](operators/transformations/top.md) and
-[`rare`](operators/transformations/rare.md) come in handy:
+For counting field values, [`top`](operators/top.md) and
+[`rare`](operators/rare.md) come in handy:
 
 ```
 export

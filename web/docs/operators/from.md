@@ -24,7 +24,7 @@ For most connectors, this default format is `json`. So, for example,
 `from stdin` uses the `json` format.
 
 Additionally, if a file extension indicating compression can be found,
-[`decompress`](../transformations/decompress.md) is automatically used.
+[`decompress`](decompress.md) is automatically used.
 For example, `from myfile.json.gz` is automatically gzip-decompressed
 and parsed as json, i.e., `load myfile.json.gz | decompress gzip | read json`.
 
@@ -32,7 +32,7 @@ The `from` operator is a pipeline under the hood. For most cases, it is equal to
 `load <connector> | read <format>`. However, for some combinations of
 connectors and formats the underlying pipeline is a lot more complex. We
 recommend always using `from ... read ...` over the [`load`](load.md) and
-[`read`](../transformations/read.md) operators.
+[`read`](read.md) operators.
 
 ### `<connector>`
 
@@ -78,5 +78,5 @@ from https://example.com/data.json read json
 from https example.com/data.json read json
 ```
 
-[connectors]: ../../connectors.md
-[formats]: ../../formats.md
+[connectors]: ../connectors.md
+[formats]: ../formats.md

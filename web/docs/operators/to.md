@@ -24,15 +24,15 @@ this default format is `json`.
 So, for example, `to stdin` uses the `json` format.
 
 Additionally, if a file extension indicating compression can be found,
-[`compress`](../transformations/compress.md) is automatically used.
-For example, `to myfile.json.gz` is automatically gzip-compressed and
-formatted as json, i.e., `write json | compress gzip | save myfile.json.gz`.
+[`compress`](compress.md) is automatically used. For example, `to
+myfile.json.gz` is automatically gzip-compressed and formatted as json, i.e.,
+`write json | compress gzip | save myfile.json.gz`.
 
 The `to` operator is a pipeline under the hood. For most cases, it is equal to
 `write <format> | save <connector>`. However, for some combinations of
 connectors and formats the underlying pipeline is a bit more complex. We
-recommend always using `to ... write ...` over the
-[`write`](../transformations/write.md) and [`save`](save.md) operators.
+recommend always using `to ... write ...` over the [`write`](write.md) and
+[`save`](save.md) operators.
 
 ### `<connector>`
 
@@ -63,5 +63,5 @@ to path/to/eve.json write json
 to file path/to/eve.json write json
 ```
 
-[connectors]: ../../connectors.md
-[formats]: ../../formats.md
+[connectors]: ../connectors.md
+[formats]: ../formats.md

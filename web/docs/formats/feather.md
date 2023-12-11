@@ -32,7 +32,7 @@ compression.
 
 ## Examples
 
-Read a Feather file via the [`from`](../operators/sources/from.md) operator:
+Read a Feather file via the [`from`](../operators/from.md) operator:
 
 ```
 from file --mmap /tmp/data.feather read feather

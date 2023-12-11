@@ -163,8 +163,8 @@ needed a new language.
 Tenzir does not rely on a third-party database.
 
 Tenzir nodes include a light-weight storage engine on top of partitioned Feather
-or Parquet files, accessible via the [`import`](operators/sinks/import.md) and
-[`export`](operators/sources/export.md) operators. The engine comes with a
+or Parquet files, accessible via the [`import`](operators/import.md) and
+[`export`](operators/export.md) operators. The engine comes with a
 catalog that tracks meta data and a thin layer of sketches to accelerate
 queries.
 
@@ -190,10 +190,10 @@ A tool integration in the Tenzir ecosystem can forms:
    existing connectors, e.g., via [`http`](connectors/http.md) if it's a matter
    of performing an API call.
 2. **Indirect Integration**: There may already exist an integration
-   via the Fluent Bit [source](operators/sources/fluent-bit.md) and
-   [sink](operators/sinks/fluent-bit.md).
+   via the Fluent Bit [source](operators/fluent-bit.md) and
+   [sink](operators/fluent-bit.md).
 3. **Wrapped Application**: It is always possible to integrate a command line
-   tool using the [`shell`](operators/transformations/shell.md), by hooking
+   tool using the [`shell`](operators/shell.md), by hooking
    standard input and output of a forked child as a byte stream into a
    pipeline.
 

@@ -1,6 +1,6 @@
 # shell
 
-Executes a system command and hooks its raw stdin and stdout into the pipeline.
+Executes a system command and hooks its stdin and stdout into the pipeline.
 
 ## Synopsis
 
@@ -14,8 +14,6 @@ The `shell` operator executes the provided command by spawning a new process.
 The input of the operator is forwarded to the child's standard input. Similarly,
 the child's standard output is forwarded to the output of the operator.
 
-You can also use [`shell` as source operator](../sources/shell.md).
-
 ### `<command>`
 
 The command to execute and hook into the pipeline processing.
@@ -25,6 +23,12 @@ line as you would on the shell, use single or double quotes for escaping, e.g.,
 `shell 'jq -C'` or `shell "jq -C"`. The command is interpreted by `/bin/sh -c`.
 
 ## Examples
+
+Show a live log from the `tenzir-node` service:
+
+```
+shell "journalctl -u tenzir-node -f | read json"
+```
 
 Consider the use case of converting CSV to JSON:
 
@@ -42,16 +46,16 @@ example, in this pipeline:
 write json | save stdout
 ```
 
-The [`write`](../transformations/write.md) operator produces raw bytes and
-[`save`](../sinks/save.md) accepts raw bytes. The `shell` operator therefore
-fits right in the middle:
+The [`write`](write.md) operator produces raw bytes and [`save`](save.md)
+accepts raw bytes. The `shell` operator therefore fits right in the middle:
 
 ```
 write json | shell "jq -C" | save stdout
 ```
 
-Using [user-defined operators](../user-defined.md), we can expose this
-(potentially verbose) post-processing more succinctly in the pipeline language:
+Using [user-defined operators](../language/user-defined-operators.md), we can
+expose this (potentially verbose) post-processing more succinctly in the
+pipeline language:
 
 ```yaml {0} title="tenzir.yaml"
 tenzir:
@@ -69,8 +73,8 @@ tenzir 'read csv | where field > 42 | jsonize' < file.csv
 This mechanism allows for wrapping also more complex invocation of tools.
 [Zeek](https://zeek.org), for example, converts packets into structured network
 logs. Tenzir already has support for consuming Zeek output with the formats
-[`zeek-json`](../../formats/zeek-json.md) and
-[`zeek-tsv`](../../formats/zeek-tsv.md). But that requires attaching yourself
+[`zeek-json`](../formats/zeek-json.md) and
+[`zeek-tsv`](../formats/zeek-tsv.md). But that requires attaching yourself
 downstream of a Zeek instance. Sometimes you want instant Zeek analytics given a
 PCAP trace.
 

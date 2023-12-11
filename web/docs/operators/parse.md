@@ -2,11 +2,6 @@
 
 Applies a parser to the string stored in a given field.
 
-:::caution Experimental
-This operator is experimental and may change at any time. There are known issues
-which will be addressed in an upcoming release. Stay tuned!
-:::
-
 ## Synopsis
 
 ```
@@ -21,7 +16,7 @@ using `<parser>` and replaces this field with the result.
 
 ## Examples
 
-Parse [CEF](../../formats/cef.md) from the Syslog messages stored in `test.log`,
+Parse [CEF](../formats/cef.md) from the Syslog messages stored in `test.log`,
 returning only the result from CEF parser.
 
 ```

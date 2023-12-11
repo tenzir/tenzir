@@ -14,9 +14,9 @@ The `decompress` operator decompresses bytes in a pipeline incrementally with a
 known codec. The operator supports decompressing multiple concatenated streams
 of the same codec transparently.
 
-The `decompress` operator is invoked automatically as a part of [`from`](../sources/from.md)
+The `decompress` operator is invoked automatically as a part of [`from`](from.md)
 if the source file has a file extension indicating compression.
-This behavior can be circumvented by using [`load`](../sources/load.md) directly.
+This behavior can be circumvented by using [`load`](load.md) directly.
 
 :::note Streaming Decompression
 The operator uses [Apache Arrow's compression

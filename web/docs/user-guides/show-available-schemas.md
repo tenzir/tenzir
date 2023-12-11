@@ -11,7 +11,7 @@ the shape of your data, you can look up available
 Many SQL databases have a `SHOW TABLES` command to show all available table
 names, and `SHOW COLUMNS` to display the individual fiels of a given table.
 
-Similarly, our [`show`](../operators/sources/show.md) operator offers the
+Similarly, our [`show`](../operators/show.md) operator offers the
 ability for introspection. Use `show fields` to display all schema fields, with
 with one field per event:
 

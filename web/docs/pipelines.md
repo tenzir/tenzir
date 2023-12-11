@@ -36,7 +36,7 @@ pipelines can execute. If a pipeline does not have a source and sink, it would
 possible and rejects the pipeline otherwise. Auto-completion is context
 dependent: on the command line we read JSON from stdin and write it stdout. In
 the app we only auto-complete a missing sink with
-[`serve`](operators/sinks/serve.md) to display the result in the browser.
+[`serve`](operators/serve.md) to display the result in the browser.
 
 Zooming out in the above type table makes the operator types apparent:
 
@@ -68,7 +68,7 @@ does not matter significantly. Similar to predicate pushdown, Tenzir operators
 support "ordering pushdown" to signal to upstream operators that the event order
 only matters intra-schema but not inter-schema. In this case we transparently
 demultiplex a heterogeneous stream into *N* homogeneous streams, each of which
-yields batches of up to 65k events. The [`import`](operators/sinks/import.md)
+yields batches of up to 65k events. The [`import`](operators/import.md)
 operator is an example of such an operator, and it pushes its ordering upstream
 so that we can efficiently parse, say, a diverse stream of NDJSON records, such
 as Suricata's EVE JSON or Zeek's streaming JSON.
@@ -85,7 +85,7 @@ A, B, and C:
 ![Multi-schema Example](multi-schema-example.excalidraw.svg)
 
 Some operators only work with exactly one instance per schema internally, such
-as [`write`](operators/transformations/write.md) when combined with the
+as [`write`](operators/write.md) when combined with the
 [`parquet`](formats/parquet.md), [`feather`](formats/feather.md), or
 [`csv`](formats/csv.md) formats. These formats cannot handle multiple input
 schemas at once. A demultiplexing operator like `to directory .. write <format>`
@@ -118,9 +118,9 @@ of the data, be it a historical or continuous one:
 Our desired user experience for interacting with historical looks like this:
 
 1. **Ingest**: to persist data at a node, create a pipeline that ends with the
-   [`import`](operators/sinks/import.md) sink.
+   [`import`](operators/import.md) sink.
 2. **Query**: to run a historical query, create a pipeline that begins with the
-   [`export`](operators/sources/export.md) operator.
+   [`export`](operators/export.md) operator.
 
 For example, to ingest JSON from a Kafka, you write `from kafka --topic foo |
 import`. To query the stored data, you write `export | where file == 42`. The
@@ -168,7 +168,7 @@ types of network connections: *implicit* and *explicit* ones:
 
 An implicit network connection exists, for example, when you use the `tenzir`
 binary on the command line to run a pipeline that ends in
-[`import`](operators/sinks/import.md):
+[`import`](operators/import.md):
 
 ```bash
 tenzir 'load gcs bkt/eve.json
@@ -202,10 +202,10 @@ as source or sink:
 
 This fictive data fabric above consists of a heterogeneous set of technologies,
 interconnected by pipelines. You can also turn any pipeline into an API using
-the [`serve`](operators/sinks/serve.md) sink, effectively creating a dataflow
+the [`serve`](operators/serve.md) sink, effectively creating a dataflow
 microservice that you can access with a HTTP client from the other side:
 
-![Serve Operator](operators/sinks/serve.excalidraw.svg)
+![Serve Operator](operators/serve.excalidraw.svg)
 
 Because you have full control over the location where you run the pipeline, you
 can push it all the way to the "last mile." This helps especially when there

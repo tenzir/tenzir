@@ -15,8 +15,8 @@ Parsers and printers interact with their corresponding dual from a
 
 ![Format](formats/format.excalidraw.svg)
 
-Formats appear as an argument to the [`read`](operators/transformations/read.md)
-and [`write`](operators/transformations/write.md) operators:
+Formats appear as an argument to the [`read`](operators/read.md)
+and [`write`](operators/write.md) operators:
 
 ```
 read <format>

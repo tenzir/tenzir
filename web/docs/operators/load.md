@@ -1,11 +1,6 @@
 # load
 
-The `load` operator acquires raw bytes from a [connector](../../connectors.md).
-
-:::warning Expert Operator
-The `load` operator is a lower-level building block of the [`from`](from.md)
-operator. Only use this if you need to operate on raw bytes.
-:::
+The `load` operator acquires raw bytes from a [connector](../connectors.md).
 
 ## Synopsis
 
@@ -20,12 +15,12 @@ load <connector>
 The `load` operator emits raw bytes.
 
 Notably, it cannot be used together with operators that expect events as input,
-but rather only with operators that expect bytes, e.g.,
-[`read`](../transformations/read.md) or [`save`](../sinks/save.md).
+but rather only with operators that expect bytes, e.g., [`read`](read.md) or
+[`save`](save.md).
 
 ### `<connector>`
 
-The [connector](../../connectors.md) used to load bytes.
+The [connector](../connectors.md) used to load bytes.
 
 Some connectors have connector-specific options. Please refer to the
 documentation of the individual connectors for more information.

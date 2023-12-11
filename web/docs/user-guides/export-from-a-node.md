@@ -6,7 +6,7 @@ sidebar_position: 4
 
 Exporting (or *querying*) data can be done by [running a
 pipeline](run-a-pipeline/README.md) that begins with the
-[`export`](../operators/sources/export.md) source.
+[`export`](../operators/export.md) source.
 
 Let's bring back the historical data we [imported in the previous
 section](import-into-a-node.md):
@@ -17,7 +17,7 @@ export | head
 
 Think of `export` being the entire data at a node. As this can grow quickly, you
 may query only subsets of it, e.g., by filtering it using
-[`where`](../operators/transformations/where.md):
+[`where`](../operators/where.md):
 
 ```
 export | where orig_bytes < 1 KiB

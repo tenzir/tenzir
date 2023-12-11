@@ -5,7 +5,7 @@ sidebar_position: 1
 # Reshape data
 
 Tenzir comes with numerous [transformation
-operators](../../operators/transformations/README.md) that do change the the
+operators](../../operators/README.md) that do change the the
 shape of their input and produce a new output. Here is a visual overview of
 transformations that you can perform over a data frame:
 
@@ -15,11 +15,11 @@ We'll walk through examples for each depicted operator, using the
 [M57](../../user-guides.md) dataset. All examples assume that you have imported
 the M57 sample data into a node, as explained in the
 [quickstart](../../get-started.md#quickstart). We therefore start every pipeline
-with [`export`](../../operators/sources/export.md).
+with [`export`](../../operators/export.md).
 
 ## Filter rows with `where`
 
-Use [`where`](../../operators/transformations/where.md) to filter rows in the
+Use [`where`](../../operators/where.md) to filter rows in the
 input with an [expression](../../language/expressions.md).
 
 Filter by metadata using the `#schema` selector:
@@ -220,8 +220,8 @@ field where the value matches exactly.
 
 ## Limit the output with `head` and `tail`
 
-Use the [`head`](../../operators/transformations/head.md) and
-[`tail`](../../operators/transformations/tail.md) operators to get the first or
+Use the [`head`](../../operators/head.md) and
+[`tail`](../../operators/tail.md) operators to get the first or
 last N records of the input.
 
 The first 3 Zeek logs with IPs in 10.10.5.0/25:
@@ -296,7 +296,7 @@ the majority of use cases and `tail` only when you have to.
 
 ## Pick fields with `select` and `drop`
 
-Use the [`select`](../../operators/transformations/select.md) operator to
+Use the [`select`](../../operators/select.md) operator to
 restrict the output to a list of fields.
 
 ```
@@ -339,11 +339,11 @@ export
 </details>
 
 Note that `select` does not reorder the input fields. Use
-[`put`](../../operators/transformations/put.md) for adjusting the field order.
+[`put`](../../operators/put.md) for adjusting the field order.
 
 ## Sample schemas with `taste`
 
-The [`taste`](../../operators/transformations/taste.md) operator provides a
+The [`taste`](../../operators/taste.md) operator provides a
 sample of the first N events of every unique schemas in the dataflow. For
 example, to get 5 unique samples:
 
@@ -454,8 +454,8 @@ export
 
 ## Add fields with `put` and `extend`
 
-The [`extend`](../../operators/transformations/extend.md) operator appends new
-fields to the input. The [`put`](../../operators/transformations/put.md)
+The [`extend`](../../operators/extend.md) operator appends new
+fields to the input. The [`put`](../../operators/put.md)
 operator does the same but drops all non-referenced fields.
 
 Here is an example that generates host pairs plus service for Zeek connection
@@ -529,7 +529,7 @@ export
 
 ## Give schemas and fields new names with `rename`
 
-The [`rename`](../../operators/transformations/rename.md) operator changes field
+The [`rename`](../../operators/rename.md) operator changes field
 or schema names.
 
 For example, rename the schema name and only print that afterwards:
@@ -583,7 +583,7 @@ export
 
 ## Aggreate records with `summarize`
 
-Use [`summarize`](../../operators/transformations/summarize.md) to group and
+Use [`summarize`](../../operators/summarize.md) to group and
 aggregate data.
 
 ```
@@ -640,7 +640,7 @@ export
 
 ## Reorder records with `sort`
 
-Use [`sort`](../../operators/transformations/sort.md) to arrange the output
+Use [`sort`](../../operators/sort.md) to arrange the output
 records according to the order of a specific field.
 
 ```
@@ -672,9 +672,9 @@ export
 
 ## Deduplicate with `unique`
 
-Use [`unique`](../../operators/transformations/unique.md) to remove adjacent
+Use [`unique`](../../operators/unique.md) to remove adjacent
 duplicates. This operator comes in handy after a
-[`sort`](../../operators/transformations/sort.md) that arranges the input so
+[`sort`](../../operators/sort.md) that arranges the input so
 that duplicates lay next to each other:
 
 ```
@@ -725,7 +725,7 @@ export
 </details>
 
 To compute a unique list of values per group, use the `distinct` aggregation
-function in [`summarize`](../../operators/transformations/summarize.md):
+function in [`summarize`](../../operators/summarize.md):
 
 ```
 export
@@ -765,7 +765,7 @@ export
 
 ## Profile the pipeline with `measure`
 
-Use [`measure`](../../operators/transformations/measure.md) to profile the input
+Use [`measure`](../../operators/measure.md) to profile the input
 and replace it with runtime statistics.
 
 For example, one way to compute a histogram over the entire persisted dataset is

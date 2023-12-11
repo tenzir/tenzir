@@ -31,7 +31,7 @@ compression.
 
 ## Examples
 
-Read a Parquet file via the [`from`](../operators/sources/from.md) operator:
+Read a Parquet file via the [`from`](../operators/from.md) operator:
 
 ```
 from file --mmap /tmp/data.prq read parquet

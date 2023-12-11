@@ -10,8 +10,7 @@ flatten [<separator>]
 
 ## Description
 
-The `flatten` operator acts on [container
-types](../../data-model/type-system.md):
+The `flatten` operator acts on [container types](../data-model/type-system.md):
 
 1. **Records**: Join nested records with a separator (`.` by default). For
    example, if a field named `x` is a record with fields `a` and `b`, flattening

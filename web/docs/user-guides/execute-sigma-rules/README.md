@@ -5,14 +5,14 @@ sidebar_position: 9
 # Execute Sigma rules
 
 Tenzir supports executing [Sigma rules](https://github.com/SigmaHQ/sigma) using
-the [`sigma`](../../operators/transformations/sigma.md) operator. This allows
+the [`sigma`](../../operators/sigma.md) operator. This allows
 you to run your Sigma rules in dataflow pipeline. The operator transpiles the
 the provided rules into an [expression](../../language/expressions.md), and
 wraps matching events into a sighting record along with the matched rule.
 
 Semantically, you can think of executing Sigma rules as applying the
-[`where`](../../operators/transformations/where.md) operator to the input,
-followed by [`put`](../../operators/transformations/put.md) to encapsulate the
+[`where`](../../operators/where.md) operator to the input,
+followed by [`put`](../../operators/put.md) to encapsulate the
 input into a new record. At a high level, the translation process looks as
 follows:
 

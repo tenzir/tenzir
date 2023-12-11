@@ -1,6 +1,6 @@
 # where
 
-Filters events according to an [expression](../../language/expressions.md).
+Filters events according to an [expression](../language/expressions.md).
 
 ## Synopsis
 
@@ -11,7 +11,7 @@ where <expression>
 ## Description
 
 The `where` operator only keeps events that match the provided
-[expression](../../language/expressions.md) and discards all other events.
+[expression](../language/expressions.md) and discards all other events.
 
 Use `where` to extract the subset of interest of the data. Tenzir's expression
 language offers various ways to describe the desired data. In particular,
@@ -20,7 +20,7 @@ constraints.
 
 ### `<expression>`
 
-The [expression](../../language/expressions.md) to evaluate for each event.
+The [expression](../language/expressions.md) to evaluate for each event.
 
 ## Examples
 

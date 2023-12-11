@@ -1,11 +1,6 @@
 # save
 
-The `save` operator acquires raw bytes from a [connector](../../connectors.md).
-
-:::warning Expert Operator
-The `save` operator is a lower-level building block of the [`to`](to.md)
-operator. Only use this if you need to operate on raw bytes.
-:::
+The `save` operator acquires raw bytes from a [connector](../connectors.md).
 
 ## Synopsis
 
@@ -20,12 +15,11 @@ save <connector>
 The `save` operator operates on raw bytes.
 
 Notably, it cannot be used after an operator that emits events, but rather only
-with operators that emit bytes, e.g., [`write`](../transformations/write.md) or
-[`load`](../sources/load.md).
+with operators that emit bytes, e.g., [`write`](write.md) or [`load`](load.md).
 
 ### `<connector>`
 
-The [connector](../../connectors.md) used to save bytes.
+The [connector](../connectors.md) used to save bytes.
 
 Some connectors have connector-specific options. Please refer to the
 documentation of the individual connectors for more information.

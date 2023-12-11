@@ -73,7 +73,7 @@ load file --mmap evil.exe | yara rule.yara
 :::info Memory Mapping Optimization
 The `--mmap` flag is merely an optimization that constructs a single chunk of
 bytes instead of a contiguous stream. Without `--mmap`, the
-[`file`](../../connectors/file.md) loader generates a stream of byte chunks and
+[`file`](../connectors/file.md) loader generates a stream of byte chunks and
 feeds them incrementally to the `yara` operator. This also works, but
 performance is better due to memory locality when using `--mmap`.
 :::
@@ -159,7 +159,7 @@ load kafka --topic malware | yara --blockwise /path/to/rules
 
 If you run this pipeline on the command line via `tenzir <pipeline>`, you see
 the matches arriving as JSON. You could also send the matches via the
-[`fluent-bit`](../sinks/fluent-bit.md) sink to Slack, Splunk, or any other
+[`fluent-bit`](fluent-bit.md) sink to Slack, Splunk, or any other
 Fluent Bit output. For example, via Slack:
 
 ```

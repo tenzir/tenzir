@@ -74,7 +74,7 @@ Read packets from the [network interface](../connectors/nic.md) `eth0`:
 from nic eth0 read pcap
 ```
 
-[Decapsulate](../operators/transformations/decapsulate.md) packets in a PCAP
+[Decapsulate](../operators/decapsulate.md) packets in a PCAP
 file:
 
 ```
