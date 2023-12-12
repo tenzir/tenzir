@@ -512,6 +512,8 @@ caf::error index_state::load_from_disk() {
   const auto store_map = [&] {
     auto result = std::map<uuid, std::filesystem::path>{};
     auto store_path = dir / ".." / "archive";
+    if (!std::filesystem::is_directory(store_path, err))
+      return result;
     for (auto const& store_file :
          std::filesystem::directory_iterator{store_path}) {
       tenzir::uuid store_uuid{};
