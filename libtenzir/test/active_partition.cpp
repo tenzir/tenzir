@@ -88,6 +88,9 @@ dummy_store(std::reference_wrapper<std::vector<tenzir::query_context>>
        const tenzir::ids&) -> caf::result<uint64_t> {
       return 0u;
     },
+    [](const tenzir::atom::persist&) -> caf::result<tenzir::resource> {
+      return {};
+    },
     [](caf::stream<tenzir::table_slice>)
       -> caf::result<caf::inbound_stream_slot<tenzir::table_slice>> {
       return tenzir::ec::no_error;

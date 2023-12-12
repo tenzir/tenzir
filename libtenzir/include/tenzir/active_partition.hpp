@@ -148,6 +148,9 @@ struct active_partition_state {
   /// The store builder.
   store_builder_actor store_builder = {};
 
+  /// Access info for the finished store.
+  std::optional<resource> store_file = {};
+
   /// Temporary storage for the serialized indexers of this partition, before
   /// they get written into the flatbuffer.
   std::map<caf::actor_id, tenzir::chunk_ptr> chunks = {};

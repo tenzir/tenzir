@@ -507,6 +507,20 @@ caf::error index_state::load_from_disk() {
   TENZIR_DEBUG("{} deletes {} orphaned mdx files", *self, orphans.size());
   for (auto& orphan : orphans)
     std::filesystem::remove(dir / fmt::format("{}.mdx", orphan), err);
+  // We build an in-memory representation of the archive folder for quicker
+  // lookup when we add file paths to the in-memory synopsis.
+  const auto store_map = [&] {
+    auto result = std::map<uuid, std::filesystem::path>{};
+    auto store_path = dir / ".." / "archive";
+    for (auto const& store_file :
+         std::filesystem::directory_iterator{store_path}) {
+      tenzir::uuid store_uuid{};
+      if (!parsers::uuid(store_file.path().stem().string(), store_uuid))
+        continue;
+      result.emplace(store_uuid, store_file.path());
+    }
+    return result;
+  }();
   // Now try to load the partitions - with a progress indicator.
   for (size_t idx = 0; idx < partitions.size(); ++idx) {
     auto partition_uuid = partitions[idx];
@@ -534,6 +548,47 @@ caf::error index_state::load_from_disk() {
         = *ps_flatbuffer->partition_synopsis_as_legacy();
       if (auto error = unpack(synopsis_legacy, ps.unshared()))
         return error;
+      // Add partition file sizes.
+      {
+        uint64_t bitmap_file_size = std::filesystem::file_size(part_path, err);
+        if (err) {
+          TENZIR_WARN("failed to get the size of the partition index file at "
+                      "{}: {}",
+                      part_path, err.message());
+          bitmap_file_size = 0u;
+        }
+        ps.unshared().indexes_file = {
+          .url = fmt::format("file://{}", canonical(part_path)),
+          .size = bitmap_file_size,
+        };
+        ps.unshared().sketches_file = {
+          .url = fmt::format("file://{}", canonical(synopsis_path)),
+          .size = chunk->get()->size(),
+        };
+        auto f = store_map.find(partition_uuid);
+        if (f == store_map.end()) {
+          // For completeness sake we could open the partition and look if the
+          // data is somewhere else entirely, but no known implementation ever
+          // deviated from the default path scheme, so we assume filesystem
+          // corruption here.
+          return add_context(ec::no_such_file,
+                             "discarding partition {} due to a missing store "
+                             "file",
+                             partition_uuid);
+        }
+        auto store_path = f->second;
+        auto store_size = std::filesystem::file_size(store_path, err);
+        if (err) {
+          TENZIR_WARN("failed to get the size of the partition store file at "
+                      "{}: {}",
+                      store_path, err.message());
+          store_size = 0u;
+        }
+        ps.unshared().store_file = {
+          .url = fmt::format("file://{}", canonical(store_path)),
+          .size = store_size,
+        };
+      }
       persisted_partitions.emplace(partition_uuid);
       synopses->emplace(partition_uuid, std::move(ps));
       return caf::none;
@@ -695,11 +750,11 @@ void index_state::decommission_active_partition(
   unpersisted[id] = {type, actor};
   active_partitions.erase(active_partition);
   // Persist active partition asynchronously.
-  const auto part_dir = partition_path(id);
-  const auto synopsis_dir = partition_synopsis_path(id);
+  const auto part_path = partition_path(id);
+  const auto synopsis_path = partition_synopsis_path(id);
   TENZIR_VERBOSE("{} persists active partition {} to {}", *self, schema,
-                 part_dir);
-  self->request(actor, caf::infinite, atom::persist_v, part_dir, synopsis_dir)
+                 part_path);
+  self->request(actor, caf::infinite, atom::persist_v, part_path, synopsis_path)
     .then(
       [=, this](partition_synopsis_ptr& ps) {
         TENZIR_VERBOSE("{} successfully persisted partition {} {}", *self,
