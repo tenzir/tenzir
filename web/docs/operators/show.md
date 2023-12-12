@@ -22,8 +22,8 @@ Available aspects:
 - `config`: shows all current configuration options.
 - `connectors`: shows all available [connectors](../connectors.md).
 - `contexts`: shows all available contexts.
-- `formats`: shows all available [formats](../../formats.md).
-- `operators`: shows all available [operators](../../operators.md).
+- `formats`: shows all available [formats](../formats.md).
+- `operators`: shows all available [operators](../operators.md).
 - `partitions`: shows all table partitions of a remote node.
 - `pipelines`: shows all managed pipelines of a remote node.
 - `plugins`: shows all loaded plugins.
