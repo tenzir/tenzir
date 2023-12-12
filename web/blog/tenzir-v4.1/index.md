@@ -2,6 +2,7 @@
 title: Tenzir v4.1
 authors: [dominiklohmann]
 date: 2023-08-31
+last_updated: 2023-12-12
 tags: [release, pipelines, operators, app]
 ---
 
@@ -51,7 +52,7 @@ The `start` action resumes a pipeline that is currently paused.
 
 ## Sigma Operator
 
-The experimental [`sigma` operator][sigma-docs] executes [Sigma
+The experimental [`sigma` operator](/next/operators/sigma) executes [Sigma
 rules][sigma-github] on its input and outputs matching events. The operator can
 work both on files and on directories of rules. Rule directories may be updated
 while the operator is running, so that adding a new rule to an already deployed
@@ -64,15 +65,14 @@ execution over a Kafka source via `from kafka --topic events | sigma`. Now that
 we have the capability in place, we are working on a unified interface to live
 and retro matching.
 
-[sigma-docs]: https://docs.tenzir.com/next/operators/transformations/sigma
 [sigma-github]: https://github.com/SigmaHQ/sigma
 [unified-detection]: https://docs.tenzir.com/use-cases/unified-detection
 
 ## Show Operator
 
-The experimental [`show` operator][show-docs] supersedes the `version` operator.
-Use `show <aspect>` to show various aspects of a Tenzir node. The following
-aspects are currently available:
+The experimental [`show` operator](/next/operators/show) supersedes the
+`version` operator. Use `show <aspect>` to show various aspects of a Tenzir
+node. The following aspects are currently available:
 
 - `build`: shows compile-time build information.
 - `config`: shows all current configuration options.
@@ -112,11 +112,6 @@ show config
 | put tenzir.endpoint
 ```
 
-[show-docs]: https://docs.tenzir.com/operators/sources/show
-[connectors-docs]: https://docs.tenzir.com/connectors
-[formats-docs]: https://docs.tenzir.com/formats
-[operators-docs]: https://docs.tenzir.com/operators
-
 ## Compress and Decompress Operators
 
 The [`compress`][compress-docs] and [`decompress`][decompress-docs] operators
@@ -135,8 +130,8 @@ export
 | save file /tmp/backup.json.gz
 ```
 
-[compress-docs]: https://docs.tenzir.com/operators/transformations/compress
-[decompress-docs]: https://docs.tenzir.com/operators/transformations/decompress
+[compress-docs]: /next/operators/compress
+[decompress-docs]: /next/operators/decompress
 
 ## Small Things
 

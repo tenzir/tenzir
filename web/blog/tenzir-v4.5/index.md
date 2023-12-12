@@ -2,6 +2,7 @@
 title: Tenzir v4.5
 authors: [dominiklohmann]
 date: 2023-11-16
+last_updated: 2023-12-12
 tags: [release, operators, expression, index, api, demo-node]
 comments: true
 ---
@@ -46,7 +47,7 @@ export
 ## The Rest API as an Operator
 
 We exposed [the Rest API](/api) as a new operator called
-[`api`](/next/operators/sources/api). The benefit primarily materializes for
+[`api`](/next/operators/api). The benefit primarily materializes for
 developers, who can now rapidly prototype integrations by using the app or
 `tenzir` command line tool, without having to spin up the integrated web
 server and do gymnastics with `curl` and `jq`.
@@ -74,10 +75,9 @@ the coarse `tenzir.allow-unsafe-pipelines` option.
 
 Why does it matter? Well, when running pipelines in a node, some operators allow
 you to fully interact with the system through a pipeline. The
-[`shell`](/operators/transformations/shell) operator is the best example, which
-allows for arbitrary command execution. This can be both a huge relief and serve
-as escape hatch to integrate third-party tools, but it is equally a security
-risk.
+[`shell`](/next/operators/shell) operator is the best example, which allows for
+arbitrary command execution. This can be both a huge relief and serve as escape
+hatch to integrate third-party tools, but it is equally a security risk.
 
 ## This & That
 

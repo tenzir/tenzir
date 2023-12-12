@@ -2,6 +2,7 @@
 title: Tenzir for Splunk Users
 authors: mavam
 date: 2023-08-03
+last_updated: 2023-12-12
 tags: [zeek, threat hunting, pipelines, tql, splunk, spl]
 comments: true
 ---
@@ -91,11 +92,10 @@ export
 Analysis:
 
 - In SPL, you typically start with an `index=X` to specify your dataset. In
-  TQL, you start with a [source operator](/operators/sources). To run a query
-  over historical data, we use the [`export`](/operators/sources/export)
-  operator.
+  TQL, you start with a source operator. To run a query over historical data, we
+  use the [`export`](/next/operators/export) operator.
 
-- The subsequent [`where`](/operators/transformations/where) operator is a
+- The subsequent [`where`](/next/operators/where) operator is a
   transformation to filter the stream of events with the
   [expression](/language/expressions) `#schema == "zeek.conn" && id.resp_p >
   1024`. In SPL, you write that expression directly into `index`. In TQL, we
@@ -105,7 +105,7 @@ Analysis:
 
   Why does this single responsibility principle matter? Because it's critical
   for *composition*: we can now replace `export` with another data source, like
-  [`from`](/operators/sources/from) [`kafka`](/connectors/kafka), and the rest
+  [`from`](/next/operators/from) [`kafka`](/connectors/kafka), and the rest
   of the pipeline stays the same.
 
 - TQL's `#schema` is an expression that is responsible for filtering the data
@@ -141,8 +141,8 @@ export
 | head 10
 ```
 
-Note the similarity. We opted to add [`top`](/operators/transformations/top) and
-[`rare`](/operators/transformations/rare) to make SPL users feel at home.
+Note the similarity. We opted to add [`top`](/next/operators/top) and
+[`rare`](/next/operators/rare) to make SPL users feel at home.
 
 ### Top 10 sources by bytes sent
 
@@ -179,9 +179,9 @@ Analysis:
   `sort B desc`, whereas `sort B` into `sort B asc`. However, we want to adopt
   the SPL syntax in the future.
 
-- SPL's `eval` maps to [`extend`](/operators/transformations/extend).
+- SPL's `eval` maps to [`extend`](/next/operators/extend).
 
-- The difference between `extend` and [`put`](/operators/transformations/put) is
+- The difference between `extend` and [`put`](/next/operators/put) is
   that `extend` keeps all fields as is, whereas `put` reorders fields and
   performs an explicit projection with the provided fields.
 
@@ -249,7 +249,7 @@ Analysis:
   to 10 events by default, which is why add `head 10`. This goes back to the
   single responsibility principle: one operator should do exactly one thing. The
   act of limiting the output should always be associated with
-  [`head`](/operators/transformations/head).
+  [`head`](/next/operators/head).
 
 ### Expired certificates
 

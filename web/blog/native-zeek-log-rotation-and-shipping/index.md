@@ -2,6 +2,7 @@
 title: Native Zeek Log Rotation & Shipping
 authors: mavam
 date: 2023-07-27
+last_updated: 2023-12-12
 tags: [zeek, logs, shipping, rotation, pipelines]
 comments: true
 ---
@@ -108,10 +109,9 @@ from file /path/to/conn.log read json --schema zeek.conn | import
 ```
 
 This pipeline reads the Zeek log and pipes it to the
-[`import`](/operators/sinks/import) operator, which stores all your logs at a
+[`import`](/next/operators/import) operator, which stores all your logs at a
 running Tenzir node. You could also use the
-[`extend`](/operators/transformations/extend) operator to include the
-filename in the data:
+[`extend`](/next/operators/extend) operator to include the filename in the data:
 
 ```bash
 pipeline="from file $file_name read $format \
@@ -119,8 +119,8 @@ pipeline="from file $file_name read $format \
           | import"
 ```
 
-Take a look at the [list of operators](/operators) for further inspiration on
-things you can do, or check out the [user guides](/user-guides) for concrete
+Take a look at the [list of operators](/next/operators) for further inspiration
+on things you can do, or check out the [user guides](/user-guides) for concrete
 ideas.
 
 ### Zeek package
@@ -163,8 +163,8 @@ Zeek logs:
    The above Zeek script hooks up two pipelines via the function
    `Tenzir::postprocess`. Each pipeline executes upon log rotation and receives
    the Zeek log file as input. The first imports all data via
-   [`import`](/operators/sinks/import) and the second writes the logs as
-   [`parquet`](/formats/parquet) files using [`to`](/operators/sinks/to).
+   [`import`](/next/operators/import) and the second writes the logs as
+   [`parquet`](/formats/parquet) files using [`to`](/next/operators/to).
 
 ## Reliability
 

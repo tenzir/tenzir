@@ -3,6 +3,7 @@ title: VAST v3.1
 authors: [tobim]
 image: /img/blog/vast-v3.1.excalidraw.svg
 date: 2023-05-12
+last_updated: 2023-12-12
 tags: [release, pipelines, operators]
 ---
 
@@ -27,26 +28,24 @@ on the VAST Language.
 
 We introduced several new operators:
 
-- [`tail`](/operators/transformations/tail): limits the
-  input to the last N events.
-- [`unique`](/operators/transformations/unique): removes
-  adjacent duplicates
-- [`measure`](/operators/transformations/measure): replaces
-  the input with incremental metrics describing the input.
+- [`tail`](/next/operators/tail): limits the input to the last N events.
+- [`unique`](/next/operators/unique): removes adjacent duplicates
+- [`measure`](/next/operators/measure): replaces the input with incremental
+  metrics describing the input.
 - `version`: returns a single event displaying version information of VAST. (Now
-  [`show`](/operators/sources/show).)
-- [`from`](/operators/sources/from): produces events by
-  combining a connector and a format.
-- [`read`](/operators/transformations/read): a short form of
-  `from` that allows for omitting the connector.
-- [`to`](/operators/sinks/to): consumes events by combining
-  a connector and format.
-- [`write`](/operators/transformations/write): a short form of `to`
-  that allows for omitting the connector.
+  [`show`](/next/operators/show).)
+- [`from`](/next/operators/from): produces events by combining a connector and a
+  format.
+- [`read`](/next/operators/read): a short form of `from` that allows for
+  omitting the connector.
+- [`to`](/next/operators/to): consumes events by combining a connector and
+  format.
+- [`write`](/next/operators/write): a short form of `to` that allows for
+  omitting the connector.
 
 Additionally, the `put`, `replace`, and `extend` operators have been updated to
 work with selectors and extractors. Check out the [growing list of
-operators](/operators/).
+operators](/next/operators/).
 
 ## Operator Aliases
 

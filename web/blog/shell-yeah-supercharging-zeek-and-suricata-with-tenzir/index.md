@@ -2,7 +2,7 @@
 title: Shell Yeah! Supercharging Zeek and Suricata with Tenzir
 authors: mavam
 date: 2023-07-20
-last_updated: 2023-07-22
+last_updated: 2023-12-12
 tags: [zeek, suricata, logs, shell]
 comments: true
 ---
@@ -77,10 +77,10 @@ zcat pcap.gz | suricatify | tenzir \
 ```
 
 It's a bit unwieldy to write such a command line that requires an external shell
-script to work. This is where [user-defined operators](/operators/user-defined)
-come into play. In combination with the [`shell`](/operators/sources/shell)
-operator, you can write a custom `zeek` and `suricata` operator and ditch the
-shell script:
+script to work. This is where [user-defined
+operators](/next/language/user-defined-operators) come into play. In combination
+with the [`shell`](/next/operators/shell) operator, you can write a custom
+`zeek` and `suricata` operator and ditch the shell script:
 
 ```yaml title="tenzir.yaml"
 tenzir:
@@ -129,7 +129,7 @@ output into the next:
 When using the `shell` operator, the `tenzir` process spawns `zeek` or
 `suricata` as child process. The operator then forwards the bytes from stdin of
 the `tenzir` process to the child's stdin, and uses the child's stdout as input
-to the subsequent [`read`](/next/operators/transformations/read) operator.
+to the subsequent [`read`](/next/operators/read) operator.
 
 ![Shelling out to Zeek](zeek-to-tenzir-shell.excalidraw.svg)
 
@@ -137,7 +137,7 @@ In the above example, `shell` acts as a *source* operator, i.e., it does not
 consume input and only produces output. The `shell` operator can also act as
 *transformation*, i.e., additionally accept input. This makes it possible to use
 it more flexibly in combination with other operators, e.g., the
-[`load`](/operators/sources/load) operator emitting bytes from a
+[`load`](/next/operators/load) operator emitting bytes from a
 [loader](/connectors):
 
 ```
@@ -176,9 +176,10 @@ node.
 
 ## Conclusion
 
-In this blog post we showed you the [`shell`](/operators/sources/shell) operator
+In this blog post we showed you the [`shell`](/next/operators/shell) operator
 and how you can use it to integrate third-party tooling into a Tenzir pipeline
-when coupled with [user-defined operators](/operators/user-defined).
+when coupled with [user-defined
+operators](/next/language/user-defined-operators).
 
 Using Zeek or Suricata? Tenzir makes 'em fun to work with. Check out our other
 blogs tagged with [`#zeek`](/blog/tags/zeek) and

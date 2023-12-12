@@ -3,7 +3,7 @@ title: Matching YARA Rules in Byte Pipelines
 authors:
    - mavam
 date: 2023-11-01
-last_updated: 2023-11-02
+last_updated: 2023-12-12
 tags: [yara, operator, dfir, detection engineering]
 comments: true
 ---
@@ -13,7 +13,7 @@ producing a structured match output to conveniently integrate alerting tools or
 trigger next processing steps in your detection workflows.
 
 [yara]: https://virustotal.github.io/yara/
-[yara-operator]: /next/operators/transformations/yara
+[yara-operator]: /next/operators/yara
 
 ![YARA Operator](yara-operator.excalidraw.svg)
 
@@ -189,7 +189,7 @@ while leaving the remainder of `yara` pipeline in place.
 
 Because the matches are structured events, you can use all existing operators to
 post-process them. For example, send them to a Slack channel via
-[`fluent-bit`](/operators/sinks/fluent-bit):
+[`fluent-bit`](/next/operators/fluent-bit):
 
 ```
 load file --mmap /tmp/test.txt
@@ -197,7 +197,7 @@ load file --mmap /tmp/test.txt
 | fluent-bit slack webhook=URL
 ```
 
-Or store them with [`import`](/operators/sinks/import) at a Tenzir node to
+Or store them with [`import`](/next/operators/import) at a Tenzir node to
 generate match statistics later on:
 
 ```

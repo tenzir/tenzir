@@ -7,6 +7,7 @@ authors:
      image_url: https://github.com/lo-chr.png
    - mavam
 date: 2023-10-19
+last_updated: 2023-12-12
 tags: [velociraptor, operator, dfir]
 comments: true
 ---
@@ -19,7 +20,7 @@ large fleet of assets, making endpoint telemetry collection and processing a
 breeze.
 
 [velociraptor]: https://docs.velociraptor.app/
-[velociraptor-operator]: /next/operators/sources/velociraptor
+[velociraptor-operator]: /next/operators/velociraptor
 [vql]: https://docs.velociraptor.app/docs/vql
 
 ![Velociraptor and Tenzir](velociraptor-and-tenzir.excalidraw.svg)
@@ -65,10 +66,9 @@ velociraptor --query "select * from pslist()"
 | import
 ```
 
-Storing it via [`import`](/operators/sinks/import) is just one of many options.
+Storing it via [`import`](/next/operators/import) is just one of many options.
 For ad-hoc investigations, you often just want to analyze the result, for which
-a variety of [transformations](/operators/transformations) come in handy. For
-example:
+a variety of transformations come in handy. For example:
 
 ```bash
 velociraptor --query "select * from pslist()"
