@@ -338,7 +338,7 @@ target_link_libraries(libtenzir PUBLIC tsl::robin_map)
 # dependency_summary("robin-map" tsl::robin_map "Dependencies")
 
 # Link against libmaxminddb.
-target_link_libraries(libtenzir PUBLIC maxminddb::maxminddb)
+target_link_libraries(libtenzir_builtins PRIVATE maxminddb::maxminddb)
 dependency_summary("libmaxminddb" maxminddb::maxminddb "Dependencies")
 
 # Link against Apache Arrow.

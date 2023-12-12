@@ -16,6 +16,7 @@ brew install --overwrite \
     gnu-sed \
     grpc \
     http-parser \
+    libmaxminddb \
     libpcap \
     librdkafka \
     libunwind-headers \
