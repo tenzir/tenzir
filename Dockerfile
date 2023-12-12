@@ -96,6 +96,7 @@ RUN apt-get update && \
       libfmt9 \
       libgrpc++1.51 \
       libhttp-parser2.9 \
+      libmaxminddb0 \
       libpcap0.8 \
       libprotobuf32 \
       librabbitmq4 \
