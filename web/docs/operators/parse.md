@@ -10,9 +10,9 @@ parse <input> <parser> <args>...
 
 ## Description
 
-The `parse` operator parses a given `<input>` field of type `string`
-using `<parser>` and replaces this field with the result.
-`<parser>` can be one of the parsers in [formats](../../formats.md)
+The `parse` operator parses a given `<input>` field of type `string` using
+`<parser>` and replaces this field with the result. `<parser>` can be one of the
+parsers in [formats](../formats.md).
 
 ## Examples
 
