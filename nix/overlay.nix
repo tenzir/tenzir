@@ -229,6 +229,7 @@ in {
         NIX_CFLAGS_LINK = "-lz";
       });
   restinio = final.callPackage ./restinio {};
+  pfs = final.callPackage ./pfs {};
   caf = let
     source = builtins.fromJSON (builtins.readFile ./caf/source.json);
   in
