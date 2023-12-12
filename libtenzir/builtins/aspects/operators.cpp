@@ -27,10 +27,6 @@ public:
     return "operators";
   }
 
-  auto location() const -> operator_location override {
-    return operator_location::anywhere;
-  }
-
   auto show(operator_control_plane& ctrl) const
     -> generator<table_slice> override {
     auto builder = series_builder{};

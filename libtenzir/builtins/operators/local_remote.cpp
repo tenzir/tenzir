@@ -125,7 +125,7 @@ public:
         .primary(p.current_span())
         .throw_();
     }
-    const auto* plugin = plugins::find<operator_parser_plugin>(op_name->name);
+    const auto* plugin = plugins::find_operator(op_name->name);
     if (!plugin) {
       diagnostic::error("operator `{}` does not exist", op_name->name)
         .primary(op_name->source)

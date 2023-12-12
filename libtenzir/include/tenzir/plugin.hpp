@@ -369,6 +369,11 @@ public:
 /// but only a parser for it. For most use cases: @see operator_plugin
 class operator_parser_plugin : public virtual plugin {
 public:
+  /// @returns the name of the operator
+  virtual auto operator_name() const -> std::string {
+    return name();
+  }
+
   /// @returns the signature of the operator.
   virtual auto signature() const -> operator_signature = 0;
 
@@ -825,9 +830,6 @@ public:
   /// @note defaults to `plugin::name()`.
   virtual auto aspect_name() const -> std::string;
 
-  /// The location of the show operator for this aspect.
-  virtual auto location() const -> operator_location = 0;
-
   /// Produces the data to show.
   virtual auto show(operator_control_plane& ctrl) const
     -> generator<table_slice>
@@ -971,6 +973,7 @@ struct formatter<enum tenzir::plugin_ptr::type> {
 // -- template function definitions -------------------------------------------
 
 namespace tenzir::plugins {
+
 template <class Plugin>
 const Plugin* find(std::string_view name) noexcept {
   const auto& plugins = get();
@@ -978,6 +981,23 @@ const Plugin* find(std::string_view name) noexcept {
   if (found == plugins.end())
     return nullptr;
   return found->template as<Plugin>();
+}
+
+inline const operator_parser_plugin*
+find_operator(std::string_view name) noexcept {
+  for (const auto* plugin : get<operator_parser_plugin>()) {
+    const auto current_name = plugin->operator_name();
+    const auto match
+      = std::equal(current_name.begin(), current_name.end(), name.begin(),
+                   name.end(), [](const char lhs, const char rhs) {
+                     return std::tolower(static_cast<unsigned char>(lhs))
+                            == std::tolower(static_cast<unsigned char>(rhs));
+                   });
+    if (match) {
+      return plugin;
+    }
+  }
+  return nullptr;
 }
 
 template <class Plugin>

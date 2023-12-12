@@ -2,7 +2,7 @@
 
 set -euxo pipefail
 
-"${app}" --bare-mode --plugins=web --endpoint=127.0.0.1:42024 exec 'show version | repeat 5 | serve version' &
+"${app}" --bare-mode --plugins=web --endpoint=127.0.0.1:42024 exec 'version | repeat 5 | serve version' &
 
 sleep 3
 

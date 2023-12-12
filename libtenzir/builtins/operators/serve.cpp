@@ -900,11 +900,6 @@ public:
     return "serves";
   }
 
-  // this is for the aspect plugin
-  auto location() const -> operator_location override {
-    return operator_location::remote;
-  }
-
   auto show(operator_control_plane& ctrl) const
     -> generator<table_slice> override {
     auto serve_manager = serve_manager_actor{};

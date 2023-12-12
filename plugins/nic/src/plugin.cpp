@@ -222,25 +222,12 @@ auto nic_type() -> type {
   };
 }
 
-class plugin final : public virtual loader_plugin<nic_loader>,
-                     public virtual aspect_plugin {
+class nics_operator final : public crtp_operator<nics_operator> {
 public:
-  auto initialize(const record& config, const record& /* global_config */)
-    -> caf::error override {
-    config_ = config;
-    return caf::none;
-  }
+  nics_operator() = default;
 
-  auto aspect_name() const -> std::string override {
-    return "nics";
-  }
-
-  auto location() const -> operator_location override {
-    return operator_location::local;
-  }
-
-  auto show(operator_control_plane& ctrl) const
-    -> generator<table_slice> override {
+  auto operator()(operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     auto err = std::array<char, PCAP_ERRBUF_SIZE>{};
     pcap_if_t* devices = nullptr;
     auto result = pcap_findalldevs(&devices, err.data());
@@ -296,6 +283,54 @@ public:
     co_yield builder.finish();
   }
 
+  auto name() const -> std::string override {
+    return "nics";
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)order;
+    (void)filter;
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, nics_operator& x) -> bool {
+    return f.object(x).pretty_name("tenzir.plugins.nics.nics_operator").fields();
+  }
+};
+
+class plugin final : public virtual loader_plugin<nic_loader>,
+                     public virtual operator_plugin<nics_operator> {
+public:
+  auto initialize(const record& config, const record& /* global_config */)
+    -> caf::error override {
+    config_ = config;
+    return caf::none;
+  }
+
+  auto name() const -> std::string override {
+    return "nic";
+  }
+
+  auto operator_name() const -> std::string override {
+    return "nics";
+  }
+
+  auto signature() const -> operator_signature override {
+    return {.source = true};
+  }
+
+  auto parse_operator(parser_interface& p) const -> operator_ptr override {
+    auto parser = argument_parser{"nics", "https://docs.tenzir.com/next/"
+                                          "operators/sources/nics"};
+    parser.parse(p);
+    return std::make_unique<nics_operator>();
+  }
+
   auto parse_loader(parser_interface& p) const
     -> std::unique_ptr<plugin_loader> override {
     auto parser = argument_parser{
@@ -307,10 +342,6 @@ public:
     parser.add("-e,--emit-file-headers", args.emit_file_headers);
     parser.parse(p);
     return std::make_unique<nic_loader>(std::move(args));
-  }
-
-  auto name() const -> std::string override {
-    return "nic";
   }
 
 private:

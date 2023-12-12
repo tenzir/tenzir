@@ -340,7 +340,7 @@ private:
   }
 
   auto parse_operator(identifier ident) -> located<operator_ptr> {
-    auto const* plugin = plugins::find<operator_parser_plugin>(ident.name);
+    auto const* plugin = plugins::find_operator(ident.name);
     if (auto definition = resolve_alias(ident.name)) {
       if (plugin) {
         diagnostic::error(

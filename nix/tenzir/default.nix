@@ -37,6 +37,7 @@
     tenzir-integration-test-deps,
     dpkg,
     restinio,
+    pfs,
     versionLongOverride ? null,
     versionShortOverride ? null,
     extraPlugins ? [],
@@ -118,6 +119,8 @@
           cppzmq
           re2
           restinio
+        ] ++ lib.optionals stdenv.isLinux [
+          pfs
         ] ++ lib.optionals (!(stdenv.isDarwin && isStatic)) [
           yara
         ];

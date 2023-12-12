@@ -24,7 +24,7 @@ wait_for_http() {
 @test "serve endpoint" {
   wait_for_http
 
-  tenzir 'show version | repeat 5 | serve version' &
+  tenzir 'version | repeat 5 | serve version' &
   sleep 3
 
   # Query the first set.

@@ -25,7 +25,7 @@ The diagram below illustrates these mechanics:
 
 ![Pipeline in the Browser](pipeline-browser.excalidraw.svg)
 
-For example, write [`show version`](../../operators/sources/show.md) and click
+For example, write [`version`](../../operators/sources/version.md) and click
 *Run* to see a single event arrive.
 
 ## On the command line
@@ -43,7 +43,7 @@ The diagram below illustrates these mechanics:
 
 ![Pipeline on the command line](pipeline-cli.excalidraw.svg)
 
-For example, run [`tenzir 'show version'`](../../operators/sources/show.md) to
+For example, run [`tenzir 'version'`](../../operators/sources/show.md) to
 see a single event rendered as JSON:
 
 ```json
@@ -57,9 +57,9 @@ You could also render it differently by passing a different
 operator, or by inferring the format from the file extension:
 
 ```bash
-tenzir 'show version | write csv'
-tenzir 'show version | to file /tmp/version.ssv'
-tenzir 'show version | to file /tmp/version.parquet'
+tenzir 'version | write csv'
+tenzir 'version | to file /tmp/version.ssv'
+tenzir 'version | to file /tmp/version.parquet'
 ```
 
 Instead of passing the pipeline description to the `tenzir` executable, you can

@@ -21,13 +21,10 @@ public:
     return "build";
   }
 
-  auto location() const -> operator_location override {
-    return operator_location::anywhere;
-  }
-
   auto show(operator_control_plane&) const -> generator<table_slice> override {
     auto builder = series_builder{};
     auto build = builder.record();
+    build.field("version", tenzir::version::version);
     build.field("type").data(version::build::type);
     build.field("tree_hash").data(version::build::tree_hash);
     build.field("assertions").data(version::build::has_assertions);
