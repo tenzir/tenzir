@@ -391,11 +391,10 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
       EXPORT pfsTargets
       FILE pfs-config.cmake
       NAMESPACE pfs::)
-    add_library(pfs::pfs ALIAS pfs)
     dependency_summary("pfs" "${CMAKE_CURRENT_SOURCE_DIR}/aux/pfs"
                        "Dependencies")
   else ()
-    dependency_summary("pfs" pfs::pfs "Dependencies")
+    dependency_summary("pfs" pfs "Dependencies")
   endif ()
   target_link_libraries(libtenzir PRIVATE pfs)
 endif()
