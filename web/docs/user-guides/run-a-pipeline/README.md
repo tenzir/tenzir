@@ -6,9 +6,8 @@ sidebar_position: 0
 
 :::tip What is a pipeline?
 A [pipeline](../../pipelines.md) is a chain of operators that begins with a
-[source](../../operators/README.md), optionally includes
-[transformations](../../operators/README.md) in the middle, and ends in a
-[sink](../../operators/README.md).
+*source*, optionally includes *transformations* in the middle, and ends with a
+*sink*.
 :::
 
 ## In the app

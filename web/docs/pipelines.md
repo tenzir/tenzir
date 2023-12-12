@@ -92,10 +92,10 @@ schemas at once. A demultiplexing operator like `to directory .. write <format>`
 removes this limitation by writing one file per schema instead.
 
 We are having ideas to make this schema (de)multiplexing explicit with a
-`per-schema` [operator modifier](operators/modifier.md) that you can write in
-front of every operator. Similarly, we are going to add union types in the
-future, making it possible to convert a heterogeneous stream of structured data
-into a homogeneous one.
+`per-schema` [operator modifier](language/operator-modifiers.md) that you can
+write in front of every operator. Similarly, we are going to add union types in
+the future, making it possible to convert a heterogeneous stream of structured
+data into a homogeneous one.
 
 It's important to note that most of the time you don't have to worry about
 schemas. They are there for you when you want to work with them, but it's often
@@ -192,7 +192,7 @@ throughput. So we generally transfer ownership of operators between processes as
 late as possible to prefer local, high-bandwidth communication. For maximum
 control over placement of computation, you can override the automatic operator
 location with the `local` and `remote` [operator
-modifiers](operators/modifier.md).
+modifiers](language/operator-modifiers.md).
 
 The above examples are implicit network connections because they're not visible
 in the pipeline definition. An explicit network connection terminates a pipeline

@@ -4,10 +4,9 @@ sidebar_position: 1
 
 # Reshape data
 
-Tenzir comes with numerous [transformation
-operators](../../operators/README.md) that do change the the
-shape of their input and produce a new output. Here is a visual overview of
-transformations that you can perform over a data frame:
+Tenzir comes with numerous transformation [operators](../../operators.md) that
+do change the the shape of their input and produce a new output. Here is a
+visual overview of transformations that you can perform over a data frame:
 
 ![Reshaping Overview](reshaping.excalidraw.svg)
 

@@ -144,13 +144,11 @@ invoking `tenzir <pipeline>` on the [command line](command-line.md) or
 
 </details>
 
-The `export` operator is a [source](operators/README.md) that
-produces data, `taste` is a
-[transformation](operators/README.md) that consumes and produces
-data, and there are [sinks](operators/README.md) that consume data.
-Either you do not provide a sink (like above) and can click the *Run* button to
-see the results in the app, or you provide a sink to deploy the pipeline
-continuously.
+The `export` operator is a *source* that only produces data, `taste` is a
+*transformation* that consumes and produces data, and there are *sinks* that
+only consume data. Either you do not provide a sink (like above) and can click
+the *Run* button to see the results in the app, or you provide a sink to deploy
+the pipeline continuously.
 
 Now filter the data with [`where`](operators/where.md) to only
 look at Suricata alerts:
