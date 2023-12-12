@@ -726,12 +726,6 @@ index_state::create_active_partition(const type& schema) {
   stage->out().set_filter(active_partition->second.stream_slot, schema);
   active_partition->second.capacity = partition_capacity;
   active_partition->second.id = id;
-  self->request(catalog, caf::infinite, atom::put_v, schema)
-    .then([]() {},
-          [this](const caf::error& error) {
-            TENZIR_WARN("{} failed to register type with catalog: {}", *self,
-                        error);
-          });
   TENZIR_DEBUG("{} created new partition {}", *self, id);
   return active_partition;
 }
@@ -1501,12 +1495,12 @@ index(index_actor::stateful_pointer<index_state> self,
       }
       auto rp = self->make_response_promise<query_cursor>();
       self
-        ->request(self->state.catalog, caf::infinite, atom::candidates_v,
-                  query_context)
+        ->request(self->state.catalog, caf::infinite, atom::internal_v,
+                  atom::candidates_v, query_context)
         .then(
           [=, candidates = std::move(candidates),
            query_contexts = std::move(query_contexts)](
-            catalog_lookup_result& lookup_result) mutable {
+            legacy_catalog_lookup_result& lookup_result) mutable {
             for (auto& [id, schema] : candidates) {
               auto new_partition_info = partition_info{
                 id, 0u, time{}, schema, version::current_partition_version};
@@ -1587,16 +1581,16 @@ index(index_actor::stateful_pointer<index_state> self,
           });
       return rp;
     },
-    [self](atom::resolve,
-           tenzir::expression& expr) -> caf::result<catalog_lookup_result> {
+    [self](atom::resolve, tenzir::expression& expr)
+      -> caf::result<legacy_catalog_lookup_result> {
       auto query_context = query_context::make_extract("index", self, expr);
       query_context.id = tenzir::uuid::random();
       auto type_set = tenzir::type_set{};
       for (const auto& [type, _] : self->state.active_partitions) {
         type_set.insert(type);
       }
-      return self->delegate(self->state.catalog, atom::candidates_v,
-                            std::move(query_context));
+      return self->delegate(self->state.catalog, atom::internal_v,
+                            atom::candidates_v, std::move(query_context));
     },
     [self](atom::query, const uuid& query_id, uint32_t num_partitions) {
       if (auto err
@@ -1788,7 +1782,7 @@ index(index_actor::stateful_pointer<index_state> self,
                     entry.uuid, pipe);
         return true;
       });
-      auto corrected_partitions = catalog_lookup_result{};
+      auto corrected_partitions = legacy_catalog_lookup_result{};
       for (const auto& partition : selected_partitions) {
         if (self->state.partitions_in_transformation.insert(partition.uuid)
               .second) {
@@ -1843,7 +1837,7 @@ index(index_actor::stateful_pointer<index_state> self,
                       partition_transfomer),
                     .candidate_partitions = input_size,
                     .requested_partitions = input_size},
-        catalog_lookup_result{corrected_partitions});
+        legacy_catalog_lookup_result{corrected_partitions});
       TENZIR_ASSERT(err == caf::none);
       const auto num_scheduled = self->state.schedule_lookups();
       TENZIR_DEBUG("{} scheduled {} partitions following a request to "

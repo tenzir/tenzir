@@ -125,7 +125,7 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     MESSAGE("register synopsis factory");
     factory<synopsis>::initialize();
     auto fs = self->spawn(posix_filesystem, directory, accountant_actor{});
-    catalog_act = self->spawn(catalog, accountant_actor{}, directory / "types");
+    catalog_act = self->spawn(catalog, accountant_actor{});
     MESSAGE("generate " << num_partitions << " UUIDs for the partitions");
     for (size_t i = 0; i < num_partitions; ++i)
       ids.emplace_back(uuid::random());
@@ -190,11 +190,11 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     auto query_context = tenzir::query_context::make_extract(
       "test", self, unbox(to<expression>(expr)));
     auto rp
-      = self->request(catalog_act, caf::infinite, tenzir::atom::candidates_v,
-                      std::move(query_context));
+      = self->request(catalog_act, caf::infinite, tenzir::atom::internal_v,
+                      atom::candidates_v, std::move(query_context));
     run();
     rp.receive(
-      [&](tenzir::catalog_lookup_result& candidates) {
+      [&](tenzir::legacy_catalog_lookup_result& candidates) {
         for (const auto& [key, candidate] : candidates.candidate_infos) {
           for (const auto& partition : candidate.partition_infos) {
             result.emplace_back(partition.uuid);
@@ -215,11 +215,11 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
     std::vector<uuid> result;
     auto query_context
       = tenzir::query_context::make_extract("test", self, std::move(expr));
-    auto rp = self->request(meta_idx, caf::infinite, tenzir::atom::candidates_v,
-                            query_context);
+    auto rp = self->request(meta_idx, caf::infinite, tenzir::atom::internal_v,
+                            atom::candidates_v, query_context);
     run();
     rp.receive(
-      [&](catalog_lookup_result& candidates) {
+      [&](legacy_catalog_lookup_result& candidates) {
         for (const auto& [key, candidate] : candidates.candidate_infos) {
           for (const auto& partition : candidate.partition_infos) {
             result.emplace_back(partition.uuid);
@@ -345,7 +345,7 @@ TEST(catalog with bool synopsis) {
   MESSAGE("generate slice data and add it to the catalog");
   // FIXME: do we have to replace the catalog from the fixture with a new
   // one for this test?
-  auto meta_idx = self->spawn(catalog, accountant_actor{}, directory / "types");
+  auto meta_idx = self->spawn(catalog, accountant_actor{});
   auto schema = type{
     "test",
     record_type{
@@ -413,11 +413,12 @@ TEST(catalog messages) {
   // Sending an expression should return candidate partition ids
   auto query_context = query_context::make_count(
     "test", receiver_actor<uint64_t>{}, count_query_context::estimate, expr);
-  auto expr_response = self->request(catalog_act, caf::infinite,
-                                     atom::candidates_v, query_context);
+  auto expr_response
+    = self->request(catalog_act, caf::infinite, atom::internal_v,
+                    atom::candidates_v, query_context);
   run();
   expr_response.receive(
-    [this](catalog_lookup_result& candidates) {
+    [this](legacy_catalog_lookup_result& candidates) {
       auto expected = std::vector<uuid>{ids.begin() + 1, ids.end()};
       std::vector<uuid> actual;
       for (const auto& [key, candidate] : candidates.candidate_infos) {
@@ -439,11 +440,11 @@ TEST(catalog messages) {
   // Sending NEITHER an expression nor ids should return all partitions.
   query_context.expr = tenzir::expression{};
   query_context.ids = tenzir::ids{};
-  auto hdl = self->request(catalog_act, caf::infinite, atom::candidates_v,
-                           query_context);
+  auto hdl = self->request(catalog_act, caf::infinite, atom::internal_v,
+                           atom::candidates_v, query_context);
   run();
   hdl.receive(
-    [](catalog_lookup_result& result) {
+    [](legacy_catalog_lookup_result& result) {
       const auto num_partitions = std::transform_reduce(
         result.candidate_infos.begin(), result.candidate_infos.end(), size_t{},
         std::plus<>{}, [](const auto& candidate) {

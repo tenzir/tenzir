@@ -36,42 +36,33 @@
 #include <filesystem>
 #include <span>
 
-tenzir::store_actor::behavior_type dummy_store() {
-  return {
-    [](tenzir::atom::query, const tenzir::query_context&) {
-      return uint64_t{0};
-    },
-    [](const tenzir::atom::erase&, const tenzir::ids&) {
-      return uint64_t{0};
-    },
-  };
-}
+namespace tenzir {
 
-using std::span;
+namespace {
 
 TEST(uuid roundtrip) {
-  tenzir::uuid uuid = tenzir::uuid::random();
-  auto expected_fb = tenzir::fbs::wrap(uuid);
+  auto uuid = uuid::random();
+  auto expected_fb = fbs::wrap(uuid);
   REQUIRE(expected_fb);
   auto fb = *expected_fb;
-  tenzir::uuid uuid2 = tenzir::uuid::random();
+  auto uuid2 = uuid::random();
   CHECK_NOT_EQUAL(uuid, uuid2);
   std::span<const std::byte> span{
     reinterpret_cast<const std::byte*>(fb->data()), fb->size()};
-  auto error = tenzir::fbs::unwrap<tenzir::fbs::LegacyUUID>(span, uuid2);
+  auto error = fbs::unwrap<fbs::LegacyUUID>(span, uuid2);
   CHECK(!error);
   CHECK_EQUAL(uuid, uuid2);
 }
 
 TEST(index roundtrip) {
-  tenzir::index_state state(/*self = */ nullptr);
+  index_state state(/*self = */ nullptr);
   // Both unpersisted and persisted partitions should show up in the created
   // flatbuffer.
-  state.unpersisted[tenzir::uuid::random()] = {};
-  state.unpersisted[tenzir::uuid::random()] = {};
-  state.persisted_partitions.emplace(tenzir::uuid::random());
-  state.persisted_partitions.emplace(tenzir::uuid::random());
-  std::set<tenzir::uuid> expected_uuids;
+  state.unpersisted[uuid::random()] = {};
+  state.unpersisted[uuid::random()] = {};
+  state.persisted_partitions.emplace(uuid::random());
+  state.persisted_partitions.emplace(uuid::random());
+  std::set<uuid> expected_uuids;
   for (auto& kv : state.unpersisted)
     expected_uuids.insert(kv.first);
   for (auto& persisted : state.persisted_partitions)
@@ -80,23 +71,23 @@ TEST(index roundtrip) {
   flatbuffers::FlatBufferBuilder builder;
   auto index = pack(builder, state);
   REQUIRE(index);
-  tenzir::fbs::FinishIndexBuffer(builder, *index);
+  fbs::FinishIndexBuffer(builder, *index);
   auto fb = builder.GetBufferPointer();
   auto sz = builder.GetSize();
   auto span = std::span(fb, sz);
   // Deserialize the index.
-  auto idx = tenzir::fbs::GetIndex(span.data());
-  CHECK_EQUAL(idx->index_type(), tenzir::fbs::index::Index::v0);
+  auto idx = fbs::GetIndex(span.data());
+  CHECK_EQUAL(idx->index_type(), fbs::index::Index::v0);
   auto idx_v0 = idx->index_as_v0();
   // Check Index state.
   auto partition_uuids = idx_v0->partitions();
   REQUIRE(partition_uuids);
   CHECK_EQUAL(partition_uuids->size(), expected_uuids.size());
-  std::set<tenzir::uuid> restored_uuids;
+  std::set<uuid> restored_uuids;
   for (auto uuid : *partition_uuids) {
     REQUIRE(uuid);
     tenzir::uuid restored_uuid;
-    auto error = tenzir::unpack(*uuid, restored_uuid);
+    auto error = unpack(*uuid, restored_uuid);
     CHECK(!error);
     restored_uuids.insert(restored_uuid);
   }
@@ -116,12 +107,12 @@ FIXTURE_SCOPE(partition_roundtrips, fixture)
 
 TEST(empty partition roundtrip) {
   // Create partition state.
-  tenzir::active_partition_state state;
-  state.data.id = tenzir::uuid::random();
-  state.data.store_id = tenzir::defaults::store_backend;
-  state.data.store_header = tenzir::chunk::make_empty();
+  active_partition_state state;
+  state.data.id = uuid::random();
+  state.data.store_id = defaults::store_backend;
+  state.data.store_header = chunk::make_empty();
   state.data.events = 23;
-  state.data.synopsis = caf::make_copy_on_write<tenzir::partition_synopsis>();
+  state.data.synopsis = caf::make_copy_on_write<partition_synopsis>();
   state.data.synopsis.unshared().events = state.data.events;
   auto& ids = state.data.type_ids["x"];
   ids.append_bits(false, 3);
@@ -129,23 +120,23 @@ TEST(empty partition roundtrip) {
   // Prepare a schema for the partition synopsis. The partition synopsis only
   // looks at the schema of the table slices it gets, so we feed it
   // with an empty table slice.
-  auto schema = tenzir::type{
+  auto schema = type{
     "y",
-    tenzir::record_type{
-      {"x", tenzir::uint64_type{}},
+    record_type{
+      {"x", uint64_type{}},
     },
   };
-  auto qf = tenzir::qualified_record_field{schema, tenzir::offset{0}};
+  auto qf = qualified_record_field{schema, offset{0}};
   state.indexers[qf] = nullptr;
-  auto slice_builder = std::make_shared<tenzir::table_slice_builder>(schema);
+  auto slice_builder = std::make_shared<table_slice_builder>(schema);
   REQUIRE(slice_builder);
   auto slice = slice_builder->finish();
   slice.offset(0);
-  REQUIRE_NOT_EQUAL(slice.encoding(), tenzir::table_slice_encoding::none);
-  state.data.synopsis.unshared().add(
-    slice, tenzir::defaults::max_partition_size, tenzir::index_config{});
+  REQUIRE_NOT_EQUAL(slice.encoding(), table_slice_encoding::none);
+  state.data.synopsis.unshared().add(slice, defaults::max_partition_size,
+                                     index_config{});
   // Serialize partition.
-  tenzir::chunk_ptr partition_chunk = {};
+  chunk_ptr partition_chunk = {};
   {
     auto combined_schema = state.combined_schema();
     REQUIRE(combined_schema);
@@ -154,18 +145,16 @@ TEST(empty partition roundtrip) {
     partition_chunk = *partition;
   }
   // Deserialize partition.
-  tenzir::passive_partition_state recovered_state = {};
-  auto container = tenzir::fbs::flatbuffer_container{partition_chunk};
-  auto partition = container.as_flatbuffer<tenzir::fbs::Partition>(0);
+  passive_partition_state recovered_state = {};
+  auto container = fbs::flatbuffer_container{partition_chunk};
+  auto partition = container.as_flatbuffer<fbs::Partition>(0);
   REQUIRE(partition);
-  REQUIRE_EQUAL(partition->partition_type(),
-                tenzir::fbs::partition::Partition::legacy);
+  REQUIRE_EQUAL(partition->partition_type(), fbs::partition::Partition::legacy);
   auto partition_legacy = partition->partition_as_legacy();
   REQUIRE(partition_legacy);
   REQUIRE(partition_legacy->store());
   REQUIRE(partition_legacy->store()->id());
-  CHECK_EQUAL(partition_legacy->store()->id()->str(),
-              tenzir::defaults::store_backend);
+  CHECK_EQUAL(partition_legacy->store()->id()->str(), defaults::store_backend);
   CHECK_EQUAL(partition_legacy->events(), state.data.events);
   auto error = unpack(*partition_legacy, recovered_state);
   CHECK(!error);
@@ -176,30 +165,28 @@ TEST(empty partition roundtrip) {
   //   CHECK_EQUAL(recovered_state.combined_schema_, state.combined_schema);
   CHECK_EQUAL(recovered_state.type_ids_, state.data.type_ids);
   // Deserialize catalog state from this partition.
-  auto ps = caf::make_copy_on_write<tenzir::partition_synopsis>();
-  auto error2 = tenzir::unpack(*partition_legacy, ps.unshared());
+  auto ps = caf::make_copy_on_write<partition_synopsis>();
+  auto error2 = unpack(*partition_legacy, ps.unshared());
   CHECK(!error2);
   CHECK_EQUAL(ps->field_synopses_.size(), 1u);
   CHECK_EQUAL(ps->events, state.data.events);
-  auto catalog = self->spawn(tenzir::catalog, tenzir::accountant_actor{},
-                             directory / "types");
-  auto rp = self->request(catalog, caf::infinite, tenzir::atom::merge_v,
+  auto catalog = self->spawn(tenzir::catalog, accountant_actor{});
+  auto rp = self->request(catalog, caf::infinite, atom::merge_v,
                           recovered_state.id, ps);
   run();
-  rp.receive([=](tenzir::atom::ok) {},
+  rp.receive([=](atom::ok) {},
              [=](const caf::error& err) {
                FAIL(err);
              });
-  auto expr = tenzir::expression{
-    tenzir::predicate{tenzir::field_extractor{"x"},
-                      tenzir::relational_operator::equal, tenzir::data{0u}}};
+  auto expr = expression{
+    predicate{field_extractor{"x"}, relational_operator::equal, data{0u}}};
   auto query_context
-    = tenzir::query_context::make_extract("test", self, std::move(expr));
-  auto rp2 = self->request(catalog, caf::infinite, tenzir::atom::candidates_v,
-                           std::move(query_context));
+    = query_context::make_extract("test", self, std::move(expr));
+  auto rp2 = self->request(catalog, caf::infinite, atom::internal_v,
+                           atom::candidates_v, std::move(query_context));
   run();
   rp2.receive(
-    [&](const tenzir::catalog_lookup_result& candidates) {
+    [&](const legacy_catalog_lookup_result& candidates) {
       REQUIRE_EQUAL(candidates.candidate_infos.size(), 1ull);
       const auto& partition_infos
         = candidates.candidate_infos.begin()->second.partition_infos;
@@ -217,32 +204,31 @@ TEST(empty partition roundtrip) {
 // finally does some queries on it to ensure the restored flatbuffer is still
 // able to return correct results.
 TEST(full partition roundtrip) {
-  auto schema = tenzir::type{
+  auto schema = type{
     "y",
-    tenzir::record_type{
-      {"x", tenzir::uint64_type{}},
+    record_type{
+      {"x", uint64_type{}},
     },
   };
   // Spawn a partition.
-  auto fs = self->spawn(tenzir::posix_filesystem, directory,
-                        tenzir::accountant_actor{});
-  auto partition_uuid = tenzir::uuid::random();
-  const auto* store_plugin = tenzir::plugins::find<tenzir::store_actor_plugin>(
-    tenzir::defaults::store_backend);
+  auto fs = self->spawn(posix_filesystem, directory, accountant_actor{});
+  auto partition_uuid = uuid::random();
+  const auto* store_plugin
+    = plugins::find<store_actor_plugin>(defaults::store_backend);
   REQUIRE(store_plugin);
-  auto partition = sys.spawn(tenzir::active_partition, schema, partition_uuid,
-                             tenzir::accountant_actor{}, fs, caf::settings{},
-                             tenzir::index_config{}, store_plugin,
-                             std::make_shared<tenzir::taxonomies>());
+  auto partition
+    = sys.spawn(active_partition, schema, partition_uuid, accountant_actor{},
+                fs, caf::settings{}, index_config{}, store_plugin,
+                std::make_shared<taxonomies>());
   run();
   REQUIRE(partition);
   // Add data to the partition.
-  auto builder = std::make_shared<tenzir::table_slice_builder>(schema);
+  auto builder = std::make_shared<table_slice_builder>(schema);
   CHECK(builder->add(0u));
   auto slice = builder->finish();
   slice.offset(0);
-  auto data = std::vector<tenzir::table_slice>{slice};
-  auto src = tenzir::detail::spawn_container_source(sys, data, partition);
+  auto data = std::vector<table_slice>{slice};
+  auto src = detail::spawn_container_source(sys, data, partition);
   REQUIRE(src);
   run();
   // Persist the partition to disk;
@@ -250,43 +236,40 @@ TEST(full partition roundtrip) {
     = "test-partition"; // will be interpreted relative to
                         // the fs actor's root dir
   std::filesystem::path synopsis_path = "test-partition-synopsis";
-  auto persist_promise
-    = self->request(partition, caf::infinite, tenzir::atom::persist_v,
-                    persist_path, synopsis_path);
+  auto persist_promise = self->request(
+    partition, caf::infinite, atom::persist_v, persist_path, synopsis_path);
   run();
   persist_promise.receive(
-    [](tenzir::partition_synopsis_ptr&) {
+    [](partition_synopsis_ptr&) {
       CHECK("persisting done");
     },
     [](const caf::error& err) {
       FAIL(err);
     });
   self->send_exit(partition, caf::exit_reason::user_shutdown);
-  auto readonly_partition
-    = sys.spawn(tenzir::passive_partition, partition_uuid,
-                tenzir::accountant_actor{}, fs, persist_path);
+  auto readonly_partition = sys.spawn(passive_partition, partition_uuid,
+                                      accountant_actor{}, fs, persist_path);
   REQUIRE(readonly_partition);
   run();
   // A minimal `partition_client_actor`that stores the results in a local
   // variable.
   auto dummy_client = [](std::shared_ptr<uint64_t> count)
-    -> tenzir::receiver_actor<uint64_t>::behavior_type {
+    -> receiver_actor<uint64_t>::behavior_type {
     return {
       [count](uint64_t hits) {
         *count += hits;
       },
     };
   };
-  auto test_expression = [&](const tenzir::expression& expression,
+  auto test_expression = [&](const expression& expression,
                              size_t expected_hits) {
     uint64_t tally = 0;
     auto result = std::make_shared<uint64_t>();
     auto dummy = self->spawn(dummy_client, result);
-    auto rp = self->request(
-      readonly_partition, caf::infinite, tenzir::atom::query_v,
-      tenzir::query_context::make_count(
-        "test", dummy, tenzir::count_query_context::mode::estimate,
-        expression));
+    auto rp = self->request(readonly_partition, caf::infinite, atom::query_v,
+                            query_context::make_count(
+                              "test", dummy,
+                              count_query_context::mode::estimate, expression));
     run();
     rp.receive(
       [&tally](uint64_t x) {
@@ -337,3 +320,7 @@ TEST(full partition roundtrip) {
 }
 
 FIXTURE_SCOPE_END()
+
+} // namespace
+
+} // namespace tenzir

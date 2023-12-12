@@ -78,7 +78,7 @@ eraser(eraser_actor::stateful_pointer<eraser_state> self,
       self->request(self->state.index_, caf::infinite, atom::resolve_v, *expr)
         .then(
           [self, transform = std::move(*transform),
-           rp](catalog_lookup_result& result) mutable {
+           rp](legacy_catalog_lookup_result& result) mutable {
             for (const auto& [_, partition_infos] : result.candidate_infos) {
               TENZIR_DEBUG("{} resolved query {} to {} partitions", *self,
                            self->state.query_,

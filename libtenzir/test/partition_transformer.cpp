@@ -44,8 +44,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     : fixtures::deterministic_actor_system_and_events(
       TENZIR_PP_STRINGIFY(SUITE)) {
     filesystem = self->spawn(memory_filesystem);
-    auto type_system_path = std::filesystem::path{"/type-registry"};
-    catalog = self->spawn(tenzir::catalog, accountant, type_system_path);
+    catalog = self->spawn(tenzir::catalog, accountant);
   }
 
   fixture(const fixture&) = delete;
@@ -306,7 +305,7 @@ TEST(partition with multiple types) {
 TEST(pass partition pipeline via the index) {
   // Spawn index and fill with data
   auto index_dir = std::filesystem::path{"/tenzir/index"};
-  auto catalog = self->spawn(tenzir::catalog, accountant, directory / "types");
+  auto catalog = self->spawn(tenzir::catalog, accountant);
   const auto partition_capacity = 8;
   const auto active_partition_timeout = tenzir::duration{};
   const auto in_mem_partitions = 10;
@@ -408,7 +407,7 @@ TEST(pass partition pipeline via the index) {
 TEST(query after transform) {
   // Spawn index and fill with data
   auto index_dir = std::filesystem::path{"/tenzir/index"};
-  auto catalog = self->spawn(tenzir::catalog, accountant, directory / "types");
+  auto catalog = self->spawn(tenzir::catalog, accountant);
   const auto partition_capacity = tenzir::defaults::max_partition_size;
   const auto active_partition_timeout = tenzir::duration{};
   const auto in_mem_partitions = 10;
@@ -450,7 +449,7 @@ TEST(query after transform) {
   auto events = size_t{0ull};
   run();
   rp1.receive(
-    [&](tenzir::catalog_lookup_result crs) {
+    [&](tenzir::legacy_catalog_lookup_result crs) {
       REQUIRE_EQUAL(crs.candidate_infos.size(), 1ull);
       auto& partition
         = crs.candidate_infos.begin()->second.partition_infos.front();
@@ -525,7 +524,7 @@ TEST(query after transform) {
 TEST(select pipeline with an empty result set) {
   // Spawn index and fill with data
   auto index_dir = std::filesystem::path{"/tenzir/index"};
-  auto catalog = self->spawn(tenzir::catalog, accountant, directory / "types");
+  auto catalog = self->spawn(tenzir::catalog, accountant);
   const auto partition_capacity = 8;
   const auto active_partition_timeout = tenzir::duration{};
   const auto in_mem_partitions = 10;

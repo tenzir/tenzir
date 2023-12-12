@@ -222,10 +222,10 @@ struct rebuilder_state {
       = query_context::make_extract("rebuild", self, run->options.expression);
     query_context.id = uuid::random();
     self
-      ->request(catalog, caf::infinite, atom::candidates_v,
+      ->request(catalog, caf::infinite, atom::internal_v, atom::candidates_v,
                 std::move(query_context))
       .then(
-        [this, finish](catalog_lookup_result& lookup_result) mutable {
+        [this, finish](legacy_catalog_lookup_result& lookup_result) mutable {
           TENZIR_ASSERT(run->statistics.num_total == 0);
           for (auto& [type, result] : lookup_result.candidate_infos) {
             if (not run->options.all) {

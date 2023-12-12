@@ -159,12 +159,13 @@ public:
     TENZIR_DEBUG("export operator starts catalog lookup with id {} and "
                  "expression {}",
                  query_context.id, expr_);
-    auto current_result = catalog_lookup_result{};
+    auto current_result = legacy_catalog_lookup_result{};
     auto current_error = caf::error{};
     ctrl.self()
-      .request(catalog, caf::infinite, atom::candidates_v, query_context)
+      .request(catalog, caf::infinite, atom::internal_v, atom::candidates_v,
+               query_context)
       .await(
-        [&current_result](catalog_lookup_result result) {
+        [&current_result](legacy_catalog_lookup_result result) {
           current_result = std::move(result);
         },
         [&current_error](caf::error e) {

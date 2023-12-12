@@ -10,6 +10,7 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/as_bytes.hpp"
+#include "tenzir/catalog_lookup.hpp"
 #include "tenzir/concept/convertible/data.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/defaults.hpp"
@@ -22,7 +23,6 @@
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/expression.hpp"
-#include "tenzir/fbs/type_registry.hpp"
 #include "tenzir/flatbuffer.hpp"
 #include "tenzir/instrumentation.hpp"
 #include "tenzir/io/read.hpp"
@@ -32,7 +32,6 @@
 #include "tenzir/modules.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/pipeline.hpp"
-#include "tenzir/prune.hpp"
 #include "tenzir/query_context.hpp"
 #include "tenzir/report.hpp"
 #include "tenzir/status.hpp"
@@ -42,6 +41,7 @@
 #include <caf/binary_serializer.hpp>
 #include <caf/detail/set_thread_name.hpp>
 #include <caf/expected.hpp>
+#include <caf/scoped_actor.hpp>
 
 #include <type_traits>
 
@@ -49,375 +49,64 @@ namespace tenzir {
 
 void catalog_state::create_from(
   std::unordered_map<uuid, partition_synopsis_ptr>&& ps) {
-  std::unordered_map<tenzir::type,
-                     std::vector<std::pair<uuid, partition_synopsis_ptr>>>
-    flat_data_map;
+  if (not partitions.empty()) {
+    throw std::logic_error(
+      fmt::format("{} must be empty when loading partitions", *self));
+  }
   for (auto&& [uuid, synopsis] : std::move(ps)) {
-    TENZIR_ASSERT(synopsis->get_reference_count() == 1ull);
     update_unprunable_fields(*synopsis);
-    flat_data_map[synopsis->schema].emplace_back(uuid, std::move(synopsis));
+    partitions.emplace_back(uuid, std::move(synopsis));
   }
-  for (auto& [type, flat_data] : flat_data_map) {
-    std::sort(flat_data.begin(), flat_data.end(),
-              [](const std::pair<uuid, partition_synopsis_ptr>& lhs,
-                 const std::pair<uuid, partition_synopsis_ptr>& rhs) {
-                return lhs.first < rhs.first;
-              });
-    synopses_per_type[type]
-      = decltype(synopses_per_type)::value_type::second_type::make_unsafe(
-        std::move(flat_data));
-  }
+  std::sort(
+    partitions.begin(), partitions.end(), [](const auto& lhs, const auto& rhs) {
+      return lhs.synopsis->max_import_time < rhs.synopsis->max_import_time;
+    });
 }
 
-void catalog_state::merge(const uuid& partition, partition_synopsis_ptr ps) {
-  update_unprunable_fields(*ps);
-  synopses_per_type[ps->schema][partition] = std::move(ps);
+void catalog_state::merge(const uuid& uuid, partition_synopsis_ptr synopsis) {
+  update_unprunable_fields(*synopsis);
+  const auto first_older
+    = std::upper_bound(partitions.begin(), partitions.end(),
+                       synopsis->max_import_time,
+                       [](const auto ts, const auto& partition) {
+                         return partition.synopsis->max_import_time > ts;
+                       });
+  partitions.emplace(first_older, uuid, std::move(synopsis));
+  TENZIR_ASSERT_EXPENSIVE(std::is_sorted(
+    partitions.begin(), partitions.end(), [](const auto& lhs, const auto& rhs) {
+      return lhs.synopsis->max_import_time < rhs.synopsis->max_import_time;
+    }));
 }
 
-void catalog_state::erase(const uuid& partition) {
-  for (auto& [type, uuid_synopsis_map] : synopses_per_type) {
-    auto erased = uuid_synopsis_map.erase(partition);
-    if (erased) {
-      if (uuid_synopsis_map.empty()) {
-        synopses_per_type.erase(type);
-      }
-      return;
-    }
-  }
+void catalog_state::erase(const uuid& uuid) {
+  const auto it = std::remove_if(partitions.begin(), partitions.end(),
+                                 [&](const auto& partition) {
+                                   return partition.uuid == uuid;
+                                 });
+  partitions.erase(it, partitions.end());
 }
 
-caf::expected<catalog_lookup_result>
-catalog_state::lookup(expression expr) const {
-  auto start = stopwatch::now();
-  auto total_candidates = catalog_lookup_result{};
-  auto num_candidate_partitions = size_t{0};
-  auto num_candidate_events = size_t{0};
-  if (expr == caf::none) {
-    expr = trivially_true_expression();
+void catalog_state::replace(
+  const std::vector<uuid>& old_uuids,
+  std::vector<partition_synopsis_pair> new_partitions) {
+  const auto it = std::remove_if(
+    partitions.begin(), partitions.end(), [&](const auto& partition) {
+      return std::any_of(old_uuids.begin(), old_uuids.end(),
+                         [&](const auto& uuid) {
+                           return uuid == partition.uuid;
+                         });
+    });
+  partitions.erase(it, partitions.end());
+  for (auto&& partition : std::move(new_partitions)) {
+    merge(partition.uuid, std::move(partition.synopsis));
   }
-  auto normalized = normalize_and_validate(expr);
-  if (not normalized) {
-    return caf::make_error(ec::invalid_argument,
-                           fmt::format("{} failed to normalize and validate "
-                                       "epxression {}: {}",
-                                       *self, expr, normalized.error()));
-  }
-  for (const auto& [type, _] : synopses_per_type) {
-    auto resolved = resolve(taxonomies, *normalized, type);
-    if (not resolved) {
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("{} failed to resolve epxression {}: "
-                                         "{}",
-                                         *self, expr, resolved.error()));
-    }
-    auto pruned = prune(*resolved, unprunable_fields);
-    auto candidates_per_type = lookup_impl(pruned, type);
-    // Sort partitions by their max import time, returning the most recent
-    // partitions first.
-    std::sort(candidates_per_type.partition_infos.begin(),
-              candidates_per_type.partition_infos.end(),
-              [&](const partition_info& lhs, const partition_info& rhs) {
-                return lhs.max_import_time > rhs.max_import_time;
-              });
-    num_candidate_partitions += candidates_per_type.partition_infos.size();
-    num_candidate_events
-      += std::transform_reduce(candidates_per_type.partition_infos.begin(),
-                               candidates_per_type.partition_infos.end(),
-                               size_t{0}, std::plus<>{},
-                               [](const auto& partition) {
-                                 return partition.events;
-                               });
-    total_candidates.candidate_infos[type] = std::move(candidates_per_type);
-  }
-  auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
-    stopwatch::now() - start);
-  TENZIR_VERBOSE("catalog found {} candidate partitions ({} events) in "
-                 "{} microseconds",
-                 num_candidate_partitions, num_candidate_events, delta.count());
-  TENZIR_TRACEPOINT(catalog_lookup, delta.count(), num_candidate_partitions);
-  return total_candidates;
-}
-
-catalog_lookup_result::candidate_info
-catalog_state::lookup_impl(const expression& expr, const type& schema) const {
-  TENZIR_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
-  auto synopsis_map_per_type_it = synopses_per_type.find(schema);
-  TENZIR_ASSERT(synopsis_map_per_type_it != synopses_per_type.end());
-  const auto& partition_synopses = synopsis_map_per_type_it->second;
-  // The partition UUIDs must be sorted, otherwise the invariants of the
-  // inplace union and intersection algorithms are violated, leading to
-  // wrong results. So all places where we return an assembled set must
-  // ensure the post-condition of returning a sorted list. We currently
-  // rely on `flat_map` already traversing them in the correct order, so
-  // no separate sorting step is required.
-  auto memoized_partitions = catalog_lookup_result::candidate_info{};
-  auto all_partitions = [&] {
-    if (!memoized_partitions.partition_infos.empty()
-        || partition_synopses.empty())
-      return memoized_partitions;
-    for (const auto& [partition_id, synopsis] : partition_synopses) {
-      memoized_partitions.partition_infos.emplace_back(partition_id, *synopsis);
-    }
-    return memoized_partitions;
-  };
-  auto f = detail::overload{
-    [&](const conjunction& x) -> catalog_lookup_result::candidate_info {
-      TENZIR_ASSERT(!x.empty());
-      auto i = x.begin();
-      auto result = lookup_impl(*i, schema);
-      if (!result.partition_infos.empty())
-        for (++i; i != x.end(); ++i) {
-          // TODO: A conjunction means that we can restrict the lookup to the
-          // remaining candidates. This could be achived by passing the `result`
-          // set to `lookup` along with the child expression.
-          auto xs = lookup_impl(*i, schema);
-          if (xs.partition_infos.empty())
-            return xs; // short-circuit
-          detail::inplace_intersect(result.partition_infos, xs.partition_infos);
-          TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                       result.partition_infos.end()));
-        }
-      return result;
-    },
-    [&](const disjunction& x) -> catalog_lookup_result::candidate_info {
-      catalog_lookup_result::candidate_info result;
-      for (const auto& op : x) {
-        // TODO: A disjunction means that we can restrict the lookup to the
-        // set of partitions that are outside of the current result set.
-        auto xs = lookup_impl(op, schema);
-        if (xs.partition_infos.size() == partition_synopses.size())
-          return xs; // short-circuit
-        TENZIR_ASSERT(
-          std::is_sorted(xs.partition_infos.begin(), xs.partition_infos.end()));
-        detail::inplace_unify(result.partition_infos, xs.partition_infos);
-        TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                     result.partition_infos.end()));
-      }
-      return result;
-    },
-    [&](const negation&) -> catalog_lookup_result::candidate_info {
-      // We cannot handle negations, because a synopsis may return false
-      // positives, and negating such a result may cause false
-      // negatives.
-      // TODO: The above statement seems to only apply to bloom filter
-      // synopses, but it should be possible to handle time or bool synopses.
-      return all_partitions();
-    },
-    [&](const predicate& x) -> catalog_lookup_result::candidate_info {
-      // Performs a lookup on all *matching* synopses with operator and
-      // data from the predicate of the expression. The match function
-      // uses a qualified_record_field to determine whether the synopsis
-      // should be queried.
-      auto search = [&](auto match) {
-        TENZIR_ASSERT(caf::holds_alternative<data>(x.rhs));
-        const auto& rhs = caf::get<data>(x.rhs);
-        catalog_lookup_result::candidate_info result;
-        // dont iterate through all synopses, rewrite lookup_impl to use a
-        // singular type all synopses loops -> relevant anymore? Use type as
-        // synopses key
-        for (const auto& [part_id, part_syn] : partition_synopses) {
-          for (const auto& [field, syn] : part_syn->field_synopses_) {
-            if (match(field)) {
-              // We need to prune the type's metadata here by converting it to
-              // a concrete type and back, because the type synopses are
-              // looked up independent from names and attributes.
-              auto prune = [&]<concrete_type T>(const T& x) {
-                return type{x};
-              };
-              auto cleaned_type = caf::visit(prune, field.type());
-              // We rely on having a field -> nullptr mapping here for the
-              // fields that don't have their own synopsis.
-              if (syn) {
-                auto opt = syn->lookup(x.op, make_view(rhs));
-                if (!opt || *opt) {
-                  TENZIR_TRACE("{} selects {} at predicate {}",
-                               detail::pretty_type_name(this), part_id, x);
-                  result.partition_infos.emplace_back(part_id, *part_syn);
-                  break;
-                }
-                // The field has no dedicated synopsis. Check if there is one
-                // for the type in general.
-              } else if (auto it = part_syn->type_synopses_.find(cleaned_type);
-                         it != part_syn->type_synopses_.end() && it->second) {
-                auto opt = it->second->lookup(x.op, make_view(rhs));
-                if (!opt || *opt) {
-                  TENZIR_TRACE("{} selects {} at predicate {}",
-                               detail::pretty_type_name(this), part_id, x);
-                  result.partition_infos.emplace_back(part_id, *part_syn);
-                  break;
-                }
-              } else {
-                // The catalog couldn't rule out this partition, so we have
-                // to include it in the result set.
-                result.partition_infos.emplace_back(part_id, *part_syn);
-                break;
-              }
-            }
-          }
-        }
-        TENZIR_DEBUG("{} checked {} partitions for predicate {} and got {} "
-                     "results",
-                     detail::pretty_type_name(this), synopses_per_type.size(),
-                     x, result.partition_infos.size());
-        // Some calling paths require the result to be sorted.
-        TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                     result.partition_infos.end()));
-        return result;
-      };
-      auto extract_expr = detail::overload{
-        [&](const meta_extractor& lhs,
-            const data& d) -> catalog_lookup_result::candidate_info {
-          switch (lhs.kind) {
-            case meta_extractor::schema: {
-              // We don't have to look into the synopses for type queries, just
-              // at the schema names.
-              catalog_lookup_result::candidate_info result;
-              for (const auto& [part_id, part_syn] : partition_synopses) {
-                for (const auto& [fqf, _] : part_syn->field_synopses_) {
-                  // TODO: provide an overload for view of evaluate() so that
-                  // we can use string_view here. Fortunately type names are
-                  // short, so we're probably not hitting the allocator due to
-                  // SSO.
-                  if (evaluate(std::string{fqf.schema_name()}, x.op, d)) {
-                    result.partition_infos.emplace_back(part_id, *part_syn);
-                    break;
-                  }
-                }
-              }
-              TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                           result.partition_infos.end()));
-              return result;
-            }
-            case meta_extractor::schema_id: {
-              auto result = catalog_lookup_result::candidate_info{};
-              for (const auto& [part_id, part_syn] : partition_synopses) {
-                TENZIR_ASSERT(part_syn->schema == schema);
-              }
-              if (evaluate(schema.make_fingerprint(), x.op, d)) {
-                for (const auto& [part_id, part_syn] : partition_synopses) {
-                  result.partition_infos.emplace_back(part_id, *part_syn);
-                }
-              }
-              TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                           result.partition_infos.end()));
-              return result;
-            }
-            case meta_extractor::import_time: {
-              catalog_lookup_result::candidate_info result;
-              for (const auto& [part_id, part_syn] : partition_synopses) {
-                TENZIR_ASSERT(
-                  part_syn->min_import_time <= part_syn->max_import_time,
-                  "encountered empty or moved-from partition synopsis");
-                auto ts = time_synopsis{
-                  part_syn->min_import_time,
-                  part_syn->max_import_time,
-                };
-                auto add = ts.lookup(x.op, caf::get<tenzir::time>(d));
-                if (!add || *add) {
-                  result.partition_infos.emplace_back(part_id, *part_syn);
-                }
-              }
-              TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                           result.partition_infos.end()));
-              return result;
-            }
-            case meta_extractor::internal: {
-              auto result = catalog_lookup_result::candidate_info{};
-              for (const auto& [part_id, part_syn] : partition_synopses) {
-                auto internal = false;
-                if (part_syn->schema) {
-                  internal = part_syn->schema.attribute("internal").has_value();
-                }
-                if (evaluate(internal, x.op, d)) {
-                  result.partition_infos.emplace_back(part_id, *part_syn);
-                }
-              };
-              TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                           result.partition_infos.end()));
-              return result;
-            }
-          }
-          TENZIR_WARN("{} cannot process meta extractor: {}",
-                      detail::pretty_type_name(this), lhs.kind);
-          return all_partitions();
-        },
-        [&](const field_extractor& lhs,
-            const data& d) -> catalog_lookup_result::candidate_info {
-          auto pred = [&](const auto& field) {
-            auto match_name = [&] {
-              auto field_name = field.field_name();
-              auto key = std::string_view{lhs.field};
-              if (field_name.length() >= key.length()) {
-                auto pos = field_name.length() - key.length();
-                auto sub = field_name.substr(pos);
-                return sub == key && (pos == 0 || field_name[pos - 1] == '.');
-              }
-              auto schema_name = field.schema_name();
-              if (key.length() > schema_name.length() + 1 + field_name.length())
-                return false;
-              auto pos = key.length() - field_name.length();
-              auto second = key.substr(pos);
-              if (second != field_name)
-                return false;
-              if (key[pos - 1] != '.')
-                return false;
-              auto fpos = schema_name.length() - (pos - 1);
-              return key.substr(0, pos - 1) == schema_name.substr(fpos)
-                     && (fpos == 0 || schema_name[fpos - 1] == '.');
-            };
-            if (!match_name())
-              return false;
-            TENZIR_ASSERT(!field.is_standalone_type());
-            return compatible(field.type(), x.op, d);
-          };
-          return search(pred);
-        },
-        [&](const type_extractor& lhs,
-            const data& d) -> catalog_lookup_result::candidate_info {
-          auto result = [&] {
-            if (!lhs.type) {
-              auto pred = [&](auto& field) {
-                const auto type = field.type();
-                for (const auto& name : type.names())
-                  if (name == lhs.type.name())
-                    return compatible(type, x.op, d);
-                return false;
-              };
-              return search(pred);
-            }
-            auto pred = [&](auto& field) {
-              return congruent(field.type(), lhs.type);
-            };
-            return search(pred);
-          }();
-          return result;
-        },
-        [&](const auto&, const auto&) -> catalog_lookup_result::candidate_info {
-          TENZIR_WARN("{} cannot process predicate: {}",
-                      detail::pretty_type_name(this), x);
-          return all_partitions();
-        },
-      };
-      return caf::visit(extract_expr, x.lhs, x.rhs);
-    },
-    [&](caf::none_t) -> catalog_lookup_result::candidate_info {
-      TENZIR_ERROR("{} received an empty expression",
-                   detail::pretty_type_name(this));
-      TENZIR_ASSERT(!"invalid expression");
-      return all_partitions();
-    },
-  };
-  auto result = caf::visit(f, expr);
-  result.exp = expr;
-  return result;
 }
 
 size_t catalog_state::memusage() const {
   size_t result = 0;
-  for (const auto& [type, id_synopsis_map] : synopses_per_type)
-    for (const auto& [id, synopsis] : id_synopsis_map) {
-      result += synopsis->memusage();
-    }
+  for (const auto& partition : partitions) {
+    result += partition.synopsis->memusage();
+  }
   return result;
 }
 
@@ -426,160 +115,12 @@ void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
     if (synopsis != nullptr
         && caf::holds_alternative<string_type>(field.type()))
       unprunable_fields.insert(std::string{field.name()});
-  // TODO/BUG: We also need to prevent pruning for enum types,
-  // which also use string literals for lookup. We must be even
-  // more strict here than with string fields, because incorrectly
-  // pruning string fields will only cause false positives, but
-  // incorrectly pruning enum fields can actually cause false negatives.
-  //
-  // else if (field.type() == enumeration_type{}) {
-  //   auto full_name = field.name();
-  //   for (auto suffix : detail::all_suffixes(full_name, "."))
-  //     unprunable_fields.insert(suffix);
-  // }
 }
 
-std::filesystem::path catalog_state::type_registry_filename() const {
-  return type_registry_dir / fmt::format("type-registry.reg", name);
-}
-
-caf::error catalog_state::save_type_registry_to_disk() const {
-  auto builder = flatbuffers::FlatBufferBuilder{};
-  auto entry_offsets
-    = std::vector<flatbuffers::Offset<fbs::type_registry::Entry>>{};
-  for (const auto& [key, types] : type_data) {
-    const auto key_offset = builder.CreateString(key);
-    auto type_offsets = std::vector<flatbuffers::Offset<fbs::TypeBuffer>>{};
-    type_offsets.reserve(types.size());
-    for (const auto& type : types) {
-      const auto type_bytes = as_bytes(type);
-      const auto type_offset = fbs::CreateTypeBuffer(
-        builder, builder.CreateVector(
-                   reinterpret_cast<const uint8_t*>(type_bytes.data()),
-                   type_bytes.size()));
-      type_offsets.push_back(type_offset);
-    }
-    const auto types_offset = builder.CreateVector(type_offsets);
-    const auto entry_offset
-      = fbs::type_registry::CreateEntry(builder, key_offset, types_offset);
-    entry_offsets.push_back(entry_offset);
-  }
-  const auto entries_offset = builder.CreateVector(entry_offsets);
-  const auto type_registry_v0_offset
-    = fbs::type_registry::Createv0(builder, entries_offset);
-  const auto type_registry_offset = fbs::CreateTypeRegistry(
-    builder, fbs::type_registry::TypeRegistry::type_registry_v0,
-    type_registry_v0_offset.Union());
-  fbs::FinishTypeRegistryBuffer(builder, type_registry_offset);
-  auto buffer = builder.Release();
-  return io::save(type_registry_filename(), as_bytes(buffer));
-}
-
-caf::error catalog_state::load_type_registry_from_disk() {
-  // Nothing to load is not an error.
-  std::error_code err{};
-  const auto dir_exists = std::filesystem::exists(type_registry_dir, err);
-  if (err)
-    return caf::make_error(ec::filesystem_error,
-                           fmt::format("failed to find directory {}: {}",
-                                       type_registry_dir, err.message()));
-  if (!dir_exists) {
-    TENZIR_DEBUG("{} found no directory {} to load from", *self,
-                 type_registry_dir);
-    return caf::none;
-  }
-  // Support the legacy CAF-serialized state, and delete it afterwards.
-  {
-    const auto fname = type_registry_dir / name;
-    const auto file_exists = std::filesystem::exists(fname, err);
-    if (err)
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("failed while trying to find file "
-                                         "{}: "
-                                         "{}",
-                                         fname, err.message()));
-    if (file_exists) {
-      auto buffer = io::read(fname);
-      if (!buffer)
-        return buffer.error();
-      std::map<std::string, detail::stable_set<legacy_type>> intermediate = {};
-      if (!detail::legacy_deserialize(*buffer, intermediate))
-        return caf::make_error(ec::parse_error, "failed to load legacy "
-                                                "type-registry state");
-      for (const auto& [k, vs] : intermediate) {
-        auto entry = type_set{};
-        for (const auto& v : vs)
-          entry.emplace(type::from_legacy_type(v));
-        type_data.emplace(k, entry);
-      }
-      TENZIR_DEBUG("{} loaded state from disk", *self);
-      // We save the new state already now before removing the old state just
-      // to be save against crashes.
-      if (auto err = save_type_registry_to_disk())
-        return err;
-      if (!std::filesystem::remove(fname, err) || err)
-        TENZIR_DEBUG("failed to delete legacy type-registry state");
-      return caf::none;
-    }
-  }
-  // Support the new FlatBuffers state.
-  {
-    const auto fname = type_registry_filename();
-    const auto file_exists = std::filesystem::exists(fname, err);
-    if (err)
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("failed while trying to find file "
-                                         "{}: "
-                                         "{}",
-                                         fname, err.message()));
-    if (file_exists) {
-      auto buffer = io::read(fname);
-      if (!buffer)
-        return buffer.error();
-      auto maybe_flatbuffer
-        = flatbuffer<fbs::TypeRegistry>::make(chunk::make(std::move(*buffer)));
-      if (!maybe_flatbuffer)
-        return maybe_flatbuffer.error();
-      const auto flatbuffer = std::move(*maybe_flatbuffer);
-      for (const auto& entry :
-           *flatbuffer->type_as_type_registry_v0()->entries()) {
-        auto types = type_set{};
-        for (const auto& value : *entry->values())
-          types.emplace(
-            type{flatbuffer.chunk()->slice(as_bytes(*value->buffer()))});
-        type_data.emplace(entry->key()->string_view(), std::move(types));
-      }
-      TENZIR_DEBUG("{} loaded state from disk", *self);
-    }
-  }
-  return caf::none;
-}
-
-void catalog_state::insert(tenzir::type schema) {
-  auto& old_schemas = type_data[std::string{schema.name()}];
-  // Insert into the existing bucket.
-  auto [hint, success] = old_schemas.insert(std::move(schema));
-  if (success) {
-    // Check whether the new schema is compatible with the latest, i.e.,
-    // whether the new schema is a superset of it.
-    if (old_schemas.begin() != hint) {
-      if (!is_subset(*old_schemas.begin(), *hint))
-        TENZIR_VERBOSE("{} detected an incompatible schema change for {}",
-                       *self, hint->name());
-      else
-        TENZIR_VERBOSE("{} detected a schema change for {}", *self,
-                       hint->name());
-    }
-    TENZIR_DEBUG("{} registered {}", *self, hint->name());
-  }
-  // Move the newly inserted schema to the front.
-  std::rotate(old_schemas.begin(), hint, std::next(hint));
-}
-
-type_set catalog_state::types() const {
+type_set catalog_state::schemas() const {
   auto result = type_set{};
-  for (const auto& x : configuration_module)
-    result.insert(x);
+  for (const auto& partition : partitions)
+    result.insert(partition.synopsis->schema);
   return result;
 }
 
@@ -588,15 +129,12 @@ void catalog_state::emit_metrics() const {
   auto num_partitions_and_events_per_schema_and_version
     = detail::stable_map<std::pair<std::string_view, uint64_t>,
                          std::pair<uint64_t, uint64_t>>{};
-  for (const auto& [type, id_synopsis_map] : synopses_per_type) {
-    for (const auto& [id, synopsis] : id_synopsis_map) {
-      TENZIR_ASSERT(synopsis);
-      auto& [num_partitions, num_events]
-        = num_partitions_and_events_per_schema_and_version[std::pair{
-          synopsis->schema.name(), synopsis->version}];
-      num_partitions += 1;
-      num_events += synopsis->events;
-    }
+  for (const auto& partition : partitions) {
+    auto& [num_partitions, num_events]
+      = num_partitions_and_events_per_schema_and_version[std::pair{
+        partition.synopsis->schema.name(), partition.synopsis->version}];
+    num_partitions += 1;
+    num_events += partition.synopsis->events;
   }
   auto total_num_partitions = uint64_t{0};
   auto total_num_events = uint64_t{0};
@@ -644,32 +182,12 @@ void catalog_state::emit_metrics() const {
 
 catalog_actor::behavior_type
 catalog(catalog_actor::stateful_pointer<catalog_state> self,
-        accountant_actor accountant,
-        const std::filesystem::path& type_reg_dir) {
+        accountant_actor accountant) {
   if (self->getf(caf::local_actor::is_detached_flag))
     caf::detail::set_thread_name("tenzir.catalog");
   self->state.self = self;
-  self->state.type_registry_dir = type_reg_dir;
-  // Register the exit handler.
-  self->set_exit_handler([self](const caf::exit_msg& msg) {
-    TENZIR_DEBUG("{} got EXIT from {}", *self, msg.source);
-    if (auto err = self->state.save_type_registry_to_disk())
-      TENZIR_ERROR("{} failed to persist state to disk: {}", *self, err);
-    self->quit(msg.reason);
-  });
-  // Load existing state from disk if possible.
-  if (auto err = self->state.load_type_registry_from_disk()) {
-    self->quit(std::move(err));
-    return catalog_actor::behavior_type::make_empty_behavior();
-  }
   self->state.taxonomies.concepts = modules::concepts();
   //  Load loaded schema types from the singleton.
-  //  TODO: Move to the load handler and re-parse the files.
-  TENZIR_DIAGNOSTIC_PUSH
-  TENZIR_DIAGNOSTIC_IGNORE_DEPRECATED
-  if (const auto* module = modules::global_module())
-    self->state.configuration_module = *module;
-  TENZIR_DIAGNOSTIC_POP
   if (accountant) {
     self->state.accountant = std::move(accountant);
     self->send(self->state.accountant, atom::announce_v, self->name());
@@ -692,10 +210,9 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         return caf::make_error(
           ec::version_error,
           fmt::format("{} cannot load unsupported partitions; please run "
-                      "'tenzir "
-                      "rebuild' with at least {} to rebuild the following "
-                      "partitions, or delete them from the database directory: "
-                      "{}",
+                      "'tenzir-ctl rebuild' with at least {} to rebuild the "
+                      "following partitions, or delete them from the database "
+                      "directory: {}",
                       *self,
                       version::support_for_partition_version(
                         version::current_partition_version)
@@ -718,157 +235,99 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         self->state.merge(uuid, partition_synopsis);
       return atom::ok_v;
     },
-    [self](atom::get) -> std::vector<partition_synopsis_pair> {
-      std::vector<partition_synopsis_pair> result;
-      result.reserve(self->state.synopses_per_type.size());
-      for (const auto& [type, id_synopsis_map] :
-           self->state.synopses_per_type) {
-        for (const auto& [id, synopsis] : id_synopsis_map) {
-          result.push_back({id, synopsis});
-        }
-      }
-      return result;
+    [self](atom::get) {
+      return std::vector<partition_synopsis_pair>{
+        self->state.partitions.begin(), self->state.partitions.end()};
     },
     [self](atom::get, atom::type) {
       TENZIR_TRACE_SCOPE("{} retrieves a list of all known types", *self);
-      // TODO: We can generate this list out of partition_synopses
-      // when we drop partition version 0 support.
-      return self->state.types();
+      return self->state.schemas();
     },
     [self](atom::erase, uuid partition) {
       self->state.erase(partition);
       return atom::ok_v;
     },
     [self](atom::replace, const std::vector<uuid>& old_uuids,
-           std::vector<partition_synopsis_pair>& new_synopses) -> atom::ok {
-      for (auto const& uuid : old_uuids)
-        self->state.erase(uuid);
-      for (auto& [uuid, partition_synopsis] : new_synopses)
-        self->state.merge(uuid, std::move(partition_synopsis));
+           std::vector<partition_synopsis_pair>& new_partitions) {
+      self->state.replace(old_uuids, std::move(new_partitions));
       return atom::ok_v;
     },
-    [self](atom::candidates, const tenzir::query_context& query_context)
-      -> caf::result<catalog_lookup_result> {
-      TENZIR_TRACE_SCOPE("{} {}", *self, TENZIR_ARG(query_context));
-      if (not query_context.ids.empty()) {
-        return caf::make_error(ec::invalid_argument, "catalog expects queries "
-                                                     "not to have ids");
+    [self](atom::candidates,
+           query_context& query) -> caf::result<catalog_lookup_actor> {
+      const auto cache_capacity = uint64_t{3};
+      return self->spawn(make_catalog_lookup, self->state.partitions,
+                         self->state.unprunable_fields, self->state.taxonomies,
+                         std::move(query), cache_capacity);
+    },
+    [self](atom::internal, atom::candidates,
+           query_context& query) -> caf::result<legacy_catalog_lookup_result> {
+      const auto start = std::chrono::steady_clock::now();
+      const auto cache_capacity = uint64_t{self->state.partitions.size()};
+      auto catalog_lookup
+        = self->spawn(make_catalog_lookup, self->state.partitions,
+                      self->state.unprunable_fields, self->state.taxonomies,
+                      std::move(query), cache_capacity);
+      auto blocking_self = caf::scoped_actor{self->system()};
+      auto num_candidates = size_t{0};
+      auto result = legacy_catalog_lookup_result{};
+      while (true) {
+        auto partial_results = std::vector<catalog_lookup_result>{};
+        auto error = caf::error{};
+        blocking_self->request(catalog_lookup, caf::infinite, atom::get_v)
+          .receive(
+            [&](std::vector<catalog_lookup_result>& response) {
+              num_candidates += response.size();
+              partial_results = std::move(response);
+            },
+            [&](caf::error& response) {
+              error = std::move(response);
+            });
+        if (error) {
+          return error;
+        }
+        if (partial_results.empty()) {
+          break;
+        }
+        for (auto& partial_result : partial_results) {
+          auto& entry = result.candidate_infos[partial_result.partition.schema];
+          if (entry.partition_infos.empty()) {
+            entry.exp = std::move(partial_result.bound_expr);
+          } else {
+            TENZIR_ASSERT_EXPENSIVE(entry.exp == partial_result.bound_expr);
+          }
+          entry.partition_infos.push_back(std::move(partial_result.partition));
+        }
       }
-      auto start = std::chrono::steady_clock::now();
-      auto result = self->state.lookup(query_context.expr);
-      if (!result) {
-        return result.error();
-      }
-      auto total_candidate_amount = std::transform_reduce(
-        result->candidate_infos.begin(), result->candidate_infos.end(),
-        size_t{0}, std::plus<>{}, [](const auto& candidate) {
-          return candidate.second.partition_infos.size();
-        });
-      auto id_str = fmt::to_string(query_context.id);
-      duration runtime = std::chrono::steady_clock::now() - start;
+      const auto id_str = fmt::to_string(query.id);
+      const duration runtime = std::chrono::steady_clock::now() - start;
       self->send(self->state.accountant, atom::metrics_v,
                  "catalog.lookup.runtime", runtime,
                  metrics_metadata{
                    {"query", id_str},
-                   {"issuer", query_context.issuer},
+                   {"issuer", query.issuer},
                  });
       self->send(self->state.accountant, atom::metrics_v,
-                 "catalog.lookup.candidates", total_candidate_amount,
+                 "catalog.lookup.candidates", num_candidates,
                  metrics_metadata{
                    {"query", std::move(id_str)},
-                   {"issuer", query_context.issuer},
+                   {"issuer", query.issuer},
                  });
       return result;
     },
     [self](atom::get, uuid uuid) -> caf::result<partition_info> {
-      for (const auto& [type, synopses] : self->state.synopses_per_type) {
-        if (auto it = synopses.find(uuid); it != synopses.end()) {
-          return partition_info{uuid, *it->second};
+      for (const auto& partition : self->state.partitions) {
+        if (partition.uuid == uuid) {
+          return partition_info{uuid, *partition.synopsis};
         }
       }
       return caf::make_error(
         tenzir::ec::lookup_error,
         fmt::format("unable to find partition with uuid: {}", uuid));
     },
-    [self](atom::status, status_verbosity v, duration) {
-      record result;
-      result["memory-usage"] = uint64_t{self->state.memusage()};
-      auto num_events = uint64_t{};
-      auto num_partitions = uint64_t{};
-      struct schema_stats_entry {
-        uint64_t num_events = {};
-        uint64_t num_partitions = {};
-        time min_import_time = time::max();
-        time max_import_time = time::min();
-      };
-      auto schema_stats
-        = std::unordered_map<std::string_view, schema_stats_entry>{};
-      for (const auto& [schema, synopses] : self->state.synopses_per_type) {
-        num_partitions += synopses.size();
-        auto& schema_stats_entry = schema_stats[schema.name()];
-        schema_stats_entry.num_partitions += synopses.size();
-        for (const auto& [_, synopsis] : synopses) {
-          num_events += synopsis->events;
-          schema_stats_entry.num_events += synopsis->events;
-          schema_stats_entry.min_import_time = std::min(
-            schema_stats_entry.min_import_time, synopsis->min_import_time);
-          schema_stats_entry.max_import_time = std::max(
-            schema_stats_entry.max_import_time, synopsis->max_import_time);
-        }
-      }
-      auto schemas = record{};
-      schemas.reserve(schema_stats.size());
-      for (const auto& [name, stats] : schema_stats) {
-        auto entry = record{
-          {"num-events", stats.num_events},
-          {"num-partitions", stats.num_partitions},
-          {"import-time",
-           record{
-             {"min", stats.min_import_time},
-             {"max", stats.max_import_time},
-           }},
-        };
-        schemas.emplace(std::string{name}, std::move(entry));
-      }
-      result["num-events"] = num_events;
-      result["num-partitions"] = num_partitions;
-      result["schemas"] = std::move(schemas);
-      if (v >= status_verbosity::detailed) {
-        auto partitions = list{};
-        partitions.reserve(num_partitions);
-        for (const auto& [type, id_synopsis_map] :
-             self->state.synopses_per_type) {
-          for (const auto& [id, synopsis] : id_synopsis_map) {
-            TENZIR_ASSERT(synopsis);
-            auto partition = record{
-              {"id", fmt::to_string(id)},
-              {"schema", synopsis->schema
-                           ? data{std::string{synopsis->schema.name()}}
-                           : data{}},
-              {"num-events", synopsis->events},
-              {"import-time",
-               record{
-                 {"min", synopsis->min_import_time},
-                 {"max", synopsis->max_import_time},
-               }},
-            };
-            if (v >= status_verbosity::debug)
-              partition["version"] = synopsis->version;
-            partitions.emplace_back(std::move(partition));
-          }
-        }
-        result["partitions"] = std::move(partitions);
-      }
-      if (v >= status_verbosity::debug)
-        detail::fill_status_map(result, self);
-      return result;
-    },
-    [self](atom::put, tenzir::type schema) {
-      TENZIR_TRACE_SCOPE("");
-      self->state.insert(std::move(schema));
+    [](atom::status, status_verbosity, duration) {
+      return record{};
     },
     [self](atom::get, atom::taxonomies) {
-      TENZIR_TRACE_SCOPE("");
       return self->state.taxonomies;
     },
   };

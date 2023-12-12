@@ -63,7 +63,7 @@ mock_index(index_actor::stateful_pointer<mock_index_state> self) {
         keep_original_partition) -> std::vector<partition_info> {
       FAIL("no mock implementation available");
     },
-    [=](atom::resolve, tenzir::expression) -> catalog_lookup_result {
+    [=](atom::resolve, tenzir::expression) -> legacy_catalog_lookup_result {
       FAIL("no mock implementation available");
     },
     [=](atom::evaluate, tenzir::query_context&) -> caf::result<query_cursor> {

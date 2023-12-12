@@ -31,7 +31,7 @@
 namespace tenzir {
 
 /// The result of a catalog query.
-struct catalog_lookup_result {
+struct legacy_catalog_lookup_result {
   struct candidate_info {
     expression exp;
     std::vector<partition_info> partition_infos;
@@ -72,9 +72,9 @@ struct catalog_lookup_result {
   }
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, catalog_lookup_result& x) {
+  friend auto inspect(Inspector& f, legacy_catalog_lookup_result& x) {
     return f.object(x)
-      .pretty_name("tenzir.system.catalog_lookup_result")
+      .pretty_name("tenzir.system.legacy_catalog_lookup_result")
       .fields(f.field("kind", x.kind),
               f.field("candidate-infos", x.candidate_infos));
   }
@@ -95,22 +95,18 @@ public:
 
   /// Adds new synopses for a partition in bulk. Used when
   /// re-building the catalog state at startup.
-  void create_from(std::unordered_map<uuid, partition_synopsis_ptr>&&);
+  void
+  create_from(std::unordered_map<uuid, partition_synopsis_ptr>&& partitions);
 
   /// Add a new partition synopsis.
-  void merge(const uuid& partition, partition_synopsis_ptr);
+  void merge(const uuid& uuid, partition_synopsis_ptr partition);
 
   /// Erase this partition from the catalog.
   void erase(const uuid& partition);
 
-  /// Retrieves the list of candidate partition IDs for a given expression.
-  /// @param expr The expression to lookup.
-  /// @returns A lookup result of candidate partitions categorized by type.
-  [[nodiscard]] caf::expected<catalog_lookup_result>
-  lookup(expression expr) const;
-
-  [[nodiscard]] catalog_lookup_result::candidate_info
-  lookup_impl(const expression& expr, const type& schema) const;
+  /// Atomically replace partitions in the catalog.
+  void replace(const std::vector<uuid>& old_uuids,
+               std::vector<partition_synopsis_pair> new_partitions);
 
   /// @returns A best-effort estimate of the amount of memory used for this
   /// catalog (in bytes).
@@ -119,20 +115,8 @@ public:
   /// Update the list of fields that should not be touched by the pruner.
   void update_unprunable_fields(const partition_synopsis& ps);
 
-  /// Create the path that the catalog's type registry is persisted at on disk.
-  [[nodiscard]] std::filesystem::path type_registry_filename() const;
-
-  /// Save the type-registry to disk.
-  [[nodiscard]] caf::error save_type_registry_to_disk() const;
-
-  /// Load the type-registry from disk.
-  caf::error load_type_registry_from_disk();
-
-  /// Store a new schema in the registry.
-  void insert(tenzir::type schema);
-
-  /// Get a list of known types from the registry.
-  [[nodiscard]] type_set types() const;
+  /// Get a list of known schemas from the registry.
+  [[nodiscard]] type_set schemas() const;
 
   /// Sends metrics to the accountant.
   void emit_metrics() const;
@@ -145,21 +129,14 @@ public:
   /// An actor handle to the accountant.
   accountant_actor accountant = {};
 
-  /// For each type, maps a partition ID to the synopses for that partition.
-  // We mainly iterate over the whole map and return a sorted set, for which
-  // the `flat_map` proves to be much faster than `std::{unordered_,}set`.
-  // See also ae9dbed.
-  std::unordered_map<tenzir::type,
-                     detail::flat_map<uuid, partition_synopsis_ptr>>
-    synopses_per_type = {};
+  // A list of partitions kept in reverse-chronological order (sorted by
+  // max-import-time).
+  std::deque<partition_synopsis_pair> partitions = {};
 
   /// The set of fields that should not be touched by the pruner.
   detail::heterogeneous_string_hashset unprunable_fields;
 
-  std::map<std::string, type_set> type_data = {};
-  tenzir::module configuration_module = {};
   tenzir::taxonomies taxonomies = {};
-  std::filesystem::path type_registry_dir = {};
 };
 
 /// The CATALOG is the first index actor that queries hit. The result
@@ -167,9 +144,8 @@ public:
 /// data. The CATALOG may return false positives but never false negatives.
 /// @param self The actor handle.
 /// @param accountant An actor handle to the accountant.
-/// @param type_reg_dir the folder for the type registry.
 catalog_actor::behavior_type
 catalog(catalog_actor::stateful_pointer<catalog_state> self,
-        accountant_actor accountant, const std::filesystem::path& type_reg_dir);
+        accountant_actor accountant);
 
 } // namespace tenzir

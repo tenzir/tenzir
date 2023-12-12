@@ -117,7 +117,7 @@ public:
 
   /// Inserts a new query into the queue.
   [[nodiscard]] caf::error
-  insert(query_state&& query_state, catalog_lookup_result&& candidates);
+  insert(query_state&& query_state, legacy_catalog_lookup_result&& candidates);
 
   /// Activates an inactive query.
   [[nodiscard]] caf::error activate(const uuid& qid, uint32_t num_partitions);

@@ -42,10 +42,10 @@ std::vector<uuid> xs
 
 receiver_actor<atom::done> dummy_client = {};
 
-catalog_lookup_result cands(uint32_t start, uint32_t end) {
+legacy_catalog_lookup_result cands(uint32_t start, uint32_t end) {
   if (end > xs.size() || start > end)
     FAIL("can't generate more than 16 candidates");
-  catalog_lookup_result result{};
+  legacy_catalog_lookup_result result{};
   for (auto i = start; i < end; ++i) {
     auto id = xs[i];
     result.candidate_infos[tenzir::type{}].partition_infos.emplace_back(
@@ -54,7 +54,7 @@ catalog_lookup_result cands(uint32_t start, uint32_t end) {
   return result;
 }
 
-catalog_lookup_result cands(uint32_t num) {
+legacy_catalog_lookup_result cands(uint32_t num) {
   return cands(0, num);
 }
 
@@ -66,7 +66,7 @@ query_context make_random_query_context() {
   return result;
 }
 
-uuid make_insert(query_queue& q, catalog_lookup_result&& candidates) {
+uuid make_insert(query_queue& q, legacy_catalog_lookup_result&& candidates) {
   uint32_t cands_size = candidates.size();
   auto query_context = make_random_query_context();
   REQUIRE_SUCCESS(q.insert(query_state{.query_contexts_per_type
@@ -78,7 +78,7 @@ uuid make_insert(query_queue& q, catalog_lookup_result&& candidates) {
   return query_context.id;
 }
 
-uuid make_insert(query_queue& q, catalog_lookup_result&& candidates,
+uuid make_insert(query_queue& q, legacy_catalog_lookup_result&& candidates,
                  uint32_t taste_size,
                  uint64_t priority = query_context::priority::normal) {
   uint32_t cands_size = candidates.size();

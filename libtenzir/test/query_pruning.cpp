@@ -136,7 +136,7 @@ TEST(query pruning with index config) {
     [](const caf::error& e) {
       REQUIRE(!e);
     });
-  auto catalog = self->spawn(tenzir::catalog, accountant, directory / "types");
+  auto catalog = self->spawn(tenzir::catalog, accountant);
   auto rp2
     = self->request(catalog, caf::infinite, tenzir::atom::merge_v, id, ps);
   run();

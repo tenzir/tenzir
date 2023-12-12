@@ -74,7 +74,7 @@ query_queue::queries() const {
 /// Inserts a new query into the queue.
 [[nodiscard]] caf::error
 query_queue::insert(query_state&& query_state,
-                    catalog_lookup_result&& candidates) {
+                    legacy_catalog_lookup_result&& candidates) {
   if (candidates.empty())
     return caf::make_error(ec::unspecified, "can't add a query with 0 "
                                             "candidates");

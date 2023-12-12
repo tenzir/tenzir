@@ -198,6 +198,12 @@ using partition_creation_listener_actor = typed_actor_fwd<
   auto(atom::update, std::vector<partition_synopsis_pair>)
     ->caf::result<void>>::unwrap;
 
+/// THE CATALOG LOOKUP actor interface.
+using catalog_lookup_actor = caf::typed_actor<
+  // Returns a set of partitions from the catalog. Returns zero partitions when
+  // done.
+  auto(atom::get)->caf::result<std::vector<catalog_lookup_result>>>;
+
 /// The CATALOG actor interface.
 using catalog_actor = typed_actor_fwd<
   // Reinitialize the catalog from a set of partition synopses. Used at
@@ -217,13 +223,13 @@ using catalog_actor = typed_actor_fwd<
   // Atomatically replace a set of partititon synopses with another.
   auto(atom::replace, std::vector<uuid>, std::vector<partition_synopsis_pair>)
     ->caf::result<atom::ok>,
-  // Return the candidate partitions per type for a query.
-  auto(atom::candidates, tenzir::query_context)
-    ->caf::result<catalog_lookup_result>,
+  // DEPRECATED: Return the candidate partitions per type for a query.
+  auto(atom::internal, atom::candidates, query_context)
+    ->caf::result<legacy_catalog_lookup_result>,
+  // Start a lookup for a candidate partition.
+  auto(atom::candidates, query_context)->caf::result<catalog_lookup_actor>,
   // Retrieves all known types.
   auto(atom::get, atom::type)->caf::result<type_set>,
-  // Registers a given schema.
-  auto(atom::put, tenzir::type)->caf::result<void>,
   // Retrieves the known taxonomies.
   auto(atom::get, atom::taxonomies)->caf::result<taxonomies>,
   // Retrieves information about a partition with a given UUID.
@@ -263,7 +269,7 @@ using index_actor = typed_actor_fwd<
   // Resolves a query to its candidate partitions per type.
   // TODO: Expose the catalog as a system component so this
   // handler can go directly to the catalog.
-  auto(atom::resolve, expression)->caf::result<catalog_lookup_result>,
+  auto(atom::resolve, expression)->caf::result<legacy_catalog_lookup_result>,
   // Queries PARTITION actors for a given query id.
   auto(atom::query, uuid, uint32_t)->caf::result<void>,
   // Erases the given partition from the INDEX.
@@ -491,6 +497,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::active_partition_actor))
   TENZIR_ADD_TYPE_ID((tenzir::analyzer_plugin_actor))
   TENZIR_ADD_TYPE_ID((tenzir::catalog_actor))
+  TENZIR_ADD_TYPE_ID((tenzir::catalog_lookup_actor))
   TENZIR_ADD_TYPE_ID((tenzir::default_active_store_actor))
   TENZIR_ADD_TYPE_ID((tenzir::default_passive_store_actor))
   TENZIR_ADD_TYPE_ID((tenzir::disk_monitor_actor))

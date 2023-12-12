@@ -103,8 +103,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       TENZIR_PP_STRINGIFY(SUITE)) {
     auto fs = self->spawn(posix_filesystem, directory, accountant_actor{});
     auto index_dir = directory / "index";
-    catalog
-      = self->spawn(tenzir::catalog, accountant_actor{}, directory / "types");
+    catalog = self->spawn(tenzir::catalog, accountant_actor{});
     index
       = self->spawn(tenzir::index, accountant_actor{}, fs, catalog, index_dir,
                     defaults::store_backend, slice_size, tenzir::duration{},

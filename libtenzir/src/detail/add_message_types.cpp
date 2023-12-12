@@ -13,6 +13,7 @@
 #include "tenzir/atoms.hpp"
 #include "tenzir/bitmap.hpp"
 #include "tenzir/catalog.hpp"
+#include "tenzir/catalog_lookup.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/command.hpp"
 #include "tenzir/component_registry.hpp"

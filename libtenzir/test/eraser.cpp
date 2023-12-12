@@ -84,10 +84,10 @@ auto mock_index(index_actor::stateful_pointer<mock_index_state>)
         version::current_partition_version,
       }};
     },
-    [=](atom::resolve, tenzir::expression) -> catalog_lookup_result {
-      catalog_lookup_result result;
+    [=](atom::resolve, tenzir::expression) -> legacy_catalog_lookup_result {
+      legacy_catalog_lookup_result result;
       for (int i = 0; i < CANDIDATES_PER_MOCK_QUERY; ++i) {
-        auto lookup_result = catalog_lookup_result::candidate_info{};
+        auto lookup_result = legacy_catalog_lookup_result::candidate_info{};
         lookup_result.partition_infos.emplace_back().uuid
           = tenzir::uuid::random();
         result.candidate_infos[tenzir::type{std::to_string(i), tenzir::type{}}]
@@ -154,7 +154,7 @@ TEST(eraser on mock INDEX) {
   expect((atom::ping), from(aut).to(aut));
   expect((atom::run), from(aut).to(aut));
   expect((atom::resolve, tenzir::expression), from(aut).to(index));
-  expect((tenzir::catalog_lookup_result), from(index).to(aut));
+  expect((tenzir::legacy_catalog_lookup_result), from(index).to(aut));
   expect((atom::apply, tenzir::pipeline, std::vector<tenzir::partition_info>,
           tenzir::keep_original_partition),
          from(aut).to(index));

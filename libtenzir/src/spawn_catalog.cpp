@@ -23,10 +23,8 @@ spawn_catalog(node_actor::stateful_pointer<node_state> self,
   auto [accountant] = self->state.registry.find<accountant_actor>();
   auto detached = caf::get_or(args.inv.options, "tenzir.detach-components",
                               defaults::detach_components);
-  auto handle
-    = detached
-        ? self->spawn<caf::detached>(catalog, accountant, args.dir / args.label)
-        : self->spawn(catalog, accountant, args.dir / args.label);
+  auto handle = detached ? self->spawn<caf::detached>(catalog, accountant)
+                         : self->spawn(catalog, accountant);
   TENZIR_VERBOSE("{} spawned the catalog", *self);
   return caf::actor_cast<caf::actor>(handle);
 }

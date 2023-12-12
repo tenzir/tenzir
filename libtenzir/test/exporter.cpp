@@ -65,8 +65,7 @@ struct fixture : fixture_base {
   }
 
   void spawn_catalog() {
-    catalog = self->spawn(tenzir::catalog, accountant_actor{},
-                          directory / "type-registry");
+    catalog = self->spawn(tenzir::catalog, accountant_actor{});
   }
 
   void spawn_index() {

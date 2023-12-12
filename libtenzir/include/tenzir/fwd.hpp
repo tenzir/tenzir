@@ -206,6 +206,7 @@ struct legacy_address_type;
 struct legacy_alias_type;
 struct legacy_bool_type;
 struct legacy_count_type;
+struct legacy_catalog_lookup_result;
 struct legacy_duration_type;
 struct legacy_enumeration_type;
 struct legacy_integer_type;
@@ -470,6 +471,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::keep_original_partition))
   TENZIR_ADD_TYPE_ID((tenzir::status_verbosity))
   TENZIR_ADD_TYPE_ID((tenzir::catalog_lookup_result))
+  TENZIR_ADD_TYPE_ID((tenzir::legacy_catalog_lookup_result))
   TENZIR_ADD_TYPE_ID((tenzir::accountant_config))
   TENZIR_ADD_TYPE_ID((tenzir::send_initial_dbstate))
 
@@ -488,11 +490,12 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::table_slice_column>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::uuid>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::partition_info>))
+  TENZIR_ADD_TYPE_ID((std::vector<tenzir::catalog_lookup_result>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::typed_array>))
   TENZIR_ADD_TYPE_ID(
     (std::unordered_map<tenzir::uuid, tenzir::partition_synopsis_ptr>))
   TENZIR_ADD_TYPE_ID((std::unordered_map<tenzir::type, //
-                                         tenzir::catalog_lookup_result>))
+                                         tenzir::legacy_catalog_lookup_result>))
   TENZIR_ADD_TYPE_ID((std::map<tenzir::uuid, tenzir::partition_synopsis_ptr>))
   TENZIR_ADD_TYPE_ID(
     (std::shared_ptr<

@@ -65,8 +65,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     fs = self->spawn(tenzir::posix_filesystem, directory,
                      tenzir::accountant_actor{});
     auto indexdir = directory / "index";
-    catalog
-      = self->spawn(tenzir::catalog, accountant_actor{}, directory / "types");
+    catalog = self->spawn(tenzir::catalog, accountant_actor{});
     client = sys.spawn(mock_client);
     run();
   }
