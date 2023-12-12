@@ -1,3 +1,9 @@
+---
+operator:
+  source: true
+  sink: true
+---
+
 # fluent-bit
 
 Sends and receives events via [Fluent Bit](https://docs.fluentbit.io/).

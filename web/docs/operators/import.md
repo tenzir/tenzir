@@ -1,3 +1,8 @@
+---
+operator:
+  sink: true
+---
+
 # import
 
 Imports events into a Tenzir node. The dual to [`export`](export.md).

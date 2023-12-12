@@ -1,3 +1,8 @@
+---
+operator:
+  source: true
+---
+
 # api
 
 Use Tenzir's REST API directly from a pipeline.

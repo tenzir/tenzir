@@ -1,3 +1,8 @@
+---
+operator:
+  transformation: true
+---
+
 # apply
 
 Include the pipeline defined in another file.
