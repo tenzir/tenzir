@@ -98,6 +98,14 @@ public:
         TENZIR_ASSERT_CHEAP(result_ty.to_arrow_type()->Equals(result->type()));
         total += result->length();
       }
+      if (total == 0) {
+        // TODO: Ideally, we should be able to recover from here a little more
+        // gracefully.
+        diagnostic::error("parsing failed")
+          .primary(input_.source)
+          .emit(ctrl.diagnostics());
+        co_return;
+      }
       TENZIR_ASSERT_CHEAP(total == string_array->length());
       const auto children
         = batch->ToStructArray().ValueOrDie()->Flatten().ValueOrDie();
