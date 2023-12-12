@@ -42,7 +42,7 @@ public:
           diagnostic::error("internal server error: {}", error)
             .note("endpoint: {}", endpoint_)
             .note("request body: {}", request_body_)
-            .docs("https://docs.tenzir.com/next/operators/sources/api")
+            .docs("https://docs.tenzir.com/operators/api")
             .emit(ctrl.diagnostics());
         });
     co_yield {};
@@ -51,7 +51,7 @@ public:
       diagnostic::error("request failed with code {}", response->code())
         .note("body: {}", response->body())
         .note("detail: {}", response->error_detail())
-        .docs("https://docs.tenzir.com/next/operators/sources/api")
+        .docs("https://docs.tenzir.com/operators/api")
         .emit(ctrl.diagnostics());
       co_return;
     }
@@ -104,8 +104,8 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto endpoint = std::string{};
     auto request_body = std::optional<std::string>{};
-    auto parser = argument_parser{"shell", "https://docs.tenzir.com/next/"
-                                           "operators/transformations/shell"};
+    auto parser
+      = argument_parser{"api", "https://docs.tenzir.com/operators/api"};
     parser.add(endpoint, "<command>");
     parser.add(request_body, "<request-body>");
     parser.parse(p);

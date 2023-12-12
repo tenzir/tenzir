@@ -193,7 +193,7 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "from <loader> <args>... [read <parser> <args>...]";
-    auto docs = "https://docs.tenzir.com/next/operators/sources/from";
+    auto docs = "https://docs.tenzir.com/operators/from";
     auto q = until_keyword_parser{"read", p};
     auto [loader, loader_path] = get_loader(q, usage, docs);
     TENZIR_DIAG_ASSERT(loader);
@@ -239,7 +239,7 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "load <loader> <args>...";
-    auto docs = "https://docs.tenzir.com/next/operators/sources/load";
+    auto docs = "https://docs.tenzir.com/operators/load";
     auto [loader, _] = get_loader(p, usage, docs);
     TENZIR_DIAG_ASSERT(loader);
     return std::make_unique<load_operator>(std::move(loader));
@@ -254,7 +254,7 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "read <parser> <args>...";
-    auto docs = "https://docs.tenzir.com/next/operators/transformations/read";
+    auto docs = "https://docs.tenzir.com/operators/read";
     auto name = p.accept_shell_arg();
     if (!name) {
       diagnostic::error("expected parser name")

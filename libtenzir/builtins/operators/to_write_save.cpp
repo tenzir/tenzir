@@ -165,7 +165,7 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "write <printer> <args>...";
-    auto docs = "https://docs.tenzir.com/next/operators/transformations/write";
+    auto docs = "https://docs.tenzir.com/operators/write";
     auto name = p.accept_shell_arg();
     if (!name) {
       diagnostic::error("expected printer name")
@@ -273,7 +273,7 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "save <saver> <args>...";
-    auto docs = "https://docs.tenzir.com/next/operators/sinks/save";
+    auto docs = "https://docs.tenzir.com/operators/save";
     auto [saver, _] = get_saver(p, usage, docs);
     TENZIR_DIAG_ASSERT(saver);
     return std::make_unique<save_operator>(std::move(saver));
@@ -368,7 +368,7 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "to <saver> <args>... [write <printer> <args>...]";
-    auto docs = "https://docs.tenzir.com/next/operators/sinks/to";
+    auto docs = "https://docs.tenzir.com/operators/to";
     auto q = until_keyword_parser{"write", p};
     auto [saver, saver_path] = get_saver(q, usage, docs);
     TENZIR_DIAG_ASSERT(saver);

@@ -42,9 +42,7 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    argument_parser{"pass", "https://docs.tenzir.com/next/operators/"
-                            "transformations/pass"}
-      .parse(p);
+    argument_parser{"pass", "https://docs.tenzir.com/operators/pass"}.parse(p);
     return std::make_unique<pass_operator>();
   }
 };
