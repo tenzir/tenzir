@@ -20,7 +20,7 @@ setup() {
     -nodes \
     -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=www.example.com" >/dev/null 2>/dev/null
   check --bg listen \
-    tenzir "load tcp://127.0.0.1:4000 --listen --tls --certfile ${key_and_cert} --keyfile ${key_and_cert}"
+    tenzir "load tcp://127.0.0.1:4000 --tls --certfile ${key_and_cert} --keyfile ${key_and_cert}"
   timeout 10 bash -c 'until lsof -i :4000; do sleep 0.2; done'
   echo foo | openssl s_client 127.0.0.1:4000
   wait_all "${listen[@]}"
