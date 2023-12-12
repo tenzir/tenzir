@@ -59,7 +59,6 @@ Every [release](https://github.com/tenzir/tenzir/releases) of Tenzir includes an
 ||[bash](https://www.gnu.org/software/bash/)|>= 4.0.0|Required to run the functional tests.|
 ||[bats](https://bats-core.readthedocs.io)|>= 1.8.0|Required to run the functional tests.|
 
-
 The minimum specified versions reflect those versions that we use in CI and
 manual testing. Older versions may still work in select cases.
 
