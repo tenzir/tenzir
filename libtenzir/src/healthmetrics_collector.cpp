@@ -1,0 +1,73 @@
+//    _   _____   __________
+//   | | / / _ | / __/_  __/     Visibility
+//   | |/ / __ |_\ \  / /          Across
+//   |___/_/ |_/___/ /_/       Space and Time
+//
+// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
+// SPDX-License-Identifier: BSD-3-Clause
+
+#include <tenzir/data.hpp>
+#include <tenzir/detail/weak_run_delayed.hpp>
+#include <tenzir/healthmetrics_collector.hpp>
+#include <tenzir/import_stream.hpp>
+#include <tenzir/series_builder.hpp>
+
+#include <ranges>
+
+namespace tenzir {
+
+auto healthmetrics_collector(
+  healthmetrics_collector_actor::stateful_pointer<healthmetrics_collector_state>
+    self,
+  caf::timespan collection_interval, const node_actor& node)
+  -> healthmetrics_collector_actor::behavior_type {
+  // Build and import metric event.
+  auto stream = import_stream::make(self, node);
+  TENZIR_ASSERT_CHEAP(stream);
+  self->state.importer = std::make_unique<import_stream>(std::move(*stream));
+  self->state.collection_interval = collection_interval;
+  for (auto const* plugin : plugins::get<health_metrics_plugin>()) {
+    auto name = plugin->metric_name();
+    auto collector = plugin->make_collector();
+    self->state.collectors[name] = collector;
+  }
+  TENZIR_VERBOSE("starting health collector measurement loop with interval {}",
+                 self->state.collection_interval);
+  self->send(self, atom::run_v);
+  return {
+    [self](atom::run) -> caf::result<void> {
+      // Start measurement loop
+      detail::weak_run_delayed_loop(
+        self, self->state.collection_interval,
+        [handle = detail::weak_handle(self)]() {
+          if (auto* self = handle.lock()) {
+            auto now = std::chrono::system_clock::now();
+            auto b = series_builder{
+              type{"tenzir.metrics.system", record_type{}, {{"internal", ""}}}};
+            auto r = b.record();
+            r.field("timestamp", now);
+            for (auto& [name, check] : self->state.collectors) {
+              TENZIR_INFO("running periodic metrics collection {}", name);
+              auto result = check();
+              if (!result)
+                continue;
+              r.field(name, *result);
+            }
+            auto slice = b.finish_assert_one_slice();
+            TENZIR_INFO("finishing slice {} with {} rows", slice, slice.rows());
+            self->state.importer->enqueue(std::move(slice));
+          }
+        });
+      return {};
+    },
+    [self](atom::status, status_verbosity, duration) -> caf::result<record> {
+      auto result = record{};
+      auto names = std::views::keys(self->state.collectors);
+      result.emplace("interval", self->state.collection_interval);
+      result.emplace("collectors", list{names.begin(), names.end()});
+      return result;
+    },
+  };
+}
+
+} // namespace tenzir
