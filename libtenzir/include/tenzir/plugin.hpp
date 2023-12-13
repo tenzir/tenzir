@@ -822,6 +822,29 @@ public:
   };
 };
 
+// -- health metrics plugin -----------------------------------------------------
+
+class health_metrics_plugin : public virtual plugin {
+public:
+  using collector = std::function<caf::expected<record>()>;
+
+  /// The name under which this metric should be displayed.
+  [[nodiscard]] virtual auto metric_name() const -> std::string {
+    return name();
+  }
+
+  // TODO
+  /// Checks if the plugin is able to collect metrics on the current
+  /// machine.
+  // [[nodiscard]] virtual auto is_platform_supported() const -> bool = 0;
+
+  /// The format in which metrics will be reported by this plugin.
+  [[nodiscard]] virtual auto metric_layout() const -> record_type = 0;
+
+  /// Create a health metrics collector.
+  [[nodiscard]] virtual auto make_collector() const -> collector = 0;
+};
+
 // -- aspect plugin ------------------------------------------------------------
 
 class aspect_plugin : public virtual plugin {
