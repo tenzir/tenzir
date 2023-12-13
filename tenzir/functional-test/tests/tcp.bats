@@ -17,7 +17,7 @@ setup() {
 
 @test "loader - listen once" {
   check --bg listen \
-    tenzir "load tcp://127.0.0.1:3000 --once"
+    tenzir "load tcp://127.0.0.1:3000 --listen-once"
   timeout 10 bash -c 'until lsof -i :3000; do sleep 0.2; done'
   echo foo | socat - TCP4:127.0.0.1:3000
   wait_all "${listen[@]}"
@@ -32,7 +32,7 @@ setup() {
     -nodes \
     -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=www.example.com" >/dev/null 2>/dev/null
   check --bg listen \
-    tenzir "load tcp://127.0.0.1:4000 --once --tls --certfile ${key_and_cert} --keyfile ${key_and_cert}"
+    tenzir "load tcp://127.0.0.1:4000 --listen-once --tls --certfile ${key_and_cert} --keyfile ${key_and_cert}"
   timeout 10 bash -c 'until lsof -i :4000; do sleep 0.2; done'
   echo foo | openssl s_client 127.0.0.1:4000
   wait_all "${listen[@]}"
@@ -48,7 +48,7 @@ setup() {
 
 @test "saver - listen" {
   coproc SERVER {
-    echo foo | tenzir "save tcp://127.0.0.1:6000 --listen --once"
+    echo foo | tenzir "save tcp://127.0.0.1:6000 --listen --listen-once"
   }
   timeout 10 bash -c 'until lsof -i :6000; do sleep 0.2; done'
   check socat TCP4:127.0.0.1:6000 -

@@ -7,14 +7,14 @@ Loads bytes from a TCP or TLS connection.
 Loader:
 
 ```
-tcp [-c|--connect] [-o|--once]
+tcp [-c|--connect] [-o|--listen-once]
     [--tls] [--certfile] [--keyfile] <endpoint>
 ```
 
 Saver:
 
 ```
-tcp [-l|--listen] [-o|--once]
+tcp [-l|--listen] [-o|--listen-once]
     [--tls] [--certfile] [--keyfile] <endpoint>
 ```
 
@@ -38,7 +38,7 @@ Connect to `<endpoint>` instead of listening at it.
 
 Listen at `<endpoint>` instead of connecting to it.
 
-### `-o,--once`
+### `-o,--listen-once`
 
 When listening to a socket, only process a single connection instead of looping
 over all connecting clients forever.

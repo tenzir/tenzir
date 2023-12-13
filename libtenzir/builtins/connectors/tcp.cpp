@@ -326,7 +326,7 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
 struct connector_args {
   std::string hostname = {};
   std::string port = {};
-  bool once = false;
+  bool listen_once = false;
   bool tls = false;
   std::optional<std::string> tls_certfile = {};
   std::optional<std::string> tls_keyfile = {};
@@ -338,8 +338,9 @@ struct loader_args : connector_args {
     return f.object(x)
       .pretty_name("tenzir.plugins.tcp.loader_args")
       .fields(f.field("hostname", x.hostname), f.field("port", x.port),
-              f.field("once", x.once), f.field("connect", x.connect),
-              f.field("tls", x.tls), f.field("tls_certfile", x.tls_certfile),
+              f.field("listen_once", x.listen_once),
+              f.field("connect", x.connect), f.field("tls", x.tls),
+              f.field("tls_certfile", x.tls_certfile),
               f.field("tls_keyfile", x.tls_keyfile));
   }
 
@@ -352,8 +353,9 @@ struct saver_args : connector_args {
     return f.object(x)
       .pretty_name("tenzir.plugins.tcp.saver_args")
       .fields(f.field("hostname", x.hostname), f.field("port", x.port),
-              f.field("once", x.once), f.field("listen", x.listen),
-              f.field("tls", x.tls), f.field("tls_certfile", x.tls_certfile),
+              f.field("listen_once", x.listen_once),
+              f.field("listen", x.listen), f.field("tls", x.tls),
+              f.field("tls_certfile", x.tls_certfile),
               f.field("tls_keyfile", x.tls_keyfile));
   }
 
@@ -430,7 +432,7 @@ public:
               });
           co_yield std::exchange(result, {});
         }
-      } while (not args.connect and not args.once);
+      } while (not args.connect and not args.listen_once);
     };
     return make(args_, ctrl);
   }
@@ -571,7 +573,7 @@ public:
     } else if constexpr (std::is_same_v<Args, saver_args>) {
       parser.add("-l,--listen", args.listen);
     }
-    parser.add("-o,--once", args.once);
+    parser.add("-o,--listen-once", args.listen_once);
     parser.add("--tls", args.tls);
     parser.add("--certfile", args.tls_certfile, "TLS certificate");
     parser.add("--keyfile", args.tls_keyfile, "TLS private key");
