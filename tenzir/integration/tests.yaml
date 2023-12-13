@@ -1272,3 +1272,13 @@ tests:
       - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin -1 --end 1'
       - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin -1 --end -1'
       - command: exec 'from @./data/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin -2 --end -1'
+
+  Parse KV:
+    tags: [pipelines]
+    steps:
+      - command: exec 'read lines | parse line kv "(\s+)[A-Z][A-Z_]+:" ":\s*"'
+        input: data/txt/key_value_pairs.txt
+      - command: exec 'parse line kv "(foo)(bar)" ""'
+        expected_result: error
+      - command: exec 'parse line kv "foo(?=bar)" ""'
+        expected_result: error
