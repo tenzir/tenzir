@@ -6,12 +6,20 @@ setup() {
   bats_load_library bats-tenzir
 }
 
-@test "connecting" {
+@test "loader - connect" {
   coproc NC { exec echo foo | socat TCP-LISTEN:8000 stdout; }
   check tenzir "load tcp://127.0.0.1:8000 --connect"
 }
 
-@test "listening" {
+@test "loader - listen" {
+  check --bg listen \
+    tenzir "load tcp://127.0.0.1:4000"
+  timeout 10 bash -c 'until lsof -i :4000; do sleep 0.2; done'
+  echo foo | socat stdin TCP4:127.0.0.1:4000
+  wait_all "${listen[@]}"
+}
+
+@test "loader - listen with SSL" {
   key_and_cert=$(mktemp)
   openssl req -x509 -newkey rsa:2048 \
     -keyout "${key_and_cert}" \
