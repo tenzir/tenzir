@@ -33,6 +33,7 @@ ENV PREFIX="/opt/tenzir" \
     PATH="/opt/tenzir/bin:${PATH}" \
     CC="gcc-12" \
     CXX="g++-12" \
+    TENZIR_CACHE_DIRECTORY="/var/cache/tenzir" \
     TENZIR_DB_DIRECTORY="/var/lib/tenzir" \
     TENZIR_LOG_FILE="/var/log/tenzir/server.log" \
     TENZIR_ENDPOINT="0.0.0.0"
@@ -56,7 +57,11 @@ RUN cmake -B build -G Ninja \
     cmake --install build --strip && \
     rm -rf build
 
-RUN mkdir -p $PREFIX/etc/tenzir /var/log/tenzir /var/lib/tenzir
+RUN mkdir -p \
+      $PREFIX/etc/tenzir \
+      /var/cache/tenzir \
+      /var/lib/tenzir \
+      /var/log/tenzir
 
 EXPOSE 5158/tcp
 
@@ -74,12 +79,14 @@ FROM debian:bookworm-slim AS tenzir-de
 # file.
 ENV PREFIX="/opt/tenzir" \
     PATH="/opt/tenzir/bin:${PATH}" \
+    TENZIR_CACHE_DIRECTORY="/var/cache/tenzir" \
     TENZIR_DB_DIRECTORY="/var/lib/tenzir" \
     TENZIR_LOG_FILE="/var/log/tenzir/server.log" \
     TENZIR_ENDPOINT="0.0.0.0"
 
 RUN useradd --system --user-group tenzir
 COPY --from=development --chown=tenzir:tenzir $PREFIX/ $PREFIX/
+COPY --from=development --chown=tenzir:tenzir /var/cache/tenzir/ /var/cache/tenzir
 COPY --from=development --chown=tenzir:tenzir /var/lib/tenzir/ /var/lib/tenzir
 COPY --from=development --chown=tenzir:tenzir /var/log/tenzir/ /var/log/tenzir
 
@@ -127,7 +134,7 @@ USER tenzir:tenzir
 
 EXPOSE 5158/tcp
 WORKDIR /var/lib/tenzir
-VOLUME ["/var/lib/tenzir"]
+VOLUME ["/var/cache/tenzir", "/var/lib/tenzir"]
 
 # Verify that Tenzir starts up correctly.
 RUN tenzir 'version'
@@ -231,10 +238,12 @@ RUN apt-get update && \
 
 USER tenzir:tenzir
 COPY demo-node /demo-node
-COPY --from=tenzir-ce --chown=tenzir:tenzir /var/lib/tenzir/ /var/lib/tenzir
+COPY --from=tenzir-ce --chown=tenzir:tenzir \
+       /var/cache/tenzir \
+       /var/lib/tenzir/ \
+       /var/log/tenzir
 ENV TENZIR_AUTOMATIC_REBUILD=0 \
-    TENZIR_ALLOW_UNSAFE_PIPELINES=true \
-    TENZIR_DB_DIRECTORY="/var/lib/tenzir"
+    TENZIR_ALLOW_UNSAFE_PIPELINES=true
 RUN /demo-node/setup.bash
 
 ENTRYPOINT ["tenzir-node"]
