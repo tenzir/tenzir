@@ -127,12 +127,10 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
         [self, weak_hdl = caf::actor_cast<caf::weak_actor_ptr>(self)](
           boost::system::error_code ec,
           const boost::asio::ip::tcp::endpoint& endpoint) {
-          TENZIR_VERBOSE("tcp connector connected to {}",
-                         endpoint.address().to_string());
           if (auto hdl = weak_hdl.lock()) {
             caf::anon_send(
               caf::actor_cast<caf::actor>(hdl),
-              caf::make_action([self, ec]() mutable {
+              caf::make_action([self, ec, endpoint]() mutable {
                 if (ec)
                   return self->state.connection_rp.deliver(caf::make_error(
                     ec::system_error,
@@ -148,6 +146,8 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
                     ec::system_error,
                     fmt::format("TLS client handshake failed: {}",
                                 ERR_get_error())));
+                TENZIR_VERBOSE("tcp connector connected to {}",
+                               endpoint.address().to_string());
                 self->state.connection_rp.deliver();
               }));
           }
@@ -430,7 +430,7 @@ public:
               });
           co_yield std::exchange(result, {});
         }
-      } while (not args.once);
+      } while (not args.connect and not args.once);
     };
     return make(args_, ctrl);
   }
