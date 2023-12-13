@@ -185,7 +185,7 @@ void pattern::resolve(const pattern_store& patterns, bool allow_recursion) {
   // Thus, we need to maintain a list of named captures ourselves.
   {
     static const auto expr
-      = re2::RE2("(\\(\\?(?:P?<(.+?)>|'(.+?)'))", re2::RE2::Quiet);
+      = re2::RE2(R"((\(\?(?:P?<(\w+)>|'(\w+)')))", re2::RE2::Quiet);
     TENZIR_ASSERT(expr.ok());
     re2::StringPiece str_re2{raw_pattern.data(), raw_pattern.size()};
     re2::StringPiece capture{}, name{};

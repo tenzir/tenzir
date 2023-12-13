@@ -1240,6 +1240,7 @@ tests:
           exec 'read lines | parse line grok --include-unnamed "(<%{NONNEGINT:priority}>\s*)?%{SYSLOGTIMESTAMP:timestamp} (%{HOSTNAME:hostname}/%{IPV4:hostip}|%{WORD:host}) %{SYSLOGPROG}:%{GREEDYDATA:message}"'
         input: data/syslog/syslog-rfc3164.log
       - command: exec 'show version | put version="v4.5.0-71-gae887a0ca3-dirty" | parse version grok "%{TIMESTAMP_ISO8601}"'
+      - command: exec 'show version | put line="55.3.244.1 GET /index.html 15824 0.043" | parse line grok "%{IP:client} %{WORD:method} %{URIPATHPARAM:request} %{NUMBER:bytes} %{NUMBER:duration}"'
 
   CSV with comments:
     tags: [pipelines, csv]
