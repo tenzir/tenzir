@@ -15,6 +15,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/process.hpp"
 #include "tenzir/error.hpp"
+#include "tenzir/forked_command.hpp"
 #include "tenzir/import_command.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/remote_command.hpp"
@@ -55,6 +56,8 @@ void add_root_opts(command& cmd) {
   cmd.options.add<std::string>("?tenzir", "console-format",
                                "format string for logging to the "
                                "console");
+  cmd.options.add<caf::config_value::list>(
+    "?tenzir", "components", "list of components to spawn in a node");
   cmd.options.add<caf::config_value::list>("?tenzir", "schema-dirs",
                                            module_desc);
   cmd.options.add<std::string>("?tenzir", "db-directory",
@@ -184,6 +187,11 @@ auto make_export_command() {
   return export_;
 }
 
+auto make_forked_command() {
+  return std::make_unique<command>("forked", "for internal use only",
+                                   opts("?tenzir.forked"));
+}
+
 auto make_status_command() {
   return std::make_unique<command>(
     "status",
@@ -225,6 +233,7 @@ auto make_command_factory() {
     {"export null", make_writer_command("null")},
     {"export arrow", make_writer_command("arrow")},
     {"export zeek", make_writer_command("zeek")},
+    {"forked", forked_command},
     {"import csv", import_command},
     {"import json", import_command},
     {"import suricata", import_command},
@@ -246,6 +255,7 @@ auto make_root_command(std::string_view name) {
   add_root_opts(*root);
   root->add_subcommand(make_count_command());
   root->add_subcommand(make_export_command());
+  root->add_subcommand(make_forked_command());
   root->add_subcommand(make_import_command());
   root->add_subcommand(make_status_command());
   return root;

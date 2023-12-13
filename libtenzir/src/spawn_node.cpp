@@ -101,6 +101,9 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   });
   self->system().registry().put("tenzir.node", actor);
   scope_linked<node_actor> node{std::move(actor)};
+  // Logically everything below this comment should be part of the
+  // start_command, but the `-N` option of the other commands requires
+  // that we spawn components here.
   auto spawn_component = [&](std::string name) {
     caf::error result = caf::none;
     auto inv = invocation{opts, "spawn "s + std::move(name), {}};
@@ -114,11 +117,23 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
         });
     return result;
   };
-  std::list components
-    = {"catalog", "index", "importer", "eraser", "disk-monitor"};
-  for (auto& c : components) {
-    if (auto err = spawn_component(c)) {
-      TENZIR_ERROR("node failed to spawn {}: {}", c, err);
+  auto default_components = caf::make_config_value_list(
+    "catalog", "index", "importer", "eraser", "disk-monitor");
+  auto maybe_components = get_or(opts, "tenzir.components", default_components);
+  auto components = get_as<caf::config_value::list>(maybe_components);
+  if (!components)
+    return add_context(ec::unrecognized_option,
+                       "tenzir.components must be a list of component names, "
+                       "but got {}",
+                       maybe_components);
+  for (auto& c : *components) {
+    auto component = get_as<std::string>(c);
+    if (!component)
+      return add_context(
+        ec::unrecognized_option,
+        "tenzir.component list element must be a string. Got {}", c);
+    if (auto err = spawn_component(*component)) {
+      TENZIR_ERROR("node failed to spawn {}: {}", component, err);
       return err;
     }
   }

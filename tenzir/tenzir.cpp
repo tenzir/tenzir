@@ -34,6 +34,10 @@
 #include <thread>
 #include <unordered_map>
 
+int foo() {
+  return 42;
+}
+
 int main(int argc, char** argv) {
   using namespace tenzir;
   // Set a signal handler for fatal conditions. Prints a backtrace if support

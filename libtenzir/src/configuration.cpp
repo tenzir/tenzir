@@ -20,12 +20,12 @@
 #include "tenzir/detail/env.hpp"
 #include "tenzir/detail/installdirs.hpp"
 #include "tenzir/detail/load_contents.hpp"
-#include "tenzir/detail/overload.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/stable_set.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/detail/system.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/pipeline_executor.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/synopsis_factory.hpp"
 #include "tenzir/type.hpp"
@@ -356,6 +356,7 @@ configuration::configuration() {
   detail::add_message_types();
   // Load I/O module.
   load<caf::io::middleman>();
+  add_actor_type("pipeline-executor", pipeline_executor);
   // Initialize factories.
   factory<synopsis>::initialize();
   factory<value_index>::initialize();

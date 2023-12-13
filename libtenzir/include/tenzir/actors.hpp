@@ -427,6 +427,17 @@ using exec_node_actor = typed_actor_fwd<
   // Source.
   ::extend_with<exec_node_sink_actor>::unwrap;
 
+/// The interface of a PIPELINE EXECUTOR actor.
+using pipeline_executor_actor = typed_actor_fwd<
+  // Execute a pipeline, returning the result asynchronously. This must be
+  // called at most once per executor.
+  auto(atom::start)->caf::result<void>,
+  // Pause the pipeline execution. No-op if it was already paused. Must not be
+  // called before the pipeline was started.
+  auto(atom::pause)->caf::result<void>,
+  // Resume the pipeline execution. No-op if it was not paused.
+  auto(atom::resume)->caf::result<void>>::unwrap;
+
 /// The interface of the NODE actor.
 using node_actor = typed_actor_fwd<
   // Run an invocation in the node.
@@ -457,18 +468,13 @@ using node_actor = typed_actor_fwd<
   // execution nodes.
   auto(atom::spawn, operator_box, operator_type, receiver_actor<diagnostic>,
        receiver_actor<metric>, int index)
-    ->caf::result<exec_node_actor>>::unwrap;
-
-/// The interface of a PIPELINE EXECUTOR actor.
-using pipeline_executor_actor = typed_actor_fwd<
-  // Execute a pipeline, returning the result asynchronously. This must be
-  // called at most once per executor.
-  auto(atom::start)->caf::result<void>,
-  // Pause the pipeline execution. No-op if it was already paused. Must not be
-  // called before the pipeline was started.
-  auto(atom::pause)->caf::result<void>,
-  // Resume the pipeline execution. No-op if it was not paused.
-  auto(atom::resume)->caf::result<void>>::unwrap;
+    ->caf::result<exec_node_actor>,
+  // Spawn a pipeline executor.
+  auto(atom::spawn, pipeline, receiver_actor<diagnostic>,
+       receiver_actor<metric>, caf::actor remote_node)
+    ->caf::result<pipeline_executor_actor>
+  //
+  >::unwrap;
 
 using terminator_actor = typed_actor_fwd<
   // Shut down the given actors.
@@ -516,6 +522,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::node_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_creation_listener_actor))
+  TENZIR_ADD_TYPE_ID((tenzir::pipeline_executor_actor))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::atom::done>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::diagnostic>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::metric>))

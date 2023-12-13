@@ -425,7 +425,7 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
   // Launch the thread on which the server will work.
   std::thread server_thread{[&] {
     auto const* scheme = server_config->require_tls ? "https" : "http";
-    TENZIR_INFO("server listening on on {}://{}:{}", scheme,
+    TENZIR_INFO("server listening on {}://{}:{}", scheme,
                 server_config->bind_address, server_config->port);
     io_context.run();
   }};

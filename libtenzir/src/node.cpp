@@ -38,6 +38,7 @@
 #include "tenzir/format/zeek.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/node.hpp"
+#include "tenzir/pipeline_executor.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/posix_filesystem.hpp"
 #include "tenzir/shutdown.hpp"
@@ -715,6 +716,14 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       }
       // TODO: Check output type.
       return spawn_result->first;
+    },
+    [self](atom::spawn, pipeline pipe, receiver_actor<diagnostic> diagnostics,
+           receiver_actor<metric> metrics,
+           caf::actor remote_node) -> caf::result<pipeline_executor_actor> {
+      TENZIR_INFO("{} spawns a pipeline executor: {}", *self, "foo");
+      return self->spawn(pipeline_executor, std::move(pipe), diagnostics,
+                         metrics, caf::actor_cast<node_actor>(remote_node),
+                         false);
     },
   };
 }
