@@ -5,8 +5,8 @@ Enriches a stream of events with a context.
 ## Synopsis
 
 ```
-lookup <context> [<options>] [--live] [--retro]
-lookup <field=><context> [<options>] [--live] [--retro]
+lookup <context> [<options>] [--live] [--retro] [--snapshot]
+lookup <field=><context> [<options>] [--live] [--retro] [--snapshot]
 ```
 
 ## Description
@@ -47,6 +47,14 @@ update](../transformations/context-update.md).
 By default, both retro and live lookups are enabled.
 Specifying either `--retro` or `--live` explicitly disables
 the other.
+
+### `--retro`
+
+A lookup-specific flag that creates a snapshot of the context at the time of
+execution. Further live and retroactive lookups will refer to that snapshot,
+disregarding any further context updates.
+
+By default, snapshotting is disabled.
 
 ## Examples
 

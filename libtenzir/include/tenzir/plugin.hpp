@@ -791,7 +791,8 @@ public:
   virtual ~context() noexcept = default;
 
   /// Emits context information for every event in `slice` in order.
-  virtual auto apply(table_slice slice, parameter_map parameters) const
+  virtual auto
+  apply(table_slice slice, parameter_map parameters, bool use_snapshot) const
     -> caf::expected<std::vector<typed_array>>
     = 0;
 
@@ -814,6 +815,9 @@ public:
 
   // Serializes a context for persistence.
   virtual auto save() const -> caf::expected<chunk_ptr> = 0;
+
+  // Creates a context-internal snapshot of the current context state.
+  virtual auto create_snapshot() -> caf::expected<void> = 0;
 };
 
 class context_plugin : public virtual plugin {

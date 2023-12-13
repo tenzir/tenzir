@@ -49,7 +49,8 @@ public:
   }
 
   /// Emits context information for every event in `slice` in order.
-  auto apply(table_slice slice, context::parameter_map parameters) const
+  auto apply(table_slice slice, context::parameter_map parameters,
+             bool use_snapshot) const
     -> caf::expected<std::vector<typed_array>> override {
     auto resolved_slice = resolve_enumerations(slice);
     auto field_name = std::optional<std::string>{};
@@ -76,9 +77,10 @@ public:
       }
       return field_builder.finish();
     }
+    const auto& entries = (use_snapshot ? snapshot_entries : context_entries);
     auto [type, slice_array] = column_offset->get(resolved_slice);
     for (const auto& value : values(type, *slice_array)) {
-      if (auto it = context_entries.find(value); it != context_entries.end()) {
+      if (auto it = entries.find(value); it != entries.end()) {
         auto r = field_builder.record();
         r.field("key", it->first);
         r.field("context", it->second);
@@ -147,6 +149,9 @@ public:
       ++context_it;
     }
     TENZIR_ASSERT_CHEAP(context_it == context_values.end());
+    if (snapshot_entries.empty()) {
+      snapshot_entries = context_entries;
+    }
     auto query_f = [key_values_list = std::move(key_values_list)](
                      parameter_map params) -> caf::expected<expression> {
       auto column = params["field"];
@@ -208,8 +213,14 @@ public:
     return chunk::make(builder.Release());
   }
 
+  auto create_snapshot() -> caf::expected<void> override {
+    snapshot_entries = context_entries;
+    return {};
+  }
+
 private:
   tsl::robin_map<data, data> context_entries;
+  tsl::robin_map<data, data> snapshot_entries;
 };
 
 class plugin : public virtual context_plugin {
