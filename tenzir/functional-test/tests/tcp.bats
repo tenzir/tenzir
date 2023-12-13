@@ -7,7 +7,7 @@ setup() {
 }
 
 @test "connecting" {
-  coproc NC { exec echo foo | ncat -l 127.0.0.1 8000 ; }
+  coproc NC { exec echo foo | socat TCP-LISTEN:8000 stdout; }
   check tenzir "load tcp://127.0.0.1:8000 --connect"
 }
 

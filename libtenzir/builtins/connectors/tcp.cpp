@@ -530,13 +530,11 @@ public:
   }
 
   friend auto inspect(auto& f, saver& x) -> bool {
-    return f.object(x).pretty_name("saver").fields(
-      f.field("args", x.args_), f.field("initialized", x.initialized_));
+    return f.object(x).pretty_name("saver").fields(f.field("args", x.args_));
   }
 
 private:
   saver_args args_;
-  bool initialized_ = false;
 };
 
 class plugin final : public virtual loader_plugin<loader>, saver_plugin<saver> {
