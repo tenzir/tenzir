@@ -279,8 +279,11 @@ public:
     return optimize_result{std::nullopt, event_order::unordered, copy()};
   }
 
-  friend auto inspect(auto& f, python_operator& x) -> bool {
-    return f.apply(x.code_);
+  friend auto inspect(auto& f, python_operator& x) {
+    return f.object(x)
+      .pretty_name("tenzir.plugins.python.python-operator")
+      .fields(f.field("requirements", x.requirements_),
+              f.field("code", x.code_));
   }
 
 private:
