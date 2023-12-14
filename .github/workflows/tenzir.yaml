@@ -422,7 +422,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Download CHANGELOG.md
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: CHANGELOG.md
       - name: Override Stub Changelog
@@ -909,7 +909,7 @@ jobs:
           echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
       - name: Download Tenzir artifact
         if: ${{ needs.configure.outputs.run-tenzir == 'true' }}
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: "${{ env.PACKAGE_NAME }}.tar.gz"
       - name: Authenticate to Google Cloud
