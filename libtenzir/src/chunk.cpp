@@ -445,4 +445,51 @@ chunk::chunk(view_type view, deleter_type&& deleter,
   TENZIR_TRACEPOINT(chunk_make, data, sz);
 }
 
+auto split(const chunk_ptr& chunk, size_t partition_point)
+  -> std::pair<chunk_ptr, chunk_ptr> {
+  if (partition_point == 0)
+    return {{}, chunk};
+  if (partition_point >= chunk->size())
+    return {chunk, {}};
+  return {
+    chunk->slice(0, partition_point),
+    chunk->slice(partition_point, chunk->size() - partition_point),
+  };
+}
+
+auto split(std::vector<chunk_ptr> chunks, size_t partition_point)
+  -> std::pair<std::vector<chunk_ptr>, std::vector<chunk_ptr>> {
+  auto it = chunks.begin();
+  for (; it != chunks.end(); ++it) {
+    if (partition_point == (*it)->size()) {
+      return {
+        {chunks.begin(), it + 1},
+        {it + 1, chunks.end()},
+      };
+    }
+    if (partition_point < (*it)->size()) {
+      auto lhs = std::vector<chunk_ptr>{};
+      auto rhs = std::vector<chunk_ptr>{};
+      lhs.reserve(std::distance(chunks.begin(), it + 1));
+      rhs.reserve(std::distance(it, chunks.end()));
+      lhs.insert(lhs.end(), std::make_move_iterator(chunks.begin()),
+                 std::make_move_iterator(it));
+      auto [split_lhs, split_rhs] = split(*it, partition_point);
+      lhs.push_back(std::move(split_lhs));
+      rhs.push_back(std::move(split_rhs));
+      rhs.insert(rhs.end(), std::make_move_iterator(it + 1),
+                 std::make_move_iterator(chunks.end()));
+      return {
+        std::move(lhs),
+        std::move(rhs),
+      };
+    }
+    partition_point -= (*it)->size();
+  }
+  return {
+    std::move(chunks),
+    {},
+  };
+}
+
 } // namespace tenzir

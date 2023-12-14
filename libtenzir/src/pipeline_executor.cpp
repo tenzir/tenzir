@@ -107,10 +107,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
         .then(
           [=, this](exec_node_actor& exec_node) {
             TENZIR_VERBOSE("{} spawned {} remotely", *self, description);
-            // TODO: We should call `quit()` whenever `start()` fails to
-            // ensure that this will not be called afterwards (or we check for
-            // this case).
-            self->monitor(exec_node);
+            self->monitor<caf::message_priority::normal>(exec_node);
             self->link_to(exec_node);
             exec_nodes[index] = std::move(exec_node);
             start_nodes_if_all_spawned();
@@ -133,7 +130,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
       }
       TENZIR_DEBUG("{} spawned {} locally", *self, description);
       std::tie(previous, input_type) = std::move(*spawn_result);
-      self->monitor(previous);
+      self->monitor<caf::message_priority::normal>(previous);
       self->link_to(previous);
       exec_nodes.push_back(previous);
     }
@@ -173,7 +170,8 @@ void pipeline_executor_state::abort_start(caf::error reason) {
     self->quit(ec::silent);
     return;
   }
-  abort_start(diagnostic::error("{}", reason).done());
+  abort_start(
+    diagnostic::error("{}", reason).note("pipeline failed to start").done());
 }
 
 void pipeline_executor_state::finish_start() {
@@ -274,35 +272,32 @@ auto pipeline_executor(
   self->state.self = self;
   self->state.node = std::move(node);
   self->set_down_handler([self](caf::down_msg& msg) {
-    TENZIR_DEBUG(
-      "{} received down from execution node {} and has {} remaining: {}", *self,
-      msg.source, self->state.exec_nodes.size() - 1, msg.reason);
     const auto exec_node
       = std::find_if(self->state.exec_nodes.begin(),
                      self->state.exec_nodes.end(), [&](const auto& exec_node) {
                        return exec_node.address() == msg.source;
                      });
-    if (exec_node == self->state.exec_nodes.end()) {
-      return;
+    if (exec_node != self->state.exec_nodes.end()) {
+      TENZIR_DEBUG("{} received down from execution node {}/{}: {}", *self,
+                   exec_node - self->state.exec_nodes.begin() + 1,
+                   self->state.exec_nodes.size(), msg.reason);
+      std::for_each(self->state.exec_nodes.begin(), exec_node + 1,
+                    [&](auto& exec_node) {
+                      if (exec_node) {
+                        self->unlink_from(exec_node);
+                        exec_node = nullptr;
+                      }
+                    });
     }
-    if (auto count = exec_node - self->state.exec_nodes.begin(); count > 0) {
-      TENZIR_VERBOSE("{} kills {} execution nodes without downstream", *self,
-                     count);
-    }
-    for (auto it = self->state.exec_nodes.begin(); it != exec_node; ++it) {
-      self->demonitor(*it);
-      // The exit reason `kill` is the only exit reason that takes effect
-      // immediately, and has even higher priority than other high priority
-      // messages. We must use it here to avoid the exit being delayed by an
-      // await, which we may never receive a reply for because of this bug in
-      // CAF: https://github.com/actor-framework/actor-framework/issues/1466
-      self->send_exit(*it, caf::exit_reason::kill);
-    }
-    self->state.exec_nodes.erase(self->state.exec_nodes.begin(), exec_node + 1);
+    const auto all_done
+      = std::all_of(self->state.exec_nodes.begin(),
+                    self->state.exec_nodes.end(), [](const auto& exec_node) {
+                      return exec_node == nullptr;
+                    });
     if (msg.reason and msg.reason != caf::exit_reason::unreachable
         and msg.reason != caf::exit_reason::user_shutdown) {
       self->quit(std::move(msg.reason));
-    } else if (self->state.exec_nodes.empty()) {
+    } else if (all_done) {
       self->quit();
     }
   });

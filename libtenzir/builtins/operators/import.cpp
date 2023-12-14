@@ -64,6 +64,12 @@ public:
       ctrl.abort(std::move(err));
       co_return;
     }
+    // We empirically need this sleep here for the flushing to take any effect
+    // afterwards. I do not fully understand why, but since we're about to
+    // rewrite this operator anyways to create partitions in-band and to
+    // directly send then to the catalog we may as well leave this in here for
+    // now. –- DL, Dec 2023
+    std::this_thread::sleep_for(std::chrono::milliseconds{100});
     // We yield once to the scheduler as the stream flushing only takes effect
     // then.
     co_yield {};

@@ -401,9 +401,9 @@ using datagram_source_actor = typed_actor_fwd<
 
 using exec_node_sink_actor = typed_actor_fwd<
   // Push events.
-  auto(atom::push, std::vector<table_slice> events)->caf::result<void>,
+  auto(atom::push, table_slice events)->caf::result<void>,
   // Push bytes.
-  auto(atom::push, std::vector<chunk_ptr> bytes)->caf::result<void>>::unwrap;
+  auto(atom::push, chunk_ptr bytes)->caf::result<void>>::unwrap;
 
 /// The interface of a EXEC NODE actor.
 using exec_node_actor = typed_actor_fwd<
@@ -411,14 +411,13 @@ using exec_node_actor = typed_actor_fwd<
   auto(atom::internal, atom::run)->caf::result<void>,
   // Start an execution node. Returns after the operator has yielded for the
   // first time.
-  auto(atom::start, std::vector<caf::actor> previous)->caf::result<void>,
+  auto(atom::start, std::vector<caf::actor> all_previous)->caf::result<void>,
   // Pause the execution node. No-op if it was already paused.
   auto(atom::pause)->caf::result<void>,
   // Resume the execution node. No-op if it was not paused.
   auto(atom::resume)->caf::result<void>,
   // Uodate demand.
-  auto(atom::pull, exec_node_sink_actor sink, uint64_t batch_size,
-       duration batch_timeout)
+  auto(atom::pull, exec_node_sink_actor sink, uint64_t batch_size)
     ->caf::result<void>>
   // Source.
   ::extend_with<exec_node_sink_actor>::unwrap;

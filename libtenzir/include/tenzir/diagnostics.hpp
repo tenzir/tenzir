@@ -37,8 +37,6 @@ public:
   virtual ~diagnostic_handler() = default;
 
   virtual void emit(diagnostic d) = 0;
-
-  virtual auto has_seen_error() const -> bool = 0;
 };
 
 enum class severity { error, warning, note };
@@ -282,26 +280,16 @@ inline auto diagnostic::modify() && -> diagnostic_builder {
 class null_diagnostic_handler final : public diagnostic_handler {
 public:
   void emit(diagnostic diag) override {
-    has_seen_error_ |= diag.severity == severity::error;
-  }
-
-  auto has_seen_error() const -> bool override {
-    return has_seen_error_;
+    (void)diag;
   }
 
 private:
-  bool has_seen_error_ = false;
 };
 
 class collecting_diagnostic_handler final : public diagnostic_handler {
 public:
   void emit(diagnostic diag) override {
-    has_seen_error_ |= diag.severity == severity::error;
     result.push_back(std::move(diag));
-  }
-
-  auto has_seen_error() const -> bool override {
-    return has_seen_error_;
   }
 
   auto collect() && -> std::vector<diagnostic> {
@@ -310,7 +298,6 @@ public:
 
 private:
   std::vector<diagnostic> result;
-  bool has_seen_error_ = false;
 };
 
 enum class color_diagnostics { no, yes };

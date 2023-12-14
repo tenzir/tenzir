@@ -59,15 +59,7 @@ public:
     public:
       void emit(diagnostic d) override {
         TENZIR_WARN("got diagnostic: {:?}", d);
-        error_ |= d.severity == severity::error;
       }
-
-      auto has_seen_error() const -> bool override {
-        return error_;
-      }
-
-    private:
-      bool error_ = false;
     };
     static auto diag = handler{};
     return diag;

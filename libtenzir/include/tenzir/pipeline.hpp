@@ -333,6 +333,13 @@ public:
     return false;
   }
 
+  /// Returns whether the operator can produce output independently from
+  /// receiving input. Set to true to cause operators to be polled rather than
+  /// pulled from. Operators without a source are always polled from.
+  virtual auto input_independent() const -> bool {
+    return false;
+  }
+
   /// Retrieve the output type of this operator for a given input.
   ///
   /// The default implementation will try to instantiate the operator and then
@@ -479,6 +486,10 @@ public:
 
   auto internal() const -> bool override {
     die("pipeline::internal() must not be called");
+  }
+
+  auto input_independent() const -> bool override {
+    die("pipeline::input_independent() must not be called");
   }
 
   auto instantiate(operator_input input, operator_control_plane& control) const

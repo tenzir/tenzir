@@ -106,10 +106,6 @@ public:
     }
   }
 
-  auto has_seen_error() const -> bool override {
-    return error_;
-  }
-
 private:
   static auto symbol(severity s) -> char {
     switch (s) {
