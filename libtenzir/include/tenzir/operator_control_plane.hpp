@@ -37,10 +37,22 @@ struct operator_control_plane {
   /// @pre error != caf::none
   virtual auto abort(caf::error error) noexcept -> void = 0;
 
+  template <class... Ts>
+  auto abort(const caf::error& error, fmt::format_string<Ts...> str,
+             Ts&&... xs) noexcept -> void {
+    abort(add_context(error, std::move(str), std::forward<Ts>(xs)...));
+  }
+
   /// Emit a warning that gets transported via the executor's side-channel.
   /// An executor may treat warnings as errors. Warnings additionally get
   /// reported to the executor's side-channel as `tenzir.warning` events.
   virtual auto warn(caf::error warning) noexcept -> void = 0;
+
+  template <class... Ts>
+  auto warn(const caf::error& warning, fmt::format_string<Ts...> str,
+            Ts&&... xs) noexcept -> void {
+    warn(add_context(warning, std::move(str), std::forward<Ts>(xs)...));
+  }
 
   /// Emit events to the executor's side-channel, e.g., metrics.
   virtual auto emit(table_slice metrics) noexcept -> void = 0;

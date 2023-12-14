@@ -132,9 +132,8 @@ public:
         // list of requirements is installed correctly?
         if (!exists(venv_path, ec)) {
           if (bp::system(python_executable, "-m", "venv", venv)) {
-            ctrl.abort(caf::make_error(ec::system_error,
-                                       "failed to create virtualenv "
-                                       "(see log for details)"));
+            ctrl.abort(ec::system_error,
+                       "failed to create virtualenv (see log for details)");
             co_return;
           }
           auto pip_invocation = std::vector<std::string>{
@@ -161,9 +160,8 @@ public:
           TENZIR_VERBOSE("installing python modules with: '{}'",
                          fmt::join(pip_invocation, "' '"));
           if (bp::system(pip_invocation, env)) {
-            ctrl.abort(caf::make_error(ec::system_error,
-                                       "failed to install pip requirements "
-                                       "(see log for details)"));
+            ctrl.abort(ec::system_error, "failed to install pip requirements "
+                                         "(see log for details)");
             co_return;
           }
         }
@@ -201,22 +199,19 @@ public:
                         stream, slice.schema().to_arrow_schema())
                         .ValueOrDie();
         if (!writer->WriteRecordBatch(*batch).ok()) {
-          ctrl.abort(caf::make_error(
-            ec::system_error, "failed to convert input batch to arrow format"));
+          ctrl.abort(ec::system_error,
+                     "failed to convert input batch to arrow format");
           co_return;
         }
         if (auto status = writer->Close(); !status.ok()) {
-          ctrl.abort(
-            caf::make_error(ec::system_error, fmt::format("failed to convert"
-                                                          "input: {}",
-                                                          status.message())));
+          ctrl.abort(ec::system_error, "failed to convert input: {}",
+                     status.message());
           co_return;
         }
         auto result = stream->Finish();
         if (!result.status().ok()) {
-          ctrl.abort(caf::make_error(ec::system_error,
-                                     "failed to finish input buffer: {}",
-                                     result.status().message()));
+          ctrl.abort(ec::system_error, "failed to finish input buffer: {}",
+                     result.status().message());
           co_return;
         }
         std_in.write(reinterpret_cast<const char*>((*result)->data()),
@@ -225,8 +220,7 @@ public:
         auto reader = arrow::ipc::RecordBatchStreamReader::Open(&file);
         if (!reader.status().ok()) {
           auto python_error = drain_pipe(errpipe);
-          ctrl.abort(caf::make_error(
-            ec::logic_error, fmt::format("python error: {}", python_error)));
+          ctrl.abort(ec::logic_error, "python error: {}", python_error);
           co_return;
         }
         auto result_batch = (*reader)->ReadNext();
@@ -234,17 +228,15 @@ public:
           TENZIR_WARN("failed to read data from python: {}",
                       result_batch.status().message());
           auto python_error = drain_pipe(errpipe);
-          ctrl.abort(caf::make_error(
-            ec::logic_error, fmt::format("python error: {}", python_error)));
+          ctrl.abort(ec::logic_error, "python error: {}", python_error);
           co_return;
         }
         // The writer on the other side writes an invalid record batch as
         // end-of-stream marker; we have to read it now to remove it from
         // the pipe.
         if (auto result = (*reader)->ReadNext(); !result.ok()) {
-          ctrl.abort(caf::make_error(ec::logic_error,
-                                     fmt::format("python error: failed to read "
-                                                 "closing bytes")));
+          ctrl.abort(ec::logic_error,
+                     "python error: failed to read closing bytes");
           co_return;
         }
         static_cast<void>((*reader)->Close());
@@ -261,7 +253,7 @@ public:
       std_in.close();
       child.wait();
     } catch (const std::exception& ex) {
-      ctrl.abort(caf::make_error(ec::logic_error, fmt::to_string(ex.what())));
+      ctrl.abort(ec::logic_error, "{}", ex.what());
     }
     co_return;
   }
