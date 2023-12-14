@@ -395,7 +395,7 @@ jobs:
         run: |
           cmake --build build --target changelog
       - name: Upload CHANGELOG.md
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: CHANGELOG.md
           path: build/CHANGELOG.md
@@ -744,7 +744,7 @@ jobs:
           cmake --build "$BUILD_DIR" --target integration
       - name: Upload Integration Test Logs on Failure
         if: failure() && (steps.integration_tests.outcome == 'failure')
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: "tenzir-integration-test-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}"
           path: "${{ env.BUILD_DIR }}/tenzir/tenzir-integration-test"
@@ -755,7 +755,7 @@ jobs:
         run: |
           cmake --build "$BUILD_DIR" --target package
       - name: Upload Artifact to GitHub
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: "${{ env.PACKAGE_NAME }}.tar.gz"
           path: "${{ env.BUILD_DIR }}/package/${{ env.PACKAGE_NAME }}.tar.gz"
@@ -970,7 +970,7 @@ jobs:
           cmake --build "$BUILD_DIR" --target integration
       - name: Upload Integration Test Logs on Failure
         if: failure() && (steps.integration_tests.outcome == 'failure')
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: "tenzir-${{ matrix.plugin.target }}-integration-test"
           path: "${{ env.BUILD_DIR }}/tenzir-${{ matrix.plugin.target }}-integration-test"
