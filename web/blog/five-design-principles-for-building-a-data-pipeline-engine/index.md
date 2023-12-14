@@ -187,13 +187,14 @@ load nic eth0
 ```
 
 This pipeline starts with PCAPs, transforms the acquired packets to events,
-[decapsulates](/operators/transformations/decapsulate) them to filter on some
-packet headers, goes back to PCAP, runs Zeek[^1] on the filtered trace, and then
-writes the log as Parquet file to disk.
+[decapsulates](/next/operators/decapsulate) them to filter on some packet
+headers, goes back to PCAP, runs Zeek[^1] on the filtered trace, and then writes
+the log as Parquet file to disk.
 
-[^1]: The `zeek` operator is [user-defined operator](/operators/user-defined)
-    for `shell "zeek -r - …" | read zeek-tsv`. We wrote a [blog post on how you
-    can use `shell` as escape hatch to integrate arbitrary
+[^1]: The `zeek` operator is [user-defined
+    operator](/next/language/user-defined-operators) for `shell "zeek -r - …" |
+    read zeek-tsv`. We wrote a [blog post on how you can use `shell` as escape
+    hatch to integrate arbitrary
     tools](/blog/shell-yeah-supercharging-zeek-and-suricata-with-tenzir) in a
     pipeline.
 
@@ -233,7 +234,7 @@ does not matter significantly. Similar to predicate pushdown, Tenzir operators
 support "ordering pushdown" to signal to upstream operators that the event order
 only matters intra-schema but not inter-schema. In this case we transparently
 demultiplex a heterogeneous stream into *N* homogeneous streams, each of which
-yields batches of up to 65k events. The [`import`](/operators/sinks/import)
+yields batches of up to 65k events. The [`import`](/next/operators/import)
 operator is an example of such an operator, and it pushes its ordering upstream
 so that we can efficiently parse, say, a diverse stream of NDJSON records, such
 as Suricata's EVE JSON or Zeek's streaming JSON.
@@ -350,7 +351,7 @@ types of network connections: *implicit* and *explicit* ones:
 
 An implicit network connection exists, for example, when you use the `tenzir`
 binary on the command line to run a pipeline that ends in
-[`import`](/operators/sinks/import):
+[`import`](/next/operators/import):
 
 ```bash
 tenzir 'load gcs bkt/eve.json

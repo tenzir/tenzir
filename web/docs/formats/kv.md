@@ -10,9 +10,9 @@ kv <field_split> <value_split>
 
 ## Description
 
-The `kv` parser is usually used with the
-[`parse`](../operators/transformations/parse.md) operator to extract key-value
-pairs from a given string, in particular if the keys are not known before.
+The `kv` parser is usually used with the [`parse`](../operators/parse.md)
+operator to extract key-value pairs from a given string, in particular if the
+keys are not known before.
 
 Incoming strings are first split into fields according to `<field_split>`. This
 can be a regular expression. For example, the input `foo: bar, baz: 42` can be
