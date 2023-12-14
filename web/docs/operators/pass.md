@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    transformation: true
+---
+
 # pass
 
 Does nothing with the input.

@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    source: true
+---
+
 # version
 
 Shows the current version.

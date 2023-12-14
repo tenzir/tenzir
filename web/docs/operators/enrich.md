@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    transformation: true
+---
+
 # enrich
 
 Enriches events with a context.

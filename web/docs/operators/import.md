@@ -1,6 +1,7 @@
 ---
-operator:
-  sink: true
+sidebar_custom_props:
+  operator:
+    sink: true
 ---
 
 # import

@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    transformation: true
+---
+
 # rare
 
 Shows the least common values. The dual to [`top`](top.md).

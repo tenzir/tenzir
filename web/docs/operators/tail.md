@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    transformation: true
+---
+
 # tail
 
 Limits the input to the last *N* events.

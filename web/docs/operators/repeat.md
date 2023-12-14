@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    transformation: true
+---
+
 # repeat
 
 Repeats the input a number of times.

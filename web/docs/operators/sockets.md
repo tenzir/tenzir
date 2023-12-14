@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    source: true
+---
+
 # sockets
 
 Shows a snapshot of open sockets.

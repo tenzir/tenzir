@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    source: true
+---
+
 # from
 
 Produces events by combining a [connector][connectors] and a [format][formats].

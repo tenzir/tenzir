@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    transformation: true
+---
+
 # where
 
 Filters events according to an [expression](../language/expressions.md).

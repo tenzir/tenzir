@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    transformation: true
+---
+
 # hash
 
 Computes a SHA256 hash digest of a given field.

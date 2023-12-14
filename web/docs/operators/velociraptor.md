@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    source: true
+---
+
 # velociraptor
 
 Submits VQL to a Velociraptor server and returns the response as events.

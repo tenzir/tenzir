@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    sink: true
+---
+
 # to
 
 Consumes events by combining a [connector][connectors] and a [format][formats].

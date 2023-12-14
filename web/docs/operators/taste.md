@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    transformation: true
+---
+
 # taste
 
 Limits the input to *N* events per unique schema.

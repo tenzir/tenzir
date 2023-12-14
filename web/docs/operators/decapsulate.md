@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    transformation: true
+---
+
 # decapsulate
 
 Decapsulates packet data at link, network, and transport layer.

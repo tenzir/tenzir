@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    transformation: true
+---
+
 # summarize
 
 Groups events and applies aggregate functions on each group.

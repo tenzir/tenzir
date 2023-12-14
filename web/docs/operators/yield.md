@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    transformation: true
+---
+
 # yield
 
 Extracts nested records with the ability to unfold lists.

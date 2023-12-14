@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    transformation: true
+---
+
 # put
 
 Returns new events that only contain a set of specified fields.

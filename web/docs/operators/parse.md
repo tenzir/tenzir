@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    transformation: true
+---
+
 # parse
 
 Applies a parser to the string stored in a given field.

@@ -1,3 +1,11 @@
+---
+sidebar_custom_props:
+  operator:
+    source: true
+    transformation: true
+    sink: true
+---
+
 # shell
 
 Executes a system command and hooks its stdin and stdout into the pipeline.

@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    transformation: true
+---
+
 # slice
 
 Keep a range events within the half-closed interval `[begin; end)`.

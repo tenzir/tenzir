@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    source: true
+---
+
 # load
 
 The `load` operator acquires raw bytes from a [connector](../connectors.md).

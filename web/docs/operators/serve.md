@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    sink: true
+---
+
 # serve
 
 Make events available under the [`/serve` REST API

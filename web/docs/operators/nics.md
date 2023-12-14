@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    source: true
+---
+
 # nics
 
 Shows a snapshot of available network interfaces.

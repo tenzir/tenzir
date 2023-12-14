@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    source: true
+---
+
 # export
 
 Retrieves events from a Tenzir node. The dual to [`import`](import.md).

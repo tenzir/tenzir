@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    transformation: true
+---
+
 # unflatten
 
 Unflattens data structures whose field names imply a nested structure.

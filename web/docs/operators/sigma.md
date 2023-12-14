@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    transformation: true
+---
+
 # sigma
 
 Filter the input with [Sigma rules][sigma] and output matching events.

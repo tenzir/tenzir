@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    transformation: true
+---
+
 # pseudonymize
 
 Pseudonymizes fields according to a given method.

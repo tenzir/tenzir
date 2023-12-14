@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    sink: true
+---
+
 # discard
 
 Discards all incoming events.

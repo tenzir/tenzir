@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    transformation: true
+---
+
 # batch
 
 The `batch` operator controls the batch size of events.
