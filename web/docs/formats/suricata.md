@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  format:
+    parser: true
+---
+
 # suricata
 
 Reads [Suricata][suricata]'s [EVE JSON][eve-json] output. The parser is an alias

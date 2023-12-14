@@ -1,3 +1,8 @@
+---
+sidebar_custom_props:
+  connector:
+    saver: true
+---
 
 # stdout
 

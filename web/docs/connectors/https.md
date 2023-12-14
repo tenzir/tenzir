@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  connector:
+    loader: true
+---
+
 # https
 
 Loads bytes via HTTPS.

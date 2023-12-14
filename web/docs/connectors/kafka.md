@@ -1,3 +1,10 @@
+---
+sidebar_custom_props:
+  connector:
+    loader: true
+    saver: true
+---
+
 # kafka
 
 Loads bytes from and saves bytes to Kafka.

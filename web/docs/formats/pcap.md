@@ -1,3 +1,10 @@
+---
+sidebar_custom_props:
+  format:
+    parser: true
+    printer: true
+---
+
 # pcap
 
 Reads and writes raw network packets in [PCAP][pcap-rfc] file format.

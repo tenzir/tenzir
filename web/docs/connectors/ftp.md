@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  connector:
+    loader: true
+---
+
 # ftp
 
 Loads bytes via FTP.

@@ -1,3 +1,10 @@
+---
+sidebar_custom_props:
+  format:
+    parser: true
+    printer: true
+---
+
 # parquet
 
 Reads events from a Parquet file. Writes events to a [Parquet][parquet] file.

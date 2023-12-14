@@ -1,3 +1,10 @@
+---
+sidebar_custom_props:
+  connector:
+    loader: true
+    saver: true
+---
+
 # file
 
 Loads bytes from a file. Saves bytes to a file.

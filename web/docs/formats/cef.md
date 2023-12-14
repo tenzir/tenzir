@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  format:
+    parser: true
+---
+
 # cef
 
 Parses events in the Common Event Format (CEF).

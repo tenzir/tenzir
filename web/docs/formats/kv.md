@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  format:
+    parser: true
+---
+
 # kv
 
 Reads key-value pairs by splitting strings based on regular expressions.

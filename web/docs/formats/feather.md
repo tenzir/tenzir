@@ -1,3 +1,10 @@
+---
+sidebar_custom_props:
+  format:
+    parser: true
+    printer: true
+---
+
 # feather
 
 Reads and writes the [Feather][feather] file format.

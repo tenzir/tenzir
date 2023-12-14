@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  connector:
+    saver: true
+---
+
 # directory
 
 Saves bytes to one file per schema into a directory.

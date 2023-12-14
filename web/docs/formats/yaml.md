@@ -1,3 +1,10 @@
+---
+sidebar_custom_props:
+  format:
+    parser: true
+    printer: true
+---
+
 # yaml
 
 Reads and writes YAML.

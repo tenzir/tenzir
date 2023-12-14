@@ -1,3 +1,10 @@
+---
+sidebar_custom_props:
+  format:
+    parser: true
+    printer: true
+---
+
 # zeek-tsv
 
 Reads and writes Zeek tab-separated values.
