@@ -146,13 +146,9 @@ A named record type describing the top-level structure of a data frame.
 
 An [operator](#operator) consuming input, without producing any output.
 
-- See all available [sinks](./operators/sinks/README.md)
-
 ## Source
 
 An [operator](#operator) producing output, without consuming any input.
-
-- See all available [sources](./operators/sources/README.md)
 
 ## TQL
 
@@ -165,5 +161,3 @@ TQL is the language in which users write [pipelines](#pipeline).
 ## Transformation
 
 An [operator](#operator) consuming both input and producing output.
-
-- See all [transformations](./operators/transformations/README.md)

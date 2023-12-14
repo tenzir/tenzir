@@ -1,3 +1,10 @@
+---
+sidebar_custom_props:
+  connector:
+    loader: true
+    saver: true
+---
+
 # file
 
 Loads bytes from a file. Saves bytes to a file.
@@ -83,7 +90,7 @@ Interpret `path` as a Unix domain socket and connect to it.
 
 ## Examples
 
-Read JSON from stdin via [`from`](../operators/sources/from.md) and convert
+Read JSON from stdin via [`from`](../operators/from.md) and convert
 it to CSV:
 
 ```

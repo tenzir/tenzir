@@ -1,5 +1,9 @@
 ---
 sidebar_label: "-"
+sidebar_custom_props:
+  connector:
+    loader: true
+    saver: true
 ---
 
 # dash

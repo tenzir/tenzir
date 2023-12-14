@@ -2,6 +2,7 @@
 title: Tenzir v4.4
 authors: [dominiklohmann]
 date: 2023-11-06
+last_updated: 2023-12-12
 tags: [release, operators, velociraptor, yara, amqp]
 comments: true
 ---
@@ -20,13 +21,12 @@ forensics and incident response (DFIR) ecosystem: [YARA][yara] and
 
 ## YARA Operator
 
-The star feature of this release is the new [`yara`
-operator](/next/operators/transformations/yara). You can now match [YARA][yara]
-rules directly within byte pipelines. This is a game-changer for threat
-intelligence and cybersecurity workflows, as it brings together all of Tenzir's
-connectors with the community's rich ecosystem of YARA rules for efficient
-malware detection and analysis. Evaluating a set of rules on a file located in
-an S3 bucket has never been easier:
+The star feature of this release is the new [`yara`](/next/operators/yara)
+operator. You can now match [YARA][yara] rules directly within byte pipelines.
+This is a game-changer for threat intelligence and cybersecurity workflows, as
+it brings together all of Tenzir's connectors with the community's rich
+ecosystem of YARA rules for efficient malware detection and analysis. Evaluating
+a set of rules on a file located in an S3 bucket has never been easier:
 
 ```
 load s3 bucket/file.exe

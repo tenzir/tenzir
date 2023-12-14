@@ -136,8 +136,8 @@ supporting writing Parquet files into an S3 bucket.
 In addition to highly scalable data ingestion, Tenzir's pipelines support
 numerous building blocks for security use cases, such as high-performance
 contextualization with threat intelligence or matching
-[YARA](../operators/transformations/yara.md) and
-[Sigma](../operators/transformations/sigma.md) rules.
+[YARA](../operators/yara.md) and
+[Sigma](../operators/sigma.md) rules.
 
 The symmetry in the pipeline architecture also enables a streamlined hand-over
 from detection to data-driven response, e.g., by writing pipelines that reshape

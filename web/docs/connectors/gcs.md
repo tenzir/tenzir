@@ -1,3 +1,10 @@
+---
+sidebar_custom_props:
+  connector:
+    loader: true
+    saver: true
+---
+
 # gcs
 
 Loads bytes from a Google Cloud Service object. Saves bytes to a Google Cloud

@@ -227,7 +227,7 @@ customization points.
 ### List plugins
 
 You can get the list of available plugins using the
-[`show`](./operators/sources/show.md) operator:
+[`show`](./operators/show.md) operator:
 
 ```bash
 tenzir 'show plugins'

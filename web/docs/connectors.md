@@ -12,8 +12,8 @@ Loaders and savers interact with their corresponding dual from a
 
 ![Connector](connectors/connector.excalidraw.svg)
 
-Connectors appear as an argument to the [`from`](operators/sources/from.md)
-and [`to`](operators/sinks/to.md) operators:
+Connectors appear as an argument to the [`from`](operators/from.md)
+and [`to`](operators/to.md) operators:
 
 ```
 from <connector> [read <format>]

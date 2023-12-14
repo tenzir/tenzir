@@ -1,3 +1,10 @@
+---
+sidebar_custom_props:
+  connector:
+    loader: true
+    saver: true
+---
+
 # amqp
 
 Sends and receives messages via AMQP.

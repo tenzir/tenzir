@@ -1,9 +1,16 @@
+---
+sidebar_custom_props:
+  format:
+    parser: true
+---
+
 # suricata
 
 Reads [Suricata][suricata]'s [EVE JSON][eve-json] output. The parser is an alias
 for [`json`](json.md) with the arguments:
+
 - `--selector=event_type:suricata`
-- `--ndjson"`
+- `--ndjson`
 
 All other options from [`json`](json.md) are also supported.
 
@@ -25,13 +32,11 @@ the event type.
 [eve-json]: https://suricata.readthedocs.io/en/latest/output/eve/eve-json-output.html
 
 Tenzir's [`json`](json.md) can handle EVE JSON correctly, but for the schema
-names to match the value from the `event_type` field, we need to pass the option
-`--selector=event_type:suricata`. The `suricata` parser does this by default.
+names to match the value from the `event_type` field, you need to pass the
+option `--selector=event_type:suricata`. The `suricata` parser does this by
+default.
 
-## Parser
-
-The `import suricata` command format consumes EVE JSON logs. The command
-demultiplexes the JSON stream according to the `event_type` field.
+## Examples
 
 Here's an `eve.log` sample:
 
@@ -46,8 +51,6 @@ Import the log as follows:
 ```bash
 tenzir 'read suricata | import' < eve.log
 ```
-
-### Read from a UNIX domain socket
 
 Instead of writing to a file, Suricata can also log to a UNIX domain socket that
 Tenzir can then read from. This saves a filesystem round-trip. This requires the

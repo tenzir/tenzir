@@ -12,7 +12,7 @@ heterogeneity with [extractors](#extractors).
 
 :::tip Where?
 Expressions occur in pipeline operators. The
-[`where`](operators/transformations/where.md) operator is the most prominent
+[`where`](operators/where.md) operator is the most prominent
 example.
 :::
 

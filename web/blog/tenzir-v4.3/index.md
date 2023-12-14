@@ -2,6 +2,7 @@
 title: Tenzir v4.3
 authors: [jachris, mavam]
 date: 2023-10-10
+last_updated: 2023-12-12
 tags: [release, operators, observability, fluent-bit, json, yaml, labels]
 ---
 
@@ -11,8 +12,8 @@ Bit][fluentbit] support with the `fluent-bit` [source][fluentbit-source] and
 *plus* what Tenzir already offers. What a treat!
 
 [fluentbit]: https://fluentbit.io/
-[fluentbit-source]: /next/operators/sources/fluent-bit
-[fluentbit-sink]: /next/operators/sinks/fluent-bit
+[fluentbit-source]: /next/operators/fluent-bit
+[fluentbit-sink]: /next/operators/fluent-bit
 
 ![Tenzir v4.3](tenzir-v4.3.excalidraw.svg)
 
@@ -31,9 +32,9 @@ Fluent Bit features [inputs][inputs] and [outputs][outputs] to get data in and
 out of the ecosystem. These are equivalent to Tenzir's
 [connectors](/connectors). Fluent Bit also has [parsers][parsers] that map to
 the equally named concept of Tenzir [parsers](/formats). Fluent Bit's
-[filters][filters] would be implemented as
-[transformations](/operators/transformations) in Tenzir, i.e., operators that
-have a non-void input and output. The diagram illustrates these relationships:
+[filters][filters] would be implemented as *transformations* in Tenzir, i.e.,
+operators that have a non-void input and output. The diagram illustrates these
+relationships:
 
 [inputs]: https://docs.fluentbit.io/manual/pipeline/inputs
 [outputs]: https://docs.fluentbit.io/manual/pipeline/outputs

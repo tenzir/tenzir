@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  format:
+    parser: true
+---
+
 # netflow
 
 Reads NetFlow v5, v9, and IPFIX.

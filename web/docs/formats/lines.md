@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  format:
+    parser: true
+---
+
 # lines
 
 Parses events as lines.

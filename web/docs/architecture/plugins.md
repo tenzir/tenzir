@@ -34,7 +34,7 @@ users can reference in a pipeline definition.
 ### Aggregation Function
 
 The aggregation function plugin adds a new [aggregation
-function](../operators/transformations/summarize.md#aggregate-functions)
+function](../operators/summarize.md#aggregate-functions)
 for the `summarize` pipeline operator that performs an incremental aggregation
 over a set of grouped input values of a single type.
 

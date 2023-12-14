@@ -144,8 +144,7 @@ public:
     bool real_time = false;
     bool cumulative = false;
     auto parser
-      = argument_parser{"measure", "https://docs.tenzir.com/next/operators/"
-                                   "transformations/measure"};
+      = argument_parser{"measure", "https://docs.tenzir.com/operators/measure"};
     parser.add("--real-time", real_time);
     parser.add("--cumulative", cumulative);
     parser.parse(p);

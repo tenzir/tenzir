@@ -2,6 +2,7 @@
 title: Contextualization Made Simple
 authors: [mavam]
 date: 2023-12-07
+last_updated: 2023-12-12
 tags: [context, enrich, node, pipelines, suricata, threat-intel, iocs]
 comments: true
 ---
@@ -165,7 +166,7 @@ The response looks as follows:
 Unfortunately the data is not yet in right shape yet. We need one IOC event per
 lookup table entry, but the above is one giant event with all IOCs in the nested
 `data` array. We can get to the desired shape with the
-[`yield`](/operators/transformations/yield) operator hoists the array elements
+[`yield`](/next/operators/yield) operator hoists the array elements
 into top-level events. Let's take a look at one of the events:
 
 ```
@@ -230,7 +231,7 @@ from file --follow /suricata/eve.json read suricata
 ```
 
 Now we hook into the DNS live feed for enrichment, keep only the matches, and
-forward them to a Slack channel via [`fluent-bit`](/operators/sinks/fluent-bit):
+forward them to a Slack channel via [`fluent-bit`](/next/operators/fluent-bit):
 
 ```
 export --live

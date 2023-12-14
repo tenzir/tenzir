@@ -1,3 +1,10 @@
+---
+sidebar_custom_props:
+  connector:
+    loader: true
+    saver: true
+---
+
 # tcp
 
 Loads bytes from a TCP or TLS connection.

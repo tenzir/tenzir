@@ -1,3 +1,10 @@
+---
+sidebar_custom_props:
+  format:
+    parser: true
+    printer: true
+---
+
 # pcap
 
 Reads and writes raw network packets in [PCAP][pcap-rfc] file format.
@@ -74,7 +81,7 @@ Read packets from the [network interface](../connectors/nic.md) `eth0`:
 from nic eth0 read pcap
 ```
 
-[Decapsulate](../operators/transformations/decapsulate.md) packets in a PCAP
+[Decapsulate](../operators/decapsulate.md) packets in a PCAP
 file:
 
 ```

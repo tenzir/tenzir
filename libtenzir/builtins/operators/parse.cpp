@@ -56,7 +56,7 @@ public:
       std::move(d)
         .modify()
         .usage("parse <input> <parser> <args>...")
-        .docs("https://docs.tenzir.com/next/operators/transformations/parse")
+        .docs("https://docs.tenzir.com/operators/parse")
         .throw_();
     }
     TENZIR_ASSERT_CHEAP(parser);

@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  format:
+    parser: true
+---
+
 # `grok`
 
 Parses a string using a `grok`-pattern, backed by regular expressions.

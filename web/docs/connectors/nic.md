@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  connector:
+    loader: true
+---
+
 # nic
 
 Reads bytes from a network interface card (NIC).

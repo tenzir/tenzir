@@ -6,7 +6,7 @@ sidebar_position: 3
 
 Importing (or *ingesting*) data can be done by [running a
 pipeline](run-a-pipeline/README.md) that ends with the
-[`import`](../operators/sinks/import.md) sink operator.
+[`import`](../operators/import.md) sink operator.
 
 Consider this example that takes a Zeek conn.log from our M57 dataset:
 
