@@ -52,20 +52,36 @@ export default function DocSidebarItemLink({
           style={{
             width: "100%",
             display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
           }}
         >
           {label}
-          <div
+          <span
             style={{
-              display: "flex",
+              flexGrow: 1
             }}
           >
-            {customProps?.operator?.source && <IconSource />}
-            {customProps?.operator?.transformation && <IconTransformation />}
-            {customProps?.operator?.sink && <IconSink />}
-          </div>
+          </span>
+          <span
+            style={{
+              visibility: customProps?.operator?.source ? "visible": "hidden"
+            }}
+          >
+            <IconSource />
+          </span>
+          <span
+            style={{
+              visibility: customProps?.operator?.transformation ? "visible": "hidden"
+            }}
+          >
+            <IconTransformation />
+          </span>
+          <span
+            style={{
+              visibility: customProps?.operator?.sink ? "visible": "hidden"
+            }}
+          >
+            <IconSink />
+          </span>
         </div>
         {!isInternalLink && <IconExternalLink />}
       </Link>
