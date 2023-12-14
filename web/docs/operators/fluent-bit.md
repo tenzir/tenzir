@@ -1,7 +1,8 @@
 ---
-operator:
-  source: true
-  sink: true
+sidebar_custom_props:
+  operator:
+    source: true
+    sink: true
 ---
 
 # fluent-bit

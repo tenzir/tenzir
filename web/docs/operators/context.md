@@ -1,7 +1,8 @@
 ---
-operator:
-  source: true
-  transformation: true
+sidebar_custom_props:
+  operator:
+    source: true
+    transformation: true
 ---
 
 # context

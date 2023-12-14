@@ -1,6 +1,7 @@
 ---
-operator:
-  transformation: true
+sidebar_custom_props:
+  operator:
+    transformation: true
 ---
 
 # apply

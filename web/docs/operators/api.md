@@ -1,6 +1,7 @@
 ---
-operator:
-  source: true
+sidebar_custom_props:
+  operator:
+    source: true
 ---
 
 # api
