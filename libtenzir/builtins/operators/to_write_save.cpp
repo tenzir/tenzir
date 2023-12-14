@@ -203,6 +203,7 @@ public:
       ctrl.abort(new_saver.error());
       co_return;
     }
+    co_yield {};
     for (auto&& x : input) {
       (*new_saver)(std::move(x));
       co_yield {};
