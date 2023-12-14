@@ -9,10 +9,6 @@ import styles from "./styles.module.css";
 import SVGSource from "./IconSource.svg";
 import SVGTransformation from "./IconTransformation.svg";
 import SVGSink from "./IconSink.svg";
-//import SVGLoader from "./IconLoader.svg";
-//import SVGSaver from "./IconSaver.svg";
-//import SVGParser from "./IconParser.svg";
-//import SVGPrinter from "./IconPrinter.svg";
 
 export default function DocSidebarItemLink({
   item,
@@ -69,10 +65,6 @@ export default function DocSidebarItemLink({
             {customProps?.operator?.source && <IconSource />}
             {customProps?.operator?.transformation && <IconTransformation />}
             {customProps?.operator?.sink && <IconSink />}
-            //{customProps?.connector?.loader && <IconLoader />}
-            //{customProps?.connector?.saver && <IconSaver />}
-            //{customProps?.format?.parser && <IconParser />}
-            //{customProps?.format?.printer && <IconPrinter />}
           </div>
         </div>
         {!isInternalLink && <IconExternalLink />}
@@ -85,7 +77,7 @@ const IconContainer = ({ children }) => (
   <div
     style={{
       height: 20,
-      //marginRight: -10,
+      marginRight: -5,
     }}
   >
     {children}
@@ -102,7 +94,3 @@ const withIconContainer = (Icon) => () =>
 const IconSource = withIconContainer(SVGSource);
 const IconTransformation = withIconContainer(SVGTransformation);
 const IconSink = withIconContainer(SVGSink);
-//const IconLoader = withIconContainer(SVGLoader);
-//const IconSaver = withIconContainer(SVGSaver);
-//const IconParser = withIconContainer(SVGParser);
-//const IconPrinter = withIconContainer(SVGPrinter);
