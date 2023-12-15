@@ -44,6 +44,18 @@ constexpr inline auto null = null_parser{};
 
 } // namespace parsers
 
+struct simple_data_parser : parser_base<simple_data_parser> {
+  using attribute = data;
+
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
+    static auto p = parsers::time | parsers::duration | parsers::net
+                    | parsers::ip | parsers::number | parsers::boolean
+                    | parsers::qqstr | parsers::null;
+    return p(f, l, a);
+  }
+};
+
 struct data_parser : parser_base<data_parser> {
   using attribute = data;
 
@@ -112,7 +124,8 @@ struct parser_registry<caf::none_t> {
 
 namespace parsers {
 
-static auto const data = data_parser{};
+constexpr inline auto simple_data = simple_data_parser{};
+constexpr inline auto data = data_parser{};
 
 } // namespace parsers
 } // namespace tenzir
