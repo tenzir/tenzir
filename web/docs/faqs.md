@@ -11,25 +11,26 @@ Tenzir is also the name of the Germany-based startup behind the product.
 ## What part of Tenzir is open and what part is closed source?
 
 The diagram below illustrates the high-level components, indicating what parts
-are open and what are closed source:
+are *open* and what are *closed* source:
 
 ![Open source vs. closed source](open-vs-closed-source.excalidraw.svg)
 
-The overwhelming majority of code is open source and available at under a
-permissive BSD 3-clause licence, available at
-[GitHub](https://github.com/tenzir/tenzir). This code implements the `tenzir`
-and `tenzir-node` [command line tools](command-line.md) that execute pipelines
-and store data. A flexible [plugin infrastructure](architecture/plugins.md)
-allows for enhancing the open-source core with closed-source plugins.
-
-We offer the [Community Edition](https://tenzir.com/pricing) as a binary package
-that consists of all open-source plugins, plus our own additional closed source
-plugins.
+The majority of code is open source and available at under a permissive BSD
+3-clause licence, available at [GitHub](https://github.com/tenzir/tenzir). This
+code implements the `tenzir` and `tenzir-node` [command line
+tools](command-line.md) that execute pipelines and store data. A flexible
+[plugin infrastructure](architecture/plugins.md) allows for enhancing the
+open-source core with closed-source plugins.
 
 The Tenzir stack also consists of a cloud platform and web app, accessible via
 [app.tenzir.com](https://app.tenzir.com). Both of these components are not
-openly available. The platform is the *control plane* that manages the nodes and
-pipelines, whereas the nodes are the *data plane* for compute and storage.
+openly available. The platform is the *control plane* that manages the fleet of
+nodes and their pipelines, whereas the nodes are the *data plane* for compute
+and storage.
+
+We offer the [Community Edition](https://tenzir.com/pricing) as a binary package
+that consists of all open-source plugins, plus our own additional closed source
+plugins, such as a plugin that connects the nodes to our platform.
 
 ## Can Tenzir see my data?
 
@@ -57,13 +58,12 @@ app and node.
 ## Does Tenzir run on-premise?
 
 Our current version of the platform runs in the public cloud (AWS in Europe),
-but we are already working on an on-premise version of the next generation
-platform.
+but we are working on an on-premise version of the next generation platform.
 
 ## Does Tenzir offer cloud-native nodes?
 
-Tenzir currently does *not* offer cloud-hosted nodes. You can only run nodes in
-your own environment.
+Tenzir currently does not offer cloud-hosted nodes. You can only run nodes in
+your own environment, including your cloud environment.
 
 However, we offer a cloud-native *demo* node that you can deploy as part of
 every account.
