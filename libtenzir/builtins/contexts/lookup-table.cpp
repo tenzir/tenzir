@@ -79,7 +79,7 @@ public:
     for (const auto& value : values(type, *slice_array)) {
       if (auto it = context_entries.find(value); it != context_entries.end()) {
         auto r = field_builder.record();
-        r.field("key", it->first);
+        r.field("address", it->first);
         r.field("context", it->second);
         r.field("timestamp", std::chrono::system_clock::now());
       } else {
