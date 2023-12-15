@@ -29,7 +29,7 @@ namespace tenzir::plugins::geoip {
 
 namespace {
 
-auto constexpr path_key = "db_path";
+auto constexpr path_key = "db-path";
 
 #if MMDB_UINT128_IS_BYTE_ARRAY
 auto cast_128_bit_unsigned_to_64_bit(uint8_t uint128[16]) -> uint64_t {
