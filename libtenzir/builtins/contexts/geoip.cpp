@@ -317,20 +317,21 @@ public:
       return field_builder.finish();
     }
     for (const auto& value : values(slice_type, *slice_array)) {
-      auto gai_error = 0;
+      auto address_info_error = 0;
       auto ip_string = fmt::to_string(value);
       if (slice_type == type{string_type{}}) {
         // Unquote IP strings.
         ip_string.erase(0, 1);
         ip_string.erase(ip_string.size() - 1);
       }
-      auto result
-        = MMDB_lookup_string(&mmdb, ip_string.data(), &gai_error, &status);
-      if (gai_error != MMDB_SUCCESS) {
+      auto result = MMDB_lookup_string(&mmdb, ip_string.data(),
+                                       &address_info_error, &status);
+      if (address_info_error != MMDB_SUCCESS) {
         return caf::make_error(
-          ec::lookup_error, fmt::format("error looking up IP address '{}' in "
-                                        "GeoIP database: {}",
-                                        ip_string, gai_strerror(gai_error)));
+          ec::lookup_error,
+          fmt::format("error looking up IP address '{}' in "
+                      "GeoIP database: {}",
+                      ip_string, gai_strerror(address_info_error)));
       }
       if (status != MMDB_SUCCESS) {
         return caf::make_error(
