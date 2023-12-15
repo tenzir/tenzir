@@ -60,6 +60,20 @@ A connector is either a *loader* that acquires bytes from a resource, or a
 
 - See all available [connectors](./connectors.md)
 
+## Context
+
+A stateful object used for in-band enrichment.
+
+Contexts live inside a node and you can manage them with the
+[`context`](./operators/context.md) operator. A context has pluggable type, such
+as a lookup table, GeoIP database, or a custom plugin. The
+[`enrich`](./operators/enrich.md) places a context into a pipeline for
+enrichment.
+
+- Read more about [contexts](./contexts.md)
+- [Manage](./operators/context.md) a context
+- [Enrich](./operators/enrich.md) with a context
+
 ## Format
 
 Translates between bytes and events.
@@ -78,6 +92,17 @@ Tenzir has *sparse* indexes. Sparse indexes live in memory and point to
 [partitions](#partition).
 
 - [Configure the catalog](./setup-guides/tune-performance/README.md#configure-the-catalog)
+
+## Loader
+
+A [connector](#connector) that acquires bytes.
+
+A loader is the dual to a [saver](#saver). It has a no input and only performs a
+side effect that acquires bytes. Use a loader in the
+[`from`](./operators/from.md) or [`load`](./operators/load.md) operators.
+
+- Learn more about [pipelines](./pipelines.md)
+- See [all connectors](./connectors.md)
 
 ## Node
 
@@ -105,6 +130,18 @@ An operator is a [source](#source), [transformation](#transformation), or
 [sink](#sink).
 
 - See all available [operators](./operators.md)
+
+## Parser
+
+A [format](#format) that translates bytes into events.
+
+A parser is the dual to a [printer](#printer). Use a parser in the
+[`from`](./operators/from.md) or [`read`](./operators/read.md) operators. You
+can use the [`parse`](./operators/parse.md) operator to parse a single field
+with a parser.
+
+- Learn more about [pipelines](./pipelines.md)
+- See [all formats](./formats.md)
 
 ## Partition
 
@@ -134,6 +171,27 @@ Combines a set of [operators](#operator) into a dataflow graph.
 Control plane for nodes and pipelines, accessible through [app](#app) at
 [app.tenzir.com](https://app.tenzir.com).
 
+## Printer
+
+A [format](#format) that translates events into bytes.
+
+A printer is the dual to a [parser](#parser). Use a parser in the
+[`to`](./operators/to.md) or [`write`](./operators/write.md) operators.
+
+- Learn more about [pipelines](./pipelines.md)
+- See [all formats](./formats.md)
+
+## Saver
+
+A [connector](#connector) that emits bytes.
+
+A saver is the dual to a [loader](#loader). It has a no output and only performs
+a side effect that emits bytes. Use a saver in the [`to`](./operators/to.md) or
+[`save`](./operators/save.md) operators.
+
+- Learn more about [pipelines](./pipelines.md)
+- See [all connectors](./connectors.md)
+
 ## Schema
 
 A named record type describing the top-level structure of a data frame.
@@ -146,9 +204,13 @@ A named record type describing the top-level structure of a data frame.
 
 An [operator](#operator) consuming input, without producing any output.
 
+- Learn more about [pipelines](./pipelines.md)
+
 ## Source
 
 An [operator](#operator) producing output, without consuming any input.
+
+- Learn more about [pipelines](./pipelines.md)
 
 ## TQL
 
@@ -157,7 +219,11 @@ An acronym for *Tenzir Query Language*.
 TQL is the language in which users write [pipelines](#pipeline).
 
 - Learn more about the [language](./language.md)
+- Understand the [syntax](./language/syntax.md)
 
 ## Transformation
 
 An [operator](#operator) consuming both input and producing output.
+
+- Learn more about [pipelines](./pipelines.md)
+
