@@ -61,7 +61,7 @@ constexpr size_t reserved_string_size(std::string_view str) {
   // table. It adds an extra byte because strings in FlatBuffers tables are
   // always zero-terminated, and then rounds up to a full four bytes because of
   // the included padding.
-  return str.empty() ? 0 : (((str.size() + 1 + 3) / 4) * 4);
+  return ((str.size() + 1 + 3) / 4) * 4;
 }
 
 const fbs::Type*
@@ -192,7 +192,6 @@ void construct_record_type(stateful_type_base& self, const T& begin,
     for (auto it = begin; it != end; ++it) {
       const auto& type_bytes = as_bytes(it->type);
       size += 24;
-      TENZIR_ASSERT(!it->name.empty(), "Record field names must not be empty.");
       size += reserved_string_size(it->name);
       size += type_bytes.size();
     }
