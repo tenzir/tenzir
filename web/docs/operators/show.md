@@ -6,7 +6,7 @@ sidebar_custom_props:
 
 # show
 
-Returns information about the Tenzir node:
+Returns information about a Tenzir node.
 
 ## Synopsis
 
