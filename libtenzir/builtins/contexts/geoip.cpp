@@ -6,41 +6,24 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/error.hpp"
-#include "tenzir/view.hpp"
-
 #include <tenzir/arrow_table_slice.hpp>
-#include <tenzir/concept/parseable/numeric/bool.hpp>
 #include <tenzir/data.hpp>
-#include <tenzir/detail/range_map.hpp>
+#include <tenzir/error.hpp>
 #include <tenzir/fbs/data.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/project.hpp>
 #include <tenzir/series_builder.hpp>
-#include <tenzir/table_slice.hpp>
-#include <tenzir/table_slice_builder.hpp>
 #include <tenzir/type.hpp>
-#include <tenzir/typed_array.hpp>
+#include <tenzir/view.hpp>
 
-#include <arrow/array.h>
-#include <arrow/array/array_base.h>
-#include <arrow/array/builder_primitive.h>
-#include <arrow/type.h>
-#include <boost/config/detail/suffix.hpp>
-#include <caf/callback.hpp>
-#include <caf/config_value.hpp>
-#include <caf/sum_type.hpp>
 #include <fmt/format.h>
-#include <tsl/robin_map.h>
 
 #include <chrono>
 #include <cstdint>
 #include <maxminddb.h>
 #include <memory>
 #include <string>
-#include <string_view>
 
 namespace tenzir::plugins::geoip {
 
