@@ -66,8 +66,8 @@ public:
   }
 
   ~ctx() override {
-    if (mmdb) {
-      MMDB_close(&*mmdb);
+    if (mmdb_) {
+      MMDB_close(&*mmdb_);
     }
   }
 
@@ -317,7 +317,7 @@ public:
         ip_string.erase(0, 1);
         ip_string.erase(ip_string.size() - 1);
       }
-      auto result = MMDB_lookup_string(&*mmdb, ip_string.data(),
+      auto result = MMDB_lookup_string(&*mmdb_, ip_string.data(),
                                        &address_info_error, &status);
       if (address_info_error != MMDB_SUCCESS) {
         return caf::make_error(
@@ -389,12 +389,12 @@ public:
     if (parameters.contains(path_key) and parameters.at(path_key)) {
       db_path_ = *parameters[path_key];
     }
-    if (mmdb) {
-      MMDB_close(&*mmdb);
+    if (mmdb_) {
+      MMDB_close(&*mmdb_);
     } else {
-      mmdb = MMDB_s{};
+      mmdb_ = MMDB_s{};
     }
-    auto status = MMDB_open(db_path_.c_str(), MMDB_MODE_MMAP, &*mmdb);
+    auto status = MMDB_open(db_path_.c_str(), MMDB_MODE_MMAP, &*mmdb_);
     if (status != MMDB_SUCCESS) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("error opening IP database at path "
@@ -426,8 +426,8 @@ public:
 
 private:
   std::string db_path_;
-  record r;
-  std::optional<MMDB_s> mmdb;
+  record r_;
+  std::optional<MMDB_s> mmdb_;
 };
 
 class plugin : public virtual context_plugin {
