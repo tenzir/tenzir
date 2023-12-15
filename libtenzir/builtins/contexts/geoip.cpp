@@ -356,7 +356,7 @@ public:
                                           ip_string, MMDB_strerror(status)));
         }
         auto r = field_builder.record();
-        r.field("key", value);
+        r.field("address", value);
         r.field("context", output);
         r.field("timestamp", std::chrono::system_clock::now());
       } else {
