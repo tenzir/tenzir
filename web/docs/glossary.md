@@ -88,8 +88,8 @@ listens on TCP port 5158.
 
 - [Deploy a node](./setup-guides/deploy-a-node/README.md)
 - Use the [REST API](./rest-api.md) to manage a node
-- [Import into a node](./user-guides/import-into-a-node.md)
-- [Export from a node](./user-guides/export-from-a-node.md)
+- [Import into a node](./user-guides/import-into-a-node/README.md)
+- [Export from a node](./user-guides/export-from-a-node/README.md)
 
 ## Metrics
 
