@@ -65,6 +65,12 @@ public:
     update(std::move(parameters));
   }
 
+  ~ctx() override {
+    if (mmdb) {
+      MMDB_close(&*mmdb);
+    }
+  }
+
   auto entry_data_list_to_list(MMDB_entry_data_list_s* entry_data_list,
                                int* status, list& l) const
     -> MMDB_entry_data_list_s* {
@@ -268,21 +274,8 @@ public:
   /// Emits context information for every event in `slice` in order.
   auto apply(table_slice slice, context::parameter_map parameters) const
     -> caf::expected<std::vector<typed_array>> override {
-    auto mmdb = MMDB_s{};
-    auto status = MMDB_open(db_path_.c_str(), MMDB_MODE_MMAP, &mmdb);
-    if (status != MMDB_SUCCESS) {
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("error opening IP database at path "
-                                         "'{}': {}",
-                                         db_path_, MMDB_strerror(status)));
-    }
+    auto status = 0;
     MMDB_entry_data_list_s* entry_data_list = nullptr;
-    auto close_mmdb = caf::detail::make_scope_guard([&] {
-      if (entry_data_list) {
-        MMDB_free_entry_data_list(entry_data_list);
-      }
-      MMDB_close(&mmdb);
-    });
     auto resolved_slice = resolve_enumerations(slice);
     auto field_name = std::optional<std::string>{};
     for (const auto& [key, value] : parameters) {
@@ -324,7 +317,7 @@ public:
         ip_string.erase(0, 1);
         ip_string.erase(ip_string.size() - 1);
       }
-      auto result = MMDB_lookup_string(&mmdb, ip_string.data(),
+      auto result = MMDB_lookup_string(&*mmdb, ip_string.data(),
                                        &address_info_error, &status);
       if (address_info_error != MMDB_SUCCESS) {
         return caf::make_error(
@@ -341,6 +334,11 @@ public:
       }
       if (result.found_entry) {
         status = MMDB_get_entry_data_list(&result.entry, &entry_data_list);
+        auto free_entry_data_list = caf::detail::make_scope_guard([&] {
+          if (entry_data_list) {
+            MMDB_free_entry_data_list(entry_data_list);
+          }
+        });
         if (status != MMDB_SUCCESS) {
           return caf::make_error(
             ec::lookup_error, fmt::format("error looking up IP address '{}' in "
@@ -391,6 +389,18 @@ public:
     if (parameters.contains(path_key) and parameters.at(path_key)) {
       db_path_ = *parameters[path_key];
     }
+    if (mmdb) {
+      MMDB_close(&*mmdb);
+    } else {
+      mmdb = MMDB_s{};
+    }
+    auto status = MMDB_open(db_path_.c_str(), MMDB_MODE_MMAP, &*mmdb);
+    if (status != MMDB_SUCCESS) {
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("error opening IP database at path "
+                                         "'{}': {}",
+                                         db_path_, MMDB_strerror(status)));
+    }
     return show();
   }
 
@@ -417,6 +427,7 @@ public:
 private:
   std::string db_path_;
   record r;
+  std::optional<MMDB_s> mmdb;
 };
 
 class plugin : public virtual context_plugin {
