@@ -38,15 +38,22 @@ dependent: on the command line we read JSON from stdin and write it stdout. In
 the app we only auto-complete a missing sink with
 [`serve`](operators/serve.md) to display the result in the browser.
 
-Zooming out in the above type table makes the operator types apparent:
+Because pipelines can transport the two types *bytes* and *events*, we can
+cleanly model the data lifecycle as separate stages:
 
-![Operator Types](operator-types.excalidraw.svg)
+![Structuring](unstructured-to-structured.excalidraw.svg)
 
-In fact, we can define the operator type as a function of its input and output types:
-
-```
-(Input x Output) → {Source, Sink, Transformation}
-```
+Data acquisition typically begins with a source operator that uses a
+[loader](connectors.md), such as [`load`](operators/load.md), to acquire bytes
+as a side effect. Then an operator, such as [`read`](operators/read.md),
+transforms bytes into events with the help of a [parser](formats.md). This
+effectively turns unstructured data into structured data. There exist numerous
+[operators](operators.md) that bring structured data into the desired form for a
+specific use case—a process we call *shaping*. After shaping yielded the desired
+form, the data leaves the pipeline in reverse order. A [printer](formats.md)
+creates bytes from events, e.g., using [`write`](operators/write.md). Finally, a
+sink operator, such as [`save`](operators/save.md), uses a
+[saver](connectors.md) to write the rendered bytes into a specific location.
 
 ## Multi-Schema Dataflows
 
