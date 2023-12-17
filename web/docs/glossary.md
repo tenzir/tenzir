@@ -236,4 +236,3 @@ TQL is the language in which users write [pipelines](#pipeline).
 An [operator](#operator) consuming both input and producing output.
 
 - Learn more about [pipelines](./pipelines.md)
-
