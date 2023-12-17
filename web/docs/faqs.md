@@ -182,22 +182,31 @@ engineering bandwidth. Please [talk to us](/discord) to let us know what is
 missing and consider contributing support for additional platforms to our [open
 source project](https://github.com/tenzir/tenzir).
 
-## Do you have an integration for tool *Y*?
+## Do you have an integration for *X*?
 
-A tool integration in the Tenzir ecosystem can forms:
+Our [integrations page](integrations.md) includes descriptions of use cases
+with third-party products and tools. If *X* is not in that list, it does not
+mean that *X* is not supported. The steps below help you understand whether
+there exists an integration:
 
-1. **Existing Connector**: We may already support the tool directly with our an
-   existing connectors, e.g., via [`http`](connectors/http.md) if it's a matter
-   of performing an API call.
-2. **Indirect Integration**: There may already exist an integration
-   via the Fluent Bit [source](operators/fluent-bit.md) and
-   [sink](operators/fluent-bit.md).
-3. **Wrapped Application**: It is always possible to integrate a command line
+1. Check the available [formats](formats.md). Sometimes an integration is just a
+   lower-level building block, such as the [Syslog parser](formats/syslog.md).
+2. Check the available [connectors](connectors.md). An integration can also be
+   generic communication primitive, such as the [AMQP](connectors/amqp.md) that
+   acts as client to speak with a RabbitMQ server, or the
+   [HTTP](connectors/http.md) connector to perform an API call.
+3. Check Fluent Bit [inputs][fluentbit-inputs] and [outputs][fluentbit-outputs].
+   Our [`fluent-bit`](operators/fluent-bit.md) operator makes it possible to use
+   the entire ecosystem of Fluent Bit integrations.
+4. Call a command-line tool. It is always possible to integrate a command line
    tool using the [`shell`](operators/shell.md), by hooking
    standard input and output of a forked child as a byte stream into a
    pipeline.
 
-Please [open a GitHub
-Discussion](https://github.com/orgs/tenzir/discussions/new/choose) or swing by
-our [Discord server](/discord) if you have questions about a specific
-integration.
+Please do not hesitate to reach out to us if you think something ism issing, by
+[opening a GitHub
+Discussion](https://github.com/orgs/tenzir/discussions/new/choose) or swinging
+by our [Discord server](/discord).
+
+[fluentbit-inputs]: https://docs.fluentbit.io/manual/pipeline/inputs/
+[fluentbit-outputs]: https://docs.fluentbit.io/manual/pipeline/outputs/
