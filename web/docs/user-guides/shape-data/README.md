@@ -2,7 +2,7 @@
 sidebar_position: 1
 ---
 
-# Reshape data
+# Shape data
 
 Tenzir comes with numerous transformation [operators](../../operators.md) that
 do change the the shape of their input and produce a new output. Here is a
