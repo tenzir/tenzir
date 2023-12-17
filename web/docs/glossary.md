@@ -93,6 +93,16 @@ Tenzir has *sparse* indexes. Sparse indexes live in memory and point to
 
 - [Configure the catalog](./setup-guides/tune-performance/README.md#configure-the-catalog)
 
+## Integration
+
+A set of pipelines to integrate with a third-party product.
+
+An integration describes use cases in combination with a specific product or
+tool. Based on the depth of the configuration, this may require configuration on
+either end.
+
+- [List of all integrations](integrations.md)
+
 ## Loader
 
 A [connector](#connector) that acquires bytes.
