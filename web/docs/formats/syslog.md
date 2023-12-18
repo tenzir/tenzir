@@ -65,8 +65,7 @@ With this input, the parser will produce the following output, with the schema n
   "hostname": "mymachine",
   "app_name": "PROGRAM",
   "process_id": null,
-  "content": "Freeform message",
-  "message": "PROGRAM: Freeform message"
+  "content": "Freeform message"
 }
 ```
 

@@ -265,7 +265,6 @@ struct legacy_message {
   std::optional<std::string> app_name;
   std::optional<std::string> process_id;
   std::string content;
-  std::string message;
 };
 
 // Timestamp as specified by RFC3164:
@@ -374,11 +373,12 @@ struct legacy_message_parser : parser_base<legacy_message_parser> {
                    >> timestamp_parser >> wsignore               // timestamp
                    >> host_parser >> wsignore                    // host
                    >> message_parser;                            // message
+    std::string message;
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       if (not p(f, l, unused))
         return false;
     } else {
-      if (not p(f, l, x.timestamp, x.host, x.message))
+      if (not p(f, l, x.timestamp, x.host, message))
         return false;
     }
     // Parse MESSAGE into its constituent parts,
@@ -389,8 +389,8 @@ struct legacy_message_parser : parser_base<legacy_message_parser> {
         = (ignore('['_p) >> +parsers::alnum >> ignore(']'_p));
       const auto tag_parser = -app_name_parser >> -process_id_parser
                               >> ignore(':'_p) >> ignore(*parsers::space);
-      auto msg_f = x.message.begin();
-      const auto msg_l = x.message.end();
+      auto msg_f = message.begin();
+      const auto msg_l = message.end();
       std::tuple<std::optional<std::string>, std::optional<std::string>> attr{};
       if (tag_parser(msg_f, msg_l, attr))
         std::tie(x.app_name, x.process_id) = std::move(attr);
@@ -430,8 +430,7 @@ inline type make_legacy_syslog_type() {
                                              {"hostname", string_type{}},
                                              {"app_name", string_type{}},
                                              {"process_id", string_type{}},
-                                             {"content", string_type{}},
-                                             {"message", string_type{}}}}};
+                                             {"content", string_type{}}}}};
 }
 
 inline type make_unknown_type() {

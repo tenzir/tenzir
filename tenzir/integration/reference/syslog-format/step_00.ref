@@ -60,8 +60,7 @@
   "hostname": "mymachineexamplecom",
   "app_name": null,
   "process_id": null,
-  "content": "evntslog - ID47 [exampleSDID@32473 iut=\"5\" eventSource=\"Applic\\\\ation\" eventID=\"1011\"][examplePriority@32473 class=\"high\"]",
-  "message": "evntslog - ID47 [exampleSDID@32473 iut=\"5\" eventSource=\"Applic\\\\ation\" eventID=\"1011\"][examplePriority@32473 class=\"high\"]"
+  "content": "evntslog - ID47 [exampleSDID@32473 iut=\"5\" eventSource=\"Applic\\\\ation\" eventID=\"1011\"][examplePriority@32473 class=\"high\"]"
 }
 {
   "facility": 5,

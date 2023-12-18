@@ -5,8 +5,7 @@
   "hostname": "localhost",
   "app_name": "iTerm2",
   "process_id": "91860",
-  "content": "(CoreFoundation) [com.apple.defaults:User Defaults] found no value for key AllowClipboardAccess in CFPrefsSearchListSource<0x60000304b0f0> (Domain: com.googlecode.iterm2, Container: (null))",
-  "message": "iTerm2[91860]: (CoreFoundation) [com.apple.defaults:User Defaults] found no value for key AllowClipboardAccess in CFPrefsSearchListSource<0x60000304b0f0> (Domain: com.googlecode.iterm2, Container: (null))"
+  "content": "(CoreFoundation) [com.apple.defaults:User Defaults] found no value for key AllowClipboardAccess in CFPrefsSearchListSource<0x60000304b0f0> (Domain: com.googlecode.iterm2, Container: (null))"
 }
 {
   "facility": null,
@@ -15,8 +14,7 @@
   "hostname": "localhost",
   "app_name": "pidinfo",
   "process_id": "91955",
-  "content": "<pidinfo`-[pidinfo reallyGetProcessInfoForProcessID:flavor:arg:size:reqid:withReply:]> proc_pidinfo flavor=9 pid=98009 arg=0 size=2352 returned 0 with errno 1",
-  "message": "pidinfo[91955]: <pidinfo`-[pidinfo reallyGetProcessInfoForProcessID:flavor:arg:size:reqid:withReply:]> proc_pidinfo flavor=9 pid=98009 arg=0 size=2352 returned 0 with errno 1"
+  "content": "<pidinfo`-[pidinfo reallyGetProcessInfoForProcessID:flavor:arg:size:reqid:withReply:]> proc_pidinfo flavor=9 pid=98009 arg=0 size=2352 returned 0 with errno 1"
 }
 {
   "facility": null,
@@ -25,8 +23,7 @@
   "hostname": "localhost",
   "app_name": "kernel",
   "process_id": "0",
-  "content": "(Sandbox) Sandbox: Slack Helper (GPU)(51866) deny(1) mach-lookup com.apple.audio.audiohald",
-  "message": "kernel[0]: (Sandbox) Sandbox: Slack Helper (GPU)(51866) deny(1) mach-lookup com.apple.audio.audiohald"
+  "content": "(Sandbox) Sandbox: Slack Helper (GPU)(51866) deny(1) mach-lookup com.apple.audio.audiohald"
 }
 {
   "facility": null,
@@ -35,8 +32,7 @@
   "hostname": "localhost",
   "app_name": "log",
   "process_id": "8908",
-  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x600000200000] activating connection: mach=true listener=false peer=false name=com.apple.coresymbolicationd",
-  "message": "log[8908]: (libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x600000200000] activating connection: mach=true listener=false peer=false name=com.apple.coresymbolicationd"
+  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x600000200000] activating connection: mach=true listener=false peer=false name=com.apple.coresymbolicationd"
 }
 {
   "facility": null,
@@ -45,8 +41,7 @@
   "hostname": "localhost",
   "app_name": "coresymbolicationd",
   "process_id": "1258",
-  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x122404660] activating connection: mach=false listener=false peer=true name=com.apple.coresymbolicationd.peer.0x122404660",
-  "message": "coresymbolicationd[1258]: (libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x122404660] activating connection: mach=false listener=false peer=true name=com.apple.coresymbolicationd.peer.0x122404660"
+  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x122404660] activating connection: mach=false listener=false peer=true name=com.apple.coresymbolicationd.peer.0x122404660"
 }
 {
   "facility": null,
@@ -55,8 +50,7 @@
   "hostname": "localhost",
   "app_name": "log",
   "process_id": "8908",
-  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x6000002100f0] activating connection: mach=true listener=false peer=false name=com.apple.cfprefsd.daemon",
-  "message": "log[8908]: (libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x6000002100f0] activating connection: mach=true listener=false peer=false name=com.apple.cfprefsd.daemon"
+  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x6000002100f0] activating connection: mach=true listener=false peer=false name=com.apple.cfprefsd.daemon"
 }
 {
   "facility": null,
@@ -65,8 +59,7 @@
   "hostname": "localhost",
   "app_name": "log",
   "process_id": "8908",
-  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x6000002101e0] activating connection: mach=true listener=false peer=false name=com.apple.cfprefsd.agent",
-  "message": "log[8908]: (libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x6000002101e0] activating connection: mach=true listener=false peer=false name=com.apple.cfprefsd.agent"
+  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x6000002101e0] activating connection: mach=true listener=false peer=false name=com.apple.cfprefsd.agent"
 }
 {
   "facility": null,
@@ -75,8 +68,7 @@
   "hostname": "localhost",
   "app_name": "cfprefsd",
   "process_id": "943",
-  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x14a824c70] activating connection: mach=false listener=false peer=true name=com.apple.cfprefsd.agent.peer.0x14a824c70",
-  "message": "cfprefsd[943]: (libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x14a824c70] activating connection: mach=false listener=false peer=true name=com.apple.cfprefsd.agent.peer.0x14a824c70"
+  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x14a824c70] activating connection: mach=false listener=false peer=true name=com.apple.cfprefsd.agent.peer.0x14a824c70"
 }
 {
   "facility": null,
@@ -85,8 +77,7 @@
   "hostname": "localhost",
   "app_name": "cfprefsd",
   "process_id": "603",
-  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x13c50f0e0] activating connection: mach=false listener=false peer=true name=com.apple.cfprefsd.daemon.peer.0x13c50f0e0",
-  "message": "cfprefsd[603]: (libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x13c50f0e0] activating connection: mach=false listener=false peer=true name=com.apple.cfprefsd.daemon.peer.0x13c50f0e0"
+  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x13c50f0e0] activating connection: mach=false listener=false peer=true name=com.apple.cfprefsd.daemon.peer.0x13c50f0e0"
 }
 {
   "facility": null,
@@ -95,8 +86,7 @@
   "hostname": "localhost",
   "app_name": "log",
   "process_id": "8908",
-  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x6000002000f0] activating connection: mach=true listener=false peer=false name=com.apple.distributed_notifications@Uv3",
-  "message": "log[8908]: (libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x6000002000f0] activating connection: mach=true listener=false peer=false name=com.apple.distributed_notifications@Uv3"
+  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x6000002000f0] activating connection: mach=true listener=false peer=false name=com.apple.distributed_notifications@Uv3"
 }
 {
   "facility": null,
@@ -105,8 +95,7 @@
   "hostname": "localhost",
   "app_name": "distnoted",
   "process_id": "928",
-  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x123667d90] activating connection: mach=false listener=false peer=true name=com.apple.distributed_notifications@Uv3.peer.0x123667d90",
-  "message": "distnoted[928]: (libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x123667d90] activating connection: mach=false listener=false peer=true name=com.apple.distributed_notifications@Uv3.peer.0x123667d90"
+  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x123667d90] activating connection: mach=false listener=false peer=true name=com.apple.distributed_notifications@Uv3.peer.0x123667d90"
 }
 {
   "facility": null,
@@ -115,8 +104,7 @@
   "hostname": "localhost",
   "app_name": "distnoted",
   "process_id": "928",
-  "content": "<distnoted> [com.apple.distnoted:diagnostic] register name: com.apple.LaunchServices.ShowAllExtensionsChangedToTrue object: kCFNotificationAnyObject token: 100000000 pid: 8908",
-  "message": "distnoted[928]: <distnoted> [com.apple.distnoted:diagnostic] register name: com.apple.LaunchServices.ShowAllExtensionsChangedToTrue object: kCFNotificationAnyObject token: 100000000 pid: 8908"
+  "content": "<distnoted> [com.apple.distnoted:diagnostic] register name: com.apple.LaunchServices.ShowAllExtensionsChangedToTrue object: kCFNotificationAnyObject token: 100000000 pid: 8908"
 }
 {
   "facility": null,
@@ -125,8 +113,7 @@
   "hostname": "localhost",
   "app_name": "distnoted",
   "process_id": "928",
-  "content": "<distnoted> [com.apple.distnoted:diagnostic] register name: com.apple.LaunchServices.ShowAllExtensionsChangedToFalse object: kCFNotificationAnyObject token: 200000001 pid: 8908",
-  "message": "distnoted[928]: <distnoted> [com.apple.distnoted:diagnostic] register name: com.apple.LaunchServices.ShowAllExtensionsChangedToFalse object: kCFNotificationAnyObject token: 200000001 pid: 8908"
+  "content": "<distnoted> [com.apple.distnoted:diagnostic] register name: com.apple.LaunchServices.ShowAllExtensionsChangedToFalse object: kCFNotificationAnyObject token: 200000001 pid: 8908"
 }
 {
   "facility": null,
@@ -135,8 +122,7 @@
   "hostname": "localhost",
   "app_name": "log",
   "process_id": "8908",
-  "content": "(Metadata) <Metadata`_MDQueryCopyParams> [com.apple.metadata:Metadata] Starting query at qos 0x11",
-  "message": "log[8908]: (Metadata) <Metadata`_MDQueryCopyParams> [com.apple.metadata:Metadata] Starting query at qos 0x11"
+  "content": "(Metadata) <Metadata`_MDQueryCopyParams> [com.apple.metadata:Metadata] Starting query at qos 0x11"
 }
 {
   "facility": null,
@@ -145,8 +131,7 @@
   "hostname": "localhost",
   "app_name": "log",
   "process_id": "8908",
-  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x6000002102d0] activating connection: mach=true listener=false peer=false name=com.apple.metadata.mds",
-  "message": "log[8908]: (libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x6000002102d0] activating connection: mach=true listener=false peer=false name=com.apple.metadata.mds"
+  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x6000002102d0] activating connection: mach=true listener=false peer=false name=com.apple.metadata.mds"
 }
 {
   "facility": null,
@@ -155,8 +140,7 @@
   "hostname": "localhost",
   "app_name": "log",
   "process_id": "8908",
-  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x14f704e70] activating connection: mach=false listener=true peer=false name=(anonymous)",
-  "message": "log[8908]: (libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x14f704e70] activating connection: mach=false listener=true peer=false name=(anonymous)"
+  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x14f704e70] activating connection: mach=false listener=true peer=false name=(anonymous)"
 }
 {
   "facility": null,
@@ -165,8 +149,7 @@
   "hostname": "localhost",
   "app_name": "mds",
   "process_id": "564",
-  "content": "<mds> [com.apple.spotlightserver:Server] KEEP!!!!! Client <private>[8908 8908] xpc checking in",
-  "message": "mds[564]: <mds> [com.apple.spotlightserver:Server] KEEP!!!!! Client <private>[8908 8908] xpc checking in"
+  "content": "<mds> [com.apple.spotlightserver:Server] KEEP!!!!! Client <private>[8908 8908] xpc checking in"
 }
 {
   "facility": null,
@@ -175,8 +158,7 @@
   "hostname": "localhost",
   "app_name": "mds",
   "process_id": "564",
-  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x13ff7a670] activating connection: mach=false listener=false peer=true name=com.apple.metadata.mds.peer.0x13ff7a670",
-  "message": "mds[564]: (libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x13ff7a670] activating connection: mach=false listener=false peer=true name=com.apple.metadata.mds.peer.0x13ff7a670"
+  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x13ff7a670] activating connection: mach=false listener=false peer=true name=com.apple.metadata.mds.peer.0x13ff7a670"
 }
 {
   "facility": null,
@@ -185,8 +167,7 @@
   "hostname": "localhost",
   "app_name": "mds",
   "process_id": "564",
-  "content": "(TCC) Created Activity ID: 0x143f7a3, Description: TCCAccessRequest() IPC",
-  "message": "mds[564]: (TCC) Created Activity ID: 0x143f7a3, Description: TCCAccessRequest() IPC"
+  "content": "(TCC) Created Activity ID: 0x143f7a3, Description: TCCAccessRequest() IPC"
 }
 {
   "facility": null,
@@ -195,8 +176,7 @@
   "hostname": "localhost",
   "app_name": "mds",
   "process_id": "564",
-  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x14b9dc870] activating connection: mach=true listener=false peer=false name=com.apple.tccd",
-  "message": "mds[564]: (libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x14b9dc870] activating connection: mach=true listener=false peer=false name=com.apple.tccd"
+  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x14b9dc870] activating connection: mach=true listener=false peer=false name=com.apple.tccd"
 }
 {
   "facility": null,
@@ -205,8 +185,7 @@
   "hostname": "localhost",
   "app_name": "mds",
   "process_id": "564",
-  "content": "(TCC) <TCC`tccd_send_message> [com.apple.TCC:access] SEND: 0/7 synchronous to com.apple.tccd: request: msgID=564.3715, function=TCCAccessRequest, service=kTCCServiceAddressBook, target_token={pid:8908, auid:501, euid:501},",
-  "message": "mds[564]: (TCC) <TCC`tccd_send_message> [com.apple.TCC:access] SEND: 0/7 synchronous to com.apple.tccd: request: msgID=564.3715, function=TCCAccessRequest, service=kTCCServiceAddressBook, target_token={pid:8908, auid:501, euid:501},"
+  "content": "(TCC) <TCC`tccd_send_message> [com.apple.TCC:access] SEND: 0/7 synchronous to com.apple.tccd: request: msgID=564.3715, function=TCCAccessRequest, service=kTCCServiceAddressBook, target_token={pid:8908, auid:501, euid:501},"
 }
 {
   "facility": null,
@@ -215,6 +194,5 @@
   "hostname": "localhost",
   "app_name": "tccd",
   "process_id": "1049",
-  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x12ff75940] activating connection: mach=false listener=false peer=true name=com.apple.tccd.peer.0x12ff75940",
-  "message": "tccd[1049]: (libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x12ff75940] activating connection: mach=false listener=false peer=true name=com.apple.tccd.peer.0x12ff75940"
+  "content": "(libxpc.dylib) <libxpc.dylib`_xpc_connection_activate_if_needed> [com.apple.xpc:connection] [0x12ff75940] activating connection: mach=false listener=false peer=true name=com.apple.tccd.peer.0x12ff75940"
 }

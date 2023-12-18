@@ -1225,10 +1225,6 @@ tests:
         input: data/syslog/cef-over-syslog.log
       - command: exec 'read syslog | parse content cef'
         input: data/syslog/cef-over-syslog.log
-      - command: exec 'read syslog'
-        input: data/syslog/cef-over-syslog-without-tags.log
-      - command: exec 'read syslog | parse message cef'
-        input: data/syslog/cef-over-syslog-without-tags.log
 
   Parse with Grok:
     tags: [pipelines]
