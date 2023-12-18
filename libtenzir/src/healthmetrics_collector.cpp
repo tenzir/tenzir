@@ -29,7 +29,12 @@ auto healthmetrics_collector(
   for (auto const* plugin : plugins::get<health_metrics_plugin>()) {
     auto name = plugin->metric_name();
     auto collector = plugin->make_collector();
-    self->state.collectors[name] = collector;
+    if (!collector) {
+      TENZIR_VERBOSE("not activating collector {}: {}", name,
+                     collector.error());
+      continue;
+    }
+    self->state.collectors[name] = *collector;
   }
   TENZIR_VERBOSE("starting health collector measurement loop with interval {}",
                  self->state.collection_interval);
@@ -47,14 +52,13 @@ auto healthmetrics_collector(
             auto r = b.record();
             r.field("timestamp", now);
             for (auto& [name, check] : self->state.collectors) {
-              TENZIR_INFO("running periodic metrics collection {}", name);
+              TENZIR_TRACE("running periodic metrics collection {}", name);
               auto result = check();
               if (!result)
                 continue;
               r.field(name, *result);
             }
             auto slice = b.finish_assert_one_slice();
-            TENZIR_INFO("finishing slice {} with {} rows", slice, slice.rows());
             self->state.importer->enqueue(std::move(slice));
           }
         });

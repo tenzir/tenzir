@@ -44,7 +44,7 @@ public:
     return "disk";
   }
 
-  auto make_collector() const -> collector override {
+  auto make_collector() const -> caf::expected<collector> override {
     return [dbdir = dbdir_]() {
       return get_diskspace_info(dbdir);
     };

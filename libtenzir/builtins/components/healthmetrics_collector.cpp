@@ -19,7 +19,7 @@ namespace tenzir::plugins::health_collector {
 
 namespace defaults {
 
-inline constexpr auto collection_interval = std::chrono::seconds{30};
+inline constexpr auto collection_interval = std::chrono::seconds{60};
 
 } // namespace defaults
 

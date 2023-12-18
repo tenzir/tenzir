@@ -11,14 +11,17 @@
 
 #include <caf/typed_event_based_actor.hpp>
 
-#include <filesystem>
+#include <cstdlib>
 
 namespace tenzir::plugins::health_cpu {
 
 namespace {
 
 auto get_cpuinfo() -> caf::expected<record> {
-  auto loadavg = std::array<double, 3>{};
+  auto loadavg = std::array<double, 3>{0.0, 0.0, 0.0};
+  // `getloadavg()` returns the number of samples retrieved,
+  // but if it's less than three we use 0 as a placehold to
+  // keep the layout uniform.
   auto error = ::getloadavg(loadavg.data(), loadavg.size());
   if (error == -1) {
     return caf::make_error(ec::system_error, "failed to get cpu load average");
@@ -40,7 +43,7 @@ public:
     return "cpu";
   }
 
-  auto make_collector() const -> collector override {
+  auto make_collector() const -> caf::expected<collector> override {
     return get_cpuinfo;
   }
 

@@ -833,16 +833,14 @@ public:
     return name();
   }
 
-  // TODO
-  /// Checks if the plugin is able to collect metrics on the current
-  /// machine.
-  // [[nodiscard]] virtual auto is_platform_supported() const -> bool = 0;
-
   /// The format in which metrics will be reported by this plugin.
   [[nodiscard]] virtual auto metric_layout() const -> record_type = 0;
 
   /// Create a health metrics collector.
-  [[nodiscard]] virtual auto make_collector() const -> collector = 0;
+  /// Plugins may return an error if the collector is not supported on the
+  /// platform the node is currently running on.
+  [[nodiscard]] virtual auto make_collector() const -> caf::expected<collector>
+    = 0;
 };
 
 // -- aspect plugin ------------------------------------------------------------
