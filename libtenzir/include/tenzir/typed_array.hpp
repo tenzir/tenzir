@@ -52,7 +52,6 @@ struct typed_array {
         = arrow::RecordBatch::Make(arrow_schema, x.array->length(), arrays);
       auto slice
         = table_slice{batch, tenzir_schema, table_slice::serialize::yes};
-      return f.object(x).fields(f.field("slice", slice));
       return f.object(x)
         .pretty_name("tenzir.typed_array")
         .fields(f.field("slice", slice));

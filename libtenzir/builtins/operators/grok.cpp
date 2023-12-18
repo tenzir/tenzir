@@ -412,7 +412,7 @@ public:
 
   auto parse_strings(std::shared_ptr<arrow::StringArray> input,
                      operator_control_plane& ctrl) const
-    -> std::vector<std::pair<type, std::shared_ptr<arrow::Array>>> override {
+    -> std::vector<typed_array> override {
     auto builder = series_builder{type{record_type{}}};
     for (auto&& string : values(string_type{}, *input)) {
       if (not string) {
@@ -501,9 +501,7 @@ public:
         }
       }
     }
-    auto finished = builder.finish();
-    TENZIR_ASSERT_CHEAP(finished.size() == 1);
-    return {{finished[0].type, finished[0].array}};
+    return builder.finish();
   }
 
   friend auto inspect(auto& f, grok_parser& x) -> bool {
