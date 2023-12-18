@@ -18,6 +18,7 @@
 #include "tenzir/expression.hpp"
 #include "tenzir/ids.hpp"
 #include "tenzir/project.hpp"
+#include "tenzir/series_builder.hpp"
 #include "tenzir/table_slice_column.hpp"
 #include "tenzir/table_slice_row.hpp"
 #include "tenzir/test/fixtures/table_slices.hpp"
@@ -621,6 +622,21 @@ TEST(unflatten - invalid field names) {
   CHECK_EQUAL(materialize(input.at(0, 1)), materialize(output.at(0, 2)));
   CHECK_EQUAL(materialize(input.at(0, 2)), materialize(output.at(0, 1)));
   CHECK_EQUAL(materialize(input.at(0, 3)), materialize(output.at(0, 3)));
+}
+
+TEST(empty record) {
+  auto b = series_builder{};
+  b.record();
+  auto x = b.finish_assert_one_slice();
+  CHECK_EQUAL(caf::get<record_type>(x.schema()).num_fields(), size_t{0});
+}
+
+TEST(record with empty field name) {
+  auto b = series_builder{};
+  b.record().field("", 42);
+  auto x = b.finish_assert_one_slice();
+  CHECK_EQUAL(caf::get<record_type>(x.schema()).num_fields(), size_t{1});
+  CHECK_EQUAL(caf::get<record_type>(x.schema()).field(0).name, "");
 }
 
 FIXTURE_SCOPE_END()
