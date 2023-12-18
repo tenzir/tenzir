@@ -105,7 +105,7 @@ else
   exit 1
 fi
 
-pipeline="from file $file_name read $format | import"
+pipeline="from file \"$file_name\" read $format | import"
 
 tenzir "$pipeline"
 ```
@@ -125,7 +125,8 @@ as follows:
 tenzir:
   operators:
     zeek:
-      shell "zeek -r - LogAscii::output_to_stdout=T
+      shell "eval \"$(zkg env)\" &&
+             zeek -r - LogAscii::output_to_stdout=T
              JSONStreaming::disable_default_logs=T
              JSONStreaming::enable_log_rotation=F
              json-streaming-logs"

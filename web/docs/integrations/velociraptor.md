@@ -39,7 +39,7 @@ as a static binary that we refer to as `velociraptor-binary` here.)
    velociraptor-binary -c server.yaml frontend
    ```
 
-## Run Raw VQL
+## Run raw VQL
 
 After you have created a TLS certificate, you can use the `velociraptor`
 operator to execute a [Velociraptor Query Language (VQL)][vql] queries:
