@@ -22,9 +22,9 @@ auto get_diskspace_info(const std::string& path) -> caf::expected<record> {
   auto spaceinfo = std::filesystem::space(path);
   // TODO: Find the mount point and/or device name if possible.
   result["name"] = path;
-  result["total-bytes"] = spaceinfo.capacity;
-  result["free-bytes"] = spaceinfo.free;
-  result["used-bytes"] = spaceinfo.capacity - spaceinfo.free;
+  result["total_bytes"] = spaceinfo.capacity;
+  result["free_bytes"] = spaceinfo.free;
+  result["used_bytes"] = spaceinfo.capacity - spaceinfo.free;
   return result;
 }
 

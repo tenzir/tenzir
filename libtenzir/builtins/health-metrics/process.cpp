@@ -19,7 +19,14 @@ namespace tenzir::plugins::health_process {
 namespace {
 
 auto get_raminfo() -> caf::expected<record> {
-  return detail::get_status();
+  auto result = record{};
+  auto status = detail::get_status();
+  // Change dashes to underscores for consistency.
+  for (auto [key, value] : status) {
+    std::replace(key.begin(), key.end(), '-', '_');
+    result[key] = std::move(value);
+  }
+  return result;
 }
 
 class plugin final : public virtual health_metrics_plugin {
@@ -39,13 +46,13 @@ public:
   auto metric_layout() const -> record_type override {
     return record_type{{
 #ifdef TENZIR_LINUX
-      {"swap-space-usage", uint64_type{}},
+      {"swap_space_usage", uint64_type{}},
 #endif
 #if defined(TENZIR_LINUX) || defined(TENZIR_MACOS)
-      {"current-memory-usage", uint64_type{}},
+      {"current_memory_usage", uint64_type{}},
 #endif
 #ifdef TENZIR_POSIX
-      {"peak-memory-usage", uint64_type{}},
+      {"peak_memory_usage", uint64_type{}},
 #endif
     }};
   }
