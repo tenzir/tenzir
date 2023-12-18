@@ -27,6 +27,7 @@
 #include <arrow/api.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
+#include <boost/algorithm/string.hpp>
 #include <boost/asio.hpp>
 #include <boost/interprocess/sync/named_semaphore.hpp>
 #include <boost/process.hpp>
@@ -67,6 +68,7 @@ auto drain_pipe(bp::ipstream& pipe) -> std::string {
     }
     result += line;
   }
+  boost::trim(result);
   return result;
 }
 
