@@ -405,21 +405,11 @@ public:
   }
 
   auto save() const -> caf::expected<chunk_ptr> override {
-    // We save the context by formatting into a record of this format:
-    // {path: string}
     auto builder = flatbuffers::FlatBufferBuilder{};
-    const auto key_key_offset = builder.CreateSharedString(path_key);
-    const auto key_value_offset = pack(builder, data{db_path_});
-    auto field_offsets
-      = std::vector<flatbuffers::Offset<fbs::data::RecordField>>{};
-    field_offsets.reserve(1);
-    const auto record_offset
-      = fbs::data::CreateRecordField(builder, key_key_offset, key_value_offset);
-    field_offsets.emplace_back(record_offset);
     const auto value_offset
-      = fbs::data::CreateRecordDirect(builder, &field_offsets);
+      = fbs::data::CreateString(builder, builder.CreateString(db_path_));
     const auto data_offset
-      = fbs::CreateData(builder, fbs::data::Data::record, value_offset.Union());
+      = fbs::CreateData(builder, fbs::data::Data::string, value_offset.Union());
     fbs::FinishDataBuffer(builder, data_offset);
     return chunk::make(builder.Release());
   }
@@ -453,38 +443,15 @@ class plugin : public virtual context_plugin {
                                          "context: {}",
                                          fb.error()));
     }
-    const auto* record = fb.value()->data_as_record();
-    if (not record) {
+    const auto* serialized_string = fb.value()->data_as_string();
+    if (not serialized_string or not serialized_string->value()) {
       return caf::make_error(ec::serialization_error,
                              "failed to deserialize geoip "
-                             "context: invalid type for "
-                             "context entry, entry must be a record");
+                             "context: invalid type or value for "
+                             "db path entry");
     }
-    if (not record->fields() or record->fields()->size() != 1) {
-      return caf::make_error(ec::serialization_error,
-                             "failed to deserialize geoip "
-                             "context: invalid or missing value for "
-                             "context entry, entry must be a record {key, "
-                             "value}");
-    }
-    data value;
     context::parameter_map params;
-    if (record->fields()->Get(0)->name()->str() != path_key) {
-      return caf::make_error(
-        ec::serialization_error,
-        fmt::format("failed to deserialize geoip context"
-                    ": invalid key '{}' ",
-                    record->fields()->Get(0)->name()->str()));
-    }
-    auto err = unpack(*record->fields()->Get(0)->data(), value);
-    if (err) {
-      return caf::make_error(ec::serialization_error,
-                             fmt::format("failed to deserialize geoip"
-                                         "context: invalid value for key '{}': "
-                                         "{}",
-                                         path_key, err));
-    }
-    params[path_key] = caf::get<std::string>(value);
+    params[path_key] = serialized_string->value()->str();
     return std::make_unique<ctx>(std::move(params));
   }
 };
