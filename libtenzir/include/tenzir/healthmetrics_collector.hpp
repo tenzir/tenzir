@@ -29,16 +29,24 @@ public:
 
   healthmetrics_collector_state() = default;
 
-  using healthcheck = std::function<record()>;
+  // -------- member functions -------------------------------------------------
 
-  // list of health checks to run
-  std::unordered_map<std::string, typename health_metrics_plugin::collector>
-    collectors;
+  auto collect_and_import_metrics() -> void;
 
-  // time between checks
-  caf::timespan collection_interval = std::chrono::seconds{30};
+  // -------- data members -----------------------------------------------------
 
-  // output stream
+  // A handle to the node actor.
+  node_actor node;
+
+  // List of health checks to run
+  using collectors_map
+    = std::unordered_map<std::string, typename health_metrics_plugin::collector>;
+  collectors_map collectors;
+
+  // Time to wait between checks.
+  caf::timespan collection_interval = std::chrono::seconds{60};
+
+  // The output stream for writing metrics events.
   std::unique_ptr<import_stream> importer = nullptr;
 };
 
