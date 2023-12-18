@@ -90,7 +90,7 @@ public:
     try {
       bp::pipe std_out;
       bp::pipe std_in;
-      bp::pipe std_err;
+      bp::ipstream std_err;
       auto python_executable = bp::search_path("python3");
       auto env = boost::this_process::environment();
       // Automatically create a virtualenv with all requirements preinstalled,
@@ -131,9 +131,15 @@ public:
         // TODO: Handle broken venvs. Maybe there is a way to check whether the
         // list of requirements is installed correctly?
         if (!exists(venv_path, ec)) {
-          if (bp::system(python_executable, "-m", "venv", venv)) {
-            ctrl.abort(ec::system_error,
-                       "failed to create virtualenv (see log for details)");
+          // The default size of the pipe buffer is 64k on Linux, we assume
+          // (hope) that this is enough. A possible solution would be to wrap
+          // the invocation in a script that drains the pipe continuously but
+          // only forwards the first n bytes.
+          if (bp::system(python_executable, "-m", "venv", venv,
+                         bp::std_err > std_err)) {
+            auto venv_error = drain_pipe(std_err);
+            ctrl.abort(ec::system_error, "failed to create virtualenv: {}",
+                       venv_error);
             co_return;
           }
           auto pip_invocation = std::vector<std::string>{
@@ -157,11 +163,13 @@ public:
                                   requirements_vec.begin(),
                                   requirements_vec.end());
           }
+          std_err = bp::ipstream{};
           TENZIR_VERBOSE("installing python modules with: '{}'",
                          fmt::join(pip_invocation, "' '"));
-          if (bp::system(pip_invocation, env)) {
-            ctrl.abort(ec::system_error, "failed to install pip requirements "
-                                         "(see log for details)");
+          if (bp::system(pip_invocation, env, bp::std_err > std_err)) {
+            auto pip_error = drain_pipe(std_err);
+            ctrl.abort(ec::system_error,
+                       "failed to install pip requirements: {}", pip_error);
             co_return;
           }
         }
