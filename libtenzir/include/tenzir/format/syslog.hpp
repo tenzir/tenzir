@@ -16,6 +16,8 @@
 #include "tenzir/concept/parseable/string.hpp"
 #include "tenzir/concept/parseable/tenzir/data.hpp"
 #include "tenzir/concept/parseable/tenzir/time.hpp"
+#include "tenzir/concept/printable/std/chrono.hpp"
+#include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/concepts.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/line_range.hpp"
@@ -260,34 +262,21 @@ struct legacy_message {
   std::optional<uint16_t> severity;
   std::string timestamp;
   std::string host;
-  std::string tag;
+  std::optional<std::string> app_name;
+  std::optional<std::string> process_id;
   std::string content;
 };
 
-/// Parser for legacy Syslog messages.
-/// @relates legacy_message
-struct legacy_message_parser : parser_base<legacy_message_parser> {
-  using attribute = legacy_message;
+// Timestamp as specified by RFC3164:
+// Mmm dd hh:mm:ss
+struct legacy_message_timestamp_parser
+  : parser_base<legacy_message_timestamp_parser> {
+  using attribute = std::string;
 
-  template <typename Iterator, typename Attribute>
+  template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    using namespace parsers;
-    using namespace parser_literals;
-    const auto is_prival = [](uint16_t in) {
-      return in <= 191;
-    };
-    const auto to_facility_and_severity = [&](uint16_t in) {
-      if constexpr (!std::is_same_v<Attribute, unused_type>) {
-        x.facility = in / 8;
-        x.severity = in % 8;
-      }
-    };
-    const auto prival = ignore(
-      integral_parser<uint16_t, 3>{}.with(is_prival)->*to_facility_and_severity);
-    const auto priority_parser = '<' >> prival >> '>';
-    const auto word = +(parsers::printable - space);
-    const auto ws = +space;
-    const auto wsignore = ignore(ws);
+    const auto word = +(parsers::printable - parsers::space);
+    const auto ws = +parsers::space;
     const auto is_month = [](const std::string& mon) {
       return mon == "Jan" || mon == "Feb" || mon == "Mar" || mon == "Apr"
              || mon == "May" || mon == "Jun" || mon == "Jul" || mon == "Aug"
@@ -318,25 +307,96 @@ struct legacy_message_parser : parser_base<legacy_message_parser> {
       const auto* const l = sv.end();
       return p(f, l, unused) && f == l;
     };
-    const auto timestamp_parser
-      = (word.with(is_month) >> ws >> word.with(is_day) >> ws
-         >> word.with(is_time))
-          ->*[](std::tuple<std::string, std::string, std::string, std::string,
-                           std::string>
-                  x) {
-                return fmt::to_string(fmt::join(x, ""));
-              };
-    const auto tag_parser = +(parsers::printable - ':');
-    const auto content_parser = ~(ignore(*space) >> *parsers::printable);
-    const auto p = ~(priority_parser >> ignore(*space)) // priority
-                   >> timestamp_parser >> wsignore      // timestamp
-                   >> word >> wsignore                  // host
-                   >> tag_parser >> ':'                 // tag
-                   >> content_parser;                   // content
-    if constexpr (std::is_same_v<Attribute, unused_type>)
+    auto p = word.with(is_month) >> ws >> word.with(is_day) >> ws
+             >> word.with(is_time);
+    if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);
-    else
-      return p(f, l, x.timestamp, x.host, x.tag, x.content);
+    } else {
+      std::array<std::string, 5> elems{};
+      if (not p(f, l, elems[0], elems[1], elems[2], elems[3], elems[4]))
+        return false;
+      x = fmt::to_string(fmt::join(elems, ""));
+      return true;
+    }
+  }
+};
+
+/// Parser for legacy Syslog messages.
+/// @relates legacy_message
+struct legacy_message_parser : parser_base<legacy_message_parser> {
+  using attribute = legacy_message;
+
+  template <typename Iterator, typename Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+    using namespace parser_literals;
+    const auto word = +(parsers::printable - parsers::space);
+    const auto ws = +parsers::space;
+    const auto wsignore = ignore(ws);
+    const auto is_prival = [](uint16_t in) {
+      return in <= 191;
+    };
+    const auto to_facility_and_severity = [&](uint16_t in) {
+      if constexpr (!std::is_same_v<Attribute, unused_type>) {
+        x.facility = in / 8;
+        x.severity = in % 8;
+      }
+    };
+    // PRIORITY is delimited by <angle brackets>, and is optional
+    const auto prival = ignore(
+      integral_parser<uint16_t, 3>{}.with(is_prival)->*to_facility_and_severity);
+    const auto priority_parser = '<' >> prival >> '>';
+    // TIMESTAMP is as specified by RFC (see above)
+    // Alternatively, try anything that parsers::time would also accept
+    const auto timestamp_parser = legacy_message_timestamp_parser{}
+                                  | (parsers::time->*([](tenzir::time t) {
+                                      return tenzir::to_string(t);
+                                    }));
+    // HOST is just whitespace-delimited characters (for now, at least)
+    const auto host_parser = word;
+    // Then, comes the MESSAGE itself.
+    //
+    // We're diverging from the RFC to produce potentially a little more
+    // user-friendly results.
+    //
+    // In the RFC, TAG is up to 32 alnum characters, and CONTENT is the rest.
+    // So, in a message like "FOO[123]: bar", TAG is "FOO", and CONTENT is
+    // "[123]: bar". Because the TAG is terminated by the first non-alnum
+    // character, in a message like "FOO: bar", the RFC-behavior is even more
+    // odd: TAG is "FOO", and CONTENT is ": bar".
+    //
+    // Instead, we try to detect an app name ("FOO"), and process id ("123"),
+    // and include the content without any of these, and any preceding
+    // whitespace. Additionally, we include the MESSAGE in its entirety, for the
+    // case that there's really no app name and pid.
+    const auto message_parser = *parsers::printable;
+    const auto p = ~(priority_parser >> ignore(*parsers::space)) // priority
+                   >> timestamp_parser >> wsignore               // timestamp
+                   >> host_parser >> wsignore                    // host
+                   >> message_parser;                            // message
+    std::string message;
+    if constexpr (std::is_same_v<Attribute, unused_type>) {
+      if (not p(f, l, unused))
+        return false;
+    } else {
+      if (not p(f, l, x.timestamp, x.host, message))
+        return false;
+    }
+    // Parse MESSAGE into its constituent parts,
+    // app_name, process_id, content
+    if constexpr (!std::is_same_v<Attribute, unused_type>) {
+      const auto app_name_parser = +parsers::alnum;
+      const auto process_id_parser
+        = (ignore('['_p) >> +parsers::alnum >> ignore(']'_p));
+      const auto tag_parser = -app_name_parser >> -process_id_parser
+                              >> ignore(':'_p) >> ignore(*parsers::space);
+      auto msg_f = message.begin();
+      const auto msg_l = message.end();
+      std::tuple<std::optional<std::string>, std::optional<std::string>> attr{};
+      if (tag_parser(msg_f, msg_l, attr))
+        std::tie(x.app_name, x.process_id) = std::move(attr);
+      x.content.assign(msg_f, msg_l);
+    }
+    return true;
   }
 };
 
@@ -368,7 +428,8 @@ inline type make_legacy_syslog_type() {
                                              {"severity", uint64_type{}},
                                              {"timestamp", string_type{}},
                                              {"hostname", string_type{}},
-                                             {"tag", string_type{}},
+                                             {"app_name", string_type{}},
+                                             {"process_id", string_type{}},
                                              {"content", string_type{}}}}};
 }
 
