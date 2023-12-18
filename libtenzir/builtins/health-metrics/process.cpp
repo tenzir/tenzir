@@ -45,13 +45,13 @@ public:
 
   auto metric_layout() const -> record_type override {
     return record_type{{
-#ifdef TENZIR_LINUX
+#if TENZIR_LINUX
       {"swap_space_usage", uint64_type{}},
 #endif
-#if defined(TENZIR_LINUX) || defined(TENZIR_MACOS)
+#if TENZIR_LINUX || TENZIR_MACOS
       {"current_memory_usage", uint64_type{}},
 #endif
-#ifdef TENZIR_POSIX
+#if TENZIR_POSIX
       {"peak_memory_usage", uint64_type{}},
 #endif
     }};
