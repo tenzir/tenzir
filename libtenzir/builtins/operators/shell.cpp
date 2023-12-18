@@ -285,6 +285,11 @@ public:
     return true;
   }
 
+  auto input_independent() const -> bool override {
+    // We may produce results without receiving any further input.
+    return true;
+  }
+
   auto name() const -> std::string override {
     return "shell";
   }

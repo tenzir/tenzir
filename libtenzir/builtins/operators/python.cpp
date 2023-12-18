@@ -62,7 +62,10 @@ auto drain_pipe(bp::ipstream& pipe) -> std::string {
     return result;
   auto line = std::string{};
   while (std::getline(pipe, line)) {
-    result += line + "\n";
+    if (not result.empty()) {
+      result += '\n';
+    }
+    result += line;
   }
   return result;
 }
@@ -185,6 +188,7 @@ public:
       codepipe << detail::strip_leading_indentation(std::string{code_});
       codepipe.close();
       ::close(errpipe.pipe().native_sink());
+      co_yield {}; // signal successful startup
       for (auto&& slice : input) {
         if (slice.rows() == 0) {
           co_yield {};

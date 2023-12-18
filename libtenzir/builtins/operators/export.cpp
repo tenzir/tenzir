@@ -203,6 +203,7 @@ public:
             });
           if (current_error) {
             ctrl.warn(std::move(current_error));
+            co_yield {};
             continue;
           }
           if (current_slice) {

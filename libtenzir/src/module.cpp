@@ -254,9 +254,6 @@ auto load_taxonomies(const caf::actor_system_config& cfg)
         return caf::make_error(ec::parse_error,
                                "failed to extract concepts from file",
                                file.string(), err.context());
-      for (auto& [name, definition] : concepts)
-        TENZIR_DEBUG("extracted concept {} with {} fields", name,
-                     definition.fields.size());
     }
   }
   return tenzir::taxonomies{std::move(concepts)};

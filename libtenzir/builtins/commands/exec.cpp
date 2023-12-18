@@ -212,7 +212,7 @@ auto exec_pipeline(pipeline pipe, caf::actor_system& sys,
         if (msg.reason) {
           result = msg.reason;
         }
-        self->quit();
+        self->quit(msg.reason);
       });
       self->state.executor = self->spawn<caf::monitored>(
         pipeline_executor, std::move(pipe),
@@ -268,15 +268,7 @@ auto exec_impl(std::string content, std::unique_ptr<diagnostic_handler> diag,
   -> caf::expected<void> {
   auto parsed = tql::parse(std::move(content), *diag);
   if (not parsed) {
-    if (not diag->has_seen_error()) {
-      return caf::make_error(ec::unspecified,
-                             "internal error: parsing failed without an error");
-    }
     return ec::silent;
-  }
-  if (diag->has_seen_error()) {
-    return caf::make_error(ec::unspecified,
-                           "internal error: parsing successful with error");
   }
   if (cfg.dump_ast) {
     for (auto& op : *parsed) {
@@ -295,10 +287,6 @@ public:
 
   void emit(diagnostic d) override {
     inner_.emit(std::move(d));
-  }
-
-  auto has_seen_error() const -> bool override {
-    return inner_.has_seen_error();
   }
 
 private:
@@ -397,7 +385,9 @@ public:
            if (result != ec::silent) {
              auto diag = make_diagnostic_printer("", "", color_diagnostics::yes,
                                                  std::cerr);
-             diag->emit(diagnostic::error("{}", result.error()).done());
+             diag->emit(diagnostic::error("{}", result.error())
+                          .note("pipeline execution failed")
+                          .done());
            }
            return caf::make_message(ec::silent);
          }

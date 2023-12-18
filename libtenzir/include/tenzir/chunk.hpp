@@ -336,6 +336,12 @@ bool inspect(Inspector& f, chunk_ptr& x) {
 caf::error read(const std::filesystem::path& filename, chunk_ptr& x,
                 chunk_metadata metadata = {});
 
+auto split(const chunk_ptr& chunk, size_t partition_point)
+  -> std::pair<chunk_ptr, chunk_ptr>;
+
+auto split(std::vector<chunk_ptr> chunks, size_t partition_point)
+  -> std::pair<std::vector<chunk_ptr>, std::vector<chunk_ptr>>;
+
 } // namespace tenzir
 
 namespace fmt {

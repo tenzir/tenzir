@@ -9,6 +9,10 @@ coproc NODE { exec tenzir-node --print-endpoint; }
 # shellcheck disable=SC2034
 read -r -u "${NODE[0]}" DUMMY
 
+# Empirically, we sometimes fail to connect to a node if we attempt that right
+# after starting it up. So we simply wait a bit with that.
+sleep 1
+
 echo "Spawning M57 Suricata pipeline"
 m57_suricata_definition='from https://storage.googleapis.com/tenzir-datasets/M57/suricata.json.zst read suricata --no-infer\n| where #schema != \"suricata.stats\"\n| import'
 m57_suricata_id=$(tenzir -q "api /pipeline/create '{\"definition\": \"${m57_suricata_definition}\", \"name\": \"M57 Suricata\", \"autostart\": {\"created\": true}}'" | jq -re ".id")
