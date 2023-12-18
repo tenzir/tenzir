@@ -50,7 +50,7 @@ public:
   }
 
   auto metric_name() const -> std::string override {
-    return "mem";
+    return "memory";
   }
 
   auto metric_layout() const -> record_type override {
