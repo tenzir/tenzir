@@ -18,31 +18,35 @@ namespace tenzir {
 
 namespace {
 
-auto collect_metrics(
-  const healthmetrics_collector_state::collectors_map& collectors)
-  -> table_slice {
-  auto now = std::chrono::system_clock::now();
-  auto b = series_builder{
-    type{"tenzir.metrics.system", record_type{}, {{"internal", ""}}}};
+auto import_metrics_from(const std::string& name,
+                         health_metrics_plugin::collector const& collector,
+                         import_stream& importer,
+                         std::chrono::system_clock::time_point now) {
+  TENZIR_TRACE("running periodic metrics collection {}", name);
+  auto schema_name = fmt::format("tenzir.metrics.{}", name);
+  auto result = collector();
+  if (!result)
+    return;
+  // We can cache the series builders in the state if constructing
+  // them here proves expensive.
+  auto b = series_builder{type{schema_name, record_type{}, {{"internal", ""}}}};
   auto r = b.record();
   r.field("timestamp", now);
-  for (auto const& [name, check] : collectors) {
-    TENZIR_TRACE("running periodic metrics collection {}", name);
-    auto result = check();
-    if (!result)
-      continue;
-    r.field(name, *result);
-  }
+  for (auto& [name, data] : *result)
+    r.field(name, data);
   auto slice = b.finish_assert_one_slice();
-  return slice;
+  importer.enqueue(std::move(slice));
 }
 
 } // namespace
 
 auto healthmetrics_collector_state::collect_and_import_metrics() -> void {
   TENZIR_ASSERT_CHEAP(importer != nullptr);
-  auto slice = collect_metrics(collectors);
-  importer->enqueue(std::move(slice));
+  // Use a consistent timestamp for all collected metrics.
+  auto now = std::chrono::system_clock::now();
+  for (auto& [name, collector] : collectors) {
+    import_metrics_from(name, collector, *importer, now);
+  }
 }
 
 auto healthmetrics_collector(
@@ -79,13 +83,10 @@ auto healthmetrics_collector(
       // Do a one-off import immediately.
       self->state.collect_and_import_metrics();
       // Start measurement loop.
-      detail::weak_run_delayed_loop(
-        self, self->state.collection_interval,
-        [handle = detail::weak_handle(self)]() {
-          if (auto* self = handle.lock()) {
-            self->state.collect_and_import_metrics();
-          }
-        });
+      detail::weak_run_delayed_loop(self, self->state.collection_interval,
+                                    [self] {
+                                      self->state.collect_and_import_metrics();
+                                    });
       return {};
     },
     [self](atom::status, status_verbosity, duration) -> caf::result<record> {
