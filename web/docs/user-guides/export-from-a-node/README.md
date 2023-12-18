@@ -13,7 +13,7 @@ CLI, at least the `export` operator runs within the node.
 ![Export](export.excalidraw.svg)
 
 Let's bring back the historical data we [imported in the previous
-section](../import-into-a-node.md):
+section](../import-into-a-node/README.md):
 
 ```
 export | head
