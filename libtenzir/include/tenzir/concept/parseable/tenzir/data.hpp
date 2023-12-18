@@ -50,8 +50,7 @@ struct simple_data_parser : parser_base<simple_data_parser> {
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     static auto p = parsers::time | parsers::duration | parsers::net
-                    | parsers::ip | parsers::number | parsers::boolean
-                    | parsers::qqstr | parsers::null;
+                    | parsers::ip | parsers::number | parsers::boolean;
     return p(f, l, a);
   }
 };
