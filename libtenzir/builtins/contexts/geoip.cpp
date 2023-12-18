@@ -9,7 +9,8 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/error.hpp>
-#include <tenzir/fbs/data.hpp>
+#include <tenzir/fbs/geoip.hpp>
+#include <tenzir/fbs/utils.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/plugin.hpp>
@@ -406,12 +407,12 @@ public:
 
   auto save() const -> caf::expected<chunk_ptr> override {
     auto builder = flatbuffers::FlatBufferBuilder{};
-    const auto value_offset
-      = fbs::data::CreateString(builder, builder.CreateString(db_path_));
-    const auto data_offset
-      = fbs::CreateData(builder, fbs::data::Data::string, value_offset.Union());
-    fbs::FinishDataBuffer(builder, data_offset);
-    return chunk::make(builder.Release());
+    auto path = builder.CreateString(db_path_);
+    fbs::context::geoip::GeoIPDataBuilder geoip_builder(builder);
+    geoip_builder.add_url(path);
+    auto geoip_data = geoip_builder.Finish();
+    fbs::context::geoip::FinishGeoIPDataBuffer(builder, geoip_data);
+    return tenzir::fbs::release(builder);
   }
 
 private:
@@ -436,22 +437,22 @@ class plugin : public virtual context_plugin {
 
   auto load_context(chunk_ptr serialized) const
     -> caf::expected<std::unique_ptr<context>> override {
-    auto fb = flatbuffer<fbs::Data>::make(std::move(serialized));
-    if (not fb) {
+    const auto* serialized_data
+      = fbs::context::geoip::GetGeoIPData(serialized->data());
+    if (not serialized_data) {
       return caf::make_error(ec::serialization_error,
                              fmt::format("failed to deserialize geoip "
-                                         "context: {}",
-                                         fb.error()));
+                                         "context: invalid file content"));
     }
-    const auto* serialized_string = fb.value()->data_as_string();
-    if (not serialized_string or not serialized_string->value()) {
+    const auto* serialized_string = serialized_data->url();
+    if (not serialized_string) {
       return caf::make_error(ec::serialization_error,
                              "failed to deserialize geoip "
                              "context: invalid type or value for "
-                             "db path entry");
+                             "DB path entry");
     }
     context::parameter_map params;
-    params[path_key] = serialized_string->value()->str();
+    params[path_key] = serialized_string->str();
     return std::make_unique<ctx>(std::move(params));
   }
 };
