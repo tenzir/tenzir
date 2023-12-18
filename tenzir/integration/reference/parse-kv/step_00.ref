@@ -4,8 +4,7 @@
     "HELLO": "World: 123",
     "ID": "XSD-3141-84",
     "FILE": null,
-    "ARGUMENTS": null,
-    "BYE": null
+    "ARGUMENTS": null
   }
 }
 {
@@ -14,27 +13,18 @@
     "HELLO": null,
     "ID": "XER-8343-12",
     "FILE": "C:\\foo\\bar.exe",
-    "ARGUMENTS": "[--qux]",
-    "BYE": null
+    "ARGUMENTS": "[--qux]"
   }
 }
 {
   "line": {
-    "CATEGORY": "Shutdown",
-    "HELLO": null,
-    "ID": null,
-    "FILE": null,
-    "ARGUMENTS": null,
+    "CATEGORY": 42,
     "BYE": ""
   }
 }
 {
   "line": {
     "CATEGORY": null,
-    "HELLO": null,
-    "ID": null,
-    "FILE": null,
-    "ARGUMENTS": null,
     "BYE": ""
   }
 }

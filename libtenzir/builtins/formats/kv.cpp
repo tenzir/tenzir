@@ -9,6 +9,7 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/collect.hpp>
+#include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/operator_control_plane.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
@@ -145,7 +146,11 @@ public:
         // handle this.
         auto [head, tail] = field_split_.split(rest);
         auto [key, value] = value_split_.split(head);
-        r.field(key, value);
+        if (auto d = data{}; parsers::simple_data(value, d)) {
+          r.field(key, d);
+        } else {
+          r.field(key, value);
+        }
         if (rest == tail) {
           diagnostic::error("`kv` did not make progress")
             .note("check your field splitter")
