@@ -1,15 +1,12 @@
 # GeoIP
 
-A [MaxMind](https://www.maxmind.com/en/home)-based IP address lookup that
-enriches events with geographical data related to a specified IP address.
+A context for enriching IP addresses with geographical data.
 
 ## Synopsis
 
 ```
-context create <name> geoip
-context create <name> geoip --db-path <mmdb file path>
-context update <name>
-context update <name> --db-path <mmdb file path>
+context create <name> geoip [--db-path <mmdb>]
+context update <name> [--db-path <mmdb>]
 context delete <name>
 enrich <name> --field <field>
 lookup <name> --field <field>
@@ -17,18 +14,22 @@ lookup <name> --field <field>
 
 ## Description
 
-The following options are currently supported for the `geoip` context:
+The `geoip` context uses a [MaxMind](https://www.maxmind.com/) database
+to perform IP address lookups.
 
-### `--db-path <mmdb file path>`
+Run `context update <name> --db-path <mmdb>` to initialize the database at path
+`<mmdb>`. Omitting `--db-path` causes a reload of a previously initialized
+database file.
 
-The path to the MaxMind DB file.
+### `--db-path <mmdb>`
 
-Updating the `db-path` will load the file content.
+The path to the MaxMind database file.
 
-Writing `context update <name>` without the path will force the context to
-reload the DB file content.
+You can provide any database in [MMDB
+format](https://maxmind.github.io/MaxMind-DB/).
 
 ### `--field <field>`
 
-The name of the field to use as IP address lookup. Only IP and string values
-will work with this context.
+The name of the field to use as IP address lookup.
+
+Only IP addresses and strings work with this context.
