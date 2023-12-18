@@ -145,7 +145,7 @@ const sidebars = {
     },
     {
       type: 'doc',
-      id: 'command-line',
+      id: 'configuration',
     },
     {
       type: 'doc',
@@ -154,10 +154,6 @@ const sidebars = {
     {
       type: 'doc',
       id: 'python',
-    },
-    {
-      type: 'doc',
-      id: 'configuration',
     },
     {
       type: 'doc',

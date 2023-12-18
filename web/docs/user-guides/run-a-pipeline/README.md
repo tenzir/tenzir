@@ -5,8 +5,7 @@ sidebar_position: 0
 # Run a pipeline
 
 You can run a [pipeline](../../pipelines.md) in the
-[app](https://app.tenzir.com) or on the [command line](../../command-line.md)
-using the `tenzir` binary.
+[app](https://app.tenzir.com) or on the command line using the `tenzir` binary.
 
 ## In the app
 

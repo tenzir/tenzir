@@ -34,7 +34,7 @@ bytes to a Kafka topic.
 The implementation uses the official [librdkafka][librdkafka] from Confluent and
 supports all [configuration options][librdkafka-options]. You can specify them
 via `-X <key=value>,...`. We recommend putting your Kafka options into the
-dedicated `kafka.yaml` [plugin config file](../command-line.md#load-plugins).
+dedicated `kafka.yaml` [plugin config file](../configuration.md#load-plugins).
 This way you can configure your all your environment-specific options once,
 independent of the per-connector invocations.
 

@@ -28,7 +28,7 @@ as a static binary that we refer to as `velociraptor-binary` here.)
    ```
 
    Copy the generated `client.yaml` to your Tenzir [plugin
-   configuration](../command-line.md#plugins) directory as `velociraptor.yaml`
+   configuration](../configuration.md#plugins) directory as `velociraptor.yaml`
    so that the operator can find it:
    ```bash
    cp client.yaml /etc/tenzir/plugin/velociraptor.yaml

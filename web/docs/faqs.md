@@ -18,7 +18,7 @@ are *open* and what are *closed* source:
 The majority of code is open source and available at under a permissive BSD
 3-clause licence, available at [GitHub](https://github.com/tenzir/tenzir). This
 code implements the `tenzir` and `tenzir-node` [command line
-tools](command-line.md) that execute pipelines and store data. A flexible
+tools](configuration.md) that execute pipelines and store data. A flexible
 [plugin infrastructure](architecture/plugins.md) allows for enhancing the
 open-source core with closed-source plugins.
 
