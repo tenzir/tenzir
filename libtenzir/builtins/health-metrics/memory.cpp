@@ -26,9 +26,9 @@ auto get_raminfo() -> caf::expected<record> {
   auto available_pages = ::sysconf(_SC_AVPHYS_PAGES);
   auto total_bytes = phys_pages * pagesize;
   auto available_bytes = available_pages * pagesize;
-  result["total-bytes"] = total_bytes;
-  result["free-bytes"] = available_bytes;
-  result["used-bytes"] = total_bytes - available_bytes;
+  result["total_bytes"] = total_bytes;
+  result["free_bytes"] = available_bytes;
+  result["used_bytes"] = total_bytes - available_bytes;
   return result;
 }
 
@@ -55,9 +55,9 @@ public:
 
   auto metric_layout() const -> record_type override {
     return record_type{{
-      {"total-bytes", uint64_type{}},
-      {"free-bytes", uint64_type{}},
-      {"used-bytes", uint64_type{}},
+      {"total_bytes", uint64_type{}},
+      {"free_bytes", uint64_type{}},
+      {"used_bytes", uint64_type{}},
     }};
   }
 };
