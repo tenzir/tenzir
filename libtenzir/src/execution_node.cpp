@@ -474,8 +474,6 @@ struct exec_node_state {
       if (output_size == 0) {
         if (should_quit) {
           self->quit();
-        } else {
-          schedule_run();
         }
         return;
       }
@@ -510,7 +508,6 @@ struct exec_node_state {
               self->quit();
               return;
             }
-            schedule_run();
           },
           [this](const caf::error& err) {
             auto time_scheduled_guard
