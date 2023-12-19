@@ -448,7 +448,7 @@ struct exec_node_state {
       // We never issue demand to the sink, so we cannot be at the end of the
       // generator here.
       TENZIR_ASSERT_CHEAP(instance->it != instance->gen.end());
-      TENZIR_DEBUG("{} {} processes", *self, op->name());
+      TENZIR_TRACE("{} {} processes", *self, op->name());
       ++instance->it;
       if (has_seen_error) {
         return;
@@ -463,7 +463,7 @@ struct exec_node_state {
         return;
       }
       TENZIR_ASSERT_CHEAP(instance);
-      TENZIR_DEBUG("{} {} processes", *self, op->name());
+      TENZIR_TRACE("{} {} processes", *self, op->name());
       auto output = std::move(*instance->it);
       const auto output_size = size(output);
       ++instance->it;
@@ -474,8 +474,6 @@ struct exec_node_state {
       if (output_size == 0) {
         if (should_quit) {
           self->quit();
-        } else {
-          schedule_run();
         }
         return;
       }
@@ -510,7 +508,6 @@ struct exec_node_state {
               self->quit();
               return;
             }
-            schedule_run();
           },
           [this](const caf::error& err) {
             auto time_scheduled_guard
@@ -558,7 +555,7 @@ struct exec_node_state {
   auto schedule_run() -> void {
     // Check whether we're already scheduled to run, or are no longer allowed to
     // rum.
-    TENZIR_DEBUG("{} {} schedules run", *self, op->name());
+    TENZIR_TRACE("{} {} schedules run", *self, op->name());
     if (run_scheduled) {
       return;
     }
@@ -613,7 +610,7 @@ struct exec_node_state {
     if (paused or not instance or has_seen_error) {
       return;
     }
-    TENZIR_DEBUG("{} {} enters run loop", *self, op->name());
+    TENZIR_TRACE("{} {} enters run loop", *self, op->name());
     // If the inbound buffer is below its capacity, we must issue demand
     // upstream.
     issue_demand();
