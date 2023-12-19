@@ -24,6 +24,7 @@ apt-get -y --no-install-recommends install \
     libfmt-dev \
     libgrpc-dev \
     libhttp-parser-dev \
+    libmaxminddb-dev \
     libpcap-dev tcpdump \
     libprotobuf-dev \
     librabbitmq-dev \

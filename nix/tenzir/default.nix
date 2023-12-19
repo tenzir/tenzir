@@ -32,6 +32,7 @@
     yara,
     rdkafka,
     cppzmq,
+    libmaxminddb,
     re2,
     tenzir-functional-test-deps,
     tenzir-integration-test-deps,
@@ -114,6 +115,7 @@
           libpcap
           libunwind
           libyamlcpp
+          libmaxminddb
           protobuf
           rabbitmq-c
           rdkafka

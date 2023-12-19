@@ -168,6 +168,9 @@ in {
     prev.writeShellScriptBin name ''
       echo "stub-${name}: $@" >&2
     '';
+  libmaxminddb = overrideAttrsIf isStatic prev.libmaxminddb (orig: {
+    nativeBuildInputs = (orig.nativeBuildInputs or []) ++ [prev.buildPackages.cmake];
+  });
   fluent-bit = let
     fluent-bit' =
       overrideAttrsIf isDarwin prev.fluent-bit

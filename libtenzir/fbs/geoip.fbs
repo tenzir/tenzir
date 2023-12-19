@@ -1,0 +1,8 @@
+namespace tenzir.fbs.context.geoip;
+
+table GeoIPData {
+  url: string (required);
+}
+
+root_type GeoIPData;
+file_identifier "vGEO";
