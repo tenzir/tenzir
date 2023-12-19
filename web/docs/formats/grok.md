@@ -78,5 +78,5 @@ Parse a fictional HTTP request log:
 ```
 # Example input:
 # 55.3.244.1 GET /index.html 15824 0.043
-grok "%{IP:client} %{WORD:method} %{URIPATHPARAM:request} %{NUMBER:bytes} %{NUMBER:duration}
+grok "%{IP:client} %{WORD:method} %{URIPATHPARAM:request} %{NUMBER:bytes} %{NUMBER:duration}"
 ```
