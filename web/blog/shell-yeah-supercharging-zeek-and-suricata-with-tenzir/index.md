@@ -2,7 +2,7 @@
 title: Shell Yeah! Supercharging Zeek and Suricata with Tenzir
 authors: mavam
 date: 2023-07-20
-last_updated: 2023-12-12
+last_updated: 2023-12-17
 tags: [zeek, suricata, logs, shell]
 comments: true
 ---
@@ -56,7 +56,7 @@ Let's break this down:
 Now that we have both Zeek and Suricata at our fingertips, how can we work with
 their output more easily? This is where Tenzir comes into play—easy
 [pipelines](/pipelines) for security teams to acquire,
-[reshape](/user-guides/reshape-data), and route event data.
+[shape](/next/user-guides/shape-data), and route event data.
 
 Here are two examples that count the number of unique source IP addresses per
 destination IP address, on both Zeek and Suricata data:

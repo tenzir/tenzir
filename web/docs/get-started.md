@@ -138,7 +138,7 @@ unique schema:
 :::note Demo Dataset
 On this site we display the data in JSON. In the Explorer, you can enjoy a
 richer display in an interactive table. You can also produce the outputs here by
-invoking `tenzir <pipeline>` on the [command line](command-line.md) or
+invoking `tenzir <pipeline>` on the command line or
 `docker run -it tenzir/tenzir <pipeline>` when using Docker.
 :::
 

@@ -11,25 +11,26 @@ Tenzir is also the name of the Germany-based startup behind the product.
 ## What part of Tenzir is open and what part is closed source?
 
 The diagram below illustrates the high-level components, indicating what parts
-are open and what are closed source:
+are *open* and what are *closed* source:
 
 ![Open source vs. closed source](open-vs-closed-source.excalidraw.svg)
 
-The overwhelming majority of code is open source and available at under a
-permissive BSD 3-clause licence, available at
-[GitHub](https://github.com/tenzir/tenzir). This code implements the `tenzir`
-and `tenzir-node` [command line tools](command-line.md) that execute pipelines
-and store data. A flexible [plugin infrastructure](architecture/plugins.md)
-allows for enhancing the open-source core with closed-source plugins.
-
-We offer the [Community Edition](https://tenzir.com/pricing) as a binary package
-that consists of all open-source plugins, plus our own additional closed source
-plugins.
+The majority of code is open source and available at under a permissive BSD
+3-clause licence, available at [GitHub](https://github.com/tenzir/tenzir). This
+code implements the `tenzir` and `tenzir-node` [command line
+tools](configuration.md) that execute pipelines and store data. A flexible
+[plugin infrastructure](architecture/plugins.md) allows for enhancing the
+open-source core with closed-source plugins.
 
 The Tenzir stack also consists of a cloud platform and web app, accessible via
 [app.tenzir.com](https://app.tenzir.com). Both of these components are not
-openly available. The platform is the *control plane* that manages the nodes and
-pipelines, whereas the nodes are the *data plane* for compute and storage.
+openly available. The platform is the *control plane* that manages the fleet of
+nodes and their pipelines, whereas the nodes are the *data plane* for compute
+and storage.
+
+We offer the [Community Edition](https://tenzir.com/pricing) as a binary package
+that consists of all open-source plugins, plus our own additional closed source
+plugins, such as a plugin that connects the nodes to our platform.
 
 ## Can Tenzir see my data?
 
@@ -57,13 +58,12 @@ app and node.
 ## Does Tenzir run on-premise?
 
 Our current version of the platform runs in the public cloud (AWS in Europe),
-but we are already working on an on-premise version of the next generation
-platform.
+but we are working on an on-premise version of the next generation platform.
 
 ## Does Tenzir offer cloud-native nodes?
 
-Tenzir currently does *not* offer cloud-hosted nodes. You can only run nodes in
-your own environment.
+Tenzir currently does not offer cloud-hosted nodes. You can only run nodes in
+your own environment, including your cloud environment.
 
 However, we offer a cloud-native *demo* node that you can deploy as part of
 every account.
@@ -182,22 +182,31 @@ engineering bandwidth. Please [talk to us](/discord) to let us know what is
 missing and consider contributing support for additional platforms to our [open
 source project](https://github.com/tenzir/tenzir).
 
-## Do you have an integration for tool *Y*?
+## Do you have an integration for *X*?
 
-A tool integration in the Tenzir ecosystem can forms:
+Our [integrations page](integrations.md) includes descriptions of use cases
+with third-party products and tools. If *X* is not in that list, it does not
+mean that *X* is not supported. The steps below help you understand whether
+there exists an integration:
 
-1. **Existing Connector**: We may already support the tool directly with our an
-   existing connectors, e.g., via [`http`](connectors/http.md) if it's a matter
-   of performing an API call.
-2. **Indirect Integration**: There may already exist an integration
-   via the Fluent Bit [source](operators/fluent-bit.md) and
-   [sink](operators/fluent-bit.md).
-3. **Wrapped Application**: It is always possible to integrate a command line
+1. Check the available [formats](formats.md). Sometimes an integration is just a
+   lower-level building block, such as the [Syslog parser](formats/syslog.md).
+2. Check the available [connectors](connectors.md). An integration can also be
+   generic communication primitive, such as the [AMQP](connectors/amqp.md) that
+   acts as client to speak with a RabbitMQ server, or the
+   [HTTP](connectors/http.md) connector to perform an API call.
+3. Check Fluent Bit [inputs][fluentbit-inputs] and [outputs][fluentbit-outputs].
+   Our [`fluent-bit`](operators/fluent-bit.md) operator makes it possible to use
+   the entire ecosystem of Fluent Bit integrations.
+4. Call a command-line tool. It is always possible to integrate a command line
    tool using the [`shell`](operators/shell.md), by hooking
    standard input and output of a forked child as a byte stream into a
    pipeline.
 
-Please [open a GitHub
-Discussion](https://github.com/orgs/tenzir/discussions/new/choose) or swing by
-our [Discord server](/discord) if you have questions about a specific
-integration.
+Please do not hesitate to reach out to us if you think something ism issing, by
+[opening a GitHub
+Discussion](https://github.com/orgs/tenzir/discussions/new/choose) or swinging
+by our [Discord server](/discord).
+
+[fluentbit-inputs]: https://docs.fluentbit.io/manual/pipeline/inputs/
+[fluentbit-outputs]: https://docs.fluentbit.io/manual/pipeline/outputs/

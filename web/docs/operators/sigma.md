@@ -10,11 +10,6 @@ Filter the input with [Sigma rules][sigma] and output matching events.
 
 [sigma]: https://github.com/SigmaHQ/sigma
 
-:::caution Experimental
-This operator is experimental and subject to change without notice, even in
-minor or patch releases.
-:::
-
 ## Synopsis
 
 ```
@@ -138,7 +133,7 @@ Watch a directory of Sigma rules and apply all of them on a continuous stream of
 Suricata events:
 
 ```
-from file --follow read suricata | sigma /tmp/rules/
+from file --follow eve.json read suricata | sigma /tmp/rules/
 ```
 
 When you add a new file to `/tmp/rules`, the `sigma` operator transpiles it and

@@ -2,6 +2,7 @@
 title: Mobilizing Zeek Logs
 authors: mavam
 date: 2023-07-06
+last_updated: 2023-12-17
 tags: [tenzir, zeek, logs, json, kafka]
 comments: true
 ---
@@ -111,7 +112,7 @@ that Tenzir handles multiple concatenated TSV logs of different schemas as you'd
 expect.
 
 Now that Zeek logs are flowing, you can do a lot more than selecting specific
-columns. Check out the [reshaping guide](/next/user-guides/reshape-data) for
+columns. Check out the [shaping guide](/next/user-guides/shape-data) for
 filtering rows, performing aggregations, and routing them elsewhere. Or [store
 the logs](/next/user-guides/import-into-a-node) locally at a Tenzir node in
 [Parquet](https://parquet.apache.org) to process them with other data tools.

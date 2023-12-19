@@ -6,7 +6,7 @@ sidebar_custom_props:
 
 # slice
 
-Keep a range events within the half-closed interval `[begin; end)`.
+Keep a range events within the half-closed interval `[begin, end)`.
 
 ## Synopsis
 
@@ -21,10 +21,10 @@ the operator match Python's array slicing.
 
 ### `<begin>`
 
-An signed integer denoting the start (inclusive) of the range to keep. Use a
+An signed integer denoting the beginning (inclusive) of the range to keep. Use a
 negative number to count from the end.
 
-### `<begin>`
+### `<end>`
 
 An signed integer denoting the end (exclusive) of the range to keep. Use a
 negative number to count from the end.

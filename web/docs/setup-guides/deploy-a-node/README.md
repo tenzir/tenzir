@@ -21,7 +21,7 @@ Install a node as follows:
    ```
 
 Edit the Docker Compose file and change [environment
-variables](../../command-line.md#environment-variables) to adjust the
+variables](../../configuration.md#environment-variables) to adjust the
 configuration.
 
 ### Linux
@@ -34,7 +34,7 @@ Install a node as follows:
 2. Move the `platform.yaml` to `<sysconfdir>/tenzir/plugin/platform.yaml` so
    that the node can find it during startup where `<sysconfdir>` might be
    `/etc`. See the [configuration files
-   documentation](../../command-line.md#configuration-files) for more options.
+   documentation](../../configuration.md#configuration-files) for more options.
 3. Run our installer to install a binary package on any Linux distribution:
    ```bash
    curl https://get.tenzir.app | sh

@@ -17,23 +17,32 @@ contains large amounts of diverse network traffic. We enriched the PCAP from Nov
 [malware-traffic-analysis.net](https://malware-traffic-analysis.net). We
 adjusted all packet timestamp to 2021. Thereafter, we ran
 [Zeek](https://zeek.org) v5.2.0 and [Suricata](https://suricata.io) 6.0.10 to
-obtain structured network logs.
+obtain structured logs.
 
 The dataset includes the following files:
 
 - [README.md](https://storage.googleapis.com/tenzir-datasets/M57/README.md)
-- [zeek.tar.gz](https://storage.googleapis.com/tenzir-datasets/M57/zeek.tar.gz) (43 MB)
-- [suricata.tar.gz](https://storage.googleapis.com/tenzir-datasets/M57/suricata.tar.gz) (123 MB)
+- [zeek-all.log.zst](https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst) (41 MB)
+- [suricata.json.zst](https://storage.googleapis.com/tenzir-datasets/M57/suricata.json.zst) (57 MB)
 - [data.pcap](https://storage.googleapis.com/tenzir-datasets/M57/PCAP/data.pcap) (3.8 GB)
 
-For the examples in the next section, download and extract the archives:
+For following examples we assume that you have imported the demo data in your
+node with the following two pipelines:
 
-```bash
-curl -L -O https://storage.googleapis.com/tenzir-datasets/M57/suricata.tar.gz
-curl -L -O https://storage.googleapis.com/tenzir-datasets/M57/zeek.tar.gz
-tar xzvf suricata.tar.gz
-tar xzvf zeek.tar.gz
 ```
+from https://storage.googleapis.com/tenzir-datasets/M57/suricata.json.zst 
+  read suricata --no-infer
+| where #schema != "suricata.stats"
+| import
+```
+
+```
+from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst
+  read zeek-tsv
+| import
+```
+
+Note that the demo node already comes with this demo data pre-populated for you.
 
 import DocCardList from '@theme/DocCardList';
 
