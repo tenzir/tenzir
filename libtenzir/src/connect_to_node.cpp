@@ -167,8 +167,13 @@ connect_to_node(caf::scoped_actor& self, const caf::settings& opts) {
       [&](caf::error& err) {
         result = std::move(err);
       });
-  if (!result)
+  if (not result) {
     return result;
+  }
+  if (not *result) {
+    return caf::make_error(ec::system_error,
+                           "failed to connect to node: handle is invalid");
+  }
   self->request(*result, timeout, atom::get_v, atom::version_v)
     .receive(
       [&](record& remote_version) {
