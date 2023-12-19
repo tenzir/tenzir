@@ -883,8 +883,11 @@ public:
     return do_not_optimize(*this);
   }
 
-  friend auto inspect(auto& f, serve_operator& x) -> bool {
-    return f.apply(x.serve_id_) && f.apply(x.buffer_size_);
+  friend auto inspect(auto& f, serve_operator& x) {
+    return f.object(x)
+      .pretty_name("tenzir.plugins.serve.serve-operator")
+      .fields(f.field("serve-id", x.serve_id_),
+              f.field("buffer-size", x.buffer_size_));
   }
 
 private:

@@ -112,6 +112,13 @@ auto inspect(Inspector& f, ec& x) {
 template <class... Ts>
 auto add_context(const caf::error& error, fmt::format_string<Ts...> str,
                  Ts&&... xs) -> caf::error {
+  if (!error)
+    return error;
+  if (!error.context()) {
+    return caf::error(
+      error.code(), error.category(),
+      caf::make_message(fmt::format(std::move(str), std::forward<Ts>(xs)...)));
+  }
   return caf::error{
     error.code(), error.category(),
     caf::message::concat(

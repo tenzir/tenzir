@@ -18,6 +18,7 @@ services:
     volumes:
       - tenzir-node:/var/lib/tenzir/
       - tenzir-node:/var/log/tenzir/
+      - tenzir-node:/var/cache/tenzir/
 
   tenzir-api:
     image: ${TENZIR_IMAGE:-tenzir/tenzir:main}
@@ -47,6 +48,8 @@ services:
       - tenzir-node
     environment:
       - TENZIR_ENDPOINT=tenzir-node:5158
+    volumes:
+      - tenzir-node:/var/cache/tenzir/
 
 volumes:
   tenzir-node:
