@@ -21,8 +21,8 @@ VAST has new project site: [vast.io](https://vast.io). We ported all
 documentation from `https://docs.tenzir.com`, added a lot of new content, and
 restructured the reading experience along the user journey.
 
-You can find the Threat Bus documentation in [Use VAST → Integrate → Threat
-Bus](/VAST%20v3.0/use/integrate/threatbus). Threat Bus is now officially in
+You can find the Threat Bus documentation in Use VAST → Integrate → Threat
+Bus. Threat Bus is now officially in
 maintainance mode: we are only supporting existing features with bugfixes. That
 said, Threat Bus will resurface in a new shape with its existing functionality
 integrated into VAST itself. Stay tuned.

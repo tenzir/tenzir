@@ -166,12 +166,10 @@ data. Otherwise data races may occur. Consequently, we need transactional
 interface (ACID) to support this operation.
 
 As long as Tenzir owns the underlying data (i.e., only Tenzir is allowed to make
-changes), Tenzir can already mutate data at rest. [Spatial
-compaction][mutate-at-rest] uses a pre-defined disk quota as trigger to apply
-pipelines to a subset of to-be-transformed data. After Tenzir applies the
-pipeline, Tenzir optionally removes the original data in an atomic fashion.
-
-[mutate-at-rest]: https://docs.tenzir.com/VAST%20v3.0/use/transform#modify-data-at-rest
+changes), Tenzir can already mutate data at rest. Spatial compaction uses a
+pre-defined disk quota as trigger to apply pipelines to a subset of
+to-be-transformed data. After Tenzir applies the pipeline, Tenzir optionally
+removes the original data in an atomic fashion.
 
 Modeled after the `compaction` plugin, we may consider exposing a mutable
 pipeline interface through a dedicated `mutate` command. In the

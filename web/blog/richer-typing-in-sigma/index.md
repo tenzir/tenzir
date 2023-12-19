@@ -7,11 +7,10 @@ last_updated: 2023-02-12
 tags: [sigma, regex, query-frontend]
 ---
 
-VAST's [Sigma frontend](/VAST%20v3.0/understand/language/frontends/sigma)
-now supports more modifiers. In the Sigma language, modifiers transform
-predicates in various ways, e.g., to apply a function over a value or to change
-the operator of a predicate. Modifiers are the customization point to enhance
-expressiveness of query operations.
+VAST's Sigma frontend now supports more modifiers. In the Sigma language,
+modifiers transform predicates in various ways, e.g., to apply a function over a
+value or to change the operator of a predicate. Modifiers are the customization
+point to enhance expressiveness of query operations.
 
 The new [pySigma][pysigma] effort, which will eventually replace the
 now-considered-legacy [sigma][sigma] project, comes with new modifiers as well.
@@ -139,13 +138,11 @@ three missing pieces for Sigma rule execution to become viable in VAST:
 
 3. **Field mappings**: while Sigma rules execute already syntactically, VAST
    currently doesn't touch the field names in the rules and interprets them as
-   [field extractors][field-extractors]. In other words, VAST doesn't support
+   field extractors. In other words, VAST doesn't support
    the Sigma taxonomy yet. Until we provide the mappings, you can already write
-   generic Sigma rules using [concepts][concepts].
+   generic Sigma rules using concepts.
 
 [arrow-containment-tests]: https://arrow.apache.org/docs/cpp/compute.html#containment-tests
-[field-extractors]: /VAST%20v3.0/understand/language/expressions#field-extractor
-[concepts]: /VAST%20v3.0/understand/data-model/taxonomies#concepts
 
 Please don't hesitate to swing by our [community chat](/discord)
 and talk with us if you are passionate about Sigma and other topics around open

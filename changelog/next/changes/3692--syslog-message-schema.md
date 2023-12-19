@@ -1,2 +1,0 @@
-The record created by the RFC 3164 syslog parser no longer has a `tag` field,
-but `app_name` and `process_id`.

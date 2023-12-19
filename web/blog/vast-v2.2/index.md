@@ -33,8 +33,8 @@ chained operators.
 [volcano]: https://paperhub.s3.amazonaws.com/dace52a42c07f7f8348b08dc2b186061.pdf
 
 While pipelines are not yet available at the query layer, they soon will be.
-Until then, you can deploy pipelines at load-time to [transform data in motion
-or data at rest](/VAST%20v3.0/use/transform).
+Until then, you can deploy pipelines at load-time to transform data in motion
+or data at rest.
 
 From a user perspective, the configuration keys associated with transforms have
 changed. Here's the updated example from our previous [VAST v1.0 release
@@ -68,7 +68,7 @@ vast:
 ## Summarization Improvements
 
 In line with the above nomenclature changes, we've improved the behavior of the
-[`summarize`][summarize] operator. It is now possible to specify an explicit
+`summarize` operator. It is now possible to specify an explicit
 name for the output fields. This is helpful when the downstream processing needs
 a predictable schema. Previously, VAST took simply the name of the input field.
 The syntax was as follows:
@@ -94,5 +94,3 @@ summarize:
 ```
 
 In SQL, this would be the `AS` token: `SELECT min(ts) AS min_ts`.
-
-[summarize]: /VAST%20v3.0/understand/language/operators/summarize

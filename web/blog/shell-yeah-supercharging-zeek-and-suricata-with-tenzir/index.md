@@ -159,7 +159,7 @@ load kafka -t artifact
 
 You may not always sit in front of a command line and are able to pipe data from
 a Unix tool into a Tenzir pipeline. For example, when you use our
-[app](/setup-guides/use-the-app) or the [REST API](/rest-api). This is where the
+[app](https://app.tenzir.com) or the [REST API](/rest-api). This is where the
 `shell` operator shines. The diagram above shows how `shell` shifts the entry
 point of data from a tool to the Tenzir process. You can consider `shell` your
 escape hatch to reach deeper into a specific Tenzir node, as if you had a native

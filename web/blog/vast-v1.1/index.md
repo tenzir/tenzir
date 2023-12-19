@@ -19,16 +19,14 @@ simply deleting it.
 
 ## Query Language Plugins
 
-VAST features [a new query language plugin
-type](https://vast.io/VAST%20v3.0/understand/architecture/plugins#language)
+VAST features a new query language plugin type
 that makes it possible to exchange the querying frontend, that is, replace the
 language in which the user writes queries. This makes it easier to integrate
 VAST into specific domains without compromising the policy-neutral system core.
 
 The first instance of the query language plugin is the [`sigma`
 plugin](https://github.com/tenzir/vast/tree/master/plugins/sigma), which make it
-possible to pass [Sigma
-rules](https://vast.io/VAST%20v3.0/understand/language/frontends/sigma) as
+possible to pass Sigma rules as
 input instead of a standard VAST query expression. Prior to this plugin, VAST
 attempted to parse a query as Sigma rule first, and if that failed, tried to
 parse it as a VAST expression. The behavior changed in that VAST now always
@@ -91,11 +89,8 @@ below).
 In [VAST v2.2](/blog/vast-v2.2), we renamed *transforms* to *pipelines*, and
 *transform steps* to *pipeline operators*. This caused several configuration key
 changes. Additionally, we renamed the `aggregate` operator to
-[`summarize`][summarize]. Please keep this in mind when reading the example
-below and consult the
-[documentation](/VAST%20v3.0/understand/language/pipelines) for the
-up-to-date syntax.
-[summarize]: /VAST%20v3.0/understand/language/operators/summarize
+`summarize`. Please keep this in mind when reading the example
+below and consult the documentation for the up-to-date syntax.
 :::
 
 The new `aggregate` transform step plugin allows for reducing data with an

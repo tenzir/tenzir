@@ -20,7 +20,7 @@ document.
 
 ## Query events based on their import time
 
-The new [`#import_time` extractor][docs-meta-extractor] allows for exporting
+The new `#import_time` extractor allows for exporting
 events based on the time they arrived at VAST. Most of the time, this timestamp
 is not far away from the timestamp of when the event occurred, but in certain
 cases the two may deviate substantially, e.g., when ingesting historical events
@@ -33,15 +33,12 @@ as JSON, run this command:
 vast export json '#type == "suricata.alert" && #import_time >= 2021-12-31 && #import_time < 2022-01-01'
 ```
 
-This differs from the [`:timestamp` type extractor][docs-type-extractor] that
+This differs from the `:timestamp` type extractor that
 queries all events that contain a type `timestamp`, which is an alias for the
 `time` type.  By convention, the `timestamp` type represents the event time
 embedded in the data itself. However, the import time  is not part of the event
 data itself, but rather part of metadata of every batch of events that VAST
 creates.
-
-[docs-meta-extractor]: https://vast.io/VAST%20v3.0/understand/language/expressions#meta-extractor
-[docs-type-extractor]: https://vast.io/VAST%20v3.0/understand/language/expressions#type-extractor
 
 ## Omit `null` fields in the JSON export
 
@@ -72,8 +69,7 @@ vast:
 In [VAST v2.2](/blog/vast-v2.2), we renamed *transforms* to *pipelines*, and
 *transform steps* to *pipeline operators*. This caused several configuration key
 changes. Please keep this in mind when reading the example below and consult the
-[documentation](/VAST%20v3.0/understand/language/pipelines) for the
-up-to-date syntax.
+documentation for the up-to-date syntax.
 :::
 
 Reshaping data during import and export is a common use case that VAST now

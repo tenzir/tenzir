@@ -329,7 +329,7 @@ export
 Analysis:
 
 - The `table` operator in splunk outputs the data in tabular form. This is the
-  default for our [app](/setup-guides/use-the-app).
+  default for our [app](https://app.tenzir.com).
 
 - There's also an [upcoming](https://github.com/tenzir/tenzir/pull/3113) `write
   table` format to generate a tabular representation outside the app.
