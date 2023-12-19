@@ -5,7 +5,7 @@ set -euo pipefail
 # Forward signals as SIGTERM to all children.
 trap 'trap " " SIGTERM; kill 0; wait' SIGINT SIGTERM
 
-coproc NODE { exec tenzir-node --print-endpoint; }
+coproc NODE { exec tenzir-node -vv --print-endpoint; }
 # shellcheck disable=SC2034
 read -r -u "${NODE[0]}" TENZIR_ENDPOINT
 
