@@ -102,7 +102,7 @@ parse message grok "%{IP:client} %{WORD:method} %{URIPATHPARAM:request} %{NUMBER
     "method": "GET",
     "request": "/index.html",
     "bytes": 15824,
-    "duration": "0.043"
+    "duration": 0.043
   }
 }
 ```
