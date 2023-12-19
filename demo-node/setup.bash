@@ -24,6 +24,13 @@ echo "Setting labels for M57 Suricata pipeline"
 m57_suricata_labels='[{"text": "suricata", "color": "#0086e5"}, {"text": "import", "color": "#2f00cc"}]'
 tenzir -q "api /pipeline/update '{\"id\": \"${m57_suricata_id}\", \"labels\": ${m57_suricata_labels}}'" | jq -er '"id = \(.pipeline.id)"'
 
+done="false"
+while [[ "${done}" != "true" ]] ; do
+  echo "Waiting for M57 Suricata demo data import to complete..."
+  sleep 5
+  done=$(tenzir -q "api /pipeline/list" | jq ".pipelines | all(.state != \"running\")")
+done
+
 echo "Spawning M57 Zeek pipeline"
 m57_zeek_definition='from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read zeek-tsv\n| import'
 m57_zeek_id=$(tenzir -q "api /pipeline/create '{\"definition\": \"${m57_zeek_definition}\", \"name\": \"M57 Zeek\", \"autostart\": {\"created\": true}}'" | jq -re ".id")
@@ -33,7 +40,7 @@ tenzir -q "api /pipeline/update '{\"id\": \"${m57_zeek_id}\", \"labels\": ${m57_
 
 done="false"
 while [[ "${done}" != "true" ]] ; do
-  echo "Waiting for demo data import to complete..."
+  echo "Waiting for M57 Zeek demo data import to complete..."
   sleep 5
   done=$(tenzir -q "api /pipeline/list" | jq ".pipelines | all(.state != \"running\")")
 done
