@@ -103,6 +103,7 @@ RUN apt-get update && \
       libfmt9 \
       libgrpc++1.51 \
       libhttp-parser2.9 \
+      libmaxminddb0 \
       libpcap0.8 \
       libprotobuf32 \
       librabbitmq4 \
@@ -233,7 +234,7 @@ FROM tenzir-ce AS tenzir-demo
 
 USER root
 RUN apt-get update && \
-    apt-get -y --no-install-recommends install jq && \
+    apt-get -y --no-install-recommends install jq lsof && \
     rm -rf /var/lib/apt/lists/*
 
 USER tenzir:tenzir

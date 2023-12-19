@@ -101,6 +101,11 @@ find_package(Boost REQUIRED COMPONENTS headers filesystem)
 
 find_package(re2 REQUIRED)
 
+# -- libmaxminddb -------------------------------------------------------------
+
+find_package(libmaxminddb REQUIRED)
+provide_find_module(libmaxminddb)
+
 # -- libsystemd ----------------------------------------------------------------
 
 option(TENZIR_ENABLE_JOURNALD_LOGGING
@@ -322,6 +327,12 @@ string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(simdjson REQUIRED)")
 target_link_libraries(libtenzir PUBLIC tsl::robin_map)
 # This is broken for the bundled robin-map, so we special-case it above.
 # dependency_summary("robin-map" tsl::robin_map "Dependencies")
+
+# Link against libmaxminddb.
+target_link_libraries(libtenzir PUBLIC maxminddb::maxminddb)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+       "\nfind_package(libmaxminddb)")
+dependency_summary("libmaxminddb" maxminddb::maxminddb "Dependencies")
 
 # Link against Apache Arrow.
 target_link_libraries(libtenzir PUBLIC ${ARROW_LIBRARY})

@@ -8,6 +8,8 @@ This directory contains the third-party software Tenzir uses. We manage it via
 ### submodules
 
 - [CAF](https://github.com/actor-framework/actor-framework) https://github.com/actor-framework/actor-framework
+- [fast_float](https://github.com/fastfloat/fast_float) https://github.com/fastfloat/fast_float
+- [simdjson](https://github.com/simdjson/simdjson) https://github.com/simdjson/simdjson
 
 ### subtrees
 

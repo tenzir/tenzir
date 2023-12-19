@@ -216,17 +216,8 @@ connector(connector_actor::stateful_pointer<connector_state> self,
       TENZIR_INFO("client connects to {}:{}{}", request.host, request.port,
                   formatted_resolved_host_suffix(request.host));
       auto rp = self->make_response_promise<node_actor>();
-      self
-        ->request(self->state.middleman, *remaining_time, caf::connect_atom_v,
-                  request.host, request.port)
-        .then(
-          [rp, req = request](const caf::node_id&, caf::strong_actor_ptr& node,
-                              const std::set<std::string>&) mutable {
-            TENZIR_INFO("client connected to node at {}:{}", req.host,
-                        req.port);
-            rp.deliver(caf::actor_cast<node_actor>(std::move(node)));
-          },
-          [self, rp, request, delay, deadline](caf::error& err) mutable {
+      auto handle_error
+        = [self, rp, request, delay, deadline](const caf::error& err) mutable {
             const auto remaining_time = calculate_remaining_time(deadline);
             if (should_retry(err, remaining_time, delay)) {
               log_connection_failed(request, *remaining_time, delay);
@@ -240,7 +231,25 @@ connector(connector_actor::stateful_pointer<connector_state> self,
                 ec::system_error,
                 fmt::format("failed to connect to node at {}:{}: {}",
                             request.host, request.port, std::move(err))));
-          });
+          };
+
+      self
+        ->request(self->state.middleman, *remaining_time, caf::connect_atom_v,
+                  request.host, request.port)
+        .then(
+          [rp, request, handle_error](const caf::node_id&,
+                                      caf::strong_actor_ptr& node,
+                                      const std::set<std::string>&) mutable {
+            if (node) {
+              TENZIR_INFO("client connected to node at {}:{}", request.host,
+                          request.port);
+              rp.deliver(caf::actor_cast<node_actor>(std::move(node)));
+              return;
+            }
+            handle_error(caf::make_error(
+              ec::system_error, "failed to connect to node: invalid handle"));
+          },
+          handle_error);
       return rp;
     },
   };
