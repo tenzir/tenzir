@@ -11,7 +11,7 @@ Parses a string using a `grok`-pattern, backed by regular expressions.
 ## Synopsis
 
 ```
-grok [--include-unnamed] [--indexed-captures]
+grok [--raw] [--include-unnamed] [--indexed-captures]
      [--pattern-definitions <additional_patterns>]
      <input_pattern>
 ```
@@ -27,7 +27,8 @@ In short, `<input_pattern>` consists of replacement fields, that look like
 `%{SYNTAX[:SEMANTIC[:CONVERSION]]}`. `SYNTAX` is a reference to a pattern,
 either built-in or user-defined through `--pattern-defintions`.
 `SEMANTIC` is an identifier that names the field in the parsed record.
-`CONVERSION` is either `string`, `int`, or `float`.
+`CONVERSION` is either `infer` (default), `string` (default with `--raw`),
+`int`, or `float`.
 
 The supported regular expression syntax is the only supported by
 [Boost.Regex](https://www.boost.org/doc/libs/1_81_0/libs/regex/doc/html/boost_regex/syntax/perl_syntax.html),
@@ -36,6 +37,14 @@ which is effectively Perl-compatible.
 ### `<input_pattern>`
 
 The `grok` pattern used for matching. Must match the input in its entirety.
+
+### `--raw`
+
+By default, `grok` attempts to do type inference to the parsed fields.
+This behavior can be accessed explicitly by setting the `CONVERSION` option
+in a replacement field to `infer`.
+
+To disable type inference, use `--raw`.
 
 ### `--include-unnamed`
 

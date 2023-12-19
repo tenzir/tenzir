@@ -23,6 +23,7 @@
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/type.hpp"
+#include "tenzir/typed_array.hpp"
 
 #include <caf/detail/pretty_type_name.hpp>
 #include <caf/error.hpp>
@@ -464,7 +465,7 @@ public:
   /// @post `input->length() == result_array->length()`
   virtual auto parse_strings(std::shared_ptr<arrow::StringArray> input,
                              operator_control_plane& ctrl) const
-    -> std::vector<std::pair<type, std::shared_ptr<arrow::Array>>>;
+    -> std::vector<typed_array>;
 
   /// Implement ordering optimization for parsers. See
   /// `operator_base::optimize(...)` for details. The default implementation

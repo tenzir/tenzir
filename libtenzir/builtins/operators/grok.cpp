@@ -8,6 +8,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 
@@ -54,12 +55,15 @@ enum class capture_type {
   // The three options below (string, int, float)
   // are grok standard options
 
-  // %{::string}, default
+  // %{::string}
   string,
   // %{::int}
   integer,
   // %{::float}
   floating,
+
+  // Tenzir extension: use simple_data_parser to infer types
+  infer,
 
   // Replacement fields without a NAME, only a SYNTAX
   unnamed,
@@ -67,14 +71,14 @@ enum class capture_type {
   // "implicit" named regex capture group,
   // without %{...},
   // but with (?<NAME>...) or (?'NAME'...)
-  // Used as a tag: in terms of type conversion, this is the same as `string`
+  // Also used when no explicit CONVERSION is set
   implicit,
 };
 
 template <typename Inspector>
 bool inspect(Inspector& f, capture_type& x) {
   return detail::inspect_enum_str(
-    f, x, {"string", "integer", "floating", "unnamed", "implicit"});
+    f, x, {"string", "integer", "floating", "infer", "unnamed", "implicit"});
 }
 
 struct pattern_store;
@@ -278,17 +282,20 @@ void pattern::resolve(const pattern_store& patterns, bool allow_recursion) {
             .throw_();
         name = fmt::to_string(fmt::join(items, "."));
       }
-      // Handle CONVERSION field, default to `string`
-      capture_type conversion{capture_type::string};
+      // Handle CONVERSION field, default to `implicit`,
+      // which will be turned to `infer` or `string`, based on the `--raw` flag
+      capture_type conversion{capture_type::implicit};
       if (elems.size() > 2) {
+        if (elems[2] == "infer")
+          conversion = capture_type::infer;
+        else if (elems[2] == "string")
+          conversion = capture_type::string;
         if (elems[2] == "int")
           conversion = capture_type::integer;
         else if (elems[2] == "long")
           conversion = capture_type::integer;
         else if (elems[2] == "float")
           conversion = capture_type::floating;
-        else if (elems[2] == "string")
-          ; // no-op
         else
           diagnostic::error("invalid replacement field")
             .note("invalid CONVERSION")
@@ -379,6 +386,7 @@ public:
     parser.add("--pattern-definitions", pattern_definitions, "<patterns>");
     parser.add("--indexed-captures", indexed_captures_);
     parser.add("--include-unnamed", include_unnamed_);
+    parser.add("--raw", raw_);
     parser.parse(p);
     if (pattern_definitions)
       patterns_.unshared().add(*pattern_definitions);
@@ -404,7 +412,7 @@ public:
 
   auto parse_strings(std::shared_ptr<arrow::StringArray> input,
                      operator_control_plane& ctrl) const
-    -> std::vector<std::pair<type, std::shared_ptr<arrow::Array>>> override {
+    -> std::vector<typed_array> override {
     auto builder = series_builder{type{record_type{}}};
     for (auto&& string : values(string_type{}, *input)) {
       if (not string) {
@@ -422,23 +430,36 @@ public:
         continue;
       }
       auto record = builder.record();
+      auto infer_match = [&](std::string_view in) -> data {
+        const auto* f = in.begin();
+        const auto* const l = in.end();
+        constexpr auto parser = parsers::simple_data;
+        if (data d{}; parser(f, l, d) && f == l)
+          return d;
+        return data{std::string{in}};
+      };
       auto convert_match
-        = [&](const boost::csub_match& match, capture_type type) -> data_view2 {
+        = [&](const boost::csub_match& match, capture_type type) -> data {
         if (!match.matched)
           return caf::none;
         switch (type) {
-          case capture_type::string:
           case capture_type::implicit:
           case capture_type::unnamed:
-            return std::string_view{match.first, match.second};
+            if (not raw_)
+              return infer_match(std::string_view{match.first, match.second});
+            return data{std::string{match.first, match.second}};
+          case capture_type::infer:
+            return infer_match(std::string_view{match.first, match.second});
+          case capture_type::string:
+            return data{std::string{match.first, match.second}};
           case capture_type::integer:
             if (auto r = to<int64_t>(match.str()))
-              return *r;
+              return data{*r};
             // TODO: Should this be an error/warning?
             return caf::none;
           case capture_type::floating:
             if (auto r = to<double>(match.str()))
-              return *r;
+              return data{*r};
             return caf::none;
         }
         TENZIR_UNREACHABLE();
@@ -480,9 +501,7 @@ public:
         }
       }
     }
-    auto finished = builder.finish();
-    TENZIR_ASSERT_CHEAP(finished.size() == 1);
-    return {{finished[0].type, finished[0].array}};
+    return builder.finish();
   }
 
   friend auto inspect(auto& f, grok_parser& x) -> bool {
@@ -498,7 +517,8 @@ public:
       .fields(f.field("patterns", get_patterns, set_patterns),
               f.field("input_pattern", x.input_pattern_),
               f.field("indexed_captures", x.indexed_captures_),
-              f.field("include_unnamed", x.include_unnamed_));
+              f.field("include_unnamed", x.include_unnamed_),
+              f.field("raw", x.raw_));
   }
 
 private:
@@ -507,7 +527,7 @@ private:
   caf::intrusive_cow_ptr<pattern_store> patterns_{
     caf::make_copy_on_write<pattern_store>()};
   pattern input_pattern_{};
-  bool indexed_captures_{false}, include_unnamed_{false};
+  bool indexed_captures_{false}, include_unnamed_{false}, raw_{false};
 };
 
 class plugin final : public virtual parser_plugin<grok_parser> {
