@@ -590,6 +590,10 @@ public:
       args.port = std::string{split[1]};
     }
     if constexpr (std::is_same_v<Args, loader_args>) {
+      if (args.listen_once and args.connect) {
+        diagnostic::error("conflicting options `--connect` and `--listen-once`")
+          .throw_();
+      }
       if (not args.connect and args.tls) {
         if (not args.tls_certfile or args.tls_certfile->empty()) {
           diagnostic::error("invalid TLS settings")
@@ -601,6 +605,11 @@ public:
             .hint("missing --keyfile")
             .throw_();
         }
+      }
+    }
+    if constexpr (std::is_same_v<Args, saver_args>) {
+      if (args.listen_once) {
+        args.listen = true;
       }
     }
     return args;
