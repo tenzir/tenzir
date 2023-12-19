@@ -31,20 +31,16 @@ to deploy them statically during import, export, or use them during compaction.
 The new syntax resembles the well-known Unix paradigm of command chaining. The
 difference to Unix pipelines is that VAST exchanges structured data between
 operators. The `vast export` and `vast import` commands now accept such a
-pipeline as a string argument. Refer to the [pipelines
-documentation][pipeline-doc] for more details on how to use the new pipeline
+pipeline as a string argument. Refer to the pipelines
+documentation for more details on how to use the new pipeline
 syntax.
 
 :::info Pipeline YAML Syntax Deprecation
 This release introduces a transitional period from YAML-style to textual
 pipelines. The old YAML syntax for pipelines will be deprecated and removed
-altogether in a future version. The new pipeline operators [`head`][head-op] and
-[`taste`][taste-op] have no YAML equivalent.
+altogether in a future version. The new pipeline operators `head` and
+`taste` have no YAML equivalent.
 :::
-
-[pipeline-doc]: /VAST%20v3.0/understand/language/pipelines#define-a-pipeline
-[head-op]: /VAST%20v3.0/understand/language/operators/head
-[taste-op]: /VAST%20v3.0/understand/language/operators/taste
 
 ## Language Upgrades
 

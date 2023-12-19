@@ -96,17 +96,17 @@ A, B, and C:
 ![Multi-schema Example](multi-schema-example.excalidraw.svg)
 
 Some operators only work with exactly one instance per schema internally, such
-as [`write`](/operators/transformations/write) when combined with the
+as [`write`](/operators/write) when combined with the
 [`parquet`](/formats/parquet), [`feather`](/formats/feather), or
 [`csv`](/formats/csv) formats. These formats cannot handle multiple input
 schemas at once. A demultiplexing operator like `to directory .. write <format>`
 removes this limitation by writing one file per schema instead.
 
 We are having ideas to make this schema (de)multiplexing explicit with a
-`per-schema` [operator modifier](/operators/modifier) that you can write in
-front of every operator. Similarly, we are going to add union types in the
-future, making it possible to convert a heterogeneous stream of structured data
-into a homogeneous one.
+`per-schema` [operator modifier](/language/operator-modifiers) that you can
+write in front of every operator. Similarly, we are going to add union types in
+the future, making it possible to convert a heterogeneous stream of structured
+data into a homogeneous one.
 
 It's important to note that most of the time you don't have to worry about
 schemas. They are there for you when you want to work with them, but it's often

@@ -59,7 +59,7 @@ with other security tools.
 
 ### Docker Compose
 
-A new set of [Docker Compose files][docker-compose] makes it easier than ever to
+A new set of Docker Compose files makes it easier than ever to
 get started with VAST. This is not designed for high-performance deployments of
 VAST, but rather to make it easier to try VAST out—all-batteries included,
 because we want to use this to showcase and test the myriad of integrations
@@ -68,11 +68,9 @@ in a modern SOC.
 Our vision for this is to show how VAST as a modular platform can power modern
 and sustainable approaches to composable security.
 
-[docker-compose]: /VAST%20v3.0/setup/deploy/docker-compose
-
 ### REST API and Frontend User Interface
 
-The experimental `web` plugin adds a [REST API][rest-api] to VAST, and also a
+The experimental `web` plugin adds a REST API to VAST, and also a
 frontend user interface we [built in Svelte][frontend-code].
 
 Both the API and the frontend are still considered unstable and subject to
@@ -89,7 +87,6 @@ The frontend UI currently displays a status page for the installed VAST node.
 
 We have some exciting features planned for both of these. Stay tuned!
 
-[rest-api]: /VAST%20v3.0/use/integrate/rest-api
 [frontend-code]: https://github.com/tenzir/vast/tree/v2.4.0/plugins/web/ui
 
 ### Python Bindings

@@ -42,8 +42,7 @@ conducive for analytics. Nearly all analytics engines support reading Parquet
 files to load a dataset in memory for subsequent analysis.
 
 The data science community has long built on this foundation, but the majority
-of infosec tooling [does not build on an open
-foundation](/VAST%20v3.0/about/vision#the-soc-architecture-maze). Too many
+of infosec tooling does not build on an open foundation. Too many
 products hide their data behind silos, either wrapped behind a SaaS with a thin
 API, or in a custom format that requires cumbersome ETL pipelines. Nearly all
 advanced use cases require full access to the data. Especially when
@@ -91,15 +90,14 @@ even when looking at space utilization alone.
 VAST can store event data as Parquet or Feather. The unit of storage scaling is
 a *partition*. In Arrow terms, a partition is a persisted form of an [Arrow
 Table][arrow-table], i.e., a concatenation of [Record
-Batches][arrow-record-batch]. A partition has thus a fixed schema. VAST's [store
-plugin][store-plugin] determines how a partition writes its buffered record
+Batches][arrow-record-batch]. A partition has thus a fixed schema. VAST's store
+plugin determines how a partition writes its buffered record
 batches to disk. The diagram below illustrates the architecture:
 
 ![Parquet Analytics](parquet-analytics.excalidraw.svg)
 
 [arrow-table]: https://arrow.apache.org/docs/python/data.html#tables
 [arrow-record-batch]: https://arrow.apache.org/docs/python/data.html#record-batches
-[store-plugin]: /VAST%20v3.0/understand/architecture/plugins#store
 
 This architecture makes it easy to point an analytics application directly to
 the store files, without the need for ETLing it into a dedicated warehouse, such
@@ -131,8 +129,7 @@ for the analysis.
 [blog-arrow]: /blog/apache-arrow-as-platform-for-security-data-engineering
 [ipaddress]: https://docs.python.org/3/library/ipaddress.html
 
-Here's how [VAST's type system](/VAST%20v3.0/understand/data-model/type-system)
-looks like:
+Here's how VAST's type system looks like:
 
 ![Type System - VAST](type-system-vast.excalidraw.svg)
 

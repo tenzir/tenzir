@@ -7,15 +7,11 @@ image: /img/blog/rest-api-deployment-single.excalidraw.svg
 tags: [frontend, rest, api, architecture]
 ---
 
-As of [v2.4](/blog/vast-v2.4) VAST ships with a new `web` [plugin][plugins] that
-provides a [REST API][rest-api]. The [API documentation](/api) describes the
+As of [v2.4](/blog/vast-v2.4) VAST ships with a new `web` plugin that
+provides a REST API. The [API documentation](/api) describes the
 available endpoints also provides an
 [OpenAPI](https://spec.openapis.org/oas/latest.html) spec for download. This
 blog post shows how we built the API and what you can do with it.
-
-[rest-api]: /VAST%20v3.0/use/integrate/rest-api
-[plugins]: /VAST%20v3.0/understand/architecture/plugins
-[actors]: /VAST%20v3.0/understand/architecture/actor-model
 
 <!--truncate-->
 
@@ -32,7 +28,7 @@ Why does VAST need a REST API? Two reasons:
    VAST through the REST API.
 
 Two architectural features of VAST made it really smooth to design the REST API:
-[Plugins][plugins] and [Actors][actors].
+Plugins and Actors.
 
 First, VAST's plugin system offers a flexible extension mechanism to add
 additional functionality without bloating the core. Specifically, we chose
@@ -42,7 +38,7 @@ dependency on Boost ASIO. We deem it acceptable to have this dependency of the
 `web` plugin, but would feel less comfortable with adding dependencies to the
 VAST core, which we try to keep as lean as possible.
 
-Second, the [actor model architecture][actors] of VAST makes it easy to
+Second, the actor model architecture of VAST makes it easy to
 integrate new "microservices" into the system. The `web` plugin is a *component
 plugin* that provides a new actor with a typed messaging interface. It neatly
 fits into the existing architecture and thereby inherits the flexible
@@ -194,7 +190,7 @@ curl "https://vast.example.org:42001/api/v0/status?verbosity=detailed" \
 :::caution Status changes in v3.0
 In the upcoming v3.0 release, the statistics under the key `.index.statistics`
 will move to `.catalog`. This change is already merged into the master branch.
-Consult the [status key reference](/VAST%20v3.0/setup/monitor#reference) for details.
+Consult the status key reference for details.
 :::
 
 ### Perform a HTTP health check
