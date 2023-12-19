@@ -104,6 +104,7 @@ find_package(re2 REQUIRED)
 # -- libmaxminddb -------------------------------------------------------------
 
 find_package(libmaxminddb REQUIRED)
+provide_find_module(libmaxminddb)
 
 # -- libsystemd ----------------------------------------------------------------
 
@@ -338,7 +339,9 @@ target_link_libraries(libtenzir PUBLIC tsl::robin_map)
 # dependency_summary("robin-map" tsl::robin_map "Dependencies")
 
 # Link against libmaxminddb.
-target_link_libraries(libtenzir_builtins PRIVATE maxminddb::maxminddb)
+target_link_libraries(libtenzir PUBLIC maxminddb::maxminddb)
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+       "\nfind_package(libmaxminddb)")
 dependency_summary("libmaxminddb" maxminddb::maxminddb "Dependencies")
 
 # Link against Apache Arrow.
