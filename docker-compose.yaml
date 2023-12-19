@@ -19,6 +19,10 @@ services:
       - tenzir-node:/var/lib/tenzir/
       - tenzir-node:/var/log/tenzir/
       - tenzir-node:/var/cache/tenzir/
+    healthcheck:
+      test: tenzir --connection-timeout=30s --connection-retry-delay=1s 'api /ping'
+      interval: 30s
+      retries: 1
 
   tenzir-api:
     image: ${TENZIR_IMAGE:-tenzir/tenzir:main}
