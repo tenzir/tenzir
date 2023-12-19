@@ -7,11 +7,15 @@ trap 'trap " " SIGTERM; kill 0; wait' SIGINT SIGTERM
 
 coproc NODE { exec tenzir-node --print-endpoint; }
 # shellcheck disable=SC2034
-read -r -u "${NODE[0]}" DUMMY
+read -r -u "${NODE[0]}" TENZIR_ENDPOINT
 
 # Empirically, we sometimes fail to connect to a node if we attempt that right
 # after starting it up. So we simply wait a bit with that.
-sleep 1
+IFS=':' read -r -a hostname_and_port <<< "${TENZIR_ENDPOINT}"
+while ! lsof -i ":${hostname_and_port[1]}"; do
+  echo "Waiting for node to be reachable..."
+  sleep 1
+done
 
 echo "Spawning M57 Suricata pipeline"
 m57_suricata_definition='from https://storage.googleapis.com/tenzir-datasets/M57/suricata.json.zst read suricata --no-infer\n| where #schema != \"suricata.stats\"\n| import'
