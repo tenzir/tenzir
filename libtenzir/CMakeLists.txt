@@ -160,29 +160,19 @@ endif ()
 # library, but always loaded when linking against the libtenzir_builtins library.
 file(GLOB_RECURSE libtenzir_builtins_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp")
-foreach (source IN LISTS libtenzir_builtins_sources)
-  file(READ "${source}" lines)
-  if (NOT "${lines}" MATCHES "\n *TENZIR_REGISTER_PLUGIN *\\(.+\\) *[\n$]")
-    message(FATAL_ERROR "builtin ${source} does not register as a plugin")
-  endif ()
-endforeach ()
+set_source_files_properties(
+  ${libtenzir_builtins_sources} PROPERTIES COMPILE_DEFINITIONS
+                                           TENZIR_ENABLE_BUILTINS=1)
 
 file(GLOB_RECURSE libtenzir_sources CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp" ${libtenzir_builtins_sources}
      "${CMAKE_CURRENT_SOURCE_DIR}/include/tenzir/*.hpp")
 
 add_library(libtenzir ${libtenzir_sources})
 TenzirTargetEnableTooling(libtenzir)
 add_library(tenzir::libtenzir ALIAS libtenzir)
 
-add_library(libtenzir_builtins STATIC ${libtenzir_builtins_sources})
-TenzirTargetEnableTooling(libtenzir_builtins)
-target_compile_definitions(libtenzir_builtins PRIVATE TENZIR_ENABLE_BUILTINS)
-set_target_properties(libtenzir_builtins PROPERTIES OUTPUT_NAME tenzir_builtins)
-add_library(tenzir::libtenzir_builtins ALIAS libtenzir_builtins)
-
 target_link_libraries(libtenzir PRIVATE libtenzir_internal)
-target_link_libraries(libtenzir_builtins PRIVATE libtenzir libtenzir_internal)
 
 # Set the libtenzir SOVERSION to '<256 * (major + 7) + minor>.<patch>' to indicate
 # that libtenzir is considered to have an unstable API and ABI. The +7 is a
@@ -374,18 +364,15 @@ target_link_libraries(libtenzir PRIVATE FastFloat::fast_float)
 
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   option(TENZIR_ENABLE_BUNDLED_PFS "Use the pfs submodule" OFF)
-  add_feature_info(
-    "TENZIR_ENABLE_BUNDLED_PFS" TENZIR_ENABLE_BUNDLED_PFS
-    "use the pfs submodule.")
+  add_feature_info("TENZIR_ENABLE_BUNDLED_PFS" TENZIR_ENABLE_BUNDLED_PFS
+                   "use the pfs submodule.")
   if (NOT TENZIR_ENABLE_BUNDLED_PFS)
     find_package(pfs CONFIG)
   endif ()
   if (NOT pfs_FOUND)
     if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/pfs/CMakeLists.txt")
-      message(
-        FATAL_ERROR
-          "pfs library not found, either use -pfs_DIR=... or"
-          " initialize the libtenzir/aux/pfs submodule")
+      message(FATAL_ERROR "pfs library not found, either use -pfs_DIR=... or"
+                          " initialize the libtenzir/aux/pfs submodule")
     endif ()
     add_subdirectory(aux/pfs)
     export(
@@ -398,7 +385,7 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     dependency_summary("pfs" pfs "Dependencies")
   endif ()
   target_link_libraries(libtenzir PRIVATE pfs)
-endif()
+endif ()
 
 # Link against a backtrace library.
 option(TENZIR_ENABLE_BACKTRACE "Print a backtrace on unexpected termination" ON)
@@ -499,7 +486,7 @@ endif ()
 # install the static libtenzir_builtins archive for development targets because
 # the plugin unit test binaries need to be able to link against it.
 install(
-  TARGETS libtenzir libtenzir_builtins ${_tenzir_bundled_simdjson}
+  TARGETS libtenzir ${_tenzir_bundled_simdjson}
   EXPORT TenzirTargets
   ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Development
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT Runtime
