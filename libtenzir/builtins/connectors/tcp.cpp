@@ -377,7 +377,6 @@ public:
       // key material, but there's no straightforward API for this in OpenSSL.
       TENZIR_ASSERT_CHEAP(args_.tls_keyfile);
       TENZIR_ASSERT_CHEAP(args_.tls_certfile);
-      auto ec = std::error_code{};
       auto* keyfile = std::fopen(args_.tls_keyfile->c_str(), "r");
       if (keyfile) {
         std::fclose(keyfile);
@@ -486,7 +485,6 @@ public:
       // key material, but there's no straightforward API for this in OpenSSL.
       TENZIR_ASSERT_CHEAP(args_.tls_keyfile);
       TENZIR_ASSERT_CHEAP(args_.tls_certfile);
-      auto ec = std::error_code{};
       auto* keyfile = std::fopen(args_.tls_keyfile->c_str(), "r");
       if (keyfile) {
         std::fclose(keyfile);
