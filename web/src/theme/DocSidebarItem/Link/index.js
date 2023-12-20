@@ -6,9 +6,12 @@ import Link from "@docusaurus/Link";
 import isInternalUrl from "@docusaurus/isInternalUrl";
 import IconExternalLink from "@theme/Icon/ExternalLink";
 import styles from "./styles.module.css";
-import SVGSource from "./IconSource.svg";
-import SVGTransformation from "./IconTransformation.svg";
-import SVGSink from "./IconSink.svg";
+import SourceOn from "./SourceOn.svg";
+import SourceOff from "./SourceOff.svg";
+import TransformationOn from "./TransformationOn.svg";
+import TransformationOff from "./TransformationOff.svg";
+import SinkOn from "./SinkOn.svg";
+import SinkOff from "./SinkOff.svg";
 
 export default function DocSidebarItemLink({
   item,
@@ -61,27 +64,7 @@ export default function DocSidebarItemLink({
             }}
           >
           </span>
-          <span
-            style={{
-              visibility: customProps?.operator?.source ? "visible": "hidden"
-            }}
-          >
-            <IconSource />
-          </span>
-          <span
-            style={{
-              visibility: customProps?.operator?.transformation ? "visible": "hidden"
-            }}
-          >
-            <IconTransformation />
-          </span>
-          <span
-            style={{
-              visibility: customProps?.operator?.sink ? "visible": "hidden"
-            }}
-          >
-            <IconSink />
-          </span>
+          <OperatorSidebarIcons customProps={customProps} />
         </div>
         {!isInternalLink && <IconExternalLink />}
       </Link>
@@ -103,10 +86,33 @@ const IconContainer = ({ children }) => (
 const withIconContainer = (Icon) => () =>
   (
     <IconContainer>
-      <Icon />
+      <Icon style={{ height: '100%', width: 'auto' }} />
     </IconContainer>
   );
 
-const IconSource = withIconContainer(SVGSource);
-const IconTransformation = withIconContainer(SVGTransformation);
-const IconSink = withIconContainer(SVGSink);
+const IconSourceOn = withIconContainer(SourceOn);
+const IconSourceOff = withIconContainer(SourceOff);
+const IconTransformationOn = withIconContainer(TransformationOn);
+const IconTransformationOff = withIconContainer(TransformationOff);
+const IconSinkOn = withIconContainer(SinkOn);
+const IconSinkOff = withIconContainer(SinkOff);
+
+const OperatorSidebarIcons = ({ customProps }) => {
+  let content = null;
+
+  if (customProps?.operator) {
+    content = (
+      <>
+        {customProps.operator.source ? <IconSourceOn /> : <IconSourceOff />}
+        {customProps.operator.transformation ? <IconTransformationOn /> : <IconTransformationOff />}
+        {customProps.operator.sink ? <IconSinkOn /> : <IconSinkOff />}
+      </>
+    );
+  }
+
+  return (
+    <>
+      {content}
+    </>
+  );
+};
