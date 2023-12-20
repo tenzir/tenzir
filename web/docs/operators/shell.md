@@ -3,7 +3,6 @@ sidebar_custom_props:
   operator:
     source: true
     transformation: true
-    sink: true
 ---
 
 # shell
