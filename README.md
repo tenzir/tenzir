@@ -43,8 +43,8 @@ and the *platform*:
 3. **Platform**: Manages nodes and account user data. Nodes connect to the
    platform and you can manage them through [app.tenzir.com][app].
 
-![Tenzir Moving Parts](./web/static/img/readme/moving-parts.excalidraw.light.png#gh-light-mode-only)
-![Tenzir Moving Parts](./web/static/img/readme/moving-parts.excalidraw.dark.png#gh-dark-mode-only)
+![Tenzir Moving Parts](./web/static/img/readme/moving-parts.light.png#gh-light-mode-only)
+![Tenzir Moving Parts](./web/static/img/readme/moving-parts.dark.png#gh-dark-mode-only)
 
 Check out our [documentation](https://docs.tenzir.com) for detailed setup
 instructions, user guides, and reference material.
