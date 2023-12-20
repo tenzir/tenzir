@@ -371,16 +371,31 @@ public:
 
   auto instantiate(operator_control_plane& ctrl) const
     -> std::optional<generator<chunk_ptr>> override {
-    if (not args_.tls) {
-      if (args_.tls_certfile and not args_.tls_certfile->empty()) {
-        diagnostic::warning("certificate provided, but TLS disabled")
-          .hint("add --tls to use an encrypted connection")
+    if (args_.tls and not args_.connect) {
+      // Verify that the files actually exist and are readable.
+      // Ideally we'd also like to verify that the files contain valid
+      // key material, but there's no straightforward API for this in OpenSSL.
+      TENZIR_ASSERT_CHEAP(args_.tls_keyfile);
+      TENZIR_ASSERT_CHEAP(args_.tls_certfile);
+      auto* keyfile = std::fopen(args_.tls_keyfile->c_str(), "r");
+      if (keyfile) {
+        std::fclose(keyfile);
+      } else {
+        auto error = std::strerror(errno);
+        diagnostic::error("failed to open TLS keyfile")
+          .hint("{}", error)
           .emit(ctrl.diagnostics());
+        return {};
       }
-      if (args_.tls_keyfile and not args_.tls_keyfile->empty()) {
-        diagnostic::warning("keyfile provided, but TLS disabled")
-          .hint("add --tls to use an encrypted connection")
+      auto* certfile = std::fopen(args_.tls_certfile->c_str(), "r");
+      if (certfile) {
+        std::fclose(certfile);
+      } else {
+        auto error = std::strerror(errno);
+        diagnostic::error("failed to open TLS certfile")
+          .hint("{}", error)
           .emit(ctrl.diagnostics());
+        return {};
       }
     }
     auto make
@@ -464,16 +479,31 @@ public:
 
   auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
-    if (not args_.tls) {
-      if (args_.tls_certfile and not args_.tls_certfile->empty()) {
-        diagnostic::warning("certificate provided, but TLS disabled")
-          .hint("add --tls to use an encrypted connection")
+    if (args_.tls and args_.listen) {
+      // Verify that the files actually exist and are readable.
+      // Ideally we'd also like to verify that the files contain valid
+      // key material, but there's no straightforward API for this in OpenSSL.
+      TENZIR_ASSERT_CHEAP(args_.tls_keyfile);
+      TENZIR_ASSERT_CHEAP(args_.tls_certfile);
+      auto* keyfile = std::fopen(args_.tls_keyfile->c_str(), "r");
+      if (keyfile) {
+        std::fclose(keyfile);
+      } else {
+        auto error = std::strerror(errno);
+        diagnostic::error("failed to open TLS keyfile")
+          .hint("{}", error)
           .emit(ctrl.diagnostics());
+        return caf::make_error(ec::invalid_argument);
       }
-      if (args_.tls_keyfile and not args_.tls_keyfile->empty()) {
-        diagnostic::warning("keyfile provided, but TLS disabled")
-          .hint("add --tls to use an encrypted connection")
+      auto* certfile = std::fopen(args_.tls_certfile->c_str(), "r");
+      if (certfile) {
+        std::fclose(certfile);
+      } else {
+        auto error = std::strerror(errno);
+        diagnostic::error("failed to open TLS certfile")
+          .hint("{}", error)
           .emit(ctrl.diagnostics());
+        return caf::make_error(ec::invalid_argument);
       }
     }
     auto tcp_bridge = ctrl.self().spawn(make_tcp_bridge);
@@ -588,6 +618,18 @@ public:
     } else {
       args.hostname = std::string{split[0]};
       args.port = std::string{split[1]};
+    }
+    if (not args.tls) {
+      if (args.tls_certfile and not args.tls_certfile->empty()) {
+        diagnostic::error("certificate provided, but TLS disabled")
+          .hint("add --tls to use an encrypted connection")
+          .throw_();
+      }
+      if (args.tls_keyfile and not args.tls_keyfile->empty()) {
+        diagnostic::error("keyfile provided, but TLS disabled")
+          .hint("add --tls to use an encrypted connection")
+          .throw_();
+      }
     }
     if constexpr (std::is_same_v<Args, loader_args>) {
       if (args.listen_once and args.connect) {
