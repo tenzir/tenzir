@@ -378,7 +378,7 @@ public:
       TENZIR_ASSERT_CHEAP(args_.tls_keyfile);
       TENZIR_ASSERT_CHEAP(args_.tls_certfile);
       auto ec = std::error_code{};
-      auto* keyfile = std::fopen(*args_.tls_keyfile, "r");
+      auto* keyfile = std::fopen(args_.tls_keyfile->c_str(), "r");
       if (keyfile) {
         std::fclose(keyfile);
       } else {
@@ -388,7 +388,7 @@ public:
           .emit(ctrl.diagnostics());
         return {};
       }
-      auto* certfile = std::fopen(*args_.tls_certfile, "r");
+      auto* certfile = std::fopen(args_.tls_certfile->c_str(), "r");
       if (certfile) {
         std::fclose(certfile);
       } else {
@@ -487,7 +487,7 @@ public:
       TENZIR_ASSERT_CHEAP(args_.tls_keyfile);
       TENZIR_ASSERT_CHEAP(args_.tls_certfile);
       auto ec = std::error_code{};
-      auto* keyfile = std::fopen(*args_.tls_keyfile, "r");
+      auto* keyfile = std::fopen(args_.tls_keyfile->c_str(), "r");
       if (keyfile) {
         std::fclose(keyfile);
       } else {
@@ -495,9 +495,9 @@ public:
         diagnostic::error("failed to open TLS keyfile")
           .hint("{}", error)
           .emit(ctrl.diagnostics());
-        return {};
+        return caf::make_error(ec::invalid_argument);
       }
-      auto* certfile = std::fopen(*args_.tls_certfile, "r");
+      auto* certfile = std::fopen(args_.tls_certfile->c_str(), "r");
       if (certfile) {
         std::fclose(certfile);
       } else {
@@ -505,7 +505,7 @@ public:
         diagnostic::error("failed to open TLS certfile")
           .hint("{}", error)
           .emit(ctrl.diagnostics());
-        return {};
+        return caf::make_error(ec::invalid_argument);
       }
     }
     auto tcp_bridge = ctrl.self().spawn(make_tcp_bridge);
