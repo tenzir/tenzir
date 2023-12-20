@@ -285,6 +285,8 @@ auto pipeline_executor(
                     [&](auto& exec_node) {
                       if (exec_node) {
                         self->unlink_from(exec_node);
+                        self->send_exit(exec_node,
+                                        caf::exit_reason::user_shutdown);
                         exec_node = nullptr;
                       }
                     });
