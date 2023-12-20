@@ -64,7 +64,7 @@ export default function DocSidebarItemLink({
             }}
           >
           </span>
-          <OperatorSidebarIcons customProps={customProps} />
+          <SidebarIcons customProps={customProps} />
         </div>
         {!isInternalLink && <IconExternalLink />}
       </Link>
@@ -97,7 +97,7 @@ const IconTransformationOff = withIconContainer(TransformationOff);
 const IconSinkOn = withIconContainer(SinkOn);
 const IconSinkOff = withIconContainer(SinkOff);
 
-const OperatorSidebarIcons = ({ customProps }) => {
+const SidebarIcons = ({ customProps }) => {
   let content = null;
 
   if (customProps?.operator) {
@@ -106,6 +106,20 @@ const OperatorSidebarIcons = ({ customProps }) => {
         {customProps.operator.source ? <IconSourceOn /> : <IconSourceOff />}
         {customProps.operator.transformation ? <IconTransformationOn /> : <IconTransformationOff />}
         {customProps.operator.sink ? <IconSinkOn /> : <IconSinkOff />}
+      </>
+    );
+  } else if (customProps?.connector) {
+    content = (
+      <>
+        {customProps.connector.loader ? <IconSourceOn /> : <IconSourceOff />}
+        {customProps.connector.saver ? <IconSinkOn /> : <IconSinkOff />}
+      </>
+    );
+  } else if (customProps?.format) {
+    content = (
+      <>
+        {customProps.format.parser ? <IconSourceOn /> : <IconSourceOff />}
+        {customProps.format.printer ? <IconSinkOn /> : <IconSinkOff />}
       </>
     );
   }
