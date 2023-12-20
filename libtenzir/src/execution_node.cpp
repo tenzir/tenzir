@@ -482,23 +482,26 @@ struct exec_node_state {
       metrics->values.outbound_measurement.num_batches += 1;
       metrics->values.outbound_measurement.num_approx_bytes
         += approx_bytes(output);
+      TENZIR_DEBUG("{} {} produced and pushes {} elements", *self, op->name(),
+                   output_size);
+      if (demand->remaining <= output_size) {
+        demand->remaining = 0;
+      } else {
+        // TODO: Should we make demand->remaining available in the operator
+        // control plane?
+        demand->remaining -= output_size;
+      }
       self
         ->request(demand->sink, caf::infinite, atom::push_v, std::move(output))
         .then(
           [this, output_size, should_quit]() {
             auto time_scheduled_guard
               = make_timer_guard(metrics->values.time_scheduled);
-            TENZIR_DEBUG("{} {} produced {} elements", *self, op->name(),
+            TENZIR_DEBUG("{} {} pushed {} elements", *self, op->name(),
                          output_size);
-            if (demand) {
-              if (demand->remaining <= output_size) {
-                demand->rp.deliver();
-                demand.reset();
-              } else {
-                // TODO: Should we make demand->remaining available in the
-                // operator control plane?
-                demand->remaining -= output_size;
-              }
+            if (demand and demand->remaining == 0) {
+              demand->rp.deliver();
+              demand.reset();
             }
             if (should_quit) {
               TENZIR_DEBUG("{} {} completes processing", *self, op->name());
@@ -508,8 +511,11 @@ struct exec_node_state {
               self->quit();
               return;
             }
+            schedule_run();
           },
-          [this](const caf::error& err) {
+          [this, output_size](const caf::error& err) {
+            TENZIR_DEBUG("{} {} failed to push {} elements", *self, op->name(),
+                         output_size);
             auto time_scheduled_guard
               = make_timer_guard(metrics->values.time_scheduled);
             if (err == caf::sec::request_receiver_down) {
@@ -590,6 +596,7 @@ struct exec_node_state {
             = make_timer_guard(metrics->values.time_scheduled);
           TENZIR_DEBUG("{} {} had its demand fulfilled", *self, op->name());
           issue_demand_inflight = false;
+          schedule_run();
         },
         [this](const caf::error& err) {
           auto time_scheduled_guard
@@ -602,6 +609,8 @@ struct exec_node_state {
               .note("{} {} failed to pull from previous execution node", *self,
                     op->name())
               .emit(ctrl->diagnostics());
+          } else {
+            schedule_run();
           }
         });
   }
