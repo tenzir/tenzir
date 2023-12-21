@@ -933,7 +933,7 @@ tests:
       - command: exec 'read zeek-tsv | head 1 | write json -c | shell rev'
         input: data/zeek/conn.log.gz
       - command: exec 'shell "echo foo"'
-      - command: exec 'shell "{ echo \"#\"; seq 1 2 10; }" | read csv | write json -c'
+      - command: exec 'shell "{ seq 1 2 10; }" | read csv --header "#" | write json -c'
 
   Top and Rare Operators:
     fixture: ServerTester

@@ -38,6 +38,7 @@ struct xsv_options {
   char list_sep = {};
   std::string null_value = {};
   bool allow_comments = {};
+  std::optional<std::string> header = {};
 
   static auto try_parse(parser_interface& p, std::string name, bool is_parser)
     -> xsv_options {
@@ -47,8 +48,10 @@ struct xsv_options {
     auto field_sep_str = located<std::string>{};
     auto list_sep_str = located<std::string>{};
     auto null_value = located<std::string>{};
+    auto header = std::optional<std::string>{};
     if (is_parser) {
       parser.add("--allow-comments", allow_comments);
+      parser.add("--header", header, "<header>");
     }
     parser.add(field_sep_str, "<field-sep>");
     parser.add(list_sep_str, "<list-sep>");
@@ -93,15 +96,15 @@ struct xsv_options {
       .list_sep = *list_sep,
       .null_value = std::move(null_value.inner),
       .allow_comments = allow_comments,
+      .header = std::move(header),
     };
   }
 
   friend auto inspect(auto& f, xsv_options& x) -> bool {
-    return f.object(x).fields(f.field("name", x.name),
-                              f.field("field_sep", x.field_sep),
-                              f.field("list_sep", x.list_sep),
-                              f.field("null_value", x.null_value),
-                              f.field("allow_comments", x.allow_comments));
+    return f.object(x).fields(
+      f.field("name", x.name), f.field("field_sep", x.field_sep),
+      f.field("list_sep", x.list_sep), f.field("null_value", x.null_value),
+      f.field("allow_comments", x.allow_comments), f.field("header", x.header));
   }
 };
 
@@ -245,22 +248,25 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
   // Parse header.
   auto it = lines.begin();
   auto header = std::optional<std::string_view>{};
-  while (it != lines.end()) {
-    auto line = *it;
-    ++it;
-    if (not line) {
-      co_yield {};
-      continue;
+  if (args.header) {
+    header = *args.header;
+  } else
+    while (it != lines.end()) {
+      auto line = *it;
+      ++it;
+      if (not line) {
+        co_yield {};
+        continue;
+      }
+      if (line->empty())
+        continue;
+      if (args.allow_comments && line->front() == '#')
+        continue;
+      header = line;
+      break;
+      if (not header)
+        co_return;
     }
-    if (line->empty())
-      continue;
-    if (args.allow_comments && line->front() == '#')
-      continue;
-    header = line;
-    break;
-  }
-  if (not header)
-    co_return;
   const auto qqstring_value_parser = parsers::qqstr.then([](std::string in) {
     static auto unescaper = [](auto& f, auto l, auto out) {
       if (*f != '\\') { // Skip every non-escape character.
@@ -493,7 +499,9 @@ public:
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{name()};
     bool allow_comments = {};
+    std::optional<std::string> header = {};
     parser.add("--allow-comments", allow_comments);
+    parser.add("--header", header, "<header>");
     parser.parse(p);
     return std::make_unique<xsv_parser>(xsv_options{
       .name = std::string{Name.str()},
@@ -501,6 +509,7 @@ public:
       .list_sep = ListSep,
       .null_value = std::string{Null.str()},
       .allow_comments = allow_comments,
+      .header = std::move(header),
     });
   }
 
@@ -513,6 +522,7 @@ public:
       .list_sep = ListSep,
       .null_value = std::string{Null.str()},
       .allow_comments = false,
+      .header = {},
     });
   }
 
