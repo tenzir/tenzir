@@ -166,7 +166,7 @@ public:
     auto start = std::optional<time>{};
     auto field = std::string{};
     auto parser = argument_parser{"delay", "https://docs.tenzir.com/next/"
-                                           "operators/transformations/delay"};
+                                           "operators/delay"};
     parser.add("--speed", speed, "<factor>");
     parser.add("--start", start, "<time>");
     parser.add(field, "<field>");

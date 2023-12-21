@@ -137,12 +137,11 @@ public:
     auto speed = std::optional<double>{};
     auto start = std::optional<time>{};
     auto field = std::string{};
-    auto parser
-      = argument_parser{"timeshift", "https://docs.tenzir.com/next/"
-                                     "operators/transformations/timeshift"};
-    parser.add(field, "<field>");
+    auto parser = argument_parser{"timeshift", "https://docs.tenzir.com/next/"
+                                               "operators/timeshift"};
     parser.add("--speed", speed, "<factor>");
     parser.add("--start", start, "<time>");
+    parser.add(field, "<field>");
     parser.parse(p);
     if (speed and *speed <= 0.0) {
       diagnostic::error("`--speed` must be greater than 0")
