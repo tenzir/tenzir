@@ -359,7 +359,8 @@ tests:
         transformation: python @./misc/scripts/print-arrow.py
       - command: 'export arrow "where #schema == \"suricata.http\""'
         transformation: python @./misc/scripts/print-arrow.py
-      - command: count
+      - command: >
+          count '#schema == "zeek.conn" || #schema == /suricata.*/'
   Import syslog:
     tags: [syslog, import]
     steps:
