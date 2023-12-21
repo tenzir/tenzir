@@ -17,7 +17,7 @@ namespace tenzir::plugins::health_memory {
 
 namespace {
 
-#ifdef TENZIR_LINUX
+#ifdef _SC_AVPHYS_PAGES
 
 auto get_raminfo() -> caf::expected<record> {
   auto result = record{};
@@ -41,11 +41,11 @@ public:
   }
 
   auto make_collector() const -> caf::expected<collector> override {
-#ifdef TENZIR_LINUX
+#ifdef _SC_AVPHYS_PAGES
     return get_raminfo;
 #else
     return caf::make_error(ec::invalid_configuration,
-                           "currently only supported on linux");
+                           "not supported on this platform");
 #endif
   }
 
