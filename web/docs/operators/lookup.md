@@ -1,3 +1,9 @@
+---
+sidebar_custom_props:
+  operator:
+    source: true
+---
+
 # lookup
 
 Enriches a stream of events with a context.
@@ -27,7 +33,7 @@ the name of the context.
 ### `<options>`
 
 Optional, context-specific options. Refer to the [`enrich` operator
-documentation](../transformations/enrich.md) for more details about these
+documentation](enrich.md) for more details about these
 options.
 
 ### `--live`
@@ -42,17 +48,17 @@ the other.
 
 A lookup-specific flag that enables retroactive lookups for previously imported
 events. The `lookup` operator will then apply a context [after a context
-update](../transformations/context-update.md).
+update](context.md).
 
 By default, both retro and live lookups are enabled.
 Specifying either `--retro` or `--live` explicitly disables
 the other.
 
-### `--retro`
+### `--snapshot`
 
 A lookup-specific flag that creates a snapshot of the context at the time of
-execution. Further live and retroactive lookups will refer to that snapshot,
-disregarding any further context updates.
+execution. In combination with `--retro`, this will commence a retroactive
+lookup with that current context state.
 
 By default, snapshotting is disabled.
 
@@ -61,7 +67,7 @@ By default, snapshotting is disabled.
 Apply the `lookup-table` context `feodo` to incoming `suricata.flow` events.
 
 ```
-lookup --live a --field=src_ip --live
+lookup --live a --field=src_ip
 | where #schema == "suricata.flow"
 ```
 
@@ -69,7 +75,7 @@ Apply the `lookup-table` context `feodo` to previous `suricata.flow` events
 after an update to `feodo`.
 
 ```
-lookup --live a --field=src_ip --retro
+lookup --retro a --field=src_ip
 | where #schema == "suricata.flow"
 ```
 
@@ -78,6 +84,6 @@ then reapply the context
 after an update to `feodo`.
 
 ```
-lookup --live a --field=src_ip
+lookup a --field=src_ip
 | where #schema == "suricata.flow"
 ```
