@@ -6,52 +6,59 @@ sidebar_custom_props:
 
 # timeshift
 
-Adjust time values by anchoring them around the current time.
+Adjusts timestamps relative to a given start time, with an optional speedup.
 
 ## Synopsis
 
 ```
-timeshift [--speed <speed>] [--relative-to <relative-to>] <field>
+timeshift [--start <time>] [--speed <factor>] <field>
 ```
 
 ## Description
 
-The `timeshift` operators adjusts a series of time values by anchoring them
-around the current time. Combined with the [`delay`](delay.md) operator this
-enables replaying a historical data set in real-time.
+The `timeshift` operator adjusts a series of time values by anchoring them
+around a given start time.
 
-### `--speed <speed>`
+If you do not provide a start time with `--start`, the operator will anchor the
+timestamps in `field` to begin with the current wall clock time, as if you
+provided `--start now`.
 
-A constant factor that describes applied to the new time values. Set to 2.0 to
-replay a dataset at twice the original speed, or to 0.5 to replay it at half the
-original speed.
+With `--speed`, you can adjust the relative speed of the time series induced by
+`field` with a multiplicative factor.
 
-Defaults to 1.0.
+The options `--start` and `--speed` work independently, i.e., you can use them
+separately or both together.
 
-### `--relative-to <relative-to>`
+### `--start <time>`
 
 The time value to anchor the values around.
 
-Defaults to the current time.
+Defaults to `now`.
+
+### `--speed <speed>`
+
+A constant factor to be divided by the inter-arrival time. For example, 2.0
+decreases the event gaps by a factor of two, resulting a twice as fast dataflow.
+A value of 0.1 creates dataflow that spans ten times the original time frame.
+
+Defaults to 1.0.
 
 ### `<field>`
 
-The name fo the field for which to shift time values.
+The name of the field containing the timestamp values.
 
 ## Examples
 
-Anchor the M57 Zeek data set around Dec 19th, 2023:
+Anchor the M57 Zeek data set around Jan 1, 1984:
 
 ```
 from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read zeek-tsv
-| replay --relative-to 2023-12-19 ts
+| timeshift --start 1984-01-01 ts
 ```
 
-Replay the M57 Zeek data set at ten times the original speed, shifting time
-values to match the start time of the pipeline:
+As above, but also make the time span of the trace 100 times longer:
 
 ```
 from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read zeek-tsv
-| replay --speed 10 ts
-| delay ts
+| timeshift --start 1984-01-01 --speed 0.01 ts
 ```

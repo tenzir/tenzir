@@ -6,7 +6,7 @@ sidebar_custom_props:
 
 # delay
 
-Delay events relative to a given start time with an optional speedup.
+Delays events relative to a given start time, with an optional speedup.
 
 ## Synopsis
 
@@ -16,39 +16,71 @@ delay [--start <time>] [--speed <factor>] <field>
 
 ## Description
 
-Delay events relative to a given start time with an optional speedup.
-FIXME
+The `delay` operator replays a dataflow according to a time field by introducing
+sleeping periods proportional to the inter-arrival times of the events.
+
+Unless you provide a start time with `--start`, the operator will anchor the
+timestamps in `field` to begin with the current wall clock time, as if you
+provided `--start now`.
+
+With `--speed`, you can adjust the sleep time of the time series induced by
+`field` with a multiplicative factor.
+
+The options `--start` and `--speed` work independently, i.e., you can use them
+separately or both together.
 
 ### `--start <time>`
 
 The time value to anchor the values around.
 
-Defaults to the first non-null timestamp.
+Defaults to `now`.
 
-### `--speed <factor>`
+### `--speed <speed>`
 
-FIXME
+A constant factor to be divided by the inter-arrival time. For example, 2.0
+decreases the event gaps by a factor of two, resulting a twice as fast dataflow.
+A value of 0.1 creates dataflow that spans ten times the original time frame.
+
+Defaults to 1.0.
+
+### `<field>`
+
+The name of the field containing the timestamp values.
 
 ## Examples
 
-Replay the M57 Zeek data set.
+Replay the M57 Zeek logs with real-world inter-arrival times from the `ts`
+column. For example, if event *i* arrives at time *t* and *i + 1* at time *u*,
+then the `delay` operator will wait time *u - t* after emitting event *i* before
+emitting event *i + 1*. If *t > u* then the operator immediately emits event *i
++ 1*.
 
 ```
 from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read zeek-tsv
 | delay ts
 ```
 
-Replay the M57 Zeek data set at ten times the original speed:
+Replay the M57 Zeek logs at 10 times the original speed. That is, wait *(u - t)
+/ 10* between event *i* and *i + 1*, assuming *u > t*.
 
 ```
 from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read zeek-tsv
 | delay --speed 10 ts
 ```
 
-FIXME: Good example for timeshift+delay
+Replay as above, but start delaying only after `ts` exceeds `2021-11-17T16:35`
+and emit all events prior to that timestamp immediately.
 
 ```
 from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read zeek-tsv
-| timeshift --start "2 days ago"
-| delay --start "1 day ago" --speed 10 ts
+| delay --start "2021-11-17T16:35" --speed 10 ts
+```
+
+Adjust the timestamp to the present, and then start replaying in 2 hours from
+now:
+
+```
+from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read zeek-tsv
+| timeshift ts
+| delay --start "in 2 hours" ts
 ```
