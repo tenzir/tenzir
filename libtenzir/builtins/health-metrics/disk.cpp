@@ -21,7 +21,7 @@ auto get_diskspace_info(const std::string& path) -> caf::expected<record> {
   auto result = record{};
   auto spaceinfo = std::filesystem::space(path);
   // TODO: Find the mount point and/or device name if possible.
-  result["name"] = path;
+  result["path"] = path;
   result["total_bytes"] = spaceinfo.capacity;
   result["free_bytes"] = spaceinfo.free;
   result["used_bytes"] = spaceinfo.capacity - spaceinfo.free;
@@ -52,9 +52,10 @@ public:
 
   auto metric_layout() const -> record_type override {
     return record_type{{
-      {"name", string_type{}},
+      {"path", string_type{}},
       {"total_bytes", uint64_type{}},
       {"used_bytes", uint64_type{}},
+      {"free_bytes", uint64_type{}},
     }};
   }
 
