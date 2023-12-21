@@ -293,7 +293,7 @@ macro (TenzirInstallExampleConfiguration target source prefix destination)
   file(
     WRITE "${CMAKE_CURRENT_BINARY_DIR}/${target}-example-config.cmake"
     "\
-    cmake_minimum_required(VERSION 3.19...3.24 FATAL_ERROR)
+    cmake_minimum_required(VERSION 3.19...3.28 FATAL_ERROR)
     file(READ \"${source}\" content)
     # Randomly generated string that temporarily replaces semicolons.
     set(dummy \"J.3t26kvfjEoi9BXbf2j.qMY\")
@@ -645,17 +645,6 @@ function (TenzirRegisterPlugin)
       "${CMAKE_CURRENT_SOURCE_DIR}/${PLUGIN_TARGET}.yaml.example"
       "plugin/${PLUGIN_TARGET}/" "${PLUGIN_TARGET}.yaml")
   endif ()
-
-  # Install README.md and CHANGELOG.md files to <docdir>/plugin/<plugin>, if
-  # they exist at the plugin project root.
-  foreach (doc IN ITEMS "README.md" "CHANGELOG.md")
-    if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${doc}")
-      install(
-        FILES "${CMAKE_CURRENT_SOURCE_DIR}/${doc}"
-        DESTINATION "${CMAKE_INSTALL_DOCDIR}/plugin/${PLUGIN_TARGET}"
-        COMPONENT Runtime)
-    endif ()
-  endforeach ()
 
   if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/schema")
     # Install the bundled schema files to <datadir>/tenzir.
