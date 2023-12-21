@@ -1286,3 +1286,22 @@ tests:
         expected_result: error
       - command: exec 'parse line kv "foo(?=bar)" ""'
         expected_result: error
+
+  Time parser:
+    tags: [pipelines]
+    steps:
+      - command: exec 'show version | put line="2023-12-14T11:02:12" | parse line time "%FT%T"'
+      - command: exec 'show version | put line="2023-12-14T11:02:12" | parse line time --components "%FT%T"'
+      - command: exec 'show version | put line="Dec 13 11:04:15" | parse line time --strict "%b %d %H:%M:%S"'
+        expected_result: error
+      - command: exec 'show version | put line="Dec 13 11:04:15" | parse line time --components --strict "%b %d %H:%M:%S"'
+      - command: exec 'show version | put line="Dec 13 11:04:15" | parse line time "%b %d %H:%M:%S"'
+      - command: exec 'show version | put line="Dec 13 11:04:15" | parse line time --components "%b %d %H:%M:%S"'
+      - command: exec 'show version | put line="2023-12-14T11:02:12+0200" | parse line time "%FT%T%z"'
+      - command: exec 'show version | put line="2023-12-14T11:02:12+0200" | parse line time --components "%FT%T%z"'
+      - command: exec 'show version | put line="Dec 13 11:04:15 +0200" | parse line time --strict "%b %d %H:%M:%S %z"'
+        expected_result: error
+      - command: exec 'show version | put line="Dec 13 11:04:15 +0200" | parse line time "%b %d %H:%M:%S %z"'
+      - guard: test $(uname) != "Darwin"
+      - command: exec 'show version | put line="Dec 13 11:04:15 +0200" | parse line time --components --strict "%b %d %H:%M:%S %z"'
+      - command: exec 'show version | put line="Dec 13 11:04:15 +0200" | parse line time --components "%b %d %H:%M:%S %z"'
