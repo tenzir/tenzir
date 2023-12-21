@@ -18,7 +18,7 @@ namespace tenzir::plugins::health_process {
 
 namespace {
 
-auto get_raminfo() -> caf::expected<record> {
+auto get_process_statistics() -> caf::expected<record> {
   auto result = record{};
   auto status = detail::get_status();
   // Change dashes to underscores for consistency.
@@ -36,7 +36,7 @@ public:
   }
 
   auto make_collector() const -> caf::expected<collector> override {
-    return get_raminfo;
+    return get_process_statistics;
   }
 
   auto metric_name() const -> std::string override {
