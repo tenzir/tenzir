@@ -32,8 +32,11 @@ FROM dependencies AS development
 ENV PREFIX="/opt/tenzir" \
     PATH="/opt/tenzir/bin:${PATH}" \
     CC="gcc-12" \
-    CXX="g++-12" \
-    TENZIR_CACHE_DIRECTORY="/var/cache/tenzir" \
+    CXX="g++-12"
+
+# When changing these, make sure to also update the corresponding entries in the
+# flake.nix file.
+ENV TENZIR_CACHE_DIRECTORY="/var/cache/tenzir" \
     TENZIR_DB_DIRECTORY="/var/lib/tenzir" \
     TENZIR_LOG_FILE="/var/log/tenzir/server.log" \
     TENZIR_ENDPOINT="0.0.0.0"
