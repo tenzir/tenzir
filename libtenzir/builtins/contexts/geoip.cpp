@@ -374,19 +374,19 @@ public:
 
   /// Updates the context.
   auto update(table_slice, context::parameter_map)
-    -> caf::expected<record> override {
+    -> caf::expected<update_result> override {
     return caf::make_error(ec::unimplemented,
                            "geoip context can not be updated with events");
   }
 
   auto update(chunk_ptr, context::parameter_map)
-    -> caf::expected<record> override {
+    -> caf::expected<update_result> override {
     return caf::make_error(ec::unimplemented, "geoip context can not be "
                                               "updated with bytes");
   }
 
   auto update(context::parameter_map parameters)
-    -> caf::expected<record> override {
+    -> caf::expected<update_result> override {
     if (parameters.contains(path_key) and parameters.at(path_key)) {
       db_path_ = *parameters[path_key];
     }
@@ -402,7 +402,7 @@ public:
                                          "'{}': {}",
                                          db_path_, MMDB_strerror(status)));
     }
-    return show();
+    return update_result{.update_info = show(), .make_query = {}};
   }
 
   auto save() const -> caf::expected<chunk_ptr> override {
