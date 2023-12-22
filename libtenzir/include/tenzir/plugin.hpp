@@ -812,6 +812,11 @@ public:
   virtual auto update(parameter_map parameters) -> caf::expected<update_result>
     = 0;
 
+  /// Create a snapshot of the initial expression.
+  virtual auto snapshot(parameter_map parameters) const
+    -> caf::expected<expression>
+    = 0;
+
   // Serializes a context for persistence.
   virtual auto save() const -> caf::expected<chunk_ptr> = 0;
 };

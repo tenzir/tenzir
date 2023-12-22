@@ -405,6 +405,11 @@ public:
     return update_result{.update_info = show(), .make_query = {}};
   }
 
+  auto snapshot(parameter_map) const -> caf::expected<expression> override {
+    return caf::make_error(ec::unimplemented,
+                           "geoip context does not support snapshots");
+  }
+
   auto save() const -> caf::expected<chunk_ptr> override {
     auto builder = flatbuffers::FlatBufferBuilder{};
     auto path = builder.CreateString(db_path_);

@@ -90,6 +90,37 @@ public:
     return field_builder.finish();
   }
 
+  auto snapshot(parameter_map parameters) const
+    -> caf::expected<expression> override {
+    auto column = parameters["field"];
+    if (not column) {
+      return caf::make_error(ec::invalid_argument, "missing 'field' parameter");
+    }
+    auto keys = list{};
+    keys.reserve(context_entries.size());
+    auto first_index = std::optional<size_t>{};
+    for (const auto& [k, _] : context_entries) {
+      keys.emplace_back(k);
+      auto current_index = k.get_data().index();
+      if (not first_index) [[unlikely]] {
+        first_index = current_index;
+      } else if (*first_index != current_index) [[unlikely]] {
+        // TODO: With the language revamp, we should get heterogeneous lookups
+        // for free.
+        return caf::make_error(ec::unimplemented,
+                               "lookup-table does not support snapshots for "
+                               "heterogeneous keys");
+      }
+    }
+    return expression{
+      predicate{
+        field_extractor(*column),
+        relational_operator::in,
+        data{keys},
+      },
+    };
+  }
+
   /// Inspects the context.
   auto show() const -> record override {
     return record{{"num_entries", context_entries.size()}};
