@@ -22,10 +22,17 @@ sleeping periods proportional to the inter-arrival times of the events.
 With `--speed`, you can adjust the sleep time of the time series induced by
 `field` with a multiplicative factor. This has the effect of making the time
 series "faster" for values great than 1 and "slower" for values less than 1.
-
 Unless you provide a start time with `--start`, the operator will anchor the
 timestamps in `field` to begin with the current wall clock time, as if you
 provided `--start now`.
+
+The diagram below illustrates the effect of applying `delay` to dataflow. If an
+event in the stream has a timestamp the precedes the previous event, `delay`
+emits it instanstly. Otherwise `delay` sleeps the amount of time to reach the
+next timestamp. As shown in the last illustration, the `--speed` factor has a
+scaling effect on the inter-arrival times.
+
+![Delay](delay.excalidraw.svg)
 
 The options `--start` and `--speed` work independently, i.e., you can use them
 separately or both together.
