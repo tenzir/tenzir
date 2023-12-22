@@ -19,21 +19,21 @@ timeshift [--start <time>] [--speed <factor>] <field>
 The `timeshift` operator adjusts a series of time values by anchoring them
 around a given start time.
 
-If you do not provide a start time with `--start`, the operator will anchor the
-timestamps in `field` to begin with the current wall clock time, as if you
-provided `--start now`.
-
 With `--speed`, you can adjust the relative speed of the time series induced by
-`field` with a multiplicative factor.
+`field` with a multiplicative factor. This has the effect of making the time
+series "faster" for values great than 1 and "slower" for values less than 1.
+
+If you do not provide a start time with `--start`, the operator will anchor the
+timestamps at the first non-null timestamp.
 
 The options `--start` and `--speed` work independently, i.e., you can use them
 separately or both together.
 
 ### `--start <time>`
 
-The time value to anchor the values around.
+The timestamp to anchor the time values around.
 
-Defaults to `now`.
+Defaults to the first non-null timestamp in `field`.
 
 ### `--speed <speed>`
 
@@ -49,7 +49,7 @@ The name of the field containing the timestamp values.
 
 ## Examples
 
-Anchor the M57 Zeek data set around Jan 1, 1984:
+Set the M57 Zeek logs to begin at Jan 1, 1984:
 
 ```
 from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read zeek-tsv

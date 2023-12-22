@@ -19,19 +19,20 @@ delay [--start <time>] [--speed <factor>] <field>
 The `delay` operator replays a dataflow according to a time field by introducing
 sleeping periods proportional to the inter-arrival times of the events.
 
+With `--speed`, you can adjust the sleep time of the time series induced by
+`field` with a multiplicative factor. This has the effect of making the time
+series "faster" for values great than 1 and "slower" for values less than 1.
+
 Unless you provide a start time with `--start`, the operator will anchor the
 timestamps in `field` to begin with the current wall clock time, as if you
 provided `--start now`.
-
-With `--speed`, you can adjust the sleep time of the time series induced by
-`field` with a multiplicative factor.
 
 The options `--start` and `--speed` work independently, i.e., you can use them
 separately or both together.
 
 ### `--start <time>`
 
-The time value to anchor the values around.
+The timestamp to anchor the time values around.
 
 Defaults to `now`.
 
