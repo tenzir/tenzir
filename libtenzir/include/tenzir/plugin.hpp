@@ -35,6 +35,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <span>
 #include <type_traits>
 #include <vector>
@@ -780,6 +781,13 @@ public:
   using parameter_map
     = std::unordered_map<std::string, std::optional<std::string>>;
 
+  /// Information about a context update that gets propagated to live lookups.
+  struct update_result {
+    record update_info;
+    // Function for emitting an updated expression. Used for retroactive lookups.
+    std::function<caf::expected<expression>(parameter_map)> make_query = {};
+  };
+
   virtual ~context() noexcept = default;
 
   /// Emits context information for every event in `slice` in order.
@@ -792,16 +800,22 @@ public:
 
   /// Updates the context.
   virtual auto update(table_slice events, parameter_map parameters)
-    -> caf::expected<record>
+    -> caf::expected<update_result>
     = 0;
 
   /// Updates the context.
   virtual auto update(chunk_ptr bytes, parameter_map parameters)
-    -> caf::expected<record>
+    -> caf::expected<update_result>
     = 0;
 
   /// Updates the context.
-  virtual auto update(parameter_map parameters) -> caf::expected<record> = 0;
+  virtual auto update(parameter_map parameters) -> caf::expected<update_result>
+    = 0;
+
+  /// Create a snapshot of the initial expression.
+  virtual auto snapshot(parameter_map parameters) const
+    -> caf::expected<expression>
+    = 0;
 
   // Serializes a context for persistence.
   virtual auto save() const -> caf::expected<chunk_ptr> = 0;

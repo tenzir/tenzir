@@ -10,7 +10,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/prepend_token.hpp>
 
-namespace tenzir::plugins::enrich {
+namespace tenzir::plugins::lookup {
 
 namespace {
 
@@ -18,23 +18,24 @@ class plugin final : public virtual operator_parser_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {
-      .source = false,
-      .transformation = true,
+      .source = true,
+      .transformation = false,
       .sink = false,
     };
   }
 
   auto name() const -> std::string override {
-    return "enrich";
+    return "lookup";
   };
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    const auto token = located<std::string>{"apply", location::unknown};
+    const auto token = located<std::string>{"lookup", location::unknown};
     auto context_pi = prepend_token{token, p};
-    const auto* context_plugin = plugins::find_operator("context");
+    const auto* context_plugin
+      = plugins::find<operator_parser_plugin>("context");
     if (not context_plugin) {
       diagnostic::error("`context` plugin is required")
-        .note("from `enrich`")
+        .note("from `lookup`")
         .throw_();
     }
     return context_plugin->parse_operator(context_pi);
@@ -43,6 +44,6 @@ public:
 
 } // namespace
 
-} // namespace tenzir::plugins::enrich
+} // namespace tenzir::plugins::lookup
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::enrich::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::lookup::plugin)
