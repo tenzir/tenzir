@@ -26,6 +26,8 @@ series "faster" for values great than 1 and "slower" for values less than 1.
 If you do not provide a start time with `--start`, the operator will anchor the
 timestamps at the first non-null timestamp.
 
+![Timeshift](timeshift.excalidraw.svg)
+
 The options `--start` and `--speed` work independently, i.e., you can use them
 separately or both together.
 
