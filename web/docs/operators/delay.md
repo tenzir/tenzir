@@ -41,7 +41,7 @@ separately or both together.
 
 The timestamp to anchor the time values around.
 
-Defaults to `now`.
+Defaults to the first non-null timestamp in `field`.
 
 ### `--speed <speed>`
 
