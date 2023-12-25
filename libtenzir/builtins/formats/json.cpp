@@ -37,7 +37,7 @@ namespace tenzir::plugins::json {
 
 namespace {
 
-inline auto to_padded_lines(generator<chunk_ptr> input)
+inline auto to_padded_crlf_lines(generator<chunk_ptr> input)
   -> generator<std::optional<simdjson::padded_string_view>> {
   auto buffer = std::string{};
   bool ended_on_carriage_return = false;
@@ -73,6 +73,44 @@ inline auto to_padded_lines(generator<chunk_ptr> input)
         } else if (*next == '\n') {
           ++current;
         }
+      }
+      begin = current + 1;
+    }
+    buffer.append(begin, end);
+    co_yield std::nullopt;
+  }
+  if (!buffer.empty()) {
+    buffer.reserve(buffer.size() + simdjson::SIMDJSON_PADDING);
+    co_yield simdjson::padded_string_view{buffer};
+  }
+}
+
+inline auto to_padded_lines(generator<chunk_ptr> input, char split)
+  -> generator<std::optional<simdjson::padded_string_view>> {
+  auto buffer = std::string{};
+  for (auto&& chunk : input) {
+    if (!chunk || chunk->size() == 0) {
+      co_yield std::nullopt;
+      continue;
+    }
+    const auto* begin = reinterpret_cast<const char*>(chunk->data());
+    const auto* const end = begin + chunk->size();
+    for (const auto* current = begin; current != end; ++current) {
+      if (*current != split) {
+        continue;
+      }
+      const auto size = static_cast<size_t>(current - begin);
+      if (size == 0) {
+        continue;
+      }
+      const auto capacity = static_cast<size_t>(end - begin);
+      if (buffer.empty() and capacity >= size + simdjson::SIMDJSON_PADDING) {
+        co_yield simdjson::padded_string_view{begin, size, capacity};
+      } else {
+        buffer.append(begin, current);
+        buffer.reserve(buffer.size() + simdjson::SIMDJSON_PADDING);
+        co_yield simdjson::padded_string_view{buffer};
+        buffer.clear();
       }
       begin = current + 1;
     }
@@ -884,6 +922,7 @@ struct parser_args {
   std::optional<located<std::string>> schema;
   std::string unnest_separator;
   std::optional<location> no_infer;
+  bool use_gelf_mode = false;
   bool use_ndjson_mode = false;
   bool preserve_order = true;
   bool raw = false;
@@ -896,6 +935,7 @@ struct parser_args {
       .fields(f.field("selector", x.selector), f.field("schema", x.schema),
               f.field("unnest_separator", x.unnest_separator),
               f.field("no_infer", x.no_infer),
+              f.field("use_gelf_mode", x.use_gelf_mode),
               f.field("use_ndjson_mode", x.use_ndjson_mode),
               f.field("preserve_order", x.preserve_order),
               f.field("raw", x.raw),
@@ -952,14 +992,39 @@ public:
       }
       schema = *found;
     }
+    if (args_.use_ndjson_mode and args_.use_gelf_mode) {
+      diagnostic::error("options `--ndjson` and `--gelf` are incompatible")
+        .emit(ctrl.diagnostics());
+      return {};
+    }
     if (args_.use_ndjson_mode and args_.arrays_of_objects) {
       diagnostic::error(
         "options `--ndjson` and `--arrays-of-objects` are incompatible")
         .emit(ctrl.diagnostics());
       return {};
     }
+    if (args_.use_gelf_mode and args_.arrays_of_objects) {
+      diagnostic::error(
+        "options `--gelf` and `--arrays-of-objects` are incompatible")
+        .emit(ctrl.diagnostics());
+      return {};
+    }
     if (args_.use_ndjson_mode) {
-      return make_parser(to_padded_lines(std::move(input)), ctrl,
+      return make_parser(to_padded_crlf_lines(std::move(input)), ctrl,
+                         args_.unnest_separator, schema, args_.preserve_order,
+                         ndjson_parser{
+                           ctrl,
+                           args_.selector,
+                           schema,
+                           std::move(schemas),
+                           args_.no_infer.has_value(),
+                           args_.preserve_order,
+                           args_.raw,
+                           args_.arrays_of_objects,
+                         });
+    }
+    if (args_.use_gelf_mode) {
+      return make_parser(to_padded_lines(std::move(input), '\0'), ctrl,
                          args_.unnest_separator, schema, args_.preserve_order,
                          ndjson_parser{
                            ctrl,
@@ -1106,6 +1171,7 @@ public:
     parser.add("--unnest-separator", args.unnest_separator, "<separator>");
     add_common_options_to_parser(parser, args);
     parser.add("--ndjson", args.use_ndjson_mode);
+    parser.add("--gelf", args.use_gelf_mode);
     parser.add("--raw", args.raw);
     parser.add("--arrays-of-objects", args.arrays_of_objects);
     parser.parse(p);
@@ -1145,6 +1211,24 @@ public:
   }
 };
 
+class gelf_parser final : public virtual parser_parser_plugin {
+public:
+  auto name() const -> std::string override {
+    return "gelf";
+  }
+
+  auto parse_parser(parser_interface& p) const
+    -> std::unique_ptr<plugin_parser> override {
+    auto parser = argument_parser{
+      name(), fmt::format("https://docs.tenzir.com/next/formats/{}", name())};
+    auto args = parser_args{};
+    add_common_options_to_parser(parser, args);
+    parser.parse(p);
+    args.use_gelf_mode = true;
+    return std::make_unique<json_parser>(std::move(args));
+  }
+};
+
 template <detail::string_literal Name, detail::string_literal Selector,
           detail::string_literal Separator = "">
 class selector_parser final : public virtual parser_parser_plugin {
@@ -1175,5 +1259,6 @@ using zeek_parser = selector_parser<"zeek-json", "_path:zeek", ".">;
 } // namespace tenzir::plugins::json
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::gelf_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::suricata_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::zeek_parser)
