@@ -3,8 +3,9 @@
 [Graylog](https://graylog.org/) is a log management solution based on on top of
 Elasticsearch.
 
-Tenzir can send data to or receive data from Graylog. In Graylog, data goes
-through three key stages:
+Use Tenzir to process data from Graylog.
+
+In Graylog, data goes through three key stages:
 
 1. **Inputs**: This stage involves data ingestion, where Graylog receives data
    from various sources. Inputs support multiple protocols like TCP, UDP, and

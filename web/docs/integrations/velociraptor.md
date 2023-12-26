@@ -1,9 +1,10 @@
 # Velociraptor
 
 [Velociraptor](https://docs.velociraptor.app) is a digital forensics and
-incident response (DFIR) tool for interrogating endpoints. Tenzir's
-[`velociraptor`](../operators/velociraptor.md) operator makes it possible to
-speak with a Velociraptor server using the [gRPC API][api].
+incident response (DFIR) tool for interrogating endpoints.
+
+Use Tenzir to conveniently speak with a Velociraptor server over the [gRPC
+API][api].
 
 [api]: https://docs.velociraptor.app/docs/server_automation/server_api/
 
