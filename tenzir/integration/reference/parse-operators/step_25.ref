@@ -4,6 +4,7 @@ pipeline [
   },
   read json {
     unnest_separator: "",
+    use_gelf_mode: false,
     use_ndjson_mode: false,
     preserve_order: true,
     raw: false,
