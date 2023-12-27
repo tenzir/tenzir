@@ -1,6 +1,6 @@
 # Graylog
 
-[Graylog](https://graylog.org/) is a log management solution based on on top of
+[Graylog](https://graylog.org/) is a log management solution based on top of
 Elasticsearch.
 
 Use Tenzir to process data from Graylog.
