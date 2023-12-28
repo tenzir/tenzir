@@ -51,7 +51,7 @@ The regular expression used to separate a key from its value.
 
 ## Examples
 
-Extract comma-separated key-value pairs from `foo:1, bar:2    , baz:3 ,  qux:4`:
+Extract comma-separated key-value pairs from `foo:1, bar:2,baz:3 , qux:4`:
 
 ```
 kv "\s*,\s*" ":"

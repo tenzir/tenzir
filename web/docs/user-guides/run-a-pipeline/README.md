@@ -30,7 +30,7 @@ definition of the pipeline.
 
 If the pipeline expects events as its input, an implicit `load - | read json`
 will be prepended. If it expects bytes instead, only `load -` is prepended.
-Likewise, if the pipeline outputs events, an implicit `write json | save -` will
+Likewise, if the pipeline outputs events, an implicit `write json | save -` will
 be appended. If it outputs bytes instead, only `save -` is appended.
 
 The diagram below illustrates these mechanics:

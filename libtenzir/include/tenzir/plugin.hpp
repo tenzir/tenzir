@@ -275,7 +275,7 @@ public:
     -> bool
     = 0;
 
-  /// @post `!x || x->name() == name()`
+  /// @post `!x || x->name() == name()`
   virtual void deserialize(deserializer f, std::unique_ptr<Base>& x) const = 0;
 };
 
