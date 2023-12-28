@@ -79,10 +79,10 @@ private:
 
 auto do_not_optimize(const operator_base& op) -> optimize_result {
   // This default implementation is always correct because it effectively
-  // promises `op | where filter | sink <=> op | where filter | sink`, which is
+  // promises `op | where filter | sink <=> op | where filter | sink`, which is
   // trivial. Note that forwarding `order` is not always valid. To see this,
   // assume `op == head` and `order == unordered`. We would have to show that
-  // `head | where filter | sink <=> shuffle | head | where filter | sink`, but
+  // `head | where filter | sink <=> shuffle | head | where filter | sink`, but
   // this is clearly not the case.
   return optimize_result{std::nullopt, event_order::ordered, op.copy()};
 }

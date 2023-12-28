@@ -66,7 +66,7 @@
 ///                                     |              ^
 ///                                builder_base        ^
 ///                               /     |      \       ^
-///                            (is)    (is)    (is)    ^            
+///                            (is)    (is)    (is)    ^
 ///                            /        |        \     ^
 ///      typed_builder<int64_type>     ...      typed_builder<record_type>
 ///
