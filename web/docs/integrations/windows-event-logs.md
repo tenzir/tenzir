@@ -60,7 +60,7 @@ fluent-bit forward listen=10.0.0.1 | import
 Ensure that the `listen` parameter matches the `host` value in your Fluent Bit
 configuration.
 
-#### Test the confguration
+#### Test the configuration
 
 Test the setup by running the Fluent Bit command line utility:
 
