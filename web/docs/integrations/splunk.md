@@ -1,7 +1,10 @@
 # Splunk
 
-The [Splunk](https://splunk.com) integration allows you to place Tenzir between
-your data sources and existing Splunk deployment.
+[Splunk](https://splunk.com) is a log management and SIEM solution for storing
+and processing logs.
+
+Deploy Tenzir between your data sources and existing Splunk for controlling
+costs and gaining additional flexibility of data processing and routing.
 
 ## Send data to an existing HEC endpoint
 
