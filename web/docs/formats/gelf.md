@@ -21,10 +21,9 @@ The `gelf` parser reads events formatted in [Graylog Extended Log Format
 [Graylog](../integrations/graylog.md) uses for importing and exporting
 of structured data.
 
-Tenzir parses GELF as a stream of NDJSON records separated by a `\0` byte. GELF
-messages can also occur one at a time, e.g., in a UDP packet or Kafka message.
-In this case there is no separator. The [chunked mode](#chunked-mode) allows for
-splitting large messages into smaller fragments.
+Tenzir parses GELF as a stream of JSON records separated by a `\0` byte. GELF
+messages can also occur one at a time (e.g., in a HTTP body, UDP packet, or
+Kafka message) in which case there is no separator.
 
 [gelf-spec]: https://go2docs.graylog.org/5-0/getting_in_log_data/gelf.html
 
