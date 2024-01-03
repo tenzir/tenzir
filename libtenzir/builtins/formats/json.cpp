@@ -37,7 +37,7 @@ namespace tenzir::plugins::json {
 
 namespace {
 
-inline auto to_padded_crlf_lines(generator<chunk_ptr> input)
+inline auto split_at_crlf(generator<chunk_ptr> input)
   -> generator<std::optional<simdjson::padded_string_view>> {
   auto buffer = std::string{};
   bool ended_on_carriage_return = false;
@@ -85,7 +85,7 @@ inline auto to_padded_crlf_lines(generator<chunk_ptr> input)
   }
 }
 
-inline auto to_padded_lines(generator<chunk_ptr> input, char split)
+inline auto split_at_null(generator<chunk_ptr> input, char split)
   -> generator<std::optional<simdjson::padded_string_view>> {
   auto buffer = std::string{};
   for (auto&& chunk : input) {
@@ -1010,7 +1010,7 @@ public:
       return {};
     }
     if (args_.use_ndjson_mode) {
-      return make_parser(to_padded_crlf_lines(std::move(input)), ctrl,
+      return make_parser(split_at_crlf(std::move(input)), ctrl,
                          args_.unnest_separator, schema, args_.preserve_order,
                          ndjson_parser{
                            ctrl,
@@ -1024,7 +1024,7 @@ public:
                          });
     }
     if (args_.use_gelf_mode) {
-      return make_parser(to_padded_lines(std::move(input), '\0'), ctrl,
+      return make_parser(split_at_null(std::move(input), '\0'), ctrl,
                          args_.unnest_separator, schema, args_.preserve_order,
                          ndjson_parser{
                            ctrl,
