@@ -22,8 +22,12 @@ The `gelf` parser reads events formatted in [Graylog Extended Log Format
 of structured data.
 
 Tenzir parses GELF as a stream of JSON records separated by a `\0` byte. GELF
-messages can also occur one at a time (e.g., in a HTTP body, UDP packet, or
-Kafka message) in which case there is no separator.
+messages can also occur one at a time (e.g., framed in a HTTP body, UDP packet,
+or Kafka message) in which case there is no separator.
+
+GELF also supports a *chunked mode* where a single message can be split into at
+most 128 chunks. Tenzir currently does not support this mode. Please [reach
+out](/discord) if you would like to see support in future versions.
 
 [gelf-spec]: https://go2docs.graylog.org/5-0/getting_in_log_data/gelf.html
 
@@ -61,32 +65,13 @@ Here is an example GELF message:
 }
 ```
 
-By convention, Graylog uses the `_gl2_` prefix for its own field. There is no
+By convention, Graylog uses the `_gl2_` prefix for its own fields. There is no
 formalized convention for naming, and exact field names may depend on your
 configuration.
 
 :::caution Boolean values
 Graylog's implementation of GELF does not support boolean values and [drops them
 on ingest](https://github.com/Graylog2/graylog2-server/issues/5504).
-:::
-
-### Chunked mode
-
-Because a single GELF message can exceed the capacity of the underlying frame,
-GELF also supports a *chunked mode* where a single message can be split into at
-most 128 chunks, each of which have the following header:
-
-1. **GELF magic bytes** (2 bytes): `0x1e 0x0f`
-2. **Message ID** (8 bytes): A unique ID for all chunks in the same message
-3. **Sequence number** (1 byte): Intra-chunk counter starting at 0
-4. **Sequence count** (1 byte): Total number of chunks of the message
-
-Graylog implementations mandate that all chunks must arrive within 5 seconds,
-otherwise all chunks with the given message ID will be discarded.
-
-:::caution No support for chunked mode
-Tenzir currently does not support chunked mode. Please [reach out](/discord) if
-you would like to see support in future versions.
 :::
 
 ## Examples
@@ -97,7 +82,8 @@ Accept GELF from a [TCP](../connectors/tcp.md) socket:
 from tcp://1.2.3.4 read gelf
 ```
 
-Read GELF from [Kafka](../connectors/kafka.md) at the `graylog` topic:
+Read GELF messages from [Kafka](../connectors/kafka.md) from the `graylog`
+topic:
 
 ```
 from kafka --topic graylog read gelf
