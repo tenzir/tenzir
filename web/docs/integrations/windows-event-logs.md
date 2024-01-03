@@ -17,6 +17,68 @@ Regardless of the concrete agent you are using for shipping, the high-level
 setup is always the same: the agent sends events in a push-based to a Tenzir
 pipeline.
 
+### Winlogbeat
+
+[Winlogbeat](https://www.elastic.co/beats/winlogbeat) is Elastic's log shipper
+to get Windows Event Logs out of Windows machines into the Elastic stack.
+
+#### Config Winlogbeat
+
+After [installing
+Winlogbeat](https://www.elastic.co/guide/en/beats/winlogbeat/current/winlogbeat-installation-configuration.html),
+create a configuration:
+
+```yaml title="winlogbeat.yml"
+# Choose your channels.
+winlogbeat.event_logs:
+  - name: Application
+  - name: System
+  - name: Security
+  - name: ForwardedEvents
+  - name: Windows PowerShell
+  - name: Microsoft-Windows-Sysmon/Operational
+  - name: Microsoft-Windows-PowerShell/Operational
+  - name: Microsoft-Windows-Windows Defender/Operational
+  - name: Microsoft-Windows-TaskScheduler/Operational
+  - name: Microsoft-Windows-TerminalServices-LocalSessionManager/Operational
+  - name: Microsoft-Windows-TerminalServices-RDPClient/Operational
+
+# Send data to a Tenzir pipeline with an ElasticSearch source.
+output.elasticsearch:
+  hosts: ["https://10.0.0.1:9200"]
+  username: "winlogbeat_internal"
+  password: "YOUR_PASSWORD" 
+  ssl:
+    enabled: true
+    certificate_authorities: [C:\Program Files\creds\ca.crt]
+    certificate: C:\Program Files\creds\beat-win10\beat-win10.crt
+    key: C:\Program Files\creds\beat-win10\beat-win10.key
+```
+
+#### Start Winlogbeat as a service
+
+After you've competed your configuration, start the Winlogbeat service:
+
+```
+C:\Program Files\Winlogbeat> Start-Service winlogbeat
+```
+
+#### Run a Tenzir pipeline
+
+Now consume the data via a Tenzir pipeline using the
+[`fluent-bit`](../operators/fluent-bit.md) operator that mimics an ElasticSearch
+bulk ingest endpoint:
+
+```
+fluent-bit elasticsearch
+  port=9200
+  tls=on
+  tls.key_file=/opt/tenzir/elk.key
+  tls.crt_file=/opt/tenzir/elk.crt
+  tls.ca_file=/opt/tenzir/ca.crt
+| import
+```
+
 ### Fluent Bit
 
 Since Tenzir has native Fluent Bit support, collecting logs via the Fluent Bit
@@ -90,68 +152,6 @@ Start the service at boot:
 
 ```
 sc.exe config fluent-bit start= auto
-```
-
-### Winlogbeat
-
-[Winlogbeat](https://www.elastic.co/beats/winlogbeat) is Elastic's log shipper
-to get Windows Event Logs out of Windows machines into the Elastic stack.
-
-#### Config Winlogbeat
-
-After [installing
-Winlogbeat](https://www.elastic.co/guide/en/beats/winlogbeat/current/winlogbeat-installation-configuration.html),
-create a configuration:
-
-```yaml title="winlogbeat.yml"
-# Choose your channels.
-winlogbeat.event_logs:
-  - name: Application
-  - name: System
-  - name: Security
-  - name: ForwardedEvents
-  - name: Windows PowerShell
-  - name: Microsoft-Windows-Sysmon/Operational
-  - name: Microsoft-Windows-PowerShell/Operational
-  - name: Microsoft-Windows-Windows Defender/Operational
-  - name: Microsoft-Windows-TaskScheduler/Operational
-  - name: Microsoft-Windows-TerminalServices-LocalSessionManager/Operational
-  - name: Microsoft-Windows-TerminalServices-RDPClient/Operational
-
-# Send data to a Tenzir pipeline with an ElasticSearch source.
-output.elasticsearch:
-  hosts: ["https://10.0.0.1:9200"]
-  username: "winlogbeat_internal"
-  password: "YOUR_PASSWORD" 
-  ssl:
-    enabled: true
-    certificate_authorities: [C:\Program Files\creds\ca.crt]
-    certificate: C:\Program Files\creds\beat-win10\beat-win10.crt
-    key: C:\Program Files\creds\beat-win10\beat-win10.key
-```
-
-#### Start Winlogbeat as a service
-
-After you've competed your configuration, start the Winlogbeat service:
-
-```
-C:\Program Files\Winlogbeat> Start-Service winlogbeat
-```
-
-#### Run a Tenzir pipeline
-
-Now consume the data via a Tenzir pipeline using the
-[`fluent-bit`](../operators/fluent-bit.md) operator that mimics an ElasticSearch
-bulk ingest endpoint:
-
-```
-fluent-bit elasticsearch
-  port=9200
-  tls=on
-  tls.key_file=/opt/tenzir/elk.key
-  tls.crt_file=/opt/tenzir/elk.crt
-  tls.ca_file=/opt/tenzir/ca.crt
-| import
 ```
 
 ### NXLog
