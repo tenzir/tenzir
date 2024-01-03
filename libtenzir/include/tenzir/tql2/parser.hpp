@@ -38,7 +38,7 @@ struct identifier {
 
   friend auto inspect(auto& f, identifier& x) -> bool {
     if (auto dbg = as_debug_writer(f)) {
-      return dbg->apply(x.symbol) && dbg->append(" @ {}", x.location);
+      return dbg->apply(x.symbol) && dbg->append(" @ {:?}", x.location);
     }
     return f.object(x).fields(f.field("symbol", x.symbol),
                               f.field("location", x.location));
@@ -105,6 +105,8 @@ struct record {
   };
 
   using content_kind = variant<member, spread>;
+
+  record() = default;
 
   explicit record(std::vector<content_kind> content)
     : content{std::move(content)} {
@@ -183,10 +185,14 @@ auto parse(std::span<token> tokens, std::string_view source,
 
 } // namespace tenzir::tql2
 
-template <>
-struct tenzir::enable_default_formatter<tenzir::tql2::ast::pipeline>
-  : std::true_type {};
+namespace tenzir {
 
 template <>
-struct tenzir::enable_default_formatter<tenzir::tql2::ast::expression>
-  : std::true_type {};
+inline constexpr auto enable_default_formatter<tenzir::tql2::ast::pipeline>
+  = true;
+
+template <>
+inline constexpr auto enable_default_formatter<tenzir::tql2::ast::expression>
+  = true;
+
+} // namespace tenzir

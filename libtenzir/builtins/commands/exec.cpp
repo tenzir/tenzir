@@ -292,8 +292,30 @@ auto exec_impl2(std::string content, std::unique_ptr<diagnostic_handler> diag,
       return {};
     }
   }
-  auto parsed = tql2::parse(tokens, content, *diag);
-  if (diag->has_seen_error()) {
+  class improve_me final : public diagnostic_handler {
+  public:
+    explicit improve_me(std::unique_ptr<diagnostic_handler> inner)
+      : inner_{std::move(inner)} {
+    }
+
+    void emit(diagnostic d) override {
+      if (d.severity == severity::error) {
+        error_ = true;
+      }
+      inner_->emit(std::move(d));
+    }
+
+    auto error() const -> bool {
+      return error_;
+    }
+
+  private:
+    bool error_ = false;
+    std::unique_ptr<diagnostic_handler> inner_;
+  };
+  auto im = improve_me{std::move(diag)};
+  auto parsed = tql2::parse(tokens, content, im);
+  if (im.error()) {
     return ec::silent;
   }
   if (cfg.dump_ast) {

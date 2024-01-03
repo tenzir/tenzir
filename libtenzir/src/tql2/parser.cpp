@@ -27,11 +27,15 @@ public:
   }
 
 private:
-  auto parse_pipeline() -> pipeline {
+  auto parse_pipeline(bool rbrace_end = false) -> pipeline {
     auto steps = std::vector<pipeline::step>{};
     while (true) {
       while (accept(tk::newline)) {
       }
+      if (rbrace_end && peek(tk::rbrace)) {
+        break;
+      }
+      // TODO: ??
       if (eoi()) {
         break;
       }
@@ -47,7 +51,7 @@ private:
         // TODO: Parse operator.
         auto op = std::move(left.path[0]);
         auto args = std::vector<invocation_arg>{};
-        while (not accept(tk::newline)) {
+        while (not accept(tk::newline) /*TODO*/ && not peek(tk::rbrace)) {
           auto expr = parse_expression();
           if (auto equal = accept(tk::equal)) {
             expr.match(
@@ -95,12 +99,36 @@ private:
                     std::move(path)};
   }
 
-  auto parse_record() -> record {
-    auto content = std::vector<record::content_kind>{};
+  auto parse_record_or_pipeline() -> expression {
     if (not accept(tk::lbrace)) {
       throw_token();
     }
+    // { }       // unknown -> record
+    // { test }  // unknown -> record
+    // { test ,  // record
+    // { test :  // record
+    // OTHERWISE // pipeline
+    // TODO: This does not respect trivia.
     auto scope = ignore_newlines(true);
+    if (peek(tk::rbrace)) {
+      scope.done();
+      accept(tk::rbrace);
+      return expression{record{}};
+    }
+    if (raw_peek(tk::identifier)) {
+      if (raw_peek(tk::rbrace, 1) || raw_peek(tk::comma, 1)
+          || raw_peek(tk::colon, 1)) {
+        // Assume this is a record.
+      } else {
+        scope.done();
+        auto pipe = parse_pipeline(true);
+        if (not accept(tk::rbrace)) {
+          throw_token();
+        }
+        return expression{std::move(pipe)};
+      }
+    }
+    auto content = std::vector<record::content_kind>{};
     while (true) {
       if (peek(tk::rbrace)) {
         // {}
@@ -108,6 +136,21 @@ private:
       }
       if (not content.empty()) {
         if (not accept(tk::comma)) {
+          if (content.size() == 1) {
+            if (auto op = content[0].match(
+                  [](record::member& x) -> std::optional<identifier> {
+                    if (x.expr.has_value()) {
+                      return std::nullopt;
+                    }
+                    return x.name;
+                  },
+                  [](record::spread&) -> std::optional<identifier> {
+                    return std::nullopt;
+                  })) {
+              // Could be pipeline!
+              parse_pipeline();
+            }
+          }
           break;
         }
         // a comma can follow the last member
@@ -131,16 +174,15 @@ private:
     if (not accept(tk::rbrace)) {
       throw_token();
     }
-    return record{std::move(content)};
+    return expression{record{std::move(content)}};
   }
 
-  auto parse_expression() -> expression {
-    // TODO
+  auto parse_atomic_expression() -> expression {
     if (selector_start()) {
       return expression{parse_selector()};
     }
     if (peek(tk::lbrace)) {
-      return expression{parse_record()};
+      return parse_record_or_pipeline();
     }
     if (auto token = accept(tk::string)) {
       // TODO: Make this better and parse content?
@@ -149,6 +191,18 @@ private:
                token.location}};
     }
     throw_token();
+  }
+
+  auto parse_expression() -> expression {
+    // TODO
+    auto exp = parse_atomic_expression();
+    while (true) {
+      if (accept(tk::pipe)) {
+        // TODO
+        throw_token();
+      }
+      return exp;
+    }
   }
 
   struct accept_result {
@@ -182,6 +236,24 @@ private:
     // TODO: Does this count as trying the token?
     tries_.push_back(kind);
     return next_ < tokens_.size() && tokens_[next_].kind == kind;
+  }
+
+  auto raw_peek(token_kind kind, size_t offset = 0) -> bool {
+    auto index = next_;
+    while (true) {
+      if (index >= tokens_.size()) {
+        return false;
+      }
+      if (is_trivia(tokens_[index].kind)) {
+        index += 1;
+        continue;
+      }
+      if (offset == 0) {
+        return tokens_[index].kind == kind;
+      }
+      offset -= 1;
+      index += 1;
+    }
   }
 
   class [[nodiscard]] newline_scope {
@@ -219,12 +291,22 @@ private:
     return scope;
   }
 
+  auto is_trivia(token_kind kind) const -> bool {
+    switch (kind) {
+      case tk::line_comment:
+      case tk::delim_comment:
+      case tk::whitespace:
+        return true;
+      case tk::newline:
+        return ignore_newline_;
+      default:
+        return false;
+    }
+  }
+
   void consume_trivia() {
     while (next_ < tokens_.size()) {
-      auto next = tokens_[next_].kind;
-      if (next == tk::line_comment || next == tk::delim_comment
-          || next == tk::whitespace
-          || (ignore_newline_ && next == tk::newline)) {
+      if (is_trivia(tokens_[next_].kind)) {
         next_ += 1;
       } else {
         break;
@@ -268,7 +350,6 @@ private:
 } // namespace tenzir::tql2::ast
 
 namespace tenzir::tql2 {
-
 auto parse(std::span<token> tokens, std::string_view source,
            diagnostic_handler& diag) -> ast::pipeline {
   return ast::parser::parse_file(tokens, source, diag);
