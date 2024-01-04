@@ -21,7 +21,6 @@
 #include <arrow/record_batch.h>
 
 #include <cstring>
-#include <msgpack.h>
 #include <queue>
 
 #include <fluent-bit/fluent-bit-minimal.h>
