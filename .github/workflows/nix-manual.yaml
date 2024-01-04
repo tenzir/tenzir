@@ -63,6 +63,7 @@ jobs:
               if ${{ inputs.build-de }} then
                 {
                   "name": "tenzir",
+                  "gha-runner-labels": ["ubuntu-latest"],
                   "static": true,
                   "upload-package-to-github": ${{ inputs.upload-de-package-to-github }},
                   "package-stores": [
@@ -79,6 +80,7 @@ jobs:
               if ${{ inputs.build-ce }} then
                 {
                   "name": "tenzir-ce",
+                  "gha-runner-labels": ["ubuntu-latest"],
                   "static": true,
                   "upload-package-to-github": false,
                   "package-stores": [
@@ -94,6 +96,7 @@ jobs:
               if ${{ inputs.build-ee }} then
                 {
                   "name": "tenzir-ee",
+                  "gha-runner-labels": ["ubuntu-latest"],
                   "static": true,
                   "upload-package-to-github": false,
                   "package-stores": [
