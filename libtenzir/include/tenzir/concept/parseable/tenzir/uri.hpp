@@ -76,4 +76,10 @@ struct parser_registry<uri> {
   using type = uri_parser;
 };
 
+namespace parsers {
+
+constexpr auto uri = uri_parser{};
+
+} // namespace parsers
+
 } // namespace tenzir
