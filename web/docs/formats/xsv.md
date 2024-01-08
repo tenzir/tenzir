@@ -70,11 +70,11 @@ Specifies the string that separates list elements *within* a field.
 
 Specifies the string that denotes an absent value.
 
-### `--allow-comments` (Parser only)
+### `--allow-comments` (Parser)
 
 Treat lines beginning with `'#'` as comments.
 
-### `--header <header>` (Parser only)
+### `--header <header>` (Parser)
 
 Use the manually provided header line instead of treating the first line as the
 header.
