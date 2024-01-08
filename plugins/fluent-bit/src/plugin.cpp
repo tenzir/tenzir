@@ -42,7 +42,8 @@ struct fmt::formatter<msgpack_object_type> : fmt::formatter<std::string_view> {
       case MSGPACK_OBJECT_NEGATIVE_INTEGER:
         name = "Negative Integer";
         break;
-      case MSGPACK_OBJECT_FLOAT32: // Fall through
+      case MSGPACK_OBJECT_FLOAT32:
+        [[fallthrough]];
       case MSGPACK_OBJECT_FLOAT64:
         name = "Float";
         break;
@@ -116,6 +117,7 @@ auto visit(auto f, const msgpack_object& object) {
     case MSGPACK_OBJECT_NEGATIVE_INTEGER:
       return f(object.via.i64);
     case MSGPACK_OBJECT_FLOAT32:
+      [[fallthrough]];
     case MSGPACK_OBJECT_FLOAT64:
       return f(object.via.f64);
     case MSGPACK_OBJECT_STR:
