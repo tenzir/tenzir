@@ -598,12 +598,12 @@ tests:
       - command: import --blocking suricata
         input: data/suricata/eve.json
       - command: status --detailed catalog
-        transformation: jq '.catalog.partitions | length'
+        transformation: jq '[.catalog.partitions[] | select(.schema | startswith("tenzir.metrics") | not)] | length'
       - command: export arrow
         transformation: python @./misc/scripts/print-arrow-batch-size.py
       - command: rebuild start --undersized
       - command: status --detailed catalog
-        transformation: jq '.catalog.partitions | length'
+        transformation: jq '[.catalog.partitions[] | select(.schema | startswith("tenzir.metrics") | not)] | length'
       - command: export json
       - command: export arrow
         transformation: python @./misc/scripts/print-arrow-batch-size.py
