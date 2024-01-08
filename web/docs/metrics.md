@@ -119,8 +119,6 @@ head 3
 ~~~
 </details>
 
-
-
 ## `tenzir.metrics.cpu`
 
 Contains a measurement of CPU utilization.
@@ -172,7 +170,6 @@ export --internal
 }
 ~~~
 </details>
-
 
 ## `tenzir.metrics.disk`
 
@@ -266,9 +263,6 @@ export --internal
 }
 ~~~
 </details>
-
-
-
 
 ## `tenzir.metrics.process`
 

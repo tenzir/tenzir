@@ -31,5 +31,9 @@ TEST(health metrics) {
   test_health_metrics_plugin("health-process");
   test_health_metrics_plugin("health-disk");
   test_health_metrics_plugin("health-cpu");
+#ifdef _SC_AVPHYS_PAGES
+  // The 'memory' health metrics plugin isn't supported
+  // on all platforms.
   test_health_metrics_plugin("health-memory");
+#endif
 }
