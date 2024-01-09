@@ -20,6 +20,7 @@ check() {
     case $1 in
       '!')
         shift # past argument
+        # TODO: compare against stderr instead of stdout
         expect_error=1
         ;;
       --with-stderr)
