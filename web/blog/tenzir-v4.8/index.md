@@ -28,42 +28,13 @@ TBD
 ## Fluent Bit Performance
 
 The [`fluent-bit`](/operators/fluent-bit) source operator got a significant
-performance boost:
+performance boost as a byproduct of changing the Fluent Bit data exchange format
+from JSON to MsgPack:
 
-![Fluent Bit Performance](fluent-bit-performance.svg)
+![Fluent Bit Performance](fluent-bit-speedup.svg)
 
-We used the following pipeline to generate these numbers:
-
-```bash
-tenzir --dump-metrics 'fluent-bit stdin | head 10M | discard' < eve.json
-```
-
-The `eve.json` input is from our Suricata dataset that we use in the [user
-guides](/user-guides). We measured this on a 2021 Apple MacBook Pro M1 Max, as
-well as on a Manjaro Linux laptop with a 14-core Intel i7 CPU. We don't have a
-good explanation for the rather stark difference between the operating systems.
-Our hunch is that the allocator performance is the high-order bit explaining the
-difference.
-
-Comparing the difference in absolute numbers might be tricky, but the gains
-become obvious when comparing the relative speedup:
-
-![Fluent Bit Speedup](fluent-bit-speedup.svg)
-
-:::info TL;DR
-We observe a 3–5x gain for throughput in EPS and 4–8x improvement of latency in
-terms of processing time.
-:::
-
-Our primary goal was actually working around an issue with the Fluent Bit `lib`
-output plugin, which we use whenever we have a Fluent Bit source operator. The `lib` plugin then takes the produced data and emits it into the Tenzir pipeline (`head` in the above example). During testing with the Fluent Bit `elasticsearch` and large Windows event logs, we noticed that Fluent Bit's `lib` output produces
-messages of the form `[timestamp, JSON]` with cropped JSON.
-
-The fix involved switching the exchange format of the `lib` output plugin from
-JSON to MsgPack. If you're curious, take a look at
-[#3770](https://github.com/tenzir/tenzir/pull/3770) for the full scoop. The
-improvement is already in the current development version and will be available
-with the next release.
+Read the [dedicated blog post on this
+issue](/blog/switching-fluentbit-from-json-to-msgpack).
 
 Thanks to Christoph Lobmeyer and Yannik Meinhardt for reporting this issue! 🙏
 
