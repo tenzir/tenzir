@@ -17,6 +17,94 @@
 using namespace tenzir;
 using namespace std::string_literals;
 
+namespace {
+
+auto make_item = [](std::string_view str) {
+  auto result = http::request_item::parse(str);
+  REQUIRE_NOT_EQUAL(result, std::nullopt);
+  return *result;
+};
+
+} // namespace
+
+TEST(parse HTTP request item) {
+  auto separators = std::array{":=@", ":=", "==", "=@", "@", "=", ":"};
+  auto types = std::array{
+    http::request_item::file_data_json, http::request_item::data_json,
+    http::request_item::url_param,      http::request_item::file_data,
+    http::request_item::file_form,      http::request_item::data,
+    http::request_item::header,
+  };
+  static_assert(separators.size() == types.size());
+  for (auto i = 0u; i < types.size(); ++i) {
+    auto sep = separators[i];
+    auto str = fmt::format("foo{}bar", sep);
+    auto item = http::request_item::parse(str);
+    REQUIRE(item);
+    CHECK_EQUAL(item->key, "foo");
+    CHECK_EQUAL(item->value, "bar");
+    CHECK_EQUAL(item->type, types[i]);
+    str = fmt::format("foo{}bar\\{}", sep, sep);
+    item = http::request_item::parse(str);
+    REQUIRE(item);
+    CHECK_EQUAL(item->key, "foo");
+    auto value = fmt::format("bar{}", sep);
+    CHECK_EQUAL(item->value, value);
+  }
+}
+
+TEST(HTTP request items - JSON) {
+  auto request = http::request{};
+  auto items = std::vector<http::request_item>{
+    make_item("Content-Type:application/json"),
+    make_item("foo:=42"),
+  };
+  auto err = apply(items, request);
+  REQUIRE_EQUAL(err, caf::none);
+  // If we have a Content-Type header, apply also adds an Accept header. So here
+  // we have 1 explicit header from the request item, plus one implicit Accept
+  // header.
+  CHECK_EQUAL(request.headers.size(), 1ull + 1);
+  const auto* header = request.header("Accept");
+  REQUIRE(header);
+  CHECK_EQUAL(header->value, "application/json, */*");
+  // Adding an item with (JSON) data makes the method POST.
+  CHECK_EQUAL(request.method, "POST");
+  CHECK_EQUAL(request.body, "{\"foo\": 42}");
+}
+
+TEST(HTTP request items - JSON without content type) {
+  auto request = http::request{};
+  auto items = std::vector<http::request_item>{
+    make_item("foo:=42"),
+  };
+  auto err = apply(items, request);
+  REQUIRE_EQUAL(err, caf::none);
+  CHECK_EQUAL(request.headers.size(), 1ull);
+  const auto* header = request.header("Accept");
+  REQUIRE(header);
+  CHECK_EQUAL(header->value, "application/json, */*");
+  CHECK_EQUAL(request.method, "POST");
+  CHECK_EQUAL(request.body, "{\"foo\": 42}");
+}
+
+TEST(HTTP request items - urlencoded) {
+  auto request = http::request{};
+  auto items = std::vector<http::request_item>{
+    make_item("Content-Type:application/x-www-form-urlencoded"),
+    make_item("foo:=42"),
+    make_item("bar:=true"),
+  };
+  auto err = apply(items, request);
+  CHECK_EQUAL(request.headers.size(), 1ull + 1);
+  const auto* header = request.header("Accept");
+  REQUIRE(header);
+  CHECK_EQUAL(header->value, "*/*");
+  REQUIRE_EQUAL(err, caf::none);
+  CHECK_EQUAL(request.method, "POST");
+  CHECK_EQUAL(request.body, "foo=42&bar=true");
+}
+
 TEST(HTTP response) {
   http::response r;
   r.status_code = 200;
