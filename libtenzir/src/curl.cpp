@@ -8,111 +8,206 @@
 
 #include "tenzir/curl.hpp"
 
-#include "tenzir/chunk.hpp"
 #include "tenzir/concept/printable/tenzir/data.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
-#include "tenzir/config.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/error.hpp"
 
 #include <fmt/format.h>
 
-#include <span>
+namespace tenzir::curl {
 
-using namespace std::chrono_literals;
+namespace {} // namespace
 
-namespace tenzir {
-
-/// HTTP options for curl.
-http_options::http_options() {
-  static const auto default_headers = std::map<std::string, std::string>{
-    {"Accept", "*/*"},
-    {"User-Agent", fmt::format("Tenzir/{}", version::version)},
-  };
-  headers = default_headers;
+easy::easy() : easy_{curl_easy_init()} {
+  TENZIR_ASSERT(easy_ != nullptr);
 }
 
-curl::curl() : easy_{curl_easy_init()}, multi_{curl_multi_init()} {
-  auto err = set(CURLOPT_FOLLOWLOCATION, 1L);
-  TENZIR_ASSERT(not err);
-  // Enable all supported built-in compressions by setting the empty string.
-  // This can always be overriden by manually setting the Accept-Encoding
-  // header.
-  err = set(CURLOPT_ACCEPT_ENCODING, "");
-  TENZIR_ASSERT(not err);
-  err = to_error(curl_multi_add_handle(multi_, easy_));
-  TENZIR_ASSERT(not err);
-}
-
-curl::~curl() {
-  if (headers_)
+easy::~easy() {
+  if (easy_ != nullptr)
+    curl_easy_cleanup(easy_);
+  if (headers_ != nullptr)
     curl_slist_free_all(headers_);
-  curl_multi_remove_handle(multi_, easy_);
-  curl_easy_cleanup(easy_);
+}
+
+auto easy::set(CURLoption option, long parameter) -> code {
+  auto curl_code = curl_easy_setopt(easy_, option, parameter);
+  return static_cast<code>(curl_code);
+}
+
+auto easy::set(CURLoption option, std::string_view parameter) -> code {
+  auto curl_code = curl_easy_setopt(easy_, option, parameter.data());
+  return static_cast<code>(curl_code);
+}
+
+auto easy::set(write_callback fun) -> code {
+  TENZIR_ASSERT_CHEAP(fun);
+  on_write_ = std::make_unique<write_callback>(std::move(fun));
+  auto curl_code = curl_easy_setopt(easy_, CURLOPT_WRITEFUNCTION, on_write);
+  TENZIR_ASSERT_CHEAP(curl_code == CURLE_OK);
+  curl_code = curl_easy_setopt(easy_, CURLOPT_WRITEDATA, on_write_.get());
+  return static_cast<code>(curl_code);
+}
+
+auto easy::set(read_callback fun) -> code {
+  TENZIR_ASSERT_CHEAP(fun);
+  on_read_ = std::make_unique<read_callback>(std::move(fun));
+  auto curl_code = curl_easy_setopt(easy_, CURLOPT_READFUNCTION, on_read);
+  TENZIR_ASSERT_CHEAP(curl_code == CURLE_OK);
+  curl_code = curl_easy_setopt(easy_, CURLOPT_READDATA, on_read_.get());
+  return static_cast<code>(curl_code);
+}
+
+auto easy::set_http_header(std::string_view name, std::string_view value)
+  -> code {
+  auto header = fmt::format("{}: {}", name, value);
+  headers_ = curl_slist_append(headers_, header.c_str());
+  auto curl_code = curl_easy_setopt(easy_, CURLOPT_HTTPHEADER, headers_);
+  return static_cast<code>(curl_code);
+}
+
+auto easy::headers()
+  -> generator<std::pair<std::string_view, std::string_view>> {
+  const auto* current = headers_;
+  while (current != nullptr) {
+    auto str = std::string_view{current->data};
+    auto split = detail::split(str, ": ");
+    TENZIR_ASSERT_CHEAP(split.size() == 2);
+    co_yield std::pair{split[0], split[1]};
+    current = current->next;
+  }
+}
+
+auto easy::perform() -> code {
+  auto curl_code = curl_easy_perform(easy_);
+  return static_cast<code>(curl_code);
+}
+
+auto easy::reset() -> void {
+  curl_easy_reset(easy_);
+}
+
+auto easy::on_write(void* ptr, size_t size, size_t nmemb, void* user_data)
+  -> size_t {
+  TENZIR_ASSERT(size == 1);
+  TENZIR_ASSERT(user_data != nullptr);
+  const auto* data = reinterpret_cast<const std::byte*>(ptr);
+  auto bytes = std::span<const std::byte>{data, nmemb};
+  auto* f = reinterpret_cast<write_callback*>(user_data);
+  (*f)(bytes);
+  return nmemb;
+}
+
+auto easy::on_read(char* buffer, size_t size, size_t nitems, void* user_data)
+  -> size_t {
+  TENZIR_ASSERT(size == 1);
+  TENZIR_ASSERT(user_data != nullptr);
+  auto* ptr = reinterpret_cast<std::byte*>(buffer);
+  auto output = std::span<std::byte>{ptr, size * nitems};
+  auto* f = reinterpret_cast<read_callback*>(user_data);
+  auto n = (*f)(output);
+  TENZIR_ASSERT_CHEAP(n > 0);
+  return n;
+}
+
+auto to_string(easy::code code) -> std::string_view {
+  auto curl_code = static_cast<CURLcode>(code);
+  return {curl_easy_strerror(curl_code)};
+}
+
+auto to_error(easy::code code) -> caf::error {
+  if (code == easy::code::ok)
+    return {};
+  return caf::make_error(ec::unspecified,
+                         fmt::format("curl: {}", to_string(code)));
+}
+
+multi::multi() : multi_{curl_multi_init()} {
+}
+
+multi::~multi() {
+  // libcurl demands the following cleanup order:
+  // (1) Remove easy handles
+  // (2) Cleanup easy handles
+  // (3) Clean up the multi handle
+  // We cannot enforce (1) and (2) here because our easy handles don't have
+  // shared ownership semantics. It's up to the user to add and remove them.
   curl_multi_cleanup(multi_);
 }
 
-auto curl::download(std::chrono::milliseconds timeout)
-  -> generator<caf::expected<chunk_ptr>> {
-  auto err = set(CURLOPT_WRITEFUNCTION, write_callback);
-  TENZIR_ASSERT(not err);
-  std::vector<chunk_ptr> chunks;
-  err = set(CURLOPT_WRITEDATA, &chunks);
-  TENZIR_ASSERT(not err);
-  auto guard = caf::detail::make_scope_guard([this]() {
-    auto err = set(CURLOPT_WRITEFUNCTION, nullptr);
-    TENZIR_ASSERT(not err);
-    err = set(CURLOPT_WRITEDATA, nullptr);
-    TENZIR_ASSERT(not err);
-  });
+auto multi::add(easy& handle) -> code {
+  auto curl_code = curl_multi_add_handle(multi_, handle.easy_);
+  return static_cast<code>(curl_code);
+}
+
+auto multi::remove(easy& handle) -> code {
+  auto curl_code = curl_multi_remove_handle(multi_, handle.easy_);
+  return static_cast<code>(curl_code);
+}
+
+auto multi::poll(std::chrono::milliseconds timeout) -> code {
   auto ms = detail::narrow_cast<int>(timeout.count());
-  auto still_running = int{0};
-  do {
-    auto mc = curl_multi_perform(multi_, &still_running);
-    if (mc == CURLM_OK && still_running != 0)
-      mc = curl_multi_poll(multi_, nullptr, 0u, ms, nullptr);
-    if (mc != CURLM_OK) {
-      co_yield to_error(mc);
-      co_return;
+  auto curl_code = curl_multi_poll(multi_, nullptr, 0u, ms, nullptr);
+  return static_cast<code>(curl_code);
+}
+
+auto multi::perform() -> std::pair<code, size_t> {
+  auto num_running = int{0};
+  auto curl_code = curl_multi_perform(multi_, &num_running);
+  TENZIR_ASSERT_CHEAP(num_running >= 0);
+  return {static_cast<code>(curl_code),
+          detail::narrow_cast<size_t>(num_running)};
+}
+
+auto multi::run(std::chrono::milliseconds timeout) -> caf::expected<size_t> {
+  auto [result, num_running] = perform();
+  if (result == code::ok and num_running != 0)
+    result = poll(timeout);
+  if (result != code::ok)
+    return to_error(result);
+  return num_running;
+}
+
+auto multi::loop(std::chrono::milliseconds timeout) -> caf::error {
+  while (true) {
+    if (auto num_running = run(timeout)) {
+      if (*num_running == 0)
+        return {};
+    } else {
+      return num_running.error();
     }
-    if (chunks.empty())
-      co_yield chunk_ptr{};
-    for (auto&& chunk : chunks)
-      co_yield chunk;
-    chunks.clear();
-  } while (still_running != 0);
+  }
 }
 
-auto curl::upload(std::span<const std::byte> bytes) -> caf::error {
-  if (auto err = set_body_data(bytes))
-    return err;
-  auto still_running = int{0};
-  do {
-    auto mc = curl_multi_perform(multi_, &still_running);
-    if (mc == CURLM_OK && still_running != 0)
-      mc = curl_multi_poll(multi_, nullptr, 0u, 0, nullptr);
-    if (mc != CURLM_OK)
-      return to_error(mc);
-  } while (still_running != 0);
-  return {};
+auto to_string(multi::code code) -> std::string_view {
+  auto curl_code = static_cast<CURLMcode>(code);
+  return {curl_multi_strerror(curl_code)};
 }
 
-auto curl::escape(std::string_view str) -> std::string {
+auto escape(std::string_view str) -> std::string {
+  auto* easy = curl_easy_init();
   auto result = std::string{};
   auto length = detail::narrow_cast<int>(str.size());
-  if (auto* escaped = curl_easy_escape(easy_, str.data(), length)) {
+  if (auto* escaped = curl_easy_escape(easy, str.data(), length)) {
     result = escaped;
     curl_free(escaped);
   }
+  curl_easy_cleanup(easy);
   return result;
 }
 
-auto curl::escape(const record& xs) -> std::string {
+auto escape(const record& xs) -> std::string {
   auto to_raw_string = [](const auto& value) -> std::string {
     auto f = detail::overload{
       [&](const auto& x) {
+        using tenzir::to_string;
         return to_string(x);
+      },
+      [](const std::basic_string<std::byte>& blob) {
+        const auto* ptr = reinterpret_cast<const char*>(blob.data());
+        return std::string{ptr, blob.size()};
       },
       [](const std::string& str) {
         return str; // no more double quotes
@@ -130,125 +225,11 @@ auto curl::escape(const record& xs) -> std::string {
   return fmt::format("{}", fmt::join(kvps, "&"));
 }
 
-auto curl::set(CURLoption option, auto parameter) -> caf::error {
-  return to_error(curl_easy_setopt(easy_, option, parameter));
-}
-
-/// A wrapper around the C API.
-auto curl::to_error(CURLcode number) -> caf::error {
-  if (number == CURLE_OK)
+auto to_error(multi::code code) -> caf::error {
+  if (code == multi::code::ok)
     return {};
-  const auto* str = curl_easy_strerror(number);
-  return caf::make_error(ec::unspecified, fmt::format("curl: {}", str));
+  return caf::make_error(ec::unspecified,
+                         fmt::format("curl: {}", to_string(code)));
 }
 
-auto curl::to_error(CURLMcode number) -> caf::error {
-  if (number == CURLM_OK)
-    return {};
-  const auto* str = curl_multi_strerror(number);
-  return caf::make_error(ec::unspecified, fmt::format("curl: {}", str));
-}
-
-auto curl::write_callback(void* ptr, size_t size, size_t nmemb, void* user_data)
-  -> size_t {
-  TENZIR_ASSERT(size == 1);
-  TENZIR_ASSERT(user_data != nullptr);
-  const auto* data = reinterpret_cast<const std::byte*>(ptr);
-  auto bytes = std::span<const std::byte>{data, nmemb};
-  auto* chunks = reinterpret_cast<std::vector<chunk_ptr>*>(user_data);
-  chunks->emplace_back(chunk::copy(bytes));
-  return nmemb;
-}
-
-auto curl::read_callback(char* buffer, size_t size, size_t nitems,
-                         void* user_data) -> size_t {
-  // Returning 0 signals end-of-file to the library and causes it to stop the
-  // current transfer.
-  TENZIR_ASSERT(size == 1);
-  TENZIR_ASSERT(user_data != nullptr);
-  auto* ptr = reinterpret_cast<std::byte*>(buffer);
-  auto output = std::span<std::byte>{ptr, size * nitems};
-  auto* input = reinterpret_cast<std::span<const std::byte>*>(user_data);
-  auto n = std::min(output.size(), input->size());
-  TENZIR_ASSERT(n > 0);
-  std::copy_n(input->begin(), n, output.end());
-  return n;
-}
-
-auto curl::set(const curl_options& opts) -> caf::error {
-  if (opts.verbose)
-    if (auto err = set(CURLOPT_VERBOSE, 1L))
-      return err;
-  if (not opts.default_protocol.empty())
-    if (auto err = set(CURLOPT_DEFAULT_PROTOCOL, opts.default_protocol.c_str()))
-      return err;
-  if (not opts.url.empty())
-    if (auto err = set(CURLOPT_URL, opts.url.c_str()))
-      return err;
-  if (opts.default_protocol == "http" or opts.default_protocol == "https") {
-    // For POST and PUT, we also set an empty body.
-    if (not opts.http.body.data.empty() or opts.http.method == "POST"
-        or opts.http.method == "PUT") {
-      if (auto err = set_body_data(as_bytes(opts.http.body.data)))
-        return err;
-    }
-    // Configure curl based on HTTP method.
-    if (opts.http.method == "GET") {
-      if (auto err = set(CURLOPT_HTTPGET, 1L))
-        return err;
-    } else if (opts.http.method == "HEAD") {
-      if (auto err = set(CURLOPT_NOBODY, 1L))
-        return err;
-    } else if (opts.http.method == "POST") {
-      if (auto err = set(CURLOPT_POST, 1L))
-        return err;
-    } else if (not opts.http.method.empty()) {
-      if (auto err = set(CURLOPT_CUSTOMREQUEST, opts.http.method.c_str()))
-        return err;
-    }
-    if (headers_) {
-      curl_slist_free_all(headers_);
-      headers_ = nullptr;
-    }
-    // Add Content-Type to headers if user specified it for the request body.
-    if (not opts.http.body.content_type.empty()) {
-      auto content_type
-        = fmt::format("Content-Type: {}", opts.http.body.content_type);
-      headers_ = curl_slist_append(headers_, content_type.c_str());
-    }
-    if (not opts.http.headers.empty()) {
-      for (const auto& [header, value] : opts.http.headers) {
-        auto str = header;
-        str += ':';
-        if (not value.empty()) {
-          str += ' ';
-          str += value;
-        }
-        headers_ = curl_slist_append(headers_, str.c_str());
-      }
-    }
-    if (auto err = set(CURLOPT_HTTPHEADER, headers_))
-      return err;
-  }
-  return {};
-}
-
-auto curl::set_body_data(std::span<const std::byte> bytes) -> caf::error {
-  // Setting the size manually is important because curl would otherwise
-  // use strlen to determine the body size (which would be UB for binary
-  // data).
-  auto size = detail::narrow_cast<long>(bytes.size());
-  if (auto err = set(CURLOPT_POSTFIELDSIZE, size))
-    return err;
-  // Here is choice of CURLOPT_POSTFIELDS vs. CURLOPT_COPYPOSTFIELDS,
-  // where the latter copies the input. We're copying now, but should
-  // revisit this for large POST bodies.
-  if (auto err = set(CURLOPT_COPYPOSTFIELDS, bytes.data()))
-    return err;
-  // NB: setting body data via CURLOPT_POSTFIELDS implicitly sets the
-  // Content-Type header to 'application/x-www-form-urlencoded' unless we
-  // provide a Content-Type header that overrides it.
-  return {};
-}
-
-} // namespace tenzir
+} // namespace tenzir::curl
