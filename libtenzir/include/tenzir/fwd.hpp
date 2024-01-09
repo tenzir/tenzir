@@ -135,6 +135,7 @@ class command;
 class configuration;
 class data;
 class diagnostic_builder;
+class diagnostic_handler;
 class double_type;
 class duration_type;
 class enumeration_type;
