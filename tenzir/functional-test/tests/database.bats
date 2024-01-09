@@ -127,7 +127,7 @@ teardown() {
      | jq '.index.statistics.layouts | del(.\"tenzir.metrics\")'"
 
   check --sort -c \
-    "tenzir-ctl status --detailed | jq -ec 'del(.version) | del(.system.\"swap-space-usage\") | paths(scalars) as \$p | {path:\$p, type:(getpath(\$p) | type)}' | grep -v ',[1-9][0-9]*,'"
+    "tenzir-ctl status --detailed | jq -ec 'del(.version) | del(.partitions) | del(.system.\"swap-space-usage\") | paths(scalars) as \$p | {path:\$p, type:(getpath(\$p) | type)}' | grep -v ',[1-9][0-9]*,'"
 
   check -c \
     "tenzir-ctl status --detailed index importer \
