@@ -232,11 +232,6 @@ components:
           description: Autostart the pipeline upon failure.
           default: false
           example: false
-        stopped:
-          type: boolean
-          description: Autostart the pipeline when it stops before completing.
-          default: false
-          example: true
     PipelineInfo:
       type: object
       properties:
