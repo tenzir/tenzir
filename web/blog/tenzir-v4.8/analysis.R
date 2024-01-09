@@ -28,34 +28,60 @@ library(patchwork)
 
 data <-
   tribble(
-    ~Metric, ~v4.7, ~v4.8,
-    "EPS", 50237, 159269,
-    "Runtime", 42.69, 9.86,
-  ) |>
-  pivot_longer(!Metric, names_to = "Version")
+    ~Metric, ~OS, ~v4.7, ~v4.8,
+    "EPS", "macOS", 50237, 159269,
+    "Runtime", "macOS", 42.69, 9.86,
+    "EPS", "Linux", 23020, 131115,
+    "Runtime", "Linux", 39.19, 4.78,
+  )
+
+comparison <- data |>
+  pivot_longer(!c(Metric, OS), names_to = "Version")
 
 
 theme_set(theme_minimal(base_size = 28))
 
-eps_plot <- data |>
+eps_plot <- comparison |>
   filter(Metric == "EPS") |>
-  ggplot(aes(x = factor(Version), y = value, fill = Metric)) +
-    geom_col(fill = "#0086E5") +
+  ggplot(aes(x = factor(Version), y = value)) +
+    geom_bar(stat = "identity", fill = "#0086E5") +
     guides(fill = "none") +
     scale_y_continuous(labels = label_number(scale_cut = cut_short_scale())) +
-    labs(x = "Tenzir Version", y = "Events Per Second (EPS)")
+    labs(x = "Tenzir Version", y = "Events Per Second (EPS)") +
+    facet_wrap(vars(OS))
 
-runtime_plot <- data |>
+runtime_plot <- comparison |>
   filter(Metric == "Runtime") |>
-  ggplot(aes(x = factor(Version), y = value, fill = Metric)) +
+  ggplot(aes(x = factor(Version), y = value)) +
     geom_col(fill = "#A102C8") +
     guides(fill = "none") +
-    labs(x = "Tenzir Version", y = "Runtime (seconds)")
-
-combined_plot <- eps_plot + runtime_plot
+    labs(x = "Tenzir Version", y = "Runtime (seconds)") +
+    facet_wrap(vars(OS))
 
 ggsave(filename = "fluent-bit-performance.svg",
-       plot = combined_plot,
+       plot = eps_plot + runtime_plot,
+       bg = "transparent",
+       width = 16,
+       height = 9)
+
+eps_plot_delta <- data |>
+  filter(Metric == "EPS") |>
+  transmute(OS, Speedup = v4.8 / v4.7) |>
+  ggplot(aes(x = OS, y = Speedup)) +
+    geom_col(fill = "#0086E5") +
+    guides(fill = "none") +
+    labs(x = "Events Per Second (EPS)", y = "Speedup")
+
+runtime_plot_delta <- data |>
+  filter(Metric == "Runtime") |>
+  transmute(OS, Speedup = v4.7 / v4.8) |>
+  ggplot(aes(x = OS, y = Speedup)) +
+    geom_col(fill = "#A102C8") +
+    guides(fill = "none") +
+    labs(x = "Runtime", y = "Speedup")
+
+ggsave(filename = "fluent-bit-speedup.svg",
+       plot = eps_plot_delta + runtime_plot_delta,
        bg = "transparent",
        width = 16,
        height = 9)
