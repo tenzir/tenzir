@@ -50,8 +50,10 @@ become obvious when comparing the relative speedup:
 
 ![Fluent Bit Speedup](fluent-bit-speedup.svg)
 
-In summary, we observe a 3–5x gain for throughput in EPS and 4–8x improvement of
-latency in terms of processing time.
+:::info TL;DR
+We observe a 3–5x gain for throughput in EPS and 4–8x improvement of latency in
+terms of processing time.
+:::
 
 Our primary goal was actually working around an issue with the Fluent Bit `lib`
 output plugin, which we use whenever we have a Fluent Bit source operator. The `lib` plugin then takes the produced data and emits it into the Tenzir pipeline (`head` in the above example). During testing with the Fluent Bit `elasticsearch` and large Windows event logs, we noticed that Fluent Bit's `lib` output produces
@@ -59,9 +61,11 @@ messages of the form `[timestamp, JSON]` with cropped JSON.
 
 The fix involved switching the exchange format of the `lib` output plugin from
 JSON to MsgPack. If you're curious, take a look at
-[#3770](https://github.com/tenzir/tenzir/pull/3770) for the full scoop.
+[#3770](https://github.com/tenzir/tenzir/pull/3770) for the full scoop. The
+improvement is already in the current development version and will be available
+with the next release.
 
-Thanks to Christoph Lobmeyer and Yannik Meinhardt for tracking this issue! 🙏
+Thanks to Christoph Lobmeyer and Yannik Meinhardt for reporting this issue! 🙏
 
 ## Here & There
 
