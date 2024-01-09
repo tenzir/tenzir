@@ -8,7 +8,10 @@
 
 #include "tenzir/cast.hpp"
 
+#include "tenzir/fwd.hpp"
+
 #include "tenzir/test/test.hpp"
+#include "tenzir/type.hpp"
 
 namespace {
 
@@ -754,4 +757,26 @@ TEST(casting int64_t array to uint64_t builder fails due to negative value) {
   auto out = tenzir::cast_to_builder(tenzir::int64_type{}, *array,
                                      tenzir::uint64_type{});
   CHECK(not out);
+}
+
+TEST(string to blob without padding) {
+  auto out = tenzir::cast_value(tenzir::string_type{}, "dGVuemly",
+                                tenzir::blob_type{});
+  REQUIRE_NOERROR(out);
+  CHECK_EQUAL(std::string_view{reinterpret_cast<char const*>(out->data())},
+              "tenzir");
+}
+
+TEST(string to blob with padding) {
+  auto out = tenzir::cast_value(tenzir::string_type{},
+                                "dmFzdA==", tenzir::blob_type{});
+  REQUIRE_NOERROR(out);
+  CHECK_EQUAL(std::string_view{reinterpret_cast<char const*>(out->data())},
+              "vast");
+}
+
+TEST(string to blob error) {
+  auto out = tenzir::cast_value(tenzir::string_type{}, "dmFzdA==!",
+                                tenzir::blob_type{});
+  REQUIRE_ERROR(out);
 }
