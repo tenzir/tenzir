@@ -908,6 +908,61 @@ data type::to_definition(bool expand) const noexcept {
     caf::visit(make_type_definition, *this));
 }
 
+auto type::to_definition2(std::optional<std::string> field_name,
+                          offset parent_path) const noexcept -> record {
+  auto attributes = list{};
+  for (const auto& [key, value] : this->attributes()) {
+    attributes.push_back(record{
+      {"key", std::string{key}},
+      {"value", value.empty() ? data{std::string{value}} : data{}},
+    });
+  }
+  auto path = list{};
+  for (const auto& index : parent_path) {
+    path.push_back(data{static_cast<int64_t>(index)});
+  }
+  auto make_type_definition = detail::overload{
+    [&](const auto&) noexcept -> record {
+      auto result = record{};
+      result.emplace("name", field_name.value_or(std::string{name()}));
+      result.emplace("kind", std::string{to_string(kind())});
+      result.emplace("type", fmt::to_string(*this));
+      result.emplace("attributes", std::move(attributes));
+      result.emplace("path", std::move(path));
+      result.emplace("fields", list{});
+      return result;
+    },
+    [&](const list_type& self) noexcept -> record {
+      // Recursively create the definition for the nested type, but add a -1 to
+      // it for the values. We override the type to include the list, but leave
+      // the kind as the nested value.
+      parent_path.push_back(-1);
+      auto result = self.value_type().to_definition2(
+        field_name.value_or(std::string{name()}), parent_path);
+      result.emplace("type", fmt::to_string(*this));
+      return result;
+    },
+    [&](const record_type& self) noexcept -> record {
+      auto fields = list{};
+      parent_path.push_back(-1);
+      for (const auto& field : self.fields()) {
+        ++parent_path.back();
+        fields.push_back(
+          field.type.to_definition2(std::string{field.name}, parent_path));
+      }
+      auto result = record{};
+      result.emplace("name", field_name.value_or(std::string{name()}));
+      result.emplace("kind", std::string{to_string(kind())});
+      result.emplace("type", fmt::to_string(*this));
+      result.emplace("attributes", std::move(attributes));
+      result.emplace("path", std::move(path));
+      result.emplace("fields", std::move(fields));
+      return result;
+    },
+  };
+  return caf::visit(make_type_definition, *this);
+}
+
 type type::from_arrow(const arrow::DataType& other) noexcept {
   auto f = detail::overload{
     []<class T>(const T&) noexcept -> type {

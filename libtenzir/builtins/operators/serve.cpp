@@ -714,8 +714,7 @@ struct serve_handler_state {
       first = false;
       out_iter = fmt::format_to(out_iter, R"("schema_id":"{}","definition":)",
                                 schema.make_fingerprint());
-      const auto ok
-        = printer.print(out_iter, schema.to_definition(/*expand*/ false));
+      const auto ok = printer.print(out_iter, schema.to_definition2());
       TENZIR_ASSERT_CHEAP(ok);
     }
     out_iter = fmt::format_to(out_iter, R"(}}]}}{})", '\n');
