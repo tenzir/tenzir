@@ -21,8 +21,51 @@
 #include <arrow/record_batch.h>
 
 #include <cstring>
+#include <queue>
 
 #include <fluent-bit/fluent-bit-minimal.h>
+
+template <>
+struct fmt::formatter<msgpack_object_type> : fmt::formatter<std::string_view> {
+  auto format(msgpack_object_type type, format_context& ctx) {
+    std::string_view name = "Unknown";
+    switch (type) {
+      case MSGPACK_OBJECT_NIL:
+        name = "Nil";
+        break;
+      case MSGPACK_OBJECT_BOOLEAN:
+        name = "Boolean";
+        break;
+      case MSGPACK_OBJECT_POSITIVE_INTEGER:
+        name = "Positive Integer";
+        break;
+      case MSGPACK_OBJECT_NEGATIVE_INTEGER:
+        name = "Negative Integer";
+        break;
+      case MSGPACK_OBJECT_FLOAT32:
+        [[fallthrough]];
+      case MSGPACK_OBJECT_FLOAT64:
+        name = "Float";
+        break;
+      case MSGPACK_OBJECT_STR:
+        name = "String";
+        break;
+      case MSGPACK_OBJECT_ARRAY:
+        name = "Array";
+        break;
+      case MSGPACK_OBJECT_MAP:
+        name = "Map";
+        break;
+      case MSGPACK_OBJECT_BIN:
+        name = "Binary";
+        break;
+      case MSGPACK_OBJECT_EXT:
+        name = "Extension";
+        break;
+    }
+    return fmt::formatter<std::string_view>::format(name, ctx);
+  }
+};
 
 namespace tenzir::plugins::fluentbit {
 
@@ -38,6 +81,131 @@ namespace tenzir::plugins::fluentbit {
 //     flb_input_set(ctx, in_ffd, "format", "msgpack", NULL);
 //     // No more JSON, but raw MsgPack delivery.
 //     flb_lib_push(ctx, in_ffd, msgpack_buf, msgpack_buf_len);"
+
+/// Utilities wrapping the MsgPack C API.
+namespace msgpack {
+
+auto to_str(const msgpack_object& object) {
+  return std::string_view{object.via.str.ptr, object.via.str.size};
+}
+
+auto to_array(const msgpack_object& object) {
+  return std::span<msgpack_object>{object.via.array.ptr,
+                                   size_t{object.via.array.size}};
+}
+
+auto to_map(const msgpack_object& object) {
+  return std::span<msgpack_object_kv>{object.via.map.ptr,
+                                      size_t{object.via.map.size}};
+}
+
+auto to_bin(const msgpack_object& object) {
+  return std::span<const std::byte>{
+    reinterpret_cast<const std::byte*>(object.via.bin.ptr),
+    size_t{object.via.bin.size}};
+}
+
+/// A MsgPack object.
+auto visit(auto f, const msgpack_object& object) {
+  switch (object.type) {
+    case MSGPACK_OBJECT_NIL:
+      return f(std::nullopt);
+    case MSGPACK_OBJECT_BOOLEAN:
+      return f(object.via.boolean);
+    case MSGPACK_OBJECT_POSITIVE_INTEGER:
+      return f(object.via.u64);
+    case MSGPACK_OBJECT_NEGATIVE_INTEGER:
+      return f(object.via.i64);
+    case MSGPACK_OBJECT_FLOAT32:
+      [[fallthrough]];
+    case MSGPACK_OBJECT_FLOAT64:
+      return f(object.via.f64);
+    case MSGPACK_OBJECT_STR:
+      return f(to_str(object));
+    case MSGPACK_OBJECT_ARRAY:
+      return f(to_array(object));
+    case MSGPACK_OBJECT_MAP:
+      return f(to_map(object));
+    case MSGPACK_OBJECT_BIN:
+      return f(to_bin(object));
+    case MSGPACK_OBJECT_EXT:
+      return f(object.via.ext);
+  }
+}
+
+/// RAII-style wrapper around `msgpack_unpack`.
+class unpacked {
+public:
+  unpacked() noexcept {
+    msgpack_unpacked_init(&unpacked_);
+  }
+
+  unpacked(unpacked&& other) : unpacked_{other.unpacked_} {
+    other.unpacked_.zone = nullptr;
+  }
+
+  auto operator=(unpacked&& other) -> unpacked& {
+    unpacked_ = other.unpacked_;
+    other.unpacked_.zone = nullptr;
+    return *this;
+  }
+
+  unpacked(const unpacked&) = delete;
+  auto operator=(const unpacked&) -> unpacked& = delete;
+
+  ~unpacked() noexcept {
+    msgpack_unpacked_destroy(&unpacked_);
+  }
+
+  // Opinionated version of `msgpack_unpack_next` that can only yield an object.
+  auto unpack(std::span<const std::byte> bytes)
+    -> std::optional<msgpack_object> {
+    auto offset = size_t{0};
+    auto result
+      = msgpack_unpack_next(&unpacked_,
+                            reinterpret_cast<const char*>(bytes.data()),
+                            bytes.size(), &offset);
+    if (result == MSGPACK_UNPACK_SUCCESS)
+      return unpacked_.data;
+    return std::nullopt;
+  }
+
+private:
+  msgpack_unpacked unpacked_;
+};
+
+/// Reimplementation of flb_time_msgpack_to_time to meet our needs.
+auto to_flb_time(const msgpack_object& object) -> std::optional<time> {
+  auto f = detail::overload{
+    [&](auto) -> std::optional<time> {
+      return std::nullopt;
+    },
+    [](uint64_t x) -> std::optional<time> {
+      auto secs = std::chrono::seconds{x};
+      return time{secs};
+    },
+    [](double x) -> std::optional<time> {
+      auto secs = double_seconds{x};
+      return time{std::chrono::duration_cast<duration>(secs)};
+    },
+    [](const msgpack_object_ext& ext) -> std::optional<time> {
+      if (ext.type != 0 || ext.size != 8) {
+        return std::nullopt;
+      }
+      // Fluent Bit encodes seconds and nanoseconds as two 32-bit unsigned
+      // integers into the extension type pointer.
+      auto u32 = uint32_t{0};
+      std::memcpy(&u32, &ext.ptr[0], 4);
+      auto result = time{std::chrono::seconds{ntohl(u32)}};
+      std::memcpy(&u32, &ext.ptr[4], 4);
+      result += std::chrono::nanoseconds{ntohl(u32)};
+      return result;
+    },
+  };
+  return visit(f, object);
+}
+
+} // namespace msgpack
 
 namespace {
 
@@ -72,10 +240,11 @@ class engine {
   /// management within Fluent Bit, we just make a copy of the data into our
   /// shared buffer that we then process later with the source operator.
   static auto handle_lib_output(void* record, size_t size, void* data) -> int {
-    auto str = std::string_view{reinterpret_cast<char*>(record), size};
+    auto deleter = [record]() noexcept {
+      flb_lib_free(record);
+    };
     auto* self = reinterpret_cast<engine*>(data);
-    self->append(str);
-    flb_lib_free(record);
+    self->append(chunk::make(record, size, deleter));
     return 0;
   }
 
@@ -100,7 +269,7 @@ public:
     // - format: "msgpack" or "json"
     // - max_records: integer representing the maximum number of records to
     //   process per single flush call.
-    if (not(*result)->output("lib", {{"format", "json"}}, &callback))
+    if (not(*result)->output("lib", {{"format", "msgpack"}}, &callback))
       return caf::make_error(ec::unspecified,
                              "failed to setup Fluent Bit lib output");
     if (not(*result)->start())
@@ -144,31 +313,25 @@ public:
 
   /// Copies data into the shared buffer with the Tenzir Fluent Bit plugin.
   /// @note This function is thread-safe.
-  void append(const auto& str) {
-    TENZIR_ASSERT_CHEAP(not str.empty());
+  void append(chunk_ptr chunk) {
     auto guard = std::lock_guard{*buffer_mtx_};
-    // Ideally, every callback invocation produces valid JSON adhering to the
-    // Fluent Bit convention of [first, second].
-    // TODO: have another look at the Fluent Bit source code and validate this
-    // assumption. Until then, we perform a cheap poorman's check to ensure the
-    // input conforms to the expectation.
-    TENZIR_ASSERT_CHEAP(str.back() == ']');
-    buffer_.emplace_back(str);
+    queue_.push(std::move(chunk));
   }
 
   /// Tries to consume the shared buffer with a function.
   /// @note This function is thread-safe.
+  /// @returns the number of consumed events.
   auto try_consume(auto f) -> size_t {
     // NB: this would be UB iff called in the same thread as append(). But since
     // append() is called by the Fluent Bit thread, it is not UB.
     if (auto lock = std::unique_lock{*buffer_mtx_, std::try_to_lock}) {
-      if (not buffer_.empty()) {
-        auto result = buffer_.size();
-        for (const auto& line : buffer_)
-          f(std::string_view{line});
-        buffer_.clear();
+      auto result = queue_.size();
+      while (not queue_.empty()) {
+        f(queue_.front());
+        queue_.pop();
         return result;
       }
+      return result;
     }
     return 0;
   }
@@ -316,10 +479,68 @@ private:
   bool started_{false};     ///< Engine started/stopped status.
   int ffd_{-1};             ///< Fluent Bit handle for pushing data
   std::chrono::milliseconds poll_interval_{}; ///< How fast we check FB
-  size_t num_stop_polls_{0};          ///< Number of polls in the destructor
-  std::vector<std::string> buffer_{}; ///< Buffer shared with Fluent Bit
+  size_t num_stop_polls_{0};      ///< Number of polls in the destructor
+  std::queue<chunk_ptr> queue_{}; ///< MsgPack chunks shared with Fluent Bit
   std::unique_ptr<std::mutex> buffer_mtx_{}; ///< Protects the shared buffer
 };
+
+auto add(auto& field, const msgpack_object& object, bool decode = false)
+  -> void {
+  auto f = detail::overload{
+    [&](std::nullopt_t) {
+      field.data(caf::none);
+    },
+    [&](auto x) {
+      field.data(x);
+    },
+    [&](std::string_view x) {
+      // Sometimes we get an escaped string that contains a JSON object
+      // that we may need to extract first. Fluent Bit has a concept of
+      // *encoders* and *decoders* for this purpose:
+      // https://docs.fluentbit.io/manual/pipeline/parsers/decoders.
+      // Parsers can be configured with a decoder using the option
+      // `decode_field json <field>`.
+      if (decode) {
+        if (auto json = from_json(x)) {
+          field.data(*json);
+          return;
+        }
+      }
+      field.data(x);
+    },
+    [&](std::span<const std::byte> xs) {
+      auto blob = std::basic_string_view<std::byte>{xs.data(), xs.size()};
+      field.data(blob);
+    },
+    [&](std::span<msgpack_object> xs) {
+      auto list = field.list();
+      for (const auto& x : xs)
+        add(list, x, decode);
+    },
+    [&](std::span<msgpack_object_kv> xs) {
+      auto record = field.record();
+      for (const auto& kvp : xs) {
+        if (kvp.key.type != MSGPACK_OBJECT_STR)
+          diagnostic::warning("invalid Fluent Bit record")
+            .note("failed to parse key")
+            .note("got {}", kvp.key.type)
+            .throw_();
+        auto key = msgpack::to_str(kvp.key);
+        auto field = record.field(key);
+        // TODO: restrict this attempt to decode to the top-level field "log"
+        // only. We currently attempt to parse *all* fields named "log" as JSON.
+        add(field, kvp.val, key == "log");
+      }
+    },
+    [&](const msgpack_object_ext& ext) {
+      diagnostic::warning("unknown MsgPack type")
+        .note("cannot handle MsgPack extensions")
+        .note("got {}", ext.type)
+        .throw_();
+    },
+  };
+  msgpack::visit(f, object);
+}
 
 class fluent_bit_operator final : public crtp_operator<fluent_bit_operator> {
 public:
@@ -339,8 +560,7 @@ public:
       co_return;
     }
     auto builder = series_builder{};
-    auto parse = [&builder](std::string_view line) {
-      TENZIR_ASSERT(not line.empty());
+    auto parse = [&ctrl, &builder](chunk_ptr chunk) {
       // What we're getting here is the typical Fluent Bit array consisting of
       // the following format, as described in
       // https://docs.fluentbit.io/manual/concepts/key-concepts#event-format:
@@ -366,95 +586,84 @@ public:
       // 1. timestamp: time (timestamp alias type)
       // 2. metadata: record (inferred)
       // 3. message: record (inferred)
-      auto json = from_json(line);
-      if (not json) {
-        TENZIR_WARN("invalid JSON: {}", line);
+      //
+      auto unpacked = msgpack::unpacked{};
+      auto object = unpacked.unpack(as_bytes(chunk));
+      // The unpacking operation cannot fail because we are calling this
+      // function within a while loop checking that msgpack_unpack_next
+      // returned MSGPACK_UNPACK_SUCCESS. See out_lib_flush() in
+      // plugins/out_lib/out_lib.c in the Fluent Bit code base for details.
+      TENZIR_ASSERT_CHEAP(object);
+      if (object->type != MSGPACK_OBJECT_ARRAY) {
+        diagnostic::warning("invalid Fluent Bit message")
+          .note("expected array as top-level object")
+          .note("got MsgPack type {}", object->type)
+          .emit(ctrl.diagnostics());
         return;
       }
-      const auto* outer = caf::get_if<list>(&*json);
-      if (outer == nullptr) {
-        TENZIR_WARN("expected array as top-level JSON, got {}", *json);
-        return;
-      }
-      if (outer->size() != 2) {
-        TENZIR_WARN("expected two-element array at top-level, got {}",
-                    outer->size());
+      const auto& outer = msgpack::to_array(*object);
+      if (outer.size() != 2) {
+        diagnostic::warning("invalid Fluent Bit message")
+          .note("expected two-element array at top-level object")
+          .note("got {} elements", outer.size())
+          .emit(ctrl.diagnostics());
         return;
       }
       // The outer framing is established, now create a new table slice row.
       auto row = builder.record();
-      const auto& first = outer->front();
-      // The first element must be either:
-      // - TIMESTAMP
-      // - [TIMESTAMP, METADATA]
-      auto handle_first = detail::overload{
-        [&](const auto&) {
-          TENZIR_ERROR("expected array or number, got {}", first);
-        },
-        [&](const double& ts) {
-          auto d = std::chrono::duration_cast<duration>(double_seconds(ts));
-          row.field("timestamp").data(time{d});
-        },
-        [&](const uint64_t& ts) {
-          row.field("timestamp").data(time{std::chrono::seconds(ts)});
-        },
-        [&](const list& xs) {
-          if (xs.size() != 2) {
-            TENZIR_WARN("expected 2-element inner array, got {}", xs.size());
-            return;
-          }
-          auto handle_nested_first = detail::overload{
-            [&](const auto&) {
-              TENZIR_ERROR("expected timestamp or object, got {}", xs[0]);
-            },
-            [&](const double& n) {
-              auto d = std::chrono::duration_cast<duration>(double_seconds(n));
-              row.field("timestamp").data(time{d});
-            },
-            [&](const uint64_t& n) {
-              row.field("timestamp").data(time{std::chrono::seconds(n)});
-            },
-          };
-          caf::visit(handle_nested_first, xs[0]);
-          row.field("metadata").data(make_view(xs[1]));
-        },
-      };
-      caf::visit(handle_first, first);
-      // The second array element is always the MESSAGE.
-      const auto& second = outer->back();
-      // We are not always getting a JSON object here. Sometimes we get an
-      // escaped string that contains a JSON object that we need to extract
-      // first. Fluent Bit has a concept of *encoders* and *decoders* for this
-      // purpose: https://docs.fluentbit.io/manual/pipeline/parsers/decoders.
-      // Parsers can be configured with a decoder using the option
-      // `decode_field json <field>`.
-      //
-      // While this means there are potentially infinite choices to make, in
-      // reality we see hopefully mostly default configurations that cover 99%
-      // of decoding needs: a nested field "log" with a string that is escaped
-      // JSON. That's what we're looking for manually for now. If users come
-      // with more flexible decoding requests, we need to adapt.
-      auto decoded = false;
-      if (const auto* rec = caf::get_if<record>(&second)) {
-        if (auto log = try_get<std::string>(*rec, "log")) {
-          if (*log and not(*log)->empty()) {
-            if (auto log_json = from_json(**log)) {
-              row.field("message").data(record{
-                {"log", std::move(*log_json)},
-              });
-              decoded = true;
-            }
-          }
+      const auto& first = outer[0];
+      const auto& second = outer[1];
+      // The first-level array element must be either:
+      // - [TIMESTAMP, METADATA] (array)
+      // - TIMESTAMP (extension)
+      if (first.type == MSGPACK_OBJECT_ARRAY) {
+        auto xs = msgpack::to_array(first);
+        if (xs.size() != 2) {
+          diagnostic::warning("invalid Fluent Bit message")
+            .note("wrong number of array elements in first-level array")
+            .note("got {}, expected 2", xs.size())
+            .emit(ctrl.diagnostics());
+          return;
         }
+        auto timestamp = msgpack::to_flb_time(xs[0]);
+        if (not timestamp) {
+          diagnostic::warning("invalid Fluent Bit message")
+            .note("failed to parse timestamp in first-level array")
+            .note("got MsgPack type {}", xs[0].type)
+            .emit(ctrl.diagnostics());
+          return;
+        }
+        row.field("timestamp").data(*timestamp);
+        if (xs[1].type == MSGPACK_OBJECT_MAP) {
+          auto map = msgpack::to_map(xs[1]);
+          if (not map.empty()) {
+            auto metadata = row.field("metadata");
+            add(metadata, xs[1]);
+          }
+        } else {
+          diagnostic::warning("invalid Fluent Bit message")
+            .note("failed parse metadata in first-level array")
+            .note("got MsgPack type {}, expected map", xs[1].type)
+            .emit(ctrl.diagnostics());
+        }
+      } else if (auto timestamp = msgpack::to_flb_time(first)) {
+        row.field("timestamp").data(*timestamp);
+      } else {
+        diagnostic::warning("invalid Fluent Bit message")
+          .note("failed to parse first-level array element")
+          .note("got MsgPack type {}, expected array or timestamp", first.type)
+          .emit(ctrl.diagnostics());
       }
-      if (not decoded)
-        row.field("message").data(make_view(second));
+      // Process the MESSAGE, i.e., the second top-level array element.
+      auto message = row.field("message");
+      add(message, second);
     };
     auto last_finish = std::chrono::steady_clock::now();
     while ((*engine)->running()) {
       const auto now = std::chrono::steady_clock::now();
       // Poll the engine and process data that Fluent Bit already handed over.
-      if ((*engine)->try_consume(parse) == 0) {
+      auto num_elements = (*engine)->try_consume(parse);
+      if (num_elements == 0) {
         TENZIR_DEBUG("sleeping for {}", args_.poll_interval);
         std::this_thread::sleep_for(args_.poll_interval);
       }
