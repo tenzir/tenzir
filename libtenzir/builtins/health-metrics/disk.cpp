@@ -19,7 +19,10 @@ namespace {
 
 auto get_diskspace_info(const std::string& path) -> caf::expected<record> {
   auto result = record{};
-  auto spaceinfo = std::filesystem::space(path);
+  auto ec = std::error_code{};
+  auto spaceinfo = std::filesystem::space(path, ec);
+  if (ec)
+    return caf::make_error(ec::system_error, fmt::to_string(ec));
   // TODO: Find the mount point and/or device name if possible.
   result["path"] = path;
   result["total_bytes"] = spaceinfo.capacity;
