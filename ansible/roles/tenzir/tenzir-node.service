@@ -28,6 +28,9 @@ CapabilityBoundingSet=
 AmbientCapabilities=
 RestrictSUIDSGID=yes
 
+# limits
+LimitNOFILE=65535
+
 # system access
 ExecPaths=/opt/tenzir/libexec/tenzir-df-percent.sh
 ProtectSystem=strict
