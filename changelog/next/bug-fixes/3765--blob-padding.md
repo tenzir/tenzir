@@ -1,2 +1,2 @@
-When reading Base64-encoded JSON string uses the `blob` type, padding with `=`
-is now accepted.
+When reading Base64-encoded JSON strings with the `blob` type, `=` padding is
+now accepted.
