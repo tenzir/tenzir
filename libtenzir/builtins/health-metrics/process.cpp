@@ -47,6 +47,7 @@ public:
     return record_type{{
 #if TENZIR_LINUX
       {"swap_space_usage", uint64_type{}},
+      {"open_fds", uint64_type{}},
 #endif
 #if TENZIR_LINUX || TENZIR_MACOS
       {"current_memory_usage", uint64_type{}},
