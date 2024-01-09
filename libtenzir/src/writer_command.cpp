@@ -8,18 +8,19 @@
 
 #include "tenzir/writer_command.hpp"
 
-#include "tenzir/concept/parseable/tenzir/expression.hpp"
-#include "tenzir/defaults.hpp"
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/exec_pipeline.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/make_sink.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/sink_command.hpp"
+#include "tenzir/tql/parser.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/make_message.hpp>
 #include <caf/message.hpp>
+#include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
 
 #include <iostream>
@@ -30,27 +31,21 @@ namespace tenzir {
 command::fun make_writer_command(std::string_view format) {
   return [format = std::string{format}](const invocation& inv,
                                         caf::actor_system& sys) {
+    TENZIR_WARN("`tenzir-ctl export` is deprecated, please use `tenzir 'export "
+                "| ...' instead`");
     TENZIR_TRACE_SCOPE("{}", inv);
     if (format == "json") {
       auto printer = make_diagnostic_printer("<input>", "",
                                              color_diagnostics::yes, std::cerr);
       auto const* json_opts = caf::get_if<caf::config_value::dictionary>(
         &inv.options, "tenzir.export.json");
-      if (json_opts) {
-        for (auto& opt : *json_opts) {
-          diagnostic::error("deprecated argument `--{}` no longer available",
-                            opt.first)
-            .emit(*printer);
-          return caf::make_message(ec::silent);
-        }
-      }
       auto pipe = std::string{"export\n"};
       auto inner = std::string{};
       if (inv.arguments.size() == 1) {
-        if (parsers::expr(inv.arguments[0])) {
-          pipe += fmt::format("| where {}\n", inv.arguments[0]);
-        } else if (not inv.arguments.empty()) {
+        if (tql::parse_internal(inv.arguments[0])) {
           pipe += fmt::format("| {}\n", inv.arguments[0]);
+        } else if (not inv.arguments.empty()) {
+          pipe += fmt::format("| where {}\n", inv.arguments[0]);
         }
       } else if (not inv.arguments.empty()) {
         diagnostic::error("expected at most 1 argument, but got {}",
@@ -58,15 +53,32 @@ command::fun make_writer_command(std::string_view format) {
           .emit(*printer);
         return caf::make_message(ec::silent);
       }
-      auto max_events = get_or(inv.options, "tenzir.export.max-events",
-                               defaults::export_::max_events);
-      pipe += fmt::format("| head {}\n", max_events);
+      if (auto const* max_events
+          = get_if(&inv.options, "tenzir.export.max-events")) {
+        pipe += fmt::format("| head {}\n", *max_events);
+      }
       pipe += "| to stdout write json -c";
-      auto flat_pipe = pipe;
-      std::replace(flat_pipe.begin(), flat_pipe.end(), '\n', ' ');
-      TENZIR_WARN("command `{}` is deprecated: please use `tenzir '{}'` "
-                  "instead",
-                  inv.full_name, flat_pipe);
+      if (json_opts) {
+        for (auto const& [name, value] : *json_opts) {
+          if (not value.to_boolean()) {
+            continue;
+          }
+          if (name == "omit-nulls") {
+            pipe += " --omit-nulls";
+          } else if (name == "omit-empty-records") {
+            pipe += " --omit-empty-objects";
+          } else if (name == "omit-empty-lists") {
+            pipe += " --omit-empty-lists";
+          } else if (name == "omit-empty") {
+            pipe += " --omit-empty";
+          } else {
+            diagnostic::error("deprecated argument `--{}` no longer available",
+                              name)
+              .emit(*printer);
+            return caf::make_message(ec::silent);
+          }
+        }
+      }
       printer = make_diagnostic_printer("<input>", pipe, color_diagnostics::yes,
                                         std::cerr);
       auto result = exec_pipeline(pipe, std::move(printer), exec_config{}, sys);
