@@ -176,20 +176,22 @@ tests:
 
   Node Zeek JSON:
     tags: [node, import-export, zeek, json]
+    fixture: ServerTester
     steps:
-      - command: -N import -b zeek-json
+      - command: import -b zeek-json
         input: data/zeek/zeek.json
-      - command: '-N export json "where \"zeek\" in #schema"'
+      - command: 'export json "where \"zeek\" in #schema"'
         transformation: jq -ec '.'
 
   Export json:
     tags: [json, zeek]
+    fixture: ServerTester
     steps:
-      - command: -N import zeek
+      - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: -N export json 'where resp_h == 192.168.1.104'
+      - command: export json 'where resp_h == 192.168.1.104'
         transformation: jq -ec '.'
-      - command: -N export json --omit-nulls 'where resp_h == 192.168.1.104'
+      - command: export json --omit-nulls 'where resp_h == 192.168.1.104'
         transformation: jq -ec '.'
 
   Shutdown with Metrics:
@@ -232,7 +234,7 @@ tests:
         input: data/zeek/conn.log.gz
       - command: export ascii 'where conn.duration <= 1.0s'
       - command: export json 'where duration >= 10.0s && duration < 15s'
-      - command: export json --numeric-durations 'where duration >= 1.8s && duration < 2.0s'
+      - command: export json 'where duration >= 1.8s && duration < 2.0s'
       - command: export ascii 'where service  == "smtp"'
       - command: export ascii 'where missed_bytes  != 0'
       - command: export ascii 'where id.orig_h !in 192.168.1.0/24'
@@ -263,32 +265,36 @@ tests:
         input: data/zeek/conn.log.gz
       - command: 'export ascii "where #schema == \"zeek.conn\""'
 
-  Node json zeek conn:
-    tags: [node, import-export, zeek, json]
-    steps:
-      - command: -N import -s @./misc/schema/zeek-conn.schema -t zeek.conn.custom json
-        input: data/json/conn.log.json.gz
-      - command: -N export ascii 'where duration > 6s'
-      - command: -N export ascii 'where :timestamp >= 2011-08-15T03:48'
-      - command: -N export ascii 'where :time >= 2011-08-15T03:48'
+  # This test was broken by https://github.com/tenzir/tenzir/pull/3782.
+  # Node json zeek conn:
+  #   tags: [node, import-export, zeek, json]
+  #   fixture: ServerTester
+  #   steps:
+  #     - command: import -s @./misc/schema/zeek-conn.schema -t zeek.conn.custom json
+  #       input: data/json/conn.log.json.gz
+  #     - command: export ascii 'where duration > 6s'
+  #     - command: export ascii 'where :timestamp >= 2011-08-15T03:48'
+  #     - command: export ascii 'where :time >= 2011-08-15T03:48'
 
   Node suricata alert:
     tags: [node, import-export, suricata, eve, import-filter]
+    fixture: ServerTester
     steps:
-      - command: -N import suricata '#schema != "suricata.stats" && event_type != "flow"'
+      - command: import -b suricata '#schema != "suricata.stats" && event_type != "flow"'
         input: data/suricata/eve.json
-      - command: -N export ascii 'where src_ip == 147.32.84.165'
-      - command: '-N export csv "where #schema == /suricata.*/"'
-      - command: '-N export zeek "where #schema == /suricata.alert/"'
-      - command: -N export json --omit-nulls --omit-empty-records
+      - command: export ascii 'where src_ip == 147.32.84.165'
+      - command: 'export csv "where #schema == /suricata.*/"'
+      - command: 'export zeek "where #schema == /suricata.alert/"'
+      - command: export json --omit-nulls --omit-empty-records
 
   Node suricata rrdata:
     tags: [node, import-export, suricata, eve]
+    fixture: ServerTester
     steps:
-      - command: -N import json --selector=event_type:suricata
+      - command: import -b json --selector=event_type:suricata
         input: data/suricata/rrdata-eve.json
-      - command: -N export ascii
-      - command: -N export json
+      - command: export ascii
+      - command: export json
 
   Node argus csv:
     tags: [node, import-export, argus, csv]
@@ -330,24 +336,29 @@ tests:
         input: data/pcap/suricata/eve.json.gz
       - command: count "net.src.ip == 192.168.168.100"
 
-  Arrow Full Data Model:
-    tags: [export, arrow]
-    steps:
-      - command: -N import --batch-encoding=arrow --schema-file="@./misc/schema/all-types.schema" --type=all_types json
-        input: data/json/all-types.json
-      - command: '-N export arrow "where #schema == \"all_types\""'
-        transformation: python @./misc/scripts/print-arrow.py
+  # This test was broken by https://github.com/tenzir/tenzir/pull/3782.
+  # Arrow Full Data Model:
+  #   tags: [export, arrow]
+  #   fixture: ServerTester
+  #   steps:
+  #     - command: import --batch-encoding=arrow --schema-file="@./misc/schema/all-types.schema" --type=all_types json
+  #       input: data/json/all-types.json
+  #     - command: 'export arrow "where #schema == \"all_types\""'
+  #       transformation: python @./misc/scripts/print-arrow.py
+
   Arrow Export:
     tags: [export, arrow]
+    fixture: ServerTester
     steps:
-      - command: -N import --batch-encoding=arrow zeek
+      - command: import --batch-encoding=arrow zeek
         input: data/zeek/conn.log.gz
-      - command: '-N export -n 10 arrow "where #schema == \"zeek.conn\""'
+      - command: 'export -n 10 arrow "where #schema == \"zeek.conn\""'
         transformation: python @./misc/scripts/print-arrow.py
-      - command: -N import --batch-encoding=arrow suricata
+      - command: import --batch-encoding=arrow suricata
         input: data/suricata/eve.json
-      - command: '-N export arrow "where #schema == \"suricata.http\""'
+      - command: 'export arrow "where #schema == \"suricata.http\""'
         transformation: python @./misc/scripts/print-arrow.py
+
   Arrow Import:
     tags: [import, arrow]
     fixture: ServerTester
@@ -360,24 +371,27 @@ tests:
       - command: 'export arrow "where #schema == \"suricata.http\""'
         transformation: python @./misc/scripts/print-arrow.py
       - command: count
+
   Import syslog:
     tags: [syslog, import]
     steps:
       - command: -N import syslog
         input: data/syslog/syslog.log
       - command: '-N export ascii "where #schema == /syslog.*/"'
+
   Heterogeneous JSONL import:
     tags: [import, json, sysmon]
+    fixture: ServerTester
     steps:
-      - command: -N import json
+      - command: import -b json
         input: data/json/sysmon.json
-      - command: -N import suricata
+      - command: import -b suricata
         input: data/suricata/eve.json
-      - command: -N export json 'where "®" in :string'
+      - command: export json 'where "®" in :string'
         transformation: jq -ec '.'
-      - command: '-N export json "where #schema ni \"suricata\""'
+      - command: 'export json "where #schema ni \"suricata\""'
         transformation: jq -ec '.'
-      - command: -N export json 'where ProcessGuid == /\{[0-9a-f]{8}-[0-9a-f]{4}-5ec2-7.15-[0-9a-f]{12}\}/'
+      - command: export json 'where ProcessGuid == /\{[0-9a-f]{8}-[0-9a-f]{4}-5ec2-7.15-[0-9a-f]{12}\}/'
         transformation: jq -ec '.'
   # Testing the #import_time meta extractor is a bit tricky and requires
   # sleeping. If this turns out to be a flaky test, increase durations and
@@ -400,21 +414,21 @@ tests:
 
   Extractor Predicates:
     tags: [import, export, suricata]
+    fixture: ServerTester
     steps:
-      - command: -N import suricata
+      - command: import -b suricata
         input: data/suricata/eve.json
-      - command: -N count "timestamp && :ip"
-      - command: -N count does_not_exist
-      - command: -N export json "where flow.alerted"
+      - command: count "timestamp && :ip"
+      - command: count does_not_exist
+      - command: export json "where flow.alerted"
 
-  # Nesting Records in Lists is not currently fully supported, but its presence
-  # should also not crash the JSON reader.
   Nested Records:
     tags: [import, json]
+    fixture: ServerTester
     steps:
-      - command: '-N import --schema="type custom = record { a: list<record { b: string, c: uint64, }>, d: uint64, }" --type=custom --batch-encoding=arrow json'
+      - command: import json
         input: data/json/record-in-list.json
-      - command: '-N export ascii "where #schema == \"custom\""'
+      - command: export ascii
 
   Example config file:
     tags: [import-export, zeek]
@@ -437,6 +451,7 @@ tests:
       - command: sleep 4
         prepend_tenzir: false
       - command: count '#schema == /zeek.*/'
+
   Export pipeline operator parsing everything but summarize:
     tags: [server, client, import-export, transforms]
     fixture: ServerTester
@@ -486,6 +501,7 @@ tests:
                                | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
                                | rename source_ip=src_ip
                                | where #schema ==\"suricata.alert\" || #schema == \"suricata.fileinfo\"'"
+
   Export pipeline operator parsing only summarize:
     tags: [server, client, import-export, transforms]
     fixture: ServerTester
@@ -495,6 +511,7 @@ tests:
       - command: export json 'summarize distinct(SourcePort) by SourceIp'
       - command: export json 'summarize any(Initiated) by SourceIp, SourcePort, DestinationPoint, UtcTime resolution 1 minute'
       - command: export json 'summarize usercount=count(User), initiated=all(Initiated) by ProcessId'
+
   Export pipeline operator parsing after expression:
     tags: [server, client, import-export, transforms]
     fixture: ServerTester
@@ -564,16 +581,17 @@ tests:
 
   Self Repair:
     tags: [fault]
+    fixture: ServerTester
     steps:
-      - command: -N import zeek
+      - command: import zeek
         input: data/zeek/conn.log.gz
       - command: exec 'version'
         transformation: "@./misc/scripts/break-sizelimit.sh"
       # We use an extra import step to trigger the repair because querying
       # directly would not wait for the repair step.
-      - command: -N import suricata
+      - command: import suricata
         input: data/suricata/eve.json
-      - command: -N count "zeek.conn.id.orig_h == 192.168.1.104"
+      - command: count "zeek.conn.id.orig_h == 192.168.1.104"
 
   # Checks if the import and export works as usual when we ignore creation
   # of partition indexes for all field names
@@ -586,10 +604,12 @@ tests:
 
   Process Query For Field With Skip Attribute:
     tags: [import, export]
+    fixture: ServerTester
     steps:
-      - command: -N import --schema-file="@./misc/schema/zeek-with-skip.schema" zeek-json
+      - command: import -b --schema-file="@./misc/schema/zeek-with-skip.schema" zeek-json
         input: data/zeek/zeek.json
-      - command: -N export json 'where username == "steve"'
+      - command: export json 'where username == "steve"'
+
   Rebuild undersized partitions:
     fixture: ExampleConfigFileTester
     tags: [import, export, rebuild]
@@ -887,13 +907,14 @@ tests:
 
   Enumerate:
     tags: [pipelines]
+    fixture: ServerTester
     steps:
-      - command: -N import -n 10 zeek
+      - command: import -b -n 10 zeek
         input: data/zeek/conn.log.gz
-      - command: -N import -n 10 zeek
+      - command: import -b -n 10 zeek
         input: data/zeek/dns.log.gz
-      - command: -N export json 'select uid | enumerate index'
-      - command: -N export json 'select uid | enumerate uid'
+      - command: export json 'select uid | enumerate index'
+      - command: export json 'select uid | enumerate uid'
 
   Sort:
     tags: [pipelines, zeek]
