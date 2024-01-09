@@ -40,6 +40,13 @@ all interfaces. Both saver and loader also have a `--listen-once` option that
 will stop the pipeline after the first connection terminated. The
 [`nics`](../operators/nics.md) operator lists all all available interfaces.
 
+:::caution One connection at at time
+A single pipeline can accept at most *one* TCP connection at a time. If another
+client attempts to connect to the same listening socket, it will time out. The
+reason for this behavior is that the downstream operator (typically a parser)
+may exhibit undefined behavior if it receives data from multiple sockets.
+:::
+
 ### `<endpoint>`
 
 The address of the remote endpoint to connect to when using `--connect`, and the
