@@ -4,6 +4,9 @@
  * work well for content-centric websites.
  */
 
+/* Load fonts from Bunny Fonts */
+@import url(https://fonts.bunny.net/css?family=inter:100,200,300,400,500,600,700,800,900|jetbrains-mono:100,200,300,400,500,600,700,800);
+
 /* You can override the default Infima variables here. */
 :root {
   --ifm-color-primary: #00a4f1;
@@ -23,6 +26,13 @@
   --docsearch-searchbox-background: transparent !important;
   --docsearch-searchbox-focus-background: var(--ifm-color-white);
   --docsearch-searchbox-shadow: transparent !important;
+
+  /* Font families matching our design system */
+  --ifm-font-family-base: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --ifm-font-family-monospace: "JetBrains Mono", SFMono-Regular, Menlo, Monaco,
+    Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 /* For readability concerns, you should choose a lighter palette in dark mode. */
