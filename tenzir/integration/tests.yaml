@@ -265,17 +265,6 @@ tests:
         input: data/zeek/conn.log.gz
       - command: 'export ascii "where #schema == \"zeek.conn\""'
 
-  # This test was broken by https://github.com/tenzir/tenzir/pull/3782.
-  # Node json zeek conn:
-  #   tags: [node, import-export, zeek, json]
-  #   fixture: ServerTester
-  #   steps:
-  #     - command: import -s @./misc/schema/zeek-conn.schema -t zeek.conn.custom json
-  #       input: data/json/conn.log.json.gz
-  #     - command: export ascii 'where duration > 6s'
-  #     - command: export ascii 'where :timestamp >= 2011-08-15T03:48'
-  #     - command: export ascii 'where :time >= 2011-08-15T03:48'
-
   Node suricata alert:
     tags: [node, import-export, suricata, eve, import-filter]
     fixture: ServerTester
@@ -335,16 +324,6 @@ tests:
       - command: import -b suricata
         input: data/pcap/suricata/eve.json.gz
       - command: count "net.src.ip == 192.168.168.100"
-
-  # This test was broken by https://github.com/tenzir/tenzir/pull/3782.
-  # Arrow Full Data Model:
-  #   tags: [export, arrow]
-  #   fixture: ServerTester
-  #   steps:
-  #     - command: import --batch-encoding=arrow --schema-file="@./misc/schema/all-types.schema" --type=all_types json
-  #       input: data/json/all-types.json
-  #     - command: 'export arrow "where #schema == \"all_types\""'
-  #       transformation: python @./misc/scripts/print-arrow.py
 
   Arrow Export:
     tags: [export, arrow]
