@@ -27,10 +27,25 @@ tcp [-l|--listen] [-o|--listen-once]
 
 ## Description
 
-The `tcp` loader establishes a TCP or TLS connection and reads bytes from it.
+The `tcp` connector supports TCP or TLS connections. The loader reads blocks of
+bytes from the socket, and the saver writes them to the socket.
 
-It can either connect to a remote endpoint, or listen on a given address and
-wait for incoming connections.
+The loader defaults to creating a socket in listening mode. Use `--connect` if
+the loader should initiate the connection instead. The saver defaults to
+creating a socket in connect mode. Use `--listen` if the saver should instead
+listen on a socket.
+
+When you have a socket in listening mode, use `0.0.0.0` to accept connections on
+all interfaces. Both saver and loader also have a `--listen-once` option that
+will stop the pipeline after the first connection terminated. The
+[`nics`](../operators/nics.md) operator lists all all available interfaces.
+
+:::caution One connection at at time
+A single pipeline can accept at most *one* TCP connection at a time. If another
+client attempts to connect to the same listening socket, it will time out. The
+reason for this behavior is that the downstream operator (typically a parser)
+may exhibit undefined behavior if it receives data from multiple sockets.
+:::
 
 ### `<endpoint>`
 
