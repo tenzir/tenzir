@@ -80,10 +80,13 @@ TEST(HTTP request items - JSON without content type) {
   };
   auto err = apply(items, request);
   REQUIRE_EQUAL(err, caf::none);
-  CHECK_EQUAL(request.headers.size(), 1ull);
+  CHECK_EQUAL(request.headers.size(), 2ull);
   const auto* header = request.header("Accept");
   REQUIRE(header);
   CHECK_EQUAL(header->value, "application/json, */*");
+  header = request.header("Content-Type");
+  REQUIRE(header);
+  CHECK_EQUAL(header->value, "application/json");
   CHECK_EQUAL(request.method, "POST");
   CHECK_EQUAL(request.body, "{\"foo\": 42}");
 }

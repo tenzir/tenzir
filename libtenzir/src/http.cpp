@@ -16,7 +16,9 @@
 
 namespace tenzir::http {
 
-auto message::header(const std::string& name) const -> const struct header* {
+namespace {} // namespace
+
+auto message::header(const std::string& name) -> struct header* {
   auto pred = [&](auto& x) -> bool {
     if (x.name.size() != name.size())
       return false;
@@ -27,6 +29,12 @@ auto message::header(const std::string& name) const -> const struct header* {
   };
   auto i = std::find_if(headers.begin(), headers.end(), pred);
   return i == headers.end() ? nullptr : &*i;
+}
+
+auto message::header(const std::string& name) const -> const struct header* {
+  // We use a const_cast to avoid duplicating logic.
+  auto* self = const_cast<message*>(this);
+  return self->header(name);
 }
 
 auto request_item::parse(std::string_view str) -> std::optional<request_item> {
@@ -121,6 +129,7 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
   } else if (not body.empty()) {
     // Without a Content-Type, we assume JSON.
     req.body = json_encode(body);
+    req.headers.emplace_back("Content-Type", "application/json");
     if (accept)
       accept->insert(accept->begin(), "application/json");
   }
