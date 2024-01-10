@@ -11,6 +11,7 @@
 #include "tenzir/detail/string.hpp"
 #include "tenzir/logger.hpp"
 
+#include <boost/algorithm/string.hpp>
 #include <fmt/color.h>
 
 #include <iostream>
@@ -18,6 +19,16 @@
 namespace tenzir {
 
 namespace {
+
+auto trim_and_truncate(std::string& str) {
+  using namespace std::string_view_literals;
+  boost::trim(str);
+  if (str.size() > 100) {
+    str = fmt::format("{} ... (truncated {} bytes)",
+                      std::string_view{str.begin(), str.begin() + 75},
+                      str.length());
+  }
+}
 
 struct colors {
   static auto make(color_diagnostics color) -> colors {
@@ -154,6 +165,17 @@ private:
 };
 
 } // namespace
+
+diagnostic_annotation::diagnostic_annotation(bool primary, std::string text,
+                                             location source)
+  : primary{primary}, text{std::move(text)}, source{std::move(source)} {
+  trim_and_truncate(this->text);
+}
+
+diagnostic_note::diagnostic_note(diagnostic_note_kind kind, std::string message)
+  : kind{kind}, message{std::move(message)} {
+  trim_and_truncate(this->message);
+}
 
 auto make_diagnostic_printer(std::string filename, std::string source,
                              color_diagnostics color, std::ostream& stream)
