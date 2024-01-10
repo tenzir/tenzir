@@ -30,6 +30,7 @@ struct http_options {
   bool json;
   bool form;
   bool chunked;
+  bool multipart;
   std::string method;
   std::vector<http::request_item> items;
 
@@ -37,8 +38,8 @@ struct http_options {
     return f.object(x)
       .pretty_name("tenzir.plugins.http_options")
       .fields(f.field("json", x.json), f.field("form", x.form),
-              f.field("chunked", x.chunked), f.field("method", x.method),
-              f.field("items", x.items));
+              f.field("chunked", x.chunked), f.field("multipart", x.multipart),
+              f.field("method", x.method), f.field("items", x.items));
   }
 };
 
@@ -63,13 +64,17 @@ auto make_request(const connector_args& args) -> caf::expected<http::request> {
   result.method = args.http_opts.method;
   if (args.http_opts.json) {
     result.headers.emplace_back("Accept", "application/json");
+    if (auto* header = result.header("Content-Type")) {
+      TENZIR_DEBUG("overwriting Content-Type to application/json (was: {})",
+                   header->value);
+      header->value = "application/json";
+    } else {
+      result.headers.emplace_back("Content-Type", "application/json");
+    }
   } else if (args.http_opts.form) {
     result.headers.emplace_back("Content-Type",
                                 "application/x-www-form-urlencoded");
   }
-  // Default to JSON.
-  if (result.header("Content-Type") == nullptr)
-    result.headers.emplace_back("Content-Type", "application/json");
   if (args.http_opts.chunked) {
     result.headers.emplace_back("Transfer-Encoding", "chunked");
   }
@@ -98,14 +103,34 @@ public:
           .emit(ctrl.diagnostics());
         co_return;
       }
-      // JSON is always the implicit content type,
-      if (not args.http_opts.form)
-        args.http_opts.json = true;
-      if (auto err = tx.prepare(std::move(*req))) {
+      if (auto err = tx.prepare(*req)) {
         diagnostic::error("failed to prepare HTTP request")
           .note("{}", err)
           .emit(ctrl.diagnostics());
         co_return;
+      }
+      if (args.http_opts.multipart) {
+        if (req->body.empty()) {
+          diagnostic::warning("ignoring request to send multipart message")
+            .note("HTTP request body is empty")
+            .emit(ctrl.diagnostics());
+        } else {
+          // Move body over to MIME part.
+          auto& easy = tx.handle();
+          auto mime = curl::mime{easy};
+          auto part = mime.add();
+          part.data(as_bytes(req->body));
+          if (const auto* header = req->header("Content-Type"))
+            part.type(header->value);
+          req->body.clear();
+          auto code = easy.set(std::move(mime));
+          if (code != curl::easy::code::ok) {
+            diagnostic::error("failed to construct HTTP request")
+              .note("{}", req.error())
+              .emit(ctrl.diagnostics());
+            co_return;
+          }
+        }
       }
       co_yield {};
       for (auto&& chunk : tx.download_chunks()) {
@@ -179,10 +204,15 @@ public:
     return [&ctrl, args = args_, tx](chunk_ptr chunk) mutable {
       if (!chunk || chunk->size() == 0)
         return;
-      // TODO: switch to multipart msgs.
-      if (auto err = tx->upload(chunk)) {
-        diagnostic::error("failed to upload chunk to {}", args.url)
+      if (auto err = tx->prepare(chunk)) {
+        diagnostic::error("failed to prepare transfer")
           .note("chunk size: {}", chunk->size())
+          .note("{}", err)
+          .emit(ctrl.diagnostics());
+        return;
+      }
+      if (auto err = tx->perform()) {
+        diagnostic::error("failed to upload chunk to {}", args.url)
           .note("{}", err)
           .emit(ctrl.diagnostics());
         return;
@@ -264,6 +294,8 @@ private:
           result.http_opts.form = true;
         } else if (arg->inner == "--chunked") {
           result.http_opts.chunked = true;
+        } else if (arg->inner == "--multipart") {
+          result.http_opts.multipart = true;
         } else {
           args.push_back(std::move(*arg));
         }

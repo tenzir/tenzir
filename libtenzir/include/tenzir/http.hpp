@@ -31,6 +31,9 @@ struct message {
   std::vector<http::header> headers;
   std::string body;
 
+  /// Retrieve a header with a case-insensitive lookup.
+  [[nodiscard]] auto header(const std::string& name) -> http::header*;
+
   [[nodiscard]] auto header(const std::string& name) const
     -> const http::header*;
 };
