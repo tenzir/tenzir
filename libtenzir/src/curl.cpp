@@ -60,6 +60,18 @@ auto easy::set(read_callback fun) -> code {
   return static_cast<code>(curl_code);
 }
 
+auto easy::set(mime handle) -> code {
+  // We do not support reading MIME parts through a callback.
+  auto curl_code = curl_easy_setopt(easy_, CURLOPT_READFUNCTION, nullptr);
+  TENZIR_ASSERT_CHEAP(curl_code == CURLE_OK);
+  // Set MIME structure as the new thing.
+  TENZIR_ASSERT_CHEAP(curl_code == CURLE_OK);
+  curl_code = curl_easy_setopt(easy_, CURLOPT_MIMEPOST, handle.mime_.get());
+  if (curl_code == CURLE_OK)
+    mime_ = std::make_unique<mime>(std::move(handle));
+  return static_cast<code>(curl_code);
+}
+
 auto easy::set_http_header(std::string_view name, std::string_view value)
   -> code {
   auto header = fmt::format("{}: {}", name, value);
@@ -124,38 +136,28 @@ auto to_error(easy::code code) -> caf::error {
                          fmt::format("curl: {}", to_string(code)));
 }
 
-multi::multi() : multi_{curl_multi_init()} {
-}
-
-multi::~multi() {
-  // libcurl demands the following cleanup order:
-  // (1) Remove easy handles
-  // (2) Cleanup easy handles
-  // (3) Clean up the multi handle
-  // We cannot enforce (1) and (2) here because our easy handles don't have
-  // shared ownership semantics. It's up to the user to add and remove them.
-  curl_multi_cleanup(multi_);
+multi::multi() : multi_{curl_multi_init(), curlm_deleter{}} {
 }
 
 auto multi::add(easy& handle) -> code {
-  auto curl_code = curl_multi_add_handle(multi_, handle.easy_);
+  auto curl_code = curl_multi_add_handle(multi_.get(), handle.easy_);
   return static_cast<code>(curl_code);
 }
 
 auto multi::remove(easy& handle) -> code {
-  auto curl_code = curl_multi_remove_handle(multi_, handle.easy_);
+  auto curl_code = curl_multi_remove_handle(multi_.get(), handle.easy_);
   return static_cast<code>(curl_code);
 }
 
 auto multi::poll(std::chrono::milliseconds timeout) -> code {
   auto ms = detail::narrow_cast<int>(timeout.count());
-  auto curl_code = curl_multi_poll(multi_, nullptr, 0u, ms, nullptr);
+  auto curl_code = curl_multi_poll(multi_.get(), nullptr, 0u, ms, nullptr);
   return static_cast<code>(curl_code);
 }
 
 auto multi::perform() -> std::pair<code, size_t> {
   auto num_running = int{0};
-  auto curl_code = curl_multi_perform(multi_, &num_running);
+  auto curl_code = curl_multi_perform(multi_.get(), &num_running);
   TENZIR_ASSERT_CHEAP(num_running >= 0);
   return {static_cast<code>(curl_code),
           detail::narrow_cast<size_t>(num_running)};
@@ -184,6 +186,39 @@ auto multi::loop(std::chrono::milliseconds timeout) -> caf::error {
 auto to_string(multi::code code) -> std::string_view {
   auto curl_code = static_cast<CURLMcode>(code);
   return {curl_multi_strerror(curl_code)};
+}
+
+auto mime::part::name(std::string_view name) -> easy::code {
+  TENZIR_ASSERT(part_ != nullptr);
+  TENZIR_ASSERT(not name.empty());
+  auto curl_code = curl_mime_name(part_, name.data());
+  return static_cast<easy::code>(curl_code);
+}
+
+auto mime::part::type(std::string_view content_type) -> easy::code {
+  TENZIR_ASSERT(part_ != nullptr);
+  TENZIR_ASSERT(not content_type.empty());
+  auto curl_code = curl_mime_type(part_, content_type.data());
+  return static_cast<easy::code>(curl_code);
+}
+
+auto mime::part::data(std::span<const std::byte> buffer) -> easy::code {
+  TENZIR_ASSERT(part_ != nullptr);
+  TENZIR_ASSERT(not buffer.empty());
+  const auto* ptr = reinterpret_cast<const char*>(buffer.data());
+  auto curl_code = curl_mime_data(part_, ptr, buffer.size());
+  return static_cast<easy::code>(curl_code);
+}
+
+mime::part::part(curl_mimepart* ptr) : part_{ptr} {
+}
+
+mime::mime(easy& handle)
+  : mime_{curl_mime_init(handle.easy_), curl_mime_deleter{}} {
+}
+
+auto mime::add() -> mime::part {
+  return part{curl_mime_addpart(mime_.get())};
 }
 
 auto escape(std::string_view str) -> std::string {

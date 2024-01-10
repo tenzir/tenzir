@@ -22,8 +22,11 @@
 
 namespace tenzir::curl {
 
+class mime;
+
 /// A single transfer, corresponding to a cURL "easy" handle.
 class easy {
+  friend class mime;
   friend class multi;
 
 public:
@@ -163,6 +166,9 @@ public:
   /// Sets a read callback.
   auto set(read_callback fun) -> code;
 
+  /// Sets a MIME handle.
+  auto set(mime handle) -> code;
+
   /// Sets a value of a HTTP header.
   /// @param name The header name, e.g., "User-Agent"
   /// @param value The header value, e.g., "Tenzir". If empty, the header will
@@ -185,9 +191,10 @@ private:
   static auto on_read(char* buffer, size_t size, size_t nitems, void* user_data)
     -> size_t;
 
+  CURL* easy_{nullptr};
   std::unique_ptr<write_callback> on_write_{};
   std::unique_ptr<read_callback> on_read_{};
-  CURL* easy_{nullptr};
+  std::unique_ptr<mime> mime_{};
   curl_slist* headers_{nullptr};
 };
 
@@ -220,11 +227,6 @@ public:
   };
 
   multi();
-  multi(multi&) = delete;
-  auto operator=(multi&) -> multi& = delete;
-  multi(multi&&) = default;
-  auto operator=(multi&&) -> multi& = default;
-  ~multi();
 
   /// Sets a multi option.
   auto set(CURLMoption option, auto parameter) -> code;
@@ -254,7 +256,20 @@ public:
   auto loop(std::chrono::milliseconds timeout) -> caf::error;
 
 private:
-  CURLM* multi_{nullptr};
+  struct curlm_deleter {
+    auto operator()(CURLM* ptr) const noexcept -> void {
+      // libcurl demands the following cleanup order:
+      // (1) Remove easy handles
+      // (2) Cleanup easy handles
+      // (3) Clean up the multi handle
+      // We cannot enforce (1) and (2) here because our easy handles don't have
+      // shared ownership semantics. It's up to the user to add and remove them.
+      if (ptr)
+        curl_multi_cleanup(ptr);
+    }
+  };
+
+  std::unique_ptr<CURLM, curlm_deleter> multi_;
 };
 
 /// @relates multi
@@ -262,6 +277,54 @@ auto to_string(multi::code code) -> std::string_view;
 
 /// @relates easy
 auto to_error(multi::code code) -> caf::error;
+
+/// An interface for MIME handling based on the `curl_mime_*` functions.
+class mime {
+  friend class easy;
+
+public:
+  /// A MIME part with view semantics. Instances of this type are only valid
+  /// while the corresponding MIME instance is valid.
+  class part {
+    friend class mime;
+
+  public:
+    /// Sets the name of the part.
+    /// @param name The name of the part.
+    /// @pre *name* must be a NULL-terminated string.
+    auto name(std::string_view name) -> easy::code;
+
+    /// Sets the content type of the part, e.g., `image/png`
+    /// @param content_type The content type of the part.
+    /// @pre *content_type* must be a NULL-terminated string.
+    auto type(std::string_view content_type) -> easy::code;
+
+    /// Sets the data of the MIME part by copying it from a buffer.
+    /// @param buffer The data to copy into the part.
+    auto data(std::span<const std::byte> buffer) -> easy::code;
+
+  private:
+    explicit part(curl_mimepart* ptr);
+
+    curl_mimepart* part_{nullptr};
+  };
+
+  /// Constructs a MIME handle.
+  explicit mime(easy& handle);
+
+  /// Adds a MIME part.
+  auto add() -> part;
+
+private:
+  struct curl_mime_deleter {
+    auto operator()(curl_mime* ptr) const noexcept -> void {
+      if (ptr)
+        curl_mime_free(ptr);
+    }
+  };
+
+  std::unique_ptr<curl_mime, curl_mime_deleter> mime_;
+};
 
 /// URL-encodes a string.
 /// @param str The input to encode.
