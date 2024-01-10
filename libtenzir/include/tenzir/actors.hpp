@@ -238,6 +238,8 @@ using importer_actor = typed_actor_fwd<
     ->caf::result<caf::outbound_stream_slot<table_slice>>,
   // Register a FLUSH LISTENER actor.
   auto(atom::subscribe, atom::flush, flush_listener_actor)->caf::result<void>,
+  // Register a subscriber for table slices.
+  auto(atom::subscribe, receiver_actor<table_slice>)->caf::result<void>,
   // Push buffered slices downstream to make the data available.
   auto(atom::flush)->caf::result<void>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
@@ -509,6 +511,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::atom::done>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::diagnostic>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::metric>))
+  TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::table_slice>))
   TENZIR_ADD_TYPE_ID((tenzir::rest_handler_actor))
   TENZIR_ADD_TYPE_ID((tenzir::status_client_actor))
   TENZIR_ADD_TYPE_ID((tenzir::stream_sink_actor<tenzir::table_slice>))
