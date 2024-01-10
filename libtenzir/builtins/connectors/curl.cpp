@@ -194,7 +194,7 @@ public:
         .note("pipeline input is the only request body")
         .hint("remove arguments that create a request body")
         .emit(ctrl.diagnostics());
-      return req.error();
+      return caf::make_error(ec::invalid_argument, "bogus operator arguments");
     }
     auto tx = std::make_shared<transfer>(args_.transfer_opts);
     if (auto err = tx->prepare(std::move(*req))) {
