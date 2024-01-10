@@ -1,0 +1,6 @@
+local_remote {
+  op: pass {
+    
+  },
+  location: "local"
+} @ 0..23

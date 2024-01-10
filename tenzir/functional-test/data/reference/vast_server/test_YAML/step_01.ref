@@ -1,0 +1,16 @@
+---
+tenzir:
+  automatic-rebuild: 0
+  bare-mode: true
+  enable-metrics: true
+  endpoint: :0
+  exec:
+    dump-diagnostics: true
+  export:
+    zeek:
+      disable-timestamp-tags: true
+  plugins:
+    []
+  start:
+    print-endpoint: true
+...

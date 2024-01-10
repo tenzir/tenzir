@@ -1,0 +1,2 @@
+warning: field `a` not found in input, but the chart operator expected it for `value`
+ = note: from `chart`

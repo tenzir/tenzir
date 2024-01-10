@@ -14,6 +14,16 @@ setup() {
 }
 
 @test "saver" {
+  # TODO: Write convenience function to get current tenzir config
+  # TODO: Why is this test even here and not in the fluent-bit plugin?
+  setup_node
+  has_fluentbit=$(tenzir 'show plugins | where name == "fluent-bit"')
+  teardown_node
+
+  if [ -z $has_fluentbit ]; then
+    skip "built without fluent-bit support"
+  fi
+
   listen=()
   check ! --bg listen \
     tenzir 'fluent-bit http port=8888 | yield message'

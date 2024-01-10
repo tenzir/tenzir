@@ -1,0 +1,9 @@
+error: invalid duplicate field value `id.orig_h` for count and value fields
+ --> <input>:1:15
+  |
+1 | export | rare id.orig_h -c id.orig_h | to stdout
+  |               ^^^^^^^^^ 
+  ⋮
+1 | export | rare id.orig_h -c id.orig_h | to stdout
+  |                            ^^^^^^^^^ 
+  |

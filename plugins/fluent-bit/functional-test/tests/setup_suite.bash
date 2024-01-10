@@ -8,7 +8,7 @@ BATS_SUITE_DIRNAME="${BATS_TEST_DIRNAME}"
 export BATS_SUITE_DIRNAME
 
 TENZIR_DIR="$(realpath "$(dirname "$(command -v tenzir)")")"
-export BATS_LIB_PATH=${BATS_LIB_PATH:+${BATS_LIB_PATH}:}${TENZIR_DIR}/../share/tenzir/functional-test:${BATS_SUITE_DIRNAME}/../../../../tenzir/functional-test
+export BATS_LIB_PATH=${BATS_LIB_PATH:+${BATS_LIB_PATH}:}${TENZIR_DIR}/../share/tenzir/functional-test/lib:${BATS_SUITE_DIRNAME}/../../../../tenzir/functional-test/lib
 
 unset "${!TENZIR@}"
 # Enable bare mode so settings in ~/.config/tenzir or the build configuration

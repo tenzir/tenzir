@@ -2,6 +2,9 @@
 # has to setup the virtualenv for the operator.
 : "${BATS_TEST_TIMEOUT:=120}"
 
+
+INPUTSDIR="${BATS_TENZIR_DATADIR}/inputs"
+
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
@@ -167,25 +170,22 @@ END
 }
 
 @test "python operator suricata passthrough" {
-  DATADIR="$(dirname "$BATS_SUITE_DIRNAME")/data"
   check tenzir -f /dev/stdin << END
-    from file $DATADIR/suricata/eve.json read suricata
+    from file $INPUTSDIR/suricata/eve.json read suricata
     | python "pass"
 END
 }
 
 @test "python operator suricata.dns passthrough" {
-  DATADIR="$(dirname "$BATS_SUITE_DIRNAME")/data"
   check tenzir -f /dev/stdin << END
-    from file $DATADIR/suricata/rrdata-eve.json read suricata
+    from file $INPUTSDIR/suricata/rrdata-eve.json read suricata
     | python "pass"
 END
 }
 
 @test "python operator suricata.dns list manipulation" {
-  DATADIR="$(dirname "$BATS_SUITE_DIRNAME")/data"
   check tenzir -f /dev/stdin << END
-    from file $DATADIR/suricata/rrdata-eve.json read suricata
+    from file $INPUTSDIR/suricata/rrdata-eve.json read suricata
     | where dns.answers != null
     | python "self.first_result = self.dns.answers[0]; self.num_results = len(self.dns.answers)"
 END
@@ -193,9 +193,8 @@ END
 
 
 # @test "python operator suricata.dns nested record in list assignment (xfail)" {
-#   DATADIR="$(dirname "$BATS_SUITE_DIRNAME")/data"
 #   check tenzir -f /dev/stdin << END
-#     from file $DATADIR/suricata/rrdata-eve.json read suricata
+#     from file $INPUTSDIR/suricata/rrdata-eve.json read suricata
 #     | where dns.answers != null
 #     | python "self.dns.answers[0].rrname = \"boogle.dom\""
 # END
@@ -203,17 +202,15 @@ END
 
 
 @test "python operator suricata.dns list assignment" {
-  DATADIR="$(dirname "$BATS_SUITE_DIRNAME")/data"
   check tenzir -f /dev/stdin << END
-    from file $DATADIR/suricata/rrdata-eve.json read suricata
+    from file $INPUTSDIR/suricata/rrdata-eve.json read suricata
     | python "if self.dns.grouped.MX is not None: self.dns.grouped.MX[0] = \"boogle.dom\""
 END
 }
 
 @test "python operator suricata.dns assignment to field in null record" {
-  DATADIR="$(dirname "$BATS_SUITE_DIRNAME")/data"
   check tenzir -f /dev/stdin << END
-    from file $DATADIR/suricata/rrdata-eve.json read suricata
+    from file $INPUTSDIR/suricata/rrdata-eve.json read suricata
     | python "
       if self.dns.grouped.TXT is None:
         self.dns.grouped.TXT = \"text record\"
@@ -223,9 +220,8 @@ END
 
 
 @test "python operator fill partial output with nulls" {
-  DATADIR="$(dirname "$BATS_SUITE_DIRNAME")/data"
   check tenzir -f /dev/stdin << END
-    from file $DATADIR/suricata/rrdata-eve.json read suricata
+    from file $INPUTSDIR/suricata/rrdata-eve.json read suricata
     | python "
       if self.dns.answers is not None:
         self.had_answers = True
@@ -235,9 +231,8 @@ END
 }
 
 @test "python operator timestamps" {
-  DATADIR="$(dirname "$BATS_SUITE_DIRNAME")/data"
   check tenzir -f /dev/stdin << END
-    from file $DATADIR/suricata/eve.json read suricata
+    from file $INPUTSDIR/suricata/eve.json read suricata
     | where #schema == "suricata.flow"
     | python "self.flow.duration = self.flow.end - self.flow.start"
 END

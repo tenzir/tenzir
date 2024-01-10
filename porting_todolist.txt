@@ -1,0 +1,26 @@
+# Functional changes
+ - removed count -e tests
+ - removed ascii output
+ - removed chXXXX issue references
+ - replace `check --sort` by in-pipeline sort where possible
+ 
+# Open questions
+ - replacement for `--selector`?
+ - replacement for `import -t`
+ 
+# To investigate
+ - Runtime reported as exact multiple of 1000ms in CI
+ - Long initial startup time
+ - Spontaneous test failures when enabling parallel execution
+
+# Bugs
+ - BATS_TEST_TIMEOUT not respected
+   - If the timeout triggers while a test is running, it causes an indefinite hang
+ - the "grouped" key behaves differently on debian and mac in the "Node suricata rrdata" test
+ 
+# QoL Features
+ - function to spawn node on a random port
+ - function to check built plugins
+ - breakpoint with live integration test environment
+ - show live output of tests
+ - dynamic test timeout based on the number of steps 

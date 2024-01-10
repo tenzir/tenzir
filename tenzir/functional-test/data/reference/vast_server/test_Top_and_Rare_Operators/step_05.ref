@@ -1,0 +1,6 @@
+error: invalid duplicate field value `count` for count and value fields
+ --> <input>:1:14
+  |
+1 | export | top count | to stdout
+  |              ^^^^^ 
+  |
