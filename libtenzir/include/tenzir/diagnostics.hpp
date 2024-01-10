@@ -13,6 +13,7 @@
 #include "tenzir/detail/inspect_enum_str.hpp"
 #include "tenzir/tql/basic.hpp"
 
+#include <boost/algorithm/string.hpp>
 #include <fmt/format.h>
 
 #include <functional>
@@ -32,6 +33,20 @@
 
 namespace tenzir {
 
+namespace {
+
+auto trim_and_truncate(std::string& str) {
+  using namespace std::string_view_literals;
+  boost::trim(str);
+  if (str.size() > 100) {
+    str = fmt::format("{} ... (truncated {} bytes)",
+                      std::string_view{str.begin(), str.begin() + 75},
+                      str.length());
+  }
+}
+
+} // namespace
+
 class diagnostic_handler {
 public:
   virtual ~diagnostic_handler() = default;
@@ -47,6 +62,14 @@ auto inspect(Inspector& f, severity& x) -> bool {
 }
 
 struct diagnostic_annotation {
+  diagnostic_annotation() = default;
+
+  explicit diagnostic_annotation(bool primary, std::string text,
+                                 location source)
+    : primary{primary}, text{std::move(text)}, source{std::move(source)} {
+    trim_and_truncate(this->text);
+  }
+
   /// True if the source represents the underlying reason for the outer
   /// diagnostic, false if it is only related to it.
   bool primary{};
@@ -86,6 +109,13 @@ auto inspect(Inspector& f, diagnostic_note_kind& x) -> bool {
 
 /// Additional information related to a parent diagnostic.
 struct diagnostic_note {
+  diagnostic_note() = default;
+
+  explicit diagnostic_note(diagnostic_note_kind kind, std::string message)
+    : kind{kind}, message{std::move(message)} {
+    trim_and_truncate(this->message);
+  }
+
   /// The type of this note.
   diagnostic_note_kind kind;
 
