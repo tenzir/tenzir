@@ -19,7 +19,16 @@
 
 namespace tenzir::curl {
 
-namespace {} // namespace
+auto slist::append(std::string_view str) -> void {
+  auto* slist = slist_.release();
+  slist_.reset(curl_slist_append(slist, str.data()));
+}
+
+auto slist::items() const -> generator<std::string_view> {
+  for (const auto* ptr = slist_.get(); ptr != nullptr; ptr = ptr->next) {
+    co_yield std::string_view{ptr->data};
+  }
+}
 
 easy::easy() : easy_{curl_easy_init()} {
   TENZIR_ASSERT(easy_ != nullptr);
@@ -28,8 +37,6 @@ easy::easy() : easy_{curl_easy_init()} {
 easy::~easy() {
   if (easy_ != nullptr)
     curl_easy_cleanup(easy_);
-  if (headers_ != nullptr)
-    curl_slist_free_all(headers_);
 }
 
 auto easy::set(CURLoption option, long parameter) -> code {
@@ -74,21 +81,36 @@ auto easy::set(mime handle) -> code {
 
 auto easy::set_http_header(std::string_view name, std::string_view value)
   -> code {
+  auto header_name = [](std::string_view str) {
+    auto i = str.find(':');
+    TENZIR_ASSERT_CHEAP(i != std::string_view::npos);
+    return str.substr(0, i);
+  };
+  for (auto header : headers_.items()) {
+    if (header_name(header) == name) {
+      // For the rare case that we overwrite a header, we're fine to pay the
+      // quadratic overhead of rebuild the list.
+      slist copy;
+      for (auto item : headers_.items())
+        if (header_name(item) != name)
+          copy.append(item);
+      headers_ = std::move(copy);
+      break;
+    }
+  }
   auto header = fmt::format("{}: {}", name, value);
-  headers_ = curl_slist_append(headers_, header.c_str());
-  auto curl_code = curl_easy_setopt(easy_, CURLOPT_HTTPHEADER, headers_);
+  headers_.append(header);
+  auto curl_code
+    = curl_easy_setopt(easy_, CURLOPT_HTTPHEADER, headers_.slist_.get());
   return static_cast<code>(curl_code);
 }
 
 auto easy::headers()
   -> generator<std::pair<std::string_view, std::string_view>> {
-  const auto* current = headers_;
-  while (current != nullptr) {
-    auto str = std::string_view{current->data};
+  for (auto str : headers_.items()) {
     auto split = detail::split(str, ": ");
     TENZIR_ASSERT_CHEAP(split.size() == 2);
     co_yield std::pair{split[0], split[1]};
-    current = current->next;
   }
 }
 

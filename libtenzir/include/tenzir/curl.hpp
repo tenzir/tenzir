@@ -22,6 +22,33 @@
 
 namespace tenzir::curl {
 
+/// A list of strings, corresponding to a `curl_slist`.
+class slist {
+  friend class easy;
+
+public:
+  slist() = default;
+
+  /// Appends a string to the list.
+  /// @param str The string to append.
+  /// @pre *str* must be NULL-terminated.
+  auto append(std::string_view str) -> void;
+
+  /// Iterates over the list items.
+  /// @returns a generator over the strings.
+  auto items() const -> generator<std::string_view>;
+
+private:
+  struct curl_slist_deleter {
+    auto operator()(curl_slist* ptr) const noexcept -> void {
+      if (ptr)
+        curl_slist_free_all(ptr);
+    }
+  };
+
+  std::unique_ptr<curl_slist, curl_slist_deleter> slist_;
+};
+
 class mime;
 
 /// A single transfer, corresponding to a cURL "easy" handle.
@@ -195,7 +222,7 @@ private:
   std::unique_ptr<write_callback> on_write_{};
   std::unique_ptr<read_callback> on_read_{};
   std::unique_ptr<mime> mime_{};
-  curl_slist* headers_{nullptr};
+  slist headers_;
 };
 
 /// @relates easy
