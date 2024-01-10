@@ -20,6 +20,7 @@ check() {
     case $1 in
       '!')
         shift # past argument
+        # TODO: compare against stderr instead of stdout
         expect_error=1
         ;;
       --with-stderr)
@@ -66,11 +67,12 @@ check() {
     file_ref_dir="${file_ref_dir#"$BATS_SUITE_DIRNAME"}"
     ref_path="$(dirname "${BATS_SUITE_DIRNAME}")/reference/${file_ref_dir}/${BATS_TEST_NAME}"
     if [[ -v UPDATE ]]; then
+      debug 0 "creating ${ref_path}"
+      mkdir -p "${ref_path}"
       if [[ "$step_nr_" -eq 0 ]]; then
-        rm -rf "${ref_path}"
+        rm -f "${ref_path}/*"
       fi
       if [[ -n "${output}" ]]; then
-        mkdir -p "${ref_path}"
         if [ $sort_output = 1 ]; then
           output="$(printf '%s' "${output}" | LC_ALL=C sort)"
         fi
@@ -89,6 +91,7 @@ check() {
         fi
       fi
     else
+      debug 1 "checking against ${ref_path}/${step}.ref"
       if [[ -f "${ref_path}/${step}.ref" ]]; then
         if [ $sort_output = 1 ]; then
           assert_sorted - < "${ref_path}/${step}.ref"
@@ -112,6 +115,11 @@ check() {
     run "${run_flags[@]}" -- "${args[@]}"
     compare_or_update
   fi
+}
+
+check_jq() {
+  # FIXME
+  check -c "$1 | jq -ec ."
 }
 
 wait_all() {
