@@ -126,6 +126,40 @@ split(std::string_view str, std::string_view sep, size_t max_splits) {
   return out;
 }
 
+namespace {
+auto find_next_nonescaped_separator(std::string_view input,
+                                    std::string_view sep, std::string_view esc,
+                                    std::string& output) -> std::string_view {
+  auto it = input.begin();
+  while (it != input.end()) {
+    auto next_sep = std::ranges::search(std::string_view{it, input.end()}, sep);
+    if (std::distance(it, next_sep.begin()) >= std::ssize(esc)) {
+      // Check for `esc` between `it` and `next_sep`
+      auto possible_esc = std::string_view{
+        std::prev(next_sep.begin(), std::ssize(esc)), next_sep.begin()};
+      if (possible_esc == esc) {
+        // Escaped separator,
+        // append everything before the escape, and the separator
+        output.append(std::string_view{it, possible_esc.begin()});
+        output.append(std::string_view{next_sep.begin(), next_sep.end()});
+        it = next_sep.end();
+        continue;
+      }
+    }
+    // Found a non-escaped separator,
+    // append everything before it to `output`,
+    // and return it
+    output.append(std::string_view{it, next_sep.begin()});
+    return std::string_view{next_sep.begin(), next_sep.end()};
+  }
+  // No separators found,
+  // append everything to `output`,
+  // and return an empty string_view pointing to the end
+  output.append(std::string_view{it, input.end()});
+  return std::string_view{input.end(), input.end()};
+}
+} // namespace
+
 std::vector<std::string>
 split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
               size_t max_splits) {
@@ -138,31 +172,20 @@ split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
   std::string current{};
   size_t splits = 0;
   while (it != str.end()) {
-    auto next_sep = std::ranges::search(std::string_view{it, str.end()}, sep);
-    if (std::distance(it, next_sep.begin()) >= std::ssize(esc)) {
-      // Possibly escaped separator
-      auto possible_esc = std::string_view{
-        std::prev(next_sep.begin(), std::ssize(esc)), next_sep.begin()};
-      if (possible_esc == esc) {
-        current.append(std::string_view{it, possible_esc.begin()});
-        current.append(std::string_view{next_sep.begin(), next_sep.end()});
-        it = next_sep.end();
-        continue;
-      }
-    }
-    if (splits++ == max_splits)
-      break;
-    current.append(std::string_view{it, next_sep.begin()});
-    out.emplace_back(std::move(current));
-    current = {};
-    it = next_sep.end();
-    if (!next_sep.empty() && it == str.end())
+    auto next_sep = find_next_nonescaped_separator(
+      std::string_view{it, str.end()}, sep, esc, current);
+    if (splits++ < max_splits) {
+      out.push_back(std::move(current));
+      current = {};
+    } else
+      current.append(next_sep);
+    if (splits <= max_splits && !next_sep.empty()
+        && next_sep.end() == str.end())
       out.emplace_back("");
+    it = next_sep.end();
   }
-  if (it != str.end()) {
-    current.append(std::string_view{it, str.end()});
+  if (not current.empty())
     out.emplace_back(std::move(current));
-  }
   return out;
 }
 
