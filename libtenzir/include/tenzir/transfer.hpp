@@ -44,21 +44,24 @@ public:
 
   /// Prepares a transfer with an HTTP request.
   /// @note resets the transfer.
-  auto prepare(http::request req) -> caf::error;
+  auto prepare(const http::request& req) -> caf::error;
 
   /// Prepares a transfer with an URL.
   /// @param url The URL to use.
   /// @note resets the transfer.
   auto prepare(uri url) -> caf::error;
 
+  /// Prepares a chunk with a binary data.
+  auto prepare(chunk_ptr chunk) -> caf::error;
+
+  /// Runs until the current transfer completed.
+  auto perform() -> caf::error;
+
   /// Retrieves file single chunk.
   auto download() -> caf::expected<chunk_ptr>;
 
   /// Retrieves the file in chunks.
   auto download_chunks() -> generator<caf::expected<chunk_ptr>>;
-
-  /// Sends a chunk.
-  auto upload(chunk_ptr chunk) -> caf::error;
 
   /// Resets all transfer parameters, keeping the underlying connection alive.
   auto reset() -> caf::error;

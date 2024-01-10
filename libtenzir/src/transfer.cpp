@@ -17,7 +17,7 @@ namespace tenzir {
 transfer::transfer(transfer_options opts) : options{std::move(opts)} {
 }
 
-auto transfer::prepare(http::request req) -> caf::error {
+auto transfer::prepare(const http::request& req) -> caf::error {
   TENZIR_DEBUG("preparing HTTP request");
   if (auto err = reset())
     return err;
@@ -71,17 +71,19 @@ auto transfer::prepare(http::request req) -> caf::error {
     if (auto err = to_error(easy.set(CURLOPT_POSTFIELDSIZE, 0)))
       return err;
   }
-  // Add default headers.
-  if (req.header("Accept") == nullptr)
-    req.headers.emplace_back("Accept", "*/*");
-  if (req.header("User-Agent") == nullptr)
-    req.headers.emplace_back("User-Agent",
-                             fmt::format("Tenzir/{}", version::version));
-  // Set headers.
-  for (const auto& [name, value] : req.headers) {
+  auto add_header = [&](std::string_view name, std::string_view value) {
     TENZIR_DEBUG("setting HTTP header {}: {}", name, value);
     auto code = easy.set_http_header(name, value);
     TENZIR_ASSERT_CHEAP(code == curl::easy::code::ok);
+  };
+  // Add default headers.
+  if (req.header("Accept") == nullptr)
+    add_header("Accept", "*/*");
+  if (req.header("User-Agent") == nullptr)
+    add_header("User-Agent", fmt::format("Tenzir/{}", version::version));
+  // Set user-provided headers.
+  for (const auto& [name, value] : req.headers) {
+    add_header(name, value);
   }
   return {};
 }
@@ -92,58 +94,15 @@ auto transfer::prepare(uri url) -> caf::error {
   return to_error(easy_.set(CURLOPT_URL, str));
 }
 
-auto transfer::download() -> caf::expected<chunk_ptr> {
-  std::vector<std::byte> body;
-  auto on_write = [&body](std::span<const std::byte> buffer) {
-    body.insert(body.end(), buffer.begin(), buffer.end());
-  };
-  auto code = easy_.set(on_write);
-  TENZIR_ASSERT_CHEAP(code == curl::easy::code::ok);
-  code = easy_.perform();
-  if (code != curl::easy::code::ok)
-    return to_error(code);
-  return chunk::make(std::move(body));
-}
-
-auto transfer::download_chunks() -> generator<caf::expected<chunk_ptr>> {
-  std::vector<chunk_ptr> chunks;
-  auto on_write = [&chunks](std::span<const std::byte> buffer) {
-    chunks.emplace_back(chunk::copy(buffer));
-  };
-  auto code = easy_.set(on_write);
-  TENZIR_ASSERT_CHEAP(code == curl::easy::code::ok);
-  auto multi = curl::multi{};
-  auto multi_code = multi.add(easy_);
-  TENZIR_ASSERT_CHEAP(multi_code == curl::multi::code::ok);
-  auto guard = caf::detail::make_scope_guard([&] {
-    multi_code = multi.remove(easy_);
-    TENZIR_ASSERT_CHEAP(multi_code == curl::multi::code::ok);
-  });
-  while (true) {
-    if (auto still_running = multi.run(options.poll_timeout)) {
-      if (chunks.empty())
-        co_yield chunk_ptr{};
-      for (auto&& chunk : chunks)
-        co_yield chunk;
-      chunks.clear();
-      if (*still_running == 0)
-        break;
-    } else {
-      co_yield still_running.error();
-      co_return;
-    }
-  }
-}
-
-auto transfer::upload(chunk_ptr chunk) -> caf::error {
+auto transfer::prepare(chunk_ptr chunk) -> caf::error {
+  TENZIR_ASSERT_CHEAP(chunk);
   // Disable the default behavior of libcurl that prints the response to stdout.
   auto on_write = [](std::span<const std::byte> buffer) {
-    (void)buffer;
+    TENZIR_DEBUG("got {}-byte response chunk", buffer.size());
   };
   auto code = easy_.set(on_write);
   TENZIR_ASSERT_CHEAP(code == curl::easy::code::ok);
-  TENZIR_ASSERT_CHEAP(chunk);
-  TENZIR_DEBUG("uploading {}-byte chunk", chunk->size());
+  TENZIR_DEBUG("preparing transfer with {}-byte chunk", chunk->size());
   auto chunk_size = detail::narrow_cast<long>(chunk->size());
   if (auto err = to_error(easy_.set(CURLOPT_POSTFIELDSIZE, chunk_size))) {
     return err;
@@ -188,7 +147,58 @@ auto transfer::upload(chunk_ptr chunk) -> caf::error {
     return buffer.size();
   };
   handle().set(on_read);
-  return to_error(handle().perform());
+  return {};
+}
+
+auto transfer::perform() -> caf::error {
+  auto code = easy_.perform();
+  if (code == curl::easy::code::ok) {
+    return to_error(code);
+  }
+  return {};
+}
+
+auto transfer::download() -> caf::expected<chunk_ptr> {
+  std::vector<std::byte> body;
+  auto on_write = [&body](std::span<const std::byte> buffer) {
+    body.insert(body.end(), buffer.begin(), buffer.end());
+  };
+  auto code = easy_.set(on_write);
+  TENZIR_ASSERT_CHEAP(code == curl::easy::code::ok);
+  code = easy_.perform();
+  if (code != curl::easy::code::ok)
+    return to_error(code);
+  return chunk::make(std::move(body));
+}
+
+auto transfer::download_chunks() -> generator<caf::expected<chunk_ptr>> {
+  std::vector<chunk_ptr> chunks;
+  auto on_write = [&chunks](std::span<const std::byte> buffer) {
+    chunks.emplace_back(chunk::copy(buffer));
+  };
+  auto code = easy_.set(on_write);
+  TENZIR_ASSERT_CHEAP(code == curl::easy::code::ok);
+  auto multi = curl::multi{};
+  auto multi_code = multi.add(easy_);
+  TENZIR_ASSERT_CHEAP(multi_code == curl::multi::code::ok);
+  auto guard = caf::detail::make_scope_guard([&] {
+    multi_code = multi.remove(easy_);
+    TENZIR_ASSERT_CHEAP(multi_code == curl::multi::code::ok);
+  });
+  while (true) {
+    if (auto still_running = multi.run(options.poll_timeout)) {
+      if (chunks.empty())
+        co_yield chunk_ptr{};
+      for (auto&& chunk : chunks)
+        co_yield chunk;
+      chunks.clear();
+      if (*still_running == 0)
+        break;
+    } else {
+      co_yield still_running.error();
+      co_return;
+    }
+  }
 }
 
 auto transfer::reset() -> caf::error {
