@@ -49,6 +49,23 @@ private:
   std::unique_ptr<curl_slist, curl_slist_deleter> slist_;
 };
 
+/// Function for `CURLOPT_WRITEFUNCTION`.
+using write_callback = std::function<void(std::span<const std::byte>)>;
+
+/// Function for `CURLOPT_READFUNCTION`.
+/// The read callback gets called as soon as the handle needs to read data. It
+/// takes as argument a buffer that can be written to. The return value
+/// represents the number of bytes written. Returning 0 signals end-of-file to
+/// the library and causes it to stop the current transfer.
+using read_callback = std::function<size_t(std::span<std::byte>)>;
+
+/// Write callback that assumes `user_data` to be a `write_callback*`.
+auto on_write(void* ptr, size_t size, size_t nmemb, void* user_data) -> size_t;
+
+/// Read callback that assumes `user_data` to be a `read_callback*`.
+auto on_read(char* buffer, size_t size, size_t nitems, void* user_data)
+  -> size_t;
+
 class mime;
 
 /// A single transfer, corresponding to a cURL "easy" handle.
@@ -163,16 +180,6 @@ public:
     curl_last = CURL_LAST
   };
 
-  // See `CURLOPT_WRITEFUNCTION` for details.
-  using write_callback = std::function<void(std::span<const std::byte>)>;
-
-  // The read callback gets called as soon as the handle needs to read data. It
-  // takes as argument a buffer that can be written to. The return value
-  // represents the number of bytes written. Returning 0 signals end-of-file to
-  // the library and causes it to stop the current transfer.
-  // See `CURLOPT_READFUNCTION` for details.
-  using read_callback = std::function<size_t(std::span<std::byte>)>;
-
   easy();
   easy(easy&) = delete;
   auto operator=(easy&) -> easy& = delete;
@@ -212,12 +219,6 @@ public:
   auto reset() -> void;
 
 private:
-  static auto on_write(void* ptr, size_t size, size_t nmemb, void* user_data)
-    -> size_t;
-
-  static auto on_read(char* buffer, size_t size, size_t nitems, void* user_data)
-    -> size_t;
-
   CURL* easy_{nullptr};
   std::unique_ptr<write_callback> on_write_{};
   std::unique_ptr<read_callback> on_read_{};
@@ -329,6 +330,12 @@ public:
     /// Sets the data of the MIME part by copying it from a buffer.
     /// @param buffer The data to copy into the part.
     auto data(std::span<const std::byte> buffer) -> easy::code;
+
+    /// Sets the data by menas of a read callback.
+    /// @param on_read The read callback to read in parts. The caller must
+    /// ensure that the pointer remains valid.
+    /// @pre `on_read != nullptr`
+    auto data(read_callback* on_read) -> easy::code;
 
   private:
     explicit part(curl_mimepart* ptr);

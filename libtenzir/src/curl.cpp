@@ -30,6 +30,28 @@ auto slist::items() const -> generator<std::string_view> {
   }
 }
 
+auto on_write(void* ptr, size_t size, size_t nmemb, void* user_data) -> size_t {
+  TENZIR_ASSERT(size == 1);
+  TENZIR_ASSERT(user_data != nullptr);
+  const auto* data = reinterpret_cast<const std::byte*>(ptr);
+  auto bytes = std::span<const std::byte>{data, nmemb};
+  auto* f = reinterpret_cast<write_callback*>(user_data);
+  (*f)(bytes);
+  return nmemb;
+}
+
+auto on_read(char* buffer, size_t size, size_t nitems, void* user_data)
+  -> size_t {
+  TENZIR_ASSERT(size == 1);
+  TENZIR_ASSERT(user_data != nullptr);
+  auto* ptr = reinterpret_cast<std::byte*>(buffer);
+  auto output = std::span<std::byte>{ptr, size * nitems};
+  auto* f = reinterpret_cast<read_callback*>(user_data);
+  auto n = (*f)(output);
+  TENZIR_ASSERT_CHEAP(n > 0);
+  return n;
+}
+
 easy::easy() : easy_{curl_easy_init()} {
   TENZIR_ASSERT(easy_ != nullptr);
 }
@@ -123,29 +145,6 @@ auto easy::reset() -> void {
   curl_easy_reset(easy_);
 }
 
-auto easy::on_write(void* ptr, size_t size, size_t nmemb, void* user_data)
-  -> size_t {
-  TENZIR_ASSERT(size == 1);
-  TENZIR_ASSERT(user_data != nullptr);
-  const auto* data = reinterpret_cast<const std::byte*>(ptr);
-  auto bytes = std::span<const std::byte>{data, nmemb};
-  auto* f = reinterpret_cast<write_callback*>(user_data);
-  (*f)(bytes);
-  return nmemb;
-}
-
-auto easy::on_read(char* buffer, size_t size, size_t nitems, void* user_data)
-  -> size_t {
-  TENZIR_ASSERT(size == 1);
-  TENZIR_ASSERT(user_data != nullptr);
-  auto* ptr = reinterpret_cast<std::byte*>(buffer);
-  auto output = std::span<std::byte>{ptr, size * nitems};
-  auto* f = reinterpret_cast<read_callback*>(user_data);
-  auto n = (*f)(output);
-  TENZIR_ASSERT_CHEAP(n > 0);
-  return n;
-}
-
 auto to_string(easy::code code) -> std::string_view {
   auto curl_code = static_cast<CURLcode>(code);
   return {curl_easy_strerror(curl_code)};
@@ -211,24 +210,32 @@ auto to_string(multi::code code) -> std::string_view {
 }
 
 auto mime::part::name(std::string_view name) -> easy::code {
-  TENZIR_ASSERT(part_ != nullptr);
-  TENZIR_ASSERT(not name.empty());
+  TENZIR_ASSERT_CHEAP(part_ != nullptr);
+  TENZIR_ASSERT_CHEAP(not name.empty());
   auto curl_code = curl_mime_name(part_, name.data());
   return static_cast<easy::code>(curl_code);
 }
 
 auto mime::part::type(std::string_view content_type) -> easy::code {
-  TENZIR_ASSERT(part_ != nullptr);
-  TENZIR_ASSERT(not content_type.empty());
+  TENZIR_ASSERT_CHEAP(part_ != nullptr);
+  TENZIR_ASSERT_CHEAP(not content_type.empty());
   auto curl_code = curl_mime_type(part_, content_type.data());
   return static_cast<easy::code>(curl_code);
 }
 
 auto mime::part::data(std::span<const std::byte> buffer) -> easy::code {
-  TENZIR_ASSERT(part_ != nullptr);
-  TENZIR_ASSERT(not buffer.empty());
+  TENZIR_ASSERT_CHEAP(part_ != nullptr);
+  TENZIR_ASSERT_CHEAP(not buffer.empty());
   const auto* ptr = reinterpret_cast<const char*>(buffer.data());
   auto curl_code = curl_mime_data(part_, ptr, buffer.size());
+  return static_cast<easy::code>(curl_code);
+}
+
+auto mime::part::data(read_callback* on_read) -> easy::code {
+  TENZIR_ASSERT_CHEAP(part_ != nullptr);
+  TENZIR_ASSERT_CHEAP(on_read != nullptr);
+  auto curl_code
+    = curl_mime_data_cb(part_, -1, curl::on_read, nullptr, nullptr, on_read);
   return static_cast<easy::code>(curl_code);
 }
 
