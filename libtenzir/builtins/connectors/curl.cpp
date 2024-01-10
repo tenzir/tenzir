@@ -120,8 +120,10 @@ public:
           auto mime = curl::mime{easy};
           auto part = mime.add();
           part.data(as_bytes(req->body));
-          if (const auto* header = req->header("Content-Type"))
+          if (auto* header = req->header("Content-Type")) {
             part.type(header->value);
+            easy.set_http_header("Content-Type", "multipart/form-data");
+          }
           req->body.clear();
           auto code = easy.set(std::move(mime));
           if (code != curl::easy::code::ok) {
