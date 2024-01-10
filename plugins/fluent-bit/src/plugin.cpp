@@ -22,8 +22,12 @@
 
 #include <cstring>
 #include <queue>
+#include <stdexcept>
 
 #include <fluent-bit/fluent-bit-minimal.h>
+
+// Tag type for when we are retrieving MsgPack objects with an unknown type.
+struct unknown_msgpack_type {};
 
 template <>
 struct fmt::formatter<msgpack_object_type> : fmt::formatter<std::string_view> {
@@ -131,6 +135,7 @@ auto visit(auto f, const msgpack_object& object) {
     case MSGPACK_OBJECT_EXT:
       return f(object.via.ext);
   }
+  return f(unknown_msgpack_type{});
 }
 
 /// RAII-style wrapper around `msgpack_unpack`.
@@ -177,7 +182,7 @@ private:
 /// Reimplementation of flb_time_msgpack_to_time to meet our needs.
 auto to_flb_time(const msgpack_object& object) -> std::optional<time> {
   auto f = detail::overload{
-    [&](auto) -> std::optional<time> {
+    [](auto) -> std::optional<time> {
       return std::nullopt;
     },
     [](uint64_t x) -> std::optional<time> {
@@ -536,6 +541,11 @@ auto add(auto& field, const msgpack_object& object, bool decode = false)
       diagnostic::warning("unknown MsgPack type")
         .note("cannot handle MsgPack extensions")
         .note("got {}", ext.type)
+        .throw_();
+    },
+    [&](const unknown_msgpack_type&) {
+      diagnostic::warning("unknown MsgPack type")
+        .note("got {}", object.type)
         .throw_();
     },
   };
