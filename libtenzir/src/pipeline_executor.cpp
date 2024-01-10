@@ -41,6 +41,12 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
     }
     untyped_exec_nodes.push_back(caf::actor_cast<caf::actor>(node));
   }
+  self->link_to(exec_nodes.back());
+  self->set_exit_handler([this](caf::exit_msg& msg) {
+    TENZIR_DEBUG("{} received exit from all execution nodes: {}", *self,
+                 msg.reason);
+    self->quit(std::move(msg.reason));
+  });
   TENZIR_DEBUG("{} successfully spawned {} execution nodes", *self,
                untyped_exec_nodes.size());
   untyped_exec_nodes.pop_back();
@@ -107,8 +113,6 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
         .then(
           [=, this](exec_node_actor& exec_node) {
             TENZIR_VERBOSE("{} spawned {} remotely", *self, description);
-            self->monitor<caf::message_priority::normal>(exec_node);
-            self->link_to(exec_node);
             exec_nodes[index] = std::move(exec_node);
             start_nodes_if_all_spawned();
           },
@@ -130,8 +134,6 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
       }
       TENZIR_DEBUG("{} spawned {} locally", *self, description);
       std::tie(previous, input_type) = std::move(*spawn_result);
-      self->monitor<caf::message_priority::normal>(previous);
-      self->link_to(previous);
       exec_nodes.push_back(previous);
     }
     ++op_index;
@@ -271,38 +273,6 @@ auto pipeline_executor(
   TENZIR_DEBUG("{} was created", *self);
   self->state.self = self;
   self->state.node = std::move(node);
-  self->set_down_handler([self](caf::down_msg& msg) {
-    const auto exec_node
-      = std::find_if(self->state.exec_nodes.begin(),
-                     self->state.exec_nodes.end(), [&](const auto& exec_node) {
-                       return exec_node.address() == msg.source;
-                     });
-    if (exec_node != self->state.exec_nodes.end()) {
-      TENZIR_DEBUG("{} received down from execution node {}/{}: {}", *self,
-                   exec_node - self->state.exec_nodes.begin() + 1,
-                   self->state.exec_nodes.size(), msg.reason);
-      std::for_each(self->state.exec_nodes.begin(), exec_node + 1,
-                    [&](auto& exec_node) {
-                      if (exec_node) {
-                        self->unlink_from(exec_node);
-                        self->send_exit(exec_node,
-                                        caf::exit_reason::user_shutdown);
-                        exec_node = nullptr;
-                      }
-                    });
-    }
-    const auto all_done
-      = std::all_of(self->state.exec_nodes.begin(),
-                    self->state.exec_nodes.end(), [](const auto& exec_node) {
-                      return exec_node == nullptr;
-                    });
-    if (msg.reason and msg.reason != caf::exit_reason::unreachable
-        and msg.reason != caf::exit_reason::user_shutdown) {
-      self->quit(std::move(msg.reason));
-    } else if (all_done) {
-      self->quit();
-    }
-  });
   self->state.pipe = std::move(pipe);
   self->state.diagnostics = std::move(diagnostics);
   self->state.metrics = std::move(metrics);

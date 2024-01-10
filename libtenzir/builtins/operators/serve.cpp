@@ -308,9 +308,10 @@ struct serve_manager_state {
   /// The serve operators currently observed by the serve-manager.
   std::vector<managed_serve_operator> ops = {};
 
-  /// A list of previously known serve ids that were expired. This exists only
-  /// for returning better error messages to the user.
-  std::unordered_set<std::string> expired_ids = {};
+  /// A list of previously known serve ids that were expired and their
+  /// corresponding error messages. This exists only for returning better error
+  /// messages to the user.
+  std::unordered_map<std::string, caf::error> expired_ids = {};
 
   auto handle_down_msg(const caf::down_msg& msg) -> void {
     const auto found
@@ -331,13 +332,13 @@ struct serve_manager_state {
     // We delay the actual removal because we support fetching the
     // last set of events again by reusing the last continuation token.
     found->done = true;
-    auto delete_serve = [this, source = msg.source]() {
+    auto delete_serve = [this, source = msg.source, reason = msg.reason]() {
       const auto found
         = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
             return op.source == source;
           });
       if (found != ops.end()) {
-        expired_ids.insert(found->serve_id);
+        expired_ids.emplace(found->serve_id, reason);
         ops.erase(found);
       }
     };
@@ -433,12 +434,16 @@ struct serve_manager_state {
           return op.serve_id == request.serve_id;
         });
     if (found == ops.end()) {
-      if (expired_ids.contains(request.serve_id)) {
+      const auto expired_id = expired_ids.find(request.serve_id);
+      if (expired_id != expired_ids.end()) {
+        if (expired_id->second == ec::diagnostic) {
+          return expired_id->second;
+        }
         return caf::make_error(
           ec::logic_error,
           fmt::format("{} got request for events with expired serve id {}; the "
-                      "pipeline serving this data is no longer available",
-                      *self, request.serve_id));
+                      "pipeline serving this data is no longer available: {}",
+                      *self, request.serve_id, expired_id->second));
       }
       return caf::make_error(ec::invalid_argument,
                              fmt::format("{} got request for events with "

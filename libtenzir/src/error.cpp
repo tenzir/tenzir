@@ -9,8 +9,10 @@
 #include "tenzir/error.hpp"
 
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/diagnostics.hpp"
 
 #include <caf/exit_reason.hpp>
+#include <caf/message_handler.hpp>
 #include <caf/pec.hpp>
 #include <caf/sec.hpp>
 
@@ -57,6 +59,7 @@ const char* descriptions[] = {
   "system_error",
   "breaking_change",
   "serialization_error",
+  "diagnostic",
 };
 
 static_assert(ec{std::size(descriptions)} == ec::ec_count,
@@ -95,10 +98,28 @@ std::string render(caf::error err) {
       oss << "Unknown";
       render_default_ctx(oss, err.context());
       break;
-    case caf::type_id_v<tenzir::ec>:
-      oss << to_string(static_cast<tenzir::ec>(err.code()));
-      render_default_ctx(oss, err.context());
+    case caf::type_id_v<tenzir::ec>: {
+      const auto code = static_cast<tenzir::ec>(err.code());
+      if (code == ec::diagnostic) {
+        auto printer = make_diagnostic_printer("<unknown>", "<unknown>",
+                                               color_diagnostics::yes, oss);
+        auto ctx = err.context();
+        caf::message_handler{
+          [&](const diagnostic& diag) {
+            printer->emit(diag);
+          },
+          [&](const caf::message& msg) {
+            printer->emit(diagnostic::error("{}", caf::deep_to_string(msg))
+                            .note("unexpected diagnostic format")
+                            .done());
+          },
+        }(ctx);
+      } else {
+        oss << to_string(code);
+        render_default_ctx(oss, err.context());
+      }
       break;
+    }
     case caf::type_id_v<caf::pec>:
       oss << to_string(static_cast<caf::pec>(err.code()));
       render_default_ctx(oss, err.context());

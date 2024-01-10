@@ -136,6 +136,15 @@ struct [[nodiscard]] diagnostic {
 
   auto modify() && -> diagnostic_builder;
 
+  /// Wraps the diagnostic in an error object.
+  auto to_error() const& -> caf::error {
+    return caf::make_error(ec::diagnostic, *this);
+  }
+
+  auto to_error() && -> caf::error {
+    return caf::make_error(ec::diagnostic, std::move(*this));
+  }
+
   template <class Inspector>
   friend auto inspect(Inspector& f, diagnostic& x) -> bool {
     return f.object(x)

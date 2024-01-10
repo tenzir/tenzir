@@ -126,22 +126,11 @@ public:
     TENZIR_DEBUG("{} {} emits diagnostic: {:?}", *self_,
                  self_->state.op->name(), diag);
     if (diag.severity == severity::error) {
-      self_->state.has_seen_error = true;
-      self_->request(diagnostic_handler_, caf::infinite, std::move(diag))
-        .then(
-          [this] {
-            self_->quit(ec::silent);
-          },
-          [this](caf::error& err) {
-            self_->quit(add_context(err, "failed to emit diagnostic"));
-          });
+      self_->send(diagnostic_handler_, diag);
+      self_->quit(std::move(diag).to_error());
       return;
     }
-    self_->request(diagnostic_handler_, caf::infinite, std::move(diag))
-      .then([] {},
-            [](const caf::error& err) {
-              TENZIR_WARN("failed to emit diagnostic: {}", err);
-            });
+    self_->send(diagnostic_handler_, std::move(diag));
   }
 
 private:
@@ -258,9 +247,6 @@ struct exec_node_state {
   };
   std::optional<resumable_generator> instance = {};
 
-  /// Whether the diagnostics handler has emitted an error.
-  bool has_seen_error = false;
-
   /// State required for keeping and sending metrics. Stored in a separate
   /// shared pointer to allow safe usage from an attached functor to send out
   /// metrics after this actor has quit.
@@ -338,31 +324,34 @@ struct exec_node_state {
       previous
         = caf::actor_cast<exec_node_actor>(std::move(all_previous.back()));
       all_previous.pop_back();
-      self->monitor<caf::message_priority::normal>(previous);
-      self->set_down_handler([this, addr = previous.address()](
-                               const caf::down_msg& msg) {
+      self->link_to(previous);
+      self->set_exit_handler([this, prev_addr = previous.address()](
+                               const caf::exit_msg& msg) {
         auto time_scheduled_guard
           = make_timer_guard(metrics->values.time_scheduled);
-        if (msg.source != addr) [[unlikely]] {
-          TENZIR_DEBUG("{} {} ignores down message `{}` from unknown source: "
-                       "{}",
-                       *self, op->name(), msg.reason, msg.source);
+        // We got an exit message, which can mean one of four things:
+        // 1. The pipeline manager quit.
+        // 2. The next operator quit.
+        // 3. The previous operator quit gracefully.
+        // 4. The previous operator quit ungracefully.
+        // In cases (1-3) we need to shut down this operator unconditionally.
+        // For (4) we we need to treat the previous operator as offline.
+        if (msg.source != prev_addr) {
+          TENZIR_DEBUG("{} {} got exit message from the next execution node or "
+                       "its executor with address {}: {}",
+                       *self, op->name(), msg.source, msg.reason);
+          self->quit(msg.reason);
           return;
         }
-        TENZIR_DEBUG("{} {} got down message from previous execution node: {}",
-                     *self, op->name(), msg.reason);
+        TENZIR_DEBUG("{} {} got down message from previous execution node with "
+                     "address {}: {}",
+                     *self, op->name(), msg.source, msg.reason);
+        if (msg.reason and msg.reason != caf::exit_reason::unreachable) {
+          self->quit(msg.reason);
+          return;
+        }
         previous = nullptr;
         schedule_run();
-        if (msg.reason) {
-          if (msg.reason != ec::silent) {
-            diagnostic::error("{}", msg.reason)
-              .note("`{}` shuts down because of an irregular exit of the "
-                    "previous operator",
-                    op->name())
-              .emit(ctrl->diagnostics());
-          }
-          self->quit(ec::silent);
-        }
       });
     }
     // Instantiate the operator with its input type.
@@ -386,7 +375,7 @@ struct exec_node_state {
       instance.emplace();
       instance->gen = std::get<generator<Output>>(std::move(*output_generator));
       instance->it = instance->gen.begin();
-      if (has_seen_error) {
+      if (self->getf(caf::abstract_actor::is_shutting_down_flag)) {
         return {};
       }
       // Emit metrics once to get started.
@@ -450,7 +439,7 @@ struct exec_node_state {
       TENZIR_ASSERT_CHEAP(instance->it != instance->gen.end());
       TENZIR_TRACE("{} {} processes", *self, op->name());
       ++instance->it;
-      if (has_seen_error) {
+      if (self->getf(caf::abstract_actor::is_shutting_down_flag)) {
         return;
       }
       if (instance->it == instance->gen.end()) {
@@ -467,7 +456,7 @@ struct exec_node_state {
       auto output = std::move(*instance->it);
       const auto output_size = size(output);
       ++instance->it;
-      if (has_seen_error) {
+      if (self->getf(caf::abstract_actor::is_shutting_down_flag)) {
         return;
       }
       const auto should_quit = instance->it == instance->gen.end();
@@ -616,7 +605,7 @@ struct exec_node_state {
   }
 
   auto run() -> void {
-    if (paused or not instance or has_seen_error) {
+    if (paused or not instance) {
       return;
     }
     TENZIR_TRACE("{} {} enters run loop", *self, op->name());
