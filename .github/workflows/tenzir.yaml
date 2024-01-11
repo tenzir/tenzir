@@ -612,6 +612,7 @@ jobs:
       CCACHE_COMPRESS: true
       CCACHE_COMPRESSLEVEL: 6
       CCACHE_DIR: "${{ github.workspace }}/.ccache"
+      CCACHE_NOHASHDIR: true
       CCACHE_SLOPPINESS: "file_macro,time_macros"
       CCACHE_UNIFY: true
       CCACHE_DEBUG: true
@@ -729,7 +730,7 @@ jobs:
       - name: Compile All Targets
         run: |
           # cmake --build "$BUILD_DIR" --target all --parallel --verbose
-          cd $BUILD_DIR && ninja ./libtenzir/CMakeFiles/libtenzir.dir/src/bitmap.cpp.o
+          cmake --build build/ --target ./libtenzir/CMakeFiles/libtenzir.dir/src/bitmap.cpp.o
       - name: Upload ccache contents
         run: |
           tar czf ccache.tar.gz /__w/tenzir/tenzir/ccache-debug
