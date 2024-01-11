@@ -385,7 +385,7 @@ jobs:
       CCACHE_ABSSTDERR: true
       CCACHE_COMPRESS: true
       CCACHE_COMPRESSLEVEL: 6
-      CCACHE_DIR: "${{ github.workspace }}/.ccache"
+      CCACHE_DIR: "/__w/tenzir/tenzir/.ccache"
       CCACHE_HASH_DIR: true
       CCACHE_SLOPPINESS: "file_macro,time_macros"
       CCACHE_UNIFY: true
@@ -473,10 +473,6 @@ jobs:
           ls -la /__w/tenzir/tenzir
           echo "/__w/tenzir/tenzir/.ccache"
           ls -la /__w/tenzir/tenzir/.ccache
-          echo "/home/runner/work/tenzir/tenzir"
-          ls -la /home/runner/work/tenzir/tenzir
-          echo "/home/runner/work/tenzir/tenzir/.ccache"
-          ls -la /home/runner/work/tenzir/tenzir/.ccache
           ccache --show-stats
           ccache --zero-stats
           ccache --show-stats
