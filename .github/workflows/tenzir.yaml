@@ -134,4 +134,10 @@ jobs:
         with:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-
+      - name: Just a test step
+        run: |
+          ls -l
+      - name: Upload ccache contents
+        run: |
+          tar czf ccache.tar.gz ${{ env.CCACHE_DIR }}
+          gsutil -m cp "ccache.tar.gz" "gs://${{ vars.GCS_BUCKET }}/debug/ccache-ci.tar.gz"
