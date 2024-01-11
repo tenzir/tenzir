@@ -405,7 +405,6 @@ jobs:
     needs:
       - configure
       - changelog
-      - docker-tenzir
     if: ${{ needs.configure.outputs.run-docs == 'true' }}
     name: Documentation
     runs-on: ubuntu-20.04
