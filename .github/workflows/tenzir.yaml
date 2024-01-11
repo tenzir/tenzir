@@ -124,7 +124,7 @@ jobs:
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.head-ref-slug }}-${{ github.sha }}
-          restore-keys: Tenzir-Debian-GCC-topic-diagnostic-for-unknown-msgpack-type-31524e5d72cbbbd0df25b4f12857c807a05907e0
+          restore-keys: Tenzir-Debian-GCC-topic-diagnostic-for-unknown-msgpack-type
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
