@@ -7,7 +7,7 @@ legacy metrics system is available [here](metrics/legacy_metrics.md).
 :::
 
 Metrics are stored as internal events in the database. To access these events,
-use `export --internal` followed by `where #schema == "<name>"`, where `<name>`
+use `metrics` followed by `where #schema == "<name>"`, where `<name>`
 is one of the following:
 
 ## `tenzir.metrics.operator`
@@ -42,18 +42,18 @@ The records `input` and `output` have the following schema:
 Show the total pipeline ingress in bytes for every day over the last week,
 excluding pipelines are only run for the explorer:
 
-~~~c
-export --internal |
-where #schema == "tenzir.metrics.operator" |
-where timestamp > 1 week ago |
-where hidden == false && source == true  |
-summarize bytes=sum(output.approx_bytes) by timestamp resolution 1 day
-~~~
+```c
+metrics
+| where #schema == "tenzir.metrics.operator"
+| where timestamp > 1 week ago
+| where hidden == false && source == true
+| summarize bytes=sum(output.approx_bytes) by timestamp resolution 1 day
+```
 
 <details>
 <summary>Output</summary>
 
-~~~json
+```json
 {
   "timestamp": "2023-11-08T00:00:00.000000",
   "bytes": 79927223
@@ -82,25 +82,26 @@ summarize bytes=sum(output.approx_bytes) by timestamp resolution 1 day
   "timestamp": "2023-11-14T00:00:00.000000",
   "bytes": 68643200
 }
-~~~
+```
+
 </details>
 
 Show the three operator instantiations that produced the most events in total
 and their pipeline:
 
-~~~c
-export --internal |
-where #schema == "tenzir.metrics.operator" |
-where output.unit == "events" |
-summarize events=max(output.elements) by pipeline_id, operator_id |
-sort events desc |
-head 3
-~~~
+```c
+metrics
+| where #schema == "tenzir.metrics.operator"
+| where output.unit == "events"
+| summarize events=max(output.elements) by pipeline_id, operator_id
+| sort events desc
+| head 3
+```
 
 <details>
 <summary>Output</summary>
 
-~~~json
+```json
 {
   "pipeline_id": "13",
   "operator_id": 0,
@@ -116,5 +117,5 @@ head 3
   "operator_id": 1,
   "events": 83013294
 }
-~~~
+```
 </details>

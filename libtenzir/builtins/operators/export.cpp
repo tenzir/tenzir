@@ -23,8 +23,6 @@
 #include <tenzir/uuid.hpp>
 
 #include <arrow/type.h>
-#include <caf/attach_stream_sink.hpp>
-#include <caf/attach_stream_source.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/scheduled_actor.hpp>
 #include <caf/scoped_actor.hpp>
@@ -37,45 +35,42 @@
 namespace tenzir::plugins::export_ {
 
 struct bridge_state {
-  std::queue<table_slice> buffer;
-  caf::typed_response_promise<table_slice> rp;
+  std::queue<table_slice> buffer = {};
+  size_t num_buffered = {};
+  caf::typed_response_promise<table_slice> rp = {};
+  expression expr = {};
 };
 
-caf::behavior
-make_bridge(caf::stateful_actor<bridge_state>* self, importer_actor importer) {
+caf::behavior make_bridge(caf::stateful_actor<bridge_state>* self,
+                          importer_actor importer, expression expr) {
+  self->state.expr = std::move(expr);
   self
-    ->request(importer, caf::infinite,
-              caf::actor_cast<stream_sink_actor<table_slice>>(self))
-    .then([](caf::outbound_stream_slot<table_slice>) {},
-          [self](caf::error err) {
-            self->quit(err);
+    ->request(importer, caf::infinite, atom::subscribe_v,
+              caf::actor_cast<receiver_actor<table_slice>>(self))
+    .then([]() {},
+          [self](const caf::error& err) {
+            self->quit(add_context(err, "failed to subscribe to importer"));
           });
-
   return {
-    [self](
-      caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
-      return caf::attach_stream_sink(
-               self, in,
-               [](caf::unit_t&) {
-                 // nop
-               },
-               [=](caf::unit_t&, table_slice slice) {
-                 if (self->state.rp.pending())
-                   self->state.rp.deliver(std::move(slice));
-                 else
-                   self->state.buffer.push(std::move(slice));
-               },
-               [=](caf::unit_t&, const caf::error& err) {
-                 if (err)
-                   TENZIR_ERROR("{} got error during streaming: {}", *self,
-                                err);
-               })
-        .inbound_slot();
+    [self](table_slice slice) {
+      auto filtered = filter(std::move(slice), self->state.expr);
+      if (not filtered)
+        return;
+      if (self->state.rp.pending()) {
+        self->state.rp.deliver(std::move(*filtered));
+      } else if (self->state.num_buffered < (1 << 22)) {
+        self->state.num_buffered += filtered->rows();
+        self->state.buffer.push(std::move(*filtered));
+      } else {
+        TENZIR_WARN("`export --live` dropped {} events because it failed to "
+                    "keep up",
+                    filtered->rows());
+      }
     },
     [self](atom::get) -> caf::result<table_slice> {
       if (self->state.rp.pending()) {
         return caf::make_error(ec::logic_error,
-                               "live exporter bride promise out of sync.");
+                               "live exporter bridge promise out of sync");
       }
       if (self->state.buffer.empty()) {
         self->state.rp = self->make_response_promise<table_slice>();
@@ -83,6 +78,7 @@ make_bridge(caf::stateful_actor<bridge_state>* self, importer_actor importer) {
       }
       auto result = std::move(self->state.buffer.front());
       self->state.buffer.pop();
+      self->state.num_buffered -= result.rows();
       return result;
     },
   };
@@ -109,9 +105,9 @@ public:
     }
     co_yield {};
     auto [importer] = std::move(*components);
-    auto bridge = ctrl.self().spawn(make_bridge, importer);
+    auto bridge = ctrl.self().spawn(make_bridge, importer, expr_);
+    auto next = table_slice{};
     while (true) {
-      auto next = table_slice{};
       ctrl.self()
         .request(bridge, caf::infinite, atom::get_v)
         .await(
@@ -121,13 +117,7 @@ public:
           [&ctrl](caf::error e) {
             diagnostic::error("{}", e).emit(ctrl.diagnostics());
           });
-      if (next.rows() == 0) {
-        co_yield {};
-        continue;
-      }
-      for (auto&& out : select(next, expr_, ids{})) {
-        co_yield std::move(out);
-      }
+      co_yield std::move(next);
     }
   }
 
