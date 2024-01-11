@@ -693,10 +693,15 @@ jobs:
           ls -la /home/runner/work/tenzir/tenzir/ || true
           ls -la /home/runner/work/tenzir/tenzir/.ccache || true
           ls -la /__w/tenzir/tenzir/.ccache || true
+          ls -l /__w
+          ls -l /__w/tenzir
       - name: Upload ccache contents
         run: |
-          tar czf ccache.tar.gz ${{ env.CCACHE_DIR }}
+          tar czf ccache.tar.gz /__w/tenzir/tenzir/.ccache
           gsutil -m cp "ccache.tar.gz" "gs://${{ vars.GCS_BUCKET }}/debug/ccache-ci.tar.gz"
+      - name: Move ccache contents
+        run: |
+          mv /__w/tenzir/tenzir/.ccache ${{ env.CCACHE_DIR }}
       - name: Configure
         run: |
           echo "$PATH"
