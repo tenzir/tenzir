@@ -703,6 +703,7 @@ jobs:
           mv /__w/tenzir/tenzir/.ccache ${{ env.CCACHE_DIR }}/..
       - name: Configure
         run: |
+          env
           echo "$PATH"
           python3 --version
           python3 -m pip --version
@@ -713,6 +714,11 @@ jobs:
           # Zero the cache statistics (but not the configuration options).
           ccache --zero-stats
           ccache --show-config
+          echo "-----------------"
+          export CCACHE_DIR=$CCACHE_DIR
+          ccache --show-config
+          echo "---------------"
+          CCACHE_DIR=/foo ccache --show-config
           # Setting different values for CMAKE_INSTALL_PREFIX and
           # CPACK_PACKAGING_INSTALL_PREFIX is currently not supported and causes
           # a warning. We accept this drawback because the package we generate
