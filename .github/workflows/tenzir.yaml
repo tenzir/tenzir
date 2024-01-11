@@ -611,7 +611,7 @@ jobs:
       CCACHE_ABSSTDERR: true
       CCACHE_COMPRESS: true
       CCACHE_COMPRESSLEVEL: 6
-      CCACHE_DIR: "${{ github.workspace }}/.ccache"
+      CCACHE_DIR: "/opt/tenzir/.ccache"
       CCACHE_NOHASHDIR: true
       CCACHE_SLOPPINESS: "file_macro,time_macros"
       CCACHE_UNIFY: true
@@ -694,13 +694,13 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
       - name: Upload ccache contents
         run: |
-          tar czf ccache.tar.gz /__w/tenzir/tenzir/.ccache
+          tar czf ccache.tar.gz ${{ env.CCACHE_DIR }}
           gsutil -m cp "ccache.tar.gz" "gs://${{ vars.GCS_BUCKET }}/debug/ccache-ci.tar.gz"
       - name: Move ccache contents
         run: |
-          mkdir -p /__w/tenzir/tenzir/ccache-debug
           mkdir -p ${{ env.CCACHE_DIR }}
-          mv /__w/tenzir/tenzir/.ccache ${{ env.CCACHE_DIR }}/..
+          mkdir -p /__w/tenzir/tenzir/ccache-debug
+      #     mv /__w/tenzir/tenzir/.ccache ${{ env.CCACHE_DIR }}/..
       - name: Configure
         run: |
           env
