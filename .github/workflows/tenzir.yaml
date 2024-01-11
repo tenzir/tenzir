@@ -123,14 +123,15 @@ jobs:
         uses: pat-s/always-upload-cache@v3.0.11
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: Tenzir-Debian-GCC-topic-diagnostic-for-unknown-msgpack-type-cb3245c48e34547c735e9b2e35bf6566bd98d431
-          restore-keys: Tenzir-Debian-GCC-topic-diagnostic-for-unknown-msgpack-type Tenzir-Debian-GCC-topic-diagnostic-for-unknown-msgpack-type-cb3245c48e34547c735e9b2e35bf6566bd98d431
+          key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.head-ref-slug }}-${{ github.sha }}
+          restore-keys: |
+            ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.head-ref-slug }}
+            ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.base-ref-slug }}
+            ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-main
+            ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-      - name: Upload ccache contents
-        run: |
-          tar czf ccache.tar.gz ${{ env.CCACHE_DIR }}
-          gsutil -m cp "ccache.tar.gz" "gs://${{ vars.GCS_BUCKET }}/debug/ccache-ci.tar.gz"
+
