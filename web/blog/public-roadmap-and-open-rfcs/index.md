@@ -58,14 +58,15 @@ existing environment. Our GitHub presence includes code, documentation, website
 content, and third-party integrations. We also promote use of GitHub Discussions
 to engage with us. This makes GitHub the focal point to engage with the content.
 Therefore, we decided to encode the roadmap as GitHub issues; for clarity in a
-dedicated repository at <https://github.com/tenzir/public-roadmap>.
+dedicated repository at
+[tenzir/public-roadmap](https://github.com/tenzir/public-roadmap).
 
 We decided against dual-purposing the issue tracker of our main repository
-<https://github.com/tenzir/vast> because it would add roadmap items as many
-open, long-running issues that scatter the attention and potentially confuse the
-community. That said, the primary value of the issue tracker is the layer on top
-of issues: [GitHub Projects][github-projects], which allows for organizing
-issues across multiple dimensions in a visually appealing way.
+[tenzir/vast](https://github.com/tenzir/vast) because it would add roadmap items
+as many open, long-running issues that scatter the attention and potentially
+confuse the community. That said, the primary value of the issue tracker is the
+layer on top of issues: [GitHub Projects][github-projects], which allows for
+organizing issues across multiple dimensions in a visually appealing way.
 
 [github-projects]: https://docs.github.com/en/issues/planning-and-tracking-with-projects
 

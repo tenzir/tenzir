@@ -1,6 +1,8 @@
 // @ts-check
 // Note: type annotations allow type checking and IDEs autocompletion
 
+import { visit } from 'unist-util-visit';
+
 const lightCodeTheme = require('prism-react-renderer/themes/github');
 const darkCodeTheme = require('prism-react-renderer/themes/vsDark');
 const path = require('node:path');
@@ -28,7 +30,6 @@ async function createConfig() {
   // This is not perfect but it works.
 
   const inlineSVGTransform = (await import('remark-inline-svg')).transform;
-  const visit = (await import('unist-util-visit')).default;
 
   const inlineSVG = (options = {}) => {
     const suffix = options.suffix || '.inline.svg';

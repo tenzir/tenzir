@@ -33,7 +33,8 @@ For the statistics, we’ll switch to R. In all subsequent figures, a single poi
 corresponds to a merge commit. The reduced opacity alleviates the effects of
 overplotting.
 
-<details><summary>Code</summary>
+<details>
+<summary>Code</summary>
 
 ``` r
 library(dplyr)
@@ -102,7 +103,8 @@ the small team set sails. Throughput increased as core contributors joined the
 team. Fast-forward to 2020 when we started doing public releases. The figure
 below shows how this process matured.
 
-<details><summary>Code</summary>
+<details>
+<summary>Code</summary>
 
 ``` r
 library(ggrepel)
@@ -140,7 +142,8 @@ vs. non-breaking changes.
 Let’s zoom in on all releases since v1.0. At this time, we had a solid
 engineering and release process in place.
 
-<details><summary>Code</summary>
+<details>
+<summary>Code</summary>
 
 ``` r
 library(tidyr)

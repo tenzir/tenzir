@@ -30,7 +30,7 @@ In addition to that, the following things have changed.
 
 - The repository moved from `tenzir/vast` to `tenzir/tenzir`.
 - Our Discord server is now the *Tenzir Community*. Join us at
-  <https://discord.tenzir.com>!
+  [discord.tenzir.com](https://discord.tenzir.com)!
 - The documentation moved from [vast.io](https://vast.io) to
   [docs.tenzir.com](https://docs.tenzir.com).
 

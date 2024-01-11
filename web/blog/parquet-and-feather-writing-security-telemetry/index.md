@@ -162,7 +162,8 @@ Every row corresponds to a single store file where we varied some of these
 parameters. We used [hyperfine](https://github.com/sharkdp/hyperfine) as
 benchmark driver tool, configured with 8 runs. Let’s take a look at the data.
 
-<details><summary>Code</summary>
+<details>
+<summary>Code</summary>
 
 ``` r
 library(dplyr)
@@ -269,7 +270,8 @@ internally VAST stores the full-qualified type as schema name.
 
 How many events do we have per schema?
 
-<details><summary>Code</summary>
+<details>
+<summary>Code</summary>
 
 ``` r
 schemas <- normalized |>
@@ -299,7 +301,8 @@ Between 1 and 100M events, we almost see everything.
 
 What’s the typical event size?
 
-<details><summary>Code</summary>
+<details>
+<summary>Code</summary>
 
 ``` r
 schemas |>
@@ -413,7 +416,8 @@ use two other types of “stores” for the analysis to facilitate comparison:
 Let’s kick of the analysis by getting a better understanding at the size
 distribution.
 
-<details><summary>Code</summary>
+<details>
+<summary>Code</summary>
 
 ``` r
 unified |>
@@ -451,7 +455,8 @@ The y-axis of above plot is log-scaled, which makes it hard for relative
 comparison. Let’s focus on the medians (the bars in the box) only and bring the
 y-axis to a linear scale:
 
-<details><summary>Code</summary>
+<details>
+<summary>Code</summary>
 
 ``` r
 medians <- unified |>
@@ -504,7 +509,8 @@ a compression ratio of **\~0.9**.
 The above analysis covered averages across schemas. If we juxtapose Parquet and
 Feather per schema, we see the difference between the two formats more clearly:
 
-<details><summary>Code</summary>
+<details>
+<summary>Code</summary>
 
 ``` r
 library(ggrepel)
@@ -573,7 +579,8 @@ compressors like Zstd shine.
 Zooming in to the bottom left area with average event size of less than 100B,
 and removing the log scaling, we see the following:
 
-<details><summary>Code</summary>
+<details>
+<summary>Code</summary>
 
 ``` r
 parquet_vs_feather_size |>
@@ -599,7 +606,8 @@ If we take pick a single point, e.g., `zeek.conn` with
 we can confirm that the relative performance matches the results of our analysis
 above:
 
-<details><summary>Code</summary>
+<details>
+<summary>Code</summary>
 
 ``` r
 unified |>
@@ -622,7 +630,8 @@ import Svg7 from './index_files/figure-gfm/plot-zeek-suricata-1.svg';
 Finally, we look at the fraction of space Parquet takes compared to Feather on a
 per schema basis, restricted to schemas with more than 10k events:
 
-<details><summary>Code</summary>
+<details>
+<summary>Code</summary>
 
 ``` r
 library(tibble)
@@ -670,7 +679,8 @@ than Parquet. Is that the case when enabling compression for both?
 To avoid distortion of small events, we also restrict the analysis to schemas
 with more than 100k events.
 
-<details><summary>Code</summary>
+<details>
+<summary>Code</summary>
 
 ``` r
 unified |>
@@ -714,7 +724,8 @@ Parquet compression is slower. Please don’t hesitate to reach out, e.g., via o
 
 Let’s compare Parquet and Feather by compression level, per schema:
 
-<details><summary>Code</summary>
+<details>
+<summary>Code</summary>
 
 ``` r
 parquet_vs_feather_duration <- unified |>
@@ -776,7 +787,8 @@ Finally, we combine the size and speed analysis into a single benchmark. Our
 goal is to find an optimal parameterization, i.e., one that strictly dominates
 others. To this end, we now plot size against speed:
 
-<details><summary>Code</summary>
+<details>
+<summary>Code</summary>
 
 ``` r
 cleaned <- unified |>
@@ -848,7 +860,8 @@ cloud is unwieldy for relative comparison. To better represent the variance of
 schemas for a given configuration, we can strip the “inner” points and only look
 at their convex hull:
 
-<details><summary>Code</summary>
+<details>
+<summary>Code</summary>
 
 ``` r
 # Native convex hull does the job, no need to leverage ggforce.
@@ -879,7 +892,8 @@ is “good” in that it offers more predictable behavior. The high amount of
 overlap makes it still difficult to perform clearer comparisons. If we facet by
 store type, it becomes easier to compare the areas:
 
-<details><summary>Code</summary>
+<details>
+<summary>Code</summary>
 
 ``` r
 cleaned |>
@@ -909,7 +923,8 @@ Arranging the facets above row-wise makes it easier to compare the y-axis, i.e.,
 speed, where lower polygons are better. Arranging them column-wise makes it easier
 to compare the x-axis, i.e., size, where the left-most polygons are better:
 
-<details><summary>Code</summary>
+<details>
+<summary>Code</summary>
 
 ``` r
 cleaned |>

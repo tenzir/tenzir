@@ -1,6 +1,6 @@
 function CodeBlock(code_block)
     if code_block.attributes["code-fold"] == "true" then
-        local open = "<details><summary>Code</summary>\n"
+        local open = "<details>\n<summary>Code</summary>\n"
         local close = "\n</details>"
         local open_block = pandoc.RawBlock("html", open)
         local close_block = pandoc.RawBlock("html", close)
