@@ -177,7 +177,7 @@ public:
       co_return;
     }
     for (const auto& [type, info] : current_result.candidate_infos) {
-      auto bound_expr = tailor(info.exp, type);
+      auto bound_expr = bind(info.exp, type);
       if (not bound_expr) {
         // failing to bind is not an error.
         continue;

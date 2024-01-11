@@ -263,6 +263,7 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
            query_context& query) -> caf::result<legacy_catalog_lookup_result> {
       const auto start = std::chrono::steady_clock::now();
       const auto cache_capacity = uint64_t{self->state.partitions.size()};
+      TENZIR_WARN("spawn lookup helper");
       auto catalog_lookup
         = self->spawn(make_catalog_lookup, self->state.partitions,
                       self->state.unprunable_fields, self->state.taxonomies,
@@ -271,15 +272,19 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       auto num_candidates = size_t{0};
       auto result = legacy_catalog_lookup_result{};
       while (true) {
+        TENZIR_WARN("use lookup helper");
         auto partial_results = std::vector<catalog_lookup_result>{};
         auto error = caf::error{};
         blocking_self->request(catalog_lookup, caf::infinite, atom::get_v)
           .receive(
             [&](std::vector<catalog_lookup_result>& response) {
               num_candidates += response.size();
+              TENZIR_WARN("received {}=>{} results", response.size(),
+                          num_candidates);
               partial_results = std::move(response);
             },
             [&](caf::error& response) {
+              TENZIR_WARN("received error: {}", response);
               error = std::move(response);
             });
         if (error) {

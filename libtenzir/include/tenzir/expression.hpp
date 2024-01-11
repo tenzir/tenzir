@@ -376,13 +376,13 @@ expression normalize(expression expr);
 /// @returns The normalized and validated expression on success.
 caf::expected<expression> normalize_and_validate(expression expr);
 
-/// Tailors an expression to a specific type.
+/// Binds an expression to a specific type.
 /// @param expr The expression to tailor to *schema*.
 /// @param schema The schema to tailor *expr* to.
 /// @pre `caf::holds_alternative<record_type>(schema)`
 /// @returns An optimized version of *expr* specifically for evaluating events
 ///          of type *schema*.
-caf::expected<expression> tailor(expression expr, const type& schema);
+caf::expected<expression> bind(expression expr, const type& schema);
 
 /// Retrieves an expression node at a given [offset](@ref offset).
 /// @param expr The expression to lookup.

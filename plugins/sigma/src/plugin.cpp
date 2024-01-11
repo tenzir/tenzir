@@ -118,7 +118,7 @@ public:
       }
       for (const auto& [path, entry] : state.rules) {
         const auto& [yaml, rule] = entry;
-        auto expr = tailor(rule, slice.schema());
+        auto expr = bind(rule, slice.schema());
         if (not expr) {
           continue;
         }

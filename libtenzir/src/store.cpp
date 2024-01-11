@@ -43,7 +43,7 @@ handle_query(const auto& self, const query_context& query_context) {
   TENZIR_TRACE("{} got a query: {}", *self, query_context);
   const auto start = std::chrono::steady_clock::now();
   const auto schema = self->state.store->schema();
-  const auto tailored_expr = tailor(query_context.expr, schema);
+  const auto tailored_expr = bind(query_context.expr, schema);
   if (!tailored_expr) {
     // In case the query was delegated from an active partition the
     // taxonomy resolution is not guaranteed to have worked (whenever the

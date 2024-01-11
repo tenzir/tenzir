@@ -159,7 +159,7 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
   auto schema = slice.schema();
   auto it = self->state.checkers.find(schema);
   if (it == self->state.checkers.end()) {
-    auto x = tailor(self->state.query_context.expr, schema);
+    auto x = bind(self->state.query_context.expr, schema);
     if (!x) {
       TENZIR_DEBUG("{} failed to tailor expression and drops slice: {}", *self,
                    x.error());

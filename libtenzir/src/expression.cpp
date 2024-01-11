@@ -198,16 +198,16 @@ caf::expected<expression> normalize_and_validate(expression expr) {
   return expr;
 }
 
-caf::expected<expression> tailor(expression expr, const type& schema) {
+caf::expected<expression> bind(expression expr, const type& schema) {
   TENZIR_ASSERT(caf::holds_alternative<record_type>(schema));
   if (caf::holds_alternative<caf::none_t>(expr))
-    return caf::make_error(ec::unspecified, fmt::format("unable to tailor "
+    return caf::make_error(ec::unspecified, fmt::format("unable to bind "
                                                         "empty expression"));
   auto result = caf::visit(type_resolver{schema}, std::move(expr));
   if (!result)
     return result;
   if (caf::holds_alternative<caf::none_t>(*result))
-    return caf::make_error(ec::unspecified, fmt::format("failed to tailor "
+    return caf::make_error(ec::unspecified, fmt::format("failed to bind "
                                                         "expression {} for "
                                                         "schema {}",
                                                         expr, schema));

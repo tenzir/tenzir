@@ -232,7 +232,7 @@ TEST(filter - import time) {
   auto time = tenzir::time{std::chrono::milliseconds(202202141214)};
   sut.import_time(time);
   auto exp = unbox(
-    tailor(unbox(to<expression>("id.orig_h != 192.168.1.102")), sut.schema()));
+    bind(unbox(to<expression>("id.orig_h != 192.168.1.102")), sut.schema()));
   auto result = filter(sut, exp);
   REQUIRE(result);
   CHECK_EQUAL(result->import_time(), time);
@@ -242,7 +242,7 @@ TEST(filter - expression overload) {
   auto sut = zeek_conn_log[0];
   // sut.offset(0);
   auto check_eval = [&](std::string_view expr, size_t x) {
-    auto exp = unbox(tailor(unbox(to<expression>(expr)), sut.schema()));
+    auto exp = unbox(bind(unbox(to<expression>(expr)), sut.schema()));
     CHECK_EQUAL(filter(sut, exp)->rows(), x);
   };
   check_eval("id.orig_h != 192.168.1.102", 5);
@@ -263,7 +263,7 @@ TEST(filter - expression with hints) {
   // sut.offset(0);
   auto check_eval = [&](std::string_view expr,
                         std::initializer_list<id_range> id_init, size_t x) {
-    auto exp = unbox(tailor(unbox(to<expression>(expr)), sut.schema()));
+    auto exp = unbox(bind(unbox(to<expression>(expr)), sut.schema()));
     auto hints = make_ids(id_init, sut.offset() + sut.rows());
     CHECK_EQUAL(filter(sut, exp, hints)->rows(), x);
   };

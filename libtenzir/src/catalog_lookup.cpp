@@ -15,15 +15,141 @@ namespace tenzir {
 
 namespace {
 
+auto evaluate_predicate(const partition_synopsis& synopsis,
+                        const meta_extractor& lhs, relational_operator op,
+                        const data& rhs) -> std::optional<bool> {
+  switch (lhs.kind) {
+    case meta_extractor::schema: {
+      // FIXME: eval depending on the op
+    }
+    case meta_extractor::schema_id: {
+      // FIXME: eval depending on the op
+    }
+    case meta_extractor::import_time: {
+      // FIXME: eval depending on the op
+    }
+    case meta_extractor::internal: {
+      const auto internal = caf::get_if<bool>(&rhs);
+      TENZIR_ASSERT_THROW(
+        internal, "catalog lookup expected a validated expression, but got a "
+                  "comparison between #internal and a non-bool value");
+      // FIXME: eval depending on the op
+      return synopsis.schema.attribute("internal").has_value() == *internal;
+    }
+  }
+  TENZIR_UNREACHABLE();
+}
+
+auto evaluate_predicate(const partition_synopsis& synopsis,
+                        const data_extractor& lhs, relational_operator op,
+                        const data& rhs) -> std::optional<bool> {
+  //    where suricata.dns.dns.rrname == "foo"
+  // => where dns.rrname == "foo" && #schema == "suricata.dns"
+  return std::nullopt;
+}
+
+template <class LhsOperand, class RhsOperand>
+auto evaluate_predicate(const partition_synopsis& synopsis,
+                        const LhsOperand& lhs, relational_operator op,
+                        const RhsOperand& rhs) -> std::optional<bool> {
+  if constexpr (not std::is_same_v<RhsOperand, data>) {
+    throw std::logic_error("catalog lookup expected a normalized expression, "
+                           "but got non-data for the rhs");
+  } else if constexpr (detail::is_any_v<LhsOperand, field_extractor,
+                                        type_extractor, data>) {
+    throw std::logic_error("catalog lookup expected a normalized expression, "
+                           "but got data or an unbound extractor for the lhs");
+  } else {
+    return evaluate_predicate(synopsis, lhs, op, rhs);
+  }
+}
+
+// Forward declaration for recursive access.
+auto evaluate_expression(const partition_synopsis& synopsis,
+                         const expression& expr) -> std::optional<bool>;
+
+// Evaluate an empty expression.
+auto evaluate_expression(const partition_synopsis& synopsis, const caf::none_t&)
+  -> std::optional<bool> {
+  return true;
+}
+
+// Evaluate a conjunction.
+auto evaluate_expression(const partition_synopsis& synopsis,
+                         const conjunction& expr) -> std::optional<bool> {
+  if (expr.empty()) {
+    return false;
+  }
+  auto all_true = true;
+  for (const auto& connective : expr) {
+    const auto lookup = evaluate_expression(synopsis, connective);
+    if (not lookup) {
+      all_true = false;
+      continue;
+    }
+    if (not *lookup) {
+      return false;
+    }
+  }
+  if (all_true) {
+    return true;
+  }
+  return std::nullopt;
+}
+
+// Evaluate a disjunction.
+auto evaluate_expression(const partition_synopsis& synopsis,
+                         const disjunction& expr) -> std::optional<bool> {
+  if (expr.empty()) {
+    return true;
+  }
+  for (const auto& connective : expr) {
+    const auto lookup = evaluate_expression(synopsis, connective);
+    if (not lookup) {
+      return std::nullopt;
+    }
+    if (*lookup) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Evaluate a negation.
+auto evaluate_expression(const partition_synopsis& synopsis, const negation&)
+  -> std::optional<bool> {
+  // We cannot handle negations, because a synopsis may return false positives,
+  // and negating such a result may cause false negatives.
+  return std::nullopt;
+}
+
+// Evaluate a predicate.
+auto evaluate_expression(const partition_synopsis& synopsis,
+                         const predicate& expr) -> std::optional<bool> {
+  auto f = [&](const auto& lhs, const auto& rhs) {
+    return evaluate_predicate(synopsis, lhs, expr.op, rhs);
+  };
+  return caf::visit(f, expr.lhs, expr.rhs);
+}
+
+auto evaluate_expression(const partition_synopsis& synopsis,
+                         const expression& expr) -> std::optional<bool> {
+  auto f = [&](const auto& x) {
+    return evaluate_expression(synopsis, x);
+  };
+  return caf::visit(f, expr);
+}
+
 /// Performs a lookup against a partition synopsis, returning the corresponding
 /// partition info if the expression cannot be ruled out for the partition. The
 /// expression must be normalized, validated, resolved and pruned for the
 /// partitions's schema.
-auto lookup(const partition_synopsis& synopsis, const expression& expr)
+auto lookup(const partition_synopsis_pair& partition, const expression& expr)
   -> std::optional<partition_info> {
-  TENZIR_ASSERT_CHEAP
-  // FIXME: re-implement the lookup.
-  return std::nullopt;
+  if (not evaluate_expression(*partition.synopsis, expr).value_or(true)) {
+    return std::nullopt;
+  }
+  return partition_info{partition.uuid, *partition.synopsis};
 }
 
 } // namespace
@@ -31,6 +157,9 @@ auto lookup(const partition_synopsis& synopsis, const expression& expr)
 auto catalog_lookup_state::run() -> void {
   if (remaining_partitions.empty()) {
     if (results.empty()) {
+      if (get_rp.pending()) {
+        get_rp.deliver(std::move(results));
+      }
       self->quit();
     }
     return;
@@ -52,12 +181,20 @@ auto catalog_lookup_state::run() -> void {
       return;
     }
     auto pruned = prune(*resolved, unprunable_fields);
+    auto bound = bind(std::move(pruned), partition.synopsis->schema);
+    if (not bound) {
+      self->quit(caf::make_error(
+        ec::invalid_argument, fmt::format("{} failed to bind epxression {}: "
+                                          "{}",
+                                          *self, query.expr, bound.error())));
+      return;
+    }
     bound_expr = bound_exprs.emplace_hint(
-      bound_expr, partition.synopsis->schema, std::move(pruned));
+      bound_expr, partition.synopsis->schema, std::move(*bound));
   }
   // Perform the lookup.
-  if (auto result = lookup(*partition.synopsis, *bound_expr)) {
-    results.push_back(std::move(*result));
+  if (auto result = lookup(partition, bound_expr->second)) {
+    results.emplace_back(std::move(*result), bound_expr->second);
   }
   // Schedule the next partition if there still is one.
   if (not remaining_partitions.empty() and results.size() < cache_capacity) {
@@ -185,14 +322,6 @@ auto make_catalog_lookup(
 //                                      result.partition_infos.end()));
 //       }
 //       return result;
-//     },
-//     [&](const negation&) -> legacy_catalog_lookup_result::candidate_info {
-//       // We cannot handle negations, because a synopsis may return false
-//       // positives, and negating such a result may cause false
-//       // negatives.
-//       // TODO: The above statement seems to only apply to bloom filter
-//       // synopses, but it should be possible to handle time or bool synopses.
-//       return all_partitions();
 //     },
 //     [&](const predicate& x) -> legacy_catalog_lookup_result::candidate_info {
 //       // Performs a lookup on all *matching* synopses with operator and
@@ -393,12 +522,6 @@ auto make_catalog_lookup(
 //         },
 //       };
 //       return caf::visit(extract_expr, x.lhs, x.rhs);
-//     },
-//     [&](caf::none_t) -> legacy_catalog_lookup_result::candidate_info {
-//       TENZIR_ERROR("{} received an empty expression",
-//                    detail::pretty_type_name(this));
-//       TENZIR_ASSERT(!"invalid expression");
-//       return all_partitions();
 //     },
 //   };
 //   auto result = caf::visit(f, expr);

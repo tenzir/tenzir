@@ -35,7 +35,7 @@ struct fixture : fixtures::events {
 
   expression make_conn_expr(std::string_view str) const {
     auto expr = make_expr(str);
-    return unbox(tailor(expr, zeek_conn_log_slice.schema()));
+    return unbox(bind(expr, zeek_conn_log_slice.schema()));
   }
 
   table_slice zeek_conn_log_slice;

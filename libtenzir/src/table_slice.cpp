@@ -617,7 +617,7 @@ select(const table_slice& slice, expression expr, const ids& hints) {
     // Tailor the expression to the type; this is required for using the
     // evaluate function, which expects field and type extractors to be resolved
     // already.
-    auto tailored_expr = tailor(expr, slice.schema());
+    auto tailored_expr = bind(expr, slice.schema());
     if (!tailored_expr)
       co_return;
     selection = evaluate(*tailored_expr, slice, selection);
@@ -768,7 +768,7 @@ uint64_t count_matching(const table_slice& slice, const expression& expr,
   // Tailor the expression to the type; this is required for using the
   // evaluate function, which expects field and type extractors to be resolved
   // already.
-  auto tailored_expr = tailor(expr, slice.schema());
+  auto tailored_expr = bind(expr, slice.schema());
   if (!tailored_expr)
     return 0;
   return rank(evaluate(expr, slice, hints));

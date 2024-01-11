@@ -76,7 +76,7 @@ public:
         .emit(ctrl.diagnostics());
       return std::nullopt;
     }
-    auto tailored_expr = tailor(std::move(*resolved_expr), schema);
+    auto tailored_expr = bind(std::move(*resolved_expr), schema);
     // We ideally want to warn when extractors can not be resolved. However,
     // this is tricky for e.g. `where #schema == "foo" && bar == 42` and
     // changing the behavior for this is tricky with the current expressions.
