@@ -119,6 +119,9 @@ jobs:
       HOMEBREW_NO_INSTALL_CLEANUP: 1
       HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
+      - name: Create ccache dor
+        run: |
+          mkdir -p ${{ env.CCACHE_DIR }}
       - name: Fetch ccache Cache
         uses: pat-s/always-upload-cache@v3.0.11
         with:
