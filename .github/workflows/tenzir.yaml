@@ -710,9 +710,12 @@ jobs:
           bash --version
           "$CC" --version
           "$CXX" --version
+          cat /__w/tenzir/tenzir/.ccache/ccache.conf || true
+          cat /etc/ccache.conf || true
           ccache --version
           # Zero the cache statistics (but not the configuration options).
           ccache --zero-stats
+          echo "------------------"
           ccache --show-config
           echo "-----------------"
           export CCACHE_DIR=$CCACHE_DIR
