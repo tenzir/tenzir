@@ -39,7 +39,7 @@ public:
           response = std::move(value);
         },
         [&](const caf::error& error) {
-          diagnostic::error("internal server error: {}", error)
+          diagnostic::error("internal server error: {}", error)
             .note("endpoint: {}", endpoint_)
             .note("request body: {}", request_body_)
             .docs("https://docs.tenzir.com/operators/api")

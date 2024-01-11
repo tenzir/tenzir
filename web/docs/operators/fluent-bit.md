@@ -22,7 +22,7 @@ making it possible to acquire events from a Fluent Bit [input plugin][inputs]
 and process events with a Fluent Bit [output plugin][outputs].
 
 [inputs]: https://docs.fluentbit.io/manual/pipeline/inputs
-[outputs]: https://docs.fluentbit.io/manual/pipeline/output
+[outputs]: https://docs.fluentbit.io/manual/pipeline/outputs
 
 Syntactically, the `fluent-bit` operator behaves similar to an invocation of the
 `fluent-bit` command line utility. For example, the invocation

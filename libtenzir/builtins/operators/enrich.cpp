@@ -18,8 +18,8 @@ class plugin final : public virtual operator_parser_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {
-      .source = true,
-      .transformation = false,
+      .source = false,
+      .transformation = true,
       .sink = false,
     };
   }

@@ -21,6 +21,7 @@
 #define FLUENT_BIT_MINIMAL_H
 
 #include <stddef.h>
+#include <string.h>
 
 // #include <fluent-bit/flb_macros.h>
 // #include <fluent-bit/flb_config.h>
@@ -84,5 +85,164 @@ FLB_EXPORT int flb_loop(flb_ctx_t* ctx);
 FLB_EXPORT int
 flb_lib_push(flb_ctx_t* ctx, int ffd, const void* data, size_t len);
 FLB_EXPORT int flb_lib_config_file(flb_ctx_t* ctx, const char* path);
+
+/*********** MsgPack *************/
+
+/**
+ * @defgroup msgpack_object Dynamically typed object
+ * @ingroup msgpack
+ * @{
+ */
+
+typedef enum {
+  MSGPACK_OBJECT_NIL = 0x00,
+  MSGPACK_OBJECT_BOOLEAN = 0x01,
+  MSGPACK_OBJECT_POSITIVE_INTEGER = 0x02,
+  MSGPACK_OBJECT_NEGATIVE_INTEGER = 0x03,
+  MSGPACK_OBJECT_FLOAT32 = 0x0a,
+  MSGPACK_OBJECT_FLOAT64 = 0x04,
+  MSGPACK_OBJECT_FLOAT = 0x04,
+#if defined(MSGPACK_USE_LEGACY_NAME_AS_FLOAT)
+  MSGPACK_OBJECT_DOUBLE = MSGPACK_OBJECT_FLOAT, /* obsolete */
+#endif /* MSGPACK_USE_LEGACY_NAME_AS_FLOAT */
+  MSGPACK_OBJECT_STR = 0x05,
+  MSGPACK_OBJECT_ARRAY = 0x06,
+  MSGPACK_OBJECT_MAP = 0x07,
+  MSGPACK_OBJECT_BIN = 0x08,
+  MSGPACK_OBJECT_EXT = 0x09
+} msgpack_object_type;
+
+struct msgpack_object;
+struct msgpack_object_kv;
+
+typedef struct {
+  uint32_t size;
+  struct msgpack_object* ptr;
+} msgpack_object_array;
+
+typedef struct {
+  uint32_t size;
+  struct msgpack_object_kv* ptr;
+} msgpack_object_map;
+
+typedef struct {
+  uint32_t size;
+  const char* ptr;
+} msgpack_object_str;
+
+typedef struct {
+  uint32_t size;
+  const char* ptr;
+} msgpack_object_bin;
+
+typedef struct {
+  int8_t type;
+  uint32_t size;
+  const char* ptr;
+} msgpack_object_ext;
+
+typedef union {
+  bool boolean;
+  uint64_t u64;
+  int64_t i64;
+#if defined(MSGPACK_USE_LEGACY_NAME_AS_FLOAT)
+  double dec; /* obsolete*/
+#endif        /* MSGPACK_USE_LEGACY_NAME_AS_FLOAT */
+  double f64;
+  msgpack_object_array array;
+  msgpack_object_map map;
+  msgpack_object_str str;
+  msgpack_object_bin bin;
+  msgpack_object_ext ext;
+} msgpack_object_union;
+
+typedef struct msgpack_object {
+  msgpack_object_type type;
+  msgpack_object_union via;
+} msgpack_object;
+
+typedef struct msgpack_object_kv {
+  msgpack_object key;
+  msgpack_object val;
+} msgpack_object_kv;
+
+/**
+ * @defgroup msgpack_zone Memory zone
+ * @ingroup msgpack
+ * @{
+ */
+
+typedef struct msgpack_zone_finalizer {
+  void (*func)(void* data);
+  void* data;
+} msgpack_zone_finalizer;
+
+typedef struct msgpack_zone_finalizer_array {
+  msgpack_zone_finalizer* tail;
+  msgpack_zone_finalizer* end;
+  msgpack_zone_finalizer* array;
+} msgpack_zone_finalizer_array;
+
+struct msgpack_zone_chunk;
+typedef struct msgpack_zone_chunk msgpack_zone_chunk;
+
+typedef struct msgpack_zone_chunk_list {
+  size_t free;
+  char* ptr;
+  msgpack_zone_chunk* head;
+} msgpack_zone_chunk_list;
+
+typedef struct msgpack_zone {
+  msgpack_zone_chunk_list chunk_list;
+  msgpack_zone_finalizer_array finalizer_array;
+  size_t chunk_size;
+} msgpack_zone;
+
+/**
+ * @defgroup msgpack_unpack Deserializer
+ * @ingroup msgpack
+ * @{
+ */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct msgpack_unpacked {
+  msgpack_zone* zone;
+  msgpack_object data;
+} msgpack_unpacked;
+
+typedef enum {
+  MSGPACK_UNPACK_SUCCESS = 2,
+  MSGPACK_UNPACK_EXTRA_BYTES = 1,
+  MSGPACK_UNPACK_CONTINUE = 0,
+  MSGPACK_UNPACK_PARSE_ERROR = -1,
+  MSGPACK_UNPACK_NOMEM_ERROR = -2
+} msgpack_unpack_return;
+
+msgpack_unpack_return
+msgpack_unpack_next(msgpack_unpacked* result, const char* data, size_t len,
+                    size_t* off);
+
+static inline void msgpack_unpacked_init(msgpack_unpacked* result) {
+  memset(result, 0, sizeof(msgpack_unpacked));
+}
+
+void msgpack_zone_free(msgpack_zone* zone);
+
+static inline void msgpack_unpacked_destroy(msgpack_unpacked* result) {
+  if (result->zone != NULL) {
+    msgpack_zone_free(result->zone);
+    result->zone = NULL;
+    memset(&result->data, 0, sizeof(msgpack_object));
+  }
+}
+
+#ifdef __cplusplus
+}
+#endif
+
+/** @} */
 
 #endif

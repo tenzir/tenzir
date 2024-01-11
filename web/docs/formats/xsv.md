@@ -12,10 +12,10 @@ Reads and writes lines with separated values.
 ## Synopsis
 
 ```
-csv [--allow-comments]
-ssv [--allow-comments]
-tsv [--allow-comments]
-xsv <field-sep> <list-sep> <null-value> [--allow-comments]
+csv [--allow-comments] [--header <header>]
+ssv [--allow-comments] [--header <header>]
+tsv [--allow-comments] [--header <header>]
+xsv <field-sep> <list-sep> <null-value> [--allow-comments] [--header <header>]
 ```
 
 ## Description
@@ -70,9 +70,14 @@ Specifies the string that separates list elements *within* a field.
 
 Specifies the string that denotes an absent value.
 
-### `--allow-comments`
+### `--allow-comments` (Parser)
 
 Treat lines beginning with `'#'` as comments.
+
+### `--header <header>` (Parser)
+
+Use the manually provided header line instead of treating the first line as the
+header.
 
 ## Examples
 

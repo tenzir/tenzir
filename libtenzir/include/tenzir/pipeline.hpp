@@ -282,19 +282,19 @@ public:
   /// if opt.order == ordered:
   ///   OPT = opt.replacement
   /// elif opt.order == schema:
-  ///   OPT = interleave | opt.replacement
+  ///   OPT = interleave | opt.replacement
   /// elif opt.order == unordered:
-  ///   OPT = shuffle | opt.replacement
+  ///   OPT = shuffle | opt.replacement
   /// ~~~
   ///
   /// The implementation must promise that the following equivalences hold:
   /// ~~~
   /// if opt.filter:
-  ///   this | where filter | sink
-  ///   <=> where opt.filter | OPT | sink
+  ///   this | where filter | sink
+  ///   <=> where opt.filter | OPT | sink
   /// else:
-  ///   this | where filter | sink
-  ///   <=> OPT | where filter | sink
+  ///   this | where filter | sink
+  ///   <=> OPT | where filter | sink
   /// ~~~
   ///
   /// Now, let us assume that operator is not `events -> events`. If the output
@@ -309,9 +309,9 @@ public:
   ///
   /// The `where expr` operator returns `opt.filter = expr && filter`,
   /// `opt.order = order` and `opt.replacement == nullptr`. Thus we want to show
-  /// `where expr | where filter | sink <=> where expr && filter | OPT | sink`,
-  /// which is implied by `sink <=> OPT | sink`. If `order = schema`, this
-  /// resolves to `sink <=> interleave | pass | sink`, which follows from what
+  /// `where expr | where filter | sink <=> where expr && filter | OPT | sink`,
+  /// which is implied by `sink <=> OPT | sink`. If `order = schema`, this
+  /// resolves to `sink <=> interleave | pass | sink`, which follows from what
   /// we may assume about `sink`.
   virtual auto optimize(expression const& filter, event_order order) const
     -> optimize_result
@@ -431,7 +431,7 @@ public:
   auto operator=(pipeline&& other) noexcept -> pipeline& = default;
 
   /// Constructs a pipeline from a sequence of operators. Flattens nested
-  /// pipelines, for example `(a | b) | c` becomes `a | b | c`.
+  /// pipelines, for example `(a | b) | c` becomes `a | b | c`.
   explicit pipeline(std::vector<operator_ptr> operators);
 
   /// TODO

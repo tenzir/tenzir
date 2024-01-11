@@ -27,23 +27,15 @@ namespace tenzir::plugins::pseudonymize {
 struct configuration {
   // field for future extensibility; currently we only use the Crypto-PAn method
   std::string method;
-  std::string seed;
   std::array<ip::byte_type, tenzir::ip::pseudonymization_seed_array_size>
     seed_bytes{};
   std::vector<std::string> fields;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, configuration& x) {
-    return detail::apply_all(f, x.method, x.seed, x.fields);
-  }
-
-  static inline const record_type& schema() noexcept {
-    static auto result = record_type{
-      {"method", string_type{}},
-      {"seed", string_type{}},
-      {"fields", list_type{string_type{}}},
-    };
-    return result;
+    return f.object(x).fields(f.field("method", x.method),
+                              f.field("seed_bytes", x.seed_bytes),
+                              f.field("fields", x.fields));
   }
 };
 
@@ -53,8 +45,8 @@ class pseudonymize_operator final
 public:
   pseudonymize_operator() = default;
 
-  pseudonymize_operator(configuration config) : config_{std::move(config)} {
-    parse_seed_string();
+  explicit pseudonymize_operator(configuration config)
+    : config_{std::move(config)} {
   }
 
   auto initialize(const type& schema, operator_control_plane&) const
@@ -126,20 +118,6 @@ public:
 private:
   /// Step-specific configuration, including the seed and field names.
   configuration config_ = {};
-
-  void parse_seed_string() {
-    auto max_seed_size = std::min(
-      tenzir::ip::pseudonymization_seed_array_size * 2, config_.seed.size());
-    for (auto i = size_t{0}; (i * 2) < max_seed_size; ++i) {
-      auto byte_string_pos = i * 2;
-      auto byte_size = (byte_string_pos + 2 > config_.seed.size()) ? 1 : 2;
-      auto byte = config_.seed.substr(byte_string_pos, byte_size);
-      if (byte_size == 1) {
-        byte.append("0");
-      }
-      config_.seed_bytes[i] = std::strtoul(byte.c_str(), 0, 16);
-    }
-  }
 };
 
 // -- plugin ------------------------------------------------------------------
@@ -183,6 +161,7 @@ public:
       };
     }
     auto config = configuration{};
+    auto seed = std::string{};
     config.fields = std::move(parsed_extractors);
     for (const auto& [key, value] : parsed_options) {
       auto value_str = caf::get_if<std::string>(&value);
@@ -200,8 +179,20 @@ public:
       if (key == "m" || key == "method") {
         config.method = *value_str;
       } else if (key == "s" || key == "seed") {
-        config.seed = *value_str;
+        seed = *value_str;
       }
+    }
+    auto max_seed_size
+      = std::min(tenzir::ip::pseudonymization_seed_array_size * 2, seed.size());
+    for (auto i = size_t{0}; (i * 2) < max_seed_size; ++i) {
+      auto byte_string_pos = i * 2;
+      auto byte_size = (byte_string_pos + 2 > seed.size()) ? 1 : 2;
+      auto byte = seed.substr(byte_string_pos, byte_size);
+      if (byte_size == 1) {
+        byte.append("0");
+      }
+      TENZIR_ASSERT_CHEAP(i < config.seed_bytes.size());
+      config.seed_bytes[i] = std::strtoul(byte.c_str(), 0, 16);
     }
     return {
       std::string_view{f, l},

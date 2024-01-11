@@ -3,6 +3,8 @@
 [Suricata](https://suricata.io/) is network monitor with a rule matching engine
 to detect threats.
 
+Use Tenzir to acquire, process, and store Suricata logs.
+
 ## Ingest EVE JSON logs into a node
 
 [EVE JSON](https://docs.suricata.io/en/latest/output/eve/eve-json-output.html)

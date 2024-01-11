@@ -32,7 +32,7 @@ void argument_parser::parse(parser_interface& p) {
 }
 
 void argument_parser::parse_impl(parser_interface& p) const {
-  // We resolve the ambiguity between `[sort] -x` and `[file] -f` by
+  // We resolve the ambiguity between `[sort] -x` and `[file] -f` by
   // not allowing short options if there is a positional expression.
   auto has_positional_expression = std::any_of(
     positional_.begin(), positional_.end(), [](const positional_t& p) {

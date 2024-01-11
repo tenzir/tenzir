@@ -35,7 +35,7 @@ export
 | enrich src_country=country --field src_ip
 | enrich dest_country=country --field dest_ip
 /* Use just the country's isocode, and discard the rest of the information */
-| replace src_country=src_country.context.country.iso_code, 
+| replace src_country=src_country.context.country.iso_code,
           dest_country=dest_country.context.country.iso_code
 ```
 
@@ -111,7 +111,7 @@ Extract space-separated `key=value` pairs with `kv`:
 
 ```json {0} title="Example input"
 {
-  "message": "foo=1 bar=2    baz=3 qux=4"
+  "message": "foo=1 bar=2 baz=3 qux=4"
 }
 ```
 
