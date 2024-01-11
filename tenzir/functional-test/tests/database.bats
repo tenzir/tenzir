@@ -75,43 +75,15 @@ teardown() {
 #   check tenzir-ctl count '#schema == "zeek.conn"'
 #   check tenzir-ctl count
 # }
-# =======
-# @test "parallel imports" {
-#   # The imports arrays hold pids of import client processes so we can wait for
-#   # them at any point.
-#   local suri_imports=()
-#   local zeek_imports=()
-#   # The `check' function must be called with -c "pipe | line" for shell pipes.
-#   # Note that we will use the decompress operator in other places, this is just
-#   # an exposition.
-#   check --bg zeek_imports -c \
-#     "gunzip -c \"$DATADIR/zeek/conn.log.gz\" \
-#      | tenzir 'read zeek-tsv | import'"
-#   # Simple input redirection can be done by wrapping the full invocation with
-#   # curly braces.
-#   { check --bg suri_imports \
-#     tenzir 'read suricata | import'; \
-#   } < "$DATADIR/suricata/eve.json"
-#   # We can also use `import -r` in this case.
-#   check --bg suri_imports \
-#     tenzir "from file $DATADIR/suricata/eve.json read suricata | import"
-#   check --bg suri_imports \
-#     tenzir "from file $DATADIR/suricata/eve.json read suricata | import"
-#   check --bg zeek_imports \
-#     tenzir "load file $DATADIR/zeek/conn.log.gz | decompress gzip | read zeek-tsv | import"
-#   check --bg suri_imports \
-#     tenzir "from file $DATADIR/suricata/eve.json read suricata | import"
-#   # Now we can block until all suricata ingests are finished.
-#   wait_all "${suri_imports[@]}"
-#   debug 1 "suri imports"
-#   check tenzir-ctl count '#schema == /suricata.*/'
-#   # And now we wait for the zeek imports.
-#   wait_all "${zeek_imports[@]}"
-#   debug 1 "zeek imports"
-#   check tenzir-ctl count '#schema == "zeek.conn"'
-#   check tenzir-ctl count
-# }
 
+wait_for_file() {
+  local file=$1
+  until [[ -f "$file" && $(stat -c %s "$file") -gt 0 ]]; do
+      sleep 1
+  done
+}
+
+# bats test_tags=metrics
 @test "batch size" {
   check tenzir "load file $DATADIR/zeek/conn.log.gz | decompress gzip | read zeek-tsv | import"
 
@@ -135,10 +107,8 @@ teardown() {
 
   check --sort tenzir-ctl export json 'where resp_h == 192.168.1.104'
 
-  # FIXME: This test is currently disabled as it is flaky. Let's figure out why
-  # in the future.
-  # # Unfortunately necessary.
-  # sleep 5
-  # sync "${TENZIR_METRICS__FILE_SINK__PATH}"
-  # check -c "jq -c '{key: .key, type: .value | type}' \"${TENZIR_METRICS__FILE_SINK__PATH}\" | sort | uniq"
+  # Verify that the metrics file eventually exists and contains valid JSON.
+  # Chop off last line to avoid partial data.
+  wait_for_file "${TENZIR_METRICS__FILE_SINK__PATH}"
+  head -n -1 "${TENZIR_METRICS__FILE_SINK__PATH}" | jq
 }
