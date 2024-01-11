@@ -14,6 +14,7 @@
 
 namespace tenzir {
 
+// a comment
 caf::expected<accountant_config>
 to_accountant_config(const caf::settings& opts) {
   accountant_config result;
