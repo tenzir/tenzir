@@ -123,7 +123,7 @@ jobs:
         run: |
           mkdir -p ${{ env.CCACHE_DIR }}
       - name: Fetch ccache Cache
-        uses: pat-s/always-upload-cache@v3.0.11
+        uses: actions/cache/restore@v3
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.head-ref-slug }}-${{ github.sha }}
