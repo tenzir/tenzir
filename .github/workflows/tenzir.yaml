@@ -694,8 +694,8 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
       - name: Upload ccache contents
         run: |
-          tar czf ccache.tar.gz ${{ env.CCACHE_DIR }}
-          gsutil -m cp "ccache.tar.gz" "gs://${{ vars.GCS_BUCKET }}/debug/ccache-ci.tar.gz"
+          tar czf ccache.tar.gz ${{ env.CCACHE_DIR }} || true
+          gsutil -m cp "ccache.tar.gz" "gs://${{ vars.GCS_BUCKET }}/debug/ccache-ci.tar.gz" || true
       - name: Move ccache contents
         run: |
           mkdir -p ${{ env.CCACHE_DIR }}
