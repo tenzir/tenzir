@@ -51,7 +51,7 @@ with GDPR, CCPA and PECR**. Plausible is made and hosted in the EU, powered by
 European-owned cloud infrastructure.
 
 For maximum transparency, we share our analytics dashboard publicly at
-<https://plausible.io/docs.tenzir.com>.
+[plausible.io/docs.tenzir.com](https://plausible.io/docs.tenzir.com).
 
 Please refer to Plausible's [data policy](https://plausible.io/data-policy) for
 a complete list of collected metrics.
@@ -76,7 +76,7 @@ periods according to trade or tax regulations).
 You are at any time entitled to request information on what data we store about
 you and ask for rectification, deletion (entirely or partially) or blocking of
 your personal data. You can object to further use of your data at any time.
-Please address your concern to <info@tenzir.com>.
+Please address your concern to [info@tenzir.com](mailto:info@tenzir.com).
 
 Should you consider the processing of your personal data as unlawful, you can
 directly submit your complaint with the responsible supervisory authority,
