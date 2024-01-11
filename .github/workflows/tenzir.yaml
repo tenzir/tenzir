@@ -676,7 +676,7 @@ jobs:
           echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
           echo "CXXFLAGS=-isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
       - name: Fetch ccache Cache
-        uses: pat-s/always-upload-cache@v3.0.11
+        uses: actions/cache/restore@v3
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.head-ref-slug }}-${{ github.sha }}
@@ -741,6 +741,11 @@ jobs:
         run: |
           # cmake --build "$BUILD_DIR" --target all --parallel --verbose
           cmake --build build/ --target ./libtenzir/CMakeFiles/libtenzir.dir/src/bitmap.cpp.o
+      - name: Save ccache Cache
+        uses: actions/cache/save@v3.0.11
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.head-ref-slug }}-${{ github.sha }}
       - name: Upload ccache contents
         run: |
           tar czf ccache.tar.gz /__w/tenzir/tenzir/ccache-debug
