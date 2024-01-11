@@ -86,4 +86,21 @@ std::pair<size_t, size_t> decode(void* dst, char const* src, size_t len);
 /// @returns The decoded bytes of *str*.
 std::string decode(std::string_view str);
 
+/// Tries to decode a Base64-encoded string. Returns `std::nullopt` if the input
+/// string is not valid.
+template <class T = std::string>
+auto try_decode(std::string_view str) -> std::optional<T> {
+  auto result = T{};
+  result.resize(decoded_size(str.size()));
+  auto [written, read] = decode(result.data(), str.data(), str.size());
+  while (read < str.size()) {
+    if (str[read] != '=') {
+      return std::nullopt;
+    }
+    read += 1;
+  }
+  result.resize(written);
+  return result;
+}
+
 } // namespace tenzir::detail::base64

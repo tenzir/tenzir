@@ -405,7 +405,6 @@ jobs:
     needs:
       - configure
       - changelog
-      - docker-tenzir
     if: ${{ needs.configure.outputs.run-docs == 'true' }}
     name: Documentation
     runs-on: ubuntu-20.04
@@ -415,12 +414,6 @@ jobs:
       - name: Checkout dotgithub submodule
         run: |
           git submodule update --init web/.github
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Download CHANGELOG.md
         uses: actions/download-artifact@v3
         with:
@@ -439,8 +432,6 @@ jobs:
       - name: Build website
         working-directory: web
         run: |
-          export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.tenzir-container-ref }}"
-          export TENZIR_CONTAINER_REGISTRY=ghcr.io
           yarn build
       - name: Deploy to GitHub Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
