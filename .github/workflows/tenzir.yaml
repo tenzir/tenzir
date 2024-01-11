@@ -619,8 +619,6 @@ jobs:
       CCACHE_NOHASHDIR: true
       CCACHE_SLOPPINESS: "file_macro,time_macros"
       CCACHE_UNIFY: true
-      CCACHE_DEBUG: true
-      CCACHE_DEBUGDIR: /__w/tenzir/tenzir/ccache-debug
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
       CMAKE_C_COMPILER_LAUNCHER: ccache
       CMAKE_GENERATOR: Ninja
