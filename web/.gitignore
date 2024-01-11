@@ -18,9 +18,6 @@
 /.quarto/
 .rlib
 
-# Generated notebooks
-/blog/parquet-and-feather-writing-security-telemetry/index.md
-
 # Docs
 /docs/contribute/code-of-conduct.md
 /docs/contribute/coding-style.md
