@@ -703,6 +703,7 @@ jobs:
           gsutil -m cp "ccache.tar.gz" "gs://${{ vars.GCS_BUCKET }}/debug/ccache-ci.tar.gz"
       - name: Move ccache contents
         run: |
+          mkdir -p ${{ env.CCACHE_DIR }}
           mv /__w/tenzir/tenzir/.ccache ${{ env.CCACHE_DIR }}
       - name: Configure
         run: |
