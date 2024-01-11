@@ -242,7 +242,7 @@ jobs:
             "docker/" "Dockerfile" ".dockerignore" \
             ".github/workflows/docker.yaml" \
             ".github/workflows/docker-config-base.json"
-          run_docker_tenzir="$(any ${run_docker_compose} ${run_docs} ${run_python})"
+          run_docker_tenzir="$(any ${run_docker_compose} ${run_python})"
           run_if_changed_default docker-tenzir $run_docker_tenzir
           run_if_changed_default regression-tests $run_docker_tenzir
           run_if_changed tenzir-nix \
