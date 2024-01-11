@@ -36,6 +36,7 @@ namespace tenzir::plugins::export_ {
 
 struct bridge_state {
   std::queue<table_slice> buffer = {};
+  size_t num_buffered = {};
   caf::typed_response_promise<table_slice> rp = {};
   expression expr = {};
 };
@@ -57,8 +58,13 @@ caf::behavior make_bridge(caf::stateful_actor<bridge_state>* self,
         return;
       if (self->state.rp.pending()) {
         self->state.rp.deliver(std::move(*filtered));
-      } else {
+      } else if (self->state.num_buffered < (1 << 22)) {
+        self->state.num_buffered += filtered->rows();
         self->state.buffer.push(std::move(*filtered));
+      } else {
+        TENZIR_WARN("`export --live` dropped {} events because it failed to "
+                    "keep up",
+                    filtered->rows());
       }
     },
     [self](atom::get) -> caf::result<table_slice> {
@@ -72,6 +78,7 @@ caf::behavior make_bridge(caf::stateful_actor<bridge_state>* self,
       }
       auto result = std::move(self->state.buffer.front());
       self->state.buffer.pop();
+      self->state.num_buffered -= result.rows();
       return result;
     },
   };
