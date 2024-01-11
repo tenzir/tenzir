@@ -134,9 +134,10 @@ jobs:
         with:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-      - name: Just a test step
+      - name: List ccache contents
         run: |
-          ls -l
+          ls -la /home/runner/work/tenzir/tenzir/
+          ls -la /home/runner/work/tenzir/tenzir/.ccache
       - name: Upload ccache contents
         run: |
           tar czf ccache.tar.gz ${{ env.CCACHE_DIR }}
