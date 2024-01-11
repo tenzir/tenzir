@@ -383,7 +383,7 @@ jobs:
       CCACHE_ABSSTDERR: true
       CCACHE_COMPRESS: true
       CCACHE_COMPRESSLEVEL: 6
-      CCACHE_DIR: "$GITHUB_WORKSPACE/.ccache"
+      CCACHE_DIR: "${{ github.workspace }}/.ccache"
       CCACHE_HASH_DIR: true
       CCACHE_SLOPPINESS: "file_macro,time_macros"
       CCACHE_UNIFY: true
@@ -397,6 +397,8 @@ jobs:
       HOMEBREW_NO_INSTALL_CLEANUP: 1
       HOMEBREW_NO_AUTO_UPDATE: 1
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Create ccache dor
         run: |
           mkdir -p ${{ env.CCACHE_DIR }}
