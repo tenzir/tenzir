@@ -14,7 +14,7 @@ QUARTO_FILES_OUTPUTS := $(patsubst %.qmd, %_files, $(QUARTO_INPUTS))
 RFC_INPUT := ../rfc/README.md
 RFC_OUTPUT := $(CONTRIBUTING_DIR)/rfc.md
 
-all: dot-github rfc quarto
+all: dot-github rfc
 
 dot-github: \
   $(CONTRIBUTING_DIR)/code-of-conduct.md \

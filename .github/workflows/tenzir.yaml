@@ -439,8 +439,6 @@ jobs:
       - name: Build website
         working-directory: web
         run: |
-          export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.tenzir-container-ref }}"
-          export TENZIR_CONTAINER_REGISTRY=ghcr.io
           yarn build
       - name: Deploy to GitHub Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
