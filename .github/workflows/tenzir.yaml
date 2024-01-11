@@ -685,23 +685,17 @@ jobs:
             ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.base-ref-slug }}
             ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-main
             ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
-          service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-      - name: Configure GCloud Credentials
-        uses: google-github-actions/setup-gcloud@v2
-      - name: Upload ccache contents
-        run: |
-          tar czf ccache.tar.gz ${{ env.CCACHE_DIR }} || true
-          gsutil -m cp "ccache.tar.gz" "gs://${{ vars.GCS_BUCKET }}/debug/ccache-ci.tar.gz" || true
-      - name: Move ccache contents
-        run: |
-          echo foo
-          mkdir -p ${{ env.CCACHE_DIR }}
-          mkdir -p /__w/tenzir/tenzir/ccache-debug
-      #     mv /__w/tenzir/tenzir/.ccache ${{ env.CCACHE_DIR }}/..
+      # - name: Authenticate to Google Cloud
+      #   uses: google-github-actions/auth@v2
+      #   with:
+      #     workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
+      #     service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+      # - name: Configure GCloud Credentials
+      #   uses: google-github-actions/setup-gcloud@v2
+      # - name: Upload ccache contents
+      #   run: |
+      #     tar czf ccache.tar.gz ${{ env.CCACHE_DIR }} || true
+      #     gsutil -m cp "ccache.tar.gz" "gs://${{ vars.GCS_BUCKET }}/debug/ccache-ci.tar.gz" || true
       - name: Configure
         run: |
           env
@@ -742,14 +736,14 @@ jobs:
           # cmake --build "$BUILD_DIR" --target all --parallel --verbose
           cmake --build build/ --target ./libtenzir/CMakeFiles/libtenzir.dir/src/bitmap.cpp.o
       - name: Save ccache Cache
-        uses: actions/cache/save@v3.0.11
+        uses: actions/cache/save@v3
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.head-ref-slug }}-${{ github.sha }}
-      - name: Upload ccache contents
-        run: |
-          tar czf ccache.tar.gz /__w/tenzir/tenzir/ccache-debug
-          gsutil -m cp "ccache.tar.gz" "gs://${{ vars.GCS_BUCKET }}/debug/ccache-debug.tar.gz"
+      # - name: Upload ccache contents
+      #   run: |
+      #     tar czf ccache.tar.gz /__w/tenzir/tenzir/ccache-debug
+      #     gsutil -m cp "ccache.tar.gz" "gs://${{ vars.GCS_BUCKET }}/debug/ccache-debug.tar.gz"
       - name: Show ccache Statistics
         run: |
           # Print statistics counter IDs and corresponding values.
