@@ -688,6 +688,8 @@ jobs:
         with:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
+      - name: Configure GCloud Credentials
+        uses: google-github-actions/setup-gcloud@v2
       - name: List ccache contents
         run: |
           ls -la /home/runner/work/tenzir/tenzir/ || true
