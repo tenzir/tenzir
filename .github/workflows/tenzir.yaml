@@ -383,7 +383,7 @@ jobs:
       CCACHE_ABSSTDERR: true
       CCACHE_COMPRESS: true
       CCACHE_COMPRESSLEVEL: 6
-      CCACHE_DIR: "${{ github.workspace }}/.ccache"
+      CCACHE_DIR: "$GITHUB_WORKSPACE/.ccache"
       CCACHE_HASH_DIR: true
       CCACHE_SLOPPINESS: "file_macro,time_macros"
       CCACHE_UNIFY: true
