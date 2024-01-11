@@ -611,6 +611,10 @@ jobs:
       CCACHE_ABSSTDERR: true
       CCACHE_COMPRESS: true
       CCACHE_COMPRESSLEVEL: 6
+      # We're intentionally placing the cache dir outside of `${{ github.workspace }}`
+      # because that has a weird issue where it switches between `/home/runner` and
+      # `/__w/` depending on the current context. See https://github.com/actions/checkout/issues/785
+      # and https://github.com/actions/runner/issues/2058.
       CCACHE_DIR: "/opt/tenzir/.ccache"
       CCACHE_NOHASHDIR: true
       CCACHE_SLOPPINESS: "file_macro,time_macros"
@@ -685,17 +689,6 @@ jobs:
             ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.base-ref-slug }}
             ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-main
             ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}
-      # - name: Authenticate to Google Cloud
-      #   uses: google-github-actions/auth@v2
-      #   with:
-      #     workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
-      #     service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
-      # - name: Configure GCloud Credentials
-      #   uses: google-github-actions/setup-gcloud@v2
-      # - name: Upload ccache contents
-      #   run: |
-      #     tar czf ccache.tar.gz ${{ env.CCACHE_DIR }} || true
-      #     gsutil -m cp "ccache.tar.gz" "gs://${{ vars.GCS_BUCKET }}/debug/ccache-ci.tar.gz" || true
       - name: Configure
         run: |
           echo "$PATH"
@@ -724,23 +717,18 @@ jobs:
             ${{ matrix.tenzir.cmake-extra-flags }}
       - name: Compile All Targets
         run: |
-          # cmake --build "$BUILD_DIR" --target all --parallel --verbose
-          cmake --build build/ --target ./libtenzir/CMakeFiles/libtenzir.dir/src/bitmap.cpp.o
-      - name: Save ccache Cache
-        uses: actions/cache/save@v3
-        with:
-          path: ${{ env.CCACHE_DIR }}
-          key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.head-ref-slug }}-${{ github.sha }}
-      # - name: Upload ccache contents
-      #   run: |
-      #     tar czf ccache.tar.gz /__w/tenzir/tenzir/ccache-debug
-      #     gsutil -m cp "ccache.tar.gz" "gs://${{ vars.GCS_BUCKET }}/debug/ccache-debug.tar.gz"
+          cmake --build "$BUILD_DIR" --target all --parallel --verbose
       - name: Show ccache Statistics
         run: |
           # Print statistics counter IDs and corresponding values.
           ccache --show-stats
           # Print statistics about cache compression.
           ccache --show-compression
+      - name: Save ccache Cache
+        uses: actions/cache/save@v3
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.head-ref-slug }}-${{ github.sha }}
       - name: Run Unit Tests
         env:
           CTEST_OUTPUT_ON_FAILURE: YES
