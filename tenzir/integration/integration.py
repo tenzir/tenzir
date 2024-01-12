@@ -399,7 +399,7 @@ class Tester:
             self.test_dir.rmdir()
 
     def check_condition(self, condition):
-        check = spawn(self.app + " " + condition.subcommand, shell=True)
+        check = spawn(condition.subcommand, shell=True)
         ret = check.wait(STEP_TIMEOUT)
         return ret
 
