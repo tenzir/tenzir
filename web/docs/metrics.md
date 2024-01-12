@@ -315,7 +315,7 @@ Contains a measurement of CPU utilization.
 Show the cpu usage over the last hour:
 
 ~~~c
-export --internal
+metrics
 | where #schema == "tenzir.metrics.cpu"
 | where timestamp > 1 hour ago
 | put timestamp, percent=loadavg_1m
@@ -368,7 +368,7 @@ Contains a measurement of disk space usage.
 Get disk usage over time
 
 ~~~c
-export --internal
+metrics
 | where #schema == "tenzir.metrics.disk"
 | sort timestamp
 | put timestamp, used_bytes
@@ -412,7 +412,7 @@ Contains a measurement of the available memory on the host.
 Get memory usage over time
 
 ~~~c
-export --internal
+metrics
 | where #schema == "tenzir.metrics.memory"
 | sort timestamp
 | put timestamp, used_bytes
@@ -460,7 +460,7 @@ Contains a measurement of the amount of memory used by the `tenzir-node` process
 Get current memory usage
 
 ~~~c
-export --internal
+metrics
 | where #schema == "tenzir.metrics.memory"
 | sort timestamp desc
 | head 1
