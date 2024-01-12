@@ -448,9 +448,11 @@ class Tester:
         if self.args.flamegraph:
             svg_file = work_dir / f"{normalized_test_name}.svg"
             run_flamegraph(self.args, svg_file)
+        def smart_quote(input: str):
+            return f"'{input}'" if " " in input else input
         for step in test.steps:
             step_id = "step_{:02d}".format(step_i)
-            LOGGER.debug(f"running step {step_i}: {step.command}")
+            LOGGER.debug(f"running step {step_i}: {' '.join(map(smart_quote, step.command))}")
             result = run_step(
                 cmd,
                 step_id,
@@ -511,7 +513,7 @@ def validate(data):
         return raw_command.replace("@.", str(SET_DIR))
 
     def to_command(raw_command):
-        return shlex.split(replace_path(raw_command))
+        return list(filter(lambda x: x != "\n", shlex.split(replace_path(raw_command))))
 
     def to_result(raw_result):
         return Result[raw_result.upper()]
