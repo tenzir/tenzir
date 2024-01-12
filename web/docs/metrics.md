@@ -286,7 +286,7 @@ Get current memory usage
 metrics
 | where #schema == "tenzir.metrics.memory"
 | sort timestamp desc
-| head 1
+| tail 1
 | put current_memory_usage
 ~~~
 
