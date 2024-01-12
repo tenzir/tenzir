@@ -99,7 +99,7 @@ jobs:
           # disables telemetry
           diagnostic-endpoint: ""
       - name: Setup Cachix
-        uses: cachix/cachix-action@v13
+        uses: cachix/cachix-action@v14
         with:
           name: tenzir
           authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"
