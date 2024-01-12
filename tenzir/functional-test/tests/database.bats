@@ -78,7 +78,7 @@ teardown() {
 
 wait_for_file() {
   local file=$1
-  until [[ -f "$file" && $(stat -c %s "$file") -gt 0 ]]; do
+  until [[ -s "$file" ]]; do
       sleep 1
   done
 }
