@@ -388,11 +388,11 @@ auto darwin_os::fetch_processes(std::optional<int> pid_filter)
       .startup = time{runtime},
       .vsize = {},
       .rsize = {},
-      .utime = {},
-      .stime = {},
       .peak_mem = {},
       .swap = {},
       .open_fds = {},
+      .utime = {},
+      .stime = {},
     };
     if (n < 0) {
       p.vsize = task.pti_virtual_size;
