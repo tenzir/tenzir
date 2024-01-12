@@ -454,6 +454,7 @@ Contains a measurement of the amount of memory used by the `tenzir-node` process
 |`current_memory_usage`|`uint64`|The memory currently used by this process|
 |`peak_memory_usage`|`uint64`|The peak amount of memory, in bytes|
 |`swap_space_usage`|`uint64`|The amount of swap space, in bytes. Only available on Linux systemsm.|
+|`open_fds`|`uint64`|The number of opened file descriptors. Only available on Linux systemsm.|
 
 ### Examples
 
