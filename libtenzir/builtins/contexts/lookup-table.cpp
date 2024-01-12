@@ -172,7 +172,8 @@ public:
     while (key_it != key_values.end()) {
       TENZIR_ASSERT_CHEAP(context_it != context_values.end());
       auto materialized_key = materialize(*key_it);
-      context_entries.emplace(materialized_key, materialize(*context_it));
+      context_entries.insert_or_assign(materialized_key,
+                                       materialize(*context_it));
       key_values_list.emplace_back(materialized_key);
       ++key_it;
       ++context_it;
