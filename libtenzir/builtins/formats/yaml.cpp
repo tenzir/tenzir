@@ -234,8 +234,10 @@ public:
             caf::make_error(ec::logic_error, "failed to format YAML document"));
           co_return;
         }
-        co_yield chunk::copy(chunk::view_type{
-          reinterpret_cast<const std::byte*>(out->c_str()), out->size()});
+        co_yield chunk::copy(
+          chunk::view_type{reinterpret_cast<const std::byte*>(out->c_str()),
+                           out->size()},
+          {.content_type = "application/x-yaml"});
       });
   }
 

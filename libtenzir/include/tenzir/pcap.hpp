@@ -18,6 +18,9 @@
 /// https://www.ietf.org/archive/id/draft-tuexen-opsawg-pcapng-05.html.
 namespace tenzir::pcap {
 
+/// The PCAP content type.
+constexpr std::string_view content_type = "application/vnd.tcpdump.pcap";
+
 /// The maximum snaplen as defined by MAXIMUM_SNAPLEN in libpcap (pcap-int.h).
 constexpr uint32_t maximum_snaplen = 262'144;
 

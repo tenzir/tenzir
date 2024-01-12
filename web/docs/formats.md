@@ -26,6 +26,26 @@ from <connector> [read <format>]
 to <connector> [write <format>]
 ```
 
+When a printer contructs raw bytes, it sets a
+[MIME](https://en.wikipedia.org/wiki/Media_type) *content type* so that savers
+can make assumptions about the otherwise opaque content. For example, the
+[`http`](connectors/http.md) saver uses this value to populate the
+`Content-Type` header when copying the raw bytes into the HTTP request body.
+
+The builtin printers set the following MIME types:
+
+| Format                          | MIME Type                        |
+|---------------------------------|----------------------------------|
+| [CSV](formats/csv.md)           | `text/csv`                       |
+| [JSON](formats/json.md)         | `application/json`               |
+| [NDJSON](formats/json.md)       | `application/x-ndjson`           |
+| [Parquet](formats/parquet.md)   | `application/x-parquet`          |
+| [PCAP](formats/pcap.md)         | `application/vnd.tcpdump.pcap`   |
+| [SSV](formats/ssv.md)           | `text/plain`                     |
+| [TSV](formats/tsv.md)           | `text/tab-separated-values`      |
+| [YAML](formats/yaml.md)         | `application/x-yaml`             |
+| [Zeek TSV](formats/zeek-tsv.md) | `application/x-zeek`             |
+
 Tenzir ships with the following formats:
 
 import DocCardList from '@theme/DocCardList';
