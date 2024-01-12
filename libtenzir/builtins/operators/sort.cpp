@@ -94,8 +94,7 @@ private:
     }
     // Set up the sorting and emit warnings at most once per schema.
     key_path = key_field_path_.emplace_hint(
-      key_field_path_.end(), schema,
-      caf::get<record_type>(schema).resolve_key(key_));
+      key_field_path_.end(), schema, schema.resolve_key_or_concept(key_));
     if (not key_path->second.has_value()) {
       ctrl.warn(caf::make_error(ec::invalid_configuration,
                                 fmt::format("sort key `{}` does not apply to "

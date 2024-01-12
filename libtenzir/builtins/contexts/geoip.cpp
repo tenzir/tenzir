@@ -296,8 +296,7 @@ public:
       return caf::make_error(ec::invalid_argument, "missing argument `field`");
     }
     auto field_builder = series_builder{};
-    auto column_offset
-      = caf::get<record_type>(slice.schema()).resolve_key(*field_name);
+    auto column_offset = slice.schema().resolve_key_or_concept(*field_name);
     if (not column_offset) {
       for (auto i = size_t{0}; i < slice.rows(); ++i) {
         field_builder.null();
