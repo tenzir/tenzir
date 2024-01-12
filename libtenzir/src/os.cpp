@@ -46,6 +46,9 @@ auto process_type() -> type {
       {"startup", time_type{}},
       {"vsize", uint64_type{}},
       {"rsize", uint64_type{}},
+      {"swap", uint64_type{}},
+      {"peak_mem", uint64_type{}},
+      {"open_fds", uint64_type{}},
       {"utime", duration_type{}},
       {"stime", duration_type{}},
     },
@@ -77,6 +80,11 @@ auto os::make() -> std::unique_ptr<os> {
   return nullptr;
 }
 
+auto os::current_process() -> process {
+  auto pid = getpid();
+  return fetch_processes(pid).at(0);
+}
+
 auto os::processes() -> table_slice {
   auto builder = series_builder{process_type()};
   for (const auto& proc : fetch_processes()) {
@@ -101,6 +109,15 @@ auto os::processes() -> table_slice {
     }
     if (proc.rsize) {
       event.field("rsize", *proc.rsize);
+    }
+    if (proc.swap) {
+      event.field("swap", *proc.swap);
+    }
+    if (proc.peak_mem) {
+      event.field("peak_mem", *proc.peak_mem);
+    }
+    if (proc.open_fds) {
+      event.field("open_fds", *proc.open_fds);
     }
     if (proc.utime) {
       event.field("utime", *proc.utime);
@@ -150,16 +167,24 @@ linux_os::linux_os() : state_{std::make_unique<state>()} {
 
 linux_os::~linux_os() = default;
 
-auto linux_os::fetch_processes() -> std::vector<process> {
+auto linux_os::current_pid() -> int {
+  return getpid();
+}
+
+auto linux_os::fetch_processes(std::optional<int> pid_filter)
+  -> std::vector<process> {
   auto result = std::vector<process>{};
   try {
     auto tasks = state_->procfs.get_processes();
     result.reserve(tasks.size());
     for (const auto& task : tasks) {
+      if (pid_filter && task.id() != *pid_filter)
+        continue;
       try {
         auto stat = task.get_stat();
         auto status = task.get_status();
         auto command_line = task.get_cmdline();
+        auto open_fds = task.count_fds();
         auto proc = process{
           .name = task.get_comm(),
           .command_line = std::move(command_line),
@@ -173,8 +198,12 @@ auto linux_os::fetch_processes() -> std::vector<process> {
           .startup = {},
           .vsize = static_cast<uint64_t>(stat.vsize),
           .rsize = static_cast<uint64_t>(stat.rss * getpagesize()),
+          .peak_mem = static_cast<uint64_t>(status.vm_hwm),
+          .swap = static_cast<uint64_t>(status.vm_swap),
+          .open_fds = open_fds,
           .utime = std::chrono::seconds{stat.utime / state_->clock_tick},
           .stime = std::chrono::seconds{stat.stime / state_->clock_tick},
+
         };
         result.push_back(std::move(proc));
       } catch (std::system_error&) {
@@ -311,7 +340,12 @@ darwin_os::darwin_os() : state_{std::make_unique<state>()} {
 
 darwin_os::~darwin_os() = default;
 
-auto darwin_os::fetch_processes() -> std::vector<process> {
+auto darwin_os::current_pid() -> int {
+  return getpid();
+}
+
+auto darwin_os::fetch_processes(std::optional<int> pid_filter)
+  -> std::vector<process> {
   auto num_procs = proc_listpids(PROC_ALL_PIDS, 0, nullptr, 0);
   std::vector<pid_t> pids;
   pids.resize(num_procs);
@@ -325,6 +359,8 @@ auto darwin_os::fetch_processes() -> std::vector<process> {
   result.reserve(pids.size());
   for (auto pid : pids) {
     if (pid <= 0)
+      continue;
+    if (pid_filter && pid != *pid_filter)
       continue;
     errno = 0;
     proc_bsdinfo proc{};
@@ -354,6 +390,9 @@ auto darwin_os::fetch_processes() -> std::vector<process> {
       .rsize = {},
       .utime = {},
       .stime = {},
+      .peak_mem = {},
+      .swap = {},
+      .open_fds = {},
     };
     if (n < 0) {
       p.vsize = task.pti_virtual_size;
