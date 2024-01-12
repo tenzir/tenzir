@@ -32,8 +32,6 @@ caf::expected<std::filesystem::path> objectpath(const void* addr = nullptr);
 ///     This metric is only available on Mac and Linux systems.
 ///   * The maximum swap space usage is stored in the key 'swap-space-usage'.
 ///     This metric is only available on Linux systems.
-///   * The number of currently opened file descriptors is stored in the
-///     key 'open-fds'. This metric is only available on Linux systems.
 record get_status();
 
 /// Forks a process to execute the given comand and returns its output

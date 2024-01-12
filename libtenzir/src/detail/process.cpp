@@ -75,18 +75,6 @@ static record get_status_proc() {
   return result;
 }
 
-static int64_t get_process_fds() {
-  auto path = "/proc/self/fd";
-  try {
-    // Empirically this uses about 1 syscall per 1500 directory entries.
-    auto begin = std::filesystem::directory_iterator(path);
-    auto end = std::filesystem::directory_iterator{};
-    return std::distance(begin, end);
-  } catch (const std::filesystem::filesystem_error& e) {
-    return -1;
-  }
-}
-
 } // namespace tenzir::detail
 #endif
 
@@ -175,9 +163,7 @@ caf::expected<std::filesystem::path> objectpath(const void* addr) {
 
 record get_status() {
 #if TENZIR_LINUX
-  auto result = get_status_proc();
-  result["open-fds"] = get_process_fds();
-  return result;
+  return get_status_proc();
 #elif TENZIR_MACOS
   auto result = get_status_rusage();
   merge(get_settings_mach(), result, policy::merge_lists::no);
