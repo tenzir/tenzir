@@ -124,15 +124,19 @@ struct [[nodiscard]] diagnostic {
   builder(enum severity s, fmt::format_string<Ts...> str, Ts&&... xs)
     -> diagnostic_builder;
 
-  template <class... Ts>
-  static auto error(fmt::format_string<Ts...> str, Ts&&... xs) {
-    return builder(severity::error, std::move(str), std::forward<Ts>(xs)...);
-  }
+  static auto builder(enum severity s, caf::error err) -> diagnostic_builder;
 
   template <class... Ts>
-  static auto warning(fmt::format_string<Ts...> str, Ts&&... xs) {
-    return builder(severity::warning, std::move(str), std::forward<Ts>(xs)...);
-  }
+  static auto error(fmt::format_string<Ts...> str, Ts&&... xs)
+    -> diagnostic_builder;
+
+  static auto error(caf::error err) -> diagnostic_builder;
+
+  template <class... Ts>
+  static auto warning(fmt::format_string<Ts...> str, Ts&&... xs)
+    -> diagnostic_builder;
+
+  static auto warning(caf::error err) -> diagnostic_builder;
 
   auto modify() && -> diagnostic_builder;
 
@@ -271,6 +275,26 @@ auto diagnostic::builder(enum severity s, fmt::format_string<Ts...> str,
                          Ts&&... xs) -> diagnostic_builder {
   return diagnostic_builder{s, fmt::format(std::move(str),
                                            std::forward<Ts>(xs)...)};
+}
+
+template <class... Ts>
+auto diagnostic::error(fmt::format_string<Ts...> str, Ts&&... xs)
+  -> diagnostic_builder {
+  return builder(severity::error, std::move(str), std::forward<Ts>(xs)...);
+}
+
+inline auto diagnostic::error(caf::error err) -> diagnostic_builder {
+  return builder(severity::error, std::move(err));
+}
+
+template <class... Ts>
+auto diagnostic::warning(fmt::format_string<Ts...> str, Ts&&... xs)
+  -> diagnostic_builder {
+  return builder(severity::warning, std::move(str), std::forward<Ts>(xs)...);
+}
+
+inline auto diagnostic::warning(caf::error err) -> diagnostic_builder {
+  return builder(severity::warning, std::move(err));
 }
 
 inline auto diagnostic::modify() && -> diagnostic_builder {

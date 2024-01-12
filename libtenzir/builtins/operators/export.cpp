@@ -115,7 +115,7 @@ public:
             next = std::move(response);
           },
           [&ctrl](caf::error e) {
-            diagnostic::error("{}", e).emit(ctrl.diagnostics());
+            diagnostic::error(e).emit(ctrl.diagnostics());
           });
       co_yield std::move(next);
     }

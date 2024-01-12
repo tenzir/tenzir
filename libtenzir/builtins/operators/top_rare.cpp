@@ -76,7 +76,7 @@ class top_rare_plugin final : public virtual operator_parser_plugin {
     auto parsed = pipeline::internal_parse_as_operator(repr);
     if (not parsed) {
       // TODO: Improve error message.
-      diagnostic::error("{}", parsed.error()).throw_();
+      diagnostic::error(parsed.error()).throw_();
     }
     return std::move(*parsed);
   }
