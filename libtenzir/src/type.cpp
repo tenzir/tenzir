@@ -926,7 +926,8 @@ auto type::to_definition2(std::optional<std::string> field_name,
       auto result = record{};
       result.emplace("name", field_name.value_or(std::string{name()}));
       result.emplace("kind", std::string{to_string(kind())});
-      result.emplace("type", fmt::to_string(*this));
+      result.emplace("type", name().empty() ? std::string{to_string(kind())}
+                                            : std::string{name()});
       result.emplace("attributes", std::move(attributes));
       result.emplace("path", std::move(path));
       result.emplace("fields", list{});
@@ -939,7 +940,10 @@ auto type::to_definition2(std::optional<std::string> field_name,
       parent_path.push_back(-1);
       auto result = self.value_type().to_definition2(
         field_name.value_or(std::string{name()}), parent_path);
-      result.emplace("type", fmt::to_string(*this));
+      result.emplace(
+        "kind", fmt::format("list<{}>", caf::get<std::string>(result["kind"])));
+      result.emplace(
+        "type", fmt::format("list<{}>", caf::get<std::string>(result["type"])));
       return result;
     },
     [&](const record_type& self) noexcept -> record {
@@ -952,8 +956,8 @@ auto type::to_definition2(std::optional<std::string> field_name,
       }
       auto result = record{};
       result.emplace("name", field_name.value_or(std::string{name()}));
-      result.emplace("kind", std::string{to_string(kind())});
-      result.emplace("type", fmt::to_string(*this));
+      result.emplace("kind", "record");
+      result.emplace("type", name().empty() ? "record" : std::string{name()});
       result.emplace("attributes", std::move(attributes));
       result.emplace("path", std::move(path));
       result.emplace("fields", std::move(fields));
