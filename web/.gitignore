@@ -14,12 +14,8 @@
 
 # Quarto
 **/*_cache/
-**/*_files/
 /.quarto/
 .rlib
-
-# Generated notebooks
-/blog/parquet-and-feather-writing-security-telemetry/index.md
 
 # Docs
 /docs/contribute/code-of-conduct.md

@@ -1021,16 +1021,11 @@ struct cast_helper<string_type, ToType> {
 
   static auto from_str(std::string_view in, const blob_type&)
     -> caf::expected<blob> {
-    // TODO: This conversion might be specific to JSON.
-    auto decoded = blob{};
-    decoded.resize(base64::decoded_size(in.size()));
-    auto [written, read] = base64::decode(decoded.data(), in.data(), in.size());
-    if (read != in.size()) {
-      return caf::make_error(
-        ec::convert_error, fmt::format("unable to convert {} into a blob", in));
+    if (auto result = base64::try_decode<blob>(in)) {
+      return std::move(*result);
     }
-    decoded.resize(written);
-    return decoded;
+    return caf::make_error(ec::convert_error,
+                           fmt::format("unable to convert {} into a blob", in));
   }
 
   static auto can_cast(const string_type&, const ToType&) noexcept

@@ -242,7 +242,7 @@ jobs:
             "docker/" "Dockerfile" ".dockerignore" \
             ".github/workflows/docker.yaml" \
             ".github/workflows/docker-config-base.json"
-          run_docker_tenzir="$(any ${run_docker_compose} ${run_docs} ${run_python})"
+          run_docker_tenzir="$(any ${run_docker_compose} ${run_python})"
           run_if_changed_default docker-tenzir $run_docker_tenzir
           run_if_changed_default regression-tests $run_docker_tenzir
           run_if_changed tenzir-nix \
@@ -405,7 +405,6 @@ jobs:
     needs:
       - configure
       - changelog
-      - docker-tenzir
     if: ${{ needs.configure.outputs.run-docs == 'true' }}
     name: Documentation
     runs-on: ubuntu-20.04
@@ -415,12 +414,6 @@ jobs:
       - name: Checkout dotgithub submodule
         run: |
           git submodule update --init web/.github
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Download CHANGELOG.md
         uses: actions/download-artifact@v3
         with:
@@ -439,8 +432,6 @@ jobs:
       - name: Build website
         working-directory: web
         run: |
-          export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.tenzir-container-ref }}"
-          export TENZIR_CONTAINER_REGISTRY=ghcr.io
           yarn build
       - name: Deploy to GitHub Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -1000,7 +991,7 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v2.3.0
+        uses: abatilo/actions-poetry@v2.4.0
         with:
           poetry-version: 1.3.0
       - name: Run poetry install
@@ -1039,7 +1030,7 @@ jobs:
         with:
           python-version: "3.10"
       - name: Setup Poetry image
-        uses: abatilo/actions-poetry@v2.3.0
+        uses: abatilo/actions-poetry@v2.4.0
         with:
           poetry-version: 1.3.0
       - name: Configure PyPI
