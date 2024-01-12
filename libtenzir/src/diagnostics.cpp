@@ -23,7 +23,7 @@ namespace {
 void trim_and_truncate(std::string& str) {
   using namespace std::string_view_literals;
   boost::trim(str);
-  if (str.size() > 300) {
+  if (str.size() > 2000) {
     auto prefix = std::string_view{str.begin(), str.begin() + 75};
     str = fmt::format("{} ... (truncated {} bytes)", prefix,
                       str.length() - prefix.length());
