@@ -180,7 +180,6 @@ auto make_export_command() {
                           "IPC streams for each schema, all concatenated "
                           "together",
                           opts("?tenzir.export.arrow"));
-
   for (const auto& plugin : plugins::get()) {
     if (const auto* writer = plugin.as<writer_plugin>()) {
       auto opts_category

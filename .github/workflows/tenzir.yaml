@@ -602,8 +602,13 @@ jobs:
       CCACHE_ABSSTDERR: true
       CCACHE_COMPRESS: true
       CCACHE_COMPRESSLEVEL: 6
-      CCACHE_DIR: "${{ github.workspace }}/.ccache"
-      CCACHE_HASH_DIR: true
+      # We're intentionally placing the cache dir outside of `${{ github.workspace }}`
+      # because that has a weird issue where it switches between `/home/runner` and
+      # `/__w/` depending on the current context. See https://github.com/actions/checkout/issues/785
+      # and https://github.com/actions/runner/issues/2058.
+      # We use `/tmp` because that's writable on both mac and linux runners.
+      CCACHE_DIR: "/tmp/ccache"
+      CCACHE_NOHASHDIR: true
       CCACHE_SLOPPINESS: "file_macro,time_macros"
       CCACHE_UNIFY: true
       CMAKE_CXX_COMPILER_LAUNCHER: ccache
@@ -665,8 +670,11 @@ jobs:
           echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
           echo "CXXFLAGS=-isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
       - name: Fetch ccache Cache
-        uses: pat-s/always-upload-cache@v3.0.11
+        uses: actions/cache/restore@v3
         with:
+          # Note that the `path` is implicitly part of the key when looking up cache hits:
+          # GitHub will only download artifacts that contain files whose locations matches `path`,
+          # so if the `path` changes nothing will be downloaded even if the key name matches.
           path: ${{ env.CCACHE_DIR }}
           key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.head-ref-slug }}-${{ github.sha }}
           restore-keys: |
@@ -709,6 +717,11 @@ jobs:
           ccache --show-stats
           # Print statistics about cache compression.
           ccache --show-compression
+      - name: Save ccache Cache
+        uses: actions/cache/save@v3
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.head-ref-slug }}-${{ github.sha }}
       - name: Run Unit Tests
         env:
           CTEST_OUTPUT_ON_FAILURE: YES
