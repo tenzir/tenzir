@@ -59,7 +59,14 @@ void counter_state::process_done() {
 
 caf::behavior counter(caf::stateful_actor<counter_state>* self, expression expr,
                       index_actor index, bool skip_candidate_check) {
-  auto normalized_expr = normalize_and_validate(std::move(expr));
+  // Modify the expression to exclude internal events.
+  auto sanitized_expr
+    = conjunction{std::move(expr), predicate{
+                                     meta_extractor{meta_extractor::internal},
+                                     relational_operator::equal,
+                                     data{false},
+                                   }};
+  auto normalized_expr = normalize_and_validate(std::move(sanitized_expr));
   if (!normalized_expr) {
     self->quit(caf::make_error(ec::format_error,
                                fmt::format("{} failed to normalize and "
