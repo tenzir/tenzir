@@ -16,3 +16,10 @@ setup() {
   jq -cn '{x: 1}, {x: 2}, {x: 3}' | tr '\n' '\0' | check tenzir "read gelf"
 }
 
+@test "unflatten underscores" {
+  check tenzir 'shell "jq -cn \"{x_y_z: 1}\"" | read json | unflatten _'
+  check tenzir 'shell "jq -cn \"{_x_y_z: 1}\"" | read json | unflatten _'
+  check tenzir 'shell "jq -cn \"{x_y_z_: 1}\"" | read json | unflatten _'
+  check tenzir 'shell "jq -cn \"{_x_y_z_: 1}\"" | read json | unflatten _'
+  check tenzir 'shell "jq -cn \"{x__y_z: 1}\"" | read json | unflatten _'
+}
