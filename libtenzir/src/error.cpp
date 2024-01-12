@@ -92,6 +92,23 @@ std::string render(caf::error err) {
     return "";
   std::ostringstream oss;
   auto category = err.category();
+  if (category == caf::type_id_v<tenzir::ec>
+      && static_cast<tenzir::ec>(err.code()) == ec::diagnostic) {
+    auto printer
+      = make_diagnostic_printer(std::nullopt, color_diagnostics::yes, oss);
+    auto ctx = err.context();
+    caf::message_handler{
+      [&](const diagnostic& diag) {
+        printer->emit(diag);
+      },
+      [&](const caf::message& msg) {
+        printer->emit(diagnostic::error("{}", caf::deep_to_string(msg))
+                        .note("unexpected diagnostic format")
+                        .done());
+      },
+    }(ctx);
+    return std::move(oss).str();
+  }
   oss << "!! ";
   switch (category) {
     default:
@@ -100,24 +117,8 @@ std::string render(caf::error err) {
       break;
     case caf::type_id_v<tenzir::ec>: {
       const auto code = static_cast<tenzir::ec>(err.code());
-      if (code == ec::diagnostic) {
-        auto printer = make_diagnostic_printer("<unknown>", "<unknown>",
-                                               color_diagnostics::yes, oss);
-        auto ctx = err.context();
-        caf::message_handler{
-          [&](const diagnostic& diag) {
-            printer->emit(diag);
-          },
-          [&](const caf::message& msg) {
-            printer->emit(diagnostic::error("{}", caf::deep_to_string(msg))
-                            .note("unexpected diagnostic format")
-                            .done());
-          },
-        }(ctx);
-      } else {
-        oss << to_string(code);
-        render_default_ctx(oss, err.context());
-      }
+      oss << to_string(code);
+      render_default_ctx(oss, err.context());
       break;
     }
     case caf::type_id_v<caf::pec>:

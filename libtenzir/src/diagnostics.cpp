@@ -20,13 +20,13 @@ namespace tenzir {
 
 namespace {
 
-auto trim_and_truncate(std::string& str) {
+void trim_and_truncate(std::string& str) {
   using namespace std::string_view_literals;
   boost::trim(str);
-  if (str.size() > 100) {
-    str = fmt::format("{} ... (truncated {} bytes)",
-                      std::string_view{str.begin(), str.begin() + 75},
-                      str.length());
+  if (str.size() > 300) {
+    auto prefix = std::string_view{str.begin(), str.begin() + 75};
+    str = fmt::format("{} ... (truncated {} bytes)", prefix,
+                      str.length() - prefix.length());
   }
 }
 
@@ -59,13 +59,13 @@ struct colors {
 
 class diagnostic_printer final : public diagnostic_handler, private colors {
 public:
-  diagnostic_printer(std::string filename, std::string source,
+  diagnostic_printer(std::optional<location_origin> origin,
                      color_diagnostics color, std::ostream& stream)
     : colors{colors::make(color)},
-      storage_{std::move(source)},
+      storage_{origin ? std::move(origin->source) : ""},
       lines_{detail::split(storage_, "\n")},
       stream_{stream},
-      filename_{std::move(filename)} {
+      filename_{origin ? std::move(origin->filename) : ""} {
   }
 
   void emit(diagnostic diag) override {
@@ -80,6 +80,10 @@ public:
     }
     auto indent = std::string(indent_width, ' ');
     for (auto& annotation : diag.annotations) {
+      if (lines_.empty()) {
+        // TODO: This is a hack for the case where we don't have the information.
+        continue;
+      }
       if (!annotation.source) {
         TENZIR_VERBOSE("annotation does not have source: {:?}", annotation);
         continue;
@@ -147,7 +151,7 @@ private:
     auto line = size_t{0};
     auto col = offset;
     while (true) {
-      TENZIR_ASSERT(line < lines_.size());
+      TENZIR_ASSERT_CHEAP(line < lines_.size());
       if (col <= lines_[line].size()) {
         break;
       }
@@ -177,11 +181,10 @@ diagnostic_note::diagnostic_note(diagnostic_note_kind kind, std::string message)
   trim_and_truncate(this->message);
 }
 
-auto make_diagnostic_printer(std::string filename, std::string source,
+auto make_diagnostic_printer(std::optional<location_origin> origin,
                              color_diagnostics color, std::ostream& stream)
   -> std::unique_ptr<diagnostic_handler> {
-  return std::make_unique<diagnostic_printer>(std::move(filename),
-                                              std::move(source), color, stream);
+  return std::make_unique<diagnostic_printer>(std::move(origin), color, stream);
 }
 
 } // namespace tenzir

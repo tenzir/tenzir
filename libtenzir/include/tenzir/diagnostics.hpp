@@ -320,7 +320,14 @@ private:
 
 enum class color_diagnostics { no, yes };
 
-auto make_diagnostic_printer(std::string filename, std::string source,
+struct location_origin {
+  std::string filename;
+  std::string source;
+};
+
+// TODO: The optionality of `origin` is a hack until we make the necessary info
+// available in all places where we need it.
+auto make_diagnostic_printer(std::optional<location_origin> origin,
                              color_diagnostics color, std::ostream& stream)
   -> std::unique_ptr<diagnostic_handler>;
 
