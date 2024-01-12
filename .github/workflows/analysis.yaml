@@ -71,13 +71,13 @@ jobs:
         run: |
           cmake --build "$BUILD_DIR" --target ccov > all-tests.log || exit 0
       - name: Upload Code Coverage Logs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: code-coverage-logs
           path: all-tests.log
           if-no-files-found: error
       - name: Upload Code Coverage Report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: code-coverage-report
           path: ${{ env.BUILD_DIR }}/ccov
