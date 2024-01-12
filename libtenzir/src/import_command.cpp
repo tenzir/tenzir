@@ -8,11 +8,12 @@
 
 #include "tenzir/import_command.hpp"
 
-#include "tenzir/actors.hpp"
 #include "tenzir/command.hpp"
 #include "tenzir/concept/parseable/tenzir/expression.hpp"
 #include "tenzir/concept/parseable/to.hpp"
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/error.hpp"
+#include "tenzir/exec_pipeline.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/make_source.hpp"
@@ -32,6 +33,41 @@
 namespace tenzir {
 
 caf::message import_command(const invocation& inv, caf::actor_system& sys) {
+  TENZIR_WARN(
+    "`tenzir-ctl import` is deprecated, use `tenzir '... | import'` instead");
+  if (inv.name() == "json" || inv.name() == "suricata") {
+    auto printer = make_diagnostic_printer("<input>", "",
+                                           color_diagnostics::yes, std::cerr);
+    auto pipe = fmt::format("from stdin read {}", inv.name());
+    if (inv.name() == "json") {
+      if (auto const* selector = caf::get_if<std::string>(
+            &inv.options, "tenzir.import.json.selector")) {
+        pipe += fmt::format(" --no-infer --selector {}", *selector);
+      }
+      if (auto const* schema
+          = caf::get_if<std::string>(&inv.options, "tenzir.import.type")) {
+        pipe += fmt::format(" --no-infer --schema {}", *schema);
+      }
+    } else {
+      pipe += " --no-infer";
+    }
+    if (inv.arguments.size() == 1) {
+      pipe += fmt::format("\n| where {}", inv.arguments[0]);
+    } else if (not inv.arguments.empty()) {
+      diagnostic::error("expected at most 1 argument, got {}",
+                        inv.arguments.size())
+        .emit(*printer);
+      return caf::make_message(ec::silent);
+    }
+    pipe += "\n| import\n";
+    printer = make_diagnostic_printer("<input>", pipe, color_diagnostics::yes,
+                                      std::cerr);
+    auto result = exec_pipeline(pipe, std::move(printer), exec_config{}, sys);
+    if (not result) {
+      return caf::make_message(result.error());
+    }
+    return {};
+  }
   TENZIR_TRACE_SCOPE("{}", inv);
   auto self = caf::scoped_actor{sys};
   // Get Tenzir node.
