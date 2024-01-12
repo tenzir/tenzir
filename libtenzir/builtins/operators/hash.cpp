@@ -64,8 +64,7 @@ public:
   auto initialize(const type& schema, operator_control_plane&) const
     -> caf::expected<state_type> override {
     // Get the target field if it exists.
-    const auto& schema_rt = caf::get<record_type>(schema);
-    auto column_index = schema_rt.resolve_key(config_.field);
+    auto column_index = schema.resolve_key_or_concept(config_.field);
     if (!column_index) {
       return state_type{};
     }

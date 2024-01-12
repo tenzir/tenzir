@@ -79,7 +79,7 @@ public:
     };
     auto transformations = std::vector<indexed_transformation>{};
     for (const auto& field : config_.fields) {
-      if (auto index = caf::get<record_type>(schema).resolve_key(field)) {
+      if (auto index = schema.resolve_key_or_concept(field)) {
         transformations.push_back({std::move(*index), transform_fn});
       }
     }
