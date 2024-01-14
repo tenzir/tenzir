@@ -36,7 +36,8 @@ Thanks to Christoph Lobmeyer and Yannik Meinhardt for reporting this issue! 🙏
 
 ## Improved Pipeline State Persistence
 
-We've improved the state management of pipelines when nodes restart or crash.
+We've improved the [state management of
+pipelines](/next/user-guides/manage-a-pipeline) when nodes restart or crash.
 Recall the state machine of a pipeline:
 
 ![Pipeline States](pipeline-states.excalidraw.svg)
