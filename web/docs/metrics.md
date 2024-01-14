@@ -122,3 +122,357 @@ metrics
 }
 ```
 </details>
+
+## `tenzir.metrics.cpu`
+
+Contains a measurement of CPU utilization.
+
+|Field|Type|Description|
+|-:|:-|-|
+|`loadavg_1m`|`double`|The load average over the last minute|
+|`loadavg_5m`|`double`|The load average over the last 5 minutes|
+|`loadavg_15m`|`double`|The load average over the last 15 minutes|
+
+### Examples
+
+Show the cpu usage over the last hour:
+
+~~~c
+metrics
+| where #schema == "tenzir.metrics.cpu"
+| where timestamp > 1 hour ago
+| put timestamp, percent=loadavg_1m
+~~~
+
+<details>
+<summary>Output</summary>
+
+~~~json
+{
+  "timestamp": "2023-12-21T12:00:32.631102",
+  "percent": 0.40478515625
+}
+{
+  "timestamp": "2023-12-21T11:59:32.626043",
+  "percent": 0.357421875
+}
+{
+  "timestamp": "2023-12-21T11:58:32.620327",
+  "percent": 0.42578125
+}
+{
+  "timestamp": "2023-12-21T11:57:32.614810",
+  "percent": 0.50390625
+}
+{
+  "timestamp": "2023-12-21T11:56:32.609896",
+  "percent": 0.32080078125
+}
+{
+  "timestamp": "2023-12-21T11:55:32.605871",
+  "percent": 0.5458984375
+}
+~~~
+</details>
+
+## `tenzir.metrics.disk`
+
+Contains a measurement of disk space usage.
+
+|Field|Type|Description|
+|-:|:-|-|
+|`path`|`string`|The byte measurements below refer to the filesystem on which this path is located|
+|`total_bytes`|`uint64`|The total size of the volume, in bytes|
+|`used_bytes`|`uint64`|The number of bytes occupied on the volume|
+|`free_bytes`|`uint64`|The number of bytes still free on the volume|
+
+### Examples
+
+Get disk usage over time
+
+~~~c
+metrics
+| where #schema == "tenzir.metrics.disk"
+| sort timestamp
+| put timestamp, used_bytes
+~~~
+
+<details>
+<summary>Output</summary>
+
+~~~json
+{
+  "timestamp": "2023-12-21T12:52:32.900086",
+  "used_bytes": 461834444800
+}
+{
+  "timestamp": "2023-12-21T12:53:32.905548",
+  "used_bytes": 461834584064
+}
+{
+  "timestamp": "2023-12-21T12:54:32.910918",
+  "used_bytes": 461840302080
+}
+{
+  "timestamp": "2023-12-21T12:55:32.916200",
+  "used_bytes": 461842751488
+}
+~~~
+</details>
+
+## `tenzir.metrics.memory`
+
+Contains a measurement of the available memory on the host.
+
+|Field|Type|Description|
+|-:|:-|-|
+|`total_bytes`|`uint64`|The total available memory, in bytes|
+|`used_bytes`|`uint64`|The amount of memory used, in bytes|
+|`free_bytes`|`uint64`|The amount of free memory, in bytes|
+
+### Examples
+
+Get memory usage over time
+
+~~~c
+metrics
+| where #schema == "tenzir.metrics.memory"
+| sort timestamp
+| put timestamp, used_bytes
+~~~
+
+<details>
+<summary>Output</summary>
+
+~~~json
+{
+  "timestamp": "2023-12-21T13:08:32.982083",
+  "used_bytes": 48572645376
+}
+{
+  "timestamp": "2023-12-21T13:09:32.986962",
+  "used_bytes": 48380682240
+}
+{
+  "timestamp": "2023-12-21T13:10:32.992494",
+  "used_bytes": 48438878208
+}
+{
+  "timestamp": "2023-12-21T13:11:32.997889",
+  "used_bytes": 48491839488
+}
+{
+  "timestamp": "2023-12-21T13:12:33.003323",
+  "used_bytes": 48529952768
+}
+~~~
+</details>
+
+## `tenzir.metrics.process`
+
+Contains a measurement of the amount of memory used by the `tenzir-node` process.
+
+|Field|Type|Description|
+|-:|:-|-|
+|`current_memory_usage`|`uint64`|The memory currently used by this process|
+|`peak_memory_usage`|`uint64`|The peak amount of memory, in bytes|
+|`swap_space_usage`|`uint64`|The amount of swap space, in bytes. Only available on Linux systemsm.|
+
+### Examples
+
+Get current memory usage
+
+~~~c
+metrics
+| where #schema == "tenzir.metrics.memory"
+| sort timestamp desc
+| tail 1
+| put current_memory_usage
+~~~
+
+<details>
+<summary>Output</summary>
+
+~~~json
+{
+  "current_memory_usage": 1083031552
+}
+~~~
+</details>
+
+## `tenzir.metrics.cpu`
+
+Contains a measurement of CPU utilization.
+
+|Field|Type|Description|
+|-:|:-|-|
+|`loadavg_1m`|`double`|The load average over the last minute|
+|`loadavg_5m`|`double`|The load average over the last 5 minutes|
+|`loadavg_15m`|`double`|The load average over the last 15 minutes|
+
+### Examples
+
+Show the cpu usage over the last hour:
+
+~~~c
+metrics
+| where #schema == "tenzir.metrics.cpu"
+| where timestamp > 1 hour ago
+| put timestamp, percent=loadavg_1m
+~~~
+
+<details>
+<summary>Output</summary>
+
+~~~json
+{
+  "timestamp": "2023-12-21T12:00:32.631102",
+  "percent": 0.40478515625
+}
+{
+  "timestamp": "2023-12-21T11:59:32.626043",
+  "percent": 0.357421875
+}
+{
+  "timestamp": "2023-12-21T11:58:32.620327",
+  "percent": 0.42578125
+}
+{
+  "timestamp": "2023-12-21T11:57:32.614810",
+  "percent": 0.50390625
+}
+{
+  "timestamp": "2023-12-21T11:56:32.609896",
+  "percent": 0.32080078125
+}
+{
+  "timestamp": "2023-12-21T11:55:32.605871",
+  "percent": 0.5458984375
+}
+~~~
+</details>
+
+## `tenzir.metrics.disk`
+
+Contains a measurement of disk space usage.
+
+|Field|Type|Description|
+|-:|:-|-|
+|`path`|`string`|The byte measurements below refer to the filesystem on which this path is located|
+|`total_bytes`|`uint64`|The total size of the volume, in bytes|
+|`used_bytes`|`uint64`|The number of bytes occupied on the volume|
+|`free_bytes`|`uint64`|The number of bytes still free on the volume|
+
+### Examples
+
+Get disk usage over time
+
+~~~c
+metrics
+| where #schema == "tenzir.metrics.disk"
+| sort timestamp
+| put timestamp, used_bytes
+~~~
+
+<details>
+<summary>Output</summary>
+
+~~~json
+{
+  "timestamp": "2023-12-21T12:52:32.900086",
+  "used_bytes": 461834444800
+}
+{
+  "timestamp": "2023-12-21T12:53:32.905548",
+  "used_bytes": 461834584064
+}
+{
+  "timestamp": "2023-12-21T12:54:32.910918",
+  "used_bytes": 461840302080
+}
+{
+  "timestamp": "2023-12-21T12:55:32.916200",
+  "used_bytes": 461842751488
+}
+~~~
+</details>
+
+## `tenzir.metrics.memory`
+
+Contains a measurement of the available memory on the host.
+
+|Field|Type|Description|
+|-:|:-|-|
+|`total_bytes`|`uint64`|The total available memory, in bytes|
+|`used_bytes`|`uint64`|The amount of memory used, in bytes|
+|`free_bytes`|`uint64`|The amount of free memory, in bytes|
+
+### Examples
+
+Get memory usage over time
+
+~~~c
+metrics
+| where #schema == "tenzir.metrics.memory"
+| sort timestamp
+| put timestamp, used_bytes
+~~~
+
+<details>
+<summary>Output</summary>
+
+~~~json
+{
+  "timestamp": "2023-12-21T13:08:32.982083",
+  "used_bytes": 48572645376
+}
+{
+  "timestamp": "2023-12-21T13:09:32.986962",
+  "used_bytes": 48380682240
+}
+{
+  "timestamp": "2023-12-21T13:10:32.992494",
+  "used_bytes": 48438878208
+}
+{
+  "timestamp": "2023-12-21T13:11:32.997889",
+  "used_bytes": 48491839488
+}
+{
+  "timestamp": "2023-12-21T13:12:33.003323",
+  "used_bytes": 48529952768
+}
+~~~
+</details>
+
+## `tenzir.metrics.process`
+
+Contains a measurement of the amount of memory used by the `tenzir-node` process.
+
+|Field|Type|Description|
+|-:|:-|-|
+|`current_memory_usage`|`uint64`|The memory currently used by this process|
+|`peak_memory_usage`|`uint64`|The peak amount of memory, in bytes|
+|`swap_space_usage`|`uint64`|The amount of swap space, in bytes. Only available on Linux systemsm.|
+
+### Examples
+
+Get current memory usage
+
+~~~c
+metrics
+| where #schema == "tenzir.metrics.memory"
+| sort timestamp desc
+| head 1
+| put current_memory_usage
+~~~
+
+<details>
+<summary>Output</summary>
+
+~~~json
+{
+  "current_memory_usage": 1083031552
+}
+~~~
+</details>

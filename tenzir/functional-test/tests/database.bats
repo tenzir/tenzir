@@ -28,11 +28,11 @@ teardown() {
   teardown_state_dir
 }
 
-@test "import and export commands" {
+@test "import and export operators" {
   < "$DATADIR/suricata/eve.json" \
     check tenzir 'read suricata | import'
 
-  check tenzir-ctl count
+  check tenzir 'export | summarize count=count(.)'
 }
 
 # TODO This test is currently disabled because it is flaky in the macOS CI.
@@ -85,6 +85,9 @@ wait_for_file() {
 
 # bats test_tags=metrics
 @test "batch size" {
+  # Check that the import command doesn't deadlock when using the `--batch-size` option
+  # and that the node keeps producing metrics.
+
   check tenzir "load file $DATADIR/zeek/conn.log.gz | decompress gzip | read zeek-tsv | import"
 
   check --sort tenzir 'export | where resp_h == 192.168.1.104 | write ssv'
@@ -93,17 +96,6 @@ wait_for_file() {
   check -c \
     "gunzip -c \"$DATADIR/zeek/conn.log.gz\" \
      | tenzir-ctl import -b --batch-size=1 -n 242 zeek"
-
-  check -c \
-    "tenzir-ctl status --detailed \
-     | jq '.index.statistics.layouts | del(.\"tenzir.metrics\")'"
-
-  check --sort -c \
-    "tenzir-ctl status --detailed | jq -ec 'del(.version) | del(.system.\"swap-space-usage\") | paths(scalars) as \$p | {path:\$p, type:(getpath(\$p) | type)}' | grep -v ',[1-9][0-9]*,'"
-
-  check -c \
-    "tenzir-ctl status --detailed index importer \
-     | jq -ec 'paths(scalars) as \$p | {path:\$p, type:(getpath(\$p) | type)}' | grep -v ',[1-9][0-9]*,'"
 
   check --sort tenzir-ctl export json 'where resp_h == 192.168.1.104'
 
