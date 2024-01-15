@@ -22,7 +22,7 @@ pipeline.
 [Winlogbeat](https://www.elastic.co/beats/winlogbeat) is Elastic's log shipper
 to get Windows Event Logs out of Windows machines into the Elastic stack.
 
-#### Config Winlogbeat
+#### Configure Winlogbeat
 
 After [installing
 Winlogbeat](https://www.elastic.co/guide/en/beats/winlogbeat/current/winlogbeat-installation-configuration.html),
@@ -46,13 +46,14 @@ winlogbeat.event_logs:
 # Send data to a Tenzir pipeline with an ElasticSearch source.
 output.elasticsearch:
   hosts: ["https://10.0.0.1:9200"]
-  username: "winlogbeat_internal"
-  password: "YOUR_PASSWORD" 
+  username: "$USER"
+  password: "$PASSWORD" 
   ssl:
     enabled: true
-    certificate_authorities: [C:\Program Files\creds\ca.crt]
-    certificate: C:\Program Files\creds\beat-win10\beat-win10.crt
-    key: C:\Program Files\creds\beat-win10\beat-win10.key
+    certificate_authorities: [C:\Program Files\Winlogbeat\ca.crt]
+    # PEM format
+    certificate: C:\Program Files\Winlogbeat\tenzir.crt
+    key: C:\Program Files\Winlogbeat\beat-win10\tenzir.key
 ```
 
 #### Start Winlogbeat as a service
