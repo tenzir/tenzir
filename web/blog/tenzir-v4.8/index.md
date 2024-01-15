@@ -24,7 +24,7 @@ You can now point your GELF feed to a Tenzir pipeline. Read our [Graylog
 integration page](/next/integrations/graylog) for the details. The TL;DR is:
 
 ```
-from tcp://0.0.0.0:5678 read gelf
+from tcp://0.0.0.0:12201 read gelf
 | import
 ```
 
