@@ -7,19 +7,55 @@ draft: true
 comments: true
 ---
 
-[Tenzir v4.8](https://github.com/tenzir/tenzir/releases/tag/v4.8.0) .
+Hot off the press: [Tenzir
+v4.8](https://github.com/tenzir/tenzir/releases/tag/v4.8.0).
 
 <!--![Tenzir v4.8](tenzir-v4.8.excalidraw.svg)-->
 
 <!-- truncate -->
 
-## Theme A
+## Graylog Support
 
-TBD
+The new [`gelf`](/next/formats/gelf) parser makes it possible to read a stream
+of [Graylog Extended Log Format
+(GELF)](https://go2docs.graylog.org/5-0/getting_in_log_data/gelf.html) messages.
 
-## Theme B
+You can now point your GELF feed to a Tenzir pipeline. Read our [Graylog
+integration page](/next/integrations/graylog) for the details. The TL;DR is:
 
-TBD
+```
+from tcp://0.0.0.0:12201 read gelf
+| import
+```
+
+## Shift Timestamps and Delay Events
+
+The new [`timeshift`](/next/operators/timeshift) and
+[`delay`](/next/operators/timeshift) make it possible to rewrite timestamps and
+act on them to replay data flexibly.
+
+The `timeshift` operator adjusts a series of time values by anchoring them
+around a given start time. You can rewrite and scale timestamps:
+
+![timeshift](timeshift.excalidraw.svg)
+
+For example, use `timeshift` to re-align our Zeek example dataset to Januar 1,
+1984, and make the trace 100x:
+
+```
+from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read zeek-tsv
+| timeshift --start 1984-01-01 --speed 0.01 ts
+```
+
+While `timeshift` rewrites timestamps, `delay` acts on them by yielding events
+according to a given time field. Delaying events comes in handy when replaying a
+trace or logs. Delaying means effectively introducing sleeping periods
+proportional to the inter-arrival times of the events. As with `timeshift`, you
+can scale the behavior with a multiplicative constant to speed things up.
+
+Here is visual explanation of how `delay` works:
+
+![delay](delay.excalidraw.svg)
 
 ## Fluent Bit Performance
 
@@ -36,7 +72,8 @@ Thanks to Christoph Lobmeyer and Yannik Meinhardt for reporting this issue! 🙏
 
 ## Improved Pipeline State Persistence
 
-We've improved the state management of pipelines when nodes restart or crash.
+We've improved the [state management of
+pipelines](/next/user-guides/manage-a-pipeline) when nodes restart or crash.
 Recall the state machine of a pipeline:
 
 ![Pipeline States](pipeline-states.excalidraw.svg)
@@ -58,6 +95,7 @@ Here's what changed on node restart and/or crash:
 
 ## Here & There
 
+Lots of smaller bug fixes landed in this release. We urge everyone to upgrade.
 If you're curious, [our changelog](/changelog#v480) has the full list of
 changes.
 
