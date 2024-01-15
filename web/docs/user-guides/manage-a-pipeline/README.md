@@ -10,8 +10,8 @@ lifecycles.
 
 [run-a-pipeline]: ../run-a-pipeline/README.md
 
-The diagram below illustrates the various states as a state machine, where
-circles correspond to states and arrows to state transitions:
+The diagram below illustrates the various states, where circles correspond to
+states and arrows to state transitions:
 
 ![Pipeline States](pipeline-states.excalidraw.svg)
 
