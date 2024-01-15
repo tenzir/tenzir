@@ -300,6 +300,11 @@ public:
   [[nodiscard]] std::shared_ptr<arrow::ArrayBuilder>
   make_arrow_builder(arrow::MemoryPool* pool) const noexcept;
 
+  /// Resolves a key on a schema.
+  /// @returns nullopt if the type is not a valid schema.
+  [[nodiscard]] std::optional<offset>
+  resolve_key_or_concept(std::string_view key) const noexcept;
+
   /// Enables integration with CAF's type inspection.
   template <class Inspector>
   friend auto inspect(Inspector& f, type& x) {
@@ -1269,6 +1274,13 @@ public:
 
   /// Resolves a flat index into an offset.
   [[nodiscard]] offset resolve_flat_index(size_t flat_index) const noexcept;
+
+  /// Resolves a key or a concept into an offset.
+  /// @note This only matches on full keys, so the key 'x.y'  matches 'x.y.z'
+  /// but not 'x.y_other.z' .
+  [[nodiscard]] std::optional<offset>
+  resolve_key_or_concept(std::string_view key,
+                         std::string_view schema_name) const noexcept;
 
   /// Resolves a key into an offset.
   /// @note This only matches on full keys, so the key 'x.y'  matches 'x.y.z'

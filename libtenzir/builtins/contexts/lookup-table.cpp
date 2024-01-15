@@ -68,8 +68,7 @@ public:
       return caf::make_error(ec::invalid_argument, "missing argument `field`");
     }
     auto field_builder = series_builder{};
-    auto column_offset
-      = caf::get<record_type>(slice.schema()).resolve_key(*field_name);
+    auto column_offset = slice.schema().resolve_key_or_concept(*field_name);
     if (not column_offset) {
       for (auto i = size_t{0}; i < slice.rows(); ++i) {
         field_builder.null();
@@ -150,13 +149,12 @@ public:
     if (not parameters.contains("key")) {
       return caf::make_error(ec::invalid_argument, "missing 'key' parameter");
     }
-    const auto& layout = caf::get<record_type>(slice.schema());
     auto key_field = parameters["key"];
     if (not key_field) {
       return caf::make_error(ec::invalid_argument,
                              "invalid 'key' parameter; 'key' must be a string");
     }
-    auto key_column = layout.resolve_key(*key_field);
+    auto key_column = slice.schema().resolve_key_or_concept(*key_field);
     if (not key_column) {
       // If there's no key column then we cannot do much.
       return update_result{record{}};
@@ -172,7 +170,8 @@ public:
     while (key_it != key_values.end()) {
       TENZIR_ASSERT_CHEAP(context_it != context_values.end());
       auto materialized_key = materialize(*key_it);
-      context_entries.emplace(materialized_key, materialize(*context_it));
+      context_entries.insert_or_assign(materialized_key,
+                                       materialize(*context_it));
       key_values_list.emplace_back(materialized_key);
       ++key_it;
       ++context_it;

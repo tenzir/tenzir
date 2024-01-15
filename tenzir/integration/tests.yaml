@@ -350,7 +350,6 @@ tests:
       - command: 'export arrow "where #schema == \"suricata.http\""'
         transformation: python @./misc/scripts/print-arrow.py
       - command: count
-
   Import syslog:
     tags: [syslog, import]
     steps:
@@ -598,12 +597,12 @@ tests:
       - command: import --blocking suricata
         input: data/suricata/eve.json
       - command: status --detailed catalog
-        transformation: jq '.catalog.partitions | length'
+        transformation: jq '[.catalog.partitions[] | select(.schema | startswith("tenzir.metrics") | not)] | length'
       - command: export arrow
         transformation: python @./misc/scripts/print-arrow-batch-size.py
       - command: rebuild start --undersized
       - command: status --detailed catalog
-        transformation: jq '.catalog.partitions | length'
+        transformation: jq '[.catalog.partitions[] | select(.schema | startswith("tenzir.metrics") | not)] | length'
       - command: export json
       - command: export arrow
         transformation: python @./misc/scripts/print-arrow-batch-size.py
@@ -1286,3 +1285,22 @@ tests:
         expected_result: error
       - command: exec 'parse line kv "foo(?=bar)" ""'
         expected_result: error
+
+  Time parser:
+    tags: [pipelines]
+    steps:
+      - command: exec 'show version | put line="2023-12-14T11:02:12" | parse line time "%FT%T"'
+      - command: exec 'show version | put line="2023-12-14T11:02:12" | parse line time --components "%FT%T"'
+      - command: exec 'show version | put line="Dec 13 11:04:15" | parse line time --strict "%b %d %H:%M:%S"'
+        expected_result: error
+      - command: exec 'show version | put line="Dec 13 11:04:15" | parse line time --components --strict "%b %d %H:%M:%S"'
+      - command: exec 'show version | put line="Dec 13 11:04:15" | parse line time "%b %d %H:%M:%S"'
+      - command: exec 'show version | put line="Dec 13 11:04:15" | parse line time --components "%b %d %H:%M:%S"'
+      - command: exec 'show version | put line="2023-12-14T11:02:12+0200" | parse line time "%FT%T%z"'
+      - command: exec 'show version | put line="2023-12-14T11:02:12+0200" | parse line time --components "%FT%T%z"'
+      - command: exec 'show version | put line="Dec 13 11:04:15 +0200" | parse line time --strict "%b %d %H:%M:%S %z"'
+        expected_result: error
+      - command: exec 'show version | put line="Dec 13 11:04:15 +0200" | parse line time "%b %d %H:%M:%S %z"'
+      - guard: test $(uname) != "Darwin"
+      - command: exec 'show version | put line="Dec 13 11:04:15 +0200" | parse line time --components --strict "%b %d %H:%M:%S %z"'
+      - command: exec 'show version | put line="Dec 13 11:04:15 +0200" | parse line time --components "%b %d %H:%M:%S %z"'

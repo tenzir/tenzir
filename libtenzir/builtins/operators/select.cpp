@@ -59,7 +59,7 @@ public:
     -> caf::expected<state_type> override {
     auto indices = state_type{};
     for (const auto& field : config_.fields) {
-      if (auto index = caf::get<record_type>(schema).resolve_key(field)) {
+      if (auto index = schema.resolve_key_or_concept(field)) {
         indices.push_back(std::move(*index));
       }
     }

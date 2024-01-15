@@ -60,12 +60,11 @@ private:
       return caf::make_error(ec::unspecified,
                              "chart operator expects input to be a record");
     }
-    const auto& record = caf::get<record_type>(schema);
     for (auto&& attr : cfg.get_attributes()) {
       // "type" and "description" fields aren't expected to be found in the input
       if (attr.key == "type" || attr.key == "description")
         continue;
-      if (record.resolve_key(attr.value))
+      if (schema.resolve_key_or_concept(attr.value))
         continue;
       return caf::make_error(ec::unspecified,
                              fmt::format("field `{}` not found in input, "

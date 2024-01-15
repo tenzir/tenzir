@@ -65,7 +65,7 @@ public:
       const auto& layout = caf::get<record_type>(slice.schema());
       auto resolved_field = resolved_fields.find(slice.schema());
       if (resolved_field == resolved_fields.end()) {
-        const auto index = layout.resolve_key(field_);
+        const auto index = slice.schema().resolve_key_or_concept(field_);
         if (not index) {
           diagnostic::warning("failed to resolve field `{}` for schema `{}`",
                               field_, slice.schema())

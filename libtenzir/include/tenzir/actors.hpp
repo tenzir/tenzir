@@ -475,6 +475,11 @@ using connector_actor = typed_actor_fwd<
   // Retrieve the handle to a remote node actor.
   auto(atom::connect, connect_request)->caf::result<node_actor>>::unwrap;
 
+using healthmetrics_collector_actor = typed_actor_fwd<
+  // Retrieve the handle to a remote node actor.
+  auto(atom::run)
+    ->caf::result<void>>::extend_with<component_plugin_actor>::unwrap;
+
 } // namespace tenzir
 
 // -- type announcements -------------------------------------------------------
