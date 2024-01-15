@@ -203,7 +203,6 @@ auto linux_os::fetch_processes(std::optional<int> pid_filter)
           .open_fds = open_fds,
           .utime = std::chrono::seconds{stat.utime / state_->clock_tick},
           .stime = std::chrono::seconds{stat.stime / state_->clock_tick},
-
         };
         result.push_back(std::move(proc));
       } catch (std::system_error&) {
@@ -452,7 +451,7 @@ auto socket_state_to_string(auto proto, auto state) -> std::string_view {
 
 auto darwin_os::fetch_sockets() -> std::vector<socket> {
   auto result = std::vector<socket>{};
-  for (const auto& proc : fetch_processes(std::nullopt)) {
+  for (const auto& proc : fetch_processes()) {
     auto pid = detail::narrow_cast<uint32_t>(proc.pid);
     auto sockets = sockets_for(pid);
     result.insert(result.end(), std::make_move_iterator(sockets.begin()),

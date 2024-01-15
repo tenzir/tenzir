@@ -94,7 +94,7 @@ public:
   ~linux_os() final;
 
   auto current_pid() -> int final;
-  auto fetch_processes(std::optional<int> pid_filter)
+  auto fetch_processes(std::optional<int> pid_filterstd = std::nullopt)
     -> std::vector<process> final;
   auto fetch_sockets() -> std::vector<socket> final;
 
@@ -115,7 +115,7 @@ public:
   ~darwin_os() final;
 
   auto current_pid() -> int final;
-  auto fetch_processes(std::optional<int> pid_filter)
+  auto fetch_processes(std::optional<int> pid_filter = std::nullopt)
     -> std::vector<process> final;
   auto fetch_sockets() -> std::vector<socket> final;
 
