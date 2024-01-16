@@ -117,6 +117,26 @@ jobs:
             nixpkgs#rclone \
             nixpkgs#skopeo \
             -c .github/workflows/nix.nu '${{ inputs.config }}'
+      - name: Install Debian package in Docker
+        run: |
+          # TODO: I just happen to know that the packages end up in here
+          # I don't know nix enough to know whether there's a command to make this easier
+          deb_fullpath="$(find /nix/store -name 'tenzir*.deb' | head -1 | xargs realpath)"
+          deb_dir="$(dirname "${deb_fullpath}")"
+          deb_file="$(basename "${deb_fullpath}")"
+          docker build docker/systemd-test -t installer-test
+          docker run -d --name installer-test \
+                 --privileged \
+                 --volume=.:/src/tenzir:ro \
+                 --volume="${deb_dir}":/tmp/packages:ro \
+                 --volume=/sys/fs/cgroup:/sys/fs/cgroup:rw \
+                 --cgroupns=host \
+                 installer-test
+          docker exec installer-test bash -c \
+                 "/src/tenzir/scripts/install.sh --package-path=/tmp/packages/${deb_file}" \
+                  || true
+          docker exec installer-test bash -c \
+                  "systemctl start tenzir-node && systemctl status tenzir-node"
       - name: Upload Tarball to Github
         if: steps.cfg.outputs.upload-to-github == 'true'
         uses: actions/upload-artifact@v4

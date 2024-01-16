@@ -84,11 +84,47 @@ then
 fi
 echo "Found ${platform}."
 
+package_url=
+package_path=
+needs_arg() {
+  if [ -z "$OPTARG" ]; then echo "--$OPT requires an argument,"; fi;
+}
+# Support long options without using bash-isms:
+# https://stackoverflow.com/a/28466267/519360
+while getopts -: OPT; do
+  if [ "$OPT" = "-" ]; then
+    OPT="${OPTARG%%=*}"
+    OPTARG="${OPTARG#$OPT}"
+    OPTARG="${OPTARG#=}"
+  fi
+  case "$OPT" in
+    package-url )   needs_arg; package_url="$OPTARG" ;;
+    package-path )  needs_arg; package_path="$OPTARG" ;;
+    \? )            exit 1 ;;
+    * )             echo "Illegal option --$OPT"; exit 1 ;;
+  esac
+done
+if [ -s "$package_path" ] && [ -s "$package_url" ]; then
+  echo "Both --package-path and --package-url cannot be set."
+  exit 1
+fi
+shift $((OPTIND-1))
+
 # Select appropriate package.
 action "Identifying package"
 package=
-package_url=
-if [ "${platform}" = "Debian" ]
+if [ -n "$package_path" ];
+then
+  if [ ! -f "$package_path" ];
+  then
+    echo "No package file found at ${bold}${package_path}${normal}."
+    exit 1
+  fi
+  echo "Path to package specified on the command line."
+elif [ -n "$package_url" ];
+then
+  echo "Package URL specified on the command line."
+elif [ "${platform}" = "Debian" ]
 then
   package_url="https://storage.googleapis.com/tenzir-dist-public/packages/main/debian/tenzir-static-latest.deb"
 elif [ "${platform}" = "Linux" ]
@@ -118,24 +154,34 @@ else
   echo "Visit ${bold}https://docs.tenzir.com${normal} for further instructions."
   exit 1
 fi
-package="$(basename "${package_url}")"
+package="$(basename "${package_url:-$package_path}")"
+package_file_extension="${package##*.}"
 echo "Using ${package}"
 
 # Download package.
 tmpdir="$(dirname "$(mktemp -u)")"
-action "Downloading ${package_url}"
-if check wget
+if [ -n "$package_path" ];
 then
-  wget -q --show-progress -O "${tmpdir}/${package}" "${package_url}"
-elif check curl
-then
-  curl --progress-bar -L -o "${tmpdir}/${package}" "${package_url}"
+  action "Using local file ${package_path}."
+  if [ "$(realpath "${package_path}")" != "$(realpath "${tmpdir}/${package}")" ];
+  then
+    ln -s "${package_path}" "${tmpdir}/${package}"
+  fi
 else
-  echo "Neither ${bold}wget${normal} nor ${bold}curl${normal}" \
-    "found in \$PATH."
-  exit 1
+  action "Downloading ${package_url}"
+  if check wget
+  then
+    wget -q --show-progress -O "${tmpdir}/${package}" "${package_url}"
+  elif check curl
+  then
+    curl --progress-bar -L -o "${tmpdir}/${package}" "${package_url}"
+  else
+    echo "Neither ${bold}wget${normal} nor ${bold}curl${normal}" \
+      "found in \$PATH."
+    exit 1
+  fi
+  echo "Successfully downloaded ${package}"
 fi
-echo "Successfully downloaded ${package}"
 
 # Get platform config.
 open_source=
@@ -173,12 +219,17 @@ then
   echo "Could not find ${bold}sudo${normal} in \$PATH."
   exit 1
 fi
-if [ "${platform}" = "Debian" ]
+if [ "${package_file_extension}" = "deb" ]
 then
   # adduser is required by the Debian package installation.
   if ! check adduser
   then
     echo "Could not find ${bold}adduser${normal} in \$PATH."
+    exit 1
+  fi
+  if ! check dpkg
+  then
+    echo "Could not find ${bold}dpkg${normal} in \$PATH."
     exit 1
   fi
   cmd1="sudo dpkg -i \"${tmpdir}/${package}\""
@@ -192,7 +243,7 @@ then
   eval "${cmd1}"
   action "Checking node status"
   eval "${cmd2}"
-elif [ "${platform}" = "Linux" ]
+elif [ "${package_file_extension}" = "gz" ]
 then
   cmd1="sudo tar xzf \"${tmpdir}/${package}\" -C /"
   echo "This script is about to run the following command:"
@@ -201,8 +252,13 @@ then
   confirm
   action "Unpacking tarball"
   eval "${cmd1}"
-elif [ "${platform}" = "macOS" ]
+elif [ "${package_file_extension}" = "pkg" ]
 then
+  if ! check installer
+  then
+    echo "Could not find ${bold}installer${normal} in \$PATH."
+    exit 1
+  fi
   cmd1="sudo installer -pkg \"${tmpdir}/${package}\" -target /"
   echo "This script is about to run the following command:"
   echo

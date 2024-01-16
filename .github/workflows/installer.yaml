@@ -28,29 +28,47 @@ jobs:
   #   steps:
   #     - name: Run installer
   #       run: curl https://get.tenzir.app | sh
-  container-debian-based:
-    name: Debian based distros in containers
+  container-linux:
+    name: Linux in containers
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        image: ["ubuntu:22.04", "ubuntu:23.04", "ubuntu:23.10", "debian:11", "debian:12"]
+        image: ["ubuntu:22.04", "ubuntu:23.04", "ubuntu:23.10", "debian:11", "debian:12",
+                "fedora:37", "fedora:38", "fedora:39", "amazonlinux:2", "amazonlinux:2023"]
+        source: ["default", "remote-package", "remote-tarball", "local-package", "local-tarball"]
     container:
       image: ${{ matrix.image }}
+    env:
+      PACKAGE_URL: https://storage.googleapis.com/tenzir-dist-public/packages/main/debian/tenzir-static-latest.deb
+      TARBALL_URL: https://storage.googleapis.com/tenzir-dist-public/packages/main/tarball/tenzir-static-latest.gz
     steps:
+      - name: Configure
+        run: |
+          # env: above is evaluated before matrix is populated, so we can't set these in env:
+          echo "IS_DEBIAN=${{ contains(matrix.image, 'ubuntu') || contains(matrix.image, 'debian') }}" >> $GITHUB_ENV
+          echo "IS_REDHAT=${{ contains(matrix.image, 'fedora') || contains(matrix.image, 'amazonlinux') }}" >> $GITHUB_ENV
+
       - name: Setup dependencies
-        run: apt update && apt install -y curl sudo adduser
+        run: |
+          if $IS_DEBIAN; then
+            apt update && apt install -y curl sudo adduser
+          else
+            yum install -y tar sudo
+          fi
+
       - name: Run installer
-        run: curl https://get.tenzir.app | sh
-  container-redhat-based:
-    name: Red Hat based distros in containers
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        image: ["fedora:37", "fedora:38", "fedora:39", "amazonlinux:2", "amazonlinux:2023"]
-    container:
-      image: ${{ matrix.image }}
-    steps:
-      - name: Setup dependencies
-        run: yum install -y tar sudo
-      - name: Run installer
-        run: curl https://get.tenzir.app | sh
+        run: |
+          if [ "${{ matrix.source }}" = "default" ]; then
+            curl https://get.tenzir.app | sh
+          elif [ "${{ matrix.source }}" = "remote-package" ] && $IS_DEBIAN; then
+            curl https://get.tenzir.app | sh -s -- --package-url=$PACKAGE_URL
+          elif [ "${{ matrix.source }}" = "remote-tarball" ]; then
+            curl https://get.tenzir.app | sh -s -- --package-url=$TARBALL_URL
+          elif [ "${{ matrix.source }}" = "local-package" ] && $IS_DEBIAN; then
+            curl -o /tmp/tenzir-static-latest.deb $PACKAGE_URL
+            curl https://get.tenzir.app | sh -s -- --package-path=/tmp/tenzir-static-latest.deb
+          elif [ "${{ matrix.source }}" = "local-tarball" ]; then
+            curl -o /tmp/tenzir-static-latest.gz $TARBALL_URL
+            curl https://get.tenzir.app | sh -s -- --package-url=/tmp/tenzir-static-latest.gz
+          fi
