@@ -63,7 +63,8 @@ public:
                      color_diagnostics color, std::ostream& stream)
     : colors{colors::make(color)},
       storage_{origin ? std::move(origin->source) : ""},
-      lines_{detail::split(storage_, "\n")},
+      lines_{origin ? detail::split(storage_, "\n")
+                    : std::vector<std::string_view>{}},
       stream_{stream},
       filename_{origin ? std::move(origin->filename) : ""} {
   }
@@ -75,6 +76,10 @@ public:
                diag.severity, uncolor, diag.message, reset);
     auto indent_width = size_t{0};
     for (auto& annotation : diag.annotations) {
+      if (lines_.empty()) {
+        // TODO: This is a hack for the case where we don't have the information.
+        break;
+      }
       auto [line, col] = line_col_indices(annotation.source.begin);
       indent_width = std::max(indent_width, std::to_string(line).size());
     }
@@ -82,7 +87,7 @@ public:
     for (auto& annotation : diag.annotations) {
       if (lines_.empty()) {
         // TODO: This is a hack for the case where we don't have the information.
-        continue;
+        break;
       }
       if (!annotation.source) {
         TENZIR_VERBOSE("annotation does not have source: {:?}", annotation);
