@@ -19,6 +19,8 @@
 #include <aws/sqs/model/ReceiveMessageRequest.h>
 #include <aws/sqs/model/SendMessageRequest.h>
 
+using namespace std::chrono_literals;
+
 namespace tenzir::plugins::sqs {
 
 namespace {
@@ -32,14 +34,19 @@ auto to_aws_string(chunk_ptr chunk) -> Aws::String {
 /// A wrapper around SQS.
 class sqs_queue {
 public:
-  sqs_queue(std::string name) : client_{config_} {
+  sqs_queue(std::string name) : name_{std::move(name)}, client_{config_} {
   }
 
   /// Creates the queue.
-  auto create() -> void {
+  auto create(std::optional<std::chrono::seconds> long_poll_time = {}) -> void {
     TENZIR_DEBUG("creating SQS queue: {}", name_);
     auto request = Aws::SQS::Model::CreateQueueRequest{};
     request.SetQueueName(std::string{name_});
+    if (long_poll_time) {
+      request.AddAttributes(
+        Aws::SQS::Model::QueueAttributeName::ReceiveMessageWaitTimeSeconds,
+        std::to_string(long_poll_time->count()));
+    }
     auto outcome = client_.CreateQueue(request);
     if (not outcome.IsSuccess()) {
       return diagnostic::error("failed to create SQS queue")
@@ -51,14 +58,17 @@ public:
   }
 
   /// Receives messages from the queue.
-  auto receive_messages(int n = 10) {
+  auto receive_messages(std::optional<std::chrono::seconds> wait_time = {}) {
     TENZIR_DEBUG("receiving messages from {}", url_);
     if (url_.empty()) {
       retrieve_url();
     }
     auto request = Aws::SQS::Model::ReceiveMessageRequest{};
     request.SetQueueUrl(url_);
-    request.SetMaxNumberOfMessages(n);
+    request.SetMaxNumberOfMessages(10);
+    if (wait_time) {
+      request.SetWaitTimeSeconds(detail::narrow_cast<int>(wait_time->count()));
+    }
     auto outcome = client_.ReceiveMessage(request);
     if (not outcome.IsSuccess()) {
       diagnostic::error("failed receiving message from SQS queue")
@@ -131,6 +141,7 @@ struct connector_args {
   std::string queue;
   bool create_queue;
   bool delete_message;
+  std::optional<std::chrono::seconds> poll_time;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, connector_args& x) -> bool {
@@ -138,7 +149,34 @@ struct connector_args {
       .pretty_name("tenzir.plugins.sqs.connector_args")
       .fields(f.field("queue", x.queue),
               f.field("create_queue", x.create_queue),
-              f.field("delete_message", x.delete_message));
+              f.field("delete_message", x.delete_message),
+              f.field("poll_time", x.poll_time));
+  }
+};
+
+struct loader_args : connector_args {
+  bool delete_message;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, loader_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("tenzir.plugins.sqs.loader_args")
+      .fields(f.field("queue", x.queue),
+              f.field("create_queue", x.create_queue),
+              f.field("delete_message", x.delete_message),
+              f.field("poll_time", x.poll_time));
+  }
+};
+
+struct saver_args : connector_args {
+  template <class Inspector>
+  friend auto inspect(Inspector& f, saver_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("tenzir.plugins.sqs.saver_args")
+      .fields(f.field("queue", x.queue),
+              f.field("create_queue", x.create_queue),
+              f.field("delete_message", x.delete_message),
+              f.field("poll_time", x.poll_time));
   }
 };
 
@@ -146,17 +184,17 @@ class sqs_loader final : public plugin_loader {
 public:
   sqs_loader() = default;
 
-  explicit sqs_loader(connector_args args) : args_{std::move(args)} {
+  explicit sqs_loader(loader_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane&) const
+  auto instantiate(operator_control_plane& ctrl) const
     -> std::optional<generator<chunk_ptr>> override {
-    auto make = [](connector_args args) mutable -> generator<chunk_ptr> {
-      auto sqs = sqs_queue{args.queue};
+    auto make = [](loader_args args) mutable -> generator<chunk_ptr> {
+      auto queue = sqs_queue{args.queue};
       if (args.create_queue) {
-        sqs.create();
+        queue.create(args.poll_time);
       }
-      auto messages = sqs.receive_messages();
+      auto messages = queue.receive_messages(args.poll_time);
       for (const auto& message : messages) {
         // If we need to make the message ID available downstream, we could copy
         // it into the metadata of chunk.
@@ -166,7 +204,7 @@ public:
         auto str = std::string_view{body.data(), body.size()};
         co_yield chunk::copy(str);
         if (args.delete_message) {
-          sqs.delete_message(message);
+          queue.delete_message(message);
         }
       }
     };
@@ -188,7 +226,7 @@ public:
   }
 
 private:
-  connector_args args_;
+  loader_args args_;
 };
 
 class sqs_saver final : public plugin_saver {
@@ -200,15 +238,15 @@ public:
 
   auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
-    auto sqs = sqs_queue{args_.queue};
+    auto queue = sqs_queue{args_.queue};
     if (args_.create_queue) {
-      sqs.create();
+      queue.create(args_.poll_time);
     }
-    return [sqs = std::make_shared<sqs_queue>(std::move(sqs))](
+    return [queue = std::make_shared<sqs_queue>(std::move(queue))](
              chunk_ptr chunk) mutable {
       if (!chunk || chunk->size() == 0)
         return;
-      sqs->send_message(to_aws_string(std::move(chunk)));
+      queue->send_message(to_aws_string(std::move(chunk)));
       return;
     };
   }
@@ -230,7 +268,7 @@ public:
   }
 
 private:
-  connector_args args_;
+  saver_args args_;
 };
 
 class plugin final : public virtual loader_plugin<sqs_loader>,
@@ -238,42 +276,53 @@ class plugin final : public virtual loader_plugin<sqs_loader>,
 public:
   auto parse_loader(parser_interface& p) const
     -> std::unique_ptr<plugin_loader> override {
-    auto parser = argument_parser{
-      name(), fmt::format("https://docs.tenzir.com/connectors/{}", name())};
-    auto args = connector_args{};
-    parser.add(args.queue, "<queue>");
-    parser.add("--create", args.create_queue,
-               "create queue if it doesn't exist");
-    parser.add("--delete", args.delete_message,
-               "delete message after reception");
-    parser.parse(p);
-    if (args.queue.empty()) {
-      diagnostic::error("queue must not be empty")
-        .hint("provide a non-empty string as queue name")
-        .throw_();
-    }
+    auto args = parse_args<loader_args>(p);
     return std::make_unique<sqs_loader>(std::move(args));
   }
 
   auto parse_saver(parser_interface& p) const
     -> std::unique_ptr<plugin_saver> override {
-    auto parser = argument_parser{
-      name(), fmt::format("https://docs.tenzir.com/connectors/{}", name())};
-    auto args = connector_args{};
-    parser.add(args.queue, "<queue>");
-    parser.add("--create", args.create_queue,
-               "create queue if it doesn't exist");
-    parser.parse(p);
-    if (args.queue.empty()) {
-      diagnostic::error("queue must not be empty")
-        .hint("provide a non-empty string as queue name")
-        .throw_();
-    }
+    auto args = parse_args<saver_args>(p);
     return std::make_unique<sqs_saver>(std::move(args));
   }
 
   auto name() const -> std::string override {
     return "sqs";
+  }
+
+private:
+  template <class Args>
+  static auto parse_args(parser_interface& p) -> Args {
+    auto parser
+      = argument_parser{"sqs", "https://docs.tenzir.com/connectors/sqs"};
+    auto result = Args{};
+    auto queue = located<std::string>{};
+    auto poll_time = std::optional<located<std::chrono::seconds>>{};
+    parser.add(queue, "<queue>");
+    parser.add("--create", result.create_queue);
+    parser.add("--poll-time", poll_time, "<duration>");
+    if constexpr (std::is_same_v<Args, loader_args>) {
+      parser.add("--delete", result.delete_message);
+    }
+    parser.parse(p);
+    if (queue.inner.empty()) {
+      diagnostic::error("queue must not be empty")
+        .primary(queue.source)
+        .hint("provide a non-empty string as queue name")
+        .throw_();
+    } else {
+      result.queue = std::move(queue.inner);
+    }
+    if (poll_time) {
+      if (poll_time->inner < 1s || poll_time->inner > 20s) {
+        diagnostic::error("invalid poll time: {}", poll_time->inner)
+          .primary(poll_time->source)
+          .hint("poll time must be in the interval [1s, 20s]")
+          .throw_();
+      }
+      result.poll_time = poll_time->inner;
+    }
+    return result;
   }
 };
 
