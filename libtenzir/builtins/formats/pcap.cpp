@@ -348,11 +348,6 @@ private:
 
 struct printer_args {};
 
-/// Creates a chunk from a PCAP file header.
-auto make_chunk(const file_header& header) -> chunk_ptr {
-  return chunk::copy(as_bytes(header));
-}
-
 /// Creates a file header from the first row of table slice (that is assumed to
 /// have one row).
 auto make_file_header(const table_slice& slice) -> std::optional<file_header> {
@@ -497,11 +492,13 @@ public:
     // headers and packet records. We may receive an ordered event stream
     // beginning with a file header, but we may also receive a random sequence
     // of packet events coming from a historical query.
+    auto meta = chunk_metadata{.content_type = std::string{pcap::content_type}};
     return printer_instance::make(
       [&ctrl, input_schema = std::move(input_schema),
        current_file_header = std::optional<file_header>{},
-       file_header_printed = false, buffer = std::vector<std::byte>{}](
-        table_slice slice) mutable -> generator<chunk_ptr> {
+       file_header_printed = false, buffer = std::vector<std::byte>{},
+       meta
+       = std::move(meta)](table_slice slice) mutable -> generator<chunk_ptr> {
         if (slice.rows() == 0) {
           co_yield {};
           co_return;
@@ -588,10 +585,10 @@ public:
         if (not file_header_printed) {
           TENZIR_DEBUG("emitting PCAP file header");
           TENZIR_ASSERT_CHEAP(current_file_header);
-          co_yield make_chunk(*current_file_header);
+          co_yield chunk::copy(as_bytes(*current_file_header), meta);
           file_header_printed = true;
         }
-        co_yield chunk::copy(buffer);
+        co_yield chunk::copy(buffer, meta);
         buffer.clear();
       });
   }

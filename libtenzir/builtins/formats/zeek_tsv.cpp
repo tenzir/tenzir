@@ -823,7 +823,8 @@ public:
         out_iter = fmt::format_to(out_iter, "\n");
       }
       printer.print_closing_line(out_iter);
-      auto chunk = chunk::make(std::move(buffer));
+      auto chunk = chunk::make(std::move(buffer),
+                               {.content_type = "application/x-zeek"});
       co_yield std::move(chunk);
     });
   }
