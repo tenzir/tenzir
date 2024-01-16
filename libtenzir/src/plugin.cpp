@@ -512,7 +512,7 @@ public:
     -> std::optional<generator<table_slice>> override {
     auto store = plugin_->make_passive_store();
     if (!store) {
-      diagnostic::error("{}", store.error()).emit(ctrl.diagnostics());
+      diagnostic::error(store.error()).emit(ctrl.diagnostics());
       return {};
     }
     return store_parser_impl(std::move(input), ctrl, std::move(*store),

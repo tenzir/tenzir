@@ -71,7 +71,7 @@ public:
     auto ts = taxonomies{.concepts = ctrl.concepts()};
     auto resolved_expr = resolve(ts, expr_.inner, schema);
     if (not resolved_expr) {
-      diagnostic::warning("{}", resolved_expr.error())
+      diagnostic::warning(resolved_expr.error())
         .primary(expr_.source)
         .emit(ctrl.diagnostics());
       return std::nullopt;
@@ -81,7 +81,7 @@ public:
     // this is tricky for e.g. `where #schema == "foo" && bar == 42` and
     // changing the behavior for this is tricky with the current expressions.
     if (not tailored_expr) {
-      // diagnostic::warning("{}", tailored_expr.error())
+      // diagnostic::warning(tailored_expr.error())
       //   .primary(expr_.source)
       //   .emit(ctrl.diagnostics());
       return std::nullopt;

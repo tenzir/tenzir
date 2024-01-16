@@ -173,7 +173,7 @@ public:
   auto abort(caf::error error) noexcept -> void override {
     TENZIR_DEBUG("{} {} aborts: {}", *state_.self, state_.op->name(), error);
     TENZIR_ASSERT_CHEAP(error != caf::none);
-    diagnostic::error("{}", error)
+    diagnostic::error(error)
       .note("from `{}`", state_.op->name())
       .emit(diagnostics());
   }
@@ -181,7 +181,7 @@ public:
   auto warn(caf::error error) noexcept -> void override {
     TENZIR_DEBUG("{} {} warns: {}", *state_.self, state_.op->name(), error);
     TENZIR_ASSERT_CHEAP(error != caf::none);
-    diagnostic::warning("{}", error)
+    diagnostic::warning(error)
       .note("from `{}`", state_.op->name())
       .emit(diagnostics());
   }
@@ -355,7 +355,7 @@ struct exec_node_state {
         schedule_run();
         if (msg.reason) {
           if (msg.reason != ec::silent) {
-            diagnostic::error("{}", msg.reason)
+            diagnostic::error(msg.reason)
               .note("`{}` shuts down because of an irregular exit of the "
                     "previous operator",
                     op->name())
@@ -525,7 +525,7 @@ struct exec_node_state {
               self->quit();
               return;
             }
-            diagnostic::error("{}", err)
+            diagnostic::error(err)
               .note("{} {} failed to push to next execution node", *self,
                     op->name())
               .emit(ctrl->diagnostics());
@@ -605,7 +605,7 @@ struct exec_node_state {
                        op->name(), err);
           issue_demand_inflight = false;
           if (err != caf::sec::request_receiver_down) {
-            diagnostic::error("{}", err)
+            diagnostic::error(err)
               .note("{} {} failed to pull from previous execution node", *self,
                     op->name())
               .emit(ctrl->diagnostics());

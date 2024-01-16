@@ -171,7 +171,7 @@ void pipeline_executor_state::abort_start(caf::error reason) {
     return;
   }
   abort_start(
-    diagnostic::error("{}", reason).note("pipeline failed to start").done());
+    diagnostic::error(reason).note("pipeline failed to start").done());
 }
 
 void pipeline_executor_state::finish_start() {
@@ -281,15 +281,14 @@ auto pipeline_executor(
       TENZIR_DEBUG("{} received down from execution node {}/{}: {}", *self,
                    exec_node - self->state.exec_nodes.begin() + 1,
                    self->state.exec_nodes.size(), msg.reason);
-      std::for_each(self->state.exec_nodes.begin(), exec_node + 1,
-                    [&](auto& exec_node) {
-                      if (exec_node) {
-                        self->unlink_from(exec_node);
-                        self->send_exit(exec_node,
-                                        caf::exit_reason::user_shutdown);
-                        exec_node = nullptr;
-                      }
-                    });
+      std::for_each(
+        self->state.exec_nodes.begin(), exec_node + 1, [&](auto& exec_node) {
+          if (exec_node) {
+            self->unlink_from(exec_node);
+            self->send_exit(exec_node, caf::exit_reason::user_shutdown);
+            exec_node = nullptr;
+          }
+        });
     }
     const auto all_done
       = std::all_of(self->state.exec_nodes.begin(),

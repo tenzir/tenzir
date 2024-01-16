@@ -131,9 +131,7 @@ public:
            if (result != ec::silent) {
              auto diag = make_diagnostic_printer("", "", color_diagnostics::yes,
                                                  std::cerr);
-             diag->emit(diagnostic::error("{}", result.error())
-                          .note("pipeline execution failed")
-                          .done());
+             diag->emit(diagnostic::error(result.error()).done());
            }
            return caf::make_message(ec::silent);
          }
