@@ -289,6 +289,8 @@ struct exec_node_state {
 
   ~exec_node_state() noexcept {
     TENZIR_DEBUG("{} {} shut down", *self, op->name());
+    instance.reset();
+    ctrl.reset();
     metrics->emit();
     if (demand and demand->rp.pending()) {
       demand->rp.deliver();
@@ -401,12 +403,13 @@ struct exec_node_state {
             schedule_run();
             rp.deliver();
           },
-          [this, rp](caf::error& error) mutable {
+          [this, rp](const caf::error& error) mutable {
             auto time_starting_guard = make_timer_guard(
               metrics->values.time_scheduled, metrics->values.time_starting);
             TENZIR_DEBUG("{} {} forwards error during startup: {}", *self,
                          op->name(), error);
-            rp.deliver(std::move(error));
+            rp.deliver(
+              add_context(error, "{} {} failed to start", *self, op->name()));
           });
       return rp;
     }

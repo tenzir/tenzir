@@ -61,11 +61,10 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
       [this]() mutable {
         finish_start();
       },
-      [this](caf::error& err) mutable {
-        TENZIR_VERBOSE("{} aborts start because execution node could not be "
-                       "started: {}",
-                       *self, err);
-        abort_start(std::move(err));
+      [this](const caf::error& err) mutable {
+        abort_start(add_context(
+          err, "{} aborts start because an execution node failed to start",
+          *self));
       });
 }
 
@@ -118,10 +117,9 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
             exec_nodes[index] = std::move(exec_node);
             start_nodes_if_all_spawned();
           },
-          [=, this](caf::error& err) {
-            TENZIR_DEBUG("{} failed to spawn {} remotely: {}", *self,
-                         description, err);
-            abort_start(std::move(err));
+          [=, this](const caf::error& err) {
+            abort_start(add_context(err, "{} failed to spawn {} remotely",
+                                    *self, description));
           });
       input_type = *output_type;
     } else {
@@ -160,10 +158,9 @@ void pipeline_executor_state::abort_start(diagnostic reason) {
         start_rp.deliver(ec::diagnostic);
         self->quit(ec::diagnostic);
       },
-      [this](caf::error& error) {
-        TENZIR_WARN("{} could not send start diagnostic: {}", *self, error);
+      [this](const caf::error& error) {
         start_rp.deliver(
-          add_context(error, "{} could not deliver diagnostic", *self));
+          add_context(error, "{} failed to deliver diagnostic", *self));
         self->quit(ec::diagnostic);
       });
 }
