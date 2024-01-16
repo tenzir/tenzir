@@ -13,16 +13,8 @@ Loads bytes from and saves bytes to [Amazon SQS][sqs] queues.
 
 ## Synopsis
 
-Loader:
-
 ```
-sqs [--create] [--delete] [--poll-time <duration>] <queue>
-```
-
-Saver:
-
-```
-sqs [--create] [--poll-time <duration>] <queue>
+sqs [--poll-time <duration>] <queue>
 ```
 
 ## Description
@@ -39,11 +31,11 @@ option to activate long polling, which helps reduce your cost of using SQS by
 reducing the number of empty responses when there are no messages available to
 return in reply to a message request.
 
-### `<queue>` (Loader, Saver)
+### `<queue>`
 
 The name of the queue to use.
 
-### `--poll-time <duration>` (Loader, Saver)
+### `--poll-time <duration>`
 
 Activates long polling. In combination with `--create`, the newly created queue
 will have long polling enabled. When the queue exists already, the connector
@@ -52,14 +44,6 @@ will activate long polling for the queue by setting an attribute.
 The `<duration>` value must be between 1 and 20 seconds.
 
 By default, the connector uses short polling.
-
-### `--create` (Loader, Saver)
-
-Create the queue if it doesn't exist.
-
-### `--delete` (Loader)
-
-Delete messages from the queue after loading them.
 
 ## Examples
 
@@ -75,9 +59,11 @@ Read JSON messages with a 20-second long poll timeout:
 from sqs --poll-time 20s
 ```
 
-Write the Tenzir version to SQS queue `tenzir`, creating the queue if it doesn't
-exist:
+Write the Tenzir version 10 times to queue `tenzir`:
 
 ```
-version | to sqs --create tenzir
+version
+| repeat 10
+| enumerate
+| to sqs tenzir
 ```
