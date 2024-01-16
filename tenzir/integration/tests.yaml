@@ -1261,6 +1261,8 @@ tests:
         input: data/xsv/sample.tsv
       - command: exec 'read csv'
         input: data/xsv/nulls-and-escaping.csv
+      - command: exec 'read ssv | write ssv --no-header'
+        input: data/xsv/sample.ssv
 
   Slice:
     tags: [pipelines, xsv]

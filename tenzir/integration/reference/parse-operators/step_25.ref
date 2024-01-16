@@ -18,7 +18,8 @@ pipeline [
     field_sep: 44,
     list_sep: 59,
     null_value: "",
-    allow_comments: false
+    allow_comments: false,
+    no_header: false
   },
   save file {
     path: "foo.csv" @ 40..47
