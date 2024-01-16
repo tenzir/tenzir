@@ -137,7 +137,7 @@ split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
   auto it = str.begin();
   std::string current{};
   size_t splits = 0;
-  while (it != str.end()) {
+  while (it != str.end() && splits != max_splits) {
     auto next_sep = std::ranges::search(std::string_view{it, str.end()}, sep);
     if (std::distance(it, next_sep.begin()) >= std::ssize(esc)) {
       // Possibly escaped separator
@@ -150,14 +150,13 @@ split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
         continue;
       }
     }
-    if (splits++ == max_splits)
-      break;
     current.append(std::string_view{it, next_sep.begin()});
     out.emplace_back(std::move(current));
     current = {};
     it = next_sep.end();
     if (!next_sep.empty() && it == str.end())
       out.emplace_back("");
+    ++splits;
   }
   if (it != str.end())
     current.append(std::string_view{it, str.end()});
