@@ -47,23 +47,24 @@ By default, the connector uses short polling.
 
 ## Examples
 
-Read JSON messages from the SQS queue `foo`:
+Read JSON messages from the SQS queue `tenzir`:
 
 ```
-from sqs foo
+from sqs://tenzir
 ```
 
 Read JSON messages with a 20-second long poll timeout:
 
 ```
-from sqs --poll-time 20s
+from sqs://tenzir --poll-time 20s
 ```
 
-Write the Tenzir version 10 times to queue `tenzir`:
+Write the Tenzir version 10 times, [enumerated](../operators/enumerate.md), to
+queue `tenzir`:
 
 ```
 version
 | repeat 10
 | enumerate
-| to sqs tenzir
+| to sqs://tenzir
 ```
