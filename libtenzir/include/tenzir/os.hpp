@@ -35,6 +35,9 @@ struct process {
   time startup;
   std::optional<uint64_t> vsize;
   std::optional<uint64_t> rsize;
+  std::optional<uint64_t> peak_mem;
+  std::optional<uint64_t> swap;
+  std::optional<uint64_t> open_fds;
   std::optional<duration> utime;
   std::optional<duration> stime;
 };
@@ -64,6 +67,9 @@ public:
 
   virtual ~os() = default;
 
+  /// Provides information about the current process.
+  auto current_process() -> process;
+
   /// Provides a snapshot of all currently running processes.
   auto processes() -> table_slice;
 
@@ -71,7 +77,10 @@ public:
   auto sockets() -> table_slice;
 
 protected:
-  virtual auto fetch_processes() -> std::vector<process> = 0;
+  virtual auto current_pid() -> int = 0;
+  virtual auto fetch_processes(std::optional<int> pid_filter = std::nullopt)
+    -> std::vector<process>
+    = 0;
   virtual auto fetch_sockets() -> std::vector<socket> = 0;
 };
 
@@ -84,7 +93,9 @@ public:
 
   ~linux_os() final;
 
-  auto fetch_processes() -> std::vector<process> final;
+  auto current_pid() -> int final;
+  auto fetch_processes(std::optional<int> pid_filterstd = std::nullopt)
+    -> std::vector<process> final;
   auto fetch_sockets() -> std::vector<socket> final;
 
 private:
@@ -103,7 +114,9 @@ public:
 
   ~darwin_os() final;
 
-  auto fetch_processes() -> std::vector<process> final;
+  auto current_pid() -> int final;
+  auto fetch_processes(std::optional<int> pid_filter = std::nullopt)
+    -> std::vector<process> final;
   auto fetch_sockets() -> std::vector<socket> final;
 
 private:

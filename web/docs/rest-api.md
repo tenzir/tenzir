@@ -5,18 +5,9 @@ sidebar_label: REST API
 
 # REST API
 
-Tenzir provides a REST API to interact with a server node. The `web`
-[plugin](architecture/plugins.md) implements the API as a dedicated
-component that can run in multiple ways.
-
-:::tip API Documentation
-At [https://docs.tenzir.com/api](/api) you can find documentation of the API
-routes and an [OpenAPI
-Specification](https://spec.openapis.org/oas/latest.html).
-
-Please note that we consider v0 still experimental and therefore do not provide
-stability guarantees.
-:::
+You can manage a Tenzir through a [REST API](/api). The `web`
+[plugin](architecture/plugins.md) implements the server that hosts the API. In
+the following, we describe how you can run this web server.
 
 ## Deployment Modes
 

@@ -97,6 +97,7 @@ static record get_settings_mach() {
 }
 
 } // namespace tenzir::detail
+
 #endif
 
 #if TENZIR_POSIX && !TENZIR_LINUX

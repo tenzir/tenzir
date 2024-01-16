@@ -90,7 +90,7 @@ jobs:
         if: steps.cfg.outputs.needs-ecr == 'true'
         uses: aws-actions/amazon-ecr-login@v2
       - name: Install Nix
-        uses: cachix/install-nix-action@v24
+        uses: cachix/install-nix-action@v25
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Use Magic Nix Cache
@@ -99,7 +99,7 @@ jobs:
           # disables telemetry
           diagnostic-endpoint: ""
       - name: Setup Cachix
-        uses: cachix/cachix-action@v13
+        uses: cachix/cachix-action@v14
         with:
           name: tenzir
           authToken: "${{ secrets.CACHIX_TENZIR_API_TOKEN }}"

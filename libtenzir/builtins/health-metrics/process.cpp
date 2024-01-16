@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/detail/process.hpp>
+#include <tenzir/os.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/type.hpp>
 
@@ -20,12 +20,20 @@ namespace {
 
 auto get_process_statistics() -> caf::expected<record> {
   auto result = record{};
-  auto status = detail::get_status();
-  // Change dashes to underscores for consistency.
-  for (auto [key, value] : status) {
-    std::replace(key.begin(), key.end(), '-', '_');
-    result[key] = std::move(value);
-  }
+  auto os = os::make();
+  if (!os)
+    return caf::make_error(ec::system_error, "failed to create os");
+  auto process = os->current_process();
+  auto assign_optional = [&result](std::string_view key, auto value) {
+    if (value)
+      result[key] = *value;
+    else
+      result[key] = caf::none;
+  };
+  assign_optional("swap_space_usage", process.swap);
+  assign_optional("open_fds", process.open_fds);
+  assign_optional("peak_memory_usage", process.peak_mem);
+  assign_optional("current_memory_usage", process.rsize);
   return result;
 }
 
@@ -45,15 +53,10 @@ public:
 
   auto metric_layout() const -> record_type override {
     return record_type{{
-#if TENZIR_LINUX
       {"swap_space_usage", uint64_type{}},
-#endif
-#if TENZIR_LINUX || TENZIR_MACOS
+      {"open_fds", uint64_type{}},
       {"current_memory_usage", uint64_type{}},
-#endif
-#if TENZIR_POSIX
       {"peak_memory_usage", uint64_type{}},
-#endif
     }};
   }
 };
