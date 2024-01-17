@@ -159,7 +159,9 @@ public:
     auto mode = ctrl.has_terminal() ? stdin_mode::inherit : stdin_mode::none;
     auto child = child::make(command_, mode);
     if (!child) {
-      ctrl.abort(child.error());
+      diagnostic::error(
+        add_context(child.error(), "failed to spawn child process"))
+        .emit(ctrl.diagnostics());
       co_return;
     }
     // We yield once because reading below is blocking, but we want to
@@ -169,7 +171,9 @@ public:
     while (true) {
       auto bytes_read = child->read(as_writeable_bytes(buffer));
       if (not bytes_read) {
-        ctrl.abort(std::move(bytes_read.error()));
+        diagnostic::error(
+          add_context(bytes_read.error(), "failed to read from child process"))
+          .emit(ctrl.diagnostics());
         co_return;
       }
       if (*bytes_read == 0) {
@@ -181,7 +185,9 @@ public:
       co_yield chk;
     }
     if (auto error = child->wait()) {
-      ctrl.abort(std::move(error));
+      diagnostic::error(add_context(error, "child process execution failed"))
+        .emit(ctrl.diagnostics());
+      co_return;
     }
   }
 
@@ -190,7 +196,9 @@ public:
     // TODO: Handle exceptions from `boost::process`.
     auto child = child::make(command_, stdin_mode::pipe);
     if (!child) {
-      ctrl.abort(child.error());
+      diagnostic::error(
+        add_context(child.error(), "failed to spawn child process"))
+        .emit(ctrl.diagnostics());
       co_return;
     }
     // Read from child in separate thread because coroutine-based async
@@ -203,7 +211,9 @@ public:
       while (true) {
         auto bytes_read = child->read(as_writeable_bytes(buffer));
         if (not bytes_read) {
-          ctrl.abort(std::move(bytes_read.error()));
+          diagnostic::error(add_context(bytes_read.error(),
+                                        "failed to read from child process"))
+            .emit(ctrl.diagnostics());
           return;
         }
         if (*bytes_read == 0) {
@@ -230,7 +240,9 @@ public:
           // TODO: If the reading end of the pipe to the child's stdin is
           // already closed, this will generate a SIGPIPE.
           if (auto err = child->write(as_bytes(*chunk))) {
-            ctrl.abort(err);
+            diagnostic::error(
+              add_context(err, "failed to write to child process"))
+              .emit(ctrl.diagnostics());
             co_return;
           }
         }
@@ -257,7 +269,8 @@ public:
       child->close_stdin();
       thread.join();
       if (auto error = child->wait()) {
-        ctrl.abort(std::move(error));
+        diagnostic::error(add_context(error, "child process execution failed"))
+          .emit(ctrl.diagnostics());
         co_return;
       }
     }
