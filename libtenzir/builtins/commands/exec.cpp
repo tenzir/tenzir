@@ -129,7 +129,7 @@ public:
        [=](const invocation& inv, caf::actor_system& sys) -> caf::message {
          auto result = exec_command(inv, sys);
          if (not result) {
-           if (result != ec::diagnostic) {
+           if (result != ec::diagnostic and result != ec::silent) {
              auto diag = make_diagnostic_printer(
                std::nullopt, color_diagnostics::yes, std::cerr);
              diag->emit(diagnostic::error("{}", result.error())
