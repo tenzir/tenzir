@@ -132,7 +132,7 @@ public:
            if (result != ec::diagnostic and result != ec::silent) {
              auto diag = make_diagnostic_printer(
                std::nullopt, color_diagnostics::yes, std::cerr);
-             diag->emit(diagnostic::error("{}", result.error())
+             diag->emit(diagnostic::error(result.error())
                           .note("pipeline execution failed")
                           .done());
            }

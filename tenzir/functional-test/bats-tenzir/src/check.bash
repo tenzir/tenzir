@@ -96,17 +96,18 @@ check() {
           assert_output - < "${ref_path}/${step}.ref"
         fi
       else
-        assert_output ""
+        refute_output
       fi
     fi
   }
   debug 1 "running: ${args[*]}"
   if [ -n "${process_group}" ]; then
+    declare -n pg="$process_group"
     {
       run "${run_flags[@]}" -- "${args[@]}" 3>&-
       compare_or_update
     } &
-    eval "$process_group+=(\"$!\")"
+    pg+=($!)
   else
     run "${run_flags[@]}" -- "${args[@]}"
     compare_or_update

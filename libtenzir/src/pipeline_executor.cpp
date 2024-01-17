@@ -173,7 +173,7 @@ void pipeline_executor_state::abort_start(caf::error reason) {
     return;
   }
   abort_start(
-    diagnostic::error("{}", reason).note("pipeline failed to start").done());
+    diagnostic::error(reason).note("pipeline failed to start").done());
 }
 
 void pipeline_executor_state::finish_start() {

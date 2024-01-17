@@ -2,29 +2,32 @@
 sidebar_custom_props:
   connector:
     loader: true
+    saver: true
 ---
 
 # http
 
-Loads bytes via HTTP.
+Loads and saves bytes via HTTP.
 
 ## Synopsis
 
 ```
-http [<method>] <url> [<item>..]
+http [--chunked] [--multipart] [-f|--form] [-j|--json] [-v|--verbose]
+     [<method>] <url> [<item>..]
 ```
 
 ## Description
 
 The `http` loader performs a HTTP request and returns the bytes of the HTTP
-response body.
+response body. The `http` saver performs a HTTP request with the request body
+being the the provided bytes by the previous operator.
 
-We modeled the `http` loader after [HTTPie](https://httpie.io/), which comes
-with an expressive and intuitive command-line syntax. We recommend to study the
-[HTTPie documentation](https://httpie.io/docs/cli/examples) to understand the
-full extent of the command-line interface. In many cases, you can perform an
-*exact* copy of the HTTPie command line and use it drop-in with the HTTP loader,
-e.g.,  the invocation
+We modeled the `http` connector after [HTTPie](https://httpie.io/), which comes
+with an expressive command-line syntax. We recommend to study the [HTTPie
+documentation](https://httpie.io/docs/cli/examples) to understand the full
+extent of the command-line interface. In many cases, you can perform an *exact*
+copy of the HTTPie command line and use it drop-in with the HTTP loader, e.g.,
+the invocation
 
 ```bash
 http PUT pie.dev/put X-API-Token:123 foo=bar
@@ -38,6 +41,31 @@ from http PUT pie.dev/put X-API-Token:123 foo=bar
 
 More generally, if your HTTPie command line is `http X` then you can write `from
 http X` to obtain an event stream or `load http X` for a byte stream.
+
+### `--chunked`
+
+Enable [chunked transfer
+encoding](https://en.wikipedia.org/wiki/Chunked_transfer_encoding). This is
+equivalent to manually setting the header `Transfer-Encoding: chunked`.
+
+### `--multipart`
+
+Encodes the HTTP request body as [multipart
+message](https://en.wikipedia.org/wiki/MIME#Multipart_messages).
+
+This automatically sets the `Content-Type` header to
+`application/form-multipart; X` where `X` contains the MIME part boundary.
+
+### `-f|--form`
+
+Submits the HTTP request body as form.
+
+This automatically sets the `Content-Type` header to
+`application/x-www-form-urlencoded`.
+
+### `-j|--json`
+
+Explicitly sets the `Accept` header to `application/json`.
 
 ### `<method>`
 
@@ -95,13 +123,13 @@ Use `\` to escape characters that shouldn't be treated as separators.
 Download and process a [CSV](../formats/csv.md) file:
 
 ```
-from http example.org/file.csv read csv
+from http://example.org/file.csv read csv
 ```
 
 Process a Zstd-compressed [Zeek TSV](../formats/zeek-tsv.md) file:
 
 ```
-load http example.org/gigantic.log.zst
+load http://example.org/gigantic.log.zst
 | decompress zstd
 | read zeek-tsv
 ```
@@ -110,4 +138,10 @@ Send a HTTP PUT request with a `X-API-Token` header and body of `{"foo": 42}`:
 
 ```
 from http PUT pie.dev/put X-API-Token:123 foo=42
+```
+
+Send pipeline data as request body in a POST request:
+
+```
+version | to http://pie.dev/put X-API-Token:123
 ```

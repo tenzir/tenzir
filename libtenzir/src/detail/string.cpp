@@ -159,10 +159,10 @@ split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
     if (!next_sep.empty() && it == str.end())
       out.emplace_back("");
   }
-  if (it != str.end()) {
+  if (it != str.end())
     current.append(std::string_view{it, str.end()});
+  if (not current.empty())
     out.emplace_back(std::move(current));
-  }
   return out;
 }
 

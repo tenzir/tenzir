@@ -15,6 +15,7 @@
 #include <fmt/color.h>
 
 #include <iostream>
+#include <string_view>
 
 namespace tenzir {
 
@@ -190,6 +191,31 @@ auto make_diagnostic_printer(std::optional<location_origin> origin,
                              color_diagnostics color, std::ostream& stream)
   -> std::unique_ptr<diagnostic_handler> {
   return std::make_unique<diagnostic_printer>(std::move(origin), color, stream);
+}
+
+auto diagnostic::builder(enum severity s, caf::error err)
+  -> diagnostic_builder {
+  auto as_string = [&](size_t i) -> std::optional<std::string_view> {
+    if (err.context().match_element<std::string>(i)) {
+      return err.context().get_as<std::string>(i);
+    }
+    return std::nullopt;
+  };
+  auto eligible = err.context().size() != 0;
+  for (auto i = size_t{0}; i < err.context().size(); ++i) {
+    if (not as_string(i)) {
+      eligible = false;
+      break;
+    }
+  }
+  if (not eligible) {
+    return builder(s, "{}", err);
+  }
+  auto b = builder(s, "{}", *as_string(err.context().size() - 1));
+  for (auto i = err.context().size() - 1; i > 0; --i) {
+    b = std::move(b).note("{}", *as_string(i - 1));
+  }
+  return b;
 }
 
 } // namespace tenzir

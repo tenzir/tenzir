@@ -290,6 +290,22 @@ TEST(escaped splitting) {
   CHECK_EQUAL(s[0], "a,b");
   CHECK_EQUAL(s[1], "c");
   CHECK_EQUAL(s[2], "");
+  // Regression found in the HTTP request item parser.
+  str = "foo:=@bar";
+  s = split_escaped(str, ":=@", "\\", 1);
+  REQUIRE_EQUAL(s.size(), 2ull);
+  CHECK_EQUAL(s[0], "foo");
+  CHECK_EQUAL(s[1], "bar");
+  str = "foo:=@bar:=@";
+  s = split_escaped(str, ":=@", "\\", 1);
+  REQUIRE_EQUAL(s.size(), 2ull);
+  CHECK_EQUAL(s[0], "foo");
+  CHECK_EQUAL(s[1], "bar:=@");
+  str = "foo:=@bar\\:=@";
+  s = split_escaped(str, ":=@", "\\", 1);
+  REQUIRE_EQUAL(s.size(), 2ull);
+  CHECK_EQUAL(s[0], "foo");
+  CHECK_EQUAL(s[1], "bar:=@");
 }
 
 TEST(join) {

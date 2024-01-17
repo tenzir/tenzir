@@ -430,7 +430,9 @@ public:
     auto input_type = caf::get<record_type>(input_schema);
     auto printer
       = xsv_printer_impl{args_.field_sep, args_.list_sep, args_.null_value};
-    return printer_instance::make([printer = std::move(printer)](
+    auto metadata = chunk_metadata{.content_type = content_type()};
+    return printer_instance::make([printer = std::move(printer),
+                                   meta = std::move(metadata)](
                                     table_slice slice) -> generator<chunk_ptr> {
       auto buffer = std::vector<char>{};
       auto out_iter = std::back_inserter(buffer);
@@ -451,7 +453,7 @@ public:
         TENZIR_ASSERT_CHEAP(ok);
         out_iter = fmt::format_to(out_iter, "\n");
       }
-      auto chunk = chunk::make(std::move(buffer));
+      auto chunk = chunk::make(std::move(buffer), meta);
       co_yield std::move(chunk);
     });
   }
@@ -465,6 +467,17 @@ public:
   }
 
 private:
+  auto content_type() const -> std::string {
+    switch (args_.field_sep) {
+      default:
+        return "text/plain";
+      case ',':
+        return "text/csv";
+      case '\t':
+        return "text/tab-separated-values";
+    }
+  }
+
   xsv_options args_;
 };
 

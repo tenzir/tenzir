@@ -1107,9 +1107,11 @@ public:
       = args_.omit_empty_objects.has_value() or args_.omit_empty.has_value();
     const auto omit_empty_lists
       = args_.omit_empty_lists.has_value() or args_.omit_empty.has_value();
+    auto meta = chunk_metadata{.content_type = compact ? "application/x-ndjson"
+                                                       : "application/json"};
     return printer_instance::make(
-      [compact, style, omit_nulls, omit_empty_objects,
-       omit_empty_lists](table_slice slice) -> generator<chunk_ptr> {
+      [compact, style, omit_nulls, omit_empty_objects, omit_empty_lists,
+       meta = std::move(meta)](table_slice slice) -> generator<chunk_ptr> {
         if (slice.rows() == 0) {
           co_yield {};
           co_return;
@@ -1136,7 +1138,7 @@ public:
           TENZIR_ASSERT_CHEAP(ok);
           out_iter = fmt::format_to(out_iter, "\n");
         }
-        auto chunk = chunk::make(std::move(buffer));
+        auto chunk = chunk::make(std::move(buffer), meta);
         co_yield std::move(chunk);
       });
   }

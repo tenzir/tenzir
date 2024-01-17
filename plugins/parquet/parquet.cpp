@@ -455,7 +455,7 @@ public:
   /// failure.
   [[nodiscard]] caf::expected<chunk_ptr> finish() override {
     auto buffer = write_parquet_buffer(slices_, parquet_config_);
-    auto chunk = chunk::make(buffer);
+    auto chunk = chunk::make(buffer, {.content_type = "application/x-parquet"});
     return chunk;
   }
 
