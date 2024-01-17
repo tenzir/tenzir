@@ -339,6 +339,9 @@ struct serve_manager_state {
           });
       if (found != ops.end()) {
         expired_ids.emplace(found->serve_id, reason);
+        if (found->get_rp.pending()) {
+          found->get_rp.deliver(reason);
+        }
         ops.erase(found);
       }
     };
