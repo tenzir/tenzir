@@ -690,11 +690,10 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       TENZIR_ASSERT(caf::holds_alternative<record>(result));
       return std::move(caf::get<record>(result));
     },
-    [self](diagnostic d, std::string op_name) -> caf::result<atom::ok> {
+    [self](diagnostic d, std::string op_name) -> caf::result<void> {
       self->state.stored_diagnostics.emplace_back(std::move(d),
                                                   std::move(op_name));
-      TENZIR_ERROR("{}", self->state.stored_diagnostics.size());
-      return atom::ok_v;
+      return {};
     },
     [self](atom::get, atom::diagnostics) -> std::vector<record> {
       std::vector<record> diags;

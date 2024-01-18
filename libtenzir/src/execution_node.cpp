@@ -128,13 +128,10 @@ public:
     self_
       ->request(self_->state.weak_node.lock(), caf::infinite, diag,
                 self_->state.op->name())
-      .then(
-        [](atom::ok) {
-          TENZIR_ERROR("done");
-        },
-        [](caf::error) {
-          TENZIR_ERROR("not done :(");
-        });
+      .then([]() {},
+            [](const caf::error& err) {
+              TENZIR_WARN("failed to store diagnostic: {}", err);
+            });
     if (diag.severity == severity::error) {
       self_->send(diagnostic_handler_, diag);
       self_->quit(std::move(diag).to_error());
