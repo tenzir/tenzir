@@ -738,6 +738,9 @@ public:
   /// Inspects the context.
   virtual auto show() const -> record = 0;
 
+  /// Dumps the context content.
+  virtual auto dump() const -> list = 0;
+
   /// Updates the context.
   virtual auto update(table_slice events, parameter_map parameters)
     -> caf::expected<update_result>

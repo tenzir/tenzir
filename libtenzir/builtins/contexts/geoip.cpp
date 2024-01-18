@@ -340,6 +340,38 @@ public:
     return record{{path_key, db_path_}};
   }
 
+  auto dump() const -> list override {
+    MMDB_search_node_s search_node;
+    MMDB_read_node(&*mmdb_, 0, &search_node);
+
+    auto l = list{};
+    auto output = record{};
+    if (search_node.left_record_type == MMDB_RECORD_TYPE_DATA) {
+      MMDB_entry_data_list_s* entry_data_list = nullptr;
+      MMDB_get_entry_data_list(&search_node.left_record_entry,
+                               &entry_data_list);
+      auto free_entry_data_list = caf::detail::make_scope_guard([&] {
+        if (entry_data_list) {
+          MMDB_free_entry_data_list(entry_data_list);
+        }
+      });
+      entry_data_list_to_record(entry_data_list, nullptr, output);
+    }
+    if (search_node.right_record_type == MMDB_RECORD_TYPE_DATA) {
+      MMDB_entry_data_list_s* entry_data_list = nullptr;
+      MMDB_get_entry_data_list(&search_node.right_record_entry,
+                               &entry_data_list);
+      auto free_entry_data_list = caf::detail::make_scope_guard([&] {
+        if (entry_data_list) {
+          MMDB_free_entry_data_list(entry_data_list);
+        }
+      });
+      entry_data_list_to_record(entry_data_list, nullptr, output);
+    }
+    l.emplace_back(output);
+    return l;
+  }
+
   /// Updates the context.
   auto update(table_slice, context::parameter_map)
     -> caf::expected<update_result> override {

@@ -96,6 +96,14 @@ public:
     return record{{"num_entries", context_entries.size()}};
   }
 
+  auto dump() const -> list override {
+    auto l = list{};
+    for (const auto& [key, value] : context_entries) {
+      l.emplace_back(record{{"key", key}, {"value", value}});
+    }
+    return l;
+  }
+
   /// Updates the context.
   auto update(table_slice slice, context::parameter_map parameters)
     -> caf::expected<update_result> override {
