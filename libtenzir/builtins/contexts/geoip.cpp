@@ -340,36 +340,67 @@ public:
     return record{{path_key, db_path_}};
   }
 
-  auto dump() const -> list override {
-    MMDB_search_node_s search_node;
-    MMDB_read_node(&*mmdb_, 0, &search_node);
+  auto dump_recurse(list& output, uint64_t node_number, uint8_t type,
+                    MMDB_entry_s* entry, std::set<uint64_t>& visited) const
+    -> int {
+    if (visited.contains(node_number)) {
+      return MMDB_SUCCESS;
+    }
+    TENZIR_ERROR(node_number);
+    visited.emplace(node_number);
+    switch (type) {
+      case MMDB_RECORD_TYPE_SEARCH_NODE: {
+        MMDB_search_node_s search_node{};
+        int status = MMDB_read_node(&*mmdb_, node_number, &search_node);
+        if (status != MMDB_SUCCESS) {
+          return status;
+        }
+        status = dump_recurse(output, search_node.left_record,
+                              search_node.left_record_type,
+                              &search_node.left_record_entry, visited);
+        if (status != MMDB_SUCCESS) {
+          return status;
+        }
+        status = dump_recurse(output, search_node.right_record,
+                              search_node.right_record_type,
+                              &search_node.right_record_entry, visited);
+        if (status != MMDB_SUCCESS) {
+          return status;
+        }
+        break;
+      }
+      case MMDB_RECORD_TYPE_EMPTY: {
+        // Stop search
+        break;
+      }
+      case MMDB_RECORD_TYPE_DATA: {
+        TENZIR_ASSERT(entry != nullptr);
+        MMDB_entry_data_list_s* entry_data_list = nullptr;
+        int status = MMDB_get_entry_data_list(entry, &entry_data_list);
+        TENZIR_ASSERT(status == MMDB_SUCCESS);
+        auto free_entry_data_list = caf::detail::make_scope_guard([&] {
+          if (entry_data_list) {
+            MMDB_free_entry_data_list(entry_data_list);
+          }
+        });
+        entry_data_list_to_list(entry_data_list, &status, output);
+        if (status != MMDB_SUCCESS) {
+          return status;
+        }
+        break;
+      }
+      case MMDB_RECORD_TYPE_INVALID: {
+        return MMDB_INVALID_DATA_ERROR;
+      }
+    }
+    return MMDB_SUCCESS;
+  }
 
-    auto l = list{};
-    auto output = record{};
-    if (search_node.left_record_type == MMDB_RECORD_TYPE_DATA) {
-      MMDB_entry_data_list_s* entry_data_list = nullptr;
-      MMDB_get_entry_data_list(&search_node.left_record_entry,
-                               &entry_data_list);
-      auto free_entry_data_list = caf::detail::make_scope_guard([&] {
-        if (entry_data_list) {
-          MMDB_free_entry_data_list(entry_data_list);
-        }
-      });
-      entry_data_list_to_record(entry_data_list, nullptr, output);
-    }
-    if (search_node.right_record_type == MMDB_RECORD_TYPE_DATA) {
-      MMDB_entry_data_list_s* entry_data_list = nullptr;
-      MMDB_get_entry_data_list(&search_node.right_record_entry,
-                               &entry_data_list);
-      auto free_entry_data_list = caf::detail::make_scope_guard([&] {
-        if (entry_data_list) {
-          MMDB_free_entry_data_list(entry_data_list);
-        }
-      });
-      entry_data_list_to_record(entry_data_list, nullptr, output);
-    }
-    l.emplace_back(output);
-    return l;
+  auto dump() const -> list override {
+    TENZIR_ASSERT(mmdb_);
+    auto output = list{};
+    dump_recurse(output, 0, MMDB_RECORD_TYPE_SEARCH_NODE, nullptr);
+    return output;
   }
 
   /// Updates the context.
