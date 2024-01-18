@@ -48,7 +48,7 @@ TEST(parse HTTP request item) {
     item = http::request_item::parse(str);
     REQUIRE(item);
     CHECK_EQUAL(item->key, "foo");
-    auto value = fmt::format("bar{}", sep);
+    auto value = fmt::format("bar\\{}", sep);
     CHECK_EQUAL(item->value, value);
   }
 }

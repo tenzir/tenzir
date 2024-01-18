@@ -290,7 +290,7 @@ TEST(escaped splitting) {
   CHECK_EQUAL(s[0], "a,b");
   CHECK_EQUAL(s[1], "c");
   CHECK_EQUAL(s[2], "");
-  // Regression found in the HTTP request item parser.
+  MESSAGE("escaped split with trailing, possibly escaped separators");
   str = "foo:=@bar";
   s = split_escaped(str, ":=@", "\\", 1);
   REQUIRE_EQUAL(s.size(), 2ull);
@@ -305,7 +305,49 @@ TEST(escaped splitting) {
   s = split_escaped(str, ":=@", "\\", 1);
   REQUIRE_EQUAL(s.size(), 2ull);
   CHECK_EQUAL(s[0], "foo");
+  CHECK_EQUAL(s[1], "bar\\:=@");
+  str = "foo:=@bar:=@:=@";
+  s = split_escaped(str, ":=@", "\\", 1);
+  REQUIRE_EQUAL(s.size(), 2ull);
+  CHECK_EQUAL(s[0], "foo");
+  CHECK_EQUAL(s[1], "bar:=@:=@");
+  str = "foo:=@bar\\:=@:=@";
+  s = split_escaped(str, ":=@", "\\", 1);
+  REQUIRE_EQUAL(s.size(), 2ull);
+  CHECK_EQUAL(s[0], "foo");
+  CHECK_EQUAL(s[1], "bar\\:=@:=@");
+  str = "foo:=@bar:=@\\:=@";
+  s = split_escaped(str, ":=@", "\\", 1);
+  REQUIRE_EQUAL(s.size(), 2ull);
+  CHECK_EQUAL(s[0], "foo");
+  CHECK_EQUAL(s[1], "bar:=@\\:=@");
+  str = "foo:=@bar\\:=@\\:=@";
+  s = split_escaped(str, ":=@", "\\", 1);
+  REQUIRE_EQUAL(s.size(), 2ull);
+  CHECK_EQUAL(s[0], "foo");
+  CHECK_EQUAL(s[1], "bar\\:=@\\:=@");
+  str = "foo:=@bar\\:=@\\:=@baz";
+  s = split_escaped(str, ":=@", "\\", 1);
+  REQUIRE_EQUAL(s.size(), 2ull);
+  CHECK_EQUAL(s[0], "foo");
+  CHECK_EQUAL(s[1], "bar\\:=@\\:=@baz");
+  str = "foo\\:=@bar:=@baz\\:=@\\:=@quux";
+  s = split_escaped(str, ":=@", "\\", 1);
+  REQUIRE_EQUAL(s.size(), 2ull);
+  CHECK_EQUAL(s[0], "foo:=@bar");
+  CHECK_EQUAL(s[1], "baz\\:=@\\:=@quux");
+  str = "foo:=@bar\\:=@:=@";
+  s = split_escaped(str, ":=@", "\\", 2);
+  REQUIRE_EQUAL(s.size(), 3ull);
+  CHECK_EQUAL(s[0], "foo");
   CHECK_EQUAL(s[1], "bar:=@");
+  CHECK_EQUAL(s[2], "");
+  str = "foo:=@bar\\:=@:=@baz";
+  s = split_escaped(str, ":=@", "\\", 2);
+  REQUIRE_EQUAL(s.size(), 3ull);
+  CHECK_EQUAL(s[0], "foo");
+  CHECK_EQUAL(s[1], "bar:=@");
+  CHECK_EQUAL(s[2], "baz");
 }
 
 TEST(join) {
