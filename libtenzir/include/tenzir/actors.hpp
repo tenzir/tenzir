@@ -454,8 +454,6 @@ using node_actor = typed_actor_fwd<
   auto(atom::config)->caf::result<record>,
   // Spawn a set of execution nodes for a given pipeline. Does not start the
   // execution nodes.
-  auto(diagnostic, std::string)->caf::result<void>,
-  auto(atom::get, atom::diagnostics)->caf::result<std::vector<record>>,
   auto(atom::spawn, operator_box, operator_type, receiver_actor<diagnostic>,
        receiver_actor<metric>, int index)
     ->caf::result<exec_node_actor>>::unwrap;
@@ -496,7 +494,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID(
     (std::vector<
       std::tuple<tenzir::exec_node_actor, tenzir::operator_type, std::string>>))
-  TENZIR_ADD_TYPE_ID((std::vector<tenzir::record>))
 
   TENZIR_ADD_TYPE_ID((tenzir::accountant_actor))
   TENZIR_ADD_TYPE_ID((tenzir::active_indexer_actor))

@@ -13,8 +13,10 @@
 #include "tenzir/detail/weak_handle.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/import_stream.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/operator_control_plane.hpp"
+#include "tenzir/series_builder.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/table_slice.hpp"
 
@@ -125,13 +127,33 @@ public:
   void emit(diagnostic diag) override {
     TENZIR_DEBUG("{} {} emits diagnostic: {:?}", *self_,
                  self_->state.op->name(), diag);
-    self_
-      ->request(self_->state.weak_node.lock(), caf::infinite, diag,
-                self_->state.op->name())
-      .then([]() {},
-            [](const caf::error& err) {
-              TENZIR_WARN("failed to store diagnostic: {}", err);
-            });
+    if (auto node = self_->state.weak_node.lock()) {
+      auto result = import_stream::make(self_, self_->state.weak_node.lock());
+      auto stream = std::move(*result);
+      auto b = series_builder{
+        type{"tenzir.diagnostics", record_type{}, {{"internal", ""}}}};
+      auto r = b.record();
+      r.field("ts", time::clock::now());
+      r.field("operator", self_->state.op->name());
+      r.field("message", diag.message);
+      r.field("severity", fmt::to_string(diag.severity));
+      auto notes = r.field("notes").list();
+      for (const auto& note : diag.notes) {
+        auto notes_r = notes.record();
+        notes_r.field("kind", fmt::to_string(note.kind));
+        notes_r.field("message", note.message);
+      }
+      auto annotations = r.field("annotations").list();
+      for (const auto& anno : diag.annotations) {
+        auto annos_r = annotations.record();
+        annos_r.field("primary", anno.primary);
+        annos_r.field("text", anno.text);
+        annos_r.field("source", fmt::format("{:?}", anno.source));
+      }
+      auto slice = b.finish_assert_one_slice();
+      stream.enqueue(std::move(slice));
+      stream.finish();
+    }
     if (diag.severity == severity::error) {
       self_->send(diagnostic_handler_, diag);
       self_->quit(std::move(diag).to_error());

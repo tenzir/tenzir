@@ -33,12 +33,6 @@ enum class detach_components {
   no,
 };
 
-struct stored_diagnostic {
-  diagnostic d;
-  std::string op;
-  time timestamp = time::clock::now();
-};
-
 /// State of the node actor.
 struct node_state {
   // -- remote command infrastructure ------------------------------------------
@@ -79,9 +73,6 @@ struct node_state {
 
   /// A pointer to the NODE actor handle.
   node_actor::pointer self = {};
-
-  /// All diagnostics that the node encounters during its runtime.
-  std::vector<stored_diagnostic> stored_diagnostics;
 
   // -- member types -----------------------------------------------------------
 

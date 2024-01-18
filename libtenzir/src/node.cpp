@@ -690,41 +690,6 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       TENZIR_ASSERT(caf::holds_alternative<record>(result));
       return std::move(caf::get<record>(result));
     },
-    [self](diagnostic d, std::string op_name) -> caf::result<void> {
-      self->state.stored_diagnostics.emplace_back(std::move(d),
-                                                  std::move(op_name));
-      return {};
-    },
-    [self](atom::get, atom::diagnostics) -> std::vector<record> {
-      std::vector<record> diags;
-      diags.reserve(self->state.stored_diagnostics.size());
-      for (const auto& sd : self->state.stored_diagnostics) {
-        auto r = record{};
-        r.emplace("ts", sd.timestamp);
-        r.emplace("operator", sd.op);
-        r.emplace("message", sd.d.message);
-        r.emplace("severity", fmt::to_string(sd.d.severity));
-        auto notes = list{};
-        for (const auto& note : sd.d.notes) {
-          auto notes_r = record{};
-          notes_r.emplace("kind", fmt::to_string(note.kind));
-          notes_r.emplace("message", note.message);
-          notes.emplace_back(std::move(notes_r));
-        }
-        r.emplace("notes", std::move(notes));
-        auto annotations = list{};
-        for (const auto& anno : sd.d.annotations) {
-          auto annos_r = record{};
-          annos_r.emplace("primary", anno.primary);
-          annos_r.emplace("text", anno.text);
-          annos_r.emplace("source", fmt::format("{:?}", anno.source));
-          annotations.emplace_back(annos_r);
-        }
-        r.emplace("annotations", annotations);
-        diags.emplace_back(std::move(r));
-      }
-      return diags;
-    },
     [self](atom::spawn, operator_box& box, operator_type input_type,
            const receiver_actor<diagnostic>& diagnostic_handler,
            const receiver_actor<metric>& metrics_handler,
