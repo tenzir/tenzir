@@ -30,46 +30,22 @@ public:
 
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    std::vector<std::pair<std::chrono::system_clock::time_point, diagnostic>>
-      stored_diagnostics;
-    TENZIR_ERROR("requesting");
+    std::vector<record> stored_diagnostics;
     auto blocking_self = caf::scoped_actor{ctrl.self().system()};
     ctrl.self()
       .request(ctrl.node(), caf::infinite, atom::get_v, atom::diagnostics_v)
       .await(
-        [&](std::vector<
-            std::pair<std::chrono::system_clock::time_point, diagnostic>>& v) {
-          TENZIR_ERROR("recieved {}", v.size());
+        [&](std::vector<record>& v) {
           stored_diagnostics = std::move(v);
-          TENZIR_ERROR("moved");
         },
         [](caf::error) {
           TENZIR_ERROR("ouch");
         });
     co_yield {};
-    TENZIR_ERROR("before builder");
     auto b = series_builder{type{record_type{}}};
     for (auto&& diag : stored_diagnostics) {
-      TENZIR_ERROR("diag");
-      auto r = b.record();
-      r.field("ts", diag.first);
-      r.field("message", diag.second.message);
-      r.field("severity", fmt::to_string(diag.second.severity));
-      auto notes = r.field("notes").list();
-      for (const auto& note : diag.second.notes) {
-        auto notes_r = notes.record();
-        notes_r.field("kind", fmt::to_string(note.kind));
-        notes_r.field("message", note.message);
-      }
-      auto annotations = r.field("annotations").list();
-      for (const auto& anno : diag.second.annotations) {
-        auto annos_r = annotations.record();
-        annos_r.field("primary", anno.primary);
-        annos_r.field("text", anno.text);
-        annos_r.field("source", fmt::format("{:?}", anno.source));
-      }
+      b.data(diag);
     }
-    TENZIR_ERROR("yielding");
     for (auto&& slice : b.finish_as_table_slice("tenzir.diagnostics"))
       co_yield std::move(slice);
   }

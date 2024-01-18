@@ -35,6 +35,7 @@ enum class detach_components {
 
 struct stored_diagnostic {
   diagnostic d;
+  std::string op;
   std::chrono::time_point<std::chrono::system_clock> timestamp
     = std::chrono::system_clock::now();
 };
