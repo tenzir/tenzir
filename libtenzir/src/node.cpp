@@ -690,6 +690,22 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       TENZIR_ASSERT(caf::holds_alternative<record>(result));
       return std::move(caf::get<record>(result));
     },
+    [self](diagnostic d) -> caf::result<atom::ok> {
+      self->state.stored_diagnostics.emplace_back(std::move(d));
+      TENZIR_ERROR("{}", self->state.stored_diagnostics.size());
+      return atom::ok_v;
+    },
+    [self](atom::get, atom::diagnostics)
+      -> std::vector<
+        std::pair<std::chrono::system_clock::time_point, diagnostic>> {
+      std::vector<std::pair<std::chrono::system_clock::time_point, diagnostic>>
+        diags;
+      diags.reserve(self->state.stored_diagnostics.size());
+      for (const auto& sd : self->state.stored_diagnostics) {
+        diags.emplace_back(sd.timestamp, sd.d);
+      }
+      return diags;
+    },
     [self](atom::spawn, operator_box& box, operator_type input_type,
            const receiver_actor<diagnostic>& diagnostic_handler,
            const receiver_actor<metric>& metrics_handler,

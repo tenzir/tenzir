@@ -33,6 +33,12 @@ enum class detach_components {
   no,
 };
 
+struct stored_diagnostic {
+  diagnostic d;
+  std::chrono::time_point<std::chrono::system_clock> timestamp
+    = std::chrono::system_clock::now();
+};
+
 /// State of the node actor.
 struct node_state {
   // -- remote command infrastructure ------------------------------------------
@@ -73,6 +79,8 @@ struct node_state {
 
   /// A pointer to the NODE actor handle.
   node_actor::pointer self = {};
+
+  std::vector<stored_diagnostic> stored_diagnostics;
 
   // -- member types -----------------------------------------------------------
 

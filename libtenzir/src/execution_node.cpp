@@ -125,6 +125,16 @@ public:
   void emit(diagnostic diag) override {
     TENZIR_DEBUG("{} {} emits diagnostic: {:?}", *self_,
                  self_->state.op->name(), diag);
+    TENZIR_ERROR("EMITTED");
+
+    self_->request(self_->state.weak_node.lock(), caf::infinite, diag)
+      .then(
+        [](atom::ok) {
+          TENZIR_ERROR("done");
+        },
+        [](caf::error) {
+          TENZIR_ERROR("not done :(");
+        });
     if (diag.severity == severity::error) {
       self_->send(diagnostic_handler_, diag);
       self_->quit(std::move(diag).to_error());
