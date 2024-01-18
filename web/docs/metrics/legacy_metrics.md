@@ -5,8 +5,92 @@ The legacy metrics system will be removed soon.
 :::
 
 Tenzir collects various metrics during execution. This reference describes what
-metrics are available and what they mean. We describe how to [collect
-metrics](setup-guides/collect-metrics.md) in the corresponding user guide.
+metrics are available and what they mean.
+
+## Enable metrics collection
+
+Set the key `tenzir.enable-metrics` to `true` in order to collect metrics:
+
+```yaml
+tenzir:
+  enable-metrics: true
+```
+
+Alternatively, pass the corresponding command-line option when starting a Tenzir
+node:
+
+```bash
+tenzir-node --enable-metrics
+```
+
+## Write metrics to a file or UNIX domain socket
+
+Tenzir also supports writing metrics to a file or UNIX domain socket (UDS). You
+can enable them individually or at the same time:
+
+```yaml
+tenzir:
+  metrics:
+    # Configures if and where metrics should be written to a file.
+    file-sink:
+      enable: false
+      real-time: false
+      path: /tmp/tenzir-metrics.log
+    # Configures if and where metrics should be written to a socket.
+    uds-sink:
+      enable: false
+      real-time: false
+      path: /tmp/tenzir-metrics.sock
+      type: datagram # possible values are "stream" or "datagram"
+    # Configures if and where metrics should be written to Tenzir itself.
+    self-sink:
+      enable: false
+```
+
+Both the file and UDS sinks write metrics as NDJSON and inline the `metadata`
+key-value pairs into the top-level object. Tenzir buffers metrics for these
+sinks to batch I/O operations. To enable real-time metrics reporting, set the
+options `tenzir.metrics.file-sink.real-time` or
+`tenzir.metrics.uds-sink.real-time` respectively in your configuration file.
+
+## Query metrics via pipelines
+
+The self-sink routes metrics as events into Tenzir's internal storage engine,
+allowing you to work with metrics using Tenzir's pipelines. The schema for the
+self-sink is slightly different, with the key being embedded in the schema name:
+
+```yaml
+tenzir.metrics.<key>:
+  record:
+    - ts: timestamp
+    - version: string
+    - actor: string
+    - key: string
+    - value: string
+    - <metadata...>
+```
+
+Here's an example that shows the start up latency of Tenzir's stores,
+grouped into 10 second buckets and looking at the minimum and the maximum
+latency, respectively, for all buckets.
+
+```bash
+tenzir '
+  export
+  | where #schema == "tenzir.metrics.passive-store.init.runtime"
+  | select ts, value
+  | summarize min(value), max(value) by ts resolution 10s
+  '
+```
+
+```json
+{"ts": "2023-02-28T17:21:50.000000", "min(value)": 0.218875, "max(value)": 107.280125}
+{"ts": "2023-02-28T17:20:00.000000", "min(value)": 0.549292, "max(value)": 0.991235}
+// ...
+```
+
+
+## Reference
 
 For the reference table below, these symbols indicate presense of additional
 metadata:
@@ -29,7 +113,7 @@ Generally, counts are reset after a component sends out a telemetry report.
 E.g., the total number of invalid lines the JSON parser encountered is reflected
 by the sum of all `json-reader.invalid-line` events.
 
-## Reference
+### Table of Metrics
 
 |Key|Description|Unit|Metadata|
 |-:|-|-|-|
