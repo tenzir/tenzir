@@ -47,6 +47,11 @@ auto inspect(Inspector& f, severity& x) -> bool {
 }
 
 struct diagnostic_annotation {
+  diagnostic_annotation() = default;
+
+  explicit diagnostic_annotation(bool primary, std::string text,
+                                 location source);
+
   /// True if the source represents the underlying reason for the outer
   /// diagnostic, false if it is only related to it.
   bool primary{};
@@ -86,6 +91,10 @@ auto inspect(Inspector& f, diagnostic_note_kind& x) -> bool {
 
 /// Additional information related to a parent diagnostic.
 struct diagnostic_note {
+  diagnostic_note() = default;
+
+  explicit diagnostic_note(diagnostic_note_kind kind, std::string message);
+
   /// The type of this note.
   diagnostic_note_kind kind;
 
@@ -139,6 +148,15 @@ struct [[nodiscard]] diagnostic {
   static auto warning(caf::error err) -> diagnostic_builder;
 
   auto modify() && -> diagnostic_builder;
+
+  /// Wraps the diagnostic in an error object.
+  auto to_error() const& -> caf::error {
+    return caf::make_error(ec::diagnostic, *this);
+  }
+
+  auto to_error() && -> caf::error {
+    return caf::make_error(ec::diagnostic, std::move(*this));
+  }
 
   template <class Inspector>
   friend auto inspect(Inspector& f, diagnostic& x) -> bool {
@@ -326,7 +344,14 @@ private:
 
 enum class color_diagnostics { no, yes };
 
-auto make_diagnostic_printer(std::string filename, std::string source,
+struct location_origin {
+  std::string filename;
+  std::string source;
+};
+
+// TODO: The optionality of `origin` is a hack until we make the necessary info
+// available in all places where we need it.
+auto make_diagnostic_printer(std::optional<location_origin> origin,
                              color_diagnostics color, std::ostream& stream)
   -> std::unique_ptr<diagnostic_handler>;
 

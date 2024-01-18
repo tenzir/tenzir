@@ -91,8 +91,10 @@ enum class ec : uint8_t {
   system_error,
   /// An breaking version change.
   breaking_change,
-  /// An error during serialization
+  /// An error during serialization.
   serialization_error,
+  /// The error wraps a diagnostic.
+  diagnostic,
   /// No error; number of error codes.
   ec_count,
 };

@@ -11,6 +11,7 @@
 #include "tenzir/detail/string.hpp"
 #include "tenzir/logger.hpp"
 
+#include <boost/algorithm/string.hpp>
 #include <fmt/color.h>
 
 #include <iostream>
@@ -19,6 +20,16 @@
 namespace tenzir {
 
 namespace {
+
+void trim_and_truncate(std::string& str) {
+  using namespace std::string_view_literals;
+  boost::trim(str);
+  if (str.size() > 2000) {
+    auto prefix = std::string_view{str.begin(), str.begin() + 75};
+    str = fmt::format("{} ... (truncated {} bytes)", prefix,
+                      str.length() - prefix.length());
+  }
+}
 
 struct colors {
   static auto make(color_diagnostics color) -> colors {
@@ -49,13 +60,14 @@ struct colors {
 
 class diagnostic_printer final : public diagnostic_handler, private colors {
 public:
-  diagnostic_printer(std::string filename, std::string source,
+  diagnostic_printer(std::optional<location_origin> origin,
                      color_diagnostics color, std::ostream& stream)
     : colors{colors::make(color)},
-      storage_{std::move(source)},
-      lines_{detail::split(storage_, "\n")},
+      storage_{origin ? std::move(origin->source) : ""},
+      lines_{origin ? detail::split(storage_, "\n")
+                    : std::vector<std::string_view>{}},
       stream_{stream},
-      filename_{std::move(filename)} {
+      filename_{origin ? std::move(origin->filename) : ""} {
   }
 
   void emit(diagnostic diag) override {
@@ -65,11 +77,19 @@ public:
                diag.severity, uncolor, diag.message, reset);
     auto indent_width = size_t{0};
     for (auto& annotation : diag.annotations) {
+      if (lines_.empty()) {
+        // TODO: This is a hack for the case where we don't have the information.
+        break;
+      }
       auto [line, col] = line_col_indices(annotation.source.begin);
       indent_width = std::max(indent_width, std::to_string(line).size());
     }
     auto indent = std::string(indent_width, ' ');
     for (auto& annotation : diag.annotations) {
+      if (lines_.empty()) {
+        // TODO: This is a hack for the case where we don't have the information.
+        break;
+      }
       if (!annotation.source) {
         TENZIR_VERBOSE("annotation does not have source: {:?}", annotation);
         continue;
@@ -137,7 +157,7 @@ private:
     auto line = size_t{0};
     auto col = offset;
     while (true) {
-      TENZIR_ASSERT(line < lines_.size());
+      TENZIR_ASSERT_CHEAP(line < lines_.size());
       if (col <= lines_[line].size()) {
         break;
       }
@@ -156,11 +176,21 @@ private:
 
 } // namespace
 
-auto make_diagnostic_printer(std::string filename, std::string source,
+diagnostic_annotation::diagnostic_annotation(bool primary, std::string text,
+                                             location source)
+  : primary{primary}, text{std::move(text)}, source{std::move(source)} {
+  trim_and_truncate(this->text);
+}
+
+diagnostic_note::diagnostic_note(diagnostic_note_kind kind, std::string message)
+  : kind{kind}, message{std::move(message)} {
+  trim_and_truncate(this->message);
+}
+
+auto make_diagnostic_printer(std::optional<location_origin> origin,
                              color_diagnostics color, std::ostream& stream)
   -> std::unique_ptr<diagnostic_handler> {
-  return std::make_unique<diagnostic_printer>(std::move(filename),
-                                              std::move(source), color, stream);
+  return std::make_unique<diagnostic_printer>(std::move(origin), color, stream);
 }
 
 auto diagnostic::builder(enum severity s, caf::error err)

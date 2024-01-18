@@ -36,8 +36,8 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   TENZIR_WARN(
     "`tenzir-ctl import` is deprecated, use `tenzir '... | import'` instead");
   if (inv.name() == "json" || inv.name() == "suricata") {
-    auto printer = make_diagnostic_printer("<input>", "",
-                                           color_diagnostics::yes, std::cerr);
+    auto printer = make_diagnostic_printer(std::nullopt, color_diagnostics::yes,
+                                           std::cerr);
     auto pipe = fmt::format("from stdin read {}", inv.name());
     if (inv.name() == "json") {
       if (auto const* selector = caf::get_if<std::string>(
@@ -60,8 +60,8 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
       return caf::make_message(ec::silent);
     }
     pipe += "\n| import\n";
-    printer = make_diagnostic_printer("<input>", pipe, color_diagnostics::yes,
-                                      std::cerr);
+    printer = make_diagnostic_printer(location_origin{"<input>", pipe},
+                                      color_diagnostics::yes, std::cerr);
     auto result = exec_pipeline(pipe, std::move(printer), exec_config{}, sys);
     if (not result) {
       return caf::make_message(result.error());

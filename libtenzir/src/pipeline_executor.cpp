@@ -13,6 +13,7 @@
 #include "tenzir/connect_to_node.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/error.hpp"
 #include "tenzir/execution_node.hpp"
 #include "tenzir/pipeline.hpp"
 
@@ -41,6 +42,12 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
     }
     untyped_exec_nodes.push_back(caf::actor_cast<caf::actor>(node));
   }
+  self->link_to(exec_nodes.back());
+  self->set_exit_handler([this](caf::exit_msg& msg) {
+    TENZIR_DEBUG("{} received exit from all execution nodes: {}", *self,
+                 msg.reason);
+    self->quit(std::move(msg.reason));
+  });
   TENZIR_DEBUG("{} successfully spawned {} execution nodes", *self,
                untyped_exec_nodes.size());
   untyped_exec_nodes.pop_back();
@@ -54,11 +61,10 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
       [this]() mutable {
         finish_start();
       },
-      [this](caf::error& err) mutable {
-        TENZIR_VERBOSE("{} aborts start because execution node could not be "
-                       "started: {}",
-                       *self, err);
-        abort_start(std::move(err));
+      [this](const caf::error& err) mutable {
+        abort_start(add_context(
+          err, "{} aborts start because an execution node failed to start",
+          *self));
       });
 }
 
@@ -107,15 +113,13 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
         .then(
           [=, this](exec_node_actor& exec_node) {
             TENZIR_VERBOSE("{} spawned {} remotely", *self, description);
-            self->monitor<caf::message_priority::normal>(exec_node);
-            self->link_to(exec_node);
+            self->monitor(exec_node);
             exec_nodes[index] = std::move(exec_node);
             start_nodes_if_all_spawned();
           },
-          [=, this](caf::error& err) {
-            TENZIR_DEBUG("{} failed to spawn {} remotely: {}", *self,
-                         description, err);
-            abort_start(std::move(err));
+          [=, this](const caf::error& err) {
+            abort_start(add_context(err, "{} failed to spawn {} remotely",
+                                    *self, description));
           });
       input_type = *output_type;
     } else {
@@ -130,8 +134,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
       }
       TENZIR_DEBUG("{} spawned {} locally", *self, description);
       std::tie(previous, input_type) = std::move(*spawn_result);
-      self->monitor<caf::message_priority::normal>(previous);
-      self->link_to(previous);
+      self->monitor(previous);
       exec_nodes.push_back(previous);
     }
     ++op_index;
@@ -152,22 +155,21 @@ void pipeline_executor_state::abort_start(diagnostic reason) {
       [this]() {
         // We already delivered the error as a diagnostic.
         TENZIR_DEBUG("{} delivered diagnostic and shuts down silently", *self);
-        start_rp.deliver(ec::silent);
-        self->quit(ec::silent);
+        start_rp.deliver(ec::diagnostic);
+        self->quit(ec::diagnostic);
       },
-      [this](caf::error& error) {
-        TENZIR_WARN("{} could not send start diagnostic: {}", *self, error);
+      [this](const caf::error& error) {
         start_rp.deliver(
-          add_context(error, "{} could not deliver diagnostic", *self));
-        self->quit(ec::silent);
+          add_context(error, "{} failed to deliver diagnostic", *self));
+        self->quit(ec::diagnostic);
       });
 }
 
 void pipeline_executor_state::abort_start(caf::error reason) {
-  if (reason == ec::silent) {
+  if (reason == ec::diagnostic) {
     TENZIR_DEBUG("{} delivers silent start abort", *self);
-    start_rp.deliver(ec::silent);
-    self->quit(ec::silent);
+    start_rp.deliver(ec::diagnostic);
+    self->quit(ec::diagnostic);
     return;
   }
   abort_start(
@@ -242,8 +244,8 @@ auto pipeline_executor_state::pause() -> caf::result<void> {
       [rp]() mutable {
         rp.deliver();
       },
-      [rp](caf::error& err) mutable {
-        rp.deliver(std::move(err));
+      [rp](const caf::error& err) mutable {
+        rp.deliver(add_context(err, "failed to pause exec-node"));
       });
   return rp;
 }
@@ -257,8 +259,8 @@ auto pipeline_executor_state::resume() -> caf::result<void> {
       [rp]() mutable {
         rp.deliver();
       },
-      [rp](caf::error& err) mutable {
-        rp.deliver(std::move(err));
+      [rp](const caf::error& err) mutable {
+        rp.deliver(add_context(err, "failed to resume exec-node"));
       });
   return rp;
 }
@@ -271,37 +273,6 @@ auto pipeline_executor(
   TENZIR_DEBUG("{} was created", *self);
   self->state.self = self;
   self->state.node = std::move(node);
-  self->set_down_handler([self](caf::down_msg& msg) {
-    const auto exec_node
-      = std::find_if(self->state.exec_nodes.begin(),
-                     self->state.exec_nodes.end(), [&](const auto& exec_node) {
-                       return exec_node.address() == msg.source;
-                     });
-    if (exec_node != self->state.exec_nodes.end()) {
-      TENZIR_DEBUG("{} received down from execution node {}/{}: {}", *self,
-                   exec_node - self->state.exec_nodes.begin() + 1,
-                   self->state.exec_nodes.size(), msg.reason);
-      std::for_each(
-        self->state.exec_nodes.begin(), exec_node + 1, [&](auto& exec_node) {
-          if (exec_node) {
-            self->unlink_from(exec_node);
-            self->send_exit(exec_node, caf::exit_reason::user_shutdown);
-            exec_node = nullptr;
-          }
-        });
-    }
-    const auto all_done
-      = std::all_of(self->state.exec_nodes.begin(),
-                    self->state.exec_nodes.end(), [](const auto& exec_node) {
-                      return exec_node == nullptr;
-                    });
-    if (msg.reason and msg.reason != caf::exit_reason::unreachable
-        and msg.reason != caf::exit_reason::user_shutdown) {
-      self->quit(std::move(msg.reason));
-    } else if (all_done) {
-      self->quit();
-    }
-  });
   self->state.pipe = std::move(pipe);
   self->state.diagnostics = std::move(diagnostics);
   self->state.metrics = std::move(metrics);
@@ -309,6 +280,16 @@ auto pipeline_executor(
     = caf::get_or(self->system().config(), "tenzir.allow-unsafe-pipelines",
                   self->state.allow_unsafe_pipelines);
   self->state.has_terminal = has_terminal;
+  self->set_down_handler([self](caf::down_msg& msg) {
+    const auto exec_node
+      = std::find_if(self->state.exec_nodes.begin(),
+                     self->state.exec_nodes.end(), [&](const auto& exec_node) {
+                       return msg.source == exec_node.address();
+                     });
+    if (exec_node != self->state.exec_nodes.end()) {
+      self->state.exec_nodes.erase(exec_node);
+    }
+  });
   return {
     [self](atom::start) -> caf::result<void> {
       return self->state.start();

@@ -457,7 +457,7 @@ guide](https://github.com/cea-sec/openwec/blob/main/doc/getting_started.md) for
 setup instructions.
 
 Configure JSON over TCP as
-[ouput](https://github.com/cea-sec/openwec/blob/main/doc/outputs.md).
+[output](https://github.com/cea-sec/openwec/blob/main/doc/outputs.md).
 
 ### Run a Tenzir pipeline
 

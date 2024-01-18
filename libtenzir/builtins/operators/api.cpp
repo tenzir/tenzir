@@ -50,7 +50,7 @@ public:
     if (response->is_error()) {
       diagnostic::error("request failed with code {}", response->code())
         .note("body: {}", response->body())
-        .note("detail: {}", response->error_detail())
+        .hint("{}", response->error_detail())
         .docs("https://docs.tenzir.com/operators/api")
         .emit(ctrl.diagnostics());
       co_return;

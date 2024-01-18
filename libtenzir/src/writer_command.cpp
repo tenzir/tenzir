@@ -35,7 +35,7 @@ command::fun make_writer_command(std::string_view format) {
                 "| ...' instead`");
     TENZIR_TRACE_SCOPE("{}", inv);
     if (format == "json") {
-      auto printer = make_diagnostic_printer("<input>", "",
+      auto printer = make_diagnostic_printer(std::nullopt,
                                              color_diagnostics::yes, std::cerr);
       auto const* json_opts = caf::get_if<caf::config_value::dictionary>(
         &inv.options, "tenzir.export.json");
@@ -79,8 +79,8 @@ command::fun make_writer_command(std::string_view format) {
           }
         }
       }
-      printer = make_diagnostic_printer("<input>", pipe, color_diagnostics::yes,
-                                        std::cerr);
+      printer = make_diagnostic_printer(location_origin{"<input>", pipe},
+                                        color_diagnostics::yes, std::cerr);
       auto result = exec_pipeline(pipe, std::move(printer), exec_config{}, sys);
       if (not result) {
         return make_message(result.error());
