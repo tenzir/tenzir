@@ -743,7 +743,7 @@ function (TenzirRegisterPlugin)
       COMMAND
         ${CMAKE_COMMAND} -E env
         PATH="${TENZIR_PATH}:\$\$PATH:${TENZIR_PATH}/../share/tenzir/functional-test/bats/bin"
-        bats "-T" "${CMAKE_CURRENT_SOURCE_DIR}/functional-test/tests"
+        bats "-T" "-x" "${CMAKE_CURRENT_SOURCE_DIR}/functional-test/tests"
       COMMENT "Executing ${PLUGIN_TARGET} functional tests..."
       USES_TERMINAL)
     unset(TENZIR_PATH)
