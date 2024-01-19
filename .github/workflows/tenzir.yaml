@@ -100,8 +100,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
-          plugins_sha=$(git -C contrib/tenzir-plugins git rev-parse HEAD)
-          plugins_main_sha=$(git -C contrib/tenzir-plugins git rev-parse main)
+          plugins_sha=$(git -C contrib/tenzir-plugins rev-parse HEAD)
+          plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse origin/main)
           if [ "$plugins_sha" != "$plugins_main_sha" ]; then
             plugins_branch=$(git -C contrib/tenzir-plugins symbolic-ref --short HEAD)
             pr_number=$(gh pr search --head "$branch" --json number -q .[0].number)
