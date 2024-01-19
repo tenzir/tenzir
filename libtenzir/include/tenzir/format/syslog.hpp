@@ -286,10 +286,14 @@ struct legacy_message_timestamp_parser
       const auto p = integral_parser<uint16_t, 2, 1>{}.with([](uint16_t day) {
         return day <= 31;
       });
-      auto sv = std::string_view{day};
-      const auto* f = sv.begin();
-      const auto* const l = sv.end();
-      return p(f, l, unused) && f == l;
+      return p(day, unused);
+    };
+    const auto is_year = [&](const std::string& year) -> bool {
+      const auto p = integral_parser<uint16_t, 4>{}.with([](uint16_t year) {
+        // Reasonable-ish assumption for a year
+        return year >= 1900 && year <= 2100;
+      });
+      return p(year, unused);
     };
     const auto is_time = [&](const std::string& time) -> bool {
       const auto hour_parser
@@ -308,12 +312,13 @@ struct legacy_message_timestamp_parser
       return p(f, l, unused) && f == l;
     };
     auto p = word.with(is_month) >> ws >> word.with(is_day) >> ws
-             >> word.with(is_time);
+             >> ~(word.with(is_year) >> ws) >> word.with(is_time);
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);
     } else {
-      std::array<std::string, 5> elems{};
-      if (not p(f, l, elems[0], elems[1], elems[2], elems[3], elems[4]))
+      std::array<std::string, 6> elems{};
+      if (not p(f, l, elems[0], elems[1], elems[2], elems[3], elems[4],
+                elems[5]))
         return false;
       x = fmt::to_string(fmt::join(elems, ""));
       return true;
