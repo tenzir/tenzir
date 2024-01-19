@@ -173,7 +173,7 @@ public:
   }
 
   template <class... Ts>
-  requires (sizeof...(Ts) != 1)
+    requires(sizeof...(Ts) != 1)
   auto operator()(Ts&... xs) noexcept -> result_type {
     return ((*this)(xs) && ...);
   }
@@ -228,6 +228,10 @@ dcso_bloom_filter::dcso_bloom_filter(uint64_t n, double p)
 
 auto dcso_bloom_filter::parameters() const -> const bloom_filter_parameters& {
   return params_;
+}
+
+auto dcso_bloom_filter::num_elements() const -> uint64_t {
+  return num_elements_;
 }
 
 /// Access the attached data.

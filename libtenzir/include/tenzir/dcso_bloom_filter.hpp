@@ -69,6 +69,9 @@ public:
   /// Returns the Bloom filter parameters.
   auto parameters() const -> const bloom_filter_parameters&;
 
+  /// Retrieves an estimate the number of elements in the Bloom filter.
+  auto num_elements() const -> uint64_t;
+
   /// Access the attached data.
   auto data() const -> const std::vector<std::byte>&;
 
