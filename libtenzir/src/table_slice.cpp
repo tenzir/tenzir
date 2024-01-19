@@ -775,6 +775,9 @@ uint64_t count_matching(const table_slice& slice, const expression& expr,
 }
 
 table_slice resolve_enumerations(table_slice slice) {
+  if (slice.rows() == 0) {
+    return slice;
+  }
   auto type = caf::get<record_type>(slice.schema());
   // Resolve enumeration types, if there are any.
   auto transformations = std::vector<indexed_transformation>{};

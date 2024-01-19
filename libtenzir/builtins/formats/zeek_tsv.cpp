@@ -801,8 +801,14 @@ public:
                                 args_.empty_field.value_or("(empty)"),
                                 args_.unset_field.value_or("-"),
                                 args_.disable_timestamp_tags};
-    return printer_instance::make([printer = std::move(printer)](
+    auto last_schema = std::make_shared<type>();
+    return printer_instance::make([last_schema = last_schema,
+                                   printer = std::move(printer)](
                                     table_slice slice) -> generator<chunk_ptr> {
+      if (slice.rows() == 0) {
+        co_yield {};
+        co_return;
+      }
       auto buffer = std::vector<char>{};
       auto out_iter = std::back_inserter(buffer);
       auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
@@ -810,10 +816,14 @@ public:
       auto input_type = caf::get<record_type>(input_schema);
       auto array
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
-      auto first = true;
+      auto should_print_close = static_cast<bool>(*last_schema);
+      auto first = std::exchange(*last_schema, input_schema) != input_schema;
       for (const auto& row : values(input_type, *array)) {
         TENZIR_ASSERT_CHEAP(row);
         if (first) {
+          if (should_print_close) {
+            printer.print_closing_line(out_iter);
+          }
           printer.print_header(out_iter, input_schema);
           first = false;
           out_iter = fmt::format_to(out_iter, "\n");
@@ -822,7 +832,6 @@ public:
         TENZIR_ASSERT_CHEAP(ok);
         out_iter = fmt::format_to(out_iter, "\n");
       }
-      printer.print_closing_line(out_iter);
       auto chunk = chunk::make(std::move(buffer),
                                {.content_type = "application/x-zeek"});
       co_yield std::move(chunk);
@@ -830,7 +839,7 @@ public:
   }
 
   auto allows_joining() const -> bool override {
-    return false;
+    return true;
   }
 
   auto name() const -> std::string override {
