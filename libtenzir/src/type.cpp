@@ -940,10 +940,12 @@ auto type::to_definition2(std::optional<std::string> field_name,
       parent_path.push_back(-1);
       auto result = self.value_type().to_definition2(
         field_name.value_or(std::string{name()}), parent_path);
-      result.emplace(
-        "kind", fmt::format("list<{}>", caf::get<std::string>(result["kind"])));
-      result.emplace(
-        "type", fmt::format("list<{}>", caf::get<std::string>(result["type"])));
+      result["kind"]
+        = fmt::format("list<{}>", caf::get<std::string>(result["kind"]));
+      result["type"]
+        = name().empty()
+            ? fmt::format("list<{}>", caf::get<std::string>(result["type"]))
+            : std::string{name()};
       return result;
     },
     [&](const record_type& self) noexcept -> record {
