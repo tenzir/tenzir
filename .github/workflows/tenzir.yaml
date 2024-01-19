@@ -115,7 +115,7 @@ jobs:
             # git add contrib/tenzir-plugins
             git config --global user.name 'CI Bot'
             git config --global user.email 'tenzir-ci-app@users.noreply.github.com'
-            git set-url origin https://x-access-token:$GITHUB_APP_TOKEN@github.com/tenzir/tenzir.git
+            git remote set-url origin https://x-access-token:$GITHUB_APP_TOKEN@github.com/tenzir/tenzir.git
             git checkout topic/fake-main
             echo "test" >> dummy-file
             git add dummy-file
