@@ -169,27 +169,6 @@ tenzir:
   # Query for aging out obsolete data.
   aging-query:
 
-  # Keep track of performance metrics.
-  enable-metrics: false
-
-  # The configuration of the metrics reporting component.
-  metrics:
-    # Configures if and how metrics should be ingested back into Tenzir.
-    self-sink:
-      enable: true
-      slice-size: 128
-    # Configures if and where metrics should be written to a file.
-    file-sink:
-      enable: false
-      real-time: false
-      path: /tmp/tenzir-metrics.log
-    # Configures if and where metrics should be written to a socket.
-    uds-sink:
-      enable: false
-      real-time: false
-      path: /tmp/tenzir-metrics.sock
-      type: datagram
-
   # The `index` key is used to adjust the false-positive rate of
   # the first-level lookup data structures (called synopses) in the
   # catalog. The lower the false-positive rate the more space will be
@@ -246,6 +225,27 @@ tenzir:
     # Must be the absolute path to an executable file, which will get passed
     # the database directory as its first and only argument.
     #disk-budget-check-binary: /opt/tenzir/libexec/tenzir-df-percent.sh
+
+  # User-defined operators.
+  operators:
+    # The Zeek operator is an example that takes raw bytes in the form of a
+    # PCAP and then parses Zeek's output via the `zeek-json` format to generate
+    # a stream of events.
+    zeek:
+      shell "zeek -r - LogAscii::output_to_stdout=T
+             JSONStreaming::disable_default_logs=T
+             JSONStreaming::enable_log_rotation=F
+             json-streaming-logs"
+      | read zeek-json
+    # The Suricata operator is analogous to the above Zeek example, with the
+    # difference that we are using Suricata. The commmand line configures
+    # Suricata such that it reads PCAP on stdin and produces EVE JSON logs on
+    # stdout, which we then parse with the `suricata` format.
+    suricata:
+     shell "suricata -r /dev/stdin
+            --set outputs.1.eve-log.filename=/dev/stdout
+            --set logging.outputs.0.console.enabled=no"
+     | read suricata
 
 # The below settings are internal to CAF, and aren't checked by Tenzir directly.
 # Please be careful when changing these options. Note that some CAF options may
@@ -346,24 +346,3 @@ caf:
 
       # List of excluded actors from run-time metrics.
       excludes: []
-
-  # User-defined operators.
-  operators:
-    # The Zeek operator is an example that takes raw bytes in the form of a
-    # PCAP and then parses Zeek's output via the `zeek-json` format to generate
-    # a stream of events.
-    zeek:
-      shell "zeek -r - LogAscii::output_to_stdout=T
-             JSONStreaming::disable_default_logs=T
-             JSONStreaming::enable_log_rotation=F
-             json-streaming-logs"
-      | read zeek-json
-    # The Suricata operator is analogous to the above Zeek example, with the
-    # difference that we are using Suricata. The commmand line configures
-    # Suricata such that it reads PCAP on stdin and produces EVE JSON logs on
-    # stdout, which we then parse with the `suricata` format.
-    suricata:
-     shell "suricata -r /dev/stdin
-            --set outputs.1.eve-log.filename=/dev/stdout
-            --set logging.outputs.0.console.enabled=no"
-     | read suricata
