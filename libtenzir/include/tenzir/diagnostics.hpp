@@ -220,8 +220,10 @@ public:
   }
 
   auto note(std::string str) && -> diagnostic_builder {
-    result_.notes.push_back(
-      diagnostic_note{diagnostic_note_kind::note, std::move(str)});
+    if (not str.empty()) {
+      result_.notes.push_back(
+        diagnostic_note{diagnostic_note_kind::note, std::move(str)});
+    }
     return std::move(*this);
   }
 
@@ -234,8 +236,10 @@ public:
   }
 
   auto docs(std::string str) && -> diagnostic_builder {
-    result_.notes.push_back(
-      diagnostic_note{diagnostic_note_kind::docs, std::move(str)});
+    if (not str.empty()) {
+      result_.notes.push_back(
+        diagnostic_note{diagnostic_note_kind::docs, std::move(str)});
+    }
     return std::move(*this);
   }
 
@@ -248,8 +252,10 @@ public:
   }
 
   auto usage(std::string str) && -> diagnostic_builder {
-    result_.notes.push_back(
-      diagnostic_note{diagnostic_note_kind::usage, std::move(str)});
+    if (not str.empty()) {
+      result_.notes.push_back(
+        diagnostic_note{diagnostic_note_kind::usage, std::move(str)});
+    }
     return std::move(*this);
   }
 
@@ -262,8 +268,10 @@ public:
   }
 
   auto hint(std::string str) && -> diagnostic_builder {
-    result_.notes.push_back(
-      diagnostic_note{diagnostic_note_kind::hint, std::move(str)});
+    if (not str.empty()) {
+      result_.notes.push_back(
+        diagnostic_note{diagnostic_note_kind::hint, std::move(str)});
+    }
     return std::move(*this);
   }
 
