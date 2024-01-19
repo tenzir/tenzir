@@ -39,6 +39,7 @@ struct xsv_options {
   std::string null_value = {};
   bool allow_comments = {};
   std::optional<std::string> header = {};
+  bool no_header = {};
 
   static auto try_parse(parser_interface& p, std::string name, bool is_parser)
     -> xsv_options {
@@ -49,10 +50,12 @@ struct xsv_options {
     auto list_sep_str = located<std::string>{};
     auto null_value = located<std::string>{};
     auto header = std::optional<std::string>{};
+    auto no_header = bool{};
     if (is_parser) {
       parser.add("--allow-comments", allow_comments);
       parser.add("--header", header, "<header>");
-    }
+    } else
+      parser.add("--no-header", no_header);
     parser.add(field_sep_str, "<field-sep>");
     parser.add(list_sep_str, "<list-sep>");
     parser.add(null_value, "<null-value>");
@@ -97,6 +100,7 @@ struct xsv_options {
       .null_value = std::move(null_value.inner),
       .allow_comments = allow_comments,
       .header = std::move(header),
+      .no_header = no_header,
     };
   }
 
@@ -104,7 +108,8 @@ struct xsv_options {
     return f.object(x).fields(
       f.field("name", x.name), f.field("field_sep", x.field_sep),
       f.field("list_sep", x.list_sep), f.field("null_value", x.null_value),
-      f.field("allow_comments", x.allow_comments), f.field("header", x.header));
+      f.field("allow_comments", x.allow_comments), f.field("header", x.header),
+      f.field("no_header", x.no_header));
   }
 };
 
@@ -431,31 +436,31 @@ public:
     auto printer
       = xsv_printer_impl{args_.field_sep, args_.list_sep, args_.null_value};
     auto metadata = chunk_metadata{.content_type = content_type()};
-    return printer_instance::make([printer = std::move(printer),
-                                   meta = std::move(metadata)](
-                                    table_slice slice) -> generator<chunk_ptr> {
-      auto buffer = std::vector<char>{};
-      auto out_iter = std::back_inserter(buffer);
-      auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
-      auto input_schema = resolved_slice.schema();
-      auto input_type = caf::get<record_type>(input_schema);
-      auto array
-        = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
-      auto first = true;
-      for (const auto& row : values(input_type, *array)) {
-        TENZIR_ASSERT_CHEAP(row);
-        if (first) {
-          printer.print_header(out_iter, *row);
-          first = false;
+    return printer_instance::make(
+      [printer = std::move(printer), meta = std::move(metadata),
+       no_header = args_.no_header](table_slice slice) -> generator<chunk_ptr> {
+        auto buffer = std::vector<char>{};
+        auto out_iter = std::back_inserter(buffer);
+        auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
+        auto input_schema = resolved_slice.schema();
+        auto input_type = caf::get<record_type>(input_schema);
+        auto array
+          = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+        auto first = true;
+        for (const auto& row : values(input_type, *array)) {
+          TENZIR_ASSERT_CHEAP(row);
+          if (first && not no_header) {
+            printer.print_header(out_iter, *row);
+            first = false;
+            out_iter = fmt::format_to(out_iter, "\n");
+          }
+          const auto ok = printer.print_values(out_iter, *row);
+          TENZIR_ASSERT_CHEAP(ok);
           out_iter = fmt::format_to(out_iter, "\n");
         }
-        const auto ok = printer.print_values(out_iter, *row);
-        TENZIR_ASSERT_CHEAP(ok);
-        out_iter = fmt::format_to(out_iter, "\n");
-      }
-      auto chunk = chunk::make(std::move(buffer), meta);
-      co_yield std::move(chunk);
-    });
+        auto chunk = chunk::make(std::move(buffer), meta);
+        co_yield std::move(chunk);
+      });
   }
 
   auto allows_joining() const -> bool override {
@@ -523,12 +528,16 @@ public:
       .null_value = std::string{Null.str()},
       .allow_comments = allow_comments,
       .header = std::move(header),
+      .no_header = false,
     });
   }
 
   auto parse_printer(parser_interface& p) const
     -> std::unique_ptr<plugin_printer> override {
-    argument_parser{name()}.parse(p);
+    auto parser = argument_parser{name()};
+    bool no_header = {};
+    parser.add("--no-header", no_header);
+    parser.parse(p);
     return std::make_unique<xsv_printer>(xsv_options{
       .name = std::string{Name.str()},
       .field_sep = Sep,
@@ -536,6 +545,7 @@ public:
       .null_value = std::string{Null.str()},
       .allow_comments = false,
       .header = {},
+      .no_header = no_header,
     });
   }
 

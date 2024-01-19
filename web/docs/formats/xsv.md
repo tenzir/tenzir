@@ -11,11 +11,22 @@ Reads and writes lines with separated values.
 
 ## Synopsis
 
+Parser:
+
 ```
 csv [--allow-comments] [--header <header>]
 ssv [--allow-comments] [--header <header>]
 tsv [--allow-comments] [--header <header>]
 xsv <field-sep> <list-sep> <null-value> [--allow-comments] [--header <header>]
+```
+
+Printer:
+
+```
+csv [--no-header]
+ssv [--no-header]
+tsv [--no-header]
+xsv <field-sep> <list-sep> <null-value> [--no-header]
 ```
 
 ## Description
@@ -78,6 +89,10 @@ Treat lines beginning with `'#'` as comments.
 
 Use the manually provided header line instead of treating the first line as the
 header.
+
+### `--no-header` (Printer)
+
+Do not print a header line containing the field names.
 
 ## Examples
 
