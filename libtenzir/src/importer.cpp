@@ -253,6 +253,10 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       });
       return rp;
     },
+    [self](table_slice& slice) -> caf::result<void> {
+      self->state.stage->out().push(std::move(slice));
+      return {};
+    },
     // -- stream_sink_actor<table_slice> ---------------------------------------
     [self](caf::stream<table_slice> in) {
       // NOTE: Architecturally it would make more sense to put the transformer
