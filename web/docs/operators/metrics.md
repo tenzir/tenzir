@@ -16,8 +16,7 @@ metrics [--live]
 
 ## Description
 
-The `metrics` operator retrieves [metrics events](../metrics.md) from a Tenzir
-node.
+The `metrics` operator retrieves metrics events from a Tenzir node.
 
 ### `--live`
 
