@@ -115,7 +115,7 @@ jobs:
             git config --global user.name 'CI Bot'
             git config --global user.email 'tenzir-ci-app@users.noreply.github.com'
             git checkout topic/fake-main
-            git echo "test" >> dummy-file
+            echo "test" >> dummy-file
             git add dummy-file
             git commit -m "test commit"
             git push
