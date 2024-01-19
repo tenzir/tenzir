@@ -670,7 +670,7 @@ jobs:
           echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
           echo "CXXFLAGS=-isystem ${llvm_root}/include/c++/v1" >> $GITHUB_ENV
       - name: Fetch ccache Cache
-        uses: actions/cache/restore@v3
+        uses: actions/cache/restore@v4
         with:
           # Note that the `path` is implicitly part of the key when looking up cache hits:
           # GitHub will only download artifacts that contain files whose locations matches `path`,
@@ -719,7 +719,7 @@ jobs:
           ccache --show-compression
       - name: Save ccache Cache
         if: always()
-        uses: actions/cache/save@v3
+        uses: actions/cache/save@v4
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.head-ref-slug }}-${{ github.sha }}
