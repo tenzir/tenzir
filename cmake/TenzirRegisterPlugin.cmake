@@ -733,9 +733,8 @@ function (TenzirRegisterPlugin)
     if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
       set(TENZIR_PATH "$<TARGET_FILE_DIR:tenzir::tenzir>")
     else ()
-      get_filename_component(Tenzir_DIR_ABSOLUTE ${Tenzir_DIR} ABSOLUTE)
       file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/share/tenzir")
-      file(CREATE_LINK "${Tenzir_DIR_ABSOLUTE}/share/tenzir/functional-test"
+      file(CREATE_LINK "${TENZIR_PREFIX_DIR}/share/tenzir/functional-test"
            "${CMAKE_BINARY_DIR}/share/tenzir/functional-test" SYMBOLIC)
       set(TENZIR_PATH "${CMAKE_CURRENT_BINARY_DIR}/bin")
     endif ()

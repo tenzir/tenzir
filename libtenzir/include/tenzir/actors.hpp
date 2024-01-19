@@ -241,7 +241,9 @@ using importer_actor = typed_actor_fwd<
   // Register a subscriber for table slices.
   auto(atom::subscribe, receiver_actor<table_slice>)->caf::result<void>,
   // Push buffered slices downstream to make the data available.
-  auto(atom::flush)->caf::result<void>>
+  auto(atom::flush)->caf::result<void>,
+  // Import a batch of data.
+  auto(table_slice)->caf::result<void>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the STREAM SINK actor for table slices with a

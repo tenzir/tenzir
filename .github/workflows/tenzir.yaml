@@ -937,7 +937,7 @@ jobs:
           echo "${INSTALL_DIR}/bin" >> $GITHUB_PATH
       - name: Configure Build
         env:
-          TENZIR_DIR: "${{ env.INSTALL_DIR }}"
+          Tenzir_DIR: "${{ env.INSTALL_DIR }}"
         run: |
           python3 --version
           python3 -m pip --version

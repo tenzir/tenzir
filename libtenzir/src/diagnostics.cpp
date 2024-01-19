@@ -12,6 +12,7 @@
 #include "tenzir/logger.hpp"
 
 #include <boost/algorithm/string.hpp>
+#include <caf/message_handler.hpp>
 #include <fmt/color.h>
 
 #include <iostream>
@@ -195,6 +196,20 @@ auto make_diagnostic_printer(std::optional<location_origin> origin,
 
 auto diagnostic::builder(enum severity s, caf::error err)
   -> diagnostic_builder {
+  if (err.category() == caf::type_id_v<tenzir::ec>
+      && static_cast<tenzir::ec>(err.code()) == ec::diagnostic) {
+    auto ctx = err.context();
+    auto* inner = static_cast<diagnostic*>(nullptr);
+    caf::message_handler{
+      [&](diagnostic& diag) {
+        inner = &diag;
+      },
+      [](const caf::message&) {},
+    }(ctx);
+    if (inner) {
+      return std::move(*inner).modify().severity(s);
+    }
+  }
   auto as_string = [&](size_t i) -> std::optional<std::string_view> {
     if (err.context().match_element<std::string>(i)) {
       return err.context().get_as<std::string>(i);

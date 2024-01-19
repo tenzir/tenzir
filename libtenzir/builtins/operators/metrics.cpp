@@ -30,9 +30,9 @@ public:
     bool live = false;
     parser.add("--live", live);
     parser.parse(p);
-    const auto definition
-      = fmt::format("export --internal {}| where #schema == /tenzir.metrics.*/",
-                    live ? " --live" : "");
+    const auto definition = fmt::format("export --internal{} | where #schema "
+                                        "== /tenzir\\.metrics\\..+/",
+                                        live ? " --live" : "");
     auto result = pipeline::internal_parse_as_operator(definition);
     if (not result) {
       diagnostic::error("failed to transform `metrics` operator into `{}`",
