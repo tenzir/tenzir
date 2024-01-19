@@ -718,6 +718,7 @@ jobs:
           # Print statistics about cache compression.
           ccache --show-compression
       - name: Save ccache Cache
+        if: always()
         uses: actions/cache/save@v3
         with:
           path: ${{ env.CCACHE_DIR }}
