@@ -178,7 +178,7 @@ public:
   auto save() const -> caf::expected<chunk_ptr> override {
     std::vector<std::byte> buffer;
     if (auto err = convert(bloom_filter_, buffer))
-      return err;
+      return add_context(err, "failed to serialize Bloom filter context");
     return chunk::make(std::move(buffer));
   }
 
@@ -206,7 +206,7 @@ class plugin : public virtual context_plugin {
     TENZIR_ASSERT_CHEAP(serialized != nullptr);
     auto bloom_filter = dcso_bloom_filter{};
     if (auto err = convert(as_bytes(*serialized), bloom_filter))
-      return err;
+      return add_context(err, "failed to deserialize Bloom filter context");
     return std::make_unique<bloom_filter_context>(std::move(bloom_filter));
   }
 };
