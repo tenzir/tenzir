@@ -7,6 +7,10 @@ tenzir:
   # The host and port to listen at and connect to.
   endpoint: "localhost:5158"
 
+  # The platform auth token for app.tenzir.com. This is an alternative to
+  # the dedicated platform.yaml file. The key has the following format:
+  #token: <tenant-id>:<api-key>[:<control-endpoint>]
+
   # The timeout for connecting to a Tenzir server. Set to 0 seconds to wait
   # indefinitely.
   connection-timeout: 5m

@@ -69,6 +69,8 @@ void add_root_opts(command& cmd) {
   cmd.options.add<int64_t>("?tenzir", "log-queue-size",
                            "the queue size for the logger");
   cmd.options.add<std::string>("?tenzir", "endpoint,e", "node endpoint");
+  cmd.options.add<std::string>(
+    "?tenzir", "token", "platform auth token (requires platform plugin)");
   cmd.options.add<std::string>("?tenzir", "node-id,i",
                                "the unique ID of this node");
   cmd.options.add<bool>("?tenzir", "node,N",
