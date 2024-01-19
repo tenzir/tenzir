@@ -20,7 +20,7 @@ The `version` operator shows the current Tenzir version.
 
 ## Schemas
 
-Tenzir emits version information with the following schema:
+Tenzir emits version information with the following schema.
 
 ### `tenzir.version`
 

@@ -4,8 +4,8 @@ sidebar_position: 6
 
 # Collect metrics
 
-Tenzir keeps detailed track of system metrics of node resource usage, pipeline
-state, and processing performance.
+Tenzir keeps track of metrics about node resource usage, pipeline state, and
+runtime performance.
 
 Metrics are stored as internal events in the node's storage engine, allowing you
 to work with metrics just like regular data. Use the
@@ -17,7 +17,7 @@ multiple time to reference the same metrics feed.
 
 ## Write metrics to a file
 
-Export metrics to a file via `metrics --live`:
+Export metrics continuously to a file via `metrics --live`:
 
 ```yaml
 metrics --live
@@ -25,7 +25,8 @@ metrics --live
 ```
 
 This attaches to incoming metrics feed and forward them as NDJSON automatically
-to a file.
+to a file. Without `--live`, the `metrics` operator returns the snapshot of all
+historical metrics.
 
 ## Summarize metrics
 

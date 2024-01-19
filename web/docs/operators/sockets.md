@@ -20,7 +20,7 @@ The `sockets` operator shows a snapshot of all currently open sockets.
 
 ## Schemas
 
-Tenzir emits socket information with the following schema:
+Tenzir emits socket information with the following schema.
 
 ### `tenzir.socket`
 

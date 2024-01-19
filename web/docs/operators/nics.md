@@ -20,7 +20,7 @@ The `nics` operator shows a snapshot of all available network interfaces.
 
 ## Schemas
 
-Tenzir emits network interface information with the following schema:
+Tenzir emits network interface card information with the following schema.
 
 ### `tenzir.nic`
 
@@ -52,5 +52,5 @@ List all connected network interfaces.
 
 ```
 nics
-| where status.connected == true'
+| where status.connected == true
 ```

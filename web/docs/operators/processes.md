@@ -20,7 +20,7 @@ The `processes` operator shows a snapshot of all currently running processes.
 
 ## Schemas
 
-Tenzir emits process information with the following schema:
+Tenzir emits process information with the following schema.
 
 ### `tenzir.process`
 
