@@ -79,10 +79,12 @@ public:
     auto [type, slice_array] = column_offset->get(resolved_slice);
     for (const auto& value : values(type, *slice_array)) {
       if (bloom_filter_.lookup(value)) {
+        auto ptr = bloom_filter_.data().data();
+        auto size = bloom_filter_.data().size();
         auto r = field_builder.record();
         r.field("key", value);
-        // TODO: add the Bloom filter meta data here.
-        // r.field("context", ???);
+        auto context = r.field("context").record();
+        context.field("data", std::basic_string<std::byte>{ptr, size});
         r.field("timestamp", std::chrono::system_clock::now());
       } else {
         field_builder.null();
