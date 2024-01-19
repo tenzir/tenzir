@@ -25,7 +25,7 @@ metrics events persisted at a Tenzir node.
 
 ## Schemas
 
-Tenzir collects metrics with the following schemas:
+Tenzir collects metrics with the following schemas.
 
 ### `tenzir.metrics.cpu`
 
@@ -100,7 +100,7 @@ Contains a measurement of the amount of memory used by the `tenzir-node` process
 
 ## Examples
 
-Show the cpu usage over the last hour:
+Show the CPU usage over the last hour:
 
 ```c
 metrics
@@ -208,7 +208,7 @@ metrics
 </details>
 
 Show the three operator instantiations that produced the most events in total
-and their pipeline ids:
+and their pipeline IDs:
 
 ```c
 metrics
