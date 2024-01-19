@@ -103,12 +103,9 @@ jobs:
           plugins_sha=$(git -C contrib/tenzir-plugins rev-parse HEAD)
           plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse origin/main)
           if [ "$plugins_sha" != "$plugins_main_sha" ]; then
-            plugins_branch=$(git -C contrib/tenzir-plugins symbolic-ref --short HEAD)
-            pr_number=$(gh pr search --head "$branch" --json number -q .[0].number)
-            echo $plugins_branch
-            echo $pr_number
-
             # Auto-merge the plugins PR and update 'tenzir-plugins/main'.
+            # pr_number=$(gh pr list --search $plugins_main_sha --json number -q .[0].number)
+            # echo $pr_number
             # gh pr merge $pr_number --repo tenzir/tenzir-plugins --match-head-commit ${plugins_sha}
             # git -C contrib/tenzir-plugins fetch
             # git -C contrib/tenzir-plugins checkout origin/main
