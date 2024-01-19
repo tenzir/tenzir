@@ -7,7 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_table_slice.hpp>
-#include <tenzir/concept/parseable/numeric/bool.hpp>
+#include <tenzir/concept/parseable/numeric.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/dcso_bloom_filter.hpp>
 #include <tenzir/detail/range_map.hpp>
@@ -197,10 +197,30 @@ class plugin : public virtual context_plugin {
     return "bloom-filter";
   }
 
-  auto make_context(context::parameter_map) const
+  auto make_context(context::parameter_map parameters) const
     -> caf::expected<std::unique_ptr<context>> override {
-    // TODO: design operator UX.
-    return std::make_unique<bloom_filter_context>(100, 0.2);
+    auto capacity = parameters["capacity"];
+    if (not capacity)
+      return caf::make_error(ec::parse_error, "no --capacity provided");
+    auto fpp = parameters["fp-prob"];
+    if (not fpp)
+      return caf::make_error(ec::parse_error, "no --fp-prob provided");
+    auto n = uint64_t{0};
+    if (not parsers::u64(*capacity, n)) {
+      return caf::make_error(ec::invalid_argument,
+                             "--capacity is not an integer");
+    }
+    auto p = double{0.0};
+    if (not parsers::real(*fpp, p)) {
+      return caf::make_error(ec::invalid_argument, "--fp-prob is not a double");
+    }
+    if (n == 0) {
+      return caf::make_error(ec::invalid_argument, "--capacity must be > 0");
+    }
+    if (p < 0.0 || p > 1.0) {
+      return caf::make_error(ec::invalid_argument, "--fp-prob not in (0,1)");
+    }
+    return std::make_unique<bloom_filter_context>(n, p);
   }
 
   auto load_context(chunk_ptr serialized) const
