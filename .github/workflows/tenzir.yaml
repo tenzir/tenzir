@@ -88,6 +88,41 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+      - name: Generate a token
+        #if: github.event_name == 'push' && github.ref == 'refs/heads/topic/fake-main'
+        id: generate_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.TENZIR_TESTAPP_APP_ID }}
+          private-key: ${{ secrets.TENZIR_TESTAPP_PRIVATE_KEY }}
+      - name: Test submodule update
+        #if: github.event_name == 'push' && github.ref == 'refs/heads/topic/fake-main'
+        env:
+          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
+        run: |
+          plugins_sha=$(git -C contrib/tenzir-plugins git rev-parse HEAD)
+          plugins_main_sha=$(git -C contrib/tenzir-plugins git rev-parse main)
+          if [ "$plugins_sha" != "$plugins_main_sha" ]; then
+            plugins_branch=$(git -C contrib/tenzir-plugins symbolic-ref --short HEAD)
+            pr_number=$(gh pr search --head "$branch" --json number -q .[0].number)
+            echo $plugins_branch
+            echo $pr_number
+
+            # Auto-merge the plugins PR and update 'tenzir-plugins/main'.
+            # gh pr merge $pr_number --repo tenzir/tenzir-plugins --match-head-commit ${plugins_sha}
+            # git -C contrib/tenzir-plugins fetch
+            # git -C contrib/tenzir-plugins checkout origin/main
+
+            # Create a new commit for the updated submodule.
+            # git add contrib/tenzir-plugins
+            git config --global user.name 'CI Bot'
+            git config --global user.email 'tenzir-ci-app@users.noreply.github.com'
+            git checkout topic/fake-main
+            git echo "test" >> dummy-file
+            git add dummy-file
+            git commit -m "test commit"
+            git push
+          fi
       - name: Fetch Tags
         run: git fetch origin +refs/tags/*:refs/tags/*
       - name: Inject Slug Variables
