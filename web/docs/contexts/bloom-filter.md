@@ -5,8 +5,7 @@ A space-efficient data structure to represent large sets.
 ## Synopsis
 
 ```
-context create <name> bloom-filter 
-  -n|--capacity <capacity> -p|--fp-probability <probability>
+context create <name> bloom-filter --capacity <capacity> --fp-prob <probability>
 context update <name> --key <field>
 context delete <name>
 enrich <name> --field <field>
@@ -47,7 +46,7 @@ drop-in replacement for `bloom` users.
 The maximum number of unique items the Bloom filter can hold while guaranteeing
 the configured false-positive probability.
 
-### `-p|--fp-probability <probability>`
+### `-p|--fp-prob <probability>`
 
 The probability of a false positive when looking up an item in the Bloom filter.
 
