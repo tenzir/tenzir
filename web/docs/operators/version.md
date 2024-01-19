@@ -18,6 +18,22 @@ version
 
 The `version` operator shows the current Tenzir version.
 
+## Schemas
+
+Tenzir emits version information with the following schema.
+
+### `tenzir.version`
+
+Contains detailed information about the process version.
+
+|Field|Type|Description|
+|:-|:-|:-|
+|`version`|`string`|The formatted version string.|
+|`major`|`uint64`|The major release version.|
+|`minor`|`uint64`|The minor release version.|
+|`patch`|`uint64`|The patch release version.|
+|`tweak`|`uint64`|The number of changes since the last release.|
+
 ## Examples
 
 Use `version` to show the current version of a development build:

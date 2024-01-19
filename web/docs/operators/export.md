@@ -25,14 +25,9 @@ instead of on events persisted at a Tenzir node.
 
 ### `--internal`
 
-Export internal events, such as metrics, instead. By default, `export` only
-returns events that were previously imported with `import`. In contrast,
-`export --internal` exports internal events such as pipeline metrics.
-[Here](../metrics.md) is an overview of the various internal events.
-
-:::warning Experimental
-This flag and the schema of the returned events are subject to change.
-:::
+Export internal events, such as metrics or diagnostics, instead. By default,
+`export` only returns events that were previously imported with `import`. In
+contrast, `export --internal` exports internal events such as operator metrics.
 
 ## Examples
 

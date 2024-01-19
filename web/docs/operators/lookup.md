@@ -6,20 +6,26 @@ sidebar_custom_props:
 
 # lookup
 
-Enriches a stream of events with a context.
+Performs live filtering of the import feed using a [context](../contexts.md),
+and translates context updates into historical queries.
 
 ## Synopsis
 
 ```
 lookup <context> [<options>] [--live] [--retro] [--snapshot]
-lookup <field=><context> [<options>] [--live] [--retro] [--snapshot]
+lookup <field>=<context> [<options>] [--live] [--retro] [--snapshot]
 ```
 
 ## Description
 
-The `lookup` operator applies a context, extending input events with a new field
-defined by the context, then outputs only the events that contain this
-enrichment.
+The `lookup` operator performs two actions simultaneously:
+
+1. Translate context updates into historical queries
+2. Filter all data with a context that gets ingested into a node
+
+These two operations combined offer *unified matching*, i.e., automated retro
+matching by turning context updates into historical queries, and live matching
+with a context on the import feed.
 
 ### `<context>`
 
@@ -27,28 +33,26 @@ The name of the context to lookup with.
 
 ### `<field>`
 
-The name of the field in which to store the context's enrichment. Defaults to
-the name of the context.
+The name of the field in which to store the context's enrichment.
+
+Defaults to the name of the context.
 
 ### `<options>`
 
 Optional, context-specific options. Refer to the [`enrich` operator
-documentation](enrich.md) for more details about these
-options.
+documentation](enrich.md) for more details.
 
 ### `--live`
 
-A lookup-specific flag that enables live lookup for incoming events.
+Enables live lookup for incoming events.
 
-By default, both retro and live lookups are enabled.
-Specifying either `--retro` or `--live` explicitly disables
-the other.
+By default, both retro and live lookups are enabled. Specifying either `--retro`
+or `--live` explicitly disables the other.
 
 ### `--retro`
 
-A lookup-specific flag that enables retroactive lookups for previously imported
-events. The `lookup` operator will then apply a context [after a context
-update](context.md).
+Enables retrospective lookups for previously imported events. The `lookup`
+operator will then apply a context [after a context update](context.md).
 
 By default, both retro and live lookups are enabled.
 Specifying either `--retro` or `--live` explicitly disables
@@ -56,34 +60,33 @@ the other.
 
 ### `--snapshot`
 
-A lookup-specific flag that creates a snapshot of the context at the time of
-execution. In combination with `--retro`, this will commence a retroactive
-lookup with that current context state.
+Creates a snapshot of the context at the time of execution. In combination with
+`--retro`, this will commence a retrospective lookup with that current context
+state.
 
-By default, snapshotting is disabled.
+By default, snapshotting is disabled. Not all contexts support this operation.
 
 ## Examples
 
-Apply the `lookup-table` context `feodo` to incoming `suricata.flow` events.
+Apply the context `feodo` to incoming `suricata.flow` events.
 
 ```
-lookup --live a --field=src_ip
+lookup --live feodo --field=src_ip
 | where #schema == "suricata.flow"
 ```
 
-Apply the `lookup-table` context `feodo` to previous `suricata.flow` events
-after an update to `feodo`.
+Apply the context `feodo` to historical `suricata.flow` events with every update
+to `feodo`.
 
 ```
-lookup --retro a --field=src_ip
+lookup --retro feodo --field=src_ip
 | where #schema == "suricata.flow"
 ```
 
-Apply the `lookup-table` context `feodo` to incoming `suricata.flow` events,
-then reapply the context
-after an update to `feodo`.
+Apply the context `feodo` to incoming `suricata.flow` events, and also apply the
+context after an update to `feodo`.
 
 ```
-lookup a --field=src_ip
+lookup feodo --field=src_ip
 | where #schema == "suricata.flow"
 ```
