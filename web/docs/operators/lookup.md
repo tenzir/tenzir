@@ -6,13 +6,14 @@ sidebar_custom_props:
 
 # lookup
 
-Enriches a stream of events with a context.
+Utilize a context for filtering imported events live and exporting events
+matching new additions to the context.
 
 ## Synopsis
 
 ```
 lookup <context> [<options>] [--live] [--retro] [--snapshot]
-lookup <field=><context> [<options>] [--live] [--retro] [--snapshot]
+lookup <field>=<context> [<options>] [--live] [--retro] [--snapshot]
 ```
 
 ## Description
@@ -20,6 +21,11 @@ lookup <field=><context> [<options>] [--live] [--retro] [--snapshot]
 The `lookup` operator applies a context, extending input events with a new field
 defined by the context, then outputs only the events that contain this
 enrichment.
+
+For context updates, the operator searches Tenzir's storage engine for matching
+events.
+
+For imported events, the operator applies and filters using the context.
 
 ### `<context>`
 
