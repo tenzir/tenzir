@@ -721,7 +721,9 @@ endif ()
 # CAF::openssl needs OpenSSL, but CAFConfig.cmake does not pull it in.
 find_package(OpenSSL REQUIRED)
 
-# TODO: Require CAF to be installed.
+set(TENZIR_CAF_LOG_LEVEL
+    "WARNING"
+    CACHE STRING "")
 
 if (TENZIR_ENABLE_DEVELOPER_MODE
     AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/libtenzir/aux/caf/CMakeLists.txt"
@@ -759,11 +761,14 @@ else ()
         libtenzir/aux/caf submodule")
   else ()
     set(TENZIR_ENABLE_BUNDLED_CAF ON)
-    set(CAF_LOG_LEVEL ${TENZIR_CAF_LOG_LEVEL})
-    set(CAF_ENABLE_EXAMPLES OFF)
-    set(CAF_ENABLE_TESTING OFF)
-    set(CAF_ENABLE_TOOLS OFF)
-    set(CAF_ENABLE_OPENSSL ON)
+    set(CAF_LOG_LEVEL "${TENZIR_CAF_LOG_LEVEL}" CACHE STRING "")
+    set(CAF_ENABLE_EXAMPLES OFF CACHE BOOL "")
+    set(CAF_ENABLE_TESTING OFF CACHE BOOL "")
+    set(CAF_ENABLE_TOOLS OFF CACHE BOOL "")
+    set(CAF_ENABLE_OPENSSL ON CACHE BOOL "")
+    if (TENZIR_ENABLE_ASSERTIONS)
+      set(CAF_ENABLE_RUNTIME_CHECKS ON CACHE BOOL "")
+    endif ()
     # add_subdirectory libtenzir/aux/caf checks if compiler supports the c++ 17. This check fails and the workaround
     # can be removed once CAF cmake changes to use set(CMAKE_CXX_STANDARD) instead of it's own check
     set(ORIGINAL_CXX_STANDARD ${CMAKE_CXX_STANDARD})
