@@ -99,7 +99,7 @@ jobs:
       - name: Test submodule update
         #if: github.event_name == 'push' && github.ref == 'refs/heads/topic/fake-main'
         env:
-          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
+          GITHUB_APP_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
           plugins_sha=$(git -C contrib/tenzir-plugins rev-parse HEAD)
           plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse origin/main)
@@ -115,6 +115,7 @@ jobs:
             # git add contrib/tenzir-plugins
             git config --global user.name 'CI Bot'
             git config --global user.email 'tenzir-ci-app@users.noreply.github.com'
+            git set-url origin https://x-access-token:$GITHUB_APP_TOKEN@github.com/tenzir/tenzir.git
             git checkout topic/fake-main
             echo "test" >> dummy-file
             git add dummy-file
