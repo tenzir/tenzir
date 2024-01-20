@@ -8,6 +8,7 @@
 
 #include "tenzir/curl.hpp"
 
+#include "tenzir/concept/parseable/numeric.hpp"
 #include "tenzir/concept/printable/tenzir/data.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/detail/assert.hpp"
@@ -250,6 +251,65 @@ auto mime::add() -> mime::part {
   return part{curl_mime_addpart(mime_.get())};
 }
 
+auto to_error(multi::code code) -> caf::error {
+  if (code == multi::code::ok)
+    return {};
+  return caf::make_error(ec::unspecified,
+                         fmt::format("curl: {}", to_string(code)));
+}
+
+url::url() : url_{curl_url()} {
+}
+
+url::url(const url& other) : url_{curl_url_dup(other.url_.get())} {
+}
+
+auto url::operator=(const url& other) -> url& {
+  url_.reset(curl_url_dup(other.url_.get()));
+  return *this;
+}
+
+auto url::set(part url_part, std::string_view str, flags fs) -> code {
+  auto curl_part = static_cast<CURLUPart>(url_part);
+  auto curl_flags = static_cast<std::underlying_type_t<flags>>(fs);
+  auto curl_code = curl_url_set(url_.get(), curl_part, str.data(), curl_flags);
+  return static_cast<code>(curl_code);
+}
+
+auto url::get(part url_part, unsigned int flags) const
+  -> std::pair<code, std::optional<std::string>> {
+  auto curl_part = static_cast<CURLUPart>(url_part);
+  char* content = nullptr;
+  auto curl_code = curl_url_get(url_.get(), curl_part, &content, flags);
+  auto result = static_cast<code>(curl_code);
+  if (result != code::ok or content == nullptr)
+    return {result, std::nullopt};
+  auto string = std::string{content};
+  curl_free(content);
+  return {result, std::move(string)};
+}
+
+/// @relates url
+auto to_string(url::code code) -> std::string_view {
+  auto curl_code = static_cast<CURLUcode>(code);
+  return {curl_url_strerror(curl_code)};
+}
+
+auto to_string(const url& x) -> std::string {
+  auto [code, result] = x.get(url::part::url);
+  TENZIR_ASSERT_CHEAP(code);
+  TENZIR_ASSERT_CHEAP(result);
+  return std::move(*result);
+}
+
+/// @relates url
+auto to_error(url::code code) -> caf::error {
+  if (code == url::code::ok)
+    return {};
+  return caf::make_error(ec::unspecified,
+                         fmt::format("curl: {}", to_string(code)));
+}
+
 auto escape(std::string_view str) -> std::string {
   auto* easy = curl_easy_init();
   auto result = std::string{};
@@ -287,13 +347,6 @@ auto escape(const record& xs) -> std::string {
     kvps.push_back(fmt::format("{}={}", escaped_key, escaped_value));
   }
   return fmt::format("{}", fmt::join(kvps, "&"));
-}
-
-auto to_error(multi::code code) -> caf::error {
-  if (code == multi::code::ok)
-    return {};
-  return caf::make_error(ec::unspecified,
-                         fmt::format("curl: {}", to_string(code)));
 }
 
 } // namespace tenzir::curl

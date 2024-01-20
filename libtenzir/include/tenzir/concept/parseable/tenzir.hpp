@@ -25,5 +25,4 @@
 #include "tenzir/concept/parseable/tenzir/subnet.hpp"
 #include "tenzir/concept/parseable/tenzir/table_slice_encoding.hpp"
 #include "tenzir/concept/parseable/tenzir/time.hpp"
-#include "tenzir/concept/parseable/tenzir/uri.hpp"
 #include "tenzir/concept/parseable/tenzir/uuid.hpp"

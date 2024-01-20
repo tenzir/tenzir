@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
-#include <tenzir/concept/parseable/tenzir/uri.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/config.hpp>
 #include <tenzir/detail/string_literal.hpp>
@@ -58,8 +57,8 @@ struct connector_args {
 
 auto make_request(const connector_args& args) -> caf::expected<http::request> {
   auto result = http::request{};
-  if (not parsers::uri(args.url, result.uri))
-    return caf::make_error(ec::parse_error, "failed to parse URI");
+  // Set URL.
+  result.uri = args.url;
   // Set method.
   result.method = args.http_opts.method;
   if (args.http_opts.json) {
