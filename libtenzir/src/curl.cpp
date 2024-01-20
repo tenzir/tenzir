@@ -205,6 +205,16 @@ auto multi::loop(std::chrono::milliseconds timeout) -> caf::error {
   }
 }
 
+auto multi::info_read() -> generator<easy::code> {
+  auto num_left = 0;
+  CURLMsg* msg = nullptr;
+  while ((msg = curl_multi_info_read(multi_.get(), &num_left))) {
+    if (msg->msg == CURLMSG_DONE) {
+      co_yield static_cast<easy::code>(msg->data.result);
+    }
+  }
+}
+
 auto to_string(multi::code code) -> std::string_view {
   auto curl_code = static_cast<CURLMcode>(code);
   return {curl_multi_strerror(curl_code)};

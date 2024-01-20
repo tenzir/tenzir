@@ -283,6 +283,9 @@ public:
   /// @returns An error upon failure.
   auto loop(std::chrono::milliseconds timeout) -> caf::error;
 
+  /// `curl_multi_info_read`
+  auto info_read() -> generator<easy::code>;
+
 private:
   struct curlm_deleter {
     auto operator()(CURLM* ptr) const noexcept -> void {

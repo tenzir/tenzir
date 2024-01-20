@@ -193,7 +193,12 @@ auto transfer::download_chunks() -> generator<caf::expected<chunk_ptr>> {
         break;
     } else {
       co_yield still_running.error();
-      co_return;
+      break;
+    }
+  }
+  for (auto code : multi.info_read()) {
+    if (code != curl::easy::code::ok) {
+      co_yield to_error(code);
     }
   }
 }
