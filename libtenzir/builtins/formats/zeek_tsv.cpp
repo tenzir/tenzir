@@ -816,17 +816,22 @@ public:
       auto input_type = caf::get<record_type>(input_schema);
       auto array
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
-      auto should_print_close = static_cast<bool>(*last_schema);
-      auto first = std::exchange(*last_schema, input_schema) != input_schema;
+      auto first = true;
+      auto is_first_schema = static_cast<bool>(*last_schema);
+      auto did_schema_change
+        = *last_schema != input_schema and not is_first_schema;
+      *last_schema = input_schema;
       for (const auto& row : values(input_type, *array)) {
         TENZIR_ASSERT_CHEAP(row);
         if (first) {
-          if (should_print_close) {
-            printer.print_closing_line(out_iter);
+          if (did_schema_change) {
+            if (not is_first_schema) {
+              printer.print_closing_line(out_iter);
+            }
+            printer.print_header(out_iter, input_schema);
+            out_iter = fmt::format_to(out_iter, "\n");
           }
-          printer.print_header(out_iter, input_schema);
           first = false;
-          out_iter = fmt::format_to(out_iter, "\n");
         }
         const auto ok = printer.print_values(out_iter, *row);
         TENZIR_ASSERT_CHEAP(ok);
