@@ -802,8 +802,7 @@ public:
                                 args_.unset_field.value_or("-"),
                                 args_.disable_timestamp_tags};
     auto last_schema = std::make_shared<type>();
-    return printer_instance::make([last_schema = last_schema,
-                                   printer = std::move(printer)](
+    return printer_instance::make([last_schema, printer = std::move(printer)](
                                     table_slice slice) -> generator<chunk_ptr> {
       if (slice.rows() == 0) {
         co_yield {};
@@ -817,7 +816,7 @@ public:
       auto array
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
       auto first = true;
-      auto is_first_schema = static_cast<bool>(*last_schema);
+      auto is_first_schema = not *last_schema;
       auto did_schema_change
         = *last_schema != input_schema and not is_first_schema;
       *last_schema = input_schema;
