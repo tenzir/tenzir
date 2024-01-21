@@ -141,10 +141,6 @@ elseif (NOT TENZIR_LOG_LEVEL STREQUAL "$CACHE{TENZIR_LOG_LEVEL}")
       CACHE STRING "${TENZIR_LOG_LEVEL_DOC}" FORCE)
 endif ()
 
-set(TENZIR_CAF_LOG_LEVEL
-    "WARNING"
-    CACHE STRING ${TENZIR_LOG_LEVEL_DOC})
-
 # Raise an error for invalid log levels.
 set(validLogLevels
     QUIET
