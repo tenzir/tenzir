@@ -43,6 +43,7 @@
 #include "tenzir/io/read.hpp"
 #include "tenzir/io/save.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/modules.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/partition_transformer.hpp"
 #include "tenzir/passive_partition.hpp"
@@ -1204,20 +1205,8 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);
   self->state.catalog = std::move(catalog);
-  self
-    ->request(self->state.catalog, caf::infinite, atom::get_v,
-              atom::taxonomies_v)
-    .await(
-      [self](tenzir::taxonomies& taxonomies) {
-        self->state.taxonomies
-          = std::make_shared<tenzir::taxonomies>(std::move(taxonomies));
-      },
-      [](caf::error& err) {
-        TENZIR_WARN("catalog failed to load taxonomy "
-                    "definitions: {}",
-                    std::move(err));
-        // TODO: Shutdown when failing?
-      });
+  self->state.taxonomies = std::make_shared<tenzir::taxonomies>();
+  self->state.taxonomies->concepts = modules::concepts();
   self->state.dir = dir;
   self->state.synopsisdir = catalog_dir;
   self->state.markersdir = dir / "markers";
