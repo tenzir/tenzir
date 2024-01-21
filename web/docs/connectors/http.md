@@ -20,7 +20,10 @@ http [--chunked] [--multipart] [-f|--form] [-j|--json] [-v|--verbose]
 
 The `http` loader performs a HTTP request and returns the bytes of the HTTP
 response body. The `http` saver performs a HTTP request with the request body
-being the the provided bytes by the previous operator.
+being the the provided bytes by the previous operator. The diagram below
+illustrates how loader and saver work:
+
+![HTTP Connector](http.excalidraw.svg)
 
 We modeled the `http` connector after [HTTPie](https://httpie.io/), which comes
 with an expressive command-line syntax. We recommend to study the [HTTPie

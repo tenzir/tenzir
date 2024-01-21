@@ -63,7 +63,14 @@ Here is visual explanation of how `delay` works:
 
 ## HTTP Saver
 
-FIXME: Write content
+The [`http`](/next/connectors/http) connector now also has a saver in addition
+to the already existing loader. Here's how they work in a nutshell:
+
+![HTTP Connector](http.excalidraw.svg)
+
+For the loader, you specify the request body and the response body is input for
+the pipeline. For the saver, the pipeline contents determine the request body
+and the response body isn't processed.
 
 ## Fluent Bit Performance
 
