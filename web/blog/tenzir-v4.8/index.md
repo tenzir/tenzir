@@ -1,18 +1,22 @@
 ---
 title: Tenzir v4.8
 authors: [dominiklohmann]
-date: 2024-02-01
-tags: [fluent-bit, performance]
-draft: true
+date: 2024-01-22
+tags: [fluent-bit, context, lookup, performance]
 comments: true
 ---
 
 Hot off the press: [Tenzir
 v4.8](https://github.com/tenzir/tenzir/releases/tag/v4.8.0).
 
+FIXME: Create heaader image
 <!--![Tenzir v4.8](tenzir-v4.8.excalidraw.svg)-->
 
 <!-- truncate -->
+
+## Lookup Operator
+
+FIXME: Write content
 
 ## Graylog Support
 
@@ -56,6 +60,10 @@ can scale the behavior with a multiplicative constant to speed things up.
 Here is visual explanation of how `delay` works:
 
 ![delay](delay.excalidraw.svg)
+
+## HTTP Saver
+
+FIXME: Write content
 
 ## Fluent Bit Performance
 
