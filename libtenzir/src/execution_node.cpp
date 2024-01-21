@@ -123,7 +123,7 @@ public:
   }
 
   void emit(diagnostic diag) override {
-    TENZIR_DEBUG("{} {} emits diagnostic: {:?}", *self_,
+    TENZIR_TRACE("{} {} emits diagnostic: {:?}", *self_,
                  self_->state.op->name(), diag);
     if (diag.severity == severity::error) {
       self_->send(diagnostic_handler_, diag);
@@ -383,7 +383,7 @@ struct exec_node_state {
       // Emit metrics once to get started.
       metrics->emit();
       if (instance->it == instance->gen.end()) {
-        TENZIR_DEBUG("{} {} finished without yielding", *self, op->name());
+        TENZIR_TRACE("{} {} finished without yielding", *self, op->name());
         self->quit();
         return {};
       }
@@ -397,7 +397,7 @@ struct exec_node_state {
           [this, rp]() mutable {
             auto time_starting_guard = make_timer_guard(
               metrics->values.time_scheduled, metrics->values.time_starting);
-            TENZIR_DEBUG("{} {} schedules run after successful startup of all "
+            TENZIR_TRACE("{} {} schedules run after successful startup of all "
                          "operators",
                          *self, op->name());
             schedule_run();
@@ -474,7 +474,7 @@ struct exec_node_state {
       metrics->values.outbound_measurement.num_batches += 1;
       metrics->values.outbound_measurement.num_approx_bytes
         += approx_bytes(output);
-      TENZIR_DEBUG("{} {} produced and pushes {} elements", *self, op->name(),
+      TENZIR_TRACE("{} {} produced and pushes {} elements", *self, op->name(),
                    output_size);
       if (demand->remaining <= output_size) {
         demand->remaining = 0;
@@ -489,14 +489,14 @@ struct exec_node_state {
           [this, output_size, should_quit]() {
             auto time_scheduled_guard
               = make_timer_guard(metrics->values.time_scheduled);
-            TENZIR_DEBUG("{} {} pushed {} elements", *self, op->name(),
+            TENZIR_TRACE("{} {} pushed {} elements", *self, op->name(),
                          output_size);
             if (demand and demand->remaining == 0) {
               demand->rp.deliver();
               demand.reset();
             }
             if (should_quit) {
-              TENZIR_DEBUG("{} {} completes processing", *self, op->name());
+              TENZIR_TRACE("{} {} completes processing", *self, op->name());
               if (demand and demand->rp.pending()) {
                 demand->rp.deliver();
               }
@@ -544,7 +544,7 @@ struct exec_node_state {
       inbound_buffer.erase(inbound_buffer.begin());
       const auto input_size = size(input);
       inbound_buffer_size -= input_size;
-      TENZIR_DEBUG("{} {} uses {} elements", *self, op->name(), input_size);
+      TENZIR_TRACE("{} {} uses {} elements", *self, op->name(), input_size);
       co_yield std::move(input);
     }
     TENZIR_DEBUG("{} {} reached end of input", *self, op->name());
@@ -575,7 +575,7 @@ struct exec_node_state {
       return;
     }
     const auto demand = defaults<Input>::max_buffered - inbound_buffer_size;
-    TENZIR_DEBUG("{} {} issues demand for up to {} elements", *self, op->name(),
+    TENZIR_TRACE("{} {} issues demand for up to {} elements", *self, op->name(),
                  demand);
     issue_demand_inflight = true;
     self
@@ -586,7 +586,7 @@ struct exec_node_state {
         [this] {
           auto time_scheduled_guard
             = make_timer_guard(metrics->values.time_scheduled);
-          TENZIR_DEBUG("{} {} had its demand fulfilled", *self, op->name());
+          TENZIR_TRACE("{} {} had its demand fulfilled", *self, op->name());
           issue_demand_inflight = false;
           schedule_run();
         },
@@ -632,7 +632,7 @@ struct exec_node_state {
     if (should_continue) {
       schedule_run();
     } else {
-      TENZIR_DEBUG("{} {} idles", *self, op->name());
+      TENZIR_TRACE("{} {} idles", *self, op->name());
     }
     metrics->values.num_runs += 1;
     metrics->values.num_runs_processing
@@ -646,7 +646,7 @@ struct exec_node_state {
   auto pull(exec_node_sink_actor sink, uint64_t batch_size) -> caf::result<void>
     requires(not std::is_same_v<Output, std::monostate>)
   {
-    TENZIR_DEBUG("{} {} received downstream demand", *self, op->name());
+    TENZIR_TRACE("{} {} received downstream demand", *self, op->name());
     if (demand) {
       demand->rp.deliver();
     }
@@ -663,7 +663,7 @@ struct exec_node_state {
     requires(not std::is_same_v<Input, std::monostate>)
   {
     const auto input_size = size(input);
-    TENZIR_DEBUG("{} {} received {} elements from upstream", *self, op->name(),
+    TENZIR_TRACE("{} {} received {} elements from upstream", *self, op->name(),
                  input_size);
     metrics->values.inbound_measurement.num_elements += input_size;
     metrics->values.inbound_measurement.num_batches += 1;
