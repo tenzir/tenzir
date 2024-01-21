@@ -8,8 +8,6 @@
 
 #pragma once
 
-#include "tenzir/uri.hpp"
-
 #include <caf/error.hpp>
 
 #include <cstdint>
@@ -41,7 +39,7 @@ struct message {
 /// A HTTP request message.
 struct request : message {
   std::string method;
-  tenzir::uri uri;
+  std::string uri;
 };
 
 /// A HTTP response message.

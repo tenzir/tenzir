@@ -8,7 +8,6 @@
 
 #include "tenzir/transfer.hpp"
 
-#include "tenzir/concept/printable/tenzir/uri.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/config.hpp"
 
@@ -30,9 +29,8 @@ auto transfer::prepare(const http::request& req) -> caf::error {
   // Ensure to follow HTTP redirects.
   if (auto err = to_error(easy.set(CURLOPT_FOLLOWLOCATION, 1)))
     return err;
-  auto url = to_string(req.uri);
-  TENZIR_DEBUG("setting URL: {}", url);
-  if (auto err = to_error(easy.set(CURLOPT_URL, url))) {
+  TENZIR_DEBUG("setting URL: {}", req.uri);
+  if (auto err = to_error(easy.set(CURLOPT_URL, req.uri))) {
     return err;
   }
   // Set method.
@@ -88,10 +86,9 @@ auto transfer::prepare(const http::request& req) -> caf::error {
   return {};
 }
 
-auto transfer::prepare(uri url) -> caf::error {
-  auto str = to_string(url);
-  TENZIR_DEBUG("setting URL: {}", str);
-  return to_error(easy_.set(CURLOPT_URL, str));
+auto transfer::prepare(std::string_view url) -> caf::error {
+  TENZIR_DEBUG("setting URL: {}", url);
+  return to_error(easy_.set(CURLOPT_URL, url));
 }
 
 auto transfer::prepare(chunk_ptr chunk) -> caf::error {
@@ -196,7 +193,12 @@ auto transfer::download_chunks() -> generator<caf::expected<chunk_ptr>> {
         break;
     } else {
       co_yield still_running.error();
-      co_return;
+      break;
+    }
+  }
+  for (auto code : multi.info_read()) {
+    if (code != curl::easy::code::ok) {
+      co_yield to_error(code);
     }
   }
 }

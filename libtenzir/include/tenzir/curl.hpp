@@ -187,6 +187,9 @@ public:
   auto operator=(easy&&) -> easy& = default;
   ~easy();
 
+  /// Sets an option to NULL / nullptr.
+  auto unset(CURLoption option) -> code;
+
   /// Sets a numeric transfer option.
   auto set(CURLoption option, long parameter) -> code;
 
@@ -283,6 +286,9 @@ public:
   /// @returns An error upon failure.
   auto loop(std::chrono::milliseconds timeout) -> caf::error;
 
+  /// `curl_multi_info_read`
+  auto info_read() -> generator<easy::code>;
+
 private:
   struct curlm_deleter {
     auto operator()(CURLM* ptr) const noexcept -> void {
@@ -359,6 +365,117 @@ private:
 
   std::unique_ptr<curl_mime, curl_mime_deleter> mime_;
 };
+
+/// An interface for URL handling based on the `curl_url_*` functions.
+class url {
+  friend class easy;
+
+public:
+  /// CURLUCode
+  enum class code {
+    ok = CURLUE_OK,
+    bad_handle = CURLUE_BAD_HANDLE,
+    bad_partpointer = CURLUE_BAD_PARTPOINTER,
+    malformed_input = CURLUE_MALFORMED_INPUT,
+    bad_port_number = CURLUE_BAD_PORT_NUMBER,
+    unsupported_scheme = CURLUE_UNSUPPORTED_SCHEME,
+    urldecode = CURLUE_URLDECODE,
+    out_of_memory = CURLUE_OUT_OF_MEMORY,
+    user_not_allowed = CURLUE_USER_NOT_ALLOWED,
+    unknown_part = CURLUE_UNKNOWN_PART,
+    no_scheme = CURLUE_NO_SCHEME,
+    no_user = CURLUE_NO_USER,
+    no_password = CURLUE_NO_PASSWORD,
+    no_options = CURLUE_NO_OPTIONS,
+    no_host = CURLUE_NO_HOST,
+    no_port = CURLUE_NO_PORT,
+    no_query = CURLUE_NO_QUERY,
+    no_fragment = CURLUE_NO_FRAGMENT,
+    no_zoneid = CURLUE_NO_ZONEID,
+    bad_file_url = CURLUE_BAD_FILE_URL,
+    bad_fragment = CURLUE_BAD_FRAGMENT,
+    bad_hostname = CURLUE_BAD_HOSTNAME,
+    bad_ipv6 = CURLUE_BAD_IPV6,
+    bad_login = CURLUE_BAD_LOGIN,
+    bad_password = CURLUE_BAD_PASSWORD,
+    bad_path = CURLUE_BAD_PATH,
+    bad_query = CURLUE_BAD_QUERY,
+    bad_scheme = CURLUE_BAD_SCHEME,
+    bad_slashes = CURLUE_BAD_SLASHES,
+    bad_user = CURLUE_BAD_USER,
+#if LIBCURL_VERSION_NUM >= 0x077500
+    lacks_idn = CURLUE_LACKS_IDN,
+#endif
+    last = CURLUE_LAST,
+  };
+
+  /// CURLUPart
+  enum class part {
+    url = CURLUPART_URL,
+    scheme = CURLUPART_SCHEME,
+    user = CURLUPART_USER,
+    password = CURLUPART_PASSWORD,
+    options = CURLUPART_OPTIONS,
+    host = CURLUPART_HOST,
+    port = CURLUPART_PORT,
+    path = CURLUPART_PATH,
+    query = CURLUPART_QUERY,
+    fragment = CURLUPART_FRAGMENT,
+    zoneid = CURLUPART_ZONEID,
+  };
+
+  enum class flags : unsigned int {
+    no_flags = 0,
+    default_port = CURLU_DEFAULT_PORT,
+    no_default_port = CURLU_NO_DEFAULT_PORT,
+    default_scheme = CURLU_DEFAULT_SCHEME,
+    non_support_scheme = CURLU_NON_SUPPORT_SCHEME,
+    path_as_is = CURLU_PATH_AS_IS,
+    disallow_user = CURLU_DISALLOW_USER,
+    urldecode = CURLU_URLDECODE,
+    urlencode = CURLU_URLENCODE,
+    appendquery = CURLU_APPENDQUERY,
+    guess_scheme = CURLU_GUESS_SCHEME,
+    no_authority = CURLU_NO_AUTHORITY,
+    allow_space = CURLU_ALLOW_SPACE,
+#if LIBCURL_VERSION_NUM >= 0x077500
+    punycode = CURLU_PUNYCODE,
+#endif
+#if LIBCURL_VERSION_NUM >= 0x080300
+    puny2idn = CURLU_PUNY2IDN,
+#endif
+  };
+
+  url();
+  url(const url& other);
+  auto operator=(const url& other) -> url&;
+  url(url&& other) = default;
+  auto operator=(url&& other) -> url& = default;
+
+  auto set(part url_part, std::string_view str, flags = {}) -> code;
+
+  auto get(part url_part, unsigned int flags = 0) const
+    -> std::pair<code, std::optional<std::string>>;
+
+private:
+  struct curl_url_deleter {
+    auto operator()(CURLU* ptr) const noexcept -> void {
+      if (ptr)
+        curl_url_cleanup(ptr);
+    }
+  };
+
+  std::unique_ptr<CURLU, curl_url_deleter> url_;
+};
+
+/// @relates url
+auto to_string(url::code code) -> std::string_view;
+
+/// @relates url
+auto to_string(const url& x) -> std::string;
+
+/// @relates url
+auto to_error(url::code code) -> caf::error;
 
 /// URL-encodes a string.
 /// @param str The input to encode.

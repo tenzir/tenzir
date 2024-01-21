@@ -49,7 +49,7 @@ public:
   /// Prepares a transfer with an URL.
   /// @param url The URL to use.
   /// @note resets the transfer.
-  auto prepare(uri url) -> caf::error;
+  auto prepare(std::string_view url) -> caf::error;
 
   /// Prepares a chunk with a binary data.
   auto prepare(chunk_ptr chunk) -> caf::error;
