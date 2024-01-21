@@ -403,7 +403,9 @@ public:
     bad_scheme = CURLUE_BAD_SCHEME,
     bad_slashes = CURLUE_BAD_SLASHES,
     bad_user = CURLUE_BAD_USER,
+#if LIBCURL_VERSION_NUM >= 0x077500
     lacks_idn = CURLUE_LACKS_IDN,
+#endif
     last = CURLUE_LAST,
   };
 
@@ -436,8 +438,12 @@ public:
     guess_scheme = CURLU_GUESS_SCHEME,
     no_authority = CURLU_NO_AUTHORITY,
     allow_space = CURLU_ALLOW_SPACE,
+#if LIBCURL_VERSION_NUM >= 0x077500
     punycode = CURLU_PUNYCODE,
-    puny2idn = CURLU_PUNY2IDN
+#endif
+#if LIBCURL_VERSION_NUM >= 0x080300
+    puny2idn = CURLU_PUNY2IDN,
+#endif
   };
 
   url();
