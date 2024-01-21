@@ -187,6 +187,9 @@ public:
   auto operator=(easy&&) -> easy& = default;
   ~easy();
 
+  /// Sets an option to NULL / nullptr.
+  auto unset(CURLoption option) -> code;
+
   /// Sets a numeric transfer option.
   auto set(CURLoption option, long parameter) -> code;
 

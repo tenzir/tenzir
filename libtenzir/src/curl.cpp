@@ -62,6 +62,11 @@ easy::~easy() {
     curl_easy_cleanup(easy_);
 }
 
+auto easy::unset(CURLoption option) -> code {
+  auto curl_code = curl_easy_setopt(easy_, option, nullptr);
+  return static_cast<code>(curl_code);
+}
+
 auto easy::set(CURLoption option, long parameter) -> code {
   auto curl_code = curl_easy_setopt(easy_, option, parameter);
   return static_cast<code>(curl_code);
