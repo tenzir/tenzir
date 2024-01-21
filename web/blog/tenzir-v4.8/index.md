@@ -44,7 +44,7 @@ around a given start time. You can rewrite and scale timestamps:
 ![timeshift](timeshift.excalidraw.svg)
 
 For example, use `timeshift` to re-align our Zeek example dataset to Januar 1,
-1984, and make the trace 100x:
+1984, and make the trace 100x faster:
 
 ```
 from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read zeek-tsv
