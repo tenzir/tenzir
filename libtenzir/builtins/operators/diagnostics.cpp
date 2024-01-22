@@ -7,17 +7,19 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
-#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series_builder.hpp>
 
-namespace tenzir::plugins::metrics {
+#include <caf/typed_event_based_actor.hpp>
+
+namespace tenzir::plugins::diagnostics {
 
 namespace {
 
 class plugin final : public virtual operator_parser_plugin {
 public:
   auto name() const -> std::string override {
-    return "metrics";
+    return "diagnostics";
   };
 
   auto signature() const -> operator_signature override {
@@ -25,17 +27,17 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"metrics", "https://docs.tenzir.com/next/"
-                                             "operators/metrics"};
+    auto parser = argument_parser{"diagnostics", "https://docs.tenzir.com/next/"
+                                                 "operators/diagnostics"};
     bool live = false;
     parser.add("--live", live);
     parser.parse(p);
-    const auto definition = fmt::format("export --internal{} | where #schema "
-                                        "== /tenzir\\.metrics\\..+/",
+    const auto definition = fmt::format("export --internal {}| where #schema "
+                                        "== \"tenzir.diagnostic\"",
                                         live ? " --live" : "");
     auto result = pipeline::internal_parse_as_operator(definition);
     if (not result) {
-      diagnostic::error("failed to transform `metrics` operator into `{}`",
+      diagnostic::error("failed to transform `diagnostics` operator into `{}`",
                         definition)
         .hint("{}", result.error())
         .throw_();
@@ -46,6 +48,6 @@ public:
 
 } // namespace
 
-} // namespace tenzir::plugins::metrics
+} // namespace tenzir::plugins::diagnostics
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::metrics::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::diagnostics::plugin)
