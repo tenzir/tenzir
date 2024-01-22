@@ -108,7 +108,7 @@ Specifies the configuration profile for the Velociraptor instance. This enables
 connecting to multiple Velociraptor instances from the same Tenzir node.
 
 To use profiles, edit your `velociraptor.yaml` configuration like this, where
-`<config>` refers to the configuration file created by Velociraptor, and
+`<config>` refers to the contents of the configuration file created by Velociraptor, and
 `<profile>` to the desired profile name.
 
 ```yaml
