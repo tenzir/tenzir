@@ -9,3 +9,4 @@ Nov 21 13:09:11 mymachine/10.1.1.16 FOO: CEF:0|Cynet|Cynet 360|4.5.4.22139|0|Mem
 Dec  6 15:56:37 mymachine PROCESS[123]: foobar
 Dec  6 15:56:17 mymachine/10.1.1.16 No app name in this message
 Dec  6 15:56:27 mymachine No app name in this message, either
+<164>Jan 18 2024 11:50:03 firepower : %FTD-4-419002: Duplicate TCP SYN from outside:84.241.12.18/59821 to inside:134.40.10.168/8192 with different initial sequence number
