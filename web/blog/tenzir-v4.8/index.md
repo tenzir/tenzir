@@ -2,7 +2,7 @@
 title: Tenzir v4.8
 authors: [dominiklohmann]
 date: 2024-01-22
-tags: [fluent-bit, context, lookup, performance]
+tags: [fluent-bit, http, context, lookup, performance]
 comments: true
 ---
 
@@ -16,7 +16,14 @@ FIXME: Create heaader image
 
 ## Lookup Operator
 
-FIXME: Write content
+The new [`lookup`](/next/operators/lookup) is a unique vehicel to perform live
+and retro matching simultaneously. Think of it as enrichment of all data that
+gets ingested into a node, plus a historical query for every change in the
+enrichment context.
+
+The diagram below visualizes this:
+
+![lookup](lookup.excalidraw.svg)
 
 ## Graylog Support
 

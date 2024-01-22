@@ -27,6 +27,10 @@ These two operations combined offer *unified matching*, i.e., automated retro
 matching by turning context updates into historical queries, and live matching
 with a context on the import feed.
 
+The diagram below illustrates how the operator works:
+
+![lookup](lookup.excalidraw.svg)
+
 ### `<context>`
 
 The name of the context to lookup with.
