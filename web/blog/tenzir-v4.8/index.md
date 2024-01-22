@@ -1,6 +1,6 @@
 ---
 title: Tenzir v4.8
-authors: [dominiklohmann]
+authors: [dominiklohmann, jachris]
 date: 2024-01-22
 tags: [fluent-bit, http, context, lookup, performance]
 comments: true
