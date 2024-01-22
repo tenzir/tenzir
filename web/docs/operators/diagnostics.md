@@ -34,12 +34,29 @@ Contains detailed information about the diagnostic.
 
 |Field|Type|Description|
 |:-|:-|:-|
-|`pipeline_id`|`string`|The ID of the pipeline that received the diagnostic.|
+|`pipeline_id`|`string`|The ID of the pipeline that created the diagnostic.|
 |`timestamp`|`time`|The exact timestamp of the diagnostic creation.|
 |`message`|`string`|The diagnostic message.|
 |`severity`|`string`|The diagnostic severity.|
 |`notes`|`list<record>`|The diagnostic notes. Can be empty.|
 |`annotations`|`list<record>`|The diagnostic annotations. Can be empty.|
+
+
+The record `notes` has the following schema:
+
+|Field|Type|Description|
+|:-|:-|:-|
+|`kind`|`string`|The kind of note, which is `note`, `usage`, `hint` or `docs`.|
+|`message`|`string`|The message of this note.|
+
+The record `annotations` has the following schema:
+
+|Field|Type|Description|
+|:-|:-|:-|
+|`primary`|`bool`|True if the `source` represents the underlying reason for the diagnostic, false if it is only related to it.|
+|`text`|`string`|A message for explanations. Can be empty.|
+|`source`|`string`|The character range in the pipeline string that this annotation is associated to.|
+
 
 ## Examples
 
