@@ -22,8 +22,8 @@ automatically based on system events.
 The states have the following meaning:
 
 - **Created**: the pipeline has just been [deployed][run-a-pipeline].
-- **Running**: the pipeline is actively processing events.
-- **Completed**: there are no more events to process.
+- **Running**: the pipeline is actively processing data.
+- **Completed**: there is no more data to process.
 - **Failed**: an error occurred.
 - **Paused**: the user interrupted execution, keeping in-memory state.
 - **Stopped**: the user interrupted execution, resetting all in-memory state.
