@@ -533,7 +533,7 @@ public:
 
   /// Returns a printer for a specified schema. If `allows_joining()`,
   /// then `input_schema`can also be `type{}`, which means that the printer
-  /// should expect a hetergenous input instead.
+  /// should expect a heterogeneous input instead.
   virtual auto
   instantiate(type input_schema, operator_control_plane& ctrl) const
     -> caf::expected<std::unique_ptr<printer_instance>>

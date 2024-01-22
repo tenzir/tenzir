@@ -361,6 +361,8 @@ setup() {
 @test "Lines" {
   check tenzir "from ${INPUTSDIR}/cef/checkpoint.log read lines | summarize n=count(.) | write json -c"
   check tenzir "from ${INPUTSDIR}/cef/checkpoint.log read lines -s | summarize n=count(.) | write json -c"
+  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | write lines"
+  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | put e | write lines"
 }
 
 # bats test_#tags=pipelines

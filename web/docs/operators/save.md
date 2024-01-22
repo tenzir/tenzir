@@ -1,12 +1,12 @@
 ---
 sidebar_custom_props:
   operator:
-    transformation: true
+    sink: true
 ---
 
 # save
 
-The `save` operator acquires raw bytes from a [connector](../connectors.md).
+The `save` operator saves bytes to a [connector](../connectors.md).
 
 ## Synopsis
 
