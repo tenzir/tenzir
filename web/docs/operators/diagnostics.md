@@ -41,7 +41,6 @@ Contains detailed information about the diagnostic.
 |`notes`|`list<record>`|The diagnostic notes. Can be empty.|
 |`annotations`|`list<record>`|The diagnostic annotations. Can be empty.|
 
-
 The record `notes` has the following schema:
 
 |Field|Type|Description|
@@ -56,7 +55,6 @@ The record `annotations` has the following schema:
 |`primary`|`bool`|True if the `source` represents the underlying reason for the diagnostic, false if it is only related to it.|
 |`text`|`string`|A message for explanations. Can be empty.|
 |`source`|`string`|The character range in the pipeline string that this annotation is associated to.|
-
 
 ## Examples
 
