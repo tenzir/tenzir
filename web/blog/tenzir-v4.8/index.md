@@ -9,21 +9,16 @@ comments: true
 Hot off the press: [Tenzir
 v4.8](https://github.com/tenzir/tenzir/releases/tag/v4.8.0).
 
-FIXME: Create heaader image
-<!--![Tenzir v4.8](tenzir-v4.8.excalidraw.svg)-->
+![lookup](lookup.excalidraw.svg)
 
 <!-- truncate -->
 
 ## Lookup Operator
 
-The new [`lookup`](/next/operators/lookup) is a unique vehicel to perform live
+The new [`lookup`](/next/operators/lookup) is a unique vehicle to perform live
 and retro matching simultaneously. Think of it as enrichment of all data that
 gets ingested into a node, plus a historical query for every change in the
 enrichment context.
-
-The diagram below visualizes this:
-
-![lookup](lookup.excalidraw.svg)
 
 ## Graylog Support
 
