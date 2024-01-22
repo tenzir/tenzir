@@ -7,7 +7,8 @@ comments: true
 ---
 
 Hot off the press: [Tenzir
-v4.8](https://github.com/tenzir/tenzir/releases/tag/v4.8.0).
+v4.8](https://github.com/tenzir/tenzir/releases/tag/v4.8.0). This release is
+filled with goodness.
 
 ![lookup](lookup.excalidraw.svg)
 
