@@ -14,6 +14,7 @@ Submits VQL to a Velociraptor server and returns the response as events.
 velociraptor [-n|--request-name <string>] [-o|--org-id <string>]
              [-r|--max-rows <uint64>] [-s|--subscribe <artifact>]
              [-q|--query <vql>] [-w|--max-wait <duration>]
+             [--profile <profile>]
 ```
 
 ## Description
@@ -100,6 +101,27 @@ contains the result of the hunt.
 Controls how long to wait before releasing a partial result set.
 
 Defaults to `1 sec`.
+
+### `--profile <profile>`
+
+Specifies the configuration profile for the Velociraptor instance. This enables
+connecting to multiple Velociraptor instances from the same Tenzir node.
+
+To use profiles, edit your `velociraptor.yaml` configuration like this, where
+`<config>` refers to the contents of the configuration file created by Velociraptor, and
+`<profile>` to the desired profile name.
+
+```yaml
+# before
+<config>
+
+# after
+profiles:
+  <profile>:
+    <config>
+```
+
+If profiles are defined, the operator defaults to the first profile.
 
 ## Examples
 
