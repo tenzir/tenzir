@@ -18,11 +18,13 @@ TenzirRegisterPlugin(
   SOURCES ${rabbitmq_sources}
   INCLUDE_DIRECTORIES include)
 
-find_package(rabbitmq-c QUIET)
-if (NOT rabbitmq-c_FOUND)
-  list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-  find_package(rabbitmq-c QUIET REQUIRED)
-  list(POP_BACK CMAKE_MODULE_PATH)
+find_package(rabbitmq-c REQUIRED)
+
+if (TENZIR_ENABLE_STATIC_PLUGINS)
+  set(rabbitmq_target rabbitmq::rabbitmq-static)
+else ()
+  set(rabbitmq_target rabbitmq::rabbitmq)
 endif ()
 
-target_link_libraries(amqp PUBLIC rabbitmq::rabbitmq)
+dependency_summary("rabbitmq-c" ${rabbitmq_target} "Dependencies")
+target_link_libraries(amqp PUBLIC ${rabbitmq_target})

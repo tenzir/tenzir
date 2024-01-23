@@ -140,8 +140,19 @@ public:
           if (bp::system(python_executable, "-m", "venv", venv,
                          bp::std_err > std_err)) {
             auto venv_error = drain_pipe(std_err);
-            ctrl.abort(ec::system_error, "failed to create virtualenv: {}",
-                       venv_error);
+            // We need to delete the potentially broken venv here to make sure
+            // that it doesn't stick around to break later runs of the python
+            // operator.
+            std::filesystem::remove_all(venv, ec);
+            if (ec) {
+              diagnostic::error("failed to create virtualenv: {}", venv_error)
+                .note("failed to delete broken virtualenv: {}", ec.message())
+                .hint("please remove `{}`", venv)
+                .emit(ctrl.diagnostics());
+              co_return;
+            }
+            diagnostic::error("failed to create virtualenv: {}", venv_error)
+              .emit(ctrl.diagnostics());
             co_return;
           }
           auto pip_invocation = std::vector<std::string>{
