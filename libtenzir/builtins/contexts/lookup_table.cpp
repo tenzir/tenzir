@@ -96,12 +96,26 @@ public:
     return record{{"num_entries", context_entries.size()}};
   }
 
-  auto dump() const -> list override {
-    auto l = list{};
+  auto dump_data_entries() const -> generator<table_slice> {
+    auto entry_builder = series_builder{};
     for (const auto& [key, value] : context_entries) {
-      l.emplace_back(record{{"key", key}, {"value", value}});
+      entry_builder.data(record{{"key", key}, {"value", value}});
+      auto slices = entry_builder.finish_as_table_slice();
+      for (auto&& slice : slices) {
+        co_yield slice;
+      }
     }
-    return l;
+  }
+
+  auto dump() -> caf::expected<std::vector<table_slice>> override {
+    if (not entry_dumper) {
+      entry_dumper = dump_data_entries();
+    }
+    for (const auto&& x : *entry_dumper) {
+      return std::vector<table_slice>{x};
+    }
+    entry_dumper.reset();
+    return std::vector<table_slice>{};
   }
 
   /// Updates the context.
@@ -233,6 +247,7 @@ public:
 
 private:
   tsl::robin_map<data, data> context_entries;
+  std::optional<generator<table_slice>> entry_dumper;
 };
 
 class plugin : public virtual context_plugin {

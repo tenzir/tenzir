@@ -738,8 +738,8 @@ public:
   /// Inspects the context.
   virtual auto show() const -> record = 0;
 
-  /// Dumps the context content.
-  virtual auto dump() const -> list = 0;
+  /// Dumps the context content or a dumping error.
+  virtual auto dump() -> caf::expected<std::vector<table_slice>> = 0;
 
   /// Updates the context.
   virtual auto update(table_slice events, parameter_map parameters)
