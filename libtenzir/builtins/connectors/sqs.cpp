@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/detail/env.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 
@@ -25,6 +26,10 @@ namespace tenzir::plugins::sqs {
 
 namespace {
 
+/// The default poll time.
+constexpr auto default_poll_time = 3s;
+static_assert(default_poll_time >= 1s && default_poll_time <= 20s);
+
 auto to_aws_string(chunk_ptr chunk) -> Aws::String {
   const auto* ptr = reinterpret_cast<Aws::String::const_pointer>(chunk->data());
   auto size = chunk->size();
@@ -34,19 +39,30 @@ auto to_aws_string(chunk_ptr chunk) -> Aws::String {
 /// A wrapper around SQS.
 class sqs_queue {
 public:
-  explicit sqs_queue(located<std::string> name,
-                     std::optional<std::chrono::seconds> poll_time = {})
+  explicit sqs_queue(located<std::string> name, std::chrono::seconds poll_time)
     : name_{std::move(name)}, poll_time_{poll_time} {
-    if (poll_time_) {
-      auto config = Aws::Client::ClientConfiguration{};
-      // The long-poll timeout is a lower bound for other AWS client timeouts.
-      auto poll_time_ms = long{poll_time_->count()} * 1'000;
-      config.requestTimeoutMs = std::max(config.requestTimeoutMs, poll_time_ms);
-      config.httpRequestTimeoutMs
-        = std::max(config.httpRequestTimeoutMs, poll_time_ms);
-      // Recreate the client, as the config is copied upon construction.
-      client_ = {config};
+    auto config = Aws::Client::ClientConfiguration{};
+    // TODO: remove this after upgrading to Arrow 15, as it's no longer
+    // necessary. This is just a bandaid fix to make an old version of the SDK
+    // honer the AWS_ENDPOINT_URL variable.
+    if (auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL")) {
+      config.endpointOverride = *endpoint_url;
     }
+    if (auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL_SQS")) {
+      config.endpointOverride = *endpoint_url;
+    }
+    // The HTTP request timeout should be longer than the poll time. The overall
+    // request timeout, including retries, should be even larger.
+    auto poll_time_ms = std::chrono::milliseconds{poll_time};
+    auto extra_time_for_http_request = 2s;
+    auto extra_time_for_retries_and_backoff = 2s;
+    auto http_request_timeout = poll_time_ms + extra_time_for_http_request;
+    auto request_timeout
+      = http_request_timeout + extra_time_for_retries_and_backoff;
+    config.httpRequestTimeoutMs = long{http_request_timeout.count()};
+    config.requestTimeoutMs = long{request_timeout.count()};
+    // Recreate the client, as the config is copied upon construction.
+    client_ = {config};
     // Do the equivalent of `aws sqs list-queues`.
     url_ = queue_url();
   }
@@ -56,10 +72,10 @@ public:
     TENZIR_DEBUG("receiving messages from {}", url_);
     auto request = Aws::SQS::Model::ReceiveMessageRequest{};
     request.SetQueueUrl(url_);
+    // TODO: adjust once we have limit pushdown. We still can lose messages
+    // because we eagerly fetch them witout waiting for ACKs from downstream.
     request.SetMaxNumberOfMessages(10);
-    if (poll_time_) {
-      request.SetWaitTimeSeconds(detail::narrow_cast<int>(poll_time_->count()));
-    }
+    request.SetWaitTimeSeconds(detail::narrow_cast<int>(poll_time_.count()));
     auto outcome = client_.ReceiveMessage(request);
     if (not outcome.IsSuccess()) {
       diagnostic::error("failed receiving message from SQS queue")
@@ -124,7 +140,7 @@ private:
   located<std::string> name_;
   Aws::String url_;
   Aws::SQS::SQSClient client_;
-  std::optional<std::chrono::seconds> poll_time_;
+  std::chrono::seconds poll_time_;
 };
 
 struct connector_args {
@@ -152,21 +168,24 @@ public:
                    connector_args args) mutable -> generator<chunk_ptr> {
       try {
         auto poll_time
-          = args.poll_time
-              ? std::optional<std::chrono::seconds>{args.poll_time->inner}
-              : std::optional<std::chrono::seconds>{std::nullopt};
+          = args.poll_time ? args.poll_time->inner : default_poll_time;
         auto queue = sqs_queue{args.queue, poll_time};
+        co_yield {};
         while (true) {
           auto messages = queue.receive_messages();
-          for (const auto& message : messages) {
-            TENZIR_DEBUG("got message {} ({})", message.GetMessageId(),
-                         message.GetReceiptHandle());
-            // It seems there's no way to get the Aws::String out of the message
-            // to move it into the chunk. So we have to copy it.
-            const auto& body = message.GetBody();
-            auto str = std::string_view{body.data(), body.size()};
-            co_yield chunk::copy(str);
-            queue.delete_message(message);
+          if (messages.empty()) {
+            co_yield {};
+          } else {
+            for (const auto& message : messages) {
+              TENZIR_DEBUG("got message {} ({})", message.GetMessageId(),
+                           message.GetReceiptHandle());
+              // It seems there's no way to get the Aws::String out of the
+              // message to move it into the chunk. So we have to copy it.
+              const auto& body = message.GetBody();
+              auto str = std::string_view{body.data(), body.size()};
+              co_yield chunk::copy(str);
+              queue.delete_message(message);
+            }
           }
         }
       } catch (diagnostic& d) {
@@ -203,7 +222,9 @@ public:
 
   auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
-    auto queue = sqs_queue{args_.queue};
+    auto poll_time
+      = args_.poll_time ? args_.poll_time->inner : default_poll_time;
+    auto queue = sqs_queue{args_.queue, poll_time};
     return [&ctrl, queue = std::make_shared<sqs_queue>(std::move(queue))](
              chunk_ptr chunk) mutable {
       if (!chunk || chunk->size() == 0)
