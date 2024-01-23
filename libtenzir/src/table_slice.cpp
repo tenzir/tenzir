@@ -1273,16 +1273,8 @@ auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
     const auto& field_name = k->name();
     unflattened_field_map[field_name]
       = unflatten_field{field_name, slice_array->GetFieldByName(field_name)};
-    if (field_name.starts_with(nested_field_separator)
-        or field_name.ends_with(nested_field_separator)) {
-      TENZIR_DEBUG("retaining original field {} during unflattening: "
-                   "encountered name with separator at beginning/end",
-                   field_name);
-      continue;
-    }
     auto separator_count
       = count_substring_occurrences(field_name, nested_field_separator);
-
     fields_to_resolve[separator_count].push_back(field_name);
   }
   for (auto& [field_name, field] : unflattened_field_map) {
