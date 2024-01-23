@@ -399,19 +399,19 @@ public:
     args.max_rows = max_rows ? max_rows->inner : default_max_rows;
     args.max_wait = std::chrono::duration_cast<std::chrono::seconds>(
       max_wait ? max_wait->inner : default_max_wait);
+    const auto available_profiles = [&]() -> std::vector<std::string_view> {
+      auto profiles = get_if<record>(&config_, "profiles");
+      if (not profiles) {
+        return {};
+      }
+      auto result = std::vector<std::string_view>{};
+      result.reserve(profiles->size());
+      for (auto& [key, _] : *profiles) {
+        result.push_back(key);
+      }
+      return result;
+    }();
     if (profile) {
-      const auto available_profiles = [&]() -> std::vector<std::string_view> {
-        auto profiles = get_if<record>(&config_, "profiles");
-        if (not profiles) {
-          return {};
-        }
-        auto result = std::vector<std::string_view>{};
-        result.reserve(profiles->size());
-        for (auto& [key, _] : *profiles) {
-          result.push_back(key);
-        }
-        return result;
-      }();
       if (available_profiles.empty()) {
         diagnostic::error("no profiles configured")
           .primary(profile->source)
@@ -435,7 +435,20 @@ public:
       return std::make_unique<velociraptor_operator>(
         std::move(args), std::move(**profile_config));
     }
-    return std::make_unique<velociraptor_operator>(std::move(args), config_);
+    if (available_profiles.empty()) {
+      return std::make_unique<velociraptor_operator>(std::move(args), config_);
+    }
+    // If we have profiles configured but no --profile set, we default to the
+    // first configured profile.
+    auto profile_config = try_get_only<record>(
+      config_, fmt::format("profiles.{}", available_profiles.front()));
+    if (not profile_config or not *profile_config) {
+      diagnostic::error("profile `{}` is invalid", available_profiles.front())
+        .note("implicitly used the first configured profile")
+        .throw_();
+    }
+    return std::make_unique<velociraptor_operator>(std::move(args),
+                                                   std::move(**profile_config));
   }
 
   auto name() const -> std::string override {

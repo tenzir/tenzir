@@ -121,6 +121,8 @@ profiles:
     <config>
 ```
 
+If profiles are defined, the operator defaults to the first profile.
+
 ## Examples
 
 Show all processes:
