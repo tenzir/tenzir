@@ -99,8 +99,6 @@
             tenzir-de-static = pkgs.pkgsStatic.tenzir-de;
             tenzir = pkgs.tenzir;
             tenzir-static = pkgs.pkgsStatic.tenzir;
-            tenzir-cm = pkgs.tenzir-cm;
-            tenzir-cm-static = pkgs.pkgsStatic.tenzir-cm;
             tenzir-ee = pkgs.tenzir-ee;
             tenzir-ee-static = pkgs.pkgsStatic.tenzir-ee;
             integration-test-shell = pkgs.mkShell {
@@ -117,8 +115,6 @@
             vast-static = self.packages.${system}.tenzir-de-static;
             vast-ce = self.packages.${system}.tenzir;
             vast-ce-static = self.packages.${system}.tenzir-static;
-            vast-cm = self.packages.${system}.tenzir-cm;
-            vast-cm-static = self.packages.${system}.tenzir-cm-static;
             vast-ee = self.packages.${system}.tenzir-ee;
             vast-ee-static = self.packages.${system}.tenzir-ee-static;
             vast-integration-test-shell = self.packages.${system}.integration-test-shell;
