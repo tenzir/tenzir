@@ -375,26 +375,25 @@ setup() {
 
 # bats test_tags=pipelines
 @test "Get and Set Attributes" {
-  check tenzir 'version | set-attributes foo=bar abc=def | get-attributes'
-  check tenzir 'version | set-attributes first=123 | set-attributes second=456 | get-attributes'
+  check tenzir 'version | set-attributes --foo bar --abc=def | get-attributes'
+  check tenzir 'version | set-attributes --first 123 | set-attributes --second 456 | get-attributes'
 }
 
 # bats test_tags=pipelines
 @test "Chart Attributes" {
-  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | chart donut value=b"
-  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | chart donut value=a"
-  cat ${INPUTSDIR}/json/all-types.json |
-    check ! tenzir "from stdin read json | chart donut"
+  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | chart donut --name e --value b"
+  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | chart donut --name e --value b | get-attributes"
+  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | chart donut --name e --value a"
+  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | chart donut"
 
   cat ${INPUTSDIR}/json/all-types.json |
-    check ! tenzir "from stdin read json | chart donut x=b"
+    check ! tenzir "from stdin read json | chart donut -x b"
 
   cat ${INPUTSDIR}/json/all-types.json |
-    check ! tenzir "from stdin read json | chart donut value=b x=e"
+    check ! tenzir "from stdin read json | chart donut --value b -x e"
 
   cat ${INPUTSDIR}/json/all-types.json |
-    check ! tenzir "from stdin read json | chart donuttt value=b"
-
+    check ! tenzir "from stdin read json | chart donuttt --value b"
 }
 
 # bats test_tags=pipelines
