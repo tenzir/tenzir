@@ -39,11 +39,11 @@ public:
       // We only warn once per schema that we had to rename a set of fields.
       if (seen.insert(slice.schema()).second
           && not result.renamed_fields.empty()) {
-        ctrl.warn(
-          caf::make_error(ec::convert_error,
-                          fmt::format("the flatten operator renamed fields due "
-                                      "to conflicting names: {}",
-                                      fmt::join(result.renamed_fields, ", "))));
+        diagnostic::warning("renaemd fields with conflicting names after "
+                            "flattening: {}",
+                            fmt::join(result.renamed_fields, ", "))
+          .note("from `{}`", name())
+          .emit(ctrl.diagnostics());
       }
       co_yield std::move(result).slice;
     }

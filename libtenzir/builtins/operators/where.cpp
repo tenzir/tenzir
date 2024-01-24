@@ -18,6 +18,7 @@
 #include <tenzir/error.hpp>
 #include <tenzir/expression.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/modules.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice_builder.hpp>
@@ -68,7 +69,7 @@ public:
 
   auto initialize(const type& schema, operator_control_plane& ctrl) const
     -> caf::expected<state_type> override {
-    auto ts = taxonomies{.concepts = ctrl.concepts()};
+    auto ts = taxonomies{.concepts = modules::concepts()};
     auto resolved_expr = resolve(ts, expr_.inner, schema);
     if (not resolved_expr) {
       diagnostic::warning(resolved_expr.error())

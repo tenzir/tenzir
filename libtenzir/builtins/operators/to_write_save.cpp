@@ -82,7 +82,9 @@ public:
     if (printer_->allows_joining()) {
       auto p = printer_->instantiate(type{}, ctrl);
       if (!p) {
-        ctrl.abort(add_context(p.error(), "failed to instantiate printer"));
+        diagnostic::error(p.error())
+          .note("failed to instantiate printer")
+          .emit(ctrl.diagnostics());
         co_return;
       }
       for (auto&& slice : input) {
@@ -104,16 +106,19 @@ public:
         if (!state) {
           auto p = printer_->instantiate(slice.schema(), ctrl);
           if (!p) {
-            ctrl.abort(add_context(p.error(), "failed to initialize printer"));
+            diagnostic::error(p.error())
+              .note("failed to initialize printer")
+              .emit(ctrl.diagnostics());
             co_return;
           }
           state = std::pair{std::move(*p), slice.schema()};
         } else if (state->second != slice.schema()) {
-          ctrl.abort(caf::make_error(
-            ec::logic_error,
-            fmt::format("'{}' does not support heterogeneous outputs; cannot "
-                        "initialize for '{}' after '{}'",
-                        printer_->name(), slice.schema(), state->second)));
+          diagnostic::error("`{}` printer does not support heterogeneous "
+                            "outputs",
+                            printer_->name())
+            .note("cannot initialize for schema `{}` after schema `{}`",
+                  slice.schema(), state->second)
+            .emit(ctrl.diagnostics());
           co_return;
         }
         for (auto&& chunk : state->first->process(std::move(slice))) {
@@ -200,7 +205,9 @@ public:
     // TODO: Extend API to allow schema-less make_saver().
     auto new_saver = saver_->instantiate(ctrl, std::nullopt);
     if (!new_saver) {
-      ctrl.abort(new_saver.error());
+      diagnostic::error(new_saver.error())
+        .note("failed to instantiate saver")
+        .emit(ctrl.diagnostics());
       co_return;
     }
     co_yield {};

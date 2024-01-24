@@ -181,8 +181,9 @@ public:
                          fmt::join(pip_invocation, "' '"));
           if (bp::system(pip_invocation, env, bp::std_err > std_err)) {
             auto pip_error = drain_pipe(std_err);
-            ctrl.abort(ec::system_error,
-                       "failed to install pip requirements: {}", pip_error);
+            diagnostic::error("{}", pip_error)
+              .note("failed to install pip requirements")
+              .emit(ctrl.diagnostics());
             co_return;
           }
         }
@@ -220,19 +221,25 @@ public:
                         stream, slice.schema().to_arrow_schema())
                         .ValueOrDie();
         if (!writer->WriteRecordBatch(*batch).ok()) {
-          ctrl.abort(ec::system_error,
-                     "failed to convert input batch to arrow format");
+          diagnostic::error("failed to convert input batch to Arrow format")
+            .note(
+              "failed to write in conversion from input batch to Arrow format")
+            .emit(ctrl.diagnostics());
           co_return;
         }
         if (auto status = writer->Close(); !status.ok()) {
-          ctrl.abort(ec::system_error, "failed to convert input: {}",
-                     status.message());
+          diagnostic::error("{}", status.message())
+            .note("failed to close writer in conversion from input batch to "
+                  "Arrow format")
+            .emit(ctrl.diagnostics());
           co_return;
         }
         auto result = stream->Finish();
         if (!result.status().ok()) {
-          ctrl.abort(ec::system_error, "failed to finish input buffer: {}",
-                     result.status().message());
+          diagnostic::error("{}", result.status().message())
+            .note(
+              "failed to flush in conversion from input batch to Arrow format")
+            .emit(ctrl.diagnostics());
           co_return;
         }
         std_in.write(reinterpret_cast<const char*>((*result)->data()),
@@ -241,23 +248,22 @@ public:
         auto reader = arrow::ipc::RecordBatchStreamReader::Open(&file);
         if (!reader.status().ok()) {
           auto python_error = drain_pipe(errpipe);
-          ctrl.abort(ec::logic_error, "python error: {}", python_error);
+          diagnostic::error("{}", python_error).emit(ctrl.diagnostics());
           co_return;
         }
         auto result_batch = (*reader)->ReadNext();
         if (!result_batch.status().ok()) {
-          TENZIR_WARN("failed to read data from python: {}",
-                      result_batch.status().message());
           auto python_error = drain_pipe(errpipe);
-          ctrl.abort(ec::logic_error, "python error: {}", python_error);
+          diagnostic::error("{}", python_error).emit(ctrl.diagnostics());
           co_return;
         }
         // The writer on the other side writes an invalid record batch as
         // end-of-stream marker; we have to read it now to remove it from
         // the pipe.
         if (auto result = (*reader)->ReadNext(); !result.ok()) {
-          ctrl.abort(ec::logic_error,
-                     "python error: failed to read closing bytes");
+          diagnostic::error("{}", result.status().message())
+            .note("failed to read closing bytes")
+            .emit(ctrl.diagnostics());
           co_return;
         }
         static_cast<void>((*reader)->Close());
@@ -274,7 +280,7 @@ public:
       std_in.close();
       child.wait();
     } catch (const std::exception& ex) {
-      ctrl.abort(ec::logic_error, "{}", ex.what());
+      diagnostic::error("{}", ex.what()).emit(ctrl.diagnostics());
     }
     co_return;
   }

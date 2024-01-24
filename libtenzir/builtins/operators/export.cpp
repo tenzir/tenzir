@@ -100,7 +100,9 @@ public:
     auto components
       = get_node_components<importer_actor>(blocking_self, ctrl.node());
     if (!components) {
-      ctrl.abort(std::move(components.error()));
+      diagnostic::error(components.error())
+        .note("failed to get importer")
+        .emit(ctrl.diagnostics());
       co_return;
     }
     co_yield {};
@@ -137,7 +139,9 @@ public:
       = get_node_components<catalog_actor, accountant_actor, filesystem_actor>(
         blocking_self, ctrl.node());
     if (!components) {
-      ctrl.abort(std::move(components.error()));
+      diagnostic::error(components.error())
+        .note("failed to get importer")
+        .emit(ctrl.diagnostics());
       co_return;
     }
     co_yield {};
@@ -150,21 +154,18 @@ public:
                  "expression {}",
                  query_context.id, expr_);
     auto current_result = catalog_lookup_result{};
-    auto current_error = caf::error{};
     ctrl.self()
       .request(catalog, caf::infinite, atom::candidates_v, query_context)
       .await(
         [&current_result](catalog_lookup_result result) {
           current_result = std::move(result);
         },
-        [&current_error](caf::error e) {
-          current_error = std::move(e);
+        [&ctrl](const caf::error& err) {
+          diagnostic::error(err)
+            .note("failed to perform catalog lookup")
+            .emit(ctrl.diagnostics());
         });
     co_yield {};
-    if (current_error) {
-      ctrl.abort(std::move(current_error));
-      co_return;
-    }
     for (const auto& [type, info] : current_result.candidate_infos) {
       auto bound_expr = tailor(info.exp, type);
       if (not bound_expr) {
@@ -178,6 +179,7 @@ public:
           passive_partition, uuid, accountant, fs,
           std::filesystem::path{"index"} / fmt::format("{:l}", uuid));
         auto recieving_slices = true;
+        auto current_error = caf::error{};
         blocking_self->send(partition, atom::query_v, query_context);
         while (recieving_slices) {
           blocking_self->receive(
@@ -192,7 +194,7 @@ public:
               current_error = std::move(e);
             });
           if (current_error) {
-            ctrl.warn(std::move(current_error));
+            diagnostic::warning(current_error).emit(ctrl.diagnostics());
             co_yield {};
             continue;
           }

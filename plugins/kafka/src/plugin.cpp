@@ -273,7 +273,7 @@ public:
       for (const auto& topic : topics) {
         TENZIR_DEBUG("publishing {} bytes to topic {}", chunk->size(), topic);
         if (auto error = client.produce(topic, as_bytes(*chunk), key, ts)) {
-          ctrl.abort(std::move(error));
+          diagnostic::error(error).emit(ctrl.diagnostics());
           return;
         }
       }

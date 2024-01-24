@@ -33,36 +33,22 @@ public:
     die("not implemented");
   }
 
-  auto abort(caf::error error) noexcept -> void override {
-    TENZIR_ASSERT(error != caf::none);
-    error_ = error;
-  }
-
-  auto warn(caf::error error) noexcept -> void override {
-    TENZIR_WARN("{}", error);
-  }
-
-  auto emit(table_slice) noexcept -> void override {
-    die("not implemented");
-  }
-
-  auto schemas() const noexcept -> const std::vector<type>& override {
-    return tenzir::modules::schemas();
-  }
-
-  auto concepts() const noexcept -> const concepts_map& override {
-    return tenzir::modules::concepts();
-  }
-
   auto diagnostics() noexcept -> diagnostic_handler& override {
-    class handler final : public diagnostic_handler {
-    public:
+    struct handler final : public diagnostic_handler {
+      handler(local_control_plane& ctrl) : ctrl{ctrl} {
+      }
       void emit(diagnostic d) override {
         TENZIR_WARN("got diagnostic: {:?}", d);
+        if (d.severity == severity::error) {
+          ctrl.error_ = d.to_error();
+        }
       }
+      local_control_plane& ctrl;
     };
-    static auto diag = handler{};
-    return diag;
+    if (not handler_) {
+      handler_ = std::make_unique<handler>(*this);
+    }
+    return *handler_;
   }
 
   auto allow_unsafe_pipelines() const noexcept -> bool override {
@@ -75,6 +61,7 @@ public:
 
 private:
   caf::error error_{};
+  std::unique_ptr<diagnostic_handler> handler_{};
 };
 
 auto do_not_optimize(const operator_base& op) -> optimize_result {

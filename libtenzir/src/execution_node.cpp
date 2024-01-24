@@ -159,34 +159,6 @@ public:
     return state_.weak_node.lock();
   }
 
-  auto abort(caf::error error) noexcept -> void override {
-    TENZIR_DEBUG("{} {} aborts: {}", *state_.self, state_.op->name(), error);
-    TENZIR_ASSERT_CHEAP(error != caf::none);
-    diagnostic::error(error)
-      .note("from `{}`", state_.op->name())
-      .emit(diagnostics());
-  }
-
-  auto warn(caf::error error) noexcept -> void override {
-    TENZIR_DEBUG("{} {} warns: {}", *state_.self, state_.op->name(), error);
-    TENZIR_ASSERT_CHEAP(error != caf::none);
-    diagnostic::warning(error)
-      .note("from `{}`", state_.op->name())
-      .emit(diagnostics());
-  }
-
-  auto emit(table_slice) noexcept -> void override {
-    die("not implemented");
-  }
-
-  auto schemas() const noexcept -> const std::vector<type>& override {
-    return tenzir::modules::schemas();
-  }
-
-  auto concepts() const noexcept -> const concepts_map& override {
-    return tenzir::modules::concepts();
-  }
-
   auto diagnostics() noexcept -> diagnostic_handler& override {
     return *diagnostic_handler_;
   }

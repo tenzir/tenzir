@@ -776,7 +776,7 @@ public:
     }
     for (auto&& result : std::move(impl).finish(config_)) {
       if (!result) {
-        ctrl.abort(std::move(result.error()));
+        diagnostic::error(result.error()).emit(ctrl.diagnostics());
         co_return;
       }
       co_yield std::move(*result);

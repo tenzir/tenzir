@@ -197,11 +197,9 @@ public:
       auto status
         = output_stream.ValueUnsafe()->Write(chunk->data(), chunk->size());
       if (not output_stream.ok()) {
-        ctrl.abort(caf::make_error(ec::filesystem_error,
-                                   fmt::format("failed to write to output "
-                                               "stream for URI "
-                                               "`{}`: {}",
-                                               uri, status.ToString())));
+        diagnostic::error("{}", status.ToString())
+          .note("failed to write to output stream for URI `{}`", uri)
+          .emit(ctrl.diagnostics());
         return;
       }
     };

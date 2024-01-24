@@ -34,28 +34,6 @@ struct fixture {
       FAIL("no mock implementation available");
     }
 
-    auto abort(caf::error) noexcept -> void override {
-      FAIL("no mock implementation available");
-    }
-
-    auto warn([[maybe_unused]] caf::error warning) noexcept -> void override {
-      FAIL("no mock implementation available");
-    }
-
-    auto emit([[maybe_unused]] table_slice metrics) noexcept -> void override {
-      FAIL("no mock implementation available");
-    }
-
-    [[nodiscard]] auto schemas() const noexcept
-      -> const std::vector<type>& override {
-      FAIL("no mock implementation available");
-    }
-
-    [[nodiscard]] auto concepts() const noexcept
-      -> const concepts_map& override {
-      FAIL("no mock implementation available");
-    }
-
     auto diagnostics() noexcept -> diagnostic_handler& override {
       static auto diag = null_diagnostic_handler{};
       return diag;

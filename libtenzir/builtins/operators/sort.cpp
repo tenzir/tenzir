@@ -96,11 +96,11 @@ private:
     key_path = key_field_path_.emplace_hint(
       key_field_path_.end(), schema, schema.resolve_key_or_concept(key_));
     if (not key_path->second.has_value()) {
-      ctrl.warn(caf::make_error(ec::invalid_configuration,
-                                fmt::format("sort key `{}` does not apply to "
-                                            "schema `{}`; events of this "
-                                            "schema will be discarded",
-                                            key_, schema)));
+      diagnostic::warning("sort key `{}` does not apply to schema `{}`", key_,
+                          schema)
+        .note("events of this schema will be discarded")
+        .note("from `sort`")
+        .emit(ctrl.diagnostics());
       return key_path->second;
     }
     auto current_key_type
@@ -109,23 +109,24 @@ private:
       // TODO: Sorting in Arrow using arrow::compute::SortIndices is not
       // supported for extension types. We can fall back to the storage array
       // for all types but subnet, which has a nested extension type.
-      ctrl.warn(caf::make_error(
-        ec::invalid_configuration,
-        fmt::format("sort key `{}` resolves to unsupported type `subnet` for "
-                    "schema `{}`; events of this schema will be discarded",
-                    key_, schema)));
+      diagnostic::warning("sort key `{}` resolves to unsupported type `subnet` "
+                          "for schema `{}`",
+                          key_, schema)
+        .note("events of this schema will be discarded")
+        .note("from `sort`")
+        .emit(ctrl.diagnostics());
       key_path->second = std::nullopt;
       return key_path->second;
     }
     if (not key_type_) {
       key_type_ = current_key_type;
     } else if (key_type_ != current_key_type) {
-      ctrl.warn(caf::make_error(
-        ec::invalid_configuration,
-        fmt::format("sort key `{}` resolved to type `{}` for schema `{}`, but "
-                    "to `{}` for a previous schema; events of this "
-                    "schema will be discarded",
-                    key_, current_key_type, schema, *key_type_)));
+      diagnostic::warning("sort key `{}` resolves to type `{}` "
+                          "for schema `{}`, but to `{}` for a previous schema",
+                          key_, current_key_type, schema, *key_type_)
+        .note("events of this schema will be discarded")
+        .note("from `sort`")
+        .emit(ctrl.diagnostics());
       key_path->second = std::nullopt;
     }
     return key_path->second;

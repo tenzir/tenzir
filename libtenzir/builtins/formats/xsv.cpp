@@ -299,10 +299,9 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
   auto header_parser = (string_value_parser % args.field_sep);
   auto fields = std::vector<std::string>{};
   if (!header_parser(*header, fields)) {
-    ctrl.abort(
-      caf::make_error(ec::parse_error, fmt::format("{0} parser failed to parse "
-                                                   "header of {0} input",
-                                                   args.name)));
+    diagnostic::error("failed to parse header")
+      .note("from `{}`", args.name)
+      .emit(ctrl.diagnostics());
     co_return;
   }
   auto b = series_builder{};
@@ -361,25 +360,25 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
     auto values_parser = (value_parser % args.field_sep);
     auto values = std::vector<data>{};
     if (!values_parser(*line, values)) {
-      ctrl.warn(
-        caf::make_error(ec::parse_error, fmt::format("{} parser skipped line: "
-                                                     "parsing line failed",
-                                                     args.name)));
+      diagnostic::warning("skips unparseable line")
+        .note("from `{}` parser", args.name)
+        .emit(ctrl.diagnostics());
       continue;
     }
     if (values.size() != fields.size()) {
-      ctrl.warn(caf::make_error(
-        ec::parse_error,
-        fmt::format("{} parser skipped line: expected {} fields but got "
-                    "{}",
-                    args.name, fields.size(), values.size())));
+      diagnostic::warning("skips unparseable line")
+        .hint("expected {} fields but got {}", fields.size(), values.size())
+        .note("from `{}` parser", args.name)
+        .emit(ctrl.diagnostics());
       continue;
     }
     auto row = b.record();
     for (const auto& [field, value] : detail::zip(fields, values)) {
       auto result = row.field(field).try_data(value);
       if (not result) {
-        ctrl.warn(result.error());
+        diagnostic::warning(result.error())
+          .note("from `{}` parser", args.name)
+          .emit(ctrl.diagnostics());
       }
     }
   }

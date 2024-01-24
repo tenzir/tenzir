@@ -79,11 +79,11 @@ auto make_extend(const table_slice& slice, const configuration& config,
          it < config.extractor_to_operand.rend(); ++it) {
       auto [field, operand] = *it;
       if (not duplicates.insert(field).second) {
-        ctrl.warn(caf::make_error(
-          ec::invalid_argument,
-          fmt::format("{} operator ignores duplicate or conflicting "
-                      "assignment for field {} in schema {}",
-                      operator_name(Mode), field, slice.schema())));
+        diagnostic::warning("duplicate or conflicting assigmnent for field {}",
+                            field)
+          .hint("schema {}", slice.schema())
+          .note("from `{}`", operator_name(Mode))
+          .emit(ctrl.diagnostics());
         continue;
       }
       if (not operand) {
@@ -95,10 +95,10 @@ auto make_extend(const table_slice& slice, const configuration& config,
       }
       auto [type, array] = resolve_operand(slice, *operand);
       if (not type && not array) {
-        ctrl.abort(caf::make_error(
-          ec::invalid_argument, fmt::format("{} operator requires lists to "
-                                            "have a homogeneous element type",
-                                            operator_name(Mode))));
+        diagnostic::error(
+          "sorting across heterogeneous lists is not implemented")
+          .note("from `{}`", operator_name(Mode))
+          .emit(ctrl.diagnostics());
         continue;
       }
       result.insert(result.begin(), {{field, type}, array});
@@ -119,10 +119,9 @@ auto make_replace(const table_slice& slice, const operand& op,
                                     std::shared_ptr<arrow::Array>>> {
     auto [type, array] = resolve_operand(slice, op);
     if (not type && not array) {
-      ctrl.abort(caf::make_error(ec::invalid_argument,
-                                 fmt::format("{} operator requires lists to "
-                                             "have a homogeneous element type",
-                                             operator_name(mode::replace))));
+      diagnostic::error("lists must have a homogeneous element type")
+        .note("from `{}`", operator_name(mode::replace))
+        .emit(ctrl.diagnostics());
       return {};
     }
     return {{
@@ -198,11 +197,10 @@ public:
             continue;
           }
           if (not operand) {
-            ctrl.warn(caf::make_error(
-              ec::logic_error,
-              fmt::format("{} operator ignores implicit implicit assignment "
-                          "for extractor {}",
-                          operator_name(Mode), extractor)));
+            diagnostic::warning("ignoring implicit assignment for field `{}`",
+                                extractor)
+              .note("from `{}`", operator_name(Mode))
+              .emit(ctrl.diagnostics());
             continue;
           }
           if (auto index = slice.schema().resolve_key_or_concept(extractor)) {

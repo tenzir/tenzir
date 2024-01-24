@@ -115,27 +115,26 @@ public:
     auto components
       = get_node_components<catalog_actor>(blocking_self, ctrl.node());
     if (!components) {
-      ctrl.abort(std::move(components.error()));
+      diagnostic::error(components.error())
+        .note("failed to get catalog")
+        .emit(ctrl.diagnostics());
       co_return;
     }
     co_yield {};
     auto [catalog] = std::move(*components);
     auto types = type_set{};
-    auto error = caf::error{};
     ctrl.self()
       .request(catalog, caf::infinite, atom::get_v, atom::type_v)
       .await(
         [&types](type_set& result) {
           types = std::move(result);
         },
-        [&error](caf::error err) {
-          error = std::move(err);
+        [&ctrl](const caf::error& err) {
+          diagnostic::error(err)
+            .note("failed to get types")
+            .emit(ctrl.diagnostics());
         });
     co_yield {};
-    if (error) {
-      ctrl.abort(std::move(error));
-      co_return;
-    }
     auto builder = series_builder{type_type()};
     for (const auto& type : types) {
       add_type(builder, type);

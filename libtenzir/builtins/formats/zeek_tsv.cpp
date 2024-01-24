@@ -21,6 +21,7 @@
 #include "tenzir/detail/zeekify.hpp"
 #include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/generator.hpp"
+#include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/table_slice_builder.hpp"
 #include "tenzir/to_lines.hpp"
@@ -696,17 +697,18 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       document.builder = table_slice_builder{std::move(schema)};
       // If there is a schema with the exact matching name, then we set it as a
       // target schema and use that for casting.
-      auto target_schema = std::find_if(
-        ctrl.schemas().begin(), ctrl.schemas().end(), [&](const auto& schema) {
-          for (const auto& name : schema.names()) {
-            if (name == schema_name) {
-              return true;
-            }
-          }
-          return false;
-        });
+      auto target_schema
+        = std::find_if(modules::schemas().begin(), modules::schemas().end(),
+                       [&](const auto& schema) {
+                         for (const auto& name : schema.names()) {
+                           if (name == schema_name) {
+                             return true;
+                           }
+                         }
+                         return false;
+                       });
       document.target_schema
-        = target_schema == ctrl.schemas().end() ? type{} : *target_schema;
+        = target_schema == modules::schemas().end() ? type{} : *target_schema;
       // We intentionally fall through here; we create the builder lazily
       // when we encounter the first event, but that we still need to parse
       // now.

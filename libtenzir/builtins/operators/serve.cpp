@@ -820,9 +820,9 @@ public:
               = caf::actor_cast<serve_manager_actor>(std::move(actors[0]));
           },
           [&](const caf::error& err) { //
-            ctrl.abort(caf::make_error(
-              ec::logic_error,
-              fmt::format("failed to find serve-manager: {}", err)));
+            diagnostic::error(err)
+              .note("failed to get serve-manager")
+              .emit(ctrl.diagnostics());
           });
     }
     // Step 2: Register this operator at SERVE MANAGER actor using the serve_id.
@@ -835,9 +835,9 @@ public:
                        escape_operator_arg(serve_id_));
         },
         [&](const caf::error& err) { //
-          ctrl.abort(caf::make_error(
-            ec::logic_error,
-            fmt::format("failed to register at serve-manager: {}", err)));
+          diagnostic::error(err)
+            .note("failed to register at serve-manager")
+            .emit(ctrl.diagnostics());
         });
     co_yield {};
     // Step 3: Forward events to the SERVE MANAGER.
@@ -851,10 +851,9 @@ public:
             // nop
           },
           [&](const caf::error& err) {
-            ctrl.abort(caf::make_error(ec::logic_error,
-                                       fmt::format("failed to buffer events at "
-                                                   "serve-manager: {}",
-                                                   err)));
+            diagnostic::error(err)
+              .note("failed to buffer events at serve-manager")
+              .emit(ctrl.diagnostics());
           });
       co_yield {};
     }
@@ -866,9 +865,9 @@ public:
           // nop
         },
         [&](const caf::error& err) {
-          ctrl.abort(caf::make_error(
-            ec::logic_error,
-            fmt::format("failed to deregister at serve-manager: {}", err)));
+          diagnostic::error(err)
+            .note("failed to deregister at serve-manager")
+            .emit(ctrl.diagnostics());
         });
     co_yield {};
   }
@@ -932,9 +931,9 @@ public:
             = caf::actor_cast<serve_manager_actor>(std::move(actors[0]));
         },
         [&](const caf::error& err) { //
-          ctrl.abort(caf::make_error(
-            ec::logic_error,
-            fmt::format("failed to find serve-manager: {}", err)));
+          diagnostic::error(err)
+            .note("failed to get at serve-manager")
+            .emit(ctrl.diagnostics());
         });
     co_yield {};
     auto serves = list{};
@@ -949,9 +948,9 @@ public:
           serves = std::move(caf::get<list>(response["requests"]));
         },
         [&](const caf::error& err) {
-          ctrl.abort(caf::make_error(
-            ec::logic_error,
-            fmt::format("failed to get status of serve-manager: {}", err)));
+          diagnostic::error(err)
+            .note("failed to get status")
+            .emit(ctrl.diagnostics());
         });
     co_yield {};
     auto builder = series_builder{};

@@ -339,11 +339,9 @@ auto impl(generator<std::optional<std::string_view>> lines,
     }
     auto msg = to<message_view>(*line);
     if (!msg) {
-      ctrl.warn(caf::make_error(ec::parse_error,
-                                fmt::format("CEF parser failed to parse "
-                                            "message: {} "
-                                            "(line: '{}')",
-                                            msg.error(), *line)));
+      diagnostic::warning("failed to parse message: {}", msg.error())
+        .note("line: `{}`", *line)
+        .emit(ctrl.diagnostics());
       continue;
     }
     add(*msg, builder);

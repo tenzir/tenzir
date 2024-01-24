@@ -230,8 +230,8 @@ public:
         // a mismatch between BeginSeq and EndSeq or BeginMap and EndMap; all of
         // these we cannot recover from.
         if (not out->good()) {
-          ctrl.abort(
-            caf::make_error(ec::logic_error, "failed to format YAML document"));
+          diagnostic::error("failed to format YAML document")
+            .emit(ctrl.diagnostics());
           co_return;
         }
         const auto* data = reinterpret_cast<const std::byte*>(out->c_str());
