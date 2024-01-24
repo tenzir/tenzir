@@ -518,8 +518,7 @@ auto non_empty_entries(parser_state& state)
   }
 }
 
-auto get_schemas(bool try_find_schema, operator_control_plane& ctrl,
-                 bool unflatten) -> std::vector<type> {
+auto get_schemas(bool try_find_schema, bool unflatten) -> std::vector<type> {
   if (not try_find_schema)
     return {};
   if (not unflatten)
@@ -970,7 +969,7 @@ public:
     -> std::optional<generator<table_slice>> override {
     auto schemas
       = get_schemas(args_.schema.has_value() or args_.selector.has_value(),
-                    ctrl, not args_.unnest_separator.empty());
+                    not args_.unnest_separator.empty());
     auto schema = std::optional<type>{};
     if (args_.schema) {
       const auto found
