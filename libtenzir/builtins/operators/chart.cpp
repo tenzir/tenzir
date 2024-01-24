@@ -33,7 +33,7 @@ public:
       auto [result, err]
         = helper_.process(std::move(slice), check_schema_fields);
       if (err) {
-        ctrl.warn(std::move(err));
+        diagnostic::warning(err).emit(ctrl.diagnostics());
       }
       co_yield result;
     }

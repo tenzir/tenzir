@@ -83,10 +83,11 @@ public:
       } else if (caf::get<record_type>(slice.schema())
                    .resolve_key(field_)
                    .has_value()) {
-        ctrl.warn(caf::make_error(ec::unspecified,
-                                  fmt::format("ignoring schema {} with already "
-                                              "existing enumeration key {}",
-                                              slice.schema().name(), field_)));
+        diagnostic::warning("ignores schema {} with already existing "
+                            "enumeration key {}",
+                            slice.schema(), field_)
+          .note("from `{}`", name())
+          .emit(ctrl.diagnostics());
         skipped_schemas.insert(slice.schema());
         co_yield slice;
       } else {

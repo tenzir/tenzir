@@ -453,7 +453,7 @@ store_plugin::make_store(accountant_actor accountant, filesystem_actor fs,
 
 static auto
 store_parser_impl(generator<chunk_ptr> loader, operator_control_plane& ctrl,
-                  std::unique_ptr<passive_store> store, std::string name)
+                  std::unique_ptr<passive_store> store)
   -> generator<table_slice> {
   // TODO: Loading everything into memory here is far from ideal. We should
   // instead load passive stores incrementally. For now we at least warn the
@@ -469,27 +469,24 @@ store_parser_impl(generator<chunk_ptr> loader, operator_control_plane& ctrl,
   }
   if (chunks.size() == 1) {
     if (auto err = store->load(std::move(chunks.front()))) {
-      ctrl.abort(caf::make_error(ec::format_error,
-                                 "{} parser failed to load: {}", name,
-                                 std::move(err)));
+      diagnostic::error(err)
+        .note("parser failed to load")
+        .emit(ctrl.diagnostics());
       co_return;
     }
   } else {
-    ctrl.warn(caf::make_error(
-      ec::unspecified, fmt::format("the experimental {} parser does "
-                                   "not currently load files "
-                                   "incrementally and may use an "
-                                   "excessive amount of memory; consider "
-                                   "using 'from file --mmap'",
-                                   name)));
+    diagnostic::warning("loading files incrementally is not currently "
+                        "supported; parser may use excessive amounts of memory")
+      .hint("consider using `from file --mmap` to load the file")
+      .emit(ctrl.diagnostics());
     auto buffer = std::vector<std::byte>{};
     for (auto&& chunk : chunks) {
       buffer.insert(buffer.end(), chunk->begin(), chunk->end());
     }
     if (auto err = store->load(chunk::make(std::move(buffer)))) {
-      ctrl.abort(caf::make_error(ec::format_error,
-                                 "{} parser failed to load: {}", name,
-                                 std::move(err)));
+      diagnostic::error(err)
+        .note("parser failed to load")
+        .emit(ctrl.diagnostics());
       co_return;
     }
   }
@@ -515,8 +512,7 @@ public:
       diagnostic::error(store.error()).emit(ctrl.diagnostics());
       return {};
     }
-    return store_parser_impl(std::move(input), ctrl, std::move(*store),
-                             plugin_->name());
+    return store_parser_impl(std::move(input), ctrl, std::move(*store));
   }
 
 private:
@@ -534,13 +530,17 @@ public:
     auto vec = std::vector<table_slice>{};
     vec.push_back(std::move(slice));
     if (auto error = store_->add(std::move(vec))) {
-      ctrl_.abort(std::move(error));
+      diagnostic::error(error)
+        .note("printer failed to add")
+        .emit(ctrl_.diagnostics());
       co_return;
     }
     // TODO
     auto chunk = store_->finish();
     if (!chunk) {
-      ctrl_.abort(std::move(chunk.error()));
+      diagnostic::error(chunk.error())
+        .note("printer failed to finish")
+        .emit(ctrl_.diagnostics());
       co_return;
     }
     co_yield std::move(*chunk);

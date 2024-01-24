@@ -31,7 +31,9 @@ public:
     for (auto&& slice : input) {
       auto [result, err] = helper_.process(std::move(slice));
       if (err) {
-        ctrl.warn(std::move(err));
+        diagnostic::warning(err)
+          .note("from `{}`", name())
+          .emit(ctrl.diagnostics());
       }
       co_yield result;
     }

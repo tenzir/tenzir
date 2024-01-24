@@ -33,38 +33,6 @@ struct operator_control_plane {
   /// Returns the node actor, if the operator location is remote.
   [[nodiscard]] virtual auto node() noexcept -> node_actor = 0;
 
-  /// Stop the execution of the operator.
-  /// @pre error != caf::none
-  virtual auto abort(caf::error error) noexcept -> void = 0;
-
-  template <class... Ts>
-  auto abort(const caf::error& error, fmt::format_string<Ts...> str,
-             Ts&&... xs) noexcept -> void {
-    abort(add_context(error, std::move(str), std::forward<Ts>(xs)...));
-  }
-
-  /// Emit a warning that gets transported via the executor's side-channel.
-  /// An executor may treat warnings as errors. Warnings additionally get
-  /// reported to the executor's side-channel as `tenzir.warning` events.
-  virtual auto warn(caf::error warning) noexcept -> void = 0;
-
-  template <class... Ts>
-  auto warn(const caf::error& warning, fmt::format_string<Ts...> str,
-            Ts&&... xs) noexcept -> void {
-    warn(add_context(warning, std::move(str), std::forward<Ts>(xs)...));
-  }
-
-  /// Emit events to the executor's side-channel, e.g., metrics.
-  virtual auto emit(table_slice metrics) noexcept -> void = 0;
-
-  /// Access available schemas.
-  [[nodiscard]] virtual auto schemas() const noexcept
-    -> const std::vector<type>& = 0;
-
-  /// Access available concepts.
-  [[nodiscard]] virtual auto concepts() const noexcept
-    -> const concepts_map& = 0;
-
   /// Returns the pipeline's diagnostic handler.
   virtual auto diagnostics() noexcept -> diagnostic_handler& = 0;
 

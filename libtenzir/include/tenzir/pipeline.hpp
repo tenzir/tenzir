@@ -704,7 +704,7 @@ public:
       if (it == states.end()) {
         auto state = initialize(slice.schema(), ctrl);
         if (!state) {
-          ctrl.abort(state.error());
+          diagnostic::error(state.error()).emit(ctrl.diagnostics());
           break;
         }
         it = states.try_emplace(it, slice.schema(), std::move(*state));

@@ -161,27 +161,26 @@ public:
     auto components
       = get_node_components<catalog_actor>(blocking_self, ctrl.node());
     if (!components) {
-      ctrl.abort(std::move(components.error()));
+      diagnostic::error(components.error())
+        .note("failed to get catalog")
+        .emit(ctrl.diagnostics());
       co_return;
     }
     co_yield {};
     auto [catalog] = std::move(*components);
     auto synopses = std::vector<partition_synopsis_pair>{};
-    auto error = caf::error{};
     ctrl.self()
       .request(catalog, caf::infinite, atom::get_v)
       .await(
         [&synopses](std::vector<partition_synopsis_pair>& result) {
           synopses = std::move(result);
         },
-        [&error](caf::error err) {
-          error = std::move(err);
+        [&ctrl](const caf::error& err) {
+          diagnostic::error(err)
+            .note("failed to get partitions")
+            .emit(ctrl.diagnostics());
         });
     co_yield {};
-    if (error) {
-      ctrl.abort(std::move(error));
-      co_return;
-    }
     auto schemas = std::set<type>{};
     for (const auto& synopsis : synopses)
       schemas.insert(synopsis.synopsis->schema);

@@ -1,2 +1,3 @@
-warning: sort key `uid` does not apply to schema `cef.event`; events of this schema will be discarded
+warning: sort key `uid` does not apply to schema `cef.event`
+ = note: events of this schema will be discarded
  = note: from `sort`

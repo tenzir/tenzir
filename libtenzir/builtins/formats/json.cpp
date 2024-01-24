@@ -20,6 +20,7 @@
 #include <tenzir/detail/string_literal.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/generator.hpp>
+#include <tenzir/modules.hpp>
 #include <tenzir/operator_control_plane.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
@@ -466,7 +467,7 @@ private:
     -> bool {
     auto result = builder.try_data(value);
     if (not result) {
-      ctrl_.warn(result.error());
+      diagnostic::warning(result.error()).emit(ctrl_.diagnostics());
       return false;
     }
     return true;
@@ -517,13 +518,12 @@ auto non_empty_entries(parser_state& state)
   }
 }
 
-auto get_schemas(bool try_find_schema, operator_control_plane& ctrl,
-                 bool unflatten) -> std::vector<type> {
+auto get_schemas(bool try_find_schema, bool unflatten) -> std::vector<type> {
   if (not try_find_schema)
     return {};
   if (not unflatten)
-    return ctrl.schemas();
-  auto schemas = ctrl.schemas();
+    return modules::schemas();
+  auto schemas = modules::schemas();
   std::vector<type> ret;
   std::transform(schemas.begin(), schemas.end(), std::back_inserter(ret),
                  [](const auto& schema) {
@@ -611,7 +611,7 @@ protected:
     TENZIR_ASSERT(selector_);
     auto maybe_schema_name = get_schema_name(doc_ref, *selector_);
     if (not maybe_schema_name) {
-      ctrl_.warn(std::move(maybe_schema_name.error()));
+      diagnostic::warning(maybe_schema_name.error()).emit(ctrl_.diagnostics());
       if (no_infer_)
         return {parser_action::skip, std::nullopt};
       auto maybe_slice_to_yield = activate_unknown_entry(state);
@@ -632,7 +632,7 @@ protected:
       }
       return {parser_action::parse, std::nullopt};
     }
-    ctrl_.warn(std::move(maybe_slice_to_yield.error()));
+    diagnostic::warning(maybe_slice_to_yield.error()).emit(ctrl_.diagnostics());
     return {parser_action::skip, std::nullopt};
   }
 
@@ -678,9 +678,9 @@ public:
     // val.error() will inherit all errors from maybe_doc. No need to check
     // for error after each operation.
     if (auto err = val.error()) {
-      this->ctrl_.warn(caf::make_error(
-        ec::parse_error, fmt::format("skips invalid JSON '{}' : {}", json_line,
-                                     error_message(err))));
+      diagnostic::warning("{}", error_message(err))
+        .note("skips invalid JSON `{}`", json_line)
+        .emit(this->ctrl_.diagnostics());
       co_return;
     }
     auto& doc = maybe_doc.value_unsafe();
@@ -708,11 +708,10 @@ public:
     // errors. Calling at_end() when is_alive() returns false is unsafe and
     // resulted in crashes.
     if (success and not doc.at_end()) {
-      this->ctrl_.warn(caf::make_error(
-        ec::parse_error, fmt::format("more than one JSON object in a "
-                                     "single line for NDJSON "
-                                     "mode (while parsing '{}')",
-                                     json_line)));
+      diagnostic::warning(
+        "encountered more than one JSON object in a single NDJSON line")
+        .note("skips remaining objects in line `{}`", json_line)
+        .emit(this->ctrl_.diagnostics());
       success = false;
     }
     if (not success) {
@@ -753,7 +752,9 @@ public:
       // returned here so it is hard to understand if we can recover from
       // it somehow.
       buffer_.reset();
-      this->ctrl_.warn(caf::make_error(ec::parse_error, error_message(err)));
+      diagnostic::warning("{}", error_message(err))
+        .note("failed to parse")
+        .emit(this->ctrl_.diagnostics());
       co_return;
     }
     for (auto doc_it = stream_.begin(); doc_it != stream_.end(); ++doc_it) {
@@ -762,9 +763,9 @@ public:
       auto doc = (*doc_it).get_value();
       if (auto err = doc.error()) {
         state.abort_requested = true;
-        this->ctrl_.abort(caf::make_error(
-          ec::parse_error, fmt::format("skips invalid JSON '{}' : {}", view,
-                                       error_message(err))));
+        diagnostic::error("{}", error_message(err))
+          .note("skips invalid JSON '{}'", view)
+          .emit(this->ctrl_.diagnostics());
         co_return;
       }
       auto [action, slices]
@@ -785,9 +786,9 @@ public:
         auto arr = doc.value_unsafe().get_array();
         if (arr.error()) {
           state.abort_requested = true;
-          this->ctrl_.abort(caf::make_error(
-            ec::parse_error, fmt::format("expected an array of objects: {}",
-                                         error_message(err))));
+          diagnostic::error("{}", error_message(err))
+            .note("expected an array of objects")
+            .emit(this->ctrl_.diagnostics());
           co_return;
         }
         for (auto&& elem : arr.value_unsafe()) {
@@ -821,9 +822,8 @@ public:
 
   void finish(parser_state& state) {
     if (not buffer_.view().empty()) {
-      ctrl_.abort(
-        caf::make_error(ec::parse_error, fmt::format("parser input ended with "
-                                                     "incomplete object")));
+      diagnostic::error("parser input ended with incomplete object")
+        .emit(ctrl_.diagnostics());
       state.abort_requested = true;
     }
   }
@@ -839,10 +839,9 @@ private:
     // investigation in the future.
     if (truncated_bytes > buffer_.view().size()) {
       state.abort_requested = true;
-      this->ctrl_.abort(caf::make_error(
-        ec::parse_error, fmt::format("detected malformed JSON and "
-                                     "aborts parsing: '{}'",
-                                     buffer_.view())));
+      diagnostic::error("detected malformed JSON")
+        .note("in input '{}'", buffer_.view())
+        .emit(this->ctrl_.diagnostics());
       return;
     }
     buffer_.truncate(truncated_bytes);
@@ -970,7 +969,7 @@ public:
     -> std::optional<generator<table_slice>> override {
     auto schemas
       = get_schemas(args_.schema.has_value() or args_.selector.has_value(),
-                    ctrl, not args_.unnest_separator.empty());
+                    not args_.unnest_separator.empty());
     auto schema = std::optional<type>{};
     if (args_.schema) {
       const auto found
