@@ -268,6 +268,11 @@ struct exec_node_state {
   std::optional<struct demand> demand = {};
   bool issue_demand_inflight = {};
 
+  /// Exponential backoff for scheduling.
+  static constexpr duration min_backoff = std::chrono::milliseconds{10};
+  static constexpr duration max_backoff = std::chrono::milliseconds{1000};
+  duration backoff = duration::zero();
+
   /// A pointer to te operator control plane passed to this operator during
   /// execution, which acts as an escape hatch to this actor.
   std::unique_ptr<exec_node_control_plane<Input, Output>> ctrl = {};
@@ -353,7 +358,7 @@ struct exec_node_state {
           return;
         }
         previous = nullptr;
-        schedule_run();
+        schedule_run(false);
       });
     }
     // Instantiate the operator with its input type.
@@ -400,7 +405,7 @@ struct exec_node_state {
             TENZIR_TRACE("{} {} schedules run after successful startup of all "
                          "operators",
                          *self, op->name());
-            schedule_run();
+            schedule_run(false);
             rp.deliver();
           },
           [this, rp](const caf::error& error) mutable {
@@ -429,7 +434,7 @@ struct exec_node_state {
   auto resume() -> caf::result<void> {
     TENZIR_DEBUG("{} {} resumes execution", *self, op->name());
     paused = false;
-    schedule_run();
+    schedule_run(false);
     return {};
   }
 
@@ -503,7 +508,7 @@ struct exec_node_state {
               self->quit();
               return;
             }
-            schedule_run();
+            schedule_run(false);
           },
           [this, output_size](const caf::error& err) {
             TENZIR_DEBUG("{} {} failed to push {} elements", *self, op->name(),
@@ -550,15 +555,30 @@ struct exec_node_state {
     TENZIR_DEBUG("{} {} reached end of input", *self, op->name());
   }
 
-  auto schedule_run() -> void {
+  auto schedule_run(bool use_backoff) -> void {
     // Check whether we're already scheduled to run, or are no longer allowed to
     // rum.
-    TENZIR_TRACE("{} {} schedules run", *self, op->name());
     if (run_scheduled) {
       return;
     }
+    if (not use_backoff) {
+      backoff = duration::zero();
+    } else if (backoff == duration::zero()) {
+      backoff = min_backoff;
+    } else {
+      backoff = std::min(std::chrono::duration_cast<duration>(1.25 * backoff),
+                         max_backoff);
+    }
+    TENZIR_TRACE("{} {} schedules run with a delay of {}", *self, op->name(),
+                 data{backoff});
     run_scheduled = true;
-    self->send(self, atom::internal_v, atom::run_v);
+    if (backoff == duration::zero()) {
+      self->send(self, atom::internal_v, atom::run_v);
+    } else {
+      detail::weak_run_delayed(self, backoff, [this] {
+        self->send(self, atom::internal_v, atom::run_v);
+      });
+    }
   }
 
   auto internal_run() -> caf::result<void> {
@@ -588,7 +608,7 @@ struct exec_node_state {
             = make_timer_guard(metrics->values.time_scheduled);
           TENZIR_TRACE("{} {} had its demand fulfilled", *self, op->name());
           issue_demand_inflight = false;
-          schedule_run();
+          schedule_run(false);
         },
         [this](const caf::error& err) {
           auto time_scheduled_guard
@@ -602,7 +622,7 @@ struct exec_node_state {
                     op->name())
               .emit(ctrl->diagnostics());
           } else {
-            schedule_run();
+            schedule_run(false);
           }
         });
   }
@@ -621,16 +641,23 @@ struct exec_node_state {
     // 1. The operator's generator is not yet completed.
     // 2. The operator has one of the three following reasons to do work:
     //   a. The upstream operator has completed.
-    //   b. The operator has issued demand that is not yet answered.
-    //   c. The operator can produce output independently from receiving input.
-    //   d. The operator has input it can consume.
-    const auto should_continue = instance->it != instance->gen.end()  // (1)
-                                 and (not previous                    // (2a)
-                                      or issue_demand_inflight        // (2b)
-                                      or op->input_independent()      // (2c)
-                                      or not inbound_buffer.empty()); // (2d)
+    //   b. The operator has upstream demand and can produce output
+    //      independently from receiving input.
+    //   c. The operator has input it can consume.
+    const auto should_continue
+      = instance->it != instance->gen.end()                      // (1)
+        and (not previous                                        // (2a)
+             or (demand.has_value() and op->input_independent()) // (2b)
+             or not inbound_buffer.empty());                     // (2c)
     if (should_continue) {
-      schedule_run();
+      schedule_run(false);
+    } else if (demand.has_value()) {
+      // If we shouldn't continue, but there is an upstream demand, then we may
+      // be in a situation where the operator has internally buffered events and
+      // needs to be polled until some oeprator-internal timeout expires before
+      // it yields the results. We use exponential backoff for this with 25%
+      // increments.
+      schedule_run(true);
     } else {
       TENZIR_TRACE("{} {} idles", *self, op->name());
     }
@@ -653,7 +680,7 @@ struct exec_node_state {
     if (instance->it == instance->gen.end()) {
       return {};
     }
-    schedule_run();
+    schedule_run(false);
     auto& pr = demand.emplace(self->make_response_promise<void>(),
                               std::move(sink), batch_size);
     return pr.rp;
@@ -670,7 +697,7 @@ struct exec_node_state {
     metrics->values.inbound_measurement.num_approx_bytes += approx_bytes(input);
     inbound_buffer_size += input_size;
     inbound_buffer.push_back(std::move(input));
-    schedule_run();
+    schedule_run(false);
     return {};
   }
 };
