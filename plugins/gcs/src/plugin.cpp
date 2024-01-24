@@ -149,10 +149,10 @@ public:
     auto uri = arrow::internal::Uri{};
     const auto parse_result = uri.Parse(args_.uri.inner);
     if (not parse_result.ok()) {
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("failed to parse URI `{}`: {}",
-                                         args_.uri.inner,
-                                         parse_result.ToString()));
+      diagnostic::error("failed to parse URI `{}`: {}", args_.uri.inner,
+                        parse_result.ToString())
+        .primary(args_.uri.source)
+        .emit(ctrl.diagnostics());
     }
     auto opts = get_options(args_);
     // TODO: As of Arrow 13, arrow::GCSFileSystem::Make() only intializes
@@ -162,31 +162,28 @@ public:
     auto file_info
       = fs->GetFileInfo(fmt::format("{}/{}", uri.host(), uri.path()));
     if (not file_info.ok()) {
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("failed to get file info from path "
-                                         "`{}`: {}",
-                                         args_.uri.inner,
-                                         file_info.status().ToString()));
+      diagnostic::error("failed to get file info from URI `{}`: {}",
+                        args_.uri.inner, file_info.status().ToString())
+        .primary(args_.uri.source)
+        .emit(ctrl.diagnostics());
     }
     auto output_stream
       = fs->OpenOutputStream(file_info->path(), opts.default_metadata);
     if (not output_stream.ok()) {
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("failed to open output stream for URI "
-                                         "`{}`: {}",
-                                         args_.uri.inner,
-                                         output_stream.status().ToString()));
+      diagnostic::error("failed to open output stream for URI `{}`: {}",
+                        args_.uri.inner, output_stream.status().ToString())
+        .primary(args_.uri.source)
+        .emit(ctrl.diagnostics());
     }
     auto stream_guard
       = caf::detail::make_scope_guard([this, &ctrl, output_stream]() {
           auto status = output_stream.ValueUnsafe()->Close();
           if (not output_stream.ok()) {
-            ctrl.abort(
-              caf::make_error(ec::filesystem_error,
-                              fmt::format("failed to close output stream for "
-                                          "URI "
-                                          "`{}`: {}",
-                                          args_.uri.inner, status.ToString())));
+            diagnostic::error("failed to close output stream for URI `{}`: {}",
+                              args_.uri.inner,
+                              output_stream.status().ToString())
+              .primary(args_.uri.source)
+              .emit(ctrl.diagnostics());
           }
         });
     return [&ctrl, output_stream, uri = args_.uri.inner,
