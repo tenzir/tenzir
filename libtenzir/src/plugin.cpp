@@ -453,7 +453,7 @@ store_plugin::make_store(accountant_actor accountant, filesystem_actor fs,
 
 static auto
 store_parser_impl(generator<chunk_ptr> loader, operator_control_plane& ctrl,
-                  std::unique_ptr<passive_store> store, std::string name)
+                  std::unique_ptr<passive_store> store)
   -> generator<table_slice> {
   // TODO: Loading everything into memory here is far from ideal. We should
   // instead load passive stores incrementally. For now we at least warn the
@@ -512,8 +512,7 @@ public:
       diagnostic::error(store.error()).emit(ctrl.diagnostics());
       return {};
     }
-    return store_parser_impl(std::move(input), ctrl, std::move(*store),
-                             plugin_->name());
+    return store_parser_impl(std::move(input), ctrl, std::move(*store));
   }
 
 private:
