@@ -641,7 +641,7 @@ struct exec_node_state {
     // 1. The operator's generator is not yet completed.
     // 2. The operator has one of the three following reasons to do work:
     //   a. The upstream operator has completed.
-    //   b. The operator has upstream demand and can produce output
+    //   b. The operator has downstream demand and can produce output
     //      independently from receiving input.
     //   c. The operator has input it can consume.
     const auto should_continue
