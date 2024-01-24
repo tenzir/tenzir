@@ -661,7 +661,7 @@ struct exec_node_state {
     } else if (demand.has_value()) {
       // If we shouldn't continue, but there is an upstream demand, then we may
       // be in a situation where the operator has internally buffered events and
-      // needs to be polled until some oeprator-internal timeout expires before
+      // needs to be polled until some operator-internal timeout expires before
       // it yields the results. We use exponential backoff for this with 25%
       // increments.
       schedule_run(true);
