@@ -272,6 +272,7 @@ struct exec_node_state {
   static constexpr duration min_backoff = std::chrono::milliseconds{10};
   static constexpr duration max_backoff = std::chrono::milliseconds{1000};
   duration backoff = duration::zero();
+  caf::disposable backoff_disposable = {};
 
   /// A pointer to te operator control plane passed to this operator during
   /// execution, which acts as an escape hatch to this actor.
@@ -556,6 +557,12 @@ struct exec_node_state {
   }
 
   auto schedule_run(bool use_backoff) -> void {
+    // Edge case: If a run with backoff is currently scheduled, but we now want
+    // a run without backoff, we can replace the scheduled run with a new one.
+    if (not backoff_disposable.disposed() and not use_backoff) {
+      backoff_disposable.dispose();
+      run_scheduled = false;
+    }
     // Check whether we're already scheduled to run, or are no longer allowed to
     // rum.
     if (run_scheduled) {
@@ -575,7 +582,7 @@ struct exec_node_state {
     if (backoff == duration::zero()) {
       self->send(self, atom::internal_v, atom::run_v);
     } else {
-      detail::weak_run_delayed(self, backoff, [this] {
+      backoff_disposable = detail::weak_run_delayed(self, backoff, [this] {
         self->send(self, atom::internal_v, atom::run_v);
       });
     }
