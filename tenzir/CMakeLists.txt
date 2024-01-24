@@ -69,7 +69,7 @@ option(TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION
        "Integrate with init systems when installing" ON)
 add_feature_info(
   "TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION" TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION
-  "integrate with init systems when installing")
+  "integrate with init systems when installing.")
 
 if (TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION)
   if (${CMAKE_SYSTEM_NAME} STREQUAL "FreeBSD")
@@ -146,10 +146,16 @@ add_dependencies(tenzir link-integration)
 # We only install the tenzir extension library, users need to provide bats,
 # bats-common and bats-assert themselves when building plugins against an
 # install tree.
-install(
-  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/integration/lib/bats-tenzir"
-  COMPONENT Development
-  DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/integration/lib")
+option(TENZIR_ENABLE_BATS_TENZIR_INSTALLATION "Install bats-tenzir" ON)
+add_feature_info("TENZIR_ENABLE_BATS_TENZIR_INSTALLATION"
+                 TENZIR_ENABLE_BATS_TENZIR_INSTALLATION "install bats-tenzir.")
+
+if (TENZIR_ENABLE_BATS_TENZIR_INSTALLATION)
+  install(
+    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/integration/lib/bats-tenzir"
+    COMPONENT Development
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/integration")
+endif ()
 
 # -- add plugins ---------------------------------------------------------------
 

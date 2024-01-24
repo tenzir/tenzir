@@ -13,7 +13,6 @@
   inputs.flake-compat.url = "github:edolstra/flake-compat";
   inputs.flake-compat.flake = false;
   inputs.flake-utils.url = "github:numtide/flake-utils";
-  inputs.nix-filter.url = "github:numtide/nix-filter";
   inputs.sbomnix.url = "github:tiiuae/sbomnix";
   inputs.sbomnix.inputs.nixpkgs.follows = "nixpkgs";
 
@@ -102,10 +101,7 @@
             tenzir-ee = pkgs.tenzir-ee;
             tenzir-ee-static = pkgs.pkgsStatic.tenzir-ee;
             integration-test-shell = pkgs.mkShell {
-              packages = pkgs.tenzir-de;
-            };
-            integration-shell = pkgs.mkShell {
-              packages = pkgs.tenzir-integration-deps;
+              packages = pkgs.tenzir-integration-test-runner;
             };
           }
           // {
