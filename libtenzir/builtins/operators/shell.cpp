@@ -88,17 +88,17 @@ public:
 
   auto read(std::span<std::byte> buffer) -> caf::expected<size_t> {
     TENZIR_ASSERT(!buffer.empty());
-    TENZIR_DEBUG("trying to read {} bytes", buffer.size());
+    TENZIR_TRACE("trying to read {} bytes", buffer.size());
     auto* data = reinterpret_cast<char*>(buffer.data());
     auto size = detail::narrow<int>(buffer.size());
     auto bytes_read = stdout_.read(data, size);
-    TENZIR_DEBUG("read {} bytes", bytes_read);
+    TENZIR_TRACE("read {} bytes", bytes_read);
     return detail::narrow<size_t>(bytes_read);
   }
 
   auto write(std::span<const std::byte> buffer) -> caf::error {
     TENZIR_ASSERT(!buffer.empty());
-    TENZIR_DEBUG("writing {} bytes to child's stdin", buffer.size());
+    TENZIR_TRACE("writing {} bytes to child's stdin", buffer.size());
     const auto* data = reinterpret_cast<const char*>(buffer.data());
     auto size = detail::narrow_cast<std::streamsize>(buffer.size());
     if (not stdin_.write(data, size))
@@ -181,7 +181,7 @@ public:
         break;
       }
       auto chk = chunk::copy(std::span{buffer.data(), *bytes_read});
-      TENZIR_DEBUG("yielding chunk with {} bytes", chk->size());
+      TENZIR_TRACE("yielding chunk with {} bytes", chk->size());
       co_yield chk;
     }
     if (auto error = child->wait()) {
