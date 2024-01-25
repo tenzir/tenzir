@@ -97,3 +97,12 @@
   "process_id": null,
   "content": "No app name in this message, either"
 }
+{
+  "facility": 20,
+  "severity": 4,
+  "timestamp": "Jan 18 2024 11:50:03",
+  "hostname": "firepower",
+  "app_name": null,
+  "process_id": null,
+  "content": "%FTD-4-419002: Duplicate TCP SYN from outside:84.241.12.18/59821 to inside:134.40.10.168/8192 with different initial sequence number"
+}

@@ -1,2 +1,2 @@
-error: replace operator requires lists to have a homogeneous element type
+error: lists must have a homogeneous element type
  = note: from `replace`

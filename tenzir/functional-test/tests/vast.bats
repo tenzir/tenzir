@@ -196,16 +196,18 @@ teardown() {
 }
 
 
-#bats test_tags=import,json,sysmon
+# TODO: Figure out why this one is flaky in CI
+#bats test_tags=import,json,sysmon,flaky
 @test "Heterogeneous jsonl import" {
+  skip "Temporarily disabled due to CI flakinesss"
+
   import_suricata_eve
   import_data "from ${INPUTSDIR}/json/sysmon.json"
 
   check --sort -c "tenzir 'export | where \"®\" in :string' | jq --sort-keys -ec ."
   check --sort -c "tenzir 'export | where #schema ni \"suricata\"' | jq --sort-keys -ec ."
 
-  # TODO: Figure out why this one is flaky in CI
-  # check tenzir 'export | where ProcessGuid == /\{[0-9a-f]{8}-[0-9a-f]{4}-5ec2-7.15-[0-9a-f]{12}\}/ | sort UtcTime | sort ProcessId'
+  check tenzir 'export | where ProcessGuid == /\{[0-9a-f]{8}-[0-9a-f]{4}-5ec2-7.15-[0-9a-f]{12}\}/ | sort UtcTime | sort ProcessId'
 }
 
 

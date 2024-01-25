@@ -1,2 +1,2 @@
-error: put operator requires lists to have a homogeneous element type
+error: sorting across heterogeneous lists is not implemented
  = note: from `put`
