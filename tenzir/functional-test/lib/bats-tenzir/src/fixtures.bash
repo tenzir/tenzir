@@ -19,7 +19,8 @@ setup_node_raw() {
   set | grep -Ee "^TENZIR" || true >&3
   # The inner exec is needed so that signals to $NODE_PID actually reach the
   # node.
-  exec {NODE_OUT}< <(exec tenzir-node --print-endpoint)
+  local node_args=$1
+  exec {NODE_OUT}< <(exec tenzir-node --print-endpoint ${node_args})
   NODE_PID=$!
   read -r -u "$NODE_OUT" TENZIR_ENDPOINT
   export TENZIR_ENDPOINT

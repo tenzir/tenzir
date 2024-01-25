@@ -1,7 +1,10 @@
 setup_suite() {
   bats_require_minimum_version 1.8.0
-
   bats_load_library bats-tenzir
+
+  # The default node config is also reasonable for the client commands, ie.
+  # enabling bare mode and disabling plugins etc.
+  export_default_node_config
 }
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
@@ -20,13 +23,11 @@ if ! which tenzir-node; then
   return 1
 fi
 
-echo "setup suite is executed!"
-
-# Enable bare mode so settings in ~/.config/tenzir or the build configuration
-# have no effect.
-export TENZIR_BARE_MODE=1
-export TENZIR_PLUGINS=""
-# TODO export TENZIR_PLUGINS__JSON__COMPACT_OUTPUT=true
-
-# TODO: Rename to ${BATS_TENZIR_SUITE_DATADIR} and move to bats-tenzir library?
+# TODO: Should the datadir definitions move into the bats-tenzir library,
+# so that files in there automatically available for plugins integration tests?
 export BATS_TENZIR_DATADIR="$(dirname ${BATS_TEST_DIRNAME})/data"
+
+export INPUTSDIR="${BATS_TENZIR_DATADIR}/inputs"
+export QUERYDIR="${BATS_TENZIR_DATADIR}/queries"
+export MISCDIR="${BATS_TENZIR_DATADIR}/misc"
+

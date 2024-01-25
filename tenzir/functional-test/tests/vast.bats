@@ -6,22 +6,11 @@
 # before pipelines were introduced and are not using any
 # server fixture.
 
-INPUTSDIR="${BATS_TENZIR_DATADIR}/inputs"
-QUERYDIR="${BATS_TENZIR_DATADIR}/queries"
-MISCDIR="${BATS_TENZIR_DATADIR}/misc"
-
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
   bats_load_library bats-tenzir
 
-  # default 'tenzir.yaml'
-  export TENZIR_EXEC__DUMP_DIAGNOSTICS=true
-  export TENZIR_EXPORT__ZEEK__DISABLE_TIMESTAMP_TAGS=true
-  export TENZIR_AUTOMATIC_REBUILD=0
-  export TENZIR_ENDPOINT=127.0.0.1:5158
-  export TENZIR_PLUGINS=
-  set | grep -Ee "^TENZIR" || true >&3
   setup_node
 }
 
@@ -40,7 +29,6 @@ teardown() {
   check tenzir 'export | where resp_p != 80 | summarize count=count(.)'
   check tenzir 'export | where 861237 | summarize count=count(.)'
 }
-
 
 # bats test_tags=node,import,export,zeek
 @test "Node Zeek conn log" {
@@ -65,11 +53,10 @@ teardown() {
   check tenzir 'export | where #schema == "zeek.conn" | summarize count=count(.) | sort ts'
 }
 
-
 # bats test_tags=node,import,export,zeek
 @test "Node Zeek dns log" {
   import_zeek_dns
-    
+
   check tenzir "export | where resp_h == 192.168.1.104"
   check tenzir 'export | where resp_h == 192.168.1.104 | write zeek-tsv --disable-timestamp-tags'
   check tenzir "export | where :port == 53 | summarize count=count(.)"
@@ -85,7 +72,7 @@ teardown() {
 
 # bats test_tags=node,import,export,zeek
 @test "Node Zeek snmp log" {
-  import_zeek_snmp  
+  import_zeek_snmp
 
   check tenzir "export | where duration >= 3s | sort ts"
 }
@@ -103,7 +90,6 @@ teardown() {
 
   check tenzir "export | sort ts"
 }
-
 
 #bats test_tags=node,import,export,suricata,eve,import_filter
 @test "Node suricata alert" {
@@ -137,7 +123,7 @@ teardown() {
     skip "disabled on mac"
   fi
 
-  zcat ${INPUTSDIR}/csv/argus-M57-10k-pkts.csv.gz | \
+  zcat ${INPUTSDIR}/csv/argus-M57-10k-pkts.csv.gz |
     tenzir-ctl import -b -t argus.record csv
   tenzir-ctl flush
 
@@ -147,21 +133,19 @@ teardown() {
 
 #bats test_tags=node,import,export,argus,ssv,csv
 @test "Node argus ssv" {
-  cat ${INPUTSDIR}/csv/argus-additional-fields.ssv | \
+  cat ${INPUTSDIR}/csv/argus-additional-fields.ssv |
     tenzir-ctl import -b -t argus.record csv '--separator=" "'
 
   check tenzir "export | sort StartTime | write csv"
 }
 
-
 #bats test_tags=node,import,export,argus,tsv,csv
 @test "node argus tsv" {
-  cat ${INPUTSDIR}/csv/argus-reordered.tsv |\
+  cat ${INPUTSDIR}/csv/argus-reordered.tsv |
     tenzir-ctl import -b -t argus.record csv '--separator="\t"'
 
   check tenzir "export | sort StartTime | write csv"
 }
-
 
 #bats test_tags=import,export,zeek
 @test "multi addr query" {
@@ -170,7 +154,6 @@ teardown() {
   query=$(<${QUERYDIR}/multi_addr.txt)
   check tenzir "export | ${query}"
 }
-
 
 #bats test_tags=export,arrow
 @test "arrow export" {
@@ -181,12 +164,11 @@ teardown() {
   import_zeek_conn
 
   check -c "tenzir-ctl export -n 10 arrow 'where #schema == \"zeek.conn\"' | python ${MISCDIR}/scripts/print-arrow.py"
-  
+
   import_suricata_eve
 
   check -c "tenzir-ctl export arrow 'where #schema == \"suricata.http\"' | python ${MISCDIR}/scripts/print-arrow.py"
 }
-
 
 #bats test_tags=syslog,import
 @test "Import syslog" {
@@ -194,7 +176,6 @@ teardown() {
 
   check --sort -c "tenzir 'export | where #schema == /syslog.*/' | jq --sort-keys -ec ."
 }
-
 
 # TODO: Figure out why this one is flaky in CI
 #bats test_tags=import,json,sysmon,flaky
@@ -210,7 +191,6 @@ teardown() {
   check tenzir 'export | where ProcessGuid == /\{[0-9a-f]{8}-[0-9a-f]{4}-5ec2-7.15-[0-9a-f]{12}\}/ | sort UtcTime | sort ProcessId'
 }
 
-
 #bats test_tags=import,json,suricata
 @test "Import time" {
   if [ $(uname) == "Darwin" ]; then
@@ -220,11 +200,10 @@ teardown() {
 
   import_suricata_eve 'where #schema == "suricata.stats"'
 
-  NOW=`date -Is`
+  NOW=$(date -Is)
   check tenzir "export | where #import_time > ${NOW}"
   check tenzir "export | where #import_time <= ${NOW} | sort timestamp"
 }
-
 
 #bats test_tags=import,export,suricata
 @test "Extractor Predicates" {
@@ -255,19 +234,16 @@ teardown() {
   tenzir "export | where zeek.conn.id.orig_h == 192.168.1.104 | summarize count=count(.)"
 }
 
-
 # bats test_tags=import,export,csv
 @test "Optional Partition Indexes" {
   # Checks if the import and export works as usual when we ignore creation
   # of partition indexes for all field names
-  
+
   TENZIR_INDEX__RULES__TARGETS="[argus.record.StartTime, argus.record.Flgs, argus.record.Proto, argus.record.SrcAddr,                  argus.record.Sport, argus.record.Dir, argus.record.DstAddr, argus.record.Dport, argus.record.TotPkts,                  argus.record.TotBytes, argus.record.State, argus.record.Dur, argus.record.UnknownField, argus.record.Cause]"
   TENZIR_INDEX__RULES__PARTITION_INDEX=false
 
-  cat ${INPUTSDIR}/csv/argus-additional-fields.ssv \
-    | tenzir-ctl import -t argus.record csv '--separator=" "'
-        
+  cat ${INPUTSDIR}/csv/argus-additional-fields.ssv |
+    tenzir-ctl import -t argus.record csv '--separator=" "'
+
   check tenzir "export | write csv"
 }
-
-

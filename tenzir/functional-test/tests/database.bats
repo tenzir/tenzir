@@ -2,21 +2,20 @@
 
 : "${BATS_TEST_TIMEOUT:=120}"
 
-INPUTSDIR="$(dirname "$BATS_SUITE_DIRNAME")/data/inputs"
-
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
   bats_load_library bats-tenzir
 
-  export TENZIR_AUTOMATIC_REBUILD=0
+  # Override parts of the default node config for this test file
+  # by using `setup_node_raw()`.
+  export_default_node_config
   export TENZIR_ENABLE_METRICS=true
   export TENZIR_METRICS__SELF_SINK__ENABLE=false
   export TENZIR_METRICS__FILE_SINK__ENABLE=true
   export TENZIR_METRICS__FILE_SINK__REAL_TIME=true
-  export TENZIR_METRICS__FILE_SINK__PATH=$PWD/$BATS_TEST_STATE_DIR/metrics.log
-  set | grep -Ee "^TENZIR" || true >&3
-  setup_node
+  export TENZIR_METRICS__FILE_SINK__PATH=${TENZIR_DB_DIRECTORY}/metrics.log
+  setup_node_raw
 }
 
 teardown() {
@@ -24,8 +23,7 @@ teardown() {
 }
 
 @test "import and export operators" {
-  < "$INPUTSDIR/suricata/eve.json" \
-    check tenzir 'read suricata | import'
+  check <"$INPUTSDIR/suricata/eve.json" tenzir 'read suricata | import'
 
   check tenzir 'export | summarize count=count(.)'
 }
@@ -74,7 +72,7 @@ teardown() {
 wait_for_file() {
   local file=$1
   until [[ -s "$file" ]]; do
-      sleep 1
+    sleep 1
   done
 }
 
