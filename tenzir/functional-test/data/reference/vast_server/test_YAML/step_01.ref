@@ -2,10 +2,11 @@
 tenzir:
   automatic-rebuild: 0
   bare-mode: true
-  enable-metrics: true
+  enable-metrics: false
   endpoint: :0
   exec:
     dump-diagnostics: true
+    implicit-events-sink: write json --compact-output | save -
   export:
     zeek:
       disable-timestamp-tags: true

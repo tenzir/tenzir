@@ -1,15 +1,34 @@
 # SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 # SPDX-License-Identifier: BSD-3-Clause
 
-setup_node() {
-  export TENZIR_BARE_MODE=true
+
+export_default_node_config() {
   export TENZIR_DB_DIRECTORY="${BATS_TEST_TMPDIR}/db"
+  export TENZIR_BARE_MODE=true
+  export TENZIR_PLUGINS=""
+  export TENZIR_ENDPOINT=":0"
+  export TENZIR_EXPORT__ZEEK__DISABLE_TIMESTAMP_TAGS=true
+  export TENZIR_AUTOMATIC_REBUILD=0
+  export TENZIR_EXEC__DUMP_DIAGNOSTICS=true
+  export TENZIR_EXEC__IMPLICIT_EVENTS_SINK="write json --compact-output | save -"
+  export TENZIR_ENABLE_METRICS=false
+}
+
+setup_node_raw() {
+  # Print node config
+  set | grep -Ee "^TENZIR" || true >&3
   # The inner exec is needed so that signals to $NODE_PID actually reach the
   # node.
-  exec {NODE_OUT}< <(exec tenzir-node -e ":0" --print-endpoint)
+  exec {NODE_OUT}< <(exec tenzir-node --print-endpoint)
   NODE_PID=$!
   read -r -u "$NODE_OUT" TENZIR_ENDPOINT
   export TENZIR_ENDPOINT
+}
+
+# Start a node with a configuration suitable for most integration tests.
+setup_node() {
+  export_default_node_config
+  setup_node_raw
 }
 
 teardown_node() {
