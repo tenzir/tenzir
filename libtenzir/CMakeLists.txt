@@ -222,12 +222,13 @@ dependency_summary("OpenSSL" OpenSSL::SSL "Dependencies")
 
 # Link against yaml-cpp.
 find_package(yaml-cpp 0.6.2 REQUIRED)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(yaml-cpp REQUIRED)")
 if (yaml-cpp_VERSION VERSION_GREATER_EQUAL 0.8)
-  target_link_libraries(libtenzir PUBLIC yaml-cpp::yaml-cpp)
+  target_link_libraries(libtenzir PRIVATE yaml-cpp::yaml-cpp)
+  target_link_libraries(libtenzir_builtins PRIVATE yaml-cpp::yaml-cpp)
   dependency_summary("yaml-cpp" yaml-cpp::yaml-cpp "Dependencies")
 else ()
-  target_link_libraries(libtenzir PUBLIC yaml-cpp)
+  target_link_libraries(libtenzir PRIVATE yaml-cpp)
+  target_link_libraries(libtenzir_builtins PRIVATE yaml-cpp)
   dependency_summary("yaml-cpp" yaml-cpp "Dependencies")
 endif ()
 
