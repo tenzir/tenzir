@@ -206,7 +206,7 @@ setup() {
   check tenzir "from ${INPUTSDIR}/zeek/merge.log read zeek-tsv | write json"
   check tenzir "from ${INPUTSDIR}/zeek/merge_with_whitespace_separation.log read zeek-tsv | write json"
   check tenzir "from ${INPUTSDIR}/zeek/dns.log.gz read zeek-tsv | head 300 | write zeek-tsv --disable-timestamp-tags"
-  check tenzir "from ${INPUTSDIR}/zeek/dns.log.gz read zeek-tsv | head 300 | write csv"
+  check tenzir "from ${INPUTSDIR}/zeek/dns.log.gz read zeek-tsv | head 300 | batch | write csv"
   check tenzir "from ${INPUTSDIR}/zeek/whitespace_start.log read zeek-tsv | write zeek-tsv --disable-timestamp-tags --set-separator \";\" --empty-field \"empty\" --unset-field \"NULLVAL\""
   check tenzir "from ${INPUTSDIR}/json/snmp.log.json.gz read json | write zeek-tsv --disable-timestamp-tags"
   check tenzir "from ${INPUTSDIR}/zeek/empty.log read zeek-tsv | write zeek-tsv --disable-timestamp-tags"
