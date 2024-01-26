@@ -23,13 +23,13 @@ teardown() {
   run ! tenzir-ctl and that is not a command
 }
 
-# bats test_tags=server,import-export,zeek
+# bats test_tags=server,import,export,zeek
 @test "Server Zeek multiple imports" {
   import_zeek_conn
   import_zeek_dns
 
-  check tenzir 'export | where resp_h == 192.168.1.104 | sort uid'
-  check tenzir 'export | where zeek.conn.id.resp_h == 192.168.1.104 | sort uid'
+  check tenzir 'export | where resp_h == 192.168.1.104 | extend schema=#schema | sort schema | sort --stable ts'
+  check tenzir 'export | where zeek.conn.id.resp_h == 192.168.1.104 | extend schema=#schema | sort schema | sort --stable ts'
   check tenzir 'export | where :timestamp >= 1970-01-01 && #schema != "tenzir.metrics" | summarize count=count(.)'
   check tenzir 'export | where #schema == "zeek.conn" | summarize count=count(.)'
 }

@@ -55,3 +55,15 @@ teardown_node() {
   # This closes the fd attached to stdout on the reading side for good measure.
   exec {NODE_OUT}<&-
 }
+
+# These are deprecated and should not be used anymore, but are provided to avoid
+# the need for a simultaneous submodule update.
+
+setup_state_dir() {
+  export BATS_TEST_STATE_DIR=${BATS_TEST_TMPDIR}
+  export TENZIR_DB_DIRECTORY="${BATS_TEST_STATE_DIR}/db"
+}
+
+teardown_state_dir() {
+  true
+}
