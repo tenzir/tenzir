@@ -10,8 +10,8 @@ setup_suite() {
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 export BATS_LIB_PATH=${BATS_LIB_PATH:+${BATS_LIB_PATH}:}${SCRIPT_DIR}/../lib
 
-# Normalize the environment unless `BATS_KEEP_ENVIRONMENT` is set.
-if [[ ! -n ${BATS_KEEP_ENVIRONMENT} ]]; then
+# Normalize the environment unless `BATS_TENZIR_KEEP_ENVIRONMENT` is set.
+if [[ ! -n ${BATS_TENZIR_KEEP_ENVIRONMENT} ]]; then
   unset $(printenv | grep -o '^TENZIR[^=]*' | paste -s -)
 fi
 

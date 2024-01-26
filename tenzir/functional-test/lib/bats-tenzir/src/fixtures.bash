@@ -12,6 +12,7 @@ export_default_node_config() {
   export TENZIR_EXEC__DUMP_DIAGNOSTICS=true
   export TENZIR_EXEC__IMPLICIT_EVENTS_SINK="write json --compact-output | save -"
   export TENZIR_ENABLE_METRICS=false
+  export TENZIR_ALLOW_UNSAFE_PIPELINES="true"
 }
 
 setup_node_raw() {
@@ -54,16 +55,4 @@ teardown_node() {
   pkill -P "$killerPid"
   # This closes the fd attached to stdout on the reading side for good measure.
   exec {NODE_OUT}<&-
-}
-
-# These are deprecated and should not be used anymore, but are provided to avoid
-# the need for a simultaneous submodule update.
-
-setup_state_dir() {
-  export BATS_TEST_STATE_DIR=${BATS_TEST_TMPDIR}
-  export TENZIR_DB_DIRECTORY="${BATS_TEST_STATE_DIR}/db"
-}
-
-teardown_state_dir() {
-  true
 }

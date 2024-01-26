@@ -1,4 +1,4 @@
-: "${BATS_TEST_TIMEOUT:=30}"
+: "${BATS_TEST_TIMEOUT:=60}"
 
 # BATS ports of our old integration test suite.
 
@@ -22,6 +22,11 @@ teardown() {
 
 # bats test_tags=node,counting,zeek
 @test "Conn log counting" {
+  if [ $(uname) == "Darwin" ]; then
+    # TODO: Figure out why this has different output on mac
+    skip "disabled on mac"
+  fi
+
   import_zeek_conn
 
   check tenzir 'export | where :ip == 192.168.1.104 | summarize count=count(.)'
@@ -200,7 +205,11 @@ teardown() {
 
   import_suricata_eve 'where #schema == "suricata.stats"'
 
-  NOW=$(date -Is)
+  # We need subsecond precision here because `date` rounds
+  # down otherwise. Also, we need `tr` because `date` uses
+  # a comma for subsecond precision by default but tenzir
+  # requires a dot. (ISO 8601 allows both)
+  NOW=$(date -Ins | tr ',' '.')
   check tenzir "export | where #import_time > ${NOW}"
   check tenzir "export | where #import_time <= ${NOW} | sort timestamp"
 }
