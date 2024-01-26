@@ -1,3 +1,1 @@
-warning: sort key `ts` does not apply to schema `tenzir.summarize`
- = note: events of this schema will be discarded
- = note: from `sort`
+{"count": 13586}
