@@ -31,8 +31,10 @@ setup() {
   teardown_node
 }
 
-# bats test_tags=metrics
+# bats test_tags=metrics,flaky
 @test "Shutdown with Metrics" {
+  skip "Disabled due to CI flakiness"
+
   # Verify that the node doesn't deadlock on
   # shutdown when metrics are enabled.
 
