@@ -24,8 +24,9 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
   : super(options),
     syslog_rfc5424_type_{make_syslog_type()},
     syslog_unkown_type_{make_unknown_type()} {
-  if (in != nullptr)
+  if (in != nullptr) {
     reset(std::move(in));
+  }
 }
 
 caf::error reader::module(tenzir::module x) {
@@ -59,8 +60,9 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
   table_slice_builder_ptr bptr = nullptr;
   size_t produced = 0;
   while (produced < max_events) {
-    if (lines_->done())
+    if (lines_->done()) {
       return finish(f, caf::make_error(ec::end_of_input, "input exhausted"));
+    }
     if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
       TENZIR_DEBUG("{} reached batch timeout", detail::pretty_type_name(this));
@@ -90,38 +92,42 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
                                          "slice builder for type {}",
                                          syslog_rfc5424_type_.name())));
       }
-      // TODO: The index is currently incapable of handling map_type.
-      // Hence, the structured_data is disabled.
       if (!bptr->add(sys_msg.hdr.facility, sys_msg.hdr.severity,
                      sys_msg.hdr.version, sys_msg.hdr.ts, sys_msg.hdr.hostname,
                      sys_msg.hdr.app_name, sys_msg.hdr.process_id,
-                     sys_msg.hdr.msg_id,
-                     /*sys_msg.data,*/ sys_msg.msg))
+                     sys_msg.hdr.msg_id, sys_msg.data, sys_msg.msg)) {
         return finish(
           f, caf::make_error(ec::format_error,
                              fmt::format("failed to produce table slice row "
                                          "for {}",
                                          syslog_rfc5424_type_.name())));
-      if (bptr->rows() >= max_slice_size)
-        if (auto err = finish(f))
+      }
+      if (bptr->rows() >= max_slice_size) {
+        if (auto err = finish(f)) {
           return err;
+        }
+      }
     } else {
       bptr = builder(syslog_unkown_type_);
-      if (!bptr)
+      if (!bptr) {
         return finish(f,
                       caf::make_error(ec::format_error,
                                       fmt::format("failed to get create table "
                                                   "slice builder for type {}",
                                                   syslog_unkown_type_.name())));
-      if (!bptr->add(line))
+      }
+      if (!bptr->add(line)) {
         return finish(
           f, caf::make_error(ec::format_error,
                              fmt::format("failed to produce table slice row "
                                          "for {}",
                                          syslog_unkown_type_.name())));
-      if (bptr->rows() >= max_slice_size)
-        if (auto err = finish(f))
+      }
+      if (bptr->rows() >= max_slice_size) {
+        if (auto err = finish(f)) {
           return err;
+        }
+      }
     }
     ++produced;
     ++batch_events_;

@@ -112,16 +112,20 @@ struct header_parser : parser_base<header_parser> {
     auto timestamp = maybe_null(parsers::time);
     auto p = pri >> version >> ' ' >> timestamp >> ' ' >> hostname >> ' '
              >> app_name >> ' ' >> process_id >> ' ' >> msg_id;
-    if constexpr (std::is_same_v<Attribute, unused_type>)
+    if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);
-    else
+    } else {
       return p(f, l, x.version, x.ts, x.hostname, x.app_name, x.process_id,
                x.msg_id);
+    }
   }
 };
 
 /// A parameter of a structured data element.
-using parameter = std::tuple<std::string, std::string>;
+struct parameter {
+  std::string key;
+  std::string value;
+};
 
 /// Parser for one structured data element parameter.
 /// @relates parameter
@@ -139,15 +143,16 @@ struct parameter_parser : parser_base<parameter_parser> {
     auto escaped = esc >> (ch<']'> | ch<'\\'> | ch<'"'>);
     auto value = escaped | (printable - ']' - '"' - '\\');
     auto p = ' ' >> key >> '=' >> '"' >> *value >> '"';
-    if constexpr (std::is_same_v<Attribute, unused_type>)
+    if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);
-    else
-      return p(f, l, x);
+    } else {
+      return p(f, l, x.key, x.value);
+    }
   }
 };
 
 /// All parameters of a structured data element.
-using parameters = tenzir::map;
+using parameters = list;
 
 /// Parser for all structured data element parameters.
 struct parameters_parser : parser_base<parameters_parser> {
@@ -157,8 +162,8 @@ struct parameters_parser : parser_base<parameters_parser> {
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
     auto param = parameter_parser{}->*[&](parameter in) {
       if constexpr (!std::is_same_v<Attribute, unused_type>) {
-        auto& [key, value] = in;
-        x[key] = value;
+        x.emplace_back(
+          record{{"key", std::move(in.key)}, {"value", std::move(in.value)}});
       }
     };
     auto p = +param;
@@ -167,7 +172,10 @@ struct parameters_parser : parser_base<parameters_parser> {
 };
 
 /// A structured data element.
-using structured_data_element = std::tuple<std::string, parameters>;
+struct structured_data_element {
+  std::string id;
+  parameters params;
+};
 
 /// Parser for structured data elements.
 /// @relates structured_data_element
@@ -186,15 +194,16 @@ struct structured_data_element_parser
     auto sd_id = rep(sd_name_char, 1, 32);
     auto params = parameters_parser{};
     auto p = '[' >> sd_id >> params >> ']';
-    if constexpr (std::is_same_v<Attribute, unused_type>)
+    if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);
-    else
-      return p(f, l, x);
+    } else {
+      return p(f, l, x.id, x.params);
+    }
   }
 };
 
 /// Structured data of a Syslog message.
-using structured_data = tenzir::map;
+using structured_data = list;
 
 /// Parser for structured data of a Syslog message.
 /// @relates structured_data
@@ -207,8 +216,8 @@ struct structured_data_parser : parser_base<structured_data_parser> {
     auto sd
       = structured_data_element_parser{}->*[&](structured_data_element in) {
           if constexpr (!std::is_same_v<Attribute, unused_type>) {
-            auto& [key, value] = in;
-            x[key] = value;
+            x.emplace_back(record{{"id", std::move(in.id)},
+                                  {"params", std::move(in.params)}});
           }
         };
     auto p = maybe_null(+sd);
@@ -249,10 +258,11 @@ struct message_parser : parser_base<message_parser> {
     using namespace parsers;
     auto p = header_parser{} >> ' ' >> structured_data_parser{}
              >> -(' ' >> message_content_parser{});
-    if constexpr (std::is_same_v<Attribute, unused_type>)
+    if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);
-    else
+    } else {
       return p(f, l, x.hdr, x.data, x.msg);
+    }
   }
 };
 
@@ -318,8 +328,9 @@ struct legacy_message_timestamp_parser
     } else {
       std::array<std::string, 6> elems{};
       if (not p(f, l, elems[0], elems[1], elems[2], elems[3], elems[4],
-                elems[5]))
+                elems[5])) {
         return false;
+      }
       x = fmt::to_string(fmt::join(elems, ""));
       return true;
     }
@@ -380,11 +391,13 @@ struct legacy_message_parser : parser_base<legacy_message_parser> {
                    >> message_parser;                            // message
     std::string message;
     if constexpr (std::is_same_v<Attribute, unused_type>) {
-      if (not p(f, l, unused))
+      if (not p(f, l, unused)) {
         return false;
+      }
     } else {
-      if (not p(f, l, x.timestamp, x.host, message))
+      if (not p(f, l, x.timestamp, x.host, message)) {
         return false;
+      }
     }
     // Parse MESSAGE into its constituent parts,
     // app_name, process_id, content
@@ -397,8 +410,9 @@ struct legacy_message_parser : parser_base<legacy_message_parser> {
       auto msg_f = message.begin();
       const auto msg_l = message.end();
       std::tuple<std::optional<std::string>, std::optional<std::string>> attr{};
-      if (tag_parser(msg_f, msg_l, attr))
+      if (tag_parser(msg_f, msg_l, attr)) {
         std::tie(x.app_name, x.process_id) = std::move(attr);
+      }
       x.content.assign(msg_f, msg_l);
     }
     return true;
@@ -417,12 +431,13 @@ inline type make_syslog_type() {
       {"app_name", string_type{}},
       {"process_id", string_type{}},
       {"message_id", string_type{}},
-      // TODO: The index is currently incapable of handling map_type. Hence, the
-      // structured_data is disabled.
-      // {"structured_data",
-      //  map_type{type{"id", string_type{}},
-      //           type{"params", map_type{type{"key", string_type{}},
-      //                                   type{"value", string_type{}}}}}},
+      {"structured_data", list_type{record_type{{
+                            {"id", string_type{}},
+                            {"params", list_type{record_type{{
+                                         {"key", string_type{}},
+                                         {"value", string_type{}},
+                                       }}}},
+                          }}}},
       {"message", string_type{}},
     }},
   };

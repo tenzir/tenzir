@@ -66,7 +66,8 @@ auto impl(generator<std::optional<std::string_view>> lines,
       }
       if (not builder->add(msg.hdr.facility, msg.hdr.severity, msg.hdr.version,
                            msg.hdr.ts, msg.hdr.hostname, msg.hdr.app_name,
-                           msg.hdr.process_id, msg.hdr.msg_id, msg.msg)) {
+                           msg.hdr.process_id, msg.hdr.msg_id, msg.data,
+                           msg.msg)) {
         diagnostic::error(
           "syslog parser (RFC 5242) failed to produce table slice")
           .note("line number {}", line_nr)
@@ -105,8 +106,9 @@ auto impl(generator<std::optional<std::string_view>> lines,
       }
     }
   }
-  if (builder && builder->rows() > 0)
+  if (builder && builder->rows() > 0) {
     co_yield builder->finish();
+  }
 }
 
 class syslog_parser final : public plugin_parser {
