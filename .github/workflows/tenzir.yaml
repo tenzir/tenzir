@@ -850,18 +850,12 @@ jobs:
           - name: Kafka
             target: kafka
             path: plugins/kafka
-          # - name: Inventory
-          #   target: inventory
-          #   path: contrib/tenzir-plugins/inventory
           - name: NIC
             target: nic
             path: plugins/nic
           - name: Matcher
             target: matcher
             path: contrib/tenzir-plugins/matcher
-          - name: Netflow
-            target: netflow
-            path: contrib/tenzir-plugins/netflow
           - name: Parquet
             target: parquet
             path: plugins/parquet

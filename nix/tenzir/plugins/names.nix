@@ -1,9 +1,7 @@
 [
   "compaction"
   "context"
-  "inventory"
   "matcher"
-  "netflow"
   "pipeline_manager"
   "platform"
 ]

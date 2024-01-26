@@ -175,14 +175,6 @@ RUN cmake -S contrib/tenzir-plugins/context -B build-context -G Ninja \
       DESTDIR=/plugin/context cmake --install build-context --strip --component Runtime && \
       rm -rf build-context
 
-# FROM plugins-source AS inventory-plugin
-#
-# RUN cmake -S contrib/tenzir-plugins/inventory -B build-inventory -G Ninja \
-#       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-#       cmake --build build-inventory --parallel && \
-#       DESTDIR=/plugin/inventory cmake --install build-inventory --strip --component Runtime && \
-#       rm -rf build-inventory
-
 FROM plugins-source AS matcher-plugin
 
 RUN cmake -S contrib/tenzir-plugins/matcher -B build-matcher -G Ninja \
@@ -190,14 +182,6 @@ RUN cmake -S contrib/tenzir-plugins/matcher -B build-matcher -G Ninja \
       cmake --build build-matcher --parallel && \
       DESTDIR=/plugin/matcher cmake --install build-matcher --strip --component Runtime && \
       rm -rf build-matcher
-
-FROM plugins-source AS netflow-plugin
-
-RUN cmake -S contrib/tenzir-plugins/netflow -B build-netflow -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-      cmake --build build-netflow --parallel && \
-      DESTDIR=/plugin/netflow cmake --install build-netflow --strip --component Runtime && \
-      rm -rf build-netflow
 
 FROM plugins-source AS pipeline-manager-plugin
 
@@ -221,7 +205,6 @@ FROM tenzir-de AS tenzir-ce
 
 COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
 COPY --from=matcher-plugin --chown=tenzir:tenzir /plugin/matcher /
-COPY --from=netflow-plugin --chown=tenzir:tenzir /plugin/netflow /
 COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline_manager /
 COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /
 
