@@ -1,7 +1,0 @@
-error: regex must have at most one capturing group
- --> <input>:1:15
-  |
-1 | parse line kv "(foo)(bar)" ""
-  |               ^^^^^^^^^^^^ 
-  |
-  = docs: https://docs.tenzir.com/docs/next/formats/kv
