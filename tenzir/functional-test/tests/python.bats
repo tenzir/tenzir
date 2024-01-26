@@ -12,8 +12,8 @@ teardown() {
   # Once one command in a tes terrors all other commands are skipped,
   # and bats doesn't support test-specific teardown functions.
   # So we need to do the teardown centrally.
-  if [ -n ${BATS_PYTHON_SERVER_PID} ]; then
-    kill -9 "$SRV_PID"
+  if [ ! -z ${BATS_PYTHON_SERVER_PID} ]; then
+    kill -9 "$BATS_PYTHON_SERVER_PID"
   fi
 }
 
