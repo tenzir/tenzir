@@ -65,10 +65,10 @@ check() {
     local file_ref_dir ref_path
     # --relative-to is not available on macOS. We can assume that the suite dir is a
     # prefix to the test file path instead.
-    # file_ref_dir="$(realpath --relative-to="${BATS_SUITE_DIRNAME}" "${BATS_TEST_FILENAME%.bats}")"
+    # file_ref_dir="$(realpath --relative-to="${BATS_TEST_DIRNAME}" "${BATS_TEST_FILENAME%.bats}")"
     file_ref_dir="${BATS_TEST_FILENAME%.bats}"
-    file_ref_dir="${file_ref_dir#"$BATS_SUITE_DIRNAME"}"
-    ref_path="$(dirname "${BATS_SUITE_DIRNAME}")/data/reference/${file_ref_dir}/${BATS_TEST_NAME}"
+    file_ref_dir="${file_ref_dir#"$BATS_TEST_DIRNAME"}"
+    ref_path="$(dirname "${BATS_TEST_DIRNAME}")/data/reference/${file_ref_dir}/${BATS_TEST_NAME}"
     if [[ -v UPDATE ]]; then
       mkdir -p "${ref_path}"
       if [[ "$step_nr_" -eq 0 ]]; then

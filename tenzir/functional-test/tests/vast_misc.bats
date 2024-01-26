@@ -18,7 +18,7 @@ setup() {
 
 # bats test_tags=import,export,zeek
 @test "Example config file" {
-  EXAMPLE_CONFIG=${BATS_SUITE_DIRNAME}/../../../tenzir.yaml.example
+  EXAMPLE_CONFIG=${BATS_TEST_DIRNAME}/../../../tenzir.yaml.example
 
   setup_node_raw --config=${EXAMPLE_CONFIG}
 

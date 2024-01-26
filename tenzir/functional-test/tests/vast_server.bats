@@ -319,7 +319,7 @@ teardown() {
 
 # bats test_tags=pipelines,yaml
 @test "YAML" {
-  TENZIR_EXAMPLE_YAML="$(dirname "$BATS_SUITE_DIRNAME")/../../tenzir.yaml.example"
+  TENZIR_EXAMPLE_YAML="$(dirname "$BATS_TEST_DIRNAME")/../../tenzir.yaml.example"
 
   check tenzir "from file ${TENZIR_EXAMPLE_YAML} read yaml | put plugins=tenzir.plugins, commands=tenzir.start.commands"
   check tenzir 'show config | drop tenzir.config | drop tenzir.cache-directory | drop tenzir.metrics | drop tenzir.db-directory | write yaml'
