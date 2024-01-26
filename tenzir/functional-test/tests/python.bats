@@ -8,6 +8,15 @@ setup() {
   bats_load_library bats-tenzir
 }
 
+teardown() {
+  # Once one command in a tes terrors all other commands are skipped,
+  # and bats doesn't support test-specific teardown functions.
+  # So we need to do the teardown centrally.
+  if [ -n ${BATS_PYTHON_SERVER_PID} ]; then
+    kill -9 "$SRV_PID"
+  fi
+}
+
 @test "simple field access" {
   check tenzir -f /dev/stdin <<END
     version
@@ -82,9 +91,10 @@ END
 
 @test "python operator requirements statement" {
   # Setup fake HTTP server that accepts any input.
-  conn=$(mktemp)
-  data=$(mktemp)
+  conn=$(mktemp --tmpdir=${BATS_TEST_TMPDIR})
+  data=$(mktemp --tmpdir=${BATS_TEST_TMPDIR})
   coproc SRV { exec socat -d -d -lf "${conn}" -r /dev/stdout TCP-LISTEN:0,crlf,reuseaddr,fork SYSTEM:"echo HTTP/1.0 200; echo Content-Type\: text/plain;" >>"${data}"; }
+  export BATS_PYTHON_SERVER_PID=$SRV_PID
   # While `sync` would be more elegant than a sleep loop, empirically it suffers from a
   # race condition on debian-based systems.
   while [ ! -s ${conn} ]; do
@@ -109,10 +119,6 @@ END
 END
   check grep -v '\(Host:\|User-Agent:\)' "${data}"
   truncate -s 0 "${data}"
-
-  # Teardown
-  kill -9 "$SRV_PID"
-  rm "${conn}" "${data}"
 }
 
 @test "python operator deletion" {
