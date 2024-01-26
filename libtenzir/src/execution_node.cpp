@@ -362,6 +362,13 @@ struct exec_node_state {
       metrics->emit();
       if (instance->it == instance->gen.end()) {
         TENZIR_TRACE("{} {} finished without yielding", *self, op->name());
+        if (previous) {
+          // If a transformation or sink operator finishes without yielding,
+          // preceding operators effectively dangle because they are set up but
+          // never receive any demand. We need to explicitly shut them down to
+          // avoid a hang.
+          self->send_exit(previous, caf::exit_reason::unreachable);
+        }
         self->quit();
         return {};
       }
