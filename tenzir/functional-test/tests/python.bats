@@ -91,8 +91,9 @@ END
 
 @test "python operator requirements statement" {
   # Setup fake HTTP server that accepts any input.
-  conn=$(mktemp --tmpdir=${BATS_TEST_TMPDIR})
-  data=$(mktemp --tmpdir=${BATS_TEST_TMPDIR})
+  conn="${BATS_TEST_TMPDIR}/conn"
+  data="${BATS_TEST_TMPDIR}/data"
+  mkdir -p conn data
   coproc SRV { exec socat -d -d -lf "${conn}" -r /dev/stdout TCP-LISTEN:0,crlf,reuseaddr,fork SYSTEM:"echo HTTP/1.0 200; echo Content-Type\: text/plain;" >>"${data}"; }
   export BATS_PYTHON_SERVER_PID=$SRV_PID
   # While `sync` would be more elegant than a sleep loop, empirically it suffers from a

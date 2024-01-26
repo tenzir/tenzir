@@ -7,5 +7,9 @@ export BATS_LIB_PATH=${BATS_LIB_PATH:+${BATS_LIB_PATH}:}${TENZIR_DIR}/../share/t
 
 bats_load_library bats-tenzir
 
-export_default_node_config
-export TENZIR_PLUGINS="web"
+setup_node_with_web_plugin() {
+  export_default_node_config
+  export TENZIR_PLUGINS="web"
+  set_node_raw
+}
+

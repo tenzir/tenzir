@@ -26,6 +26,13 @@ setup_node_raw() {
   export TENZIR_ENDPOINT
 }
 
+setup_node_with_plugins() {
+  local plugins=$1
+  export_default_node_config
+  export TENZIR_PLUGINS="$plugins"
+  setup_node_raw
+}
+
 # Start a node with a configuration suitable for most integration tests.
 setup_node() {
   export_default_node_config
