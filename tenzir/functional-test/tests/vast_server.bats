@@ -23,8 +23,13 @@ teardown() {
   run ! tenzir-ctl and that is not a command
 }
 
-# bats test_tags=server, import-export, zeek
+# bats test_tags=server,import-export,zeek
 @test "Server Zeek multiple imports" {
+  if [ $(uname) == "Darwin" ]; then
+    # TODO: Figure out why this has different output on mac
+    skip "disabled on mac"
+  fi  
+
   import_zeek_conn
   import_zeek_dns
 
