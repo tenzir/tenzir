@@ -334,7 +334,6 @@ in {
     pkg.withPlugins (ps: [
       ps.context
       ps.matcher
-      ps.netflow
       ps.pipeline_manager
       ps.platform
     ]);
@@ -355,9 +354,7 @@ in {
     pkg.withPlugins (ps: [
       ps.compaction
       ps.context
-      #ps.inventory
       ps.matcher
-      ps.netflow
       ps.pipeline_manager
       ps.platform
     ]);
