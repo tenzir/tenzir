@@ -13,7 +13,6 @@
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/detail/string_literal.hpp"
 #include "tenzir/detail/to_xsv_sep.hpp"
-#include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/parser_interface.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/series_builder.hpp"
@@ -371,21 +370,26 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
         .emit(ctrl.diagnostics());
       continue;
     }
-    if (values.size() != fields.size()) {
-      diagnostic::warning("skips unparseable line")
-        .hint("expected {} fields but got {}", fields.size(), values.size())
-        .note("from `{}` parser", args.name)
-        .emit(ctrl.diagnostics());
-      continue;
+    auto generated_field_id = 0;
+    while (fields.size() < values.size()) {
+      auto name = fmt::format("unnamed{}", ++generated_field_id);
+      if (std::find(fields.begin(), fields.end(), name) == fields.end()) {
+        fields.push_back(name);
+      }
     }
     auto row = b.record();
-    for (const auto& [field, value] : detail::zip(fields, values)) {
-      auto result = row.field(field).try_data(value);
+    for (size_t i = 0; i < fields.size(); ++i) {
+      if (i >= values.size()) {
+        row.field(fields[i]).null();
+        continue;
+      }
+      auto result = row.field(fields[i]).try_data(values[i]);
       if (not result) {
         diagnostic::warning(result.error())
           .note("from `{}` parser", args.name)
           .emit(ctrl.diagnostics());
       }
+      continue;
     }
   }
   if (b.length() > 0) {
