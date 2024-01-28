@@ -198,6 +198,22 @@ function (TenzirCompileFlatBuffers)
     INTERFACE $<BUILD_INTERFACE:${output_prefix}>
               $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
+  if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
+    set(FBS_PATH "${CMAKE_SOURCE_DIR}/libtenzir/fbs")
+  else ()
+    string(TOUPPER "${TENZIR_CMAKE_BUILD_TYPE}" build_type_uppercase_)
+    get_target_property(FBS_PATH tenzir::tenzir
+                        IMPORTED_LOCATION_${build_type_uppercase_})
+    unset(build_type_uppercase_)
+    get_filename_component(FBS_PATH "${FBS_PATH}" DIRECTORY)
+    get_filename_component(FBS_PATH "${FBS_PATH}" DIRECTORY)
+    set(FBS_PATH "${FBS_PATH}/include/tenzir/fbs")
+  endif ()
+
+  file(GLOB included_flatbuffers_schemas CONFIGURE_DEPENDS "${FBS_PATH}/*.fbs")
+  list(APPEND FBS_SCHEMAS ${included_flatbuffers_schemas})
+  list(REMOVE_DUPLICATES FBS_SCHEMAS)
+
   foreach (schema IN LISTS FBS_SCHEMAS)
     get_filename_component(basename ${schema} NAME_WE)
     # The hardcoded path that flatc generates.
@@ -232,6 +248,8 @@ function (TenzirCompileFlatBuffers)
         --gen-name-strings
         # Generate mutator functions.
         --gen-mutable
+        # Allow including other files.
+        -I "${FBS_PATH}"
         # Set output directory and schema inputs.
         -o "${output_prefix}/${FBS_INCLUDE_DIRECTORY}" "${schema}"
       COMMAND ${CMAKE_COMMAND} -E rename "${output_file}" "${desired_file}"
@@ -245,13 +263,14 @@ function (TenzirCompileFlatBuffers)
     # FBS_TARGET cannot depend on the OUTPUT of a add_custom_command directly,
     # and depending on a BYPRODUCT of a add_custom_command causes the Unix
     # Makefiles generator to constantly rebuild targets in the same export set.
-    add_custom_target("compile-flatbuffers-schema-${basename}"
+    add_custom_target("compile-flatbuffers-schema-${FBS_TARGET}-${basename}"
                       DEPENDS "${desired_file}")
-    add_dependencies(${FBS_TARGET} "compile-flatbuffers-schema-${basename}")
+    add_dependencies(${FBS_TARGET}
+                     "compile-flatbuffers-schema-${FBS_TARGET}-${basename}")
     set_property(
       TARGET ${FBS_TARGET}
       APPEND
-      PROPERTY PUBLIC_HEADER "${desired_file}")
+      PROPERTY PUBLIC_HEADER "${desired_file}" "${schema}")
   endforeach ()
 
   install(

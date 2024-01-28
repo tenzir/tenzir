@@ -50,8 +50,8 @@ endif ()
 # -- flatbuffers ---------------------------------------------------------------
 
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/fbs/*.fbs"
-     "${CMAKE_CURRENT_SOURCE_DIR}/fbs/legacy/*.fbs")
+     "${CMAKE_CURRENT_SOURCE_DIR}/fbs/*.fbs")
+
 list(SORT flatbuffers_schemas)
 
 TenzirCompileFlatBuffers(
@@ -336,8 +336,7 @@ target_link_libraries(libtenzir PUBLIC tsl::robin_map)
 
 # Link against libmaxminddb.
 target_link_libraries(libtenzir PUBLIC maxminddb::maxminddb)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST
-       "\nfind_package(libmaxminddb)")
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(libmaxminddb)")
 dependency_summary("libmaxminddb" maxminddb::maxminddb "Dependencies")
 
 # Link against Apache Arrow.
@@ -382,18 +381,15 @@ target_link_libraries(libtenzir PRIVATE FastFloat::fast_float)
 
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   option(TENZIR_ENABLE_BUNDLED_PFS "Use the pfs submodule" OFF)
-  add_feature_info(
-    "TENZIR_ENABLE_BUNDLED_PFS" TENZIR_ENABLE_BUNDLED_PFS
-    "use the pfs submodule.")
+  add_feature_info("TENZIR_ENABLE_BUNDLED_PFS" TENZIR_ENABLE_BUNDLED_PFS
+                   "use the pfs submodule.")
   if (NOT TENZIR_ENABLE_BUNDLED_PFS)
     find_package(pfs CONFIG)
   endif ()
   if (NOT pfs_FOUND)
     if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/pfs/CMakeLists.txt")
-      message(
-        FATAL_ERROR
-          "pfs library not found, either use -pfs_DIR=... or"
-          " initialize the libtenzir/aux/pfs submodule")
+      message(FATAL_ERROR "pfs library not found, either use -pfs_DIR=... or"
+                          " initialize the libtenzir/aux/pfs submodule")
     endif ()
     add_subdirectory(aux/pfs)
     export(
@@ -406,7 +402,7 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     dependency_summary("pfs" pfs "Dependencies")
   endif ()
   target_link_libraries(libtenzir PRIVATE pfs)
-endif()
+endif ()
 
 # Link against a backtrace library.
 option(TENZIR_ENABLE_BACKTRACE "Print a backtrace on unexpected termination" ON)
