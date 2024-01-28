@@ -73,7 +73,6 @@ setup() {
   check -c "gunzip -c '${INPUTSDIR}'/json/irc.log.json.gz | tenzir 'from - read json | to - write json '"
 
   check -c "gunzip -c '${INPUTSDIR}'/json/irc.log.json.gz | tenzir 'from file - read json | to - write json'"
-
 }
 
 # bats test_tags=pipelines
