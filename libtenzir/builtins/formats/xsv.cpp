@@ -389,7 +389,6 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
           .note("from `{}` parser", args.name)
           .emit(ctrl.diagnostics());
       }
-      continue;
     }
   }
   if (b.length() > 0) {
