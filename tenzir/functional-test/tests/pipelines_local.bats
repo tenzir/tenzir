@@ -62,22 +62,17 @@ setup() {
 
 # bats test_tags=pipelines
 @test "Local Pipeline Execution" {
-  if [ $(uname) == "Darwin" ]; then
-    # TODO: Figure out why this is failing on mac
-    skip "disabled on mac"
-  fi
-
   # - is an alternative form of stdin and stdout
-  check -c "zcat '${INPUTSDIR}'/json/sip.log.json.gz | tenzir 'from stdin read json | write json | save stdout'"
-  check -c "zcat '${INPUTSDIR}'/json/sip.log.json.gz | tenzir 'from file - read json | to stdout write json'"
+  check -c "gunzip -c '${INPUTSDIR}'/json/sip.log.json.gz | tenzir 'from stdin read json | write json | save stdout'"
+  check -c "gunzip -c '${INPUTSDIR}'/json/sip.log.json.gz | tenzir 'from file - read json | to stdout write json'"
 
   # stdin and stdout are the defaults
-  check -c "zcat '${INPUTSDIR}'/json/files.log.json.gz | tenzir 'read json | write json'"
+  check -c "gunzip -c '${INPUTSDIR}'/json/files.log.json.gz | tenzir 'read json | write json'"
 
   # - is an alternative form of stdin and stdout
-  check -c "zcat '${INPUTSDIR}'/json/irc.log.json.gz | tenzir 'from - read json | to - write json '"
+  check -c "gunzip -c '${INPUTSDIR}'/json/irc.log.json.gz | tenzir 'from - read json | to - write json '"
 
-  check -c "zcat '${INPUTSDIR}'/json/irc.log.json.gz | tenzir 'from file - read json | to - write json'"
+  check -c "gunzip -c '${INPUTSDIR}'/json/irc.log.json.gz | tenzir 'from file - read json | to - write json'"
 
 }
 
