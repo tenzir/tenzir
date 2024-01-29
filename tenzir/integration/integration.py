@@ -558,7 +558,7 @@ def validate(data):
             schema.Use(to_test),
         )
     )
-    tests = schema.Schema({schema.And(str, len): test})
+    tests = schema.Schema(schema.Or({str: test}, {}))
     sch = schema.Schema(
         {
             schema.Optional("config-file", default=None): schema.Use(absolute_path),

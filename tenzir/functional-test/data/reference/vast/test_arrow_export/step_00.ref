@@ -1,0 +1,47 @@
+open next reader
+ts: timestamp[ns]
+  -- field metadata --
+  TENZIR:name:0: 'timestamp'
+uid: string
+  -- field metadata --
+  TENZIR:attributes:0: '{ "index": "hash" }'
+id: struct<orig_h: fixed_size_binary[16], orig_p: uint64, resp_h: fixed_size_binary[16], resp_p: uint64>
+  child 0, orig_h: fixed_size_binary[16]
+    -- field metadata --
+    ARROW:extension:metadata: 'tenzir.ip'
+    ARROW:extension:name: 'tenzir.ip'
+  child 1, orig_p: uint64
+    -- field metadata --
+    TENZIR:name:0: 'port'
+  child 2, resp_h: fixed_size_binary[16]
+    -- field metadata --
+    ARROW:extension:metadata: 'tenzir.ip'
+    ARROW:extension:name: 'tenzir.ip'
+  child 3, resp_p: uint64
+    -- field metadata --
+    TENZIR:name:0: 'port'
+  -- field metadata --
+  TENZIR:name:0: 'zeek.conn_id'
+proto: string
+service: string
+duration: duration[ns]
+orig_bytes: uint64
+resp_bytes: uint64
+conn_state: string
+local_orig: bool
+local_resp: bool
+missed_bytes: uint64
+history: string
+orig_pkts: uint64
+orig_ip_bytes: uint64
+resp_pkts: uint64
+resp_ip_bytes: uint64
+tunnel_parents: list<item: string>
+  child 0, item: string
+community_id: string
+_write_ts: timestamp[ns]
+-- schema metadata --
+TENZIR:name:0: 'zeek.conn'
+done with current reader, rows: 10
+open next reader
+done with all readers

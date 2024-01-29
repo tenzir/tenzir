@@ -1,0 +1,8 @@
+pipeline [
+  write json {
+    
+  },
+  save file {
+    path: "xyz.json" @ 8..16
+  }
+] @ 0..16

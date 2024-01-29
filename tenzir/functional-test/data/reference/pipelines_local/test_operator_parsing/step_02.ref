@@ -1,0 +1,8 @@
+error: unexpected positional argument
+ --> <input>:1:9
+  |
+1 | version 42
+  |         ^^ 
+  |
+  = usage: version (takes no arguments)
+  = docs: https://docs.tenzir.com/next/operators/sources/version

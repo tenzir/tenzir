@@ -1,4 +1,0 @@
-error: failed to parse Zeek document: mismatching number #fields and #types
- = note: found 20 #fields
- = note: found 19 #types
- = note: line 9

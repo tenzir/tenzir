@@ -1,9 +1,0 @@
-error: insufficient information to create a datetime
- = hint: either provide a year, month, day, hour, and minute, or disable --strict to use default values
- = docs: https://docs.tenzir.com/docs/next/formats/time
-error: parsing failed
- --> <input>:1:51
-  |
-1 | show version | put line="Dec 13 11:04:15" | parse line time --strict "%b %d %H:%M:%S"
-  |                                                   ^^^^ 
-  |

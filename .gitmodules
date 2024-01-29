@@ -20,11 +20,11 @@
 	path = libtenzir/aux/pfs
 	url = https://github.com/tenzir/pfs.git
 [submodule "tenzir/functional-test/bats"]
-	path = tenzir/functional-test/bats
+	path = tenzir/functional-test/lib/bats
 	url = https://github.com/bats-core/bats-core
 [submodule "tenzir/functional-test/bats-support"]
-	path = tenzir/functional-test/bats-support
+	path = tenzir/functional-test/lib/bats-support
 	url = https://github.com/bats-core/bats-support
 [submodule "tenzir/functional-test/bats-assert"]
-	path = tenzir/functional-test/bats-assert
+	path = tenzir/functional-test/lib/bats-assert
 	url = https://github.com/bats-core/bats-assert

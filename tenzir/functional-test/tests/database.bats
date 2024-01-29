@@ -2,35 +2,28 @@
 
 : "${BATS_TEST_TIMEOUT:=120}"
 
-# Enable bare mode so settings in ~/.config/tenzir or the build configuration
-# have no effect.
-export TENZIR_BARE_MODE=1
-
-DATADIR="$(dirname "$BATS_SUITE_DIRNAME")/data"
-
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
   bats_load_library bats-tenzir
-  setup_state_dir
-  export TENZIR_AUTOMATIC_REBUILD=0
+
+  # Override parts of the default node config for this test file
+  # by using `setup_node_raw()`.
+  export_default_node_config
   export TENZIR_ENABLE_METRICS=true
   export TENZIR_METRICS__SELF_SINK__ENABLE=false
   export TENZIR_METRICS__FILE_SINK__ENABLE=true
   export TENZIR_METRICS__FILE_SINK__REAL_TIME=true
-  export TENZIR_METRICS__FILE_SINK__PATH=$PWD/$BATS_TEST_STATE_DIR/metrics.log
-  set | grep -Ee "^TENZIR" || true >&3
-  setup_node
+  export TENZIR_METRICS__FILE_SINK__PATH=${TENZIR_DB_DIRECTORY}/metrics.log
+  setup_node_raw
 }
 
 teardown() {
   teardown_node
-  teardown_state_dir
 }
 
 @test "import and export operators" {
-  < "$DATADIR/suricata/eve.json" \
-    check tenzir 'read suricata | import'
+  check <"$INPUTSDIR/suricata/eve.json" tenzir 'read suricata | import'
 
   check tenzir 'export | summarize count=count(.)'
 }
@@ -46,22 +39,22 @@ teardown() {
 #   # Note that we will use the decompress operator in other places, this is just
 #   # an exposition.
 #   check --bg zeek_imports -c \
-#     "gunzip -c \"$DATADIR/zeek/conn.log.gz\" \
+#     "gunzip -c \"$INPUTSDIR/zeek/conn.log.gz\" \
 #      | tenzir 'read zeek-tsv | import'"
 #   # Simple input redirection can be done by wrapping the full invocation with
 #   # curly braces.
 #   { check --bg suri_imports \
 #     tenzir 'read suricata | import'; \
-#   } < "$DATADIR/suricata/eve.json"
+#   } < "$INPUTSDIR/suricata/eve.json"
 #   # We can also use `import -r` in this case.
 #   check --bg suri_imports \
-#     tenzir "from file $DATADIR/suricata/eve.json read suricata | import"
+#     tenzir "from file $INPUTSDIR/suricata/eve.json read suricata | import"
 #   check --bg suri_imports \
-#     tenzir "from file $DATADIR/suricata/eve.json read suricata | import"
+#     tenzir "from file $INPUTSDIR/suricata/eve.json read suricata | import"
 #   check --bg zeek_imports \
-#     tenzir "load file $DATADIR/zeek/conn.log.gz | decompress gzip | read zeek-tsv | import"
+#     tenzir "load file $INPUTSDIR/zeek/conn.log.gz | decompress gzip | read zeek-tsv | import"
 #   check --bg suri_imports \
-#     tenzir "from file $DATADIR/suricata/eve.json read suricata | import"
+#     tenzir "from file $INPUTSDIR/suricata/eve.json read suricata | import"
 #   # Now we can block until all suricata ingests are finished.
 #   wait_all "${suri_imports[@]}"
 #   debug 1 "suri imports"
@@ -79,7 +72,7 @@ teardown() {
 wait_for_file() {
   local file=$1
   until [[ -s "$file" ]]; do
-      sleep 1
+    sleep 1
   done
 }
 
@@ -88,13 +81,13 @@ wait_for_file() {
   # Check that the import command doesn't deadlock when using the `--batch-size` option
   # and that the node keeps producing metrics.
 
-  check tenzir "load file $DATADIR/zeek/conn.log.gz | decompress gzip | read zeek-tsv | import"
+  check tenzir "load file $INPUTSDIR/zeek/conn.log.gz | decompress gzip | read zeek-tsv | import"
 
   check --sort tenzir 'export | where resp_h == 192.168.1.104 | write ssv'
 
   # import some more to make sure accounting data is in the system.
   check -c \
-    "gunzip -c \"$DATADIR/zeek/conn.log.gz\" \
+    "gunzip -c \"$INPUTSDIR/zeek/conn.log.gz\" \
      | tenzir-ctl import -b --batch-size=1 -n 242 zeek"
 
   check --sort tenzir-ctl export json 'where resp_h == 192.168.1.104'

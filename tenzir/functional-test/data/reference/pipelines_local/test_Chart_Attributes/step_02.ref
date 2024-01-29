@@ -1,0 +1,7 @@
+error: could not parse `chart` operator
+ --> <input>:1:24
+  |
+1 | from stdin read json | chart donut
+  |                        ^^^^^^^^^^^ 
+  |
+  = note: !! syntax_error: failed to parse operator arguments: ''

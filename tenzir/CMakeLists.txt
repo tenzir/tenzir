@@ -123,7 +123,7 @@ add_custom_target(
   functional-test-core
   COMMAND
     ${CMAKE_COMMAND} -E env
-    PATH="$<TARGET_FILE_DIR:tenzir::tenzir>:\$\$PATH:${CMAKE_CURRENT_SOURCE_DIR}/functional-test/bats/bin"
+    PATH="$<TARGET_FILE_DIR:tenzir::tenzir>:\$\$PATH:${CMAKE_CURRENT_SOURCE_DIR}/functional-test/lib/bats/bin"
     bats "-T" "${CMAKE_CURRENT_SOURCE_DIR}/functional-test/tests"
   COMMENT "Executing functional tests..."
   USES_TERMINAL)
@@ -147,9 +147,9 @@ add_dependencies(tenzir link-functional-test)
 # bats-common and bats-assert themselves when building plugins against an
 # install tree.
 install(
-  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/functional-test/bats-tenzir"
+  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/functional-test/lib/bats-tenzir"
   COMPONENT Development
-  DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/functional-test")
+  DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/functional-test/lib")
 
 # -- integration tests ---------------------------------------------------------
 

@@ -6,15 +6,15 @@ setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
   bats_load_library bats-tenzir
-  setup_state_dir
+
   TENZIR_START__COMMANDS="web server --mode=dev --port=5160"
   export TENZIR_START__COMMANDS
-  setup_node
+  setup_node_with_plugins web
+  wait_for_http
 }
 
 teardown() {
   teardown_node
-  teardown_state_dir
 }
 
 wait_for_http() {
@@ -22,8 +22,6 @@ wait_for_http() {
 }
 
 @test "serve endpoint" {
-  wait_for_http
-
   tenzir 'version | repeat 5 | serve version' &
   sleep 3
 

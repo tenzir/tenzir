@@ -20,7 +20,7 @@ sleep 3
 
 docker exec -i tenzir-regression \
   tenzir 'read suricata | import' \
-  < tenzir/functional-test/data/suricata/eve.json
+  < tenzir/functional-test/data/inputs/suricata/eve.json
 
 docker exec tenzir-regression \
   tenzir 'export | where #schema == "suricata.alert" | write json' \

@@ -1,0 +1,41 @@
+open next reader
+ts: timestamp[ns]
+  -- field metadata --
+  VAST:name:0: 'timestamp'
+uid: string
+  -- field metadata --
+  VAST:attributes:0: '{ "index": "hash" }'
+id.orig_h: fixed_size_binary[16]
+  -- field metadata --
+  ARROW:extension:metadata: 'tenzir.ip'
+  ARROW:extension:name: 'tenzir.ip'
+id.orig_p: uint64
+  -- field metadata --
+  VAST:name:0: 'port'
+id.resp_h: fixed_size_binary[16]
+  -- field metadata --
+  ARROW:extension:metadata: 'tenzir.ip'
+  ARROW:extension:name: 'tenzir.ip'
+id.resp_p: uint64
+  -- field metadata --
+  VAST:name:0: 'port'
+proto: string
+service: string
+duration: duration[ns]
+orig_bytes: uint64
+resp_bytes: uint64
+conn_state: string
+local_orig: bool
+missed_bytes: uint64
+history: string
+orig_pkts: uint64
+orig_ip_bytes: uint64
+resp_pkts: uint64
+resp_ip_bytes: uint64
+tunnel_parents: list<item: string>
+  child 0, item: string
+-- schema metadata --
+VAST:name:0: 'zeek.conn'
+done with current reader, rows: 10
+open next reader
+done with all readers

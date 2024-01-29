@@ -1,0 +1,7 @@
+error: could not parse `chart` operator
+ --> <input>:1:24
+  |
+1 | from stdin read json | chart donut value=b x=e
+  |                        ^^^^^^^^^^^^^^^^^^^^^^^ 
+  |
+  = note: !! syntax_error: chart type `donut` disallows field `x`

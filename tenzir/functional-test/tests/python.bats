@@ -6,29 +6,19 @@ setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
   bats_load_library bats-tenzir
-
-  # Fake HTTP server accepts any input.
-  conn=$(mktemp)
-  data=$(mktemp)
-  coproc SRV { exec socat -d -d -lf "${conn}" -r /dev/stdout TCP-LISTEN:0,crlf,reuseaddr,fork SYSTEM:"echo HTTP/1.0 200; echo Content-Type\: text/plain;" >> "${data}"; }
-  # While `sync` would be more elegant than a sleep loop, empirically it suffers from a
-  # race condition on debian-based systems.
-  while [ ! -s ${conn} ]; do
-    sleep 0.1
-  done
-  # socat writes a line like this into ${conn}:
-  # 2023/10/31 18:20:34 socat[469933] N listening on AF=2 0.0.0.0:42437
-  read -r HTTP_INFO < "${conn}"
-  port="${HTTP_INFO##*:}"
 }
 
 teardown() {
-  kill -9 "$SRV_PID"
-  rm "${conn}" "${data}"
+  # Once one command in a test errors all other commands are skipped,
+  # and bats doesn't support test-specific teardown functions.
+  # So we need to do the teardown centrally.
+  if [ ! -z ${BATS_PYTHON_SERVER_PID} ]; then
+    kill -9 "$BATS_PYTHON_SERVER_PID"
+  fi
 }
 
 @test "simple field access" {
-  check tenzir -f /dev/stdin << END
+  check tenzir -f /dev/stdin <<END
     version
     | put a=1, b=2
     | python "self.c = self.a + self.b"
@@ -36,7 +26,7 @@ END
 }
 
 @test "nested struct support" {
-  check tenzir -f /dev/stdin << END
+  check tenzir -f /dev/stdin <<END
     version
     | put a.b=1, b=2
     | unflatten
@@ -48,7 +38,7 @@ END
 }
 
 @test "empty output throws" {
-  check ! --with-stderr tenzir -f /dev/stdin << END
+  check ! --with-stderr tenzir -f /dev/stdin <<END
     version
     | put a.b=1, b=2
     | python 'self.clear()'
@@ -56,7 +46,7 @@ END
 }
 
 @test "python operator nested passthrough" {
-  check tenzir -f /dev/stdin << END
+  check tenzir -f /dev/stdin <<END
     version
     | put a.b = 2
     | unflatten
@@ -65,7 +55,7 @@ END
 }
 
 @test "python operator nested modification" {
-  check tenzir -f /dev/stdin << END
+  check tenzir -f /dev/stdin <<END
     version
     | put a.b = 2
     | unflatten
@@ -74,7 +64,7 @@ END
 }
 
 @test "python operator nested deep modification" {
-  check tenzir -f /dev/stdin << END
+  check tenzir -f /dev/stdin <<END
     version
     | put a.b.c = 2
     | unflatten
@@ -83,7 +73,7 @@ END
 }
 
 @test "python operator nested addition" {
-  check tenzir -f /dev/stdin << END
+  check tenzir -f /dev/stdin <<END
     version
     | put a.b = 2
     | unflatten
@@ -92,7 +82,7 @@ END
 }
 
 @test "python operator field deletion" {
-  check tenzir -f /dev/stdin << END
+  check tenzir -f /dev/stdin <<END
     put a.b = 1, a.c = 2, d = 3
     | unflatten
     | python "del self.a.b = 3; del self.d"
@@ -100,7 +90,24 @@ END
 }
 
 @test "python operator requirements statement" {
-  check tenzir -f /dev/stdin << END
+  # Setup fake HTTP server that accepts any input.
+  conn="${BATS_TEST_TMPDIR}/conn"
+  data="${BATS_TEST_TMPDIR}/data"
+  mkdir -p conn data
+  coproc SRV { exec socat -d -d -lf "${conn}" -r /dev/stdout TCP-LISTEN:0,crlf,reuseaddr,fork SYSTEM:"echo HTTP/1.0 200; echo Content-Type\: text/plain;" >>"${data}"; }
+  export BATS_PYTHON_SERVER_PID=$SRV_PID
+  # While `sync` would be more elegant than a sleep loop, empirically it suffers from a
+  # race condition on debian-based systems.
+  while [ ! -s ${conn} ]; do
+    sleep 0.1
+  done
+  # socat writes a line like this into ${conn}:
+  # 2023/10/31 18:20:34 socat[469933] N listening on AF=2 0.0.0.0:42437
+  read -r HTTP_INFO <"${conn}"
+  port="${HTTP_INFO##*:}"
+
+  # Test
+  check tenzir -f /dev/stdin <<END
     version
     | put a=1, b=2
     | python --requirements 'requests' '
@@ -115,30 +122,28 @@ END
   truncate -s 0 "${data}"
 }
 
-
 @test "python operator deletion" {
-  check tenzir -f /dev/stdin << END
+  check tenzir -f /dev/stdin <<END
     put a.b = 1, a.c = 2, d = 3
     | unflatten
     | python "del self.a.b = 3; del self.d"
 END
 }
 
-
 @test "python operator json passthrough" {
-  cat > input.json << END
+  cat >${BATS_TEST_TMPDIR}/input.json <<END
   {
     "foo": "bar"
   }
 END
-  check tenzir -f /dev/stdin << END
-    from file input.json
+  check tenzir -f /dev/stdin <<END
+    from file ${BATS_TEST_TMPDIR}/input.json
     | python "pass"
 END
 }
 
 @test "python operator advanced type passthrough" {
-  cat > input.json << END
+  cat >${BATS_TEST_TMPDIR}/input.json <<END
   {
     "ip": "127.0.0.1",
     "subnet": "10.0.0.1/8",
@@ -147,73 +152,65 @@ END
     "list": [1,2,3]
   }
 END
-  check tenzir -f /dev/stdin << END
-    from file input.json
+  check tenzir -f /dev/stdin <<END
+    from file ${BATS_TEST_TMPDIR}/input.json
     | python "pass"
 END
 }
 
 @test "python operator advanced type manipulation" {
-  cat > input.json << END
+  cat >${BATS_TEST_TMPDIR}/input.json <<END
   {
     "ip": "127.0.255.255",
     "subnet": "127.0.0.1/8"
   }
 END
-  check tenzir -f /dev/stdin << END
-    from file input.json
+  check tenzir -f /dev/stdin <<END
+    from file ${BATS_TEST_TMPDIR}/input.json
     | python "self.inside = self.ip in self.subnet"
 END
 }
 
 @test "python operator suricata passthrough" {
-  DATADIR="$(dirname "$BATS_SUITE_DIRNAME")/data"
-  check tenzir -f /dev/stdin << END
-    from file $DATADIR/suricata/eve.json read suricata
+  check tenzir -f /dev/stdin <<END
+    from file $INPUTSDIR/suricata/eve.json read suricata
     | python "pass"
 END
 }
 
 @test "python operator suricata.dns passthrough" {
-  DATADIR="$(dirname "$BATS_SUITE_DIRNAME")/data"
-  check tenzir -f /dev/stdin << END
-    from file $DATADIR/suricata/rrdata-eve.json read suricata
+  check tenzir -f /dev/stdin <<END
+    from file $INPUTSDIR/suricata/rrdata-eve.json read suricata
     | python "pass"
 END
 }
 
 @test "python operator suricata.dns list manipulation" {
-  DATADIR="$(dirname "$BATS_SUITE_DIRNAME")/data"
-  check tenzir -f /dev/stdin << END
-    from file $DATADIR/suricata/rrdata-eve.json read suricata
+  check tenzir -f /dev/stdin <<END
+    from file $INPUTSDIR/suricata/rrdata-eve.json read suricata
     | where dns.answers != null
     | python "self.first_result = self.dns.answers[0]; self.num_results = len(self.dns.answers)"
 END
 }
 
-
 # @test "python operator suricata.dns nested record in list assignment (xfail)" {
-#   DATADIR="$(dirname "$BATS_SUITE_DIRNAME")/data"
 #   check tenzir -f /dev/stdin << END
-#     from file $DATADIR/suricata/rrdata-eve.json read suricata
+#     from file $INPUTSDIR/suricata/rrdata-eve.json read suricata
 #     | where dns.answers != null
 #     | python "self.dns.answers[0].rrname = \"boogle.dom\""
 # END
 # }
 
-
 @test "python operator suricata.dns list assignment" {
-  DATADIR="$(dirname "$BATS_SUITE_DIRNAME")/data"
-  check tenzir -f /dev/stdin << END
-    from file $DATADIR/suricata/rrdata-eve.json read suricata
+  check tenzir -f /dev/stdin <<END
+    from file $INPUTSDIR/suricata/rrdata-eve.json read suricata
     | python "if self.dns.grouped.MX is not None: self.dns.grouped.MX[0] = \"boogle.dom\""
 END
 }
 
 @test "python operator suricata.dns assignment to field in null record" {
-  DATADIR="$(dirname "$BATS_SUITE_DIRNAME")/data"
-  check tenzir -f /dev/stdin << END
-    from file $DATADIR/suricata/rrdata-eve.json read suricata
+  check tenzir -f /dev/stdin <<END
+    from file $INPUTSDIR/suricata/rrdata-eve.json read suricata
     | python "
       if self.dns.grouped.TXT is None:
         self.dns.grouped.TXT = \"text record\"
@@ -221,11 +218,9 @@ END
 END
 }
 
-
 @test "python operator fill partial output with nulls" {
-  DATADIR="$(dirname "$BATS_SUITE_DIRNAME")/data"
-  check tenzir -f /dev/stdin << END
-    from file $DATADIR/suricata/rrdata-eve.json read suricata
+  check tenzir -f /dev/stdin <<END
+    from file $INPUTSDIR/suricata/rrdata-eve.json read suricata
     | python "
       if self.dns.answers is not None:
         self.had_answers = True
@@ -235,9 +230,8 @@ END
 }
 
 @test "python operator timestamps" {
-  DATADIR="$(dirname "$BATS_SUITE_DIRNAME")/data"
-  check tenzir -f /dev/stdin << END
-    from file $DATADIR/suricata/eve.json read suricata
+  check tenzir -f /dev/stdin <<END
+    from file $INPUTSDIR/suricata/eve.json read suricata
     | where #schema == "suricata.flow"
     | python "self.flow.duration = self.flow.end - self.flow.start"
 END
