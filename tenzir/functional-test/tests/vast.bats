@@ -22,11 +22,6 @@ teardown() {
 
 # bats test_tags=node,counting,zeek
 @test "Conn log counting" {
-  if [ $(uname) == "Darwin" ]; then
-    # TODO: Figure out why this has different output on mac
-    skip "disabled on mac"
-  fi
-
   import_zeek_conn
 
   check tenzir 'export | where :ip == 192.168.1.104 | summarize count=count(.)'
@@ -110,11 +105,6 @@ teardown() {
 
 #bats test_tags=node,import,export,suricata,eve
 @test "Node suricata rrdata" {
-  if [ $(uname) == "Darwin" ]; then
-    # TODO: Figure out why this has different output on mac
-    skip "disabled on mac"
-  fi
-
   import_data "load file ${INPUTSDIR}/suricata/rrdata-eve.json | read json --selector=event_type:suricata"
 
   check tenzir 'export | sort timestamp'
@@ -123,12 +113,7 @@ teardown() {
 
 #bats test_tags=node,import,export,argus,csv
 @test "Node argus csv" {
-  if [ $(uname) == "Darwin" ]; then
-    # TODO: Figure out why this is failing on mac
-    skip "disabled on mac"
-  fi
-
-  zcat ${INPUTSDIR}/csv/argus-M57-10k-pkts.csv.gz |
+  gunzip -c ${INPUTSDIR}/csv/argus-M57-10k-pkts.csv.gz |
     tenzir-ctl import -b -t argus.record csv
   tenzir-ctl flush
 
@@ -198,20 +183,14 @@ teardown() {
 
 #bats test_tags=import,json,suricata
 @test "Import time" {
-  if [ $(uname) == "Darwin" ]; then
-    # TODO: Figure out correct invocation of `date` for mac
-    skip "disabled on mac"
-  fi
-
   import_suricata_eve 'where #schema == "suricata.stats"'
 
   # We need subsecond precision here because `date` rounds
   # down otherwise. Also, we need `tr` because `date` uses
   # a comma for subsecond precision by default but tenzir
   # requires a dot. (ISO 8601 allows both)
-  NOW=$(date -Ins | tr ',' '.')
-  check tenzir "export | where #import_time > ${NOW}"
-  check tenzir "export | where #import_time <= ${NOW} | sort timestamp"
+  check tenzir "export | where #import_time > now"
+  check tenzir "export | where #import_time <= now | sort timestamp"
 }
 
 #bats test_tags=import,export,suricata

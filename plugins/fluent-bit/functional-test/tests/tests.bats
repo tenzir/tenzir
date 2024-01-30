@@ -27,5 +27,5 @@ setup() {
 @test "Use fluent-bit to count to 10" {
   run -0 --separate-stderr \
     tenzir 'version | repeat | head | fluent-bit counter'
-  { check cut -d , -f 2; } <<< "$output"
+  { check cut -d , -f 2; } <<<"$output"
 }

@@ -3,7 +3,7 @@
 : "${BATS_TEST_TIMEOUT:=120}"
 
 RULE="${BATS_SUITE_DIRNAME}/test.yara"
-COMPILED_RULE="${BATS_TEST_DIRNAME}/test.yarac"
+COMPILED_RULE="${BATS_TEST_TMPDIR}/test.yarac"
 
 setup() {
   bats_load_library bats-support

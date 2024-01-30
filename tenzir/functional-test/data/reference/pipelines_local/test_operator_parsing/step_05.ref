@@ -1,8 +1,0 @@
-pipeline [
-  load file {
-    path: "a/b/c.json" @ 10..20
-  },
-  read cef {
-    
-  }
-] @ 0..29
