@@ -37,7 +37,7 @@ ENV PREFIX="/opt/tenzir" \
 # When changing these, make sure to also update the corresponding entries in the
 # flake.nix file.
 ENV TENZIR_CACHE_DIRECTORY="/var/cache/tenzir" \
-    TENZIR_DB_DIRECTORY="/var/lib/tenzir" \
+    TENZIR_STATE_DIRECTORY="/var/lib/tenzir" \
     TENZIR_LOG_FILE="/var/log/tenzir/server.log" \
     TENZIR_ENDPOINT="0.0.0.0"
 
@@ -83,7 +83,7 @@ FROM debian:bookworm-slim AS tenzir-de
 ENV PREFIX="/opt/tenzir" \
     PATH="/opt/tenzir/bin:${PATH}" \
     TENZIR_CACHE_DIRECTORY="/var/cache/tenzir" \
-    TENZIR_DB_DIRECTORY="/var/lib/tenzir" \
+    TENZIR_STATE_DIRECTORY="/var/lib/tenzir" \
     TENZIR_LOG_FILE="/var/log/tenzir/server.log" \
     TENZIR_ENDPOINT="0.0.0.0"
 

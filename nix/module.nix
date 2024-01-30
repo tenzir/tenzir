@@ -65,7 +65,7 @@ in {
                   default = ["all"];
                   description = "The names of plugins to enable";
                 };
-                db-directory = mkOption {
+                state-directory = mkOption {
                   type = lib.types.path;
                   default = "/var/lib/tenzir";
                   description = ''
@@ -108,7 +108,7 @@ in {
         ExecStart = "${cfg.package}/bin/tenzir-node --config=${configFile}";
         DynamicUser = true;
         NoNewPrivileges = true;
-        PIDFile = "${cfg.settings.tenzir.db-directory}/pid.lock";
+        PIDFile = "${cfg.settings.tenzir.state-directory}/pid.lock";
         ProtectKernelTunables = true;
         ProtectControlGroups = true;
         ProtectKernelModules = true;

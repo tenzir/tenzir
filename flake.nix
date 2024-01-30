@@ -77,7 +77,7 @@
               Env = [
                 # When changing these, make sure to also update the
                 # corresponding entries in the Dockerfile.
-                "TENZIR_DB_DIRECTORY=${tenzir-dir}"
+                "TENZIR_STATE_DIRECTORY=${tenzir-dir}"
                 "TENZIR_CACHE_DIRECTORY=/var/cache/tenzir"
                 "TENZIR_LOG_FILE=/var/log/tenzir/server.log"
                 "TENZIR_ENDPOINT=0.0.0.0"

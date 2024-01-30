@@ -3,7 +3,7 @@
 
 
 export_default_node_config() {
-  export TENZIR_DB_DIRECTORY="${BATS_TEST_TMPDIR}/db"
+  export TENZIR_STATE_DIRECTORY="${BATS_TEST_TMPDIR}/db"
   export TENZIR_BARE_MODE=true
   export TENZIR_PLUGINS=""
   export TENZIR_ENDPOINT=":0"

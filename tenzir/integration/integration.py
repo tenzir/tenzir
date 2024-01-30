@@ -263,7 +263,7 @@ def run_step(
             if step.transformation:
                 LOGGER.debug(f"transforming output with `{step.transformation}`")
                 env = os.environ.copy()
-                env["TENZIR_INTEGRATION_DB_DIRECTORY"] = db_dir
+                env["TENZIR_INTEGRATION_STATE_DIRECTORY"] = db_dir
                 try:
                     out = subprocess.run(
                         [step.transformation],

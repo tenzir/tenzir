@@ -162,7 +162,7 @@ bool setup_spdlog(bool is_server, const tenzir::invocation& cmd_invocation,
     if (log_file == defaults::logger::log_file
         && tenzir_file_verbosity != TENZIR_LOG_LEVEL_QUIET) {
       std::filesystem::path log_dir = caf::get_or(
-        cfg_file, "tenzir.db-directory", defaults::db_directory.data());
+        cfg_file, "tenzir.state-directory", defaults::state_directory.data());
       std::error_code err{};
       if (!std::filesystem::exists(log_dir, err)) {
         const auto created_log_dir
@@ -178,7 +178,7 @@ bool setup_spdlog(bool is_server, const tenzir::invocation& cmd_invocation,
       log_file = (log_dir / log_file).string();
     }
   } else {
-    // Please note, client file does not go to db_directory!
+    // Please note, client file does not go to state_directory!
     auto client_log_file
       = caf::get_if<std::string>(&cfg_cmd, "tenzir.client-log-file");
     if (!client_log_file)

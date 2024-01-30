@@ -86,14 +86,16 @@ caf::error validate(const disk_monitor_config& config) {
   return {};
 }
 
-caf::expected<size_t> compute_dbdir_size(std::filesystem::path dbdir,
+caf::expected<size_t> compute_dbdir_size(std::filesystem::path state_directory,
                                          const disk_monitor_config& config) {
   caf::expected<size_t> result = 0;
   if (!config.scan_binary) {
-    return detail::recursive_size(dbdir);
+    return detail::recursive_size(state_directory);
   }
-  const auto& command = fmt::format("{} {}", *config.scan_binary, dbdir);
-  TENZIR_VERBOSE("executing command '{}' to determine size of dbdir", command);
+  const auto& command
+    = fmt::format("{} {}", *config.scan_binary, state_directory);
+  TENZIR_VERBOSE("executing command '{}' to determine size of state_directory",
+                 command);
   auto cmd_output = detail::execute_blocking(command);
   if (!cmd_output)
     return cmd_output.error();
@@ -125,7 +127,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
     return disk_monitor_actor::behavior_type::make_empty_behavior();
   }
   self->state.config = config;
-  self->state.dbdir = db_dir;
+  self->state.state_directory = db_dir;
   self->state.index = std::move(index);
   self->send(self, atom::ping_v);
   return {
@@ -142,13 +144,14 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       // see noticeable overhead even on large-ish databases.
       // Nonetheless, if this becomes relevant we should switch to using
       // `inotify()` or similar to do real-time tracking of the db size.
-      auto size = compute_dbdir_size(self->state.dbdir, self->state.config);
+      auto size
+        = compute_dbdir_size(self->state.state_directory, self->state.config);
       if (!size) {
         TENZIR_WARN("{} failed to calculate recursive size of {}: {}", *self,
-                    self->state.dbdir, size.error());
+                    self->state.state_directory, size.error());
         return;
       }
-      TENZIR_VERBOSE("{} checks db-directory of size {}", *self, *size);
+      TENZIR_VERBOSE("{} checks state-directory of size {}", *self, *size);
       if (*size > self->state.config.high_water_mark) {
         self
           ->request(static_cast<disk_monitor_actor>(self), caf::infinite,
@@ -158,19 +161,20 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
               // nop
             },
             [=](const caf::error& err) {
-              TENZIR_ERROR("{} failed to purge db-directory: {}", *self, err);
+              TENZIR_ERROR("{} failed to purge state-directory: {}", *self,
+                           err);
             });
       }
     },
     [self](atom::erase) -> caf::result<void> {
       auto err = std::error_code{};
-      const auto index_dir
-        = std::filesystem::directory_iterator(self->state.dbdir / "index", err);
+      const auto index_dir = std::filesystem::directory_iterator(
+        self->state.state_directory / "index", err);
       if (err)
         return caf::make_error(ec::filesystem_error, //
                                fmt::format("failed to find index in "
-                                           "db-directory at {}: {}",
-                                           self->state.dbdir, err));
+                                           "state-directory at {}: {}",
+                                           self->state.state_directory, err));
       // TODO(ch20006): Add some check on the overall structure on the db dir.
       std::vector<partition_diskstate> partitions;
       for (const auto& entry : index_dir) {
@@ -230,11 +234,11 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       constexpr auto erase_timeout = std::chrono::seconds{60};
       auto continuation = [=] {
         if (--self->state.pending_partitions == 0) {
-          if (const auto size
-              = compute_dbdir_size(self->state.dbdir, self->state.config);
+          if (const auto size = compute_dbdir_size(self->state.state_directory,
+                                                   self->state.config);
               !size) {
             TENZIR_WARN("{} failed to calculate size of {}: {}", *self,
-                        self->state.dbdir, size.error());
+                        self->state.state_directory, size.error());
           } else {
             TENZIR_VERBOSE("{} erased ids from index; leftover size is {}",
                            *self, *size);

@@ -35,7 +35,8 @@ class plugin final : public virtual health_metrics_plugin {
 public:
   auto initialize(const record& config, const record& /*plugin_config*/)
     -> caf::error override {
-    dbdir_ = get_or(config, "tenzir.db-directory", defaults::db_directory);
+    state_directory_
+      = get_or(config, "tenzir.state-directory", defaults::state_directory);
     return {};
   }
 
@@ -48,8 +49,8 @@ public:
   }
 
   auto make_collector() const -> caf::expected<collector> override {
-    return [dbdir = dbdir_]() {
-      return get_diskspace_info(dbdir);
+    return [state_directory = state_directory_]() {
+      return get_diskspace_info(state_directory);
     };
   }
 
@@ -63,7 +64,7 @@ public:
   }
 
 private:
-  std::string dbdir_ = {};
+  std::string state_directory_ = {};
 };
 
 } // namespace
