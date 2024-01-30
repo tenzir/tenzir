@@ -58,7 +58,7 @@ output.elasticsearch:
 
 #### Start Winlogbeat as a service
 
-After you've competed your configuration, start the Winlogbeat service:
+After completing your configuration, start the Winlogbeat service:
 
 ```
 C:\Program Files\Winlogbeat> Start-Service winlogbeat
@@ -276,7 +276,7 @@ instructions.
 
 ### Setup the Window Event Collector (WEC)
 
-We begin with setting up the WEC priot to connecting the client to it.
+We begin with setting up the WEC prior to connecting the client to it.
 
 #### Setup Windows Remote Management (WinRM)
 
