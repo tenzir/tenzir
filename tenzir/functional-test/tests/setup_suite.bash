@@ -7,7 +7,7 @@ setup_suite() {
   export_default_node_config
 }
 
-SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 export BATS_LIB_PATH=${BATS_LIB_PATH:+${BATS_LIB_PATH}:}${SCRIPT_DIR}/../lib
 
 # Normalize the environment unless `BATS_TENZIR_KEEP_ENVIRONMENT` is set.
@@ -22,9 +22,9 @@ fi
 
 # TODO: Should the datadir definitions move into the bats-tenzir library,
 # so that files in there automatically available for plugins integration tests?
-export BATS_TENZIR_DATADIR="$(dirname ${BATS_TEST_DIRNAME})/data"
+BATS_TEST_DATADIR="$(realpath $(dirname ${BATS_TEST_DIRNAME}))"
+export BATS_TENZIR_DATADIR="${BATS_TEST_DATADIR%%/functional-test/*}/data"
 
 export INPUTSDIR="${BATS_TENZIR_DATADIR}/inputs"
 export QUERYDIR="${BATS_TENZIR_DATADIR}/queries"
 export MISCDIR="${BATS_TENZIR_DATADIR}/misc"
-
