@@ -58,12 +58,9 @@ teardown() {
 #   # Now we can block until all suricata ingests are finished.
 #   wait_all "${suri_imports[@]}"
 #   debug 1 "suri imports"
-#   # TODO: Flushing should not be necessary!
-#   tenzir-ctl flush
 #   check tenzir-ctl count '#schema == /suricata.*/'
 #   # And now we wait for the zeek imports.
 #   wait_all "${zeek_imports[@]}"
-#   tenzir-ctl flush
 #   debug 1 "zeek imports"
 #   check tenzir-ctl count '#schema == "zeek.conn"'
 #   check tenzir-ctl count
