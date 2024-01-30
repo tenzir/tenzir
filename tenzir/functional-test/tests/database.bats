@@ -8,14 +8,14 @@ setup() {
   bats_load_library bats-tenzir
 
   # Override parts of the default node config for this test file
-  # by using `setup_node_raw()`.
+  # by using `setup_node()`.
   export_default_node_config
   export TENZIR_ENABLE_METRICS=true
   export TENZIR_METRICS__SELF_SINK__ENABLE=false
   export TENZIR_METRICS__FILE_SINK__ENABLE=true
   export TENZIR_METRICS__FILE_SINK__REAL_TIME=true
   export TENZIR_METRICS__FILE_SINK__PATH=${TENZIR_STATE_DIRECTORY}/metrics.log
-  setup_node_raw
+  setup_node
 }
 
 teardown() {

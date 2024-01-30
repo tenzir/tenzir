@@ -11,10 +11,11 @@ the test output against a known reference file.
 To run all tests, execute the `integration` target from cmake.
 
 To run all tests in this directory, use `bats tests/`.
-Note that all paths are computed relative to the test file,
-so bats can be invoked from any directory.
 
 To run all tests in a specific test file, use e.g. `bats tests/version.test`
+
+Note that bats can be invoked from any directory, since all paths are computed
+relative to the test file.
 
 To run the set of tests that failed during the last run of bats,
 the `--filter-status failed` option can be used. This can also

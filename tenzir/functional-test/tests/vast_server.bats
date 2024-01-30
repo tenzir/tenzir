@@ -8,7 +8,7 @@ setup() {
   bats_load_library bats-assert
   bats_load_library bats-tenzir
 
-  setup_node
+  setup_node_with_default_config
 }
 
 teardown() {

@@ -16,7 +16,7 @@ setup() {
 @test "saver" {
   # TODO: Write convenience function to get current tenzir config
   # TODO: Why is this test not in the fluent-bit plugin?
-  setup_node
+  setup_node_with_default_config
   has_fluentbit=$(tenzir 'show plugins | where name == "fluent-bit"')
   teardown_node
 

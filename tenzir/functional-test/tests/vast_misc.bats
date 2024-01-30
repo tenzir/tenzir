@@ -20,7 +20,7 @@ setup() {
 @test "Example config file" {
   EXAMPLE_CONFIG=${BATS_TEST_DIRNAME}/../../../tenzir.yaml.example
 
-  setup_node_raw --config=${EXAMPLE_CONFIG}
+  setup_node --config=${EXAMPLE_CONFIG}
 
   tenzir --config=${EXAMPLE_CONFIG} \
     "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | import"
@@ -39,7 +39,7 @@ setup() {
   # shutdown when metrics are enabled.
 
   export TENZIR_ENABLE_METRICS=true
-  setup_node_raw
+  setup_node
 
   # Random command to ensure the node is up.
   tenzir 'show serves | discard'
@@ -60,7 +60,7 @@ setup() {
   export TENZIR_START__DISK_BUDGET_CHECK_INTERVAL=2
   export TENZIR_START__DISK_BUDGET_CHECK_BINARY=${MISCDIR}/scripts/count_partitions_plus1.sh
 
-  setup_node_raw
+  setup_node
 
   import_zeek_conn
   sleep 4
