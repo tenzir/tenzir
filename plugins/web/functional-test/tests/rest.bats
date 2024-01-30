@@ -9,7 +9,9 @@ setup() {
   bats_load_library bats-assert
   bats_load_library bats-tenzir
 
+  export_default_node_config
   export TENZIR_START__COMMANDS
+  export TENZIR_PLUGINS=web
 }
 
 teardown() {

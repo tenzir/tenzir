@@ -2,8 +2,7 @@ setup_suite() {
   bats_require_minimum_version 1.8.0
   bats_load_library bats-tenzir
 
-  export_default_paths
-  export_default_node_config
+  bats_tenzir_initialize
   
   export INPUTSDIR="${BATS_TENZIR_INPUTSDIR}"
   export QUERYDIR="${BATS_TENZIR_QUERIESDIR}"

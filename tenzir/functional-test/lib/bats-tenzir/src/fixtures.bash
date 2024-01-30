@@ -14,11 +14,6 @@ export_default_paths() {
 }
 
 export_default_node_config() {
-  # Normalize the environment unless `BATS_TENZIR_KEEP_ENVIRONMENT` is set.
-  if [[ ! -n ${BATS_TENZIR_KEEP_ENVIRONMENT} ]]; then
-    unset $(printenv | grep -o '^TENZIR[^=]*' | paste -s -)
-  fi
-
   export TENZIR_BARE_MODE=true
   export TENZIR_STATE_DIRECTORY="${BATS_TEST_TMPDIR}/db"
   export TENZIR_PLUGINS=""
@@ -29,6 +24,16 @@ export_default_node_config() {
   export TENZIR_EXEC__IMPLICIT_EVENTS_SINK="write json --compact-output | save -"
   export TENZIR_ENABLE_METRICS=false
   export TENZIR_ALLOW_UNSAFE_PIPELINES="true"
+}
+
+bats_tenzir_initialize() {
+  # Normalize the environment unless `BATS_TENZIR_KEEP_ENVIRONMENT` is set.
+  if [[ ! -n ${BATS_TENZIR_KEEP_ENVIRONMENT} ]]; then
+    unset $(printenv | grep -o '^TENZIR[^=]*' | paste -s -)
+  fi
+
+  export_default_paths
+  export_default_node_config
 }
 
 setup_node() {
