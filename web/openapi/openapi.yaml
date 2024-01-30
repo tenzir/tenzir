@@ -244,6 +244,14 @@ components:
         definition:
           type: string
           description: The pipeline definition.
+        created_at:
+          type: integer
+          format: int64
+          description: The Unix timestamp of the pipeline creation time in nanoseconds.
+        last_modified:
+          type: integer
+          format: int64
+          description: The Unix timestamp of the last pipeline modification in nanoseconds.
         state:
           type: string
           enum:
@@ -433,6 +441,8 @@ paths:
                     - id: 7
                       name: user-assigned-name
                       definition: export | where foo | publish /bar
+                      created_at: 1706180157837037485
+                      last_modifed: 1706180157837038016
                       state: running
                       error: ~
                       diagnostics:
