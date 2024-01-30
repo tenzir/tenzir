@@ -19,8 +19,6 @@ if ! which tenzir; then
   return 1
 fi
 
-# Try to load the `bats-tenzir` library either relative to
-# the current directory (for in-tree builds) or relative to the
-# tenzir binary (for builds against an installed tenzir)
-TENZIR_DIR="$(realpath "$(dirname "$(command -v tenzir)")")"
-export BATS_LIB_PATH=${BATS_LIB_PATH:+${BATS_LIB_PATH}:}${TENZIR_DIR}/../share/tenzir/functional-test/lib:${BATS_TEST_DIRNAME}/../../../../../tenzir/functional-test/lib
+libpath_relative_to_binary="$(realpath "$(dirname "$(command -v tenzir)")")/../share/tenzir/functional-test/lib"
+libpath_relative_to_pwd="${BATS_TEST_DATADIR%%/functional-test/*}/lib"
+export BATS_LIB_PATH=${BATS_LIB_PATH:+${BATS_LIB_PATH}:}${libpath_relative_to_binary}:${libpath_relative_to_pwd}

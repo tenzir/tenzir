@@ -9,6 +9,9 @@ setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
   bats_load_library bats-tenzir
+
+  export_default_node_config
+  export TENZIR_PLUGINS="yara"
 }
 
 @test "produce events for matching strings" {
