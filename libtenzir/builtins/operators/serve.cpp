@@ -75,7 +75,6 @@ namespace tenzir::plugins::serve {
 namespace {
 
 constexpr auto SERVE_ENDPOINT_ID = 0;
-constexpr auto FINAL_CONTINUATION_TOKEN = std::string_view{"__DONE__"};
 
 constexpr auto SPEC_V0 = R"_(
 /serve:
@@ -146,7 +145,7 @@ constexpr auto SPEC_V0 = R"_(
                           schema: "string"
                           schema_id: "string"
                           events: "uint64"
-                data:
+                events:
                   type: array
                   items:
                     type: object
@@ -282,7 +281,7 @@ struct managed_serve_operator {
     if (stop_rp.pending() and buffer.empty()) {
       TENZIR_ASSERT(not put_rp.pending());
       TENZIR_DEBUG("serve for id {} is done", escape_operator_arg(serve_id));
-      continuation_token = FINAL_CONTINUATION_TOKEN;
+      continuation_token.clear();
       get_rp.deliver(std::make_tuple(std::string{}, std::move(results)));
       stop_rp.deliver();
       return true;
@@ -506,16 +505,14 @@ struct serve_manager_state {
     for (const auto& op : ops) {
       auto& entry = caf::get<record>(requests.emplace_back(record{}));
       entry.emplace("serve_id", op.serve_id);
-      const auto lingering = op.continuation_token == FINAL_CONTINUATION_TOKEN;
-      entry.emplace("continuation_token",
-                    op.continuation_token.empty() or lingering
-                      ? data{}
-                      : op.continuation_token);
+      entry.emplace("continuation_token", op.continuation_token.empty()
+                                            ? data{}
+                                            : op.continuation_token);
       entry.emplace("buffer_size", op.buffer_size);
       entry.emplace("num_buffered", rows(op.buffer));
       entry.emplace("num_requested", op.requested);
       entry.emplace("num_delivered", op.delivered);
-      entry.emplace("lingering", lingering);
+      entry.emplace("lingering", op.continuation_token.empty());
       entry.emplace("done", op.done);
       if (verbosity >= status_verbosity::detailed) {
         entry.emplace("put_pending", op.put_rp.pending());
@@ -675,7 +672,7 @@ struct serve_handler_state {
       .oneline = true,
     }};
     auto result
-      = next_continuation_token == FINAL_CONTINUATION_TOKEN
+      = next_continuation_token.empty()
           ? std::string{R"({"next_continuation_token":null,"events":[)"}
           : fmt::format(R"({{"next_continuation_token":"{}","events":[)",
                         next_continuation_token);
