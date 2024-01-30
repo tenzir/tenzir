@@ -720,7 +720,7 @@ struct serve_handler_state {
     }
     // Write schemas
     if (seen_schemas.empty()) {
-      out_iter = fmt::format_to(out_iter, R"(}}],"schemas":[]}}{})", '\n');
+      out_iter = fmt::format_to(out_iter, R"(],"schemas":[]}}{})", '\n');
       return result;
     }
     out_iter = fmt::format_to(out_iter, R"(}}],"schemas":[)");
