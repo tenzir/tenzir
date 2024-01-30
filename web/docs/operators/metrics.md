@@ -224,17 +224,17 @@ metrics
 
 ```json
 {
-  "pipeline_id": "13",
+  "pipeline_id": "70a25089-b16c-448d-9492-af5566789b99",
   "operator_id": 0,
   "events": 391008694
 }
 {
-  "pipeline_id": "12",
+  "pipeline_id": "7842733c-06d6-4713-9b80-e20944927207",
   "operator_id": 0,
   "events": 246914949
 }
 {
-  "pipeline_id": "0",
+  "pipeline_id": "6df003be-0841-45ad-8be0-56ff4b7c19ef",
   "operator_id": 1,
   "events": 83013294
 }

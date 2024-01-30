@@ -371,7 +371,7 @@ paths:
               properties:
                 id:
                   type: string
-                  example: 7
+                  example: 4c7f2b11-6169-4d1b-89b4-4fc0a68b3d4a
                   description: The id of the pipeline to be deleted.
       responses:
         200:
@@ -438,7 +438,7 @@ paths:
                       $ref: "#/components/schemas/PipelineInfo"
                 example:
                   pipelines:
-                    - id: 7
+                    - id: 4c7f2b11-6169-4d1b-89b4-4fc0a68b3d4a
                       name: user-assigned-name
                       definition: export | where foo | publish /bar
                       created_at: 1706180157837037485
@@ -453,7 +453,7 @@ paths:
                             {}
                           out:
                             {}
-                    - id: 8
+                    - id: 08446737-da9b-4787-8599-97d85c48c3bb
                       name: wrong-pipeline
                       definition: export asdf
                       state: failed
@@ -547,7 +547,7 @@ paths:
               properties:
                 id:
                   type: string
-                  example: 7
+                  example: 08446737-da9b-4787-8599-97d85c48c3bb
                   description: The id of the pipeline to be updated.
                 action:
                   type: string
