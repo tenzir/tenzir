@@ -456,12 +456,125 @@ Refer to the [OpenWEC getting started
 guide](https://github.com/cea-sec/openwec/blob/main/doc/getting_started.md) for
 setup instructions.
 
+For running OpenWEC on non-Windows machines that are likely not joined to a
+Windows domain, it is most useful to configure TLS client authentication. The
+OpenWEC documentation (see above) recommends to use [a script collection from
+NXLog](https://gitlab.com/nxlog-public/contrib/-/tree/master/windows-event-forwarding)
+that  creates keys/certificates that can immediately be used to configure both
+Windows clients and the OpenWEC collector. Make sure to pay attention to
+specifying the correct hostnames for the sending and receiving machines!
+
+```
+$ git clone https://gitlab.com/nxlog-public/contrib
+...
+$ cd contrib/windows-event-forwarding
+$ ./genca.sh myca
+.........+..+.......+...+...+..+...+.........+..................+.......+..+.+..+......+.+...+..+.+........+......+.+.................+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*..............+....+..+.............+......+......+......+..+...+.............+......+.....+.+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*.......+...............+......+..+...+.........+......+....+...........+..........+.........+............+.....+.+...+.....+....+...+..+.+..+.............+............+.....+.........+.+..+.......+.....+....+..+...+.+...........+.........+....+..............+.......+........+................+..+....+......+...+.....+.......+..+..........+..+...+.......+...+...+...+..+.........+....+......+.....+....+.........+......+..............+.......+......+.....+....+........+...+..........+..............+.+.....+............+.............+...+.........+..+.+........+......+................+..................+..+........................+......+...+.+...+............+.........+.....+.+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+..+....+.....+.+..+..........+..+......+..........+.................+......+.+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*....+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*...+...........+...+.......+.........+......+.....+...+.+............+..+...+..........+........+.......+...+..+...+......+..........+..................+......+.....+....+.....+......+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-----
+$ ./gencert-client.sh myclient.domain.com
+..+.....+.+.........+...........+............+.......+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*..+......+......+...+..+....+..............+...+..........+..+.+......+......+..+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*.....+.+...+.....+.......+...+..+............+.............+...+.....+.+...+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+.+......+....+...+..+...+...+..........+.........+.....+.+..+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*...........+...................+...........+.+...+...+.....+..........+...+.....+......+.+..+......+.+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*........+..........+..+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-----
+Certificate request self-signature ok
+subject=CN = myclient.domain.com, O = nxlog.org, C = HU, ST = state, L = location
+Enter Export Password: <pwd>
+Verifying - Enter Export Password: <pwd>
+$ ./gencert-server.sh openwec.domain.com
+.+..+..........+...+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*...+......+.......+...+...+.........+........+..........+...+..+...+......+..........+......+........+....+.....+...+....+...+..+...............+...+...+............+.+.....+....+...+.....+.........+...+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*......+....+......+............+..+................+..............+.......+.....+...+.......+.....+......+....+..............+.+..............+....+...+..+.+..+....+...+..+....+..+..........+...+.........+..+.........+......+.+........+....+...........+..........+..+..........+.....+....+.....+....+..............+.+..+...+......+...................+...........+...+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+...+....+..+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*....+...+..+......+....+..+.+.........+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++*.+....+........+...+....+......+..+.......+...+......+...........+.+..+............+.............+...+...+.....+................+...+.....+.......+........................+.....+...................+..+......+...+.+...+...+.....+..........+...+..+....+.....+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+-----
+Certificate request self-signature ok
+subject=CN = openwec.domain.com, O = nxlog.org, C = HU, ST = state, L = location
+##################################################################################
+
+Use the following for the Subscription Manager string:
+Server=HTTPS://openwec.domain.com:5985/wsman/,Refresh=14400,IssuerCA=6605742C5400141B76A747E19EA585E29B09F017
+```
+The string in the last line can be used to configure the Windows Event
+Forwarding subscription manager on the sending side as described in the section
+above ("Change local group policy settings"). While you're at it, also import
+the `client.pfx` and `ca-cert.pem` into the corresponding stores (see [the
+documentation](https://github.com/cea-sec/openwec/blob/main/doc/tls.md#client-configuration)).
+
+Then, configure the OpenWEC server as follows (assuming the output files are in
+`/etc`, the directory `/var/db/openwec` exists and it is writable by the current
+user):
+
+```
+$ cat openwec.conf.toml
+[server]
+
+[logging]
+verbosity = "info"
+
+[database]
+type = "SQLite"
+path = "/var/db/openwec/openwec.sqlite"
+
+[[collectors]]
+listen_address = "0.0.0.0"
+hostname = "openwec.domain.com"
+
+[collectors.authentication]
+type = "Tls"
+ca_certificate = "/etc/ca-cert.pem"
+server_certificate = "/etc/server-cert.pem"
+server_private_key = "/etc/server-key.pem"
+```
+
+Create the database (only needed to be done once):
+```
+$ openwec -c openwec.conf.toml db init
+```
+
+Start the server:
+```
+$ openwecd -c openwec.conf.toml
+2024-01-30T13:59:26.295792509+01:00 INFO server - Server settings: Server { db_sync_interval: None, flush_heartbeats_interval: None, heartbeats_queue_size: None, node_name: None, keytab: None, tcp_keepalive_time: None, tcp_keepalive_intvl: None, tcp_keepalive_probes: None }
+2024-01-30T13:59:26.295947557+01:00 INFO server::subscription - reload_subscriptions task started
+2024-01-30T13:59:26.296046314+01:00 INFO server::heartbeat - Heartbeat task started
+2024-01-30T13:59:26.297503212+01:00 WARN server::subscription - There are no active subscriptions!
+2024-01-30T13:59:26.306151854+01:00 INFO server::tls - Loaded TLS configuration with server certificate /etc/server-cert.pem
+2024-01-30T13:59:26.309876793+01:00 INFO server - Server listenning on 0.0.0.0:5985
+```
+It might make sense to ensure that the server is started and kept up via some
+automated means, like systemd.
+
+Then, while the server is running, create a subscription in OpenWEC for the
+desired channels. For example, to match the subscription from the example above,
+create an XML file like this (say, `subscription.xml`):
+
+```xml
+<QueryList>
+    <Query Id="0">
+        <Select Path="Application">*</Select>
+        <Select Path="Security">*</Select>
+        <Select Path="System">*</Select>
+    </Query>
+</QueryList>
+```
+
+Create a named subscription (e.g. with name `DC_SUBSCRIPTION`) using the `openwec` CLI tool:
+```
+$ openwec subscriptions new DC_SUBSCRIPTION subscription.xml
+```
+
 Configure JSON over TCP as
-[output](https://github.com/cea-sec/openwec/blob/main/doc/outputs.md).
+[output](https://github.com/cea-sec/openwec/blob/main/doc/outputs.md):
+```
+$ openwec subscriptions edit DC_SUBSCRIPTION outputs add --format json tcp localhost 1514
+```
+
+Enable the subscription:
+```
+$ openwec subscriptions enable DC_SUBSCRIPTION
+```
 
 ### Run a Tenzir pipeline
 
-Afterwards, import the logs with [`tcp`](../connectors/tcp.md) connector:
+Import the logs sent with the configuration above into Tenzir using the
+[`tcp`](../connectors/tcp.md) connector:
 
 ```
 from tcp://10.0.0.1:1514 | import
