@@ -35,6 +35,7 @@ Contains detailed information about the diagnostic.
 |Field|Type|Description|
 |:-|:-|:-|
 |`pipeline_id`|`string`|The ID of the pipeline that created the diagnostic.|
+|`run`|`uint64`|The number of the run, starting at 1 for the first run.|
 |`timestamp`|`time`|The exact timestamp of the diagnostic creation.|
 |`message`|`string`|The diagnostic message.|
 |`severity`|`string`|The diagnostic severity.|

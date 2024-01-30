@@ -252,6 +252,9 @@ components:
           type: integer
           format: int64
           description: The Unix timestamp of the last pipeline modification in nanoseconds.
+        total_runs:
+          type: integer
+          description: The total amount of runs this pipeline has attempted so far.
         state:
           type: string
           enum:

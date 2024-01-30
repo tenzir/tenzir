@@ -66,6 +66,7 @@ operator instantiation.
 |Field|Type|Description|
 |:-|:-|:-|
 |`pipeline_id`|`string`|The ID of the pipeline where the associated operator is from.|
+|`run`|`uint64`|The number of the run, starting at 1 for the first run.|
 |`hidden`|`bool`|True if the pipeline is running for the explorer.|
 |`operator_id`|`uint64`|The ID of the operator inside the pipeline referenced above.|
 |`source`|`bool`|True if this is the first operator in the pipeline.|
