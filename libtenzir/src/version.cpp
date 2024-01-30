@@ -85,6 +85,9 @@ auto tenzir_features() -> std::vector<std::string> {
     // The pipeline manager can autostart and autodelete pipelines, as per the
     // user's requests.
     "extended_pipeline_actions",
+    // The `chart` operator is supported, so that the frontend can conditionally
+    // render results as charts.
+    "chart_operator",
   };
 }
 

@@ -6,36 +6,50 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/detail/set_attributes_operator_helper.hpp>
+#include <tenzir/cast.hpp>
+#include <tenzir/parser_interface.hpp>
 #include <tenzir/plugin.hpp>
 
 namespace tenzir::plugins::set_attributes {
 
 namespace {
 
-using detail::set_attributes_operator_helper;
-using configuration = detail::set_attributes_operator_helper::configuration;
+using configuration = detail::stable_map<std::string, std::string>;
 
 class set_attributes_operator final
   : public crtp_operator<set_attributes_operator> {
 public:
   set_attributes_operator() = default;
 
-  explicit set_attributes_operator(set_attributes_operator_helper&& helper)
-    : helper_(std::move(helper)) {
+  explicit set_attributes_operator(configuration&& cfg) : cfg_(std::move(cfg)) {
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input) const
     -> generator<table_slice> {
+    std::unordered_map<type, type> enriched_schemas_cache{};
     for (auto&& slice : input) {
-      auto [result, err] = helper_.process(std::move(slice));
-      if (err) {
-        diagnostic::warning(err)
-          .note("from `{}`", name())
-          .emit(ctrl.diagnostics());
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
       }
-      co_yield result;
+      auto original_schema = slice.schema();
+      if (auto it = enriched_schemas_cache.find(original_schema);
+          it != enriched_schemas_cache.end()) {
+        const auto& [_, cached_schema] = *it;
+        co_yield cast(std::move(slice), cached_schema);
+        continue;
+      }
+      std::vector<type::attribute_view> attrs;
+      attrs.reserve(cfg_.size());
+      std::ranges::transform(cfg_, std::back_inserter(attrs),
+                             [](const configuration::value_type& a) {
+                               return type::attribute_view{a.first, a.second};
+                             });
+      auto new_schema = type{original_schema, std::move(attrs)};
+      TENZIR_ASSERT(new_schema);
+      co_yield cast(std::move(slice), new_schema);
+      enriched_schemas_cache.emplace(std::move(original_schema),
+                                     std::move(new_schema));
     }
   }
 
@@ -50,11 +64,13 @@ public:
   }
 
   friend auto inspect(auto& f, set_attributes_operator& x) -> bool {
-    return f.apply(x.helper_.get_config());
+    return f.object(x)
+      .pretty_name("set-attributes")
+      .fields(f.field("config", x.cfg_));
   }
 
 private:
-  set_attributes_operator_helper helper_{};
+  configuration cfg_{};
 };
 
 class plugin final : public virtual operator_plugin<set_attributes_operator> {
@@ -63,13 +79,50 @@ public:
     return {.transformation = true};
   }
 
-  auto make_operator(std::string_view pipeline) const
-    -> std::pair<std::string_view, caf::expected<operator_ptr>> override {
-    set_attributes_operator_helper helper{};
-    auto [sv, err] = helper.parse(pipeline);
-    if (err)
-      return {sv, err};
-    return {sv, std::make_unique<set_attributes_operator>(std::move(helper))};
+  auto parse_operator(parser_interface& p) const -> operator_ptr override {
+    configuration attributes{};
+    auto docs = fmt::format("https://docs.tenzir.com/operators/{}", name());
+    while (not p.at_end()) {
+      auto key = p.accept_shell_arg();
+      if (not key) {
+        diagnostic::error("failed to parse attribute flag")
+          .primary(p.current_span())
+          .docs(docs)
+          .throw_();
+      }
+      if (not key->inner.starts_with("--")) {
+        diagnostic::error("invalid attribute flag")
+          .primary(key->source)
+          .note("flag must start with `--`")
+          .docs(docs)
+          .throw_();
+      }
+      // Strip preceding `--`
+      key->inner = key->inner.substr(2);
+      if (auto eq_idx = key->inner.find('='); eq_idx != std::string::npos) {
+        // --key=value
+        attributes.emplace(key->inner.substr(0, eq_idx),
+                           key->inner.substr(eq_idx + 1));
+        continue;
+      }
+      // --key value
+      auto value = p.accept_shell_arg();
+      if (not value) {
+        diagnostic::error("failed to parse attribute value")
+          .primary(p.current_span())
+          .docs(docs)
+          .throw_();
+      }
+      if (value->inner.starts_with("--")) {
+        diagnostic::error("invalid attribute value")
+          .primary(value->source)
+          .note("value cannot start with `--`")
+          .docs(docs)
+          .throw_();
+      }
+      attributes.emplace(std::move(key->inner), std::move(value->inner));
+    }
+    return std::make_unique<set_attributes_operator>(std::move(attributes));
   }
 };
 

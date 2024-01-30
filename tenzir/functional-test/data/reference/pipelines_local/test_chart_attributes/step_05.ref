@@ -1,7 +1,8 @@
-error: could not parse `chart` operator
- --> <input>:1:24
+error: unknown option `-x`
+ --> <input>:1:46
   |
-1 | from stdin read json | chart donuttt value=b
-  |                        ^^^^^^^^^^^^^^^^^^^^^ 
+1 | from stdin read json | chart donut --value b -x e
+  |                                              ^^ 
   |
-  = note: !! syntax_error: invalid chart type `donuttt`, allowed types are: `stacked-area`, `donut`, and `bar`
+  = usage: chart donut [--name <field>] [--value <field>] [--title <title>]
+  = docs: https://docs.tenzir/operators/chart
