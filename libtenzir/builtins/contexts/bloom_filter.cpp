@@ -217,7 +217,7 @@ class plugin : public virtual context_plugin {
     if (n == 0) {
       return caf::make_error(ec::invalid_argument, "--capacity must be > 0");
     }
-    if (p < 0.0 || p > 1.0) {
+    if (p <= 0.0 || p >= 1.0) {
       return caf::make_error(ec::invalid_argument, "--fp-prob not in (0,1)");
     }
     return std::make_unique<bloom_filter_context>(n, p);
