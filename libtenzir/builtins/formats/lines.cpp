@@ -11,6 +11,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/to_lines.hpp>
+#include <tenzir/tql/parser.hpp>
 
 #include <optional>
 
@@ -88,8 +89,9 @@ public:
           builder = table_slice_builder{line_type()};
         }
       }
-      if (builder.rows() > 0)
+      if (builder.rows() > 0) {
         co_yield builder.finish();
+      }
     };
     return make(ctrl, std::move(input), !!args_.skip_empty);
   }
@@ -104,8 +106,49 @@ private:
   parser_args args_;
 };
 
-class plugin final : public virtual parser_plugin<lines_parser> {
+// To get better diagnostics in `write`, i.e.:
+//    "'xsv' does not support heterogeneous outputs..."
+// -> "'lines' does not..."
+// Otherwise, we could just use the `ssv_plugin` directly
+class lines_printer final : public plugin_printer {
 public:
+  lines_printer() = default;
+
+  lines_printer(std::unique_ptr<plugin_printer> inner)
+    : inner_(std::move(inner)) {
+  }
+
+  auto name() const -> std::string override {
+    return "lines";
+  }
+
+  auto instantiate(type input_schema, operator_control_plane& ctrl) const
+    -> caf::expected<std::unique_ptr<printer_instance>> override {
+    TENZIR_ASSERT_CHEAP(inner_);
+    return inner_->instantiate(std::move(input_schema), ctrl);
+  }
+
+  auto allows_joining() const -> bool override {
+    TENZIR_ASSERT_CHEAP(inner_);
+    return inner_->allows_joining();
+  }
+
+  friend auto inspect(auto& f, lines_printer& x) -> bool {
+    return f.begin_object(caf::invalid_type_id, "lines_printer")
+           && plugin_inspect(f, x.inner_) && f.end_object();
+  }
+
+private:
+  std::unique_ptr<plugin_printer> inner_;
+};
+
+class plugin final : public virtual parser_plugin<lines_parser>,
+                     public virtual printer_plugin<lines_printer> {
+public:
+  auto name() const -> std::string override {
+    return "lines";
+  }
+
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{
@@ -114,6 +157,24 @@ public:
     parser.add("-s,--skip-empty", args.skip_empty);
     parser.parse(p);
     return std::make_unique<lines_parser>(std::move(args));
+  }
+
+  auto parse_printer(parser_interface& p) const
+    -> std::unique_ptr<plugin_printer> override {
+    if (not p.at_end()) {
+      diagnostic::error("'lines' printer doesn't accept any arguments")
+        .primary(p.current_span())
+        .docs(fmt::format("https://docs.tenzir.com/docs/formats/{}", name()))
+        .throw_();
+    }
+    const auto* ssv_plugin = plugins::find<printer_parser_plugin>("ssv");
+    TENZIR_DIAG_ASSERT(ssv_plugin);
+    auto diag = null_diagnostic_handler{};
+    auto parser = tql::make_parser_interface("--no-header", diag);
+    TENZIR_DIAG_ASSERT(parser);
+    auto result = ssv_plugin->parse_printer(*parser);
+    TENZIR_DIAG_ASSERT(result);
+    return std::make_unique<lines_printer>(std::move(result));
   }
 };
 

@@ -192,7 +192,6 @@ public:
 
   friend auto inspect(auto& f, yaml_parser& x) -> bool {
     return f.object(x).fields();
-    return true;
   }
 };
 

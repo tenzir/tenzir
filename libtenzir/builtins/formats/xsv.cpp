@@ -54,8 +54,9 @@ struct xsv_options {
     if (is_parser) {
       parser.add("--allow-comments", allow_comments);
       parser.add("--header", header, "<header>");
-    } else
+    } else {
       parser.add("--no-header", no_header);
+    }
     parser.add(field_sep_str, "<field-sep>");
     parser.add(list_sep_str, "<list-sep>");
     parser.add(null_value, "<null-value>");
@@ -255,7 +256,7 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
   auto header = std::optional<std::string_view>{};
   if (args.header) {
     header = *args.header;
-  } else
+  } else {
     while (it != lines.end()) {
       auto line = *it;
       ++it;
@@ -263,23 +264,28 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
         co_yield {};
         continue;
       }
-      if (line->empty())
+      if (line->empty()) {
         continue;
-      if (args.allow_comments && line->front() == '#')
+      }
+      if (args.allow_comments && line->front() == '#') {
         continue;
+      }
       header = line;
       break;
-      if (not header)
+      if (not header) {
         co_return;
+      }
     }
+  }
   const auto qqstring_value_parser = parsers::qqstr.then([](std::string in) {
     static auto unescaper = [](auto& f, auto l, auto out) {
       if (*f != '\\') { // Skip every non-escape character.
         *out++ = *f++;
         return true;
       }
-      if (l - f < 2)
+      if (l - f < 2) {
         return false;
+      }
       switch (auto c = *++f) {
         case '\\':
           *out++ = '\\';
@@ -431,39 +437,41 @@ public:
   auto
   instantiate([[maybe_unused]] type input_schema, operator_control_plane&) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
-    auto input_type = caf::get<record_type>(input_schema);
-    auto printer
-      = xsv_printer_impl{args_.field_sep, args_.list_sep, args_.null_value};
     auto metadata = chunk_metadata{.content_type = content_type()};
-    return printer_instance::make(
-      [printer = std::move(printer), meta = std::move(metadata),
-       no_header = args_.no_header](table_slice slice) -> generator<chunk_ptr> {
-        auto buffer = std::vector<char>{};
-        auto out_iter = std::back_inserter(buffer);
-        auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
-        auto input_schema = resolved_slice.schema();
-        auto input_type = caf::get<record_type>(input_schema);
-        auto array
-          = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
-        auto first = true;
-        for (const auto& row : values(input_type, *array)) {
-          TENZIR_ASSERT_CHEAP(row);
-          if (first && not no_header) {
-            printer.print_header(out_iter, *row);
-            first = false;
-            out_iter = fmt::format_to(out_iter, "\n");
-          }
-          const auto ok = printer.print_values(out_iter, *row);
-          TENZIR_ASSERT_CHEAP(ok);
+    return printer_instance::make([meta = std::move(metadata), args = args_](
+                                    table_slice slice) -> generator<chunk_ptr> {
+      if (slice.rows() == 0) {
+        co_yield {};
+        co_return;
+      }
+      auto printer
+        = xsv_printer_impl{args.field_sep, args.list_sep, args.null_value};
+      auto buffer = std::vector<char>{};
+      auto out_iter = std::back_inserter(buffer);
+      auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
+      auto input_schema = resolved_slice.schema();
+      auto input_type = caf::get<record_type>(input_schema);
+      auto array
+        = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+      auto first = true;
+      for (const auto& row : values(input_type, *array)) {
+        TENZIR_ASSERT_CHEAP(row);
+        if (first && not args.no_header) {
+          printer.print_header(out_iter, *row);
+          first = false;
           out_iter = fmt::format_to(out_iter, "\n");
         }
-        auto chunk = chunk::make(std::move(buffer), meta);
-        co_yield std::move(chunk);
-      });
+        const auto ok = printer.print_values(out_iter, *row);
+        TENZIR_ASSERT_CHEAP(ok);
+        out_iter = fmt::format_to(out_iter, "\n");
+      }
+      auto chunk = chunk::make(std::move(buffer), meta);
+      co_yield std::move(chunk);
+    });
   }
 
   auto allows_joining() const -> bool override {
-    return false;
+    return args_.no_header;
   };
 
   friend auto inspect(auto& f, xsv_printer& x) -> bool {
