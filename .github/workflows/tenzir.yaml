@@ -828,7 +828,7 @@ jobs:
             path: plugins/parquet
           - name: Pipeline Manager
             target: pipeline-manager
-            path: contrib/tenzir-plugins/pipeline_manager
+            path: contrib/tenzir-plugins/pipeline-manager
           - name: Platform
             target: platform
             path: contrib/tenzir-plugins/platform

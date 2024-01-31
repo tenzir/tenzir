@@ -334,7 +334,7 @@ in {
     pkg.withPlugins (ps: [
       ps.context
       ps.matcher
-      ps.pipeline_manager
+      ps.pipeline-manager
       ps.platform
     ]);
   tenzir-cm = let
@@ -355,7 +355,7 @@ in {
       ps.compaction
       ps.context
       ps.matcher
-      ps.pipeline_manager
+      ps.pipeline-manager
       ps.platform
     ]);
   tenzir-integration-deps = let

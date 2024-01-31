@@ -184,11 +184,11 @@ RUN cmake -S contrib/tenzir-plugins/matcher -B build-matcher -G Ninja \
 
 FROM plugins-source AS pipeline-manager-plugin
 
-RUN cmake -S contrib/tenzir-plugins/pipeline_manager -B build-pipeline_manager -G Ninja \
+RUN cmake -S contrib/tenzir-plugins/pipeline-manager -B build-pipeline-manager -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-      cmake --build build-pipeline_manager --parallel && \
-      DESTDIR=/plugin/pipeline_manager cmake --install build-pipeline_manager --strip --component Runtime && \
-      rm -rf build-pipeline_manager
+      cmake --build build-pipeline-manager --parallel && \
+      DESTDIR=/plugin/pipeline-manager cmake --install build-pipeline-manager --strip --component Runtime && \
+      rm -rf build-pipeline-manager
 
 FROM plugins-source AS platform-plugin
 
@@ -204,7 +204,7 @@ FROM tenzir-de AS tenzir-ce
 
 COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
 COPY --from=matcher-plugin --chown=tenzir:tenzir /plugin/matcher /
-COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline_manager /
+COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline-manager /
 COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /
 
 # -- tenzir-node-ce ------------------------------------------------------------
