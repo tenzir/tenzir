@@ -15,7 +15,6 @@ brew install --overwrite \
     fmt \
     gnu-sed \
     grpc \
-    http-parser \
     libmaxminddb \
     libpcap \
     librdkafka \
@@ -25,6 +24,7 @@ brew install --overwrite \
     nmap \
     openssl \
     pandoc \
+    pipx \
     pkg-config \
     poetry \
     protobuf \
