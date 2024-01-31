@@ -741,34 +741,34 @@ function (TenzirRegisterPlugin)
     endforeach ()
   endif ()
 
-  # Ensure that a target functional-test always exists, even if a plugin does not
-  # define functional tests.
-  if (NOT TARGET functional-test)
-    add_custom_target(functional-test)
+  # Ensure that a target integration always exists, even if a plugin does not
+  # define integration tests.
+  if (NOT TARGET integration)
+    add_custom_target(integration)
   endif ()
 
-  # Setup functional tests.
-  if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/functional-test/tests")
+  # Setup integration tests.
+  if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests")
     if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
       set(TENZIR_PATH "$<TARGET_FILE_DIR:tenzir::tenzir>")
     else ()
       file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/share/tenzir")
-      file(CREATE_LINK "${TENZIR_PREFIX_DIR}/share/tenzir/functional-test"
-           "${CMAKE_BINARY_DIR}/share/tenzir/functional-test" SYMBOLIC)
+      file(CREATE_LINK "${TENZIR_PREFIX_DIR}/share/tenzir/integration"
+           "${CMAKE_BINARY_DIR}/share/tenzir/integration" SYMBOLIC)
       set(TENZIR_PATH "${CMAKE_CURRENT_BINARY_DIR}/bin")
     endif ()
     add_custom_target(
-      functional-test-${PLUGIN_TARGET}
+      integration-${PLUGIN_TARGET}
       COMMAND
         ${CMAKE_COMMAND} -E env
-        PATH="${TENZIR_PATH}:\$\$PATH:${TENZIR_PATH}/../share/tenzir/functional-test/lib/bats/bin"
-        bats "-r" "-T" "${CMAKE_CURRENT_SOURCE_DIR}/functional-test/tests"
-      COMMENT "Executing ${PLUGIN_TARGET} functional tests..."
+        PATH="${TENZIR_PATH}:\$\$PATH:${TENZIR_PATH}/../share/tenzir/integration/lib/bats/bin"
+        bats "-r" "-T" "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests"
+      COMMENT "Executing ${PLUGIN_TARGET} integration tests..."
       USES_TERMINAL)
     unset(TENZIR_PATH)
 
-    add_dependencies(functional-test-${PLUGIN_TARGET} tenzir::tenzir)
-    add_dependencies(functional-test functional-test-${PLUGIN_TARGET})
+    add_dependencies(integration-${PLUGIN_TARGET} tenzir::tenzir)
+    add_dependencies(integration integration-${PLUGIN_TARGET})
   endif ()
 
   if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")

@@ -358,7 +358,7 @@ in {
       ps.pipeline_manager
       ps.platform
     ]);
-  tenzir-functional-test-deps = let
+  tenzir-integration-deps = let
     bats = prev.bats.withLibraries (p: [
       p.bats-support
       p.bats-assert

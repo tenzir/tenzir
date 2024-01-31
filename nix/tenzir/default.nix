@@ -34,7 +34,7 @@
     cppzmq,
     libmaxminddb,
     re2,
-    tenzir-functional-test-deps,
+    tenzir-integration-deps,
     tenzir-integration-test-deps,
     dpkg,
     restinio,
@@ -233,10 +233,10 @@
         dontStrip = true;
 
         doInstallCheck = false;
-        installCheckInputs = tenzir-functional-test-deps ++ tenzir-integration-test-deps;
+        installCheckInputs = tenzir-integration-deps ++ tenzir-integration-test-deps;
         # TODO: Investigate why the disk monitor test fails in the build sandbox.
         installCheckPhase = ''
-          PATH="${placeholder "out"}/bin:$PATH" bats -T -j $NIX_BUILD_CORES ../tenzir/functional-test
+          PATH="${placeholder "out"}/bin:$PATH" bats -T -j $NIX_BUILD_CORES ../tenzir/integration
           python ../tenzir/integration/integration.py \
             --app ${placeholder "out"}/bin/tenzir-ctl \
             --disable "Disk Monitor"

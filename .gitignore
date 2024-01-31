@@ -26,8 +26,8 @@ venv/
 /tenzir*.log
 /tenzir-unit-test/
 /tenzir-integration-test*/
-/tenzir-functional-test-state/
-/tenzir/functional-test/tests/.bats/
+/tenzir-integration-state/
+/tenzir/integration/tests/.bats/
 
 # Python build artifacts
 /python/dist

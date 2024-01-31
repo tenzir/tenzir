@@ -14,7 +14,7 @@ in
           pkgs.speeve
           pkgs.poetry
           pkgs.python3Packages.spdx-tools
-        ] ++ pkgs.tenzir-functional-test-deps
+        ] ++ pkgs.tenzir-integration-deps
           ++ pkgs.tenzir-integration-test-deps
           ++ lib.optionals (!(pkgs.stdenv.hostPlatform.useLLVM or false)) [
           # Make clang available as alternative compiler when it isn't the default.

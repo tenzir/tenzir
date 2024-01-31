@@ -740,7 +740,7 @@ jobs:
       - name: Run Functional Tests
         id: functional_tests
         run: |
-          VERBOSE=1 cmake --build "$BUILD_DIR" --target functional-test -j 1
+          VERBOSE=1 cmake --build "$BUILD_DIR" --target integration -j 1
       - name: Publish Functional Test Report
         uses: mikepenz/action-junit-report@v4
         if: always()
@@ -952,8 +952,8 @@ jobs:
         run: |
           # We don't always have a bats submodule when building plugins, so we
           # get it with Nix.
-          nix --accept-flake-config develop .#functional-test-shell \
-            --command bash -c "cmake --build \"$BUILD_DIR\" --target functional-test -j 1"
+          nix --accept-flake-config develop .#integration-shell \
+            --command bash -c "cmake --build \"$BUILD_DIR\" --target integration -j 1"
       - name: Publish Functional Test Report
         uses: mikepenz/action-junit-report@v4
         if: always()
