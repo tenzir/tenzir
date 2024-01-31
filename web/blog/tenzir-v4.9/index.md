@@ -24,6 +24,28 @@ way, at the cost of potential false positives when looking up an item.
 If you have massive amounts of indicators or a large amount of things you would
 liket to contextualize, this feature is for you.
 
+Create a Bloom filter context by using `bloom-filter` as context type:
+
+```
+context create indicators bloom-filter
+```
+
+Then populate it with a pipeline, exactly like a [lookup
+table](/next/contexts/lookup-table):
+
+```
+from /tmp/iocs.csv
+| context update bloom-filter --key ioc
+```
+
+Thereafter use it for enrichment, e.g., in this example pipeline:
+
+```
+export --live
+| where #schema == "suricata.dns"
+| enrich indicators --field dns.rrname
+```
+
 ## Housekeeping
 
 For the curious, [the changelog](/changelog#v490) has the full scoop.
