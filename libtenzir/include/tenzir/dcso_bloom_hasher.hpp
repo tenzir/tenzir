@@ -82,7 +82,8 @@ public:
         h(""sv);
       } else if constexpr (std::is_same_v<view_type, view<bool>>) {
         h(value ? "true"sv : "false"sv);
-      } else if constexpr (std::is_same_v<view_type, view<std::string>>) {
+      } else if constexpr (detail::is_any_v<view_type, view<std::string>,
+                                            view<blob>>) {
         h(value);
       } else if constexpr (detail::is_any_v<view_type, view<pattern>>) {
         h(value.string());
@@ -93,11 +94,17 @@ public:
         auto json = to_json(materialize(value));
         TENZIR_ASSERT(json);
         h(*json);
-      } else {
+      } else if constexpr (detail::is_any_v<view_type, view<int64_t>,
+                                            view<uint64_t>, view<double>,
+                                            view<duration>, view<time>, view<ip>,
+                                            view<subnet>, view<enumeration>>) {
         // By default, we convert to string. For cases that may have multiple
         // representations, such as durations, we need to have a dialogue with
         // our users before committing to a fixed string representation.
         h(to_string(value));
+      } else {
+        static_assert(detail::always_false_v<view_type>,
+                      "missing type dispatch");
       }
     };
     caf::visit(f, x);
