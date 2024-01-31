@@ -200,23 +200,30 @@ class plugin : public virtual context_plugin {
 
   auto make_context(context::parameter_map parameters) const
     -> caf::expected<std::unique_ptr<context>> override {
-    auto capacity = parameters["capacity"];
-    if (not capacity) {
-      return caf::make_error(ec::parse_error, "no --capacity provided");
-    }
-    auto fpp = parameters["fp-probability"];
-    if (not fpp) {
-      return caf::make_error(ec::parse_error, "no --fp-probability provided");
-    }
     auto n = uint64_t{0};
-    if (not parsers::u64(*capacity, n)) {
-      return caf::make_error(ec::invalid_argument,
-                             "--capacity is not an integer");
-    }
     auto p = double{0.0};
-    if (not parsers::real(*fpp, p)) {
-      return caf::make_error(ec::invalid_argument,
-                             "--fp-probability is not a double");
+    for (const auto& [key, value] : parameters) {
+      if (key == "capacity") {
+        if (not value) {
+          return caf::make_error(ec::parse_error, "no --capacity provided");
+        }
+        if (not parsers::u64(*value, n)) {
+          return caf::make_error(ec::invalid_argument,
+                                 "--capacity is not an integer");
+        }
+      } else if (key == "fp-probability") {
+        if (not value) {
+          return caf::make_error(ec::parse_error,
+                                 "no --fp-probability provided");
+        }
+        if (not parsers::real(*value, p)) {
+          return caf::make_error(ec::invalid_argument,
+                                 "--fp-probability is not a double");
+        }
+      } else {
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("invalid option: {}", key));
+      }
     }
     if (n == 0) {
       return caf::make_error(ec::invalid_argument, "--capacity must be > 0");
