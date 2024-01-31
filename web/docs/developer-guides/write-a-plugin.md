@@ -21,7 +21,7 @@ Pass `-DTENZIR_ENABLE_STATIC_PLUGINS:BOOL=ON` to `cmake` to build plugins
 alongside Tenzir as static plugins. This option is always on for static binary
 builds.
 
-Tenzir ships with many plugin that showcase what a typical scaffold looks like.
+Tenzir ships with many plugins that showcase what a typical scaffold looks like.
 Have a look at the the
 [plugins](https://github.com/tenzir/tenzir/tree/main/plugins) directory, and an
 [example `CMakeLists.txt` file from the AMQP
