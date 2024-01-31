@@ -402,7 +402,7 @@ function (TenzirRegisterPlugin)
     # <one_value_keywords>
     "TARGET;ENTRYPOINT"
     # <multi_value_keywords>
-    "SOURCES;TEST_SOURCES;INCLUDE_DIRECTORIES"
+    "SOURCES;TEST_SOURCES;INCLUDE_DIRECTORIES;DEPENDENCIES;BUILTINS"
     # <args>...
     ${ARGN})
 
@@ -473,6 +473,25 @@ function (TenzirRegisterPlugin)
   make_absolute(PLUGIN_ENTRYPOINT)
   make_absolute(PLUGIN_SOURCES)
   make_absolute(PLUGIN_INCLUDE_DIRECTORIES)
+  make_absolute(PLUGIN_BUILTINS)
+
+  # Set up builtins bundled with the plugin.
+  if (PLUGIN_BUILTINS)
+    foreach (builtin IN LISTS PLUGIN_BUILTINS)
+      file(READ "${builtin}" lines)
+      if (NOT "${lines}" MATCHES "\n *TENZIR_REGISTER_PLUGIN *\\(.+\\) *[\n$]")
+        message(FATAL_ERROR "builtin ${builtin} does not register as a plugin")
+      endif ()
+      set_property(
+        SOURCE "${builtin}"
+        APPEND
+        PROPERTY COMPILE_DEFINITIONS "TENZIR_ENABLE_BUILTINS=1"
+                 "TENZIR_BUILTIN_DEPENDENCY=${PLUGIN_TARGET}")
+    endforeach ()
+
+    list(APPEND PLUGIN_SOURCES ${PLUGIN_BUILTINS})
+    list(REMOVE_DUPLICATES PLUGIN_SOURCES)
+  endif ()
 
   # Deduplicate the entrypoint so plugin authors can grep for sources while
   # still specifying the entrypoint manually.
@@ -602,10 +621,20 @@ function (TenzirRegisterPlugin)
       COMMAND ${CMAKE_COMMAND} -P
               "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake")
   endif ()
-  set_source_files_properties(
-    "${PLUGIN_ENTRYPOINT}"
-    PROPERTIES COMPILE_DEFINITIONS
-               "TENZIR_PLUGIN_VERSION=${PLUGIN_TARGET_IDENTIFIER}")
+
+  unset(formatted_dependencies)
+  foreach (dependency IN LISTS PLUGIN_DEPENDENCIES)
+    list(APPEND formatted_dependencies "\"${dependency}\"")
+  endforeach ()
+  list(JOIN formatted_dependencies "," formatted_dependencies)
+  set_property(
+    SOURCE "${PLUGIN_ENTRYPOINT}"
+    APPEND
+    PROPERTY COMPILE_DEFINITIONS
+             "TENZIR_PLUGIN_VERSION=${PLUGIN_TARGET_IDENTIFIER}"
+             "TENZIR_PLUGIN_DEPENDENCIES=${formatted_dependencies}")
+  unset(formatted_dependencies)
+
   list(APPEND PLUGIN_ENTRYPOINT "${CMAKE_CURRENT_BINARY_DIR}/config.cpp")
 
   # Create a static library target for our plugin with the entrypoint, and use

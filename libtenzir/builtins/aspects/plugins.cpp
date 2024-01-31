@@ -58,6 +58,10 @@ public:
       TENZIR_ADD_PLUGIN_TYPE(store);
       TENZIR_ADD_PLUGIN_TYPE(writer);
 #undef TENZIR_ADD_PLUGIN_TYPE
+      auto dependencies = row.field("dependencies").list();
+      for (const auto& dependency : plugin.dependencies()) {
+        dependencies.data(dependency);
+      }
     }
     for (auto&& slice : builder.finish_as_table_slice("tenzir.plugin")) {
       co_yield std::move(slice);

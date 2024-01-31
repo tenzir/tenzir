@@ -13,8 +13,9 @@ include(CTest)
 
 find_package(Tenzir REQUIRED)
 TenzirRegisterPlugin(
-  TARGET nic ENTRYPOINT src/plugin.cpp #TEST_SOURCES tests.cpp
-)
+  TARGET nic
+  ENTRYPOINT src/plugin.cpp
+  DEPENDENCIES pcap)
 
 # Link nic plugin against libpcap.
 find_package(PkgConfig REQUIRED QUIET)

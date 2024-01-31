@@ -254,15 +254,38 @@ load(const std::vector<std::string>& bundled_plugins,
     }
   }
   // Remove plugins that are explicitly disabled.
+  for (auto& plugin : get_mutable()) {
+    plugin.reference_dependencies();
+  }
   const auto disabled_plugins
     = caf::get_or(cfg, "tenzir.disable-plugins", std::vector<std::string>{""});
   const auto is_disabled_plugin = [&](const auto& plugin) {
     return std::find(disabled_plugins.begin(), disabled_plugins.end(), plugin)
            != disabled_plugins.end();
   };
-  get_mutable().erase(std::remove_if(get_mutable().begin(), get_mutable().end(),
-                                     is_disabled_plugin),
-                      get_mutable().end());
+  auto removed = std::remove_if(get_mutable().begin(), get_mutable().end(),
+                                is_disabled_plugin);
+  // Remove plugins whose dependencies are not met. We do this in a loop until
+  // for one iteratin we do not remove any plugins with unmet dependencies. Not
+  // an ideal algorithm, but it's good enough given that we don't expect to have
+  // a million plugins loaded.
+  while (true) {
+    const auto has_unavailable_dependency = [&](const auto& plugin) {
+      for (const auto& dependency : plugin.dependencies()) {
+        if (std::find(get_mutable().begin(), removed, dependency) == removed) {
+          return true;
+        }
+      }
+      return false;
+    };
+    auto it = std::remove_if(get_mutable().begin(), removed,
+                             has_unavailable_dependency);
+    if (it == removed) {
+      break;
+    }
+    removed = it;
+  }
+  get_mutable().erase(removed, get_mutable().end());
   // Sort loaded plugins by name (case-insensitive).
   std::sort(get_mutable().begin(), get_mutable().end());
   return loaded_plugin_paths;
@@ -750,22 +773,39 @@ plugin_ptr::make_dynamic(const char* filename,
                            version::build::tree_hash);
   auto plugin_version = reinterpret_cast<const char* (*)()>(
     dlsym(library, "tenzir_plugin_version"));
-  if (!plugin_version)
+  if (not plugin_version) {
     return caf::make_error(ec::system_error,
                            "failed to resolve symbol tenzir_plugin_version in",
                            filename, dlerror());
+  }
+  auto plugin_dependencies = reinterpret_cast<const char* const* (*)()>(
+    dlsym(library, "tenzir_plugin_dependencies"));
+  if (not plugin_dependencies) {
+    return caf::make_error(ec::system_error,
+                           "failed to resolve symbol "
+                           "tenzir_plugin_dependencies in",
+                           filename, dlerror());
+  }
+  auto dependencies = std::vector<std::string>{};
+  if (const char* const* dependencies_clist = plugin_dependencies()) {
+    while (const char* dependency = *dependencies_clist++) {
+      dependencies.emplace_back(dependency);
+    }
+  }
   auto plugin_create = reinterpret_cast<::tenzir::plugin* (*)()>(
     dlsym(library, "tenzir_plugin_create"));
-  if (!plugin_create)
+  if (not plugin_create) {
     return caf::make_error(ec::system_error,
                            "failed to resolve symbol tenzir_plugin_create in",
                            filename, dlerror());
+  }
   auto plugin_destroy = reinterpret_cast<void (*)(::tenzir::plugin*)>(
     dlsym(library, "tenzir_plugin_destroy"));
-  if (!plugin_destroy)
+  if (not plugin_destroy) {
     return caf::make_error(ec::system_error,
                            "failed to resolve symbol tenzir_plugin_destroy in",
                            filename, dlerror());
+  }
   auto plugin_type_id_block
     = reinterpret_cast<::tenzir::plugin_type_id_block (*)()>(
       dlsym(library, "tenzir_plugin_type_id_block"));
@@ -773,11 +813,12 @@ plugin_ptr::make_dynamic(const char* filename,
     auto plugin_register_type_id_block
       = reinterpret_cast<void (*)(::caf::actor_system_config&)>(
         dlsym(library, "tenzir_plugin_register_type_id_block"));
-    if (!plugin_register_type_id_block)
+    if (not plugin_register_type_id_block) {
       return caf::make_error(ec::system_error,
                              "failed to resolve symbol "
                              "tenzir_plugin_register_type_id_block in",
                              filename, dlerror());
+    }
     // If the plugin requested to add additional type ID blocks, check if the
     // ranges overlap. Since this is static for the whole process, we just
     // store the already registed ID blocks from plugins in a static variable.
@@ -800,98 +841,78 @@ plugin_ptr::make_dynamic(const char* filename,
     plugin_register_type_id_block(cfg);
     old_blocks.push_back(new_block);
   }
-  return plugin_ptr{library, plugin_create(), plugin_destroy, plugin_version(),
-                    type::dynamic};
+  return plugin_ptr{
+    std::make_shared<control_block>(library, plugin_create(), plugin_destroy,
+                                    plugin_version(), std::move(dependencies),
+                                    type::dynamic),
+  };
 }
 
-plugin_ptr plugin_ptr::make_static(plugin* instance, void (*deleter)(plugin*),
-                                   const char* version) noexcept {
-  return plugin_ptr{nullptr, instance, deleter, version, type::static_};
+plugin_ptr
+plugin_ptr::make_static(plugin* instance, void (*deleter)(plugin*),
+                        const char* version,
+                        std::vector<std::string> dependencies) noexcept {
+  return plugin_ptr{
+    std::make_shared<control_block>(nullptr, instance, deleter, version,
+                                    std::move(dependencies), type::static_),
+  };
 }
 
-plugin_ptr plugin_ptr::make_builtin(plugin* instance, void (*deleter)(plugin*),
-                                    const char* version) noexcept {
-  return plugin_ptr{nullptr, instance, deleter, version, type::builtin};
+plugin_ptr
+plugin_ptr::make_builtin(plugin* instance, void (*deleter)(plugin*),
+                         const char* version,
+                         std::vector<std::string> dependencies) noexcept {
+  return plugin_ptr{
+    std::make_shared<control_block>(nullptr, instance, deleter, version,
+                                    std::move(dependencies), type::builtin),
+  };
 }
 
 plugin_ptr::plugin_ptr() noexcept = default;
-
-plugin_ptr::~plugin_ptr() noexcept {
-  release();
-}
-
-plugin_ptr::plugin_ptr(plugin_ptr&& other) noexcept
-  : library_{std::exchange(other.library_, {})},
-    instance_{std::exchange(other.instance_, {})},
-    deleter_{std::exchange(other.deleter_, {})},
-    version_{std::exchange(other.version_, {})},
-    type_{std::exchange(other.type_, {})} {
-  // nop
-}
-
-plugin_ptr& plugin_ptr::operator=(plugin_ptr&& rhs) noexcept {
-  // Clean up *this* to prevent leaking an instance_.
-  release();
-  library_ = std::exchange(rhs.library_, {});
-  instance_ = std::exchange(rhs.instance_, {});
-  deleter_ = std::exchange(rhs.deleter_, {});
-  version_ = std::exchange(rhs.version_, {});
-  type_ = std::exchange(rhs.type_, {});
-  return *this;
-}
+plugin_ptr::~plugin_ptr() noexcept = default;
+plugin_ptr::plugin_ptr(plugin_ptr&& other) noexcept = default;
+plugin_ptr& plugin_ptr::operator=(plugin_ptr&& rhs) noexcept = default;
 
 plugin_ptr::operator bool() const noexcept {
-  return static_cast<bool>(instance_);
+  return static_cast<bool>(ctrl_->instance);
 }
 
 const plugin* plugin_ptr::operator->() const noexcept {
-  return instance_;
+  return ctrl_->instance;
 }
 
 plugin* plugin_ptr::operator->() noexcept {
-  return instance_;
+  return ctrl_->instance;
 }
 
 const plugin& plugin_ptr::operator*() const noexcept {
-  return *instance_;
+  return *ctrl_->instance;
 }
 
 plugin& plugin_ptr::operator&() noexcept {
-  return *instance_;
-}
-
-plugin_ptr::plugin_ptr(void* library, plugin* instance,
-                       void (*deleter)(plugin*), const char* version,
-                       enum type type) noexcept
-  : library_{library},
-    instance_{instance},
-    deleter_{deleter},
-    version_{version},
-    type_{type} {
-  // nop
+  return *ctrl_->instance;
 }
 
 const char* plugin_ptr::version() const noexcept {
-  return version_;
+  return ctrl_->version;
+}
+
+const std::vector<std::string>& plugin_ptr::dependencies() const noexcept {
+  return ctrl_->dependencies;
 }
 
 enum plugin_ptr::type plugin_ptr::type() const noexcept {
-  return type_;
+  return ctrl_->type;
 }
 
-void plugin_ptr::release() noexcept {
-  if (instance_) {
-    TENZIR_ASSERT(deleter_);
-    deleter_(instance_);
-    instance_ = {};
-    deleter_ = {};
+auto plugin_ptr::reference_dependencies() noexcept -> void {
+  for (const auto& dependency : dependencies()) {
+    for (const auto& plugin : plugins::get()) {
+      if (plugin == dependency) {
+        ctrl_->dependencies_ctrl.push_back(plugin.ctrl_);
+      }
+    }
   }
-  if (library_) {
-    dlclose(library_);
-    library_ = {};
-  }
-  version_ = {};
-  type_ = {};
 }
 
 std::strong_ordering
@@ -948,6 +969,41 @@ bool operator==(const plugin_ptr& lhs, std::string_view rhs) noexcept {
                     [](unsigned char lhs, unsigned char rhs) noexcept {
                       return std::tolower(lhs) == std::tolower(rhs);
                     });
+}
+
+plugin_ptr::control_block::control_block(void* library, plugin* instance,
+                                         void (*deleter)(plugin*),
+                                         const char* version,
+                                         std::vector<std::string> dependencies,
+                                         enum type type) noexcept
+  : library{library},
+    instance{instance},
+    deleter{deleter},
+    version{version},
+    dependencies{std::move(dependencies)},
+    type{type} {
+  // nop
+}
+
+plugin_ptr::control_block::~control_block() noexcept {
+  if (instance) {
+    TENZIR_ASSERT_CHEAP(deleter);
+    deleter(instance);
+    instance = {};
+    deleter = {};
+  }
+  if (library) {
+    dlclose(library);
+    library = {};
+  }
+  version = {};
+  dependencies = {};
+  type = {};
+}
+
+plugin_ptr::plugin_ptr(std::shared_ptr<control_block> ctrl) noexcept
+  : ctrl_{std::move(ctrl)} {
+  // nop
 }
 
 } // namespace tenzir
