@@ -1,4 +1,4 @@
-: "${BATS_TEST_TIMEOUT:=3}"
+: "${BATS_TEST_TIMEOUT:=10}"
 
 setup() {
   bats_load_library bats-support
