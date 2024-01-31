@@ -895,15 +895,19 @@ public:
   /// @param instance The plugin instance.
   /// @param deleter A deleter for the plugin instance.
   /// @param version The version of the plugin.
-  static plugin_ptr make_static(plugin* instance, void (*deleter)(plugin*),
-                                const char* version) noexcept;
+  /// @param dependencies The plugin's dependencies.
+  static plugin_ptr
+  make_static(plugin* instance, void (*deleter)(plugin*), const char* version,
+              std::vector<std::string> dependencies) noexcept;
 
   /// Take ownership of a builtin.
   /// @param instance The plugin instance.
   /// @param deleter A deleter for the plugin instance.
   /// @param version The version of the plugin.
-  static plugin_ptr make_builtin(plugin* instance, void (*deleter)(plugin*),
-                                 const char* version) noexcept;
+  /// @param dependencies The plugin's dependencies.
+  static plugin_ptr
+  make_builtin(plugin* instance, void (*deleter)(plugin*), const char* version,
+               std::vector<std::string> dependencies) noexcept;
 
   /// Default-construct an invalid plugin.
   plugin_ptr() noexcept;
@@ -933,7 +937,7 @@ public:
   [[nodiscard]] const Plugin* as() const {
     static_assert(std::is_base_of_v<plugin, Plugin>, "'Plugin' must be derived "
                                                      "from 'tenzir::plugin'");
-    return dynamic_cast<const Plugin*>(instance_);
+    return dynamic_cast<const Plugin*>(ctrl_->instance);
   }
 
   /// Downcast a plugin to a more specific plugin type.
@@ -943,14 +947,20 @@ public:
   Plugin* as() {
     static_assert(std::is_base_of_v<plugin, Plugin>, "'Plugin' must be derived "
                                                      "from 'tenzir::plugin'");
-    return dynamic_cast<Plugin*>(instance_);
+    return dynamic_cast<Plugin*>(ctrl_->instance);
   }
 
   /// Returns the plugin version.
   [[nodiscard]] const char* version() const noexcept;
 
+  /// Returns the plugin's dependencies.
+  [[nodiscard]] const std::vector<std::string>& dependencies() const noexcept;
+
   /// Returns the plugins type.
   [[nodiscard]] enum type type() const noexcept;
+
+  /// Bump the reference count of all dependencies.
+  auto reference_dependencies() noexcept -> void;
 
   /// Compare two plugins.
   friend bool operator==(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept;
@@ -963,19 +973,31 @@ public:
   operator<=>(const plugin_ptr& lhs, std::string_view rhs) noexcept;
 
 private:
+  struct control_block {
+    control_block(void* library, plugin* instance, void (*deleter)(plugin*),
+                  const char* version, std::vector<std::string> dependencies,
+                  enum type type) noexcept;
+    ~control_block() noexcept;
+
+    control_block(const control_block&) = delete;
+    control_block& operator=(const control_block&) = delete;
+    control_block(control_block&& other) noexcept = delete;
+    control_block& operator=(control_block&& rhs) noexcept = delete;
+
+    void* library = {};
+    plugin* instance = {};
+    void (*deleter)(plugin*) = {};
+    const char* version = nullptr;
+    std::vector<std::string> dependencies = {};
+    std::vector<std::shared_ptr<control_block>> dependencies_ctrl = {};
+    enum type type = {};
+  };
+
   /// Create a plugin_ptr.
-  plugin_ptr(void* library, plugin* instance, void (*deleter)(plugin*),
-             const char* version, enum type type) noexcept;
+  explicit plugin_ptr(std::shared_ptr<control_block> ctrl) noexcept;
 
-  /// Helper function to release ownership of a plugin.
-  void release() noexcept;
-
-  /// Implementation details.
-  void* library_ = {};
-  plugin* instance_ = {};
-  void (*deleter_)(plugin*) = {};
-  const char* version_ = nullptr;
-  enum type type_ = {};
+  /// The plugin's control block.
+  std::shared_ptr<control_block> ctrl_ = {};
 };
 
 } // namespace tenzir
@@ -1060,9 +1082,16 @@ extern const char* TENZIR_PLUGIN_VERSION;
 #elif defined(TENZIR_ENABLE_STATIC_PLUGINS) || defined(TENZIR_ENABLE_BUILTINS)
 
 #  if defined(TENZIR_ENABLE_STATIC_PLUGINS)
-#    define TENZIR_MAKE_PLUGIN ::tenzir::plugin_ptr::make_static
+#    define TENZIR_MAKE_PLUGIN(...)                                            \
+      ::tenzir::plugin_ptr::make_static(__VA_ARGS__,                           \
+                                        {TENZIR_PLUGIN_DEPENDENCIES})
+#  elif defined(TENZIR_BUILTIN_DEPENDENCY)
+#    define TENZIR_MAKE_PLUGIN(...)                                            \
+      ::tenzir::plugin_ptr::make_builtin(                                      \
+        __VA_ARGS__, {TENZIR_PP_STRINGIFY(TENZIR_BUILTIN_DEPENDENCY)})
 #  else
-#    define TENZIR_MAKE_PLUGIN ::tenzir::plugin_ptr::make_builtin
+#    define TENZIR_MAKE_PLUGIN(...)                                            \
+      ::tenzir::plugin_ptr::make_builtin(__VA_ARGS__, {})
 #  endif
 
 #  define TENZIR_REGISTER_PLUGIN(name)                                         \
@@ -1126,6 +1155,12 @@ extern const char* TENZIR_PLUGIN_VERSION;
     }                                                                          \
     extern "C" auto tenzir_libtenzir_build_tree_hash() -> const char* {        \
       return ::tenzir::version::build::tree_hash;                              \
+    }                                                                          \
+    extern "C" auto tenzir_plugin_dependencies() -> const char* const* {       \
+      static constexpr auto dependencies = [](auto... xs) {                    \
+        return std::array<const char*, sizeof...(xs) + 1>{xs..., nullptr};     \
+      }(TENZIR_PLUGIN_DEPENDENCIES);                                           \
+      return dependencies.data();                                              \
     }
 
 #  define TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                         \
