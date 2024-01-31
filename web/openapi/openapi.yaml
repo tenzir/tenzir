@@ -624,6 +624,11 @@ paths:
                   example: 2.0s
                   default: 2.0s
                   description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 5 seconds.
+                use_simple_format:
+                  type: bool
+                  example: true
+                  default: false
+                  description: Use an experimental, more simple format for the contained schema.
       responses:
         200:
           description: Success.
