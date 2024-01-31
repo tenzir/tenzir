@@ -113,6 +113,11 @@ constexpr auto SPEC_V0 = R"_(
                 example: "2000ms"
                 default: "2000ms"
                 description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 5 seconds.
+              use_simple_format:
+                type: bool
+                example: true
+                default: false
+                description: Use an experimental, more simple format for the contained schema.
     responses:
       200:
         description: Success.
@@ -211,6 +216,7 @@ struct request_limits {
 struct serve_request {
   std::string serve_id = {};
   std::string continuation_token = {};
+  bool use_simple_format = {};
   request_limits limits = {};
 };
 
@@ -661,12 +667,24 @@ struct serve_handler_state {
       }
       result.limits.timeout = **timeout;
     }
+
+    auto use_simple_format = try_get<bool>(params, "use_simple_format");
+    if (not use_simple_format) {
+      return parse_error{
+        .message = "failed to read use_simple_format",
+        .detail = caf::make_error(ec::invalid_argument,
+                                  fmt::format("parameter: {}; got params {}",
+                                              max_events.error(), params))};
+    }
+    if (*use_simple_format) {
+      result.use_simple_format = **use_simple_format;
+    }
     return result;
   }
 
   static auto create_response(const std::string& next_continuation_token,
-                              const std::vector<table_slice>& results)
-    -> std::string {
+                              const std::vector<table_slice>& results,
+                              bool use_simple_format) -> std::string {
     auto printer = json_printer{{
       .indentation = 0,
       .oneline = true,
@@ -715,7 +733,8 @@ struct serve_handler_state {
       out_iter = fmt::format_to(out_iter, R"("schema_id":"{}","definition":)",
                                 schema.make_fingerprint());
       const auto ok
-        = printer.print(out_iter, schema.to_definition(/*expand*/ false));
+        = printer.print(out_iter, use_simple_format ? schema.to_definition2()
+                                                    : schema.to_definition());
       TENZIR_ASSERT_CHEAP(ok);
     }
     out_iter = fmt::format_to(out_iter, R"(}}]}}{})", '\n');
@@ -743,10 +762,11 @@ struct serve_handler_state {
                 request.continuation_token, request.limits.min_events,
                 request.limits.timeout, request.limits.max_events)
       .then(
-        [rp](const std::tuple<std::string, std::vector<table_slice>>&
-               result) mutable {
-          rp.deliver(rest_response::from_json_string(
-            create_response(std::get<0>(result), std::get<1>(result))));
+        [rp, use_simple_format = request.use_simple_format](
+          const std::tuple<std::string, std::vector<table_slice>>&
+            result) mutable {
+          rp.deliver(rest_response::from_json_string(create_response(
+            std::get<0>(result), std::get<1>(result), use_simple_format)));
         },
         [rp](caf::error& err) mutable {
           // TODO: Use a struct with distinct fields for user-facing
@@ -985,6 +1005,7 @@ public:
           {"max_events", uint64_type{}},
           {"min_events", uint64_type{}},
           {"timeout", duration_type{}},
+          {"use_simple_format", bool_type{}},
         },
         .version = api_version::v0,
         .content_type = http_content_type::json,

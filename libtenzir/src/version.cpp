@@ -88,6 +88,8 @@ auto tenzir_features() -> std::vector<std::string> {
     // The `chart` operator is supported, so that the frontend can conditionally
     // render results as charts.
     "chart_operator",
+    // The `/serve` endpoint supports the new `use_simple_format: bool` option.
+    "serve_use_simple_format_option",
   };
 }
 
