@@ -19,12 +19,12 @@
 [submodule "libtenzir/aux/pfs"]
 	path = libtenzir/aux/pfs
 	url = https://github.com/tenzir/pfs.git
-[submodule "tenzir/functional-test/bats"]
-	path = tenzir/functional-test/lib/bats
+[submodule "tenzir/integration/bats"]
+	path = tenzir/integration/lib/bats
 	url = https://github.com/bats-core/bats-core
-[submodule "tenzir/functional-test/bats-support"]
-	path = tenzir/functional-test/lib/bats-support
+[submodule "tenzir/integration/bats-support"]
+	path = tenzir/integration/lib/bats-support
 	url = https://github.com/bats-core/bats-support
-[submodule "tenzir/functional-test/bats-assert"]
-	path = tenzir/functional-test/lib/bats-assert
+[submodule "tenzir/integration/bats-assert"]
+	path = tenzir/integration/lib/bats-assert
 	url = https://github.com/bats-core/bats-assert

@@ -115,98 +115,41 @@ if (TENZIR_ENABLE_INIT_SYSTEM_INTEGRATION)
   endif ()
 endif ()
 
-# -- functional tests ----------------------------------------------------------
+# -- integration tests ---------------------------------------------------------
 
-add_custom_target(functional-test)
+add_custom_target(integration)
 
 add_custom_target(
-  functional-test-core
+  integration-core
   COMMAND
     ${CMAKE_COMMAND} -E env
-    PATH="$<TARGET_FILE_DIR:tenzir::tenzir>:\$\$PATH:${CMAKE_CURRENT_SOURCE_DIR}/functional-test/lib/bats/bin"
-    bats "-r" "-T" "${CMAKE_CURRENT_SOURCE_DIR}/functional-test/tests"
-  COMMENT "Executing functional tests..."
+    PATH="$<TARGET_FILE_DIR:tenzir::tenzir>:\$\$PATH:${CMAKE_CURRENT_SOURCE_DIR}/integration/lib/bats/bin"
+    bats "-r" "-T" "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests"
+  COMMENT "Executing integration tests..."
   USES_TERMINAL)
 
-add_dependencies(functional-test-core tenzir)
-add_dependencies(functional-test functional-test-core)
+add_dependencies(integration-core tenzir)
+add_dependencies(integration integration-core)
 
 # link the full
 add_custom_target(
-  link-functional-test
+  link-integration
   COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/share/tenzir"
   COMMAND
     ${CMAKE_COMMAND} -E create_symlink
-    "${CMAKE_CURRENT_SOURCE_DIR}/functional-test"
-    "${CMAKE_BINARY_DIR}/share/tenzir/functional-test"
-  COMMENT "Linking functional test directory")
+    "${CMAKE_CURRENT_SOURCE_DIR}/integration"
+    "${CMAKE_BINARY_DIR}/share/tenzir/integration"
+  COMMENT "Linking integration test directory")
 
-add_dependencies(tenzir link-functional-test)
+add_dependencies(tenzir link-integration)
 
 # We only install the tenzir extension library, users need to provide bats,
 # bats-common and bats-assert themselves when building plugins against an
 # install tree.
 install(
-  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/functional-test/lib/bats-tenzir"
+  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/integration/lib/bats-tenzir"
   COMPONENT Development
-  DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/functional-test/lib")
-
-# -- integration tests ---------------------------------------------------------
-
-# TODO: Hide integration test suite behind an option that is enabled by default.
-
-file(
-  GENERATE
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/integration-$<CONFIG>.sh"
-  CONTENT
-    "#!/bin/sh
-     if ! command -v jq >/dev/null 2>&1; then
-       >&2 echo 'failed to find jq in $PATH'
-       exit 1
-     fi
-     base_dir=\"${CMAKE_CURRENT_SOURCE_DIR}/integration\"
-     env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
-     export app=\"$<IF:$<BOOL:${TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS}>,$<TARGET_FILE:tenzir::tenzir>,${CMAKE_INSTALL_FULL_BINDIR}/$<TARGET_FILE_NAME:tenzir::tenzir>>-ctl\"
-     update=\"$<IF:$<BOOL:${TENZIR_ENABLE_UPDATE_INTEGRATION_REFERENCES}>,-u,>\"
-     set -e
-     if [ ! -f \"$env_dir/bin/activate\" ]; then
-       python3 -m venv \"$env_dir\"
-     fi
-     . \"$env_dir/bin/activate\"
-     python3 -m pip install --upgrade pip
-     python3 -m pip install -r \"$base_dir/requirements.txt\"
-     python3 \"$base_dir/integration.py\" \
-      --app \"$app\" \
-      --directory tenzir-integration-test \
-      --set \"$base_dir\"/tests.yaml \
-      \${update} \
-      \"$@\"
-    ")
-
-add_custom_target(
-  integration
-  COMMAND /bin/sh "${CMAKE_CURRENT_BINARY_DIR}/integration-$<CONFIG>.sh" "-v"
-          "DEBUG"
-  USES_TERMINAL)
-
-add_custom_target(
-  link-integration-directory ALL
-  COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/share/tenzir"
-  COMMAND
-    ${CMAKE_COMMAND} -E create_symlink "${CMAKE_CURRENT_SOURCE_DIR}/integration"
-    "${CMAKE_BINARY_DIR}/share/tenzir/integration"
-  COMMENT "Linking integration test directory")
-
-install(
-  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/integration"
-  COMPONENT Development
-  DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir"
-  PATTERN "integration/tenzir.yaml.example" EXCLUDE)
-
-install(
-  FILES "${PROJECT_SOURCE_DIR}/tenzir.yaml.example"
-  COMPONENT Development
-  DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/integration")
+  DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/integration/lib")
 
 # -- add plugins ---------------------------------------------------------------
 

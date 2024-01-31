@@ -770,36 +770,6 @@ function (TenzirRegisterPlugin)
     endforeach ()
   endif ()
 
-  # Ensure that a target functional-test always exists, even if a plugin does not
-  # define functional tests.
-  if (NOT TARGET functional-test)
-    add_custom_target(functional-test)
-  endif ()
-
-  # Setup functional tests.
-  if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/functional-test/tests")
-    if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
-      set(TENZIR_PATH "$<TARGET_FILE_DIR:tenzir::tenzir>")
-    else ()
-      file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/share/tenzir")
-      file(CREATE_LINK "${TENZIR_PREFIX_DIR}/share/tenzir/functional-test"
-           "${CMAKE_BINARY_DIR}/share/tenzir/functional-test" SYMBOLIC)
-      set(TENZIR_PATH "${CMAKE_CURRENT_BINARY_DIR}/bin")
-    endif ()
-    add_custom_target(
-      functional-test-${PLUGIN_TARGET}
-      COMMAND
-        ${CMAKE_COMMAND} -E env
-        PATH="${TENZIR_PATH}:\$\$PATH:${TENZIR_PATH}/../share/tenzir/functional-test/lib/bats/bin"
-        bats "-r" "-T" "${CMAKE_CURRENT_SOURCE_DIR}/functional-test/tests"
-      COMMENT "Executing ${PLUGIN_TARGET} functional tests..."
-      USES_TERMINAL)
-    unset(TENZIR_PATH)
-
-    add_dependencies(functional-test-${PLUGIN_TARGET} tenzir::tenzir)
-    add_dependencies(functional-test functional-test-${PLUGIN_TARGET})
-  endif ()
-
   # Ensure that a target integration always exists, even if a plugin does not
   # define integration tests.
   if (NOT TARGET integration)
@@ -807,61 +777,27 @@ function (TenzirRegisterPlugin)
   endif ()
 
   # Setup integration tests.
-  if (TARGET tenzir::tenzir
-      AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests.yaml")
+  if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests")
     if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
-      set(integration_test_path "${CMAKE_SOURCE_DIR}/tenzir/integration")
+      set(TENZIR_PATH "$<TARGET_FILE_DIR:tenzir::tenzir>")
     else ()
-      if (IS_ABSOLUTE "${CMAKE_INSTALL_DATADIR}")
-        set(integration_test_path "${CMAKE_INSTALL_DATADIR}/tenzir/integration")
-      else ()
-        get_target_property(integration_test_path tenzir::tenzir LOCATION)
-        get_filename_component(integration_test_path "${integration_test_path}"
-                               DIRECTORY)
-        get_filename_component(integration_test_path "${integration_test_path}"
-                               DIRECTORY)
-        set(integration_test_path
-            "${integration_test_path}/${CMAKE_INSTALL_DATADIR}/tenzir/integration"
-        )
-      endif ()
+      file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/share/tenzir")
+      file(CREATE_LINK "${TENZIR_PREFIX_DIR}/share/tenzir/integration"
+           "${CMAKE_BINARY_DIR}/share/tenzir/integration" SYMBOLIC)
+      set(TENZIR_PATH "${CMAKE_CURRENT_BINARY_DIR}/bin")
     endif ()
-    file(
-      GENERATE
-      OUTPUT
-        "${CMAKE_CURRENT_BINARY_DIR}/${PLUGIN_TARGET}-integration-$<CONFIG>.sh"
-      CONTENT
-        "#!/bin/sh
-        if ! command -v jq >/dev/null 2>&1; then
-          >&2 echo 'failed to find jq in $PATH'
-          exit 1
-        fi
-        base_dir=\"${integration_test_path}\"
-        env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
-        export app=\"$<IF:$<BOOL:${TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS}>,$<TARGET_FILE:tenzir::tenzir>,${CMAKE_INSTALL_FULL_BINDIR}/$<TARGET_FILE_NAME:tenzir::tenzir>>-ctl\"
-        update=\"$<IF:$<BOOL:${TENZIR_ENABLE_UPDATE_INTEGRATION_REFERENCES}>,-u,>\"
-        set -e
-        if [ ! -f \"$env_dir/bin/activate\" ]; then
-          python3 -m venv \"$env_dir\"
-        fi
-        . \"$env_dir/bin/activate\"
-        python -m pip install --upgrade pip
-        python -m pip install -r \"$base_dir/requirements.txt\"
-        $<$<TARGET_EXISTS:${PLUGIN_TARGET}-shared>:export TENZIR_PLUGIN_DIRS=\"\$(echo \"$<TARGET_FILE_DIR:${PLUGIN_TARGET}-shared>\" | sed -e \"s/,/\\\\\\\\,/g\")\">
-        export TENZIR_SCHEMA_DIRS=\"\$(echo \"${CMAKE_CURRENT_SOURCE_DIR}/schema\" | sed -e \"s/,/\\\\\\\\,/g\")\"
-        python \"$base_dir/integration.py\" \
-          --app \"$app\" \
-          --set \"${CMAKE_CURRENT_SOURCE_DIR}/integration/tests.yaml\" \
-          --directory tenzir-${PLUGIN_TARGET}-integration-test \
-          \$update \
-          \"$@\"")
     add_custom_target(
-      ${PLUGIN_TARGET}-integration
+      integration-${PLUGIN_TARGET}
       COMMAND
-        /bin/sh
-        "${CMAKE_CURRENT_BINARY_DIR}/${PLUGIN_TARGET}-integration-$<CONFIG>.sh"
-        -v DEBUG
+        ${CMAKE_COMMAND} -E env
+        PATH="${TENZIR_PATH}:\$\$PATH:${TENZIR_PATH}/../share/tenzir/integration/lib/bats/bin"
+        bats "-r" "-T" "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests"
+      COMMENT "Executing ${PLUGIN_TARGET} integration tests..."
       USES_TERMINAL)
-    add_dependencies(integration ${PLUGIN_TARGET}-integration)
+    unset(TENZIR_PATH)
+
+    add_dependencies(integration-${PLUGIN_TARGET} tenzir::tenzir)
+    add_dependencies(integration integration-${PLUGIN_TARGET})
   endif ()
 
   if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")

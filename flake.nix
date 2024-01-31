@@ -106,8 +106,8 @@
             integration-test-shell = pkgs.mkShell {
               packages = pkgs.tenzir-de;
             };
-            functional-test-shell = pkgs.mkShell {
-              packages = pkgs.tenzir-functional-test-deps;
+            integration-shell = pkgs.mkShell {
+              packages = pkgs.tenzir-integration-deps;
             };
           }
           // {

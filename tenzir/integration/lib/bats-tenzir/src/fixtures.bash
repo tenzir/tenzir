@@ -3,9 +3,9 @@
 
 export_default_paths() {
   BATS_TEST_DATADIR="$(realpath $(dirname ${BATS_TEST_DIRNAME}))"
-  # Look for the first folder called `functional-test/` that is a parent
+  # Look for the first folder called `integration/` that is a parent
   # of the location of the test file.
-  export BATS_TENZIR_DATADIR="${BATS_TEST_DATADIR%%/functional-test/*}/data"
+  export BATS_TENZIR_DATADIR="${BATS_TEST_DATADIR%%/integration/*}/data"
 
   export BATS_TENZIR_INPUTSDIR="${BATS_TENZIR_DATADIR}/inputs"
   export BATS_TENZIR_QUERIESDIR="${BATS_TENZIR_DATADIR}/queries"

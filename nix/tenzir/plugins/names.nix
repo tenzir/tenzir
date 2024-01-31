@@ -2,6 +2,6 @@
   "compaction"
   "context"
   "matcher"
-  "pipeline_manager"
+  "pipeline-manager"
   "platform"
 ]
