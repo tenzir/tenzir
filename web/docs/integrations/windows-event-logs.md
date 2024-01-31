@@ -560,7 +560,7 @@ For the new subscription, configure JSON over TCP as
 [output](https://github.com/cea-sec/openwec/blob/main/doc/outputs.md):
 
 ```bash
-openwec subscriptions edit DC_SUBSCRIPTION outputs add --format json tcp localhost 1514
+openwec subscriptions edit DC_SUBSCRIPTION outputs add --format json tcp 10.0.0.1 1514
 ```
 
 Finally, enable the subscription:
@@ -570,7 +570,7 @@ openwec subscriptions enable DC_SUBSCRIPTION
 ```
 
 That's it! You should now be able read the Windows event logs in JSON format by
-spinning up a server that listens at `tcp://localhost:1514`.
+spinning up a server that listens at `tcp://10.0.0.1:1514`.
 
 ### Run a Tenzir pipeline
 
