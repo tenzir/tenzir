@@ -54,8 +54,9 @@ public:
   /// @returns `true` iff a new element was added.
   template <class T>
   auto add(const T& x) -> bool {
-    if (!bloom_filter_.add(x))
+    if (!bloom_filter_.add(x)) {
       return false;
+    }
     ++num_elements_;
     return true;
   }

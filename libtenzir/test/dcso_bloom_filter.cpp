@@ -52,8 +52,9 @@ TEST(dcso bloom fingerprinting) {
   // DCSO's Bloom filter performs the mod-m operation as part of the digest
   // (fingerprint) computation. Tenzir does it within the Bloom filter
   // implementation because it may vary based on the partitioning policy.
-  for (auto& digest : digests)
+  for (auto& digest : digests) {
     digest %= dcso_bloom_filter::m(100'000, 0.01);
+  }
   CHECK_EQUAL(digests, expected);
 }
 
@@ -75,8 +76,9 @@ auto generate_test_value(size_t length) -> std::vector<std::byte> {
     return static_cast<std::byte>(byte);
   };
   std::vector<std::byte> result(length);
-  for (auto& byte : result)
+  for (auto& byte : result) {
     byte = make_random_byte();
+  }
   return result;
 }
 
@@ -102,9 +104,11 @@ auto generate_example_filter(uint64_t capacity, double p, size_t num_samples)
 // https://github.com/DCSO/bloom/blob/9240e18c9363ee935edbdf025c07e4f3cca43b1d/bloom_test.go#L244
 TEST(dcso bloom checking) {
   auto [filter, values] = generate_example_filter(100'000, 0.001, 100'000);
-  for (const auto& value : values)
-    if (!filter.lookup(value))
+  for (const auto& value : values) {
+    if (!filter.lookup(value)) {
       FAIL("expected value not present in filter:" << value);
+    }
+  }
 }
 
 // https://github.com/DCSO/bloom/blob/9240e18c9363ee935edbdf025c07e4f3cca43b1d/bloom_test.go#L91

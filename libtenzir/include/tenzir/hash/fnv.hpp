@@ -27,10 +27,12 @@ class fnv {
   static_assert(Bits == 32 || Bits == 64);
 
   static constexpr auto make_result_type() {
-    if constexpr (Bits == 64)
+    if constexpr (Bits == 64) {
       return uint64_t{};
-    if constexpr (Bits == 32)
+    }
+    if constexpr (Bits == 32) {
       return uint32_t{};
+    }
   }
 
 public:
@@ -41,17 +43,21 @@ public:
   // See http://www.isthe.com/chongo/tech/comp/fnv/index.html#FNV-param for the
   // parameterization
   static constexpr auto prime() -> result_type {
-    if constexpr (Bits == 64)
+    if constexpr (Bits == 64) {
       return 1099511628211ull;
-    if constexpr (Bits == 32)
+    }
+    if constexpr (Bits == 32) {
       return 16777619u;
+    }
   }
 
   static constexpr auto offset_basis() -> result_type {
-    if constexpr (Bits == 64)
+    if constexpr (Bits == 64) {
       return 14695981039346656037ull;
-    if constexpr (Bits == 32)
+    }
+    if constexpr (Bits == 32) {
       return 2166136261u;
+    }
   }
 
   auto operator()(const void* x, size_t n) noexcept -> void {

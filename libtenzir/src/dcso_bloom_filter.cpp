@@ -48,8 +48,9 @@ public:
     write(*x.params_.m);
     write(x.num_elements_);
     // Write Bloom filter.
-    if (!inspect(*this, const_cast<bloom_filter_type&>(x.bloom_filter_)))
+    if (!inspect(*this, const_cast<bloom_filter_type&>(x.bloom_filter_))) {
       return false;
+    }
     // Write auxiliary data.
     bytes_.insert(bytes_.end(), x.data_.begin(), x.data_.end());
     return true;
@@ -62,8 +63,9 @@ public:
   }
 
   auto operator()(const bitvector<uint64_t>& xs) -> result_type {
-    for (auto block : xs.blocks())
+    for (auto block : xs.blocks()) {
       write(block);
+    }
     return true;
   }
 
@@ -140,8 +142,9 @@ public:
                     bloom_filter_bytes, remaining_bytes));
       return false;
     }
-    if (!inspect(*this, x.bloom_filter_))
+    if (!inspect(*this, x.bloom_filter_)) {
       return false;
+    }
     // Interpret remaining bytes as auxiliary data.
     if (bloom_filter_bytes < remaining_bytes) {
       auto data = bytes_.subspan(header_bytes + bloom_filter_bytes);
@@ -167,8 +170,9 @@ public:
       auto block = blocks.subspan(i * 8).subspan<0, 8>();
       xs.append_block(read(block));
     }
-    if (m_ % 64 != 0)
+    if (m_ % 64 != 0) {
       xs.resize(m_);
+    }
     return true;
   }
 
@@ -246,8 +250,9 @@ auto dcso_bloom_filter::data() -> std::vector<std::byte>& {
 
 auto convert(std::span<const std::byte> xs, dcso_bloom_filter& x)
   -> caf::error {
-  if (xs.size() < dcso_bloom_filter::min_buffer_size)
+  if (xs.size() < dcso_bloom_filter::min_buffer_size) {
     return caf::make_error(ec::parse_error, "bloom filter buffer too small");
+  }
   dcso_bloom_filter::deserializer source{xs};
   if (!source(x)) {
     if (auto err = std::move(source).last_error()) {
@@ -262,8 +267,9 @@ auto convert(std::span<const std::byte> xs, dcso_bloom_filter& x)
 auto convert(const dcso_bloom_filter& x, std::vector<std::byte>& xs)
   -> caf::error {
   dcso_bloom_filter::serializer sink{xs};
-  if (sink(x))
+  if (sink(x)) {
     return {};
+  }
   return caf::make_error(ec::convert_error, "dcso_bloom_filter serialization "
                                             "failed");
 }
