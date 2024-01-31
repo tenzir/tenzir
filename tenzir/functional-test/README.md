@@ -14,6 +14,9 @@ To run all tests in this directory, use `bats tests/`.
 
 To run all tests in a specific test file, use e.g. `bats tests/version.test`
 
+Note that bats can be invoked from any directory, since all paths are computed
+relative to the test file.
+
 To run the set of tests that failed during the last run of bats,
 the `--filter-status failed` option can be used. This can also
 be useful in combination with the `UPDATE` option below when updating

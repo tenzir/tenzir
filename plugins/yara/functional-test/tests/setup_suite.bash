@@ -1,21 +1,10 @@
 setup_suite() {
   bats_require_minimum_version 1.8.0
-
   bats_load_library bats-tenzir
+
+  bats_tenzir_initialize
 }
 
-teardown_suite() {
-  bats_load_library bats-tenzir
-}
-
-BATS_SUITE_DIRNAME="${BATS_TEST_DIRNAME}"
-export BATS_SUITE_DIRNAME
-
-TENZIR_DIR="$(realpath "$(dirname "$(command -v tenzir)")")"
-export BATS_LIB_PATH=${BATS_LIB_PATH:+${BATS_LIB_PATH}:}${TENZIR_DIR}/../share/tenzir/functional-test:${BATS_SUITE_DIRNAME}/../../../../tenzir/functional-test/lib
-
-unset "${!TENZIR@}"
-# Enable bare mode so settings in ~/.config/tenzir or the build configuration
-# have no effect.
-export TENZIR_BARE_MODE=1
-export TENZIR_PLUGINS="yara"
+libpath_relative_to_binary="$(realpath "$(dirname "$(command -v tenzir)")")/../share/tenzir/functional-test/lib"
+libpath_relative_to_pwd="${BATS_TEST_DIRNAME}/../../../../lib"
+export BATS_LIB_PATH=${BATS_LIB_PATH:+${BATS_LIB_PATH}:}${libpath_relative_to_binary}:${libpath_relative_to_pwd}

@@ -2,29 +2,22 @@ setup_suite() {
   bats_require_minimum_version 1.8.0
   bats_load_library bats-tenzir
 
-  # The default node config is also reasonable for the client commands, ie.
-  # enabling bare mode and disabling plugins etc.
-  export_default_node_config
+  bats_tenzir_initialize
+  
+  export INPUTSDIR="${BATS_TENZIR_INPUTSDIR}"
+  export QUERYDIR="${BATS_TENZIR_QUERIESDIR}"
+  export MISCDIR="${BATS_TENZIR_MISCDIR}"
 }
 
-SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
-export BATS_LIB_PATH=${BATS_LIB_PATH:+${BATS_LIB_PATH}:}${SCRIPT_DIR}/../lib
+teardown_suite() {
+  : # Nothing to do
+}
 
-# Normalize the environment unless `BATS_TENZIR_KEEP_ENVIRONMENT` is set.
-if [[ ! -n ${BATS_TENZIR_KEEP_ENVIRONMENT} ]]; then
-  unset $(printenv | grep -o '^TENZIR[^=]*' | paste -s -)
-fi
-
-if ! which tenzir-node; then
+if ! which tenzir; then
   echo "tenzir binaries must be on $PATH"
   return 1
 fi
 
-# TODO: Should the datadir definitions move into the bats-tenzir library,
-# so that files in there automatically available for plugins integration tests?
-BATS_TEST_DATADIR="$(realpath $(dirname ${BATS_TEST_DIRNAME}))"
-export BATS_TENZIR_DATADIR="${BATS_TEST_DATADIR%%/functional-test/*}/data"
-
-export INPUTSDIR="${BATS_TENZIR_DATADIR}/inputs"
-export QUERYDIR="${BATS_TENZIR_DATADIR}/queries"
-export MISCDIR="${BATS_TENZIR_DATADIR}/misc"
+libpath_relative_to_binary="$(realpath "$(dirname "$(command -v tenzir)")")/../share/tenzir/functional-test/lib"
+libpath_relative_to_pwd="${BATS_TEST_DATADIR%%/functional-test/*}/lib"
+export BATS_LIB_PATH=${BATS_LIB_PATH:+${BATS_LIB_PATH}:}${libpath_relative_to_binary}:${libpath_relative_to_pwd}

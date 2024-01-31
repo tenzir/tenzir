@@ -1,10 +1,21 @@
 # SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 # SPDX-License-Identifier: BSD-3-Clause
 
+export_default_paths() {
+  BATS_TEST_DATADIR="$(realpath $(dirname ${BATS_TEST_DIRNAME}))"
+  # Look for the first folder called `functional-test/` that is a parent
+  # of the location of the test file.
+  export BATS_TENZIR_DATADIR="${BATS_TEST_DATADIR%%/functional-test/*}/data"
+
+  export BATS_TENZIR_INPUTSDIR="${BATS_TENZIR_DATADIR}/inputs"
+  export BATS_TENZIR_QUERIESDIR="${BATS_TENZIR_DATADIR}/queries"
+  export BATS_TENZIR_MISCDIR="${BATS_TENZIR_DATADIR}/misc"
+  export BATS_TENZIR_CONFIGDIR="${BATS_TENZIR_DATADIR}/config"
+}
 
 export_default_node_config() {
-  export TENZIR_STATE_DIRECTORY="${BATS_TEST_TMPDIR}/db"
   export TENZIR_BARE_MODE=true
+  export TENZIR_STATE_DIRECTORY="${BATS_TEST_TMPDIR}/db"
   export TENZIR_PLUGINS=""
   export TENZIR_ENDPOINT=":0"
   export TENZIR_EXPORT__ZEEK__DISABLE_TIMESTAMP_TAGS=true
@@ -15,12 +26,24 @@ export_default_node_config() {
   export TENZIR_ALLOW_UNSAFE_PIPELINES="true"
 }
 
-setup_node_raw() {
+bats_tenzir_initialize() {
+  # Normalize the environment unless `BATS_TENZIR_KEEP_ENVIRONMENT` is set.
+  if [[ ! -n ${BATS_TENZIR_KEEP_ENVIRONMENT} ]]; then
+    unset $(printenv | grep -o '^TENZIR[^=]*' | paste -s -)
+  fi
+
+  export_default_paths
+  export_default_node_config
+}
+
+setup_node() {
+  local node_args=$1
+  # Always enforce bare mode even when using custom config.
+  export TENZIR_BARE_MODE=true
   # Print node config
   set | grep -Ee "^TENZIR" || true >&3
   # The inner exec is needed so that signals to $NODE_PID actually reach the
   # node.
-  local node_args=$1
   exec {NODE_OUT}< <(exec tenzir-node --print-endpoint ${node_args})
   NODE_PID=$!
   read -r -u "$NODE_OUT" TENZIR_ENDPOINT
@@ -29,15 +52,16 @@ setup_node_raw() {
 
 setup_node_with_plugins() {
   local plugins=$1
+  local node_args=$2
   export_default_node_config
   export TENZIR_PLUGINS="$plugins"
-  setup_node_raw
+  setup_node ${node_args}
 }
 
 # Start a node with a configuration suitable for most integration tests.
-setup_node() {
+setup_node_with_default_config() {
   export_default_node_config
-  setup_node_raw
+  setup_node
 }
 
 teardown_node() {
