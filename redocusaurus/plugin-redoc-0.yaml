@@ -723,7 +723,7 @@ paths:
                               schema: string
                               schema_id: string
                               events: uint64
-                  data:
+                  events:
                     type: array
                     items:
                       type: object
