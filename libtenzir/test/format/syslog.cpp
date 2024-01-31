@@ -20,7 +20,7 @@ using namespace tenzir;
 namespace {
 
 // Technically, we don't need the actor system. However, we do need to
-// initialize the table slice builder factories which happens automatically in
+// initialize the table slice builder factories, which happens automatically in
 // the actor system setup. Further, including this fixture gives us access to
 // log files to hunt down bugs faster.
 struct fixture : public fixtures::deterministic_actor_system {
@@ -70,15 +70,14 @@ TEST(syslog structured data element parser) {
   CHECK(p("[exampleSDID@32473 iut=\"3\" eventSource=\"App\\]lication\" "
           "eventID=\"1011\"]",
           attr));
-  auto sd_id = std::get<0>(attr);
-  CHECK_EQUAL(sd_id, "exampleSDID@32473");
+  CHECK_EQUAL(attr.id, "exampleSDID@32473");
 }
 
 TEST(syslog parameters parser) {
   format::syslog::parameter attr;
   auto p = format::syslog::parameter_parser{};
   CHECK(p(" iut=\"3\"", attr));
-  CHECK_EQUAL(std::get<0>(attr), "iut");
-  CHECK_EQUAL(std::get<1>(attr), "3");
+  CHECK_EQUAL(attr.key, "iut");
+  CHECK_EQUAL(attr.value, "3");
 }
 FIXTURE_SCOPE_END()

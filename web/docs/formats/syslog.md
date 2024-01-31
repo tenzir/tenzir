@@ -40,14 +40,24 @@ With this input, the parser will produce the following output, with the schema n
   "app_name": "evntslog",
   "process_id": "1370",
   "message_id": "ID47",
+  "structured_data": [
+    {
+      "id": "exampleSDID@32473",
+      "params": [
+        {
+          "key": "eventSource",
+          "value": "Application"
+        },
+        {
+          "key": "eventID",
+          "value": "1011"
+        }
+      ]
+    }
+  ],
   "message": "Event log entry"
 }
 ```
-
-:::note Structured Data
-The STRUCTURED-DATA field defined in RFC 5424, delimited by square brackets `[]` in the input,
-is currently not included in the resulting schema.
-:::
 
 Here's an example of a syslog message in RFC 3164 format:
 
