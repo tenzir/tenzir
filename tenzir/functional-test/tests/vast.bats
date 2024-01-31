@@ -115,7 +115,6 @@ teardown() {
 @test "Node argus csv" {
   gunzip -c ${INPUTSDIR}/csv/argus-M57-10k-pkts.csv.gz |
     tenzir-ctl import -b -t argus.record csv
-  tenzir-ctl flush
 
   check tenzir "export | where State != \"CON\" && Dur > 4900ms | sort StartTime"
   check tenzir "export | where Cause == \"Status\" && Dur > 1s | sort StartTime"
