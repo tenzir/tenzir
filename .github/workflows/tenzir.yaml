@@ -737,27 +737,16 @@ jobs:
       - name: Install
         run: |
           cmake --install "$BUILD_DIR"
-      - name: Run Functional Tests
-        id: functional_tests
+      - name: Run Integration Tests
+        id: integration_tests
         run: |
           VERBOSE=1 cmake --build "$BUILD_DIR" --target integration -j 1
-      - name: Publish Functional Test Report
+      - name: Publish Integration Test Report
         uses: mikepenz/action-junit-report@v4
         if: always()
         with:
           report_paths: report.xml
           token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Run Integration Tests
-        id: integration_tests
-        run: |
-          cmake --build "$BUILD_DIR" --target integration
-      - name: Upload Integration Test Logs on Failure
-        if: failure() && (steps.integration_tests.outcome == 'failure')
-        uses: actions/upload-artifact@v4
-        with:
-          name: "tenzir-integration-test-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}"
-          path: "${{ env.BUILD_DIR }}/tenzir/tenzir-integration-test"
-          if-no-files-found: error
       - name: Package
         env:
           DESTDIR: ${{ env.PWD }}
@@ -947,33 +936,19 @@ jobs:
         working-directory: ${{ env.BUILD_DIR }}
         run: |
           ctest --parallel
-      - name: Run Functional Tests
-        id: functional_tests
+      - name: Run Integration Tests
+        id: integration_tests
         run: |
           # We don't always have a bats submodule when building plugins, so we
           # get it with Nix.
           nix --accept-flake-config develop .#integration-shell \
             --command bash -c "cmake --build \"$BUILD_DIR\" --target integration -j 1"
-      - name: Publish Functional Test Report
+      - name: Publish Integration Test Report
         uses: mikepenz/action-junit-report@v4
         if: always()
         with:
           report_paths: report.xml
           token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Run Integration Tests
-        id: integration_tests
-        # We intentionally run the plugin integration tests before
-        # installing, because that is a use-case we want to explicitly
-        # support for easier plugin development.
-        run: |
-          cmake --build "$BUILD_DIR" --target integration
-      - name: Upload Integration Test Logs on Failure
-        if: failure() && (steps.integration_tests.outcome == 'failure')
-        uses: actions/upload-artifact@v4
-        with:
-          name: "tenzir-${{ matrix.plugin.target }}-integration-test"
-          path: "${{ env.BUILD_DIR }}/tenzir-${{ matrix.plugin.target }}-integration-test"
-          if-no-files-found: error
       - name: Install
         run: |
           cmake --install "$BUILD_DIR" --prefix "$INSTALL_DIR"
