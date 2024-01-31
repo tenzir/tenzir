@@ -9,6 +9,7 @@
 #include "tenzir/as_bytes.hpp"
 #include "tenzir/detail/coding.hpp"
 #include "tenzir/hash/crc.hpp"
+#include "tenzir/hash/fnv.hpp"
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/hash/sha1.hpp"
 #include "tenzir/hash/uhash.hpp"
@@ -23,6 +24,14 @@ namespace {
 template <size_t N>
 auto chop(const char (&xs)[N]) {
   return as_bytes(xs).template first<(N - 1)>();
+}
+
+// A version of hash_append that doesn't add the size of the input.
+template <class Hasher>
+auto byte_hash(std::string_view bytes) {
+  Hasher h;
+  h(bytes.data(), bytes.size());
+  return static_cast<typename Hasher::result_type>(h);
 }
 
 } // namespace
@@ -46,6 +55,36 @@ TEST(crc32 hash_append) {
   CHECK_EQUAL(foo.finish(), 2943590935u);
   hash_append(foo, 'o');
   CHECK_EQUAL(foo.finish(), 2356372769u);
+}
+
+// FNV test values taken from the canonical reference over at
+// http://www.isthe.com/chongo/src/fnv/test_fnv.c.
+
+TEST(fnv1 - 32bit) {
+  using hasher_type = fnv1<32>;
+  auto h = byte_hash<hasher_type>;
+  CHECK_EQUAL(h(""), hasher_type::offset_basis());
+  CHECK_EQUAL(h(""), 0x811c9dc5UL);
+  CHECK_EQUAL(h("foo"), 0x408f5e13UL);
+  CHECK_EQUAL(h("foobar"), 0x31f0b262UL);
+}
+
+TEST(fnv1a - 32bit) {
+  using hasher_type = fnv1a<32>;
+  auto h = byte_hash<hasher_type>;
+  CHECK_EQUAL(h(""), hasher_type::offset_basis());
+  CHECK_EQUAL(h(""), 0x811c9dc5UL);
+  CHECK_EQUAL(h("foo"), 0xa9f37ed7UL);
+  CHECK_EQUAL(h("foobar"), 0xbf9cf968UL);
+}
+
+TEST(fnv1 - 64bit) {
+  using hasher_type = fnv1<64>;
+  auto h = byte_hash<hasher_type>;
+  CHECK_EQUAL(h(""), hasher_type::offset_basis());
+  CHECK_EQUAL(h(""), 0xcbf29ce484222325ULL);
+  CHECK_EQUAL(h("foo"), 0xd8cbc7186ba13533ULL);
+  CHECK_EQUAL(h("foobar"), 0x340d8765a4dda9c2ULL);
 }
 
 TEST(xxh64 oneshot with seed) {

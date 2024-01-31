@@ -602,19 +602,15 @@ jobs:
             dependencies-script-path: scripts/debian/install-dev-dependencies.sh
             cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON
             bundled-plugins:
-              # We enable the web and fluent-bit plugins here, because:
-              #  * web: Is needed as a dependency of the pipeline-manager, and
-              #    plugin dependency graphs cannot the modeled with the current
-              #    plugin API.
+              # We enable some plugins here, because:
               #  * fluent-bit: The plugin library links to libfluent-bit.so, which
               #    is built by upstream without support for `dlopen()`, the
               #    integrated build method used here works around that by linking
               #    libfluent-bit.so to libtenzir.so directly. The alternative
               #    workaround of using LD_PRELOAD for the standalone plugin build
               #    does not work in the GitHub Actions Runner.
-              - plugins/web
               - plugins/fluent-bit
-          - os: macos-latest
+          - os: macos-14
             container: null
             name: macOS
             compiler: Clang
@@ -623,10 +619,13 @@ jobs:
             dependencies-script-path: scripts/macOS/install-dev-dependencies.sh
             cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON
             bundled-plugins:
-              # Parquet uses illegal instructions on macOS in Arrow version
-              # 14.0.1, so we disable it in the macOS CI. Last checked on
-              # 2023-12-16.
-              - plugins/[^(parquet)]*
+              # - Parquet uses illegal instructions on macOS in Arrow version
+              #   14.0.1, so we disable it in the macOS CI. Last checked on
+              #   2023-12-16.
+              # - The http-parser package is disabled on Hoembrew, which means
+              #   we cannot build the web plugin on macOS anymore. Last checked
+              #   on 2024-01-31.
+              - plugins/[^(parquet)(web)]*
               - contrib/tenzir-plugins/*
     env:
       BUILD_DIR: build
@@ -846,7 +845,6 @@ jobs:
           - name: Example Analyzer
             target: example-analyzer
             path: examples/plugins/analyzer
-            debian-dependencies:
           - name: Kafka
             target: kafka
             path: plugins/kafka
@@ -859,9 +857,6 @@ jobs:
           - name: Parquet
             target: parquet
             path: plugins/parquet
-          # The pipeline manager integration tests require that the web
-          # plugin exists, which is why we're building the web plugin
-          # already in the main Tenzir job.
           - name: Pipeline Manager
             target: pipeline-manager
             path: contrib/tenzir-plugins/pipeline_manager
@@ -874,6 +869,9 @@ jobs:
           - name: Velociraptor
             target: velociraptor
             path: plugins/velociraptor
+          - name: Web
+            target: web
+            path: plugins/web
           - name: Yara
             target: yara
             path: plugins/yara
@@ -1022,7 +1020,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.10"]
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest]
     env:
       DEBIAN_FRONTEND: noninteractive
     steps:
