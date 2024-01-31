@@ -56,7 +56,7 @@ struct disk_monitor_state {
   };
 
   /// The path to the database directory.
-  std::filesystem::path dbdir;
+  std::filesystem::path state_directory;
 
   /// The user-configurable behavior.
   disk_monitor_config config;

@@ -417,8 +417,8 @@ store_plugin::make_store_builder(accountant_actor accountant,
   if (!store)
     return store.error();
   auto db_dir = std::filesystem::path{
-    caf::get_or(content(fs->home_system().config()), "tenzir.db-directory",
-                defaults::db_directory.data())};
+    caf::get_or(content(fs->home_system().config()), "tenzir.state-directory",
+                defaults::state_directory.data())};
   std::error_code err{};
   const auto abs_dir = std::filesystem::absolute(db_dir, err);
   auto path = abs_dir / "archive" / fmt::format("{}.{}", id, name());
@@ -440,8 +440,8 @@ store_plugin::make_store(accountant_actor accountant, filesystem_actor fs,
                                                  "single uuid");
   const auto id = uuid{header.subspan<0, uuid::num_bytes>()};
   auto db_dir = std::filesystem::path{
-    caf::get_or(content(fs->home_system().config()), "tenzir.db-directory",
-                defaults::db_directory.data())};
+    caf::get_or(content(fs->home_system().config()), "tenzir.state-directory",
+                defaults::state_directory.data())};
   std::error_code err{};
   const auto abs_dir = std::filesystem::absolute(db_dir, err);
   auto path = abs_dir / "archive" / fmt::format("{}.{}", id, name());

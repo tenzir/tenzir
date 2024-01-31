@@ -14,7 +14,7 @@ setup() {
   export TENZIR_METRICS__SELF_SINK__ENABLE=false
   export TENZIR_METRICS__FILE_SINK__ENABLE=true
   export TENZIR_METRICS__FILE_SINK__REAL_TIME=true
-  export TENZIR_METRICS__FILE_SINK__PATH=${TENZIR_DB_DIRECTORY}/metrics.log
+  export TENZIR_METRICS__FILE_SINK__PATH=${TENZIR_STATE_DIRECTORY}/metrics.log
   setup_node_raw
 }
 

@@ -44,9 +44,6 @@ void add_root_opts(command& cmd) {
     "disable user and system configuration, schema and plugin "
     "directories lookup and static and dynamic plugin "
     "autoloading (this may only be used on the command line)");
-  cmd.options.add<bool>("?tenzir", "detach-components",
-                        "create dedicated threads for some "
-                        "components");
   cmd.options.add<bool>(
     "?tenzir", "allow-unsafe-pipelines",
     "allow unsafe location overrides for pipelines with the "
@@ -60,8 +57,12 @@ void add_root_opts(command& cmd) {
                                "console");
   cmd.options.add<caf::config_value::list>("?tenzir", "schema-dirs",
                                            module_desc);
-  cmd.options.add<std::string>("?tenzir", "db-directory,d",
+  cmd.options.add<std::string>("?tenzir", "db-directory",
+                               "deprecated; use state-directory instead");
+  cmd.options.add<std::string>("?tenzir", "state-directory,d",
                                "directory for persistent state");
+  cmd.options.add<std::string>("?tenzir", "cache-directory",
+                               "directory for runtime state");
   cmd.options.add<std::string>("?tenzir", "log-file", "log filename");
   cmd.options.add<std::string>("?tenzir", "client-log-file",
                                "client log file (default: "

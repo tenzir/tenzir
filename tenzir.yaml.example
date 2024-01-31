@@ -20,7 +20,16 @@ tenzir:
   # available:
   #   - $STATE_DIRECTORY
   #   - $PWD/tenzir.db
-  #db-directory:
+  #state-directory:
+
+  # The file system path used for persistent state.
+  # Defaults to one of the following paths, selecting the first that is
+  # available:
+  #   - $CACHE_DIRECTORY
+  #   - $XDG_CACHE_HOME/tenzir
+  #   - $HOME/.cache/tenzir (Linux)
+  #   - $HOME/Library/Caches/tenzir (macOS)
+  #cache-directory:
 
   # The file system path used for persistent state.
   # Defaults to one of the following paths, selecting the first that is
@@ -38,7 +47,7 @@ tenzir:
   # Defaults to one of the following paths, selecting the first that is
   # available:
   #   - $LOGS_DIRECTORY/server.log
-  #   - <db-directory>/server.log
+  #   - <state-directory>/server.log
   #log-file:
 
   # The file system path used for client log files relative to the current
@@ -147,14 +156,6 @@ tenzir:
 
   # The amount of queries that can be executed in parallel.
   max-queries: 10
-
-  # The directory to use for the partition synopses of the catalog.
-  #catalog-dir: <dbdir>/index
-
-  # Whether to run some components in dedicated threads, in particular
-  # the filesystem and catalog actors. It is usually a good idea to
-  # enable this setting for significantly better performance.
-  detach-components: true
 
   # The store backend to use. Can be 'feather', or the name of a user-provided
   # store plugin.
