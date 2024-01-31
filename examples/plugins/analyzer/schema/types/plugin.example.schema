@@ -1,4 +1,0 @@
-// A test type that contains a single string field.
-type plugin.example.type = record{
-  field: string,
-}

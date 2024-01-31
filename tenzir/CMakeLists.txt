@@ -151,63 +151,6 @@ install(
   COMPONENT Development
   DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/functional-test/lib")
 
-# -- integration tests ---------------------------------------------------------
-
-# TODO: Hide integration test suite behind an option that is enabled by default.
-
-file(
-  GENERATE
-  OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/integration-$<CONFIG>.sh"
-  CONTENT
-    "#!/bin/sh
-     if ! command -v jq >/dev/null 2>&1; then
-       >&2 echo 'failed to find jq in $PATH'
-       exit 1
-     fi
-     base_dir=\"${CMAKE_CURRENT_SOURCE_DIR}/integration\"
-     env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
-     export app=\"$<IF:$<BOOL:${TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS}>,$<TARGET_FILE:tenzir::tenzir>,${CMAKE_INSTALL_FULL_BINDIR}/$<TARGET_FILE_NAME:tenzir::tenzir>>-ctl\"
-     update=\"$<IF:$<BOOL:${TENZIR_ENABLE_UPDATE_INTEGRATION_REFERENCES}>,-u,>\"
-     set -e
-     if [ ! -f \"$env_dir/bin/activate\" ]; then
-       python3 -m venv \"$env_dir\"
-     fi
-     . \"$env_dir/bin/activate\"
-     python3 -m pip install --upgrade pip
-     python3 -m pip install -r \"$base_dir/requirements.txt\"
-     python3 \"$base_dir/integration.py\" \
-      --app \"$app\" \
-      --directory tenzir-integration-test \
-      --set \"$base_dir\"/tests.yaml \
-      \${update} \
-      \"$@\"
-    ")
-
-add_custom_target(
-  integration
-  COMMAND /bin/sh "${CMAKE_CURRENT_BINARY_DIR}/integration-$<CONFIG>.sh" "-v"
-          "DEBUG"
-  USES_TERMINAL)
-
-add_custom_target(
-  link-integration-directory ALL
-  COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/share/tenzir"
-  COMMAND
-    ${CMAKE_COMMAND} -E create_symlink "${CMAKE_CURRENT_SOURCE_DIR}/integration"
-    "${CMAKE_BINARY_DIR}/share/tenzir/integration"
-  COMMENT "Linking integration test directory")
-
-install(
-  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/integration"
-  COMPONENT Development
-  DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir"
-  PATTERN "integration/tenzir.yaml.example" EXCLUDE)
-
-install(
-  FILES "${PROJECT_SOURCE_DIR}/tenzir.yaml.example"
-  COMPONENT Development
-  DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/integration")
-
 # -- add plugins ---------------------------------------------------------------
 
 set(plugins_default "plugins/*")

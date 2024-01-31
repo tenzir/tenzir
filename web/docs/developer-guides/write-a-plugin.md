@@ -21,11 +21,11 @@ Pass `-DTENZIR_ENABLE_STATIC_PLUGINS:BOOL=ON` to `cmake` to build plugins
 alongside Tenzir as static plugins. This option is always on for static binary
 builds.
 
-Tenzir ships with an example plugin that showcases how a typical scaffold looks
-like. Have a look at the the [example
-plugins](https://github.com/tenzir/tenzir/tree/main/examples/plugins) directory,
-and an [example `CMakeLists.txt` file for
-plugins](https://github.com/tenzir/tenzir/blob/main/examples/plugins/analyzer/CMakeLists.txt).
+Tenzir ships with many plugin that showcase what a typical scaffold looks like.
+Have a look at the the
+[plugins](https://github.com/tenzir/tenzir/tree/main/plugins) directory, and an
+[example `CMakeLists.txt` file from the AMQP
+plugin](https://github.com/tenzir/tenzir/blob/main/plugins/amqp/CMakeLists.txt).
 
 We highly urge calling the provided `TenzirRegisterPlugin` CMake in your plugin's
 `CMakeLists.txt` file instead of handrolling your CMake build scaffolding
@@ -60,10 +60,6 @@ classes that inherit from `tenzir::plugin` use *virtual inheritance* to avoid
 issues with the [dreaded
 diamond](https://isocpp.org/wiki/faq/multiple-inheritance#mi-diamond).
 :::
-
-Please also consult the [example-analyzer
-plugin](https://github.com/tenzir/tenzir/tree/main/examples/plugins/analyzer)
-for a complete end-to-end code example.
 
 ## Implement the plugin interface
 
@@ -223,16 +219,15 @@ To execute registered unit tests, you can also simply run the test binary
 
 Every plugin ideally comes with integration tests as well. Our convention is
 that integration tests reside in an `integration` subdirectory. If you add a
-file called `integration/tests.yaml`, Tenzir runs them alongside the regular
-integration tests. Please refer to the example plugin directory for more
-details.
+file called `integration/*.bats`, Tenzir runs them alongside the regular
+integration tests.
 
 Note that plugins may affect the overall behavior of Tenzir. Therefore we
 recommend to to run all integrations regularly by running the build target
 `integration`.
 
 To execute plugin-specific integration tests only, run the build target
-`<plugin>-integration`, where `<plugin>` is the name of your plugin.
+`integration-<plugin>`, where `<plugin>` is the name of your plugin.
 
 ## Package it
 

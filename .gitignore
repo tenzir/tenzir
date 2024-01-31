@@ -31,7 +31,3 @@ venv/
 
 # Python build artifacts
 /python/dist
-
-# Tenzir example artifacts
-/examples/**/.ipynb_checkpoints/
-/examples/notebooks/output

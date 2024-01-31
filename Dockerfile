@@ -15,7 +15,6 @@ RUN ./scripts/debian/install-dev-dependencies.sh && rm -rf /var/lib/apt/lists/*
 # Tenzir
 COPY changelog ./changelog
 COPY cmake ./cmake
-COPY examples ./examples
 COPY libtenzir ./libtenzir
 COPY libtenzir_test ./libtenzir_test
 COPY plugins ./plugins

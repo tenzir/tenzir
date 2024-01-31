@@ -75,7 +75,6 @@ jobs:
       run-docker-tenzir: ${{ steps.configure.outputs.run-docker-tenzir }}
       docker-config: ${{ steps.docker.outputs.docker-config }}
       run-docker-compose: ${{ steps.configure.outputs.run-docker-compose }}
-      run-example-notebooks: ${{ steps.configure.outputs.run-example-notebooks }}
       run-regression-tests: ${{ steps.configure.outputs.run-regression-tests }}
       run-tenzir-nix: ${{ steps.configure.outputs.run-tenzir-nix }}
       nix-matrix: ${{ steps.nix.outputs.nix-matrix }}
@@ -162,7 +161,6 @@ jobs:
           # * Enable Jobs (below)
           echo "::notice Disable all others so we can selectivly enable again"
           echo "run-changelog=false" >> $GITHUB_OUTPUT
-          echo "run-example-notebooks=false" >> $GITHUB_OUTPUT
           echo "run-regression-tests=false" >> $GITHUB_OUTPUT
           echo "run-python=false" >> $GITHUB_OUTPUT
           echo "run-python-package=false" >> $GITHUB_OUTPUT
@@ -176,7 +174,6 @@ jobs:
           shopt -s expand_aliases
           alias run_all_checks=' \
             echo "run-changelog=true" >> $GITHUB_OUTPUT; \
-            echo "run-example-notebooks=true" >> $GITHUB_OUTPUT; \
             echo "run-regression-tests=true" >> $GITHUB_OUTPUT; \
             echo "run-python=true" >> $GITHUB_OUTPUT; \
             echo "run-docs=true" >> $GITHUB_OUTPUT; \
@@ -544,31 +541,6 @@ jobs:
         run: |
           docker/test
 
-  example-notebooks:
-    needs:
-      - docker-tenzir
-      - configure
-    if: ${{ needs.configure.outputs.run-example-notebooks == 'true' }}
-    name: Build Example Notebooks
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build Notebooks
-        working-directory: examples/notebooks
-        run: |
-          export TENZIR_CONTAINER_REF="${{ needs.configure.outputs.tenzir-container-ref }}"
-          export TENZIR_CONTAINER_REGISTRY=ghcr.io
-          make docker
-          # TODO: An assertion of the actual content of the output would be welcome
-          make docker TARGET=clean
-
   tenzir-nix:
     name: Nix (${{ matrix.config.name }})
     needs:
@@ -842,9 +814,6 @@ jobs:
           - name: Context
             target: context
             path: contrib/tenzir-plugins/context
-          - name: Example Analyzer
-            target: example-analyzer
-            path: examples/plugins/analyzer
           - name: Kafka
             target: kafka
             path: plugins/kafka
@@ -1088,7 +1057,6 @@ jobs:
       - docker-compose
       - docker-tenzir
       - docs
-      - example-notebooks
       - openapi-spec
       - policy-enforcement
       - python
