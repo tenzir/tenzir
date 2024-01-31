@@ -179,8 +179,9 @@ public:
 
   auto save() const -> caf::expected<chunk_ptr> override {
     std::vector<std::byte> buffer;
-    if (auto err = convert(bloom_filter_, buffer))
+    if (auto err = convert(bloom_filter_, buffer)) {
       return add_context(err, "failed to serialize Bloom filter context");
+    }
     return chunk::make(std::move(buffer));
   }
 
@@ -200,11 +201,13 @@ class plugin : public virtual context_plugin {
   auto make_context(context::parameter_map parameters) const
     -> caf::expected<std::unique_ptr<context>> override {
     auto capacity = parameters["capacity"];
-    if (not capacity)
+    if (not capacity) {
       return caf::make_error(ec::parse_error, "no --capacity provided");
-    auto fpp = parameters["fp-prob"];
-    if (not fpp)
-      return caf::make_error(ec::parse_error, "no --fp-prob provided");
+    }
+    auto fpp = parameters["fp-probability"];
+    if (not fpp) {
+      return caf::make_error(ec::parse_error, "no --fp-probability provided");
+    }
     auto n = uint64_t{0};
     if (not parsers::u64(*capacity, n)) {
       return caf::make_error(ec::invalid_argument,
@@ -212,13 +215,15 @@ class plugin : public virtual context_plugin {
     }
     auto p = double{0.0};
     if (not parsers::real(*fpp, p)) {
-      return caf::make_error(ec::invalid_argument, "--fp-prob is not a double");
+      return caf::make_error(ec::invalid_argument,
+                             "--fp-probability is not a double");
     }
     if (n == 0) {
       return caf::make_error(ec::invalid_argument, "--capacity must be > 0");
     }
     if (p <= 0.0 || p >= 1.0) {
-      return caf::make_error(ec::invalid_argument, "--fp-prob not in (0,1)");
+      return caf::make_error(ec::invalid_argument,
+                             "--fp-probability not in (0,1)");
     }
     return std::make_unique<bloom_filter_context>(n, p);
   }
@@ -227,8 +232,9 @@ class plugin : public virtual context_plugin {
     -> caf::expected<std::unique_ptr<context>> override {
     TENZIR_ASSERT_CHEAP(serialized != nullptr);
     auto bloom_filter = dcso_bloom_filter{};
-    if (auto err = convert(as_bytes(*serialized), bloom_filter))
+    if (auto err = convert(as_bytes(*serialized), bloom_filter)) {
       return add_context(err, "failed to deserialize Bloom filter context");
+    }
     return std::make_unique<bloom_filter_context>(std::move(bloom_filter));
   }
 };

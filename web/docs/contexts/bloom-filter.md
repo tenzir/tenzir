@@ -5,7 +5,8 @@ A space-efficient data structure to represent large sets.
 ## Synopsis
 
 ```
-context create <name> bloom-filter --capacity <capacity> --fp-prob <probability>
+context create <name> bloom-filter
+    --capacity <capacity> --fp-probability <probability>
 context update <name> --key <field>
 context delete <name>
 enrich <name> --field <field>
@@ -41,16 +42,16 @@ The Bloom filter implementation is a C++ rebuild of DCSO's
 the exact same method for FNV1 hashing and parameter calculation, making it a
 drop-in replacement for `bloom` users.
 
-### `-n|--capacity <capacity>`
+### `--capacity <capacity>`
 
 The maximum number of unique items the Bloom filter can hold while guaranteeing
 the configured false-positive probability.
 
-### `-p|--fp-prob <probability>`
+### `--fp-probability <probability>`
 
 The probability of a false positive when looking up an item in the Bloom filter.
 
-Must be between `0.0` and `1.0`.
+Must be within `0.0` and `1.0`.
 
 ### `--key <field>`
 
