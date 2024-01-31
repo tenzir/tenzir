@@ -13,7 +13,6 @@
 #include "web/mime.hpp"
 #include "web/restinio_response.hpp"
 #include "web/restinio_server.hpp"
-#include "web/specification_command.hpp"
 
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
@@ -363,16 +362,7 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
       return request->create_response(restinio::status_temporary_redirect())
         .append_header(restinio::http_field::server, "Tenzir")
         .append_header_date_field()
-        .append_header(restinio::http_field::location, "/api/v0/status")
-        .done();
-    });
-  auto openapi = generate_openapi_json();
-  router->http_get(
-    "/openapi.json",
-    [openapi](auto request, auto) -> restinio::request_handling_status_t {
-      return request->create_response(restinio::status_ok())
-        .append_header(restinio::http_field::content_type, "application/json")
-        .set_body(openapi)
+        .append_header(restinio::http_field::location, "/api/v0/ping")
         .done();
     });
   if (server_config->webroot) {

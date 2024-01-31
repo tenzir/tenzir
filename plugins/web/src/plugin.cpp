@@ -10,7 +10,6 @@
 #include "web/configuration.hpp"
 #include "web/generate_token_command.hpp"
 #include "web/server_command.hpp"
-#include "web/specification_command.hpp"
 
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
@@ -68,12 +67,9 @@ class plugin final : public virtual command_plugin,
         .add<int64_t>("port", "listen port"));
     rest_command->add_subcommand("generate-token", "generate auth token",
                                  command::opts("?plugins.web.token"));
-    rest_command->add_subcommand("openapi", "print openAPI spec",
-                                 command::opts("?plugins.web.spec"));
     auto factory = command::factory{};
     factory["web server"] = web::server_command;
     factory["web generate-token"] = web::generate_token_command;
-    factory["web openapi"] = web::specification_command;
     return {std::move(rest_command), std::move(factory)};
   }
 };

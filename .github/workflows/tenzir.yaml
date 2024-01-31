@@ -475,11 +475,11 @@ jobs:
       - name: Check OpenAPI Spec
         run: |
           docker run \
-            --pull=always --rm --entrypoint=tenzir-ctl \
+            --pull=always --rm \
             "ghcr.io/tenzir/tenzir:${{ needs.configure.outputs.tenzir-container-ref }}" \
-            web openapi > web/openapi/openapi.yaml
+            'openapi | to web/openapi/openapi.yaml'
           git diff --quiet --exit-code || {
-            echo "The OpenAPI Spec is not aligned with the current sources. Please run *tenzir-ctl web openapi > web/openapi/openapi.yaml* or apply the following diff directly:"
+            echo "The OpenAPI Spec is not aligned with the current sources. Please run *tenzir 'openapi | to web/openapi/openapi.yaml'* or apply the following diff directly:"
             git diff --exit-code
           }
 
