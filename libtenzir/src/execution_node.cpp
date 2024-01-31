@@ -747,6 +747,12 @@ auto exec_node(
         = make_timer_guard(self->state.metrics->values.time_scheduled);
       return self->state.resume();
     },
+    [self](diagnostic& diag) -> caf::result<void> {
+      auto time_scheduled_guard
+        = make_timer_guard(self->state.metrics->values.time_scheduled);
+      self->state.ctrl->diagnostics().emit(std::move(diag));
+      return {};
+    },
     [self](atom::push, table_slice& events) -> caf::result<void> {
       auto time_scheduled_guard
         = make_timer_guard(self->state.metrics->values.time_scheduled);

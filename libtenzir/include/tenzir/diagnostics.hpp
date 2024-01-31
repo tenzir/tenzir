@@ -293,6 +293,8 @@ public:
     diag.emit(std::move(result_));
   }
 
+  void emit(const shared_diagnostic_handler& diag) &&;
+
   [[noreturn]] void throw_() && {
     throw std::move(result_);
   }

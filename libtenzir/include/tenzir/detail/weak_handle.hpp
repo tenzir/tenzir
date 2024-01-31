@@ -45,6 +45,12 @@ struct weak_handle : caf::weak_actor_ptr {
     return caf::actor_cast<Handle>(weak_ptr_.lock());
   }
 
+  friend auto inspect(auto& f, weak_handle& x) -> bool {
+    return f.object(x)
+      .pretty_name("tenzir.detail.weak_handle")
+      .fields(f.field("weak_ptr", x.weak_ptr_));
+  }
+
 private:
   caf::weak_actor_ptr weak_ptr_ = {};
 };
