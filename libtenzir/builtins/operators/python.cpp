@@ -77,19 +77,34 @@ public:
   python_operator() = default;
 
   explicit python_operator(const config* config, std::string requirements,
-                           std::string code)
-    : config_{config}, requirements_{std::move(requirements)} {
-    if (code.empty()) {
-      code_ = "pass";
-    } else {
-      code_ = std::move(code);
-    }
+                           std::filesystem::path filename, std::string code)
+    : config_{config},
+      requirements_{std::move(requirements)},
+      code_filename_{std::move(filename)},
+      code_{std::move(code)} {
   }
 
   auto execute(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     TENZIR_ASSERT(config_);
     try {
+      // Get the code to be executed.
+      TENZIR_ASSERT_CHEAP(code_.empty() xor code_filename_.empty());
+      auto code = std::string{};
+      if (!code_.empty()) {
+        code = code_;
+      } else {
+        auto code_chunk = chunk::make_empty();
+        if (auto err = read(code_filename_, code_chunk)) {
+          diagnostic::error("failed to read code from file: {}", err)
+            .note("while trying to read file: {}", code_filename_)
+            .emit(ctrl.diagnostics());
+          co_return;
+        }
+        code = std::string{reinterpret_cast<const char*>(code_chunk->data()),
+                           code_chunk->size()};
+      }
+      // Setup python prerequisites.
       bp::pipe std_out;
       bp::pipe std_in;
       bp::ipstream std_err;
@@ -316,6 +331,7 @@ public:
 private:
   const config* config_ = nullptr;
   std::string requirements_ = {};
+  std::filesystem::path code_filename_ = {};
   std::string code_ = {};
 };
 
@@ -354,15 +370,21 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto command = std::string{};
+    auto code = std::string{};
     auto requirements = std::string{};
+    auto filename = std::string{};
     auto parser = argument_parser{"python", "https://docs.tenzir.com/next/"
                                             "operators/transformations/python"};
     parser.add("-r,--requirements", requirements, "<requirements>");
-    parser.add(command, "<command>");
+    parser.add("-f,--file", filename, "<filename>");
+    parser.add(code, "<command>");
     parser.parse(p);
-    return std::make_unique<python_operator>(&config, std::move(requirements),
-                                             std::move(command));
+    if (!filename.empty() and !code.empty()) {
+      diagnostic::error("foo").throw_();
+    }
+    return std::make_unique<python_operator>(
+      &config, std::move(requirements),
+      std::filesystem::path{std::move(filename)}, std::move(code));
   }
 };
 
