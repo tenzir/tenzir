@@ -85,16 +85,6 @@ int main(int argc, char** argv) {
                           ? app_path
                           : app_path.substr(last_slash + 1);
   bool is_server = (app_name == "tenzir-node");
-  // Allow `tenzir-ctl start` or `tenzir-ctl -N <cmd>` as alternative ways
-  // to start a node, as well as the legacy `vast` command.
-  if (app_name == "vast" || app_name == "tenzir-ctl")
-    is_server = invocation->full_name == "start"
-                || caf::get_or(cfg.content, "tenzir.node", false);
-  std::string_view max_threads_key = "caf.scheduler.max-threads";
-  if (!is_server
-      && !caf::holds_alternative<caf::config_value::integer>(cfg,
-                                                             max_threads_key))
-    cfg.set(max_threads_key, 2);
   // Create log context as soon as we know the correct configuration.
   auto log_context = create_log_context(is_server, *invocation, cfg.content);
   if (!log_context)
