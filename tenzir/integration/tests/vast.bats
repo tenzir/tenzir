@@ -240,7 +240,7 @@ teardown() {
   TENZIR_INDEX__RULES__PARTITION_INDEX=false
 
   cat ${INPUTSDIR}/csv/argus-additional-fields.ssv |
-    tenzir-ctl import -t argus.record csv '--separator=" "'
+    tenzir-ctl import -b -t argus.record csv '--separator=" "'
 
   check tenzir "export | write csv"
 }

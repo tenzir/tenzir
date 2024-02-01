@@ -637,7 +637,7 @@ struct exec_node_state {
              or not inbound_buffer.empty());                     // (2c)
     if (should_continue) {
       schedule_run(false);
-    } else if (demand.has_value()) {
+    } else if (demand.has_value() or std::is_same_v<Output, std::monostate>) {
       // If we shouldn't continue, but there is an upstream demand, then we may
       // be in a situation where the operator has internally buffered events and
       // needs to be polled until some operator-internal timeout expires before

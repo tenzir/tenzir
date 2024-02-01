@@ -362,8 +362,8 @@ teardown() {
 #bats test_tags=import,export
 @test "Process Query For Field With Skip Attribute" {
   cat ${INPUTSDIR}/zeek/zeek.json |
-    tenzir-ctl import --schema-file="${MISCDIR}/schema/zeek-with-skip.schema" zeek-json
+    tenzir-ctl import -b --schema-file="${MISCDIR}/schema/zeek-with-skip.schema" zeek-json
 
-  check tenzir 'export'
-  check tenzir 'export | where username == "steve"'
+  check --sort tenzir 'export'
+  check --sort tenzir 'export | where username == "steve"'
 }
