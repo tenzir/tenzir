@@ -36,9 +36,7 @@ public:
   ~shared_diagnostic_handler() noexcept override = default;
 
   inline auto emit(diagnostic diag) -> void override {
-    if (auto exec_node = weak_exec_node_.lock()) {
-      caf::anon_send<caf::message_priority::high>(exec_node, std::move(diag));
-    }
+    std::as_const(*this).emit(std::move(diag));
   }
 
   inline auto emit(diagnostic diag) const -> void {
