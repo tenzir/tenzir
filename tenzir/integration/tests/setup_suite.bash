@@ -3,7 +3,7 @@ setup_suite() {
   bats_load_library bats-tenzir
 
   bats_tenzir_initialize
-  
+
   export INPUTSDIR="${BATS_TENZIR_INPUTSDIR}"
   export QUERYDIR="${BATS_TENZIR_QUERIESDIR}"
   export MISCDIR="${BATS_TENZIR_MISCDIR}"
