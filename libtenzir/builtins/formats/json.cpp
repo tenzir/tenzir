@@ -132,14 +132,13 @@ enum class parser_action {
 
 struct selector {
   std::string prefix;
-  std::string selector_field;
+  std::vector<std::string> path;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, selector& x) -> bool {
     return f.object(x)
       .pretty_name("selector")
-      .fields(f.field("prefix", x.prefix),
-              f.field("selector_field", x.selector_field));
+      .fields(f.field("prefix", x.prefix), f.field("path", x.path));
   }
 };
 
@@ -423,8 +422,9 @@ private:
 
   [[nodiscard]] auto parse_impl(simdjson::ondemand::value val,
                                 builder_ref builder, size_t depth) -> bool {
-    if (depth > defaults::max_recursion)
+    if (depth > defaults::max_recursion) {
       die("nesting too deep in json_parser parse");
+    }
     auto type = val.type();
     if (type.error()) {
       report_parse_err(val, "a value");
@@ -482,22 +482,35 @@ private:
 
 auto get_schema_name(simdjson::ondemand::document_reference doc,
                      const selector& selector) -> caf::expected<std::string> {
-  auto type = doc[selector.selector_field];
+  auto object = doc.get_value();
+  for (const auto& field : selector.path) {
+    object = object[field];
+  }
   doc.rewind();
-  if (auto err = type.error()) {
-    if (err != simdjson::error_code::NO_SUCH_FIELD)
+  if (auto err = object.error()) {
+    if (err != simdjson::error_code::NO_SUCH_FIELD) {
       return caf::make_error(ec::parse_error, error_message(err));
+    }
     return std::string{unknown_entry_name};
   }
-  auto maybe_schema_name = type.value_unsafe().get_string();
-  if (auto err = maybe_schema_name.error()) {
-    return caf::make_error(ec::parse_error, error_message(err));
+  auto name = std::string{};
+  auto value = object.value_unsafe();
+  if (auto string = value.get_string(); string.error() == simdjson::SUCCESS) {
+    name = string.value_unsafe();
+  } else if (auto int64 = value.get_int64();
+             int64.error() == simdjson::SUCCESS) {
+    name = fmt::to_string(int64.value_unsafe());
+  } else if (auto uint64 = value.get_uint64();
+             uint64.error() == simdjson::SUCCESS) {
+    name = fmt::to_string(uint64.value_unsafe());
+  } else {
+    return caf::make_error(ec::parse_error,
+                           "expected string or integer for schema name");
   }
   if (selector.prefix.empty()) {
-    return std::string{maybe_schema_name.value_unsafe()};
+    return name;
   }
-  return fmt::format("{}.{}", selector.prefix,
-                     maybe_schema_name.value_unsafe());
+  return fmt::format("{}.{}", selector.prefix, name);
 }
 
 auto non_empty_entries(parser_state& state)
@@ -519,10 +532,12 @@ auto non_empty_entries(parser_state& state)
 }
 
 auto get_schemas(bool try_find_schema, bool unflatten) -> std::vector<type> {
-  if (not try_find_schema)
+  if (not try_find_schema) {
     return {};
-  if (not unflatten)
+  }
+  if (not unflatten) {
     return modules::schemas();
+  }
   auto schemas = modules::schemas();
   std::vector<type> ret;
   std::transform(schemas.begin(), schemas.end(), std::back_inserter(ret),
@@ -534,8 +549,9 @@ auto get_schemas(bool try_find_schema, bool unflatten) -> std::vector<type> {
 
 auto unflatten_if_needed(std::string_view separator, table_slice slice)
   -> table_slice {
-  if (separator.empty())
+  if (separator.empty()) {
     return slice;
+  }
   return unflatten(slice, separator);
 }
 
@@ -612,8 +628,9 @@ protected:
     auto maybe_schema_name = get_schema_name(doc_ref, *selector_);
     if (not maybe_schema_name) {
       diagnostic::warning(maybe_schema_name.error()).emit(ctrl_.diagnostics());
-      if (no_infer_)
+      if (no_infer_) {
         return {parser_action::skip, std::nullopt};
+      }
       auto maybe_slice_to_yield = activate_unknown_entry(state);
       if (maybe_slice_to_yield) {
         return {parser_action::yield, std::move(maybe_slice_to_yield)};
@@ -812,10 +829,11 @@ public:
           continue;
         }
       }
-      if (auto slices = this->handle_max_rows(state))
+      if (auto slices = this->handle_max_rows(state)) {
         for (auto& slice : *slices) {
           co_yield std::move(slice);
         }
+      }
     }
     handle_truncated_bytes(state);
   }
@@ -912,8 +930,12 @@ auto parse_selector(std::string_view x, location source) -> selector {
       .primary(source)
       .throw_();
   }
+  auto path = std::vector<std::string>{};
+  for (auto field : detail::split(split[0], ".")) {
+    path.emplace_back(field);
+  }
   auto prefix = split.size() == 2 ? std::string{split[1]} : "";
-  return selector{std::move(prefix), std::string{split[0]}};
+  return selector{std::move(prefix), std::move(path)};
 }
 
 struct parser_args {
@@ -1096,10 +1118,11 @@ public:
     -> caf::expected<std::unique_ptr<printer_instance>> override {
     const auto compact = !!args_.compact_output;
     auto style = default_style();
-    if (args_.monochrome_output)
+    if (args_.monochrome_output) {
       style = no_style();
-    else if (args_.color_output)
+    } else if (args_.color_output) {
       style = jq_style();
+    }
     const auto omit_nulls
       = args_.omit_nulls.has_value() or args_.omit_empty.has_value();
     const auto omit_empty_objects

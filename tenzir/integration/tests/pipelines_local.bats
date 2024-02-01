@@ -94,31 +94,48 @@ setup() {
 @test "Use schema time unit when converting from a double to a duration" {
   check tenzir "from file ${INPUTSDIR}/json/double-to-duration-cast.json read json --selector=schema:argus | select SIntPkt | write json"
 }
+
+# bats test_tags=pipelines,json
+@test "Read JSON with nested selector field" {
+  check tenzir "from file ${INPUTSDIR}/suricata/eve.json read json --selector=flow.start | put x=#schema"
+}
+
+# bats test_tags=pipelines,json
+@test "Read JSON with integer selector" {
+  check tenzir "from file ${INPUTSDIR}/suricata/eve.json read json --selector=pcap_cnt | put x=#schema"
+}
+
 # bats test_tags=pipelines
 @test "Read from suricata file" {
   check tenzir "from file ${INPUTSDIR}/suricata/eve.json read suricata | write json"
   check tenzir "from file ${INPUTSDIR}/suricata/eve.json read json --schema=suricata.alert --no-infer | write json"
 }
+
 # bats test_tags=pipelines
 @test "Skip columns that are not in the schema for suricata input with no-infer option" {
   check tenzir "from file ${INPUTSDIR}/suricata/dns-with-no-schema-column.json read suricata --no-infer | select custom_field | write json"
 }
+
 # bats test_tags=pipelines
 @test "Read from zeek json file" {
   check tenzir "from file ${INPUTSDIR}/zeek/zeek.json read zeek-json | write json"
 }
+
 # bats test_tags=json
 @test "Read JSON from tshark output" {
   check tenzir "from file ${INPUTSDIR}/pcap/tshark.json"
 }
+
 # bats test_tags=json
 @test "Read JSON with new field in record list" {
   check tenzir "from file ${INPUTSDIR}/json/record-list-new-field.json"
 }
+
 # bats test_tags=json
 @test "Read JSON with differents fields in one record list" {
   check tenzir "from file ${INPUTSDIR}/json/record-list-different-fields.json"
 }
+
 # bats test_tags=json
 @test "Read JSON with list config in overwritten field" {
   check tenzir "from file ${INPUTSDIR}/json/record-list-conflict-field-overwrite.json"
