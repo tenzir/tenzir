@@ -30,30 +30,26 @@ public:
       row.field("version").data(version);
       row.field("kind").data(fmt::to_string(plugin.type()));
       auto types = row.field("types").list();
-#define TENZIR_ADD_PLUGIN_TYPE(category)                                       \
+#define TENZIR_ADD_PLUGIN_TYPE(type, name)                                     \
   do {                                                                         \
-    if (plugin.as<category##_plugin>()) {                                      \
-      types.data(#category);                                                   \
+    if (plugin.as<type##_plugin>()) {                                          \
+      types.data(name);                                                        \
     }                                                                          \
   } while (false)
-      TENZIR_ADD_PLUGIN_TYPE(analyzer);
-      TENZIR_ADD_PLUGIN_TYPE(aggregation_function);
-      TENZIR_ADD_PLUGIN_TYPE(aspect);
-      TENZIR_ADD_PLUGIN_TYPE(component);
-      TENZIR_ADD_PLUGIN_TYPE(command);
-      TENZIR_ADD_PLUGIN_TYPE(context);
-      TENZIR_ADD_PLUGIN_TYPE(loader_parser);
-      TENZIR_ADD_PLUGIN_TYPE(loader_serialization);
-      TENZIR_ADD_PLUGIN_TYPE(operator_parser);
-      TENZIR_ADD_PLUGIN_TYPE(operator_serialization);
-      TENZIR_ADD_PLUGIN_TYPE(rest_endpoint);
-      TENZIR_ADD_PLUGIN_TYPE(parser_parser);
-      TENZIR_ADD_PLUGIN_TYPE(parser_serialization);
-      TENZIR_ADD_PLUGIN_TYPE(printer_parser);
-      TENZIR_ADD_PLUGIN_TYPE(printer_serialization);
-      TENZIR_ADD_PLUGIN_TYPE(saver_parser);
-      TENZIR_ADD_PLUGIN_TYPE(saver_serialization);
-      TENZIR_ADD_PLUGIN_TYPE(store);
+      TENZIR_ADD_PLUGIN_TYPE(aggregation_function, "aggregation_function");
+      TENZIR_ADD_PLUGIN_TYPE(analyzer, "analyzer");
+      TENZIR_ADD_PLUGIN_TYPE(aspect, "aspect");
+      TENZIR_ADD_PLUGIN_TYPE(command, "command");
+      TENZIR_ADD_PLUGIN_TYPE(component, "component");
+      TENZIR_ADD_PLUGIN_TYPE(context, "context");
+      TENZIR_ADD_PLUGIN_TYPE(loader_parser, "loader");
+      TENZIR_ADD_PLUGIN_TYPE(metrics, "metrics");
+      TENZIR_ADD_PLUGIN_TYPE(operator_parser, "operator");
+      TENZIR_ADD_PLUGIN_TYPE(parser_parser, "parser");
+      TENZIR_ADD_PLUGIN_TYPE(printer_parser, "printer");
+      TENZIR_ADD_PLUGIN_TYPE(rest_endpoint, "rest_endpoint");
+      TENZIR_ADD_PLUGIN_TYPE(saver_parser, "saver");
+      TENZIR_ADD_PLUGIN_TYPE(store, "store");
 #undef TENZIR_ADD_PLUGIN_TYPE
       auto dependencies = row.field("dependencies").list();
       for (const auto& dependency : plugin.dependencies()) {

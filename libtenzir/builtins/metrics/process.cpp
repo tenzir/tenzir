@@ -37,10 +37,10 @@ auto get_process_statistics() -> caf::expected<record> {
   return result;
 }
 
-class plugin final : public virtual health_metrics_plugin {
+class plugin final : public virtual metrics_plugin {
 public:
   auto name() const -> std::string override {
-    return "health-process";
+    return "process";
   }
 
   auto make_collector() const -> caf::expected<collector> override {

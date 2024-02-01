@@ -13,9 +13,9 @@
 
 using namespace tenzir;
 
-void test_health_metrics_plugin(const std::string& plugin_name) {
+void test_metrics_plugin(const std::string& plugin_name) {
   MESSAGE(plugin_name);
-  auto const* plugin = plugins::find<health_metrics_plugin>(plugin_name);
+  auto const* plugin = plugins::find<metrics_plugin>(plugin_name);
   REQUIRE(plugin);
   auto collector = plugin->make_collector();
   REQUIRE_NOERROR(collector);
@@ -27,13 +27,13 @@ void test_health_metrics_plugin(const std::string& plugin_name) {
   }
 }
 
-TEST(health metrics) {
-  test_health_metrics_plugin("health-process");
-  test_health_metrics_plugin("health-disk");
-  test_health_metrics_plugin("health-cpu");
+TEST(metrics) {
+  test_metrics_plugin("process");
+  test_metrics_plugin("disk");
+  test_metrics_plugin("cpu");
 #ifdef _SC_AVPHYS_PAGES
-  // The 'memory' health metrics plugin isn't supported
+  // The 'memory' health plugin isn't supported
   // on all platforms.
-  test_health_metrics_plugin("health-memory");
+  test_metrics_plugin("memory");
 #endif
 }

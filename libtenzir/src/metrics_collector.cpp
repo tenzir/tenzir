@@ -8,8 +8,8 @@
 
 #include <tenzir/data.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
-#include <tenzir/healthmetrics_collector.hpp>
 #include <tenzir/import_stream.hpp>
+#include <tenzir/metrics_collector.hpp>
 #include <tenzir/series_builder.hpp>
 
 #include <ranges>
@@ -19,7 +19,7 @@ namespace tenzir {
 namespace {
 
 auto import_metrics_from(const std::string& name,
-                         health_metrics_plugin::collector const& collector,
+                         metrics_plugin::collector const& collector,
                          import_stream& importer,
                          std::chrono::system_clock::time_point now) {
   TENZIR_TRACE("running periodic metrics collection {}", name);
@@ -40,7 +40,7 @@ auto import_metrics_from(const std::string& name,
 
 } // namespace
 
-auto healthmetrics_collector_state::collect_and_import_metrics() -> void {
+auto metrics_collector_state::collect_and_import_metrics() -> void {
   TENZIR_ASSERT_CHEAP(importer != nullptr);
   // Use a consistent timestamp for all collected metrics.
   auto now = std::chrono::system_clock::now();
@@ -49,14 +49,13 @@ auto healthmetrics_collector_state::collect_and_import_metrics() -> void {
   }
 }
 
-auto healthmetrics_collector(
-  healthmetrics_collector_actor::stateful_pointer<healthmetrics_collector_state>
-    self,
+auto metrics_collector(
+  metrics_collector_actor::stateful_pointer<metrics_collector_state> self,
   caf::timespan collection_interval, const node_actor& node)
-  -> healthmetrics_collector_actor::behavior_type {
+  -> metrics_collector_actor::behavior_type {
   self->state.node = node;
   self->state.collection_interval = collection_interval;
-  for (auto const* plugin : plugins::get<health_metrics_plugin>()) {
+  for (auto const* plugin : plugins::get<metrics_plugin>()) {
     auto name = plugin->metric_name();
     auto collector = plugin->make_collector();
     if (!collector) {

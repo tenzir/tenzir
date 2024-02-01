@@ -774,9 +774,9 @@ public:
   };
 };
 
-// -- health metrics plugin -----------------------------------------------------
+// -- metrics plugin ----------------------------------------------------------
 
-class health_metrics_plugin : public virtual plugin {
+class metrics_plugin : public virtual plugin {
 public:
   using collector = std::function<caf::expected<record>()>;
 
@@ -788,7 +788,7 @@ public:
   /// The format in which metrics will be reported by this plugin.
   [[nodiscard]] virtual auto metric_layout() const -> record_type = 0;
 
-  /// Create a health metrics collector.
+  /// Create a metrics collector.
   /// Plugins may return an error if the collector is not supported on the
   /// platform the node is currently running on.
   [[nodiscard]] virtual auto make_collector() const -> caf::expected<collector>

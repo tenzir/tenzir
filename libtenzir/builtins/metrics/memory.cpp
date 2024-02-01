@@ -34,10 +34,10 @@ auto get_raminfo() -> caf::expected<record> {
 
 #endif
 
-class plugin final : public virtual health_metrics_plugin {
+class plugin final : public virtual metrics_plugin {
 public:
   auto name() const -> std::string override {
-    return "health-memory";
+    return "memory";
   }
 
   auto make_collector() const -> caf::expected<collector> override {
