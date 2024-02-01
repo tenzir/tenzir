@@ -18,16 +18,16 @@
 
 namespace tenzir {
 
-/// Periodically run all registered health metrics
-class healthmetrics_collector_state {
+/// Periodically collects all registered metrics.
+class metrics_collector_state {
 public:
   // -- constants --------------------------------------------------------------
 
-  static inline constexpr auto name = "healthmetrics_collector";
+  static inline constexpr auto name = "metrics_collector";
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  healthmetrics_collector_state() = default;
+  metrics_collector_state() = default;
 
   // -------- member functions -------------------------------------------------
 
@@ -40,7 +40,7 @@ public:
 
   // List of health checks to run
   using collectors_map
-    = std::unordered_map<std::string, typename health_metrics_plugin::collector>;
+    = std::unordered_map<std::string, typename metrics_plugin::collector>;
   collectors_map collectors;
 
   // Time to wait between checks.
@@ -54,10 +54,9 @@ public:
 /// hits from `archive`.
 /// @param interval The time between two query executions.
 /// @param index A handle to the INDEX.
-auto healthmetrics_collector(
-  healthmetrics_collector_actor::stateful_pointer<healthmetrics_collector_state>
-    self,
+auto metrics_collector(
+  metrics_collector_actor::stateful_pointer<metrics_collector_state> self,
   caf::timespan collection_interval, const node_actor& node)
-  -> healthmetrics_collector_actor::behavior_type;
+  -> metrics_collector_actor::behavior_type;
 
 } // namespace tenzir

@@ -213,56 +213,6 @@ public:
   make_command() const = 0;
 };
 
-// -- reader plugin -----------------------------------------------------------
-
-/// A base class for plugins that add import formats.
-/// @relates plugin
-class reader_plugin : public virtual plugin {
-public:
-  /// Returns the import format's name.
-  [[nodiscard]] virtual const char* reader_format() const = 0;
-
-  /// Returns the `tenzir import <format>` helptext.
-  [[nodiscard]] virtual const char* reader_help() const = 0;
-
-  /// Returns the options for the `tenzir import <format>` command.
-  [[nodiscard]] virtual config_options
-  reader_options(command::opts_builder&& opts) const
-    = 0;
-
-  /// Creates a reader, which will be available via `tenzir import <format>` and
-  /// `tenzir spawn source <format>`.
-  /// @note Use `tenzir::detail::make_input_stream` to create an input stream
-  /// from the options.
-  [[nodiscard]] virtual std::unique_ptr<format::reader>
-  make_reader(const caf::settings& options) const = 0;
-};
-
-// -- writer plugin -----------------------------------------------------------
-
-/// A base class for plugins that add export formats.
-/// @relates plugin
-class writer_plugin : public virtual plugin {
-public:
-  /// Returns the export format's name.
-  [[nodiscard]] virtual const char* writer_format() const = 0;
-
-  /// Returns the `tenzir export <format>` helptext.
-  [[nodiscard]] virtual const char* writer_help() const = 0;
-
-  /// Returns the options for the `tenzir export <format>` command.
-  [[nodiscard]] virtual config_options
-  writer_options(command::opts_builder&& opts) const
-    = 0;
-
-  /// Creates a reader, which will be available via `tenzir export <format>` and
-  /// `tenzir spawn sink <format>`.
-  /// @note Use `tenzir::detail::make_output_stream` to create an output stream
-  /// from the options.
-  [[nodiscard]] virtual std::unique_ptr<format::writer>
-  make_writer(const caf::settings& options) const = 0;
-};
-
 // -- serialization plugin -----------------------------------------------------
 
 /// This plugin interface can be used to serialize and deserialize classes
@@ -625,19 +575,6 @@ public:
   virtual auto aggregation_default() const -> data = 0;
 };
 
-// -- language plugin ---------------------------------------------------
-
-/// A language parser to pass query in a custom language to Tenzir.
-/// @relates plugin
-class language_plugin : public virtual plugin {
-public:
-  /// Parses a query string into a pipeline object.
-  /// @param query The string representing the custom query.
-  virtual auto parse_query(std::string_view query) const
-    -> caf::expected<pipeline>
-    = 0;
-};
-
 // -- rest endpoint plugin -----------------------------------------------------
 
 // A rest endpoint plugin declares a set of routes on which it can respond
@@ -837,9 +774,9 @@ public:
   };
 };
 
-// -- health metrics plugin -----------------------------------------------------
+// -- metrics plugin ----------------------------------------------------------
 
-class health_metrics_plugin : public virtual plugin {
+class metrics_plugin : public virtual plugin {
 public:
   using collector = std::function<caf::expected<record>()>;
 
@@ -851,7 +788,7 @@ public:
   /// The format in which metrics will be reported by this plugin.
   [[nodiscard]] virtual auto metric_layout() const -> record_type = 0;
 
-  /// Create a health metrics collector.
+  /// Create a metrics collector.
   /// Plugins may return an error if the collector is not supported on the
   /// platform the node is currently running on.
   [[nodiscard]] virtual auto make_collector() const -> caf::expected<collector>

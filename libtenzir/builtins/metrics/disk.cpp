@@ -31,7 +31,7 @@ auto get_diskspace_info(const std::string& path) -> caf::expected<record> {
   return result;
 }
 
-class plugin final : public virtual health_metrics_plugin {
+class plugin final : public virtual metrics_plugin {
 public:
   auto initialize(const record& config, const record& /*plugin_config*/)
     -> caf::error override {
@@ -41,7 +41,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "health-disk";
+    return "disk";
   }
 
   auto metric_name() const -> std::string override {

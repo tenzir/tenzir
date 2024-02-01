@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/healthmetrics_collector.hpp>
+#include <tenzir/metrics_collector.hpp>
 #include <tenzir/node.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/type.hpp>
@@ -38,13 +38,12 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "healthmetrics_collector";
+    return "metrics-collector";
   }
 
   auto make_component(node_actor::stateful_pointer<node_state> node) const
     -> component_plugin_actor override {
-    return node->spawn(tenzir::healthmetrics_collector, collection_interval_,
-                       node);
+    return node->spawn(tenzir::metrics_collector, collection_interval_, node);
   }
 
 private:

@@ -62,27 +62,6 @@ void factory_traits<format::reader>::initialize() {
   fac::add("test", make_reader<test::reader>);
   fac::add("zeek", make_reader<zeek::reader>);
   fac::add("zeek-json", make_reader<json::reader, json::zeek_selector>);
-  for (const auto& plugin : plugins::get()) {
-    if (const auto* reader = plugin.as<reader_plugin>()) {
-      fac::add(
-        reader->reader_format(),
-        [name = std::string{plugin->name()}](const caf::settings& options)
-          -> caf::expected<std::unique_ptr<format::reader>> {
-          for (const auto& plugin : plugins::get()) {
-            if (plugin->name() != name)
-              continue;
-            const auto* reader = plugin.as<reader_plugin>();
-            TENZIR_ASSERT(reader);
-            return reader->make_reader(options);
-          }
-          return caf::make_error(ec::logic_error,
-                                 fmt::format("reader plugin {} was used to "
-                                             "initialize factory but unloaded "
-                                             "at a later point in time",
-                                             name));
-        });
-    }
-  }
 }
 
 } // namespace tenzir

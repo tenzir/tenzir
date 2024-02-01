@@ -333,7 +333,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "<write_and_save>";
+    return "internal-write-save";
   }
 
   auto optimize(expression const& filter, event_order order) const

@@ -33,10 +33,10 @@ auto get_cpuinfo() -> caf::expected<record> {
   return result;
 }
 
-class plugin final : public virtual health_metrics_plugin {
+class plugin final : public virtual metrics_plugin {
 public:
   auto name() const -> std::string override {
-    return "health-cpu";
+    return "cpu";
   }
 
   auto metric_name() const -> std::string override {

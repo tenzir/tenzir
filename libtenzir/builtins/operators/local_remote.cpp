@@ -77,7 +77,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "local_remote";
+    return "internal-local-remote";
   }
 
   friend auto inspect(auto& f, local_remote_operator& x) -> bool {
