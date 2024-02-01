@@ -63,13 +63,17 @@ public:
   ctx() noexcept = default;
 
   explicit ctx(context::parameter_map parameters) noexcept {
-    update(std::move(parameters));
+    reset(std::move(parameters));
   }
 
   ~ctx() override {
     if (mmdb_) {
       MMDB_close(&*mmdb_);
     }
+  }
+
+  auto context_type() const -> std::string override {
+    return "geoip";
   }
 
   auto entry_data_list_to_list(MMDB_entry_data_list_s* entry_data_list,
@@ -378,14 +382,12 @@ public:
                            "geoip context can not be updated with events");
   }
 
-  auto update(chunk_ptr, context::parameter_map)
-    -> caf::expected<update_result> override {
-    return caf::make_error(ec::unimplemented, "geoip context can not be "
-                                              "updated with bytes");
+  auto make_query() -> make_query_type override {
+    return {};
   }
 
-  auto update(context::parameter_map parameters)
-    -> caf::expected<update_result> override {
+  auto reset(context::parameter_map parameters)
+    -> caf::expected<record> override {
     if (parameters.contains(path_key) and parameters.at(path_key)) {
       db_path_ = *parameters[path_key];
     }
@@ -401,7 +403,7 @@ public:
                                          "'{}': {}",
                                          db_path_, MMDB_strerror(status)));
     }
-    return update_result{.update_info = show(), .make_query = {}};
+    return show();
   }
 
   auto snapshot(parameter_map) const -> caf::expected<expression> override {

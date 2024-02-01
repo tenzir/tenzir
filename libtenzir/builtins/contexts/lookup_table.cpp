@@ -47,6 +47,10 @@ public:
     // nop
   }
 
+  auto context_type() const -> std::string override {
+    return "lookup-table";
+  }
+
   /// Emits context information for every event in `slice` in order.
   auto apply(table_slice slice, context::parameter_map parameters) const
     -> caf::expected<std::vector<series>> override {
@@ -196,15 +200,33 @@ public:
                          .make_query = std::move(query_f)};
   }
 
-  auto update(chunk_ptr, context::parameter_map)
-    -> caf::expected<update_result> override {
-    return caf::make_error(ec::unimplemented, "lookup-table context can not be "
-                                              "updated with bytes");
+  auto make_query() -> make_query_type override {
+    auto key_values_list = list{};
+    key_values_list.reserve(context_entries.size());
+    for (const auto& entry : context_entries) {
+      key_values_list.emplace_back(entry.first);
+    }
+    return [key_values_list = std::move(key_values_list)](
+             parameter_map params) -> caf::expected<expression> {
+      auto column = params["field"];
+      if (not column) {
+        return caf::make_error(ec::invalid_argument,
+                               "missing 'field' parameter for lookup in "
+                               "lookup-table");
+      }
+      return expression{
+        predicate{
+          field_extractor(*column),
+          relational_operator::in,
+          data{key_values_list},
+        },
+      };
+    };
   }
 
-  auto update(context::parameter_map) -> caf::expected<update_result> override {
-    return caf::make_error(ec::unimplemented,
-                           "lookup-table context can not be updated with void");
+  auto reset(context::parameter_map) -> caf::expected<record> override {
+    context_entries.clear();
+    return show();
   }
 
   auto save() const -> caf::expected<chunk_ptr> override {

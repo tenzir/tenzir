@@ -48,6 +48,10 @@ public:
   bloom_filter_context(uint64_t n, double p) : bloom_filter_{n, p} {
   }
 
+  auto context_type() const -> std::string override {
+    return "bloom-filter";
+  }
+
   /// Emits context information for every event in `slice` in order.
   auto apply(table_slice slice, context::parameter_map parameters) const
     -> caf::expected<std::vector<series>> override {
@@ -163,18 +167,15 @@ public:
                          .make_query = std::move(query_f)};
   }
 
-  auto update(chunk_ptr, context::parameter_map)
-    -> caf::expected<update_result> override {
-    // TODO: We're getting chunks piece-meal currently and therefore cannot
-    // determine the boundary of the stream. In theory, we should accumulate the
-    // chunks until the upstream pipeline is complete. What we need in the
-    // context API is a signal that we're done.
-    return ec::unimplemented;
+  auto make_query() -> make_query_type override {
+    return {};
   }
 
-  auto update(context::parameter_map) -> caf::expected<update_result> override {
-    return caf::make_error(ec::unimplemented,
-                           "bloom-filter context can not be updated with void");
+  auto reset(context::parameter_map) -> caf::expected<record> override {
+    auto params = bloom_filter_.parameters();
+    TENZIR_ASSERT_CHEAP(params.n && params.p);
+    bloom_filter_ = dcso_bloom_filter{*params.n, *params.p};
+    return show();
   }
 
   auto save() const -> caf::expected<chunk_ptr> override {
