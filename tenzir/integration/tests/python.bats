@@ -17,6 +17,7 @@ teardown() {
   fi
 }
 
+# bats test_tags=python
 @test "simple field access" {
   check tenzir -f /dev/stdin <<END
     version
@@ -25,6 +26,7 @@ teardown() {
 END
 }
 
+# bats test_tags=python
 @test "nested struct support" {
   check tenzir -f /dev/stdin <<END
     version
@@ -37,6 +39,7 @@ END
 END
 }
 
+# bats test_tags=python
 @test "empty output throws" {
   check ! --with-stderr tenzir -f /dev/stdin <<END
     version
@@ -45,6 +48,7 @@ END
 END
 }
 
+# bats test_tags=python
 @test "python operator nested passthrough" {
   check tenzir -f /dev/stdin <<END
     version
@@ -54,6 +58,7 @@ END
 END
 }
 
+# bats test_tags=python
 @test "python operator nested modification" {
   check tenzir -f /dev/stdin <<END
     version
@@ -63,6 +68,7 @@ END
 END
 }
 
+# bats test_tags=python
 @test "python operator nested deep modification" {
   check tenzir -f /dev/stdin <<END
     version
@@ -72,6 +78,7 @@ END
 END
 }
 
+# bats test_tags=python
 @test "python operator nested addition" {
   check tenzir -f /dev/stdin <<END
     version
@@ -81,6 +88,7 @@ END
 END
 }
 
+# bats test_tags=python
 @test "python operator field deletion" {
   check tenzir -f /dev/stdin <<END
     put a.b = 1, a.c = 2, d = 3
@@ -89,6 +97,7 @@ END
 END
 }
 
+# bats test_tags=python
 @test "python operator requirements statement" {
   # Setup fake HTTP server that accepts any input.
   conn="${BATS_TEST_TMPDIR}/conn"
@@ -122,6 +131,7 @@ END
   truncate -s 0 "${data}"
 }
 
+# bats test_tags=python
 @test "python operator deletion" {
   check tenzir -f /dev/stdin <<END
     put a.b = 1, a.c = 2, d = 3
@@ -130,6 +140,7 @@ END
 END
 }
 
+# bats test_tags=python
 @test "python operator json passthrough" {
   cat >${BATS_TEST_TMPDIR}/input.json <<END
   {
@@ -142,6 +153,7 @@ END
 END
 }
 
+# bats test_tags=python
 @test "python operator advanced type passthrough" {
   cat >${BATS_TEST_TMPDIR}/input.json <<END
   {
@@ -158,6 +170,7 @@ END
 END
 }
 
+# bats test_tags=python
 @test "python operator advanced type manipulation" {
   cat >${BATS_TEST_TMPDIR}/input.json <<END
   {
@@ -171,6 +184,7 @@ END
 END
 }
 
+# bats test_tags=python
 @test "python operator suricata passthrough" {
   check tenzir -f /dev/stdin <<END
     from file $INPUTSDIR/suricata/eve.json read suricata
@@ -178,6 +192,7 @@ END
 END
 }
 
+# bats test_tags=python
 @test "python operator suricata.dns passthrough" {
   check tenzir -f /dev/stdin <<END
     from file $INPUTSDIR/suricata/rrdata-eve.json read suricata
@@ -185,6 +200,7 @@ END
 END
 }
 
+# bats test_tags=python
 @test "python operator suricata.dns list manipulation" {
   check tenzir -f /dev/stdin <<END
     from file $INPUTSDIR/suricata/rrdata-eve.json read suricata
@@ -193,6 +209,7 @@ END
 END
 }
 
+# bats test_tags=python
 # @test "python operator suricata.dns nested record in list assignment (xfail)" {
 #   check tenzir -f /dev/stdin << END
 #     from file $INPUTSDIR/suricata/rrdata-eve.json read suricata
@@ -201,6 +218,7 @@ END
 # END
 # }
 
+# bats test_tags=python
 @test "python operator suricata.dns list assignment" {
   check tenzir -f /dev/stdin <<END
     from file $INPUTSDIR/suricata/rrdata-eve.json read suricata
@@ -208,6 +226,7 @@ END
 END
 }
 
+# bats test_tags=python
 @test "python operator suricata.dns assignment to field in null record" {
   check tenzir -f /dev/stdin <<END
     from file $INPUTSDIR/suricata/rrdata-eve.json read suricata
@@ -218,6 +237,7 @@ END
 END
 }
 
+# bats test_tags=python
 @test "python operator fill partial output with nulls" {
   check tenzir -f /dev/stdin <<END
     from file $INPUTSDIR/suricata/rrdata-eve.json read suricata
@@ -229,10 +249,22 @@ END
 END
 }
 
+# bats test_tags=python
 @test "python operator timestamps" {
   check tenzir -f /dev/stdin <<END
     from file $INPUTSDIR/suricata/eve.json read suricata
     | where #schema == "suricata.flow"
     | python "self.flow.duration = self.flow.end - self.flow.start"
+END
+}
+
+# bats test_tags=python
+@test "python operator file option" {
+  echo "self.original_c = self.a.b.c; self.a.b.c = 3" >${BATS_TEST_TMPDIR}/code.py
+  check tenzir -f /dev/stdin <<END
+    version
+    | put a.b.c = 2
+    | unflatten
+    | python --file ${BATS_TEST_TMPDIR}/code.py
 END
 }

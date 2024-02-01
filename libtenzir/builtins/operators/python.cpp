@@ -77,19 +77,43 @@ public:
   python_operator() = default;
 
   explicit python_operator(const config* config, std::string requirements,
-                           std::string code)
-    : config_{config}, requirements_{std::move(requirements)} {
-    if (code.empty()) {
-      code_ = "pass";
-    } else {
-      code_ = std::move(code);
-    }
+                           std::variant<std::filesystem::path, std::string> code)
+    : config_{config},
+      requirements_{std::move(requirements)},
+      code_{std::move(code)} {
   }
 
   auto execute(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     TENZIR_ASSERT(config_);
     try {
+      // Get the code to be executed.
+      auto maybe_code = std::visit(
+        detail::overload{
+          [](std::filesystem::path path) -> caf::expected<std::string> {
+            auto code_chunk = chunk::make_empty();
+            if (auto err = read(path, code_chunk)) {
+              return caf::make_error(
+                ec::system_error,
+                fmt::format("failed to read code from file: {}", err));
+            }
+            return std::string{
+              reinterpret_cast<const char*>(code_chunk->data()),
+              code_chunk->size()};
+          },
+          [](std::string inline_code) -> caf::expected<std::string> {
+            return inline_code;
+          }},
+        code_);
+      if (!maybe_code) {
+        diagnostic::error("failed to obtain code")
+          .note(fmt::format("error: {}", maybe_code.error()))
+          .emit(ctrl.diagnostics());
+        co_return;
+      }
+      auto code = *maybe_code;
+      TENZIR_INFO("got code {}", code);
+      // Setup python prerequisites.
       bp::pipe std_out;
       bp::pipe std_in;
       bp::ipstream std_err;
@@ -205,7 +229,7 @@ public:
                     env,
                     bp::std_out > std_out,
                     bp::std_in < std_in};
-      codepipe << detail::strip_leading_indentation(std::string{code_});
+      codepipe << detail::strip_leading_indentation(std::string{code});
       codepipe.close();
       ::close(errpipe.pipe().native_sink());
       co_yield {}; // signal successful startup
@@ -316,7 +340,7 @@ public:
 private:
   const config* config_ = nullptr;
   std::string requirements_ = {};
-  std::string code_ = {};
+  std::variant<std::filesystem::path, std::string> code_ = {};
 };
 
 class plugin final : public virtual operator_plugin<python_operator> {
@@ -354,15 +378,28 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto command = std::string{};
+    auto command = std::optional<std::string>{};
     auto requirements = std::string{};
+    auto filename = std::string{};
     auto parser = argument_parser{"python", "https://docs.tenzir.com/next/"
                                             "operators/transformations/python"};
     parser.add("-r,--requirements", requirements, "<requirements>");
+    parser.add("-f,--file", filename, "<filename>");
     parser.add(command, "<command>");
     parser.parse(p);
+    if (!filename.empty() == command.has_value()) {
+      diagnostic::error(
+        "Must have exactly one of the '--file' argument or inline code")
+        .throw_();
+    }
+    auto code = std::variant<std::filesystem::path, std::string>{};
+    if (command.has_value()) {
+      code = *command;
+    } else {
+      code = std::filesystem::path{filename};
+    }
     return std::make_unique<python_operator>(&config, std::move(requirements),
-                                             std::move(command));
+                                             std::move(code));
   }
 };
 
