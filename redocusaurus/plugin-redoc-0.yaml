@@ -1,14 +1,14 @@
 openapi: 3.0.0
 info:
-  title: Tenzir Rest API
+  title: Tenzir REST API
   version: '"0.1"'
-  description: |-
-
+  description: >-
     This API can be used to interact with a Tenzir Node in a RESTful manner.
+
 
     All API requests must be authenticated with a valid token, which must be
     supplied in the `X-Tenzir-Token` request header. The token can be generated
-    on the command-line using the `tenzir-ctl web generate-token` command.
+    on the command-line using `tenzir 'openapi | write yaml`.
 servers:
   - url: https://tenzir.example.com/api/v0
 security:
@@ -92,7 +92,11 @@ components:
     LaunchParameters:
       allOf:
         - $ref: '#/components/schemas/CreateParameters'
-        - type: object
+          type: null
+          required: null
+          properties: null
+        - $ref: null
+          type: object
           required:
             - serve_id
           properties:
@@ -502,6 +506,8 @@ paths:
                     - id: 08446737-da9b-4787-8599-97d85c48c3bb
                       name: wrong-pipeline
                       definition: export asdf
+                      created_at: null
+                      last_modifed: null
                       state: failed
                       error: format 'asdf' not found
                       diagnostics: []
