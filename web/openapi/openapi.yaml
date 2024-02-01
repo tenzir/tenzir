@@ -1,9 +1,9 @@
 ---
 openapi: 3.0.0
 info:
-  title: Tenzir Rest API
+  title: Tenzir REST API
   version: "\"0.1\""
-  description: "\nThis API can be used to interact with a Tenzir Node in a RESTful manner.\n\nAll API requests must be authenticated with a valid token, which must be\nsupplied in the `X-Tenzir-Token` request header. The token can be generated\non the command-line using the `tenzir-ctl web generate-token` command."
+  description: "This API can be used to interact with a Tenzir Node in a RESTful manner.\n\nAll API requests must be authenticated with a valid token, which must be supplied in the `X-Tenzir-Token` request header. The token can be generated on the command-line using `tenzir 'openapi | write yaml`."
 servers:
   - url: https://tenzir.example.com/api/v0
 security:
@@ -44,7 +44,7 @@ components:
         ttl:
           type: string
           description: "A duration string specifying the maximum time for this pipeline to exist. No value means the pipeline is allowed to exist forever.\nThis parameter must be defined if the `hidden` parameter is true.\n"
-          default: ~
+          default: null
           example: 5.0m
         autostart:
           $ref: "#/components/schemas/PipelineAutostart"
@@ -80,7 +80,11 @@ components:
     LaunchParameters:
       allOf:
         - $ref: "#/components/schemas/CreateParameters"
-        - type: object
+          type: null
+          required: null
+          properties: null
+        - $ref: null
+          type: object
           required:
             - serve_id
           properties:
@@ -444,7 +448,7 @@ paths:
                       created_at: 1706180157837037485
                       last_modifed: 1706180157837038016
                       state: running
-                      error: ~
+                      error: null
                       diagnostics:
                         []
                       metrics:
@@ -456,6 +460,8 @@ paths:
                     - id: 08446737-da9b-4787-8599-97d85c48c3bb
                       name: wrong-pipeline
                       definition: export asdf
+                      created_at: null
+                      last_modifed: null
                       state: failed
                       error: format 'asdf' not found
                       diagnostics:
@@ -737,3 +743,4 @@ paths:
                   Tenzir: v2.3.0-rc3-32-g8529a6c43f
         401:
           description: Not authenticated.
+...
