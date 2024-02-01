@@ -13,11 +13,11 @@
 
 namespace tenzir::version {
 
-const char* version = "@TENZIR_VERSION_TAG@";
-const char* major = "@TENZIR_VERSION_MAJOR@";
-const char* minor = "@TENZIR_VERSION_MINOR@";
-const char* patch = "@TENZIR_VERSION_PATCH@";
-const char* tweak = "@TENZIR_VERSION_TWEAK@";
+const char* version = "@TENZIR_VERSION@";
+const char* dev_suffix = "@TENZIR_VERSION_DEV_SUFFIX@";
+const uint64_t major = @Tenzir_VERSION_MAJOR@;
+const uint64_t minor = @Tenzir_VERSION_MINOR@;
+const uint64_t patch = @Tenzir_VERSION_PATCH@;
 const uint64_t current_partition_version = @TENZIR_PARTITION_VERSION@;
 
 supported_versions

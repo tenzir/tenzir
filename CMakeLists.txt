@@ -4,14 +4,15 @@ cmake_minimum_required(VERSION 3.19...3.28 FATAL_ERROR)
 
 # Semicolon-separated list of directories specifying a search path for CMake.
 list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-set(TENZIR_VERSION_TAG_BACKUP "${TENZIR_VERSION_TAG}")
+if (DEFINED TENZIR_VERSION_DEV_SUFFIX)
+  set(TENZIR_VERSION_DEV_SUFFIX_BACKUP "${TENZIR_VERSION_DEV_SUFFIX}")
+endif ()
 include(TenzirVersion)
 
 # Create the Tenzir project.
 project(
   Tenzir
-  VERSION
-    ${TENZIR_VERSION_MAJOR}.${TENZIR_VERSION_MINOR}.${TENZIR_VERSION_PATCH}.${TENZIR_VERSION_TWEAK}
+  VERSION "${TENZIR_VERSION}"
   DESCRIPTION "Visibility Across Space and Time"
   HOMEPAGE_URL "https://tenzir.com"
   LANGUAGES C CXX)
@@ -853,7 +854,7 @@ if (TENZIR_ENABLE_PYTHON_BINDINGS)
   # first.
   set(TENZIR_PYTHON_BINARY_DIR "${CMAKE_BINARY_DIR}/share/tenzir/python")
   set(TENZIR_PYTHON_WHEEL
-    "${TENZIR_PYTHON_BINARY_DIR}/tenzir-${TENZIR_VERSION_MAJOR}.${TENZIR_VERSION_MINOR}.${TENZIR_VERSION_PATCH}-py3-none-any.whl")
+    "${TENZIR_PYTHON_BINARY_DIR}/tenzir-${TENZIR_VERSION}-py3-none-any.whl")
   file(
     WRITE "${CMAKE_CURRENT_BINARY_DIR}/build-wheel.cmake"
     "\
@@ -910,7 +911,7 @@ install(
 write_basic_package_version_file(
   "${CMAKE_CURRENT_BINARY_DIR}/TenzirConfigVersion.cmake"
   VERSION
-    "${TENZIR_VERSION_MAJOR}.${TENZIR_VERSION_MINOR}.${TENZIR_VERSION_PATCH}"
+    "${TENZIR_VERSION}"
   COMPATIBILITY ExactVersion)
 
 configure_package_config_file(

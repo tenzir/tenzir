@@ -22,10 +22,10 @@ public:
     auto builder = series_builder{};
     auto event = builder.record();
     event.field("version", tenzir::version::version);
-    event.field("major", std::stoull(tenzir::version::major));
-    event.field("minor", std::stoull(tenzir::version::minor));
-    event.field("patch", std::stoull(tenzir::version::patch));
-    event.field("tweak", std::stoull(tenzir::version::tweak));
+    event.field("dev-suffix", tenzir::version::dev_suffix);
+    event.field("major", tenzir::version::major);
+    event.field("minor", tenzir::version::minor);
+    event.field("patch", tenzir::version::patch);
     co_yield builder.finish_assert_one_slice("tenzir.version");
   }
 

@@ -26,14 +26,15 @@
 
 namespace tenzir::version {
 
-/// Contains the full version string.
+/// Contains the base version string.
 extern const char* version;
+/// Contains a free-form version suffix.
+extern const char* dev_suffix;
 
 /// The individual version components.
-extern const char* major;
-extern const char* minor;
-extern const char* patch;
-extern const char* tweak;
+extern const uint64_t major;
+extern const uint64_t minor;
+extern const uint64_t patch;
 
 /// The version number of the Tenzir partition format. Bump this whenever making
 /// changes that require partitions to be rebuilt.

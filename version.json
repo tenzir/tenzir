@@ -1,17 +1,10 @@
 {
-  "tenzir-version-fallback_COMMENT": [
+  "tenzir-version_COMMENT": [
     "The main version fragment. This should be identical to the closest",
     "annotated git tag without the leading 'v'.",
     "This value gets updated automatically by `scripts/prepare-release`."
   ],
-  "tenzir-version-fallback": "4.8.2",
-  "tenzir-version-rev-count_COMMENT": [
-    "This value stores the ancestor count of the tagged commit, calculated",
-    "with `git rev-list --count HEAD`, then incremented by 1. This operates",
-    "under the assumption that the release-preparing PR contains exactly one",
-    "commit and is rebased before merging."
-  ],
-  "tenzir-version-rev-count": 19580,
+  "tenzir-version": "4.8.2",
   "tenzir-partition-version_COMMENT": [
     "The partition version. This number must be bumped alongside the release",
     "version for releases that contain major format changes to the on-disk",

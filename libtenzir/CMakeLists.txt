@@ -191,8 +191,8 @@ target_link_libraries(libtenzir_builtins PRIVATE libtenzir libtenzir_internal)
 # the SOVERSION 2022.12, and it enforces that v1.0.0 has a larger SOVERSION than
 # the last CalVer release.
 math(EXPR TENZIR_SOVERSION_MAJOR
-     "256 * (${TENZIR_VERSION_MAJOR} + 7) + ${TENZIR_VERSION_MINOR}")
-set(TENZIR_SOVERSION_MINOR "${TENZIR_VERSION_PATCH}")
+     "256 * (${Tenzir_VERSION_MAJOR} + 7) + ${Tenzir_VERSION_MINOR}")
+set(TENZIR_SOVERSION_MINOR "${Tenzir_VERSION_PATCH}")
 set_target_properties(
   libtenzir
   PROPERTIES SOVERSION "${TENZIR_SOVERSION_MAJOR}.${TENZIR_SOVERSION_MINOR}"
@@ -473,12 +473,20 @@ else ()
   message(FATAL_ERROR "Failed to detect build or configuration types")
 endif ()
 
+if (DEFINED TENZIR_VERSION_DEV_SUFFIX_BACKUP)
+  set(set_tenzir_version_dev_suffix
+    "set(TENZIR_VERSION_DEV_SUFFIX \"${TENZIR_VERSION_DEV_SUFFIX_BACKUP}\")")
+endif ()
+
 file(
   WRITE "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake"
   "\
   get_filename_component(CMAKE_MODULE_PATH
     \"${CMAKE_CURRENT_SOURCE_DIR}/../cmake\" ABSOLUTE)
-  set(TENZIR_VERSION_TAG \"${TENZIR_VERSION_TAG_BACKUP}\")
+  ${set_tenzir_version_dev_suffix}
+  set(Tenzir_VERSION_MAJOR \"${Tenzir_VERSION_MAJOR}\")
+  set(Tenzir_VERSION_MINOR \"${Tenzir_VERSION_MINOR}\")
+  set(Tenzir_VERSION_PATCH \"${Tenzir_VERSION_PATCH}\")
   set(TENZIR_BUILD_TYPE \"${TENZIR_BUILD_TYPE}\")
   set(TENZIR_ENABLE_ASSERTIONS \"${TENZIR_ENABLE_ASSERTIONS}\")
   set(TENZIR_ENABLE_ASAN \"${TENZIR_ENABLE_ASAN}\")
@@ -486,6 +494,8 @@ file(
   include(TenzirVersion)
   configure_file(\"${CMAKE_CURRENT_SOURCE_DIR}/src/config.cpp.in\"
                  \"${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp\")")
+
+unset(set_tenzir_version_dev_suffix)
 
 # We generate config.cpp as a byproduct of a custom target so we can re-generate
 # the version string and build tree hash on every build. Note that this must not

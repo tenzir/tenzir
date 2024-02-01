@@ -42,8 +42,13 @@ jobs:
       - name: Calculate Version
         id: version
         run: |
-          version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            id_sha="$(git merge-base origin/main HEAD)"
+          else
+            id_sha="${{ github.sha }}"
+          fi
+          tenzir_version_dev_suffix="-g${id_sha:0:10}"
+          echo "tenzir-version-dev-suffix=${tenzir_version_dev_suffix}" >> "$GITHUB_OUTPUT"
       - name: Configure Docker
         id: docker
         run: |
@@ -96,8 +101,8 @@ jobs:
               else
                 empty
               end
-            ] | ."version" = $v | ."tags" = $ARGS.positional' \
-            --arg v "${{ steps.version.outputs.version }}" \
+            ] | ."version-dev-suffix" = $vs | ."tags" = $ARGS.positional' \
+            --arg vs "${{ steps.version.outputs.version-dev-suffix }}" \
             --args -- "${tags[@]}")"
           echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
           echo "::notice docker-config = ${docker_config}"

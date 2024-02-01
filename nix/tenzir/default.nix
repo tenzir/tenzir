@@ -38,8 +38,6 @@
     dpkg,
     restinio,
     pfs,
-    versionLongOverride ? null,
-    versionShortOverride ? null,
     extraPlugins ? [],
     symlinkJoin,
     extraCmakeFlags ? [],
@@ -50,17 +48,9 @@
   }: let
     inherit (stdenv.hostPlatform) isMusl isStatic;
 
-    versionLongOverride' = lib.removePrefix "v" versionLongOverride;
-    versionShortOverride' = lib.removePrefix "v" versionShortOverride;
-    versionFallback = (builtins.fromJSON (builtins.readFile ./../../version.json)).tenzir-version-fallback;
-    versionLong =
-      if (versionLongOverride != null)
-      then versionLongOverride'
-      else versionFallback;
-    versionShort =
-      if (versionShortOverride != null)
-      then versionShortOverride'
-      else versionLong;
+    version = (builtins.fromJSON (builtins.readFile ./../../version.json)).tenzir-version;
+
+    isDevBuild = (builtins.getEnv "TENZIR_DEV_BUILD") != "";
 
     extraPlugins' = map (x: "extra-plugins/${baseNameOf x}") extraPlugins;
     bundledPlugins =
@@ -97,8 +87,7 @@
         ]);
   in
     stdenv.mkDerivation (finalAttrs: ({
-        inherit pname;
-        version = versionLong;
+        inherit pname version;
         src = tenzir-source;
 
         postUnpack = ''
@@ -162,8 +151,6 @@
             "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
             "-DCAF_ROOT_DIR=${caf}"
             "-DTENZIR_EDITION_NAME=${lib.toUpper pname}"
-            "-DTENZIR_VERSION_TAG=v${versionLong}"
-            "-DTENZIR_VERSION_SHORT=v${versionShort}"
             "-DTENZIR_ENABLE_RELOCATABLE_INSTALLATIONS=${lib.boolToString isStatic}"
             "-DTENZIR_ENABLE_BACKTRACE=ON"
             "-DTENZIR_ENABLE_JEMALLOC=${lib.boolToString isMusl}"
@@ -219,15 +206,23 @@
           ])
           ++ extraCmakeFlags;
 
+        # TODO: Omit this for "tagged release" builds.
+        preConfigure = if isDevBuild then ''
+          version_dev_suffix=$(basename $out | cut -d'-' -f 1)
+          cmakeFlagsArray+=("-DTENZIR_VERSION_DEV_SUFFIX=-n$version_dev_suffix")
+        ''
+        else ''
+          cmakeFlagsArray+=("-DTENZIR_VERSION_DEV_SUFFIX=\"\"")
+        ''
         # TODO: Fix LTO on darwin by passing these commands by their original
         # executable names "llvm-ar" and "llvm-ranlib". Should work with
         # `readlink -f $AR` to find the correct ones.
-        #preConfigure = lib.optionalString stdenv.isDarwin ''
-        #  cmakeFlagsArray+=("-DCMAKE_C_COMPILER_AR=$(command -v $AR)")
-        #  cmakeFlagsArray+=("-DCMAKE_CXX_COMPILER_AR=$(command -v $AR)")
-        #  cmakeFlagsArray+=("-DCMAKE_C_COMPILER_RANLIB=$(command -v $RANLIB)")
-        #  cmakeFlagsArray+=("-DCMAKE_CXX_COMPILER_RANLIB=$(command -v $RANLIB)")
-        #'';
+          + lib.optionalString stdenv.isDarwin ''
+          cmakeFlagsArray+=("-DCMAKE_C_COMPILER_AR=$(readlink -f $AR)")
+          cmakeFlagsArray+=("-DCMAKE_CXX_COMPILER_AR=$(readlink -f $AR)")
+          cmakeFlagsArray+=("-DCMAKE_C_COMPILER_RANLIB=$(readlink -f $RANLIB)")
+          cmakeFlagsArray+=("-DCMAKE_CXX_COMPILER_RANLIB=$(readlink -f $RANLIB)")
+        '';
 
         hardeningDisable = lib.optionals isStatic [
           "fortify"

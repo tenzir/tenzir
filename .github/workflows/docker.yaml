@@ -77,7 +77,7 @@ jobs:
           BUILDX_GIT_LABELS: full
           CACHE_TAG: ghcr.io/tenzir/tenzir:build-cache
         run: |
-          cmake_version_args="-DTENZIR_VERSION_TAG:STRING=${{ fromJSON(inputs.config).version }}"
+          cmake_version_args="-DTENZIR_VERSION_DEV_SUFFIX:STRING=${{ fromJSON(inputs.config).version-dev-suffix }}"
           echo "::info Building the Developer Edition Image"
           docker buildx build . \
             -t "tenzir/tenzir-de:latest" --target "tenzir-de" \

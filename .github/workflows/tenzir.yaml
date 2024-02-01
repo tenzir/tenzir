@@ -67,8 +67,8 @@ jobs:
       release-version: ${{ steps.configure.outputs.release-version }}
       head-ref-slug: ${{ steps.configure.outputs.head-ref-slug }}
       base-ref-slug: ${{ steps.configure.outputs.base-ref-slug }}
-      cmake-version-args: ${{ steps.configure.outputs.cmake-version-args }}
       tenzir-container-ref: ${{ steps.configure.outputs.tenzir-container-ref }}
+      tenzir-version-dev-suffix: ${{ steps.configure.outputs.tenzir-version-dev-suffix }}
       run-changelog: ${{ steps.configure.outputs.run-changelog }}
       run-docs: ${{ steps.configure.outputs.run-docs }}
       run-docker-tenzir: ${{ steps.configure.outputs.run-docker-tenzir }}
@@ -135,23 +135,28 @@ jobs:
           # Inject the branch slugs for cache names.
           echo "head-ref-slug=${GITHUB_HEAD_REF_SLUG}" >> $GITHUB_OUTPUT
           echo "base-ref-slug=${GITHUB_BASE_REF_SLUG}" >> $GITHUB_OUTPUT
-          # For pull requests we make it possible to cache all layers by setting
-          # a fixed TENZIR_BUILD_OPTIONS for within a given pull request. We
-          # accept the downaside that this means that Docker images created
-          # within pull request triggers of this job display the merge-base
-          # version.
-          # Since the Docker build does not have the Git context, we set
-          # version fallbacks manually here.
+          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            tenzir_version_dev_suffix=""
+            tenzir_docker_version_dev_suffix=""
+          else
+            id_sha="${{ github.sha }}"
+            tenzir_version_dev_suffix="-g${id_sha:0:10}"
+            tenzir_docker_version_dev_suffix="${tenzir_version_dev_suffix}"
+            # In Pull Requests we replace the normal commit hash based version
+            # suffix with the PR number. That way we get stable arguments to
+            # `docker build`, which is needed for layer caching to work.
+            if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+              tenzir_docker_version_dev_suffix="-pr${{ github.event.number }}"
+            fi
+          fi
+          echo "tenzir-version-dev-suffix=${tenzir_version_dev_suffix}" >> $GITHUB_OUTPUT
+          echo "tenzir-docker-version-dev-suffix=${tenzir_dockdr_version_dev_suffix}" >> $GITHUB_OUTPUT
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            tenzir_tag="${before_version}"
             tenzir_container_ref="${GITHUB_HEAD_REF_SLUG}"
           else
-            tenzir_tag="${build_version}"
             tenzir_container_ref="${{ github.sha }}"
           fi
           echo "tenzir-container-ref=${tenzir_container_ref}" >> $GITHUB_OUTPUT
-          cmake_version_args="-DTENZIR_VERSION_TAG:STRING=${tenzir_tag}"
-          echo "cmake-version-args=${cmake_version_args}" >> $GITHUB_OUTPUT
           #################################
           ######## Decide what jobs to run.
           #################################
@@ -261,9 +266,9 @@ jobs:
             exit 1
           fi
           docker_config="$(jq -c \
-            '."version" = $v | ."tags" = $ARGS.positional' \
+            '."version-dev-suffix" = $vs | ."tags" = $ARGS.positional' \
             .github/workflows/docker-config-base.json \
-            --arg v "${{ steps.configure.outputs.build-version-short }}" \
+            --arg vs "${{ steps.configure.outputs.tenzir-version-dev-suffix }}" \
             --args -- "${tags[@]}")"
           # Clear push repos in case we're in a PR, but push the community
           # edition to ghcr.
@@ -726,7 +731,7 @@ jobs:
             -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
             -DCPACK_PACKAGING_INSTALL_PREFIX:STRING="/" \
             -DTENZIR_PLUGINS:STRING="${{ join(matrix.tenzir.bundled-plugins, ';') }}" \
-            ${{ needs.configure.outputs.cmake-version-args }} \
+            -DTENZIR_VERSION_DEV_SUFFIX:STRING="${{ needs.configure.outputs.tenzir-version-dev-suffix }}" \
             ${{ matrix.tenzir.cmake-extra-flags }}
       - name: Compile All Targets
         run: |
