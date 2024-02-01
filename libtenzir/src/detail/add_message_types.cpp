@@ -39,6 +39,7 @@
 #include "tenzir/query_status.hpp"
 #include "tenzir/report.hpp"
 #include "tenzir/resource.hpp"
+#include "tenzir/shared_diagnostic_handler.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/subnet.hpp"
 #include "tenzir/table_slice.hpp"

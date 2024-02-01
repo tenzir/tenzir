@@ -12,9 +12,7 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/die.hpp"
-#include "tenzir/taxonomies.hpp"
-#include "tenzir/type.hpp"
+#include "tenzir/shared_diagnostic_handler.hpp"
 
 #include <caf/typed_actor.hpp>
 
@@ -28,10 +26,10 @@ struct operator_control_plane {
   virtual ~operator_control_plane() noexcept = default;
 
   /// Returns the hosting actor.
-  [[nodiscard]] virtual auto self() noexcept -> exec_node_actor::base& = 0;
+  virtual auto self() noexcept -> exec_node_actor::base& = 0;
 
   /// Returns the node actor, if the operator location is remote.
-  [[nodiscard]] virtual auto node() noexcept -> node_actor = 0;
+  virtual auto node() noexcept -> node_actor = 0;
 
   /// Returns the pipeline's diagnostic handler.
   virtual auto diagnostics() noexcept -> diagnostic_handler& = 0;
@@ -41,6 +39,14 @@ struct operator_control_plane {
 
   /// Returns true if the operator is hosted by process that has a terminal.
   virtual auto has_terminal() const noexcept -> bool = 0;
+
+  /// Return a version of the diagnostic handler that may be passed to other
+  /// threads. NOTE: Unlike for the regular diagnostic handler, emitting an
+  /// erorr via the shared diagnostic handler does not shut down the operator
+  /// immediately.
+  inline auto shared_diagnostics() noexcept -> shared_diagnostic_handler {
+    return shared_diagnostic_handler{exec_node_actor{&(self())}};
+  }
 };
 
 } // namespace tenzir

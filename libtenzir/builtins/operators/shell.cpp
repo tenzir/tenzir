@@ -206,14 +206,15 @@ public:
     // queue such that to this coroutine can yield them.
     auto chunks = std::queue<chunk_ptr>{};
     auto chunks_mutex = std::mutex{};
-    auto thread = std::thread([&child, &chunks, &chunks_mutex, &ctrl] {
+    auto thread = std::thread([&child, &chunks, &chunks_mutex,
+                               diagnostics = ctrl.shared_diagnostics()]() {
       auto buffer = std::vector<char>(block_size);
       while (true) {
         auto bytes_read = child->read(as_writeable_bytes(buffer));
         if (not bytes_read) {
           diagnostic::error(add_context(bytes_read.error(),
                                         "failed to read from child process"))
-            .emit(ctrl.diagnostics());
+            .emit(diagnostics);
           return;
         }
         if (*bytes_read == 0) {

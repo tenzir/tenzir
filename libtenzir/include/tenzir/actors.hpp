@@ -420,6 +420,8 @@ using exec_node_actor = typed_actor_fwd<
   auto(atom::pause)->caf::result<void>,
   // Resume the execution node. No-op if it was not paused.
   auto(atom::resume)->caf::result<void>,
+  // Emit a diagnostic through the exec node.
+  auto(diagnostic diag)->caf::result<void>,
   // Uodate demand.
   auto(atom::pull, exec_node_sink_actor sink, uint64_t batch_size)
     ->caf::result<void>>

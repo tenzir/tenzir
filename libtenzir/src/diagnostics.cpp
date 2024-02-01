@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/string.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/shared_diagnostic_handler.hpp"
 
 #include <boost/algorithm/string.hpp>
 #include <caf/message_handler.hpp>
@@ -231,6 +232,10 @@ auto diagnostic::builder(enum severity s, caf::error err)
     b = std::move(b).note("{}", *as_string(i - 1));
   }
   return b;
+}
+
+void diagnostic_builder::emit(const shared_diagnostic_handler& diag) && {
+  return diag.emit(std::move(result_));
 }
 
 } // namespace tenzir

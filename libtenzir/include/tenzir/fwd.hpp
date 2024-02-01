@@ -165,6 +165,7 @@ class plugin;
 class port;
 class record_type;
 class segment;
+class shared_diagnostic_handler;
 class string_type;
 class subnet_type;
 class subnet;
@@ -441,6 +442,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::relational_operator))
   TENZIR_ADD_TYPE_ID((tenzir::rest_endpoint))
   TENZIR_ADD_TYPE_ID((tenzir::rest_response))
+  TENZIR_ADD_TYPE_ID((tenzir::shared_diagnostic_handler))
   TENZIR_ADD_TYPE_ID((tenzir::subnet))
   TENZIR_ADD_TYPE_ID((tenzir::table_slice))
   TENZIR_ADD_TYPE_ID((tenzir::table_slice_column))
