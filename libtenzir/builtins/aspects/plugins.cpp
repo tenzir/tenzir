@@ -46,8 +46,6 @@ public:
       TENZIR_ADD_PLUGIN_TYPE(loader_serialization);
       TENZIR_ADD_PLUGIN_TYPE(operator_parser);
       TENZIR_ADD_PLUGIN_TYPE(operator_serialization);
-      TENZIR_ADD_PLUGIN_TYPE(language);
-      TENZIR_ADD_PLUGIN_TYPE(reader);
       TENZIR_ADD_PLUGIN_TYPE(rest_endpoint);
       TENZIR_ADD_PLUGIN_TYPE(parser_parser);
       TENZIR_ADD_PLUGIN_TYPE(parser_serialization);
@@ -56,7 +54,6 @@ public:
       TENZIR_ADD_PLUGIN_TYPE(saver_parser);
       TENZIR_ADD_PLUGIN_TYPE(saver_serialization);
       TENZIR_ADD_PLUGIN_TYPE(store);
-      TENZIR_ADD_PLUGIN_TYPE(writer);
 #undef TENZIR_ADD_PLUGIN_TYPE
       auto dependencies = row.field("dependencies").list();
       for (const auto& dependency : plugin.dependencies()) {

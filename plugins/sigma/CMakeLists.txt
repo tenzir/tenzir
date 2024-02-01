@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.19...3.28 FATAL_ERROR)
 
 project(
   sigma
-  DESCRIPTION "Sigma query language plugin for Tenzir"
+  DESCRIPTION "Sigma operator plugin for Tenzir"
   LANGUAGES CXX)
 
 include(CTest)

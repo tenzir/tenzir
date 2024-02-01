@@ -163,34 +163,6 @@ caf::error convert(std::string_view line, message_view& msg) {
   return caf::none;
 }
 
-/// Infers a schema from a message.
-/// @param msg The message to infer a schema from.
-/// @returns The inferred schema.
-type infer(const message_view& msg) {
-  static constexpr auto name = "cef.event";
-  // These fields are always present.
-  auto fields = std::vector<struct record_type::field>{
-    {"cef_version", uint64_type{}},    {"device_vendor", string_type{}},
-    {"device_product", string_type{}}, {"device_version", string_type{}},
-    {"signature_id", string_type{}},   {"name", string_type{}},
-    {"severity", string_type{}},
-  };
-  // Infer extension record, if present.
-  auto deduce = [](const data& value) -> type {
-    if (auto t = type::infer(value).value_or(type{}))
-      return t;
-    return type{string_type{}};
-  };
-  if (!msg.extension.empty()) {
-    std::vector<struct record_type::field> ext_fields;
-    ext_fields.reserve(msg.extension.size());
-    for (const auto& [key, value] : msg.extension)
-      ext_fields.emplace_back(std::string{key}, deduce(value));
-    fields.emplace_back("extension", record_type{std::move(ext_fields)});
-  }
-  return {name, record_type{std::move(fields)}};
-}
-
 /// Parses a line of ASCII as CEF message.
 /// @param msg The CEF message.
 /// @param builder The table slice builder to add the message to.
@@ -205,124 +177,6 @@ void add(const message_view& msg, builder_ref builder) {
   event.field("severity", msg.severity);
   event.field("extension", msg.extension);
 }
-
-class reader : public format::reader {
-public:
-  using super = format::reader;
-
-  /// Constructs a CEF reader.
-  /// @param options Additional options.
-  /// @param in The stream of JSON objects.
-  explicit reader(const caf::settings& options, std::unique_ptr<std::istream> in
-                                                = nullptr)
-    : super(options) {
-    if (in != nullptr)
-      reset(std::move(in));
-  }
-
-  reader(const reader&) = delete;
-  reader& operator=(const reader&) = delete;
-  reader(reader&&) noexcept = default;
-  reader& operator=(reader&&) noexcept = default;
-  ~reader() override = default;
-
-  void reset(std::unique_ptr<std::istream> in) override {
-    TENZIR_ASSERT(in != nullptr);
-    input_ = std::move(in);
-    lines_ = std::make_unique<detail::line_range>(*input_);
-  }
-
-  caf::error module(class module) override {
-    // Not implemented.
-    return caf::none;
-  }
-
-  [[nodiscard]] class module module() const override {
-    class module result {};
-    return result;
-  }
-
-  [[nodiscard]] const char* name() const override {
-    return "cef-reader";
-  }
-
-protected:
-  report status() const override {
-    using namespace std::string_literals;
-    uint64_t invalid_line = num_invalid_lines_;
-    if (num_invalid_lines_ > 0)
-      TENZIR_WARN("{} failed to parse {} of {} recent lines",
-                  detail::pretty_type_name(this), num_invalid_lines_,
-                  num_lines_);
-    num_invalid_lines_ = 0;
-    num_lines_ = 0;
-    return {.data = {
-              {name() + ".invalid-line"s, invalid_line},
-            }};
-  }
-
-  caf::error
-  read_impl(size_t max_events, size_t max_slice_size, consumer& cons) override {
-    TENZIR_ASSERT(max_events > 0);
-    TENZIR_ASSERT(max_slice_size > 0);
-    size_t produced = 0;
-    auto builder = series_builder{};
-    auto finish = [&] {
-      for (auto&& slice : builder.finish_as_table_slice("cef.event")) {
-        cons(std::move(slice));
-      }
-    };
-    while (produced < max_events) {
-      if (lines_->done()) {
-        finish();
-        return caf::make_error(ec::end_of_input, "input exhausted");
-      }
-      if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
-          && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
-        TENZIR_DEBUG("{} reached batch timeout",
-                     detail::pretty_type_name(this));
-        finish();
-        return ec::timeout;
-      }
-      bool timed_out = lines_->next_timeout(read_timeout_);
-      if (timed_out) {
-        TENZIR_DEBUG("{} stalled at line {}", detail::pretty_type_name(this),
-                     lines_->line_number());
-        return ec::stalled;
-      }
-      auto& line = lines_->get();
-      ++num_lines_;
-      if (line.empty()) {
-        // Ignore empty lines.
-        TENZIR_DEBUG("{} ignores empty line at {}",
-                     detail::pretty_type_name(this), lines_->line_number());
-        continue;
-      }
-      auto msg = to<message_view>(std::string_view{line});
-      if (!msg) {
-        TENZIR_WARN("{} failed to parse CEF messge: {}",
-                    detail::pretty_type_name(this), msg.error());
-        ++num_invalid_lines_;
-        continue;
-      }
-      auto schema = infer(*msg);
-      add(*msg, builder);
-      produced++;
-      batch_events_++;
-      if (detail::narrow<size_t>(builder.length()) == max_slice_size) {
-        finish();
-      }
-    }
-    finish();
-    return caf::none;
-  }
-
-private:
-  std::unique_ptr<std::istream> input_;
-  std::unique_ptr<detail::line_range> lines_;
-  mutable size_t num_invalid_lines_ = 0;
-  mutable size_t num_lines_ = 0;
-};
 
 auto impl(generator<std::optional<std::string_view>> lines,
           operator_control_plane& ctrl) -> generator<table_slice> {
@@ -368,27 +222,7 @@ public:
   }
 };
 
-class plugin final : public virtual reader_plugin,
-                     public virtual parser_plugin<cef_parser> {
-  [[nodiscard]] const char* reader_format() const override {
-    return "cef";
-  }
-
-  [[nodiscard]] const char* reader_help() const override {
-    return "imports logs in Common Event Format (CEF)";
-  }
-
-  [[nodiscard]] config_options
-  reader_options(command::opts_builder&&) const override {
-    return {};
-  }
-
-  [[nodiscard]] std::unique_ptr<format::reader>
-  make_reader(const caf::settings& options) const override {
-    auto in = detail::make_input_stream(options);
-    return std::make_unique<reader>(options, in ? std::move(*in) : nullptr);
-  }
-
+class plugin final : public virtual parser_plugin<cef_parser> {
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
     argument_parser{"cef", "https://docs.tenzir.com/next/formats/cef"}.parse(p);
