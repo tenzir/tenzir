@@ -24,7 +24,8 @@ struct optional_dot {};
 
 } // namespace policy
 
-struct double_parser : parser_base<double_parser> {
+template <char Separator>
+struct double_parser : parser_base<double_parser<Separator>> {
   using attribute = double;
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, unused_type) const;
@@ -33,14 +34,43 @@ struct double_parser : parser_base<double_parser> {
   bool parse(Iterator& f, const Iterator& l, double& a) const;
 };
 
+struct double_detect_separator_parser
+  : parser_base<double_detect_separator_parser> {
+  using attribute = double;
+
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& val) const {
+    Attribute val_dot{};
+    auto f_dot = f;
+    const auto r_dot = double_parser<'.'>{}(f_dot, l, val_dot);
+    Attribute val_comma{};
+    auto f_comma = f;
+    const auto r_comma = double_parser<','>{}(f_comma, l, val_comma);
+    if (not r_dot && not r_comma) {
+      return false;
+    }
+    if (r_dot && f_dot >= f_comma) {
+      val = val_dot;
+      f = f_dot;
+      return true;
+    }
+    TENZIR_ASSERT(r_comma && f_comma >= f_dot);
+    val = val_comma;
+    f = f_comma;
+    return true;
+  }
+};
+
 template <>
 struct parser_registry<double> {
-  using type = double_parser;
+  using type = double_parser<'.'>;
 };
 
 namespace parsers {
 
-auto const real = double_parser{};
+inline constexpr auto real = double_parser<'.'>{};
+inline constexpr auto real_comma = double_parser<','>{};
+inline constexpr auto real_detect_sep = double_detect_separator_parser{};
 
 } // namespace parsers
 } // namespace tenzir
