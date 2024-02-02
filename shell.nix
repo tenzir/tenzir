@@ -13,6 +13,7 @@ pkgs.mkShell.override { stdenv = pkgs.gcc13Stdenv; } (
         pkgs.ccache
         pkgs.clang-tools_16
         pkgs.cmake-format
+        pkgs.shfmt
         pkgs.speeve
         pkgs.poetry
         pkgs.python3Packages.spdx-tools

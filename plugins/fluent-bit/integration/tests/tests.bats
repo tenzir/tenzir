@@ -20,7 +20,18 @@ setup() {
 }
 
 @test "read stdin via fluent-bit" {
-  echo '{"foo": {"bar": 42}}' | check tenzir 'fluent-bit stdin | drop timestamp'
+  # fluent-bit has an internal race condition that can cause the loss of
+  # events during startup. We have to accept this for now and avoid
+  # test flakyness with a bit of trickery.
+  result="$(
+    while :; do
+      echo '{"foo": {"bar": 42}}'
+      sleep 1
+    done |
+      tenzir 'fluent-bit stdin | drop timestamp | head 1' |
+      grep -v 'kevent'
+  )"
+  check echo "$result"
 }
 
 @test "fluent-bit works as a sink" {
