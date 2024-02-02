@@ -33,7 +33,8 @@ A description of the problem this proposal solves.
 > *AlphaNumUnder* := *AlphaUnder* | [`0`-`9`]
 
 The literals for durations will be more limited than we currently have. For
-example: `now()` instead of `now`, and `now() - 1h` instead of `1h ago`.
+example: `now` and `1h ago` will not be lexical items, but rather expressions
+`now()` and `now() - 1h`, respectively.
 
 
 ## [_File_]
@@ -71,12 +72,23 @@ character.
 > [_PipelineExpr_]<sup>?</sup> \
 > &nbsp; &nbsp; `(` `)` [_PipelineExpr_]<sup>?</sup>
 
+We might want to disallow the `(...)` syntax for operators, depending on how we
+approach multiline operator statements.
+
+If we delay constants/`$` until later, we will also delay `let`.
 
 ### [_Arguments_]
 
 > [_Arguments_] := [_Argument_] (`,` [_Argument_])<sup>\*</sup> \
 > [_Argument_] := [_Expression_] | [_Path_] `=` [_Expression_]
 
+For consistency, arguments are always separated by comma. This implies that
+`write json, indent=4` has a comma as well.
+
+For operators, we could consider relaxing this restriction a bit, for example by
+starting a new argument when it would otherwise fail to parse. This also enables
+comma-less syntax for other operators, e.g., `select foo bar baz`. However, this
+approach is somewhat hacky and should be carefully considered.
 
 ### [_Expression_]
 
@@ -88,6 +100,8 @@ Fun fact: TQL expressions are a superset of JSON.
 > `-` [_Expression_] \
 > `$` [_Expression_]
 
+TODO: We should delay implementing `$`.
+
 We should decide whether we want to keep `$` for expanding non-entity constants.
 The need for disambiguation arises when accessing `let` bindings in a pipeline,
 `group` constants, outer values when processing a list with a pipeline, or
@@ -98,7 +112,6 @@ future). But in all cases, when a pipeline is instantiated, all constants are
 known, and we could make decisions depending on that. However, we can't know
 whether there exists a field with this name.
 
-Also, are constants always lexical?
 
 #### [_BinaryExpr_]
 
@@ -177,6 +190,24 @@ Are there any places where both a pipeline and a record would be valid?
 
 There is a syntactic ambiguity between non-qualified constants and identifier.
 This is related to [the discussion](#unaryexpr) about `$`.
+
+## Semantics
+
+### Instantiation
+
+### Argument Evaluation
+
+### Name Resolution
+
+Compile-time lexical:
+- Operator, function and method names
+- Qualified constants
+
+Run-time lexical:
+- `let foo = "test.json" | to $foo` (could be compile-time)
+- `group foo, bar.baz { where $foo == $(bar.baz + 4) }` (could be compile-time)
+- `answers = answers -> { where foo == $qux }` (must be run-time)
+- `window info.ts { write json indent=4 | to f"{$window.count}-{$window.end}.json" }` (could be compile-time)
 
 ## Alternatives
 
