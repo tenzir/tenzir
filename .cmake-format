@@ -29,6 +29,7 @@ with section("parse"):
                 "INCLUDE_DIRECTORIES": "*",
                 "DEPENDENCIES": "*",
                 "BUILTINS": "*",
+                "FLATBUFFERS": "*",
             },
         },
         "tenzirnormalizeinstalldirs": {

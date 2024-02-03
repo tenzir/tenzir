@@ -23,86 +23,159 @@ namespace tenzir {
 /// whether the only data contained in the owned chunk is the table itself
 /// (root) or other the table is just part of a bigger root table (child).
 enum class flatbuffer_type {
+  size_prefixed, ///< The table type is a root type with a size prefix.
   root,  ///< The table type is a root type, or a nested FlatBuffers table.
   child, ///< The table is sliced from a root table.
 };
 
+/// A utility function for determining the size prefixed buffer length of a
+/// FlatBuffers table.
+/// @pre chunk != nullptr
+/// @pre chunk->size() >= sizeof(flatbuffers::uoffset_t)
+inline auto size_prefixed_flatbuffer_size(const chunk_ptr& chunk) {
+  TENZIR_ASSERT_CHEAP(chunk);
+  TENZIR_ASSERT_CHEAP(chunk->size() >= sizeof(flatbuffers::uoffset_t));
+  // The version of FlatBuffers we're using in the Dockerfile doesn't have
+  // GetSizePrefixedBufferLength, so we take GetPrefixedSize and add the buffer
+  // length on top manually.
+  return sizeof(::flatbuffers::uoffset_t)
+         + flatbuffers::GetPrefixedSize(
+           reinterpret_cast<const uint8_t*>(chunk->data()));
+}
+
+/// A function returning a FlatBuffers table identifier.
+/// NOTE: Unfortunately, for a given FlatBuffers table *Foo* there is no
+/// built-in mechanism to get *FooIdentifier* even when enabling the static
+/// reflection option of the flatc compiler, so users of the API must pass it in
+/// manually.
+using flatbuffer_identifier = auto() -> const char*;
+
 /// A wrapper class around a FlatBuffers table that allows for sharing the
 /// lifetime with the chunk containing the table.
 /// @tparam Table The generated FlatBuffers table type.
+/// @tparam Identifier The FlatBuffers table's flle identifier function.
 /// @tparam Type Determines whether the table is a root or a child table.
-template <class Table, flatbuffer_type Type = flatbuffer_type::root>
+template <class Table, flatbuffer_identifier Identifier = nullptr,
+          flatbuffer_type Type = flatbuffer_type::root>
 class flatbuffer final {
 public:
   // -- member types and constants --------------------------------------------
 
-  template <class ParentTable, flatbuffer_type ParentType>
+  static_assert(Type != flatbuffer_type::child or Identifier == nullptr,
+                "child FlatBuffers tables must not have a buffer identifier");
+
+  template <class ParentTable, flatbuffer_identifier ParentIdentifier,
+            flatbuffer_type ParentType>
   friend class flatbuffer;
 
   friend struct ::fmt::formatter<flatbuffer>;
-
-  /// Indicates whether to verify the FlatBuffers table on construction.
-  enum class verify {
-    yes, ///< Perform extensive buffer verification.
-    no,  ///< Skip extensive buffer verification.
-  };
-
-#if TENZIR_ENABLE_ASSERTIONS
-  static constexpr auto verify_default = verify::yes;
-#else
-  static constexpr auto verify_default = verify::no;
-#endif // TENZIR_ENABLE_ASSERTIONS
 
   // -- constructors, destructors, and assignment operators -------------------
 
   /// Constructs a ref-counted FlatBuffers root table that shares the
   /// lifetime with the chunk it's constructed from.
   /// @pre *chunk* must hold a valid *Table*.
-  [[nodiscard]] static caf::expected<flatbuffer>
-  make(chunk_ptr&& chunk, enum verify verify = verify_default) noexcept
-    requires(Type == flatbuffer_type::root)
+  [[nodiscard]] static auto make_unsafe(chunk_ptr&& chunk) noexcept
+    -> caf::expected<flatbuffer>
+    requires(Type != flatbuffer_type::child)
   {
-    if (!chunk)
+    // FlatBuffers does not correctly use '::flatbuffers::{s,u}offset_t' over
+    // '{s,u}offset_t' in `FLATBUFFERS_{MIN,MAX}_BUFFER_SIZE`.
+    using flatbuffers::soffset_t, flatbuffers::uoffset_t;
+    if (not chunk) {
       return caf::make_error(ec::logic_error, fmt::format("failed to read {} "
                                                           "from a nullptr",
                                                           qualified_name()));
-    if (chunk->size() == 0)
-      return caf::make_error(ec::logic_error, fmt::format("failed to read {} "
-                                                          "from an empty chunk",
-                                                          qualified_name()));
-    if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE)
+    }
+    if (chunk->size() < FLATBUFFERS_MIN_BUFFER_SIZE) {
+      return caf::make_error(
+        ec::format_error,
+        fmt::format("failed to read {} because its size {} "
+                    "is below the minimum required size of {}",
+                    qualified_name(), chunk->size(),
+                    FLATBUFFERS_MIN_BUFFER_SIZE));
+    }
+    if constexpr (Type == flatbuffer_type::size_prefixed) {
+      const auto expected_size = size_prefixed_flatbuffer_size(chunk);
+      if (chunk->size() != expected_size) {
+        return caf::make_error(
+          ec::logic_error,
+          fmt::format("failed to read {} from a chunk of length {} with a size "
+                      "prefixed buffer length of {}",
+                      qualified_name(), chunk->size(), expected_size));
+      }
+    }
+    if constexpr (Identifier != nullptr) {
+      if (not flatbuffers::BufferHasIdentifier(
+            chunk->data(), Identifier(),
+            Type == flatbuffer_type::size_prefixed)) {
+        return caf::make_error(ec::format_error,
+                               fmt::format("failed to read {} because its "
+                                           "buffer identifier is wrong or "
+                                           "missing",
+                                           qualified_name()));
+      }
+    }
+    if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE) {
       return caf::make_error(
         ec::format_error, fmt::format("failed to read {} because its size {} "
                                       "exceeds the maximum allowed size of {}",
                                       qualified_name(), chunk->size(),
                                       FLATBUFFERS_MAX_BUFFER_SIZE));
-    if (verify == verify::yes) {
-      const auto* const data = reinterpret_cast<const uint8_t*>(chunk->data());
-      auto verifier = flatbuffers::Verifier{data, chunk->size()};
-      if (!flatbuffers::GetRoot<Table>(data)->Verify(verifier))
-        return caf::make_error(ec::format_error,
-                               fmt::format("failed to read {} because its "
-                                           "verification failed",
-                                           qualified_name()));
-#if defined(FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE)
-      TENZIR_ASSERT(verifier.GetComputedSize() >= chunk->size());
-      if (verifier.GetComputedSize() > chunk->size())
-        return caf::make_error(
-          ec::format_error,
-          fmt::format("failed to read {} because of {} unexpected excess bytes",
-                      qualified_name(),
-                      verifier.GetComputedSize() - chunk->size()));
-#endif // defined(FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE)
     }
     return flatbuffer{chunk};
   }
 
+  /// Constructs a ref-counted FlatBuffers root table that shares the
+  /// lifetime with the chunk it's constructed from.
+  /// @pre *chunk* must hold a valid *Table*.
+  [[nodiscard]] static auto make(chunk_ptr&& chunk) noexcept
+    -> caf::expected<flatbuffer>
+    requires(Type != flatbuffer_type::child)
+  {
+    auto result = make_unsafe(std::move(chunk));
+    if (not result) {
+      return std::move(result.error());
+    }
+    const auto* const data
+      = reinterpret_cast<const uint8_t*>(result->chunk()->data());
+    auto verifier = flatbuffers::Verifier{data, result->chunk()->size()};
+    if (not result->root()->Verify(verifier)) {
+      return caf::make_error(ec::format_error,
+                             fmt::format("failed to read {} because its "
+                                         "verification failed",
+                                         qualified_name()));
+    }
+#if defined(FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE)
+    TENZIR_ASSERT(verifier.GetComputedSize() >= result->chunk()->size());
+    if (verifier.GetComputedSize() > result->chunk()->size()) {
+      return caf::make_error(
+        ec::format_error,
+        fmt::format("failed to read {} because of {} unexpected excess bytes",
+                    qualified_name(),
+                    verifier.GetComputedSize() - result.chunk()->size()));
+    }
+#endif // defined(FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE)
+    return std::move(*result);
+  }
+
   /// Constructs a ref-counted FlatBuffers root table.
   /// @pre *buffer* must hold a valid *Table*.
-  [[nodiscard]] static caf::expected<flatbuffer>
-  make(flatbuffers::DetachedBuffer&& buffer, enum verify verify
-                                             = verify_default) noexcept {
-    return make(chunk::make(std::move(buffer)), verify);
+  [[nodiscard]] static auto make(flatbuffers::DetachedBuffer&& buffer) noexcept
+    -> caf::expected<flatbuffer>
+    requires(Type != flatbuffer_type::child)
+  {
+    return make(chunk::make(std::move(buffer)));
+  }
+
+  /// Constructs a ref-counted FlatBuffers root table.
+  /// @pre *buffer* must hold a valid *Table*.
+  [[nodiscard]] static auto
+  make_unsafe(flatbuffers::DetachedBuffer&& buffer) noexcept
+    -> caf::expected<flatbuffer>
+    requires(Type != flatbuffer_type::child)
+  {
+    return make_unsafe(chunk::make(std::move(buffer)));
   }
 
   /// Default-constructs a FlatBuffers table.
@@ -110,18 +183,21 @@ public:
 
   /// Constructs a ref-counted FlatBuffers root table from a FlatBufferBuilder
   /// by finishing it.
-  // TODO: FlatBuffers 2.0's reflection allows for inferring the
-  // *file_identifier* from *Table*, which makes this API a lot easier to use.
-  // When upgrading to that version from 1.12 we can enable reflection when
-  // compiling the schemas.
   flatbuffer(flatbuffers::FlatBufferBuilder& builder,
-             flatbuffers::Offset<Table> offset,
-             const char* file_identifier) noexcept
-    requires(Type == flatbuffer_type::root)
+             flatbuffers::Offset<Table> offset) noexcept
+    requires(Type != flatbuffer_type::child)
   {
-    builder.Finish(offset, file_identifier);
+    if constexpr (Type == flatbuffer_type::root) {
+      builder.Finish(offset, Identifier != nullptr ? Identifier() : nullptr);
+    } else if constexpr (Type == flatbuffer_type::size_prefixed) {
+      builder.FinishSizePrefixed(offset, Identifier != nullptr ? Identifier()
+                                                               : nullptr);
+    } else {
+      static_assert(detail::always_false_v<decltype(Type)>,
+                    "unhandled FlatBuffers Type");
+    }
     auto chunk = chunk::make(builder.Release());
-    TENZIR_ASSERT(chunk);
+    TENZIR_ASSERT_CHEAP(chunk);
     *this = flatbuffer{chunk};
   }
 
@@ -129,8 +205,9 @@ public:
   /// lifetime with another FlatBuffer pointer.
   /// @pre `parent`
   /// @pre *table* must be accessible from *parent*.
-  template <class ParentTable, flatbuffer_type ParentType>
-  flatbuffer(flatbuffer<ParentTable, ParentType> parent,
+  template <class ParentTable, flatbuffer_identifier ParentIdentifier,
+            flatbuffer_type ParentType>
+  flatbuffer(flatbuffer<ParentTable, ParentIdentifier, ParentType> parent,
              const Table& table) noexcept
     requires(Type == flatbuffer_type::child)
     : chunk_{std::exchange(parent.chunk_, {})}, table_{&table} {
@@ -153,7 +230,7 @@ public:
     // nop
   }
 
-  flatbuffer& operator=(const flatbuffer& rhs) noexcept {
+  auto operator=(const flatbuffer& rhs) noexcept -> flatbuffer& {
     if (&rhs == this)
       return *this;
     chunk_ = rhs.chunk_;
@@ -161,7 +238,7 @@ public:
     return *this;
   }
 
-  flatbuffer& operator=(flatbuffer&& rhs) noexcept {
+  auto operator=(flatbuffer&& rhs) noexcept -> flatbuffer& {
     chunk_ = std::exchange(rhs.chunk_, {});
     table_ = std::exchange(rhs.table_, {});
     return *this;
@@ -173,12 +250,12 @@ public:
     return table_ != nullptr;
   }
 
-  const Table& operator*() const noexcept {
+  auto operator*() const noexcept -> const Table& {
     TENZIR_ASSERT(table_);
     return *table_;
   }
 
-  const Table* operator->() const noexcept {
+  auto operator->() const noexcept -> const Table* {
     TENZIR_ASSERT(table_);
     return table_;
   }
@@ -191,8 +268,8 @@ public:
   /// table and operations that require root tables must be supported.
   /// @pre `*this != nullptr`
   template <class ChildTable>
-  [[nodiscard]] flatbuffer<ChildTable, flatbuffer_type::child>
-  slice(const ChildTable& child_table) const noexcept {
+  [[nodiscard]] auto slice(const ChildTable& child_table) const noexcept
+    -> flatbuffer<ChildTable, nullptr, flatbuffer_type::child> {
     TENZIR_ASSERT(*this);
     return {*this, child_table};
   }
@@ -202,10 +279,11 @@ public:
   /// @pre *child_table* and *nested_flatbuffer* must point to the same nested
   /// FlatBuffers table, i.e., `*(*this)->child_nested_root()` and
   /// `*(*this)->child()` respectively.
-  template <class ChildTable>
-  [[nodiscard]] flatbuffer<ChildTable, flatbuffer_type::root>
+  template <flatbuffer_identifier ChildIdentifier = nullptr, class ChildTable>
+  [[nodiscard]] auto
   slice(const ChildTable& child_table,
-        const flatbuffers::Vector<uint8_t>& nested_flatbuffer) const noexcept {
+        const flatbuffers::Vector<uint8_t>& nested_flatbuffer) const noexcept
+    -> flatbuffer<ChildTable, ChildIdentifier, flatbuffer_type::root> {
     TENZIR_ASSERT(*this);
     TENZIR_ASSERT(
       &child_table
@@ -216,8 +294,15 @@ public:
   /// Accesses the underlying chunk.
   /// @note The returned chunk may contain more than just the FlatBuffers table
   /// if it is not a root table.
-  [[nodiscard]] const chunk_ptr& chunk() const noexcept {
+  [[nodiscard]] auto chunk() const& noexcept -> const chunk_ptr& {
     return chunk_;
+  }
+
+  /// Accesses the underlying chunk.
+  /// @note The returned chunk may contain more than just the FlatBuffers table
+  /// if it is not a root table.
+  [[nodiscard]] auto chunk() && noexcept -> chunk_ptr {
+    return std::move(chunk_);
   }
 
   // -- concepts --------------------------------------------------------------
@@ -243,8 +328,6 @@ public:
     const auto name = qualified_name();
     return f
       .object(x)
-      // TODO CAF 0.19 just pass string_view to pretty name as caf::string_view
-      // is removed or obsolete
       .pretty_name(caf::string_view{name.data(), name.size()})
       .on_load(load_callback)
       .fields(f.field("chunk", x.chunk_),
@@ -264,10 +347,23 @@ private:
   /// lifetime with the chunk it's constructed from.
   /// @pre *chunk* must hold a valid *Table*.
   flatbuffer(chunk_ptr chunk) noexcept
-    requires(Type == flatbuffer_type::root)
-    : chunk_{std::move(chunk)},
-      table_{flatbuffers::GetRoot<Table>(chunk_->data())} {
+    requires(Type != flatbuffer_type::child)
+    : chunk_{std::move(chunk)}, table_{root()} {
     // nop
+  }
+
+  /// Returns a pointer into the underlying FlatBuffers tbale.
+  /// @pre *chunk* must hold a valid *Table*.
+  auto root() const noexcept -> const Table* {
+    const auto* const data = reinterpret_cast<const uint8_t*>(chunk_->data());
+    if constexpr (Type == flatbuffer_type::root) {
+      return flatbuffers::GetRoot<Table>(data);
+    } else if constexpr (Type == flatbuffer_type::size_prefixed) {
+      return flatbuffers::GetSizePrefixedRoot<Table>(data);
+    } else {
+      static_assert(detail::always_false_v<decltype(Type)>,
+                    "unhandled FlatBuffers Type");
+    }
   }
 
   /// A pointer to the underlying chunk. For root tables, the beginning of the
@@ -279,27 +375,37 @@ private:
   const Table* table_ = {};
 };
 
+/// A convenience alias for size prefixed FlatBuffers tables.
+template <class Table, flatbuffer_identifier Identifier = nullptr>
+using size_prefixed_flatbuffer
+  = flatbuffer<Table, Identifier, flatbuffer_type::size_prefixed>;
+
+/// A convenience alias for child FlatBuffers tables.
+template <class Table>
+using child_flatbuffer = flatbuffer<Table, nullptr, flatbuffer_type::child>;
+
 // -- deduction guides --------------------------------------------------------
 
-template <class Table, class ParentTable, flatbuffer_type ParentType>
-flatbuffer(flatbuffer<ParentTable, ParentType>, const Table*)
-  -> flatbuffer<Table, flatbuffer_type::child>;
+template <class Table, class ParentTable,
+          flatbuffer_identifier ParentIdentifier, flatbuffer_type ParentType>
+flatbuffer(flatbuffer<ParentTable, ParentIdentifier, ParentType>, const Table*)
+  -> flatbuffer<Table, nullptr, flatbuffer_type::child>;
 
 } // namespace tenzir
 
 // -- formatter ---------------------------------------------------------------
 
-template <class Table, tenzir::flatbuffer_type Type>
-struct fmt::formatter<tenzir::flatbuffer<Table, Type>> {
+template <class Table, tenzir::flatbuffer_identifier Identifier,
+          tenzir::flatbuffer_type Type>
+struct fmt::formatter<tenzir::flatbuffer<Table, Identifier, Type>> {
   template <class ParseContext>
   auto parse(const ParseContext& ctx) -> decltype(ctx.begin()) {
     return ctx.begin();
   }
 
   template <class FormatContext>
-  auto
-  format(const tenzir::flatbuffer<Table, Type>& flatbuffer, FormatContext& ctx)
-    -> decltype(ctx.out()) {
+  auto format(const tenzir::flatbuffer<Table, Identifier, Type>& flatbuffer,
+              FormatContext& ctx) -> decltype(ctx.out()) {
     return fmt::format_to(ctx.out(), "{}({})", flatbuffer.qualified_name(),
                           fmt::ptr(flatbuffer.table_));
   }

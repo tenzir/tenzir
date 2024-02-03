@@ -9,13 +9,10 @@ include(CTest)
 
 find_package(Tenzir REQUIRED)
 
-file(GLOB_RECURSE velociraptor_sources CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
-
 TenzirRegisterPlugin(
   TARGET velociraptor
   ENTRYPOINT src/plugin.cpp
-  SOURCES ${velociraptor_sources})
+  SOURCES GLOB "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
 find_package(protobuf CONFIG)
 if (NOT protobuf_FOUND)

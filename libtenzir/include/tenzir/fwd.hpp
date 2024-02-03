@@ -65,8 +65,9 @@ class RandomAccessFile;
 
 namespace flatbuffers {
 
-#if FLATBUFFERS_VERSION_MAJOR >= 23 && FLATBUFFERS_VERSION_MINOR >= 5          \
-  && FLATBUFFERS_VERSION_REVISION >= 9
+#if (FLATBUFFERS_VERSION_REVISION + (FLATBUFFERS_VERSION_MINOR * 100)          \
+     + (FLATBUFFERS_VERSION_MAJOR * 10000))                                    \
+  >= 230509
 
 template <bool>
 class FlatBufferBuilderImpl;
