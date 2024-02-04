@@ -37,6 +37,7 @@ struct xsv_options {
   char list_sep = {};
   std::string null_value = {};
   bool allow_comments = {};
+  bool auto_expand = {};
   std::optional<std::string> header = {};
   bool no_header = {};
 
@@ -45,6 +46,7 @@ struct xsv_options {
     auto parser
       = argument_parser{"xsv", "https://docs.tenzir.com/next/formats/xsv"};
     auto allow_comments = bool{};
+    auto auto_expand = bool{};
     auto field_sep_str = located<std::string>{};
     auto list_sep_str = located<std::string>{};
     auto null_value = located<std::string>{};
@@ -52,6 +54,7 @@ struct xsv_options {
     auto no_header = bool{};
     if (is_parser) {
       parser.add("--allow-comments", allow_comments);
+      parser.add("--auto-expand", auto_expand);
       parser.add("--header", header, "<header>");
     } else {
       parser.add("--no-header", no_header);
@@ -99,6 +102,7 @@ struct xsv_options {
       .list_sep = *list_sep,
       .null_value = std::move(null_value.inner),
       .allow_comments = allow_comments,
+      .auto_expand = auto_expand,
       .header = std::move(header),
       .no_header = no_header,
     };
@@ -108,7 +112,8 @@ struct xsv_options {
     return f.object(x).fields(
       f.field("name", x.name), f.field("field_sep", x.field_sep),
       f.field("list_sep", x.list_sep), f.field("null_value", x.null_value),
-      f.field("allow_comments", x.allow_comments), f.field("header", x.header),
+      f.field("allow_comments", x.allow_comments),
+      f.field("auto_expand", x.auto_expand), f.field("header", x.header),
       f.field("no_header", x.no_header));
   }
 };
@@ -364,18 +369,26 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
                                 });
     auto values_parser = (value_parser % args.field_sep);
     auto values = std::vector<data>{};
-    if (!values_parser(*line, values)) {
+    if (not values_parser(*line, values)) {
       diagnostic::warning("skips unparseable line")
         .note("from `{}` parser", args.name)
         .emit(ctrl.diagnostics());
       continue;
     }
     auto generated_field_id = 0;
-    while (fields.size() < values.size()) {
-      auto name = fmt::format("unnamed{}", ++generated_field_id);
-      if (std::find(fields.begin(), fields.end(), name) == fields.end()) {
-        fields.push_back(name);
+    if (args.auto_expand) {
+      while (fields.size() < values.size()) {
+        auto name = fmt::format("unnamed{}", ++generated_field_id);
+        if (std::find(fields.begin(), fields.end(), name) == fields.end()) {
+          fields.push_back(name);
+        }
       }
+    } else if (fields.size() < values.size()) {
+      diagnostic::warning("skips {} excess values in line",
+                          values.size() - fields.size())
+        .hint("use `--auto-expand` to add fields for excess values")
+        .note("from `{}` parser", args.name)
+        .emit(ctrl.diagnostics());
     }
     auto row = b.record();
     for (size_t i = 0; i < fields.size(); ++i) {
@@ -527,8 +540,10 @@ public:
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{name()};
     bool allow_comments = {};
+    bool auto_expand = {};
     std::optional<std::string> header = {};
     parser.add("--allow-comments", allow_comments);
+    parser.add("--auto-expand", auto_expand);
     parser.add("--header", header, "<header>");
     parser.parse(p);
     return std::make_unique<xsv_parser>(xsv_options{
@@ -537,6 +552,7 @@ public:
       .list_sep = ListSep,
       .null_value = std::string{Null.str()},
       .allow_comments = allow_comments,
+      .auto_expand = auto_expand,
       .header = std::move(header),
       .no_header = false,
     });
@@ -554,6 +570,7 @@ public:
       .list_sep = ListSep,
       .null_value = std::string{Null.str()},
       .allow_comments = false,
+      .auto_expand = false,
       .header = {},
       .no_header = no_header,
     });

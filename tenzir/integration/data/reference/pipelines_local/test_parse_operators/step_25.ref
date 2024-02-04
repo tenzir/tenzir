@@ -19,6 +19,7 @@ pipeline [
     list_sep: 59,
     null_value: "",
     allow_comments: false,
+    auto_expand: false,
     no_header: false
   },
   save file {

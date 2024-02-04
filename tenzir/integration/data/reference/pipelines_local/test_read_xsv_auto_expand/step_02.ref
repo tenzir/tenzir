@@ -1,0 +1,4 @@
+{"foo": 1, "bar": 2, "baz": 3}
+warning: skips 2 excess values in line
+ = hint: use `--auto-expand` to add fields for excess values
+ = note: from `csv` parser

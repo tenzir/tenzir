@@ -14,10 +14,10 @@ Reads and writes lines with separated values.
 Parser:
 
 ```
-csv [--allow-comments] [--header <header>]
-ssv [--allow-comments] [--header <header>]
-tsv [--allow-comments] [--header <header>]
-xsv <field-sep> <list-sep> <null-value> [--allow-comments] [--header <header>]
+csv [--allow-comments] [--auto-expand] [--header <header>]
+ssv [--allow-comments] [--auto-expand] [--header <header>]
+tsv [--allow-comments] [--auto-expand] [--header <header>]
+xsv <field-sep> <list-sep> <null-value> [--allow-comments] [--auto-expand] [--header <header>]
 ```
 
 Printer:
@@ -84,6 +84,11 @@ Specifies the string that denotes an absent value.
 ### `--allow-comments` (Parser)
 
 Treat lines beginning with `'#'` as comments.
+
+### `--auto-expand (Parser)
+
+Automatically add fields to the schema when encountering events with too many
+values instead of dropping the excess values.
 
 ### `--header <header>` (Parser)
 
