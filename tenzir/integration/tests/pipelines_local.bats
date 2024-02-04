@@ -461,6 +461,14 @@ setup() {
   check tenzir "from ${INPUTSDIR}/xsv/nulls-and-escaping.csv read csv"
 }
 
+@test "read xsv auto expand" {
+  echo "1,2,3" | check tenzir 'read csv --header "foo,bar,baz"'
+  echo "1,2" | check tenzir 'read csv --header "foo,bar,baz"'
+  echo "1,2,3,4,5" | check tenzir 'read csv --header "foo,bar,baz"'
+  echo "1,2,3,4,5" | check tenzir 'read csv --header "foo,bar,baz" --auto-expand'
+  echo "1,2,3,4,5" | check tenzir 'read csv --header "foo,unnamed1,baz" --auto-expand'
+}
+
 # bats test_tags=pipelines, xsv
 @test "Slice" {
   check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin 1"
