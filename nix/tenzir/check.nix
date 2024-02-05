@@ -3,7 +3,7 @@
   stdenvNoCC,
   src,
   tenzir-integration-test-deps,
-  pkgsBuildHost,
+  pkgsBuildBuild,
 }:
 # The untested tenzir edition build.
 unchecked:
@@ -19,6 +19,9 @@ stdenvNoCC.mkDerivation {
   nativeCheckInputs = tenzir-integration-test-deps;
   checkPhase =
     let
+      py3 = pkgsBuildBuild.python3.withPackages (ps: [
+        ps.requests
+      ]);
       template = path: ''
         if [ -d "${path}/integration/tests" ]; then
           echo "running ${path} tests"
@@ -28,8 +31,9 @@ stdenvNoCC.mkDerivation {
     in
     ''
       patchShebangs tenzir/integration/data/misc/scripts
-      export PATH=''${PATH:+$PATH:}${lib.getBin unchecked}/bin:${lib.getBin pkgsBuildHost.toybox}/bin
+      export PATH=''${PATH:+$PATH:}${lib.getBin unchecked}/bin:${lib.getBin pkgsBuildBuild.toybox}/bin
       export BATS_LIB_PATH=''${BATS_LIB_PATH:+''${BATS_LIB_PATH}:}$PWD/tenzir/integration
+      export PYTHONPATH=''${PYTHONPATH:+''${PYTHONPATH}:}${py3}/${py3.sitePackages}
       mkdir -p cache
       export XDG_CACHE_HOME=$PWD/cache
       ${template "tenzir"}
