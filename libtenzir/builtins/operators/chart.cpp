@@ -325,6 +325,13 @@ chart_definition chart_definitions[] = {
    = {{.attr = "x", .flag = "-x,--x-axis", .type = flag_type::field_name, .default_ = nth_field{0}},
       {.attr = "y", .flag = "-y,--y-axis", .type = flag_type::field_name, .default_ = nth_field{1}},
       {.attr = "title", .flag = "--title", .type = flag_type::attribute_value, .default_ = schema_name{}},}},
+  // `area` is equivalent to `line`
+  {.type = "area",
+   .required_flags = {},
+   .optional_flags
+   = {{.attr = "x", .flag = "-x,--x-axis", .type = flag_type::field_name, .default_ = nth_field{0}},
+      {.attr = "y", .flag = "-y,--y-axis", .type = flag_type::field_name, .default_ = nth_field{1}},
+      {.attr = "title", .flag = "--title", .type = flag_type::attribute_value, .default_ = schema_name{}},}},
   // `bar` is equivalent to `line`
   {.type = "bar",
    .required_flags = {},

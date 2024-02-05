@@ -4,5 +4,5 @@ error: invalid chart type
 1 | from stdin read json | chart donuttt --value b
   |                              ^^^^^^^ 
   |
-  = hint: valid chart types are: line, bar, donut
+  = hint: valid chart types are: line, area, bar, donut
   = docs: https://docs.tenzir/operators/chart

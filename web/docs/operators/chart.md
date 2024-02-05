@@ -12,6 +12,7 @@ Add metadata to a schema, necessary for rendering as a chart.
 
 ```
 chart line   [--title <title>] [-x|--x-axis <field>] [-y|--y-axis <field>]
+chart area   [--title <title>] [-x|--x-axis <field>] [-y|--y-axis <field>]
 chart bar    [--title <title>] [-x|--x-axis <field>] [-y|--y-axis <field>]
 chart donut  [--title <title>] [--name <field>] [--value <field>]
 ```
@@ -26,11 +27,11 @@ The operator does no rendering itself.
 
 Set the chart title. Defaults to the schema name.
 
-### `-x|--x-axis <field>` (`line` and `bar` charts only)
+### `-x|--x-axis <field>` (`line`, `area`, and `bar` charts only)
 
 Set the field used for the X-axis. Defaults to the first field in the schema.
 
-### `-y|--y-axis <field>` (`line` and `bar` charts only)
+### `-y|--y-axis <field>` (`line`, `area`, and `bar` charts only)
 
 Set the field used for the Y-axis. Defaults to the second field in the schema.
 
