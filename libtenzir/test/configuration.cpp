@@ -160,9 +160,6 @@ TEST(command line overrides environment even for plugins) {
 
 TEST(command line no value for integer values generates default value) {
   using cfg_int = caf::config_value::integer;
-  parse(std::vector<std::string>{"start", "--disk-budget-check-interval="});
-  CHECK_EQUAL(get<cfg_int>("tenzir.start.disk-budget-check-interval"),
-              cfg_int{0});
   parse(std::vector<std::string>{"import", "--batch-size="});
   CHECK_EQUAL(get<cfg_int>("tenzir.import.batch-size"), cfg_int{0});
 }
@@ -179,7 +176,7 @@ TEST(command line no value for bool value generates default true value by CAF) {
 }
 
 TEST(command line parse caf settings correctly) {
-  parse(std::vector<std::string>{"start", "--caf.scheduler.max-threads=1"});
+  parse(std::vector<std::string>{"import", "--caf.scheduler.max-threads=1"});
   CHECK_EQUAL(get<caf::config_value::integer>("caf.scheduler.max-threads"), 1);
 }
 
