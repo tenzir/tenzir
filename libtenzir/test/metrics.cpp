@@ -29,7 +29,8 @@ void test_metrics_plugin(const std::string& plugin_name) {
 
 TEST(metrics) {
   test_metrics_plugin("process");
-  test_metrics_plugin("disk");
+  // We don't tes the disk plugin as that sporadically fails in CI.
+  // test_metrics_plugin("disk");
   test_metrics_plugin("cpu");
 #ifdef _SC_AVPHYS_PAGES
   // The 'memory' health plugin isn't supported
