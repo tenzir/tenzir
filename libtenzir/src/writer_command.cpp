@@ -39,7 +39,10 @@ command::fun make_writer_command(std::string_view format) {
                                              color_diagnostics::yes, std::cerr);
       auto const* json_opts = caf::get_if<caf::config_value::dictionary>(
         &inv.options, "tenzir.export.json");
-      auto pipe = std::string{"export\n"};
+      auto pipe = fmt::format(
+        "export{}\n", get_or(inv.options, "tenzir.export.low-priority", false)
+                        ? " --low-priority"
+                        : "");
       auto inner = std::string{};
       if (inv.arguments.size() == 1) {
         if (tql::parse_internal(inv.arguments[0])) {
