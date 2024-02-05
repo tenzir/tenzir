@@ -264,10 +264,22 @@ bool setup_spdlog(bool is_server, const tenzir::invocation& cmd_invocation,
     file_sink->set_pattern(file_format);
     sinks.push_back(file_sink);
   }
+  auto overflow_policy = caf::get_or(cfg_file, "tenzir.log-overflow-policy",
+                                     defaults::logger::overflow_policy);
+  if (overflow_policy != "block" && overflow_policy != "overrun_oldest") {
+    fmt::print(stderr, "failed to start logger; invalid value for "
+                       "tenzir.log-overflow-policy");
+    return false;
+  }
+  auto spdlog_overflow_policy
+    = overflow_policy == "block"
+        ? spdlog::async_overflow_policy::block
+        : spdlog::async_overflow_policy::overrun_oldest;
   // Replace the /dev/null logger that was created during init.
-  logger() = std::make_shared<spdlog::async_logger>(
-    "tenzir", sinks.begin(), sinks.end(), spdlog::thread_pool(),
-    spdlog::async_overflow_policy::block);
+  logger()
+    = std::make_shared<spdlog::async_logger>("tenzir", sinks.begin(),
+                                             sinks.end(), spdlog::thread_pool(),
+                                             spdlog_overflow_policy);
   logger()->set_level(tenzir_loglevel_to_spd(tenzir_verbosity));
   spdlog::register_logger(logger());
   return true;
