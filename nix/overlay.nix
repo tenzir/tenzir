@@ -172,8 +172,13 @@ in {
     nativeBuildInputs = (orig.nativeBuildInputs or []) ++ [prev.buildPackages.cmake];
   });
   fluent-bit = let
+    fluent-bit'' = prev.fluent-bit.overrideAttrs (orig: {
+      patches = (orig.patches or []) ++ [
+        ./fix-fluent-bit-install.patch
+      ];
+    });
     fluent-bit' =
-      overrideAttrsIf isDarwin prev.fluent-bit
+      overrideAttrsIf isDarwin fluent-bit''
       (orig: {
         buildInputs = (orig.buildInputs or []) ++ (with prev.darwin.apple_sdk.frameworks; [Foundation IOKit]);
         # The name "kIOMainPortDefault" has been introduced in a a later SDK
@@ -182,7 +187,9 @@ in {
           (orig.cmakeFlags or [])
           ++ [
             "-DCMAKE_C_FLAGS=\"-DkIOMainPortDefault=kIOMasterPortDefault\""
+            "-DFLB_LUAJIT=OFF"
           ];
+        env.NIX_CFLAGS_COMPILE = "-mmacosx-version-min=10.12 -Wno-int-conversion";
       });
   in
     overrideAttrsIf isStatic fluent-bit'

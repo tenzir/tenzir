@@ -9,7 +9,7 @@
     ];
   };
 
-  inputs.nixpkgs.url = "github:nixos/nixpkgs/7086fd448fbe174a8c05a87a475bedd704520b68";
+  inputs.nixpkgs.url = "github:nixos/nixpkgs/1f5d74db169236ad4bed54028c8e147298c7cf9d";
   inputs.flake-compat.url = "github:edolstra/flake-compat";
   inputs.flake-compat.flake = false;
   inputs.flake-utils.url = "github:numtide/flake-utils";

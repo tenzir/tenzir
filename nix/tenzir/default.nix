@@ -87,6 +87,7 @@
     in
       p.withPackages (ps:
         with ps; [
+          aiohttp
           dynaconf
           pandas
           pyarrow
