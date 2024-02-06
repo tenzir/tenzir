@@ -914,12 +914,9 @@ data type::to_definition(bool expand) const noexcept {
 
 auto type::to_definition2(std::optional<std::string> field_name,
                           offset parent_path) const noexcept -> record {
-  auto attributes = list{};
+  auto attributes = record{};
   for (const auto& [key, value] : this->attributes()) {
-    attributes.push_back(record{
-      {"key", std::string{key}},
-      {"value", value.empty() ? data{std::string{value}} : data{}},
-    });
+    attributes.emplace(key, value.empty() ? data{} : data{std::string{value}});
   }
   auto path = list{};
   for (const auto& index : parent_path) {
