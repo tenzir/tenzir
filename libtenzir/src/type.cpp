@@ -377,6 +377,10 @@ type::type(chunk_ptr&& table) noexcept {
   table_ = std::move(table);
 }
 
+type::type(flatbuffer<fbs::Type>&& fb) noexcept : type(std::move(fb).chunk()) {
+  // nop
+}
+
 type::type(std::string_view name, const type& nested,
            std::vector<attribute_view>&& attributes) noexcept {
   if (name.empty() && attributes.empty()) {

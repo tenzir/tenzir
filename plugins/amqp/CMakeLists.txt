@@ -9,13 +9,10 @@ include(CTest)
 
 find_package(Tenzir REQUIRED)
 
-file(GLOB_RECURSE rabbitmq_sources CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
-
 TenzirRegisterPlugin(
   TARGET amqp
   ENTRYPOINT src/plugin.cpp
-  SOURCES ${rabbitmq_sources}
+  SOURCES GLOB "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
   INCLUDE_DIRECTORIES include)
 
 find_package(rabbitmq-c REQUIRED)

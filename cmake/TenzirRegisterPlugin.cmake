@@ -108,6 +108,12 @@ macro (TenzirTargetEnableTooling _target)
 endmacro ()
 
 macro (make_absolute vars)
+  list(GET "${vars}" 0 _glob)
+  if ("${_glob}" STREQUAL "GLOB")
+    list(REMOVE_AT "${vars}" 0)
+    file(GLOB_RECURSE "${vars}" CONFIGURE_DEPENDS ${${vars}})
+  endif ()
+  unset(_glob)
   foreach (var IN LISTS "${vars}")
     get_filename_component(var_abs "${var}" ABSOLUTE)
     list(APPEND vars_abs "${var_abs}")
@@ -244,7 +250,6 @@ function (TenzirCompileFlatBuffers)
         # Generate C++ headers using the C++17 standard.
         --cpp --cpp-std c++17 --scoped-enums
         # Generate type name functions.
-        # TODO: Replace with --cpp-static-reflection once available.
         --gen-name-strings
         # Generate mutator functions.
         --gen-mutable
@@ -402,7 +407,7 @@ function (TenzirRegisterPlugin)
     # <one_value_keywords>
     "TARGET;ENTRYPOINT"
     # <multi_value_keywords>
-    "SOURCES;TEST_SOURCES;INCLUDE_DIRECTORIES;DEPENDENCIES;BUILTINS"
+    "SOURCES;TEST_SOURCES;INCLUDE_DIRECTORIES;DEPENDENCIES;BUILTINS;FLATBUFFERS"
     # <args>...
     ${ARGN})
 
@@ -472,8 +477,10 @@ function (TenzirRegisterPlugin)
   # Make all given paths absolute.
   make_absolute(PLUGIN_ENTRYPOINT)
   make_absolute(PLUGIN_SOURCES)
+  make_absolute(PLUGIN_TEST_SOURCES)
   make_absolute(PLUGIN_INCLUDE_DIRECTORIES)
   make_absolute(PLUGIN_BUILTINS)
+  make_absolute(PLUGIN_FLATBUFFERS)
 
   # Set up builtins bundled with the plugin.
   if (PLUGIN_BUILTINS)
@@ -684,6 +691,14 @@ function (TenzirRegisterPlugin)
     if (TARGET tenzir)
       add_dependencies(tenzir ${PLUGIN_TARGET}-shared)
     endif ()
+  endif ()
+
+  if (PLUGIN_FLATBUFFERS)
+    TenzirCompileFlatBuffers(
+      TARGET ${PLUGIN_TARGET}-fbs
+      SCHEMAS ${PLUGIN_FLATBUFFERS}
+      INCLUDE_DIRECTORY "${PLUGIN_TARGET}/fbs")
+    target_link_libraries(${PLUGIN_TARGET} PUBLIC ${PLUGIN_TARGET}-fbs)
   endif ()
 
   # Install an example configuration file, if it exists at the plugin project root.

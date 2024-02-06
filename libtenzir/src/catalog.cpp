@@ -537,7 +537,8 @@ caf::error catalog_state::load_type_registry_from_disk() {
       if (!buffer)
         return buffer.error();
       auto maybe_flatbuffer
-        = flatbuffer<fbs::TypeRegistry>::make(chunk::make(std::move(*buffer)));
+        = flatbuffer<fbs::TypeRegistry, fbs::TypeRegistryIdentifier>::make(
+          chunk::make(std::move(*buffer)));
       if (!maybe_flatbuffer)
         return maybe_flatbuffer.error();
       const auto flatbuffer = std::move(*maybe_flatbuffer);

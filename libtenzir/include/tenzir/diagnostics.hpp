@@ -289,6 +289,10 @@ public:
     return std::move(result_);
   }
 
+  auto to_error() && -> caf::error {
+    return std::move(*this).done().to_error();
+  }
+
   void emit(diagnostic_handler& diag) && {
     diag.emit(std::move(result_));
   }

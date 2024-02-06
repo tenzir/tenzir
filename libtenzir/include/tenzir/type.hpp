@@ -13,6 +13,7 @@
 #include "tenzir/aliases.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/detail/type_traits.hpp"
+#include "tenzir/flatbuffer.hpp"
 #include "tenzir/generator.hpp"
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/offset.hpp"
@@ -170,6 +171,12 @@ public:
   /// @note The table offsets are verified only when assertions are enabled.
   /// @pre `table != nullptr`
   explicit type(chunk_ptr&& table) noexcept;
+
+  /// Constructs a type from a FlatBuffers root table.
+  /// @param fb The FlatBuffers root table.
+  /// @note The table offsets are verified only when assertions are enabled.
+  /// @pre `fb != nullptr`
+  explicit type(flatbuffer<fbs::Type>&& fb) noexcept;
 
   /// Explicitly construct a type from a basic concrete type.
   template <basic_type T>
