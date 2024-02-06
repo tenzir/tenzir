@@ -182,7 +182,8 @@ public:
       auto column = params["field"];
       if (not column) {
         return caf::make_error(ec::invalid_argument,
-                               "missing 'field' parameter");
+                               "missing 'field' parameter for lookup in "
+                               "lookup-table");
       }
       return expression{
         predicate{
