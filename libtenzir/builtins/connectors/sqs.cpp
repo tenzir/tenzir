@@ -40,7 +40,7 @@ auto to_aws_string(chunk_ptr chunk) -> Aws::String {
 class sqs_queue {
 public:
   explicit sqs_queue(located<std::string> name, std::chrono::seconds poll_time)
-    : name_{std::move(name)}, poll_time_{poll_time} {
+    : name_{std::move(name)} {
     auto config = Aws::Client::ClientConfiguration{};
     // TODO: remove this after upgrading to Arrow 15, as it's no longer
     // necessary. This is just a bandaid fix to make an old version of the SDK
@@ -68,14 +68,14 @@ public:
   }
 
   /// Receives messages from the queue.
-  auto receive_messages() {
+  auto receive_messages(std::chrono::seconds poll_time) {
     TENZIR_DEBUG("receiving messages from {}", url_);
     auto request = Aws::SQS::Model::ReceiveMessageRequest{};
     request.SetQueueUrl(url_);
     // TODO: adjust once we have limit pushdown. We still can lose messages
     // because we eagerly fetch them witout waiting for ACKs from downstream.
     request.SetMaxNumberOfMessages(10);
-    request.SetWaitTimeSeconds(detail::narrow_cast<int>(poll_time_.count()));
+    request.SetWaitTimeSeconds(detail::narrow_cast<int>(poll_time.count()));
     auto outcome = client_.ReceiveMessage(request);
     if (not outcome.IsSuccess()) {
       diagnostic::error("failed receiving message from SQS queue")
@@ -140,7 +140,6 @@ private:
   located<std::string> name_;
   Aws::String url_;
   Aws::SQS::SQSClient client_;
-  std::chrono::seconds poll_time_;
 };
 
 struct connector_args {
@@ -172,7 +171,7 @@ public:
         auto queue = sqs_queue{args.queue, poll_time};
         co_yield {};
         while (true) {
-          auto messages = queue.receive_messages();
+          auto messages = queue.receive_messages(poll_time);
           if (messages.empty()) {
             co_yield {};
           } else {
