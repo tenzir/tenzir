@@ -10,6 +10,7 @@
 #include <tenzir/format/reader_factory.hpp>
 #include <tenzir/format/syslog.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/to_lines.hpp>
 
@@ -17,34 +18,140 @@ namespace tenzir::plugins::syslog {
 
 namespace {
 
-auto impl(generator<std::optional<std::string_view>> lines,
-          operator_control_plane& ctrl) -> generator<table_slice> {
-  std::optional<table_slice_builder> builder{std::nullopt};
-  auto syslog_type = format::syslog::make_syslog_type();
-  auto legacy_syslog_type = format::syslog::make_legacy_syslog_type();
-  auto unknown_type = format::syslog::make_unknown_type();
-  auto last_finish = std::chrono::steady_clock::now();
-  auto line_nr = size_t{0};
-  auto change_builder_schema = [&](const type& t) -> table_slice {
-    if (builder && builder->schema() == t) {
+struct syslog_builder {
+public:
+  using message_type = format::syslog::message;
+
+  syslog_builder() : builder_(format::syslog::make_syslog_type()) {
+  }
+
+  auto add(const message_type& msg) -> bool {
+    record r{
+      {"facility", msg.hdr.facility},     {"severity", msg.hdr.severity},
+      {"version", msg.hdr.version},       {"timestamp", msg.hdr.ts},
+      {"hostname", msg.hdr.hostname},     {"app_name", msg.hdr.app_name},
+      {"process_id", msg.hdr.process_id}, {"message_id", msg.hdr.msg_id},
+      {"structured_data", msg.data},      {"message", msg.msg},
+    };
+    return builder_.try_data(r).operator bool();
+  }
+
+  auto rows() -> size_t {
+    return static_cast<size_t>(builder_.length());
+  }
+
+  auto finish() -> std::vector<table_slice> {
+    return builder_.finish_as_table_slice();
+  }
+
+private:
+  series_builder builder_;
+};
+
+struct legacy_syslog_builder {
+public:
+  using message_type = format::syslog::legacy_message;
+
+  legacy_syslog_builder()
+    : builder_(format::syslog::make_legacy_syslog_type()) {
+  }
+
+  auto add(const message_type& msg) -> bool {
+    return builder_.add(msg.facility, msg.severity, msg.timestamp, msg.host,
+                        msg.app_name, msg.process_id, msg.content);
+  }
+
+  auto rows() -> size_t {
+    return builder_.rows();
+  }
+
+  auto finish() -> std::vector<table_slice> {
+    if (rows() == 0) {
       return {};
     }
-    if (builder) {
-      TENZIR_ASSERT_EXPENSIVE(builder->schema() != t);
-      auto slice = builder->finish();
-      builder.emplace(t);
-      return slice;
+    return {builder_.finish()};
+  }
+
+private:
+  table_slice_builder builder_;
+};
+
+struct unknown_syslog_builder {
+public:
+  using message_type = std::string;
+
+  unknown_syslog_builder() : builder_(format::syslog::make_unknown_type()) {
+  }
+
+  auto add(const message_type& line) -> bool {
+    return builder_.add(line);
+  }
+
+  auto rows() -> size_t {
+    return builder_.rows();
+  }
+
+  auto finish() -> std::vector<table_slice> {
+    if (rows() == 0) {
+      return {};
     }
-    builder.emplace(t);
-    return {};
+    return {builder_.finish()};
+  }
+
+private:
+  table_slice_builder builder_;
+};
+
+auto impl(generator<std::optional<std::string_view>> lines,
+          operator_control_plane& ctrl) -> generator<table_slice> {
+  std::variant<syslog_builder, legacy_syslog_builder, unknown_syslog_builder>
+    builder{std::in_place_type<unknown_syslog_builder>};
+  const auto finish = [&]() {
+    return std::visit(
+      [&](auto& b) {
+        return b.finish();
+      },
+      builder);
   };
+  const auto rows = [&]() {
+    return std::visit(
+      [&](auto& b) {
+        return b.rows();
+      },
+      builder);
+  };
+  const auto add = [&](const auto& msg) {
+    return std::visit(
+      [&](auto& b) -> bool {
+        if constexpr (std::is_same_v<std::remove_cvref_t<decltype(msg)>,
+                                     typename std::remove_reference_t<
+                                       decltype(b)>::message_type>) {
+          return b.add(msg);
+        } else {
+          TENZIR_UNREACHABLE();
+        }
+      },
+      builder);
+  };
+  const auto change_builder
+    = [&]<typename Builder>(tag<Builder>) -> std::vector<table_slice> {
+    if (std::holds_alternative<Builder>(builder)) {
+      return {};
+    }
+    auto finished = finish();
+    builder.template emplace<Builder>();
+    return finished;
+  };
+  auto last_finish = std::chrono::steady_clock::now();
+  auto line_nr = size_t{0};
   for (auto&& line : lines) {
     const auto now = std::chrono::steady_clock::now();
-    if (builder
-        and (builder->rows() >= defaults::import::table_slice_size
-             or last_finish + defaults::import::batch_timeout < now)) {
+    if (rows() >= defaults::import::table_slice_size
+        or last_finish + defaults::import::batch_timeout < now) {
       last_finish = now;
-      co_yield builder->finish();
+      for (auto&& slice : finish()) {
+        co_yield std::move(slice);
+      }
     }
     if (not line) {
       if (last_finish != now) {
@@ -61,13 +168,10 @@ auto impl(generator<std::optional<std::string_view>> lines,
     format::syslog::message msg{};
     format::syslog::legacy_message legacy_msg{};
     if (auto parser = format::syslog::message_parser{}; parser(f, l, msg)) {
-      if (auto slice = change_builder_schema(syslog_type); slice.rows() > 0) {
+      for (auto&& slice : change_builder(tag_v<syslog_builder>)) {
         co_yield std::move(slice);
       }
-      if (not builder->add(msg.hdr.facility, msg.hdr.severity, msg.hdr.version,
-                           msg.hdr.ts, msg.hdr.hostname, msg.hdr.app_name,
-                           msg.hdr.process_id, msg.hdr.msg_id, msg.data,
-                           msg.msg)) {
+      if (not add(msg)) {
         diagnostic::error(
           "syslog parser (RFC 5242) failed to produce table slice")
           .note("line number {}", line_nr)
@@ -77,14 +181,10 @@ auto impl(generator<std::optional<std::string_view>> lines,
       }
     } else if (auto legacy_parser = format::syslog::legacy_message_parser{};
                legacy_parser(f, l, legacy_msg)) {
-      if (auto slice = change_builder_schema(legacy_syslog_type);
-          slice.rows() > 0) {
+      for (auto&& slice : change_builder(tag_v<legacy_syslog_builder>)) {
         co_yield std::move(slice);
       }
-      if (not builder->add(legacy_msg.facility, legacy_msg.severity,
-                           legacy_msg.timestamp, legacy_msg.host,
-                           legacy_msg.app_name, legacy_msg.process_id,
-                           legacy_msg.content)) {
+      if (not add(legacy_msg)) {
         diagnostic::error(
           "syslog parser (RFC 3164) failed to produce table slice")
           .note("line number {}", line_nr)
@@ -93,10 +193,10 @@ auto impl(generator<std::optional<std::string_view>> lines,
         co_return;
       }
     } else {
-      if (auto slice = change_builder_schema(unknown_type); slice.rows() > 0) {
+      for (auto&& slice : change_builder(tag_v<unknown_syslog_builder>)) {
         co_yield std::move(slice);
       }
-      if (not builder->add(*line)) {
+      if (not add(*line)) {
         diagnostic::error(
           "syslog parser (unknown format) failed to produce table slice")
           .note("line number {}", line_nr)
@@ -106,8 +206,8 @@ auto impl(generator<std::optional<std::string_view>> lines,
       }
     }
   }
-  if (builder && builder->rows() > 0) {
-    co_yield builder->finish();
+  for (auto slices = finish(); auto&& slice : slices) {
+    co_yield std::move(slice);
   }
 }
 
