@@ -341,7 +341,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Configure ssh-agent
-        uses: webfactory/ssh-agent@v0.8.0
+        uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
       - name: Require contrib/tenzir-plugins to be on a main branch commit
@@ -871,7 +871,7 @@ jobs:
             >> /root/.ssh/known_hosts
           chmod 600 /root/.ssh/known_hosts
       - name: Configure ssh-agent
-        uses: webfactory/ssh-agent@v0.8.0
+        uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
       - name: Checkout
