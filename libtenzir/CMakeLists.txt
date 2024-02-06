@@ -254,10 +254,22 @@ endif ()
 # Link against curl.
 # The FindCURL module from CMake doesn't expose the link dependencies of libcurl.a
 # correctly, so we use pkg-config instead.
-pkg_check_modules(PC_CURL REQUIRED QUIET IMPORTED_TARGET libcurl)
+pkg_check_modules(PC_CURL REQUIRED IMPORTED_TARGET libcurl)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST
        "\npkg_check_modules(PC_CURL REQUIRED QUIET IMPORTED_TARGET libcurl)")
 target_link_libraries(libtenzir PUBLIC PkgConfig::PC_CURL)
+# The static curl library we use on macOS depends on SystemConfiguration, but
+# that dependency is missing from the pkg-config file, so we insert it here as a
+# work around.
+if (CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND PC_CURL_CFLAGS MATCHES ".*CURL_STATICLIB.*")
+  find_library(SystemConfiguration SystemConfiguration REQUIRED)
+  mark_as_advanced(SystemConfiguration)
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+         "\nfind_library(SystemConfiguration SystemConfiguration REQUIRED)")
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+         "\nmark_as_advanced(SystemConfiguration)")
+  target_link_libraries(libtenzir PUBLIC ${SystemConfiguration})
+endif ()
 dependency_summary("CURL" PkgConfig::PC_CURL "Dependencies")
 
 # Link against fmt.
