@@ -128,6 +128,9 @@ public:
 
   /// Constructs a ref-counted FlatBuffers root table that shares the
   /// lifetime with the chunk it's constructed from.
+  /// @note This verifies the FlatBuffers table recursively, potentially
+  /// loading memory in the chunk, which can be expensive. Use `make_unsafe`
+  /// instead to skip this verification.
   /// @pre *chunk* must hold a valid *Table*.
   [[nodiscard]] static auto make(chunk_ptr&& chunk) noexcept
     -> caf::expected<flatbuffer>
@@ -162,16 +165,6 @@ public:
   /// Constructs a ref-counted FlatBuffers root table.
   /// @pre *buffer* must hold a valid *Table*.
   [[nodiscard]] static auto make(flatbuffers::DetachedBuffer&& buffer) noexcept
-    -> caf::expected<flatbuffer>
-    requires(Type != flatbuffer_type::child)
-  {
-    return make(chunk::make(std::move(buffer)));
-  }
-
-  /// Constructs a ref-counted FlatBuffers root table.
-  /// @pre *buffer* must hold a valid *Table*.
-  [[nodiscard]] static auto
-  make_unsafe(flatbuffers::DetachedBuffer&& buffer) noexcept
     -> caf::expected<flatbuffer>
     requires(Type != flatbuffer_type::child)
   {
