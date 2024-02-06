@@ -17,9 +17,7 @@ services:
       - ${TENZIR_WEB_PORT:-5160}:5160
       - ${TENZIR_PORT:-5158}:5158
     entrypoint:
-      - tenzir-ctl
-    command:
-      - start
+      - tenzir-node
     networks:
       - tenzir
 
