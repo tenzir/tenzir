@@ -73,7 +73,7 @@ public:
     auto request = Aws::SQS::Model::ReceiveMessageRequest{};
     request.SetQueueUrl(url_);
     // TODO: adjust once we have limit pushdown. We still can lose messages
-    // because we eagerly fetch them witout waiting for ACKs from downstream.
+    // because we eagerly fetch them without waiting for ACKs from downstream.
     request.SetMaxNumberOfMessages(10);
     request.SetWaitTimeSeconds(detail::narrow_cast<int>(poll_time.count()));
     auto outcome = client_.ReceiveMessage(request);
@@ -226,8 +226,9 @@ public:
     auto queue = sqs_queue{args_.queue, poll_time};
     return [&ctrl, queue = std::make_shared<sqs_queue>(std::move(queue))](
              chunk_ptr chunk) mutable {
-      if (!chunk || chunk->size() == 0)
+      if (!chunk || chunk->size() == 0) {
         return;
+      }
       try {
         queue->send_message(to_aws_string(std::move(chunk)));
       } catch (diagnostic& d) {
