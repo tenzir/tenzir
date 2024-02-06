@@ -357,7 +357,7 @@ string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(libmaxminddb)")
 dependency_summary("libmaxminddb" maxminddb::maxminddb "Dependencies")
 
 # Link against AWS SDK
-target_link_libraries(libtenzir PUBLIC ${AWSSDK_LINK_LIBRARIES})
+target_link_libraries(libtenzir_builtins PRIVATE ${AWSSDK_LINK_LIBRARIES})
 dependency_summary("AWS SDK" ${AWSSDK_CORE_HEADER_FILE} "Dependencies")
 
 # Link against Apache Arrow.
