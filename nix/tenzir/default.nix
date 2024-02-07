@@ -16,6 +16,7 @@
     curl,
     libpcap,
     arrow-cpp,
+    aws-sdk-cpp-tenzir,
     fast_float,
     flatbuffers,
     fluent-bit,
@@ -122,6 +123,7 @@
         ];
         propagatedNativeBuildInputs = [pkg-config];
         buildInputs = [
+          aws-sdk-cpp-tenzir
           fast_float
           fluent-bit
           grpc
