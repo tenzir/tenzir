@@ -9,11 +9,10 @@
     ];
   };
 
-  inputs.nixpkgs.url = "github:nixos/nixpkgs/7086fd448fbe174a8c05a87a475bedd704520b68";
+  inputs.nixpkgs.url = "github:nixos/nixpkgs/1f5d74db169236ad4bed54028c8e147298c7cf9d";
   inputs.flake-compat.url = "github:edolstra/flake-compat";
   inputs.flake-compat.flake = false;
   inputs.flake-utils.url = "github:numtide/flake-utils";
-  inputs.nix-filter.url = "github:numtide/nix-filter";
   inputs.sbomnix.url = "github:tiiuae/sbomnix";
   inputs.sbomnix.inputs.nixpkgs.follows = "nixpkgs";
 
@@ -99,15 +98,10 @@
             tenzir-de-static = pkgs.pkgsStatic.tenzir-de;
             tenzir = pkgs.tenzir;
             tenzir-static = pkgs.pkgsStatic.tenzir;
-            tenzir-cm = pkgs.tenzir-cm;
-            tenzir-cm-static = pkgs.pkgsStatic.tenzir-cm;
             tenzir-ee = pkgs.tenzir-ee;
             tenzir-ee-static = pkgs.pkgsStatic.tenzir-ee;
             integration-test-shell = pkgs.mkShell {
-              packages = pkgs.tenzir-de;
-            };
-            integration-shell = pkgs.mkShell {
-              packages = pkgs.tenzir-integration-deps;
+              packages = pkgs.tenzir-integration-test-runner;
             };
           }
           // {
@@ -117,8 +111,6 @@
             vast-static = self.packages.${system}.tenzir-de-static;
             vast-ce = self.packages.${system}.tenzir;
             vast-ce-static = self.packages.${system}.tenzir-static;
-            vast-cm = self.packages.${system}.tenzir-cm;
-            vast-cm-static = self.packages.${system}.tenzir-cm-static;
             vast-ee = self.packages.${system}.tenzir-ee;
             vast-ee-static = self.packages.${system}.tenzir-ee-static;
             vast-integration-test-shell = self.packages.${system}.integration-test-shell;

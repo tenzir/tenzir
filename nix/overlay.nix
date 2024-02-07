@@ -38,15 +38,36 @@ in {
             })
           ];
       });
+  # The arrow package overrides aws-sdk-cpp in a let binding to specify
+  # the exact apis that are needed for arrow. We need to extend the list
+  # of APIs for our own purpose, so we "decorate" the override function.
+  aws-sdk-cpp-tenzir = let
+    self = final.aws-sdk-cpp.override {
+      apis = [
+        # arrow-cpp apis; must be kept in sync with nixpkgs.
+        "cognito-identity"
+        "config"
+        "identity-management"
+        "s3"
+        "sts"
+        "transfer"
+        # Additional apis used by tenzir.
+        "sqs"
+      ];
+    };
+  in
+    (self // {override = _: self;});
   arrow-cpp = let
-    arrow-cpp' = prev.arrow-cpp.overrideAttrs (orig: {
+    arrow-cpp' = (prev.arrow-cpp.overrideAttrs (orig: {
       buildInputs = orig.buildInputs ++ [final.bzip2];
       cmakeFlags =
         orig.cmakeFlags
         ++ [
           "-DARROW_WITH_BZ2=ON"
         ];
-    });
+      })).override {
+        aws-sdk-cpp = final.aws-sdk-cpp-tenzir;
+      };
   in
     overrideAttrsIf isStatic
     (
@@ -78,10 +99,6 @@ in {
       cmakeFlags =
         orig.cmakeFlags
         ++ [
-          # Needed for correct dependency resolution, should be the default...
-          "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
-          # Backtrace doesn't build in static mode, need to investigate.
-          "-DARROW_WITH_BACKTRACE=OFF"
           "-DARROW_BUILD_TESTS=OFF"
         ];
       doCheck = false;
@@ -172,8 +189,13 @@ in {
     nativeBuildInputs = (orig.nativeBuildInputs or []) ++ [prev.buildPackages.cmake];
   });
   fluent-bit = let
+    fluent-bit'' = prev.fluent-bit.overrideAttrs (orig: {
+      patches = (orig.patches or []) ++ [
+        ./fix-fluent-bit-install.patch
+      ];
+    });
     fluent-bit' =
-      overrideAttrsIf isDarwin prev.fluent-bit
+      overrideAttrsIf isDarwin fluent-bit''
       (orig: {
         buildInputs = (orig.buildInputs or []) ++ (with prev.darwin.apple_sdk.frameworks; [Foundation IOKit]);
         # The name "kIOMainPortDefault" has been introduced in a a later SDK
@@ -182,7 +204,9 @@ in {
           (orig.cmakeFlags or [])
           ++ [
             "-DCMAKE_C_FLAGS=\"-DkIOMainPortDefault=kIOMasterPortDefault\""
+            "-DFLB_LUAJIT=OFF"
           ];
+        env.NIX_CFLAGS_COMPILE = "-mmacosx-version-min=10.12 -Wno-int-conversion";
       });
   in
     overrideAttrsIf isStatic fluent-bit'
@@ -295,75 +319,126 @@ in {
       prev.rabbitmq-c.override {
         xmlto = null;
       };
-  tenzir-source = inputs.nix-filter.lib.filter {
+  bats-tenzir = prev.stdenv.mkDerivation {
+    pname = "bats-tenzir";
+    version = "0.1";
+    src = lib.fileset.toSource {
+      root = ./../tenzir/integration/lib/bats-tenzir;
+      fileset = ./../tenzir/integration/lib/bats-tenzir;
+    };
+    dontBuild = true;
+    installPhase = ''
+      mkdir -p "$out/share/bats/bats-tenzir"
+      cp load.bash "$out/share/bats/bats-tenzir"
+      cp -r src "$out/share/bats/bats-tenzir"
+    '';
+    meta = {
+      platforms = lib.platforms.all;
+      license = lib.licenses.bsd3;
+      #maintainers = [ ];
+    };
+  };
+  bundledPlugins = builtins.attrNames (lib.filterAttrs (name: type: type == "directory") (builtins.readDir ../plugins));
+  integration-test-tree = lib.fileset.unions ([
+    (lib.fileset.difference ../tenzir/integration ../tenzir/integration/lib/bats-tenzir)
+  ] ++ builtins.map (x: lib.fileset.maybeMissing (./.. + "/plugins/${x}/integration")) final.bundledPlugins);
+  tenzir-tree = lib.fileset.difference (lib.fileset.unions [
+    ../changelog
+    ../cmake
+    ../libtenzir
+    ../libtenzir_test
+    ../plugins
+    ../python
+    ../schema
+    ../scripts
+    ../tenzir
+    ../VERSIONING.md
+    ../CMakeLists.txt
+    ../LICENSE
+    ../README.md
+    ../tenzir.spdx.json
+    ../VERSIONING.md
+    ../tenzir.yaml.example
+    ../version.json
+  ]) final.integration-test-tree;
+  tenzir-source = lib.fileset.toSource {
     root = ./..;
-    include = [
-      (inputs.nix-filter.lib.inDirectory ../changelog)
-      (inputs.nix-filter.lib.inDirectory ../cmake)
-      (inputs.nix-filter.lib.inDirectory ../contrib)
-      (inputs.nix-filter.lib.inDirectory ../docs)
-      (inputs.nix-filter.lib.inDirectory ../docs)
-      (inputs.nix-filter.lib.inDirectory ../libtenzir)
-      (inputs.nix-filter.lib.inDirectory ../libtenzir_test)
-      (inputs.nix-filter.lib.inDirectory ../plugins)
-      (inputs.nix-filter.lib.inDirectory ../python)
-      (inputs.nix-filter.lib.inDirectory ../schema)
-      (inputs.nix-filter.lib.inDirectory ../scripts)
-      (inputs.nix-filter.lib.inDirectory ../tenzir)
-      ../VERSIONING.md
-      ../CMakeLists.txt
-      ../LICENSE
-      ../README.md
-      ../tenzir.spdx.json
-      ../VERSIONING.md
-      ../tenzir.yaml.example
-      ../version.json
-    ];
+    fileset = final.tenzir-tree;
   };
-  tenzir-de = final.callPackage ./tenzir {
-    inherit stdenv versionShortOverride versionLongOverride;
-    pname = "tenzir-de";
+  unchecked = {
+    tenzir-de = final.callPackage ./tenzir {
+      inherit stdenv versionShortOverride versionLongOverride;
+      pname = "tenzir-de";
+    };
+    # Policy: The suffix-less `tenzir' packages come with a few closed source
+    # plugins.
+    tenzir = let
+      pkg = final.unchecked.tenzir-de.override {
+        pname = "tenzir";
+      };
+    in
+      pkg.withPlugins (ps: [
+        ps.context
+        ps.matcher
+        ps.pipeline-manager
+        ps.platform
+      ]);
+    tenzir-ee = let
+      pkg = final.unchecked.tenzir-de.override {
+        pname = "tenzir-ee";
+      };
+    in
+      pkg.withPlugins (ps: [
+        ps.compaction
+        ps.context
+        ps.matcher
+        ps.pipeline-manager
+        ps.platform
+      ]);
   };
-  # Policy: The suffix-less `tenzir' packages come with a few closed source
-  # plugins.
-  tenzir = let
-    pkg = final.tenzir-de.override {
-      pname = "tenzir";
-    };
-  in
-    pkg.withPlugins (ps: [
-      ps.context
-      ps.matcher
-      ps.pipeline-manager
-      ps.platform
-    ]);
-  tenzir-cm = let
-    pkg = final.tenzir-de.override {
-      pname = "tenzir-cm";
-    };
-  in
-    pkg.withPlugins (ps: [
-      ps.compaction
-      ps.matcher
-    ]);
-  tenzir-ee = let
-    pkg = final.tenzir-de.override {
-      pname = "tenzir-ee";
-    };
-  in
-    pkg.withPlugins (ps: [
-      ps.compaction
-      ps.context
-      ps.matcher
-      ps.pipeline-manager
-      ps.platform
-    ]);
-  tenzir-integration-deps = let
-    bats = prev.bats.withLibraries (p: [
-      p.bats-support
-      p.bats-assert
-    ]);
-  in [bats prev.curl prev.jq prev.socat];
+  toChecked =
+    x:
+    # Run checks only on Linux for now. Alternative platforms are expensive in
+    # CI and also not as important.
+    if isLinux then
+      final.callPackage ./tenzir/check.nix
+        {
+          src = lib.fileset.toSource {
+            root = ../.;
+            fileset = lib.fileset.unions [
+              final.integration-test-tree
+              ../tenzir.yaml.example
+            ];
+          };
+        }
+        x
+    else
+      x // { unchecked = x; };
+  tenzir-de = final.toChecked final.unchecked.tenzir-de;
+  tenzir = final.toChecked final.unchecked.tenzir;
+  tenzir-ee = final.toChecked final.unchecked.tenzir-ee;
+  tenzir-integration-test-runner = with prev.pkgsBuildBuild; [
+    (bats.withLibraries (
+      p: [
+        p.bats-support
+        p.bats-assert
+        bats-tenzir
+      ]
+    ))
+    parallel
+  ];
+  tenzir-integration-test-deps = with prev.pkgsBuildBuild; [
+    curl
+    jq
+    lsof
+    procps
+    socat
+    # toybox provides a portable `rev`, but it also comes with a `cp` that does
+    # not provide all the flags that are used in stdenv phases. We just add it
+    # to the PATH in the checkPhase directly as a workaround.
+    #toybox
+    yara
+  ] ++ final.tenzir-integration-test-runner;
   pythonPackagesExtensions =
     prev.pythonPackagesExtensions
     ++ [
@@ -373,22 +448,10 @@ in {
         }
       )
     ];
-  tenzir-integration-test-deps = let
-    py3 = prev.python3.withPackages (ps:
-      with ps; [
-        coloredlogs
-        dynaconf
-        jsondiff
-        pyarrow
-        python-box
-        pyyaml
-        schema
-      ]);
-  in [py3 final.jq final.tcpdump];
   speeve = final.buildGoModule rec {
     pname = "speeve";
     version = "0.1.3";
-    vendorSha256 = "sha256-Mw1cRIwmDS2Canljkuw96q2+e+z14MUcU5EtupUcTDQ=";
+    vendorHash = "sha256-Mw1cRIwmDS2Canljkuw96q2+e+z14MUcU5EtupUcTDQ=";
     src = final.fetchFromGitHub {
       rev = "v${version}";
       owner = "satta";

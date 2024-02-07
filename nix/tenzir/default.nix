@@ -16,6 +16,7 @@
     curl,
     libpcap,
     arrow-cpp,
+    aws-sdk-cpp-tenzir,
     fast_float,
     flatbuffers,
     fluent-bit,
@@ -34,8 +35,6 @@
     cppzmq,
     libmaxminddb,
     re2,
-    tenzir-integration-deps,
-    tenzir-integration-test-deps,
     dpkg,
     restinio,
     pfs,
@@ -43,11 +42,11 @@
     versionShortOverride ? null,
     extraPlugins ? [],
     symlinkJoin,
-    runCommand,
-    makeWrapper,
     extraCmakeFlags ? [],
-    disableTests ? true,
+    python3,
     pkgsBuildHost,
+    runCommand,
+    makeBinaryWrapper,
   }: let
     inherit (stdenv.hostPlatform) isMusl isStatic;
 
@@ -81,10 +80,23 @@
       # building protobufc.
       ++ lib.optionals (!(stdenv.isDarwin && isStatic)) [
         "plugins/yara"
-      ]
-      ++ extraPlugins';
+      ];
+    py3 = let
+      p = if stdenv.buildPlatform.canExecute stdenv.hostPlatform
+        then pkgsBuildHost.python3
+        else python3;
+    in
+      p.withPackages (ps:
+        with ps; [
+          aiohttp
+          dynaconf
+          pandas
+          pyarrow
+          python-box
+          pip
+        ]);
   in
-    stdenv.mkDerivation ({
+    stdenv.mkDerivation (finalAttrs: ({
         inherit pname;
         version = versionLong;
         src = tenzir-source;
@@ -105,18 +117,19 @@
           dpkg
           protobuf
           poetry
+          makeBinaryWrapper
         ] ++ lib.optionals stdenv.isDarwin [
           lld
         ];
         propagatedNativeBuildInputs = [pkg-config];
         buildInputs = [
+          aws-sdk-cpp-tenzir
           fast_float
           fluent-bit
           grpc
           libpcap
           libunwind
           libyamlcpp
-          libmaxminddb
           protobuf
           rabbitmq-c
           rdkafka
@@ -134,6 +147,7 @@
           caf
           curl
           flatbuffers
+          libmaxminddb
           robin-map
           simdjson
           spdlog
@@ -156,9 +170,12 @@
             "-DTENZIR_ENABLE_MANPAGES=OFF"
             "-DTENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
             "-DTENZIR_ENABLE_FLUENT_BIT_SO_WORKAROUNDS=OFF"
-            "-DTENZIR_PLUGINS=${lib.concatStringsSep ";" bundledPlugins}"
-          ]
-          ++ lib.optionals isStatic [
+            "-DTENZIR_PLUGINS=${lib.concatStringsSep ";" (bundledPlugins ++ extraPlugins')}"
+            # Disabled for now, takes long to compile and integration tests give
+            # reasonable coverage.
+            "-DTENZIR_ENABLE_UNIT_TESTS=OFF"
+            "-DTENZIR_ENABLE_BATS_TENZIR_INSTALLATION=OFF"
+          ] ++ lib.optionals isStatic [
             "-DBUILD_SHARED_LIBS:BOOL=OFF"
             #"-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
             "-DCPACK_GENERATOR=${if stdenv.isDarwin then "productbuild" else "TGZ;DEB"}"
@@ -200,9 +217,6 @@
             # builder in the Nix context, and that doesn't make sense.
             "-DTENZIR_ENABLE_INIT_SYSTEM_INTEGRATION=OFF"
           ])
-          ++ lib.optionals disableTests [
-            "-DTENZIR_ENABLE_UNIT_TESTS=OFF"
-          ]
           ++ extraCmakeFlags;
 
         # TODO: Fix LTO on darwin by passing these commands by their original
@@ -227,25 +241,23 @@
           rm -rf $out/nix-support
         '';
 
+        # Checking is done in a dedicated derivation, see check.nix.
         doCheck = false;
-        checkTarget = "test";
+        doInstallCheck = false;
 
         dontStrip = true;
 
-        doInstallCheck = false;
-        installCheckInputs = tenzir-integration-deps ++ tenzir-integration-test-deps;
-        # TODO: Investigate why the disk monitor test fails in the build sandbox.
-        installCheckPhase = ''
-          PATH="${placeholder "out"}/bin:$PATH" bats -T -j $NIX_BUILD_CORES ../tenzir/integration
-          python ../tenzir/integration/integration.py \
-            --app ${placeholder "out"}/bin/tenzir-ctl \
-            --disable "Disk Monitor"
+        postInstall = ''
+          wrapProgram $out/bin/tenzir \
+            --prefix PATH : ${lib.makeBinPath [ py3 ]} \
+            --suffix PYTHONPATH : ${py3}/${py3.sitePackages}
         '';
 
-        passthru = rec {
-          plugins = callPackage ./plugins {tenzir = self;};
-          withPlugins = plugins': let
-            actualPlugins = plugins' plugins;
+        passthru = {
+          plugins = bundledPlugins ++ extraPlugins;
+          withPlugins = selection: let
+            allPlugins = callPackage ./plugins {tenzir = self;};
+            actualPlugins = selection allPlugins;
           in
             if isStatic
             then
@@ -254,8 +266,8 @@
               }
             else
               symlinkJoin {
-                name = "tenzir";
-                paths = [self actualPlugins];
+                inherit (self) passthru meta pname version name;
+                paths = [ self ] ++ actualPlugins;
               };
         };
 
@@ -269,15 +281,16 @@
           maintainers = with maintainers; [tobim];
         };
       }
-      # allowedRequisites does not work on darwin.
+      # disallowedReferences does not work on darwin.
       // lib.optionalAttrs (isStatic && stdenv.isLinux) {
-        allowedRequisites = ["out"];
+        #disallowedReferences = [ tenzir-source ] ++ extraPlugins;
       }
       // lib.optionalAttrs isStatic {
         __noChroot = stdenv.isDarwin;
 
         installPhase = ''
           runHook preInstall
+          # TODO: Check if we need this and comment if yes.
           PATH=$PATH:/usr/bin
           cmake --install . --component Runtime
           cmakeFlagsArray+=(
@@ -300,7 +313,7 @@
           install -m 644 -Dt $package package/*
           runHook postInstall
         '';
-      });
-  self = callPackage pkgFun ({self = self;} // args);
+      }));
+  self' = callPackage pkgFun ({self = self';} // args);
 in
-  self
+  self'

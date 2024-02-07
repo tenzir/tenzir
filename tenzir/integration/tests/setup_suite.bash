@@ -13,7 +13,7 @@ teardown_suite() {
   : # Nothing to do
 }
 
-if ! which tenzir; then
+if ! command -v tenzir; then
   echo "tenzir binaries must be on $PATH"
   return 1
 fi

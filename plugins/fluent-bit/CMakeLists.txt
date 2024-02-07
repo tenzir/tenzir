@@ -26,7 +26,6 @@ if (NOT fluentbit_FOUND)
 endif ()
 
 get_filename_component(FLUENT_BIT_PREFIX ${FLUENT_BIT_LOCATION} PATH)
-get_filename_component(FLUENT_BIT_PREFIX ${FLUENT_BIT_PREFIX} PATH)
 dependency_summary("fluent-bit" ${FLUENT_BIT_PREFIX} "Dependencies")
 target_link_libraries(fluent-bit PRIVATE fluentbit::fluentbit)
 

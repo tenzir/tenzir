@@ -941,7 +941,7 @@ jobs:
         run: |
           # We don't always have a bats submodule when building plugins, so we
           # get it with Nix.
-          nix --accept-flake-config develop .#integration-shell \
+          nix --accept-flake-config develop .#integration-test-shell \
             --command bash -c "cmake --build \"$BUILD_DIR\" --target integration -j 1"
       - name: Publish Integration Test Report
         uses: mikepenz/action-junit-report@v4
