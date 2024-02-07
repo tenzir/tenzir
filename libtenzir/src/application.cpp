@@ -233,7 +233,6 @@ auto make_command_factory() {
     {"import zeek", import_command},
     {"import zeek-json", import_command},
     {"import arrow", import_command},
-    {"start", start_command},
     {"status", remote_command},
   };
   // clang-format on
@@ -248,7 +247,6 @@ auto make_root_command(std::string_view name) {
   root->add_subcommand(make_count_command());
   root->add_subcommand(make_export_command());
   root->add_subcommand(make_import_command());
-  root->add_subcommand(make_start_command());
   root->add_subcommand(make_status_command());
   return root;
 }

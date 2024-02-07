@@ -149,6 +149,9 @@ inline constexpr const size_t client_queue_size = 100;
 /// Maximum number of log messages in the logger queue (server).
 inline constexpr const size_t server_queue_size = 1'000'000;
 
+/// Policy when running out of space in the log queue.
+inline constexpr const char* overflow_policy = "overrun_oldest";
+
 /// Number of logger threads.
 inline constexpr const size_t logger_threads = 1;
 
