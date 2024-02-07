@@ -59,10 +59,6 @@ TenzirCompileFlatBuffers(
   SCHEMAS ${flatbuffers_schemas}
   INCLUDE_DIRECTORY "tenzir/fbs/")
 
-# -- AWS SDK -------------------------------------------------------------------
-
-find_package(AWSSDK COMPONENTS sqs REQUIRED CONFIG)
-
 # -- arrow ---------------------------------------------------------------------
 
 find_package(Arrow REQUIRED CONFIG)
@@ -355,10 +351,6 @@ target_link_libraries(libtenzir PUBLIC tsl::robin_map)
 target_link_libraries(libtenzir PUBLIC maxminddb::maxminddb)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(libmaxminddb)")
 dependency_summary("libmaxminddb" maxminddb::maxminddb "Dependencies")
-
-# Link against AWS SDK
-target_link_libraries(libtenzir_builtins PRIVATE ${AWSSDK_LINK_LIBRARIES})
-dependency_summary("AWS SDK" ${AWSSDK_CORE_HEADER_FILE} "Dependencies")
 
 # Link against Apache Arrow.
 target_link_libraries(libtenzir PUBLIC ${ARROW_LIBRARY})
