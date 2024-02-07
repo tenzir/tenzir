@@ -67,14 +67,16 @@ public:
     url_ = queue_url();
   }
 
-  /// Receives messages from the queue.
-  auto receive_messages(std::chrono::seconds poll_time) {
+  /// Receives N messages from the queue.
+  auto receive_messages(size_t num_messages, std::chrono::seconds poll_time) {
+    TENZIR_ASSERT(num_messages > 0);
+    TENZIR_ASSERT(num_messages <= 10);
     TENZIR_DEBUG("receiving messages from {}", url_);
     auto request = Aws::SQS::Model::ReceiveMessageRequest{};
     request.SetQueueUrl(url_);
     // TODO: adjust once we have limit pushdown. We still can lose messages
     // because we eagerly fetch them without waiting for ACKs from downstream.
-    request.SetMaxNumberOfMessages(10);
+    request.SetMaxNumberOfMessages(detail::narrow_cast<int>(num_messages));
     request.SetWaitTimeSeconds(detail::narrow_cast<int>(poll_time.count()));
     auto outcome = client_.ReceiveMessage(request);
     if (not outcome.IsSuccess()) {
@@ -171,7 +173,8 @@ public:
         auto queue = sqs_queue{args.queue, poll_time};
         co_yield {};
         while (true) {
-          auto messages = queue.receive_messages(poll_time);
+          constexpr auto num_messages = size_t{10};
+          auto messages = queue.receive_messages(num_messages, poll_time);
           if (messages.empty()) {
             co_yield {};
           } else {
