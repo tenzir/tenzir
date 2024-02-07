@@ -5,6 +5,7 @@ set -euo pipefail
 brew --version
 brew install --overwrite \
     apache-arrow \
+    aws-sdk-cpp \
     bash \
     boost \
     ccache \
