@@ -68,7 +68,7 @@ jobs:
       head-ref-slug: ${{ steps.configure.outputs.head-ref-slug }}
       base-ref-slug: ${{ steps.configure.outputs.base-ref-slug }}
       tenzir-container-ref: ${{ steps.configure.outputs.tenzir-container-ref }}
-      tenzir-version-dev-suffix: ${{ steps.configure.outputs.tenzir-version-dev-suffix }}
+      tenzir-version-build-metadata: ${{ steps.configure.outputs.tenzir-version-build-metadata }}
       run-changelog: ${{ steps.configure.outputs.run-changelog }}
       run-docs: ${{ steps.configure.outputs.run-docs }}
       run-docker-tenzir: ${{ steps.configure.outputs.run-docker-tenzir }}
@@ -136,21 +136,21 @@ jobs:
           echo "head-ref-slug=${GITHUB_HEAD_REF_SLUG}" >> $GITHUB_OUTPUT
           echo "base-ref-slug=${GITHUB_BASE_REF_SLUG}" >> $GITHUB_OUTPUT
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            tenzir_version_dev_suffix=""
-            tenzir_docker_version_dev_suffix=""
+            tenzir_version_build_metadata=""
+            tenzir_docker_version_build_metadata=""
           else
             id_sha="${{ github.sha }}"
-            tenzir_version_dev_suffix="-g${id_sha:0:10}"
-            tenzir_docker_version_dev_suffix="${tenzir_version_dev_suffix}"
+            tenzir_version_build_metadata="-g${id_sha:0:10}"
+            tenzir_docker_version_build_metadata="${tenzir_version_build_metadata}"
             # In Pull Requests we replace the normal commit hash based version
             # suffix with the PR number. That way we get stable arguments to
             # `docker build`, which is needed for layer caching to work.
             if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-              tenzir_docker_version_dev_suffix="-pr${{ github.event.number }}"
+              tenzir_docker_version_build_metadata="pr${{ github.event.number }}"
             fi
           fi
-          echo "tenzir-version-dev-suffix=${tenzir_version_dev_suffix}" >> $GITHUB_OUTPUT
-          echo "tenzir-docker-version-dev-suffix=${tenzir_dockdr_version_dev_suffix}" >> $GITHUB_OUTPUT
+          echo "tenzir-version-build-metadata=${tenzir_version_build_metadata}" >> $GITHUB_OUTPUT
+          echo "tenzir-docker-version-build-metadata=${tenzir_dockdr_version_build_metadata}" >> $GITHUB_OUTPUT
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             tenzir_container_ref="${GITHUB_HEAD_REF_SLUG}"
           else
@@ -266,9 +266,9 @@ jobs:
             exit 1
           fi
           docker_config="$(jq -c \
-            '."version-dev-suffix" = $vs | ."tags" = $ARGS.positional' \
+            '."version-build-metadata" = $vs | ."tags" = $ARGS.positional' \
             .github/workflows/docker-config-base.json \
-            --arg vs "${{ steps.configure.outputs.tenzir-version-dev-suffix }}" \
+            --arg vs "${{ steps.configure.outputs.tenzir-version-build-metadata }}" \
             --args -- "${tags[@]}")"
           # Clear push repos in case we're in a PR, but push the community
           # edition to ghcr.
@@ -731,7 +731,7 @@ jobs:
             -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
             -DCPACK_PACKAGING_INSTALL_PREFIX:STRING="/" \
             -DTENZIR_PLUGINS:STRING="${{ join(matrix.tenzir.bundled-plugins, ';') }}" \
-            -DTENZIR_VERSION_DEV_SUFFIX:STRING="${{ needs.configure.outputs.tenzir-version-dev-suffix }}" \
+            -DTENZIR_VERSION_BUILD_METADATA:STRING="${{ needs.configure.outputs.tenzir-version-build-metadata }}" \
             ${{ matrix.tenzir.cmake-extra-flags }}
       - name: Compile All Targets
         run: |

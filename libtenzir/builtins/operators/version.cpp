@@ -22,7 +22,7 @@ public:
     auto builder = series_builder{};
     auto event = builder.record();
     event.field("version", tenzir::version::version);
-    event.field("dev-suffix", tenzir::version::dev_suffix);
+    event.field("build", tenzir::version::build_metadata);
     event.field("major", tenzir::version::major);
     event.field("minor", tenzir::version::minor);
     event.field("patch", tenzir::version::patch);

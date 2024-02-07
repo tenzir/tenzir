@@ -4,8 +4,8 @@ cmake_minimum_required(VERSION 3.19...3.28 FATAL_ERROR)
 
 # Semicolon-separated list of directories specifying a search path for CMake.
 list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-if (DEFINED TENZIR_VERSION_DEV_SUFFIX)
-  set(TENZIR_VERSION_DEV_SUFFIX_BACKUP "${TENZIR_VERSION_DEV_SUFFIX}")
+if (DEFINED TENZIR_VERSION_BUILD_METADATA)
+  set(TENZIR_VERSION_BUILD_METADATA_BACKUP "${TENZIR_VERSION_BUILD_METADATA}")
 endif ()
 include(TenzirVersion)
 

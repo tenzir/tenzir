@@ -473,9 +473,9 @@ else ()
   message(FATAL_ERROR "Failed to detect build or configuration types")
 endif ()
 
-if (DEFINED TENZIR_VERSION_DEV_SUFFIX_BACKUP)
-  set(set_tenzir_version_dev_suffix
-    "set(TENZIR_VERSION_DEV_SUFFIX \"${TENZIR_VERSION_DEV_SUFFIX_BACKUP}\")")
+if (DEFINED TENZIR_VERSION_BUILD_METADATA_BACKUP)
+  set(set_tenzir_version_build_metadata
+    "set(TENZIR_VERSION_BUILD_METADATA \"${TENZIR_VERSION_BUILD_METADATA_BACKUP}\")")
 endif ()
 
 file(
@@ -483,7 +483,7 @@ file(
   "\
   get_filename_component(CMAKE_MODULE_PATH
     \"${CMAKE_CURRENT_SOURCE_DIR}/../cmake\" ABSOLUTE)
-  ${set_tenzir_version_dev_suffix}
+  ${set_tenzir_version_build_metadata}
   set(Tenzir_VERSION_MAJOR \"${Tenzir_VERSION_MAJOR}\")
   set(Tenzir_VERSION_MINOR \"${Tenzir_VERSION_MINOR}\")
   set(Tenzir_VERSION_PATCH \"${Tenzir_VERSION_PATCH}\")
@@ -495,7 +495,7 @@ file(
   configure_file(\"${CMAKE_CURRENT_SOURCE_DIR}/src/config.cpp.in\"
                  \"${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp\")")
 
-unset(set_tenzir_version_dev_suffix)
+unset(set_tenzir_version_build_metadata)
 
 # We generate config.cpp as a byproduct of a custom target so we can re-generate
 # the version string and build tree hash on every build. Note that this must not

@@ -29,7 +29,7 @@ namespace tenzir::version {
 /// Contains the base version string.
 extern const char* version;
 /// Contains a free-form version suffix.
-extern const char* dev_suffix;
+extern const char* build_metadata;
 
 /// The individual version components.
 extern const uint64_t major;

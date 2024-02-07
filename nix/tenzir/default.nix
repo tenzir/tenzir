@@ -208,11 +208,11 @@
 
         # TODO: Omit this for "tagged release" builds.
         preConfigure = if isDevBuild then ''
-          version_dev_suffix=$(basename $out | cut -d'-' -f 1)
-          cmakeFlagsArray+=("-DTENZIR_VERSION_DEV_SUFFIX=-n$version_dev_suffix")
+          version_build_metadata=$(basename $out | cut -d'-' -f 1)
+          cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=N$version_build_metadata")
         ''
         else ''
-          cmakeFlagsArray+=("-DTENZIR_VERSION_DEV_SUFFIX=\"\"")
+          cmakeFlagsArray+=("-DTENZIR_VERSION_BUILD_METADATA=\"\"")
         ''
         # TODO: Fix LTO on darwin by passing these commands by their original
         # executable names "llvm-ar" and "llvm-ranlib". Should work with

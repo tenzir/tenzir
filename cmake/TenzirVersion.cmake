@@ -6,7 +6,7 @@ string(JSON TENZIR_PARTITION_VERSION GET "${TENZIR_VERSION_JSON}"
 
 find_package(Git QUIET)
 
-if (NOT DEFINED TENZIR_VERSION_DEV_SUFFIX)
+if (NOT DEFINED TENZIR_VERSION_BUILD_METADATA)
   if (Git_FOUND)
     execute_process(
       COMMAND "${GIT_EXECUTABLE}" describe --abbrev=10 --long --dirty
@@ -20,16 +20,22 @@ if (NOT DEFINED TENZIR_VERSION_DEV_SUFFIX)
         WARNING
           "git-describe failed: ${_git_describe_result}; using a generic \"-dev\" version suffix"
       )
-      set(TENZIR_VERSION_DEV_SUFFIX "-dev")
     else ()
-      string(REGEX MATCH "(-g[0-9a-z]+)?(-dirty)?$" TENZIR_VERSION_DEV_SUFFIX "${_git_describe_output}")
+      string(REGEX MATCH "(g[0-9a-f]+)?(-dirty)?$" _git_describe_suffix "${_git_describe_output}")
+      if (_git_describe_suffix)
+        set(TENZIR_VERSION_BUILD_METADATA "${_git_describe_suffix}")
+      endif ()
     endif ()
     unset(_git_describe_output)
     unset(_git_describe_result)
-  else ()
-    set(TENZIR_VERSION_DEV_SUFFIX "-dev")
   endif ()
 endif ()
+
+if (NOT DEFINED TENZIR_VERSION_BUILD_METADATA)
+  set(TENZIR_VERSION_BUILD_METADATA "unknown")
+endif ()
+
+set(TENZIR_VERSION_FULL "${TENZIR_VERSION}+${TENZIR_VERSION_BUILD_METADATA}")
 
 cmake_policy(PUSH)
 if (POLICY CMP0009)

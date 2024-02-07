@@ -13,8 +13,8 @@
 
 namespace tenzir::version {
 
-const char* version = "@TENZIR_VERSION@";
-const char* dev_suffix = "@TENZIR_VERSION_DEV_SUFFIX@";
+const char* version = "@TENZIR_VERSION_FULL@";
+const char* build_metadata = "@TENZIR_VERSION_BUILD_METADATA@";
 const uint64_t major = @Tenzir_VERSION_MAJOR@;
 const uint64_t minor = @Tenzir_VERSION_MINOR@;
 const uint64_t patch = @Tenzir_VERSION_PATCH@;
