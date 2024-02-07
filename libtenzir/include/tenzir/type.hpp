@@ -13,6 +13,7 @@
 #include "tenzir/aliases.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/detail/type_traits.hpp"
+#include "tenzir/flatbuffer.hpp"
 #include "tenzir/generator.hpp"
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/offset.hpp"
@@ -171,6 +172,12 @@ public:
   /// @pre `table != nullptr`
   explicit type(chunk_ptr&& table) noexcept;
 
+  /// Constructs a type from a FlatBuffers root table.
+  /// @param fb The FlatBuffers root table.
+  /// @note The table offsets are verified only when assertions are enabled.
+  /// @pre `fb != nullptr`
+  explicit type(flatbuffer<fbs::Type>&& fb) noexcept;
+
   /// Explicitly construct a type from a basic concrete type.
   template <basic_type T>
   explicit type(const T& other) noexcept {
@@ -275,7 +282,10 @@ public:
   /// Converts the type into its type definition.
   /// @param expand Render the definition in its expanded form.
   /// @pre *this
-  [[nodiscard]] data to_definition(bool expand = false) const noexcept;
+  [[nodiscard]] auto to_definition(bool expand = false) const noexcept -> data;
+  [[nodiscard]] auto to_definition2(std::optional<std::string> field_name = {},
+                                    offset parent_path = {}) const noexcept
+    -> record;
 
   /// Creates a type from an Arrow DataType, Field, or Schema.
   [[nodiscard]] static type from_arrow(const arrow::DataType& other) noexcept;
@@ -299,6 +309,11 @@ public:
   /// Creates an Arrow ArrayBuilder from the type.
   [[nodiscard]] std::shared_ptr<arrow::ArrayBuilder>
   make_arrow_builder(arrow::MemoryPool* pool) const noexcept;
+
+  /// Resolves a key on a schema.
+  /// @returns nullopt if the type is not a valid schema.
+  [[nodiscard]] std::optional<offset>
+  resolve_key_or_concept(std::string_view key) const noexcept;
 
   /// Enables integration with CAF's type inspection.
   template <class Inspector>
@@ -1269,6 +1284,13 @@ public:
 
   /// Resolves a flat index into an offset.
   [[nodiscard]] offset resolve_flat_index(size_t flat_index) const noexcept;
+
+  /// Resolves a key or a concept into an offset.
+  /// @note This only matches on full keys, so the key 'x.y'  matches 'x.y.z'
+  /// but not 'x.y_other.z' .
+  [[nodiscard]] std::optional<offset>
+  resolve_key_or_concept(std::string_view key,
+                         std::string_view schema_name) const noexcept;
 
   /// Resolves a key into an offset.
   /// @note This only matches on full keys, so the key 'x.y'  matches 'x.y.z'

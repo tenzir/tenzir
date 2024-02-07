@@ -9,8 +9,10 @@
 #include "tenzir/error.hpp"
 
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/diagnostics.hpp"
 
 #include <caf/exit_reason.hpp>
+#include <caf/message_handler.hpp>
 #include <caf/pec.hpp>
 #include <caf/sec.hpp>
 
@@ -57,6 +59,7 @@ const char* descriptions[] = {
   "system_error",
   "breaking_change",
   "serialization_error",
+  "diagnostic",
 };
 
 static_assert(ec{std::size(descriptions)} == ec::ec_count,
@@ -89,16 +92,35 @@ std::string render(caf::error err) {
     return "";
   std::ostringstream oss;
   auto category = err.category();
+  if (category == caf::type_id_v<tenzir::ec>
+      && static_cast<tenzir::ec>(err.code()) == ec::diagnostic) {
+    auto printer
+      = make_diagnostic_printer(std::nullopt, color_diagnostics::yes, oss);
+    auto ctx = err.context();
+    caf::message_handler{
+      [&](const diagnostic& diag) {
+        printer->emit(diag);
+      },
+      [&](const caf::message& msg) {
+        printer->emit(diagnostic::error("{}", caf::deep_to_string(msg))
+                        .note("unexpected diagnostic format")
+                        .done());
+      },
+    }(ctx);
+    return std::move(oss).str();
+  }
   oss << "!! ";
   switch (category) {
     default:
       oss << "Unknown";
       render_default_ctx(oss, err.context());
       break;
-    case caf::type_id_v<tenzir::ec>:
-      oss << to_string(static_cast<tenzir::ec>(err.code()));
+    case caf::type_id_v<tenzir::ec>: {
+      const auto code = static_cast<tenzir::ec>(err.code());
+      oss << to_string(code);
       render_default_ctx(oss, err.context());
       break;
+    }
     case caf::type_id_v<caf::pec>:
       oss << to_string(static_cast<caf::pec>(err.code()));
       render_default_ctx(oss, err.context());
@@ -113,6 +135,38 @@ std::string render(caf::error err) {
       break;
   }
   return oss.str();
+}
+
+auto add_context_impl(const caf::error& error, std::string str) -> caf::error {
+  if (!error)
+    return error;
+  if (error.category() == caf::type_id_v<tenzir::ec>
+      && static_cast<tenzir::ec>(error.code()) == ec::diagnostic) {
+    auto ctx = error.context();
+    auto* inner = static_cast<diagnostic*>(nullptr);
+    caf::message_handler{
+      [&](diagnostic& diag) {
+        inner = &diag;
+      },
+      [](const caf::message&) {},
+    }(ctx);
+    if (inner) {
+      return caf::make_error(
+        ec::diagnostic, std::move(*inner).modify().note(std::move(str)).done());
+    }
+  }
+  if (!error.context()) {
+    return caf::error{
+      error.code(),
+      error.category(),
+      caf::make_message(std::move(str)),
+    };
+  }
+  return caf::error{
+    error.code(),
+    error.category(),
+    caf::message::concat(error.context(), caf::make_message(std::move(str))),
+  };
 }
 
 } // namespace tenzir

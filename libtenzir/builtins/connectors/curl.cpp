@@ -9,12 +9,11 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/config.hpp>
-#include <tenzir/curl.hpp>
 #include <tenzir/detail/string_literal.hpp>
+#include <tenzir/http.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
-
-#include <curl/curl.h>
+#include <tenzir/transfer.hpp>
 
 #include <filesystem>
 #include <regex>
@@ -26,18 +25,62 @@ namespace tenzir::plugins {
 
 namespace {
 
-struct connector_args {
-  curl_options options;
-  std::chrono::milliseconds poll_timeout = 1s;
+struct http_options {
+  bool json;
+  bool form;
+  bool chunked;
+  bool multipart;
+  std::string method;
+  std::vector<http::request_item> items;
 
-  template <class Inspector>
-  friend auto inspect(Inspector& f, connector_args& x) -> bool {
+  friend auto inspect(auto& f, http_options& x) -> bool {
     return f.object(x)
-      .pretty_name("connector_args")
-      .fields(f.field("options", x.options),
-              f.field("poll_timeout", x.poll_timeout));
+      .pretty_name("tenzir.plugins.http_options")
+      .fields(f.field("json", x.json), f.field("form", x.form),
+              f.field("chunked", x.chunked), f.field("multipart", x.multipart),
+              f.field("method", x.method), f.field("items", x.items));
   }
 };
+
+struct connector_args {
+  std::string url;
+  transfer_options transfer_opts;
+  http_options http_opts;
+
+  friend auto inspect(auto& f, connector_args& x) -> bool {
+    return f.object(x)
+      .pretty_name("tenzir.plugins.connector_args")
+      .fields(f.field("url", x.url), f.field("transfer_opts", x.transfer_opts),
+              f.field("http_opts", x.http_opts));
+  }
+};
+
+auto make_request(const connector_args& args) -> caf::expected<http::request> {
+  auto result = http::request{};
+  // Set URL.
+  result.uri = args.url;
+  // Set method.
+  result.method = args.http_opts.method;
+  if (args.http_opts.json) {
+    result.headers.emplace_back("Accept", "application/json");
+    if (auto* header = result.header("Content-Type")) {
+      TENZIR_DEBUG("overwriting Content-Type to application/json (was: {})",
+                   header->value);
+      header->value = "application/json";
+    } else {
+      result.headers.emplace_back("Content-Type", "application/json");
+    }
+  } else if (args.http_opts.form) {
+    result.headers.emplace_back("Content-Type",
+                                "application/x-www-form-urlencoded");
+  }
+  if (args.http_opts.chunked) {
+    result.headers.emplace_back("Transfer-Encoding", "chunked");
+  }
+  if (auto err = apply(args.http_opts.items, result))
+    return err;
+  return result;
+}
 
 template <detail::string_literal Protocol>
 class curl_loader final : public plugin_loader {
@@ -49,14 +92,51 @@ public:
 
   auto instantiate(operator_control_plane& ctrl) const
     -> std::optional<generator<chunk_ptr>> override {
-    auto make = [&ctrl](connector_args args) mutable -> generator<chunk_ptr> {
-      auto handle = curl{};
-      if (auto err = handle.set(args.options))
-        ctrl.abort(err);
+    auto make = [](operator_control_plane& ctrl,
+                   connector_args args) mutable -> generator<chunk_ptr> {
+      auto tx = transfer{args.transfer_opts};
+      auto req = make_request(args);
+      if (not req) {
+        diagnostic::error("failed to construct HTTP request")
+          .note("{}", req.error())
+          .emit(ctrl.diagnostics());
+        co_return;
+      }
+      if (auto err = tx.prepare(*req)) {
+        diagnostic::error("failed to prepare HTTP request")
+          .note("{}", err)
+          .emit(ctrl.diagnostics());
+        co_return;
+      }
+      if (args.http_opts.multipart) {
+        if (req->body.empty()) {
+          diagnostic::warning("ignoring request to send multipart message")
+            .note("HTTP request body is empty")
+            .emit(ctrl.diagnostics());
+        } else {
+          // Move body over to MIME part.
+          auto& easy = tx.handle();
+          auto mime = curl::mime{easy};
+          auto part = mime.add();
+          part.data(as_bytes(req->body));
+          if (auto* header = req->header("Content-Type")) {
+            part.type(header->value);
+            easy.set_http_header("Content-Type", "multipart/form-data");
+          }
+          req->body.clear();
+          auto code = easy.set(std::move(mime));
+          if (code != curl::easy::code::ok) {
+            diagnostic::error("failed to construct HTTP request")
+              .note("{}", req.error())
+              .emit(ctrl.diagnostics());
+            co_return;
+          }
+        }
+      }
       co_yield {};
-      for (auto&& chunk : handle.download(args.poll_timeout)) {
+      for (auto&& chunk : tx.download_chunks()) {
         if (not chunk) {
-          diagnostic::error("failed to download {}", args.options.url)
+          diagnostic::error("failed to download {}", args.url)
             .hint(fmt::format("{}", chunk.error()))
             .emit(ctrl.diagnostics());
           co_return;
@@ -64,7 +144,7 @@ public:
         co_yield *chunk;
       }
     };
-    return make(args_);
+    return make(ctrl, args_);
   }
 
   auto name() const -> std::string override {
@@ -85,159 +165,197 @@ private:
   connector_args args_;
 };
 
-/// A key-value pair passed on the command line.
-struct request_item {
-  std::string_view type;
-  std::string key;
-  std::string value;
+template <detail::string_literal Protocol>
+class curl_saver final : public plugin_saver {
+public:
+  curl_saver() = default;
+
+  explicit curl_saver(connector_args args) : args_{std::move(args)} {
+  }
+
+  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
+    -> caf::expected<std::function<void(chunk_ptr)>> override {
+    auto req = make_request(args_);
+    if (not req) {
+      diagnostic::error("failed to construct HTTP request")
+        .note("{}", req.error())
+        .emit(ctrl.diagnostics());
+      return req.error();
+    }
+    // We're trying to accommodate the most common scenario of getting JSON to
+    // be submitted via a POST request.
+    if (req->method.empty()) {
+      req->method = "POST";
+    }
+    if (not req->body.empty()) {
+      diagnostic::error("found {}-byte HTTP request body", req->body.size())
+        .note("cannot use request body in HTTP saver")
+        .note("pipeline input is the only request body")
+        .hint("remove arguments that create a request body")
+        .emit(ctrl.diagnostics());
+      return caf::make_error(ec::invalid_argument, "bogus operator arguments");
+    }
+    auto tx = std::make_shared<transfer>(args_.transfer_opts);
+    if (auto err = tx->prepare(std::move(*req))) {
+      diagnostic::error("failed to prepare HTTP request")
+        .note("{}", err)
+        .emit(ctrl.diagnostics());
+      return err;
+    }
+    return [&ctrl, args = args_, tx](chunk_ptr chunk) mutable {
+      if (!chunk || chunk->size() == 0)
+        return;
+      if (auto err = tx->prepare(chunk)) {
+        diagnostic::error("failed to prepare transfer")
+          .note("chunk size: {}", chunk->size())
+          .note("{}", err)
+          .emit(ctrl.diagnostics());
+        return;
+      }
+      if (auto err = tx->perform()) {
+        diagnostic::error("failed to upload chunk to {}", args.url)
+          .note("{}", err)
+          .emit(ctrl.diagnostics());
+        return;
+      }
+    };
+  }
+
+  auto name() const -> std::string override {
+    return std::string{Protocol.str()};
+  }
+
+  auto default_printer() const -> std::string override {
+    return "json";
+  }
+
+  auto is_joining() const -> bool override {
+    return true;
+  }
+
+  friend auto inspect(auto& f, curl_saver& x) -> bool {
+    return f.object(x)
+      .pretty_name("curl_saver")
+      .fields(f.field("args", x.args_));
+  }
+
+private:
+  connector_args args_;
 };
 
-/// Parses a request item like HTTPie.
-auto parse_request_item(std::string_view str) -> std::optional<request_item> {
-  auto xs = detail::split_escaped(str, ":=@", "\\", 1);
-  if (xs.size() == 2)
-    return request_item{.type = "file-data-json", .key = xs[0], .value = xs[1]};
-  xs = detail::split_escaped(str, ":=", "\\", 1);
-  if (xs.size() == 2)
-    return request_item{.type = "data-json", .key = xs[0], .value = xs[1]};
-  xs = detail::split_escaped(str, "==", "\\", 1);
-  if (xs.size() == 2)
-    return request_item{.type = "url-param", .key = xs[0], .value = xs[1]};
-  xs = detail::split_escaped(str, "=@", "\\", 1);
-  if (xs.size() == 2)
-    return request_item{.type = "file-data", .key = xs[0], .value = xs[1]};
-  xs = detail::split_escaped(str, "@", "\\", 1);
-  if (xs.size() == 2)
-    return request_item{.type = "file-form", .key = xs[0], .value = xs[1]};
-  xs = detail::split_escaped(str, "=", "\\", 1);
-  if (xs.size() == 2)
-    return request_item{.type = "data", .key = xs[0], .value = xs[1]};
-  xs = detail::split_escaped(str, ":", "\\", 1);
-  if (xs.size() == 2)
-    return request_item{.type = "header", .key = xs[0], .value = xs[1]};
-  return {};
-}
-
-/// Parses a sequence of key-value pairs (= request items)
-auto parse_http_options(std::vector<located<std::string>>& request_items)
-  -> http_options {
-  auto result = http_options{};
-  auto body = record{};
-  auto headers = std::map<std::string, std::string>{};
-  for (const auto& request_item : request_items) {
-    auto item = parse_request_item(request_item.inner);
-    if (not item)
-      diagnostic::error("failed to parse request item")
-        .primary(request_item.source)
-        .throw_();
-    if (item->type == "header") {
-      headers[std::string{item->key}] = std::string{item->value};
-    } else if (item->type == "data") {
-      result.method = "POST";
-      body[std::string{item->key}] = std::string{item->value};
-    } else if (item->type == "data-json") {
-      result.method = "POST";
-      auto data = from_json(item->value);
-      if (not data)
-        diagnostic::error("invalid JSON value")
-          .primary(request_item.source)
-          .throw_();
-      body[std::string{item->key}] = std::move(*data);
-    } else {
-      diagnostic::error("unsupported request item type")
-        .primary(request_item.source)
-        .throw_();
-    }
-  }
-  if (not body.empty()) {
-    // We're currently only supporting JSON. In the future we're going to
-    // support -f for form-encoded data as well.
-    auto json_body = to_json(body, {.oneline = true});
-    TENZIR_ASSERT_CHEAP(json_body);
-    result.body = std::move(*json_body);
-    result.headers["Accept"] = "application/json, */*";
-    result.headers["Content-Type"] = "application/json";
-  }
-  // User-provided headers always have precedence, which is why we process
-  // them last, after we added automatically generated ones previously.
-  for (auto& [header, value] : headers)
-    result.headers[header] = std::move(value);
-  return result;
-}
-
 template <detail::string_literal Protocol>
-class plugin final : public virtual loader_plugin<curl_loader<Protocol>> {
-  /// Auto-completes a scheme-less URL with the schem from this plugin.
+class plugin final : public virtual loader_plugin<curl_loader<Protocol>>,
+                     public virtual saver_plugin<curl_saver<Protocol>> {
+public:
+  static auto protocol() -> std::string {
+    return std::string{Protocol.str()};
+  }
+
+  auto parse_loader(parser_interface& p) const
+    -> std::unique_ptr<plugin_loader> override {
+    return std::make_unique<curl_loader<Protocol>>(parse_args(p));
+  }
+
+  auto parse_saver(parser_interface& p) const
+    -> std::unique_ptr<plugin_saver> override {
+    return std::make_unique<curl_saver<Protocol>>(parse_args(p));
+  }
+
+  auto name() const -> std::string override {
+    return protocol();
+  }
+
+private:
+  /// Auto-completes a scheme-less URL with the scheme from this plugin.
   static auto auto_complete(std::string_view url) -> std::string {
     if (url.find("://") != std::string_view::npos)
       return std::string{url};
     return fmt::format("{}://{}", Protocol.str(), url);
   }
 
-public:
-  auto parse_loader(parser_interface& p) const
-    -> std::unique_ptr<plugin_loader> override {
-    auto args = connector_args{};
-    args.options.default_protocol = name();
-    auto make = [&]() {
-      return std::make_unique<curl_loader<Protocol>>(std::move(args));
-    };
+  static auto parse_args(parser_interface& p) -> connector_args {
+    auto result = connector_args{};
+    result.transfer_opts.default_protocol = protocol();
     // For HTTP and HTTPS the desired CLI UX is HTTPie:
     //
     //     [<method>] <url> [<item>..]
     //
     // Please see `man http` for an explanation of the desired outcome.
-    if (name() == "http" || name() == "https") {
+    if (protocol() == "http" || protocol() == "https") {
       // Collect all arguments first until `argument_parser` becomes mightier.
-      auto items = std::vector<located<std::string>>{};
+      auto args = std::vector<located<std::string>>{};
+      // Process options here manually until argument_parser becomes more
+      // powerful.
       while (auto arg = p.accept_shell_arg()) {
-        // Process options here manually until argument_parser becomes more
-        // powerful.
-        if (arg && (arg->inner == "-v" || arg->inner == "--verbose"))
-          args.options.verbose = true;
-        else
-          items.push_back(std::move(*arg));
+        if (arg->inner == "-v" || arg->inner == "--verbose") {
+          result.transfer_opts.verbose = true;
+        } else if (arg->inner == "-j" || arg->inner == "--json") {
+          result.http_opts.json = true;
+        } else if (arg->inner == "-f" || arg->inner == "--form") {
+          result.http_opts.form = true;
+        } else if (arg->inner == "--chunked") {
+          result.http_opts.chunked = true;
+        } else if (arg->inner == "--multipart") {
+          result.http_opts.multipart = true;
+        } else {
+          args.push_back(std::move(*arg));
+        }
       }
-      if (items.empty())
+      TENZIR_DEBUG("parsed shell arguments:");
+      for (auto i = 0u; i < args.size(); ++i) {
+        TENZIR_DEBUG("- args[{}] = {}", i, args[i].inner);
+      }
+      if (args.empty())
         diagnostic::error("no URL provided").throw_();
       // No ambiguity, just go with <url>.
-      if (items.size() == 1) {
-        args.options.url = std::move(items[0].inner);
-        return make();
+      if (args.size() == 1) {
+        result.url = auto_complete(args[0].inner);
+        return result;
       }
-      TENZIR_ASSERT(items.size() >= 2);
+      TENZIR_ASSERT(args.size() >= 2);
       // Try <method> <url> [<item>..]
       auto method_regex = std::regex{"[a-zA-Z]+"};
-      if (std::regex_match(items[0].inner, method_regex)) {
-        TENZIR_DEBUG("detected syntax: <method> <url> [<item>..]");
+      if (std::regex_match(args[0].inner, method_regex)) {
         // FIXME: find a strategy to deal with some false positives here, e.g.,
-        // "localhost".
-        auto method = std::move(items[0].inner);
-        args.options.url = auto_complete(items[1].inner);
-        items.erase(items.begin());
-        items.erase(items.begin());
-        args.options.http = parse_http_options(items);
-        args.options.http.method = std::move(method);
-        return make();
+        // "localhost" should be interepreted as URL and not HTTP method.
+        TENZIR_DEBUG("detected syntax: <method> <url> [<item>..]");
+        result.http_opts.method = std::move(args[0].inner);
+        result.url = auto_complete(args[1].inner);
+        args.erase(args.begin());
+        args.erase(args.begin());
+        for (auto& arg : args) {
+          if (auto item = http::request_item::parse(arg.inner))
+            result.http_opts.items.push_back(std::move(*item));
+          else
+            diagnostic::error("invalid HTTP request item")
+              .primary(arg.source)
+              .note("{}", arg.inner)
+              .throw_();
+        }
+        return result;
       }
       TENZIR_DEBUG("trying last possible syntax: <url> <item> [<item>..]");
-      args.options.url = auto_complete(items[0].inner);
-      items.erase(items.begin());
-      args.options.http = parse_http_options(items);
-      return make();
+      result.url = auto_complete(args[0].inner);
+      args.erase(args.begin());
+      for (auto& arg : args) {
+        if (auto item = http::request_item::parse(arg.inner))
+          result.http_opts.items.push_back(std::move(*item));
+        else
+          diagnostic::error("invalid HTTP request item")
+            .primary(arg.source)
+            .note("{}", arg.inner)
+            .throw_();
+      }
+      return result;
     } else {
       auto parser = argument_parser{
-        name(),
-        fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
-      parser.add("-v,--verbose", args.options.verbose);
-      parser.add(args.options.url, "<url>");
+        protocol(),
+        fmt::format("https://docs.tenzir.com/docs/connectors/{}", protocol())};
+      parser.add("-v,--verbose", result.transfer_opts.verbose);
+      parser.add(result.url, "<url>");
       parser.parse(p);
     }
-    return make();
-  }
-
-  auto name() const -> std::string override {
-    return std::string{Protocol.str()};
+    return result;
   }
 };
 

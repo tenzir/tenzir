@@ -50,8 +50,8 @@ endif ()
 # -- flatbuffers ---------------------------------------------------------------
 
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/fbs/*.fbs"
-     "${CMAKE_CURRENT_SOURCE_DIR}/fbs/legacy/*.fbs")
+     "${CMAKE_CURRENT_SOURCE_DIR}/fbs/*.fbs")
+
 list(SORT flatbuffers_schemas)
 
 TenzirCompileFlatBuffers(
@@ -140,10 +140,6 @@ elseif (NOT TENZIR_LOG_LEVEL STREQUAL "$CACHE{TENZIR_LOG_LEVEL}")
       "${TENZIR_LOG_LEVEL}"
       CACHE STRING "${TENZIR_LOG_LEVEL_DOC}" FORCE)
 endif ()
-
-set(TENZIR_CAF_LOG_LEVEL
-    "WARNING"
-    CACHE STRING ${TENZIR_LOG_LEVEL_DOC})
 
 # Raise an error for invalid log levels.
 set(validLogLevels
@@ -340,8 +336,7 @@ target_link_libraries(libtenzir PUBLIC tsl::robin_map)
 
 # Link against libmaxminddb.
 target_link_libraries(libtenzir PUBLIC maxminddb::maxminddb)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST
-       "\nfind_package(libmaxminddb)")
+string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(libmaxminddb)")
 dependency_summary("libmaxminddb" maxminddb::maxminddb "Dependencies")
 
 # Link against Apache Arrow.
@@ -355,7 +350,8 @@ string(APPEND TENZIR_FIND_DEPENDENCY_LIST
 dependency_summary("Boost" Boost::headers "Dependencies")
 
 # Link against re2.
-target_link_libraries(libtenzir PUBLIC re2::re2)
+target_link_libraries(libtenzir PRIVATE re2::re2)
+target_link_libraries(libtenzir_builtins PRIVATE re2::re2)
 dependency_summary("re2" re2::re2 "Dependencies")
 
 # Link against fast_float
@@ -385,18 +381,15 @@ target_link_libraries(libtenzir PRIVATE FastFloat::fast_float)
 
 if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   option(TENZIR_ENABLE_BUNDLED_PFS "Use the pfs submodule" OFF)
-  add_feature_info(
-    "TENZIR_ENABLE_BUNDLED_PFS" TENZIR_ENABLE_BUNDLED_PFS
-    "use the pfs submodule.")
+  add_feature_info("TENZIR_ENABLE_BUNDLED_PFS" TENZIR_ENABLE_BUNDLED_PFS
+                   "use the pfs submodule.")
   if (NOT TENZIR_ENABLE_BUNDLED_PFS)
     find_package(pfs CONFIG)
   endif ()
   if (NOT pfs_FOUND)
     if (NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/aux/pfs/CMakeLists.txt")
-      message(
-        FATAL_ERROR
-          "pfs library not found, either use -pfs_DIR=... or"
-          " initialize the libtenzir/aux/pfs submodule")
+      message(FATAL_ERROR "pfs library not found, either use -pfs_DIR=... or"
+                          " initialize the libtenzir/aux/pfs submodule")
     endif ()
     add_subdirectory(aux/pfs)
     export(
@@ -409,7 +402,7 @@ if (${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     dependency_summary("pfs" pfs "Dependencies")
   endif ()
   target_link_libraries(libtenzir PRIVATE pfs)
-endif()
+endif ()
 
 # Link against a backtrace library.
 option(TENZIR_ENABLE_BACKTRACE "Print a backtrace on unexpected termination" ON)

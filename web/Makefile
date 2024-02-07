@@ -14,9 +14,16 @@ QUARTO_FILES_OUTPUTS := $(patsubst %.qmd, %_files, $(QUARTO_INPUTS))
 RFC_INPUT := ../rfc/README.md
 RFC_OUTPUT := $(CONTRIBUTING_DIR)/rfc.md
 
-all: dot-github rfc quarto
+all: dot-github rfc
+
+check-submodule:
+	@if ! [ -f .github/.git ]; then \
+	  printf "initializing .github submodule\n" >&2; \
+	  git submodule update --init .github; \
+	fi
 
 dot-github: \
+  check-submodule \
   $(CONTRIBUTING_DIR)/code-of-conduct.md \
   $(CONTRIBUTING_DIR)/coding-style.md \
   $(CONTRIBUTING_DIR)/security.md \

@@ -108,6 +108,12 @@ macro (TenzirTargetEnableTooling _target)
 endmacro ()
 
 macro (make_absolute vars)
+  list(GET "${vars}" 0 _glob)
+  if ("${_glob}" STREQUAL "GLOB")
+    list(REMOVE_AT "${vars}" 0)
+    file(GLOB_RECURSE "${vars}" CONFIGURE_DEPENDS ${${vars}})
+  endif ()
+  unset(_glob)
   foreach (var IN LISTS "${vars}")
     get_filename_component(var_abs "${var}" ABSOLUTE)
     list(APPEND vars_abs "${var_abs}")
@@ -198,6 +204,22 @@ function (TenzirCompileFlatBuffers)
     INTERFACE $<BUILD_INTERFACE:${output_prefix}>
               $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
+  if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
+    set(FBS_PATH "${CMAKE_SOURCE_DIR}/libtenzir/fbs")
+  else ()
+    string(TOUPPER "${TENZIR_CMAKE_BUILD_TYPE}" build_type_uppercase_)
+    get_target_property(FBS_PATH tenzir::tenzir
+                        IMPORTED_LOCATION_${build_type_uppercase_})
+    unset(build_type_uppercase_)
+    get_filename_component(FBS_PATH "${FBS_PATH}" DIRECTORY)
+    get_filename_component(FBS_PATH "${FBS_PATH}" DIRECTORY)
+    set(FBS_PATH "${FBS_PATH}/include/tenzir/fbs")
+  endif ()
+
+  file(GLOB included_flatbuffers_schemas CONFIGURE_DEPENDS "${FBS_PATH}/*.fbs")
+  list(APPEND FBS_SCHEMAS ${included_flatbuffers_schemas})
+  list(REMOVE_DUPLICATES FBS_SCHEMAS)
+
   foreach (schema IN LISTS FBS_SCHEMAS)
     get_filename_component(basename ${schema} NAME_WE)
     # The hardcoded path that flatc generates.
@@ -228,10 +250,11 @@ function (TenzirCompileFlatBuffers)
         # Generate C++ headers using the C++17 standard.
         --cpp --cpp-std c++17 --scoped-enums
         # Generate type name functions.
-        # TODO: Replace with --cpp-static-reflection once available.
         --gen-name-strings
         # Generate mutator functions.
         --gen-mutable
+        # Allow including other files.
+        -I "${FBS_PATH}"
         # Set output directory and schema inputs.
         -o "${output_prefix}/${FBS_INCLUDE_DIRECTORY}" "${schema}"
       COMMAND ${CMAKE_COMMAND} -E rename "${output_file}" "${desired_file}"
@@ -245,13 +268,14 @@ function (TenzirCompileFlatBuffers)
     # FBS_TARGET cannot depend on the OUTPUT of a add_custom_command directly,
     # and depending on a BYPRODUCT of a add_custom_command causes the Unix
     # Makefiles generator to constantly rebuild targets in the same export set.
-    add_custom_target("compile-flatbuffers-schema-${basename}"
+    add_custom_target("compile-flatbuffers-schema-${FBS_TARGET}-${basename}"
                       DEPENDS "${desired_file}")
-    add_dependencies(${FBS_TARGET} "compile-flatbuffers-schema-${basename}")
+    add_dependencies(${FBS_TARGET}
+                     "compile-flatbuffers-schema-${FBS_TARGET}-${basename}")
     set_property(
       TARGET ${FBS_TARGET}
       APPEND
-      PROPERTY PUBLIC_HEADER "${desired_file}")
+      PROPERTY PUBLIC_HEADER "${desired_file}" "${schema}")
   endforeach ()
 
   install(
@@ -383,7 +407,7 @@ function (TenzirRegisterPlugin)
     # <one_value_keywords>
     "TARGET;ENTRYPOINT"
     # <multi_value_keywords>
-    "SOURCES;TEST_SOURCES;INCLUDE_DIRECTORIES"
+    "SOURCES;TEST_SOURCES;INCLUDE_DIRECTORIES;DEPENDENCIES;BUILTINS;FLATBUFFERS"
     # <args>...
     ${ARGN})
 
@@ -453,7 +477,28 @@ function (TenzirRegisterPlugin)
   # Make all given paths absolute.
   make_absolute(PLUGIN_ENTRYPOINT)
   make_absolute(PLUGIN_SOURCES)
+  make_absolute(PLUGIN_TEST_SOURCES)
   make_absolute(PLUGIN_INCLUDE_DIRECTORIES)
+  make_absolute(PLUGIN_BUILTINS)
+  make_absolute(PLUGIN_FLATBUFFERS)
+
+  # Set up builtins bundled with the plugin.
+  if (PLUGIN_BUILTINS)
+    foreach (builtin IN LISTS PLUGIN_BUILTINS)
+      file(READ "${builtin}" lines)
+      if (NOT "${lines}" MATCHES "\n *TENZIR_REGISTER_PLUGIN *\\(.+\\) *[\n$]")
+        message(FATAL_ERROR "builtin ${builtin} does not register as a plugin")
+      endif ()
+      set_property(
+        SOURCE "${builtin}"
+        APPEND
+        PROPERTY COMPILE_DEFINITIONS "TENZIR_ENABLE_BUILTINS=1"
+                 "TENZIR_BUILTIN_DEPENDENCY=${PLUGIN_TARGET}")
+    endforeach ()
+
+    list(APPEND PLUGIN_SOURCES ${PLUGIN_BUILTINS})
+    list(REMOVE_DUPLICATES PLUGIN_SOURCES)
+  endif ()
 
   # Deduplicate the entrypoint so plugin authors can grep for sources while
   # still specifying the entrypoint manually.
@@ -583,10 +628,20 @@ function (TenzirRegisterPlugin)
       COMMAND ${CMAKE_COMMAND} -P
               "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake")
   endif ()
-  set_source_files_properties(
-    "${PLUGIN_ENTRYPOINT}"
-    PROPERTIES COMPILE_DEFINITIONS
-               "TENZIR_PLUGIN_VERSION=${PLUGIN_TARGET_IDENTIFIER}")
+
+  unset(formatted_dependencies)
+  foreach (dependency IN LISTS PLUGIN_DEPENDENCIES)
+    list(APPEND formatted_dependencies "\"${dependency}\"")
+  endforeach ()
+  list(JOIN formatted_dependencies "," formatted_dependencies)
+  set_property(
+    SOURCE "${PLUGIN_ENTRYPOINT}"
+    APPEND
+    PROPERTY COMPILE_DEFINITIONS
+             "TENZIR_PLUGIN_VERSION=${PLUGIN_TARGET_IDENTIFIER}"
+             "TENZIR_PLUGIN_DEPENDENCIES=${formatted_dependencies}")
+  unset(formatted_dependencies)
+
   list(APPEND PLUGIN_ENTRYPOINT "${CMAKE_CURRENT_BINARY_DIR}/config.cpp")
 
   # Create a static library target for our plugin with the entrypoint, and use
@@ -636,6 +691,14 @@ function (TenzirRegisterPlugin)
     if (TARGET tenzir)
       add_dependencies(tenzir ${PLUGIN_TARGET}-shared)
     endif ()
+  endif ()
+
+  if (PLUGIN_FLATBUFFERS)
+    TenzirCompileFlatBuffers(
+      TARGET ${PLUGIN_TARGET}-fbs
+      SCHEMAS ${PLUGIN_FLATBUFFERS}
+      INCLUDE_DIRECTORY "${PLUGIN_TARGET}/fbs")
+    target_link_libraries(${PLUGIN_TARGET} PUBLIC ${PLUGIN_TARGET}-fbs)
   endif ()
 
   # Install an example configuration file, if it exists at the plugin project root.
@@ -722,36 +785,6 @@ function (TenzirRegisterPlugin)
     endforeach ()
   endif ()
 
-  # Ensure that a target functional-test always exists, even if a plugin does not
-  # define functional tests.
-  if (NOT TARGET functional-test)
-    add_custom_target(functional-test)
-  endif ()
-
-  # Setup functional tests.
-  if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/functional-test/tests")
-    if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
-      set(TENZIR_PATH "$<TARGET_FILE_DIR:tenzir::tenzir>")
-    else ()
-      file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/share/tenzir")
-      file(CREATE_LINK "${TENZIR_DIR}/share/tenzir/functional-test"
-           "${CMAKE_BINARY_DIR}/share/tenzir/functional-test" SYMBOLIC)
-      set(TENZIR_PATH "${CMAKE_CURRENT_BINARY_DIR}/bin")
-    endif ()
-    add_custom_target(
-      functional-test-${PLUGIN_TARGET}
-      COMMAND
-        ${CMAKE_COMMAND} -E env
-        PATH="${TENZIR_PATH}:${TENZIR_PATH}/../share/tenzir/functional-test/bats/bin:\$\$PATH"
-        bats "-T" "${CMAKE_CURRENT_SOURCE_DIR}/functional-test/tests"
-      COMMENT "Executing ${PLUGIN_TARGET} functional tests..."
-      USES_TERMINAL)
-    unset(TENZIR_PATH)
-
-    add_dependencies(functional-test-${PLUGIN_TARGET} tenzir::tenzir)
-    add_dependencies(functional-test functional-test-${PLUGIN_TARGET})
-  endif ()
-
   # Ensure that a target integration always exists, even if a plugin does not
   # define integration tests.
   if (NOT TARGET integration)
@@ -759,61 +792,27 @@ function (TenzirRegisterPlugin)
   endif ()
 
   # Setup integration tests.
-  if (TARGET tenzir::tenzir
-      AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests.yaml")
+  if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests")
     if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
-      set(integration_test_path "${CMAKE_SOURCE_DIR}/tenzir/integration")
+      set(TENZIR_PATH "$<TARGET_FILE_DIR:tenzir::tenzir>")
     else ()
-      if (IS_ABSOLUTE "${CMAKE_INSTALL_DATADIR}")
-        set(integration_test_path "${CMAKE_INSTALL_DATADIR}/tenzir/integration")
-      else ()
-        get_target_property(integration_test_path tenzir::tenzir LOCATION)
-        get_filename_component(integration_test_path "${integration_test_path}"
-                               DIRECTORY)
-        get_filename_component(integration_test_path "${integration_test_path}"
-                               DIRECTORY)
-        set(integration_test_path
-            "${integration_test_path}/${CMAKE_INSTALL_DATADIR}/tenzir/integration"
-        )
-      endif ()
+      file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/share/tenzir")
+      file(CREATE_LINK "${TENZIR_PREFIX_DIR}/share/tenzir/integration"
+           "${CMAKE_BINARY_DIR}/share/tenzir/integration" SYMBOLIC)
+      set(TENZIR_PATH "${CMAKE_CURRENT_BINARY_DIR}/bin")
     endif ()
-    file(
-      GENERATE
-      OUTPUT
-        "${CMAKE_CURRENT_BINARY_DIR}/${PLUGIN_TARGET}-integration-$<CONFIG>.sh"
-      CONTENT
-        "#!/bin/sh
-        if ! command -v jq >/dev/null 2>&1; then
-          >&2 echo 'failed to find jq in $PATH'
-          exit 1
-        fi
-        base_dir=\"${integration_test_path}\"
-        env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
-        export app=\"$<IF:$<BOOL:${TENZIR_ENABLE_RELOCATABLE_INSTALLATIONS}>,$<TARGET_FILE:tenzir::tenzir>,${CMAKE_INSTALL_FULL_BINDIR}/$<TARGET_FILE_NAME:tenzir::tenzir>>-ctl\"
-        update=\"$<IF:$<BOOL:${TENZIR_ENABLE_UPDATE_INTEGRATION_REFERENCES}>,-u,>\"
-        set -e
-        if [ ! -f \"$env_dir/bin/activate\" ]; then
-          python3 -m venv \"$env_dir\"
-        fi
-        . \"$env_dir/bin/activate\"
-        python -m pip install --upgrade pip
-        python -m pip install -r \"$base_dir/requirements.txt\"
-        $<$<TARGET_EXISTS:${PLUGIN_TARGET}-shared>:export TENZIR_PLUGIN_DIRS=\"\$(echo \"$<TARGET_FILE_DIR:${PLUGIN_TARGET}-shared>\" | sed -e \"s/,/\\\\\\\\,/g\")\">
-        export TENZIR_SCHEMA_DIRS=\"\$(echo \"${CMAKE_CURRENT_SOURCE_DIR}/schema\" | sed -e \"s/,/\\\\\\\\,/g\")\"
-        python \"$base_dir/integration.py\" \
-          --app \"$app\" \
-          --set \"${CMAKE_CURRENT_SOURCE_DIR}/integration/tests.yaml\" \
-          --directory tenzir-${PLUGIN_TARGET}-integration-test \
-          \$update \
-          \"$@\"")
     add_custom_target(
-      ${PLUGIN_TARGET}-integration
+      integration-${PLUGIN_TARGET}
       COMMAND
-        /bin/sh
-        "${CMAKE_CURRENT_BINARY_DIR}/${PLUGIN_TARGET}-integration-$<CONFIG>.sh"
-        -v DEBUG
+        ${CMAKE_COMMAND} -E env
+        PATH="${TENZIR_PATH}:\$\$PATH:${TENZIR_PATH}/../share/tenzir/integration/lib/bats/bin"
+        bats "-r" "-T" "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests"
+      COMMENT "Executing ${PLUGIN_TARGET} integration tests..."
       USES_TERMINAL)
-    add_dependencies(integration ${PLUGIN_TARGET}-integration)
+    unset(TENZIR_PATH)
+
+    add_dependencies(integration-${PLUGIN_TARGET} tenzir::tenzir)
+    add_dependencies(integration integration-${PLUGIN_TARGET})
   endif ()
 
   if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")

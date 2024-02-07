@@ -10,14 +10,28 @@
 
 #include "tenzir/detail/string.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/shared_diagnostic_handler.hpp"
 
+#include <boost/algorithm/string.hpp>
+#include <caf/message_handler.hpp>
 #include <fmt/color.h>
 
 #include <iostream>
+#include <string_view>
 
 namespace tenzir {
 
 namespace {
+
+void trim_and_truncate(std::string& str) {
+  using namespace std::string_view_literals;
+  boost::trim(str);
+  if (str.size() > 2000) {
+    auto prefix = std::string_view{str.begin(), str.begin() + 75};
+    str = fmt::format("{} ... (truncated {} bytes)", prefix,
+                      str.length() - prefix.length());
+  }
+}
 
 struct colors {
   static auto make(color_diagnostics color) -> colors {
@@ -48,13 +62,14 @@ struct colors {
 
 class diagnostic_printer final : public diagnostic_handler, private colors {
 public:
-  diagnostic_printer(std::string filename, std::string source,
+  diagnostic_printer(std::optional<location_origin> origin,
                      color_diagnostics color, std::ostream& stream)
     : colors{colors::make(color)},
-      storage_{std::move(source)},
-      lines_{detail::split(storage_, "\n")},
+      storage_{origin ? std::move(origin->source) : ""},
+      lines_{origin ? detail::split(storage_, "\n")
+                    : std::vector<std::string_view>{}},
       stream_{stream},
-      filename_{std::move(filename)} {
+      filename_{origin ? std::move(origin->filename) : ""} {
   }
 
   void emit(diagnostic diag) override {
@@ -64,12 +79,19 @@ public:
                diag.severity, uncolor, diag.message, reset);
     auto indent_width = size_t{0};
     for (auto& annotation : diag.annotations) {
-      auto [line_idx, col] = line_col_indices(annotation.source.begin);
-      indent_width
-        = std::max(indent_width, std::to_string(line_idx + 1).size());
+      if (lines_.empty()) {
+        // TODO: This is a hack for the case where we don't have the information.
+        break;
+      }
+      auto [line, col] = line_col_indices(annotation.source.begin);
+      indent_width = std::max(indent_width, std::to_string(line + 1).size());
     }
     auto indent = std::string(indent_width, ' ');
     for (auto& annotation : diag.annotations) {
+      if (lines_.empty()) {
+        // TODO: This is a hack for the case where we don't have the information.
+        break;
+      }
       if (!annotation.source) {
         TENZIR_VERBOSE("annotation does not have source: {:?}", annotation);
         continue;
@@ -138,7 +160,7 @@ private:
     auto line = size_t{0};
     auto col = offset;
     while (true) {
-      TENZIR_ASSERT(line < lines_.size());
+      TENZIR_ASSERT_CHEAP(line < lines_.size());
       if (col <= lines_[line].size()) {
         break;
       }
@@ -157,11 +179,64 @@ private:
 
 } // namespace
 
-auto make_diagnostic_printer(std::string filename, std::string source,
+diagnostic_annotation::diagnostic_annotation(bool primary, std::string text,
+                                             location source)
+  : primary{primary}, text{std::move(text)}, source{std::move(source)} {
+  trim_and_truncate(this->text);
+}
+
+diagnostic_note::diagnostic_note(diagnostic_note_kind kind, std::string message)
+  : kind{kind}, message{std::move(message)} {
+  trim_and_truncate(this->message);
+}
+
+auto make_diagnostic_printer(std::optional<location_origin> origin,
                              color_diagnostics color, std::ostream& stream)
   -> std::unique_ptr<diagnostic_handler> {
-  return std::make_unique<diagnostic_printer>(std::move(filename),
-                                              std::move(source), color, stream);
+  return std::make_unique<diagnostic_printer>(std::move(origin), color, stream);
+}
+
+auto diagnostic::builder(enum severity s, caf::error err)
+  -> diagnostic_builder {
+  if (err.category() == caf::type_id_v<tenzir::ec>
+      && static_cast<tenzir::ec>(err.code()) == ec::diagnostic) {
+    auto ctx = err.context();
+    auto* inner = static_cast<diagnostic*>(nullptr);
+    caf::message_handler{
+      [&](diagnostic& diag) {
+        inner = &diag;
+      },
+      [](const caf::message&) {},
+    }(ctx);
+    if (inner) {
+      return std::move(*inner).modify().severity(s);
+    }
+  }
+  auto as_string = [&](size_t i) -> std::optional<std::string_view> {
+    if (err.context().match_element<std::string>(i)) {
+      return err.context().get_as<std::string>(i);
+    }
+    return std::nullopt;
+  };
+  auto eligible = err.context().size() != 0;
+  for (auto i = size_t{0}; i < err.context().size(); ++i) {
+    if (not as_string(i)) {
+      eligible = false;
+      break;
+    }
+  }
+  if (not eligible) {
+    return builder(s, "{}", err);
+  }
+  auto b = builder(s, "{}", *as_string(err.context().size() - 1));
+  for (auto i = err.context().size() - 1; i > 0; --i) {
+    b = std::move(b).note("{}", *as_string(i - 1));
+  }
+  return b;
+}
+
+void diagnostic_builder::emit(const shared_diagnostic_handler& diag) && {
+  return diag.emit(std::move(result_));
 }
 
 } // namespace tenzir

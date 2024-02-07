@@ -342,7 +342,7 @@ public:
         } else if (message == ec::timeout) {
           co_yield {};
         } else {
-          ctrl.abort(message.error());
+          diagnostic::error(message.error()).emit(ctrl.diagnostics());
           break;
         }
       }
@@ -393,8 +393,9 @@ public:
         auto timeout = engine->num_peers() == 0 ? 500ms : 0ms;
         engine->poll_monitor(timeout);
       } while (engine->num_peers() == 0);
-      if (auto error = engine->send(chunk))
-        ctrl.abort(error);
+      if (auto error = engine->send(chunk)) {
+        diagnostic::error(error).emit(ctrl.diagnostics());
+      }
     };
   }
 

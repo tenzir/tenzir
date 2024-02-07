@@ -13,8 +13,6 @@
 #include "tenzir/detail/inspection_common.hpp"
 
 #include <caf/error.hpp>
-#include <caf/make_message.hpp>
-#include <caf/message.hpp>
 #include <fmt/format.h>
 
 namespace tenzir {
@@ -91,8 +89,10 @@ enum class ec : uint8_t {
   system_error,
   /// An breaking version change.
   breaking_change,
-  /// An error during serialization
+  /// An error during serialization.
   serialization_error,
+  /// The error wraps a diagnostic.
+  diagnostic,
   /// No error; number of error codes.
   ec_count,
 };
@@ -109,21 +109,13 @@ auto inspect(Inspector& f, ec& x) {
   return detail::inspect_enum(f, x);
 }
 
+auto add_context_impl(const caf::error& error, std::string str) -> caf::error;
+
 template <class... Ts>
-auto add_context(const caf::error& error, fmt::format_string<Ts...> str,
-                 Ts&&... xs) -> caf::error {
-  if (!error)
-    return error;
-  if (!error.context()) {
-    return caf::error(
-      error.code(), error.category(),
-      caf::make_message(fmt::format(std::move(str), std::forward<Ts>(xs)...)));
-  }
-  return caf::error{
-    error.code(), error.category(),
-    caf::message::concat(
-      error.context(),
-      caf::make_message(fmt::format(std::move(str), std::forward<Ts>(xs)...)))};
+auto add_context(const caf::error& error, fmt::format_string<Ts...> fmt,
+                 Ts&&... args) -> caf::error {
+  return add_context_impl(error, fmt::format(std::move(fmt),
+                                             std::forward<Ts>(args)...));
 }
 
 } // namespace tenzir

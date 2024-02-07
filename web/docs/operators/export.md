@@ -11,7 +11,7 @@ Retrieves events from a Tenzir node. The dual to [`import`](import.md).
 ## Synopsis
 
 ```
-export [--live] [--internal]
+export [--live] [--internal] [--low-priority]
 ```
 
 ## Description
@@ -25,14 +25,14 @@ instead of on events persisted at a Tenzir node.
 
 ### `--internal`
 
-Export internal events, such as metrics, instead. By default, `export` only
-returns events that were previously imported with `import`. In contrast,
-`export --internal` exports internal events such as pipeline metrics.
-[Here](../metrics.md) is an overview of the various internal events.
+Export internal events, such as metrics or diagnostics, instead. By default,
+`export` only returns events that were previously imported with `import`. In
+contrast, `export --internal` exports internal events such as operator metrics.
 
-:::warning Experimental
-This flag and the schema of the returned events are subject to change.
-:::
+### `--low-priority`
+
+Treat this export with a lower priority, causing it to interfere less with
+regular priority exports at the cost of potentially running slower.
 
 ## Examples
 

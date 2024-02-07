@@ -11,11 +11,22 @@ Reads and writes lines with separated values.
 
 ## Synopsis
 
+Parser:
+
 ```
-csv [--allow-comments]
-ssv [--allow-comments]
-tsv [--allow-comments]
-xsv <field-sep> <list-sep> <null-value> [--allow-comments]
+csv [--allow-comments] [--auto-expand] [--header <header>]
+ssv [--allow-comments] [--auto-expand] [--header <header>]
+tsv [--allow-comments] [--auto-expand] [--header <header>]
+xsv <field-sep> <list-sep> <null-value> [--allow-comments] [--auto-expand] [--header <header>]
+```
+
+Printer:
+
+```
+csv [--no-header]
+ssv [--no-header]
+tsv [--no-header]
+xsv <field-sep> <list-sep> <null-value> [--no-header]
 ```
 
 ## Description
@@ -70,9 +81,23 @@ Specifies the string that separates list elements *within* a field.
 
 Specifies the string that denotes an absent value.
 
-### `--allow-comments`
+### `--allow-comments` (Parser)
 
 Treat lines beginning with `'#'` as comments.
+
+### `--auto-expand (Parser)
+
+Automatically add fields to the schema when encountering events with too many
+values instead of dropping the excess values.
+
+### `--header <header>` (Parser)
+
+Use the manually provided header line instead of treating the first line as the
+header.
+
+### `--no-header` (Printer)
+
+Do not print a header line containing the field names.
 
 ## Examples
 

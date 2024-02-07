@@ -27,6 +27,9 @@ with section("parse"):
                 "SOURCES": "*",
                 "TEST_SOURCES": "*",
                 "INCLUDE_DIRECTORIES": "*",
+                "DEPENDENCIES": "*",
+                "BUILTINS": "*",
+                "FLATBUFFERS": "*",
             },
         },
         "tenzirnormalizeinstalldirs": {

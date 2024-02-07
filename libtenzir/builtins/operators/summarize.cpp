@@ -228,7 +228,7 @@ struct binding {
     result.aggregation_columns.reserve(config.aggregations.size());
     auto const& rt = caf::get<record_type>(schema);
     for (auto const& field : config.group_by_extractors) {
-      if (auto offset = rt.resolve_key(field)) {
+      if (auto offset = schema.resolve_key_or_concept(field)) {
         auto type = rt.field(*offset).type;
         result.group_by_columns.emplace_back(
           column{std::move(*offset), std::move(type)});
@@ -251,7 +251,8 @@ struct binding {
               // that `count(.)` works across multiple schemas.
               TENZIR_ASSERT(aggr.function->name() == "count");
               return {{{}, type{int64_type{}}}};
-            } else if (auto offset = rt.resolve_key(aggr.input)) {
+            } else if (auto offset
+                       = schema.resolve_key_or_concept(aggr.input)) {
               auto type = rt.field(*offset).type;
               return {{std::move(*offset), std::move(type)}};
             } else {
@@ -775,7 +776,7 @@ public:
     }
     for (auto&& result : std::move(impl).finish(config_)) {
       if (!result) {
-        ctrl.abort(std::move(result.error()));
+        diagnostic::error(result.error()).emit(ctrl.diagnostics());
         co_return;
       }
       co_yield std::move(*result);

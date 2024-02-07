@@ -1,7 +1,0 @@
-error: could not parse `chart` operator
- --> <input>:1:20
-  |
-1 | from - read json | chart donut
-  |                    ^^^^^^^^^^^ 
-  |
-  = note: !! syntax_error: failed to parse operator arguments: ''

@@ -1,112 +1,42 @@
-# Integration Tests
+# The Tenzir Integration Testing Framework
 
-This directory contains a tailor-made integration test utility for Tenzir. Unlike
-the *unit tests*, which perform isolated tests of individual components, the
-*integration tests* simulate real-world uses of the system and verify its
-expected behavior.
+We run our integration tests on top of [`bats`](https://bats-core.readthedocs.io).
 
-Integration tests are YAML files that follow a specific schema.
+There is one custom library `bats-tenzir` that provides
+common node setup and a `check` function that compares
+the test output against a known reference file.
 
-## Test Specification Schema
+# Running integration tests
 
-Each *test* consists of a *name* (1), an optional list of *tags* (2), an
-optional reference to a *fixture* (3), and a sequence of *steps* (4) that
-consists of an application *command* (5), and an optional *input* dataset in
-`gz` format (6).
+To run all tests, execute the `integration` target from cmake.
 
-Example:
+To run all tests in this directory, use `bats tests/`.
 
-``` yaml
-Zeek conn log: (1)
-  tags: [zeek, example] (2)
-  fixture: ExampleTester (3)
-  steps: (4)
-    - command: import -b zeek (5)
-      input: data/zeek/conn.log.gz (6)
-    - command: export ascii 'resp_h == 192.168.1.104' (5)
-```
+To run all tests in a specific test file, use e.g. `bats tests/version.test`
 
-Fixtures are associative arrays with the mandatory keys `enter` and `exit`.
-Both their values are expected to be written as block form scalars containing
-Python code. This code executes within `Tester.run()` as setup and tear-down
-hook.
+Note that bats can be invoked from any directory, since all paths are computed
+relative to the test file.
 
-Example:
+To run the set of tests that failed during the last run of bats,
+the `--filter-status failed` option can be used. This can also
+be useful in combination with the `UPDATE` option below when updating
+tests after implementing a breaking change.
 
-``` yaml
-fixtures:
-  ExampleTester:
-    enter: | # python
-      print('The current working directory is {}'.format(work_dir))
-    exit: | # python
-      pass
-```
+To run one specific test, add the `bats:focus` tag to that test and
+run the test file.
 
-The variable `work_dir` contains the working directory with the Tenzir logs of the
-current test.
+# Updating and creating references
 
-The creation of a subprocess should be done through the `spawn()` wrapper
-function, which passes its arguments to the `Popen` constructor from `subprocess`.
+To update or create reference files, set the `UPDATE=1` environment
+variable and run `bats`.
 
-A *test set* is a collection of tests and fixtures in one YAML file.
-The default test set resides in `tests.yaml`.
+To update the references for one specific test, add the `bats:focus`
+tag to that test and run bats with `UPDATE=1`. Only that test will
+be executed and updated.
 
-## Test Runner
+# Temporary files
 
-### Prerequisites
-
-The runner depends on the python libraries `schema` and `pyyaml`. You can make
-them available in a temporary environment:
-
-```bash
-python3 -m venv env
-source env/bin/activate
-pip install -r requirements.txt
-```
-
-### Usage
-
-Still in the virtual environment, you can now run the default test set:
-
-```sh
-python3 integration.py --app <path/to/core>
-```
-
-You can get an overview of all available options by running
-
-```sh
-python3 integration.py --help
-```
-
-During the execution of a test, each step is invoked after an error free run of
-the previous step. An error is detected if the return code of the command is
-not `0`. A step is successful if no error occurred and if the stdout output of
-`command` matches the reference.
-
-### Output
-
-The runner prints status information about the current test and step as the
-tests are executed. At the end of each test a triplet of numbers that
-represents a summary is printed. The format is:
-
-```
-(number of steps defined/count of successful steps/cound of failed steps)
-```
-
-A test is successful if all steps are completed successfully.
-
-Example output:
-
-```sh
-Test: Zeek conn log
-Waiting for port 5158 to be available
-Starting server
-Waiting for server to listen on port 5158
-Running step ['import', 'zeek']
-Running step ['export', 'ascii', 'resp_h == 192.168.1.104']
-Shutting down server
-(2/2/0)
-```
-
-If the output of a step produces a mismatch with the provided reference, a diff
-between them is printed to `stdout`.
+There are variables `$BATS_TEST_TMPDIR` and `$BATS_FILE_TMPDIR`
+automatically defined that point to a temporary directory that
+is unique for this test or unique for the current test file
+respectively.

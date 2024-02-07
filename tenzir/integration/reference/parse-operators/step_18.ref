@@ -1,6 +1,0 @@
-error: the file `./file` does not exist
- --> <input>:1:6
-  |
-1 | load ./file | read json
-  |      ^^^^^^ 
-  |

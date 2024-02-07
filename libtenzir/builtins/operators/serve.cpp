@@ -75,7 +75,6 @@ namespace tenzir::plugins::serve {
 namespace {
 
 constexpr auto SERVE_ENDPOINT_ID = 0;
-constexpr auto FINAL_CONTINUATION_TOKEN = std::string_view{"__DONE__"};
 
 constexpr auto SPEC_V0 = R"_(
 /serve:
@@ -114,6 +113,11 @@ constexpr auto SPEC_V0 = R"_(
                 example: "2000ms"
                 default: "2000ms"
                 description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 5 seconds.
+              use_simple_format:
+                type: bool
+                example: true
+                default: false
+                description: Use an experimental, more simple format for the contained schema.
     responses:
       200:
         description: Success.
@@ -146,7 +150,7 @@ constexpr auto SPEC_V0 = R"_(
                           schema: "string"
                           schema_id: "string"
                           events: "uint64"
-                data:
+                events:
                   type: array
                   items:
                     type: object
@@ -212,6 +216,7 @@ struct request_limits {
 struct serve_request {
   std::string serve_id = {};
   std::string continuation_token = {};
+  bool use_simple_format = {};
   request_limits limits = {};
 };
 
@@ -282,7 +287,7 @@ struct managed_serve_operator {
     if (stop_rp.pending() and buffer.empty()) {
       TENZIR_ASSERT(not put_rp.pending());
       TENZIR_DEBUG("serve for id {} is done", escape_operator_arg(serve_id));
-      continuation_token = FINAL_CONTINUATION_TOKEN;
+      continuation_token.clear();
       get_rp.deliver(std::make_tuple(std::string{}, std::move(results)));
       stop_rp.deliver();
       return true;
@@ -308,9 +313,10 @@ struct serve_manager_state {
   /// The serve operators currently observed by the serve-manager.
   std::vector<managed_serve_operator> ops = {};
 
-  /// A list of previously known serve ids that were expired. This exists only
-  /// for returning better error messages to the user.
-  std::unordered_set<std::string> expired_ids = {};
+  /// A list of previously known serve ids that were expired and their
+  /// corresponding error messages. This exists only for returning better error
+  /// messages to the user.
+  std::unordered_map<std::string, caf::error> expired_ids = {};
 
   auto handle_down_msg(const caf::down_msg& msg) -> void {
     const auto found
@@ -331,13 +337,16 @@ struct serve_manager_state {
     // We delay the actual removal because we support fetching the
     // last set of events again by reusing the last continuation token.
     found->done = true;
-    auto delete_serve = [this, source = msg.source]() {
+    auto delete_serve = [this, source = msg.source, reason = msg.reason]() {
       const auto found
         = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
             return op.source == source;
           });
       if (found != ops.end()) {
-        expired_ids.insert(found->serve_id);
+        expired_ids.emplace(found->serve_id, reason);
+        if (found->get_rp.pending()) {
+          found->get_rp.deliver(reason);
+        }
         ops.erase(found);
       }
     };
@@ -433,12 +442,16 @@ struct serve_manager_state {
           return op.serve_id == request.serve_id;
         });
     if (found == ops.end()) {
-      if (expired_ids.contains(request.serve_id)) {
+      const auto expired_id = expired_ids.find(request.serve_id);
+      if (expired_id != expired_ids.end()) {
+        if (expired_id->second == ec::diagnostic) {
+          return expired_id->second;
+        }
         return caf::make_error(
           ec::logic_error,
           fmt::format("{} got request for events with expired serve id {}; the "
-                      "pipeline serving this data is no longer available",
-                      *self, request.serve_id));
+                      "pipeline serving this data is no longer available: {}",
+                      *self, request.serve_id, expired_id->second));
       }
       return caf::make_error(ec::invalid_argument,
                              fmt::format("{} got request for events with "
@@ -498,16 +511,14 @@ struct serve_manager_state {
     for (const auto& op : ops) {
       auto& entry = caf::get<record>(requests.emplace_back(record{}));
       entry.emplace("serve_id", op.serve_id);
-      const auto lingering = op.continuation_token == FINAL_CONTINUATION_TOKEN;
-      entry.emplace("continuation_token",
-                    op.continuation_token.empty() or lingering
-                      ? data{}
-                      : op.continuation_token);
+      entry.emplace("continuation_token", op.continuation_token.empty()
+                                            ? data{}
+                                            : op.continuation_token);
       entry.emplace("buffer_size", op.buffer_size);
       entry.emplace("num_buffered", rows(op.buffer));
       entry.emplace("num_requested", op.requested);
       entry.emplace("num_delivered", op.delivered);
-      entry.emplace("lingering", lingering);
+      entry.emplace("lingering", op.continuation_token.empty());
       entry.emplace("done", op.done);
       if (verbosity >= status_verbosity::detailed) {
         entry.emplace("put_pending", op.put_rp.pending());
@@ -656,18 +667,30 @@ struct serve_handler_state {
       }
       result.limits.timeout = **timeout;
     }
+
+    auto use_simple_format = try_get<bool>(params, "use_simple_format");
+    if (not use_simple_format) {
+      return parse_error{
+        .message = "failed to read use_simple_format",
+        .detail = caf::make_error(ec::invalid_argument,
+                                  fmt::format("parameter: {}; got params {}",
+                                              max_events.error(), params))};
+    }
+    if (*use_simple_format) {
+      result.use_simple_format = **use_simple_format;
+    }
     return result;
   }
 
   static auto create_response(const std::string& next_continuation_token,
-                              const std::vector<table_slice>& results)
-    -> std::string {
+                              const std::vector<table_slice>& results,
+                              bool use_simple_format) -> std::string {
     auto printer = json_printer{{
       .indentation = 0,
       .oneline = true,
     }};
     auto result
-      = next_continuation_token == FINAL_CONTINUATION_TOKEN
+      = next_continuation_token.empty()
           ? std::string{R"({"next_continuation_token":null,"events":[)"}
           : fmt::format(R"({{"next_continuation_token":"{}","events":[)",
                         next_continuation_token);
@@ -710,7 +733,8 @@ struct serve_handler_state {
       out_iter = fmt::format_to(out_iter, R"("schema_id":"{}","definition":)",
                                 schema.make_fingerprint());
       const auto ok
-        = printer.print(out_iter, schema.to_definition(/*expand*/ false));
+        = printer.print(out_iter, use_simple_format ? schema.to_definition2()
+                                                    : schema.to_definition());
       TENZIR_ASSERT_CHEAP(ok);
     }
     out_iter = fmt::format_to(out_iter, R"(}}]}}{})", '\n');
@@ -738,10 +762,11 @@ struct serve_handler_state {
                 request.continuation_token, request.limits.min_events,
                 request.limits.timeout, request.limits.max_events)
       .then(
-        [rp](const std::tuple<std::string, std::vector<table_slice>>&
-               result) mutable {
-          rp.deliver(rest_response::from_json_string(
-            create_response(std::get<0>(result), std::get<1>(result))));
+        [rp, use_simple_format = request.use_simple_format](
+          const std::tuple<std::string, std::vector<table_slice>>&
+            result) mutable {
+          rp.deliver(rest_response::from_json_string(create_response(
+            std::get<0>(result), std::get<1>(result), use_simple_format)));
         },
         [rp](caf::error& err) mutable {
           // TODO: Use a struct with distinct fields for user-facing
@@ -812,9 +837,9 @@ public:
               = caf::actor_cast<serve_manager_actor>(std::move(actors[0]));
           },
           [&](const caf::error& err) { //
-            ctrl.abort(caf::make_error(
-              ec::logic_error,
-              fmt::format("failed to find serve-manager: {}", err)));
+            diagnostic::error(err)
+              .note("failed to get serve-manager")
+              .emit(ctrl.diagnostics());
           });
     }
     // Step 2: Register this operator at SERVE MANAGER actor using the serve_id.
@@ -827,9 +852,9 @@ public:
                        escape_operator_arg(serve_id_));
         },
         [&](const caf::error& err) { //
-          ctrl.abort(caf::make_error(
-            ec::logic_error,
-            fmt::format("failed to register at serve-manager: {}", err)));
+          diagnostic::error(err)
+            .note("failed to register at serve-manager")
+            .emit(ctrl.diagnostics());
         });
     co_yield {};
     // Step 3: Forward events to the SERVE MANAGER.
@@ -843,10 +868,9 @@ public:
             // nop
           },
           [&](const caf::error& err) {
-            ctrl.abort(caf::make_error(ec::logic_error,
-                                       fmt::format("failed to buffer events at "
-                                                   "serve-manager: {}",
-                                                   err)));
+            diagnostic::error(err)
+              .note("failed to buffer events at serve-manager")
+              .emit(ctrl.diagnostics());
           });
       co_yield {};
     }
@@ -858,9 +882,9 @@ public:
           // nop
         },
         [&](const caf::error& err) {
-          ctrl.abort(caf::make_error(
-            ec::logic_error,
-            fmt::format("failed to deregister at serve-manager: {}", err)));
+          diagnostic::error(err)
+            .note("failed to deregister at serve-manager")
+            .emit(ctrl.diagnostics());
         });
     co_yield {};
   }
@@ -924,9 +948,9 @@ public:
             = caf::actor_cast<serve_manager_actor>(std::move(actors[0]));
         },
         [&](const caf::error& err) { //
-          ctrl.abort(caf::make_error(
-            ec::logic_error,
-            fmt::format("failed to find serve-manager: {}", err)));
+          diagnostic::error(err)
+            .note("failed to get at serve-manager")
+            .emit(ctrl.diagnostics());
         });
     co_yield {};
     auto serves = list{};
@@ -941,9 +965,9 @@ public:
           serves = std::move(caf::get<list>(response["requests"]));
         },
         [&](const caf::error& err) {
-          ctrl.abort(caf::make_error(
-            ec::logic_error,
-            fmt::format("failed to get status of serve-manager: {}", err)));
+          diagnostic::error(err)
+            .note("failed to get status")
+            .emit(ctrl.diagnostics());
         });
     co_yield {};
     auto builder = series_builder{};
@@ -981,6 +1005,7 @@ public:
           {"max_events", uint64_type{}},
           {"min_events", uint64_type{}},
           {"timeout", duration_type{}},
+          {"use_simple_format", bool_type{}},
         },
         .version = api_version::v0,
         .content_type = http_content_type::json,

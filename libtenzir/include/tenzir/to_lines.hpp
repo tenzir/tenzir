@@ -19,7 +19,7 @@ namespace tenzir {
 inline auto to_lines(generator<chunk_ptr> input)
   -> generator<std::optional<std::string_view>> {
   auto buffer = std::string{};
-  bool ended_on_linefeed = false;
+  bool ended_on_carriage_return = false;
   for (auto&& chunk : input) {
     if (!chunk || chunk->size() == 0) {
       co_yield std::nullopt;
@@ -27,10 +27,10 @@ inline auto to_lines(generator<chunk_ptr> input)
     }
     const auto* begin = reinterpret_cast<const char*>(chunk->data());
     const auto* const end = begin + chunk->size();
-    if (ended_on_linefeed && *begin == '\n') {
+    if (ended_on_carriage_return && *begin == '\n') {
       ++begin;
     };
-    ended_on_linefeed = false;
+    ended_on_carriage_return = false;
     for (const auto* current = begin; current != end; ++current) {
       if (*current != '\n' && *current != '\r') {
         continue;
@@ -45,7 +45,7 @@ inline auto to_lines(generator<chunk_ptr> input)
       if (*current == '\r') {
         auto next = current + 1;
         if (next == end) {
-          ended_on_linefeed = true;
+          ended_on_carriage_return = true;
         } else if (*next == '\n') {
           ++current;
         }

@@ -8,20 +8,15 @@ project(
 include(FeatureSummary)
 include(CTest)
 
-file(GLOB_RECURSE web_sources CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
-     "${CMAKE_CURRENT_SOURCE_DIR}/include/web/*.hpp")
-
-file(GLOB_RECURSE web_tests CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp")
-
 find_package(Tenzir REQUIRED)
 
 TenzirRegisterPlugin(
   TARGET web
   ENTRYPOINT src/plugin.cpp
-  SOURCES ${web_sources}
-  TEST_SOURCES ${web_tests}
+  SOURCES GLOB "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+          "${CMAKE_CURRENT_SOURCE_DIR}/include/web/*.hpp"
+  TEST_SOURCES GLOB "${CMAKE_CURRENT_SOURCE_DIR}/tests/*.cpp"
+  FLATBUFFERS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/src/fbs/*.fbs"
   INCLUDE_DIRECTORIES include)
 
 find_package(OpenSSL REQUIRED)
@@ -46,14 +41,3 @@ else ()
 endif ()
 dependency_summary("restinio" restinio::restinio "Dependencies")
 target_link_libraries(web PRIVATE restinio::restinio)
-
-# Compile the web FlatBuffers schemas.
-file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
-     "${CMAKE_CURRENT_SOURCE_DIR}/src/fbs/*.fbs")
-
-TenzirCompileFlatBuffers(
-  TARGET web-fbs
-  SCHEMAS ${flatbuffers_schemas}
-  INCLUDE_DIRECTORY "web/fbs")
-
-target_link_libraries(web PUBLIC web-fbs)

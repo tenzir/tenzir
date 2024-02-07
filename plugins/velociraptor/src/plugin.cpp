@@ -361,12 +361,14 @@ public:
     auto subscribe = std::optional<located<std::string>>{};
     auto max_wait = std::optional<located<duration>>{};
     auto query = std::optional<located<std::string>>{};
+    auto profile = std::optional<located<std::string>>{};
     parser.add("-n,--request-name", request_name, "<string>");
     parser.add("-o,--org-id", org_id, "<string>");
     parser.add("-q,--query", query, "<vql>");
     parser.add("-r,--max-rows", max_rows, "<uint64>");
     parser.add("-s,--subscribe", subscribe, "<artifact>");
     parser.add("-w,--max-wait", max_wait, "<duration>");
+    parser.add("--profile", profile, "<profile>");
     parser.parse(p);
     if (max_wait && max_wait->inner < 1s)
       diagnostic::error("--max-wait too low")
@@ -387,16 +389,66 @@ public:
         .vql = make_subscribe_query(subscribe->inner),
       });
     }
-    if (args.requests.empty())
+    if (args.requests.empty()) {
       diagnostic::error("no artifact subscription or VQL expression provided")
         .hint("use -s,--subscirbe <artifact> for a subscription")
         .hint("use -q,--query <vql> to run a VQL expression")
         .throw_();
+    }
     args.org_id = org_id ? org_id->inner : default_org_id;
     args.max_rows = max_rows ? max_rows->inner : default_max_rows;
     args.max_wait = std::chrono::duration_cast<std::chrono::seconds>(
       max_wait ? max_wait->inner : default_max_wait);
-    return std::make_unique<velociraptor_operator>(std::move(args), config_);
+    const auto available_profiles = [&]() -> std::vector<std::string_view> {
+      auto profiles = get_if<record>(&config_, "profiles");
+      if (not profiles) {
+        return {};
+      }
+      auto result = std::vector<std::string_view>{};
+      result.reserve(profiles->size());
+      for (auto& [key, _] : *profiles) {
+        result.push_back(key);
+      }
+      return result;
+    }();
+    if (profile) {
+      if (available_profiles.empty()) {
+        diagnostic::error("no profiles configured")
+          .primary(profile->source)
+          .throw_();
+      }
+      auto profile_config = try_get_only<record>(
+        config_, fmt::format("profiles.{}", profile->inner));
+      if (not profile_config) {
+        diagnostic::error("profile `{}` is invalid: {}", profile->inner,
+                          profile_config.error())
+          .primary(profile->source)
+          .hint("available profiles: {}", fmt::join(available_profiles, ", "))
+          .throw_();
+      }
+      if (not *profile_config) {
+        diagnostic::error("profile `{}` does not exist", profile->inner)
+          .primary(profile->source)
+          .hint("available profiles: {}", fmt::join(available_profiles, ", "))
+          .throw_();
+      }
+      return std::make_unique<velociraptor_operator>(
+        std::move(args), std::move(**profile_config));
+    }
+    if (available_profiles.empty()) {
+      return std::make_unique<velociraptor_operator>(std::move(args), config_);
+    }
+    // If we have profiles configured but no --profile set, we default to the
+    // first configured profile.
+    auto profile_config = try_get_only<record>(
+      config_, fmt::format("profiles.{}", available_profiles.front()));
+    if (not profile_config or not *profile_config) {
+      diagnostic::error("profile `{}` is invalid", available_profiles.front())
+        .note("implicitly used the first configured profile")
+        .throw_();
+    }
+    return std::make_unique<velociraptor_operator>(std::move(args),
+                                                   std::move(**profile_config));
   }
 
   auto name() const -> std::string override {

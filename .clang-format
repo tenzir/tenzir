@@ -43,6 +43,7 @@ IndentPPDirectives: AfterHash
 IndentRequires: true
 IndentWidth: 2
 IndentWrappedFunctionNames: false
+InsertBraces: true
 KeepEmptyLinesAtTheStartOfBlocks: false
 Language: Cpp
 MacroBlockBegin: "CAF_BEGIN_TYPE_ID_BLOCK"

@@ -1,0 +1,6 @@
+{"b": true, "e": "A"}
+{"b": false, "e": "B"}
+{"b": false, "e": "C"}
+{"b": false, "e": "D"}
+warning: field `a` not found in input (schema `tenzir.json`), but the chart operator expected it for `y`
+ = note: from `chart`

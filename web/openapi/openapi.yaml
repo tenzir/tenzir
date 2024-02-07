@@ -1,9 +1,9 @@
 ---
 openapi: 3.0.0
 info:
-  title: Tenzir Rest API
+  title: Tenzir REST API
   version: "\"0.1\""
-  description: "\nThis API can be used to interact with a Tenzir Node in a RESTful manner.\n\nAll API requests must be authenticated with a valid token, which must be\nsupplied in the `X-Tenzir-Token` request header. The token can be generated\non the command-line using the `tenzir-ctl web generate-token` command."
+  description: "This API can be used to interact with a Tenzir Node in a RESTful manner.\n\nAll API requests must be authenticated with a valid token, which must be supplied in the `X-Tenzir-Token` request header. The token can be generated on the command-line using `tenzir 'openapi | write yaml`."
 servers:
   - url: https://tenzir.example.com/api/v0
 security:
@@ -44,7 +44,7 @@ components:
         ttl:
           type: string
           description: "A duration string specifying the maximum time for this pipeline to exist. No value means the pipeline is allowed to exist forever.\nThis parameter must be defined if the `hidden` parameter is true.\n"
-          default: ~
+          default: null
           example: 5.0m
         autostart:
           $ref: "#/components/schemas/PipelineAutostart"
@@ -80,7 +80,11 @@ components:
     LaunchParameters:
       allOf:
         - $ref: "#/components/schemas/CreateParameters"
-        - type: object
+          type: null
+          required: null
+          properties: null
+        - $ref: null
+          type: object
           required:
             - serve_id
           properties:
@@ -232,11 +236,6 @@ components:
           description: Autostart the pipeline upon failure.
           default: false
           example: false
-        stopped:
-          type: boolean
-          description: Autostart the pipeline when it stops before completing.
-          default: false
-          example: true
     PipelineInfo:
       type: object
       properties:
@@ -249,6 +248,17 @@ components:
         definition:
           type: string
           description: The pipeline definition.
+        created_at:
+          type: integer
+          format: int64
+          description: The Unix timestamp of the pipeline creation time in nanoseconds.
+        last_modified:
+          type: integer
+          format: int64
+          description: The Unix timestamp of the last pipeline modification in nanoseconds.
+        total_runs:
+          type: integer
+          description: The total amount of runs this pipeline has attempted so far.
         state:
           type: string
           enum:
@@ -368,7 +378,7 @@ paths:
               properties:
                 id:
                   type: string
-                  example: 7
+                  example: 4c7f2b11-6169-4d1b-89b4-4fc0a68b3d4a
                   description: The id of the pipeline to be deleted.
       responses:
         200:
@@ -435,11 +445,13 @@ paths:
                       $ref: "#/components/schemas/PipelineInfo"
                 example:
                   pipelines:
-                    - id: 7
+                    - id: 4c7f2b11-6169-4d1b-89b4-4fc0a68b3d4a
                       name: user-assigned-name
                       definition: export | where foo | publish /bar
+                      created_at: 1706180157837037485
+                      last_modifed: 1706180157837038016
                       state: running
-                      error: ~
+                      error: null
                       diagnostics:
                         []
                       metrics:
@@ -448,9 +460,11 @@ paths:
                             {}
                           out:
                             {}
-                    - id: 8
+                    - id: 08446737-da9b-4787-8599-97d85c48c3bb
                       name: wrong-pipeline
                       definition: export asdf
+                      created_at: null
+                      last_modifed: null
                       state: failed
                       error: format 'asdf' not found
                       diagnostics:
@@ -542,7 +556,7 @@ paths:
               properties:
                 id:
                   type: string
-                  example: 7
+                  example: 08446737-da9b-4787-8599-97d85c48c3bb
                   description: The id of the pipeline to be updated.
                 action:
                   type: string
@@ -619,6 +633,11 @@ paths:
                   example: 2.0s
                   default: 2.0s
                   description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 5 seconds.
+                use_simple_format:
+                  type: bool
+                  example: true
+                  default: false
+                  description: Use an experimental, more simple format for the contained schema.
       responses:
         200:
           description: Success.
@@ -651,7 +670,7 @@ paths:
                               schema: string
                               schema_id: string
                               events: uint64
-                  data:
+                  events:
                     type: array
                     items:
                       type: object
@@ -727,3 +746,4 @@ paths:
                   Tenzir: v2.3.0-rc3-32-g8529a6c43f
         401:
           description: Not authenticated.
+...

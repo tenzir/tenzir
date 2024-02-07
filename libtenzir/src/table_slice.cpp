@@ -775,6 +775,9 @@ uint64_t count_matching(const table_slice& slice, const expression& expr,
 }
 
 table_slice resolve_enumerations(table_slice slice) {
+  if (slice.rows() == 0) {
+    return slice;
+  }
   auto type = caf::get<record_type>(slice.schema());
   // Resolve enumeration types, if there are any.
   auto transformations = std::vector<indexed_transformation>{};
@@ -890,7 +893,7 @@ auto resolve_operand(const table_slice& slice, const operand& op)
       bind_value(value);
     },
     [&](const field_extractor& ex) {
-      if (auto index = layout.resolve_key(ex.field)) {
+      if (auto index = slice.schema().resolve_key_or_concept(ex.field)) {
         bind_array(*index);
         return;
       }
@@ -1270,16 +1273,8 @@ auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
     const auto& field_name = k->name();
     unflattened_field_map[field_name]
       = unflatten_field{field_name, slice_array->GetFieldByName(field_name)};
-    if (field_name.starts_with(nested_field_separator)
-        or field_name.ends_with(nested_field_separator)) {
-      TENZIR_DEBUG("retaining original field {} during unflattening: "
-                   "encountered name with separator at beginning/end",
-                   field_name);
-      continue;
-    }
     auto separator_count
       = count_substring_occurrences(field_name, nested_field_separator);
-
     fields_to_resolve[separator_count].push_back(field_name);
   }
   for (auto& [field_name, field] : unflattened_field_map) {

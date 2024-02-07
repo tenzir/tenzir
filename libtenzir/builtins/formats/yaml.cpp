@@ -192,7 +192,6 @@ public:
 
   friend auto inspect(auto& f, yaml_parser& x) -> bool {
     return f.object(x).fields();
-    return true;
   }
 };
 
@@ -230,12 +229,20 @@ public:
         // a mismatch between BeginSeq and EndSeq or BeginMap and EndMap; all of
         // these we cannot recover from.
         if (not out->good()) {
-          ctrl.abort(
-            caf::make_error(ec::logic_error, "failed to format YAML document"));
+          diagnostic::error("failed to format YAML document")
+            .emit(ctrl.diagnostics());
           co_return;
         }
-        co_yield chunk::copy(chunk::view_type{
-          reinterpret_cast<const std::byte*>(out->c_str()), out->size()});
+        const auto* data = reinterpret_cast<const std::byte*>(out->c_str());
+        auto size = out->size();
+        auto meta = chunk_metadata{.content_type = "application/x-yaml"};
+        auto chunk = chunk::make(
+          data, size,
+          [emitter = std::move(out)]() noexcept {
+            static_cast<void>(emitter);
+          },
+          std::move(meta));
+        co_yield chunk;
       });
   }
 

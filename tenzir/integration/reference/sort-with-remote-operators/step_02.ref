@@ -1,2 +1,0 @@
-warning: !! invalid_configuration: sort key `uid` does not apply to schema `cef.event`; events of this schema will be discarded
- = note: from `sort`

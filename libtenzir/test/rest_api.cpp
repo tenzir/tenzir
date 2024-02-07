@@ -81,7 +81,7 @@ FIXTURE_SCOPE(rest_api_tests, fixture)
 
 TEST(status endpoint) {
   auto const* plugin
-    = tenzir::plugins::find<tenzir::rest_endpoint_plugin>("api-status");
+    = tenzir::plugins::find<tenzir::rest_endpoint_plugin>("status");
   REQUIRE(plugin);
   auto endpoints = plugin->rest_endpoints();
   REQUIRE_EQUAL(endpoints.size(), 1ull);

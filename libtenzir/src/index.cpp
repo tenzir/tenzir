@@ -43,6 +43,7 @@
 #include "tenzir/io/read.hpp"
 #include "tenzir/io/save.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/modules.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/partition_transformer.hpp"
 #include "tenzir/passive_partition.hpp"
@@ -1204,20 +1205,8 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);
   self->state.catalog = std::move(catalog);
-  self
-    ->request(self->state.catalog, caf::infinite, atom::get_v,
-              atom::taxonomies_v)
-    .await(
-      [self](tenzir::taxonomies& taxonomies) {
-        self->state.taxonomies
-          = std::make_shared<tenzir::taxonomies>(std::move(taxonomies));
-      },
-      [](caf::error& err) {
-        TENZIR_WARN("catalog failed to load taxonomy "
-                    "definitions: {}",
-                    std::move(err));
-        // TODO: Shutdown when failing?
-      });
+  self->state.taxonomies = std::make_shared<tenzir::taxonomies>();
+  self->state.taxonomies->concepts = modules::concepts();
   self->state.dir = dir;
   self->state.synopsisdir = catalog_dir;
   self->state.markersdir = dir / "markers";
@@ -1486,19 +1475,6 @@ index(index_actor::stateful_pointer<index_state> self,
       candidates.reserve(self->state.active_partitions.size()
                          + self->state.unpersisted.size());
       query_state::type_query_context_map query_contexts;
-      if (not caf::get_or(
-            content(self->system().config()),
-            "tenzir.experimental-disable-active-partition-queries", false)) {
-        for (const auto& [active_partition_type, active_partition] :
-             self->state.active_partitions) {
-          candidates.emplace_back(active_partition.id, active_partition_type);
-          query_contexts[active_partition_type] = query_context;
-        }
-        for (const auto& [id, schema_actor_pair] : self->state.unpersisted) {
-          candidates.emplace_back(id, schema_actor_pair.first);
-          query_contexts[schema_actor_pair.first] = query_context;
-        }
-      }
       auto rp = self->make_response_promise<query_cursor>();
       self
         ->request(self->state.catalog, caf::infinite, atom::candidates_v,

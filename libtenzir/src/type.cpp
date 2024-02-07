@@ -19,6 +19,7 @@
 #include "tenzir/fbs/type.hpp"
 #include "tenzir/legacy_type.hpp"
 #include "tenzir/module.hpp"
+#include "tenzir/modules.hpp"
 
 #include <arrow/array.h>
 #include <arrow/type_traits.h>
@@ -374,6 +375,10 @@ type::type(chunk_ptr&& table) noexcept {
 #  endif // defined(FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE)
 #endif   // TENZIR_ENABLE_ASSERTIONS
   table_ = std::move(table);
+}
+
+type::type(flatbuffer<fbs::Type>&& fb) noexcept : type(std::move(fb).chunk()) {
+  // nop
 }
 
 type::type(std::string_view name, const type& nested,
@@ -907,6 +912,64 @@ data type::to_definition(bool expand) const noexcept {
     caf::visit(make_type_definition, *this));
 }
 
+auto type::to_definition2(std::optional<std::string> field_name,
+                          offset parent_path) const noexcept -> record {
+  auto attributes = record{};
+  for (const auto& [key, value] : this->attributes()) {
+    attributes.emplace(key, value.empty() ? data{} : data{std::string{value}});
+  }
+  auto path = list{};
+  for (const auto& index : parent_path) {
+    path.push_back(data{static_cast<int64_t>(index)});
+  }
+  auto make_type_definition = detail::overload{
+    [&](const auto&) noexcept -> record {
+      auto result = record{};
+      result.emplace("name", field_name.value_or(std::string{name()}));
+      result.emplace("kind", std::string{to_string(kind())});
+      result.emplace("type", name().empty() ? std::string{to_string(kind())}
+                                            : std::string{name()});
+      result.emplace("attributes", std::move(attributes));
+      result.emplace("path", std::move(path));
+      result.emplace("fields", list{});
+      return result;
+    },
+    [&](const list_type& self) noexcept -> record {
+      // Recursively create the definition for the nested type, but add a -1 to
+      // it for the values. We override the type to include the list, but leave
+      // the kind as the nested value.
+      parent_path.push_back(-1);
+      auto result = self.value_type().to_definition2(
+        field_name.value_or(std::string{name()}), parent_path);
+      result["kind"]
+        = fmt::format("list<{}>", caf::get<std::string>(result["kind"]));
+      result["type"]
+        = name().empty()
+            ? fmt::format("list<{}>", caf::get<std::string>(result["type"]))
+            : std::string{name()};
+      return result;
+    },
+    [&](const record_type& self) noexcept -> record {
+      auto fields = list{};
+      parent_path.push_back(-1);
+      for (const auto& field : self.fields()) {
+        ++parent_path.back();
+        fields.push_back(
+          field.type.to_definition2(std::string{field.name}, parent_path));
+      }
+      auto result = record{};
+      result.emplace("name", field_name.value_or(std::string{name()}));
+      result.emplace("kind", "record");
+      result.emplace("type", name().empty() ? "record" : std::string{name()});
+      result.emplace("attributes", std::move(attributes));
+      result.emplace("path", std::move(path));
+      result.emplace("fields", std::move(fields));
+      return result;
+    },
+  };
+  return caf::visit(make_type_definition, *this);
+}
+
 type type::from_arrow(const arrow::DataType& other) noexcept {
   auto f = detail::overload{
     []<class T>(const T&) noexcept -> type {
@@ -999,6 +1062,15 @@ type::make_arrow_builder(arrow::MemoryPool* pool) const noexcept {
     return x.make_arrow_builder(pool);
   };
   return caf::visit(f, *this);
+}
+
+std::optional<offset>
+type::resolve_key_or_concept(std::string_view key) const noexcept {
+  const auto* rt = caf::get_if<record_type>(this);
+  if (not rt) {
+    return {};
+  }
+  return rt->resolve_key_or_concept(key, name());
 }
 
 auto inspect(caf::detail::stringification_inspector& f, type& x) {
@@ -2835,8 +2907,8 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
   die("index out of bounds");
 }
 
-std::optional<offset>
-record_type::resolve_key(std::string_view key) const noexcept {
+std::optional<offset> record_type::resolve_key_or_concept(
+  std::string_view key, std::string_view schema_name) const noexcept {
   auto index = offset{0};
   auto history = std::vector{std::pair{
     table().type_as_record_type(),
@@ -2908,7 +2980,37 @@ record_type::resolve_key(std::string_view key) const noexcept {
         break;
     }
   }
+  // As a fallback, try to resolve the key as a concept, if the schema name is
+  // known.
+  if (schema_name.empty()) {
+    return {};
+  }
+  const auto try_strip_schema_name
+    = [&schema_name](std::string_view key) -> std::optional<std::string_view> {
+    if (not key.starts_with(schema_name)) {
+      return {};
+    }
+    key = key.substr(schema_name.size());
+    if (not key.starts_with('.')) {
+      return {};
+    }
+    return key.substr(1);
+  };
+  const auto resolved_keys
+    = resolve_concepts(modules::concepts(), {std::string{key}});
+  for (const auto& resolved_key : resolved_keys) {
+    if (auto key = try_strip_schema_name(resolved_key)) {
+      if (auto result = resolve_key(*key)) {
+        return result;
+      }
+    }
+  }
   return {};
+}
+
+std::optional<offset>
+record_type::resolve_key(std::string_view key) const noexcept {
+  return resolve_key_or_concept(key, {});
 }
 
 generator<offset>

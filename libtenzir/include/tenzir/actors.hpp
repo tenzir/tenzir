@@ -238,8 +238,12 @@ using importer_actor = typed_actor_fwd<
     ->caf::result<caf::outbound_stream_slot<table_slice>>,
   // Register a FLUSH LISTENER actor.
   auto(atom::subscribe, atom::flush, flush_listener_actor)->caf::result<void>,
+  // Register a subscriber for table slices.
+  auto(atom::subscribe, receiver_actor<table_slice>)->caf::result<void>,
   // Push buffered slices downstream to make the data available.
-  auto(atom::flush)->caf::result<void>>
+  auto(atom::flush)->caf::result<void>,
+  // Import a batch of data.
+  auto(table_slice)->caf::result<void>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the STREAM SINK actor for table slices with a
@@ -416,6 +420,8 @@ using exec_node_actor = typed_actor_fwd<
   auto(atom::pause)->caf::result<void>,
   // Resume the execution node. No-op if it was not paused.
   auto(atom::resume)->caf::result<void>,
+  // Emit a diagnostic through the exec node.
+  auto(diagnostic diag)->caf::result<void>,
   // Uodate demand.
   auto(atom::pull, exec_node_sink_actor sink, uint64_t batch_size)
     ->caf::result<void>>
@@ -473,6 +479,11 @@ using connector_actor = typed_actor_fwd<
   // Retrieve the handle to a remote node actor.
   auto(atom::connect, connect_request)->caf::result<node_actor>>::unwrap;
 
+using metrics_collector_actor = typed_actor_fwd<
+  // Retrieve the handle to a remote node actor.
+  auto(atom::run)
+    ->caf::result<void>>::extend_with<component_plugin_actor>::unwrap;
+
 } // namespace tenzir
 
 // -- type announcements -------------------------------------------------------
@@ -509,6 +520,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::atom::done>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::diagnostic>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::metric>))
+  TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::table_slice>))
   TENZIR_ADD_TYPE_ID((tenzir::rest_handler_actor))
   TENZIR_ADD_TYPE_ID((tenzir::status_client_actor))
   TENZIR_ADD_TYPE_ID((tenzir::stream_sink_actor<tenzir::table_slice>))

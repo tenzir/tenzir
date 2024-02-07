@@ -32,16 +32,18 @@ public:
     // can offer a better mechanism here.
     auto result = import_stream::make(ctrl.self(), ctrl.node());
     if (not result) {
-      ctrl.abort(result.error());
+      diagnostic::error(result.error())
+        .note("failed to create import stream")
+        .emit(ctrl.diagnostics());
       co_return;
     }
     auto stream = std::move(*result);
     auto total_events = size_t{0};
     for (auto&& slice : input) {
       if (stream.has_ended()) {
-        ctrl.abort(caf::make_error(
-          ec::unspecified,
-          fmt::format("unexpected import stream end: {}", stream.error())));
+        diagnostic::error(stream.error())
+          .note("import stream unexpectedly ended")
+          .emit(ctrl.diagnostics());
         co_return;
       }
       if (slice.rows() == 0) {
@@ -61,7 +63,7 @@ public:
       co_yield {};
     }
     if (auto err = stream.error()) {
-      ctrl.abort(std::move(err));
+      diagnostic::error(err).emit(ctrl.diagnostics());
       co_return;
     }
     // We empirically need this sleep here for the flushing to take any effect

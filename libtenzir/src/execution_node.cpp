@@ -123,25 +123,14 @@ public:
   }
 
   void emit(diagnostic diag) override {
-    TENZIR_DEBUG("{} {} emits diagnostic: {:?}", *self_,
+    TENZIR_TRACE("{} {} emits diagnostic: {:?}", *self_,
                  self_->state.op->name(), diag);
     if (diag.severity == severity::error) {
-      self_->state.has_seen_error = true;
-      self_->request(diagnostic_handler_, caf::infinite, std::move(diag))
-        .then(
-          [this] {
-            self_->quit(ec::silent);
-          },
-          [this](caf::error& err) {
-            self_->quit(add_context(err, "failed to emit diagnostic"));
-          });
+      self_->send(diagnostic_handler_, diag);
+      self_->quit(std::move(diag).to_error());
       return;
     }
-    self_->request(diagnostic_handler_, caf::infinite, std::move(diag))
-      .then([] {},
-            [](const caf::error& err) {
-              TENZIR_WARN("failed to emit diagnostic: {}", err);
-            });
+    self_->send(diagnostic_handler_, std::move(diag));
   }
 
 private:
@@ -168,34 +157,6 @@ public:
 
   auto node() noexcept -> node_actor override {
     return state_.weak_node.lock();
-  }
-
-  auto abort(caf::error error) noexcept -> void override {
-    TENZIR_DEBUG("{} {} aborts: {}", *state_.self, state_.op->name(), error);
-    TENZIR_ASSERT_CHEAP(error != caf::none);
-    diagnostic::error("{}", error)
-      .note("from `{}`", state_.op->name())
-      .emit(diagnostics());
-  }
-
-  auto warn(caf::error error) noexcept -> void override {
-    TENZIR_DEBUG("{} {} warns: {}", *state_.self, state_.op->name(), error);
-    TENZIR_ASSERT_CHEAP(error != caf::none);
-    diagnostic::warning("{}", error)
-      .note("from `{}`", state_.op->name())
-      .emit(diagnostics());
-  }
-
-  auto emit(table_slice) noexcept -> void override {
-    die("not implemented");
-  }
-
-  auto schemas() const noexcept -> const std::vector<type>& override {
-    return tenzir::modules::schemas();
-  }
-
-  auto concepts() const noexcept -> const concepts_map& override {
-    return tenzir::modules::concepts();
   }
 
   auto diagnostics() noexcept -> diagnostic_handler& override {
@@ -258,9 +219,6 @@ struct exec_node_state {
   };
   std::optional<resumable_generator> instance = {};
 
-  /// Whether the diagnostics handler has emitted an error.
-  bool has_seen_error = false;
-
   /// State required for keeping and sending metrics. Stored in a separate
   /// shared pointer to allow safe usage from an attached functor to send out
   /// metrics after this actor has quit.
@@ -281,6 +239,12 @@ struct exec_node_state {
   };
   std::optional<struct demand> demand = {};
   bool issue_demand_inflight = {};
+
+  /// Exponential backoff for scheduling.
+  static constexpr duration min_backoff = std::chrono::milliseconds{10};
+  static constexpr duration max_backoff = std::chrono::milliseconds{1000};
+  duration backoff = duration::zero();
+  caf::disposable backoff_disposable = {};
 
   /// A pointer to te operator control plane passed to this operator during
   /// execution, which acts as an escape hatch to this actor.
@@ -303,6 +267,8 @@ struct exec_node_state {
 
   ~exec_node_state() noexcept {
     TENZIR_DEBUG("{} {} shut down", *self, op->name());
+    instance.reset();
+    ctrl.reset();
     metrics->emit();
     if (demand and demand->rp.pending()) {
       demand->rp.deliver();
@@ -338,31 +304,34 @@ struct exec_node_state {
       previous
         = caf::actor_cast<exec_node_actor>(std::move(all_previous.back()));
       all_previous.pop_back();
-      self->monitor<caf::message_priority::normal>(previous);
-      self->set_down_handler([this, addr = previous.address()](
-                               const caf::down_msg& msg) {
+      self->link_to(previous);
+      self->set_exit_handler([this, prev_addr = previous.address()](
+                               const caf::exit_msg& msg) {
         auto time_scheduled_guard
           = make_timer_guard(metrics->values.time_scheduled);
-        if (msg.source != addr) [[unlikely]] {
-          TENZIR_DEBUG("{} {} ignores down message `{}` from unknown source: "
-                       "{}",
-                       *self, op->name(), msg.reason, msg.source);
+        // We got an exit message, which can mean one of four things:
+        // 1. The pipeline manager quit.
+        // 2. The next operator quit.
+        // 3. The previous operator quit gracefully.
+        // 4. The previous operator quit ungracefully.
+        // In cases (1-3) we need to shut down this operator unconditionally.
+        // For (4) we we need to treat the previous operator as offline.
+        if (msg.source != prev_addr) {
+          TENZIR_DEBUG("{} {} got exit message from the next execution node or "
+                       "its executor with address {}: {}",
+                       *self, op->name(), msg.source, msg.reason);
+          self->quit(msg.reason);
           return;
         }
-        TENZIR_DEBUG("{} {} got down message from previous execution node: {}",
-                     *self, op->name(), msg.reason);
-        previous = nullptr;
-        schedule_run();
-        if (msg.reason) {
-          if (msg.reason != ec::silent) {
-            diagnostic::error("{}", msg.reason)
-              .note("`{}` shuts down because of an irregular exit of the "
-                    "previous operator",
-                    op->name())
-              .emit(ctrl->diagnostics());
-          }
-          self->quit(ec::silent);
+        TENZIR_DEBUG("{} {} got down message from previous execution node with "
+                     "address {}: {}",
+                     *self, op->name(), msg.source, msg.reason);
+        if (msg.reason and msg.reason != caf::exit_reason::unreachable) {
+          self->quit(msg.reason);
+          return;
         }
+        previous = nullptr;
+        schedule_run(false);
       });
     }
     // Instantiate the operator with its input type.
@@ -386,13 +355,20 @@ struct exec_node_state {
       instance.emplace();
       instance->gen = std::get<generator<Output>>(std::move(*output_generator));
       instance->it = instance->gen.begin();
-      if (has_seen_error) {
+      if (self->getf(caf::abstract_actor::is_shutting_down_flag)) {
         return {};
       }
       // Emit metrics once to get started.
       metrics->emit();
       if (instance->it == instance->gen.end()) {
-        TENZIR_DEBUG("{} {} finished without yielding", *self, op->name());
+        TENZIR_TRACE("{} {} finished without yielding", *self, op->name());
+        if (previous) {
+          // If a transformation or sink operator finishes without yielding,
+          // preceding operators effectively dangle because they are set up but
+          // never receive any demand. We need to explicitly shut them down to
+          // avoid a hang.
+          self->send_exit(previous, caf::exit_reason::unreachable);
+        }
         self->quit();
         return {};
       }
@@ -406,18 +382,19 @@ struct exec_node_state {
           [this, rp]() mutable {
             auto time_starting_guard = make_timer_guard(
               metrics->values.time_scheduled, metrics->values.time_starting);
-            TENZIR_DEBUG("{} {} schedules run after successful startup of all "
+            TENZIR_TRACE("{} {} schedules run after successful startup of all "
                          "operators",
                          *self, op->name());
-            schedule_run();
+            schedule_run(false);
             rp.deliver();
           },
-          [this, rp](caf::error& error) mutable {
+          [this, rp](const caf::error& error) mutable {
             auto time_starting_guard = make_timer_guard(
               metrics->values.time_scheduled, metrics->values.time_starting);
             TENZIR_DEBUG("{} {} forwards error during startup: {}", *self,
                          op->name(), error);
-            rp.deliver(std::move(error));
+            rp.deliver(
+              add_context(error, "{} {} failed to start", *self, op->name()));
           });
       return rp;
     }
@@ -437,7 +414,7 @@ struct exec_node_state {
   auto resume() -> caf::result<void> {
     TENZIR_DEBUG("{} {} resumes execution", *self, op->name());
     paused = false;
-    schedule_run();
+    schedule_run(false);
     return {};
   }
 
@@ -450,7 +427,7 @@ struct exec_node_state {
       TENZIR_ASSERT_CHEAP(instance->it != instance->gen.end());
       TENZIR_TRACE("{} {} processes", *self, op->name());
       ++instance->it;
-      if (has_seen_error) {
+      if (self->getf(caf::abstract_actor::is_shutting_down_flag)) {
         return;
       }
       if (instance->it == instance->gen.end()) {
@@ -467,7 +444,7 @@ struct exec_node_state {
       auto output = std::move(*instance->it);
       const auto output_size = size(output);
       ++instance->it;
-      if (has_seen_error) {
+      if (self->getf(caf::abstract_actor::is_shutting_down_flag)) {
         return;
       }
       const auto should_quit = instance->it == instance->gen.end();
@@ -482,7 +459,7 @@ struct exec_node_state {
       metrics->values.outbound_measurement.num_batches += 1;
       metrics->values.outbound_measurement.num_approx_bytes
         += approx_bytes(output);
-      TENZIR_DEBUG("{} {} produced and pushes {} elements", *self, op->name(),
+      TENZIR_TRACE("{} {} produced and pushes {} elements", *self, op->name(),
                    output_size);
       if (demand->remaining <= output_size) {
         demand->remaining = 0;
@@ -497,21 +474,21 @@ struct exec_node_state {
           [this, output_size, should_quit]() {
             auto time_scheduled_guard
               = make_timer_guard(metrics->values.time_scheduled);
-            TENZIR_DEBUG("{} {} pushed {} elements", *self, op->name(),
+            TENZIR_TRACE("{} {} pushed {} elements", *self, op->name(),
                          output_size);
             if (demand and demand->remaining == 0) {
               demand->rp.deliver();
               demand.reset();
             }
             if (should_quit) {
-              TENZIR_DEBUG("{} {} completes processing", *self, op->name());
+              TENZIR_TRACE("{} {} completes processing", *self, op->name());
               if (demand and demand->rp.pending()) {
                 demand->rp.deliver();
               }
               self->quit();
               return;
             }
-            schedule_run();
+            schedule_run(false);
           },
           [this, output_size](const caf::error& err) {
             TENZIR_DEBUG("{} {} failed to push {} elements", *self, op->name(),
@@ -525,7 +502,7 @@ struct exec_node_state {
               self->quit();
               return;
             }
-            diagnostic::error("{}", err)
+            diagnostic::error(err)
               .note("{} {} failed to push to next execution node", *self,
                     op->name())
               .emit(ctrl->diagnostics());
@@ -552,21 +529,42 @@ struct exec_node_state {
       inbound_buffer.erase(inbound_buffer.begin());
       const auto input_size = size(input);
       inbound_buffer_size -= input_size;
-      TENZIR_DEBUG("{} {} uses {} elements", *self, op->name(), input_size);
+      TENZIR_TRACE("{} {} uses {} elements", *self, op->name(), input_size);
       co_yield std::move(input);
     }
     TENZIR_DEBUG("{} {} reached end of input", *self, op->name());
   }
 
-  auto schedule_run() -> void {
+  auto schedule_run(bool use_backoff) -> void {
+    // Edge case: If a run with backoff is currently scheduled, but we now want
+    // a run without backoff, we can replace the scheduled run with a new one.
+    if (not backoff_disposable.disposed() and not use_backoff) {
+      backoff_disposable.dispose();
+      run_scheduled = false;
+    }
     // Check whether we're already scheduled to run, or are no longer allowed to
     // rum.
-    TENZIR_TRACE("{} {} schedules run", *self, op->name());
     if (run_scheduled) {
       return;
     }
+    if (not use_backoff) {
+      backoff = duration::zero();
+    } else if (backoff == duration::zero()) {
+      backoff = min_backoff;
+    } else {
+      backoff = std::min(std::chrono::duration_cast<duration>(1.25 * backoff),
+                         max_backoff);
+    }
+    TENZIR_TRACE("{} {} schedules run with a delay of {}", *self, op->name(),
+                 data{backoff});
     run_scheduled = true;
-    self->send(self, atom::internal_v, atom::run_v);
+    if (backoff == duration::zero()) {
+      self->send(self, atom::internal_v, atom::run_v);
+    } else {
+      backoff_disposable = detail::weak_run_delayed(self, backoff, [this] {
+        self->send(self, atom::internal_v, atom::run_v);
+      });
+    }
   }
 
   auto internal_run() -> caf::result<void> {
@@ -583,7 +581,7 @@ struct exec_node_state {
       return;
     }
     const auto demand = defaults<Input>::max_buffered - inbound_buffer_size;
-    TENZIR_DEBUG("{} {} issues demand for up to {} elements", *self, op->name(),
+    TENZIR_TRACE("{} {} issues demand for up to {} elements", *self, op->name(),
                  demand);
     issue_demand_inflight = true;
     self
@@ -594,9 +592,9 @@ struct exec_node_state {
         [this] {
           auto time_scheduled_guard
             = make_timer_guard(metrics->values.time_scheduled);
-          TENZIR_DEBUG("{} {} had its demand fulfilled", *self, op->name());
+          TENZIR_TRACE("{} {} had its demand fulfilled", *self, op->name());
           issue_demand_inflight = false;
-          schedule_run();
+          schedule_run(false);
         },
         [this](const caf::error& err) {
           auto time_scheduled_guard
@@ -605,18 +603,18 @@ struct exec_node_state {
                        op->name(), err);
           issue_demand_inflight = false;
           if (err != caf::sec::request_receiver_down) {
-            diagnostic::error("{}", err)
+            diagnostic::error(err)
               .note("{} {} failed to pull from previous execution node", *self,
                     op->name())
               .emit(ctrl->diagnostics());
           } else {
-            schedule_run();
+            schedule_run(false);
           }
         });
   }
 
   auto run() -> void {
-    if (paused or not instance or has_seen_error) {
+    if (paused or not instance) {
       return;
     }
     TENZIR_TRACE("{} {} enters run loop", *self, op->name());
@@ -629,18 +627,25 @@ struct exec_node_state {
     // 1. The operator's generator is not yet completed.
     // 2. The operator has one of the three following reasons to do work:
     //   a. The upstream operator has completed.
-    //   b. The operator has issued demand that is not yet answered.
-    //   c. The operator can produce output independently from receiving input.
-    //   d. The operator has input it can consume.
-    const auto should_continue = instance->it != instance->gen.end()  // (1)
-                                 and (not previous                    // (2a)
-                                      or issue_demand_inflight        // (2b)
-                                      or op->input_independent()      // (2c)
-                                      or not inbound_buffer.empty()); // (2d)
+    //   b. The operator has downstream demand and can produce output
+    //      independently from receiving input.
+    //   c. The operator has input it can consume.
+    const auto should_continue
+      = instance->it != instance->gen.end()                      // (1)
+        and (not previous                                        // (2a)
+             or (demand.has_value() and op->input_independent()) // (2b)
+             or not inbound_buffer.empty());                     // (2c)
     if (should_continue) {
-      schedule_run();
+      schedule_run(false);
+    } else if (demand.has_value() or std::is_same_v<Output, std::monostate>) {
+      // If we shouldn't continue, but there is an upstream demand, then we may
+      // be in a situation where the operator has internally buffered events and
+      // needs to be polled until some operator-internal timeout expires before
+      // it yields the results. We use exponential backoff for this with 25%
+      // increments.
+      schedule_run(true);
     } else {
-      TENZIR_DEBUG("{} {} idles", *self, op->name());
+      TENZIR_TRACE("{} {} idles", *self, op->name());
     }
     metrics->values.num_runs += 1;
     metrics->values.num_runs_processing
@@ -654,14 +659,14 @@ struct exec_node_state {
   auto pull(exec_node_sink_actor sink, uint64_t batch_size) -> caf::result<void>
     requires(not std::is_same_v<Output, std::monostate>)
   {
-    TENZIR_DEBUG("{} {} received downstream demand", *self, op->name());
+    TENZIR_TRACE("{} {} received downstream demand", *self, op->name());
     if (demand) {
       demand->rp.deliver();
     }
     if (instance->it == instance->gen.end()) {
       return {};
     }
-    schedule_run();
+    schedule_run(false);
     auto& pr = demand.emplace(self->make_response_promise<void>(),
                               std::move(sink), batch_size);
     return pr.rp;
@@ -671,14 +676,14 @@ struct exec_node_state {
     requires(not std::is_same_v<Input, std::monostate>)
   {
     const auto input_size = size(input);
-    TENZIR_DEBUG("{} {} received {} elements from upstream", *self, op->name(),
+    TENZIR_TRACE("{} {} received {} elements from upstream", *self, op->name(),
                  input_size);
     metrics->values.inbound_measurement.num_elements += input_size;
     metrics->values.inbound_measurement.num_batches += 1;
     metrics->values.inbound_measurement.num_approx_bytes += approx_bytes(input);
     inbound_buffer_size += input_size;
     inbound_buffer.push_back(std::move(input));
-    schedule_run();
+    schedule_run(false);
     return {};
   }
 };
@@ -741,6 +746,12 @@ auto exec_node(
       auto time_scheduled_guard
         = make_timer_guard(self->state.metrics->values.time_scheduled);
       return self->state.resume();
+    },
+    [self](diagnostic& diag) -> caf::result<void> {
+      auto time_scheduled_guard
+        = make_timer_guard(self->state.metrics->values.time_scheduled);
+      self->state.ctrl->diagnostics().emit(std::move(diag));
+      return {};
     },
     [self](atom::push, table_slice& events) -> caf::result<void> {
       auto time_scheduled_guard

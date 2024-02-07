@@ -44,9 +44,6 @@ void add_root_opts(command& cmd) {
     "disable user and system configuration, schema and plugin "
     "directories lookup and static and dynamic plugin "
     "autoloading (this may only be used on the command line)");
-  cmd.options.add<bool>("?tenzir", "detach-components",
-                        "create dedicated threads for some "
-                        "components");
   cmd.options.add<bool>(
     "?tenzir", "allow-unsafe-pipelines",
     "allow unsafe location overrides for pipelines with the "
@@ -60,8 +57,12 @@ void add_root_opts(command& cmd) {
                                "console");
   cmd.options.add<caf::config_value::list>("?tenzir", "schema-dirs",
                                            module_desc);
-  cmd.options.add<std::string>("?tenzir", "db-directory,d",
+  cmd.options.add<std::string>("?tenzir", "db-directory",
+                               "deprecated; use state-directory instead");
+  cmd.options.add<std::string>("?tenzir", "state-directory,d",
                                "directory for persistent state");
+  cmd.options.add<std::string>("?tenzir", "cache-directory",
+                               "directory for runtime state");
   cmd.options.add<std::string>("?tenzir", "log-file", "log filename");
   cmd.options.add<std::string>("?tenzir", "client-log-file",
                                "client log file (default: "
@@ -180,15 +181,6 @@ auto make_export_command() {
                           "IPC streams for each schema, all concatenated "
                           "together",
                           opts("?tenzir.export.arrow"));
-
-  for (const auto& plugin : plugins::get()) {
-    if (const auto* writer = plugin.as<writer_plugin>()) {
-      auto opts_category
-        = fmt::format("?tenzir.export.{}", writer->writer_format());
-      export_->add_subcommand(writer->writer_format(), writer->writer_help(),
-                              writer->writer_options(opts(opts_category)));
-    }
-  }
   return export_;
 }
 
@@ -245,16 +237,6 @@ auto make_command_factory() {
     {"status", remote_command},
   };
   // clang-format on
-  for (auto& plugin : plugins::get()) {
-    if (auto* reader = plugin.as<reader_plugin>()) {
-      result.emplace(fmt::format("import {}", reader->reader_format()),
-                     import_command);
-    }
-    if (auto* writer = plugin.as<writer_plugin>()) {
-      result.emplace(fmt::format("export {}", writer->writer_format()),
-                     make_writer_command(writer->writer_format()));
-    }
-  }
   return result;
 } // namespace
 
@@ -315,14 +297,6 @@ std::unique_ptr<command> make_import_command() {
   import_->add_subcommand(
     "test", "imports random data for testing or benchmarking",
     opts("?tenzir.import.test").add<int64_t>("seed", "the PRNG seed"));
-  for (const auto& plugin : plugins::get()) {
-    if (const auto* reader = plugin.as<reader_plugin>()) {
-      auto opts_category
-        = fmt::format("?tenzir.import.{}", reader->reader_format());
-      import_->add_subcommand(reader->reader_format(), reader->reader_help(),
-                              reader->reader_options(opts(opts_category)));
-    }
-  }
   return import_;
 }
 

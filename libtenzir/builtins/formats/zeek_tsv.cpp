@@ -21,6 +21,7 @@
 #include "tenzir/detail/zeekify.hpp"
 #include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/generator.hpp"
+#include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/table_slice_builder.hpp"
 #include "tenzir/to_lines.hpp"
@@ -696,17 +697,18 @@ auto parser_impl(generator<std::optional<std::string_view>> lines,
       document.builder = table_slice_builder{std::move(schema)};
       // If there is a schema with the exact matching name, then we set it as a
       // target schema and use that for casting.
-      auto target_schema = std::find_if(
-        ctrl.schemas().begin(), ctrl.schemas().end(), [&](const auto& schema) {
-          for (const auto& name : schema.names()) {
-            if (name == schema_name) {
-              return true;
-            }
-          }
-          return false;
-        });
+      auto target_schema
+        = std::find_if(modules::schemas().begin(), modules::schemas().end(),
+                       [&](const auto& schema) {
+                         for (const auto& name : schema.names()) {
+                           if (name == schema_name) {
+                             return true;
+                           }
+                         }
+                         return false;
+                       });
       document.target_schema
-        = target_schema == ctrl.schemas().end() ? type{} : *target_schema;
+        = target_schema == modules::schemas().end() ? type{} : *target_schema;
       // We intentionally fall through here; we create the builder lazily
       // when we encounter the first event, but that we still need to parse
       // now.
@@ -801,8 +803,13 @@ public:
                                 args_.empty_field.value_or("(empty)"),
                                 args_.unset_field.value_or("-"),
                                 args_.disable_timestamp_tags};
-    return printer_instance::make([printer = std::move(printer)](
+    auto last_schema = std::make_shared<type>();
+    return printer_instance::make([last_schema, printer = std::move(printer)](
                                     table_slice slice) -> generator<chunk_ptr> {
+      if (slice.rows() == 0) {
+        co_yield {};
+        co_return;
+      }
       auto buffer = std::vector<char>{};
       auto out_iter = std::back_inserter(buffer);
       auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
@@ -811,25 +818,33 @@ public:
       auto array
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
       auto first = true;
+      auto is_first_schema = not *last_schema;
+      auto did_schema_change = *last_schema != input_schema;
+      *last_schema = input_schema;
       for (const auto& row : values(input_type, *array)) {
         TENZIR_ASSERT_CHEAP(row);
         if (first) {
-          printer.print_header(out_iter, input_schema);
+          if (did_schema_change) {
+            if (not is_first_schema) {
+              printer.print_closing_line(out_iter);
+            }
+            printer.print_header(out_iter, input_schema);
+            out_iter = fmt::format_to(out_iter, "\n");
+          }
           first = false;
-          out_iter = fmt::format_to(out_iter, "\n");
         }
         const auto ok = printer.print_values(out_iter, *row);
         TENZIR_ASSERT_CHEAP(ok);
         out_iter = fmt::format_to(out_iter, "\n");
       }
-      printer.print_closing_line(out_iter);
-      auto chunk = chunk::make(std::move(buffer));
+      auto chunk = chunk::make(std::move(buffer),
+                               {.content_type = "application/x-zeek"});
       co_yield std::move(chunk);
     });
   }
 
   auto allows_joining() const -> bool override {
-    return false;
+    return true;
   }
 
   auto name() const -> std::string override {

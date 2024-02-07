@@ -1,2 +1,0 @@
-error: !! invalid_argument: extend operator requires lists to have a homogeneous element type
- = note: from `extend`

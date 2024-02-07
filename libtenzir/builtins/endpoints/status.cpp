@@ -134,7 +134,7 @@ class plugin final : public virtual rest_endpoint_plugin {
   }
 
   [[nodiscard]] auto name() const -> std::string override {
-    return "api-status";
+    return "status";
   };
 
   [[nodiscard]] auto openapi_endpoints(api_version version) const

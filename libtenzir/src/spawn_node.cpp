@@ -35,7 +35,7 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   // Fetch values from config.
   auto id = get_or(opts, "tenzir.node-id", defaults::node_id.data());
   auto db_dir
-    = get_or(opts, "tenzir.db-directory", defaults::db_directory.data());
+    = get_or(opts, "tenzir.state-directory", defaults::state_directory.data());
   auto detach_components = caf::get_or(opts, "tenzir.detach-components",
                                        defaults::detach_components);
   std::error_code err{};
@@ -43,21 +43,22 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   if (err)
     return caf::make_error(ec::filesystem_error,
                            fmt::format("failed to get absolute path to "
-                                       "db-directory {}: {}",
+                                       "state-directory {}: {}",
                                        db_dir, err.message()));
   const auto dir_exists = std::filesystem::exists(abs_dir, err);
   if (!dir_exists) {
     if (auto created_dir = std::filesystem::create_directories(abs_dir, err);
         !created_dir)
       return caf::make_error(ec::filesystem_error,
-                             fmt::format("unable to create db-directory {}: {}",
+                             fmt::format("unable to create state-directory {}: "
+                                         "{}",
                                          abs_dir, err.message()));
   }
   if (const auto is_writable = ::access(abs_dir.c_str(), W_OK) == 0;
       !is_writable)
     return caf::make_error(
       ec::filesystem_error,
-      "unable to write to db-directory:", abs_dir.string());
+      "unable to write to state-directory:", abs_dir.string());
   // Acquire PID lock.
   auto pid_file = abs_dir / "pid.lock";
   TENZIR_DEBUG("node acquires PID lock {}", pid_file.string());

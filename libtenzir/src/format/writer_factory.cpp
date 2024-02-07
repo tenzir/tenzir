@@ -45,27 +45,6 @@ void factory_traits<format::writer>::initialize() {
   fac::add("null", make_writer<null::writer>);
   fac::add("zeek", make_writer<zeek::writer>);
   fac::add("arrow", make_writer<arrow::writer>);
-  for (const auto& plugin : plugins::get()) {
-    if (const auto* reader = plugin.as<writer_plugin>()) {
-      fac::add(
-        reader->writer_format(),
-        [name = std::string{plugin->name()}](const caf::settings& options)
-          -> caf::expected<std::unique_ptr<format::writer>> {
-          for (const auto& plugin : plugins::get()) {
-            if (plugin->name() != name)
-              continue;
-            const auto* writer = plugin.as<writer_plugin>();
-            TENZIR_ASSERT(writer);
-            return writer->make_writer(options);
-          }
-          return caf::make_error(ec::logic_error,
-                                 fmt::format("writer plugin {} was used to "
-                                             "initialize factory but unloaded "
-                                             "at a later point in time",
-                                             name));
-        });
-    }
-  }
 }
 
 } // namespace tenzir

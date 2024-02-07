@@ -15,7 +15,6 @@ RUN ./scripts/debian/install-dev-dependencies.sh && rm -rf /var/lib/apt/lists/*
 # Tenzir
 COPY changelog ./changelog
 COPY cmake ./cmake
-COPY examples ./examples
 COPY libtenzir ./libtenzir
 COPY libtenzir_test ./libtenzir_test
 COPY plugins ./plugins
@@ -37,7 +36,7 @@ ENV PREFIX="/opt/tenzir" \
 # When changing these, make sure to also update the corresponding entries in the
 # flake.nix file.
 ENV TENZIR_CACHE_DIRECTORY="/var/cache/tenzir" \
-    TENZIR_DB_DIRECTORY="/var/lib/tenzir" \
+    TENZIR_STATE_DIRECTORY="/var/lib/tenzir" \
     TENZIR_LOG_FILE="/var/log/tenzir/server.log" \
     TENZIR_ENDPOINT="0.0.0.0"
 
@@ -83,7 +82,7 @@ FROM debian:bookworm-slim AS tenzir-de
 ENV PREFIX="/opt/tenzir" \
     PATH="/opt/tenzir/bin:${PATH}" \
     TENZIR_CACHE_DIRECTORY="/var/cache/tenzir" \
-    TENZIR_DB_DIRECTORY="/var/lib/tenzir" \
+    TENZIR_STATE_DIRECTORY="/var/lib/tenzir" \
     TENZIR_LOG_FILE="/var/log/tenzir/server.log" \
     TENZIR_ENDPOINT="0.0.0.0"
 
@@ -175,14 +174,6 @@ RUN cmake -S contrib/tenzir-plugins/context -B build-context -G Ninja \
       DESTDIR=/plugin/context cmake --install build-context --strip --component Runtime && \
       rm -rf build-context
 
-# FROM plugins-source AS inventory-plugin
-#
-# RUN cmake -S contrib/tenzir-plugins/inventory -B build-inventory -G Ninja \
-#       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-#       cmake --build build-inventory --parallel && \
-#       DESTDIR=/plugin/inventory cmake --install build-inventory --strip --component Runtime && \
-#       rm -rf build-inventory
-
 FROM plugins-source AS matcher-plugin
 
 RUN cmake -S contrib/tenzir-plugins/matcher -B build-matcher -G Ninja \
@@ -191,21 +182,13 @@ RUN cmake -S contrib/tenzir-plugins/matcher -B build-matcher -G Ninja \
       DESTDIR=/plugin/matcher cmake --install build-matcher --strip --component Runtime && \
       rm -rf build-matcher
 
-FROM plugins-source AS netflow-plugin
-
-RUN cmake -S contrib/tenzir-plugins/netflow -B build-netflow -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-      cmake --build build-netflow --parallel && \
-      DESTDIR=/plugin/netflow cmake --install build-netflow --strip --component Runtime && \
-      rm -rf build-netflow
-
 FROM plugins-source AS pipeline-manager-plugin
 
-RUN cmake -S contrib/tenzir-plugins/pipeline_manager -B build-pipeline_manager -G Ninja \
+RUN cmake -S contrib/tenzir-plugins/pipeline-manager -B build-pipeline-manager -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-      cmake --build build-pipeline_manager --parallel && \
-      DESTDIR=/plugin/pipeline_manager cmake --install build-pipeline_manager --strip --component Runtime && \
-      rm -rf build-pipeline_manager
+      cmake --build build-pipeline-manager --parallel && \
+      DESTDIR=/plugin/pipeline-manager cmake --install build-pipeline-manager --strip --component Runtime && \
+      rm -rf build-pipeline-manager
 
 FROM plugins-source AS platform-plugin
 
@@ -221,8 +204,7 @@ FROM tenzir-de AS tenzir-ce
 
 COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
 COPY --from=matcher-plugin --chown=tenzir:tenzir /plugin/matcher /
-COPY --from=netflow-plugin --chown=tenzir:tenzir /plugin/netflow /
-COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline_manager /
+COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline-manager /
 COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /
 
 # -- tenzir-node-ce ------------------------------------------------------------

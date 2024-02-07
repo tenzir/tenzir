@@ -65,8 +65,9 @@ class RandomAccessFile;
 
 namespace flatbuffers {
 
-#if FLATBUFFERS_VERSION_MAJOR >= 23 && FLATBUFFERS_VERSION_MINOR >= 5          \
-  && FLATBUFFERS_VERSION_REVISION >= 9
+#if (FLATBUFFERS_VERSION_REVISION + (FLATBUFFERS_VERSION_MINOR * 100)          \
+     + (FLATBUFFERS_VERSION_MAJOR * 10000))                                    \
+  >= 230509
 
 template <bool>
 class FlatBufferBuilderImpl;
@@ -135,6 +136,7 @@ class command;
 class configuration;
 class data;
 class diagnostic_builder;
+class diagnostic_handler;
 class double_type;
 class duration_type;
 class enumeration_type;
@@ -164,6 +166,7 @@ class plugin;
 class port;
 class record_type;
 class segment;
+class shared_diagnostic_handler;
 class string_type;
 class subnet_type;
 class subnet;
@@ -440,6 +443,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::relational_operator))
   TENZIR_ADD_TYPE_ID((tenzir::rest_endpoint))
   TENZIR_ADD_TYPE_ID((tenzir::rest_response))
+  TENZIR_ADD_TYPE_ID((tenzir::shared_diagnostic_handler))
   TENZIR_ADD_TYPE_ID((tenzir::subnet))
   TENZIR_ADD_TYPE_ID((tenzir::table_slice))
   TENZIR_ADD_TYPE_ID((tenzir::table_slice_column))

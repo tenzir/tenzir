@@ -409,7 +409,9 @@ public:
     TENZIR_ASSERT(stream);
     auto guard = caf::detail::make_scope_guard([&ctrl, stream] {
       if (auto error = stream->close()) {
-        ctrl.abort(std::move(error));
+        diagnostic::error(error)
+          .note("failed to close stream")
+          .emit(ctrl.diagnostics());
       }
     });
     return [&ctrl, real_time = args_.real_time, stream = std::move(stream),
@@ -419,12 +421,16 @@ public:
         return;
       }
       if (auto error = stream->write(std::span{chunk->data(), chunk->size()})) {
-        ctrl.abort(std::move(error));
+        diagnostic::error(error)
+          .note("failed to write to stream")
+          .emit(ctrl.diagnostics());
         return;
       }
       if (real_time) {
         if (auto error = stream->flush()) {
-          ctrl.abort(std::move(error));
+          diagnostic::error(error)
+            .note("failed to flush stream")
+            .emit(ctrl.diagnostics());
           return;
         }
       }

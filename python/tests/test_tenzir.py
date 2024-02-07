@@ -44,28 +44,19 @@ async def endpoint():
     await asyncio.wait_for(proc.wait(), 5)
 
 
-async def tenzir_import(endpoint, expression: list[str]):
-    # import
-    logger.debug(f"> tenzir-ctl -e {endpoint} import --blocking {' '.join(expression)}")
-    import_proc = await asyncio.create_subprocess_exec(
-        "tenzir-ctl", "-e", endpoint, "import", "--blocking", *expression, stderr=PIPE
+async def tenzir_exec(endpoint, pipeline: str):
+    logger.debug(f"> tenzir -e {endpoint} {pipeline}")
+    exec_proc = await asyncio.create_subprocess_exec(
+        "tenzir", "-e", endpoint, pipeline, stderr=PIPE,
     )
-    (_, import_err) = await asyncio.wait_for(import_proc.communicate(), 3)
-    assert import_proc.returncode == 0
-    logger.debug(f"tenzir-ctl import stderr:\n{import_err.decode()}")
-    # flush
-    logger.debug(f"> tenzir-ctl -e {endpoint} flush")
-    flush_proc = await asyncio.create_subprocess_exec(
-        "tenzir-ctl", "-e", endpoint, "flush", stderr=PIPE
-    )
-    (_, flush_err) = await asyncio.wait_for(flush_proc.communicate(), 3)
-    assert flush_proc.returncode == 0
-    logger.debug(f"tenzir-ctl flush stderr:\n{flush_err.decode()}")
+    (_, exec_err) = await asyncio.wait_for(exec_proc.communicate(), 3)
+    assert exec_proc.returncode == 0
+    logger.debug(f"tenzir {pipeline} stderr:\n{exec_err.decode()}")
 
 
 def integration_data(path):
     dir_path = os.path.dirname(os.path.realpath(__file__))
-    return os.path.normpath(f"{dir_path}/../../tenzir/functional-test/data/{path}")
+    return os.path.normpath(f"{dir_path}/../../tenzir/integration/data/inputs/{path}")
 
 
 @pytest.mark.asyncio
@@ -73,8 +64,8 @@ async def test_count(endpoint):
     tenzir = Tenzir(endpoint)
     result = await tenzir.count()
     assert result == 0
-    await tenzir_import(
-        endpoint, ["-r", integration_data("suricata/eve.json"), "suricata"]
+    await tenzir_exec(
+        endpoint, f"load {integration_data('suricata/eve.json')} | read suricata | import",
     )
     result = await tenzir.count()
     assert result == 8
@@ -82,8 +73,8 @@ async def test_count(endpoint):
 
 @pytest.mark.asyncio
 async def test_export_collect_pyarrow(endpoint):
-    await tenzir_import(
-        endpoint, ["-r", integration_data("suricata/eve.json"), "suricata"]
+    await tenzir_exec(
+        endpoint, f"load {integration_data('suricata/eve.json')} | read suricata | import",
     )
     tenzir = Tenzir(endpoint)
     result = tenzir.export('#schema == "suricata.alert"', ExportMode.HISTORICAL)
@@ -109,8 +100,8 @@ async def test_export_collect_pyarrow(endpoint):
 
 @pytest.mark.asyncio
 async def test_export_historical_rows(endpoint):
-    await tenzir_import(
-        endpoint, ["-r", integration_data("suricata/eve.json"), "suricata"]
+    await tenzir_exec(
+        endpoint, f"load {integration_data('suricata/eve.json')} | read suricata | import",
     )
     tenzir = Tenzir(endpoint)
     result = tenzir.export('#schema == "suricata.alert"', ExportMode.HISTORICAL)
@@ -136,8 +127,8 @@ async def test_export_continuous_rows(endpoint):
     task = asyncio.create_task(run_export())
     # Wait for the export task to be ready before triggering import
     await asyncio.sleep(3)
-    await tenzir_import(
-        endpoint, ["-r", integration_data("suricata/eve.json"), "suricata"]
+    await tenzir_exec(
+        endpoint, f"load {integration_data('suricata/eve.json')} | read suricata | import",
     )
     logger.info("await task")
     row = await asyncio.wait_for(task, 5)

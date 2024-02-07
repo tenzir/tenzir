@@ -305,6 +305,13 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
   self->state.pipeline_str = fmt::format("{:?}", pipe);
   auto expr = expression{};
   std::tie(expr, pipe) = pipe.optimize_into_filter();
+  // Modify the expression to exclude internal events.
+  expr
+    = conjunction{std::move(expr), predicate{
+                                     meta_extractor{meta_extractor::internal},
+                                     relational_operator::equal,
+                                     data{false},
+                                   }};
   auto normalized = normalize_and_validate(std::move(expr));
   if (!normalized) {
     self->quit(caf::make_error(ec::format_error,

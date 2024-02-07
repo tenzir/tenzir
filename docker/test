@@ -48,10 +48,10 @@ docker compose up ${build_policy} --detach
 docker compose run tenzir status > /dev/null
 
 # Ingest some test data.
-gunzip -c ../tenzir/functional-test/data/zeek/*.log.gz |
+gunzip -c ../tenzir/integration/data/inputs/zeek/*.log.gz |
   docker compose run --no-TTY tenzir import --blocking zeek
 docker compose run --no-TTY tenzir import --blocking suricata \
-  < ../tenzir/functional-test/data/suricata/eve.json
+  < ../tenzir/integration/data/inputs/suricata/eve.json
 
 # Check whether we imported the right amount of data.
 num_imported="$(docker compose run --interactive=false tenzir count)"

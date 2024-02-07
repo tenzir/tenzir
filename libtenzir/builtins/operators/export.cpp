@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/query_cursor.hpp"
+
 #include <tenzir/actors.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/atoms.hpp>
@@ -23,8 +25,6 @@
 #include <tenzir/uuid.hpp>
 
 #include <arrow/type.h>
-#include <caf/attach_stream_sink.hpp>
-#include <caf/attach_stream_source.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/scheduled_actor.hpp>
 #include <caf/scoped_actor.hpp>
@@ -37,45 +37,42 @@
 namespace tenzir::plugins::export_ {
 
 struct bridge_state {
-  std::queue<table_slice> buffer;
-  caf::typed_response_promise<table_slice> rp;
+  std::queue<table_slice> buffer = {};
+  size_t num_buffered = {};
+  caf::typed_response_promise<table_slice> rp = {};
+  expression expr = {};
 };
 
-caf::behavior
-make_bridge(caf::stateful_actor<bridge_state>* self, importer_actor importer) {
+caf::behavior make_bridge(caf::stateful_actor<bridge_state>* self,
+                          importer_actor importer, expression expr) {
+  self->state.expr = std::move(expr);
   self
-    ->request(importer, caf::infinite,
-              caf::actor_cast<stream_sink_actor<table_slice>>(self))
-    .then([](caf::outbound_stream_slot<table_slice>) {},
-          [self](caf::error err) {
-            self->quit(err);
+    ->request(importer, caf::infinite, atom::subscribe_v,
+              caf::actor_cast<receiver_actor<table_slice>>(self))
+    .then([]() {},
+          [self](const caf::error& err) {
+            self->quit(add_context(err, "failed to subscribe to importer"));
           });
-
   return {
-    [self](
-      caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
-      return caf::attach_stream_sink(
-               self, in,
-               [](caf::unit_t&) {
-                 // nop
-               },
-               [=](caf::unit_t&, table_slice slice) {
-                 if (self->state.rp.pending())
-                   self->state.rp.deliver(std::move(slice));
-                 else
-                   self->state.buffer.push(std::move(slice));
-               },
-               [=](caf::unit_t&, const caf::error& err) {
-                 if (err)
-                   TENZIR_ERROR("{} got error during streaming: {}", *self,
-                                err);
-               })
-        .inbound_slot();
+    [self](table_slice slice) {
+      auto filtered = filter(std::move(slice), self->state.expr);
+      if (not filtered)
+        return;
+      if (self->state.rp.pending()) {
+        self->state.rp.deliver(std::move(*filtered));
+      } else if (self->state.num_buffered < (1 << 22)) {
+        self->state.num_buffered += filtered->rows();
+        self->state.buffer.push(std::move(*filtered));
+      } else {
+        TENZIR_WARN("`export --live` dropped {} events because it failed to "
+                    "keep up",
+                    filtered->rows());
+      }
     },
     [self](atom::get) -> caf::result<table_slice> {
       if (self->state.rp.pending()) {
         return caf::make_error(ec::logic_error,
-                               "live exporter bride promise out of sync.");
+                               "live exporter bridge promise out of sync");
       }
       if (self->state.buffer.empty()) {
         self->state.rp = self->make_response_promise<table_slice>();
@@ -83,6 +80,7 @@ make_bridge(caf::stateful_actor<bridge_state>* self, importer_actor importer) {
       }
       auto result = std::move(self->state.buffer.front());
       self->state.buffer.pop();
+      self->state.num_buffered -= result.rows();
       return result;
     },
   };
@@ -92,8 +90,8 @@ class export_operator final : public crtp_operator<export_operator> {
 public:
   export_operator() = default;
 
-  explicit export_operator(expression expr, bool live)
-    : expr_{std::move(expr)}, live_{live} {
+  explicit export_operator(expression expr, bool live, bool low_priority)
+    : expr_{std::move(expr)}, live_{live}, low_priority_(low_priority) {
   }
 
   auto run_live(operator_control_plane& ctrl) const -> generator<table_slice> {
@@ -104,14 +102,16 @@ public:
     auto components
       = get_node_components<importer_actor>(blocking_self, ctrl.node());
     if (!components) {
-      ctrl.abort(std::move(components.error()));
+      diagnostic::error(components.error())
+        .note("failed to get importer")
+        .emit(ctrl.diagnostics());
       co_return;
     }
     co_yield {};
     auto [importer] = std::move(*components);
-    auto bridge = ctrl.self().spawn(make_bridge, importer);
+    auto bridge = ctrl.self().spawn(make_bridge, importer, expr_);
+    auto next = table_slice{};
     while (true) {
-      auto next = table_slice{};
       ctrl.self()
         .request(bridge, caf::infinite, atom::get_v)
         .await(
@@ -119,15 +119,9 @@ public:
             next = std::move(response);
           },
           [&ctrl](caf::error e) {
-            diagnostic::error("{}", e).emit(ctrl.diagnostics());
+            diagnostic::error(e).emit(ctrl.diagnostics());
           });
-      if (next.rows() == 0) {
-        co_yield {};
-        continue;
-      }
-      for (auto&& out : select(next, expr_, ids{})) {
-        co_yield std::move(out);
-      }
+      co_yield std::move(next);
     }
   }
 
@@ -144,74 +138,83 @@ public:
     // can offer a better mechanism here.
     auto blocking_self = caf::scoped_actor(ctrl.self().system());
     auto components
-      = get_node_components<catalog_actor, accountant_actor, filesystem_actor>(
-        blocking_self, ctrl.node());
+      = get_node_components<index_actor>(blocking_self, ctrl.node());
     if (!components) {
-      ctrl.abort(std::move(components.error()));
+      diagnostic::error(components.error())
+        .note("failed to get importer")
+        .emit(ctrl.diagnostics());
       co_return;
     }
     co_yield {};
-    auto [catalog, accountant, fs] = std::move(*components);
-    auto current_slice = std::optional<table_slice>{};
+    auto [index] = std::move(*components);
     auto query_context
       = tenzir::query_context::make_extract("export", blocking_self, expr_);
-    query_context.id = uuid::random();
-    TENZIR_DEBUG("export operator starts catalog lookup with id {} and "
-                 "expression {}",
-                 query_context.id, expr_);
-    auto current_result = catalog_lookup_result{};
-    auto current_error = caf::error{};
+    query_context.priority = low_priority_ ? query_context::priority::low
+                                           : query_context::priority::normal;
+    auto query_cursor = tenzir::query_cursor{};
     ctrl.self()
-      .request(catalog, caf::infinite, atom::candidates_v, query_context)
+      .request(index, caf::infinite, atom::evaluate_v, query_context)
       .await(
-        [&current_result](catalog_lookup_result result) {
-          current_result = std::move(result);
+        [&query_cursor](tenzir::query_cursor cursor) {
+          query_cursor = cursor;
         },
-        [&current_error](caf::error e) {
-          current_error = std::move(e);
+        [&ctrl](const caf::error& err) {
+          diagnostic::error(err)
+            .note("failed to perform catalog lookup")
+            .emit(ctrl.diagnostics());
         });
     co_yield {};
-    if (current_error) {
-      ctrl.abort(std::move(current_error));
+    if (query_cursor.candidate_partitions == 0) {
       co_return;
     }
-    for (const auto& [type, info] : current_result.candidate_infos) {
-      auto bound_expr = tailor(info.exp, type);
-      if (not bound_expr) {
-        // failing to bind is not an error.
-        continue;
-      }
-      query_context.expr = std::move(*bound_expr);
-      for (const auto& partition_info : info.partition_infos) {
-        const auto& uuid = partition_info.uuid;
-        auto partition = blocking_self->spawn(
-          passive_partition, uuid, accountant, fs,
-          std::filesystem::path{"index"} / fmt::format("{:l}", uuid));
-        auto recieving_slices = true;
-        blocking_self->send(partition, atom::query_v, query_context);
-        while (recieving_slices) {
-          blocking_self->receive(
-            [&current_slice](table_slice slice) {
-              current_slice = std::move(slice);
+    auto inflight_partitions = query_cursor.scheduled_partitions;
+    TENZIR_DEBUG("export operator got {}/{} partitions ({} in flight)",
+                 query_cursor.scheduled_partitions,
+                 query_cursor.candidate_partitions, inflight_partitions);
+    auto current_slice = std::optional<table_slice>{};
+    while (true) {
+      if (inflight_partitions == 0) {
+        if (query_cursor.scheduled_partitions
+            == query_cursor.candidate_partitions) {
+          break;
+        }
+        constexpr auto BATCH_SIZE = uint32_t{1};
+        ctrl.self()
+          .request(index, caf::infinite, atom::query_v, query_cursor.id,
+                   BATCH_SIZE)
+          .await(
+            [&]() {
+              query_cursor.scheduled_partitions += BATCH_SIZE;
+              inflight_partitions += BATCH_SIZE;
+              TENZIR_DEBUG(
+                "export operator got {}/{} partitions ({} in flight)",
+                query_cursor.scheduled_partitions,
+                query_cursor.candidate_partitions, inflight_partitions);
             },
-            [&recieving_slices](uint64_t) {
-              recieving_slices = false;
-            },
-            [&recieving_slices, &current_error](caf::error e) {
-              recieving_slices = false;
-              current_error = std::move(e);
+            [&](const caf::error& err) {
+              diagnostic::error(err)
+                .note("failed to request further results")
+                .emit(ctrl.diagnostics());
             });
-          if (current_error) {
-            ctrl.warn(std::move(current_error));
-            co_yield {};
-            continue;
-          }
-          if (current_slice) {
-            co_yield *current_slice;
-            current_slice.reset();
-          } else {
-            co_yield {};
-          }
+        co_yield {};
+      }
+      while (inflight_partitions > 0) {
+        blocking_self->receive(
+          [&](table_slice& slice) {
+            current_slice = std::move(slice);
+          },
+          [&](atom::done) {
+            inflight_partitions = 0;
+          },
+          [&](const caf::error& err) {
+            diagnostic::warning(err).emit(ctrl.diagnostics());
+            inflight_partitions = 0;
+          });
+        if (current_slice) {
+          co_yield std::move(*current_slice);
+          current_slice.reset();
+        } else {
+          co_yield {};
         }
       }
     }
@@ -222,9 +225,7 @@ public:
   }
 
   auto detached() const -> bool override {
-    if (live_)
-      return false;
-    return true;
+    return !live_;
   }
 
   auto location() const -> operator_location override {
@@ -249,9 +250,9 @@ public:
     }
     auto expr = clauses.empty() ? trivially_true_expression()
                                 : expression{conjunction{std::move(clauses)}};
-    return optimize_result{trivially_true_expression(), event_order::ordered,
-                           std::make_unique<export_operator>(std::move(expr),
-                                                             live_)};
+    return optimize_result{
+      trivially_true_expression(), event_order::ordered,
+      std::make_unique<export_operator>(std::move(expr), live_, low_priority_)};
   }
 
   friend auto inspect(auto& f, export_operator& x) -> bool {
@@ -262,6 +263,7 @@ public:
 private:
   expression expr_;
   bool live_;
+  bool low_priority_;
 };
 
 class plugin final : public virtual operator_plugin<export_operator> {
@@ -274,9 +276,13 @@ public:
     auto parser = argument_parser{"export", "https://docs.tenzir.com/next/"
                                             "operators/sources/export"};
     bool live = false;
+    bool low_priority = false;
     auto internal = false;
     parser.add("--live", live);
     parser.add("--internal", internal);
+    // TODO: Ideally this should be one level further up, ie.
+    // `tenzir --low-priority <pipeline>`
+    parser.add("--low-priority", low_priority);
     parser.parse(p);
     return std::make_unique<export_operator>(
       expression{
@@ -286,7 +292,7 @@ public:
           data{internal},
         },
       },
-      live);
+      live, low_priority);
   }
 };
 

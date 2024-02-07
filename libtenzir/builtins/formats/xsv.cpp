@@ -13,7 +13,6 @@
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/detail/string_literal.hpp"
 #include "tenzir/detail/to_xsv_sep.hpp"
-#include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/parser_interface.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/series_builder.hpp"
@@ -38,17 +37,27 @@ struct xsv_options {
   char list_sep = {};
   std::string null_value = {};
   bool allow_comments = {};
+  bool auto_expand = {};
+  std::optional<std::string> header = {};
+  bool no_header = {};
 
   static auto try_parse(parser_interface& p, std::string name, bool is_parser)
     -> xsv_options {
     auto parser
       = argument_parser{"xsv", "https://docs.tenzir.com/next/formats/xsv"};
     auto allow_comments = bool{};
+    auto auto_expand = bool{};
     auto field_sep_str = located<std::string>{};
     auto list_sep_str = located<std::string>{};
     auto null_value = located<std::string>{};
+    auto header = std::optional<std::string>{};
+    auto no_header = bool{};
     if (is_parser) {
       parser.add("--allow-comments", allow_comments);
+      parser.add("--auto-expand", auto_expand);
+      parser.add("--header", header, "<header>");
+    } else {
+      parser.add("--no-header", no_header);
     }
     parser.add(field_sep_str, "<field-sep>");
     parser.add(list_sep_str, "<list-sep>");
@@ -93,15 +102,19 @@ struct xsv_options {
       .list_sep = *list_sep,
       .null_value = std::move(null_value.inner),
       .allow_comments = allow_comments,
+      .auto_expand = auto_expand,
+      .header = std::move(header),
+      .no_header = no_header,
     };
   }
 
   friend auto inspect(auto& f, xsv_options& x) -> bool {
-    return f.object(x).fields(f.field("name", x.name),
-                              f.field("field_sep", x.field_sep),
-                              f.field("list_sep", x.list_sep),
-                              f.field("null_value", x.null_value),
-                              f.field("allow_comments", x.allow_comments));
+    return f.object(x).fields(
+      f.field("name", x.name), f.field("field_sep", x.field_sep),
+      f.field("list_sep", x.list_sep), f.field("null_value", x.null_value),
+      f.field("allow_comments", x.allow_comments),
+      f.field("auto_expand", x.auto_expand), f.field("header", x.header),
+      f.field("no_header", x.no_header));
   }
 };
 
@@ -245,30 +258,38 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
   // Parse header.
   auto it = lines.begin();
   auto header = std::optional<std::string_view>{};
-  while (it != lines.end()) {
-    auto line = *it;
-    ++it;
-    if (not line) {
-      co_yield {};
-      continue;
+  if (args.header) {
+    header = *args.header;
+  } else {
+    while (it != lines.end()) {
+      auto line = *it;
+      ++it;
+      if (not line) {
+        co_yield {};
+        continue;
+      }
+      if (line->empty()) {
+        continue;
+      }
+      if (args.allow_comments && line->front() == '#') {
+        continue;
+      }
+      header = line;
+      break;
+      if (not header) {
+        co_return;
+      }
     }
-    if (line->empty())
-      continue;
-    if (args.allow_comments && line->front() == '#')
-      continue;
-    header = line;
-    break;
   }
-  if (not header)
-    co_return;
   const auto qqstring_value_parser = parsers::qqstr.then([](std::string in) {
     static auto unescaper = [](auto& f, auto l, auto out) {
       if (*f != '\\') { // Skip every non-escape character.
         *out++ = *f++;
         return true;
       }
-      if (l - f < 2)
+      if (l - f < 2) {
         return false;
+      }
       switch (auto c = *++f) {
         case '\\':
           *out++ = '\\';
@@ -288,10 +309,9 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
   auto header_parser = (string_value_parser % args.field_sep);
   auto fields = std::vector<std::string>{};
   if (!header_parser(*header, fields)) {
-    ctrl.abort(
-      caf::make_error(ec::parse_error, fmt::format("{0} parser failed to parse "
-                                                   "header of {0} input",
-                                                   args.name)));
+    diagnostic::error("failed to parse header")
+      .note("from `{}`", args.name)
+      .emit(ctrl.diagnostics());
     co_return;
   }
   auto b = series_builder{};
@@ -349,26 +369,38 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
                                 });
     auto values_parser = (value_parser % args.field_sep);
     auto values = std::vector<data>{};
-    if (!values_parser(*line, values)) {
-      ctrl.warn(
-        caf::make_error(ec::parse_error, fmt::format("{} parser skipped line: "
-                                                     "parsing line failed",
-                                                     args.name)));
+    if (not values_parser(*line, values)) {
+      diagnostic::warning("skips unparseable line")
+        .note("from `{}` parser", args.name)
+        .emit(ctrl.diagnostics());
       continue;
     }
-    if (values.size() != fields.size()) {
-      ctrl.warn(caf::make_error(
-        ec::parse_error,
-        fmt::format("{} parser skipped line: expected {} fields but got "
-                    "{}",
-                    args.name, fields.size(), values.size())));
-      continue;
+    auto generated_field_id = 0;
+    if (args.auto_expand) {
+      while (fields.size() < values.size()) {
+        auto name = fmt::format("unnamed{}", ++generated_field_id);
+        if (std::find(fields.begin(), fields.end(), name) == fields.end()) {
+          fields.push_back(name);
+        }
+      }
+    } else if (fields.size() < values.size()) {
+      diagnostic::warning("skips {} excess values in line",
+                          values.size() - fields.size())
+        .hint("use `--auto-expand` to add fields for excess values")
+        .note("from `{}` parser", args.name)
+        .emit(ctrl.diagnostics());
     }
     auto row = b.record();
-    for (const auto& [field, value] : detail::zip(fields, values)) {
-      auto result = row.field(field).try_data(value);
+    for (size_t i = 0; i < fields.size(); ++i) {
+      if (i >= values.size()) {
+        row.field(fields[i]).null();
+        continue;
+      }
+      auto result = row.field(fields[i]).try_data(values[i]);
       if (not result) {
-        ctrl.warn(result.error());
+        diagnostic::warning(result.error())
+          .note("from `{}` parser", args.name)
+          .emit(ctrl.diagnostics());
       }
     }
   }
@@ -421,11 +453,15 @@ public:
   auto
   instantiate([[maybe_unused]] type input_schema, operator_control_plane&) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
-    auto input_type = caf::get<record_type>(input_schema);
-    auto printer
-      = xsv_printer_impl{args_.field_sep, args_.list_sep, args_.null_value};
-    return printer_instance::make([printer = std::move(printer)](
+    auto metadata = chunk_metadata{.content_type = content_type()};
+    return printer_instance::make([meta = std::move(metadata), args = args_](
                                     table_slice slice) -> generator<chunk_ptr> {
+      if (slice.rows() == 0) {
+        co_yield {};
+        co_return;
+      }
+      auto printer
+        = xsv_printer_impl{args.field_sep, args.list_sep, args.null_value};
       auto buffer = std::vector<char>{};
       auto out_iter = std::back_inserter(buffer);
       auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
@@ -436,7 +472,7 @@ public:
       auto first = true;
       for (const auto& row : values(input_type, *array)) {
         TENZIR_ASSERT_CHEAP(row);
-        if (first) {
+        if (first && not args.no_header) {
           printer.print_header(out_iter, *row);
           first = false;
           out_iter = fmt::format_to(out_iter, "\n");
@@ -445,13 +481,13 @@ public:
         TENZIR_ASSERT_CHEAP(ok);
         out_iter = fmt::format_to(out_iter, "\n");
       }
-      auto chunk = chunk::make(std::move(buffer));
+      auto chunk = chunk::make(std::move(buffer), meta);
       co_yield std::move(chunk);
     });
   }
 
   auto allows_joining() const -> bool override {
-    return false;
+    return args_.no_header;
   };
 
   friend auto inspect(auto& f, xsv_printer& x) -> bool {
@@ -459,6 +495,17 @@ public:
   }
 
 private:
+  auto content_type() const -> std::string {
+    switch (args_.field_sep) {
+      default:
+        return "text/plain";
+      case ',':
+        return "text/csv";
+      case '\t':
+        return "text/tab-separated-values";
+    }
+  }
+
   xsv_options args_;
 };
 
@@ -493,7 +540,11 @@ public:
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{name()};
     bool allow_comments = {};
+    bool auto_expand = {};
+    std::optional<std::string> header = {};
     parser.add("--allow-comments", allow_comments);
+    parser.add("--auto-expand", auto_expand);
+    parser.add("--header", header, "<header>");
     parser.parse(p);
     return std::make_unique<xsv_parser>(xsv_options{
       .name = std::string{Name.str()},
@@ -501,18 +552,27 @@ public:
       .list_sep = ListSep,
       .null_value = std::string{Null.str()},
       .allow_comments = allow_comments,
+      .auto_expand = auto_expand,
+      .header = std::move(header),
+      .no_header = false,
     });
   }
 
   auto parse_printer(parser_interface& p) const
     -> std::unique_ptr<plugin_printer> override {
-    argument_parser{name()}.parse(p);
+    auto parser = argument_parser{name()};
+    bool no_header = {};
+    parser.add("--no-header", no_header);
+    parser.parse(p);
     return std::make_unique<xsv_printer>(xsv_options{
       .name = std::string{Name.str()},
       .field_sep = Sep,
       .list_sep = ListSep,
       .null_value = std::string{Null.str()},
       .allow_comments = false,
+      .auto_expand = false,
+      .header = {},
+      .no_header = no_header,
     });
   }
 

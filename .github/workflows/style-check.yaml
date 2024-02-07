@@ -1,4 +1,4 @@
-name: "Style Check"
+name: Style Check
 on:
   pull_request:
     types:
@@ -11,67 +11,183 @@ on:
 env:
   DEBIAN_FRONTEND: noninteractive
 jobs:
-  style:
-    name: Style Check
+  ansible-lint:
+    name: ansible-lint
     runs-on: ubuntu-latest
     steps:
-
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.9'
-
-      - name: Clang Format
-        run: |
-          pip install --upgrade clang-format
-          which clang-format
-          clang-format --version
-          git diff -U0 --no-color $(git merge-base origin/main HEAD) -- \
-              '*.cpp' '*.cpp.in' '*.hpp' '*.hpp.in' |
-            scripts/clang-format-diff.py -p1
-
-      - name: CMake Format
-        run: |
-          pip install --upgrade cmake_format
-          git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/main HEAD) -- "**CMakeLists.txt" "**.cmake" |
-            tr '\\n' '\\0'
-            xargs -0 cmake-format --in-place
-          git diff --exit-code
-
-      - name: Black
-        run: |
-          pip install --upgrade black
-          # Note: black fails when it doesn't have to do anything.
-          git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/main HEAD) |
-            tr '\\n' '\\0' |
-            grep '\.py$' |
-            xargs -0 --no-run-if-empty black || true
-          git diff --exit-code
-
-      - name: ShellCheck
-        run: |
-          git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/main HEAD) |
-            scripts/shellcheck.bash
-
-      - name: yamllint
-        run: |
-          pip install --upgrade yamllint
-          git ls-files -z '*.yaml' '.yml' | xargs -0 yamllint
-
-      - name: Ansible Lint
+          python-version: '3.12'
+          cache: 'pip'
+      - name: Check
         run: |
           pip install --upgrade ansible ansible-lint
           ansible-galaxy collection install ansible.posix
           ansible-lint --strict --profile production ansible
 
-      - name: Terraform fmt
+  black:
+    name: black
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - name: Check
         run: |
-          terraform fmt -check -recursive -diff
+          pip install --upgrade black
+          # Note: black fails when it doesn't have to do anything.
+          git diff --submodule=diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/main HEAD) |
+            tr '\\n' '\\0' |
+            grep '\.py$' |
+            xargs -0 --no-run-if-empty black || true
+          git diff --submodule=diff --exit-code
 
-      - name: Markdown Lint
+  clang-format:
+    name: clang-format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - name: Check
+        run: |
+          pip install --upgrade clang-format
+          which clang-format
+          clang-format --version
+          git diff --submodule=diff -U0 --no-color $(git merge-base origin/main HEAD) -- \
+              '*.cpp' '*.cpp.in' '*.hpp' '*.hpp.in' |
+            scripts/clang-format-diff.py -p1
+
+  cmake-format:
+    name: cmake-format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - name: Check
+        run: |
+          pip install --upgrade cmake_format
+          git diff --submodule=diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/main HEAD) -- "**CMakeLists.txt" "**.cmake" |
+            tr '\\n' '\\0'
+            xargs -0 cmake-format --in-place
+          git diff --submodule=diff --exit-code
+
+  markdownlint:
+    name: markdownlint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Check
         run: |
           npm install --no-save markdownlint-cli
           npx markdownlint --ignore libtenzir/aux --ignore node_modules .
+
+  shellcheck:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - name: Check
+        run: |
+          pip install --upgrade shellcheck-py
+          git diff --submodule=diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/main HEAD) |
+            scripts/shellcheck.bash
+
+  shfmt:
+    name: shfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - name: Check
+        run: |
+          pip install --upgrade shfmt-py
+          git ls-files --recurse-submodules -z -- '*.bats' ':!:tenzir/integration/lib/bats*/**' |
+            xargs -0 shfmt -l -w
+          git diff --submodule=diff --exit-code
+
+  terraform-fmt:
+    name: terraform fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: hashicorp/setup-terraform@v3
+      - name: Check
+        run: |
+          terraform fmt -check -recursive -diff
+
+  yamllint:
+    name: yamllint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+      - name: Check
+        run: |
+          pip install --upgrade yamllint
+          git ls-files --recurse-submodules -z -- '*.yaml' '.yml' |
+            xargs -0 yamllint
+
+  style-check:
+    needs:
+      - ansible-lint
+      - black
+      - clang-format
+      - cmake-format
+      - markdownlint
+      - shellcheck
+      - shfmt
+      - terraform-fmt
+      - yamllint
+    if: always()
+    runs-on: ubuntu-latest
+    name: Style Check
+    steps:
+      - name: Failure
+        if: contains(join(needs.*.result, ','), 'failure') || contains(join(needs.*.result, ','), 'cancelled')
+        run: |
+          # This check runs after any other job failed.
+          exit 1
+      - name: Success
+        run: |
+          # This check runs after all other jobs are done or skipped
+          exit 0

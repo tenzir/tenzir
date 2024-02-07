@@ -18,6 +18,7 @@
 #include <tenzir/error.hpp>
 #include <tenzir/expression.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/modules.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice_builder.hpp>
@@ -68,10 +69,10 @@ public:
 
   auto initialize(const type& schema, operator_control_plane& ctrl) const
     -> caf::expected<state_type> override {
-    auto ts = taxonomies{.concepts = ctrl.concepts()};
+    auto ts = taxonomies{.concepts = modules::concepts()};
     auto resolved_expr = resolve(ts, expr_.inner, schema);
     if (not resolved_expr) {
-      diagnostic::warning("{}", resolved_expr.error())
+      diagnostic::warning(resolved_expr.error())
         .primary(expr_.source)
         .emit(ctrl.diagnostics());
       return std::nullopt;
@@ -81,7 +82,7 @@ public:
     // this is tricky for e.g. `where #schema == "foo" && bar == 42` and
     // changing the behavior for this is tricky with the current expressions.
     if (not tailored_expr) {
-      // diagnostic::warning("{}", tailored_expr.error())
+      // diagnostic::warning(tailored_expr.error())
       //   .primary(expr_.source)
       //   .emit(ctrl.diagnostics());
       return std::nullopt;

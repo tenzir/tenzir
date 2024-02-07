@@ -20,6 +20,7 @@
 #include <tenzir/detail/string_literal.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/generator.hpp>
+#include <tenzir/modules.hpp>
 #include <tenzir/operator_control_plane.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
@@ -37,12 +38,10 @@ namespace tenzir::plugins::json {
 
 namespace {
 
-/// A variant of *to_lines* that returns a string view with additional padding
-/// bytes that are safe to read.
-inline auto to_padded_lines(generator<chunk_ptr> input)
+inline auto split_at_crlf(generator<chunk_ptr> input)
   -> generator<std::optional<simdjson::padded_string_view>> {
   auto buffer = std::string{};
-  bool ended_on_linefeed = false;
+  bool ended_on_carriage_return = false;
   for (auto&& chunk : input) {
     if (!chunk || chunk->size() == 0) {
       co_yield std::nullopt;
@@ -50,10 +49,10 @@ inline auto to_padded_lines(generator<chunk_ptr> input)
     }
     const auto* begin = reinterpret_cast<const char*>(chunk->data());
     const auto* const end = begin + chunk->size();
-    if (ended_on_linefeed && *begin == '\n') {
+    if (ended_on_carriage_return && *begin == '\n') {
       ++begin;
     };
-    ended_on_linefeed = false;
+    ended_on_carriage_return = false;
     for (const auto* current = begin; current != end; ++current) {
       if (*current != '\n' && *current != '\r') {
         continue;
@@ -71,10 +70,48 @@ inline auto to_padded_lines(generator<chunk_ptr> input)
       if (*current == '\r') {
         auto next = current + 1;
         if (next == end) {
-          ended_on_linefeed = true;
+          ended_on_carriage_return = true;
         } else if (*next == '\n') {
           ++current;
         }
+      }
+      begin = current + 1;
+    }
+    buffer.append(begin, end);
+    co_yield std::nullopt;
+  }
+  if (!buffer.empty()) {
+    buffer.reserve(buffer.size() + simdjson::SIMDJSON_PADDING);
+    co_yield simdjson::padded_string_view{buffer};
+  }
+}
+
+inline auto split_at_null(generator<chunk_ptr> input, char split)
+  -> generator<std::optional<simdjson::padded_string_view>> {
+  auto buffer = std::string{};
+  for (auto&& chunk : input) {
+    if (!chunk || chunk->size() == 0) {
+      co_yield std::nullopt;
+      continue;
+    }
+    const auto* begin = reinterpret_cast<const char*>(chunk->data());
+    const auto* const end = begin + chunk->size();
+    for (const auto* current = begin; current != end; ++current) {
+      if (*current != split) {
+        continue;
+      }
+      const auto size = static_cast<size_t>(current - begin);
+      if (size == 0) {
+        continue;
+      }
+      const auto capacity = static_cast<size_t>(end - begin);
+      if (buffer.empty() and capacity >= size + simdjson::SIMDJSON_PADDING) {
+        co_yield simdjson::padded_string_view{begin, size, capacity};
+      } else {
+        buffer.append(begin, current);
+        buffer.reserve(buffer.size() + simdjson::SIMDJSON_PADDING);
+        co_yield simdjson::padded_string_view{buffer};
+        buffer.clear();
       }
       begin = current + 1;
     }
@@ -95,14 +132,13 @@ enum class parser_action {
 
 struct selector {
   std::string prefix;
-  std::string selector_field;
+  std::vector<std::string> path;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, selector& x) -> bool {
     return f.object(x)
       .pretty_name("selector")
-      .fields(f.field("prefix", x.prefix),
-              f.field("selector_field", x.selector_field));
+      .fields(f.field("prefix", x.prefix), f.field("path", x.path));
   }
 };
 
@@ -386,8 +422,9 @@ private:
 
   [[nodiscard]] auto parse_impl(simdjson::ondemand::value val,
                                 builder_ref builder, size_t depth) -> bool {
-    if (depth > defaults::max_recursion)
+    if (depth > defaults::max_recursion) {
       die("nesting too deep in json_parser parse");
+    }
     auto type = val.type();
     if (type.error()) {
       report_parse_err(val, "a value");
@@ -430,7 +467,7 @@ private:
     -> bool {
     auto result = builder.try_data(value);
     if (not result) {
-      ctrl_.warn(result.error());
+      diagnostic::warning(result.error()).emit(ctrl_.diagnostics());
       return false;
     }
     return true;
@@ -445,22 +482,35 @@ private:
 
 auto get_schema_name(simdjson::ondemand::document_reference doc,
                      const selector& selector) -> caf::expected<std::string> {
-  auto type = doc[selector.selector_field];
+  auto object = doc.get_value();
+  for (const auto& field : selector.path) {
+    object = object[field];
+  }
   doc.rewind();
-  if (auto err = type.error()) {
-    if (err != simdjson::error_code::NO_SUCH_FIELD)
+  if (auto err = object.error()) {
+    if (err != simdjson::error_code::NO_SUCH_FIELD) {
       return caf::make_error(ec::parse_error, error_message(err));
+    }
     return std::string{unknown_entry_name};
   }
-  auto maybe_schema_name = type.value_unsafe().get_string();
-  if (auto err = maybe_schema_name.error()) {
-    return caf::make_error(ec::parse_error, error_message(err));
+  auto name = std::string{};
+  auto value = object.value_unsafe();
+  if (auto string = value.get_string(); string.error() == simdjson::SUCCESS) {
+    name = string.value_unsafe();
+  } else if (auto int64 = value.get_int64();
+             int64.error() == simdjson::SUCCESS) {
+    name = fmt::to_string(int64.value_unsafe());
+  } else if (auto uint64 = value.get_uint64();
+             uint64.error() == simdjson::SUCCESS) {
+    name = fmt::to_string(uint64.value_unsafe());
+  } else {
+    return caf::make_error(ec::parse_error,
+                           "expected string or integer for schema name");
   }
   if (selector.prefix.empty()) {
-    return std::string{maybe_schema_name.value_unsafe()};
+    return name;
   }
-  return fmt::format("{}.{}", selector.prefix,
-                     maybe_schema_name.value_unsafe());
+  return fmt::format("{}.{}", selector.prefix, name);
 }
 
 auto non_empty_entries(parser_state& state)
@@ -481,13 +531,14 @@ auto non_empty_entries(parser_state& state)
   }
 }
 
-auto get_schemas(bool try_find_schema, operator_control_plane& ctrl,
-                 bool unflatten) -> std::vector<type> {
-  if (not try_find_schema)
+auto get_schemas(bool try_find_schema, bool unflatten) -> std::vector<type> {
+  if (not try_find_schema) {
     return {};
-  if (not unflatten)
-    return ctrl.schemas();
-  auto schemas = ctrl.schemas();
+  }
+  if (not unflatten) {
+    return modules::schemas();
+  }
+  auto schemas = modules::schemas();
   std::vector<type> ret;
   std::transform(schemas.begin(), schemas.end(), std::back_inserter(ret),
                  [](const auto& schema) {
@@ -498,8 +549,9 @@ auto get_schemas(bool try_find_schema, operator_control_plane& ctrl,
 
 auto unflatten_if_needed(std::string_view separator, table_slice slice)
   -> table_slice {
-  if (separator.empty())
+  if (separator.empty()) {
     return slice;
+  }
   return unflatten(slice, separator);
 }
 
@@ -575,9 +627,10 @@ protected:
     TENZIR_ASSERT(selector_);
     auto maybe_schema_name = get_schema_name(doc_ref, *selector_);
     if (not maybe_schema_name) {
-      ctrl_.warn(std::move(maybe_schema_name.error()));
-      if (no_infer_)
+      diagnostic::warning(maybe_schema_name.error()).emit(ctrl_.diagnostics());
+      if (no_infer_) {
         return {parser_action::skip, std::nullopt};
+      }
       auto maybe_slice_to_yield = activate_unknown_entry(state);
       if (maybe_slice_to_yield) {
         return {parser_action::yield, std::move(maybe_slice_to_yield)};
@@ -596,7 +649,7 @@ protected:
       }
       return {parser_action::parse, std::nullopt};
     }
-    ctrl_.warn(std::move(maybe_slice_to_yield.error()));
+    diagnostic::warning(maybe_slice_to_yield.error()).emit(ctrl_.diagnostics());
     return {parser_action::skip, std::nullopt};
   }
 
@@ -642,9 +695,9 @@ public:
     // val.error() will inherit all errors from maybe_doc. No need to check
     // for error after each operation.
     if (auto err = val.error()) {
-      this->ctrl_.warn(caf::make_error(
-        ec::parse_error, fmt::format("skips invalid JSON '{}' : {}", json_line,
-                                     error_message(err))));
+      diagnostic::warning("{}", error_message(err))
+        .note("skips invalid JSON `{}`", json_line)
+        .emit(this->ctrl_.diagnostics());
       co_return;
     }
     auto& doc = maybe_doc.value_unsafe();
@@ -672,11 +725,10 @@ public:
     // errors. Calling at_end() when is_alive() returns false is unsafe and
     // resulted in crashes.
     if (success and not doc.at_end()) {
-      this->ctrl_.warn(caf::make_error(
-        ec::parse_error, fmt::format("more than one JSON object in a "
-                                     "single line for NDJSON "
-                                     "mode (while parsing '{}')",
-                                     json_line)));
+      diagnostic::warning(
+        "encountered more than one JSON object in a single NDJSON line")
+        .note("skips remaining objects in line `{}`", json_line)
+        .emit(this->ctrl_.diagnostics());
       success = false;
     }
     if (not success) {
@@ -717,7 +769,9 @@ public:
       // returned here so it is hard to understand if we can recover from
       // it somehow.
       buffer_.reset();
-      this->ctrl_.warn(caf::make_error(ec::parse_error, error_message(err)));
+      diagnostic::warning("{}", error_message(err))
+        .note("failed to parse")
+        .emit(this->ctrl_.diagnostics());
       co_return;
     }
     for (auto doc_it = stream_.begin(); doc_it != stream_.end(); ++doc_it) {
@@ -726,9 +780,9 @@ public:
       auto doc = (*doc_it).get_value();
       if (auto err = doc.error()) {
         state.abort_requested = true;
-        this->ctrl_.abort(caf::make_error(
-          ec::parse_error, fmt::format("skips invalid JSON '{}' : {}", view,
-                                       error_message(err))));
+        diagnostic::error("{}", error_message(err))
+          .note("skips invalid JSON '{}'", view)
+          .emit(this->ctrl_.diagnostics());
         co_return;
       }
       auto [action, slices]
@@ -749,9 +803,9 @@ public:
         auto arr = doc.value_unsafe().get_array();
         if (arr.error()) {
           state.abort_requested = true;
-          this->ctrl_.abort(caf::make_error(
-            ec::parse_error, fmt::format("expected an array of objects: {}",
-                                         error_message(err))));
+          diagnostic::error("{}", error_message(err))
+            .note("expected an array of objects")
+            .emit(this->ctrl_.diagnostics());
           co_return;
         }
         for (auto&& elem : arr.value_unsafe()) {
@@ -775,19 +829,19 @@ public:
           continue;
         }
       }
-      if (auto slices = this->handle_max_rows(state))
+      if (auto slices = this->handle_max_rows(state)) {
         for (auto& slice : *slices) {
           co_yield std::move(slice);
         }
+      }
     }
     handle_truncated_bytes(state);
   }
 
   void finish(parser_state& state) {
     if (not buffer_.view().empty()) {
-      ctrl_.abort(
-        caf::make_error(ec::parse_error, fmt::format("parser input ended with "
-                                                     "incomplete object")));
+      diagnostic::error("parser input ended with incomplete object")
+        .emit(ctrl_.diagnostics());
       state.abort_requested = true;
     }
   }
@@ -803,10 +857,9 @@ private:
     // investigation in the future.
     if (truncated_bytes > buffer_.view().size()) {
       state.abort_requested = true;
-      this->ctrl_.abort(caf::make_error(
-        ec::parse_error, fmt::format("detected malformed JSON and "
-                                     "aborts parsing: '{}'",
-                                     buffer_.view())));
+      diagnostic::error("detected malformed JSON")
+        .note("in input '{}'", buffer_.view())
+        .emit(this->ctrl_.diagnostics());
       return;
     }
     buffer_.truncate(truncated_bytes);
@@ -877,8 +930,12 @@ auto parse_selector(std::string_view x, location source) -> selector {
       .primary(source)
       .throw_();
   }
+  auto path = std::vector<std::string>{};
+  for (auto field : detail::split(split[0], ".")) {
+    path.emplace_back(field);
+  }
   auto prefix = split.size() == 2 ? std::string{split[1]} : "";
-  return selector{std::move(prefix), std::string{split[0]}};
+  return selector{std::move(prefix), std::move(path)};
 }
 
 struct parser_args {
@@ -886,6 +943,7 @@ struct parser_args {
   std::optional<located<std::string>> schema;
   std::string unnest_separator;
   std::optional<location> no_infer;
+  bool use_gelf_mode = false;
   bool use_ndjson_mode = false;
   bool preserve_order = true;
   bool raw = false;
@@ -898,6 +956,7 @@ struct parser_args {
       .fields(f.field("selector", x.selector), f.field("schema", x.schema),
               f.field("unnest_separator", x.unnest_separator),
               f.field("no_infer", x.no_infer),
+              f.field("use_gelf_mode", x.use_gelf_mode),
               f.field("use_ndjson_mode", x.use_ndjson_mode),
               f.field("preserve_order", x.preserve_order),
               f.field("raw", x.raw),
@@ -932,7 +991,7 @@ public:
     -> std::optional<generator<table_slice>> override {
     auto schemas
       = get_schemas(args_.schema.has_value() or args_.selector.has_value(),
-                    ctrl, not args_.unnest_separator.empty());
+                    not args_.unnest_separator.empty());
     auto schema = std::optional<type>{};
     if (args_.schema) {
       const auto found
@@ -954,14 +1013,39 @@ public:
       }
       schema = *found;
     }
+    if (args_.use_ndjson_mode and args_.use_gelf_mode) {
+      diagnostic::error("options `--ndjson` and `--gelf` are incompatible")
+        .emit(ctrl.diagnostics());
+      return {};
+    }
     if (args_.use_ndjson_mode and args_.arrays_of_objects) {
       diagnostic::error(
         "options `--ndjson` and `--arrays-of-objects` are incompatible")
         .emit(ctrl.diagnostics());
       return {};
     }
+    if (args_.use_gelf_mode and args_.arrays_of_objects) {
+      diagnostic::error(
+        "options `--gelf` and `--arrays-of-objects` are incompatible")
+        .emit(ctrl.diagnostics());
+      return {};
+    }
     if (args_.use_ndjson_mode) {
-      return make_parser(to_padded_lines(std::move(input)), ctrl,
+      return make_parser(split_at_crlf(std::move(input)), ctrl,
+                         args_.unnest_separator, schema, args_.preserve_order,
+                         ndjson_parser{
+                           ctrl,
+                           args_.selector,
+                           schema,
+                           std::move(schemas),
+                           args_.no_infer.has_value(),
+                           args_.preserve_order,
+                           args_.raw,
+                           args_.arrays_of_objects,
+                         });
+    }
+    if (args_.use_gelf_mode) {
+      return make_parser(split_at_null(std::move(input), '\0'), ctrl,
                          args_.unnest_separator, schema, args_.preserve_order,
                          ndjson_parser{
                            ctrl,
@@ -1034,19 +1118,22 @@ public:
     -> caf::expected<std::unique_ptr<printer_instance>> override {
     const auto compact = !!args_.compact_output;
     auto style = default_style();
-    if (args_.monochrome_output)
+    if (args_.monochrome_output) {
       style = no_style();
-    else if (args_.color_output)
+    } else if (args_.color_output) {
       style = jq_style();
+    }
     const auto omit_nulls
       = args_.omit_nulls.has_value() or args_.omit_empty.has_value();
     const auto omit_empty_objects
       = args_.omit_empty_objects.has_value() or args_.omit_empty.has_value();
     const auto omit_empty_lists
       = args_.omit_empty_lists.has_value() or args_.omit_empty.has_value();
+    auto meta = chunk_metadata{.content_type = compact ? "application/x-ndjson"
+                                                       : "application/json"};
     return printer_instance::make(
-      [compact, style, omit_nulls, omit_empty_objects,
-       omit_empty_lists](table_slice slice) -> generator<chunk_ptr> {
+      [compact, style, omit_nulls, omit_empty_objects, omit_empty_lists,
+       meta = std::move(meta)](table_slice slice) -> generator<chunk_ptr> {
         if (slice.rows() == 0) {
           co_yield {};
           co_return;
@@ -1073,7 +1160,7 @@ public:
           TENZIR_ASSERT_CHEAP(ok);
           out_iter = fmt::format_to(out_iter, "\n");
         }
-        auto chunk = chunk::make(std::move(buffer));
+        auto chunk = chunk::make(std::move(buffer), meta);
         co_yield std::move(chunk);
       });
   }
@@ -1108,6 +1195,7 @@ public:
     parser.add("--unnest-separator", args.unnest_separator, "<separator>");
     add_common_options_to_parser(parser, args);
     parser.add("--ndjson", args.use_ndjson_mode);
+    parser.add("--gelf", args.use_gelf_mode);
     parser.add("--raw", args.raw);
     parser.add("--arrays-of-objects", args.arrays_of_objects);
     parser.parse(p);
@@ -1147,6 +1235,24 @@ public:
   }
 };
 
+class gelf_parser final : public virtual parser_parser_plugin {
+public:
+  auto name() const -> std::string override {
+    return "gelf";
+  }
+
+  auto parse_parser(parser_interface& p) const
+    -> std::unique_ptr<plugin_parser> override {
+    auto parser = argument_parser{
+      name(), fmt::format("https://docs.tenzir.com/next/formats/{}", name())};
+    auto args = parser_args{};
+    add_common_options_to_parser(parser, args);
+    parser.parse(p);
+    args.use_gelf_mode = true;
+    return std::make_unique<json_parser>(std::move(args));
+  }
+};
+
 template <detail::string_literal Name, detail::string_literal Selector,
           detail::string_literal Separator = "">
 class selector_parser final : public virtual parser_parser_plugin {
@@ -1177,5 +1283,6 @@ using zeek_parser = selector_parser<"zeek-json", "_path:zeek", ".">;
 } // namespace tenzir::plugins::json
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::gelf_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::suricata_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::zeek_parser)

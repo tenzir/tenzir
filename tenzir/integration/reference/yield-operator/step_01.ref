@@ -1,8 +1,0 @@
-warning: record has no field `foo`
- --> <input>:1:27
-  |
-1 | read suricata | yield dns.foo
-  |                           ~~~ 
-  |
-  = hint: must be one of: version, type, id, flags, qr, rd, ra, aa, tc, rrname, rrtype, rcode, ttl, tx_id, grouped, answers
-  = note: for schema `suricata.dns`

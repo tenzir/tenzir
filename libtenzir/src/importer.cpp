@@ -64,6 +64,9 @@ public:
       else
         state.schema_counters.emplace(std::string{name}, rows);
       slice.import_time(time::clock::now());
+      for (const auto& subscriber : state.subscribers) {
+        state.self->send(subscriber, slice);
+      }
       out.push(std::move(slice));
     }
     t.stop(events);
@@ -211,6 +214,15 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       self->state.send_report();
     });
   }
+  self->set_down_handler([self](const caf::down_msg& msg) {
+    const auto subscriber
+      = std::remove_if(self->state.subscribers.begin(),
+                       self->state.subscribers.end(),
+                       [&](const auto& subscriber) {
+                         return subscriber.address() == msg.source;
+                       });
+    self->state.subscribers.erase(subscriber, self->state.subscribers.end());
+  });
   return {
     // Add a new sink.
     [self](stream_sink_actor<table_slice> sink) {
@@ -224,6 +236,10 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       self->send(self->state.index, atom::subscribe_v, atom::flush_v,
                  std::move(listener));
     },
+    [self](atom::subscribe, receiver_actor<table_slice> subscriber) {
+      self->monitor(subscriber);
+      self->state.subscribers.push_back(subscriber);
+    },
     // Push buffered slices downstream to make the data available.
     [self](atom::flush) -> caf::result<void> {
       auto rp = self->make_response_promise<void>();
@@ -236,6 +252,10 @@ importer(importer_actor::stateful_pointer<importer_state> self,
         rp.delegate(self->state.index, atom::flush_v);
       });
       return rp;
+    },
+    [self](table_slice& slice) -> caf::result<void> {
+      self->state.stage->out().push(std::move(slice));
+      return {};
     },
     // -- stream_sink_actor<table_slice> ---------------------------------------
     [self](caf::stream<table_slice> in) {

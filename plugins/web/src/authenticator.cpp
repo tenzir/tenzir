@@ -21,8 +21,8 @@ namespace tenzir::plugins::web {
 caf::error authenticator_state::initialize_from(chunk_ptr chunk) {
   // We always verify here since most fields are required, so we
   // can just assert there presence below.
-  auto fb = flatbuffer<fbs::ServerState>::make(
-    std::move(chunk), flatbuffer<fbs::ServerState>::verify::yes);
+  auto fb = flatbuffer<fbs::ServerState, fbs::ServerStateIdentifier>::make(
+    std::move(chunk));
   if (!fb)
     return fb.error();
   if ((*fb)->server_state_type() != fbs::server_state::ServerState::v0)

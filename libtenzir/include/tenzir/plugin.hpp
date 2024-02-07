@@ -213,56 +213,6 @@ public:
   make_command() const = 0;
 };
 
-// -- reader plugin -----------------------------------------------------------
-
-/// A base class for plugins that add import formats.
-/// @relates plugin
-class reader_plugin : public virtual plugin {
-public:
-  /// Returns the import format's name.
-  [[nodiscard]] virtual const char* reader_format() const = 0;
-
-  /// Returns the `tenzir import <format>` helptext.
-  [[nodiscard]] virtual const char* reader_help() const = 0;
-
-  /// Returns the options for the `tenzir import <format>` command.
-  [[nodiscard]] virtual config_options
-  reader_options(command::opts_builder&& opts) const
-    = 0;
-
-  /// Creates a reader, which will be available via `tenzir import <format>` and
-  /// `tenzir spawn source <format>`.
-  /// @note Use `tenzir::detail::make_input_stream` to create an input stream
-  /// from the options.
-  [[nodiscard]] virtual std::unique_ptr<format::reader>
-  make_reader(const caf::settings& options) const = 0;
-};
-
-// -- writer plugin -----------------------------------------------------------
-
-/// A base class for plugins that add export formats.
-/// @relates plugin
-class writer_plugin : public virtual plugin {
-public:
-  /// Returns the export format's name.
-  [[nodiscard]] virtual const char* writer_format() const = 0;
-
-  /// Returns the `tenzir export <format>` helptext.
-  [[nodiscard]] virtual const char* writer_help() const = 0;
-
-  /// Returns the options for the `tenzir export <format>` command.
-  [[nodiscard]] virtual config_options
-  writer_options(command::opts_builder&& opts) const
-    = 0;
-
-  /// Creates a reader, which will be available via `tenzir export <format>` and
-  /// `tenzir spawn sink <format>`.
-  /// @note Use `tenzir::detail::make_output_stream` to create an output stream
-  /// from the options.
-  [[nodiscard]] virtual std::unique_ptr<format::writer>
-  make_writer(const caf::settings& options) const = 0;
-};
-
 // -- serialization plugin -----------------------------------------------------
 
 /// This plugin interface can be used to serialize and deserialize classes
@@ -533,7 +483,7 @@ public:
 
   /// Returns a printer for a specified schema. If `allows_joining()`,
   /// then `input_schema`can also be `type{}`, which means that the printer
-  /// should expect a hetergenous input instead.
+  /// should expect a heterogeneous input instead.
   virtual auto
   instantiate(type input_schema, operator_control_plane& ctrl) const
     -> caf::expected<std::unique_ptr<printer_instance>>
@@ -623,19 +573,6 @@ public:
 
   /// Return the value that should be used if there is no input.
   virtual auto aggregation_default() const -> data = 0;
-};
-
-// -- language plugin ---------------------------------------------------
-
-/// A language parser to pass query in a custom language to Tenzir.
-/// @relates plugin
-class language_plugin : public virtual plugin {
-public:
-  /// Parses a query string into a pipeline object.
-  /// @param query The string representing the custom query.
-  virtual auto parse_query(std::string_view query) const
-    -> caf::expected<pipeline>
-    = 0;
 };
 
 // -- rest endpoint plugin -----------------------------------------------------
@@ -837,6 +774,27 @@ public:
   };
 };
 
+// -- metrics plugin ----------------------------------------------------------
+
+class metrics_plugin : public virtual plugin {
+public:
+  using collector = std::function<caf::expected<record>()>;
+
+  /// The name under which this metric should be displayed.
+  [[nodiscard]] virtual auto metric_name() const -> std::string {
+    return name();
+  }
+
+  /// The format in which metrics will be reported by this plugin.
+  [[nodiscard]] virtual auto metric_layout() const -> record_type = 0;
+
+  /// Create a metrics collector.
+  /// Plugins may return an error if the collector is not supported on the
+  /// platform the node is currently running on.
+  [[nodiscard]] virtual auto make_collector() const -> caf::expected<collector>
+    = 0;
+};
+
 // -- aspect plugin ------------------------------------------------------------
 
 class aspect_plugin : public virtual plugin {
@@ -874,15 +832,19 @@ public:
   /// @param instance The plugin instance.
   /// @param deleter A deleter for the plugin instance.
   /// @param version The version of the plugin.
-  static plugin_ptr make_static(plugin* instance, void (*deleter)(plugin*),
-                                const char* version) noexcept;
+  /// @param dependencies The plugin's dependencies.
+  static plugin_ptr
+  make_static(plugin* instance, void (*deleter)(plugin*), const char* version,
+              std::vector<std::string> dependencies) noexcept;
 
   /// Take ownership of a builtin.
   /// @param instance The plugin instance.
   /// @param deleter A deleter for the plugin instance.
   /// @param version The version of the plugin.
-  static plugin_ptr make_builtin(plugin* instance, void (*deleter)(plugin*),
-                                 const char* version) noexcept;
+  /// @param dependencies The plugin's dependencies.
+  static plugin_ptr
+  make_builtin(plugin* instance, void (*deleter)(plugin*), const char* version,
+               std::vector<std::string> dependencies) noexcept;
 
   /// Default-construct an invalid plugin.
   plugin_ptr() noexcept;
@@ -912,7 +874,7 @@ public:
   [[nodiscard]] const Plugin* as() const {
     static_assert(std::is_base_of_v<plugin, Plugin>, "'Plugin' must be derived "
                                                      "from 'tenzir::plugin'");
-    return dynamic_cast<const Plugin*>(instance_);
+    return dynamic_cast<const Plugin*>(ctrl_->instance);
   }
 
   /// Downcast a plugin to a more specific plugin type.
@@ -922,14 +884,20 @@ public:
   Plugin* as() {
     static_assert(std::is_base_of_v<plugin, Plugin>, "'Plugin' must be derived "
                                                      "from 'tenzir::plugin'");
-    return dynamic_cast<Plugin*>(instance_);
+    return dynamic_cast<Plugin*>(ctrl_->instance);
   }
 
   /// Returns the plugin version.
   [[nodiscard]] const char* version() const noexcept;
 
+  /// Returns the plugin's dependencies.
+  [[nodiscard]] const std::vector<std::string>& dependencies() const noexcept;
+
   /// Returns the plugins type.
   [[nodiscard]] enum type type() const noexcept;
+
+  /// Bump the reference count of all dependencies.
+  auto reference_dependencies() noexcept -> void;
 
   /// Compare two plugins.
   friend bool operator==(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept;
@@ -942,19 +910,31 @@ public:
   operator<=>(const plugin_ptr& lhs, std::string_view rhs) noexcept;
 
 private:
+  struct control_block {
+    control_block(void* library, plugin* instance, void (*deleter)(plugin*),
+                  const char* version, std::vector<std::string> dependencies,
+                  enum type type) noexcept;
+    ~control_block() noexcept;
+
+    control_block(const control_block&) = delete;
+    control_block& operator=(const control_block&) = delete;
+    control_block(control_block&& other) noexcept = delete;
+    control_block& operator=(control_block&& rhs) noexcept = delete;
+
+    void* library = {};
+    plugin* instance = {};
+    void (*deleter)(plugin*) = {};
+    const char* version = nullptr;
+    std::vector<std::string> dependencies = {};
+    std::vector<std::shared_ptr<control_block>> dependencies_ctrl = {};
+    enum type type = {};
+  };
+
   /// Create a plugin_ptr.
-  plugin_ptr(void* library, plugin* instance, void (*deleter)(plugin*),
-             const char* version, enum type type) noexcept;
+  explicit plugin_ptr(std::shared_ptr<control_block> ctrl) noexcept;
 
-  /// Helper function to release ownership of a plugin.
-  void release() noexcept;
-
-  /// Implementation details.
-  void* library_ = {};
-  plugin* instance_ = {};
-  void (*deleter_)(plugin*) = {};
-  const char* version_ = nullptr;
-  enum type type_ = {};
+  /// The plugin's control block.
+  std::shared_ptr<control_block> ctrl_ = {};
 };
 
 } // namespace tenzir
@@ -1039,9 +1019,16 @@ extern const char* TENZIR_PLUGIN_VERSION;
 #elif defined(TENZIR_ENABLE_STATIC_PLUGINS) || defined(TENZIR_ENABLE_BUILTINS)
 
 #  if defined(TENZIR_ENABLE_STATIC_PLUGINS)
-#    define TENZIR_MAKE_PLUGIN ::tenzir::plugin_ptr::make_static
+#    define TENZIR_MAKE_PLUGIN(...)                                            \
+      ::tenzir::plugin_ptr::make_static(__VA_ARGS__,                           \
+                                        {TENZIR_PLUGIN_DEPENDENCIES})
+#  elif defined(TENZIR_BUILTIN_DEPENDENCY)
+#    define TENZIR_MAKE_PLUGIN(...)                                            \
+      ::tenzir::plugin_ptr::make_builtin(                                      \
+        __VA_ARGS__, {TENZIR_PP_STRINGIFY(TENZIR_BUILTIN_DEPENDENCY)})
 #  else
-#    define TENZIR_MAKE_PLUGIN ::tenzir::plugin_ptr::make_builtin
+#    define TENZIR_MAKE_PLUGIN(...)                                            \
+      ::tenzir::plugin_ptr::make_builtin(__VA_ARGS__, {})
 #  endif
 
 #  define TENZIR_REGISTER_PLUGIN(name)                                         \
@@ -1105,6 +1092,12 @@ extern const char* TENZIR_PLUGIN_VERSION;
     }                                                                          \
     extern "C" auto tenzir_libtenzir_build_tree_hash() -> const char* {        \
       return ::tenzir::version::build::tree_hash;                              \
+    }                                                                          \
+    extern "C" auto tenzir_plugin_dependencies() -> const char* const* {       \
+      static constexpr auto dependencies = [](auto... xs) {                    \
+        return std::array<const char*, sizeof...(xs) + 1>{xs..., nullptr};     \
+      }(TENZIR_PLUGIN_DEPENDENCIES);                                           \
+      return dependencies.data();                                              \
     }
 
 #  define TENZIR_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                         \

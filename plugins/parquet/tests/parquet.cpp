@@ -470,9 +470,9 @@ TEST(active parquet store status) {
   run();
   r.receive(
     [uuid, this](record& status) {
-      auto db_dir = std::filesystem::path{
-        caf::get_or(content(self->home_system().config()),
-                    "tenzir.db-directory", defaults::db_directory.data())};
+      auto db_dir = std::filesystem::path{caf::get_or(
+        content(self->home_system().config()), "tenzir.state-directory",
+        defaults::state_directory.data())};
       std::error_code err{};
       const auto abs_dir = std::filesystem::absolute(db_dir, err);
       auto path = abs_dir / "archive" / fmt::format("{}.parquet", uuid);
