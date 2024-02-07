@@ -23,8 +23,8 @@ profile.
 
 A typical [shaping](../user-guides/shape-data/README.md) operation is applying
 filters on the input values, e.g., by specifying a regular expression to only
-keep matching events. Filtering is a **CPU**-intensive operation. Unless you use
-numerous complex regular expressions, filtering is a cheap.
+keep matching events. Filtering only incurs **CPU** load. Unless you use
+numerous, complex regular expressions, filtering is cheap.
   
 #### Aggregation
 
