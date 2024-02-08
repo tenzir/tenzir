@@ -8,7 +8,6 @@
 
 #include "tenzir/format/reader.hpp"
 
-#include "tenzir/concept/parseable/tenzir/table_slice_encoding.hpp"
 #include "tenzir/concept/parseable/tenzir/time.hpp"
 #include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/configuration.hpp"

@@ -13,7 +13,6 @@
 #include "tenzir/chunk.hpp"
 #include "tenzir/concept/printable/print.hpp"
 #include "tenzir/expression.hpp"
-#include "tenzir/table_slice_encoding.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/view.hpp"
 
@@ -44,10 +43,6 @@ public:
     no,  ///< Skip serialization into the Arrow IPC backing if possible.
     yes, ///< Always serialize into an Arrow IPC backing.
   };
-
-  /// A typed view on a given set of columns of a table slice.
-  template <class... Types>
-  friend class projection;
 
   // -- constructors, destructors, and assignment operators --------------------
 
@@ -121,9 +116,6 @@ public:
   operator!=(const table_slice& lhs, const table_slice& rhs) noexcept;
 
   // -- properties -------------------------------------------------------------
-
-  /// @returns The encoding of the slice.
-  [[nodiscard]] enum table_slice_encoding encoding() const noexcept;
 
   /// @returns The table schema.
   /// @note If default-constructed, returns a default-constructed `type`.
@@ -204,11 +196,6 @@ public:
   /// @param slice The table slice to convert.
   friend std::shared_ptr<arrow::RecordBatch>
   to_record_batch(const table_slice& slice);
-
-  /// Creates a typed view on a given set of columns of a table slice.
-  /// @note This function is defined and documented in 'tenzir/project.hpp'.
-  template <class... Hints>
-  friend auto project(table_slice slice, Hints&&... hints);
 
   // -- concepts ---------------------------------------------------------------
 
@@ -299,7 +286,6 @@ table_slice concatenate(std::vector<table_slice> slices);
 /// @param slice The input table slice.
 /// @param expr The filter expression.
 /// @param hints ID set for selecting events from `slice`.
-/// @pre `slice.encoding() != table_slice_encoding::none`
 generator<table_slice>
 select(const table_slice& slice, expression expr, const ids& hints);
 
@@ -311,7 +297,6 @@ select(const table_slice& slice, expression expr, const ids& hints);
 /// @param hints An ID set for pruning the events that need to be considered.
 /// @returns a new table slice consisting only of events matching the given
 ///          expression.
-/// @pre `slice.encoding() != table_slice_encoding::none`
 std::optional<table_slice>
 filter(const table_slice& slice, expression expr, const ids& hints);
 
@@ -320,7 +305,6 @@ filter(const table_slice& slice, expression expr, const ids& hints);
 /// @param expr The expression to evaluate.
 /// @param hints An ID set for pruning the events that need to be considered.
 /// @returns the number of rows that are included in `hints` and match `expr`.
-/// @pre `slice.encoding() != table_slice_encoding::none`
 uint64_t count_matching(const table_slice& slice, const expression& expr,
                         const ids& hints);
 
@@ -341,7 +325,6 @@ table_slice tail(table_slice slice, size_t num_rows);
 /// @param partition_point The index of the first row for the second slice.
 /// @returns two new table slices if `0 < partition_point < slice.rows()`,
 ///          otherwise returns `slice` and an invalid table slice.
-/// @pre `slice.encoding() != table_slice_encoding::none`
 std::pair<table_slice, table_slice>
 split(const table_slice& slice, size_t partition_point);
 
@@ -385,7 +368,6 @@ filter(const table_slice& slice, const expression& expr);
 ///              slice.
 /// @returns a new table slice consisting only of events matching the given
 ///          expression.
-/// @pre `slice.encoding() != table_slice_encoding::none`
 [[nodiscard]] std::optional<table_slice>
 filter(const table_slice& slice, const ids& hints);
 

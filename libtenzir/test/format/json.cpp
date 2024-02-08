@@ -79,7 +79,6 @@ TEST(json to data) {
   CHECK(obj.error() == ::simdjson::error_code::SUCCESS);
   REQUIRE_EQUAL(tenzir::format::json::add(obj.value(), *builder), caf::none);
   auto slice = builder->finish();
-  REQUIRE_NOT_EQUAL(slice.encoding(), table_slice_encoding::none);
   CHECK(slice.at(0, 0) == data{true});
   CHECK(slice.at(0, 1) == data{uint64_t{424242}});
   CHECK(slice.at(0, 2).is<double>());

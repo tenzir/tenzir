@@ -437,8 +437,9 @@ std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
 table_slice transform_columns(
   const table_slice& slice,
   const std::vector<indexed_transformation>& transformations) noexcept {
-  if (slice.encoding() == table_slice_encoding::none)
+  if (slice.rows() == 0) {
     return {};
+  }
   auto input_batch = to_record_batch(slice);
   auto input_struct_array = input_batch->ToStructArray().ValueOrDie();
   auto [output_schema, output_struct_array]

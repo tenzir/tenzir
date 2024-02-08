@@ -35,8 +35,9 @@ caf::error single_schema_reader::finish(consumer& f, caf::error result,
   if (builder_ != nullptr && builder_->rows() > 0) {
     auto slice = builder_->finish();
     // Override error in case we encounter an error in the builder.
-    if (slice.encoding() == table_slice_encoding::none)
+    if (slice.rows() == 0) {
       return caf::make_error(ec::parse_error, "unable to finish current slice");
+    }
     if (cast_to_schema)
       slice = cast(std::move(slice), cast_to_schema);
     f(std::move(slice));

@@ -265,7 +265,6 @@ enum class query_options : uint32_t;
 enum class relational_operator : uint8_t;
 enum class send_initial_dbstate : bool;
 enum class status_verbosity;
-enum class table_slice_encoding : uint8_t;
 
 template <class>
 class arrow_table_slice;

@@ -238,7 +238,6 @@ void table_slices::test_manual_serialization() {
   MESSAGE("load content for the second slice from the buffer");
   CHECK_EQUAL(tenzir::detail::legacy_deserialize(buf, slice2), true);
   MESSAGE("check result of serialization roundtrip");
-  REQUIRE_NOT_EQUAL(slice2.encoding(), table_slice_encoding::none);
   CHECK_EQUAL(slice1, slice2);
 }
 
@@ -253,7 +252,6 @@ void table_slices::test_smart_pointer_serialization() {
   MESSAGE("load content for the second slice from the buffer");
   CHECK_EQUAL(tenzir::detail::legacy_deserialize(buf, slice2), true);
   MESSAGE("check result of serialization roundtrip");
-  REQUIRE_NOT_EQUAL(slice2.encoding(), table_slice_encoding::none);
   CHECK_EQUAL(slice1, slice2);
 }
 

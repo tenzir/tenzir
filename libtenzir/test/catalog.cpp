@@ -357,7 +357,6 @@ TEST(catalog with bool synopsis) {
   CHECK(builder->add(make_data_view(true)));
   auto slice = builder->finish();
   slice.offset(0);
-  REQUIRE(slice.encoding() != table_slice_encoding::none);
   auto ps1 = make_partition_synopsis(slice);
   auto id1 = uuid::random();
   merge(meta_idx, id1,
@@ -365,7 +364,6 @@ TEST(catalog with bool synopsis) {
   CHECK(builder->add(make_data_view(false)));
   slice = builder->finish();
   slice.offset(1);
-  REQUIRE(slice.encoding() != table_slice_encoding::none);
   auto ps2 = make_partition_synopsis(slice);
   auto id2 = uuid::random();
   merge(meta_idx, id2,
@@ -373,7 +371,6 @@ TEST(catalog with bool synopsis) {
   CHECK(builder->add(make_data_view(caf::none)));
   slice = builder->finish();
   slice.offset(2);
-  REQUIRE(slice.encoding() != table_slice_encoding::none);
   auto ps3 = make_partition_synopsis(slice);
   auto id3 = uuid::random();
   merge(meta_idx, id3,
