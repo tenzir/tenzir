@@ -18,6 +18,10 @@ check() {
   command -v "$1" >/dev/null 2>&1
 }
 
+beginswith() {
+  case $2 in "$1"*) true;; *) false;; esac;
+}
+
 # Only use colors when we have a TTY.
 if [ -t 1 ]
 then
@@ -84,39 +88,45 @@ then
 fi
 echo "Found ${platform}."
 
-# Select appropriate package.
-action "Identifying package"
-package=
-package_url=
-if [ "${platform}" = "Debian" ]
+# The caller can supply a package URL with an environment variable. This should
+# only be used for testing modifications to the packaging.
+if [ -n "${TENZIR_PACKAGE_URL}" ]
 then
-  package_url="https://storage.googleapis.com/tenzir-dist-public/packages/main/debian/tenzir-static-latest.deb"
-elif [ "${platform}" = "Linux" ]
-then
-  package_url="https://storage.googleapis.com/tenzir-dist-public/packages/main/tarball/tenzir-static-latest.gz"
-elif [ "${platform}" = "NixOS" ]
-then
-  echo "Try Tenzir with our ${bold}flake.nix${normal}:"
-  echo
-  echo "    ${bold}nix shell github:tenzir/tenzir/latest -c tenzir-node${normal}"
-  echo
-  echo "Install Tenzir by adding" \
-    "${bold}github:tenzir/tenzir/latest${normal} to your"
-  echo "flake inputs, or use your preferred method to include third-party"
-  echo "modules on classic NixOS."
-  exit 0
-elif [ "${platform}" = "macOS" ]
-then
-  package_url="https://storage.googleapis.com/tenzir-dist-public/packages/main/macOS/tenzir-static-latest.pkg"
+  package_url="${TENZIR_PACKAGE_URL}"
 else
-  echo "We do not offer pre-built packages for ${platform}." \
-      "Your options:"
-  echo
-  echo "  1. Use Docker"
-  echo "  2. Build from source"
-  echo
-  echo "Visit ${bold}https://docs.tenzir.com${normal} for further instructions."
-  exit 1
+  # Select appropriate package.
+  action "Identifying package"
+  package_url_base="https://storage.googleapis.com/tenzir-dist-public/packages/main"
+  if [ "${platform}" = "Debian" ]
+  then
+    package_url="${package_url_base}/debian/tenzir-static-latest.deb"
+  elif [ "${platform}" = "Linux" ]
+  then
+    package_url="${package_url_base}/main/tarball/tenzir-static-latest.gz"
+  elif [ "${platform}" = "NixOS" ]
+  then
+    echo "Try Tenzir with our ${bold}flake.nix${normal}:"
+    echo
+    echo "    ${bold}nix shell github:tenzir/tenzir/latest -c tenzir-node${normal}"
+    echo
+    echo "Install Tenzir by adding" \
+      "${bold}github:tenzir/tenzir/latest${normal} to your"
+    echo "flake inputs, or use your preferred method to include third-party"
+    echo "modules on classic NixOS."
+    exit 0
+  elif [ "${platform}" = "macOS" ]
+  then
+    package_url="${package_url_base}/macOS/tenzir-static-latest.pkg"
+  else
+    echo "We do not offer pre-built packages for ${platform}." \
+        "Your options:"
+    echo
+    echo "  1. Use Docker"
+    echo "  2. Build from source"
+    echo
+    echo "Visit ${bold}https://docs.tenzir.com${normal} for further instructions."
+    exit 1
+  fi
 fi
 package="$(basename "${package_url}")"
 echo "Using ${package}"
@@ -124,7 +134,8 @@ echo "Using ${package}"
 # Download package.
 tmpdir="$(dirname "$(mktemp -u)")"
 action "Downloading ${package_url}"
-if check wget
+# Wget does not support the file:// URL scheme.
+if check wget && beginswith "${package_url}" "https://"
 then
   wget -q --show-progress -O "${tmpdir}/${package}" "${package_url}"
 elif check curl
@@ -181,14 +192,14 @@ then
     echo "Could not find ${bold}adduser${normal} in \$PATH."
     exit 1
   fi
-  cmd1="sudo dpkg -i \"${tmpdir}/${package}\""
+  cmd1="sudo apt-get --yes install \"${tmpdir}/${package}\""
   cmd2="sudo systemctl status tenzir-node || [ ! -d /run/systemd/system ]"
   echo "This script is about to run the following commands:"
   echo
   echo "  - ${cmd1}"
   echo "  - ${cmd2}"
   confirm
-  action "Installing via dpkg"
+  action "Installing via apt-get"
   eval "${cmd1}"
   action "Checking node status"
   eval "${cmd2}"
