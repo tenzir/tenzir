@@ -188,14 +188,12 @@ teardown() {
     if [ ! command -v gdate ]; then
       skip "this test requires coreutils to be installed on macOS"
     fi
-    NOW=$(gdate -Ins | tr ',' '.')
+    # We need subsecond precision here because `date` rounds down otherwise.
+    NOW=$(gdate -Ins)
   else
-    NOW=$(date -Ins | tr ',' '.')
+    NOW=$(date -Ins)
   fi
 
-  # We need subsecond precision here because `date` rounds down otherwise. Also,
-  # we need `tr` because `date` uses a comma for subsecond precision by default
-  # but tenzir requires a dot. (ISO 8601 allows both)
   check tenzir "export | where #import_time > ${NOW}"
   check tenzir "export | where #import_time <= ${NOW} | sort timestamp"
   check tenzir "export | where #import_time > now"
