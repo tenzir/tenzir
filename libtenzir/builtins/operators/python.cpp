@@ -93,9 +93,9 @@ public:
           [](std::filesystem::path path) -> caf::expected<std::string> {
             auto code_chunk = chunk::make_empty();
             if (auto err = read(path, code_chunk)) {
-              return caf::make_error(
-                ec::system_error,
-                fmt::format("failed to read code from file: {}", err));
+              return diagnostic::error(err)
+                .note("failed to read code from file")
+                .to_error();
             }
             return std::string{
               reinterpret_cast<const char*>(code_chunk->data()),
@@ -106,13 +106,12 @@ public:
           }},
         code_);
       if (!maybe_code) {
-        diagnostic::error("failed to obtain code")
-          .note(fmt::format("error: {}", maybe_code.error()))
+        diagnostic::error(maybe_code.error())
+          .note("failed to obtain code")
           .emit(ctrl.diagnostics());
         co_return;
       }
       auto code = *maybe_code;
-      TENZIR_INFO("got code {}", code);
       // Setup python prerequisites.
       bp::pipe std_out;
       bp::pipe std_in;
@@ -378,25 +377,29 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto command = std::optional<std::string>{};
+    auto command = std::optional<located<std::string>>{};
     auto requirements = std::string{};
-    auto filename = std::string{};
+    auto filename = std::optional<located<std::string>>{};
     auto parser = argument_parser{"python", "https://docs.tenzir.com/next/"
                                             "operators/transformations/python"};
     parser.add("-r,--requirements", requirements, "<requirements>");
     parser.add("-f,--file", filename, "<filename>");
     parser.add(command, "<command>");
     parser.parse(p);
-    if (!filename.empty() == command.has_value()) {
+    if (!filename && !command) {
+      diagnostic::error("must have either the `--file` argument or inline code")
+        .throw_();
+    }
+    if (filename && command) {
       diagnostic::error(
-        "Must have exactly one of the '--file' argument or inline code")
+        "cannot have `--file` argument together with inline code")
         .throw_();
     }
     auto code = std::variant<std::filesystem::path, std::string>{};
     if (command.has_value()) {
-      code = *command;
+      code = command->inner;
     } else {
-      code = std::filesystem::path{filename};
+      code = std::filesystem::path{filename->inner};
     }
     return std::make_unique<python_operator>(&config, std::move(requirements),
                                              std::move(code));

@@ -70,7 +70,7 @@ teardown() {
   check tenzir "export | where resp_h == 216.240.189.196 | sort ts"
 }
 
-# bats test_tags=node,import,export,zeek,bats:focus
+# bats test_tags=node,import,export,zeek
 @test "Node Zeek snmp log" {
   import_zeek_snmp
 
