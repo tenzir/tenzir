@@ -8,7 +8,8 @@
 
 #pragma once
 
-#include "tenzir/table_slice.hpp"
+#include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/offset.hpp"
 #include "tenzir/type.hpp"
 
 #include <arrow/array.h>
@@ -18,12 +19,17 @@
 
 namespace tenzir {
 
-/// A temporary series representation (until we have a proper one).
-struct typed_array {
-  typed_array() = default;
+/// A series represents a contiguous representation of nullable data of the same
+/// type, e.g., a column in a table slice.
+struct series {
+  series() = default;
+
+  series(table_slice slice, offset idx) {
+    std::tie(type, array) = idx.get(slice);
+  }
 
   template <type_or_concrete_type Type>
-  typed_array(Type type, std::shared_ptr<arrow::Array> array)
+  series(Type type, std::shared_ptr<arrow::Array> array)
     : type{std::move(type)}, array{std::move(array)} {
   }
 
@@ -32,7 +38,7 @@ struct typed_array {
   }
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, typed_array& x) -> bool {
+  friend auto inspect(Inspector& f, series& x) -> bool {
     if constexpr (Inspector::is_loading) {
       table_slice slice;
       auto callback = [&]() noexcept {
@@ -41,7 +47,7 @@ struct typed_array {
         return true;
       };
       return f.object(x)
-        .pretty_name("tenzir.typed_array")
+        .pretty_name("tenzir.series")
         .on_load(callback)
         .fields(f.field("slice", slice));
     } else {
@@ -53,8 +59,21 @@ struct typed_array {
       auto slice
         = table_slice{batch, tenzir_schema, table_slice::serialize::yes};
       return f.object(x)
-        .pretty_name("tenzir.typed_array")
+        .pretty_name("tenzir.series")
         .fields(f.field("slice", slice));
+    }
+  }
+
+  template <type_or_concrete_type Type = type>
+  auto values() const {
+    if constexpr (concrete_type<Type>) {
+      const auto* ct = caf::get_if<Type>(type);
+      TENZIR_ASSERT_CHEAP(ct);
+      TENZIR_ASSERT_CHEAP(array);
+      return tenzir::values(*ct, *array);
+    } else {
+      TENZIR_ASSERT_CHEAP(array);
+      return tenzir::values(type, *array);
     }
   }
 

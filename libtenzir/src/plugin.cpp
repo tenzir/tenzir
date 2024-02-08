@@ -670,7 +670,7 @@ auto aspect_plugin::aspect_name() const -> std::string {
 
 auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
                                   operator_control_plane& ctrl) const
-  -> std::vector<typed_array> {
+  -> std::vector<series> {
   // TODO: Collecting finished table slices here is very bad for performance.
   // For example, we have to concatenate new table slices. But there are also
   // many questions with regards to semantics. This should be either completely
@@ -731,7 +731,7 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
       output.push_back(std::move(slice));
     }
   }
-  auto result = std::vector<typed_array>{};
+  auto result = std::vector<series>{};
   result.reserve(output.size());
   for (auto&& slice : output) {
     result.emplace_back(slice.schema(),

@@ -143,7 +143,7 @@ public:
   auto operator=(builder_base&&) -> builder_base& = delete;
 
   /// @pre `0 <= count <= length()`
-  virtual auto finish(int64_t count) -> typed_array = 0;
+  virtual auto finish(int64_t count) -> series = 0;
 
   virtual auto arrow_type() const -> std::shared_ptr<arrow::DataType> = 0;
 
@@ -169,7 +169,7 @@ public:
     (void)root;
   }
 
-  auto finish(int64_t count) -> typed_array override {
+  auto finish(int64_t count) -> series override {
     TENZIR_ASSERT_CHEAP(count <= length_);
     auto builder = arrow::NullBuilder{};
     check(builder.AppendNulls(count));
@@ -266,10 +266,10 @@ public:
   /// type becomes null. Type reduction is also applied recursively. The goal is
   /// to leave the builder in the same state as-if the remaining items were
   /// added to a fresh builder.
-  auto finish(int64_t count) -> typed_array {
+  auto finish(int64_t count) -> series {
     auto old_length = length();
     TENZIR_ASSERT_CHEAP(count <= old_length);
-    auto result = typed_array{};
+    auto result = series{};
     if (count == 0) {
       result.type = type();
       result.array
@@ -384,7 +384,7 @@ public:
     has_conflict_ = true;
   }
 
-  auto finish() -> std::vector<typed_array> {
+  auto finish() -> std::vector<series> {
     has_conflict_ = false;
     if (builder_.length() > 0) {
       finished_.push_back(builder_.finish(builder_.length()));
@@ -415,7 +415,7 @@ private:
   }
 
   dynamic_builder builder_;
-  std::vector<typed_array> finished_;
+  std::vector<series> finished_;
 
   /// TODO: We finish the builder before we upgrade to a conflict builder.
   /// However, we do not want to keep the conflict builder if the next top-level
@@ -435,7 +435,7 @@ public:
     variants_.push_back(std::move(builder));
   }
 
-  auto finish(int64_t count) -> typed_array override {
+  auto finish(int64_t count) -> series override {
     TENZIR_TRACE("finishing {} of {} conflicts with {} variants", count,
                  length(), variants_.size());
     TENZIR_ASSERT_CHEAP(count <= length());
@@ -446,7 +446,7 @@ public:
     for (auto it = discriminants_.begin(); it != end; ++it) {
       variant_counts[*it] += 1;
     }
-    auto arrays = std::vector<typed_array>{};
+    auto arrays = std::vector<series>{};
     arrays.reserve(variants_.size());
     for (auto i = size_t{0}; i < variants_.size(); ++i) {
       arrays.push_back(variants_[i]->finish(variant_counts[i]));
@@ -600,7 +600,7 @@ public:
     return std::static_pointer_cast<array_type>(inner_->Finish().ValueOrDie());
   }
 
-  auto finish(int64_t count) -> typed_array override {
+  auto finish(int64_t count) -> series override {
     TENZIR_TRACE("finishing {} of {} with type {}", count, length(), kind());
     auto array = finish();
     TENZIR_ASSERT_CHEAP(count <= array->length());
@@ -686,7 +686,7 @@ public:
     }
   }
 
-  auto finish(int64_t count) -> typed_array override {
+  auto finish(int64_t count) -> series override {
     auto old_length = length();
     TENZIR_TRACE("list got request to finish {} of {}", count, old_length);
     check(offsets_.Append(detail::narrow<int32_t>(elements_.length())));
@@ -764,7 +764,7 @@ public:
     return record_ref{this};
   }
 
-  auto finish(int64_t count) -> typed_array override {
+  auto finish(int64_t count) -> series override {
     TENZIR_ASSERT_CHEAP(count <= length_);
     TENZIR_TRACE("finishing {} of {} records with {} fields", count, length(),
                  fields_.size());
@@ -1336,7 +1336,7 @@ auto series_builder::list() -> builder_ref {
   return impl_->list();
 }
 
-auto series_builder::finish() -> std::vector<typed_array> {
+auto series_builder::finish() -> std::vector<series> {
   return impl_->finish();
 }
 

@@ -274,7 +274,7 @@ public:
 
   /// Emits context information for every event in `slice` in order.
   auto apply(table_slice slice, context::parameter_map parameters) const
-    -> caf::expected<std::vector<typed_array>> override {
+    -> caf::expected<std::vector<series>> override {
     auto status = 0;
     MMDB_entry_data_list_s* entry_data_list = nullptr;
     auto resolved_slice = resolve_enumerations(slice);
