@@ -16,6 +16,7 @@
 namespace tenzir::tql2::ast {
 
 struct assignment;
+struct field_access;
 struct expression;
 struct identifier;
 struct invocation;
@@ -24,23 +25,22 @@ struct record;
 struct selector;
 
 struct identifier {
-  identifier(std::string symbol, location location)
-    : symbol{std::move(symbol)}, location{location} {
+  identifier(std::string name, location location)
+    : name{std::move(name)}, location{location} {
   }
 
-  identifier(std::string_view symbol, location location)
-    : identifier{std::string(symbol), location} {
+  identifier(std::string_view name, location location)
+    : identifier{std::string(name), location} {
   }
 
-  // TODO: Intern.
-  std::string symbol;
+  std::string name;
   location location;
 
   friend auto inspect(auto& f, identifier& x) -> bool {
     if (auto dbg = as_debug_writer(f)) {
-      return dbg->apply(x.symbol) && dbg->append(" @ {:?}", x.location);
+      return dbg->apply(x.name) && dbg->append(" @ {:?}", x.location);
     }
-    return f.object(x).fields(f.field("symbol", x.symbol),
+    return f.object(x).fields(f.field("symbol", x.name),
                               f.field("location", x.location));
   }
 };
@@ -64,11 +64,12 @@ struct string : located<std::string> {
   using located::located;
 };
 
-using expression_kind = variant<record, selector, pipeline, string>;
+using expression_kind
+  = variant<record, selector, pipeline, string, field_access>;
 
 struct expression {
   template <class T>
-  explicit expression(T&& x)
+  explicit(false) expression(T&& x)
     : kind{std::make_unique<expression_kind>(std::forward<T>(x))} {
   }
 
@@ -85,6 +86,21 @@ struct expression {
   friend auto inspect(auto& f, expression& x) -> bool;
 };
 
+struct field_access {
+  field_access(expression left, location dot, identifier name)
+    : left{std::move(left)}, dot{dot}, name{std::move(name)} {
+  }
+
+  expression left;
+  location dot;
+  identifier name;
+
+  friend auto inspect(auto& f, field_access& x) -> bool {
+    return f.object(x).fields(f.field("left", x.left), f.field("dot", x.dot),
+                              f.field("name", x.name));
+  }
+};
+
 struct record {
   struct spread {
     expression expr;
@@ -94,25 +110,29 @@ struct record {
     }
   };
 
-  struct member {
-    identifier name;
-    std::optional<expression> expr;
+  struct field {
+    field(identifier name, expression expr)
+      : name{std::move(name)}, expr{std::move(expr)} {
+    }
 
-    friend auto inspect(auto& f, member& x) -> bool {
+    identifier name;
+    expression expr;
+
+    friend auto inspect(auto& f, field& x) -> bool {
       return f.object(x).fields(f.field("name", x.name),
                                 f.field("expr", x.expr));
     }
   };
 
-  using content_kind = variant<member, spread>;
+  using content_kind = variant<field, spread>;
 
-  record() = default;
-
-  explicit record(std::vector<content_kind> content)
-    : content{std::move(content)} {
+  record(location left, std::vector<content_kind> content, location right)
+    : begin{left}, content{std::move(content)}, end{right} {
   }
 
+  location begin;
   std::vector<content_kind> content;
+  location end;
 
   friend auto inspect(auto& f, record& x) -> bool {
     return f.apply(x.content);

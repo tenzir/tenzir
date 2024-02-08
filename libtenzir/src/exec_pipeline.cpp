@@ -169,8 +169,9 @@ auto add_implicit_source_and_sink(pipeline pipe, exec_config const& config)
   return pipe;
 }
 
-auto exec_impl2(std::string content, std::unique_ptr<diagnostic_handler> diag,
-                const exec_config& cfg, caf::actor_system& sys)
+auto exec_pipeline2(std::string content,
+                    std::unique_ptr<diagnostic_handler> diag,
+                    const exec_config& cfg, caf::actor_system& sys)
   -> caf::expected<void> {
   auto tokens = tql2::lex(content);
   if (cfg.dump_tokens) {
@@ -182,6 +183,7 @@ auto exec_impl2(std::string content, std::unique_ptr<diagnostic_handler> diag,
     }
     return {};
   }
+  auto error_emitted = false;
   for (auto& token : tokens) {
     if (token.kind == tql2::token_kind::error) {
       auto begin = size_t{0};
@@ -191,8 +193,11 @@ auto exec_impl2(std::string content, std::unique_ptr<diagnostic_handler> diag,
       diagnostic::error("could not parse token")
         .primary(location{begin, token.end})
         .emit(*diag);
-      return {};
+      error_emitted = true;
     }
+  }
+  if (error_emitted) {
+    return ec::silent;
   }
   class improve_me final : public diagnostic_handler {
   public:
@@ -234,7 +239,7 @@ auto exec_pipeline(std::string content,
                    const exec_config& cfg, caf::actor_system& sys)
   -> caf::expected<void> {
   if (cfg.tql2) {
-    return exec_impl2(std::move(content), std::move(diag), cfg, sys);
+    return exec_pipeline2(std::move(content), std::move(diag), cfg, sys);
   }
   auto parsed = tql::parse(std::move(content), *diag);
   if (not parsed) {

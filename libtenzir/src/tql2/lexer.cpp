@@ -20,7 +20,11 @@ auto lex(std::string_view content) -> std::vector<token> {
   using namespace parsers;
   auto identifier = (alpha | chr{'_'}) >> *(alnum | chr{'_'});
   auto p
-    = ignore(+digit >> chr{'.'} >> *digit)
+    = ignore(*xdigit >> chr{':'} >> *xdigit >> chr{':'} >> *xdigit >> *((chr{'.'} | chr{':'}) >> *xdigit))
+      ->* [] { return token_kind::ipv6; }
+    | ignore(+digit >> chr{'.'} >> +digit >> +(chr{'.'} >> +digit))
+      ->* [] { return token_kind::ipv4; }
+    | ignore(+digit >> chr{'.'} >> +digit)
       ->* [] { return token_kind::real; }
     | ignore(+digit)
       ->* [] { return token_kind::integer; }
@@ -62,7 +66,12 @@ auto lex(std::string_view content) -> std::vector<token> {
       result.emplace_back(kind, current - content.begin());
     } else {
       ++current;
-      result.emplace_back(token_kind::error, current - content.begin());
+      auto end = current - content.begin();
+      if (result.empty() || result.back().kind != token_kind::error) {
+        result.emplace_back(token_kind::error, end);
+      } else {
+        result.back().end = end;
+      }
     }
   }
   return result;

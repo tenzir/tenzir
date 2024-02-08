@@ -18,15 +18,6 @@
 
 namespace tenzir::tql2 {
 
-namespace experiment {
-
-struct identifier : std::string {};
-struct integer : std::string {};
-enum class simple { lpar, rpar };
-struct token : variant<identifier, integer, simple> {};
-
-} // namespace experiment
-
 TENZIR_ENUM(
   /// TODO
   token_kind,
@@ -37,7 +28,7 @@ TENZIR_ENUM(
   // ??
   meta, type_extractor,
   // literals
-  integer, real, true_, false_, null, string,
+  integer, real, true_, false_, null, string, ipv4, ipv6,
   // operators
   pipe, logical_or, greater, dot, minus, cmp_equals,
   // other punctuation

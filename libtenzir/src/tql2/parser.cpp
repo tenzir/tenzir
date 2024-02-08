@@ -28,6 +28,7 @@ public:
 
 private:
   auto parse_pipeline(bool rbrace_end = false) -> pipeline {
+    auto scope = ignore_newlines(false);
     auto steps = std::vector<pipeline::step>{};
     while (true) {
       while (accept(tk::newline)) {
@@ -44,7 +45,7 @@ private:
         auto right = parse_expression();
         steps.emplace_back(
           assignment{std::move(left), equal.location, std::move(right)});
-        if (not accept(tk::newline)) {
+        if (not accept(tk::newline) && not eoi()) {
           throw_token();
         }
       } else if (left.path.size() == 1) {
@@ -100,81 +101,39 @@ private:
   }
 
   auto parse_record_or_pipeline() -> expression {
-    if (not accept(tk::lbrace)) {
+    auto begin = accept(tk::lbrace);
+    if (not begin) {
       throw_token();
     }
     // { }       // unknown -> record
-    // { test }  // unknown -> record
-    // { test ,  // record
     // { test :  // record
-    // OTHERWISE // pipeline
+    // OTHERWISE pipeline
     // TODO: This does not respect trivia.
     auto scope = ignore_newlines(true);
-    if (peek(tk::rbrace)) {
-      scope.done();
-      accept(tk::rbrace);
-      return expression{record{}};
-    }
-    if (raw_peek(tk::identifier)) {
-      if (raw_peek(tk::rbrace, 1) || raw_peek(tk::comma, 1)
-          || raw_peek(tk::colon, 1)) {
-        // Assume this is a record.
-      } else {
-        scope.done();
-        auto pipe = parse_pipeline(true);
-        if (not accept(tk::rbrace)) {
-          throw_token();
+    auto is_record = peek(tk::rbrace)
+                     || (raw_peek(tk::identifier) && raw_peek(tk::colon, 1));
+    if (is_record) {
+      auto content = std::vector<record::content_kind>{};
+      while (true) {
+        if (not content.empty()) {
+          (void)accept(tk::comma);
         }
-        return expression{std::move(pipe)};
-      }
-    }
-    auto content = std::vector<record::content_kind>{};
-    while (true) {
-      if (peek(tk::rbrace)) {
-        // {}
-        break;
-      }
-      if (not content.empty()) {
-        if (not accept(tk::comma)) {
-          if (content.size() == 1) {
-            if (auto op = content[0].match(
-                  [](record::member& x) -> std::optional<identifier> {
-                    if (x.expr.has_value()) {
-                      return std::nullopt;
-                    }
-                    return x.name;
-                  },
-                  [](record::spread&) -> std::optional<identifier> {
-                    return std::nullopt;
-                  })) {
-              // Could be pipeline!
-              parse_pipeline();
-            }
-          }
-          break;
-        }
-        // a comma can follow the last member
         if (peek(tk::rbrace)) {
-          break;
+          scope.done();
+          auto end = expect(tk::rbrace);
+          return expression{
+            record{begin.location, std::move(content), end.location}};
         }
-      }
-      if (auto ident = accept(tk::identifier)) {
-        auto expr = std::optional<expression>{};
-        if (accept(tk::colon)) {
-          expr = parse_expression();
-        }
-        content.emplace_back(record::member{
-          identifier{ident.text, ident.location}, std::move(expr)});
-      } else {
-        throw_token();
+        auto name = expect(tk::identifier);
+        expect(tk::colon);
+        auto expr = parse_expression();
+        content.emplace_back(
+          record::field{identifier{name.text, name.location}, std::move(expr)});
       }
     }
-    // have to be done before?
-    scope.done();
-    if (not accept(tk::rbrace)) {
-      throw_token();
-    }
-    return expression{record{std::move(content)}};
+    auto pipe = parse_pipeline(true);
+    expect(tk::rbrace);
+    return pipe;
   }
 
   auto parse_atomic_expression() -> expression {
@@ -190,18 +149,22 @@ private:
         string{std::string{token.text.substr(1, token.text.size() - 2)},
                token.location}};
     }
+    // if (auto token = accept(tk::integer)) {
+    //   return expression{};
+    // }
     throw_token();
   }
 
   auto parse_expression() -> expression {
     // TODO
-    auto exp = parse_atomic_expression();
+    auto expr = parse_atomic_expression();
     while (true) {
-      if (accept(tk::pipe)) {
-        // TODO
-        throw_token();
+      if (auto dot = accept(tk::dot)) {
+        auto name = expect(tk::identifier);
+        expr
+          = field_access{std::move(expr), dot.location, name.as_identifier()};
       }
-      return exp;
+      return expr;
     }
   }
 
@@ -213,9 +176,13 @@ private:
       // TODO: Is this okay?
       return text.data() != nullptr;
     }
+
+    auto as_identifier() const -> identifier {
+      return identifier{text, location};
+    }
   };
 
-  auto accept(token_kind kind) -> accept_result {
+  [[nodiscard]] auto accept(token_kind kind) -> accept_result {
     if (next_ < tokens_.size()) {
       auto next = tokens_[next_];
       if (kind == next.kind) {
@@ -230,6 +197,13 @@ private:
     }
     tries_.push_back(kind);
     return {};
+  }
+
+  auto expect(token_kind kind) -> accept_result {
+    if (auto result = accept(kind)) {
+      return result;
+    }
+    throw_token();
   }
 
   auto peek(token_kind kind) -> bool {
