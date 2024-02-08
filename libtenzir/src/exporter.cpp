@@ -153,7 +153,7 @@ void provide_to_source(exporter_actor::stateful_pointer<exporter_state> self,
 
 void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
                   table_slice slice) {
-  TENZIR_ASSERT(slice.encoding() != table_slice_encoding::none);
+  TENZIR_ASSERT(slice.rows() != 0);
   TENZIR_DEBUG("{} got batch of {} events", *self, slice.rows());
   // Construct a candidate checker if we don't have one for this type.
   auto schema = slice.schema();
@@ -451,7 +451,7 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
     },
     // -- receiver_actor<table_slice> ------------------------------------------
     [self](table_slice slice) { //
-      TENZIR_ASSERT(slice.encoding() != table_slice_encoding::none);
+      TENZIR_ASSERT(slice.rows() != 0);
       TENZIR_DEBUG("{} got batch of {} events", *self, slice.rows());
       self->state.query_status.processed += slice.rows();
       // Ship slices to connected SINKs.

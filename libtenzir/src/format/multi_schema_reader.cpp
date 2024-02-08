@@ -43,8 +43,9 @@ multi_schema_reader::finish(consumer& f, table_slice_builder_ptr& builder_ptr,
     }
     auto slice = builder_ptr->finish();
     // Override error in case we encounter an error in the builder.
-    if (slice.encoding() == table_slice_encoding::none)
+    if (slice.rows() == 0) {
       return caf::make_error(ec::parse_error, "unable to finish current slice");
+    }
     f(std::move(slice));
   }
   return result;

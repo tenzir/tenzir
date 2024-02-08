@@ -1223,7 +1223,7 @@ index(index_actor::stateful_pointer<index_state> self,
       // nop
     },
     [self](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
-      TENZIR_ASSERT(x.encoding() != table_slice_encoding::none);
+      TENZIR_ASSERT(x.rows() != 0);
       if (!self->state.stage->running())
         return;
       auto&& schema = x.schema();

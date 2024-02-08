@@ -38,8 +38,9 @@ auto make_slice(const record_type& schema, Ts&&... xs) {
   if (!ok)
     FAIL("builder failed to add given values");
   auto slice = builder->finish();
-  if (slice.encoding() == table_slice_encoding::none)
+  if (slice.rows() == 0) {
     FAIL("builder failed to produce a table slice");
+  }
   return slice;
 }
 

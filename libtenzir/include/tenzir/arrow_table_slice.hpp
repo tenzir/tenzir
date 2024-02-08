@@ -68,10 +68,6 @@ public:
   inline static constexpr bool is_latest_version
     = std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>;
 
-  /// The encoding of the slice.
-  inline static constexpr enum table_slice_encoding encoding
-    = table_slice_encoding::arrow;
-
   /// @returns The table schema.
   [[nodiscard]] const type& schema() const noexcept;
 

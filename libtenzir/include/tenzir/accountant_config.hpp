@@ -22,7 +22,6 @@ struct accountant_config {
     bool enable = true;
     // TODO: Switch to unsigned when moving to tenzir::record for transmitting.
     int64_t slice_size = 128;
-    table_slice_encoding slice_type = defaults::import::table_slice_type;
   };
 
   struct file_sink {

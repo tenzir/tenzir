@@ -10,7 +10,6 @@
 
 #include "tenzir/component_config.hpp"
 #include "tenzir/concept/parseable/detail/posix.hpp"
-#include "tenzir/concept/parseable/tenzir/table_slice_encoding.hpp"
 
 namespace tenzir {
 
@@ -19,7 +18,6 @@ to_accountant_config(const caf::settings& opts) {
   accountant_config result;
   extract_settings(result.self_sink.enable, opts, "self-sink.enable");
   extract_settings(result.self_sink.slice_size, opts, "self-sink.slice-size");
-  extract_settings(result.self_sink.slice_type, opts, "self-sink.slice-type");
   extract_settings(result.file_sink.enable, opts, "file-sink.enable");
   extract_settings(result.file_sink.path, opts, "file-sink.path");
   extract_settings(result.file_sink.real_time, opts, "file_sink.real-time");

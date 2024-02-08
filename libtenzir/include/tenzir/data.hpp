@@ -17,6 +17,7 @@
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/detail/type_traits.hpp"
+#include "tenzir/die.hpp"
 #include "tenzir/ip.hpp"
 #include "tenzir/pattern.hpp"
 #include "tenzir/policy/merge_lists.hpp"

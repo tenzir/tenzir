@@ -14,6 +14,7 @@
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/detail/system.hpp"
+#include "tenzir/die.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/start_command.hpp"
