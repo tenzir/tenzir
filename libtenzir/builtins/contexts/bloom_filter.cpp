@@ -17,7 +17,6 @@
 #include <tenzir/fwd.hpp>
 #include <tenzir/operator.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/project.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/table_slice_builder.hpp>

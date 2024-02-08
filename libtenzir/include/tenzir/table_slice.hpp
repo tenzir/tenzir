@@ -45,10 +45,6 @@ public:
     yes, ///< Always serialize into an Arrow IPC backing.
   };
 
-  /// A typed view on a given set of columns of a table slice.
-  template <class... Types>
-  friend class projection;
-
   // -- constructors, destructors, and assignment operators --------------------
 
   /// Default-constructs an empty table slice.
@@ -204,11 +200,6 @@ public:
   /// @param slice The table slice to convert.
   friend std::shared_ptr<arrow::RecordBatch>
   to_record_batch(const table_slice& slice);
-
-  /// Creates a typed view on a given set of columns of a table slice.
-  /// @note This function is defined and documented in 'tenzir/project.hpp'.
-  template <class... Hints>
-  friend auto project(table_slice slice, Hints&&... hints);
 
   // -- concepts ---------------------------------------------------------------
 
