@@ -19,12 +19,11 @@ recommendation. The following considerations affect your resource requirements:
 Depending on what you do with pipelines, you may generate a different resource
 profile.
 
-#### Filtering
+#### Data Shaping
 
-A typical [shaping](../user-guides/shape-data/README.md) operation is applying
-filters on the input values, e.g., by specifying a regular expression to only
-keep matching events. Filtering only incurs **CPU** load. Unless you use
-numerous, complex regular expressions, filtering is cheap.
+[Shaping](../user-guides/shape-data/README.md) operation changes the form of the
+data, e.g., filtering events, removing columns, or changing values. This
+workload predominantly incurs **CPU** load.
   
 #### Aggregation
 
@@ -54,9 +53,9 @@ of pipelines.
 
 The throughput of pipeline has an impact on performance. Pipelines with low data
 volume do not strain the system much, but high-volume pipelines substantially
-affect CPU and RAM requirements. Therefore, understanding your ingress volume,
-either as events per second or bytes per day, is helpful for sizing your node
-proportionally.
+affect **CPU** and **RAM** requirements. Therefore, understanding your ingress
+volume, either as events per second or bytes per day, is helpful for sizing your
+node proportionally.
 
 ### Retention
 
@@ -66,10 +65,14 @@ When you leverage the node's built-in storage engine by
 persistent **storage**. To assess your retention span, you need to understand
 your data volume and your capacity.
 
+Tenzir storage engine builds sparse indexes to accelerate historical queries.
+Based on how aggressively configure indexing, your **RAM** requirements may
+vary.
+
 ## Calculator
 
 <iframe
   src="https://tenzir-node-sizing.streamlit.app/?embed=true"
-  height="1000"
+  height="1300"
   style={{ width: "100%", border: "none" }}
 ></iframe>
