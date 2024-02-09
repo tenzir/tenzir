@@ -33,5 +33,5 @@ cmake -B build \
     -DCUSTOM_MEMORY_MANAGEMENT=OFF \
     -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}"
 cmake --build build --parallel
-cmake --build build --target install
+cmake --install build --strip
 rm -rf "${SOURCE_TREE}"
