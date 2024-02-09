@@ -21,7 +21,6 @@
 #include "tenzir/detail/stable_map.hpp"
 #include "tenzir/die.hpp"
 #include "tenzir/expression.hpp"
-#include "tenzir/framed.hpp"
 #include "tenzir/http_api.hpp"
 #include "tenzir/index.hpp"
 #include "tenzir/ip.hpp"
