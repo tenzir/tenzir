@@ -18,7 +18,6 @@
 #include "tenzir/expression.hpp"
 #include "tenzir/ids.hpp"
 #include "tenzir/series_builder.hpp"
-#include "tenzir/table_slice_row.hpp"
 #include "tenzir/test/fixtures/table_slices.hpp"
 #include "tenzir/test/test.hpp"
 
@@ -63,21 +62,6 @@ TEST(random integer slices) {
   auto [lowest, highest] = std::minmax_element(values.begin(), values.end());
   CHECK_GREATER_EQUAL(*lowest, int64_t{100});
   CHECK_LESS_EQUAL(*highest, int64_t{200});
-}
-
-TEST(row view) {
-  auto sut = zeek_conn_log[0];
-  auto flat_schema = flatten(caf::get<record_type>(sut.schema()));
-  for (size_t row = 0; row < sut.rows(); ++row) {
-    auto rview = table_slice_row{sut, row};
-    REQUIRE_NOT_EQUAL(rview.size(), 0u);
-    CHECK_EQUAL(rview.index(), row);
-    CHECK_EQUAL(rview.size(), sut.columns());
-    for (size_t column = 0; column < rview.size(); ++column)
-      CHECK_EQUAL(
-        materialize(rview[column]),
-        materialize(sut.at(row, column, flat_schema.field(column).type)));
-  }
 }
 
 TEST(select - import time) {
