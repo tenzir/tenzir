@@ -43,7 +43,6 @@
 #include "tenzir/status.hpp"
 #include "tenzir/subnet.hpp"
 #include "tenzir/table_slice.hpp"
-#include "tenzir/table_slice_column.hpp"
 #include "tenzir/taxonomies.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/typed_array.hpp"

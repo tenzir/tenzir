@@ -172,7 +172,6 @@ class subnet_type;
 class subnet;
 class synopsis;
 class table_slice_builder;
-class table_slice_column;
 class table_slice;
 class time_type;
 class type;
@@ -445,7 +444,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::shared_diagnostic_handler))
   TENZIR_ADD_TYPE_ID((tenzir::subnet))
   TENZIR_ADD_TYPE_ID((tenzir::table_slice))
-  TENZIR_ADD_TYPE_ID((tenzir::table_slice_column))
   TENZIR_ADD_TYPE_ID((tenzir::taxonomies))
   TENZIR_ADD_TYPE_ID((tenzir::type))
   TENZIR_ADD_TYPE_ID((tenzir::type_extractor))
@@ -488,7 +486,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::table_slice>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::framed<tenzir::chunk_ptr>>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::framed<tenzir::table_slice>>))
-  TENZIR_ADD_TYPE_ID((std::vector<tenzir::table_slice_column>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::uuid>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::partition_info>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::typed_array>))
@@ -508,14 +505,12 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((caf::stream<tenzir::table_slice>))
   TENZIR_ADD_TYPE_ID((caf::stream<tenzir::framed<tenzir::chunk_ptr>>))
   TENZIR_ADD_TYPE_ID((caf::stream<tenzir::framed<tenzir::table_slice>>))
-  TENZIR_ADD_TYPE_ID((caf::stream<tenzir::table_slice_column>))
   TENZIR_ADD_TYPE_ID((caf::inbound_stream_slot<tenzir::chunk_ptr>))
   TENZIR_ADD_TYPE_ID((caf::inbound_stream_slot<tenzir::table_slice>))
   TENZIR_ADD_TYPE_ID(
     (caf::inbound_stream_slot<tenzir::framed<tenzir::chunk_ptr>>))
   TENZIR_ADD_TYPE_ID(
     (caf::inbound_stream_slot<tenzir::framed<tenzir::table_slice>>))
-  TENZIR_ADD_TYPE_ID((caf::inbound_stream_slot<tenzir::table_slice_column>))
   TENZIR_ADD_TYPE_ID((caf::outbound_stream_slot<tenzir::table_slice>))
 
 CAF_END_TYPE_ID_BLOCK(tenzir_types)
