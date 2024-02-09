@@ -393,6 +393,8 @@ public:
     if (filename && command) {
       diagnostic::error(
         "cannot have `--file` argument together with inline code")
+        .primary(filename->source)
+        .primary(command->source)
         .throw_();
     }
     auto code = std::variant<std::filesystem::path, std::string>{};
