@@ -52,6 +52,7 @@ auto lex(std::string_view content) -> std::vector<token> {
     | X("-", minus)
     | X(",", comma)
     | X(":", colon)
+    | X("'", quote)
     | X("\n", newline)
 #undef X
     | ignore(identifier)

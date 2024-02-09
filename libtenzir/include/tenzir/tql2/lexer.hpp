@@ -32,7 +32,7 @@ TENZIR_ENUM(
   // operators
   pipe, logical_or, greater, dot, minus, cmp_equals,
   // other punctuation
-  equal, comma, colon,
+  equal, comma, colon, quote,
   // parenthesis
   lpar, rpar, lbrace, rbrace,
   // newline
