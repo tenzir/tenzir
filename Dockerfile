@@ -26,6 +26,8 @@ RUN ./scripts/debian/install-dev-dependencies.sh && \
     apt-get -y --no-install-recommends install /root/fluent-bit_*.deb && \
     rm /root/fluent-bit_*.deb && \
     rm -rf /var/lib/apt/lists/*
+COPY scripts/debian/install-aws-sdk.sh ./scripts/debian/
+RUN ./scripts/debian/install-aws-sdk.sh
 
 # Tenzir
 COPY changelog ./changelog
