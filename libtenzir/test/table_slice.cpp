@@ -18,7 +18,6 @@
 #include "tenzir/expression.hpp"
 #include "tenzir/ids.hpp"
 #include "tenzir/series_builder.hpp"
-#include "tenzir/table_slice_column.hpp"
 #include "tenzir/table_slice_row.hpp"
 #include "tenzir/test/fixtures/table_slices.hpp"
 #include "tenzir/test/test.hpp"
@@ -64,25 +63,6 @@ TEST(random integer slices) {
   auto [lowest, highest] = std::minmax_element(values.begin(), values.end());
   CHECK_GREATER_EQUAL(*lowest, int64_t{100});
   CHECK_LESS_EQUAL(*highest, int64_t{200});
-}
-
-TEST(column view) {
-  auto sut = zeek_conn_log[0];
-  auto flat_schema = flatten(caf::get<record_type>(sut.schema()));
-  auto ts_index = flat_schema.resolve_key("ts");
-  REQUIRE(ts_index);
-  auto ts_cview = table_slice_column{sut, flat_schema.flat_index(*ts_index)};
-  CHECK_EQUAL(ts_cview.index(), 0u);
-  for (size_t column = 0; column < sut.columns(); ++column) {
-    auto cview = table_slice_column{sut, column};
-    REQUIRE_NOT_EQUAL(cview.size(), 0u);
-    CHECK_EQUAL(cview.index(), column);
-    CHECK_EQUAL(cview.size(), sut.rows());
-    for (size_t row = 0; row < cview.size(); ++row)
-      CHECK_EQUAL(
-        materialize(cview[row]),
-        materialize(sut.at(row, column, flat_schema.field(column).type)));
-  }
 }
 
 TEST(row view) {
