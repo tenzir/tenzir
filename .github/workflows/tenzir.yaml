@@ -849,9 +849,6 @@ jobs:
           - name: Sigma
             target: sigma
             path: plugins/sigma
-          - name: SQS
-            target: sqs
-            path: plugins/sqs
           - name: Velociraptor
             target: velociraptor
             path: plugins/velociraptor

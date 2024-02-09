@@ -62,6 +62,7 @@ ENV TENZIR_CACHE_DIRECTORY="/var/cache/tenzir" \
 ARG TENZIR_BUILD_OPTIONS
 
 RUN cmake -B build -G Ninja \
+      -D CMAKE_PREFIX_PATH="/opt/aws-sdk-cpp" \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
       -D CMAKE_BUILD_TYPE:STRING="Release" \
       -D TENZIR_ENABLE_AVX_INSTRUCTIONS:BOOL="OFF" \
