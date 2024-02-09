@@ -504,7 +504,7 @@ public:
 
   auto parse_strings(std::shared_ptr<arrow::StringArray> input,
                      operator_control_plane& ctrl) const
-    -> std::vector<typed_array> override {
+    -> std::vector<series> override {
     auto b = series_builder{type{record_type{}}};
     for (auto&& string : values(string_type{}, *input)) {
       if (not string) {

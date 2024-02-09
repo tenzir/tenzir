@@ -17,11 +17,11 @@
 #include <tenzir/fwd.hpp>
 #include <tenzir/operator.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/type.hpp>
-#include <tenzir/typed_array.hpp>
 
 #include <arrow/array.h>
 #include <arrow/array/array_base.h>
@@ -50,7 +50,7 @@ public:
 
   /// Emits context information for every event in `slice` in order.
   auto apply(table_slice slice, context::parameter_map parameters) const
-    -> caf::expected<std::vector<typed_array>> override {
+    -> caf::expected<std::vector<series>> override {
     auto resolved_slice = resolve_enumerations(slice);
     auto field_name = std::optional<std::string>{};
     for (const auto& [key, value] : parameters) {

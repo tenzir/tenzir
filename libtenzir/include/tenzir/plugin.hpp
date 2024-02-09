@@ -22,8 +22,8 @@
 #include "tenzir/http_api.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/series.hpp"
 #include "tenzir/type.hpp"
-#include "tenzir/typed_array.hpp"
 
 #include <caf/detail/pretty_type_name.hpp>
 #include <caf/error.hpp>
@@ -416,7 +416,7 @@ public:
   /// @post `input->length() == result_array->length()`
   virtual auto parse_strings(std::shared_ptr<arrow::StringArray> input,
                              operator_control_plane& ctrl) const
-    -> std::vector<typed_array>;
+    -> std::vector<series>;
 
   /// Implement ordering optimization for parsers. See
   /// `operator_base::optimize(...)` for details. The default implementation
@@ -729,7 +729,7 @@ public:
 
   /// Emits context information for every event in `slice` in order.
   virtual auto apply(table_slice slice, parameter_map parameters) const
-    -> caf::expected<std::vector<typed_array>>
+    -> caf::expected<std::vector<series>>
     = 0;
 
   /// Inspects the context.
