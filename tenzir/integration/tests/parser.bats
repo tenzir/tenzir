@@ -67,3 +67,19 @@ j
 match k {}
 EOF
 }
+
+@test "functions" {
+  # TODO
+  check ! tenzir -f /dev/stdin <<EOF
+a = b()
+a = b(c)
+a = b(c=d)
+a = b(c, d=e)
+a = b(c=d, e, g=h, i,)
+foo a.b()
+foo a.b(c)
+foo a.b(c=d)
+foo a.b(c, d=e)
+foo a.b(c=d, e, g=h, i,)
+EOF
+}

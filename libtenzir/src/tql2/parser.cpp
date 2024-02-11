@@ -76,7 +76,8 @@ private:
         // TODO: Parse operator.
         auto op = std::move(left.path[0]);
         auto args = std::vector<invocation_arg>{};
-        while (not accept_stmt_sep() /*TODO*/ && not peek(tk::rbrace)) {
+        while (not accept_stmt_sep() /*TODO*/ && not peek(tk::rbrace)
+               && not eoi()) {
           if (not args.empty()) {
             expect(tk::comma);
           }
