@@ -1,6 +1,12 @@
-error: expected one of: lpar, identifier, this_, lbrace, string, integer
- --> /dev/stdin:1:5
+error: could not parse token
+ --> /dev/stdin:5:3
   |
-1 | a b,
-  |     ^ got newline
+5 | h \
+  |   ^ 
+  |
+error: could not parse token
+ --> /dev/stdin:7:4
+  |
+7 |   j\
+  |    ^ 
   |

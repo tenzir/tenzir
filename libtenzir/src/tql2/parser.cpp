@@ -80,6 +80,7 @@ private:
                && not eoi()) {
           if (not args.empty()) {
             expect(tk::comma);
+            consume_trivia_with_newlines();
           }
           auto expr = parse_expression();
           if (auto equal = accept(tk::equal)) {
@@ -220,6 +221,7 @@ private:
         auto new_prec = precedence(*bin_op);
         if (new_prec >= prec) {
           auto location = advance();
+          consume_trivia_with_newlines();
           auto right = parse_expression(new_prec + 1);
           expr = bin_expr{
             std::move(expr),
@@ -353,14 +355,27 @@ private:
     }
   }
 
-  void consume_trivia() {
+  template <class F>
+  void consume_while(F&& f) {
     while (next_ < tokens_.size()) {
-      if (is_trivia(tokens_[next_].kind)) {
+      if (f(tokens_[next_].kind)) {
         next_ += 1;
       } else {
         break;
       }
     }
+  }
+
+  void consume_trivia() {
+    consume_while([&](token_kind k) {
+      return is_trivia(k);
+    });
+  }
+
+  void consume_trivia_with_newlines() {
+    consume_while([&](token_kind k) {
+      return is_trivia(k) || k == token_kind::newline;
+    });
   }
 
   auto eoi() const -> bool {
