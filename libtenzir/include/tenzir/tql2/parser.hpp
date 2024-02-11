@@ -23,6 +23,7 @@ struct invocation;
 struct pipeline;
 struct record;
 struct selector;
+struct bin_expr;
 
 struct identifier {
   identifier(std::string name, location location)
@@ -64,8 +65,15 @@ struct string : located<std::string> {
   using located::located;
 };
 
+struct integer : located<std::string> {
+  explicit integer(located<std::string> x) : located{std::move(x)} {
+  }
+
+  using located::located;
+};
+
 using expression_kind
-  = variant<record, selector, pipeline, string, field_access>;
+  = variant<record, selector, pipeline, string, field_access, integer, bin_expr>;
 
 struct expression {
   template <class T>
@@ -84,6 +92,23 @@ struct expression {
   std::unique_ptr<expression_kind> kind;
 
   friend auto inspect(auto& f, expression& x) -> bool;
+};
+
+TENZIR_ENUM(binary_op, plus, minus, star, slash, double_equal);
+
+struct bin_expr {
+  bin_expr(expression left, located<binary_op> op, expression right)
+    : left{std::move(left)}, op{op}, right{std::move(right)} {
+  }
+
+  expression left;
+  located<binary_op> op;
+  expression right;
+
+  friend auto inspect(auto& f, bin_expr& x) -> bool {
+    return f.object(x).fields(f.field("left", x.left), f.field("op", x.op),
+                              f.field("right", x.right));
+  }
 };
 
 struct field_access {

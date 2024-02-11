@@ -1,0 +1,6 @@
+error: expected one of: newline, pipe, this_, identifier
+ --> /dev/stdin:2:1
+  |
+2 | if b == 42 {
+  | ^^ got if_
+  |

@@ -1,0 +1,6 @@
+error: expected one of: lpar, identifier, this_, lbrace, string, integer
+ --> /dev/stdin:1:5
+  |
+1 | a b,
+  |     ^ got newline
+  |

@@ -21,18 +21,16 @@ namespace tenzir::tql2 {
 TENZIR_ENUM(
   /// TODO
   token_kind,
-  // keywords,
-  this_, // TODO
-  // basics
+  //
   identifier,
-  // ??
-  meta, type_extractor,
+  // keywords
+  this_, if_, else_, match,
   // literals
   integer, real, true_, false_, null, string, ipv4, ipv6,
   // operators
-  pipe, logical_or, greater, dot, minus, cmp_equals,
+  pipe, greater, dot, plus, minus, slash, star, double_equal,
   // other punctuation
-  equal, comma, colon, quote,
+  at, equal, comma, colon, single_quote,
   // parenthesis
   lpar, rpar, lbrace, rbrace,
   // newline

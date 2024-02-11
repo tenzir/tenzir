@@ -1,0 +1,5 @@
+         string "\"a\xffb\""
+     whitespace " "
+           plus "+"
+     whitespace " "
+        integer "42"

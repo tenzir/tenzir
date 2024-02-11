@@ -1,0 +1,65 @@
+[
+  invocation {
+    op: "export" @ 0..6,
+    args: [
+      
+    ]
+  },
+  assignment {
+    left: {
+      path: [
+        "foo" @ 9..12
+      ]
+    },
+    equals: 13..14,
+    right: integer "42" @ 15..17
+  },
+  invocation {
+    op: "set" @ 20..23,
+    args: [
+      assignment {
+        left: {
+          path: [
+            "bar" @ 24..27
+          ]
+        },
+        equals: 28..29,
+        right: integer "43" @ 30..32
+      }
+    ]
+  },
+  invocation {
+    op: "foo" @ 35..38,
+    args: [
+      expression selector {
+        path: [
+          "bar" @ 39..42
+        ]
+      },
+      assignment {
+        left: {
+          path: [
+            "baz" @ 44..47
+          ]
+        },
+        equals: 47..48,
+        right: selector {
+          path: [
+            "qux" @ 48..51
+          ]
+        }
+      },
+      expression selector {
+        path: [
+          "quux" @ 53..57
+        ]
+      }
+    ]
+  },
+  invocation {
+    op: "import" @ 60..66,
+    args: [
+      
+    ]
+  }
+]

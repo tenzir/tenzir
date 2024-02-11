@@ -18,7 +18,9 @@ auto lex(std::string_view content) -> std::vector<token> {
   const auto* current = content.begin();
   // clang-format off
   using namespace parsers;
-  auto identifier = (alpha | chr{'_'}) >> *(alnum | chr{'_'});
+  auto start_ident = -(chr{'$'}) >> (alpha | chr{'_'});
+  auto continue_ident = alnum | chr{'_'};
+  auto identifier = start_ident >> *continue_ident;
   auto p
     = ignore(*xdigit >> chr{':'} >> *xdigit >> chr{':'} >> *xdigit >> *((chr{'.'} | chr{':'}) >> *xdigit))
       ->* [] { return token_kind::ipv6; }
@@ -28,32 +30,40 @@ auto lex(std::string_view content) -> std::vector<token> {
       ->* [] { return token_kind::real; }
     | ignore(+digit)
       ->* [] { return token_kind::integer; }
-    | ignore(lit{"this"} >> !&(parsers::alnum | '_'))
-      ->* [] { return token_kind::this_; }
-    | ignore(chr{'"'} >> *(any - chr{'"'}) >> (chr{'"'} | eoi))
+    // | ignore(chr{'"'} >> *(any - chr{'"'}) >> (chr{'"'} | eoi))
+    //   ->* [] { return token_kind::string; }
+    | ignore(chr{'"'} >> *(lit{"\\\""} | (any - chr{'"'})) >> chr{'"'})
       ->* [] { return token_kind::string; }
     | ignore((lit{"//"} | lit{"# "}) >> *(any - '\n'))
       ->* [] { return token_kind::line_comment; }
     | ignore(lit{"/*"} >> *(any - lit{"*/"}) >> (lit{"*/"} | eoi))
       ->* [] { return token_kind::delim_comment; }
-    | ignore(chr{'#'} >> identifier)
-      ->* [] { return token_kind::meta; }
+    | ignore(chr{'@'})
+      ->* [] { return token_kind::at; }
 #define X(x, y) ignore(lit{x}) ->* [] { return token_kind::y; }
-    | X("||", logical_or)
     | X("|", pipe)
     | X(">", greater)
     | X(".", dot)
-    | X("==", cmp_equals)
+    | X("==", double_equal)
     | X("=", equal)
     | X("(", lpar)
     | X(")", rpar)
     | X("{", lbrace)
     | X("}", rbrace)
+    | X("+", plus)
     | X("-", minus)
+    | X("/", slash)
+    | X("*", star)
     | X(",", comma)
     | X(":", colon)
-    | X("'", quote)
+    | X("'", single_quote)
     | X("\n", newline)
+#undef X
+#define X(x, y) ignore(lit{x} >> !continue_ident) ->* [] { return token_kind::y; }
+    | X("this", this_)
+    | X("if", if_)
+    | X("else", else_)
+    | X("match", match)
 #undef X
     | ignore(identifier)
       ->* [] { return token_kind::identifier; }

@@ -6,10 +6,30 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/detail/assert.hpp"
+
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/tql2/parser.hpp>
 
 namespace tenzir::tql2::ast {
+
+namespace {
+
+static auto precedence(binary_op x) -> int {
+  using enum binary_op;
+  switch (x) {
+    case star:
+    case slash:
+      return 2;
+    case plus:
+    case minus:
+      return 1;
+    case double_equal:
+      return 2;
+  }
+  TENZIR_UNREACHABLE();
+}
+} // namespace
 
 class parser {
 public:
@@ -27,11 +47,15 @@ public:
   }
 
 private:
+  auto accept_stmt_sep() -> bool {
+    return accept(tk::newline) || accept(tk::pipe);
+  }
+
   auto parse_pipeline(bool rbrace_end = false) -> pipeline {
     auto scope = ignore_newlines(false);
     auto steps = std::vector<pipeline::step>{};
     while (true) {
-      while (accept(tk::newline)) {
+      while (accept_stmt_sep()) {
       }
       if (rbrace_end && peek(tk::rbrace)) {
         break;
@@ -45,14 +69,17 @@ private:
         auto right = parse_expression();
         steps.emplace_back(
           assignment{std::move(left), equal.location, std::move(right)});
-        if (not accept(tk::newline) && not eoi()) {
+        if (not accept_stmt_sep() && not eoi()) {
           throw_token();
         }
       } else if (left.path.size() == 1) {
         // TODO: Parse operator.
         auto op = std::move(left.path[0]);
         auto args = std::vector<invocation_arg>{};
-        while (not accept(tk::newline) /*TODO*/ && not peek(tk::rbrace)) {
+        while (not accept_stmt_sep() /*TODO*/ && not peek(tk::rbrace)) {
+          if (not args.empty()) {
+            expect(tk::comma);
+          }
           auto expr = parse_expression();
           if (auto equal = accept(tk::equal)) {
             expr.match(
@@ -63,6 +90,7 @@ private:
                                              std::move(right)});
               },
               [](auto&) {
+                // TODO
                 diagnostic::error("left of = must be selector").throw_();
               });
           } else {
@@ -137,6 +165,11 @@ private:
   }
 
   auto parse_atomic_expression() -> expression {
+    if (accept(tk::lpar)) {
+      auto result = parse_expression();
+      expect(tk::rpar);
+      return result;
+    }
     if (selector_start()) {
       return expression{parse_selector()};
     }
@@ -149,23 +182,55 @@ private:
         string{std::string{token.text.substr(1, token.text.size() - 2)},
                token.location}};
     }
-    // if (auto token = accept(tk::integer)) {
-    //   return expression{};
-    // }
+    if (auto token = accept(tk::integer)) {
+      return expression{integer{token.as_string()}};
+    }
     throw_token();
   }
 
-  auto parse_expression() -> expression {
+  auto peek_binary_op() -> std::optional<binary_op> {
+#define X(x)                                                                   \
+  if (auto token = peek(tk::x)) {                                              \
+    return binary_op::x;                                                       \
+  }
+    X(plus);
+    X(minus);
+    X(star);
+    X(slash);
+    X(double_equal);
+#undef X
+    return std::nullopt;
+  }
+
+  auto parse_expression(int prec = 0) -> expression {
     // TODO
     auto expr = parse_atomic_expression();
     while (true) {
       if (auto dot = accept(tk::dot)) {
         auto name = expect(tk::identifier);
-        expr
-          = field_access{std::move(expr), dot.location, name.as_identifier()};
+        expr = field_access{
+          std::move(expr),
+          dot.location,
+          name.as_identifier(),
+        };
+        continue;
       }
-      return expr;
+      if (auto bin_op = peek_binary_op()) {
+        auto new_prec = precedence(*bin_op);
+        if (new_prec >= prec) {
+          auto location = advance();
+          auto right = parse_expression(new_prec + 1);
+          expr = bin_expr{
+            std::move(expr),
+            located{*bin_op, location},
+            std::move(right),
+          };
+          continue;
+        }
+      }
+      break;
     }
+    return expr;
   }
 
   struct accept_result {
@@ -180,19 +245,28 @@ private:
     auto as_identifier() const -> identifier {
       return identifier{text, location};
     }
+
+    auto as_string() const -> located<std::string> {
+      return {text, location};
+    }
   };
+
+  [[nodiscard]] auto advance() -> location {
+    TENZIR_ASSERT_CHEAP(next_ < tokens_.size());
+    auto begin = next_ == 0 ? 0 : tokens_[next_ - 1].end;
+    auto end = tokens_[next_].end;
+    ++next_;
+    consume_trivia();
+    tries_.clear();
+    return {begin, end};
+  }
 
   [[nodiscard]] auto accept(token_kind kind) -> accept_result {
     if (next_ < tokens_.size()) {
-      auto next = tokens_[next_];
-      if (kind == next.kind) {
-        auto begin = next_ == 0 ? 0 : tokens_[next_ - 1].end;
-        auto end = next.end;
-        ++next_;
-        consume_trivia();
-        tries_.clear();
-        return accept_result{source_.substr(begin, end - begin),
-                             location{begin, end}};
+      if (kind == tokens_[next_].kind) {
+        auto loc = advance();
+        return accept_result{source_.substr(loc.begin, loc.end - loc.begin),
+                             location{loc.begin, loc.end}};
       }
     }
     tries_.push_back(kind);
