@@ -908,7 +908,10 @@ public:
   auto insert_new_field(std::string name) -> dynamic_builder* {
     auto [it, inserted] = fields_.emplace(
       std::move(name), std::make_unique<dynamic_builder>(root_));
-    TENZIR_ASSERT_CHEAP(inserted);
+    TENZIR_ASSERT_CHEAP(
+      inserted,
+      fmt::format("tried to insert field `{}`, but it already exists", name)
+        .c_str());
     return it->second.get();
   }
 
