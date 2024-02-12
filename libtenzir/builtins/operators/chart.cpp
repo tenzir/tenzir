@@ -339,9 +339,9 @@ chart_definition chart_definitions[] = {
    = {{.attr = "x", .flag = "-x,--x-axis", .type = flag_type::field_name, .default_ = nth_field{0}},
       {.attr = "y", .flag = "-y,--y-axis", .type = flag_type::field_name, .default_ = nth_field{1}},
       {.attr = "title", .flag = "--title", .type = flag_type::attribute_value, .default_ = schema_name{}},}},
-  // `donut` chart is equivalent to `line` and `bar`, except
+  // `pie` chart is equivalent to `line` and `bar`, except
   // --x-axis is called --name, and --y-axis is called --value
-  {.type = "donut",
+  {.type = "pie",
    .required_flags = {},
    .optional_flags
    = {{.attr = "x", .flag = "--name", .type = flag_type::field_name, .default_ = nth_field{0}},

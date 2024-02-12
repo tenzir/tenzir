@@ -400,19 +400,19 @@ setup() {
 
 # bats test_tags=pipelines
 @test "Chart Attributes" {
-  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | chart donut --name e --value b"
-  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | chart donut --name e --value b | get-attributes"
-  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | chart donut --name e --value a"
-  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | chart donut"
+  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | chart pie --name e --value b"
+  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | chart pie --name e --value b | get-attributes"
+  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | chart pie --name e --value a"
+  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | chart pie"
 
   cat ${INPUTSDIR}/json/all-types.json |
-    check ! tenzir "from stdin read json | chart donut -x b"
+    check ! tenzir "from stdin read json | chart pie -x b"
 
   cat ${INPUTSDIR}/json/all-types.json |
-    check ! tenzir "from stdin read json | chart donut --value b -x e"
+    check ! tenzir "from stdin read json | chart pie --value b -x e"
 
   cat ${INPUTSDIR}/json/all-types.json |
-    check ! tenzir "from stdin read json | chart donuttt --value b"
+    check ! tenzir "from stdin read json | chart piett --value b"
 }
 
 # bats test_tags=pipelines

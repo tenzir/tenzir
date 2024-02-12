@@ -14,7 +14,7 @@ Add metadata to a schema, necessary for rendering as a chart.
 chart line   [--title <title>] [-x|--x-axis <field>] [-y|--y-axis <field>]
 chart area   [--title <title>] [-x|--x-axis <field>] [-y|--y-axis <field>]
 chart bar    [--title <title>] [-x|--x-axis <field>] [-y|--y-axis <field>]
-chart donut  [--title <title>] [--name <field>] [--value <field>]
+chart pie    [--title <title>] [--name <field>] [--value <field>]
 ```
 
 ## Description
@@ -35,12 +35,12 @@ Set the field used for the X-axis. Defaults to the first field in the schema.
 
 Set the field used for the Y-axis. Defaults to the second field in the schema.
 
-### `--name <field>` (`donut` chart only)
+### `--name <field>` (`pie` chart only)
 
 Set the field used for the names of the segments.
 Defaults to the first field in the schema.
 
-### `--value <field>` (`donut` chart only)
+### `--value <field>` (`pie` chart only)
 
 Set the field used for the value of a segment.
 Defaults to the second field in the schema.
