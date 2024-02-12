@@ -35,6 +35,8 @@ public:
 
   // -------- data members -----------------------------------------------------
 
+  metrics_collector_actor::pointer self;
+
   // A handle to the node actor.
   node_actor node;
 
@@ -47,7 +49,7 @@ public:
   caf::timespan collection_interval = std::chrono::seconds{60};
 
   // The output stream for writing metrics events.
-  std::unique_ptr<import_stream> importer = nullptr;
+  importer_actor importer;
 };
 
 /// Spawn a HEALTHCHECKER actor. Periodically queries `index` and erases all
