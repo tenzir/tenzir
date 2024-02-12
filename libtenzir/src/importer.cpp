@@ -213,6 +213,16 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     self->state.index = std::move(index);
     self->state.stage->add_outbound_path(self->state.index);
   }
+  for (const auto& plugin : plugins::get<analyzer_plugin>()) {
+    // We can safely assert that the analyzer was already initialized. The
+    // pipeline API guarantees that remote operators run after the node was
+    // successfully initialized, which implies that analyzers have been
+    // initialized as well.
+    // TODO: Is this actually true?
+    auto analyzer = plugin->analyzer();
+    TENZIR_ASSERT(analyzer);
+    self->state.stage->add_outbound_path(analyzer);
+  }
   if (accountant) {
     TENZIR_DEBUG("{} registers accountant {}", *self, accountant);
     self->state.accountant = std::move(accountant);
