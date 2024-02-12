@@ -25,6 +25,7 @@ struct record;
 struct selector;
 struct binary_expr;
 struct unary_expr;
+struct function_call;
 
 struct identifier {
   identifier(std::string name, location location)
@@ -73,8 +74,9 @@ struct integer : located<std::string> {
   using located::located;
 };
 
-using expression_kind = variant<record, selector, pipeline, string,
-                                field_access, integer, binary_expr, unary_expr>;
+using expression_kind
+  = variant<record, selector, pipeline, string, field_access, integer,
+            binary_expr, unary_expr, function_call>;
 
 struct expression {
   template <class T>
@@ -115,7 +117,7 @@ struct binary_expr {
   }
 };
 
-TENZIR_ENUM(unary_op, neg, not_)
+TENZIR_ENUM(unary_op, neg, not_);
 
 struct unary_expr {
   unary_expr(located<unary_op> op, expression expr)
@@ -127,6 +129,44 @@ struct unary_expr {
 
   friend auto inspect(auto& f, unary_expr& x) -> bool {
     return f.object(x).fields(f.field("op", x.op), f.field("expr", x.expr));
+  }
+};
+
+struct assignment {
+  assignment(selector left, location equals, expression right)
+    : left{std::move(left)}, equals{equals}, right{std::move(right)} {
+  }
+
+  selector left;
+  location equals;
+  expression right;
+
+  friend auto inspect(auto& f, assignment& x) -> bool {
+    return f.object(x).fields(f.field("left", x.left),
+                              f.field("equals", x.equals),
+                              f.field("right", x.right));
+  }
+};
+
+using argument = variant<expression, assignment>;
+
+struct entity {
+  explicit entity(std::vector<identifier> path) : path{std::move(path)} {
+  }
+
+  std::vector<identifier> path;
+
+  friend auto inspect(auto& f, entity& x) -> bool {
+    return f.object(x).fields(f.field("path", x.path));
+  }
+};
+
+struct function_call {
+  entity fn;
+  std::vector<argument> args;
+
+  friend auto inspect(auto& f, function_call& x) -> bool {
+    return f.object(x).fields(f.field("fn", x.fn), f.field("args", x.args));
   }
 };
 
@@ -183,27 +223,9 @@ struct record {
   }
 };
 
-struct assignment {
-  assignment(selector left, location equals, expression right)
-    : left{std::move(left)}, equals{equals}, right{std::move(right)} {
-  }
-
-  selector left;
-  location equals;
-  expression right;
-
-  friend auto inspect(auto& f, assignment& x) -> bool {
-    return f.object(x).fields(f.field("left", x.left),
-                              f.field("equals", x.equals),
-                              f.field("right", x.right));
-  }
-};
-
-using invocation_arg = variant<expression, assignment>;
-
 struct invocation {
-  identifier op;
-  std::vector<invocation_arg> args;
+  entity op;
+  std::vector<argument> args;
 
   friend auto inspect(auto& f, invocation& x) -> bool {
     return f.object(x).fields(f.field("op", x.op), f.field("args", x.args));

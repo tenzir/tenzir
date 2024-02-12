@@ -18,9 +18,8 @@ auto lex(std::string_view content) -> std::vector<token> {
   const auto* current = content.begin();
   // clang-format off
   using namespace parsers;
-  auto start_ident = -(chr{'$'}) >> (alpha | chr{'_'});
   auto continue_ident = alnum | chr{'_'};
-  auto identifier = start_ident >> *continue_ident;
+  auto identifier = alpha | chr{'_'} >> *continue_ident;
   auto p
     = ignore(*xdigit >> chr{':'} >> *xdigit >> chr{':'} >> *xdigit >> *((chr{'.'} | chr{':'}) >> *xdigit))
       ->* [] { return token_kind::ipv6; }
@@ -65,6 +64,8 @@ auto lex(std::string_view content) -> std::vector<token> {
     | X("else", else_)
     | X("match", match)
 #undef X
+    | ignore(chr{'$'} >> identifier)
+      ->* [] { return token_kind::dollar_ident; }
     | ignore(identifier)
       ->* [] { return token_kind::identifier; }
     | ignore(+(space - '\n'))

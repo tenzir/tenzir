@@ -68,33 +68,38 @@ private:
     return accept(tk::newline) || accept(tk::pipe);
   }
 
-  auto parse_pipeline(bool rbrace_end = false) -> pipeline {
+  auto parse_pipeline() -> pipeline {
     auto scope = ignore_newlines(false);
     auto steps = std::vector<pipeline::step>{};
+    auto end = [&] {
+      return eoi() || peek(tk::rbrace);
+    };
     while (true) {
       while (accept_stmt_sep()) {
       }
-      if (rbrace_end && peek(tk::rbrace)) {
+      if (end()) {
         break;
       }
-      // TODO: ??
-      if (eoi()) {
-        break;
-      }
+      // either selector followed by `=`, or entity (no_dollar)
+      // this -> selector
+      // identifier:
+      //   equals -> selector
+      //   dot -> selector
+      //   quote -> entity
       auto left = parse_selector();
       if (auto equal = accept(tk::equal)) {
         auto right = parse_expression();
         steps.emplace_back(
           assignment{std::move(left), equal.location, std::move(right)});
-        if (not accept_stmt_sep() && not eoi()) {
+        if (not end() || not accept_stmt_sep()) {
           throw_token();
         }
       } else if (left.path.size() == 1) {
         // TODO: Parse operator.
-        auto op = std::move(left.path[0]);
-        auto args = std::vector<invocation_arg>{};
-        while (not accept_stmt_sep() /*TODO*/ && not peek(tk::rbrace)
-               && not eoi()) {
+        // TODO: Proper entity.
+        auto op = entity{{std::move(left.path[0])}};
+        auto args = std::vector<argument>{};
+        while (not end() && not accept_stmt_sep()) {
           if (not args.empty()) {
             expect(tk::comma);
             consume_trivia_with_newlines();
@@ -178,7 +183,7 @@ private:
           record::field{identifier{name.text, name.location}, std::move(expr)});
       }
     }
-    auto pipe = parse_pipeline(true);
+    auto pipe = parse_pipeline();
     expect(tk::rbrace);
     return pipe;
   }

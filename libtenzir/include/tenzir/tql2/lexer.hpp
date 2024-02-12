@@ -24,7 +24,7 @@ TENZIR_ENUM(
   /// TODO
   token_kind,
   //
-  identifier,
+  identifier, dollar_ident,
   // keywords
   this_, if_, else_, match,
   // literals

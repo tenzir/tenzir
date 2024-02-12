@@ -9,10 +9,7 @@
 #pragma once
 
 #include "tenzir/detail/inspect_enum_str.hpp"
-#include "tenzir/detail/logger.hpp"
-#include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/pp.hpp"
-#include "tenzir/error.hpp"
 #include "tenzir/tag.hpp"
 
 #include <fmt/format.h>
@@ -48,7 +45,7 @@
     return tenzir::detail::inspect_enum_str(                                   \
       f, x, {TENZIR_PP_FOR(TENZIR_ENUM_STR, __VA_ARGS__)});                    \
   }                                                                            \
-  void adl_tenzir_macro_enum(name);
+  void adl_tenzir_macro_enum(name)
 
 namespace tenzir {
 
