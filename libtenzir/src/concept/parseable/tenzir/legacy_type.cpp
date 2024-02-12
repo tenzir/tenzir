@@ -91,7 +91,17 @@ bool legacy_type_parser::parse(Iterator& f, const Iterator& l,
   auto legacy_record_type_parser
     = ("record" >> skp >> '{'
     >> ((skp >> field >> skp) % ',') >> ~(',' >> skp)
-    >> '}') ->* to_record
+    >> '}').with([](const std::vector<record_field>& x) -> bool {
+      // Make sure that there are no duplicate field names.
+      auto names = std::vector<std::string_view>{};
+      names.reserve(x.size());
+      for (auto& field : x) {
+        names.push_back(field.name);
+      }
+      std::ranges::sort(names);
+      auto it = std::ranges::adjacent_find(names, std::equal_to{});
+      return it == names.end();
+    }) ->* to_record
     ;
   static auto to_named_legacy_none_type = [](std::string name) -> legacy_type {
     return legacy_none_type{}.name(std::move(name));
