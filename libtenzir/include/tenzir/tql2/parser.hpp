@@ -23,7 +23,8 @@ struct invocation;
 struct pipeline;
 struct record;
 struct selector;
-struct bin_expr;
+struct binary_expr;
+struct unary_expr;
 
 struct identifier {
   identifier(std::string name, location location)
@@ -72,8 +73,8 @@ struct integer : located<std::string> {
   using located::located;
 };
 
-using expression_kind
-  = variant<record, selector, pipeline, string, field_access, integer, bin_expr>;
+using expression_kind = variant<record, selector, pipeline, string,
+                                field_access, integer, binary_expr, unary_expr>;
 
 struct expression {
   template <class T>
@@ -81,10 +82,13 @@ struct expression {
     : kind{std::make_unique<expression_kind>(std::forward<T>(x))} {
   }
 
+  ~expression() = default;
+  expression(const expression&) = delete;
   expression(expression&&) = default;
+  auto operator=(const expression&) -> expression& = delete;
   auto operator=(expression&&) -> expression& = default;
 
-  explicit expression(record x);
+  // explicit expression(record x);
 
   template <class... Fs>
   auto match(Fs&&... fs) -> decltype(auto);
@@ -94,10 +98,10 @@ struct expression {
   friend auto inspect(auto& f, expression& x) -> bool;
 };
 
-TENZIR_ENUM(binary_op, plus, minus, star, slash, double_equal);
+TENZIR_ENUM(binary_op, add, sub, mul, div, eq, neq, gt, ge, lt, le, and_, or_);
 
-struct bin_expr {
-  bin_expr(expression left, located<binary_op> op, expression right)
+struct binary_expr {
+  binary_expr(expression left, located<binary_op> op, expression right)
     : left{std::move(left)}, op{op}, right{std::move(right)} {
   }
 
@@ -105,9 +109,24 @@ struct bin_expr {
   located<binary_op> op;
   expression right;
 
-  friend auto inspect(auto& f, bin_expr& x) -> bool {
+  friend auto inspect(auto& f, binary_expr& x) -> bool {
     return f.object(x).fields(f.field("left", x.left), f.field("op", x.op),
                               f.field("right", x.right));
+  }
+};
+
+TENZIR_ENUM(unary_op, neg, not_)
+
+struct unary_expr {
+  unary_expr(located<unary_op> op, expression expr)
+    : op{op}, expr{std::move(expr)} {
+  }
+
+  located<unary_op> op;
+  expression expr;
+
+  friend auto inspect(auto& f, unary_expr& x) -> bool {
+    return f.object(x).fields(f.field("op", x.op), f.field("expr", x.expr));
   }
 };
 
@@ -210,13 +229,18 @@ auto expression::match(Fs&&... fs) -> decltype(auto) {
   return kind->match(std::forward<Fs>(fs)...);
 }
 
-inline expression::expression(record x)
-  : kind{std::make_unique<expression_kind>(std::move(x))} {
-}
+// inline expression::expression(record x)
+//   : kind{std::make_unique<expression_kind>(std::move(x))} {
+// }
 
-auto inspect(auto& f, expression& x) -> bool {
+template <class Inspector>
+auto inspect(Inspector& f, expression& x) -> bool {
   // TODO
-  TENZIR_ASSERT_CHEAP(x.kind);
+  if constexpr (Inspector::is_loading) {
+    x.kind = std::make_unique<expression_kind>();
+  } else {
+    TENZIR_ASSERT_CHEAP(x.kind);
+  }
   return f.apply(*x.kind);
 }
 

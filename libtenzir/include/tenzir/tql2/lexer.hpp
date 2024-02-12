@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "tenzir/detail/assert.hpp"
+
 #include <tenzir/detail/default_formatter.hpp>
 #include <tenzir/detail/enum.hpp>
 
@@ -28,17 +30,60 @@ TENZIR_ENUM(
   // literals
   integer, real, true_, false_, null, string, ipv4, ipv6,
   // operators
-  pipe, greater, dot, plus, minus, slash, star, double_equal,
+  dot, plus, minus, slash, star, equal_equal, bang_equal, less, less_equal,
+  greater, greater_equal,
   // other punctuation
   at, equal, comma, colon, single_quote,
   // parenthesis
-  lpar, rpar, lbrace, rbrace,
-  // newline
-  newline,
+  lpar, rpar, lbrace, rbrace, lbracket, rbracket,
+  //
+  pipe, newline,
   // trivia
   whitespace, delim_comment, line_comment,
   // special
   error);
+
+inline auto describe(token_kind k) -> std::string_view {
+  using enum token_kind;
+#define X(x, y)                                                                \
+  case x:                                                                      \
+    return y
+  switch (k) {
+    X(identifier, "identifier");
+    X(this_, "`this`");
+    X(if_, "`if`");
+    X(else_, "`else`");
+    X(match, "`match`");
+    X(integer, "integer");
+    X(real, "real");
+    X(true_, "`true`");
+    X(false_, "`false`");
+    X(null, "`null`");
+    X(dot, "`.`");
+    X(plus, "`+`");
+    X(minus, "`-`");
+    X(star, "`*`");
+    X(slash, "`/`");
+    X(equal_equal, "`==`");
+    X(bang_equal, "`!=`");
+    X(less, "`<`");
+    X(less_equal, "`<=`");
+    X(greater, "`>`");
+    X(greater_equal, "`>=`");
+    X(pipe, "`|`");
+    X(lpar, "`(`");
+    X(rpar, "`)`");
+    X(lbrace, "`{`");
+    X(rbrace, "`}`");
+    X(lbracket, "`[`");
+    X(rbracket, "`]`");
+    // TODO
+    default:
+      return to_string(k);
+  }
+#undef X
+  TENZIR_UNREACHABLE();
+}
 
 struct token {
   token(token_kind kind, size_t end) : kind{kind}, end{end} {

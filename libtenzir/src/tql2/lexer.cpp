@@ -44,7 +44,7 @@ auto lex(std::string_view content) -> std::vector<token> {
     | X("|", pipe)
     | X(">", greater)
     | X(".", dot)
-    | X("==", double_equal)
+    | X("==", equal_equal)
     | X("=", equal)
     | X("(", lpar)
     | X(")", rpar)

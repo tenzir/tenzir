@@ -11,6 +11,8 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/tql2/parser.hpp>
 
+#include <ranges>
+
 namespace tenzir::tql2::ast {
 
 namespace {
@@ -18,14 +20,24 @@ namespace {
 static auto precedence(binary_op x) -> int {
   using enum binary_op;
   switch (x) {
-    case star:
-    case slash:
+    case mul:
+    case div:
+      return 5;
+    case add:
+    case sub:
+      return 4;
+    case gt:
+    case ge:
+    case lt:
+    case le:
+      return 3;
+    case eq:
+    case neq:
       return 2;
-    case plus:
-    case minus:
+    case and_:
       return 1;
-    case double_equal:
-      return 2;
+    case or_:
+      return 0;
   }
   TENZIR_UNREACHABLE();
 }
@@ -38,7 +50,12 @@ public:
   static auto parse_file(std::span<token> tokens, std::string_view source,
                          diagnostic_handler& diag) -> pipeline {
     try {
-      return parser{tokens, source}.parse_pipeline();
+      auto self = parser{tokens, source};
+      auto pipe = self.parse_pipeline();
+      if (self.next_ != self.tokens_.size()) {
+        self.throw_token("expected EOF");
+      }
+      return pipe;
     } catch (diagnostic& d) {
       // TODO
       diag.emit(d);
@@ -173,6 +190,7 @@ private:
       return result;
     }
     if (selector_start()) {
+      // Check if we have identifier followed by `(` or `'`.
       return expression{parse_selector()};
     }
     if (peek(tk::lbrace)) {
@@ -191,15 +209,20 @@ private:
   }
 
   auto peek_binary_op() -> std::optional<binary_op> {
-#define X(x)                                                                   \
+#define X(x, y)                                                                \
   if (auto token = peek(tk::x)) {                                              \
-    return binary_op::x;                                                       \
+    return binary_op::y;                                                       \
   }
-    X(plus);
-    X(minus);
-    X(star);
-    X(slash);
-    X(double_equal);
+    X(plus, add);
+    X(minus, sub);
+    X(star, mul);
+    X(slash, div);
+    X(greater, gt);
+    X(greater_equal, ge);
+    X(less, le);
+    X(less_equal, le);
+    X(equal_equal, eq);
+    X(bang_equal, neq);
 #undef X
     return std::nullopt;
   }
@@ -223,7 +246,7 @@ private:
           auto location = advance();
           consume_trivia_with_newlines();
           auto right = parse_expression(new_prec + 1);
-          expr = bin_expr{
+          expr = binary_expr{
             std::move(expr),
             located{*bin_op, location},
             std::move(right),
@@ -382,21 +405,27 @@ private:
     return next_ == tokens_.size();
   }
 
-  [[noreturn]] void throw_token() {
+  [[noreturn]] void throw_token(std::string message) {
     auto loc = location{};
     auto got = std::string_view{};
     if (next_ < tokens_.size()) {
       loc.begin = next_ == 0 ? 0 : tokens_[next_ - 1].end;
       loc.end = tokens_[next_].end;
-      got = to_string(tokens_[next_].kind);
+      got = describe(tokens_[next_].kind);
     } else {
       loc.begin = tokens_.back().end;
       loc.end = tokens_.back().end;
       got = "EOF";
     }
-    diagnostic::error("expected one of: {}", fmt::join(tries_, ", "))
-      .primary(loc, "got {}", got)
-      .throw_();
+    diagnostic::error("{}", message).primary(loc, "got {}", got).throw_();
+  }
+
+  [[noreturn]] void throw_token() {
+    std::ranges::sort(tries_);
+    tries_.erase(std::ranges::unique(tries_).begin(), tries_.end());
+    throw_token(fmt::format(
+      "expected one of: {}",
+      fmt::join(tries_ | std::ranges::views::transform(describe), ", ")));
   }
 
   parser(std::span<token> tokens, std::string_view source)
