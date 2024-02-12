@@ -43,10 +43,11 @@ auto metrics_collector_state::collect_and_import_metrics() -> void {
 
 auto metrics_collector(
   metrics_collector_actor::stateful_pointer<metrics_collector_state> self,
-  caf::timespan collection_interval, const node_actor& node)
-  -> metrics_collector_actor::behavior_type {
+  caf::timespan collection_interval, const node_actor& node,
+  importer_actor importer) -> metrics_collector_actor::behavior_type {
   self->state.self = self;
   self->state.node = node;
+  self->state.importer = std::move(importer);
   self->state.collection_interval = collection_interval;
   for (auto const* plugin : plugins::get<metrics_plugin>()) {
     auto name = plugin->metric_name();
@@ -63,12 +64,6 @@ auto metrics_collector(
   self->send(self, atom::run_v);
   return {
     [self](atom::run) -> caf::result<void> {
-      auto scoped_self = caf::scoped_actor{self->system()};
-      auto components
-        = get_node_components<importer_actor>(scoped_self, self->state.node);
-      TENZIR_ASSERT_CHEAP(components);
-      auto [importer] = std::move(*components);
-      self->state.importer = std::move(importer);
       // Do a one-off import immediately.
       self->state.collect_and_import_metrics();
       // Start measurement loop.

@@ -58,7 +58,7 @@ public:
 /// @param index A handle to the INDEX.
 auto metrics_collector(
   metrics_collector_actor::stateful_pointer<metrics_collector_state> self,
-  caf::timespan collection_interval, const node_actor& node)
-  -> metrics_collector_actor::behavior_type;
+  caf::timespan collection_interval, const node_actor& node,
+  importer_actor importer) -> metrics_collector_actor::behavior_type;
 
 } // namespace tenzir

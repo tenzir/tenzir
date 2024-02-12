@@ -218,7 +218,6 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     // pipeline API guarantees that remote operators run after the node was
     // successfully initialized, which implies that analyzers have been
     // initialized as well.
-    // TODO: Is this actually true?
     auto analyzer = plugin->analyzer();
     TENZIR_ASSERT(analyzer);
     self->state.stage->add_outbound_path(analyzer);
