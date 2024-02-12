@@ -179,9 +179,12 @@ auto size(const chunk_ptr& chunk) -> uint64_t {
 
 struct metrics_state {
   auto emit(bool exec_node_paused) -> void {
-    if (not exec_node_paused) {
-      values.time_total = std::chrono::duration_cast<duration>(
-        std::chrono::steady_clock::now() - start_time - total_time_paused);
+    values.time_total = std::chrono::duration_cast<duration>(
+      std::chrono::steady_clock::now() - start_time);
+    if (exec_node_paused) {
+      values.time_paused_total += std::chrono::duration_cast<duration>(
+        std::chrono::steady_clock::now() - pause_time);
+      pause_time = std::chrono::steady_clock::now();
     }
     caf::anon_send(metrics_handler, values);
   }
@@ -190,8 +193,7 @@ struct metrics_state {
   // passed through this operator.
   std::chrono::steady_clock::time_point start_time
     = std::chrono::steady_clock::now();
-  std::chrono::steady_clock::time_point last_pause_time = {};
-  duration total_time_paused = {};
+  std::chrono::steady_clock::time_point pause_time = {};
 
   receiver_actor<metric> metrics_handler = {};
   metric values = {};
@@ -419,15 +421,13 @@ struct exec_node_state {
     // Emit the last metrics before pausing as metrics will contain no
     // time delta from now on.
     metrics->emit(paused);
-    metrics->last_pause_time = std::chrono::steady_clock::now();
+    metrics->pause_time = std::chrono::steady_clock::now();
     paused = true;
     return {};
   }
 
   auto resume() -> caf::result<void> {
     TENZIR_DEBUG("{} {} resumes execution", *self, op->name());
-    metrics->total_time_paused
-      += (std::chrono::steady_clock::now() - metrics->last_pause_time);
     paused = false;
     schedule_run(false);
     return {};
