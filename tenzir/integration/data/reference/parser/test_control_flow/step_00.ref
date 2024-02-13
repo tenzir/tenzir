@@ -1,4 +1,4 @@
-error: expected one of: identifier, `this`, `|`, newline
+error: expected one of: identifier, `this`, `}`, `|`, newline
  --> /dev/stdin:2:1
   |
 2 | if b == 42 {

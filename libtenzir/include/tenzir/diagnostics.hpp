@@ -147,6 +147,10 @@ struct [[nodiscard]] diagnostic {
 
   static auto warning(caf::error err) -> diagnostic_builder;
 
+  template <class... Ts>
+  static auto note(fmt::format_string<Ts...> str, Ts&&... xs)
+    -> diagnostic_builder;
+
   auto modify() && -> diagnostic_builder;
 
   /// Wraps the diagnostic in an error object.
@@ -332,6 +336,12 @@ auto diagnostic::warning(fmt::format_string<Ts...> str, Ts&&... xs)
 
 inline auto diagnostic::warning(caf::error err) -> diagnostic_builder {
   return builder(severity::warning, std::move(err));
+}
+
+template <class... Ts>
+auto diagnostic::note(fmt::format_string<Ts...> str, Ts&&... xs)
+  -> diagnostic_builder {
+  return builder(severity::note, std::move(str), std::forward<Ts>(xs)...);
 }
 
 inline auto diagnostic::modify() && -> diagnostic_builder {

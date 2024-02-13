@@ -1,6 +1,10 @@
 [
   invocation {
-    op: "export" @ 0..6,
+    op: {
+      path: [
+        "export" @ 0..6
+      ]
+    },
     args: [
       
     ]
@@ -15,7 +19,11 @@
     right: integer "42" @ 13..15
   },
   invocation {
-    op: "set" @ 16..19,
+    op: {
+      path: [
+        "set" @ 16..19
+      ]
+    },
     args: [
       assignment {
         left: {
@@ -29,7 +37,11 @@
     ]
   },
   invocation {
-    op: "foo" @ 29..32,
+    op: {
+      path: [
+        "foo" @ 29..32
+      ]
+    },
     args: [
       expression selector {
         path: [
@@ -57,7 +69,11 @@
     ]
   },
   invocation {
-    op: "import" @ 52..58,
+    op: {
+      path: [
+        "import" @ 52..58
+      ]
+    },
     args: [
       
     ]

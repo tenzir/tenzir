@@ -6,14 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/tokens.hpp"
 
-namespace tenzir::tql2::ast {
+namespace tenzir::tql2 {
 
-auto expression::location() const -> tenzir::location {
-  return match([](const auto& x) {
-    return x.location();
-  });
-}
+auto lex(std::string_view content) -> std::vector<token>;
 
-} // namespace tenzir::tql2::ast
+} // namespace tenzir::tql2

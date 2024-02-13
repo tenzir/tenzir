@@ -8,10 +8,7 @@
 
 #pragma once
 
-#include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enum.hpp"
-
-#include <fmt/core.h>
 
 #include <string_view>
 
@@ -23,7 +20,7 @@ TENZIR_ENUM(
   //
   identifier, dollar_ident,
   // keywords
-  this_, if_, else_, match,
+  this_, if_, else_, match, and_, or_,
   // literals
   integer, real, true_, false_, null, string, ipv4, ipv6,
   // operators

@@ -25,6 +25,7 @@ struct selector;
 struct binary_expr;
 struct unary_expr;
 struct function_call;
+struct pipeline_expr;
 
 struct identifier {
   identifier(std::string name, location location)
@@ -56,6 +57,21 @@ struct selector {
   std::optional<location> this_;
   std::vector<identifier> path;
 
+  auto location() const -> location {
+    auto result = tenzir::location{};
+    if (this_) {
+      result.begin = this_->begin;
+      result.end = this_->end;
+    } else {
+      TENZIR_ASSERT_CHEAP(not path.empty());
+      result.begin = path.front().location.begin;
+    }
+    if (not path.empty()) {
+      result.end = path.back().location.end;
+    }
+    return result;
+  }
+
   friend auto inspect(auto& f, selector& x) -> bool {
     return f.object(x).fields(f.field("this", x.this_),
                               f.field("path", x.path));
@@ -64,6 +80,10 @@ struct selector {
 
 struct string : located<std::string> {
   using located::located;
+
+  auto location() const -> location {
+    return source;
+  }
 };
 
 struct integer : located<std::string> {
@@ -71,10 +91,14 @@ struct integer : located<std::string> {
   }
 
   using located::located;
+
+  auto location() const -> location {
+    return source;
+  }
 };
 
 using expression_kind
-  = variant<record, selector, pipeline, string, field_access, integer,
+  = variant<record, selector, pipeline_expr, string, field_access, integer,
             binary_expr, unary_expr, function_call>;
 
 struct expression {
@@ -92,7 +116,15 @@ struct expression {
   // explicit expression(record x);
 
   template <class... Fs>
-  auto match(Fs&&... fs) -> decltype(auto);
+  auto match(Fs&&... fs) & -> decltype(auto);
+  template <class... Fs>
+  auto match(Fs&&... fs) && -> decltype(auto);
+  template <class... Fs>
+  auto match(Fs&&... fs) const& -> decltype(auto);
+  template <class... Fs>
+  auto match(Fs&&... fs) const&& -> decltype(auto);
+
+  auto location() const -> location;
 
   std::unique_ptr<expression_kind> kind;
 
@@ -104,6 +136,10 @@ TENZIR_ENUM(binary_op, add, sub, mul, div, eq, neq, gt, ge, lt, le, and_, or_);
 struct binary_expr {
   binary_expr(expression left, located<binary_op> op, expression right)
     : left{std::move(left)}, op{op}, right{std::move(right)} {
+  }
+
+  auto location() const -> location {
+    return left.location().combine(right.location());
   }
 
   expression left;
@@ -121,6 +157,10 @@ TENZIR_ENUM(unary_op, neg, not_);
 struct unary_expr {
   unary_expr(located<unary_op> op, expression expr)
     : op{op}, expr{std::move(expr)} {
+  }
+
+  auto location() const -> location {
+    return op.source.combine(expr.location());
   }
 
   located<unary_op> op;
@@ -155,6 +195,13 @@ struct entity {
 
   std::vector<identifier> path;
 
+  auto location() const -> location {
+    if (path.empty()) {
+      return location::unknown;
+    }
+    return path.front().location.combine(path.back().location);
+  }
+
   friend auto inspect(auto& f, entity& x) -> bool {
     return f.object(x).fields(f.field("path", x.path));
   }
@@ -163,6 +210,11 @@ struct entity {
 struct function_call {
   entity fn;
   std::vector<argument> args;
+
+  auto location() const -> location {
+    // TODO
+    return fn.location();
+  }
 
   friend auto inspect(auto& f, function_call& x) -> bool {
     return f.object(x).fields(f.field("fn", x.fn), f.field("args", x.args));
@@ -177,6 +229,10 @@ struct field_access {
   expression left;
   location dot;
   identifier name;
+
+  auto location() const -> location {
+    return left.location().combine(name.location);
+  }
 
   friend auto inspect(auto& f, field_access& x) -> bool {
     return f.object(x).fields(f.field("left", x.left), f.field("dot", x.dot),
@@ -217,6 +273,10 @@ struct record {
   std::vector<content_kind> content;
   location end;
 
+  auto location() const -> location {
+    return tenzir::location{begin.begin, end.end};
+  }
+
   friend auto inspect(auto& f, record& x) -> bool {
     return f.apply(x.content);
   }
@@ -244,8 +304,43 @@ struct pipeline {
   }
 };
 
+struct pipeline_expr {
+  pipeline_expr(location open, pipeline inner, location close)
+    : open{open}, inner{std::move(inner)}, close{close} {
+  }
+
+  location open;
+  pipeline inner;
+  location close;
+
+  auto location() const -> location {
+    return open.combine(close);
+  }
+
+  friend auto inspect(auto& f, pipeline_expr& x) -> bool {
+    return f.object(x).fields(f.field("open", x.open),
+                              f.field("inner", x.inner),
+                              f.field("close", x.close));
+  }
+};
+
 template <class... Fs>
-auto expression::match(Fs&&... fs) -> decltype(auto) {
+auto expression::match(Fs&&... fs) & -> decltype(auto) {
+  TENZIR_ASSERT_CHEAP(kind);
+  return kind->match(std::forward<Fs>(fs)...);
+}
+template <class... Fs>
+auto expression::match(Fs&&... fs) && -> decltype(auto) {
+  TENZIR_ASSERT_CHEAP(kind);
+  return kind->match(std::forward<Fs>(fs)...);
+}
+template <class... Fs>
+auto expression::match(Fs&&... fs) const& -> decltype(auto) {
+  TENZIR_ASSERT_CHEAP(kind);
+  return kind->match(std::forward<Fs>(fs)...);
+}
+template <class... Fs>
+auto expression::match(Fs&&... fs) const&& -> decltype(auto) {
   TENZIR_ASSERT_CHEAP(kind);
   return kind->match(std::forward<Fs>(fs)...);
 }

@@ -230,7 +230,10 @@ auto exec_pipeline2(std::string content,
     fmt::println("{:#?}", parsed);
     return {};
   }
-  return ec::unimplemented;
+  diagnostic::note("input is valid TQL2")
+    .hint("use `--dump-ast` to show AST")
+    .emit(im);
+  return {};
 }
 
 } // namespace

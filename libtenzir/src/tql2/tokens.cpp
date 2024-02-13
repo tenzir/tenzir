@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/tql2/lexer.hpp>
+#include "tenzir/tql2/tokens.hpp"
 
 namespace tenzir::tql2 {
 
@@ -16,37 +16,50 @@ auto describe(token_kind k) -> std::string_view {
   case x:                                                                      \
     return y
   switch (k) {
-    X(identifier, "identifier");
-    X(this_, "`this`");
-    X(if_, "`if`");
-    X(else_, "`else`");
-    X(match, "`match`");
-    X(integer, "integer");
-    X(real, "real");
-    X(true_, "`true`");
-    X(false_, "`false`");
-    X(null, "`null`");
-    X(dot, "`.`");
-    X(plus, "`+`");
-    X(minus, "`-`");
-    X(star, "`*`");
-    X(slash, "`/`");
-    X(equal_equal, "`==`");
+    X(and_, "`and`");
+    X(at, "@");
     X(bang_equal, "`!=`");
-    X(less, "`<`");
-    X(less_equal, "`<=`");
-    X(greater, "`>`");
+    X(colon, "`:`");
+    X(comma, "`,`");
+    X(delim_comment, "`/*...*/`");
+    X(dollar_ident, "$identifier");
+    X(dot, "`.`");
+    X(else_, "`else`");
+    X(equal_equal, "`==`");
+    X(equal, "`=`");
+    X(error, "error");
+    X(false_, "`false`");
     X(greater_equal, "`>=`");
-    X(pipe, "`|`");
-    X(lpar, "`(`");
-    X(rpar, "`)`");
+    X(greater, "`>`");
+    X(identifier, "identifier");
+    X(if_, "`if`");
+    X(integer, "integer");
+    X(ipv4, "ipv4");
+    X(ipv6, "ipv6");
     X(lbrace, "`{`");
-    X(rbrace, "`}`");
     X(lbracket, "`[`");
+    X(less_equal, "`<=`");
+    X(less, "`<`");
+    X(line_comment, "`// ...`");
+    X(lpar, "`(`");
+    X(match, "`match`");
+    X(minus, "`-`");
+    X(newline, "newline");
+    X(null, "`null`");
+    X(or_, "`or`");
+    X(pipe, "`|`");
+    X(plus, "`+`");
+    X(rbrace, "`}`");
     X(rbracket, "`]`");
-    // TODO
-    default:
-      return to_string(k);
+    X(real, "real");
+    X(rpar, "`)`");
+    X(single_quote, "`'`");
+    X(slash, "`/`");
+    X(star, "`*`");
+    X(string, "string");
+    X(this_, "`this`");
+    X(true_, "`true`");
+    X(whitespace, "whitespace");
   }
 #undef X
   TENZIR_UNREACHABLE();

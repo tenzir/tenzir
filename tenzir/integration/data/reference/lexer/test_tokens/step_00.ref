@@ -80,4 +80,4 @@
         newline "\n"
      identifier "foo"
    single_quote "'"
-     identifier "$bar"
+   dollar_ident "$bar"

@@ -6,14 +6,14 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/tokens.hpp"
 
-namespace tenzir::tql2::ast {
+namespace tenzir::tql2 {
 
-auto expression::location() const -> tenzir::location {
-  return match([](const auto& x) {
-    return x.location();
-  });
-}
+// TODO
+auto parse(std::span<token> tokens, std::string_view source,
+           diagnostic_handler& diag) -> ast::pipeline;
 
-} // namespace tenzir::tql2::ast
+} // namespace tenzir::tql2

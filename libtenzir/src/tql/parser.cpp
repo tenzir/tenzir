@@ -62,14 +62,18 @@ struct lexer_traits<binary_op> {
 
   static auto build(std::string parsed, location source)
     -> std::pair<binary_op, location> {
-    if (parsed == "==")
+    if (parsed == "==") {
       return {binary_op::equals, source};
-    if (parsed == "!=")
+    }
+    if (parsed == "!=") {
       return {binary_op::not_equals, source};
-    if (parsed == "+")
+    }
+    if (parsed == "+") {
       return {binary_op::add, source};
-    if (parsed == "*")
+    }
+    if (parsed == "*") {
       return {binary_op::mul, source};
+    }
     TENZIR_UNREACHABLE();
   }
 };
@@ -146,8 +150,9 @@ private:
 
   [[nodiscard]] auto accept(std::string_view x) -> std::optional<location> {
     auto impl = [&](auto p) -> std::optional<location> {
-      if (auto result = accept_with_span(p))
+      if (auto result = accept_with_span(p)) {
         return result->second;
+      }
       return {};
     };
     if (x == "=") {
