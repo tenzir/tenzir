@@ -353,32 +353,32 @@ public:
     return record{{path_key, db_path_}};
   }
 
-  auto dump_recurse(uint64_t node_number, uint8_t type, MMDB_entry_s* entry)
-    -> generator<table_slice> {
-    if (current_dump_.visited.contains(node_number)) {
+  auto dump_recurse(uint64_t node_number, uint8_t type, MMDB_entry_s* entry,
+                    current_dump& current_dump) -> generator<table_slice> {
+    if (current_dump.visited.contains(node_number)) {
       co_return;
     }
-    current_dump_.visited.emplace(node_number);
+    current_dump.visited.emplace(node_number);
     switch (type) {
       case MMDB_RECORD_TYPE_SEARCH_NODE: {
         MMDB_search_node_s search_node{};
-        current_dump_.status
+        current_dump.status
           = MMDB_read_node(&*mmdb_, node_number, &search_node);
-        if (current_dump_.status != MMDB_SUCCESS) {
+        if (current_dump.status != MMDB_SUCCESS) {
           co_return;
         }
         for (auto&& x :
              dump_recurse(search_node.left_record, search_node.left_record_type,
-                          &search_node.left_record_entry)) {
-          if (current_dump_.status != MMDB_SUCCESS) {
+                          &search_node.left_record_entry, current_dump)) {
+          if (current_dump.status != MMDB_SUCCESS) {
             co_return;
           }
           co_yield x;
         }
-        for (auto&& x : dump_recurse(search_node.right_record,
-                                     search_node.right_record_type,
-                                     &search_node.right_record_entry)) {
-          if (current_dump_.status != MMDB_SUCCESS) {
+        for (auto&& x : dump_recurse(
+               search_node.right_record, search_node.right_record_type,
+               &search_node.right_record_entry, current_dump)) {
+          if (current_dump.status != MMDB_SUCCESS) {
             co_return;
           }
           co_yield x;
@@ -392,9 +392,8 @@ public:
       case MMDB_RECORD_TYPE_DATA: {
         TENZIR_ASSERT(entry != nullptr);
         MMDB_entry_data_list_s* entry_data_list = nullptr;
-        current_dump_.status
-          = MMDB_get_entry_data_list(entry, &entry_data_list);
-        if (current_dump_.status != MMDB_SUCCESS) {
+        current_dump.status = MMDB_get_entry_data_list(entry, &entry_data_list);
+        if (current_dump.status != MMDB_SUCCESS) {
           co_return;
         }
         auto free_entry_data_list = caf::detail::make_scope_guard([&] {
@@ -403,8 +402,8 @@ public:
           }
         });
         list output;
-        entry_data_list_to_list(entry_data_list, &current_dump_.status, output);
-        if (current_dump_.status != MMDB_SUCCESS) {
+        entry_data_list_to_list(entry_data_list, &current_dump.status, output);
+        if (current_dump.status != MMDB_SUCCESS) {
           co_return;
         }
         auto b = series_builder{};
@@ -418,31 +417,20 @@ public:
         break;
       }
       case MMDB_RECORD_TYPE_INVALID: {
-        current_dump_.status = MMDB_INVALID_DATA_ERROR;
+        current_dump.status = MMDB_INVALID_DATA_ERROR;
         co_return;
       }
     }
     co_return;
   }
 
-  auto dump() -> caf::expected<std::vector<table_slice>> override {
+  auto dump() -> generator<table_slice> override {
     TENZIR_ASSERT(mmdb_);
-    auto output = list{};
-    if (not current_dump_.dumper) {
-      current_dump_.dumper
-        = dump_recurse(0, MMDB_RECORD_TYPE_SEARCH_NODE, nullptr);
+    current_dump current_dump;
+    for (auto&& slice :
+         dump_recurse(0, MMDB_RECORD_TYPE_SEARCH_NODE, nullptr, current_dump)) {
+      co_yield slice;
     }
-    for (auto&& slice : *current_dump_.dumper) {
-      return std::vector<table_slice>{slice};
-    }
-    auto status = current_dump_.status;
-    current_dump_.reset();
-    if (status != MMDB_SUCCESS) {
-      return caf::make_error(ec::lookup_error,
-                             fmt::format("error dumping GeoIP database: {}",
-                                         MMDB_strerror(status)));
-    }
-    return std::vector<table_slice>{};
   }
 
   /// Updates the context.
@@ -495,7 +483,6 @@ private:
   std::string db_path_;
   record r_;
   std::optional<MMDB_s> mmdb_;
-  current_dump current_dump_;
 };
 
 class plugin : public virtual context_plugin {

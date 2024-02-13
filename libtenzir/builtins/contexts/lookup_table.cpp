@@ -96,26 +96,23 @@ public:
     return record{{"num_entries", context_entries.size()}};
   }
 
-  auto dump_data_entries() const -> generator<table_slice> {
+  auto dump() -> generator<table_slice> override {
     auto entry_builder = series_builder{};
+    auto i = 0;
     for (const auto& [key, value] : context_entries) {
       entry_builder.data(record{{"key", key}, {"value", value}});
-      auto slices = entry_builder.finish_as_table_slice();
-      for (auto&& slice : slices) {
-        co_yield slice;
+      ++i;
+      if (i % 65536 == 0) {
+        auto slices = entry_builder.finish_as_table_slice();
+        for (auto&& slice : slices) {
+          co_yield slice;
+        }
       }
     }
-  }
-
-  auto dump() -> caf::expected<std::vector<table_slice>> override {
-    if (not entry_dumper) {
-      entry_dumper = dump_data_entries();
+    auto slices = entry_builder.finish_as_table_slice();
+    for (auto&& slice : slices) {
+      co_yield slice;
     }
-    for (const auto&& x : *entry_dumper) {
-      return std::vector<table_slice>{x};
-    }
-    entry_dumper.reset();
-    return std::vector<table_slice>{};
   }
 
   /// Updates the context.

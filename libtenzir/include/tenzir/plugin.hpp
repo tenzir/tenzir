@@ -739,7 +739,7 @@ public:
   virtual auto show() const -> record = 0;
 
   /// Dumps the context content or a dumping error.
-  virtual auto dump() -> caf::expected<std::vector<table_slice>> = 0;
+  virtual auto dump() -> generator<table_slice> = 0;
 
   /// Updates the context.
   virtual auto update(table_slice events, parameter_map parameters)
