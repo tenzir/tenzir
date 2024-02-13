@@ -33,7 +33,6 @@ in
         # makes changes to the python code observable in the python operator
         # without needing to rebuild the wheel.
         export TENZIR_PLUGINS__PYTHON__IMPLICIT_REQUIREMENTS="-e $PWD/python"
-        export TENZIR_DEV_BUILD=1
       '';
     }
     // lib.optionalAttrs isStatic {

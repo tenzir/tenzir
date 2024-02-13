@@ -12,7 +12,7 @@ include(TenzirVersion)
 # Create the Tenzir project.
 project(
   Tenzir
-  VERSION "${TENZIR_VERSION}"
+  VERSION "${TENZIR_VERSION_MMP}"
   DESCRIPTION "Visibility Across Space and Time"
   HOMEPAGE_URL "https://tenzir.com"
   LANGUAGES C CXX)
