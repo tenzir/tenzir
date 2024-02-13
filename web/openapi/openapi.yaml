@@ -456,9 +456,9 @@ paths:
                         []
                       metrics:
                         total:
-                          in:
+                          ingress:
                             {}
-                          out:
+                          egress:
                             {}
                     - id: 08446737-da9b-4787-8599-97d85c48c3bb
                       name: wrong-pipeline
@@ -471,9 +471,9 @@ paths:
                         []
                       metrics:
                         total:
-                          in:
+                          ingress:
                             {}
-                          out:
+                          egress:
                             {}
         400:
           description: Invalid arguments.
