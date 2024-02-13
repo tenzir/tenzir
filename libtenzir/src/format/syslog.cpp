@@ -20,9 +20,26 @@ namespace tenzir {
 namespace format {
 namespace syslog {
 
+inline type make_syslog_type_without_structured_data() {
+  return type{
+    "syslog.rfc5424",
+    record_type{{
+      {"facility", uint64_type{}},
+      {"severity", uint64_type{}},
+      {"version", uint64_type{}},
+      {"timestamp", time_type{}},
+      {"hostname", string_type{}},
+      {"app_name", string_type{}},
+      {"process_id", string_type{}},
+      {"message_id", string_type{}},
+      {"message", string_type{}},
+    }},
+  };
+}
+
 reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
   : super(options),
-    syslog_rfc5424_type_{make_syslog_type()},
+    syslog_rfc5424_type_{make_syslog_type_without_structured_data()},
     syslog_unkown_type_{make_unknown_type()} {
   if (in != nullptr) {
     reset(std::move(in));
@@ -95,7 +112,11 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
       if (!bptr->add(sys_msg.hdr.facility, sys_msg.hdr.severity,
                      sys_msg.hdr.version, sys_msg.hdr.ts, sys_msg.hdr.hostname,
                      sys_msg.hdr.app_name, sys_msg.hdr.process_id,
-                     sys_msg.hdr.msg_id, sys_msg.data, sys_msg.msg)) {
+                     // Not using sys_msg.data, because its schema can vary,
+                     // so it would segfault here.
+                     // This is a legacy code path, anyway, so it doesn't matter
+                     // that we don't support `structured_data` here.
+                     sys_msg.hdr.msg_id, sys_msg.msg)) {
         return finish(
           f, caf::make_error(ec::format_error,
                              fmt::format("failed to produce table slice row "
