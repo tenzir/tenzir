@@ -152,7 +152,7 @@ struct binary_expr {
   }
 };
 
-TENZIR_ENUM(unary_op, neg, not_);
+TENZIR_ENUM(unary_op, pos, neg, not_);
 
 struct unary_expr {
   unary_expr(located<unary_op> op, expression expr)
@@ -208,6 +208,12 @@ struct entity {
 };
 
 struct function_call {
+  function_call(std::optional<expression> receiver, entity fn,
+                std::vector<argument> args)
+    : receiver{std::move(receiver)}, fn{std::move(fn)}, args{std::move(args)} {
+  }
+
+  std::optional<expression> receiver;
   entity fn;
   std::vector<argument> args;
 
@@ -217,7 +223,8 @@ struct function_call {
   }
 
   friend auto inspect(auto& f, function_call& x) -> bool {
-    return f.object(x).fields(f.field("fn", x.fn), f.field("args", x.args));
+    return f.object(x).fields(f.field("receiver", x.receiver),
+                              f.field("fn", x.fn), f.field("args", x.args));
   }
 };
 

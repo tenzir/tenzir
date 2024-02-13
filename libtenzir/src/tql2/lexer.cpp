@@ -68,6 +68,7 @@ auto lex(std::string_view content) -> std::vector<token> {
     | X("match", match)
     | X("and", and_)
     | X("or", or_)
+    | X("not", not_)
 #undef X
     | ignore(chr{'$'} >> identifier)
       ->* [] { return token_kind::dollar_ident; }

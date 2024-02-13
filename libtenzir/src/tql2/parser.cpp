@@ -8,6 +8,7 @@
 
 #include "tenzir/tql2/parser.hpp"
 
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/tql2/ast.hpp"
 
 #include <ranges>
@@ -18,23 +19,35 @@ using namespace tenzir::tql2::ast;
 
 namespace {
 
+auto precedence(unary_op x) -> int {
+  using enum unary_op;
+  switch (x) {
+    case pos:
+    case neg:
+      return 7;
+    case not_:
+      return 2;
+  };
+  TENZIR_UNREACHABLE();
+}
+
 auto precedence(binary_op x) -> int {
   using enum binary_op;
   switch (x) {
     case mul:
     case div:
-      return 5;
+      return 6;
     case add:
     case sub:
-      return 4;
+      return 5;
     case gt:
     case ge:
     case lt:
     case le:
-      return 3;
+      return 4;
     case eq:
     case neq:
-      return 2;
+      return 3;
     case and_:
       return 1;
     case or_:
@@ -66,6 +79,25 @@ public:
 private:
   auto accept_stmt_sep() -> bool {
     return accept(tk::newline) || accept(tk::pipe);
+  }
+
+  auto parse_argument() -> argument {
+    auto expr = parse_expression();
+    if (auto equal = accept(tk::equal)) {
+      return expr.match(
+        [&](selector& y) -> argument {
+          auto left = std::move(y);
+          auto right = parse_expression();
+          return assignment{std::move(left), equal.location, std::move(right)};
+        },
+        [&](auto&) -> argument {
+          // TODO
+          diagnostic::error("left of = must be selector")
+            .primary(expr.location())
+            .throw_();
+        });
+    }
+    return expr;
   }
 
   auto parse_pipeline() -> pipeline {
@@ -103,25 +135,7 @@ private:
             expect(tk::comma);
             consume_trivia_with_newlines();
           }
-          // TODO
-          auto expr = parse_expression();
-          if (auto equal = accept(tk::equal)) {
-            expr.match(
-              [&](selector& y) {
-                auto left = std::move(y);
-                auto right = parse_expression();
-                args.emplace_back(assignment{std::move(left), equal.location,
-                                             std::move(right)});
-              },
-              [&](auto&) {
-                // TODO
-                diagnostic::error("left of = must be selector")
-                  .primary(expr.location())
-                  .throw_();
-              });
-          } else {
-            args.emplace_back(std::move(expr));
-          }
+          args.push_back(parse_argument());
         }
         steps.emplace_back(invocation{std::move(op), std::move(args)});
       } else {
@@ -192,34 +206,20 @@ private:
     return pipeline_expr{begin.location, std::move(pipe), end.location};
   }
 
-  auto parse_atomic_expression() -> expression {
-    if (accept(tk::lpar)) {
-      auto result = parse_expression();
-      expect(tk::rpar);
-      return result;
-    }
-    if (selector_start()) {
-      // Check if we have identifier followed by `(` or `'`.
-      return expression{parse_selector()};
-    }
-    if (peek(tk::lbrace)) {
-      return parse_record_or_pipeline();
-    }
-    if (auto token = accept(tk::string)) {
-      // TODO: Make this better and parse content?
-      return expression{
-        string{std::string{token.text.substr(1, token.text.size() - 2)},
-               token.location}};
-    }
-    if (auto token = accept(tk::integer)) {
-      return expression{integer{token.as_string()}};
-    }
-    throw_token();
+  auto peek_unary_op() -> std::optional<unary_op> {
+#define X(x, y)                                                                \
+  if (peek(tk::x)) {                                                           \
+    return unary_op::y;                                                        \
+  }
+    X(not_, not_);
+    X(minus, neg);
+#undef X
+    return std::nullopt;
   }
 
   auto peek_binary_op() -> std::optional<binary_op> {
 #define X(x, y)                                                                \
-  if (auto token = peek(tk::x)) {                                              \
+  if (peek(tk::x)) {                                                           \
     return binary_op::y;                                                       \
   }
     X(plus, add);
@@ -232,13 +232,15 @@ private:
     X(less_equal, le);
     X(equal_equal, eq);
     X(bang_equal, neq);
+    X(and_, and_);
+    X(or_, or_)
 #undef X
     return std::nullopt;
   }
 
   auto parse_expression(int prec = 0) -> expression {
     // TODO
-    auto expr = parse_atomic_expression();
+    auto expr = parse_unary_expression();
     while (true) {
       if (auto dot = accept(tk::dot)) {
         auto name = expect(tk::identifier);
@@ -266,6 +268,77 @@ private:
       break;
     }
     return expr;
+  }
+
+  auto parse_unary_expression() -> expression {
+    if (auto op = peek_unary_op()) {
+      auto location = advance();
+      auto expr = parse_expression(precedence(*op));
+      return unary_expr{
+        located{*op, location},
+        std::move(expr),
+      };
+    }
+    return parse_primary_expression();
+  }
+
+  auto parse_primary_expression() -> expression {
+    if (accept(tk::lpar)) {
+      auto result = parse_expression();
+      expect(tk::rpar);
+      return result;
+    }
+    if (selector_start()) {
+      // Check if we have identifier followed by `(` or `'`.
+      // TODO: Accept entity as function name.
+      auto selector = parse_selector();
+      if (accept(tk::lpar)) {
+        auto scope = ignore_newlines(true);
+        if (selector.this_) {
+          if (selector.path.empty()) {
+            diagnostic::error("`this` cannot be called")
+              .primary(*selector.this_)
+              .throw_();
+          }
+        }
+        TENZIR_ASSERT_CHEAP(not selector.path.empty());
+        auto function = entity{{std::move(selector.path.back())}};
+        selector.path.pop_back();
+        auto receiver = std::optional<expression>{};
+        if (selector.this_ || not selector.path.empty()) {
+          receiver = std::move(selector);
+        }
+        auto args = std::vector<argument>{};
+        while (true) {
+          if (accept(tk::rpar)) {
+            break;
+          }
+          if (not args.empty()) {
+            expect(tk::comma);
+            if (accept(tk::rpar)) {
+              break;
+            }
+          }
+          args.push_back(parse_argument());
+        }
+        return expression{function_call{std::move(receiver),
+                                        std::move(function), std::move(args)}};
+      }
+      return selector;
+    }
+    if (peek(tk::lbrace)) {
+      return parse_record_or_pipeline();
+    }
+    if (auto token = accept(tk::string)) {
+      // TODO: Make this better and parse content?
+      return expression{
+        string{std::string{token.text.substr(1, token.text.size() - 2)},
+               token.location}};
+    }
+    if (auto token = accept(tk::integer)) {
+      return expression{integer{token.as_string()}};
+    }
+    throw_token();
   }
 
   struct accept_result {

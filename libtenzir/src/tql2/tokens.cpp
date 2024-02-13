@@ -45,6 +45,7 @@ auto describe(token_kind k) -> std::string_view {
     X(match, "`match`");
     X(minus, "`-`");
     X(newline, "newline");
+    X(not_, "`not`");
     X(null, "`null`");
     X(or_, "`or`");
     X(pipe, "`|`");
