@@ -234,8 +234,7 @@ using catalog_actor = typed_actor_fwd<
 /// The interface of an IMPORTER actor.
 using importer_actor = typed_actor_fwd<
   // Add a new sink.
-  auto(stream_sink_actor<table_slice>)
-    ->caf::result<caf::outbound_stream_slot<table_slice>>,
+  auto(stream_sink_actor<table_slice>)->caf::result<void>,
   // Register a FLUSH LISTENER actor.
   auto(atom::subscribe, atom::flush, flush_listener_actor)->caf::result<void>,
   // Register a subscriber for table slices.

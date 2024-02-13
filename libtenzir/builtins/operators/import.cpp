@@ -10,7 +10,6 @@
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
-#include <tenzir/import_stream.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/node_control.hpp>
 #include <tenzir/pipeline.hpp>

@@ -8,7 +8,6 @@
 
 #include <tenzir/data.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
-#include <tenzir/import_stream.hpp>
 #include <tenzir/metrics_collector.hpp>
 #include <tenzir/series_builder.hpp>
 

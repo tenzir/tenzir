@@ -11,7 +11,6 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/actors.hpp"
-#include "tenzir/import_stream.hpp"
 #include "tenzir/plugin.hpp"
 
 #include <caf/typed_event_based_actor.hpp>

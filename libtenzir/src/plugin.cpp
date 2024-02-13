@@ -403,7 +403,7 @@ analyzer_plugin::analyzer(node_actor::stateful_pointer<node_state> node) const {
   node
     ->request(importer, caf::infinite,
               static_cast<stream_sink_actor<table_slice>>(handle))
-    .then([](const caf::outbound_stream_slot<table_slice>&) {},
+    .then([]() {},
           [&](const caf::error& error) {
             TENZIR_ERROR("failed to connect analyzer {} to the importer: {}",
                          name(), error);
