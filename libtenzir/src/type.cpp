@@ -938,7 +938,9 @@ auto type::to_definition2(std::optional<std::string> field_name,
       // Recursively create the definition for the nested type, but add a -1 to
       // it for the values. We override the type to include the list, but leave
       // the kind as the nested value.
-      parent_path.push_back(-1);
+      if (caf::holds_alternative<record_type>(self.value_type())) {
+        parent_path.push_back(-1);
+      }
       auto result = self.value_type().to_definition2(
         field_name.value_or(std::string{name()}), parent_path);
       result["kind"]
