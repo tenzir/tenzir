@@ -86,7 +86,7 @@ auto spawn_exporter(node_actor::stateful_pointer<node_state> self,
       ->request(importer, caf::infinite,
                 static_cast<stream_sink_actor<table_slice>>(handle))
       .then(
-        [=](caf::outbound_stream_slot<table_slice>) {
+        [=]() {
           // nop
         },
         [=, importer = importer](caf::error err) {
