@@ -15,6 +15,9 @@ Manages a [context](../contexts.md).
 context create <name> <context-type>
 context delete <name>
 context update <name> [<options>]
+context reset  <name>
+context save   <name>
+context load   <name>
 ```
 
 ## Description
@@ -25,10 +28,22 @@ The `context` operator manages [context](../contexts.md) instances.
   returns information about the new context.
 
 - The `delete` command destroys a given context. The pipeline returns
-  information abou the deleted context.
+  information about the deleted context.
 
 - The `update` command adds new data to a given context. The pipeline returns
   information about what the update performed.
+
+- The `reset` command clears the state of a given context, as if it had just
+  been created. The pipeline returns information about the cleared context.
+
+- The `save` command outputs the state of the context, serialized into bytes.
+  The result can be processed further in a pipeline,
+  e.g. as an input for the [`save`](./save.md) operator,
+  or to initialize another context with `context load`.
+
+- The `load` command takes in bytes, likely previously created with
+  `context save`, and initializes the context with that data. The pipeline
+  returns information about the populated context.
 
 ### `<name>`
 
