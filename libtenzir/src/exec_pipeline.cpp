@@ -11,6 +11,7 @@
 #include <tenzir/pipeline.hpp>
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/tql/parser.hpp>
+#include <tenzir/tql2/lexer.hpp>
 #include <tenzir/tql2/parser.hpp>
 
 #include <caf/event_based_actor.hpp>
