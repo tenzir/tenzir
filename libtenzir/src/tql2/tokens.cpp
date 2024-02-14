@@ -22,13 +22,14 @@ auto describe(token_kind k) -> std::string_view {
     X(colon, "`:`");
     X(comma, "`,`");
     X(delim_comment, "`/*...*/`");
-    X(dollar_ident, "$identifier");
+    X(dollar_ident, "dollar identifier");
     X(dot, "`.`");
     X(else_, "`else`");
     X(equal_equal, "`==`");
     X(equal, "`=`");
     X(error, "error");
     X(false_, "`false`");
+    X(fat_arrow, "`=>`");
     X(greater_equal, "`>=`");
     X(greater, "`>`");
     X(identifier, "identifier");
@@ -60,6 +61,7 @@ auto describe(token_kind k) -> std::string_view {
     X(string, "string");
     X(this_, "`this`");
     X(true_, "`true`");
+    X(underscore, "`_`");
     X(whitespace, "whitespace");
   }
 #undef X

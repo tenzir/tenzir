@@ -20,14 +20,14 @@ TENZIR_ENUM(
   //
   identifier, dollar_ident,
   // keywords
-  this_, if_, else_, match, not_, and_, or_,
+  this_, if_, else_, match, not_, and_, or_, underscore,
   // literals
   integer, real, true_, false_, null, string, ipv4, ipv6,
   // operators
   dot, plus, minus, slash, star, equal_equal, bang_equal, less, less_equal,
   greater, greater_equal,
   // other punctuation
-  at, equal, comma, colon, single_quote,
+  at, equal, comma, colon, single_quote, fat_arrow,
   // parenthesis
   lpar, rpar, lbrace, rbrace, lbracket, rbracket,
   //

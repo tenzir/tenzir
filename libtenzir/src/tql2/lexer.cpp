@@ -39,6 +39,7 @@ auto lex(std::string_view content) -> std::vector<token> {
     | ignore(chr{'@'})
       ->* [] { return token_kind::at; }
 #define X(x, y) ignore(lit{x}) ->* [] { return token_kind::y; }
+    | X("=>", fat_arrow)
     | X("==", equal_equal)
     | X("!=", equal_equal)
     | X(">=", greater_equal)
@@ -58,6 +59,7 @@ auto lex(std::string_view content) -> std::vector<token> {
     | X("}", rbrace)
     | X(",", comma)
     | X(":", colon)
+    | X("_", underscore)
     | X("'", single_quote)
     | X("\n", newline)
 #undef X
@@ -69,6 +71,9 @@ auto lex(std::string_view content) -> std::vector<token> {
     | X("and", and_)
     | X("or", or_)
     | X("not", not_)
+    | X("true", true_)
+    | X("false", false_)
+    | X("null", null)
 #undef X
     | ignore(chr{'$'} >> identifier)
       ->* [] { return token_kind::dollar_ident; }

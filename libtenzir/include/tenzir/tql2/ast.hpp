@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/enum.hpp"
+#include "tenzir/detail/type_traits.hpp"
 #include "tenzir/location.hpp"
 
 namespace tenzir::tql2::ast {
@@ -80,10 +81,6 @@ struct selector {
 
 struct string : located<std::string> {
   using located::located;
-
-  auto location() const -> location {
-    return source;
-  }
 };
 
 struct integer : located<std::string> {
@@ -91,15 +88,23 @@ struct integer : located<std::string> {
   }
 
   using located::located;
+};
 
+struct boolean : located<bool> {
+  using located::located;
+};
+
+struct null : location {
   auto location() const -> location {
-    return source;
+    return *this;
   }
 };
 
+struct duration : located<tenzir::duration> {};
+
 using expression_kind
-  = variant<record, selector, pipeline_expr, string, field_access, integer,
-            binary_expr, unary_expr, function_call>;
+  = variant<record, selector, pipeline_expr, string, integer, boolean,
+            field_access, binary_expr, unary_expr, function_call, null>;
 
 struct expression {
   template <class T>
@@ -185,9 +190,21 @@ struct assignment {
                               f.field("equals", x.equals),
                               f.field("right", x.right));
   }
+
+  auto location() const -> location {
+    return left.location().combine(right.location());
+  }
 };
 
-using argument = variant<expression, assignment>;
+struct argument : variant<expression, assignment> {
+  using variant::variant;
+
+  auto location() const -> location {
+    return match([](auto& x) {
+      return x.location();
+    });
+  }
+};
 
 struct entity {
   explicit entity(std::vector<identifier> path) : path{std::move(path)} {
@@ -298,16 +315,71 @@ struct invocation {
   }
 };
 
-struct pipeline {
-  using step = variant<assignment, invocation>;
+struct if_stmt;
+struct match_stmt;
 
-  explicit pipeline(std::vector<step> steps) : steps{std::move(steps)} {
+using statement = variant<invocation, assignment, if_stmt, match_stmt>;
+
+struct pipeline {
+  explicit pipeline(std::vector<statement> body)
+    : body{std::make_unique<std::vector<statement>>(std::move(body))} {
   }
 
-  std::vector<step> steps;
+  std::unique_ptr<std::vector<statement>> body;
 
-  friend auto inspect(auto& f, pipeline& x) -> bool {
-    return f.apply(x.steps);
+  template <class Inspector>
+  friend auto inspect(Inspector& f, pipeline& x) -> bool {
+    if constexpr (Inspector::is_loading) {
+      x.body = std::make_unique<std::vector<statement>>();
+    } else {
+      TENZIR_ASSERT_CHEAP(x.body);
+    }
+    // TODO: What is this?
+    return f.apply(
+      *static_cast<std::enable_if_t<not detail::always_false_v<Inspector>,
+                                    decltype(body)&>>(x.body));
+  }
+};
+
+struct if_stmt {
+  if_stmt(expression condition, pipeline then, std::optional<pipeline> else_)
+    : condition{std::move(condition)},
+      then{std::move(then)},
+      else_{std::move(else_)} {
+  }
+
+  expression condition;
+  pipeline then;
+  std::optional<pipeline> else_;
+
+  friend auto inspect(auto& f, if_stmt& x) -> bool {
+    return f.object(x).fields(f.field("condition", x.condition),
+                              f.field("then", x.then),
+                              f.field("else", x.else_));
+  }
+};
+
+struct match_case {
+  std::vector<expression> filter;
+  pipeline pipe;
+
+  friend auto inspect(auto& f, match_case& x) -> bool {
+    return f.object(x).fields(f.field("filter", x.filter),
+                              f.field("pipe", x.pipe));
+  }
+};
+
+struct match_stmt {
+  expression expr;
+  std::vector<match_case> cases;
+
+  friend auto inspect(auto& f, match_stmt& x) -> bool {
+    return f.object(x).fields(f.field("expr", x.expr),
+                              f.field("cases", x.cases));
+  }
+
+  match_stmt(expression expr, std::vector<match_case> cases)
+    : expr{std::move(expr)}, cases{std::move(cases)} {
   }
 };
 

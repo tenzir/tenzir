@@ -120,6 +120,10 @@ struct located {
 
   auto operator<=>(const located&) const = default;
 
+  auto location() const -> location {
+    return source;
+  }
+
   template <class Inspector>
   friend auto inspect(Inspector& f, located& x) {
     if (auto dbg = as_debug_writer(f)) {

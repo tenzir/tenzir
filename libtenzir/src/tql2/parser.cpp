@@ -102,8 +102,9 @@ private:
 
   auto parse_pipeline() -> pipeline {
     auto scope = ignore_newlines(false);
-    auto steps = std::vector<pipeline::step>{};
+    auto steps = std::vector<statement>{};
     auto end = [&] {
+      // TODO: rbrace
       return eoi() || peek(tk::rbrace);
     };
     auto accept_stmt_end = [&] {
@@ -112,7 +113,60 @@ private:
     while (true) {
       while (accept_stmt_sep()) {
       }
+      if (accept(tk::if_)) {
+        auto condition = parse_expression();
+        expect(tk::lbrace);
+        auto consequence = parse_pipeline();
+        expect(tk::rbrace);
+        auto alternative = std::optional<pipeline>{};
+        if (accept(tk::else_)) {
+          expect(tk::lbrace);
+          alternative = parse_pipeline();
+          expect(tk::rbrace);
+        }
+        steps.emplace_back(if_stmt{
+          std::move(condition),
+          std::move(consequence),
+          std::move(alternative),
+        });
+        if (not accept_stmt_end()) {
+          throw_token();
+        }
+        continue;
+      }
+      if (accept(tk::match)) {
+        // TODO: Decide exact syntax, useable for both single-line and
+        // multi-line TQL, and for expressions and statements.
+        //    match foo {
+        //      "ok", 42 => { ... }
+        //    }
+        auto expr = parse_expression();
+        auto cases = std::vector<match_case>{};
+        expect(tk::lbrace);
+        // TODO: Restrict this.
+        while (not accept(tk::rbrace)) {
+          auto filter = std::vector<expression>{};
+          while (true) {
+            filter.push_back(parse_expression());
+            if (accept(tk::fat_arrow)) {
+              break;
+            }
+            expect(tk::comma);
+          }
+          expect(tk::lbrace);
+          auto pipe = parse_pipeline();
+          expect(tk::rbrace);
+          // TODO: require comma or newline?
+          (void)accept(tk::comma);
+          cases.emplace_back(std::move(filter), std::move(pipe));
+        }
+        steps.emplace_back(match_stmt{std::move(expr), std::move(cases)});
+        if (not accept_stmt_end()) {
+          throw_token();
+        }
+      }
       if (end()) {
+        // TODO: Use if(START) instead.
         break;
       }
       // either selector followed by `=`, or entity (no_dollar)
@@ -132,7 +186,28 @@ private:
         auto args = std::vector<argument>{};
         while (not accept_stmt_end()) {
           if (not args.empty()) {
-            expect(tk::comma);
+            if (not accept(tk::comma)) {
+              // Allow `{ ... }` without comma as final argument.
+              if (not peek(tk::lbrace)) {
+                diagnostic::error("unexpected continuation of arguments")
+                  .primary(next_location())
+                  .hint("try inserting a `,` before")
+                  .throw_();
+              }
+              args.emplace_back(parse_record_or_pipeline());
+              if (accept_stmt_end()) {
+                break;
+              }
+              auto before = args.back().match([](auto& x) {
+                return x.location();
+              });
+              diagnostic::error(
+                "expected end of statement due to final argument")
+                .primary(next_location(), "expected end of statement")
+                .secondary(before, "final argument")
+                .hint("insert a `,` before `{` to continue arguments")
+                .throw_();
+            }
             consume_trivia_with_newlines();
           }
           args.push_back(parse_argument());
@@ -283,10 +358,31 @@ private:
   }
 
   auto parse_primary_expression() -> expression {
+    // Literals: bool, duration, time, double, ipv4, ipv6, uint/int??, string
+    // x = 42 -> signed
+    // x = 9223372036854775808 -> unsigned
     if (accept(tk::lpar)) {
       auto result = parse_expression();
       expect(tk::rpar);
       return result;
+    }
+    if (auto token = accept(tk::string)) {
+      // TODO: Make this better and parse content?
+      return expression{
+        string{std::string{token.text.substr(1, token.text.size() - 2)},
+               token.location}};
+    }
+    if (auto token = accept(tk::integer)) {
+      return expression{integer{token.as_string()}};
+    }
+    if (auto token = accept(tk::true_)) {
+      return expression{boolean{true, token.location}};
+    }
+    if (auto token = accept(tk::false_)) {
+      return expression{boolean{false, token.location}};
+    }
+    if (auto token = accept(tk::null)) {
+      return expression{null{token.location}};
     }
     if (selector_start()) {
       // Check if we have identifier followed by `(` or `'`.
@@ -328,15 +424,6 @@ private:
     }
     if (peek(tk::lbrace)) {
       return parse_record_or_pipeline();
-    }
-    if (auto token = accept(tk::string)) {
-      // TODO: Make this better and parse content?
-      return expression{
-        string{std::string{token.text.substr(1, token.text.size() - 2)},
-               token.location}};
-    }
-    if (auto token = accept(tk::integer)) {
-      return expression{integer{token.as_string()}};
     }
     throw_token();
   }
@@ -487,16 +574,24 @@ private:
     return next_ == tokens_.size();
   }
 
-  [[noreturn]] void throw_token(std::string message) {
+  auto next_location() -> location {
     auto loc = location{};
-    auto got = std::string_view{};
     if (next_ < tokens_.size()) {
       loc.begin = next_ == 0 ? 0 : tokens_[next_ - 1].end;
       loc.end = tokens_[next_].end;
-      got = describe(tokens_[next_].kind);
     } else {
       loc.begin = tokens_.back().end;
       loc.end = tokens_.back().end;
+    }
+    return loc;
+  }
+
+  [[noreturn]] void throw_token(std::string message) {
+    auto loc = next_location();
+    auto got = std::string_view{};
+    if (next_ < tokens_.size()) {
+      got = describe(tokens_[next_].kind);
+    } else {
       got = "EOF";
     }
     diagnostic::error("{}", message).primary(loc, "got {}", got).throw_();
