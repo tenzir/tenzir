@@ -53,47 +53,19 @@ public:
   }
 
   /// Emits context information for every event in `slice` in order.
-  auto apply(table_slice slice, context::parameter_map parameters) const
-    -> caf::expected<std::vector<series>> override {
-    auto resolved_slice = resolve_enumerations(slice);
-    auto field_name = std::optional<std::string>{};
-    for (const auto& [key, value] : parameters) {
-      if (key == "field") {
-        if (not value) {
-          return caf::make_error(ec::invalid_argument,
-                                 "invalid argument type for `field`: expected "
-                                 "a string");
-        }
-        field_name = *value;
-        continue;
-      }
-    }
-    if (not field_name) {
-      return caf::make_error(ec::invalid_argument, "missing argument `field`");
-    }
-    auto field_builder = series_builder{};
-    auto column_offset = slice.schema().resolve_key_or_concept(*field_name);
-    if (not column_offset) {
-      for (auto i = size_t{0}; i < slice.rows(); ++i) {
-        field_builder.null();
-      }
-      return field_builder.finish();
-    }
-    auto [type, slice_array] = column_offset->get(resolved_slice);
-    for (const auto& value : values(type, *slice_array)) {
+  auto apply(series s) const -> caf::expected<std::vector<series>> override {
+    auto builder = series_builder{};
+    for (const auto& value : s.values()) {
       if (bloom_filter_.lookup(value)) {
         auto ptr = bloom_filter_.data().data();
         auto size = bloom_filter_.data().size();
-        auto r = field_builder.record();
-        r.field("key", value);
-        auto context = r.field("context").record();
-        context.field("data", std::basic_string<std::byte>{ptr, size});
-        r.field("timestamp", std::chrono::system_clock::now());
+        auto r = builder.record();
+        r.field("data", std::basic_string<std::byte>{ptr, size});
       } else {
-        field_builder.null();
+        builder.null();
       }
     }
-    return field_builder.finish();
+    return builder.finish();
   }
 
   auto snapshot(parameter_map) const -> caf::expected<expression> override {
@@ -150,11 +122,6 @@ public:
     auto query_f = [key_values_list = std::move(key_values_list)](
                      parameter_map params) -> caf::expected<expression> {
       auto column = params["field"];
-      if (not column) {
-        return caf::make_error(ec::invalid_argument,
-                               "missing 'field' parameter for lookup in "
-                               "bloom-filter");
-      }
       return expression{
         predicate{
           field_extractor(*column),

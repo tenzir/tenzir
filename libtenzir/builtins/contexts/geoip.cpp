@@ -277,46 +277,14 @@ public:
   }
 
   /// Emits context information for every event in `slice` in order.
-  auto apply(table_slice slice, context::parameter_map parameters) const
-    -> caf::expected<std::vector<series>> override {
+  auto apply(series s) const -> caf::expected<std::vector<series>> override {
     auto status = 0;
     MMDB_entry_data_list_s* entry_data_list = nullptr;
-    auto resolved_slice = resolve_enumerations(slice);
-    auto field_name = std::optional<std::string>{};
-    for (const auto& [key, value] : parameters) {
-      if (key == "field") {
-        if (not value) {
-          return caf::make_error(ec::invalid_argument,
-                                 "invalid argument type for `field`: expected "
-                                 "a string");
-        }
-        field_name = *value;
-        continue;
-      }
-      return caf::make_error(ec::invalid_argument,
-                             fmt::format("invalid argument `{}`", key));
-    }
-    if (not field_name) {
-      return caf::make_error(ec::invalid_argument, "missing argument `field`");
-    }
-    auto field_builder = series_builder{};
-    auto column_offset = slice.schema().resolve_key_or_concept(*field_name);
-    if (not column_offset) {
-      for (auto i = size_t{0}; i < slice.rows(); ++i) {
-        field_builder.null();
-      }
-      return field_builder.finish();
-    }
-    auto [slice_type, slice_array] = column_offset->get(resolved_slice);
-    if (slice_type != type{ip_type{}} and slice_type != type{string_type{}}) {
-      // No ip type = no enrichment.
-      field_builder.null();
-      return field_builder.finish();
-    }
-    for (const auto& value : values(slice_type, *slice_array)) {
+    auto builder = series_builder{};
+    for (const auto& value : s.values()) {
       auto address_info_error = 0;
       auto ip_string = fmt::to_string(value);
-      if (slice_type == type{string_type{}}) {
+      if (s.type == type{string_type{}}) {
         // Unquote IP strings.
         ip_string.erase(0, 1);
         ip_string.erase(ip_string.size() - 1);
@@ -359,15 +327,12 @@ public:
                                           "GeoIP database: {}",
                                           ip_string, MMDB_strerror(status)));
         }
-        auto r = field_builder.record();
-        r.field("address", value);
-        r.field("context", output);
-        r.field("timestamp", std::chrono::system_clock::now());
+        builder.data(output);
       } else {
-        field_builder.null();
+        builder.null();
       }
     }
-    return field_builder.finish();
+    return builder.finish();
   }
 
   /// Inspects the context.

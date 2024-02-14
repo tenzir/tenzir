@@ -731,9 +731,8 @@ public:
 
   virtual auto context_type() const -> std::string = 0;
 
-  /// Emits context information for every event in `slice` in order.
-  virtual auto apply(table_slice slice, parameter_map parameters) const
-    -> caf::expected<std::vector<series>>
+  /// Emits context information for every event in `array` in order.
+  virtual auto apply(series array) const -> caf::expected<std::vector<series>>
     = 0;
 
   /// Inspects the context.
