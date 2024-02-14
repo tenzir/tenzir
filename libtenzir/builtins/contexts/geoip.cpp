@@ -468,14 +468,14 @@ public:
                            "geoip context does not support snapshots");
   }
 
-  auto save() const -> caf::expected<chunk_ptr> override {
+  auto save() const -> caf::expected<save_result> override {
     auto builder = flatbuffers::FlatBufferBuilder{};
     auto path = builder.CreateString(db_path_);
     fbs::context::geoip::GeoIPDataBuilder geoip_builder(builder);
     geoip_builder.add_url(path);
     auto geoip_data = geoip_builder.Finish();
     fbs::context::geoip::FinishGeoIPDataBuffer(builder, geoip_data);
-    return tenzir::fbs::release(builder);
+    return save_result{.data = tenzir::fbs::release(builder), .version = 1};
   }
 
 private:
@@ -484,22 +484,13 @@ private:
   std::optional<MMDB_s> mmdb_;
 };
 
-class plugin : public virtual context_plugin {
-  auto initialize(const record&, const record&) -> caf::error override {
-    return caf::none;
+struct v1_loader : public context_loader {
+  auto version() const -> int {
+    return 1;
   }
 
-  auto name() const -> std::string override {
-    return "geoip";
-  }
-
-  auto make_context(context::parameter_map parameters) const
-    -> caf::expected<std::unique_ptr<context>> override {
-    return std::make_unique<ctx>(std::move(parameters));
-  }
-
-  auto load_context(chunk_ptr serialized) const
-    -> caf::expected<std::unique_ptr<context>> override {
+  auto load(chunk_ptr serialized) const
+    -> caf::expected<std::unique_ptr<context>> {
     const auto* serialized_data
       = fbs::context::geoip::GetGeoIPData(serialized->data());
     if (not serialized_data) {
@@ -517,6 +508,22 @@ class plugin : public virtual context_plugin {
     context::parameter_map params;
     params[path_key] = serialized_string->str();
     return std::make_unique<ctx>(std::move(params));
+  }
+};
+
+class plugin : public virtual context_plugin {
+  auto initialize(const record&, const record&) -> caf::error override {
+    register_loader(std::make_unique<v1_loader>());
+    return caf::none;
+  }
+
+  auto name() const -> std::string override {
+    return "geoip";
+  }
+
+  auto make_context(context::parameter_map parameters) const
+    -> caf::expected<std::unique_ptr<context>> override {
+    return std::make_unique<ctx>(std::move(parameters));
   }
 };
 

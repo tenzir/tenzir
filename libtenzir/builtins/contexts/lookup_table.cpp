@@ -208,7 +208,7 @@ public:
     return show();
   }
 
-  auto save() const -> caf::expected<chunk_ptr> override {
+  auto save() const -> caf::expected<save_result> override {
     // We save the context by formatting into a record of this format:
     //   [{key: key, value: value}, ...]
     auto builder = flatbuffers::FlatBufferBuilder{};
@@ -236,29 +236,20 @@ public:
     const auto data_offset
       = fbs::CreateData(builder, fbs::data::Data::list, list_offset.Union());
     fbs::FinishDataBuffer(builder, data_offset);
-    return chunk::make(builder.Release());
+    return save_result{.data = chunk::make(builder.Release()), .version = 1};
   }
 
 private:
   tsl::robin_map<data, data> context_entries;
 };
 
-class plugin : public virtual context_plugin {
-  auto initialize(const record&, const record&) -> caf::error override {
-    return caf::none;
+struct v1_loader : public context_loader {
+  auto version() const -> int {
+    return 1;
   }
 
-  auto name() const -> std::string override {
-    return "lookup-table";
-  }
-
-  auto make_context(context::parameter_map) const
-    -> caf::expected<std::unique_ptr<context>> override {
-    return std::make_unique<ctx>();
-  }
-
-  auto load_context(chunk_ptr serialized) const
-    -> caf::expected<std::unique_ptr<context>> override {
+  auto load(chunk_ptr serialized) const
+    -> caf::expected<std::unique_ptr<context>> {
     auto fb = flatbuffer<fbs::Data>::make(std::move(serialized));
     if (not fb) {
       return caf::make_error(ec::serialization_error,
@@ -320,6 +311,22 @@ class plugin : public virtual context_plugin {
     }
 
     return std::make_unique<ctx>(std::move(context_entries));
+  }
+};
+
+class plugin : public virtual context_plugin {
+  auto initialize(const record&, const record&) -> caf::error override {
+    register_loader(std::make_unique<v1_loader>());
+    return caf::none;
+  }
+
+  auto name() const -> std::string override {
+    return "lookup-table";
+  }
+
+  auto make_context(context::parameter_map) const
+    -> caf::expected<std::unique_ptr<context>> override {
+    return std::make_unique<ctx>();
   }
 };
 
