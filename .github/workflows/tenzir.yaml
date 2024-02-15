@@ -84,6 +84,10 @@ jobs:
       run-python: ${{ steps.configure.outputs.run-python }}
       run-python-package: ${{ steps.configure.outputs.run-python-package }}
     steps:
+      - name: Configure ssh-agent
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
       - name: Checkout
         uses: actions/checkout@v4
         with:
