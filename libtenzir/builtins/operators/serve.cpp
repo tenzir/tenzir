@@ -289,6 +289,7 @@ struct managed_serve_operator {
       TENZIR_DEBUG("serve for id {} is done", escape_operator_arg(serve_id));
       continuation_token.clear();
       get_rp.deliver(std::make_tuple(std::string{}, std::move(results)));
+      delayed_attempt.dispose();
       stop_rp.deliver();
       return true;
     }
@@ -301,6 +302,7 @@ struct managed_serve_operator {
     TENZIR_DEBUG("serve for id {} is now available with continuation token {}",
                  escape_operator_arg(serve_id), continuation_token);
     get_rp.deliver(std::make_tuple(continuation_token, std::move(results)));
+    delayed_attempt.dispose();
     return true;
   }
 };
@@ -346,6 +348,7 @@ struct serve_manager_state {
         expired_ids.emplace(found->serve_id, reason);
         if (found->get_rp.pending()) {
           found->get_rp.deliver(reason);
+          found->delayed_attempt.dispose();
         }
         ops.erase(found);
       }
