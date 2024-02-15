@@ -100,27 +100,31 @@ jobs:
         #if: github.event_name == 'push' && github.ref == 'refs/heads/topic/fake-main'
         env:
           GITHUB_APP_TOKEN: ${{ steps.generate_token.outputs.token }}
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
           plugins_sha=$(git -C contrib/tenzir-plugins rev-parse HEAD)
           plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse origin/main)
           if [ "$plugins_sha" != "$plugins_main_sha" ]; then
             # Auto-merge the plugins PR and update 'tenzir-plugins/main'.
-            # pr_number=$(gh pr list --search $plugins_main_sha --json number -q .[0].number)
-            # echo $pr_number
-            # gh pr merge $pr_number --repo tenzir/tenzir-plugins --match-head-commit ${plugins_sha}
-            # git -C contrib/tenzir-plugins fetch
-            # git -C contrib/tenzir-plugins checkout origin/main
+            cd contrib/tenzir-plugins
+            pr_number=$(gh pr list --search $plugins_main_sha --json number -q ".[0].number")
+            echo $pr_number
+            cd ..
+            # nix/update-plugins.sh
+            git -C contrib/tenzir-plugins fetch
+            git -C contrib/tenzir-plugins checkout origin/main
 
             # Create a new commit for the updated submodule.
             # git add contrib/tenzir-plugins
             git config --global user.name 'CI Bot'
             git config --global user.email 'tenzir-ci-app@users.noreply.github.com'
             git remote set-url origin https://x-access-token:$GITHUB_APP_TOKEN@github.com/tenzir/tenzir.git
-            git checkout topic/fake-main
+            git checkout -b topic/bump-submodules-from-$plugins_main_sha-to-$plugins_sha
             echo "test" >> dummy-file
             git add dummy-file
             git commit -m "test commit"
-            git push
+            git push -u origin topic/bump-submodules-from-$plugins_main_sha-to-$plugins_sha
+            gh pr create --title "Bump submodules from $plugins_main_sha to $plugins_sha" --body "Test"
           fi
       - name: Fetch Tags
         run: git fetch origin +refs/tags/*:refs/tags/*
