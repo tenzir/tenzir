@@ -749,7 +749,7 @@ void index_state::decommission_active_partition(
   stage->out().close(active_partition->second.stream_slot);
   stage->out().force_emit_batches();
   // Move the active partition to the list of unpersisted partitions.
-  TENZIR_ASSERT(!unpersisted.contains(id));
+  TENZIR_ASSERT_EXPENSIVE(!unpersisted.contains(id));
   unpersisted[id] = {type, actor};
   active_partitions.erase(active_partition);
   // Persist active partition asynchronously.

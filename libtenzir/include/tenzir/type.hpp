@@ -1603,14 +1603,14 @@ struct sum_type_access<tenzir::type> final {
 
   template <tenzir::basic_type T, int Index>
   static const T& get(const tenzir::type& x, sum_type_token<T, Index> token) {
-    TENZIR_ASSERT(is(x, token));
+    TENZIR_ASSERT_EXPENSIVE(is(x, token));
     static const auto instance = T{};
     return instance;
   }
 
   template <tenzir::complex_type T, int Index>
   static const T& get(const tenzir::type& x, sum_type_token<T, Index> token) {
-    TENZIR_ASSERT(is(x, token));
+    TENZIR_ASSERT_EXPENSIVE(is(x, token));
     return static_cast<const T&>(
       static_cast<const tenzir::stateful_type_base&>(x));
   }
@@ -1663,7 +1663,7 @@ struct sum_type_access<tenzir::type> final {
       }(types{},
         std::make_integer_sequence<uint8_t, detail::tl_size<types>::value>());
     const auto dispatch = table[index_from_type(x)];
-    TENZIR_ASSERT(dispatch);
+    TENZIR_ASSERT_EXPENSIVE(dispatch);
     return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
   }
 };
@@ -1688,13 +1688,13 @@ struct sum_type_access<arrow::DataType> final {
   template <class T, int Index>
   static const T&
   get(const arrow::DataType& x, sum_type_token<T, Index> token) {
-    TENZIR_ASSERT(is(x, token));
+    TENZIR_ASSERT_EXPENSIVE(is(x, token));
     return static_cast<const T&>(x);
   }
 
   template <class T, int Index>
   static T& get(arrow::DataType& x, sum_type_token<T, Index> token) {
-    TENZIR_ASSERT(is(x, token));
+    TENZIR_ASSERT_EXPENSIVE(is(x, token));
     return static_cast<T&>(x);
   }
 
@@ -1739,7 +1739,7 @@ struct sum_type_access<arrow::DataType> final {
       }(types{},
         std::make_integer_sequence<int, detail::tl_size<types>::value>());
     const auto dispatch = table[index_from_type(x)];
-    TENZIR_ASSERT(dispatch);
+    TENZIR_ASSERT_EXPENSIVE(dispatch);
     return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
   }
 };
@@ -1769,13 +1769,13 @@ struct sum_type_access<arrow::Array> final {
 
   template <class T, int Index>
   static const T& get(const arrow::Array& x, sum_type_token<T, Index> token) {
-    TENZIR_ASSERT(is(x, token));
+    TENZIR_ASSERT_EXPENSIVE(is(x, token));
     return static_cast<const T&>(x);
   }
 
   template <class T, int Index>
   static T& get(arrow::Array& x, sum_type_token<T, Index> token) {
-    TENZIR_ASSERT(is(x, token));
+    TENZIR_ASSERT_EXPENSIVE(is(x, token));
     return static_cast<T&>(x);
   }
 
@@ -1797,7 +1797,7 @@ struct sum_type_access<arrow::Array> final {
   template <class Result, class Visitor, class... Args>
   static auto apply(const arrow::Array& x, Visitor&& v, Args&&... xs)
     -> Result {
-    TENZIR_ASSERT(x.type());
+    TENZIR_ASSERT_EXPENSIVE(x.type());
     // A dispatch table that maps variant type index to dispatch function for
     // the concrete type.
     static constexpr auto table =
@@ -1816,7 +1816,7 @@ struct sum_type_access<arrow::Array> final {
         std::make_integer_sequence<int, detail::tl_size<types>::value>());
     const auto dispatch
       = table[sum_type_access<arrow::DataType>::index_from_type(*x.type())];
-    TENZIR_ASSERT(dispatch);
+    TENZIR_ASSERT_EXPENSIVE(dispatch);
     return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
   }
 };
@@ -1839,7 +1839,7 @@ struct sum_type_access<arrow::Scalar> final {
     static_assert(std::is_base_of_v<arrow::Scalar, T>);
     if (!x.is_valid)
       return false;
-    TENZIR_ASSERT(x.type);
+    TENZIR_ASSERT_EXPENSIVE(x.type);
     if (x.type->id() != T::TypeClass::type_id)
       return false;
     if constexpr (arrow::is_extension_type<typename T::TypeClass>::value)
@@ -1850,13 +1850,13 @@ struct sum_type_access<arrow::Scalar> final {
 
   template <class T, int Index>
   static const T& get(const arrow::Scalar& x, sum_type_token<T, Index> token) {
-    TENZIR_ASSERT(is(x, token));
+    TENZIR_ASSERT_EXPENSIVE(is(x, token));
     return static_cast<const T&>(x);
   }
 
   template <class T, int Index>
   static T& get(arrow::Scalar& x, sum_type_token<T, Index> token) {
-    TENZIR_ASSERT(is(x, token));
+    TENZIR_ASSERT_EXPENSIVE(is(x, token));
     return static_cast<T&>(x);
   }
 
@@ -1878,8 +1878,8 @@ struct sum_type_access<arrow::Scalar> final {
   template <class Result, class Visitor, class... Args>
   static auto apply(const arrow::Scalar& x, Visitor&& v, Args&&... xs)
     -> Result {
-    TENZIR_ASSERT(x.is_valid);
-    TENZIR_ASSERT(x.type);
+    TENZIR_ASSERT_EXPENSIVE(x.is_valid);
+    TENZIR_ASSERT_EXPENSIVE(x.type);
     // A dispatch table that maps variant type index to dispatch function for
     // the concrete type.
     static constexpr auto table =
@@ -1898,7 +1898,7 @@ struct sum_type_access<arrow::Scalar> final {
         std::make_integer_sequence<int, detail::tl_size<types>::value>());
     const auto dispatch
       = table[sum_type_access<arrow::DataType>::index_from_type(*x.type)];
-    TENZIR_ASSERT(dispatch);
+    TENZIR_ASSERT_EXPENSIVE(dispatch);
     return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
   }
 };
@@ -1931,13 +1931,13 @@ struct sum_type_access<arrow::ArrayBuilder> final {
   template <class T, int Index>
   static const T&
   get(const arrow::ArrayBuilder& x, sum_type_token<T, Index> token) {
-    TENZIR_ASSERT(is(x, token));
+    TENZIR_ASSERT_EXPENSIVE(is(x, token));
     return static_cast<const T&>(x);
   }
 
   template <class T, int Index>
   static T& get(arrow::ArrayBuilder& x, sum_type_token<T, Index> token) {
-    TENZIR_ASSERT(is(x, token));
+    TENZIR_ASSERT_EXPENSIVE(is(x, token));
     return static_cast<T&>(x);
   }
 
@@ -1959,7 +1959,7 @@ struct sum_type_access<arrow::ArrayBuilder> final {
   template <class Result, class Visitor, class... Args>
   static auto apply(const arrow::ArrayBuilder& x, Visitor&& v, Args&&... xs)
     -> Result {
-    TENZIR_ASSERT(x.type());
+    TENZIR_ASSERT_EXPENSIVE(x.type());
     // A dispatch table that maps variant type index to dispatch function for
     // the concrete type.
     static constexpr auto table =
@@ -1978,7 +1978,7 @@ struct sum_type_access<arrow::ArrayBuilder> final {
         std::make_integer_sequence<int, detail::tl_size<types>::value>());
     const auto dispatch
       = table[sum_type_access<arrow::DataType>::index_from_type(*x.type())];
-    TENZIR_ASSERT(dispatch);
+    TENZIR_ASSERT_EXPENSIVE(dispatch);
     return dispatch(x, std::forward<Visitor>(v), std::forward<Args>(xs)...);
   }
 };

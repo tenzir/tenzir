@@ -169,7 +169,8 @@ auto make_unflattened_struct_array(
   // foo struct array with bar and baz as children
   std::unordered_set<unflatten_field*> handled_fields;
   for (const auto& field : fields) {
-    TENZIR_ASSERT(original_field_name_to_new_field_map.contains(field->name()));
+    TENZIR_ASSERT_EXPENSIVE(
+      original_field_name_to_new_field_map.contains(field->name()));
     auto* f = original_field_name_to_new_field_map.at(field->name());
     if (not handled_fields.contains(f)) {
       new_columns.push_back(f->to_arrow());
@@ -555,11 +556,11 @@ table_slice concatenate(std::vector<table_slice> slices) {
   if (slices.size() == 1)
     return std::move(slices[0]);
   auto schema = slices[0].schema();
-  TENZIR_ASSERT(std::all_of(slices.begin(), slices.end(),
-                            [&](const auto& slice) {
-                              return slice.schema() == schema;
-                            }),
-                "concatenate requires slices to be homogeneous");
+  TENZIR_ASSERT_EXPENSIVE(std::all_of(slices.begin(), slices.end(),
+                                      [&](const auto& slice) {
+                                        return slice.schema() == schema;
+                                      }),
+                          "concatenate requires slices to be homogeneous");
   auto builder = caf::get<record_type>(schema).make_arrow_builder(
     arrow::default_memory_pool());
   auto arrow_schema = schema.to_arrow_schema();
@@ -1128,7 +1129,7 @@ auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
   // additional transformation to rename them in case we detect any.
   transformations.clear();
   const auto& layout = caf::get<record_type>(slice.schema());
-  TENZIR_ASSERT(layout.num_fields() == layout.num_leaves());
+  TENZIR_ASSERT_EXPENSIVE(layout.num_fields() == layout.num_leaves());
   for (const auto& leaf : layout.leaves()) {
     size_t num_occurences = 0;
     if (std::any_of(transformations.begin(), transformations.end(),
@@ -1165,7 +1166,8 @@ auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
       }
     }
   }
-  TENZIR_ASSERT(std::is_sorted(transformations.begin(), transformations.end()));
+  TENZIR_ASSERT_EXPENSIVE(
+    std::is_sorted(transformations.begin(), transformations.end()));
   slice = transform_columns(slice, transformations);
   // Renaming cannot fail.
   TENZIR_ASSERT(slice.rows() > 0);

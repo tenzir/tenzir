@@ -197,7 +197,8 @@ void partition_transformer_state::update_type_ids_and_indexers(
   ids.append_bits(false, first - ids.size());
   ids.append_bits(true, last - first);
   // Push the event data to the indexers.
-  TENZIR_ASSERT(slice.columns() == caf::get<record_type>(schema).num_leaves());
+  TENZIR_ASSERT_EXPENSIVE(slice.columns()
+                          == caf::get<record_type>(schema).num_leaves());
   for (size_t flat_index = 0;
        const auto& [field, offset] : caf::get<record_type>(schema).leaves()) {
     const auto qf = qualified_record_field{schema, offset};

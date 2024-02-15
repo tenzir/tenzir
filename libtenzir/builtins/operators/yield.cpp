@@ -178,7 +178,7 @@ public:
       = table_slice{arrow::RecordBatch::Make(new_type.to_arrow_schema(),
                                              array->length(), fields),
                     new_type};
-    TENZIR_ASSERT(to_record_batch(result)->Validate().ok());
+    TENZIR_ASSERT_EXPENSIVE(to_record_batch(result)->Validate().ok());
     return result;
   }
 

@@ -95,8 +95,9 @@ public:
     // TODO: Adjust filter function return type.
     // TODO: Replace this with an Arrow-native filter function as soon as we
     // are able to directly evaluate expressions on a record batch.
-    if (expr)
+    if (expr) {
       return filter(slice, *expr).value_or(table_slice{});
+    }
     return {};
   }
 
