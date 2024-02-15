@@ -138,7 +138,7 @@ jobs:
             git add contrib/tenzir-plugins
             git add nix/
             git commit -m "Automatic submodule bump from $plugins_main_sha_short to $new_plugins_main_sha"
-            git push -u origin fake-main
+            git push -u origin topic/fake-main
 
             # DEV: Switch back to current branch
             git checkout $current_branch
