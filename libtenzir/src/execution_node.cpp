@@ -348,8 +348,8 @@ struct exec_node_state {
       }
       if (not std::holds_alternative<generator<Output>>(*output_generator)) {
         return caf::make_error(
-          ec::logic_error, fmt::format("{} expected {}, but got {}", *self,
-                                       operator_type_name<Output>(),
+          ec::logic_error, fmt::format("{} {} expected {}, but got {}", *self,
+                                       op->name(), operator_type_name<Output>(),
                                        operator_type_name(*output_generator)));
       }
       instance.emplace();

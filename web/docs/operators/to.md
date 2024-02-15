@@ -11,9 +11,9 @@ Consumes events by combining a [connector][connectors] and a [format][formats].
 ## Synopsis
 
 ```
-to <uri> [write <format>]
-to <path> [write <format>]
-to <connector> [write <format>]
+to [--progress] <uri> [write <format>]
+to [--progress] <path> [write <format>]
+to [--progress] <connector> [write <format>]
 ```
 
 ## Description
@@ -39,6 +39,11 @@ The `to` operator is a pipeline under the hood. For most cases, it is equal to
 connectors and formats the underlying pipeline is a bit more complex. We
 recommend always using `to ... write ...` over the [`write`](write.md) and
 [`save`](save.md) operators.
+
+### `--progress`
+
+Emit events describing the progress of the save operation. Note that this turns
+the `to` operator into a transformation rather than a sink.
 
 ### `<connector>`
 

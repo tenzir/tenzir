@@ -15,6 +15,7 @@
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/type.hpp>
 
@@ -28,6 +29,11 @@
 namespace tenzir::plugins::write_to_print_save {
 
 namespace {
+
+enum class show_progress : bool {
+  no,
+  yes,
+};
 
 [[noreturn]] void throw_printer_not_found(located<std::string_view> x) {
   auto available = std::vector<std::string>{};
@@ -191,7 +197,8 @@ public:
 
 /// The operator for saving data that will have to be joined later
 /// during pipeline execution.
-class save_operator final : public crtp_operator<save_operator> {
+template <show_progress ShowProgress>
+class save_operator final : public crtp_operator<save_operator<ShowProgress>> {
 public:
   save_operator() = default;
 
@@ -199,9 +206,12 @@ public:
     : saver_{std::move(saver)} {
   }
 
+  using output_type = std::conditional_t<ShowProgress == show_progress::yes,
+                                         table_slice, std::monostate>;
+
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> generator<std::monostate> {
+    -> generator<output_type> {
     // TODO: Extend API to allow schema-less make_saver().
     auto new_saver = saver_->instantiate(ctrl, std::nullopt);
     if (!new_saver) {
@@ -211,9 +221,28 @@ public:
       co_return;
     }
     co_yield {};
-    for (auto&& x : input) {
-      (*new_saver)(std::move(x));
-      co_yield {};
+    if constexpr (ShowProgress == show_progress::yes) {
+      auto builder = series_builder{};
+      auto bytes = uint64_t{};
+      for (auto&& x : input) {
+        if (not x) {
+          co_yield builder.finish_assert_one_slice("tenzir.progress");
+          continue;
+        }
+        bytes += x->size();
+        auto progress = builder.record();
+        progress.field("bytes", bytes);
+        (*new_saver)(std::move(x));
+      }
+      co_yield builder.finish_assert_one_slice("tenzir.progress");
+    } else {
+      for (auto&& x : input) {
+        if (not x) {
+          co_yield {};
+          continue;
+        }
+        (*new_saver)(std::move(x));
+      }
     }
   }
 
@@ -226,7 +255,8 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "save";
+    return fmt::format("internal-save-{}-progress",
+                       ShowProgress == show_progress::yes ? "with" : "without");
   }
 
   auto optimize(expression const& filter, event_order order) const
@@ -243,7 +273,11 @@ protected:
   auto infer_type_impl(operator_type input) const
     -> caf::expected<operator_type> override {
     if (input.is<chunk_ptr>()) {
-      return tag_v<void>;
+      if constexpr (ShowProgress == show_progress::yes) {
+        return tag_v<table_slice>;
+      } else {
+        return tag_v<void>;
+      }
     }
     // TODO: Fuse this check with crtp_operator::instantiate()
     return caf::make_error(ec::type_clash,
@@ -256,41 +290,81 @@ private:
 };
 
 auto get_saver(parser_interface& p, const char* usage, const char* docs)
-  -> std::pair<std::unique_ptr<plugin_saver>, located<std::string>> {
-  auto s_name = p.accept_shell_arg();
-  if (not s_name) {
+  -> std::tuple<std::unique_ptr<plugin_saver>, located<std::string>,
+                show_progress> {
+  auto arg = p.accept_shell_arg();
+  auto show_progress = show_progress::no;
+  if (not arg) {
     diagnostic::error("expected saver name")
       .primary(p.current_span())
       .usage(usage)
       .docs(docs)
       .throw_();
   }
-  auto [saver, name, path, is_uri] = detail::resolve_saver(p, *s_name);
+  if (arg->inner.starts_with("--")) {
+    if (arg->inner != "--progress") {
+      diagnostic::error("unsupported option `{}`", arg->inner)
+        .primary(arg->source)
+        .usage(usage)
+        .docs(docs)
+        .throw_();
+    }
+    show_progress = show_progress::yes;
+    arg = p.accept_shell_arg();
+    if (not arg) {
+      diagnostic::error("expected saver name")
+        .primary(p.current_span())
+        .usage(usage)
+        .docs(docs)
+        .throw_();
+    }
+  }
+  auto [saver, name, path, is_uri] = detail::resolve_saver(p, *arg);
   if (not saver) {
     throw_saver_not_found(name, is_uri);
   }
-  return {std::move(saver), std::move(path)};
+  return {
+    std::move(saver),
+    std::move(path),
+    show_progress,
+  };
 }
 
-class save_plugin final : public virtual operator_plugin<save_operator> {
+class save_plugin final : public virtual operator_parser_plugin {
 public:
+  auto name() const -> std::string override {
+    return "save";
+  }
+
   auto signature() const -> operator_signature override {
-    return {.sink = true};
+    // Technically, if --progress is set, the save operator is a transformation
+    // rather than a sink. However, we do not want to advertise this, as it is
+    // more distracting than helpful.
+    return {
+      .sink = true,
+    };
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto usage = "save <saver> <args>...";
+    auto usage = "save [--progress] <saver> <args>...";
     auto docs = "https://docs.tenzir.com/operators/save";
-    auto [saver, _] = get_saver(p, usage, docs);
+    auto [saver, _, show_progress] = get_saver(p, usage, docs);
     TENZIR_DIAG_ASSERT(saver);
-    return std::make_unique<save_operator>(std::move(saver));
+    if (show_progress == show_progress::yes) {
+      return std::make_unique<save_operator<show_progress::yes>>(
+        std::move(saver));
+    }
+    return std::make_unique<save_operator<show_progress::no>>(std::move(saver));
   }
 };
 
 /// The operator for printing and saving data without joining.
+template <show_progress ShowProgress>
 class write_and_save_operator final
-  : public schematic_operator<write_and_save_operator, write_and_save_state,
-                              std::monostate> {
+  : public schematic_operator<
+      write_and_save_operator<ShowProgress>, write_and_save_state,
+      std::conditional_t<ShowProgress == show_progress::yes, table_slice,
+                         std::monostate>> {
 public:
   write_and_save_operator() = default;
 
@@ -300,7 +374,7 @@ public:
   }
 
   auto initialize(const type& schema, operator_control_plane& ctrl) const
-    -> caf::expected<state_type> override {
+    -> caf::expected<write_and_save_state> override {
     auto p = printer_->instantiate(schema, ctrl);
     if (not p) {
       return std::move(p.error());
@@ -316,12 +390,27 @@ public:
     };
   }
 
-  auto process(table_slice slice, state_type& state) const
-    -> output_type override {
-    for (auto&& x : state.printer->process(std::move(slice))) {
-      state.saver(std::move(x));
+  auto process(table_slice slice, write_and_save_state& state) const
+    -> std::conditional_t<ShowProgress == show_progress::yes, table_slice,
+                          std::monostate> override {
+    if constexpr (ShowProgress == show_progress::yes) {
+      auto builder = series_builder{};
+      auto progress = builder.record();
+      for (auto&& x : state.printer->process(std::move(slice))) {
+        if (not x) {
+          continue;
+        }
+        bytes += x->size();
+        state.saver(std::move(x));
+      }
+      progress.field("bytes", bytes);
+      return builder.finish_assert_one_slice("tenzir.progress");
+    } else {
+      for (auto&& x : state.printer->process(std::move(slice))) {
+        state.saver(std::move(x));
+      }
+      return {};
     }
-    return {};
   }
 
   auto detached() const -> bool override {
@@ -333,13 +422,14 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "internal-write-save";
+    return fmt::format("internal-write-save-{}-progress",
+                       ShowProgress == show_progress::yes ? "with" : "without");
   }
 
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     (void)filter, (void)order;
-    return optimize_result{std::nullopt, event_order::schema, copy()};
+    return optimize_result{std::nullopt, event_order::schema, this->copy()};
   }
 
   friend auto inspect(auto& f, write_and_save_operator& x) -> bool {
@@ -350,7 +440,11 @@ protected:
   auto infer_type_impl(operator_type input) const
     -> caf::expected<operator_type> override {
     if (input.is<table_slice>()) {
-      return tag_v<void>;
+      if constexpr (ShowProgress == show_progress::yes) {
+        return tag_v<table_slice>;
+      } else {
+        return tag_v<void>;
+      }
     }
     // TODO: Fuse this check with crtp_operator::instantiate()
     return caf::make_error(ec::type_clash,
@@ -361,6 +455,10 @@ protected:
 private:
   std::unique_ptr<plugin_printer> printer_;
   std::unique_ptr<plugin_saver> saver_;
+
+  // This will anger @jachris if he sees it, but @eliaskosunen said it was okay.
+  // -- @dominiklohmann, half jokingly, during a Hackathon.
+  mutable uint64_t bytes = 0;
 };
 
 class to_plugin final : public virtual operator_parser_plugin {
@@ -370,14 +468,20 @@ public:
   };
 
   auto signature() const -> operator_signature override {
-    return {.sink = true};
+    // Technically, if --progress is set, the to operator is a transformation
+    // rather than a sink. However, we do not want to advertise this, as it is
+    // more distracting than helpful.
+    return {
+      .sink = true,
+    };
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto usage = "to <saver> <args>... [write <printer> <args>...]";
+    auto usage
+      = "to [--progress] <saver> <args>... [write <printer> <args>...]";
     auto docs = "https://docs.tenzir.com/operators/to";
     auto q = until_keyword_parser{"write", p};
-    auto [saver, saver_path] = get_saver(q, usage, docs);
+    auto [saver, saver_path, show_progress] = get_saver(q, usage, docs);
     TENZIR_DIAG_ASSERT(saver);
     TENZIR_DIAG_ASSERT(q.at_end());
     auto compress = operator_ptr{};
@@ -412,20 +516,36 @@ public:
     // contains the necessary check that it is only passed one single schema in
     // that case, and it otherwise aborts the execution.
     if (not saver->is_joining() && not compress) {
-      return std::make_unique<write_and_save_operator>(std::move(printer),
-                                                       std::move(saver));
+      if (show_progress == show_progress::yes) {
+        return std::make_unique<write_and_save_operator<show_progress::yes>>(
+          std::move(printer), std::move(saver));
+      }
+      return std::make_unique<write_and_save_operator<show_progress::no>>(
+        std::move(printer), std::move(saver));
     }
     auto ops = std::vector<operator_ptr>{};
     ops.push_back(std::make_unique<write_operator>(std::move(printer)));
     if (compress)
       ops.push_back(std::move(compress));
-    ops.push_back(std::make_unique<save_operator>(std::move(saver)));
+    if (show_progress == show_progress::yes) {
+      ops.push_back(
+        std::make_unique<save_operator<show_progress::yes>>(std::move(saver)));
+    } else {
+      ops.push_back(
+        std::make_unique<save_operator<show_progress::no>>(std::move(saver)));
+    }
     return std::make_unique<pipeline>(std::move(ops));
   }
 };
 
-using write_and_save_plugin
-  = operator_inspection_plugin<write_and_save_operator>;
+using save_plugin_with_progress
+  = operator_inspection_plugin<save_operator<show_progress::yes>>;
+using save_plugin_without_progress
+  = operator_inspection_plugin<save_operator<show_progress::no>>;
+using write_and_save_plugin_with_progress
+  = operator_inspection_plugin<write_and_save_operator<show_progress::yes>>;
+using write_and_save_plugin_without_progress
+  = operator_inspection_plugin<write_and_save_operator<show_progress::no>>;
 
 } // namespace
 
@@ -433,6 +553,12 @@ using write_and_save_plugin
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::write_to_print_save::to_plugin)
 TENZIR_REGISTER_PLUGIN(
-  tenzir::plugins::write_to_print_save::write_and_save_plugin)
+  tenzir::plugins::write_to_print_save::save_plugin_with_progress)
+TENZIR_REGISTER_PLUGIN(
+  tenzir::plugins::write_to_print_save::save_plugin_without_progress)
+TENZIR_REGISTER_PLUGIN(
+  tenzir::plugins::write_to_print_save::write_and_save_plugin_with_progress)
+TENZIR_REGISTER_PLUGIN(
+  tenzir::plugins::write_to_print_save::write_and_save_plugin_without_progress)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::write_to_print_save::save_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::write_to_print_save::write_plugin)

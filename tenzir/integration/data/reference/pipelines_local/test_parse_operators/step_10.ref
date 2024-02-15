@@ -2,7 +2,7 @@ pipeline [
   write json {
     
   },
-  save file {
+  internal-save-without-progress file {
     path: "xyz.json" @ 8..16
   }
 ] @ 0..16

@@ -11,9 +11,9 @@ The `save` operator saves bytes to a [connector](../connectors.md).
 ## Synopsis
 
 ```
-save <uri>
-save <path>
-save <connector>
+save [--progress] <uri>
+save [--progress] <path>
+save [--progress] <connector>
 ```
 
 ## Description
@@ -22,6 +22,11 @@ The `save` operator operates on raw bytes.
 
 Notably, it cannot be used after an operator that emits events, but rather only
 with operators that emit bytes, e.g., [`write`](write.md) or [`load`](load.md).
+
+### `--progress`
+
+Emit events describing the progress of the save operation. Note that this turns
+the `save` operator into a transformation rather than a sink.
 
 ### `<connector>`
 

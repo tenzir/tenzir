@@ -506,3 +506,9 @@ setup() {
   check ! tenzir 'parse line kv "(foo)(bar)" ""'
   check ! tenzir 'parse line kv "foo(?=bar)" ""'
 }
+
+# bats test_tags=pipelines
+@test "Save Progress" {
+  echo "1,2,3" | check tenzir 'read csv --header "foo,bar,baz" | to --progress /dev/null write csv'
+  echo "1,2,3" | check tenzir 'read csv --header "foo,bar,baz" | write json | save --progress /dev/null'
+}

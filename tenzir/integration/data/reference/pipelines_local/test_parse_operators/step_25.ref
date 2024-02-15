@@ -22,7 +22,7 @@ pipeline [
     auto_expand: false,
     no_header: false
   },
-  save file {
+  internal-save-without-progress file {
     path: "foo.csv" @ 40..47
   }
 ] @ 37..47
