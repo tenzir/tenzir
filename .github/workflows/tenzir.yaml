@@ -107,16 +107,17 @@ jobs:
           if [ "$plugins_sha" != "$plugins_main_sha" ]; then
             ls
             # Auto-merge the plugins PR and update 'tenzir-plugins/main'.
-            # nix/update-plugins.sh
+            git checkout -b topic/bump-submodules-from-$plugins_main_sha-to-$plugins_sha
+            nix/update-plugins.sh
+            git add nix/
             git -C contrib/tenzir-plugins fetch
             git -C contrib/tenzir-plugins checkout origin/main
 
             # Create a new commit for the updated submodule.
-            # git add contrib/tenzir-plugins
+            git add contrib/tenzir-plugins
             git config --global user.name 'CI Bot'
             git config --global user.email 'tenzir-ci-app@users.noreply.github.com'
             git remote set-url origin https://x-access-token:$GITHUB_APP_TOKEN@github.com/tenzir/tenzir.git
-            git checkout -b topic/bump-submodules-from-$plugins_main_sha-to-$plugins_sha
             echo "test" >> dummy-file
             git add dummy-file
             git commit -m "test commit"
