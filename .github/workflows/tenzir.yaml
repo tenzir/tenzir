@@ -114,9 +114,10 @@ jobs:
             git remote set-url origin https://x-access-token:$GITHUB_APP_TOKEN@github.com/tenzir/tenzir.git
 
             # Auto-merge the plugins PR and update 'tenzir-plugins/main'.
-            pr_number=$(gh pr list --search $plugins_main_sha --json number -q .[0].number)
+            pr_number=$(gh pr --repo tenzir/tenzir-plugins list --search $plugins_main_sha --json number -q .[0].number)
             echo $pr_number
-            gh pr merge $pr_number --repo tenzir/tenzir-plugins --match-head-commit ${plugins_sha}
+            [ $pr_number ] # Assert the pr number was non-empty
+            gh pr --repo tenzir/tenzir-plugins merge $pr_number --merge --match-head-commit ${plugins_sha}
 
             # Create a new commit for the updated submodule.
             git -C contrib/tenzir-plugins checkout origin/fake-main
