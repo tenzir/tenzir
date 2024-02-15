@@ -48,18 +48,18 @@ def upload_packages [
       do $run "tarball" $tgzs
     }
   }
+  print $"::notice copying artifacts to /packages/{debian,tarball}"
+  mkdir ./packages/debian ./packages/tarball
+  for deb in $debs {
+    cp -v $deb ./packages/debian
+  }
+  for pkg in $pkgs {
+    cp -v $pkg ./packages/macOS
+  }
+  for tgz in $tgzs {
+    cp -v $tgz ./packages/tarball
+  }
   if $copy {
-    print $"::notice copying artifacts to /packages/{debian,tarball}"
-    mkdir ./packages/debian ./packages/tarball
-    for deb in $debs {
-      cp -v $deb ./packages/debian
-    }
-    for pkg in $pkgs {
-      cp -v $pkg ./packages/macOS
-    }
-    for tgz in $tgzs {
-      cp -v $tgz ./packages/tarball
-    }
     if $git_tag != null {
       let os = (uname -s)
       if $os == "Linux" {

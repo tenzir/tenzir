@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   build:
-    name: Build
+    name: Build & Install
     runs-on: ${{ fromJSON(inputs.config).editions[0].gha-runner-labels }}
     steps:
       - name: Prevent pushing protected editions to public repos
@@ -118,49 +118,41 @@ jobs:
             nixpkgs#skopeo \
             -c .github/workflows/nix.nu '${{ inputs.config }}'
       - name: Upload Tarball to Github
-        if: steps.cfg.outputs.upload-to-github == 'true'
+        if: >-
+          runner.os == 'Linux' &&
+          steps.cfg.outputs.upload-to-github == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: tarball
           path: "./packages/tarball/*.tar.gz"
           if-no-files-found: ignore
       - name: Upload Debian Package to Github
-        if: steps.cfg.outputs.upload-to-github == 'true'
+        if: >-
+          runner.os == 'Linux' &&
+          steps.cfg.outputs.upload-to-github == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: debian
           path: "./packages/debian/*.deb"
           if-no-files-found: ignore
       - name: Upload macOS Package to Github
-        if: steps.cfg.outputs.upload-to-github == 'true'
+        if: >-
+          runner.os == 'macOS' &&
+          steps.cfg.outputs.upload-to-github == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: macOS
           path: "./packages/macOS/*.pkg"
           if-no-files-found: ignore
-
-  install:
-    needs:
-      - build
-    if: ${{ contains(fromJSON(inputs.config).editions[0].gha-runner-labels, 'ubuntu-latest') }}
-    name: Install
-    runs-on: "ubuntu-latest"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Download Tenzir artifact
-        id: download
-        uses: actions/download-artifact@v4
-        with:
-          name: "debian"
-      - name: Install
+      - name: Test Installation
+        if: runner.os == 'Linux'
         run: |
-          deb_file="$(basename ${{steps.download.outputs.download-path}}/tenzir*.deb)"
+          deb_file="$(basename ./packages/debian/tenzir*.deb)"
           docker build docker/systemd-test -t installer-test
           docker run -d --name installer-test \
                  --privileged \
                  --volume=.:/src/tenzir:ro \
-                 --volume="${{steps.download.outputs.download-path}}":/tmp/packages:ro \
+                 --volume="./packages/debian":/tmp/packages:ro \
                  --volume=/sys/fs/cgroup:/sys/fs/cgroup:rw \
                  --cgroupns=host \
                  installer-test
