@@ -26,6 +26,7 @@ namespace tenzir::plugins {
 namespace {
 
 struct http_options {
+  bool octet_stream;
   bool json;
   bool form;
   bool chunked;
@@ -36,9 +37,10 @@ struct http_options {
   friend auto inspect(auto& f, http_options& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.plugins.http_options")
-      .fields(f.field("json", x.json), f.field("form", x.form),
-              f.field("chunked", x.chunked), f.field("multipart", x.multipart),
-              f.field("method", x.method), f.field("items", x.items));
+      .fields(f.field("octet-stream", x.octet_stream), f.field("json", x.json),
+              f.field("form", x.form), f.field("chunked", x.chunked),
+              f.field("multipart", x.multipart), f.field("method", x.method),
+              f.field("items", x.items));
   }
 };
 
@@ -61,7 +63,9 @@ auto make_request(const connector_args& args) -> caf::expected<http::request> {
   result.uri = args.url;
   // Set method.
   result.method = args.http_opts.method;
-  if (args.http_opts.json) {
+  if (args.http_opts.octet_stream) {
+    // nop
+  } else if (args.http_opts.json) {
     result.headers.emplace_back("Accept", "application/json");
     if (auto* header = result.header("Content-Type")) {
       TENZIR_DEBUG("overwriting Content-Type to application/json (was: {})",
@@ -293,6 +297,8 @@ private:
           result.http_opts.json = true;
         } else if (arg->inner == "-f" || arg->inner == "--form") {
           result.http_opts.form = true;
+        } else if (arg->inner == "--octet-stream") {
+          result.http_opts.octet_stream = true;
         } else if (arg->inner == "--chunked") {
           result.http_opts.chunked = true;
         } else if (arg->inner == "--multipart") {

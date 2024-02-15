@@ -125,6 +125,7 @@ auto transfer::prepare(chunk_ptr chunk) -> caf::error {
       easy_.set_http_header("Content-Type", *chunk->metadata().content_type);
     }
   }
+  easy_.set_http_header("Content-Length", fmt::to_string(chunk->size()));
   auto on_read =
     [chunk = std::move(chunk)](std::span<std::byte> buffer) mutable -> size_t {
     if (not chunk || chunk->size() == 0) {
