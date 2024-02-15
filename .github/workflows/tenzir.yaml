@@ -129,7 +129,7 @@ jobs:
             # Create a new commit for the updated submodule.
             plugins_sha_short=$(git -C contrib/tenzir-plugins rev-parse --short HEAD)
             plugins_main_sha_short=$(git -C contrib/tenzir-plugins rev-parse --short origin/fake-main)
-            git -C contrib/tenzir-plugins checkout origin/fake-main
+            git -C contrib/tenzir-plugins checkout fake-main
             new_plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse --short origin/fake-main)
             nix/update-plugins.sh
             git add contrib/tenzir-plugins
