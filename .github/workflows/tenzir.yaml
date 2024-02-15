@@ -103,16 +103,17 @@ jobs:
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
           set -x
+
+          # Setup git
+          git config --global user.name 'CI Bot'
+          git config --global user.email 'tenzir-ci-app@users.noreply.github.com'
+          git remote set-url origin https://x-access-token:$GITHUB_APP_TOKEN@github.com/tenzir/tenzir.git
           git submodule update --init --depth 1 -- contrib/tenzir-plugins
           git -C contrib/tenzir-plugins fetch origin fake-main
+
           plugins_sha=$(git -C contrib/tenzir-plugins rev-parse --short HEAD)
           plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse --short origin/fake-main)
           if [ "$plugins_sha" != "$plugins_main_sha" ]; then
-            # Setup git
-            git config --global user.name 'CI Bot'
-            git config --global user.email 'tenzir-ci-app@users.noreply.github.com'
-            git remote set-url origin https://x-access-token:$GITHUB_APP_TOKEN@github.com/tenzir/tenzir.git
-
             # Auto-merge the plugins PR and update 'tenzir-plugins/main'.
             pr_number=$(gh pr --repo tenzir/tenzir-plugins list --search $plugins_main_sha --json number -q .[0].number)
             echo $pr_number
