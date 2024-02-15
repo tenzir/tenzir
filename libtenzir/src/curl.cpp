@@ -126,8 +126,10 @@ auto easy::set_http_header(std::string_view name, std::string_view value)
       break;
     }
   }
-  auto header = fmt::format("{}: {}", name, value);
-  headers_.append(header);
+  if (not value.empty()) {
+    auto header = fmt::format("{}: {}", name, value);
+    headers_.append(header);
+  }
   auto curl_code
     = curl_easy_setopt(easy_, CURLOPT_HTTPHEADER, headers_.slist_.get());
   return static_cast<code>(curl_code);
