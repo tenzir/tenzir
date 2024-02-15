@@ -103,7 +103,7 @@ jobs:
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
           set -x
-          git submodule update contrib/tenzir-plugins --init --depth 1
+          git submodule update --init --depth 1 -- contrib/tenzir-plugins
           git -C contrib/tenzir-plugins fetch origin fake-main
           plugins_sha=$(git -C contrib/tenzir-plugins rev-parse --short HEAD)
           plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse --short origin/fake-main)
