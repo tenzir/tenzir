@@ -102,12 +102,11 @@ jobs:
           GITHUB_APP_TOKEN: ${{ steps.generate_token.outputs.token }}
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
-          plugins_sha=$(git -C contrib/tenzir-plugins rev-parse HEAD)
-          plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse origin/main)
+          plugins_sha=$(git -C contrib/tenzir-plugins rev-parse --short HEAD)
+          plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse --short origin/main)
           if [ "$plugins_sha" != "$plugins_main_sha" ]; then
             ls
             # Auto-merge the plugins PR and update 'tenzir-plugins/main'.
-            #cd contrib/tenzir-plugins
             # nix/update-plugins.sh
             git -C contrib/tenzir-plugins fetch
             git -C contrib/tenzir-plugins checkout origin/main
