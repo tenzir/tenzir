@@ -116,8 +116,8 @@ jobs:
           git remote set-url origin https://x-access-token:$GITHUB_APP_TOKEN@github.com/tenzir/tenzir.git
           git -C contrib/tenzir-plugins fetch origin fake-main
 
-          plugins_sha=$(git -C contrib/tenzir-plugins rev-parse --short HEAD)
-          plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse --short origin/fake-main)
+          plugins_sha=$(git -C contrib/tenzir-plugins rev-parse HEAD)
+          plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse origin/fake-main)
           if [ "$plugins_sha" != "$plugins_main_sha" ]; then
             # Auto-merge the plugins PR and update 'tenzir-plugins/main'.
             # gh pr --repo tenzir/tenzir-plugins list
@@ -127,12 +127,14 @@ jobs:
             gh pr --repo tenzir/tenzir-plugins merge $pr_number --merge --match-head-commit ${plugins_sha}
 
             # Create a new commit for the updated submodule.
+            plugins_sha_short=$(git -C contrib/tenzir-plugins rev-parse --short HEAD)
+            plugins_main_sha_short=$(git -C contrib/tenzir-plugins rev-parse --short origin/fake-main)
             git -C contrib/tenzir-plugins checkout origin/fake-main
             new_plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse --short origin/fake-main)
             nix/update-plugins.sh
             git add contrib/tenzir-plugins
             git add nix/
-            git commit -m "Automatic submodule bump from $plugins_main_sha to $new_plugins_main_sha"
+            git commit -m "Automatic submodule bump from $plugins_main_sha_short to $new_plugins_main_sha"
             git push -u origin topic/fake-main
           fi
       - name: Fetch Tags
