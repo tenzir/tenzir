@@ -87,6 +87,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          submodules: true
           fetch-depth: 0
           persist-credentials: false
       - name: Generate a token
@@ -108,7 +109,6 @@ jobs:
           git config --global user.name 'CI Bot'
           git config --global user.email 'tenzir-ci-app@users.noreply.github.com'
           git remote set-url origin https://x-access-token:$GITHUB_APP_TOKEN@github.com/tenzir/tenzir.git
-          git submodule update --init --depth 1 -- contrib/tenzir-plugins
           git -C contrib/tenzir-plugins fetch origin fake-main
 
           plugins_sha=$(git -C contrib/tenzir-plugins rev-parse --short HEAD)
