@@ -128,7 +128,7 @@ jobs:
             gh pr --repo tenzir/tenzir-plugins merge $pr_number --merge --match-head-commit ${plugins_sha}
 
             # Create a new commit for the updated submodule.
-            git checkout fake-main # In reality, we are already on branch `main`.
+            git checkout topic/fake-main # In reality, we are already on branch `main`.
 
             plugins_sha_short=$(git -C contrib/tenzir-plugins rev-parse --short HEAD)
             plugins_main_sha_short=$(git -C contrib/tenzir-plugins rev-parse --short origin/fake-main)
