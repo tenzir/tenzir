@@ -103,6 +103,8 @@ jobs:
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
           set -x
+          git submodule update contrib/tenzir-plugins --init --depth 1
+          git -C contrib/tenzir-plugins fetch origin fake-main
           plugins_sha=$(git -C contrib/tenzir-plugins rev-parse --short HEAD)
           plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse --short origin/fake-main)
           if [ "$plugins_sha" != "$plugins_main_sha" ]; then
@@ -117,7 +119,6 @@ jobs:
             gh pr merge $pr_number --repo tenzir/tenzir-plugins --match-head-commit ${plugins_sha}
 
             # Create a new commit for the updated submodule.
-            git -C contrib/tenzir-plugins fetch
             git -C contrib/tenzir-plugins checkout origin/fake-main
             new_plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse --short origin/fake-main)
             nix/update-plugins.sh
