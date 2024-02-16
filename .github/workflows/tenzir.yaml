@@ -101,7 +101,7 @@ jobs:
           app-id: ${{ vars.TENZIR_TESTAPP_APP_ID }}
           private-key: ${{ secrets.TENZIR_TESTAPP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-      - name: Test submodule update
+      - name: Bump plugins submodule
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GITHUB_APP_TOKEN: ${{ steps.generate_token.outputs.token }}
@@ -134,7 +134,7 @@ jobs:
             nix/update-plugins.sh
             git add contrib/tenzir-plugins
             git add nix/
-            git commit -m "Automatic submodule bump from $plugins_sha_short to $new_plugins_main_sha"
+            git commit -m "Bump submodule from $plugins_sha_short to $new_plugins_main_sha"
             git push -u origin main
           fi
       - name: Fetch Tags
