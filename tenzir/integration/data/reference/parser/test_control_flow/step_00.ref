@@ -1,6 +1,104 @@
-error: expected one of: identifier, `this`, `}`, `|`, newline
- --> /dev/stdin:2:1
-  |
-2 | if b == 42 {
-  | ^^ got `if`
-  |
+[
+  invocation {
+    op: {
+      path: [
+        "a" @ 0..1
+      ]
+    },
+    args: [
+      
+    ]
+  },
+  if_stmt {
+    condition: binary_expr {
+      left: selector {
+        path: [
+          "b" @ 5..6
+        ]
+      },
+      op: "eq" @ 7..9,
+      right: integer "42" @ 10..12
+    },
+    then: [
+      invocation {
+        op: {
+          path: [
+            "c" @ 17..18
+          ]
+        },
+        args: [
+          expression selector {
+            path: [
+              "d" @ 19..20
+            ]
+          }
+        ]
+      },
+      invocation {
+        op: {
+          path: [
+            "e" @ 23..24
+          ]
+        },
+        args: [
+          assignment {
+            left: {
+              path: [
+                "f" @ 25..26
+              ]
+            },
+            equals: 26..27,
+            right: selector {
+              path: [
+                "g" @ 27..28
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        "h" @ 31..32
+      ]
+    },
+    args: [
+      
+    ]
+  },
+  if_stmt {
+    condition: selector {
+      path: [
+        "i" @ 36..37
+      ]
+    },
+    then: [
+      
+    ],
+    else: [
+      
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        "j" @ 49..50
+      ]
+    },
+    args: [
+      
+    ]
+  },
+  match_stmt {
+    expr: selector {
+      path: [
+        "k" @ 57..58
+      ]
+    },
+    cases: [
+      
+    ]
+  }
+]

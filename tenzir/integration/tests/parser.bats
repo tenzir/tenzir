@@ -55,7 +55,7 @@ EOF
 
 @test "control flow" {
   # TODO
-  check ! tenzir -f /dev/stdin <<EOF
+  check tenzir -f /dev/stdin <<EOF
 a
 if b == 42 {
   c d
@@ -69,8 +69,7 @@ EOF
 }
 
 @test "functions" {
-  # TODO
-  check ! tenzir -f /dev/stdin <<EOF
+  check tenzir -f /dev/stdin <<EOF
 a = b()
 a = b(c)
 a = b(c=d)

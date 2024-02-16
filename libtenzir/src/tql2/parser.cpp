@@ -406,12 +406,16 @@ private:
         }
         auto args = std::vector<argument>{};
         while (true) {
-          if (accept(tk::rpar)) {
+          if (peek(tk::rpar)) {
+            scope.done();
+            (void)advance();
             break;
           }
           if (not args.empty()) {
             expect(tk::comma);
-            if (accept(tk::rpar)) {
+            if (peek(tk::rpar)) {
+              scope.done();
+              (void)advance();
               break;
             }
           }

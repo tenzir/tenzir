@@ -1,6 +1,348 @@
-error: expected one of: `.`, `+`, `-`, `/`, `*`, `==`, `!=`, `<`, `<=`, `>`, `>=`, `}`, `|`, newline
- --> /dev/stdin:1:6
-  |
-1 | a = b()
-  |      ^ got `(`
-  |
+[
+  assignment {
+    left: {
+      path: [
+        "a" @ 0..1
+      ]
+    },
+    equals: 2..3,
+    right: function_call {
+      fn: {
+        path: [
+          "b" @ 4..5
+        ]
+      },
+      args: [
+        
+      ]
+    }
+  },
+  assignment {
+    left: {
+      path: [
+        "a" @ 8..9
+      ]
+    },
+    equals: 10..11,
+    right: function_call {
+      fn: {
+        path: [
+          "b" @ 12..13
+        ]
+      },
+      args: [
+        expression selector {
+          path: [
+            "c" @ 14..15
+          ]
+        }
+      ]
+    }
+  },
+  assignment {
+    left: {
+      path: [
+        "a" @ 17..18
+      ]
+    },
+    equals: 19..20,
+    right: function_call {
+      fn: {
+        path: [
+          "b" @ 21..22
+        ]
+      },
+      args: [
+        assignment {
+          left: {
+            path: [
+              "c" @ 23..24
+            ]
+          },
+          equals: 24..25,
+          right: selector {
+            path: [
+              "d" @ 25..26
+            ]
+          }
+        }
+      ]
+    }
+  },
+  assignment {
+    left: {
+      path: [
+        "a" @ 28..29
+      ]
+    },
+    equals: 30..31,
+    right: function_call {
+      fn: {
+        path: [
+          "b" @ 32..33
+        ]
+      },
+      args: [
+        expression selector {
+          path: [
+            "c" @ 34..35
+          ]
+        },
+        assignment {
+          left: {
+            path: [
+              "d" @ 37..38
+            ]
+          },
+          equals: 38..39,
+          right: selector {
+            path: [
+              "e" @ 39..40
+            ]
+          }
+        }
+      ]
+    }
+  },
+  assignment {
+    left: {
+      path: [
+        "a" @ 42..43
+      ]
+    },
+    equals: 44..45,
+    right: function_call {
+      fn: {
+        path: [
+          "b" @ 46..47
+        ]
+      },
+      args: [
+        assignment {
+          left: {
+            path: [
+              "c" @ 48..49
+            ]
+          },
+          equals: 49..50,
+          right: selector {
+            path: [
+              "d" @ 50..51
+            ]
+          }
+        },
+        expression selector {
+          path: [
+            "e" @ 53..54
+          ]
+        },
+        assignment {
+          left: {
+            path: [
+              "g" @ 56..57
+            ]
+          },
+          equals: 57..58,
+          right: selector {
+            path: [
+              "h" @ 58..59
+            ]
+          }
+        },
+        expression selector {
+          path: [
+            "i" @ 61..62
+          ]
+        }
+      ]
+    }
+  },
+  invocation {
+    op: {
+      path: [
+        "foo" @ 65..68
+      ]
+    },
+    args: [
+      expression function_call {
+        receiver: selector {
+          path: [
+            "a" @ 69..70
+          ]
+        },
+        fn: {
+          path: [
+            "b" @ 71..72
+          ]
+        },
+        args: [
+          
+        ]
+      }
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        "foo" @ 75..78
+      ]
+    },
+    args: [
+      expression function_call {
+        receiver: selector {
+          path: [
+            "a" @ 79..80
+          ]
+        },
+        fn: {
+          path: [
+            "b" @ 81..82
+          ]
+        },
+        args: [
+          expression selector {
+            path: [
+              "c" @ 83..84
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        "foo" @ 86..89
+      ]
+    },
+    args: [
+      expression function_call {
+        receiver: selector {
+          path: [
+            "a" @ 90..91
+          ]
+        },
+        fn: {
+          path: [
+            "b" @ 92..93
+          ]
+        },
+        args: [
+          assignment {
+            left: {
+              path: [
+                "c" @ 94..95
+              ]
+            },
+            equals: 95..96,
+            right: selector {
+              path: [
+                "d" @ 96..97
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        "foo" @ 99..102
+      ]
+    },
+    args: [
+      expression function_call {
+        receiver: selector {
+          path: [
+            "a" @ 103..104
+          ]
+        },
+        fn: {
+          path: [
+            "b" @ 105..106
+          ]
+        },
+        args: [
+          expression selector {
+            path: [
+              "c" @ 107..108
+            ]
+          },
+          assignment {
+            left: {
+              path: [
+                "d" @ 110..111
+              ]
+            },
+            equals: 111..112,
+            right: selector {
+              path: [
+                "e" @ 112..113
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        "foo" @ 115..118
+      ]
+    },
+    args: [
+      expression function_call {
+        receiver: selector {
+          path: [
+            "a" @ 119..120
+          ]
+        },
+        fn: {
+          path: [
+            "b" @ 121..122
+          ]
+        },
+        args: [
+          assignment {
+            left: {
+              path: [
+                "c" @ 123..124
+              ]
+            },
+            equals: 124..125,
+            right: selector {
+              path: [
+                "d" @ 125..126
+              ]
+            }
+          },
+          expression selector {
+            path: [
+              "e" @ 128..129
+            ]
+          },
+          assignment {
+            left: {
+              path: [
+                "g" @ 131..132
+              ]
+            },
+            equals: 132..133,
+            right: selector {
+              path: [
+                "h" @ 133..134
+              ]
+            }
+          },
+          expression selector {
+            path: [
+              "i" @ 136..137
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]
