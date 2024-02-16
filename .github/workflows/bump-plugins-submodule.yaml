@@ -14,6 +14,7 @@ concurrency:
 jobs:
   bump-plugins-submodule:
     name: Bump the plugins submodule if necessary
+    runs-on: ubuntu-20.04
     steps:
       - name: Configure ssh-agent
         uses: webfactory/ssh-agent@v0.8.0
