@@ -504,8 +504,8 @@ paths:
                       diagnostics: []
                       metrics:
                         total:
-                          in: {}
-                          out: {}
+                          ingress: {}
+                          egress: {}
                     - id: 08446737-da9b-4787-8599-97d85c48c3bb
                       name: wrong-pipeline
                       definition: export asdf
@@ -516,8 +516,8 @@ paths:
                       diagnostics: []
                       metrics:
                         total:
-                          in: {}
-                          out: {}
+                          ingress: {}
+                          egress: {}
         '400':
           description: Invalid arguments.
           content:
