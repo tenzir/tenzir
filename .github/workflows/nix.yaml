@@ -125,7 +125,7 @@ jobs:
         with:
           name: tarball
           path: "./packages/tarball/*.tar.gz"
-          if-no-files-found: ignore
+          if-no-files-found: error
       - name: Upload Debian Package to Github
         if: >-
           runner.os == 'Linux' &&
@@ -134,7 +134,7 @@ jobs:
         with:
           name: debian
           path: "./packages/debian/*.deb"
-          if-no-files-found: ignore
+          if-no-files-found: error
       - name: Upload macOS Package to Github
         if: >-
           runner.os == 'macOS' &&
@@ -143,7 +143,7 @@ jobs:
         with:
           name: macOS
           path: "./packages/macOS/*.pkg"
-          if-no-files-found: ignore
+          if-no-files-found: error
       - name: Test Installation
         if: runner.os == 'Linux'
         run: |

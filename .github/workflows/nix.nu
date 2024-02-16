@@ -49,7 +49,7 @@ def upload_packages [
     }
   }
   print $"::notice copying artifacts to /packages/{debian,tarball}"
-  mkdir ./packages/debian ./packages/tarball
+  mkdir ./packages/debian ./packages/tarball ./packages/macOS
   for deb in $debs {
     cp -v $deb ./packages/debian
   }
