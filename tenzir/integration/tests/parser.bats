@@ -54,7 +54,6 @@ EOF
 }
 
 @test "control flow" {
-  # TODO
   check tenzir -f /dev/stdin <<EOF
 a
 if b == 42 {

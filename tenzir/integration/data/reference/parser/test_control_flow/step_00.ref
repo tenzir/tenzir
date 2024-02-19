@@ -100,5 +100,92 @@
     cases: [
       
     ]
+  },
+  match_stmt {
+    expr: selector {
+      path: [
+        "k" @ 68..69
+      ]
+    },
+    cases: [
+      {
+        filter: [
+          string "foo" @ 72..77
+        ],
+        pipe: [
+          invocation {
+            op: {
+              path: [
+                "bar" @ 83..86
+              ]
+            },
+            args: [
+              
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  match_stmt {
+    expr: selector {
+      path: [
+        "k" @ 97..98
+      ]
+    },
+    cases: [
+      {
+        filter: [
+          string "foo" @ 103..108
+        ],
+        pipe: [
+          invocation {
+            op: {
+              path: [
+                "bar" @ 118..121
+              ]
+            },
+            args: [
+              
+            ]
+          }
+        ]
+      },
+      {
+        filter: [
+          integer "42" @ 128..130
+        ],
+        pipe: [
+          invocation {
+            op: {
+              path: [
+                "foo" @ 140..143
+              ]
+            },
+            args: [
+              expression selector {
+                path: [
+                  "bar" @ 144..147
+                ]
+              }
+            ]
+          },
+          invocation {
+            op: {
+              path: [
+                "qux" @ 152..155
+              ]
+            },
+            args: [
+              expression selector {
+                path: [
+                  "bar" @ 156..159
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
   }
 ]

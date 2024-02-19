@@ -143,8 +143,9 @@ private:
         auto expr = parse_expression();
         auto cases = std::vector<match_case>{};
         expect(tk::lbrace);
+        auto scope = ignore_newlines(true);
         // TODO: Restrict this.
-        while (not accept(tk::rbrace)) {
+        while (not peek(tk::rbrace)) {
           auto filter = std::vector<expression>{};
           while (true) {
             filter.push_back(parse_expression());
@@ -160,10 +161,13 @@ private:
           (void)accept(tk::comma);
           cases.emplace_back(std::move(filter), std::move(pipe));
         }
+        scope.done();
+        expect(tk::rbrace);
         steps.emplace_back(match_stmt{std::move(expr), std::move(cases)});
         if (not accept_stmt_end()) {
           throw_token();
         }
+        continue;
       }
       if (end()) {
         // TODO: Use if(START) instead.
