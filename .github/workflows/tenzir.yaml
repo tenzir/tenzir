@@ -358,7 +358,9 @@ jobs:
           app-id: ${{ vars.TENZIR_AUTOBUMPER_APP_ID }}
           private-key: ${{ secrets.TENZIR_AUTOBUMPER_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
-      - name: Require an open PR for the submodule bump
+      - name: Require an open PR for a submodule bump
+        env:
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
           plugins_sha=$(git -C contrib/tenzir-plugins rev-parse HEAD)
           plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse origin/main)
