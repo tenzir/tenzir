@@ -46,7 +46,7 @@ jobs:
           git config --global user.name 'CI Bot'
           git config --global user.email 'tenzir-ci-app@users.noreply.github.com'
           git remote set-url origin https://x-access-token:$GITHUB_APP_TOKEN@github.com/tenzir/tenzir.git
-          git -C contrib/tenzir-plugins fetch origin main
+          git -C contrib/tenzir-plugins fetch -q origin main
 
           plugins_sha=$(git -C contrib/tenzir-plugins rev-parse HEAD)
           plugins_sha_short=$(git -C contrib/tenzir-plugins rev-parse --short HEAD)
