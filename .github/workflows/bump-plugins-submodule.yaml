@@ -58,7 +58,7 @@ jobs:
             # gh pr --repo tenzir/tenzir-plugins list
             pr_number=$(gh pr --repo tenzir/tenzir-plugins list --search $plugins_sha --json number -q .[0].number)
             [ $pr_number ] # Assert the pr number was non-empty
-            gh pr --repo tenzir/tenzir-plugins merge $pr_number --merge --match-head-commit ${plugins_sha}
+            gh pr --repo tenzir/tenzir-plugins merge $pr_number --admin --merge --match-head-commit ${plugins_sha}
 
             # Fetch and checkout the newly created merge commit
             git -C contrib/tenzir-plugins pull -q origin main
