@@ -28,14 +28,16 @@ auto lex(std::string_view content) -> std::vector<token> {
       ->* [] { return token_kind::real; }
     | ignore(+digit)
       ->* [] { return token_kind::integer; }
-    // | ignore(chr{'"'} >> *(any - chr{'"'}) >> (chr{'"'} | eoi))
-    //   ->* [] { return token_kind::string; }
     | ignore(chr{'"'} >> *(lit{"\\\""} | (any - chr{'"'})) >> chr{'"'})
       ->* [] { return token_kind::string; }
+    | ignore(chr{'"'} >> *(lit{"\\\""} | (any - chr{'"'})))
+      ->* [] { return token_kind::error; } // non-terminated string
     | ignore((lit{"//"} | lit{"# "}) >> *(any - '\n'))
       ->* [] { return token_kind::line_comment; }
-    | ignore(lit{"/*"} >> *(any - lit{"*/"}) >> (lit{"*/"} | eoi))
+    | ignore(lit{"/*"} >> *(any - lit{"*/"}) >> lit{"*/"})
       ->* [] { return token_kind::delim_comment; }
+    | ignore(lit{"/*"} >> *(any - lit{"*/"}))
+      ->* [] { return token_kind::error; } // non-terminated comment
     | ignore(chr{'@'})
       ->* [] { return token_kind::at; }
 #define X(x, y) ignore(lit{x}) ->* [] { return token_kind::y; }

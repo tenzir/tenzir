@@ -1,1 +1,1 @@
-  delim_comment "/*"
+          error "/*"

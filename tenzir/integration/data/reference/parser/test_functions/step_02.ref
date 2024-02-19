@@ -1,0 +1,6 @@
+error: expected one of: identifier, `this`, `not`, integer, `true`, `false`, `null`, string, `-`, `(`, `)`, `{`
+ --> /dev/stdin:1:9
+  |
+1 | a = b(c,,)
+  |         ^ got `,`
+  |

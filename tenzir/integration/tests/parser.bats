@@ -30,10 +30,9 @@ foo bar, baz=qux, quux | import
 EOF
 }
 
-@test "arithmetic" {
+@test "precedence" {
   check tenzir -f /dev/stdin <<EOF
-foo = 1 + 2 * 3 + 4 + 5 * 6 * 7 / 8 / 9
-foo = ((1 + (2 * 3)) + 4) + ((((5 * 6) * 7) / 8) / 9)
+foo = 1 + 2 * 3 + 4 + 5 * 6 * 7 / 8 / 9 or -foo + not 2 and bar == 42
 EOF
 }
 
@@ -88,5 +87,11 @@ foo a.b(c)
 foo a.b(c=d)
 foo a.b(c, d=e)
 foo a.b(c=d, e, g=h, i,)
+EOF
+  check ! tenzir -f /dev/stdin <<EOF
+a = b(,)
+EOF
+  check ! tenzir -f /dev/stdin <<EOF
+a = b(c,,)
 EOF
 }
