@@ -20,7 +20,7 @@ TENZIR_ENUM(
   //
   identifier, dollar_ident,
   // keywords
-  this_, if_, else_, match, not_, and_, or_, underscore,
+  this_, if_, else_, match, not_, and_, or_, underscore, let,
   // literals
   integer, real, true_, false_, null, string, ipv4, ipv6,
   // operators

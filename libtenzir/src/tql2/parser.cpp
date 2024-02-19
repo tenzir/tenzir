@@ -17,6 +17,41 @@ namespace tenzir::tql2 {
 
 using namespace tenzir::tql2::ast;
 
+#if 0
+/*
+type foo = {...};
+context bar = {}
+
+read json, schema=foo
+
+bar.update()
+
+sort -x, y
+
+sort -$bar
+$bar = 42
+
+my_custom_operator foo
+...
+group foo {
+  head $group.foo
+}
+...
+*/
+
+class sort_operator_foo {
+public:
+  // ...
+};
+
+class sort_plugin {
+public:
+  auto from_ast() -> sort_operator_foo {
+    return sort_operator_foo{};
+  }
+};
+#endif
+
 namespace {
 
 auto precedence(unary_op x) -> int {
@@ -112,6 +147,20 @@ private:
     };
     while (true) {
       while (accept_stmt_sep()) {
+      }
+      if (accept(tk::let)) {
+        if (silent_peek(tk::identifier)) {
+          throw_token("expected `$` before identifier");
+        }
+        auto name = expect(tk::dollar_ident);
+        expect(tk::equal);
+        auto expr = parse_expression();
+        // TODO: Dollar ident.
+        steps.emplace_back(let_stmt{name.as_identifier(), std::move(expr)});
+        if (not accept_stmt_end()) {
+          throw_token();
+        }
+        continue;
       }
       if (accept(tk::if_)) {
         auto condition = parse_expression();
@@ -483,10 +532,14 @@ private:
     throw_token();
   }
 
+  auto silent_peek(token_kind kind) -> bool {
+    return next_ < tokens_.size() && tokens_[next_].kind == kind;
+  }
+
   auto peek(token_kind kind) -> bool {
     // TODO: Does this count as trying the token?
     tries_.push_back(kind);
-    return next_ < tokens_.size() && tokens_[next_].kind == kind;
+    return silent_peek(kind);
   }
 
   auto raw_peek(token_kind kind, size_t offset = 0) -> bool {

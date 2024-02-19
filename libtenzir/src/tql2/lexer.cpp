@@ -67,6 +67,7 @@ auto lex(std::string_view content) -> std::vector<token> {
 #undef X
 #define X(x, y) ignore(lit{x} >> !continue_ident) ->* [] { return token_kind::y; }
     | X("this", this_)
+    | X("let", let)
     | X("if", if_)
     | X("else", else_)
     | X("match", match)

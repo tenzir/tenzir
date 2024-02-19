@@ -41,6 +41,7 @@ auto describe(token_kind k) -> std::string_view {
     X(lbracket, "`[`");
     X(less_equal, "`<=`");
     X(less, "`<`");
+    X(let, "`let`");
     X(line_comment, "`// ...`");
     X(lpar, "`(`");
     X(match, "`match`");

@@ -16,17 +16,20 @@
 namespace tenzir::tql2::ast {
 
 struct assignment;
-struct field_access;
+struct binary_expr;
 struct expression;
+struct field_access;
+struct function_call;
 struct identifier;
+struct if_stmt;
 struct invocation;
+struct let_stmt;
+struct match_stmt;
+struct pipeline_expr;
 struct pipeline;
 struct record;
 struct selector;
-struct binary_expr;
 struct unary_expr;
-struct function_call;
-struct pipeline_expr;
 
 struct identifier {
   identifier(std::string name, location location)
@@ -315,10 +318,8 @@ struct invocation {
   }
 };
 
-struct if_stmt;
-struct match_stmt;
-
-using statement = variant<invocation, assignment, if_stmt, match_stmt>;
+using statement
+  = variant<invocation, assignment, let_stmt, if_stmt, match_stmt>;
 
 struct pipeline {
   explicit pipeline(std::vector<statement> body)
@@ -338,6 +339,19 @@ struct pipeline {
     return f.apply(
       *static_cast<std::enable_if_t<not detail::always_false_v<Inspector>,
                                     decltype(body)&>>(x.body));
+  }
+};
+
+struct let_stmt {
+  let_stmt(identifier name, expression expr)
+    : name{std::move(name)}, expr{std::move(expr)} {
+  }
+
+  identifier name;
+  expression expr;
+
+  friend auto inspect(auto& f, let_stmt& x) -> bool {
+    return f.object(x).fields(f.field("name", x.name), f.field("expr", x.expr));
   }
 };
 
