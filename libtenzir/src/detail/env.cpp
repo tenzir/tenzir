@@ -28,11 +28,11 @@ auto env_mutex = std::mutex{};
 
 } // namespace
 
-std::optional<std::string_view> getenv(std::string_view var) {
+std::optional<std::string> getenv(std::string_view var) {
   auto lock = std::scoped_lock{env_mutex};
   // NOLINTNEXTLINE(concurrency-mt-unsafe)
   if (const char* result = ::getenv(var.data()))
-    return std::string_view{result};
+    return std::string{result};
   return {};
 }
 
@@ -58,6 +58,7 @@ caf::error unsetenv(std::string_view var) {
 
 generator<std::pair<std::string_view, std::string_view>> environment() {
   // Envrionment variables come as "key=value" pair strings.
+  auto lock = std::scoped_lock{env_mutex};
   for (auto env = environ; *env != nullptr; ++env) {
     auto str = std::string_view{*env};
     auto i = str.find('=');

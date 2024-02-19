@@ -1385,6 +1385,15 @@ auto series_builder::finish_assert_one_slice(std::string_view name)
   return std::move(result[0]);
 }
 
+auto series_builder::finish_assert_one_array() -> series {
+  auto result = finish();
+  if (result.empty()) {
+    return {};
+  }
+  TENZIR_ASSERT(result.size() == 1);
+  return std::move(result[0]);
+}
+
 auto series_builder::kind() -> type_kind {
   return impl_->kind();
 }
