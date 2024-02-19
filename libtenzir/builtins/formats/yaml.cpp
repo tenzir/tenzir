@@ -132,7 +132,7 @@ auto print_node(auto& out, const View& value) -> void {
     }
     out << YAML::EndMap;
   } else if constexpr (detail::is_any_v<View, view<pattern>, view<map>>) {
-    die("unreachable");
+    TENZIR_UNREACHABLE();
   } else {
     static_assert(detail::always_false_v<View>, "missing overload");
   }

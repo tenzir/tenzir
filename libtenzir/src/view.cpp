@@ -340,7 +340,7 @@ auto descend(view<record> r, std::string_view path)
     }
     current = *maybe_rec;
   }
-  die("unreachable");
+  TENZIR_UNREACHABLE();
 }
 
 } // namespace tenzir

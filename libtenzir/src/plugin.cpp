@@ -154,7 +154,7 @@ unload_disabled_static_plugins(std::vector<std::string> paths_or_names) {
       case plugin_ptr::type::builtin:
         return false;
     }
-    die("unreachable");
+    TENZIR_UNREACHABLE();
   };
   get_mutable().erase(std::remove_if(get_mutable().begin(), get_mutable().end(),
                                      check_and_remove_disabled_static_plugin),

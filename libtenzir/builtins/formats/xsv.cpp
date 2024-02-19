@@ -172,11 +172,11 @@ struct xsv_printer_impl {
     }
 
     auto operator()(view<pattern>) noexcept -> bool {
-      die("unreachable");
+      TENZIR_UNREACHABLE();
     }
 
     auto operator()(view<map>) noexcept -> bool {
-      die("unreachable");
+      TENZIR_UNREACHABLE();
     }
 
     auto operator()(view<std::string> x) noexcept -> bool {

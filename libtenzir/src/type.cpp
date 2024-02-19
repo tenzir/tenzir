@@ -647,7 +647,7 @@ type type::from_legacy_type(const legacy_type& other) noexcept {
       return type{other.name(), string_type{}, std::move(attributes)};
     },
     [&](const legacy_pattern_type&) noexcept -> type {
-      die("unreachable");
+      TENZIR_UNREACHABLE();
     },
     [&](const legacy_address_type&) noexcept {
       return type{other.name(), ip_type{}, std::move(attributes)};
@@ -1141,7 +1141,7 @@ auto type::prune() const noexcept -> type {
       return type{list_type{lt.value_type().prune()}};
     },
     [](const map_type&) -> type {
-      die("unreachable");
+      TENZIR_UNREACHABLE();
     },
     [](const record_type& rt) -> type {
       auto fields = std::vector<record_type::field_view>{};
