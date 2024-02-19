@@ -1,0 +1,73 @@
+name: Bump Plugins Submodule
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  # Wait for in-progress runs of this action to finish before starting.
+  # This has a double-purpose: It ensures that caches are always able to pick
+  # up work from previous builds of the same branch, and it rate-limits the CI
+  # to ensure it's running smoothly for all users.
+  group: ${{ github.workflow }}
+
+jobs:
+  bump-plugins-submodule:
+    name: Bump the plugins submodule if necessary
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Configure ssh-agent
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Generate a token
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: generate_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.TENZIR_TESTAPP_APP_ID }}
+          private-key: ${{ secrets.TENZIR_TESTAPP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+      - name: Bump plugins submodule
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GITHUB_APP_TOKEN: ${{ steps.generate_token.outputs.token }}
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+        run: |
+          set -x
+
+          # Setup git
+          git config --global user.name 'CI Bot'
+          git config --global user.email 'tenzir-ci-app@users.noreply.github.com'
+          git remote set-url origin https://x-access-token:$GITHUB_APP_TOKEN@github.com/tenzir/tenzir.git
+          git -C contrib/tenzir-plugins fetch origin main
+
+          plugins_sha=$(git -C contrib/tenzir-plugins rev-parse HEAD)
+          plugins_sha_short=$(git -C contrib/tenzir-plugins rev-parse --short HEAD)
+          plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse origin/main)
+          plugins_main_sha_short=$(git -C contrib/tenzir-plugins rev-parse --short origin/main)
+
+          if [ "$plugins_sha" != "$plugins_main_sha" ]; then
+            # Auto-merge the plugins PR and update 'tenzir-plugins/main'.
+            # gh pr --repo tenzir/tenzir-plugins list
+            pr_number=$(gh pr --repo tenzir/tenzir-plugins list --search $plugins_sha --json number -q .[0].number)
+            echo $pr_number
+            [ $pr_number ] # Assert the pr number was non-empty
+            gh pr --repo tenzir/tenzir-plugins merge $pr_number --merge --match-head-commit ${plugins_sha}
+
+            # Create a new commit for the updated submodule.
+            git checkout main # TODO: Is this necessary or are we already on main?
+            git -C contrib/tenzir-plugins checkout main
+            new_plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse --short origin/main)
+            nix/update-plugins.sh
+            git add contrib/tenzir-plugins
+            git add nix/
+            git commit -m "Bump submodule from $plugins_sha_short to $new_plugins_main_sha"
+            git push -u origin main
+          fi

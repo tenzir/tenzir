@@ -55,7 +55,6 @@ permissions:
   statuses: write
 
 jobs:
-
   configure:
     name: Configure
     runs-on: ubuntu-20.04
@@ -329,6 +328,7 @@ jobs:
           echo "nix-matrix=${nix_matrix}" >> "$GITHUB_OUTPUT"
           echo "::notice nix-matrix = ${nix_matrix}"
 
+
   policy-enforcement:
     name: Policy Enforcement
     needs:
@@ -344,13 +344,13 @@ jobs:
         uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
-      - name: Require contrib/tenzir-plugins to be on a main branch commit
+      - name: Require contrib/tenzir-plugins to be downstream of current `main`
         run: |
           git submodule update --init contrib/tenzir-plugins
           git -C contrib/tenzir-plugins fetch origin main
           git -C contrib/tenzir-plugins merge-base --is-ancestor \
-            $(git -C contrib/tenzir-plugins rev-parse HEAD) \
-            $(git -C contrib/tenzir-plugins rev-parse origin/main)
+            $(git -C contrib/tenzir-plugins rev-parse origin/main) \
+            $(git -C contrib/tenzir-plugins rev-parse HEAD)
       - name: Install Nix
         uses: cachix/install-nix-action@v25
         with:

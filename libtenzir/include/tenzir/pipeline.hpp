@@ -188,6 +188,8 @@ struct [[nodiscard]] metric {
   duration time_processing = {};
   duration time_scheduled = {};
   duration time_total = {};
+  duration time_running = {};
+  duration time_paused = {};
   uint64_t num_runs = {};
   uint64_t num_runs_processing = {};
   uint64_t num_runs_processing_input = {};
@@ -206,6 +208,8 @@ struct [[nodiscard]] metric {
       f.field("time_processing", x.time_processing),
       f.field("time_scheduled", x.time_scheduled),
       f.field("time_total", x.time_total),
+      f.field("time_running", x.time_running),
+      f.field("time_paused", x.time_paused),
       f.field("inbound_measurement", x.inbound_measurement),
       f.field("outbound_measurement", x.outbound_measurement),
       f.field("num_runs", x.num_runs),

@@ -78,6 +78,8 @@ operator instantiation.
 |`starting_duration`|`duration`|The time spent to start the operator.|
 |`processing_duration`|`duration`|The time spent processing the data.|
 |`scheduled_duration`|`duration`|The time that the operator was scheduled.|
+|`running_duration`|`duration`|The time that the operator was running.|
+|`paused_duration`|`duration`|The time that the operator was paused.|
 |`input`|`record`|Measurement of the incoming data stream.|
 |`output`|`record`|Measurement of the outgoing data stream.|
 
