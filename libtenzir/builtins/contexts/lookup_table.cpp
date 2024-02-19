@@ -116,7 +116,7 @@ public:
         }
       }
     }
-    TENZIR_ASSERT_CHEAP(slice.rows() != 0);
+    TENZIR_ASSERT(slice.rows() != 0);
     if (not parameters.contains("key")) {
       return caf::make_error(ec::invalid_argument, "missing 'key' parameter");
     }
@@ -139,7 +139,7 @@ public:
     auto key_it = key_values.begin();
     auto context_it = context_values.begin();
     while (key_it != key_values.end()) {
-      TENZIR_ASSERT_CHEAP(context_it != context_values.end());
+      TENZIR_ASSERT(context_it != context_values.end());
       auto materialized_key = materialize(*key_it);
       context_entries.insert_or_assign(materialized_key,
                                        materialize(*context_it));
@@ -147,7 +147,7 @@ public:
       ++key_it;
       ++context_it;
     }
-    TENZIR_ASSERT_CHEAP(context_it == context_values.end());
+    TENZIR_ASSERT(context_it == context_values.end());
     auto query_f = [key_values_list = std::move(key_values_list)](
                      parameter_map params) -> caf::expected<expression> {
       auto column = params["field"];

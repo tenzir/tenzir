@@ -94,9 +94,10 @@ query_queue::insert(query_state&& query_state,
         it->priority += query_state_it->second.query_contexts_per_type.begin()
                           ->second.priority;
         it->queries.push_back(qid);
-        TENZIR_ASSERT(!detail::contains(inactive_partitions, cand.uuid),
-                      "A partition must not be active and inactive at the same "
-                      "time");
+        TENZIR_ASSERT_EXPENSIVE(
+          !detail::contains(inactive_partitions, cand.uuid),
+          "A partition must not be active and inactive at the same "
+          "time");
         continue;
       }
       it = std::find(inactive_partitions.begin(), inactive_partitions.end(),
@@ -173,10 +174,10 @@ bool query_queue::mark_partition_erased(const uuid& pid) {
   auto it = std::find(partitions.begin(), partitions.end(), pid);
   if (it != partitions.end()) {
     it->erased = true;
-    TENZIR_ASSERT_CHEAP(!detail::contains(inactive_partitions, pid),
-                        "A partition must not be active and inactive at the "
-                        "same "
-                        "time");
+    TENZIR_ASSERT(!detail::contains(inactive_partitions, pid),
+                  "A partition must not be active and inactive at the "
+                  "same "
+                  "time");
     return true;
   }
   it = std::find(inactive_partitions.begin(), inactive_partitions.end(), pid);
@@ -255,7 +256,7 @@ query_queue::handle_completion(const uuid& qid) {
   if (query_state.completed_partitions == query_state.requested_partitions)
     result = query_state.client;
   if (query_state.completed_partitions == query_state.candidate_partitions) {
-    TENZIR_ASSERT(!reachable(qid));
+    TENZIR_ASSERT_EXPENSIVE(!reachable(qid));
     queries_.erase(qid);
   }
   return result;

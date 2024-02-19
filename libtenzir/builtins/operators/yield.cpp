@@ -113,7 +113,7 @@ public:
               .emit(ctrl.diagnostics());
             return false;
           }
-          TENZIR_ASSERT_CHEAP(index->size() == 1);
+          TENZIR_ASSERT(index->size() == 1);
           current = rec_ty->field(*index).type;
           result.push_back((*index)[0]);
           return true;
@@ -159,26 +159,26 @@ public:
       batch->ToStructArray().ValueOrDie());
     auto& [indices, new_type] = *state;
     for (auto index : indices) {
-      TENZIR_ASSERT_CHEAP(array);
+      TENZIR_ASSERT(array);
       if (index == unnest_idx) {
         auto list_array = dynamic_cast<arrow::ListArray*>(array.get());
-        TENZIR_ASSERT_CHEAP(list_array);
+        TENZIR_ASSERT(list_array);
         array = list_array->Flatten().ValueOrDie();
       } else {
         auto struct_array = dynamic_cast<arrow::StructArray*>(array.get());
-        TENZIR_ASSERT_CHEAP(struct_array);
+        TENZIR_ASSERT(struct_array);
         array = struct_array->GetFlattenedField(detail::narrow<int>(index))
                   .ValueOrDie();
       }
     }
     auto record = std::dynamic_pointer_cast<arrow::StructArray>(array);
-    TENZIR_ASSERT_CHEAP(record);
+    TENZIR_ASSERT(record);
     auto fields = record->Flatten().ValueOrDie();
     auto result
       = table_slice{arrow::RecordBatch::Make(new_type.to_arrow_schema(),
                                              array->length(), fields),
                     new_type};
-    TENZIR_ASSERT(to_record_batch(result)->Validate().ok());
+    TENZIR_ASSERT_EXPENSIVE(to_record_batch(result)->Validate().ok());
     return result;
   }
 

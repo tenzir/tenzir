@@ -341,7 +341,7 @@ bool evaluate_meta_extractor(const table_slice& slice,
         TENZIR_EVAL_DISPATCH(not_ni);
 #undef TENZIR_EVAL_DISPATCH
       }
-      die("unreachable");
+      TENZIR_UNREACHABLE();
     }
     case meta_extractor::kind::schema_id: {
       switch (op) {
@@ -365,7 +365,7 @@ bool evaluate_meta_extractor(const table_slice& slice,
         TENZIR_EVAL_DISPATCH(not_ni);
 #undef TENZIR_EVAL_DISPATCH
       }
-      die("unreachable");
+      TENZIR_UNREACHABLE();
     }
     case meta_extractor::kind::import_time: {
       switch (op) {
@@ -389,7 +389,7 @@ bool evaluate_meta_extractor(const table_slice& slice,
         TENZIR_EVAL_DISPATCH(not_ni);
 #undef TENZIR_EVAL_DISPATCH
       }
-      die("unreachable");
+      TENZIR_UNREACHABLE();
     }
     case meta_extractor::kind::internal: {
       switch (op) {
@@ -413,7 +413,7 @@ bool evaluate_meta_extractor(const table_slice& slice,
         TENZIR_EVAL_DISPATCH(not_ni);
 #undef TENZIR_EVAL_DISPATCH
       }
-      die("unreachable");
+      TENZIR_UNREACHABLE();
     }
   }
   __builtin_unreachable();
@@ -486,7 +486,7 @@ ids evaluate(const expression& expr, const table_slice& slice,
         TENZIR_EVAL_DISPATCH(not_ni);
 #undef TENZIR_EVAL_DISPATCH
       }
-      die("unreachable");
+      TENZIR_UNREACHABLE();
     },
   };
   const auto evaluate_expression

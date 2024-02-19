@@ -27,7 +27,7 @@ namespace tenzir {
 active_indexer_actor::behavior_type
 active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
                size_t column, value_index_ptr index) {
-  TENZIR_ASSERT_CHEAP(index);
+  TENZIR_ASSERT(index);
   TENZIR_DEBUG("{} spawned as active indexer for type {}", *self,
                index->type());
   self->state.column = column;
@@ -100,7 +100,7 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
 indexer_actor::behavior_type
 passive_indexer(indexer_actor::stateful_pointer<indexer_state> self,
                 uuid partition_id, value_index_ptr index) {
-  TENZIR_ASSERT_CHEAP(index);
+  TENZIR_ASSERT(index);
   TENZIR_DEBUG("{} spawned as passive indexer for a column of type {}", *self,
                index->type());
   self->state.partition_id = partition_id;

@@ -94,7 +94,7 @@ public:
   /// Updates the context.
   auto update(table_slice slice, context::parameter_map parameters)
     -> caf::expected<update_result> override {
-    TENZIR_ASSERT_CHEAP(slice.rows() != 0);
+    TENZIR_ASSERT(slice.rows() != 0);
     if (not parameters.contains("key")) {
       return caf::make_error(ec::invalid_argument, "missing 'key' parameter");
     }
@@ -140,7 +140,7 @@ public:
 
   auto reset(context::parameter_map) -> caf::expected<record> override {
     auto params = bloom_filter_.parameters();
-    TENZIR_ASSERT_CHEAP(params.n && params.p);
+    TENZIR_ASSERT(params.n && params.p);
     bloom_filter_ = dcso_bloom_filter{*params.n, *params.p};
     return show();
   }
@@ -205,7 +205,7 @@ class plugin : public virtual context_plugin {
 
   auto load_context(chunk_ptr serialized) const
     -> caf::expected<std::unique_ptr<context>> override {
-    TENZIR_ASSERT_CHEAP(serialized != nullptr);
+    TENZIR_ASSERT(serialized != nullptr);
     auto bloom_filter = dcso_bloom_filter{};
     if (auto err = convert(as_bytes(*serialized), bloom_filter)) {
       return add_context(err, "failed to deserialize Bloom filter context");

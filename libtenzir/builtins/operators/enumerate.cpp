@@ -57,8 +57,7 @@ public:
       auto builder
         = uint64_type::make_arrow_builder(arrow::default_memory_pool());
       auto reserve_result = builder->Reserve(n);
-      TENZIR_ASSERT_CHEAP(reserve_result.ok(),
-                          reserve_result.ToString().c_str());
+      TENZIR_ASSERT(reserve_result.ok(), reserve_result.ToString().c_str());
       // Fill the column.
       auto& offset = offsets[current_type];
       for (uint64_t i = 0; i < detail::narrow_cast<uint64_t>(n); ++i) {

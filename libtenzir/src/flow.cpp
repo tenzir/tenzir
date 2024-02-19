@@ -33,7 +33,7 @@ bool operator==(const flow& x, const flow& y) {
 }
 
 port_type protocol(const flow& x) {
-  TENZIR_ASSERT(x.src_port.type() == x.dst_port.type());
+  TENZIR_ASSERT_EXPENSIVE(x.src_port.type() == x.dst_port.type());
   return x.src_port.type();
 }
 

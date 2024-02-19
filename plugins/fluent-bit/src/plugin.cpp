@@ -352,14 +352,14 @@ public:
 
   /// Checks whether the Fluent Bit engine is still running.
   auto running() -> bool {
-    TENZIR_ASSERT_CHEAP(ctx_ != nullptr);
+    TENZIR_ASSERT(ctx_ != nullptr);
     return ctx_->status == FLB_LIB_OK;
   }
 
   /// Pushes data into Fluent Bit.
   auto push(std::string_view data) -> bool {
-    TENZIR_ASSERT_CHEAP(ctx_ != nullptr);
-    TENZIR_ASSERT_CHEAP(ffd_ >= 0);
+    TENZIR_ASSERT(ctx_ != nullptr);
+    TENZIR_ASSERT(ffd_ >= 0);
     return flb_lib_push(ctx_, ffd_, data.data(), data.size()) != 0;
   }
 
@@ -448,7 +448,7 @@ private:
 
   /// Starts the engine.
   auto start() -> bool {
-    TENZIR_ASSERT_CHEAP(ctx_ != nullptr);
+    TENZIR_ASSERT(ctx_ != nullptr);
     TENZIR_DEBUG("starting Fluent Bit engine");
     auto ret = flb_start(ctx_);
     if (ret == 0) {
@@ -461,7 +461,7 @@ private:
 
   /// Stops the engine.
   auto stop() -> bool {
-    TENZIR_ASSERT_CHEAP(ctx_ != nullptr);
+    TENZIR_ASSERT(ctx_ != nullptr);
     if (not started_) {
       TENZIR_DEBUG("discarded attempt to stop unstarted engine");
       return false;
@@ -603,7 +603,7 @@ public:
       // function within a while loop checking that msgpack_unpack_next
       // returned MSGPACK_UNPACK_SUCCESS. See out_lib_flush() in
       // plugins/out_lib/out_lib.c in the Fluent Bit code base for details.
-      TENZIR_ASSERT_CHEAP(object);
+      TENZIR_ASSERT(object);
       if (object->type != MSGPACK_OBJECT_ARRAY) {
         diagnostic::warning("invalid Fluent Bit message")
           .note("expected array as top-level object")
@@ -720,12 +720,12 @@ public:
       auto it = std::back_inserter(event);
       for (const auto& row :
            values(caf::get<record_type>(resolved_slice.schema()), *array)) {
-        TENZIR_ASSERT_CHEAP(row);
+        TENZIR_ASSERT(row);
         auto printer = json_printer{{
           .oneline = true,
         }};
         const auto ok = printer.print(it, *row);
-        TENZIR_ASSERT_CHEAP(ok);
+        TENZIR_ASSERT(ok);
         // Wrap JSON object in the 2-element JSON array that Fluent Bit expects.
         auto message = fmt::format("[{}, {}]", flb_time_now(), event);
         if (not(*engine)->push(message))

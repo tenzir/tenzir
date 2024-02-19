@@ -43,7 +43,7 @@ caf::error setenv(std::string_view key, std::string_view value, int overwrite) {
     return {};
   return caf::make_error( //
     ec::system_error,
-    fmt::format("failed in unsetenv(3): {}", ::strerror(errno)));
+    fmt::format("failed in setenv(3): {}", ::strerror(errno)));
 }
 
 caf::error unsetenv(std::string_view var) {

@@ -31,7 +31,7 @@ public:
     // can offer a better mechanism here.
     auto self = caf::scoped_actor{ctrl.self().system()};
     auto components = get_node_components<importer_actor>(self, ctrl.node());
-    TENZIR_ASSERT_CHEAP(components);
+    TENZIR_ASSERT(components);
     auto [importer] = std::move(*components);
     auto total_events = size_t{0};
     for (auto&& slice : input) {

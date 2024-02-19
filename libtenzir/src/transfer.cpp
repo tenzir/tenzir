@@ -72,7 +72,7 @@ auto transfer::prepare(const http::request& req) -> caf::error {
   auto add_header = [&](std::string_view name, std::string_view value) {
     TENZIR_DEBUG("setting HTTP header {}: {}", name, value);
     auto code = easy.set_http_header(name, value);
-    TENZIR_ASSERT_CHEAP(code == curl::easy::code::ok);
+    TENZIR_ASSERT(code == curl::easy::code::ok);
   };
   // Add default headers.
   if (req.header("Accept") == nullptr)
@@ -92,13 +92,13 @@ auto transfer::prepare(std::string_view url) -> caf::error {
 }
 
 auto transfer::prepare(chunk_ptr chunk) -> caf::error {
-  TENZIR_ASSERT_CHEAP(chunk);
+  TENZIR_ASSERT(chunk);
   // Disable the default behavior of libcurl that prints the response to stdout.
   auto on_write = [](std::span<const std::byte> buffer) {
     TENZIR_DEBUG("got {}-byte response chunk", buffer.size());
   };
   auto code = easy_.set(on_write);
-  TENZIR_ASSERT_CHEAP(code == curl::easy::code::ok);
+  TENZIR_ASSERT(code == curl::easy::code::ok);
   TENZIR_DEBUG("preparing transfer with {}-byte chunk", chunk->size());
   auto chunk_size = detail::narrow_cast<long>(chunk->size());
   if (auto err = to_error(easy_.set(CURLOPT_POSTFIELDSIZE, chunk_size))) {
@@ -161,7 +161,7 @@ auto transfer::download() -> caf::expected<chunk_ptr> {
     body.insert(body.end(), buffer.begin(), buffer.end());
   };
   auto code = easy_.set(on_write);
-  TENZIR_ASSERT_CHEAP(code == curl::easy::code::ok);
+  TENZIR_ASSERT(code == curl::easy::code::ok);
   code = easy_.perform();
   if (code != curl::easy::code::ok)
     return to_error(code);
@@ -174,13 +174,13 @@ auto transfer::download_chunks() -> generator<caf::expected<chunk_ptr>> {
     chunks.emplace_back(chunk::copy(buffer));
   };
   auto code = easy_.set(on_write);
-  TENZIR_ASSERT_CHEAP(code == curl::easy::code::ok);
+  TENZIR_ASSERT(code == curl::easy::code::ok);
   auto multi = curl::multi{};
   auto multi_code = multi.add(easy_);
-  TENZIR_ASSERT_CHEAP(multi_code == curl::multi::code::ok);
+  TENZIR_ASSERT(multi_code == curl::multi::code::ok);
   auto guard = caf::detail::make_scope_guard([&] {
     multi_code = multi.remove(easy_);
-    TENZIR_ASSERT_CHEAP(multi_code == curl::multi::code::ok);
+    TENZIR_ASSERT(multi_code == curl::multi::code::ok);
   });
   while (true) {
     if (auto still_running = multi.run(options.poll_timeout)) {

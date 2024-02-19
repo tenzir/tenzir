@@ -288,7 +288,7 @@ inline auto descend(const record* r, std::string_view path)
                     fmt::join(std::span{names.data(), &name}, ".")));
     }
   }
-  die("unreachable");
+  TENZIR_UNREACHABLE();
 }
 
 /// Tries to find the entry with the dot-sperated `path` with the given type.
