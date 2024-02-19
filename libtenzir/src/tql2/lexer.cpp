@@ -79,7 +79,7 @@ auto lex(std::string_view content) -> std::vector<token> {
       ->* [] { return token_kind::dollar_ident; }
     | ignore(identifier)
       ->* [] { return token_kind::identifier; }
-    | ignore(+(space - '\n'))
+    | ignore(+((space - '\n') | ("\\" >> *(space - '\n') >> '\n')))
       ->* [] { return token_kind::whitespace; }
   ;
   // clang-format on

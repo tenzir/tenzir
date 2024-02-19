@@ -1,12 +1,91 @@
-error: could not parse token
- --> /dev/stdin:5:3
-  |
-5 | h \
-  |   ^ 
-  |
-error: could not parse token
- --> /dev/stdin:7:4
-  |
-7 |   j\
-  |    ^ 
-  |
+[
+  invocation {
+    op: {
+      path: [
+        "a" @ 0..1
+      ]
+    },
+    args: [
+      expression selector {
+        path: [
+          "b" @ 2..3
+        ]
+      },
+      expression selector {
+        path: [
+          "c" @ 7..8
+        ]
+      },
+      expression selector {
+        path: [
+          "d" @ 12..13
+        ]
+      },
+      expression selector {
+        path: [
+          "e" @ 15..16
+        ]
+      }
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        "f" @ 17..18
+      ]
+    },
+    args: [
+      expression selector {
+        path: [
+          "g" @ 19..20
+        ]
+      }
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        "h" @ 21..22
+      ]
+    },
+    args: [
+      expression selector {
+        path: [
+          "i" @ 27..28
+        ]
+      },
+      expression selector {
+        path: [
+          "j" @ 32..33
+        ]
+      },
+      expression selector {
+        path: [
+          "k" @ 38..39
+        ]
+      }
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        "l" @ 40..41
+      ]
+    },
+    args: [
+      expression binary_expr {
+        left: selector {
+          path: [
+            "m" @ 42..43
+          ]
+        },
+        op: "add" @ 44..45,
+        right: selector {
+          path: [
+            "n" @ 48..49
+          ]
+        }
+      }
+    ]
+  }
+]

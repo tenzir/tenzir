@@ -38,8 +38,7 @@ EOF
 }
 
 @test "multiline operators" {
-  # TODO
-  check ! tenzir -f /dev/stdin <<EOF
+  check tenzir -f /dev/stdin <<EOF
 a b,
   c,
   d, e
