@@ -65,6 +65,16 @@ h
 if i {} else {}
 j
 match k {}
+match k { "foo" => { bar } }
+match k {
+  "foo" => {
+    bar
+  }
+  42 => {
+    foo bar
+    qux bar
+  }
+}
 EOF
 }
 
