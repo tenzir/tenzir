@@ -11,8 +11,8 @@ Enriches events with a context.
 ## Synopsis
 
 ```
-enrich <name> [<options>]
-enrich <field>=<name> [<options>]
+enrich <name> [<options>] [--filter]
+enrich <field>=<name> [<options>] [--filter]
 ```
 
 ## Description
@@ -37,6 +37,11 @@ The following options are currently supported for the `lookup-table` context:
 - `--field <field>` (required): The field in the input events to evaluate
   against the keys of the lookup table.
 
+### `--filter`
+
+An optional flag that enables the operator to filter events that do not
+contain a context.
+
 ## Examples
 
 Apply the `lookup-table` context `feodo` to `suricata.flow` events, using the
@@ -53,6 +58,5 @@ To return only events that have a context, use:
 ```
 export
 | where #schema == "suricata.flow"
-| enrich feodo --field dest_ip
-| where feodo.key != null
+| enrich feodo --field dest_ip --filter
 ```
