@@ -8,3 +8,5 @@ source "$(dirname "${BASH_SOURCE[0]}")/src/assert_sorted.bash"
 source "$(dirname "${BASH_SOURCE[0]}")/src/check.bash"
 source "$(dirname "${BASH_SOURCE[0]}")/src/fixtures.bash"
 source "$(dirname "${BASH_SOURCE[0]}")/src/import.bash"
+
+export TENZIR_ABORT_ON_PANIC=1

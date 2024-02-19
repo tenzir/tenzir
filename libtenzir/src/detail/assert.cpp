@@ -8,8 +8,12 @@
 
 #include "tenzir/detail/assert.hpp"
 
+#include "tenzir/config.hpp"
 #include "tenzir/detail/backtrace.hpp"
+#include "tenzir/detail/env.hpp"
 #include "tenzir/logger.hpp"
+
+#include <cstdlib>
 
 namespace tenzir::detail {
 
@@ -17,8 +21,18 @@ void panic(std::string message) {
   // TODO: Ideally, we would capture a stacktrace here and print it after some
   // post-processing, potentially only after being caught. The exception type
   // should be change to a special panic exception.
-  TENZIR_ERROR("PANIC: {}", message);
   backtrace();
+  TENZIR_ERROR("panic: {}", message);
+  TENZIR_ERROR("version: {}", version::version);
+  TENZIR_ERROR("this is a bug, we would appreciate a report - thank you!");
+  // TODO: Consider making this available through the normal configuration
+  // mechanism.
+  if (auto e = detail::getenv("TENZIR_ABORT_ON_PANIC");
+      e && not e->empty() && *e != "0") {
+    // Wait until `spdlog` flushed the logs.
+    std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    std::_Exit(1);
+  }
   throw std::runtime_error(message);
 }
 
