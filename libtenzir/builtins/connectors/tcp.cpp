@@ -9,6 +9,7 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/config.hpp>
+#include <tenzir/detail/posix.hpp>
 #include <tenzir/detail/string_literal.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
@@ -379,7 +380,7 @@ public:
       if (keyfile) {
         std::fclose(keyfile);
       } else {
-        auto error = std::strerror(errno);
+        auto error = detail::describe_errno();
         diagnostic::error("failed to open TLS keyfile")
           .hint("{}", error)
           .emit(ctrl.diagnostics());
@@ -389,7 +390,7 @@ public:
       if (certfile) {
         std::fclose(certfile);
       } else {
-        auto error = std::strerror(errno);
+        auto error = detail::describe_errno();
         diagnostic::error("failed to open TLS certfile")
           .hint("{}", error)
           .emit(ctrl.diagnostics());
@@ -487,7 +488,7 @@ public:
       if (keyfile) {
         std::fclose(keyfile);
       } else {
-        auto error = std::strerror(errno);
+        auto error = detail::describe_errno();
         diagnostic::error("failed to open TLS keyfile")
           .hint("{}", error)
           .emit(ctrl.diagnostics());
@@ -497,7 +498,7 @@ public:
       if (certfile) {
         std::fclose(certfile);
       } else {
-        auto error = std::strerror(errno);
+        auto error = detail::describe_errno();
         diagnostic::error("failed to open TLS certfile")
           .hint("{}", error)
           .emit(ctrl.diagnostics());

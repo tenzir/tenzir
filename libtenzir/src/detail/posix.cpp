@@ -96,7 +96,7 @@ uds_datagram_sender::make(const std::string& path) {
   if (result.src_fd < 0)
     return caf::make_error(
       ec::system_error,
-      "failed to obtain an AF_UNIX DGRAM socket: ", ::strerror(errno));
+      "failed to obtain an AF_UNIX DGRAM socket: ", detail::describe_errno());
   if (auto err = make_nonblocking(result.src_fd))
     return err;
   // Create a unique temporary directory for a place to bind the sending side
@@ -108,7 +108,7 @@ uds_datagram_sender::make(const std::string& path) {
   if (src_name == nullptr)
     return caf::make_error(ec::system_error,
                            fmt::format("failed in mkdtemp({}): {}",
-                                       mkd_template, ::strerror(errno)));
+                                       mkd_template, detail::describe_errno()));
   // Replace the first null terminator with a directory separator to get the
   // full path.
   src_name[16] = '/';
@@ -117,8 +117,8 @@ uds_datagram_sender::make(const std::string& path) {
   src.sun_family = AF_UNIX;
   std::strncpy(src.sun_path, src_name, sizeof(src.sun_path) - 1);
   if (::bind(result.src_fd, reinterpret_cast<sockaddr*>(&src), sizeof(src)) < 0)
-    return caf::make_error(ec::system_error,
-                           "failed to bind client socket:", ::strerror(errno));
+    return caf::make_error(ec::system_error, "failed to bind client socket:",
+                           detail::describe_errno());
   // From https://man7.org/linux/man-pages/man2/unlink.2.html:
   //   If the name was the last link to a file but any processes still
   //   have the file open, the file will remain in existence until the
@@ -127,12 +127,12 @@ uds_datagram_sender::make(const std::string& path) {
   //    it right away.
   if (::unlink(src_name) != 0) {
     TENZIR_WARN("{} failed in unlink({}): {}", __func__, src_name,
-                ::strerror(errno));
+                detail::describe_errno());
   } else {
     src_name[16] = '\0';
     if (::rmdir(src_name) != 0)
       TENZIR_WARN("{} failed in rmdir({}): {}", __func__, src_name,
-                  ::strerror(errno));
+                  detail::describe_errno());
   }
   // Prepare the destination socket address.
   std::memset(&result.dst, 0, sizeof(result.dst));
@@ -156,7 +156,8 @@ caf::error uds_datagram_sender::send(std::span<char> data, int timeout_usec) {
                                        "bytes in a single datagram",
                                        sent, data.size()));
   if (errno != EAGAIN && errno != EWOULDBLOCK)
-    return caf::make_error(ec::system_error, "::sendto: ", ::strerror(errno));
+    return caf::make_error(ec::system_error,
+                           "::sendto: ", detail::describe_errno());
   if (timeout_usec == 0)
     return ec::timeout;
   auto ready = wpoll(src_fd, timeout_usec);
@@ -177,7 +178,8 @@ caf::error uds_datagram_sender::send(std::span<char> data, int timeout_usec) {
                                        "bytes in a single datagram",
                                        sent, data.size()));
   if (errno != EAGAIN && errno != EWOULDBLOCK)
-    return caf::make_error(ec::system_error, "::sendto: ", ::strerror(errno));
+    return caf::make_error(ec::system_error,
+                           "::sendto: ", detail::describe_errno());
   return ec::timeout;
 }
 
@@ -199,7 +201,8 @@ int uds_connect(const std::string& path, socket_type type) {
       std::strncpy(clt.sun_path, client_path.data(), sizeof(clt.sun_path) - 1);
       ::unlink(client_path.c_str()); // Always remove previous socket file.
       if (::bind(fd, reinterpret_cast<sockaddr*>(&clt), sizeof(clt)) < 0) {
-        TENZIR_WARN("{} failed in bind: {}", __func__, ::strerror(errno));
+        TENZIR_WARN("{} failed in bind: {}", __func__,
+                    detail::describe_errno());
         return -1;
       }
       break;
@@ -210,7 +213,8 @@ int uds_connect(const std::string& path, socket_type type) {
   std::strncpy(srv.sun_path, path.data(), sizeof(srv.sun_path) - 1);
   if (::connect(fd, reinterpret_cast<sockaddr*>(&srv), sizeof(srv)) < 0) {
     if (!(type == socket_type::datagram && errno == ENOENT)) {
-      TENZIR_WARN("{} failed in connect: {}", __func__, ::strerror(errno));
+      TENZIR_WARN("{} failed in connect: {}", __func__,
+                  detail::describe_errno());
       return -1;
     }
   }
@@ -342,11 +346,11 @@ namespace {
   auto flags = ::fcntl(fd, F_GETFL, 0);
   if (flags == -1)
     return caf::make_error(ec::filesystem_error,
-                           "failed in fcntl(2):", std::strerror(errno));
+                           "failed in fcntl(2):", detail::describe_errno());
   flags = flag ? flags | O_NONBLOCK : flags & ~O_NONBLOCK;
   if (::fcntl(fd, F_SETFL, flags) == -1)
     return caf::make_error(ec::filesystem_error,
-                           "failed in fcntl(2):", std::strerror(errno));
+                           "failed in fcntl(2):", detail::describe_errno());
   return caf::none;
 }
 
@@ -368,7 +372,7 @@ caf::expected<bool> rpoll(int fd, int usec) {
   auto rc = ::select(fd + 1, &read_set, nullptr, nullptr, &timeout);
   if (rc < 0)
     return caf::make_error(ec::filesystem_error,
-                           "failed in select(2):", std::strerror(errno));
+                           "failed in select(2):", detail::describe_errno());
   return !!FD_ISSET(fd, &read_set);
 }
 
@@ -380,7 +384,7 @@ caf::expected<bool> wpoll(int fd, int usec) {
   auto rc = ::select(fd + 1, nullptr, &write_set, nullptr, &timeout);
   if (rc < 0)
     return caf::make_error(ec::filesystem_error,
-                           "failed in select(2):", std::strerror(errno));
+                           "failed in select(2):", detail::describe_errno());
   return !!FD_ISSET(fd, &write_set);
 }
 
@@ -391,7 +395,7 @@ caf::error close(int fd) {
   } while (result < 0 && errno == EINTR);
   if (result != 0)
     return caf::make_error(ec::filesystem_error,
-                           "failed in close(2):", std::strerror(errno));
+                           "failed in close(2):", detail::describe_errno());
   return caf::none;
 }
 
@@ -412,7 +416,7 @@ caf::expected<size_t> read(int fd, void* buffer, size_t bytes) {
     } while (taken < 0 && errno == EINTR);
     if (taken < 0) // error
       return caf::make_error(ec::filesystem_error,
-                             "failed in read(2):", std::strerror(errno));
+                             "failed in read(2):", detail::describe_errno());
     if (taken == 0) // EOF
       break;
     total += static_cast<size_t>(taken);
@@ -437,7 +441,7 @@ caf::expected<size_t> write(int fd, const void* buffer, size_t bytes) {
     } while (written < 0 && errno == EINTR);
     if (written < 0)
       return caf::make_error(ec::filesystem_error,
-                             "failed in write(2):", std::strerror(errno));
+                             "failed in write(2):", detail::describe_errno());
     // write should not return 0 if it wasn't asked to write that amount. We
     // want to cover this case anyway in case it ever happens.
     if (written == 0)
@@ -450,7 +454,7 @@ caf::expected<size_t> write(int fd, const void* buffer, size_t bytes) {
 caf::error seek(int fd, size_t bytes) {
   if (::lseek(fd, bytes, SEEK_CUR) == -1)
     return caf::make_error(ec::filesystem_error,
-                           "failed in seek(2):", std::strerror(errno));
+                           "failed in seek(2):", detail::describe_errno());
   return caf::none;
 }
 
