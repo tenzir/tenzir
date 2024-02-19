@@ -61,7 +61,6 @@ jobs:
     outputs:
       version-matrix: ${{ steps.configure.outputs.version-matrix }}
       build-version: ${{ steps.configure.outputs.build-version }}
-      build-version-short: ${{ steps.configure.outputs.build-version-short }}
       before-sha: ${{ steps.configure.outputs.before-sha }}
       before-version: ${{ steps.configure.outputs.before-version }}
       release-version: ${{ steps.configure.outputs.release-version }}
@@ -118,17 +117,17 @@ jobs:
           echo "version-matrix=${version_matrix}" >> $GITHUB_OUTPUT
           # Set a bunch of version numbers depending on how we triggered the PR
           # so they're consistent between jobs.
-          build_version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
-          build_version_short="$(git describe --abbrev=10 --match='v[0-9]*')"
+          version="$(jq -r '."tenzir-version"' version.json)"
+          id_sha="${{ github.sha }}"
+          release_version="${version}"
+          build_version="${version}+g${id_sha:0:10}"
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             before_sha="${{ github.event.before }}"
           else
             before_sha="$(git merge-base origin/main HEAD)"
           fi
-          before_version="$(git describe --abbrev=10 --match='v[0-9]*' -- "${before_sha}")"
-          release_version="$(git describe --abbrev=0 --match='v[0-9]*')"
+          before_version="${version}+g${before_sha:0:10}"
           echo "build-version=${build_version}" >> $GITHUB_OUTPUT
-          echo "build-version-short=${build_version_short}" >> $GITHUB_OUTPUT
           echo "before-sha=${before_sha}" >> $GITHUB_OUTPUT
           echo "before-version=${before_version}" >> $GITHUB_OUTPUT
           echo "release-version=${release_version}" >> $GITHUB_OUTPUT
@@ -139,8 +138,7 @@ jobs:
             tenzir_version_build_metadata=""
             tenzir_docker_version_build_metadata=""
           else
-            id_sha="${{ github.sha }}"
-            tenzir_version_build_metadata="-g${id_sha:0:10}"
+            tenzir_version_build_metadata="g${id_sha:0:10}"
             tenzir_docker_version_build_metadata="${tenzir_version_build_metadata}"
             # In Pull Requests we replace the normal commit hash based version
             # suffix with the PR number. That way we get stable arguments to
@@ -268,7 +266,7 @@ jobs:
           docker_config="$(jq -c \
             '."version-build-metadata" = $vs | ."tags" = $ARGS.positional' \
             .github/workflows/docker-config-base.json \
-            --arg vs "${{ steps.configure.outputs.tenzir-version-build-metadata }}" \
+            --arg vs "${{ steps.configure.outputs.tenzir-docker-version-build-metadata }}" \
             --args -- "${tags[@]}")"
           # Clear push repos in case we're in a PR, but push the community
           # edition to ghcr.
