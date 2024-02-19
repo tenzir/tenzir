@@ -60,8 +60,10 @@ jobs:
             [ $pr_number ] # Assert the pr number was non-empty
             gh pr --repo tenzir/tenzir-plugins merge $pr_number --merge --match-head-commit ${plugins_sha}
 
+            # Fetch and checkout the newly created merge commit
+            git -C contrib/tenzir-plugins pull -q origin main
+
             # Create a new commit for the updated submodule.
-            git -C contrib/tenzir-plugins checkout main
             new_plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse --short origin/main)
             nix/update-plugins.sh
             git add contrib/tenzir-plugins
