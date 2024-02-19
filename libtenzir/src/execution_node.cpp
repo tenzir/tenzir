@@ -424,7 +424,7 @@ struct exec_node_state {
     if constexpr (std::is_same_v<Output, std::monostate>) {
       // We never issue demand to the sink, so we cannot be at the end of the
       // generator here.
-      TENZIR_ASSERT_CHEAP(instance->it != instance->gen.end());
+      TENZIR_ASSERT(instance->it != instance->gen.end());
       TENZIR_TRACE("{} {} processes", *self, op->name());
       ++instance->it;
       if (self->getf(caf::abstract_actor::is_shutting_down_flag)) {
@@ -439,7 +439,7 @@ struct exec_node_state {
       if (not demand or instance->it == instance->gen.end()) {
         return;
       }
-      TENZIR_ASSERT_CHEAP(instance);
+      TENZIR_ASSERT(instance);
       TENZIR_TRACE("{} {} processes", *self, op->name());
       auto output = std::move(*instance->it);
       const auto output_size = size(output);

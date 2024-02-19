@@ -174,10 +174,10 @@ bool query_queue::mark_partition_erased(const uuid& pid) {
   auto it = std::find(partitions.begin(), partitions.end(), pid);
   if (it != partitions.end()) {
     it->erased = true;
-    TENZIR_ASSERT_CHEAP(!detail::contains(inactive_partitions, pid),
-                        "A partition must not be active and inactive at the "
-                        "same "
-                        "time");
+    TENZIR_ASSERT(!detail::contains(inactive_partitions, pid),
+                  "A partition must not be active and inactive at the "
+                  "same "
+                  "time");
     return true;
   }
   it = std::find(inactive_partitions.begin(), inactive_partitions.end(), pid);

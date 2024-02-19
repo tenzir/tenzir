@@ -191,7 +191,7 @@ auto append_columns(const record_type& schema,
   // of the value 1, call .data() on that and pass it in here instead.
   const auto append_status
     = builder.AppendValues(array.length(), /*valid_bytes*/ nullptr);
-  TENZIR_ASSERT_CHEAP(append_status.ok(), append_status.ToString().c_str());
+  TENZIR_ASSERT(append_status.ok(), append_status.ToString().c_str());
   for (auto field_index = 0; field_index < array.num_fields(); ++field_index) {
     const auto field_type = schema.field(field_index).type;
     const auto& field_array = *array.field(field_index);
@@ -218,8 +218,8 @@ auto append_columns(const record_type& schema,
           const auto append_array_slice_result
             = concrete_field_builder.AppendArraySlice(
               *concrete_field_array.data(), 0, array.length());
-          TENZIR_ASSERT_CHEAP(append_array_slice_result.ok(),
-                              append_array_slice_result.ToString().c_str());
+          TENZIR_ASSERT(append_array_slice_result.ok(),
+                        append_array_slice_result.ToString().c_str());
         } else {
           // For complex types and extension types we cannot use the
           // AppendArraySlice API, so we need to take a slight detour by
@@ -240,8 +240,7 @@ auto append_columns(const record_type& schema,
           }();
           const auto reserve_result
             = concrete_field_builder.Reserve(array.length());
-          TENZIR_ASSERT_CHEAP(reserve_result.ok(),
-                              reserve_result.ToString().c_str());
+          TENZIR_ASSERT(reserve_result.ok(), reserve_result.ToString().c_str());
           for (auto row = 0; row < array.length(); ++row) {
             if (concrete_field_array_storage.IsNull(row)) {
               const auto append_null_result

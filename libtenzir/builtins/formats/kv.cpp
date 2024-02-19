@@ -60,8 +60,8 @@ public:
 
   auto split(std::string_view input) const
     -> std::pair<std::string_view, std::string_view> {
-    TENZIR_ASSERT_CHEAP(regex_);
-    TENZIR_ASSERT_CHEAP(regex_->NumberOfCapturingGroups() == 1);
+    TENZIR_ASSERT(regex_);
+    TENZIR_ASSERT(regex_->NumberOfCapturingGroups() == 1);
     auto group = re2::StringPiece{};
     if (not re2::RE2::PartialMatch(input, *regex_, &group)) {
       return {input, {}};

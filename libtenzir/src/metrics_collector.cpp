@@ -16,7 +16,7 @@
 namespace tenzir {
 
 auto metrics_collector_state::collect_and_import_metrics() -> void {
-  TENZIR_ASSERT_CHEAP(importer != nullptr);
+  TENZIR_ASSERT(importer != nullptr);
   // Use a consistent timestamp for all collected metrics.
   auto now = std::chrono::system_clock::now();
   for (auto& [name, collector] : collectors) {

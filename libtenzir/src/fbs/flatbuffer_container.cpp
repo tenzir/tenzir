@@ -26,26 +26,26 @@ tenzir::chunk_ptr flatbuffer_container::dissolve() && {
 }
 
 chunk_ptr flatbuffer_container::get_raw(size_t idx) const {
-  TENZIR_ASSERT_CHEAP(chunk_);
-  TENZIR_ASSERT_CHEAP(header_);
+  TENZIR_ASSERT(chunk_);
+  TENZIR_ASSERT(header_);
   auto const& segments = *header_->file_segments();
-  TENZIR_ASSERT_CHEAP(idx <= segments.size());
+  TENZIR_ASSERT(idx <= segments.size());
   auto const* range = segments.Get(idx);
   return chunk_->slice(range->offset(), range->size());
 }
 
 const std::byte* flatbuffer_container::get(size_t idx) const {
-  TENZIR_ASSERT_CHEAP(chunk_);
-  TENZIR_ASSERT_CHEAP(header_);
+  TENZIR_ASSERT(chunk_);
+  TENZIR_ASSERT(header_);
   auto const& segments = *header_->file_segments();
-  TENZIR_ASSERT_CHEAP(idx <= segments.size());
+  TENZIR_ASSERT(idx <= segments.size());
   auto offset = segments.Get(idx)->offset();
   return chunk_->data() + offset;
 }
 
 size_t flatbuffer_container::size() const {
-  TENZIR_ASSERT_CHEAP(chunk_);
-  TENZIR_ASSERT_CHEAP(header_);
+  TENZIR_ASSERT(chunk_);
+  TENZIR_ASSERT(header_);
   return header_->file_segments()->size();
 }
 

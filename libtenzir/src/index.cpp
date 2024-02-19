@@ -972,7 +972,7 @@ auto index_state::schedule_lookups() -> size_t {
     running_partition_lookups++;
     num_scheduled++;
   }
-  TENZIR_ASSERT_CHEAP(running_partition_lookups >= previous_partition_lookups);
+  TENZIR_ASSERT(running_partition_lookups >= previous_partition_lookups);
   return running_partition_lookups - previous_partition_lookups;
 }
 

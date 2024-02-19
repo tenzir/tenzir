@@ -37,7 +37,7 @@ public:
   /// Bloom filter.
   ip_synopsis(type x, typename super::bloom_filter_type bf)
     : super{std::move(x), std::move(bf)} {
-    TENZIR_ASSERT_CHEAP(caf::holds_alternative<ip_type>(this->type()));
+    TENZIR_ASSERT(caf::holds_alternative<ip_type>(this->type()));
   }
 
   [[nodiscard]] synopsis_ptr clone() const override {
@@ -84,7 +84,7 @@ using buffered_ip_synopsis = buffered_synopsis<tenzir::ip, HashFunction>;
 template <class HashFunction>
 synopsis_ptr make_ip_synopsis(tenzir::type type, bloom_filter_parameters params,
                               std::vector<size_t> seeds) {
-  TENZIR_ASSERT_CHEAP(caf::holds_alternative<ip_type>(type));
+  TENZIR_ASSERT(caf::holds_alternative<ip_type>(type));
   auto x = make_bloom_filter<HashFunction>(params, std::move(seeds));
   if (!x) {
     TENZIR_WARN("{} failed to construct Bloom filter", __func__);
@@ -105,7 +105,7 @@ synopsis_ptr make_ip_synopsis(tenzir::type type, bloom_filter_parameters params,
 template <class HashFunction>
 synopsis_ptr
 make_buffered_ip_synopsis(tenzir::type type, bloom_filter_parameters params) {
-  TENZIR_ASSERT_CHEAP(caf::holds_alternative<ip_type>(type));
+  TENZIR_ASSERT(caf::holds_alternative<ip_type>(type));
   if (!params.p) {
     return nullptr;
   }
@@ -121,7 +121,7 @@ make_buffered_ip_synopsis(tenzir::type type, bloom_filter_parameters params) {
 /// @relates ip_synopsis
 template <class HashFunction>
 synopsis_ptr make_ip_synopsis(tenzir::type type, const caf::settings& opts) {
-  TENZIR_ASSERT_CHEAP(caf::holds_alternative<ip_type>(type));
+  TENZIR_ASSERT(caf::holds_alternative<ip_type>(type));
   if (auto xs = parse_parameters(type))
     return make_ip_synopsis<HashFunction>(std::move(type), *xs);
   // If no explicit Bloom filter parameters were attached to the type, we try

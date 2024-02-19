@@ -1172,9 +1172,9 @@ caf::error writer::write(const table_slice& x) {
   auto array = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
   auto out_iter = std::ostream_iterator<char>{out()};
   for (const auto& row : values(type, *array)) {
-    TENZIR_ASSERT_CHEAP(row);
+    TENZIR_ASSERT(row);
     const auto ok = printer_.print(out_iter, *row);
-    TENZIR_ASSERT_CHEAP(ok);
+    TENZIR_ASSERT(ok);
     out_iter = fmt::format_to(out_iter, "\n");
   }
   return {};

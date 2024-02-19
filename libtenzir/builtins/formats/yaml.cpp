@@ -222,7 +222,7 @@ public:
         out->SetIndent(2);
         for (const auto& row :
              values(caf::get<record_type>(resolved_slice.schema()), *array)) {
-          TENZIR_ASSERT_CHEAP(row);
+          TENZIR_ASSERT(row);
           print_document(*out, *row);
         }
         // If the output failed, then we either failed to allocate memory or had

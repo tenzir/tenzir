@@ -111,7 +111,7 @@ public:
       return optimize_result{expr_.inner, order, nullptr};
     }
     auto combined = normalize_and_validate(conjunction{expr_.inner, filter});
-    TENZIR_ASSERT_CHEAP(combined);
+    TENZIR_ASSERT(combined);
     return optimize_result{std::move(*combined), order, nullptr};
   }
 

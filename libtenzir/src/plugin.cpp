@@ -687,9 +687,9 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
     auto& last = output.back();
     auto null_builder = caf::get<record_type>(last.schema())
                           .make_arrow_builder(arrow::default_memory_pool());
-    TENZIR_ASSERT_CHEAP(null_builder->AppendNull().ok());
+    TENZIR_ASSERT(null_builder->AppendNull().ok());
     auto null_array = std::shared_ptr<arrow::StructArray>{};
-    TENZIR_ASSERT_CHEAP(null_builder->Finish(&null_array).ok());
+    TENZIR_ASSERT(null_builder->Finish(&null_array).ok());
     auto null_batch = arrow::RecordBatch::Make(
       last.schema().to_arrow_schema(), 1, null_array->Flatten().ValueOrDie());
     last
@@ -987,7 +987,7 @@ plugin_ptr::control_block::control_block(void* library, plugin* instance,
 
 plugin_ptr::control_block::~control_block() noexcept {
   if (instance) {
-    TENZIR_ASSERT_CHEAP(deleter);
+    TENZIR_ASSERT(deleter);
     deleter(instance);
     instance = {};
     deleter = {};

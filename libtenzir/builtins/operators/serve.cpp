@@ -713,9 +713,9 @@ struct serve_handler_state {
         first = false;
         out_iter = fmt::format_to(out_iter, R"("schema_id":"{}","data":)",
                                   slice.schema().make_fingerprint());
-        TENZIR_ASSERT_CHEAP(row);
+        TENZIR_ASSERT(row);
         const auto ok = printer.print(out_iter, *row);
-        TENZIR_ASSERT_CHEAP(ok);
+        TENZIR_ASSERT(ok);
       }
     }
     // Write schemas
@@ -735,7 +735,7 @@ struct serve_handler_state {
       const auto ok
         = printer.print(out_iter, use_simple_format ? schema.to_definition2()
                                                     : schema.to_definition());
-      TENZIR_ASSERT_CHEAP(ok);
+      TENZIR_ASSERT(ok);
     }
     out_iter = fmt::format_to(out_iter, R"(}}]}}{})", '\n');
     return result;
