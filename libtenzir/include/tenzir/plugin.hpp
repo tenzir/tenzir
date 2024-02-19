@@ -720,6 +720,8 @@ public:
   using make_query_type
     = std::function<caf::expected<expression>(parameter_map)>;
 
+  static constexpr auto dump_batch_size_limit = 65536;
+
   /// Information about a context update that gets propagated to live lookups.
   struct update_result {
     record update_info;
@@ -731,6 +733,9 @@ public:
 
   virtual auto context_type() const -> std::string = 0;
 
+  virtual auto dump_event_name() const -> std::string {
+    return fmt::format("tenzir.{}.info", context_type());
+  }
   /// Emits context information for every event in `array` in order.
   virtual auto apply(series array) const -> caf::expected<std::vector<series>>
     = 0;

@@ -98,21 +98,16 @@ public:
 
   auto dump() -> generator<table_slice> override {
     auto entry_builder = series_builder{};
-    auto i = 0;
     for (const auto& [key, value] : context_entries) {
-      entry_builder.data(record{{"key", key}, {"value", value}});
-      ++i;
-      if (i % 65536 == 0) {
-        auto slices = entry_builder.finish_as_table_slice();
-        for (auto&& slice : slices) {
-          co_yield slice;
-        }
+      auto row = entry_builder.record();
+      row.field("key", key);
+      row.field("value", value);
+      if (entry_builder.length() >= context::dump_batch_size_limit) {
+        co_yield entry_builder.finish_assert_one_slice(dump_event_name());
       }
     }
-    auto slices = entry_builder.finish_as_table_slice();
-    for (auto&& slice : slices) {
-      co_yield slice;
-    }
+    // Dump all remaining entries that did not reach the size limit.
+    co_yield entry_builder.finish_assert_one_slice(dump_event_name());
   }
 
   /// Updates the context.
@@ -244,7 +239,6 @@ public:
 
 private:
   tsl::robin_map<data, data> context_entries;
-  std::optional<generator<table_slice>> entry_dumper;
 };
 
 class plugin : public virtual context_plugin {

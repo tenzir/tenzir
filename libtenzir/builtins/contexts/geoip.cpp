@@ -59,15 +59,9 @@ auto cast_128_bit_unsigned_to_64_bit(mmdb_uint128_t uint128) -> uint64_t {
 #endif
 
 struct current_dump {
-  std::optional<generator<table_slice>> dumper = {};
   std::set<uint64_t> visited = {};
   int status = MMDB_SUCCESS;
-
-  auto reset() -> void {
-    dumper.reset();
-    visited.clear();
-    status = MMDB_SUCCESS;
-  }
+  series_builder builder;
 };
 } // namespace
 
@@ -365,13 +359,13 @@ public:
         current_dump.status
           = MMDB_read_node(&*mmdb_, node_number, &search_node);
         if (current_dump.status != MMDB_SUCCESS) {
-          co_return;
+          break;
         }
         for (auto&& x :
              dump_recurse(search_node.left_record, search_node.left_record_type,
                           &search_node.left_record_entry, current_dump)) {
           if (current_dump.status != MMDB_SUCCESS) {
-            co_return;
+            break;
           }
           co_yield x;
         }
@@ -379,7 +373,7 @@ public:
                search_node.right_record, search_node.right_record_type,
                &search_node.right_record_entry, current_dump)) {
           if (current_dump.status != MMDB_SUCCESS) {
-            co_return;
+            break;
           }
           co_yield x;
         }
@@ -394,34 +388,35 @@ public:
         MMDB_entry_data_list_s* entry_data_list = nullptr;
         current_dump.status = MMDB_get_entry_data_list(entry, &entry_data_list);
         if (current_dump.status != MMDB_SUCCESS) {
-          co_return;
+          break;
         }
         auto free_entry_data_list = caf::detail::make_scope_guard([&] {
           if (entry_data_list) {
             MMDB_free_entry_data_list(entry_data_list);
           }
         });
-        list output;
+        auto output = list{};
         entry_data_list_to_list(entry_data_list, &current_dump.status, output);
         if (current_dump.status != MMDB_SUCCESS) {
-          co_return;
+          break;
         }
-        auto b = series_builder{};
         for (auto& x : output) {
-          b.data(x);
-        }
-        auto f = b.finish_as_table_slice();
-        for (auto&& x : f) {
-          co_yield x;
+          current_dump.builder.data(x);
+          if (current_dump.builder.length() >= context::dump_batch_size_limit) {
+            auto slices
+              = current_dump.builder.finish_as_table_slice(dump_event_name());
+            for (auto&& slice : slices) {
+              co_yield slice;
+            }
+          }
         }
         break;
       }
       case MMDB_RECORD_TYPE_INVALID: {
         current_dump.status = MMDB_INVALID_DATA_ERROR;
-        co_return;
+        break;
       }
     }
-    co_return;
   }
 
   auto dump() -> generator<table_slice> override {
@@ -430,6 +425,14 @@ public:
     for (auto&& slice :
          dump_recurse(0, MMDB_RECORD_TYPE_SEARCH_NODE, nullptr, current_dump)) {
       co_yield slice;
+    }
+    if (current_dump.builder.length() > 0) {
+      // Dump all remaining entries that did not reach the size limit.
+      co_yield current_dump.builder.finish_assert_one_slice(dump_event_name());
+    }
+    if (current_dump.status != MMDB_SUCCESS) {
+      TENZIR_ERROR("dump of GeoIP context ended prematurely: {}",
+                   MMDB_strerror(current_dump.status));
     }
   }
 
