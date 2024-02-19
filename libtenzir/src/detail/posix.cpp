@@ -33,12 +33,11 @@
 namespace tenzir::detail {
 
 auto describe_errno(int err) -> std::string {
-  auto result = std::string(256, '\0');
-  if (strerror_r(err, result.data(), result.size()) != 0) {
-    return fmt::format("<errno = {}>", err);
+  // See https://www.club.cc.cmu.edu/~cmccabe/blog_strerror.html.
+  if (0 <= err && err < sys_nerr) {
+    return sys_errlist[err];
   }
-  result.erase(std::find(result.begin(), result.end(), '\0'), result.end());
-  return result;
+  return fmt::format("<errno = {}>", err);
 }
 
 int uds_listen(const std::string& path) {
