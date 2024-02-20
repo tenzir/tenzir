@@ -304,6 +304,7 @@ private:
       auto content = std::vector<record::content_kind>{};
       while (true) {
         if (not content.empty()) {
+          // TODO: Check.
           (void)accept(tk::comma);
         }
         if (peek(tk::rbrace)) {
@@ -428,21 +429,20 @@ private:
     }
     if (auto token = accept(tk::string)) {
       // TODO: Make this better and parse content?
-      return expression{
-        string{std::string{token.text.substr(1, token.text.size() - 2)},
-               token.location}};
+      return string{std::string{token.text.substr(1, token.text.size() - 2)},
+                    token.location};
     }
     if (auto token = accept(tk::integer)) {
-      return expression{integer{token.as_string()}};
+      return integer{token.as_string()};
     }
     if (auto token = accept(tk::true_)) {
-      return expression{boolean{true, token.location}};
+      return boolean{true, token.location};
     }
     if (auto token = accept(tk::false_)) {
-      return expression{boolean{false, token.location}};
+      return boolean{false, token.location};
     }
     if (auto token = accept(tk::null)) {
-      return expression{null{token.location}};
+      return null{token.location};
     }
     if (selector_start()) {
       // Check if we have identifier followed by `(` or `'`.
@@ -481,13 +481,30 @@ private:
           }
           args.push_back(parse_argument());
         }
-        return expression{function_call{std::move(receiver),
-                                        std::move(function), std::move(args)}};
+        return function_call{std::move(receiver), std::move(function),
+                             std::move(args)};
       }
       return selector;
     }
     if (peek(tk::lbrace)) {
       return parse_record_or_pipeline();
+    }
+    if (auto open = accept(tk::lbracket)) {
+      auto items = std::vector<expression>{};
+      while (true) {
+        if (not items.empty()) {
+          if (not accept(tk::comma)) {
+            if (not peek(tk::rbracket)) {
+              throw_token();
+            }
+          }
+        }
+        if (auto close = accept(tk::rbracket)) {
+          return list{open.location, std::move(items), close.location};
+        }
+        items.push_back(parse_expression());
+      }
+      throw_token();
     }
     throw_token();
   }

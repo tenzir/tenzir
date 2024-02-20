@@ -33,6 +33,7 @@ struct identifier;
 struct if_stmt;
 struct invocation;
 struct let_stmt;
+struct list;
 struct match_stmt;
 struct pipeline_expr;
 struct pipeline;
@@ -122,7 +123,7 @@ struct underscore : location {
 };
 
 using expression_kind
-  = variant<record, selector, pipeline_expr, string, integer, boolean,
+  = variant<record, list, selector, pipeline_expr, string, integer, boolean,
             field_access, binary_expr, unary_expr, function_call, null,
             underscore, unpack>;
 
@@ -308,6 +309,26 @@ struct field_access {
   friend auto inspect(auto& f, field_access& x) -> bool {
     return f.object(x).fields(f.field("left", x.left), f.field("dot", x.dot),
                               f.field("name", x.name));
+  }
+};
+
+struct list {
+  list(location open, std::vector<expression> items, location close)
+    : open{open}, items{std::move(items)}, close{close} {
+  }
+
+  location open;
+  std::vector<expression> items;
+  location close;
+
+  friend auto inspect(auto& f, list& x) -> bool {
+    return f.object(x).fields(f.field("open", x.open),
+                              f.field("items", x.items),
+                              f.field("close", x.close));
+  }
+
+  auto location() const -> location {
+    return open.combine(close);
   }
 };
 
