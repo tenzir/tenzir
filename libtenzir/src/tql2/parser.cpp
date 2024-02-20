@@ -9,6 +9,7 @@
 #include "tenzir/tql2/parser.hpp"
 
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/plugin.hpp"
 #include "tenzir/tql2/ast.hpp"
 
 #include <ranges>
@@ -17,7 +18,7 @@ namespace tenzir::tql2 {
 
 using namespace tenzir::tql2::ast;
 
-#if 0
+#if 1
 /*
 type foo = {...};
 context bar = {}
@@ -38,6 +39,41 @@ group foo {
 }
 ...
 */
+
+class operator_definition {
+public:
+  virtual ~operator_definition() = default;
+
+  virtual auto name() const -> std::string_view;
+};
+
+class entity_registry {
+public:
+  void add(std::unique_ptr<operator_definition> x);
+};
+
+class tql2_plugin : public plugin {
+public:
+  virtual void register_entities(entity_registry& r);
+};
+
+class sort2_operator final : public operator_definition {
+public:
+  auto name() const -> std::string_view override {
+    return "sort2";
+  };
+};
+
+class sort2_plugin final : public tql2_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tenzir.sort_operator";
+  }
+
+  void register_entities(entity_registry& r) override {
+    r.add(std::make_unique<sort2_operator>());
+  }
+};
 
 class sort_operator_foo {
 public:

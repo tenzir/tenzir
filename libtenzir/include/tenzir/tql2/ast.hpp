@@ -340,20 +340,18 @@ using statement
   = variant<invocation, assignment, let_stmt, if_stmt, match_stmt>;
 
 struct pipeline {
-  explicit pipeline(std::vector<statement> body)
-    : body{std::make_unique<std::vector<statement>>(std::move(body))} {
-  }
+  explicit pipeline(std::vector<statement> body);
+  ~pipeline();
+  pipeline(const pipeline&) = delete;
+  pipeline(pipeline&&) noexcept;
+  auto operator=(const pipeline&) -> pipeline& = delete;
+  auto operator=(pipeline&&) noexcept -> pipeline&;
 
-  std::unique_ptr<std::vector<statement>> body;
+  std::vector<statement> body;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, pipeline& x) -> bool {
-    if constexpr (Inspector::is_loading) {
-      x.body = std::make_unique<std::vector<statement>>();
-    } else {
-      TENZIR_ASSERT(x.body);
-    }
-    return f.apply(*detail::identity<Inspector>(x.body));
+    return f.apply(x.body);
   }
 };
 
@@ -453,9 +451,11 @@ auto expression::match(Fs&&... fs) const&& -> decltype(auto) {
   return kind->match(std::forward<Fs>(fs)...);
 }
 
-// inline expression::expression(record x)
-//   : kind{std::make_unique<expression_kind>(std::move(x))} {
-// }
+inline pipeline::pipeline(std::vector<statement> body) : body{std::move(body)} {
+}
+inline pipeline::~pipeline() = default;
+inline pipeline::pipeline(pipeline&&) noexcept = default;
+inline auto pipeline::operator=(pipeline&&) noexcept -> pipeline& = default;
 
 } // namespace tenzir::tql2::ast
 
