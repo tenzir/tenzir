@@ -403,11 +403,8 @@ public:
         for (auto& x : output) {
           current_dump.builder.data(x);
           if (current_dump.builder.length() >= context::dump_batch_size_limit) {
-            auto slices = current_dump.builder.finish_as_table_slice(
+            co_yield current_dump.builder.finish_assert_one_slice(
               fmt::format("tenzir.{}.info", context_type()));
-            for (auto&& slice : slices) {
-              co_yield slice;
-            }
           }
         }
         break;
@@ -426,11 +423,9 @@ public:
          dump_recurse(0, MMDB_RECORD_TYPE_SEARCH_NODE, nullptr, current_dump)) {
       co_yield slice;
     }
-    if (current_dump.builder.length() > 0) {
-      // Dump all remaining entries that did not reach the size limit.
-      co_yield current_dump.builder.finish_assert_one_slice(
-        fmt::format("tenzir.{}.info", context_type()));
-    }
+    // Dump all remaining entries that did not reach the size limit.
+    co_yield current_dump.builder.finish_assert_one_slice(
+      fmt::format("tenzir.{}.info", context_type()));
     if (current_dump.status != MMDB_SUCCESS) {
       TENZIR_ERROR("dump of GeoIP context ended prematurely: {}",
                    MMDB_strerror(current_dump.status));
