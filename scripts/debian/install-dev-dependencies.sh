@@ -63,7 +63,7 @@ codename="$(lsb_release --codename --short)"
 wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-${codename}.deb"
 apt-get -y --no-install-recommends install ./"apache-arrow-apt-source-latest-${codename}.deb"
 apt-get update
-apt-get -y --no-install-recommends install libarrow-dev=13.0.0-1 libprotobuf-dev libparquet-dev=13.0.0-1
+apt-get -y --no-install-recommends install libarrow-dev libprotobuf-dev libparquet-dev
 rm ./"apache-arrow-apt-source-latest-${codename}.deb"
 
 # Fluent-bit
