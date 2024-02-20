@@ -118,6 +118,11 @@ constexpr auto SPEC_V0 = R"_(
                 example: true
                 default: false
                 description: Use an experimental, more simple format for the contained schema.
+              numeric_durations:
+                type: bool
+                example: true
+                default: false
+                description: Render duration values as numbers represending seconds instead of strings.
     responses:
       200:
         description: Success.
@@ -217,6 +222,7 @@ struct serve_request {
   std::string serve_id = {};
   std::string continuation_token = {};
   bool use_simple_format = {};
+  bool numeric_durations = {};
   request_limits limits = {};
 };
 
@@ -667,7 +673,6 @@ struct serve_handler_state {
       }
       result.limits.timeout = **timeout;
     }
-
     auto use_simple_format = try_get<bool>(params, "use_simple_format");
     if (not use_simple_format) {
       return parse_error{
@@ -679,15 +684,28 @@ struct serve_handler_state {
     if (*use_simple_format) {
       result.use_simple_format = **use_simple_format;
     }
+    auto numeric_durations = try_get<bool>(params, "numeric_durations");
+    if (not numeric_durations) {
+      return parse_error{
+        .message = "failed to read numeric_durations",
+        .detail = caf::make_error(ec::invalid_argument,
+                                  fmt::format("parameter: {}; got params {}",
+                                              max_events.error(), params))};
+    }
+    if (*numeric_durations) {
+      result.numeric_durations = **numeric_durations;
+    }
     return result;
   }
 
   static auto create_response(const std::string& next_continuation_token,
                               const std::vector<table_slice>& results,
-                              bool use_simple_format) -> std::string {
+                              bool use_simple_format, bool numeric_durations)
+    -> std::string {
     auto printer = json_printer{{
       .indentation = 0,
       .oneline = true,
+      .numeric_durations = numeric_durations,
     }};
     auto result
       = next_continuation_token.empty()
@@ -762,11 +780,13 @@ struct serve_handler_state {
                 request.continuation_token, request.limits.min_events,
                 request.limits.timeout, request.limits.max_events)
       .then(
-        [rp, use_simple_format = request.use_simple_format](
+        [rp, use_simple_format = request.use_simple_format,
+         numeric_durations = request.numeric_durations](
           const std::tuple<std::string, std::vector<table_slice>>&
             result) mutable {
-          rp.deliver(rest_response::from_json_string(create_response(
-            std::get<0>(result), std::get<1>(result), use_simple_format)));
+          rp.deliver(rest_response::from_json_string(
+            create_response(std::get<0>(result), std::get<1>(result),
+                            use_simple_format, numeric_durations)));
         },
         [rp](caf::error& err) mutable {
           // TODO: Use a struct with distinct fields for user-facing
@@ -1006,6 +1026,7 @@ public:
           {"min_events", uint64_type{}},
           {"timeout", duration_type{}},
           {"use_simple_format", bool_type{}},
+          {"numeric_durations", bool_type{}},
         },
         .version = api_version::v0,
         .content_type = http_content_type::json,
