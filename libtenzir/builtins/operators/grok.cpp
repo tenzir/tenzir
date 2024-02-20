@@ -257,8 +257,8 @@ void pattern::resolve(const pattern_store& patterns, bool allow_recursion) {
         // user-provided pattern used for parsing input. That pattern can only
         // reference other patterns that either exist and have already been
         // resolved, or don't exist at all. We thus can never reach here.
-        TENZIR_ASSERT_CHEAP(allow_recursion);
-        TENZIR_ASSERT_CHEAP(patterns.get_reference_count() == 1);
+        TENZIR_ASSERT(allow_recursion);
+        TENZIR_ASSERT(patterns.get_reference_count() == 1);
         const_cast<pattern&>(subpattern).resolve(patterns, allow_recursion);
       }
       auto name = elems.size() > 1 ? std::string{elems[1]} : "";
@@ -412,7 +412,7 @@ public:
 
   auto parse_strings(std::shared_ptr<arrow::StringArray> input,
                      operator_control_plane& ctrl) const
-    -> std::vector<typed_array> override {
+    -> std::vector<series> override {
     auto builder = series_builder{type{record_type{}}};
     for (auto&& string : values(string_type{}, *input)) {
       if (not string) {
@@ -487,7 +487,7 @@ public:
                                      });
               named_capture_it != input_pattern_.named_captures.end()) {
             const auto& [name, type] = *named_capture_it;
-            TENZIR_ASSERT_CHEAP(not name.empty());
+            TENZIR_ASSERT(not name.empty());
             add_field(name, convert_match(match, type), type);
           } else {
             const auto type = capture_type::implicit;
@@ -496,7 +496,7 @@ public:
         }
       } else {
         for (auto&& [name, type] : input_pattern_.named_captures) {
-          TENZIR_ASSERT_CHEAP(not name.empty());
+          TENZIR_ASSERT(not name.empty());
           add_field(name, convert_match(matches[name], type), type);
         }
       }

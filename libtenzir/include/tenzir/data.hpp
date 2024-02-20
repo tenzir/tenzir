@@ -17,6 +17,7 @@
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/detail/type_traits.hpp"
+#include "tenzir/die.hpp"
 #include "tenzir/ip.hpp"
 #include "tenzir/pattern.hpp"
 #include "tenzir/policy/merge_lists.hpp"
@@ -287,7 +288,7 @@ inline auto descend(const record* r, std::string_view path)
                     fmt::join(std::span{names.data(), &name}, ".")));
     }
   }
-  die("unreachable");
+  TENZIR_UNREACHABLE();
 }
 
 /// Tries to find the entry with the dot-sperated `path` with the given type.

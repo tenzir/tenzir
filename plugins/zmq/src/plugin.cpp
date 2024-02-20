@@ -274,8 +274,8 @@ private:
     auto num_events_signaled = ::zmq::poll(items.data(), items.size(), ms);
     if (num_events_signaled == 0)
       return false;
-    TENZIR_ASSERT_CHEAP(num_events_signaled > 0);
-    TENZIR_ASSERT_CHEAP((items[0].revents & flags) != 0);
+    TENZIR_ASSERT(num_events_signaled > 0);
+    TENZIR_ASSERT((items[0].revents & flags) != 0);
     return true;
   }
 

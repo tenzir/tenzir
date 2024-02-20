@@ -801,14 +801,19 @@ function (TenzirRegisterPlugin)
            "${CMAKE_BINARY_DIR}/share/tenzir/integration" SYMBOLIC)
       set(TENZIR_PATH "${CMAKE_CURRENT_BINARY_DIR}/bin")
     endif ()
+    include(ProcessorCount)
+    ProcessorCount(parallel_level)
+    math(EXPR parallel_level "${parallel_level} + 2")
     add_custom_target(
       integration-${PLUGIN_TARGET}
       COMMAND
         ${CMAKE_COMMAND} -E env
         PATH="${TENZIR_PATH}:\$\$PATH:${TENZIR_PATH}/../share/tenzir/integration/lib/bats/bin"
-        bats "-r" "-T" "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests"
+        bats "-r" "-T" "--jobs" "${parallel_level}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests"
       COMMENT "Executing ${PLUGIN_TARGET} integration tests..."
       USES_TERMINAL)
+    unset(parallel_level)
     unset(TENZIR_PATH)
 
     add_dependencies(integration-${PLUGIN_TARGET} tenzir::tenzir)

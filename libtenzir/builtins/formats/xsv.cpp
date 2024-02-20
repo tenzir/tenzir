@@ -172,11 +172,11 @@ struct xsv_printer_impl {
     }
 
     auto operator()(view<pattern>) noexcept -> bool {
-      die("unreachable");
+      TENZIR_UNREACHABLE();
     }
 
     auto operator()(view<map>) noexcept -> bool {
-      die("unreachable");
+      TENZIR_UNREACHABLE();
     }
 
     auto operator()(view<std::string> x) noexcept -> bool {
@@ -361,7 +361,7 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
             });
     const auto value_parser = (single_value_parser % args.list_sep)
                                 .then([](std::vector<data> values) -> data {
-                                  TENZIR_ASSERT_CHEAP(not values.empty());
+                                  TENZIR_ASSERT(not values.empty());
                                   if (values.size() == 1) {
                                     return std::move(values[0]);
                                   }
@@ -471,14 +471,14 @@ public:
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
       auto first = true;
       for (const auto& row : values(input_type, *array)) {
-        TENZIR_ASSERT_CHEAP(row);
+        TENZIR_ASSERT(row);
         if (first && not args.no_header) {
           printer.print_header(out_iter, *row);
           first = false;
           out_iter = fmt::format_to(out_iter, "\n");
         }
         const auto ok = printer.print_values(out_iter, *row);
-        TENZIR_ASSERT_CHEAP(ok);
+        TENZIR_ASSERT(ok);
         out_iter = fmt::format_to(out_iter, "\n");
       }
       auto chunk = chunk::make(std::move(buffer), meta);

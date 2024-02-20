@@ -230,8 +230,8 @@ bool type_check(const type& x, const data_view& y) {
         // Technically lists can contain heterogeneous data,
         // but for optimization purposes we only check the
         // first element when assertions are disabled.
-        TENZIR_ASSERT(std::all_of(it + 1, u.end(), check), //
-                      "expected a homogenous list");
+        TENZIR_ASSERT_EXPENSIVE(std::all_of(it + 1, u.end(), check), //
+                                "expected a homogenous list");
         return true;
       }
       return false;
@@ -249,8 +249,8 @@ bool type_check(const type& x, const data_view& y) {
         // Technically maps can contain heterogeneous data,
         // but for optimization purposes we only check the
         // first element when assertions are disabled.
-        TENZIR_ASSERT(std::all_of(it + 1, u.end(), check), //
-                      "expected a homogenous map");
+        TENZIR_ASSERT_EXPENSIVE(std::all_of(it + 1, u.end(), check), //
+                                "expected a homogenous map");
         return true;
       }
       return false;
@@ -340,7 +340,7 @@ auto descend(view<record> r, std::string_view path)
     }
     current = *maybe_rec;
   }
-  die("unreachable");
+  TENZIR_UNREACHABLE();
 }
 
 } // namespace tenzir

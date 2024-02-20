@@ -749,7 +749,7 @@ void index_state::decommission_active_partition(
   stage->out().close(active_partition->second.stream_slot);
   stage->out().force_emit_batches();
   // Move the active partition to the list of unpersisted partitions.
-  TENZIR_ASSERT(!unpersisted.contains(id));
+  TENZIR_ASSERT_EXPENSIVE(!unpersisted.contains(id));
   unpersisted[id] = {type, actor};
   active_partitions.erase(active_partition);
   // Persist active partition asynchronously.
@@ -972,7 +972,7 @@ auto index_state::schedule_lookups() -> size_t {
     running_partition_lookups++;
     num_scheduled++;
   }
-  TENZIR_ASSERT_CHEAP(running_partition_lookups >= previous_partition_lookups);
+  TENZIR_ASSERT(running_partition_lookups >= previous_partition_lookups);
   return running_partition_lookups - previous_partition_lookups;
 }
 
@@ -1223,7 +1223,7 @@ index(index_actor::stateful_pointer<index_state> self,
       // nop
     },
     [self](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
-      TENZIR_ASSERT(x.encoding() != table_slice_encoding::none);
+      TENZIR_ASSERT(x.rows() != 0);
       if (!self->state.stage->running())
         return;
       auto&& schema = x.schema();

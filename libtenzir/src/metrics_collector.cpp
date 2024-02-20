@@ -8,7 +8,6 @@
 
 #include <tenzir/data.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
-#include <tenzir/import_stream.hpp>
 #include <tenzir/metrics_collector.hpp>
 #include <tenzir/series_builder.hpp>
 
@@ -16,44 +15,38 @@
 
 namespace tenzir {
 
-namespace {
-
-auto import_metrics_from(const std::string& name,
-                         metrics_plugin::collector const& collector,
-                         import_stream& importer,
-                         std::chrono::system_clock::time_point now) {
-  TENZIR_TRACE("running periodic metrics collection {}", name);
-  auto schema_name = fmt::format("tenzir.metrics.{}", name);
-  auto result = collector();
-  if (!result)
-    return;
-  // We can cache the series builders in the state if constructing
-  // them here proves expensive.
-  auto b = series_builder{type{schema_name, record_type{}, {{"internal", ""}}}};
-  auto r = b.record();
-  r.field("timestamp", now);
-  for (auto& [name, data] : *result)
-    r.field(name, data);
-  auto slice = b.finish_assert_one_slice();
-  importer.enqueue(std::move(slice));
-}
-
-} // namespace
-
 auto metrics_collector_state::collect_and_import_metrics() -> void {
-  TENZIR_ASSERT_CHEAP(importer != nullptr);
+  TENZIR_ASSERT(importer != nullptr);
   // Use a consistent timestamp for all collected metrics.
   auto now = std::chrono::system_clock::now();
   for (auto& [name, collector] : collectors) {
-    import_metrics_from(name, collector, *importer, now);
+    TENZIR_TRACE("running periodic metrics collection {}", name);
+    auto schema_name = fmt::format("tenzir.metrics.{}", name);
+    auto result = collector();
+    if (!result) {
+      return;
+    }
+    // We can cache the series builders in the state if constructing
+    // them here proves expensive.
+    auto b
+      = series_builder{type{schema_name, record_type{}, {{"internal", ""}}}};
+    auto r = b.record();
+    r.field("timestamp", now);
+    for (auto& [name, data] : *result) {
+      r.field(name, data);
+    }
+    auto slice = b.finish_assert_one_slice();
+    self->send(importer, std::move(slice));
   }
 }
 
 auto metrics_collector(
   metrics_collector_actor::stateful_pointer<metrics_collector_state> self,
-  caf::timespan collection_interval, const node_actor& node)
-  -> metrics_collector_actor::behavior_type {
+  caf::timespan collection_interval, const node_actor& node,
+  importer_actor importer) -> metrics_collector_actor::behavior_type {
+  self->state.self = self;
   self->state.node = node;
+  self->state.importer = std::move(importer);
   self->state.collection_interval = collection_interval;
   for (auto const* plugin : plugins::get<metrics_plugin>()) {
     auto name = plugin->metric_name();
@@ -70,15 +63,6 @@ auto metrics_collector(
   self->send(self, atom::run_v);
   return {
     [self](atom::run) -> caf::result<void> {
-      // Build and import stream on first usage.
-      auto stream = import_stream::make(self, self->state.node);
-      if (!stream) {
-        TENZIR_WARN("{} aborts because it failed to create import stream: {}",
-                    *self, stream.error());
-        return stream.error();
-      }
-      self->state.importer
-        = std::make_unique<import_stream>(std::move(*stream));
       // Do a one-off import immediately.
       self->state.collect_and_import_metrics();
       // Start measurement loop.

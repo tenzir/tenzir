@@ -17,10 +17,7 @@
 #include "tenzir/detail/legacy_deserialize.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/ids.hpp"
-#include "tenzir/project.hpp"
 #include "tenzir/series_builder.hpp"
-#include "tenzir/table_slice_column.hpp"
-#include "tenzir/table_slice_row.hpp"
 #include "tenzir/test/fixtures/table_slices.hpp"
 #include "tenzir/test/test.hpp"
 
@@ -65,40 +62,6 @@ TEST(random integer slices) {
   auto [lowest, highest] = std::minmax_element(values.begin(), values.end());
   CHECK_GREATER_EQUAL(*lowest, int64_t{100});
   CHECK_LESS_EQUAL(*highest, int64_t{200});
-}
-
-TEST(column view) {
-  auto sut = zeek_conn_log[0];
-  auto flat_schema = flatten(caf::get<record_type>(sut.schema()));
-  auto ts_index = flat_schema.resolve_key("ts");
-  REQUIRE(ts_index);
-  auto ts_cview = table_slice_column{sut, flat_schema.flat_index(*ts_index)};
-  CHECK_EQUAL(ts_cview.index(), 0u);
-  for (size_t column = 0; column < sut.columns(); ++column) {
-    auto cview = table_slice_column{sut, column};
-    REQUIRE_NOT_EQUAL(cview.size(), 0u);
-    CHECK_EQUAL(cview.index(), column);
-    CHECK_EQUAL(cview.size(), sut.rows());
-    for (size_t row = 0; row < cview.size(); ++row)
-      CHECK_EQUAL(
-        materialize(cview[row]),
-        materialize(sut.at(row, column, flat_schema.field(column).type)));
-  }
-}
-
-TEST(row view) {
-  auto sut = zeek_conn_log[0];
-  auto flat_schema = flatten(caf::get<record_type>(sut.schema()));
-  for (size_t row = 0; row < sut.rows(); ++row) {
-    auto rview = table_slice_row{sut, row};
-    REQUIRE_NOT_EQUAL(rview.size(), 0u);
-    CHECK_EQUAL(rview.index(), row);
-    CHECK_EQUAL(rview.size(), sut.columns());
-    for (size_t column = 0; column < rview.size(); ++column)
-      CHECK_EQUAL(
-        materialize(rview[column]),
-        materialize(sut.at(row, column, flat_schema.field(column).type)));
-  }
 }
 
 TEST(select - import time) {
@@ -375,125 +338,6 @@ TEST(cast) {
               fmt::to_string(expected_rows[1]));
   CHECK_EQUAL(fmt::to_string(materialize(*rows[2])),
               fmt::to_string(expected_rows[2]));
-}
-
-TEST(project column flat index) {
-  auto sut = head(zeek_conn_log[0], 3);
-  auto proj = project(sut, time_type{}, 0, string_type{}, 6);
-  CHECK(proj);
-  CHECK(proj.begin() != proj.end());
-  for (auto&& [ts, proto] : proj) {
-    REQUIRE(ts);
-    CHECK_GREATER_EQUAL(*ts, tenzir::time{});
-    REQUIRE(proto);
-    CHECK_EQUAL(*proto, "udp");
-  }
-}
-
-TEST(project column full name) {
-  auto sut = zeek_conn_log[0];
-  auto proj = project(sut, time_type{}, "zeek.conn.ts", string_type{},
-                      "zeek.conn.proto");
-  CHECK(proj);
-  CHECK(proj.begin() != proj.end());
-  for (auto&& [ts, proto] : proj) {
-    REQUIRE(ts);
-    CHECK_GREATER_EQUAL(*ts, tenzir::time{});
-    REQUIRE(proto);
-    CHECK_EQUAL(*proto, "udp");
-  }
-}
-
-TEST(project column name) {
-  auto sut = zeek_conn_log[0];
-  auto proj = project(sut, time_type{}, "ts", string_type{}, "proto");
-  CHECK(proj);
-  CHECK(proj.begin() != proj.end());
-  for (auto&& [ts, proto] : proj) {
-    REQUIRE(ts);
-    CHECK_GREATER_EQUAL(*ts, tenzir::time{});
-    REQUIRE(proto);
-    CHECK_EQUAL(*proto, "udp");
-  }
-}
-
-TEST(project column mixed access) {
-  auto sut = zeek_conn_log[0];
-  auto proj = project(sut, time_type{}, 0, string_type{}, "proto");
-  CHECK(proj);
-  CHECK(proj.begin() != proj.end());
-  for (auto&& [ts, proto] : proj) {
-    REQUIRE(ts);
-    CHECK_GREATER_EQUAL(*ts, tenzir::time{});
-    REQUIRE(proto);
-    CHECK_EQUAL(*proto, "udp");
-  }
-}
-
-TEST(project column order independence) {
-  auto sut = zeek_conn_log[0];
-  auto proj = project(sut, string_type{}, "proto", time_type{}, "ts");
-  CHECK(proj);
-  CHECK(proj.begin() != proj.end());
-  for (auto&& [proto, ts] : proj) {
-    REQUIRE(proto);
-    CHECK_EQUAL(*proto, "udp");
-    REQUIRE(ts);
-    CHECK_GREATER_EQUAL(*ts, tenzir::time{});
-  }
-}
-
-TEST(project column detect type mismatches) {
-  auto sut = zeek_conn_log[0];
-  auto proj = project(sut, bool_type{}, "proto", time_type{}, "ts");
-  CHECK(!proj);
-  CHECK(proj.begin() == proj.end());
-}
-
-TEST(project column detect wrong field names) {
-  auto sut = zeek_conn_log[0];
-  auto proj = project(sut, string_type{}, "porto", time_type{}, "ts");
-  CHECK(!proj);
-  CHECK(proj.begin() == proj.end());
-}
-
-TEST(project column detect wrong flat indices) {
-  auto sut = zeek_conn_log[0];
-  auto proj = project(sut, string_type{}, 123, time_type{}, "ts");
-  CHECK(!proj);
-  CHECK(proj.begin() == proj.end());
-}
-
-TEST(project column unspecified types) {
-  auto sut = zeek_conn_log[0];
-  auto proj = project(sut, type{}, "proto", time_type{}, "ts");
-  CHECK(proj);
-  CHECK(proj.begin() != proj.end());
-  for (auto&& [proto, ts] : proj) {
-    REQUIRE(caf::holds_alternative<view<std::string>>(proto));
-    CHECK_EQUAL(caf::get<tenzir::view<std::string>>(proto), "udp");
-    REQUIRE(ts);
-    CHECK_GREATER_EQUAL(*ts, tenzir::time{});
-  }
-}
-
-TEST(project column lists) {
-  auto sut = zeek_dns_log[0];
-  auto proj = project(sut, list_type{string_type{}}, "answers");
-  CHECK(proj);
-  CHECK(proj.begin() != proj.end());
-  CHECK_EQUAL(proj.size(), sut.rows());
-  size_t answers = 0;
-  for (auto&& [answer] : proj) {
-    if (answer) {
-      answers++;
-      for (auto entry : *answer) {
-        CHECK(!caf::holds_alternative<caf::none_t>(entry));
-        CHECK(caf::holds_alternative<view<std::string>>(entry));
-      }
-    }
-  }
-  CHECK_EQUAL(answers, 4u);
 }
 
 TEST(roundtrip) {

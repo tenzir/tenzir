@@ -191,7 +191,7 @@ public:
           = std::vector<std::pair<offset, const operand*>>{};
         for (const auto& [extractor, operand] : config_.extractor_to_operand) {
           if (extractor == "#schema") {
-            TENZIR_ASSERT_CHEAP(operand);
+            TENZIR_ASSERT(operand);
             replace_schema_name
               = caf::get<std::string>(caf::get<data>(*operand));
             continue;

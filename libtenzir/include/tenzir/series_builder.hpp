@@ -9,8 +9,8 @@
 #pragma once
 
 #include "tenzir/data.hpp"
+#include "tenzir/series.hpp"
 #include "tenzir/type.hpp"
-#include "tenzir/typed_array.hpp"
 #include "tenzir/variant.hpp"
 #include "tenzir/view.hpp"
 
@@ -127,7 +127,7 @@ public:
   /// handled by starting a new array. After calling this method, the builder is
   /// empty and can be directly used again. If the builder was initialized with
   /// a type, then this initialization is preserved.
-  auto finish() -> std::vector<typed_array>;
+  auto finish() -> std::vector<series>;
 
   /// Similar to `finish()`, but converts the result to table slices.
   ///
@@ -141,6 +141,10 @@ public:
   /// Same as `finish_as_table_slice(name)`, but asserts that there is only one
   /// result.
   auto finish_assert_one_slice(std::string_view name = "") -> table_slice;
+
+  /// Same as `finish_as_table_slice(name)`, but asserts that there is only one
+  /// result.
+  auto finish_assert_one_array() -> series;
 
   /// Returns the full type, which can be expensive. Use `kind()` if possible.
   auto type() -> type;

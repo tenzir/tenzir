@@ -1,8 +1,0 @@
-error: unknown option `-x`
- --> <input>:1:46
-  |
-1 | from stdin read json | chart donut --value b -x e
-  |                                              ^^ 
-  |
-  = usage: chart donut [--name <field>] [--value <field>] [--title <title>]
-  = docs: https://docs.tenzir/operators/chart

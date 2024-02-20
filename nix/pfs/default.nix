@@ -7,17 +7,18 @@
 in
   stdenv.mkDerivation (finalAttrs: {
     pname = "pfs";
-    version = "0.6.1";
+    version = "0.8.0";
 
     src = fetchFromGitHub {
       owner = "dtrugman";
       repo = "pfs";
       rev = "v${finalAttrs.version}";
-      sha256 = "sha256-T1VGXhWw6zC6xkfmnI4sPE3y0XXqTsZvvubcLwnjyKg=";
+      sha256 = "sha256-TeSdON2MXUZ8LDiIFfh8cjyP361SE7cE1c8oDXQL3OU=";
     };
 
     cmakeFlags = lib.optionals stdenv.hostPlatform.isStatic [
       "-Dpfs_BUILD_TESTS=OFF"
+      "-Dpfs_BUILD_SAMPLES=OFF"
     ];
     nativeBuildInputs = [cmake];
 

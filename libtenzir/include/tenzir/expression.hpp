@@ -529,7 +529,7 @@ struct formatter<enum tenzir::meta_extractor::kind> {
       case tenzir::meta_extractor::kind::internal:
         return fmt::format_to(ctx.out(), "#internal");
     }
-    tenzir::die("unreachable");
+    TENZIR_UNREACHABLE();
   }
 };
 

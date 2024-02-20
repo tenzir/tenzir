@@ -38,6 +38,14 @@ auto format_metric(const metric& metric) -> std::string {
                      data{metric.time_processing},
                      100.0 * static_cast<double>(metric.time_processing.count())
                        / static_cast<double>(metric.time_total.count()));
+  it = fmt::format_to(it, "{}running: {} ({:.2f}%)\n", indent,
+                      data{metric.time_running},
+                      100.0 * static_cast<double>(metric.time_running.count())
+                        / static_cast<double>(metric.time_total.count()));
+  it = fmt::format_to(it, "{}paused: {} ({:.2f}%)\n", indent,
+                      data{metric.time_paused},
+                      100.0 * static_cast<double>(metric.time_paused.count())
+                        / static_cast<double>(metric.time_total.count()));
   it = fmt::format_to(
     it, "{}runs: {} ({:.2f}% processing / {:.2f}% input / {:.2f}% output)\n",
     indent, metric.num_runs,
@@ -52,7 +60,7 @@ auto format_metric(const metric& metric) -> std::string {
       static_cast<double>(metric.inbound_measurement.num_elements)
         / std::chrono::duration_cast<
             std::chrono::duration<double, std::chrono::seconds::period>>(
-            metric.time_total)
+            metric.time_running)
             .count());
     if (metric.inbound_measurement.unit != operator_type_name<chunk_ptr>()) {
       it = fmt::format_to(
@@ -61,7 +69,7 @@ auto format_metric(const metric& metric) -> std::string {
         static_cast<double>(metric.inbound_measurement.num_approx_bytes)
           / std::chrono::duration_cast<
               std::chrono::duration<double, std::chrono::seconds::period>>(
-              metric.time_total)
+              metric.time_running)
               .count());
     }
     it = fmt::format_to(
@@ -80,7 +88,7 @@ auto format_metric(const metric& metric) -> std::string {
       static_cast<double>(metric.outbound_measurement.num_elements)
         / std::chrono::duration_cast<
             std::chrono::duration<double, std::chrono::seconds::period>>(
-            metric.time_total)
+            metric.time_running)
             .count());
     if (metric.outbound_measurement.unit != operator_type_name<chunk_ptr>()) {
       it = fmt::format_to(
@@ -89,7 +97,7 @@ auto format_metric(const metric& metric) -> std::string {
         static_cast<double>(metric.outbound_measurement.num_approx_bytes)
           / std::chrono::duration_cast<
               std::chrono::duration<double, std::chrono::seconds::period>>(
-              metric.time_total)
+              metric.time_running)
               .count());
     }
     it = fmt::format_to(

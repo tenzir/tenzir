@@ -172,7 +172,6 @@ class subnet_type;
 class subnet;
 class synopsis;
 class table_slice_builder;
-class table_slice_column;
 class table_slice;
 class time_type;
 class type;
@@ -250,7 +249,7 @@ struct status;
 struct taxonomies;
 struct type_extractor;
 struct type_set;
-struct typed_array;
+struct series;
 
 enum class api_version : uint8_t;
 enum class arithmetic_operator : uint8_t;
@@ -265,7 +264,6 @@ enum class query_options : uint32_t;
 enum class relational_operator : uint8_t;
 enum class send_initial_dbstate : bool;
 enum class status_verbosity;
-enum class table_slice_encoding : uint8_t;
 
 template <class>
 class arrow_table_slice;
@@ -274,9 +272,6 @@ inline constexpr size_t dynamic_extent = std::numeric_limits<size_t>::max();
 
 template <class>
 class framed;
-
-template <class... Types>
-class projection;
 
 template <class>
 class scope_linked;
@@ -427,6 +422,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::module))
   TENZIR_ADD_TYPE_ID((tenzir::negation))
   TENZIR_ADD_TYPE_ID((tenzir::null_bitmap))
+  TENZIR_ADD_TYPE_ID((tenzir::offset))
   TENZIR_ADD_TYPE_ID((tenzir::operator_box))
   TENZIR_ADD_TYPE_ID((tenzir::operator_type))
   TENZIR_ADD_TYPE_ID((tenzir::partition_info))
@@ -446,12 +442,11 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::shared_diagnostic_handler))
   TENZIR_ADD_TYPE_ID((tenzir::subnet))
   TENZIR_ADD_TYPE_ID((tenzir::table_slice))
-  TENZIR_ADD_TYPE_ID((tenzir::table_slice_column))
   TENZIR_ADD_TYPE_ID((tenzir::taxonomies))
   TENZIR_ADD_TYPE_ID((tenzir::type))
   TENZIR_ADD_TYPE_ID((tenzir::type_extractor))
   TENZIR_ADD_TYPE_ID((tenzir::type_set))
-  TENZIR_ADD_TYPE_ID((tenzir::typed_array))
+  TENZIR_ADD_TYPE_ID((tenzir::series))
   TENZIR_ADD_TYPE_ID((tenzir::uuid))
   TENZIR_ADD_TYPE_ID((tenzir::wah_bitmap))
 
@@ -477,8 +472,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::accountant_config))
   TENZIR_ADD_TYPE_ID((tenzir::send_initial_dbstate))
 
-  TENZIR_ADD_TYPE_ID((tenzir::framed<tenzir::chunk_ptr>))
-  TENZIR_ADD_TYPE_ID((tenzir::framed<tenzir::table_slice>))
   TENZIR_ADD_TYPE_ID((std::pair<std::string, tenzir::data>))
   TENZIR_ADD_TYPE_ID((std::vector<uint32_t>))
   TENZIR_ADD_TYPE_ID((std::vector<uint64_t>))
@@ -487,12 +480,9 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID(
     (std::tuple<std::string, std::vector<tenzir::table_slice>>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::table_slice>))
-  TENZIR_ADD_TYPE_ID((std::vector<tenzir::framed<tenzir::chunk_ptr>>))
-  TENZIR_ADD_TYPE_ID((std::vector<tenzir::framed<tenzir::table_slice>>))
-  TENZIR_ADD_TYPE_ID((std::vector<tenzir::table_slice_column>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::uuid>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::partition_info>))
-  TENZIR_ADD_TYPE_ID((std::vector<tenzir::typed_array>))
+  TENZIR_ADD_TYPE_ID((std::vector<tenzir::series>))
   TENZIR_ADD_TYPE_ID(
     (std::unordered_map<tenzir::uuid, tenzir::partition_synopsis_ptr>))
   TENZIR_ADD_TYPE_ID((std::unordered_map<tenzir::type, //
@@ -507,16 +497,8 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
 
   TENZIR_ADD_TYPE_ID((caf::stream<tenzir::chunk_ptr>))
   TENZIR_ADD_TYPE_ID((caf::stream<tenzir::table_slice>))
-  TENZIR_ADD_TYPE_ID((caf::stream<tenzir::framed<tenzir::chunk_ptr>>))
-  TENZIR_ADD_TYPE_ID((caf::stream<tenzir::framed<tenzir::table_slice>>))
-  TENZIR_ADD_TYPE_ID((caf::stream<tenzir::table_slice_column>))
   TENZIR_ADD_TYPE_ID((caf::inbound_stream_slot<tenzir::chunk_ptr>))
   TENZIR_ADD_TYPE_ID((caf::inbound_stream_slot<tenzir::table_slice>))
-  TENZIR_ADD_TYPE_ID(
-    (caf::inbound_stream_slot<tenzir::framed<tenzir::chunk_ptr>>))
-  TENZIR_ADD_TYPE_ID(
-    (caf::inbound_stream_slot<tenzir::framed<tenzir::table_slice>>))
-  TENZIR_ADD_TYPE_ID((caf::inbound_stream_slot<tenzir::table_slice_column>))
   TENZIR_ADD_TYPE_ID((caf::outbound_stream_slot<tenzir::table_slice>))
 
 CAF_END_TYPE_ID_BLOCK(tenzir_types)

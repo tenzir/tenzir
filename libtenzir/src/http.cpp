@@ -90,7 +90,7 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
   }
   auto json_encode = [](const auto& x) {
     auto result = to_json(x, {.oneline = true});
-    TENZIR_ASSERT_CHEAP(result);
+    TENZIR_ASSERT(result);
     return std::move(*result);
   };
   auto url_encode = [](const auto& x) {

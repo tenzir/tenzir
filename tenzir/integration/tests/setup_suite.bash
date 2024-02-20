@@ -13,11 +13,12 @@ teardown_suite() {
   : # Nothing to do
 }
 
-if ! which tenzir; then
+if ! command -v tenzir; then
   echo "tenzir binaries must be on $PATH"
   return 1
 fi
 
 libpath_relative_to_binary="$(realpath "$(dirname "$(command -v tenzir)")")/../share/tenzir/integration/lib"
-libpath_relative_to_pwd="${BATS_TEST_DATADIR%%/integration/*}/lib"
+libpath_relative_to_pwd="${BATS_TEST_DIRNAME%%/integration/*}/integration/lib"
 export BATS_LIB_PATH=${BATS_LIB_PATH:+${BATS_LIB_PATH}:}${libpath_relative_to_binary}:${libpath_relative_to_pwd}
+echo ${BATS_LIB_PATH}

@@ -69,7 +69,7 @@ uuid uuid::null() {
 }
 
 uuid uuid::from_flatbuffer(const fbs::UUID& id) {
-  TENZIR_ASSERT_CHEAP(id.data()->size() == uuid::num_bytes);
+  TENZIR_ASSERT(id.data()->size() == uuid::num_bytes);
   auto const* data = id.data();
   return uuid{std::span<const std::byte, uuid::num_bytes>(
     reinterpret_cast<const std::byte*>(data->data()), data->size())};

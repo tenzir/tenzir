@@ -168,7 +168,7 @@ struct ymdhms_parser : tenzir::parser_base<ymdhms_parser> {
       [](auto x) { return x >= 0 && x <= 23; });
     auto min = integral_parser<int, 2, 2>{}.with(
       [](auto x) { return x >= 0 && x <= 59; });
-    auto sec = parsers::real.with([](auto x) {
+    auto sec = parsers::real_detect_sep.with([](auto x) {
       return x >= 0.0 && x <= 60.0;
     });
     auto time_divider = '+'_p | 'T' | ' ';

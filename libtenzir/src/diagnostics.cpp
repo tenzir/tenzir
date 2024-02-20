@@ -160,7 +160,7 @@ private:
     auto line = size_t{0};
     auto col = offset;
     while (true) {
-      TENZIR_ASSERT_CHEAP(line < lines_.size());
+      TENZIR_ASSERT(line < lines_.size());
       if (col <= lines_[line].size()) {
         break;
       }

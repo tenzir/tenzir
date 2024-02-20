@@ -372,7 +372,6 @@ TEST(passive feather store selective query) {
   REQUIRE_EQUAL(results.size(), 1ull);
   const auto expected_slice = filter(slice, *expr, tenzir::ids{});
   REQUIRE(expected_slice);
-  REQUIRE(expected_slice->encoding() != table_slice_encoding::none);
   compare_table_slices(*expected_slice, results[0]);
 }
 

@@ -178,7 +178,7 @@ struct formatter<enum tenzir::query_processor::state_name> {
       case tenzir::query_processor::state_name::await_results_until_done:
         return fmt::format_to(ctx.out(), "await_results_until_done");
     }
-    tenzir::die("unreachable");
+    TENZIR_UNREACHABLE();
   }
 };
 

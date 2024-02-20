@@ -6,7 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/detail/env.hpp>
 #include <tenzir/detail/load_contents.hpp>
+#include <tenzir/diagnostics.hpp>
 #include <tenzir/exec_pipeline.hpp>
 #include <tenzir/plugin.hpp>
 
@@ -89,8 +91,11 @@ auto exec_command(const invocation& inv, caf::actor_system& sys)
                                std::move(content));
     return result;
   }
-  auto printer = make_diagnostic_printer(location_origin{filename, content},
-                                         color_diagnostics::yes, std::cerr);
+  auto color = isatty(STDERR_FILENO) == 1
+               && detail::getenv("NO_COLOR").value_or("").empty();
+  auto printer = make_diagnostic_printer(
+    location_origin{filename, content},
+    color ? color_diagnostics::yes : color_diagnostics::no, std::cerr);
   return exec_pipeline(std::move(content), std::move(printer), cfg, sys);
 }
 

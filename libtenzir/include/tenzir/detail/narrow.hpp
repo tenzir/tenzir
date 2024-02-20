@@ -18,18 +18,13 @@
 
 #pragma once
 
-#include "tenzir/detail/raise_error.hpp"
+#include "tenzir/detail/assert.hpp"
 
+#include <source_location>
 #include <type_traits>
 #include <utility>
 
 namespace tenzir::detail {
-
-/// @relates narrow
-struct narrowing_error : std::runtime_error {
-  using super = std::runtime_error;
-  using super::super;
-};
 
 /// A searchable way to do narrowing casts of values.
 template <class T, class U>
@@ -42,14 +37,16 @@ struct is_same_signedness
   : public std::bool_constant<std::is_signed<T>::value
                               == std::is_signed<U>::value> {};
 
-/// A checked version of narrow_cast that throws if the cast changed the value.
+/// A checked cast that panics if the cast changed the value.
 template <class T, class U>
-T narrow(U y) {
+auto narrow(U y, std::source_location source = std::source_location::current())
+  -> T {
   T x = narrow_cast<T>(y);
-  if (static_cast<U>(x) != y)
-    TENZIR_RAISE_ERROR(narrowing_error, "narrowing error");
-  if (!is_same_signedness<T, U>::value && ((x < T{}) != (y < U{})))
-    TENZIR_RAISE_ERROR(narrowing_error, "narrowing error");
+  if (static_cast<U>(x) != y
+      && (is_same_signedness<T, U>::value || (x < T{}) != (y < U{}))) {
+    detail::panic("cannot narrow {} to {} @ {}:{}", y, typeid(T).name(),
+                  source.file_name(), source.line());
+  }
   return x;
 }
 

@@ -24,12 +24,11 @@ async def endpoint():
     if os.path.isdir(test_db_dir):
         shutil.rmtree(test_db_dir)
     proc = await asyncio.create_subprocess_exec(
-        "tenzir-ctl",
+        "tenzir-node",
         "-e",
         ":0",
         "-d",
         test_db_dir,
-        "start",
         "--print-endpoint",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,

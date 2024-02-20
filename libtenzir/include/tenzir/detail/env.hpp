@@ -20,7 +20,7 @@ namespace tenzir::detail {
 /// A thread-safe wrapper around `::getenv`.
 /// @param var The environment variable.
 /// @returns The copied environment variables contents, or `std::nullopt`.
-[[nodiscard]] std::optional<std::string_view> getenv(std::string_view var);
+[[nodiscard]] std::optional<std::string> getenv(std::string_view var);
 
 /// A thread-safe wrapper around `::setenv`.
 /// @param key The environment variable key.
@@ -40,6 +40,9 @@ setenv(std::string_view key, std::string_view value, int overwrite = 1);
 /// strings, each of which has the form `key=value` by convention (per `man
 /// environ`). The results does not include variables that violate this
 /// convention.
+///
+/// The returned `string_view`s must are only valid until the returned generator
+/// is destroyed.
 generator<std::pair<std::string_view, std::string_view>> environment();
 
 } // namespace tenzir::detail

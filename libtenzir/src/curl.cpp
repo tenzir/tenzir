@@ -49,7 +49,7 @@ auto on_read(char* buffer, size_t size, size_t nitems, void* user_data)
   auto output = std::span<std::byte>{ptr, size * nitems};
   auto* f = reinterpret_cast<read_callback*>(user_data);
   auto n = (*f)(output);
-  TENZIR_ASSERT_CHEAP(n > 0);
+  TENZIR_ASSERT(n > 0);
   return n;
 }
 
@@ -78,19 +78,19 @@ auto easy::set(CURLoption option, std::string_view parameter) -> code {
 }
 
 auto easy::set(write_callback fun) -> code {
-  TENZIR_ASSERT_CHEAP(fun);
+  TENZIR_ASSERT(fun);
   on_write_ = std::make_unique<write_callback>(std::move(fun));
   auto curl_code = curl_easy_setopt(easy_, CURLOPT_WRITEFUNCTION, on_write);
-  TENZIR_ASSERT_CHEAP(curl_code == CURLE_OK);
+  TENZIR_ASSERT(curl_code == CURLE_OK);
   curl_code = curl_easy_setopt(easy_, CURLOPT_WRITEDATA, on_write_.get());
   return static_cast<code>(curl_code);
 }
 
 auto easy::set(read_callback fun) -> code {
-  TENZIR_ASSERT_CHEAP(fun);
+  TENZIR_ASSERT(fun);
   on_read_ = std::make_unique<read_callback>(std::move(fun));
   auto curl_code = curl_easy_setopt(easy_, CURLOPT_READFUNCTION, on_read);
-  TENZIR_ASSERT_CHEAP(curl_code == CURLE_OK);
+  TENZIR_ASSERT(curl_code == CURLE_OK);
   curl_code = curl_easy_setopt(easy_, CURLOPT_READDATA, on_read_.get());
   return static_cast<code>(curl_code);
 }
@@ -98,9 +98,9 @@ auto easy::set(read_callback fun) -> code {
 auto easy::set(mime handle) -> code {
   // We do not support reading MIME parts through a callback.
   auto curl_code = curl_easy_setopt(easy_, CURLOPT_READFUNCTION, nullptr);
-  TENZIR_ASSERT_CHEAP(curl_code == CURLE_OK);
+  TENZIR_ASSERT(curl_code == CURLE_OK);
   // Set MIME structure as the new thing.
-  TENZIR_ASSERT_CHEAP(curl_code == CURLE_OK);
+  TENZIR_ASSERT(curl_code == CURLE_OK);
   curl_code = curl_easy_setopt(easy_, CURLOPT_MIMEPOST, handle.mime_.get());
   if (curl_code == CURLE_OK)
     mime_ = std::make_unique<mime>(std::move(handle));
@@ -111,7 +111,7 @@ auto easy::set_http_header(std::string_view name, std::string_view value)
   -> code {
   auto header_name = [](std::string_view str) {
     auto i = str.find(':');
-    TENZIR_ASSERT_CHEAP(i != std::string_view::npos);
+    TENZIR_ASSERT(i != std::string_view::npos);
     return str.substr(0, i);
   };
   for (auto header : headers_.items()) {
@@ -137,7 +137,7 @@ auto easy::headers()
   -> generator<std::pair<std::string_view, std::string_view>> {
   for (auto str : headers_.items()) {
     auto split = detail::split(str, ": ");
-    TENZIR_ASSERT_CHEAP(split.size() == 2);
+    TENZIR_ASSERT(split.size() == 2);
     co_yield std::pair{split[0], split[1]};
   }
 }
@@ -185,7 +185,7 @@ auto multi::poll(std::chrono::milliseconds timeout) -> code {
 auto multi::perform() -> std::pair<code, size_t> {
   auto num_running = int{0};
   auto curl_code = curl_multi_perform(multi_.get(), &num_running);
-  TENZIR_ASSERT_CHEAP(num_running >= 0);
+  TENZIR_ASSERT(num_running >= 0);
   return {static_cast<code>(curl_code),
           detail::narrow_cast<size_t>(num_running)};
 }
@@ -226,30 +226,30 @@ auto to_string(multi::code code) -> std::string_view {
 }
 
 auto mime::part::name(std::string_view name) -> easy::code {
-  TENZIR_ASSERT_CHEAP(part_ != nullptr);
-  TENZIR_ASSERT_CHEAP(not name.empty());
+  TENZIR_ASSERT(part_ != nullptr);
+  TENZIR_ASSERT(not name.empty());
   auto curl_code = curl_mime_name(part_, name.data());
   return static_cast<easy::code>(curl_code);
 }
 
 auto mime::part::type(std::string_view content_type) -> easy::code {
-  TENZIR_ASSERT_CHEAP(part_ != nullptr);
-  TENZIR_ASSERT_CHEAP(not content_type.empty());
+  TENZIR_ASSERT(part_ != nullptr);
+  TENZIR_ASSERT(not content_type.empty());
   auto curl_code = curl_mime_type(part_, content_type.data());
   return static_cast<easy::code>(curl_code);
 }
 
 auto mime::part::data(std::span<const std::byte> buffer) -> easy::code {
-  TENZIR_ASSERT_CHEAP(part_ != nullptr);
-  TENZIR_ASSERT_CHEAP(not buffer.empty());
+  TENZIR_ASSERT(part_ != nullptr);
+  TENZIR_ASSERT(not buffer.empty());
   const auto* ptr = reinterpret_cast<const char*>(buffer.data());
   auto curl_code = curl_mime_data(part_, ptr, buffer.size());
   return static_cast<easy::code>(curl_code);
 }
 
 auto mime::part::data(read_callback* on_read) -> easy::code {
-  TENZIR_ASSERT_CHEAP(part_ != nullptr);
-  TENZIR_ASSERT_CHEAP(on_read != nullptr);
+  TENZIR_ASSERT(part_ != nullptr);
+  TENZIR_ASSERT(on_read != nullptr);
   auto curl_code
     = curl_mime_data_cb(part_, -1, curl::on_read, nullptr, nullptr, on_read);
   return static_cast<easy::code>(curl_code);
@@ -312,8 +312,8 @@ auto to_string(url::code code) -> std::string_view {
 
 auto to_string(const url& x) -> std::string {
   auto [code, result] = x.get(url::part::url);
-  TENZIR_ASSERT_CHEAP(code);
-  TENZIR_ASSERT_CHEAP(result);
+  TENZIR_ASSERT(code);
+  TENZIR_ASSERT(result);
   return std::move(*result);
 }
 

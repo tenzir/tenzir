@@ -60,8 +60,8 @@ public:
 
   auto split(std::string_view input) const
     -> std::pair<std::string_view, std::string_view> {
-    TENZIR_ASSERT_CHEAP(regex_);
-    TENZIR_ASSERT_CHEAP(regex_->NumberOfCapturingGroups() == 1);
+    TENZIR_ASSERT(regex_);
+    TENZIR_ASSERT(regex_->NumberOfCapturingGroups() == 1);
     auto group = re2::StringPiece{};
     if (not re2::RE2::PartialMatch(input, *regex_, &group)) {
       return {input, {}};
@@ -132,7 +132,7 @@ public:
 
   auto parse_strings(std::shared_ptr<arrow::StringArray> input,
                      operator_control_plane& ctrl) const
-    -> std::vector<typed_array> override {
+    -> std::vector<series> override {
     auto b = series_builder{type{record_type{}}};
     for (auto&& string : values(string_type{}, *input)) {
       if (not string) {

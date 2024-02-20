@@ -56,19 +56,22 @@ template <type_or_concrete_type FromType, type_or_concrete_type ToType>
 struct cast_helper<FromType, ToType> {
   template <type_or_concrete_type Type>
   static auto is_valid(const Type& type) noexcept {
-    if constexpr (!concrete_type<Type>)
-      if (!type)
+    if constexpr (!concrete_type<Type>) {
+      if (!type) {
         return false;
+      }
+    }
     return true;
   }
 
   static auto can_cast(const FromType& from_type,
                        const ToType& to_type) noexcept -> caf::expected<void> {
-    if (!is_valid(from_type) || !is_valid(to_type))
+    if (!is_valid(from_type) || !is_valid(to_type)) {
       return caf::make_error(ec::logic_error,
                              fmt::format("cannot cast from '{}' to '{}': both "
                                          "types must be valid",
                                          from_type, to_type));
+    }
     const auto f
       = [&]<concrete_type ConcreteFromType, concrete_type ConcreteToType>(
           const ConcreteFromType& from_type,
@@ -76,12 +79,13 @@ struct cast_helper<FromType, ToType> {
           return cast_helper<ConcreteFromType, ConcreteToType>::can_cast(
             from_type, to_type);
         };
-    if constexpr (concrete_type<FromType>)
+    if constexpr (concrete_type<FromType>) {
       return caf::visit(f, detail::passthrough(from_type), to_type);
-    else if constexpr (concrete_type<ToType>)
+    } else if constexpr (concrete_type<ToType>) {
       return caf::visit(f, from_type, detail::passthrough(to_type));
-    else
+    } else {
       return caf::visit(f, from_type, to_type);
+    }
   }
 
   static auto
@@ -89,28 +93,30 @@ struct cast_helper<FromType, ToType> {
        const std::shared_ptr<type_to_arrow_array_t<type>>& from_array,
        const ToType& to_type) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<ToType>> {
-    TENZIR_ASSERT(can_cast(from_type, to_type));
+    TENZIR_ASSERT_EXPENSIVE(can_cast(from_type, to_type));
     const auto f
       = [&]<concrete_type ConcreteFromType, concrete_type ConcreteToType>(
           const ConcreteFromType& from_type,
           const ConcreteToType& to_type) noexcept
       -> std::shared_ptr<type_to_arrow_array_t<type>> {
-      if constexpr (concrete_type<FromType>)
+      if constexpr (concrete_type<FromType>) {
         return cast_helper<ConcreteFromType, ConcreteToType>::cast(
           from_type, from_array, to_type);
-      else
+      } else {
         return cast_helper<ConcreteFromType, ConcreteToType>::cast(
           from_type,
           std::static_pointer_cast<type_to_arrow_array_t<ConcreteFromType>>(
             from_array),
           to_type);
+      }
     };
-    if constexpr (concrete_type<FromType>)
+    if constexpr (concrete_type<FromType>) {
       return caf::visit(f, detail::passthrough(from_type), to_type);
-    else if constexpr (concrete_type<ToType>)
+    } else if constexpr (concrete_type<ToType>) {
       return caf::visit(f, from_type, detail::passthrough(to_type));
-    else
+    } else {
       return caf::visit(f, from_type, to_type);
+    }
   }
 
   template <class InputType>
@@ -128,17 +134,19 @@ struct cast_helper<FromType, ToType> {
       if constexpr (concrete_type<ToType>) {
         return v;
       } else {
-        if (not v)
+        if (not v) {
           return std::move(v.error());
+        }
         return std::move(*v);
       }
     };
-    if constexpr (concrete_type<FromType>)
+    if constexpr (concrete_type<FromType>) {
       return caf::visit(f, detail::passthrough(from_type), to_type);
-    else if constexpr (concrete_type<ToType>)
+    } else if constexpr (concrete_type<ToType>) {
       return caf::visit(f, from_type, detail::passthrough(to_type));
-    else
+    } else {
       return caf::visit(f, from_type, to_type);
+    }
   }
 
 private:
@@ -204,11 +212,12 @@ template <complex_type Type>
 struct cast_helper<Type, Type> {
   static auto can_cast(const Type& from_type, const Type& to_type) noexcept
     -> caf::expected<void> {
-    if (from_type != to_type)
+    if (from_type != to_type) {
       return caf::make_error(ec::convert_error,
                              fmt::format("cannot cast from '{}' to '{}': not "
                                          "implemented",
                                          from_type, to_type));
+    }
     return {};
   }
 
@@ -216,7 +225,7 @@ struct cast_helper<Type, Type> {
                    std::shared_ptr<type_to_arrow_array_t<Type>> from_array,
                    const Type& to_type) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<Type>> {
-    TENZIR_ASSERT(can_cast(from_type, to_type));
+    TENZIR_ASSERT_EXPENSIVE(can_cast(from_type, to_type));
     return from_array;
   }
 };
@@ -228,11 +237,12 @@ struct cast_helper<list_type, list_type> {
     -> caf::expected<void> {
     auto can_cast_value_types = cast_helper<type, type>::can_cast(
       from_type.value_type(), to_type.value_type());
-    if (!can_cast_value_types)
+    if (!can_cast_value_types) {
       return caf::make_error(ec::convert_error,
                              fmt::format("cannot cast from '{}' to '{}': {}",
                                          from_type, to_type,
                                          can_cast_value_types.error()));
+    }
     return {};
   }
 
@@ -240,9 +250,10 @@ struct cast_helper<list_type, list_type> {
                    std::shared_ptr<type_to_arrow_array_t<list_type>> from_array,
                    const list_type& to_type) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<list_type>> {
-    TENZIR_ASSERT(can_cast(from_type, to_type));
-    if (from_type == to_type)
+    TENZIR_ASSERT_EXPENSIVE(can_cast(from_type, to_type));
+    if (from_type == to_type) {
       return from_array;
+    }
     const auto offsets = from_array->offsets();
     const auto cast_values = cast_helper<type, type>::cast(
       from_type.value_type(), from_array->values(), to_type.value_type());
@@ -260,8 +271,9 @@ struct cast_helper<list_type, list_type> {
   static auto cast_value(const list_type& from_type, const InputType& value,
                          const list_type& to_type) noexcept
     -> caf::expected<type_to_data_t<list_type>> {
-    if (from_type == to_type)
+    if (from_type == to_type) {
       return on_same_input_and_output_types(value);
+    }
     auto output = to_type.construct();
     output.reserve(value.size());
     for (const auto& val : value) {
@@ -321,8 +333,9 @@ struct cast_helper<record_type, record_type> {
   static auto
   can_cast(const record_type& from_type, const record_type& to_type) noexcept
     -> caf::expected<void> {
-    if (from_type == to_type)
+    if (from_type == to_type) {
       return {};
+    }
     // Castts between record types are possible unless there is a matching field
     // name with conflicting types that cannot be casted.
     for (const auto& to_leaf : to_type.leaves()) {
@@ -349,9 +362,10 @@ struct cast_helper<record_type, record_type> {
        std::shared_ptr<type_to_arrow_array_t<record_type>> from_array,
        const record_type& to_type) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<record_type>> {
-    TENZIR_ASSERT(can_cast(from_type, to_type));
-    if (from_type == to_type)
+    TENZIR_ASSERT_EXPENSIVE(can_cast(from_type, to_type));
+    if (from_type == to_type) {
       return from_array;
+    }
     // NOLINTNEXTLINE
     auto impl = [&](const auto& impl, const record_type& to_type,
                     std::string_view key_prefix) noexcept
@@ -397,8 +411,9 @@ struct cast_helper<record_type, record_type> {
   static auto cast_value(const record_type& from_type, const InputType& in,
                          const record_type& to_type) noexcept
     -> caf::expected<type_to_data_t<record_type>> {
-    if (from_type == to_type)
+    if (from_type == to_type) {
       return on_same_input_and_output_types(in);
+    }
     // NOLINTNEXTLINE
     auto impl
       = [&](const auto& impl, const record_type& to_type,
@@ -410,8 +425,9 @@ struct cast_helper<record_type, record_type> {
                            : fmt::format("{}.{}", key_prefix, to_field.name);
         if (const auto* r = caf::get_if<record_type>(&to_field.type)) {
           auto maybe_nested_record = impl(impl, *r, key);
-          if (not maybe_nested_record)
+          if (not maybe_nested_record) {
             return std::move(maybe_nested_record.error());
+          }
           ret[to_field.name] = std::move(*maybe_nested_record);
           continue;
         }
@@ -423,8 +439,9 @@ struct cast_helper<record_type, record_type> {
         }
         // The field exists, so we can insert the cast column.
         auto input_at_path = get_input_at_path(in, key);
-        if (not input_at_path)
+        if (not input_at_path) {
           return std::move(input_at_path.error());
+        }
         if (caf::holds_alternative<view<caf::none_t>>(*input_at_path)) {
           ret[to_field.name] = caf::none;
           continue;
@@ -458,8 +475,9 @@ private:
   get_input_at_path(const type_to_data_t<record_type>& in, std::string_view key)
     -> caf::expected<data_view> {
     auto input_at_path = descend(std::addressof(in), key);
-    if (not input_at_path)
+    if (not input_at_path) {
       return std::move(input_at_path.error());
+    }
     TENZIR_ASSERT(*input_at_path);
     return make_view(**input_at_path);
   }
@@ -468,8 +486,9 @@ private:
   get_input_at_path(view<type_to_data_t<record_type>> in, std::string_view key)
     -> caf::expected<data_view> {
     auto input_at_path = descend(in, key);
-    if (not input_at_path)
+    if (not input_at_path) {
       return std::move(input_at_path.error());
+    }
     return *input_at_path;
   }
 };
@@ -484,10 +503,11 @@ struct cast_helper<int64_type, uint64_type> {
   static auto
   cast_value(const int64_type&, int64_t value, const uint64_type&) noexcept
     -> caf::expected<uint64_t> {
-    if (value < 0)
+    if (value < 0) {
       return caf::make_error(
         ec::convert_error,
         fmt::format("unable to convert negative value {} into uint64", value));
+    }
     return static_cast<uint64_t>(value);
   }
 
@@ -508,11 +528,12 @@ struct cast_helper<uint64_type, int64_type> {
 
   static auto cast_value(const uint64_type&, uint64_t value,
                          const int64_type&) noexcept -> caf::expected<int64_t> {
-    if (value > std::numeric_limits<int64_t>::max())
+    if (value > std::numeric_limits<int64_t>::max()) {
       return caf::make_error(ec::convert_error,
                              fmt::format("unable to convert {} into int64: the "
                                          "value is above the int64_t limit",
                                          value));
+    }
     return static_cast<int64_t>(value);
   }
 
@@ -534,11 +555,12 @@ struct cast_helper<int64_type, bool_type> {
   static auto cast_value(const int64_type&, int64_t value,
                          const bool_type&) noexcept -> caf::expected<bool> {
     if (value < std::numeric_limits<bool>::min()
-        or value > std::numeric_limits<bool>::max())
+        or value > std::numeric_limits<bool>::max()) {
       return caf::make_error(ec::convert_error,
                              fmt::format("unable to convert {} into int64: "
                                          "only '0' and '1' are supported.",
                                          value));
+    }
     return static_cast<bool>(value);
   }
 
@@ -600,11 +622,12 @@ struct cast_helper<uint64_type, bool_type> {
 
   static auto cast_value(const uint64_type&, uint64_t value,
                          const bool_type&) noexcept -> caf::expected<bool> {
-    if (value > std::numeric_limits<bool>::max())
+    if (value > std::numeric_limits<bool>::max()) {
       return caf::make_error(ec::convert_error,
                              fmt::format("unable to convert {} into uint64: "
                                          "only '0' and '1' are supported.",
                                          value));
+    }
     return static_cast<bool>(value);
   }
 
@@ -645,11 +668,12 @@ struct cast_helper<double_type, bool_type> {
 
   static auto cast_value(const double_type&, double value,
                          const bool_type&) noexcept -> caf::expected<bool> {
-    if (value != 0.0 and value != 1.0)
+    if (value != 0.0 and value != 1.0) {
       return caf::make_error(ec::convert_error,
                              fmt::format("unable to convert {} into a double: "
                                          "only '0.0' and '1.0' are supported.",
                                          value));
+    }
     return static_cast<bool>(value);
   }
 
@@ -752,18 +776,20 @@ struct cast_helper<uint64_type, enumeration_type> {
   static auto cast_value(const uint64_type&, uint64_t value,
                          const enumeration_type& enum_type) noexcept
     -> caf::expected<enumeration> {
-    if (value > std::numeric_limits<uint32_t>::max())
+    if (value > std::numeric_limits<uint32_t>::max()) {
       return caf::make_error(
         ec::convert_error, fmt::format("unable to convert {} into {}: "
                                        "the value is out of enum value range.",
                                        value, enum_type));
+    }
     auto field = enum_type.field(static_cast<uint32_t>(value));
-    if (field.empty())
+    if (field.empty()) {
       return caf::make_error(ec::convert_error,
                              fmt::format("unable to convert {} into {}: "
                                          "the value doesn't correspond to any "
                                          "enum state",
                                          value, enum_type));
+    }
     return static_cast<enumeration>(value);
   }
 
@@ -786,18 +812,20 @@ struct cast_helper<int64_type, enumeration_type> {
                          const enumeration_type& enum_type) noexcept
     -> caf::expected<enumeration> {
     if (value > std::numeric_limits<uint32_t>::max()
-        or value < std::numeric_limits<uint32_t>::min())
+        or value < std::numeric_limits<uint32_t>::min()) {
       return caf::make_error(
         ec::convert_error, fmt::format("unable to convert {} into {}: "
                                        "the value is out of enum value range.",
                                        value, enum_type));
+    }
     auto field = enum_type.field(static_cast<uint32_t>(value));
-    if (field.empty())
+    if (field.empty()) {
       return caf::make_error(ec::convert_error,
                              fmt::format("unable to convert {} into {}: "
                                          "the value doesn't correspond to any "
                                          "enum state",
                                          value, enum_type));
+    }
     return static_cast<enumeration>(value);
   }
 
@@ -821,12 +849,13 @@ struct cast_helper<double_type, enumeration_type> {
     -> caf::expected<enumeration> {
     auto maybe_uint = cast_helper<double_type, uint64_type>::cast_value(
       double_type{}, value, uint64_type{});
-    if (not maybe_uint)
+    if (not maybe_uint) {
       return caf::make_error(ec::convert_error,
                              fmt::format("unable to convert {} into {}: "
                                          "the value cannot be represented as "
                                          "unsigned integer: {}",
                                          value, enum_type, maybe_uint.error()));
+    }
     return cast_helper<uint64_type, enumeration_type>::cast_value(
       uint64_type{}, *maybe_uint, enum_type);
   }
@@ -844,8 +873,9 @@ struct cast_helper<enumeration_type, enumeration_type> {
   static auto
   can_cast(const enumeration_type& from, const enumeration_type& to) noexcept
     -> caf::expected<void> {
-    if (from == to)
+    if (from == to) {
       return {};
+    }
     return caf::make_error(ec::convert_error,
                            fmt::format("unable to convert from {} to {} : "
                                        "mismatching enumeration types",
@@ -856,8 +886,9 @@ struct cast_helper<enumeration_type, enumeration_type> {
                          const enumeration_type& to) noexcept
     -> caf::expected<enumeration> {
     auto can = can_cast(from, to);
-    if (can)
+    if (can) {
       return value;
+    }
     return std::move(can.error());
   }
 
@@ -866,7 +897,7 @@ struct cast_helper<enumeration_type, enumeration_type> {
        std::shared_ptr<type_to_arrow_array_t<enumeration_type>> array,
        const enumeration_type& to) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<enumeration_type>> {
-    TENZIR_ASSERT(can_cast(from, to));
+    TENZIR_ASSERT_EXPENSIVE(can_cast(from, to));
     return array;
   }
 };
@@ -911,56 +942,63 @@ template <concrete_type ToType>
 struct cast_helper<string_type, ToType> {
   static auto from_str(std::string_view in, const time_type&)
     -> caf::expected<time> {
-    if (auto ret = time{}; parsers::time(in, ret))
+    if (auto ret = time{}; parsers::time(in, ret)) {
       return ret;
+    }
     return caf::make_error(ec::convert_error,
                            fmt::format("unable to convert {} into time", in));
   }
 
   static auto from_str(std::string_view in, const duration_type&)
     -> caf::expected<duration> {
-    if (auto ret = duration{}; parsers::duration(in, ret))
+    if (auto ret = duration{}; parsers::duration(in, ret)) {
       return ret;
+    }
     return caf::make_error(
       ec::convert_error, fmt::format("unable to convert {} into duration", in));
   }
 
   static auto from_str(std::string_view in, const subnet_type&)
     -> caf::expected<subnet> {
-    if (auto ret = subnet{}; parsers::net(in, ret))
+    if (auto ret = subnet{}; parsers::net(in, ret)) {
       return ret;
+    }
     return caf::make_error(ec::convert_error,
                            fmt::format("unable to convert {} into subnet", in));
   }
 
   static auto from_str(std::string_view in, const ip_type&)
     -> caf::expected<ip> {
-    if (auto ret = ip{}; parsers::ip(in, ret))
+    if (auto ret = ip{}; parsers::ip(in, ret)) {
       return ret;
+    }
     return caf::make_error(ec::convert_error,
                            fmt::format("unable to convert {} into ip", in));
   }
 
   static auto from_str(std::string_view in, const null_type&)
     -> caf::expected<caf::none_t> {
-    if (parsers::lit{"null"}(in))
+    if (parsers::lit{"null"}(in)) {
       return caf::none;
+    }
     return caf::make_error(ec::convert_error,
                            fmt::format("unable to convert {} into a null", in));
   }
 
   static auto from_str(std::string_view in, const bool_type&)
     -> caf::expected<bool> {
-    if (auto ret = false; parsers::boolean(in, ret))
+    if (auto ret = false; parsers::boolean(in, ret)) {
       return ret;
+    }
     return caf::make_error(ec::convert_error,
                            fmt::format("unable to convert {} into a bool", in));
   }
 
   static auto from_str(std::string_view in, const uint64_type&)
     -> caf::expected<uint64_t> {
-    if (auto ret = uint64_t{0}; parsers::count(in, ret))
+    if (auto ret = uint64_t{0}; parsers::count(in, ret)) {
       return ret;
+    }
     return caf::make_error(ec::convert_error,
                            fmt::format("unable to convert {} into an uint64",
                                        in));
@@ -968,24 +1006,27 @@ struct cast_helper<string_type, ToType> {
 
   static auto from_str(std::string_view in, const int64_type&)
     -> caf::expected<int64_t> {
-    if (auto ret = int64_t{0}; parsers::integer(in, ret))
+    if (auto ret = int64_t{0}; parsers::integer(in, ret)) {
       return ret;
+    }
     return caf::make_error(
       ec::convert_error, fmt::format("unable to convert {} into an int64", in));
   }
 
   static auto from_str(std::string_view in, const double_type&)
     -> caf::expected<double> {
-    if (auto ret = double{0}; parsers::real(in, ret))
+    if (auto ret = double{0}; parsers::real(in, ret)) {
       return ret;
+    }
     return caf::make_error(
       ec::convert_error, fmt::format("unable to convert {} into a double", in));
   }
 
   static auto from_str(std::string_view in, const enumeration_type& type)
     -> caf::expected<enumeration> {
-    if (auto val = type.resolve(in))
+    if (auto val = type.resolve(in)) {
       return detail::narrow_cast<enumeration>(*val);
+    }
     return caf::make_error(
       ec::convert_error,
       fmt::format("unable to convert {} into enumeration {}", in, type));
@@ -1060,17 +1101,20 @@ struct cast_helper<FromType, duration_type> {
   static auto
   cast_value(const FromType& from, ValType value, const duration_type& to,
              std::string_view unit = "s") noexcept -> caf::expected<duration> {
-    if (value < ValType{0})
+    if (value < ValType{0}) {
       return caf::make_error(ec::convert_error,
                              fmt::format("unable to convert negative numeric "
                                          "value {} into a duration type",
                                          value));
+    }
     auto str = cast_helper<FromType, string_type>::cast_value(from, value,
                                                               string_type{});
-    if (not str)
+    if (not str) {
       return str.error();
-    if (str->front() == '+')
+    }
+    if (str->front() == '+') {
       str->erase(0, 1);
+    }
     *str += unit;
     return cast_helper<string_type, duration_type>::cast_value(string_type{},
                                                                *str, to);
@@ -1129,8 +1173,9 @@ static auto cast_to_builder(const FromType& from_type,
       continue;
     }
     auto converted = cast_value(from_type, *v, to_type);
-    if (not converted)
+    if (not converted) {
       return converted.error();
+    }
     auto status = append_builder(to_type, *ret, make_view(*converted));
     TENZIR_ASSERT(status.ok());
   }

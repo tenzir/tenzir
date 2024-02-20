@@ -10,8 +10,6 @@
 
 #include "tenzir/fwd.hpp"
 
-#include "tenzir/table_slice_encoding.hpp"
-
 #include <caf/fwd.hpp>
 
 #include <chrono>
@@ -32,9 +30,6 @@ namespace import {
 
 /// Maximum size for sources that generate table slices.
 inline constexpr uint64_t table_slice_size = 65'536; // 64 Ki
-
-/// The default table slice type when arrow is available.
-inline constexpr auto table_slice_type = table_slice_encoding::arrow;
 
 /// Maximum number of results.
 inline constexpr size_t max_events = 0;
@@ -148,6 +143,9 @@ inline constexpr const size_t client_queue_size = 100;
 
 /// Maximum number of log messages in the logger queue (server).
 inline constexpr const size_t server_queue_size = 1'000'000;
+
+/// Policy when running out of space in the log queue.
+inline constexpr const char* overflow_policy = "overrun_oldest";
 
 /// Number of logger threads.
 inline constexpr const size_t logger_threads = 1;

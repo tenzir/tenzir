@@ -21,7 +21,6 @@
 #include "tenzir/detail/stable_map.hpp"
 #include "tenzir/die.hpp"
 #include "tenzir/expression.hpp"
-#include "tenzir/framed.hpp"
 #include "tenzir/http_api.hpp"
 #include "tenzir/index.hpp"
 #include "tenzir/ip.hpp"
@@ -39,14 +38,13 @@
 #include "tenzir/query_status.hpp"
 #include "tenzir/report.hpp"
 #include "tenzir/resource.hpp"
+#include "tenzir/series.hpp"
 #include "tenzir/shared_diagnostic_handler.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/subnet.hpp"
 #include "tenzir/table_slice.hpp"
-#include "tenzir/table_slice_column.hpp"
 #include "tenzir/taxonomies.hpp"
 #include "tenzir/type.hpp"
-#include "tenzir/typed_array.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <caf/init_global_meta_objects.hpp>

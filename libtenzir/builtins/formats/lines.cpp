@@ -124,12 +124,12 @@ public:
 
   auto instantiate(type input_schema, operator_control_plane& ctrl) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
-    TENZIR_ASSERT_CHEAP(inner_);
+    TENZIR_ASSERT(inner_);
     return inner_->instantiate(std::move(input_schema), ctrl);
   }
 
   auto allows_joining() const -> bool override {
-    TENZIR_ASSERT_CHEAP(inner_);
+    TENZIR_ASSERT(inner_);
     return inner_->allows_joining();
   }
 

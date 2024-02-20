@@ -15,7 +15,6 @@
 #include "tenzir/policy/include_field_names.hpp"
 #include "tenzir/policy/omit_nulls.hpp"
 #include "tenzir/table_slice.hpp"
-#include "tenzir/table_slice_row.hpp"
 #include "tenzir/type.hpp"
 
 #include <caf/error.hpp>
@@ -72,9 +71,9 @@ protected:
   }
 
   template <class... Policies, class Printer>
-  caf::error
-  print_record(Printer& printer, const line_elements& le,
-               const record_type& schema, table_slice_row row, size_t& pos) {
+  caf::error print_record(Printer& printer, const line_elements& le,
+                          const record_type& schema, table_slice slice,
+                          size_t row, size_t& pos) {
     auto print_field = [&](auto& iter, const record_type::field_view& f,
                            size_t column) {
       auto rep = [&](data_view x) {
@@ -83,7 +82,7 @@ protected:
         else
           return x;
       };
-      auto x = to_canonical(f.type, row[column]);
+      auto x = to_canonical(f.type, slice.at(row, column));
       return printer.print(iter, rep(std::move(x)));
     };
     auto iter = std::back_inserter(buf_);
@@ -92,7 +91,7 @@ protected:
     for (const auto& f : schema.fields()) {
       if constexpr (detail::is_any_v<policy::omit_nulls, Policies...>) {
         if (!caf::holds_alternative<record_type>(f.type)
-            && caf::holds_alternative<caf::none_t>(row[pos])) {
+            && caf::holds_alternative<caf::none_t>(slice.at(row, pos))) {
           if (const auto* r = caf::get_if<record_type>(&f.type))
             pos += r->num_leaves();
           else
@@ -109,8 +108,10 @@ protected:
             return ec::print_error;
           append(le.kv_separator);
         }
-        if (auto err = print_record<Policies...>(printer, le, *r, row, pos))
+        if (auto err
+            = print_record<Policies...>(printer, le, *r, slice, row, pos)) {
           return err;
+        }
       } else {
         if (!print_field(iter, f, pos++))
           return ec::print_error;
@@ -148,10 +149,10 @@ protected:
     }();
     for (size_t row = 0; row < xs.rows(); ++row) {
       size_t pos = 0;
-      if (auto err = print_record<Policies...>(printer, le,
-                                               caf::get<record_type>(schema),
-                                               table_slice_row{xs, row}, pos))
+      if (auto err = print_record<Policies...>(
+            printer, le, caf::get<record_type>(schema), xs, row, pos)) {
         return err;
+      }
       append('\n');
       write_buf();
     }

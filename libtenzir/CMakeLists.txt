@@ -222,12 +222,13 @@ dependency_summary("OpenSSL" OpenSSL::SSL "Dependencies")
 
 # Link against yaml-cpp.
 find_package(yaml-cpp 0.6.2 REQUIRED)
-string(APPEND TENZIR_FIND_DEPENDENCY_LIST "\nfind_package(yaml-cpp REQUIRED)")
 if (yaml-cpp_VERSION VERSION_GREATER_EQUAL 0.8)
-  target_link_libraries(libtenzir PUBLIC yaml-cpp::yaml-cpp)
+  target_link_libraries(libtenzir PRIVATE yaml-cpp::yaml-cpp)
+  target_link_libraries(libtenzir_builtins PRIVATE yaml-cpp::yaml-cpp)
   dependency_summary("yaml-cpp" yaml-cpp::yaml-cpp "Dependencies")
 else ()
-  target_link_libraries(libtenzir PUBLIC yaml-cpp)
+  target_link_libraries(libtenzir PRIVATE yaml-cpp)
+  target_link_libraries(libtenzir_builtins PRIVATE yaml-cpp)
   dependency_summary("yaml-cpp" yaml-cpp "Dependencies")
 endif ()
 
@@ -253,10 +254,22 @@ endif ()
 # Link against curl.
 # The FindCURL module from CMake doesn't expose the link dependencies of libcurl.a
 # correctly, so we use pkg-config instead.
-pkg_check_modules(PC_CURL REQUIRED QUIET IMPORTED_TARGET libcurl)
+pkg_check_modules(PC_CURL REQUIRED IMPORTED_TARGET libcurl)
 string(APPEND TENZIR_FIND_DEPENDENCY_LIST
        "\npkg_check_modules(PC_CURL REQUIRED QUIET IMPORTED_TARGET libcurl)")
 target_link_libraries(libtenzir PUBLIC PkgConfig::PC_CURL)
+# The static curl library we use on macOS depends on SystemConfiguration, but
+# that dependency is missing from the pkg-config file, so we insert it here as a
+# work around.
+if (CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND PC_CURL_CFLAGS MATCHES ".*CURL_STATICLIB.*")
+  find_library(SystemConfiguration SystemConfiguration REQUIRED)
+  mark_as_advanced(SystemConfiguration)
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+         "\nfind_library(SystemConfiguration SystemConfiguration REQUIRED)")
+  string(APPEND TENZIR_FIND_DEPENDENCY_LIST
+         "\nmark_as_advanced(SystemConfiguration)")
+  target_link_libraries(libtenzir PUBLIC ${SystemConfiguration})
+endif ()
 dependency_summary("CURL" PkgConfig::PC_CURL "Dependencies")
 
 # Link against fmt.

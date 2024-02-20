@@ -61,6 +61,8 @@ struct importer_state {
   [[nodiscard]] caf::typed_response_promise<record>
   status(status_verbosity v) const;
 
+  void on_process(const table_slice& slice);
+
   /// The active id block.
   id_block current;
 

@@ -48,18 +48,18 @@ def upload_packages [
       do $run "tarball" $tgzs
     }
   }
+  print $"::notice copying artifacts to /packages/{debian,tarball}"
+  mkdir ./packages/debian ./packages/tarball ./packages/macOS
+  for deb in $debs {
+    cp -v $deb ./packages/debian
+  }
+  for pkg in $pkgs {
+    cp -v $pkg ./packages/macOS
+  }
+  for tgz in $tgzs {
+    cp -v $tgz ./packages/tarball
+  }
   if $copy {
-    print $"::notice copying artifacts to /packages/{debian,tarball}"
-    mkdir ./packages/debian ./packages/tarball
-    for deb in $debs {
-      cp -v $deb ./packages/debian
-    }
-    for pkg in $pkgs {
-      cp -v $pkg ./packages/macOS
-    }
-    for tgz in $tgzs {
-      cp -v $tgz ./packages/tarball
-    }
     if $git_tag != null {
       let os = (uname -s)
       if $os == "Linux" {
@@ -130,7 +130,7 @@ export def run [
   # Run local effects by building all requested editions.
   let targets = ($cfg.editions | each {|e| $".#(attribute_name $e)" })
   print $"::notice building ($targets)"
-  nix --accept-flake-config --print-build-logs build --no-link $targets
+  nix --accept-flake-config --print-build-logs build --no-link ...$targets
   # Run remote effects by uploading packages and images.
   for e in $cfg.editions {
     let stores = (if ($e.package-stores? == null) {[]} else {$e.package-stores})

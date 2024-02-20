@@ -22,7 +22,7 @@ if [ "$1" = "configure" ]; then
     fi
 fi
 
-if [ "$1" = "configure" ] ; then
+if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-deconfigure" ] || [ "$1" = "abort-remove" ] ; then
   if [ -d /run/systemd/system ]; then
     # Link the service into systemd's default service directory to make
     # it known.
@@ -40,11 +40,11 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
         if deb-systemd-helper --quiet was-enabled 'tenzir-node.service'; then
             # Enables the unit on first installation, creates new
             # symlinks on upgrades if the unit file has changed.
-            deb-systemd-helper enable '/opt/tenzir/lib/systemd/system/tenzir-node.service' >/dev/null || true
+            deb-systemd-helper enable 'tenzir-node.service' >/dev/null || true
         else
             # Update the statefile to add new symlinks (if any), which need to be
             # cleaned up on purge. Also remove old symlinks.
-            deb-systemd-helper update-state '/opt/tenzir/lib/systemd/system/tenzir-node.service' >/dev/null || true
+            deb-systemd-helper update-state 'tenzir-node.service' >/dev/null || true
         fi
     fi
 fi

@@ -154,7 +154,7 @@ unload_disabled_static_plugins(std::vector<std::string> paths_or_names) {
       case plugin_ptr::type::builtin:
         return false;
     }
-    die("unreachable");
+    TENZIR_UNREACHABLE();
   };
   get_mutable().erase(std::remove_if(get_mutable().begin(), get_mutable().end(),
                                      check_and_remove_disabled_static_plugin),
@@ -403,7 +403,7 @@ analyzer_plugin::analyzer(node_actor::stateful_pointer<node_state> node) const {
   node
     ->request(importer, caf::infinite,
               static_cast<stream_sink_actor<table_slice>>(handle))
-    .then([](const caf::outbound_stream_slot<table_slice>&) {},
+    .then([]() {},
           [&](const caf::error& error) {
             TENZIR_ERROR("failed to connect analyzer {} to the importer: {}",
                          name(), error);
@@ -670,7 +670,7 @@ auto aspect_plugin::aspect_name() const -> std::string {
 
 auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
                                   operator_control_plane& ctrl) const
-  -> std::vector<typed_array> {
+  -> std::vector<series> {
   // TODO: Collecting finished table slices here is very bad for performance.
   // For example, we have to concatenate new table slices. But there are also
   // many questions with regards to semantics. This should be either completely
@@ -687,9 +687,9 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
     auto& last = output.back();
     auto null_builder = caf::get<record_type>(last.schema())
                           .make_arrow_builder(arrow::default_memory_pool());
-    TENZIR_ASSERT_CHEAP(null_builder->AppendNull().ok());
+    TENZIR_ASSERT(null_builder->AppendNull().ok());
     auto null_array = std::shared_ptr<arrow::StructArray>{};
-    TENZIR_ASSERT_CHEAP(null_builder->Finish(&null_array).ok());
+    TENZIR_ASSERT(null_builder->Finish(&null_array).ok());
     auto null_batch = arrow::RecordBatch::Make(
       last.schema().to_arrow_schema(), 1, null_array->Flatten().ValueOrDie());
     last
@@ -731,7 +731,7 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
       output.push_back(std::move(slice));
     }
   }
-  auto result = std::vector<typed_array>{};
+  auto result = std::vector<series>{};
   result.reserve(output.size());
   for (auto&& slice : output) {
     result.emplace_back(slice.schema(),
@@ -987,7 +987,7 @@ plugin_ptr::control_block::control_block(void* library, plugin* instance,
 
 plugin_ptr::control_block::~control_block() noexcept {
   if (instance) {
-    TENZIR_ASSERT_CHEAP(deleter);
+    TENZIR_ASSERT(deleter);
     deleter(instance);
     instance = {};
     deleter = {};
