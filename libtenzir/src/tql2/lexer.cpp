@@ -10,6 +10,8 @@
 
 #include "tenzir/concept/parseable/string/char_class.hpp"
 
+#include <arrow/util/utf8.h>
+
 namespace tenzir::tql2 {
 
 auto lex(std::string_view content) -> std::vector<token> {

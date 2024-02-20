@@ -450,7 +450,7 @@ private:
               .throw_();
           }
         }
-        TENZIR_ASSERT_CHEAP(not selector.path.empty());
+        TENZIR_ASSERT(not selector.path.empty());
         auto function = entity{{std::move(selector.path.back())}};
         selector.path.pop_back();
         auto receiver = std::optional<expression>{};
@@ -504,7 +504,7 @@ private:
   };
 
   [[nodiscard]] auto advance() -> location {
-    TENZIR_ASSERT_CHEAP(next_ < tokens_.size());
+    TENZIR_ASSERT(next_ < tokens_.size());
     auto begin = next_ == 0 ? 0 : tokens_[next_ - 1].end;
     auto end = tokens_[next_].end;
     ++next_;
@@ -567,7 +567,7 @@ private:
     }
 
     void done() const {
-      TENZIR_ASSERT_CHEAP(ptr_);
+      TENZIR_ASSERT(ptr_);
       *ptr_ = previous_;
     }
 

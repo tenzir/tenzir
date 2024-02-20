@@ -14,9 +14,12 @@
 #include <tenzir/tql2/lexer.hpp>
 #include <tenzir/tql2/parser.hpp>
 
+#include <arrow/util/utf8.h>
 #include <caf/event_based_actor.hpp>
 #include <caf/expected.hpp>
 #include <caf/scoped_actor.hpp>
+
+#include <string_view>
 
 namespace tenzir {
 
@@ -182,13 +185,36 @@ auto exec_pipeline2(std::string content,
                     std::unique_ptr<diagnostic_handler> diag,
                     const exec_config& cfg, caf::actor_system& sys)
   -> caf::expected<void> {
+  auto content_view = std::string_view{content};
   auto tokens = tql2::lex(content);
-  if (cfg.dump_tokens) {
+  // TODO: Refactor this.
+  arrow::util::InitializeUTF8();
+  if (not arrow::util::ValidateUTF8(content)) {
+    // Figure out the exact token.
     auto last = size_t{0};
     for (auto& token : tokens) {
-      fmt::print("{:>15} {:?}\n", token.kind,
-                 content.substr(last, token.end - last));
+      if (not arrow::util::ValidateUTF8(content_view.substr(last, token.end))) {
+        // TODO: We can't really do this directly, unless we handle invalid
+        // UTF-8 in diagnostics.
+        diagnostic::error("invalid UTF8")
+          .primary(location{last, token.end})
+          .emit(*diag);
+      }
       last = token.end;
+    }
+    return ec::silent;
+  }
+  if (cfg.dump_tokens) {
+    auto last = size_t{0};
+    auto has_error = false;
+    for (auto& token : tokens) {
+      fmt::print("{:>15} {:?}\n", token.kind,
+                 content_view.substr(last, token.end - last));
+      last = token.end;
+      has_error |= token.kind == tql2::token_kind::error;
+    }
+    if (has_error) {
+      return ec::silent;
     }
     return {};
   }

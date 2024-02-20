@@ -9,12 +9,11 @@ setup() {
 }
 
 @test "null byte" {
-  check tenzir -f /dev/stdin < <(echo -ne '\0')
+  check ! tenzir -f /dev/stdin < <(echo -ne '\0')
 }
 
 @test "invalid utf-8" {
-  # TODO: This should be rejected.
-  check tenzir -f /dev/stdin < <(echo -ne '"a\xFFb" + 42')
+  check ! tenzir -f /dev/stdin < <(echo -ne '"a\xFFb" + 42')
 }
 
 @test "valid utf-8" {
@@ -22,7 +21,7 @@ setup() {
 }
 
 @test "non-terminated string" {
-  check tenzir -f /dev/stdin < <(echo -ne '"bar')
+  check ! tenzir -f /dev/stdin < <(echo -ne '"bar')
 }
 
 @test "non-terminated line comment" {
@@ -30,7 +29,7 @@ setup() {
 }
 
 @test "non-terminated delim comment" {
-  check tenzir -f /dev/stdin < <(echo -ne '/*')
+  check ! tenzir -f /dev/stdin < <(echo -ne '/*')
 }
 
 @test "tokens" {

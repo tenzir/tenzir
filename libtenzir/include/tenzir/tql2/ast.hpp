@@ -67,7 +67,7 @@ struct selector {
       result.begin = this_->begin;
       result.end = this_->end;
     } else {
-      TENZIR_ASSERT_CHEAP(not path.empty());
+      TENZIR_ASSERT(not path.empty());
       result.begin = path.front().location.begin;
     }
     if (not path.empty()) {
@@ -333,7 +333,7 @@ struct pipeline {
     if constexpr (Inspector::is_loading) {
       x.body = std::make_unique<std::vector<statement>>();
     } else {
-      TENZIR_ASSERT_CHEAP(x.body);
+      TENZIR_ASSERT(x.body);
     }
     // TODO: What is this?
     return f.apply(
@@ -419,22 +419,22 @@ struct pipeline_expr {
 
 template <class... Fs>
 auto expression::match(Fs&&... fs) & -> decltype(auto) {
-  TENZIR_ASSERT_CHEAP(kind);
+  TENZIR_ASSERT(kind);
   return kind->match(std::forward<Fs>(fs)...);
 }
 template <class... Fs>
 auto expression::match(Fs&&... fs) && -> decltype(auto) {
-  TENZIR_ASSERT_CHEAP(kind);
+  TENZIR_ASSERT(kind);
   return kind->match(std::forward<Fs>(fs)...);
 }
 template <class... Fs>
 auto expression::match(Fs&&... fs) const& -> decltype(auto) {
-  TENZIR_ASSERT_CHEAP(kind);
+  TENZIR_ASSERT(kind);
   return kind->match(std::forward<Fs>(fs)...);
 }
 template <class... Fs>
 auto expression::match(Fs&&... fs) const&& -> decltype(auto) {
-  TENZIR_ASSERT_CHEAP(kind);
+  TENZIR_ASSERT(kind);
   return kind->match(std::forward<Fs>(fs)...);
 }
 
@@ -448,7 +448,7 @@ auto inspect(Inspector& f, expression& x) -> bool {
   if constexpr (Inspector::is_loading) {
     x.kind = std::make_unique<expression_kind>();
   } else {
-    TENZIR_ASSERT_CHEAP(x.kind);
+    TENZIR_ASSERT(x.kind);
   }
   return f.apply(*x.kind);
 }
