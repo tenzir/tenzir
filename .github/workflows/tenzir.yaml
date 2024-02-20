@@ -61,14 +61,13 @@ jobs:
     outputs:
       version-matrix: ${{ steps.configure.outputs.version-matrix }}
       build-version: ${{ steps.configure.outputs.build-version }}
-      build-version-short: ${{ steps.configure.outputs.build-version-short }}
       before-sha: ${{ steps.configure.outputs.before-sha }}
       before-version: ${{ steps.configure.outputs.before-version }}
       release-version: ${{ steps.configure.outputs.release-version }}
       head-ref-slug: ${{ steps.configure.outputs.head-ref-slug }}
       base-ref-slug: ${{ steps.configure.outputs.base-ref-slug }}
-      cmake-version-args: ${{ steps.configure.outputs.cmake-version-args }}
       tenzir-container-ref: ${{ steps.configure.outputs.tenzir-container-ref }}
+      tenzir-version-build-metadata: ${{ steps.configure.outputs.tenzir-version-build-metadata }}
       run-changelog: ${{ steps.configure.outputs.run-changelog }}
       run-docs: ${{ steps.configure.outputs.run-docs }}
       run-docker-tenzir: ${{ steps.configure.outputs.run-docker-tenzir }}
@@ -118,40 +117,44 @@ jobs:
           echo "version-matrix=${version_matrix}" >> $GITHUB_OUTPUT
           # Set a bunch of version numbers depending on how we triggered the PR
           # so they're consistent between jobs.
-          build_version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
-          build_version_short="$(git describe --abbrev=10 --match='v[0-9]*')"
+          version="$(jq -r '."tenzir-version"' version.json)"
+          id_sha="${{ github.sha }}"
+          release_version="${version}"
+          build_version="${version}+g${id_sha:0:10}"
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             before_sha="${{ github.event.before }}"
           else
             before_sha="$(git merge-base origin/main HEAD)"
           fi
-          before_version="$(git describe --abbrev=10 --match='v[0-9]*' -- "${before_sha}")"
-          release_version="$(git describe --abbrev=0 --match='v[0-9]*')"
+          before_version="${version}+g${before_sha:0:10}"
           echo "build-version=${build_version}" >> $GITHUB_OUTPUT
-          echo "build-version-short=${build_version_short}" >> $GITHUB_OUTPUT
           echo "before-sha=${before_sha}" >> $GITHUB_OUTPUT
           echo "before-version=${before_version}" >> $GITHUB_OUTPUT
           echo "release-version=${release_version}" >> $GITHUB_OUTPUT
           # Inject the branch slugs for cache names.
           echo "head-ref-slug=${GITHUB_HEAD_REF_SLUG}" >> $GITHUB_OUTPUT
           echo "base-ref-slug=${GITHUB_BASE_REF_SLUG}" >> $GITHUB_OUTPUT
-          # For pull requests we make it possible to cache all layers by setting
-          # a fixed TENZIR_BUILD_OPTIONS for within a given pull request. We
-          # accept the downaside that this means that Docker images created
-          # within pull request triggers of this job display the merge-base
-          # version.
-          # Since the Docker build does not have the Git context, we set
-          # version fallbacks manually here.
+          if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
+            tenzir_version_build_metadata=""
+            tenzir_docker_version_build_metadata=""
+          else
+            tenzir_version_build_metadata="g${id_sha:0:10}"
+            tenzir_docker_version_build_metadata="${tenzir_version_build_metadata}"
+            # In Pull Requests we replace the normal commit hash based version
+            # suffix with the PR number. That way we get stable arguments to
+            # `docker build`, which is needed for layer caching to work.
+            if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+              tenzir_docker_version_build_metadata="pr${{ github.event.number }}"
+            fi
+          fi
+          echo "tenzir-version-build-metadata=${tenzir_version_build_metadata}" >> $GITHUB_OUTPUT
+          echo "tenzir-docker-version-build-metadata=${tenzir_dockdr_version_build_metadata}" >> $GITHUB_OUTPUT
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
-            tenzir_tag="${before_version}"
             tenzir_container_ref="${GITHUB_HEAD_REF_SLUG}"
           else
-            tenzir_tag="${build_version}"
             tenzir_container_ref="${{ github.sha }}"
           fi
           echo "tenzir-container-ref=${tenzir_container_ref}" >> $GITHUB_OUTPUT
-          cmake_version_args="-DTENZIR_VERSION_TAG:STRING=${tenzir_tag}"
-          echo "cmake-version-args=${cmake_version_args}" >> $GITHUB_OUTPUT
           #################################
           ######## Decide what jobs to run.
           #################################
@@ -261,9 +264,9 @@ jobs:
             exit 1
           fi
           docker_config="$(jq -c \
-            '."version" = $v | ."tags" = $ARGS.positional' \
+            '."version-build-metadata" = $vs | ."tags" = $ARGS.positional' \
             .github/workflows/docker-config-base.json \
-            --arg v "${{ steps.configure.outputs.build-version-short }}" \
+            --arg vs "${{ steps.configure.outputs.tenzir-docker-version-build-metadata }}" \
             --args -- "${tags[@]}")"
           # Clear push repos in case we're in a PR, but push the community
           # edition to ghcr.
@@ -338,8 +341,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Configure ssh-agent
         uses: webfactory/ssh-agent@v0.9.0
         with:
@@ -396,8 +397,6 @@ jobs:
           apt-get -y install git
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Install Dependencies
         run: ./scripts/debian/install-dev-dependencies.sh
       - name: Configure Build
@@ -480,8 +479,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Login to GitHub Container Registry
@@ -517,8 +514,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Login to GitHub Container Registry
@@ -545,8 +540,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Login to GitHub Container Registry
@@ -728,7 +721,7 @@ jobs:
             -DCPACK_PACKAGE_FILE_NAME:STRING="$PACKAGE_NAME" \
             -DCPACK_PACKAGING_INSTALL_PREFIX:STRING="/" \
             -DTENZIR_PLUGINS:STRING="${{ join(matrix.tenzir.bundled-plugins, ';') }}" \
-            ${{ needs.configure.outputs.cmake-version-args }} \
+            -DTENZIR_VERSION_BUILD_METADATA:STRING="${{ needs.configure.outputs.tenzir-version-build-metadata }}" \
             ${{ matrix.tenzir.cmake-extra-flags }}
       - name: Compile All Targets
         run: |
