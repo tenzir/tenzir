@@ -10,8 +10,17 @@
 
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/enum.hpp"
-#include "tenzir/detail/type_traits.hpp"
 #include "tenzir/location.hpp"
+
+namespace tenzir::detail {
+
+// TODO
+template <class T = void, class U>
+auto identity(U&& x) -> U&& {
+  return std::forward<U>(x);
+}
+
+} // namespace tenzir::detail
 
 namespace tenzir::tql2::ast {
 
@@ -136,7 +145,16 @@ struct expression {
 
   std::unique_ptr<expression_kind> kind;
 
-  friend auto inspect(auto& f, expression& x) -> bool;
+  template <class Inspector>
+  friend auto inspect(Inspector& f, expression& x) -> bool {
+    // TODO
+    if constexpr (Inspector::is_loading) {
+      x.kind = std::make_unique<expression_kind>();
+    } else {
+      TENZIR_ASSERT(x.kind);
+    }
+    return f.apply(*detail::identity<Inspector>(x.kind));
+  }
 };
 
 TENZIR_ENUM(binary_op, add, sub, mul, div, eq, neq, gt, ge, lt, le, and_, or_);
@@ -335,10 +353,7 @@ struct pipeline {
     } else {
       TENZIR_ASSERT(x.body);
     }
-    // TODO: What is this?
-    return f.apply(
-      *static_cast<std::enable_if_t<not detail::always_false_v<Inspector>,
-                                    decltype(body)&>>(x.body));
+    return f.apply(*detail::identity<Inspector>(x.body));
   }
 };
 
@@ -441,17 +456,6 @@ auto expression::match(Fs&&... fs) const&& -> decltype(auto) {
 // inline expression::expression(record x)
 //   : kind{std::make_unique<expression_kind>(std::move(x))} {
 // }
-
-template <class Inspector>
-auto inspect(Inspector& f, expression& x) -> bool {
-  // TODO
-  if constexpr (Inspector::is_loading) {
-    x.kind = std::make_unique<expression_kind>();
-  } else {
-    TENZIR_ASSERT(x.kind);
-  }
-  return f.apply(*x.kind);
-}
 
 } // namespace tenzir::tql2::ast
 
