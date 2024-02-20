@@ -40,52 +40,6 @@ group foo {
 ...
 */
 
-class operator_definition {
-public:
-  virtual ~operator_definition() = default;
-
-  virtual auto name() const -> std::string_view;
-};
-
-class entity_registry {
-public:
-  void add(std::unique_ptr<operator_definition> x);
-};
-
-class tql2_plugin : public plugin {
-public:
-  virtual void register_entities(entity_registry& r);
-};
-
-class sort2_operator final : public operator_definition {
-public:
-  auto name() const -> std::string_view override {
-    return "sort2";
-  };
-};
-
-class sort2_plugin final : public tql2_plugin {
-public:
-  auto name() const -> std::string override {
-    return "tenzir.sort_operator";
-  }
-
-  void register_entities(entity_registry& r) override {
-    r.add(std::make_unique<sort2_operator>());
-  }
-};
-
-class sort_operator_foo {
-public:
-  // ...
-};
-
-class sort_plugin {
-public:
-  auto from_ast() -> sort_operator_foo {
-    return sort_operator_foo{};
-  }
-};
 #endif
 
 namespace {
