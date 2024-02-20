@@ -71,7 +71,7 @@ struct expression_printer : printer_base<expression_printer> {
         case meta_extractor::internal:
           return printers::str(out_, "#internal");
       }
-      die("unreachable");
+      TENZIR_UNREACHABLE();
     }
 
     bool operator()(const type_extractor& e) const {

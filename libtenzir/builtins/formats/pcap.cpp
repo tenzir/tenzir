@@ -365,43 +365,43 @@ auto make_file_header(const table_slice& slice) -> std::optional<file_header> {
     // types are not as expected. This also applies to `to_packet_record`.
     if (key == "magic_number") {
       auto magic_number = caf::get_if<uint64_t>(&value);
-      TENZIR_ASSERT_CHEAP(magic_number);
+      TENZIR_ASSERT(magic_number);
       result.magic_number = detail::narrow_cast<uint32_t>(*magic_number);
       continue;
     }
     if (key == "major_version") {
       auto major_version = caf::get_if<uint64_t>(&value);
-      TENZIR_ASSERT_CHEAP(major_version);
+      TENZIR_ASSERT(major_version);
       result.major_version = detail::narrow_cast<uint16_t>(*major_version);
       continue;
     }
     if (key == "minor_version") {
       auto minor_version = caf::get_if<uint64_t>(&value);
-      TENZIR_ASSERT_CHEAP(minor_version);
+      TENZIR_ASSERT(minor_version);
       result.minor_version = detail::narrow_cast<uint16_t>(*minor_version);
       continue;
     }
     if (key == "reserved1") {
       auto reserved1 = caf::get_if<uint64_t>(&value);
-      TENZIR_ASSERT_CHEAP(reserved1);
+      TENZIR_ASSERT(reserved1);
       result.reserved1 = detail::narrow_cast<uint32_t>(*reserved1);
       continue;
     }
     if (key == "reserved2") {
       auto reserved2 = caf::get_if<uint64_t>(&value);
-      TENZIR_ASSERT_CHEAP(reserved2);
+      TENZIR_ASSERT(reserved2);
       result.reserved2 = detail::narrow_cast<uint32_t>(*reserved2);
       continue;
     }
     if (key == "snaplen") {
       auto snaplen = caf::get_if<uint64_t>(&value);
-      TENZIR_ASSERT_CHEAP(snaplen);
+      TENZIR_ASSERT(snaplen);
       result.snaplen = detail::narrow_cast<uint32_t>(*snaplen);
       continue;
     }
     if (key == "linktype") {
       auto linktype = caf::get_if<uint64_t>(&value);
-      TENZIR_ASSERT_CHEAP(linktype);
+      TENZIR_ASSERT(linktype);
       result.linktype = detail::narrow_cast<uint32_t>(*linktype);
       continue;
     }
@@ -435,19 +435,19 @@ auto to_packet_record(auto row) -> std::pair<packet_record, uint32_t> {
   for (const auto& [key, value] : row) {
     if (key == "linktype") {
       auto linktype_ptr = caf::get_if<uint64_t>(&value);
-      TENZIR_ASSERT_CHEAP(linktype_ptr);
+      TENZIR_ASSERT(linktype_ptr);
       linktype = detail::narrow_cast<uint32_t>(*linktype_ptr);
     } else if (key == "timestamp") {
       auto timestamp_ptr = caf::get_if<time>(&value);
-      TENZIR_ASSERT_CHEAP(timestamp_ptr);
+      TENZIR_ASSERT(timestamp_ptr);
       timestamp = *timestamp_ptr;
     } else if (key == "captured_packet_length") {
       auto captured_packet_length = caf::get_if<uint64_t>(&value);
-      TENZIR_ASSERT_CHEAP(captured_packet_length);
+      TENZIR_ASSERT(captured_packet_length);
       pkt.header.captured_packet_length = *captured_packet_length;
     } else if (key == "original_packet_length") {
       auto original_packet_length = caf::get_if<uint64_t>(&value);
-      TENZIR_ASSERT_CHEAP(original_packet_length);
+      TENZIR_ASSERT(original_packet_length);
       pkt.header.original_packet_length = *original_packet_length;
     } else if (key == "data") {
       if (auto str_data = caf::get_if<view<std::string>>(&value)) {
@@ -457,7 +457,7 @@ auto to_packet_record(auto row) -> std::pair<packet_record, uint32_t> {
           str_data->size()};
       } else {
         auto data = caf::get_if<view<blob>>(&value);
-        TENZIR_ASSERT_CHEAP(data);
+        TENZIR_ASSERT(data);
         pkt.data = *data;
       }
     } else {
@@ -544,7 +544,7 @@ public:
           auto array
             = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
           for (const auto& row : values(input_record, *array)) {
-            TENZIR_ASSERT_CHEAP(row);
+            TENZIR_ASSERT(row);
             if (auto diag = process_packet_row(*row)) {
               ctrl.diagnostics().emit(std::move(*diag));
               co_return;
@@ -569,7 +569,7 @@ public:
             co_return;
           }
           for (const auto& row : values(*pcap_record_type, *pcap_values)) {
-            TENZIR_ASSERT_CHEAP(row);
+            TENZIR_ASSERT(row);
             if (auto diag = process_packet_row(*row)) {
               ctrl.diagnostics().emit(std::move(*diag));
               co_return;
@@ -584,7 +584,7 @@ public:
         }
         if (not file_header_printed) {
           TENZIR_DEBUG("emitting PCAP file header");
-          TENZIR_ASSERT_CHEAP(current_file_header);
+          TENZIR_ASSERT(current_file_header);
           co_yield chunk::copy(as_bytes(*current_file_header), meta);
           file_header_printed = true;
         }

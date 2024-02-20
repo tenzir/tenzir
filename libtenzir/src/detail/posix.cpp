@@ -11,7 +11,6 @@
 #include "tenzir/config.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/narrow.hpp"
-#include "tenzir/detail/raise_error.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
 
@@ -21,11 +20,10 @@
 #include <sys/types.h>
 #include <sys/un.h>
 
-#include <cerrno>
 #include <cstring>
+#include <errno.h>
 #include <fcntl.h>
 #include <limits>
-#include <stdexcept>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>

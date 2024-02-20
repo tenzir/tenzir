@@ -169,7 +169,8 @@ auto make_unflattened_struct_array(
   // foo struct array with bar and baz as children
   std::unordered_set<unflatten_field*> handled_fields;
   for (const auto& field : fields) {
-    TENZIR_ASSERT(original_field_name_to_new_field_map.contains(field->name()));
+    TENZIR_ASSERT_EXPENSIVE(
+      original_field_name_to_new_field_map.contains(field->name()));
     auto* f = original_field_name_to_new_field_map.at(field->name());
     if (not handled_fields.contains(f)) {
       new_columns.push_back(f->to_arrow());
@@ -190,7 +191,7 @@ auto append_columns(const record_type& schema,
   // of the value 1, call .data() on that and pass it in here instead.
   const auto append_status
     = builder.AppendValues(array.length(), /*valid_bytes*/ nullptr);
-  TENZIR_ASSERT_CHEAP(append_status.ok(), append_status.ToString().c_str());
+  TENZIR_ASSERT(append_status.ok(), append_status.ToString().c_str());
   for (auto field_index = 0; field_index < array.num_fields(); ++field_index) {
     const auto field_type = schema.field(field_index).type;
     const auto& field_array = *array.field(field_index);
@@ -217,8 +218,8 @@ auto append_columns(const record_type& schema,
           const auto append_array_slice_result
             = concrete_field_builder.AppendArraySlice(
               *concrete_field_array.data(), 0, array.length());
-          TENZIR_ASSERT_CHEAP(append_array_slice_result.ok(),
-                              append_array_slice_result.ToString().c_str());
+          TENZIR_ASSERT(append_array_slice_result.ok(),
+                        append_array_slice_result.ToString().c_str());
         } else {
           // For complex types and extension types we cannot use the
           // AppendArraySlice API, so we need to take a slight detour by
@@ -239,8 +240,7 @@ auto append_columns(const record_type& schema,
           }();
           const auto reserve_result
             = concrete_field_builder.Reserve(array.length());
-          TENZIR_ASSERT_CHEAP(reserve_result.ok(),
-                              reserve_result.ToString().c_str());
+          TENZIR_ASSERT(reserve_result.ok(), reserve_result.ToString().c_str());
           for (auto row = 0; row < array.length(); ++row) {
             if (concrete_field_array_storage.IsNull(row)) {
               const auto append_null_result
@@ -555,11 +555,11 @@ table_slice concatenate(std::vector<table_slice> slices) {
   if (slices.size() == 1)
     return std::move(slices[0]);
   auto schema = slices[0].schema();
-  TENZIR_ASSERT(std::all_of(slices.begin(), slices.end(),
-                            [&](const auto& slice) {
-                              return slice.schema() == schema;
-                            }),
-                "concatenate requires slices to be homogeneous");
+  TENZIR_ASSERT_EXPENSIVE(std::all_of(slices.begin(), slices.end(),
+                                      [&](const auto& slice) {
+                                        return slice.schema() == schema;
+                                      }),
+                          "concatenate requires slices to be homogeneous");
   auto builder = caf::get<record_type>(schema).make_arrow_builder(
     arrow::default_memory_pool());
   auto arrow_schema = schema.to_arrow_schema();
@@ -1128,7 +1128,7 @@ auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
   // additional transformation to rename them in case we detect any.
   transformations.clear();
   const auto& layout = caf::get<record_type>(slice.schema());
-  TENZIR_ASSERT(layout.num_fields() == layout.num_leaves());
+  TENZIR_ASSERT_EXPENSIVE(layout.num_fields() == layout.num_leaves());
   for (const auto& leaf : layout.leaves()) {
     size_t num_occurences = 0;
     if (std::any_of(transformations.begin(), transformations.end(),
@@ -1165,7 +1165,8 @@ auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
       }
     }
   }
-  TENZIR_ASSERT(std::is_sorted(transformations.begin(), transformations.end()));
+  TENZIR_ASSERT_EXPENSIVE(
+    std::is_sorted(transformations.begin(), transformations.end()));
   slice = transform_columns(slice, transformations);
   // Renaming cannot fail.
   TENZIR_ASSERT(slice.rows() > 0);

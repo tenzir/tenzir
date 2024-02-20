@@ -369,11 +369,11 @@ struct zeek_printer {
     }
 
     auto operator()(view<pattern>) noexcept -> bool {
-      die("unreachable");
+      TENZIR_UNREACHABLE();
     }
 
     auto operator()(view<map>) noexcept -> bool {
-      die("unreachable");
+      TENZIR_UNREACHABLE();
     }
 
     auto operator()(view<std::string> x) noexcept -> bool {
@@ -822,7 +822,7 @@ public:
       auto did_schema_change = *last_schema != input_schema;
       *last_schema = input_schema;
       for (const auto& row : values(input_type, *array)) {
-        TENZIR_ASSERT_CHEAP(row);
+        TENZIR_ASSERT(row);
         if (first) {
           if (did_schema_change) {
             if (not is_first_schema) {
@@ -834,7 +834,7 @@ public:
           first = false;
         }
         const auto ok = printer.print_values(out_iter, *row);
-        TENZIR_ASSERT_CHEAP(ok);
+        TENZIR_ASSERT(ok);
         out_iter = fmt::format_to(out_iter, "\n");
       }
       auto chunk = chunk::make(std::move(buffer),

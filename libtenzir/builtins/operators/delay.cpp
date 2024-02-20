@@ -86,7 +86,7 @@ public:
                                                         slice.schema(), *index);
         }
       }
-      TENZIR_ASSERT_CHEAP(resolved_field != resolved_fields.end());
+      TENZIR_ASSERT(resolved_field != resolved_fields.end());
       if (not resolved_field->second) {
         co_yield std::move(slice);
         continue;

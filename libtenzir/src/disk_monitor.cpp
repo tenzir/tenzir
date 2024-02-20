@@ -212,10 +212,11 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                   [](const auto& lhs, const auto& rhs) {
                     return lhs.id < rhs.id;
                   });
-        TENZIR_ASSERT(std::is_sorted(blacklist.begin(), blacklist.end(),
-                                     [](const auto& lhs, const auto& rhs) {
-                                       return lhs.id < rhs.id;
-                                     }));
+        TENZIR_ASSERT_EXPENSIVE(
+          std::is_sorted(blacklist.begin(), blacklist.end(),
+                         [](const auto& lhs, const auto& rhs) {
+                           return lhs.id < rhs.id;
+                         }));
         std::vector<partition_diskstate> good_partitions;
         std::set_difference(partitions.begin(), partitions.end(),
                             blacklist.begin(), blacklist.end(),

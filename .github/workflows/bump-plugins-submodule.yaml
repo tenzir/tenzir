@@ -31,8 +31,8 @@ jobs:
         id: generate_token
         uses: actions/create-github-app-token@v1
         with:
-          app-id: ${{ vars.TENZIR_TESTAPP_APP_ID }}
-          private-key: ${{ secrets.TENZIR_TESTAPP_PRIVATE_KEY }}
+          app-id: ${{ vars.TENZIR_AUTOBUMPER_APP_ID }}
+          private-key: ${{ secrets.TENZIR_AUTOBUMPER_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
       - name: Bump plugins submodule
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -46,7 +46,7 @@ jobs:
           git config --global user.name 'CI Bot'
           git config --global user.email 'tenzir-ci-app@users.noreply.github.com'
           git remote set-url origin https://x-access-token:$GITHUB_APP_TOKEN@github.com/tenzir/tenzir.git
-          git -C contrib/tenzir-plugins fetch origin main
+          git -C contrib/tenzir-plugins fetch -q origin main
 
           plugins_sha=$(git -C contrib/tenzir-plugins rev-parse HEAD)
           plugins_sha_short=$(git -C contrib/tenzir-plugins rev-parse --short HEAD)
@@ -57,13 +57,13 @@ jobs:
             # Auto-merge the plugins PR and update 'tenzir-plugins/main'.
             # gh pr --repo tenzir/tenzir-plugins list
             pr_number=$(gh pr --repo tenzir/tenzir-plugins list --search $plugins_sha --json number -q .[0].number)
-            echo $pr_number
             [ $pr_number ] # Assert the pr number was non-empty
-            gh pr --repo tenzir/tenzir-plugins merge $pr_number --merge --match-head-commit ${plugins_sha}
+            gh pr --repo tenzir/tenzir-plugins merge $pr_number --admin --merge --match-head-commit ${plugins_sha}
+
+            # Fetch and checkout the newly created merge commit
+            git -C contrib/tenzir-plugins pull -q origin main
 
             # Create a new commit for the updated submodule.
-            git checkout main # TODO: Is this necessary or are we already on main?
-            git -C contrib/tenzir-plugins checkout main
             new_plugins_main_sha=$(git -C contrib/tenzir-plugins rev-parse --short origin/main)
             nix/update-plugins.sh
             git add contrib/tenzir-plugins

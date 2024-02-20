@@ -184,7 +184,7 @@ align_array_to_type(const tenzir::type& t,
         struct_array->null_bitmap(), struct_array->null_count());
     },
     [&](const auto&) -> std::shared_ptr<arrow::Array> {
-      TENZIR_ASSERT(t.to_arrow_type()->Equals(array->type()));
+      TENZIR_ASSERT_EXPENSIVE(t.to_arrow_type()->Equals(array->type()));
       return {};
     },
   };
@@ -211,7 +211,7 @@ restore_enum_chunk_array(const tenzir::type& t,
       return map_chunked_array(t, array, align_array_to_type);
     },
     [&](const auto&) -> std::shared_ptr<arrow::ChunkedArray> {
-      TENZIR_ASSERT(t.to_arrow_type()->Equals(array->type()));
+      TENZIR_ASSERT_EXPENSIVE(t.to_arrow_type()->Equals(array->type()));
       return {};
     },
   };

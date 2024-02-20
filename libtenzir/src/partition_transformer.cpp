@@ -50,7 +50,7 @@ void store_or_fulfill(
   } else {
     auto* path_data = std::get_if<partition_transformer_state::path_data>(
       &self->state.persist);
-    TENZIR_ASSERT_CHEAP(path_data != nullptr, "unexpected variant content");
+    TENZIR_ASSERT(path_data != nullptr, "unexpected variant content");
     self->state.fulfill(self, std::move(stream_data), std::move(*path_data));
   }
 }
@@ -65,7 +65,7 @@ void store_or_fulfill(
   } else {
     auto* stream_data = std::get_if<partition_transformer_state::stream_data>(
       &self->state.persist);
-    TENZIR_ASSERT_CHEAP(stream_data != nullptr, "unexpected variant content");
+    TENZIR_ASSERT(stream_data != nullptr, "unexpected variant content");
     self->state.fulfill(self, std::move(*stream_data), std::move(path_data));
   }
 }
@@ -79,9 +79,8 @@ void quit_or_stall(
   if (std::holds_alternative<std::monostate>(shutdown_state)) {
     shutdown_state = std::move(result);
   } else {
-    TENZIR_ASSERT_CHEAP(
-      std::holds_alternative<stores_are_finished>(shutdown_state),
-      "unexpected variant content");
+    TENZIR_ASSERT(std::holds_alternative<stores_are_finished>(shutdown_state),
+                  "unexpected variant content");
     result.promise.deliver(std::move(result.result));
     self->quit();
   }
@@ -98,7 +97,7 @@ void quit_or_stall(
     shutdown_state = std::move(result);
   } else {
     auto* finished = std::get_if<transformer_is_finished>(&shutdown_state);
-    TENZIR_ASSERT_CHEAP(finished != nullptr, "unexpected variant content");
+    TENZIR_ASSERT(finished != nullptr, "unexpected variant content");
     finished->promise.deliver(std::move(finished->result));
     self->quit();
   }
@@ -197,7 +196,8 @@ void partition_transformer_state::update_type_ids_and_indexers(
   ids.append_bits(false, first - ids.size());
   ids.append_bits(true, last - first);
   // Push the event data to the indexers.
-  TENZIR_ASSERT(slice.columns() == caf::get<record_type>(schema).num_leaves());
+  TENZIR_ASSERT_EXPENSIVE(slice.columns()
+                          == caf::get<record_type>(schema).num_leaves());
   for (size_t flat_index = 0;
        const auto& [field, offset] : caf::get<record_type>(schema).leaves()) {
     const auto qf = qualified_record_field{schema, offset};

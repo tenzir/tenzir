@@ -155,7 +155,7 @@ connect_to_node(caf::scoped_actor& self, const caf::settings& opts) {
                                      details::get_deadline(timeout));
   auto result = caf::expected<node_actor>{caf::error{}};
   // `get_node_endpoint()` will add a default value.
-  TENZIR_ASSERT_CHEAP(node_endpoint->port.has_value());
+  TENZIR_ASSERT(node_endpoint->port.has_value());
   self
     ->request(connector_actor, caf::infinite, atom::connect_v,
               connect_request{node_endpoint->port->number(),

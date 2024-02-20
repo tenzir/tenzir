@@ -33,8 +33,8 @@ enum class flatbuffer_type {
 /// @pre chunk != nullptr
 /// @pre chunk->size() >= sizeof(flatbuffers::uoffset_t)
 inline auto size_prefixed_flatbuffer_size(const chunk_ptr& chunk) {
-  TENZIR_ASSERT_CHEAP(chunk);
-  TENZIR_ASSERT_CHEAP(chunk->size() >= sizeof(flatbuffers::uoffset_t));
+  TENZIR_ASSERT(chunk);
+  TENZIR_ASSERT(chunk->size() >= sizeof(flatbuffers::uoffset_t));
   // The version of FlatBuffers we're using in the Dockerfile doesn't have
   // GetSizePrefixedBufferLength, so we take GetPrefixedSize and add the buffer
   // length on top manually.
@@ -190,7 +190,7 @@ public:
                     "unhandled FlatBuffers Type");
     }
     auto chunk = chunk::make(builder.Release());
-    TENZIR_ASSERT_CHEAP(chunk);
+    TENZIR_ASSERT(chunk);
     *this = flatbuffer{chunk};
   }
 

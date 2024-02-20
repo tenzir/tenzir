@@ -57,9 +57,9 @@ auto try_plugin_by_url(located<std::string_view> src)
     return {};
   // In a valid URL, the first ':' is guaranteed to separate the scheme from
   // the rest
-  TENZIR_ASSERT(src.inner.find(':') != std::string::npos);
   try_plugin_by_url_result<Plugin> result{};
   auto scheme_len = src.inner.find(':');
+  TENZIR_ASSERT(scheme_len != std::string::npos);
   result.scheme = make_located_string_view(src, 0, scheme_len);
   auto non_scheme_offset = scheme_len + 1;
   if (src.inner.substr(non_scheme_offset).starts_with("//"))

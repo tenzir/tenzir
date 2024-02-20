@@ -142,6 +142,10 @@ public:
   /// result.
   auto finish_assert_one_slice(std::string_view name = "") -> table_slice;
 
+  /// Same as `finish_as_table_slice(name)`, but asserts that there is only one
+  /// result.
+  auto finish_assert_one_array() -> series;
+
   /// Returns the full type, which can be expensive. Use `kind()` if possible.
   auto type() -> type;
 
