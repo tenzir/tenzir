@@ -78,6 +78,13 @@ indicate optionality.
 Every type has zero or more **attributes**, which are free-form key-value pairs
 to enrich types with custom semantics.
 
+For duration types, the attribute `unit` can be set to customize how numeric
+values are interpreted by parsers. For example, `#unit=s` makes it so that the
+number `1708430755` is parsed as `"1708430755s"`. The `unit` attribute can also
+be set for timestamps, which means that numeric values are interpreted as
+offsets from the Unix epoch. For example, `#unit=s` makes it so that
+`1708430755` is parsed as `"2023-02-20T12:05:55"`.
+
 ### Aliases
 
 An alias wraps an existing type under a new name. Aliases are first-class types,

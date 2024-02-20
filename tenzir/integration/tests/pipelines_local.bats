@@ -499,3 +499,21 @@ setup() {
   check ! tenzir 'parse line kv "(foo)(bar)" ""'
   check ! tenzir 'parse line kv "foo(?=bar)" ""'
 }
+
+@test "Parse JSON with numeric timestamp" {
+  local schemas="$BATS_RUN_TMPDIR/tmp/$BATS_TEST_NAME"
+  mkdir -p $schemas
+  local schema="$schemas/foo_bar.schema"
+  cat >$schema <<EOF
+type foo_bar = record {
+  foo: time #unit=ms,
+  bar: time #unit=ns,
+}
+EOF
+  check tenzir --schema-dirs=$schemas "from stdin read json --schema=foo_bar" <<EOF
+{
+  "foo": 1707736115592,
+  "bar": 1707736115592000000
+}
+EOF
+}

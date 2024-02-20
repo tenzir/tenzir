@@ -1163,70 +1163,92 @@ auto builder_ref::try_atom(detail::atom_view value) -> caf::expected<void> {
     atom(value);
     return {};
   }
-  auto f = [&]<class FromData, class ToType>(
-             const FromData& value, tag<ToType>) -> caf::expected<void> {
+  auto cast = [&]<class FromData, class ToType>(
+                const FromData& value,
+                tag<ToType>) -> caf::expected<type_to_data_t<ToType>> {
     using FromType = atom_view_to_type_t<FromData>;
-    using ToData = type_to_data_t<ToType>;
-    if constexpr (not atom_type<ToType>) {
-      return caf::make_error(ec::type_clash,
-                             fmt::format("expected {} but got {}",
-                                         type_kind::of<ToType>,
-                                         type_kind::of<FromType>));
-    } else {
-      auto result = caf::expected<ToData>{ToData{}};
-      auto full_ty = type();
-      auto ty = caf::get<ToType>(full_ty);
-      // TODO: Refactor this logic.
-      if constexpr (std::same_as<FromType, enumeration_type>) {
-        // We have to special case this, because we cannot construct a proper
-        // `FromType` instance just from the data.
-        if constexpr (std::same_as<ToType, enumeration_type>) {
-          if (ty.field(value).empty()) {
-            return caf::make_error(ec::invalid_argument,
-                                   fmt::format("enumeration type {} does not "
-                                               "accept value {}",
-                                               full_ty, value));
-          }
-          result = value;
-        } else {
-          // TODO: We could consider allowing some conversions from enumeration.
-          // However, this code path is normally not taken anyway. For example,
-          // the JSON parser first has to resolve the enumeration string, which
-          // requires this having enumeration type.
-          return caf::make_error(ec::convert_error,
-                                 fmt::format("cannot convert enumeration to {}",
-                                             type_kind::of<ToType>));
+    static_assert(atom_type<ToType>);
+    static_assert(atom_type<FromType>);
+    auto full_ty = type();
+    auto ty = caf::get<ToType>(full_ty);
+    // TODO: Refactor this logic.
+    if constexpr (std::same_as<FromType, enumeration_type>) {
+      // We have to special case this, because we cannot construct a proper
+      // `FromType` instance just from the data.
+      if constexpr (std::same_as<ToType, enumeration_type>) {
+        if (ty.field(value).empty()) {
+          return caf::make_error(ec::invalid_argument,
+                                 fmt::format("enumeration type {} does not "
+                                             "accept value {}",
+                                             full_ty, value));
         }
-      } else if constexpr (std::same_as<ToType, duration_type>) {
-        // TODO: Should we prefer to error if no unit was specified?
-        auto unit = full_ty.attribute("unit").value_or("s");
-        if constexpr (
-          // TODO: These special cases were extracted from `cast.hpp`.
-          // We should make it so that this is not necessary.
-          std::same_as<FromType, int64_type>
-          || std::same_as<FromType, uint64_type>
-          || std::same_as<FromType, double_type>) {
-          result = cast_value(FromType{}, value, ty, unit);
-        } else if constexpr (std::same_as<FromType, string_type>) {
-          result = cast_value(FromType{}, value, ty);
-          if (not result) {
-            result
-              = cast_value(FromType{}, fmt::format("{} {}", value, unit), ty);
-          }
-        } else {
-          result = cast_value(FromType{}, value, ty);
-        }
+        return value;
       } else {
-        result = cast_value(FromType{}, value, ty);
+        // TODO: We could consider allowing some conversions from enumeration.
+        // However, this code path is normally not taken anyway. For example,
+        // the JSON parser first has to resolve the enumeration string, which
+        // requires this having enumeration type.
+        return caf::make_error(ec::convert_error,
+                               fmt::format("cannot convert enumeration to {}",
+                                           type_kind::of<ToType>));
       }
+    } else if constexpr (std::same_as<ToType, duration_type>) {
+      // TODO: Should we prefer to error if no unit was specified?
+      auto unit = full_ty.attribute("unit").value_or("s");
+      if constexpr (
+        // TODO: These special cases were extracted from `cast.hpp`.
+        // We should make it so that this is not necessary.
+        std::same_as<FromType, int64_type>
+        || std::same_as<FromType, uint64_type>
+        || std::same_as<FromType, double_type>) {
+        return cast_value(FromType{}, value, ty, unit);
+      } else if constexpr (std::same_as<FromType, string_type>) {
+        auto result = cast_value(FromType{}, value, ty);
+        if (not result) {
+          result
+            = cast_value(FromType{}, fmt::format("{} {}", value, unit), ty);
+        }
+        return result;
+      }
+    } else if constexpr (std::same_as<ToType, time_type>) {
+      if constexpr (std::same_as<FromType, int64_type>
+                    || std::same_as<FromType, uint64_type>
+                    || std::same_as<FromType, double_type>) {
+        auto unit = full_ty.attribute("unit");
+        if (unit) {
+          auto since_epoch
+            = cast_value(FromType{}, value, duration_type{}, *unit);
+          if (not since_epoch) {
+            return since_epoch.error();
+          }
+          return time{} + *since_epoch;
+        }
+      }
+    }
+    return cast_value(FromType{}, value, ty);
+  };
+  auto insert = [&]<class ToType>(tag<ToType>) -> caf::expected<void> {
+    if constexpr (atom_type<ToType>) {
+      auto result = std::visit(
+        [&](auto& value) {
+          return cast(value, tag_v<ToType>);
+        },
+        value);
       if (not result) {
         return result.error();
       }
-      atom(*result);
+      atom(detail::atom_view{*result});
       return {};
+    } else {
+      auto from_kind = value.match([]<class T>(const T&) {
+        return type_kind::of<atom_view_to_type_t<T>>;
+      });
+      return caf::make_error(ec::type_clash,
+                             fmt::format("expected {} but got {}",
+                                         type_kind::of<ToType>, from_kind));
     }
   };
-  return std::visit(f, value, kind());
+  return std::visit(insert, kind());
 }
 
 void builder_ref::null() {
