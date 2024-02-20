@@ -10,7 +10,9 @@ WORKDIR /tmp/tenzir
 
 COPY scripts ./scripts
 
-RUN ./scripts/debian/install-dev-dependencies.sh && rm -rf /var/lib/apt/lists/*
+RUN ./scripts/debian/install-dev-dependencies.sh && \
+    ./scripts/debian/build-fluent-bit.sh && \
+    rm -rf /var/lib/apt/lists/*
 
 # Tenzir
 COPY changelog ./changelog
@@ -91,6 +93,7 @@ COPY --from=development --chown=tenzir:tenzir $PREFIX/ $PREFIX/
 COPY --from=development --chown=tenzir:tenzir /var/cache/tenzir/ /var/cache/tenzir
 COPY --from=development --chown=tenzir:tenzir /var/lib/tenzir/ /var/lib/tenzir
 COPY --from=development --chown=tenzir:tenzir /var/log/tenzir/ /var/log/tenzir
+COPY --from=development /tmp/fluent-bit/build/*.deb /root
 
 RUN apt-get update && \
     apt-get -y --no-install-recommends install \
@@ -128,9 +131,8 @@ RUN apt-get update && \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
     apt-get -y --no-install-recommends install libarrow1500 libparquet1500 && \
-    wget "https://storage.googleapis.com/tenzir-public-data/fluent-bit-packages/debian/bookworm/fluent-bit_2.1.10_amd64.deb" && \
-    apt-get -y --no-install-recommends install ./fluent-bit_2.1.10_amd64.deb && \
-    rm ./fluent-bit_2.1.10_amd64.deb && \
+    apt-get -y --no-install-recommends install /root/fluent-bit_*.deb && \
+    rm /root/fluent-bit_*.deb && \
     rm -rf /var/lib/apt/lists/*
 
 USER tenzir:tenzir

@@ -659,8 +659,14 @@ jobs:
           git submodule update --init --recursive libtenzir
           git submodule update --init --recursive plugins
           git submodule update --init --recursive tenzir
-      - name: Install Dependencies
-        run: ./${{ matrix.tenzir.dependencies-script-path }}
+      - name: Install Dependencies (Debian)
+        if: ${{ matrix.tenzir.name == 'Debian' }}
+        run: |
+          ./scripts/debian/install-dev-dependencies.sh
+          ./scripts/debian/install-fluent-bit.sh
+      - name: Install Dependencies (macOS)
+        if: ${{ matrix.tenzir.name == 'macOS' }}
+        run: ./scripts/macOS/install-dev-dependencies.sh
       - name: Setup Python
         if: ${{ matrix.tenzir.name == 'macOS' }}
         uses: actions/setup-python@v5
@@ -897,6 +903,7 @@ jobs:
             apt-transport-https \
             curl
           ./scripts/debian/install-dev-dependencies.sh
+          ./scripts/debian/install-fluent-bit.sh
       - name: Determine Tenzir Package Name
         id: configure
         run: |
