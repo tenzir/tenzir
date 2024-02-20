@@ -117,7 +117,7 @@ constexpr auto SPEC_V0 = R"_(
                 type: bool
                 example: true
                 default: false
-                description: Use an experimental, more simple format for the contained schema.
+                description: Use an experimental, more simple format for the contained schema, and render durations as numbers representing seconds as opposed to human-readable strings.
     responses:
       200:
         description: Success.
@@ -688,6 +688,7 @@ struct serve_handler_state {
     auto printer = json_printer{{
       .indentation = 0,
       .oneline = true,
+      .numeric_durations = use_simple_format,
     }};
     auto result
       = next_continuation_token.empty()

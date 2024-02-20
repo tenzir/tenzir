@@ -637,7 +637,7 @@ paths:
                   type: bool
                   example: true
                   default: false
-                  description: Use an experimental, more simple format for the contained schema.
+                  description: Use an experimental, more simple format for the contained schema, and render durations as numbers representing seconds as opposed to human-readable strings.
       responses:
         200:
           description: Success.
