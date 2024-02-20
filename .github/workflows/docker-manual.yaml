@@ -35,8 +35,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Fetch Tags
         run: git fetch origin +refs/tags/*:refs/tags/*
       - name: Calculate Version
