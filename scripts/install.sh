@@ -90,7 +90,7 @@ echo "Found ${platform}."
 
 # The caller can supply a package URL with an environment variable. This should
 # only be used for testing modifications to the packaging.
-if [ -n "${TENZIR_PACKAGE_URL}" ]
+if [ -n "${TENZIR_PACKAGE_URL:-}" ]
 then
   package_url="${TENZIR_PACKAGE_URL}"
 else
