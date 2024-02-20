@@ -64,7 +64,12 @@ codename="$(lsb_release --codename --short)"
 wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-${codename}.deb"
 apt-get -y --no-install-recommends install ./"apache-arrow-apt-source-latest-${codename}.deb"
 apt-get update
-apt-get -y --no-install-recommends install libarrow-dev libprotobuf-dev libparquet-dev
+# The apt download sometimes fails with a 403. We employ a similar workaround as
+# arrow itself: https://github.com/apache/arrow/pull/36836.
+# See also: https://github.com/apache/arrow/issues/35292.
+apt-get -y --no-install-recommends install libarrow-dev libprotobuf-dev libparquet-dev || \
+  apt-get -y --no-install-recommends install libarrow-dev libprotobuf-dev libparquet-dev || \
+  apt-get -y --no-install-recommends install libarrow-dev libprotobuf-dev libparquet-dev
 rm ./"apache-arrow-apt-source-latest-${codename}.deb"
 
 # Node 18.x and Yarn
