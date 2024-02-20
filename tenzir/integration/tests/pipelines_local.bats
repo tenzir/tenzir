@@ -506,8 +506,8 @@ setup() {
   local schema="$schemas/foo_bar.schema"
   cat >$schema <<EOF
 type foo_bar = record {
-  foo: time #since_epoch_unit=ms,
-  bar: time #since_epoch_unit=ns,
+  foo: time #unit=ms,
+  bar: time #unit=ns,
 }
 EOF
   check tenzir --schema-dirs=$schemas "from stdin read json --schema=foo_bar" <<EOF

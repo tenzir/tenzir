@@ -1214,7 +1214,7 @@ auto builder_ref::try_atom(detail::atom_view value) -> caf::expected<void> {
       if constexpr (std::same_as<FromType, int64_type>
                     || std::same_as<FromType, uint64_type>
                     || std::same_as<FromType, double_type>) {
-        auto unit = full_ty.attribute("since_epoch_unit");
+        auto unit = full_ty.attribute("unit");
         if (unit) {
           auto since_epoch
             = cast_value(FromType{}, value, duration_type{}, *unit);
