@@ -40,21 +40,12 @@ With this input, the parser will produce the following output, with the schema n
   "app_name": "evntslog",
   "process_id": "1370",
   "message_id": "ID47",
-  "structured_data": [
-    {
-      "id": "exampleSDID@32473",
-      "params": [
-        {
-          "key": "eventSource",
-          "value": "Application"
-        },
-        {
-          "key": "eventID",
-          "value": "1011"
-        }
-      ]
+  "structured_data": {
+    "exampleSDID@32473": {
+      "eventSource": "Application",
+      "eventID": 1011
     }
-  ],
+  },
   "message": "Event log entry"
 }
 ```

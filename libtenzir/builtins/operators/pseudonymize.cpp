@@ -191,7 +191,7 @@ public:
       if (byte_size == 1) {
         byte.append("0");
       }
-      TENZIR_ASSERT_CHEAP(i < config.seed_bytes.size());
+      TENZIR_ASSERT(i < config.seed_bytes.size());
       config.seed_bytes[i] = std::strtoul(byte.c_str(), 0, 16);
     }
     return {

@@ -717,19 +717,22 @@ class context {
 public:
   using parameter_map
     = std::unordered_map<std::string, std::optional<std::string>>;
+  using make_query_type
+    = std::function<caf::expected<expression>(parameter_map)>;
 
   /// Information about a context update that gets propagated to live lookups.
   struct update_result {
     record update_info;
     // Function for emitting an updated expression. Used for retroactive lookups.
-    std::function<caf::expected<expression>(parameter_map)> make_query = {};
+    make_query_type make_query = {};
   };
 
   virtual ~context() noexcept = default;
 
-  /// Emits context information for every event in `slice` in order.
-  virtual auto apply(table_slice slice, parameter_map parameters) const
-    -> caf::expected<std::vector<series>>
+  virtual auto context_type() const -> std::string = 0;
+
+  /// Emits context information for every event in `array` in order.
+  virtual auto apply(series array) const -> caf::expected<std::vector<series>>
     = 0;
 
   /// Inspects the context.
@@ -740,22 +743,19 @@ public:
     -> caf::expected<update_result>
     = 0;
 
-  /// Updates the context.
-  virtual auto update(chunk_ptr bytes, parameter_map parameters)
-    -> caf::expected<update_result>
-    = 0;
-
-  /// Updates the context.
-  virtual auto update(parameter_map parameters) -> caf::expected<update_result>
-    = 0;
+  /// Clears the context state, with optional parameters.
+  virtual auto reset(parameter_map parameters) -> caf::expected<record> = 0;
 
   /// Create a snapshot of the initial expression.
   virtual auto snapshot(parameter_map parameters) const
     -> caf::expected<expression>
     = 0;
 
-  // Serializes a context for persistence.
+  /// Serializes a context for persistence.
   virtual auto save() const -> caf::expected<chunk_ptr> = 0;
+
+  /// Returns a callback for retroactive lookups.
+  virtual auto make_query() -> make_query_type = 0;
 };
 
 class context_plugin : public virtual plugin {
@@ -973,8 +973,9 @@ template <class Plugin>
 const Plugin* find(std::string_view name) noexcept {
   const auto& plugins = get();
   const auto found = std::find(plugins.begin(), plugins.end(), name);
-  if (found == plugins.end())
+  if (found == plugins.end()) {
     return nullptr;
+  }
   return found->template as<Plugin>();
 }
 
@@ -997,9 +998,11 @@ find_operator(std::string_view name) noexcept {
 
 template <class Plugin>
 generator<const Plugin*> get() noexcept {
-  for (auto const& plugin : get())
-    if (auto const* specific_plugin = plugin.as<Plugin>())
+  for (auto const& plugin : get()) {
+    if (auto const* specific_plugin = plugin.as<Plugin>()) {
       co_yield specific_plugin;
+    }
+  }
 }
 
 } // namespace tenzir::plugins

@@ -47,53 +47,25 @@ public:
     // nop
   }
 
-  /// Emits context information for every event in `slice` in order.
-  auto apply(table_slice slice, context::parameter_map parameters) const
-    -> caf::expected<std::vector<series>> override {
-    auto resolved_slice = resolve_enumerations(slice);
-    auto field_name = std::optional<std::string>{};
-    for (const auto& [key, value] : parameters) {
-      if (key == "field") {
-        if (not value) {
-          return caf::make_error(ec::invalid_argument,
-                                 "invalid argument type for `field`: expected "
-                                 "a string");
-        }
-        field_name = *value;
-        continue;
-      }
-    }
-    if (not field_name) {
-      return caf::make_error(ec::invalid_argument, "missing argument `field`");
-    }
-    auto field_builder = series_builder{};
-    auto column_offset = slice.schema().resolve_key_or_concept(*field_name);
-    if (not column_offset) {
-      for (auto i = size_t{0}; i < slice.rows(); ++i) {
-        field_builder.null();
-      }
-      return field_builder.finish();
-    }
-    auto keys = series{resolved_slice, *column_offset};
-    for (const auto& value : keys.values()) {
+  auto context_type() const -> std::string override {
+    return "lookup-table";
+  }
+
+  auto apply(series s) const -> caf::expected<std::vector<series>> override {
+    auto builder = series_builder{};
+    for (const auto& value : s.values()) {
       if (auto it = context_entries.find(value); it != context_entries.end()) {
-        auto r = field_builder.record();
-        r.field("key", it->first);
-        r.field("context", it->second);
-        r.field("timestamp", std::chrono::system_clock::now());
+        builder.data(it->second);
       } else {
-        field_builder.null();
+        builder.null();
       }
     }
-    return field_builder.finish();
+    return builder.finish();
   }
 
   auto snapshot(parameter_map parameters) const
     -> caf::expected<expression> override {
     auto column = parameters["field"];
-    if (not column) {
-      return caf::make_error(ec::invalid_argument, "missing 'field' parameter");
-    }
     auto keys = list{};
     keys.reserve(context_entries.size());
     auto first_index = std::optional<size_t>{};
@@ -144,7 +116,7 @@ public:
         }
       }
     }
-    TENZIR_ASSERT_CHEAP(slice.rows() != 0);
+    TENZIR_ASSERT(slice.rows() != 0);
     if (not parameters.contains("key")) {
       return caf::make_error(ec::invalid_argument, "missing 'key' parameter");
     }
@@ -167,7 +139,7 @@ public:
     auto key_it = key_values.begin();
     auto context_it = context_values.begin();
     while (key_it != key_values.end()) {
-      TENZIR_ASSERT_CHEAP(context_it != context_values.end());
+      TENZIR_ASSERT(context_it != context_values.end());
       auto materialized_key = materialize(*key_it);
       context_entries.insert_or_assign(materialized_key,
                                        materialize(*context_it));
@@ -175,9 +147,30 @@ public:
       ++key_it;
       ++context_it;
     }
-    TENZIR_ASSERT_CHEAP(context_it == context_values.end());
+    TENZIR_ASSERT(context_it == context_values.end());
     auto query_f = [key_values_list = std::move(key_values_list)](
                      parameter_map params) -> caf::expected<expression> {
+      auto column = params["field"];
+      return expression{
+        predicate{
+          field_extractor(*column),
+          relational_operator::in,
+          data{key_values_list},
+        },
+      };
+    };
+    return update_result{.update_info = show(),
+                         .make_query = std::move(query_f)};
+  }
+
+  auto make_query() -> make_query_type override {
+    auto key_values_list = list{};
+    key_values_list.reserve(context_entries.size());
+    for (const auto& entry : context_entries) {
+      key_values_list.emplace_back(entry.first);
+    }
+    return [key_values_list = std::move(key_values_list)](
+             parameter_map params) -> caf::expected<expression> {
       auto column = params["field"];
       if (not column) {
         return caf::make_error(ec::invalid_argument,
@@ -192,19 +185,11 @@ public:
         },
       };
     };
-    return update_result{.update_info = show(),
-                         .make_query = std::move(query_f)};
   }
 
-  auto update(chunk_ptr, context::parameter_map)
-    -> caf::expected<update_result> override {
-    return caf::make_error(ec::unimplemented, "lookup-table context can not be "
-                                              "updated with bytes");
-  }
-
-  auto update(context::parameter_map) -> caf::expected<update_result> override {
-    return caf::make_error(ec::unimplemented,
-                           "lookup-table context can not be updated with void");
+  auto reset(context::parameter_map) -> caf::expected<record> override {
+    context_entries.clear();
+    return show();
   }
 
   auto save() const -> caf::expected<chunk_ptr> override {

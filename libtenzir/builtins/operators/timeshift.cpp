@@ -66,7 +66,7 @@ public:
                                                         slice.schema(), *index);
         }
       }
-      TENZIR_ASSERT_CHEAP(resolved_field != resolved_fields.end());
+      TENZIR_ASSERT(resolved_field != resolved_fields.end());
       if (not resolved_field->second) {
         co_yield std::move(slice);
         continue;
@@ -74,7 +74,7 @@ public:
       auto transform_fn = [&](struct record_type::field field,
                               std::shared_ptr<arrow::Array> array) noexcept
         -> indexed_transformation::result_type {
-        TENZIR_ASSERT_CHEAP(caf::holds_alternative<time_type>(field.type));
+        TENZIR_ASSERT(caf::holds_alternative<time_type>(field.type));
         auto builder = series_builder{};
         for (auto element : values(
                time_type{},
@@ -94,8 +94,8 @@ public:
                          (*element - *first_time) / speed_));
         }
         auto arrays = builder.finish();
-        TENZIR_ASSERT_CHEAP(arrays.size() == 1);
-        TENZIR_ASSERT_CHEAP(caf::holds_alternative<time_type>(arrays[0].type));
+        TENZIR_ASSERT(arrays.size() == 1);
+        TENZIR_ASSERT(caf::holds_alternative<time_type>(arrays[0].type));
         return {{field, std::move(arrays[0].array)}};
       };
       auto transformations = std::vector<indexed_transformation>{

@@ -48,48 +48,24 @@ public:
   bloom_filter_context(uint64_t n, double p) : bloom_filter_{n, p} {
   }
 
+  auto context_type() const -> std::string override {
+    return "bloom-filter";
+  }
+
   /// Emits context information for every event in `slice` in order.
-  auto apply(table_slice slice, context::parameter_map parameters) const
-    -> caf::expected<std::vector<series>> override {
-    auto resolved_slice = resolve_enumerations(slice);
-    auto field_name = std::optional<std::string>{};
-    for (const auto& [key, value] : parameters) {
-      if (key == "field") {
-        if (not value) {
-          return caf::make_error(ec::invalid_argument,
-                                 "invalid argument type for `field`: expected "
-                                 "a string");
-        }
-        field_name = *value;
-        continue;
-      }
-    }
-    if (not field_name) {
-      return caf::make_error(ec::invalid_argument, "missing argument `field`");
-    }
-    auto field_builder = series_builder{};
-    auto column_offset = slice.schema().resolve_key_or_concept(*field_name);
-    if (not column_offset) {
-      for (auto i = size_t{0}; i < slice.rows(); ++i) {
-        field_builder.null();
-      }
-      return field_builder.finish();
-    }
-    auto [type, slice_array] = column_offset->get(resolved_slice);
-    for (const auto& value : values(type, *slice_array)) {
+  auto apply(series s) const -> caf::expected<std::vector<series>> override {
+    auto builder = series_builder{};
+    for (const auto& value : s.values()) {
       if (bloom_filter_.lookup(value)) {
         auto ptr = bloom_filter_.data().data();
         auto size = bloom_filter_.data().size();
-        auto r = field_builder.record();
-        r.field("key", value);
-        auto context = r.field("context").record();
-        context.field("data", std::basic_string<std::byte>{ptr, size});
-        r.field("timestamp", std::chrono::system_clock::now());
+        auto r = builder.record();
+        r.field("data", std::basic_string<std::byte>{ptr, size});
       } else {
-        field_builder.null();
+        builder.null();
       }
     }
-    return field_builder.finish();
+    return builder.finish();
   }
 
   auto snapshot(parameter_map) const -> caf::expected<expression> override {
@@ -118,7 +94,7 @@ public:
   /// Updates the context.
   auto update(table_slice slice, context::parameter_map parameters)
     -> caf::expected<update_result> override {
-    TENZIR_ASSERT_CHEAP(slice.rows() != 0);
+    TENZIR_ASSERT(slice.rows() != 0);
     if (not parameters.contains("key")) {
       return caf::make_error(ec::invalid_argument, "missing 'key' parameter");
     }
@@ -146,11 +122,6 @@ public:
     auto query_f = [key_values_list = std::move(key_values_list)](
                      parameter_map params) -> caf::expected<expression> {
       auto column = params["field"];
-      if (not column) {
-        return caf::make_error(ec::invalid_argument,
-                               "missing 'field' parameter for lookup in "
-                               "bloom-filter");
-      }
       return expression{
         predicate{
           field_extractor(*column),
@@ -163,18 +134,15 @@ public:
                          .make_query = std::move(query_f)};
   }
 
-  auto update(chunk_ptr, context::parameter_map)
-    -> caf::expected<update_result> override {
-    // TODO: We're getting chunks piece-meal currently and therefore cannot
-    // determine the boundary of the stream. In theory, we should accumulate the
-    // chunks until the upstream pipeline is complete. What we need in the
-    // context API is a signal that we're done.
-    return ec::unimplemented;
+  auto make_query() -> make_query_type override {
+    return {};
   }
 
-  auto update(context::parameter_map) -> caf::expected<update_result> override {
-    return caf::make_error(ec::unimplemented,
-                           "bloom-filter context can not be updated with void");
+  auto reset(context::parameter_map) -> caf::expected<record> override {
+    auto params = bloom_filter_.parameters();
+    TENZIR_ASSERT(params.n && params.p);
+    bloom_filter_ = dcso_bloom_filter{*params.n, *params.p};
+    return show();
   }
 
   auto save() const -> caf::expected<chunk_ptr> override {
@@ -237,7 +205,7 @@ class plugin : public virtual context_plugin {
 
   auto load_context(chunk_ptr serialized) const
     -> caf::expected<std::unique_ptr<context>> override {
-    TENZIR_ASSERT_CHEAP(serialized != nullptr);
+    TENZIR_ASSERT(serialized != nullptr);
     auto bloom_filter = dcso_bloom_filter{};
     if (auto err = convert(as_bytes(*serialized), bloom_filter)) {
       return add_context(err, "failed to deserialize Bloom filter context");

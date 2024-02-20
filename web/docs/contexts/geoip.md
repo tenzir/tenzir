@@ -6,8 +6,10 @@ A context for enriching IP addresses with geographical data.
 
 ```
 context create <name> geoip [--db-path <mmdb>]
-context update <name> [--db-path <mmdb>]
 context delete <name>
+context reset  <name> [--db-path <mmdb>]
+context load   <name>
+context save   <name>
 enrich <name> --field <field>
 lookup <name> --field <field>
 ```
@@ -17,7 +19,7 @@ lookup <name> --field <field>
 The `geoip` context uses a [MaxMind](https://www.maxmind.com/) database
 to perform IP address lookups.
 
-Run `context update <name> --db-path <mmdb>` to initialize the database at path
+Run `context reset <name> --db-path <mmdb>` to initialize the database at path
 `<mmdb>`. Omitting `--db-path` causes a reload of a previously initialized
 database file.
 

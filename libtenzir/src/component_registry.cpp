@@ -22,7 +22,8 @@ bool component_registry::add(caf::actor comp, std::string type,
     label = type;
 #if TENZIR_ENABLE_ASSERTIONS
   auto pred = [&](auto& x) { return x.second.actor == comp; };
-  TENZIR_ASSERT(std::none_of(components_.begin(), components_.end(), pred));
+  TENZIR_ASSERT_EXPENSIVE(
+    std::none_of(components_.begin(), components_.end(), pred));
 #endif
   return components_
     .emplace(std::move(label), component{std::move(comp), std::move(type)})

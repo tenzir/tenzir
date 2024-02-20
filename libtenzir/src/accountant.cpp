@@ -185,7 +185,7 @@ struct accountant_state_impl {
     auto buf = std::vector<char>{};
     auto iter = std::back_inserter(buf);
     const auto ok = printer.print(iter, entry);
-    TENZIR_ASSERT_CHEAP(ok);
+    TENZIR_ASSERT(ok);
     *iter++ = '\n';
     return buf;
   }

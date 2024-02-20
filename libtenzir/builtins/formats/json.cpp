@@ -183,7 +183,7 @@ struct parser_state {
   bool preserve_order = true;
 
   auto get_entry(size_t idx) -> entry_data& {
-    TENZIR_ASSERT_CHEAP(idx < entries.size());
+    TENZIR_ASSERT(idx < entries.size());
     return entries[idx];
   }
 
@@ -199,7 +199,7 @@ struct parser_state {
     auto index = entries.size();
     auto& entry = entries.emplace_back(std::move(name), schema);
     auto inserted = entry_map.try_emplace(entry.name, index).second;
-    TENZIR_ASSERT_CHEAP(inserted);
+    TENZIR_ASSERT(inserted);
     return index;
   }
 
@@ -1155,9 +1155,9 @@ public:
         auto out_iter = std::back_inserter(buffer);
         for (const auto& row :
              values(caf::get<record_type>(resolved_slice.schema()), *array)) {
-          TENZIR_ASSERT_CHEAP(row);
+          TENZIR_ASSERT(row);
           const auto ok = printer.print(out_iter, *row);
-          TENZIR_ASSERT_CHEAP(ok);
+          TENZIR_ASSERT(ok);
           out_iter = fmt::format_to(out_iter, "\n");
         }
         auto chunk = chunk::make(std::move(buffer), meta);

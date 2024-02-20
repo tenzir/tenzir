@@ -77,7 +77,7 @@ auto add_type(builder_ref builder, const type& t) {
       layout.field("list").data(fmt::to_string(l.value_type()));
     },
     [&](const map_type&) {
-      die("unreachable");
+      TENZIR_UNREACHABLE();
     },
     [&](const record_type& r) {
       auto record = layout.field("record");

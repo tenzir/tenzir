@@ -31,8 +31,9 @@ public:
     -> caf::error override {
     auto maybe_interval
       = try_get_or(plugin_config, "interval", defaults::collection_interval);
-    if (!maybe_interval)
+    if (!maybe_interval) {
       return maybe_interval.error();
+    }
     collection_interval_ = *maybe_interval;
     return {};
   }
@@ -43,7 +44,9 @@ public:
 
   auto make_component(node_actor::stateful_pointer<node_state> node) const
     -> component_plugin_actor override {
-    return node->spawn(tenzir::metrics_collector, collection_interval_, node);
+    auto [importer] = node->state.registry.find<importer_actor>();
+    return node->spawn(tenzir::metrics_collector, collection_interval_, node,
+                       std::move(importer));
   }
 
 private:

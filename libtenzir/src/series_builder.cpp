@@ -92,7 +92,7 @@ namespace tenzir {
 namespace {
 
 void check(const arrow::Status& status) {
-  TENZIR_ASSERT_CHEAP(status.ok(), status.ToString().c_str());
+  TENZIR_ASSERT(status.ok(), status.ToString().c_str());
 }
 
 template <class T>
@@ -170,7 +170,7 @@ public:
   }
 
   auto finish(int64_t count) -> series override {
-    TENZIR_ASSERT_CHEAP(count <= length_);
+    TENZIR_ASSERT(count <= length_);
     auto builder = arrow::NullBuilder{};
     check(builder.AppendNulls(count));
     length_ -= count;
@@ -268,7 +268,7 @@ public:
   /// added to a fresh builder.
   auto finish(int64_t count) -> series {
     auto old_length = length();
-    TENZIR_ASSERT_CHEAP(count <= old_length);
+    TENZIR_ASSERT(count <= old_length);
     auto result = series{};
     if (count == 0) {
       result.type = type();
@@ -279,7 +279,7 @@ public:
     } else {
       result = builder_->finish(count);
     }
-    TENZIR_ASSERT_CHEAP(length() == old_length - count);
+    TENZIR_ASSERT(length() == old_length - count);
     result.type.assign_metadata(metadata_);
     make_null_if_possible();
     return result;
@@ -368,14 +368,14 @@ public:
     } else {
       count = builder_.length() - 1;
     }
-    TENZIR_ASSERT_CHEAP(count >= 0);
+    TENZIR_ASSERT(count >= 0);
     if (count == 0) {
       return;
     }
     auto remaining = builder_.length() - count;
     auto slice = builder_.finish(count);
-    TENZIR_ASSERT_CHEAP(slice.length() == count);
-    TENZIR_ASSERT_CHEAP(builder_.length() == remaining);
+    TENZIR_ASSERT(slice.length() == count);
+    TENZIR_ASSERT(builder_.length() == remaining);
     finished_.push_back(std::move(slice));
   }
 
@@ -388,7 +388,7 @@ public:
     has_conflict_ = false;
     if (builder_.length() > 0) {
       finished_.push_back(builder_.finish(builder_.length()));
-      TENZIR_ASSERT_CHEAP(builder_.length() == 0);
+      TENZIR_ASSERT(builder_.length() == 0);
     }
     return std::exchange(finished_, {});
   }
@@ -402,7 +402,7 @@ public:
 
   /// @pre may only be called once and directly after construction
   void protect(const tenzir::type& ty) {
-    TENZIR_ASSERT_CHEAP(total_length() == 0);
+    TENZIR_ASSERT(total_length() == 0);
     builder_.protect(ty);
   }
 
@@ -438,7 +438,7 @@ public:
   auto finish(int64_t count) -> series override {
     TENZIR_TRACE("finishing {} of {} conflicts with {} variants", count,
                  length(), variants_.size());
-    TENZIR_ASSERT_CHEAP(count <= length());
+    TENZIR_ASSERT(count <= length());
     auto builder = arrow::StringBuilder{};
     auto variant_counts = std::vector<int64_t>{};
     variant_counts.resize(variants_.size());
@@ -455,9 +455,9 @@ public:
     variant_offsets.resize(variants_.size());
     for (auto it = discriminants_.begin(); it != end; ++it) {
       auto discriminant = *it;
-      TENZIR_ASSERT_CHEAP(discriminant < variants_.size());
+      TENZIR_ASSERT(discriminant < variants_.size());
       auto offset = variant_offsets[discriminant];
-      TENZIR_ASSERT_CHEAP(offset < arrays[discriminant].length());
+      TENZIR_ASSERT(offset < arrays[discriminant].length());
       // TODO: We chose the strategy of always serializing conflicting types as
       // JSON strings. This means that we can always get the original data by
       // parsing the resulting strings as JSON. However, we could also use
@@ -603,7 +603,7 @@ public:
   auto finish(int64_t count) -> series override {
     TENZIR_TRACE("finishing {} of {} with type {}", count, length(), kind());
     auto array = finish();
-    TENZIR_ASSERT_CHEAP(count <= array->length());
+    TENZIR_ASSERT(count <= array->length());
     auto rest_begin = count;
     auto rest_count = array->length() - rest_begin;
     append_array_slice(*inner_, type_, *array, rest_begin, rest_count);
@@ -698,12 +698,12 @@ public:
     TENZIR_TRACE("ending offset of list is {} out of {}", ending_offset,
                  elements_.length());
     if (count == old_length) {
-      TENZIR_ASSERT_CHEAP(ending_offset == elements_.length());
+      TENZIR_ASSERT(ending_offset == elements_.length());
     }
     // Copy and shift the remaining offsets. Note that we do not copy the last
     // offsets in order to maintain the invariant of `offsets_`.
     auto remaining = old_length - count;
-    TENZIR_ASSERT_CHEAP(remaining == offsets->length() - count - 1);
+    TENZIR_ASSERT(remaining == offsets->length() - count - 1);
     check(offsets_.Reserve(remaining));
     for (auto i = count; i < count + remaining; ++i) {
       auto shifted = offsets->Value(i) - ending_offset;
@@ -765,7 +765,7 @@ public:
   }
 
   auto finish(int64_t count) -> series override {
-    TENZIR_ASSERT_CHEAP(count <= length_);
+    TENZIR_ASSERT(count <= length_);
     TENZIR_TRACE("finishing {} of {} records with {} fields", count, length(),
                  fields_.size());
     auto ty = type();
@@ -773,12 +773,12 @@ public:
     field_arrays.reserve(fields_.size());
     for (auto it = fields_.begin(); it != fields_.end();) {
       auto& [name, builder] = *it;
-      TENZIR_ASSERT_CHEAP(builder->length() <= length_);
+      TENZIR_ASSERT(builder->length() <= length_);
       if (builder->length() < count) {
         builder->resize(count);
       }
       auto field = builder->finish(count);
-      TENZIR_ASSERT_CHEAP(field.length() == count);
+      TENZIR_ASSERT(field.length() == count);
       field_arrays.push_back(std::move(field.array));
       auto remove = false;
       if (builder->length() > 0) {
@@ -897,7 +897,7 @@ public:
     // nulls afterwards. Instead of this flag, we could also detect whether
     // `name` was removed from `builders_` and recreate it if necessary. The
     // effect should be equivalent.
-    TENZIR_ASSERT_CHEAP(keep_alive_ == nullptr);
+    TENZIR_ASSERT(keep_alive_ == nullptr);
     keep_alive_ = builder;
     auto result = builder->prepare<Type>();
     keep_alive_ = nullptr;
@@ -908,7 +908,10 @@ public:
   auto insert_new_field(std::string name) -> dynamic_builder* {
     auto [it, inserted] = fields_.emplace(
       std::move(name), std::make_unique<dynamic_builder>(root_));
-    TENZIR_ASSERT_CHEAP(inserted);
+    TENZIR_ASSERT(
+      inserted,
+      fmt::format("tried to insert field `{}`, but it already exists", name)
+        .c_str());
     return it->second.get();
   }
 
@@ -960,8 +963,8 @@ void dynamic_builder::atom(detail::atom_view value) {
               builder_.get())) {
           cast->append(value);
         } else {
-          TENZIR_ASSERT_CHEAP(false, "attempted to add enum data to a non-enum "
-                                     "builder");
+          TENZIR_ASSERT(false, "attempted to add enum data to a non-enum "
+                               "builder");
         }
       } else {
         prepare<atom_view_to_type_t<decltype(value)>>()->append(value);
@@ -1036,11 +1039,10 @@ auto dynamic_builder::prepare() -> detail::typed_builder<Type>* {
   auto have_kind = builder_->kind();
   auto want_kind = type_kind::make<Type>();
   TENZIR_ASSERT(have_kind != want_kind);
-  TENZIR_ASSERT_CHEAP(not protected_,
-                      fmt::format("type mismatch for prepared type: "
-                                  "expected {} but got {}",
-                                  want_kind, have_kind)
-                        .c_str());
+  TENZIR_ASSERT(not protected_, fmt::format("type mismatch for prepared type: "
+                                            "expected {} but got {}",
+                                            want_kind, have_kind)
+                                  .c_str());
   TENZIR_TRACE("finishing events due to conflict: requested {} but got {}",
                want_kind, have_kind);
   root_->finish_previous_events(this);
@@ -1050,7 +1052,7 @@ auto dynamic_builder::prepare() -> detail::typed_builder<Type>* {
       = std::make_unique<detail::conflict_builder>(root_, std::move(builder_));
     root_->set_conflict_flag();
   } else {
-    TENZIR_ASSERT_CHEAP(builder_->kind().is<null_type>());
+    TENZIR_ASSERT(builder_->kind().is<null_type>());
   }
   return prepare<Type>();
 }
@@ -1068,7 +1070,7 @@ void detail::field_ref::atom(detail::atom_view value) {
           // was called. Therefore, If the field was already set (to a non-null
           // value), then the length of the field builder is equal to the length
           // of the record builder. In that case, we remove the last element.
-          TENZIR_ASSERT_CHEAP(field->length() <= origin_->length());
+          TENZIR_ASSERT(field->length() <= origin_->length());
           if (field->length() == origin_->length()) {
             field->resize(origin_->length() - 1);
           }
@@ -1083,8 +1085,8 @@ void detail::field_ref::atom(detail::atom_view value) {
         // enumeration type. Thus, we have to special case this.
         auto* builder = origin_->builder(name_);
         if (not builder) {
-          TENZIR_ASSERT_CHEAP(false, "cannot get enumeration builder for "
-                                     "non-existing field");
+          TENZIR_ASSERT(false, "cannot get enumeration builder for "
+                               "non-existing field");
         }
         builder->resize(origin_->length_ - 1);
         builder->atom(value);
@@ -1255,7 +1257,7 @@ void builder_ref::null() {
 
 void builder_ref::data(data_view2 value) {
   auto result = try_data(std::move(value));
-  TENZIR_ASSERT_CHEAP(result, fmt::to_string(result.error()).c_str());
+  TENZIR_ASSERT(result, fmt::to_string(result.error()).c_str());
 }
 
 auto builder_ref::try_data(data_view2 value) -> caf::expected<void> {
@@ -1368,8 +1370,8 @@ auto series_builder::finish_as_table_slice(std::string_view name)
   auto result = std::vector<table_slice>{};
   result.reserve(arrays.size());
   for (auto& array : arrays) {
-    TENZIR_ASSERT_CHEAP(caf::holds_alternative<record_type>(array.type));
-    TENZIR_ASSERT_CHEAP(array.length() > 0);
+    TENZIR_ASSERT(caf::holds_alternative<record_type>(array.type));
+    TENZIR_ASSERT(array.length() > 0);
     if (not name.empty()) {
       // The following check is not an optimization, but prevents
       // double-wrapping, which would change `#schema_id`.
@@ -1384,11 +1386,11 @@ auto series_builder::finish_as_table_slice(std::string_view name)
       array.type = tenzir::type{"tenzir.unknown", array.type};
     }
     auto* cast = dynamic_cast<arrow::StructArray*>(array.array.get());
-    TENZIR_ASSERT_CHEAP(cast);
+    TENZIR_ASSERT(cast);
     auto arrow_schema = array.type.to_arrow_schema();
     auto batch = arrow::RecordBatch::Make(std::move(arrow_schema),
                                           cast->length(), cast->fields());
-    TENZIR_ASSERT_CHEAP(batch);
+    TENZIR_ASSERT(batch);
     TENZIR_ASSERT_EXPENSIVE(batch->Validate().ok());
     result.emplace_back(batch, array.type);
   }
@@ -1401,7 +1403,16 @@ auto series_builder::finish_assert_one_slice(std::string_view name)
   if (result.empty()) {
     return {};
   }
-  TENZIR_ASSERT_CHEAP(result.size() == 1);
+  TENZIR_ASSERT(result.size() == 1);
+  return std::move(result[0]);
+}
+
+auto series_builder::finish_assert_one_array() -> series {
+  auto result = finish();
+  if (result.empty()) {
+    return {};
+  }
+  TENZIR_ASSERT(result.size() == 1);
   return std::move(result[0]);
 }
 
@@ -1422,8 +1433,8 @@ void series_builder::remove_last() {
 }
 
 void detail::dynamic_builder::protect(const tenzir::type& ty) {
-  TENZIR_ASSERT_CHEAP(kind().is<null_type>());
-  TENZIR_ASSERT_CHEAP(length() == 0);
+  TENZIR_ASSERT(kind().is<null_type>());
+  TENZIR_ASSERT(length() == 0);
   metadata_ = ty;
   protected_ = true;
   auto f = detail::overload{

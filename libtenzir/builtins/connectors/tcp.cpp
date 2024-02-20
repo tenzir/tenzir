@@ -373,8 +373,8 @@ public:
       // Verify that the files actually exist and are readable.
       // Ideally we'd also like to verify that the files contain valid
       // key material, but there's no straightforward API for this in OpenSSL.
-      TENZIR_ASSERT_CHEAP(args_.tls_keyfile);
-      TENZIR_ASSERT_CHEAP(args_.tls_certfile);
+      TENZIR_ASSERT(args_.tls_keyfile);
+      TENZIR_ASSERT(args_.tls_certfile);
       auto* keyfile = std::fopen(args_.tls_keyfile->c_str(), "r");
       if (keyfile) {
         std::fclose(keyfile);
@@ -481,8 +481,8 @@ public:
       // Verify that the files actually exist and are readable.
       // Ideally we'd also like to verify that the files contain valid
       // key material, but there's no straightforward API for this in OpenSSL.
-      TENZIR_ASSERT_CHEAP(args_.tls_keyfile);
-      TENZIR_ASSERT_CHEAP(args_.tls_certfile);
+      TENZIR_ASSERT(args_.tls_keyfile);
+      TENZIR_ASSERT(args_.tls_certfile);
       auto* keyfile = std::fopen(args_.tls_keyfile->c_str(), "r");
       if (keyfile) {
         std::fclose(keyfile);

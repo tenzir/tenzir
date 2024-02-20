@@ -52,24 +52,12 @@ public:
   void process(caf::downstream<table_slice>& out,
                std::vector<table_slice>& slices) override {
     TENZIR_TRACE_SCOPE("{}", TENZIR_ARG(slices));
-    uint64_t events = 0;
-    auto t = timer::start(state.measurement_);
-    for (auto&& slice : std::exchange(slices, {})) {
-      auto rows = slice.rows();
-      events += rows;
-      auto name = slice.schema().name();
-      if (auto it = state.schema_counters.find(name);
-          it != state.schema_counters.end())
-        it.value() += rows;
-      else
-        state.schema_counters.emplace(std::string{name}, rows);
-      slice.import_time(time::clock::now());
-      for (const auto& subscriber : state.subscribers) {
-        state.self->send(subscriber, slice);
-      }
+    auto now = time::clock::now();
+    for (auto& slice : slices) {
+      slice.import_time(now);
+      state.on_process(slice);
       out.push(std::move(slice));
     }
-    t.stop(events);
   }
 
   void finalize(const caf::error& err) override {
@@ -134,13 +122,15 @@ importer_state::status(status_verbosity v) const {
   if (v >= status_verbosity::detailed) {
     auto sources_status = list{};
     sources_status.reserve(inbound_descriptions.size());
-    for (const auto& kv : inbound_descriptions)
+    for (const auto& kv : inbound_descriptions) {
       sources_status.emplace_back(kv.second);
+    }
     rs->content["sources"] = std::move(sources_status);
   }
   // General state such as open streams.
-  if (v >= status_verbosity::debug)
+  if (v >= status_verbosity::debug) {
     detail::fill_status_map(rs->content, self);
+  }
   return rs->promise;
 }
 
@@ -169,13 +159,14 @@ void importer_state::send_report() {
 #if TENZIR_LOG_LEVEL >= TENZIR_LOG_LEVEL_VERBOSE
   auto beat = [&](const auto& sample) {
     if (sample.value.events > 0) {
-      if (auto rate = sample.value.rate_per_sec(); std::isfinite(rate))
+      if (auto rate = sample.value.rate_per_sec(); std::isfinite(rate)) {
         TENZIR_VERBOSE("{} handled {} events at a rate of {} events/sec in {}",
                        *self, sample.value.events, static_cast<uint64_t>(rate),
                        to_string(sample.value.duration));
-      else
+      } else {
         TENZIR_VERBOSE("{} handled {} events in {}", *self, sample.value.events,
                        to_string(sample.value.duration));
+      }
     }
   };
   beat(r.data[1]);
@@ -185,14 +176,30 @@ void importer_state::send_report() {
   last_report = now;
 }
 
+void importer_state::on_process(const table_slice& slice) {
+  auto t = timer::start(measurement_);
+  auto rows = slice.rows();
+  auto name = slice.schema().name();
+  if (auto it = schema_counters.find(name); it != schema_counters.end()) {
+    it.value() += rows;
+  } else {
+    schema_counters.emplace(std::string{name}, rows);
+  }
+  for (const auto& subscriber : subscribers) {
+    self->send(subscriber, slice);
+  }
+  t.stop(rows);
+}
+
 importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self,
          const std::filesystem::path& dir, index_actor index,
          accountant_actor accountant) {
   TENZIR_TRACE_SCOPE("importer {} {}", TENZIR_ARG(self->id()), TENZIR_ARG(dir));
   if (auto ec = std::error_code{};
-      std::filesystem::exists(dir / "current_id_block", ec))
+      std::filesystem::exists(dir / "current_id_block", ec)) {
     std::filesystem::remove(dir / "current_id_block", ec);
+  }
   namespace defs = defaults;
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     self->state.send_report();
@@ -225,9 +232,10 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   });
   return {
     // Add a new sink.
-    [self](stream_sink_actor<table_slice> sink) {
-      TENZIR_DEBUG("{} adds a new sink: {}", *self, sink);
-      return self->state.stage->add_outbound_path(sink);
+    [self](stream_sink_actor<table_slice> sink) -> caf::result<void> {
+      TENZIR_DEBUG("{} adds a new sink", *self);
+      self->state.stage->add_outbound_path(sink);
+      return {};
     },
     // Register a FLUSH LISTENER actor.
     [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
@@ -254,6 +262,8 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       return rp;
     },
     [self](table_slice& slice) -> caf::result<void> {
+      slice.import_time(time::clock::now());
+      self->state.on_process(slice);
       self->state.stage->out().push(std::move(slice));
       return {};
     },

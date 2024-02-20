@@ -32,7 +32,7 @@ auto no_style() -> json_style {
 
 auto default_style() -> json_style {
   // See https://no-color.org.
-  if (detail::getenv("NO_COLOR").value_or(std::string_view{}).empty()) {
+  if (detail::getenv("NO_COLOR").value_or("").empty()) {
     return no_style();
   }
   // TODO: Let the saver detect a default style, depending on

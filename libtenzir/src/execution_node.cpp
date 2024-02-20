@@ -187,21 +187,6 @@ auto size(const chunk_ptr& chunk) -> uint64_t {
   return chunk ? chunk->size() : 0;
 }
 
-struct metrics_state {
-  auto emit() -> void {
-    values.time_total = std::chrono::duration_cast<duration>(
-      std::chrono::steady_clock::now() - start_time);
-    caf::anon_send(metrics_handler, values);
-  }
-
-  // Metrics that track the total number of inbound and outbound elements that
-  // passed through this operator.
-  std::chrono::steady_clock::time_point start_time
-    = std::chrono::steady_clock::now();
-  receiver_actor<metric> metrics_handler = {};
-  metric values = {};
-};
-
 template <class Input, class Output>
 struct exec_node_state {
   static constexpr auto name = "exec-node";
@@ -219,10 +204,14 @@ struct exec_node_state {
   };
   std::optional<resumable_generator> instance = {};
 
-  /// State required for keeping and sending metrics. Stored in a separate
-  /// shared pointer to allow safe usage from an attached functor to send out
-  /// metrics after this actor has quit.
-  std::shared_ptr<metrics_state> metrics = {};
+  /// State required for keeping and sending metrics.
+  std::chrono::steady_clock::time_point start_time
+    = std::chrono::steady_clock::now();
+  receiver_actor<metric> metrics_handler = {};
+  metric metrics = {};
+
+  /// Whether this execution node is paused, and when it was.
+  std::optional<std::chrono::steady_clock::time_point> paused_at = {};
 
   /// A handle to the previous execution node.
   exec_node_actor previous = {};
@@ -262,25 +251,35 @@ struct exec_node_state {
   bool consumed_input = false;
   bool produced_output = false;
 
-  /// Whether this execution node is paused.
-  bool paused = {};
-
   ~exec_node_state() noexcept {
     TENZIR_DEBUG("{} {} shut down", *self, op->name());
     instance.reset();
     ctrl.reset();
-    metrics->emit();
+    emit_metrics();
     if (demand and demand->rp.pending()) {
       demand->rp.deliver();
     }
   }
 
+  auto emit_metrics() -> void {
+    const auto now = std::chrono::steady_clock::now();
+    auto metrics_copy = metrics;
+    if (paused_at) {
+      metrics_copy.time_paused
+        += std::chrono::duration_cast<duration>(now - *paused_at);
+    }
+    metrics_copy.time_total
+      = std::chrono::duration_cast<duration>(now - start_time);
+    metrics_copy.time_running
+      = metrics_copy.time_total - metrics_copy.time_paused;
+    caf::anon_send(metrics_handler, std::move(metrics_copy));
+  }
+
   auto start(std::vector<caf::actor> all_previous) -> caf::result<void> {
     TENZIR_DEBUG("{} {} received start request", *self, op->name());
     detail::weak_run_delayed_loop(self, defaults<>::metrics_interval, [this] {
-      auto time_scheduled_guard
-        = make_timer_guard(metrics->values.time_scheduled);
-      metrics->emit();
+      auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+      emit_metrics();
     });
     if (instance.has_value()) {
       return caf::make_error(ec::logic_error,
@@ -307,8 +306,7 @@ struct exec_node_state {
       self->link_to(previous);
       self->set_exit_handler([this, prev_addr = previous.address()](
                                const caf::exit_msg& msg) {
-        auto time_scheduled_guard
-          = make_timer_guard(metrics->values.time_scheduled);
+        auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
         // We got an exit message, which can mean one of four things:
         // 1. The pipeline manager quit.
         // 2. The next operator quit.
@@ -336,8 +334,7 @@ struct exec_node_state {
     }
     // Instantiate the operator with its input type.
     {
-      auto time_scheduled_guard
-        = make_timer_guard(metrics->values.time_processing);
+      auto time_scheduled_guard = make_timer_guard(metrics.time_processing);
       auto output_generator = op->instantiate(make_input_adapter(), *ctrl);
       if (not output_generator) {
         TENZIR_DEBUG("{} {} failed to instantiate operator: {}", *self,
@@ -359,7 +356,7 @@ struct exec_node_state {
         return {};
       }
       // Emit metrics once to get started.
-      metrics->emit();
+      emit_metrics();
       if (instance->it == instance->gen.end()) {
         TENZIR_TRACE("{} {} finished without yielding", *self, op->name());
         if (previous) {
@@ -380,8 +377,8 @@ struct exec_node_state {
                   std::move(all_previous))
         .then(
           [this, rp]() mutable {
-            auto time_starting_guard = make_timer_guard(
-              metrics->values.time_scheduled, metrics->values.time_starting);
+            auto time_starting_guard
+              = make_timer_guard(metrics.time_scheduled, metrics.time_starting);
             TENZIR_TRACE("{} {} schedules run after successful startup of all "
                          "operators",
                          *self, op->name());
@@ -389,8 +386,8 @@ struct exec_node_state {
             rp.deliver();
           },
           [this, rp](const caf::error& error) mutable {
-            auto time_starting_guard = make_timer_guard(
-              metrics->values.time_scheduled, metrics->values.time_starting);
+            auto time_starting_guard
+              = make_timer_guard(metrics.time_scheduled, metrics.time_starting);
             TENZIR_DEBUG("{} {} forwards error during startup: {}", *self,
                          op->name(), error);
             rp.deliver(
@@ -406,25 +403,32 @@ struct exec_node_state {
   }
 
   auto pause() -> caf::result<void> {
+    if (paused_at) {
+      return {};
+    }
     TENZIR_DEBUG("{} {} pauses execution", *self, op->name());
-    paused = true;
+    paused_at = std::chrono::steady_clock::now();
     return {};
   }
 
   auto resume() -> caf::result<void> {
+    if (not paused_at) {
+      return {};
+    }
     TENZIR_DEBUG("{} {} resumes execution", *self, op->name());
-    paused = false;
+    metrics.time_paused += std::chrono::duration_cast<duration>(
+      std::chrono::steady_clock::now() - *paused_at);
+    paused_at.reset();
     schedule_run(false);
     return {};
   }
 
   auto advance_generator() -> void {
-    auto time_processing_guard
-      = make_timer_guard(metrics->values.time_processing);
+    auto time_processing_guard = make_timer_guard(metrics.time_processing);
     if constexpr (std::is_same_v<Output, std::monostate>) {
       // We never issue demand to the sink, so we cannot be at the end of the
       // generator here.
-      TENZIR_ASSERT_CHEAP(instance->it != instance->gen.end());
+      TENZIR_ASSERT(instance->it != instance->gen.end());
       TENZIR_TRACE("{} {} processes", *self, op->name());
       ++instance->it;
       if (self->getf(caf::abstract_actor::is_shutting_down_flag)) {
@@ -439,7 +443,7 @@ struct exec_node_state {
       if (not demand or instance->it == instance->gen.end()) {
         return;
       }
-      TENZIR_ASSERT_CHEAP(instance);
+      TENZIR_ASSERT(instance);
       TENZIR_TRACE("{} {} processes", *self, op->name());
       auto output = std::move(*instance->it);
       const auto output_size = size(output);
@@ -455,10 +459,9 @@ struct exec_node_state {
         return;
       }
       produced_output = true;
-      metrics->values.outbound_measurement.num_elements += output_size;
-      metrics->values.outbound_measurement.num_batches += 1;
-      metrics->values.outbound_measurement.num_approx_bytes
-        += approx_bytes(output);
+      metrics.outbound_measurement.num_elements += output_size;
+      metrics.outbound_measurement.num_batches += 1;
+      metrics.outbound_measurement.num_approx_bytes += approx_bytes(output);
       TENZIR_TRACE("{} {} produced and pushes {} elements", *self, op->name(),
                    output_size);
       if (demand->remaining <= output_size) {
@@ -473,7 +476,7 @@ struct exec_node_state {
         .then(
           [this, output_size, should_quit]() {
             auto time_scheduled_guard
-              = make_timer_guard(metrics->values.time_scheduled);
+              = make_timer_guard(metrics.time_scheduled);
             TENZIR_TRACE("{} {} pushed {} elements", *self, op->name(),
                          output_size);
             if (demand and demand->remaining == 0) {
@@ -494,7 +497,7 @@ struct exec_node_state {
             TENZIR_DEBUG("{} {} failed to push {} elements", *self, op->name(),
                          output_size);
             auto time_scheduled_guard
-              = make_timer_guard(metrics->values.time_scheduled);
+              = make_timer_guard(metrics.time_scheduled);
             if (err == caf::sec::request_receiver_down) {
               if (demand and demand->rp.pending()) {
                 demand->rp.deliver();
@@ -590,15 +593,13 @@ struct exec_node_state {
                 detail::narrow_cast<uint64_t>(demand))
       .then(
         [this] {
-          auto time_scheduled_guard
-            = make_timer_guard(metrics->values.time_scheduled);
+          auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
           TENZIR_TRACE("{} {} had its demand fulfilled", *self, op->name());
           issue_demand_inflight = false;
           schedule_run(false);
         },
         [this](const caf::error& err) {
-          auto time_scheduled_guard
-            = make_timer_guard(metrics->values.time_scheduled);
+          auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
           TENZIR_DEBUG("{} {} failed to get its demand fulfilled: {}", *self,
                        op->name(), err);
           issue_demand_inflight = false;
@@ -614,7 +615,7 @@ struct exec_node_state {
   }
 
   auto run() -> void {
-    if (paused or not instance) {
+    if (paused_at or not instance) {
       return;
     }
     TENZIR_TRACE("{} {} enters run loop", *self, op->name());
@@ -647,11 +648,10 @@ struct exec_node_state {
     } else {
       TENZIR_TRACE("{} {} idles", *self, op->name());
     }
-    metrics->values.num_runs += 1;
-    metrics->values.num_runs_processing
-      += consumed_input or produced_output ? 1 : 0;
-    metrics->values.num_runs_processing_input += consumed_input ? 1 : 0;
-    metrics->values.num_runs_processing_output += produced_output ? 1 : 0;
+    metrics.num_runs += 1;
+    metrics.num_runs_processing += consumed_input or produced_output ? 1 : 0;
+    metrics.num_runs_processing_input += consumed_input ? 1 : 0;
+    metrics.num_runs_processing_output += produced_output ? 1 : 0;
     consumed_input = false;
     produced_output = false;
   }
@@ -678,9 +678,9 @@ struct exec_node_state {
     const auto input_size = size(input);
     TENZIR_TRACE("{} {} received {} elements from upstream", *self, op->name(),
                  input_size);
-    metrics->values.inbound_measurement.num_elements += input_size;
-    metrics->values.inbound_measurement.num_batches += 1;
-    metrics->values.inbound_measurement.num_approx_bytes += approx_bytes(input);
+    metrics.inbound_measurement.num_elements += input_size;
+    metrics.inbound_measurement.num_batches += 1;
+    metrics.inbound_measurement.num_approx_bytes += approx_bytes(input);
     inbound_buffer_size += input_size;
     inbound_buffer.push_back(std::move(input));
     schedule_run(false);
@@ -697,20 +697,16 @@ auto exec_node(
   -> exec_node_actor::behavior_type {
   self->state.self = self;
   self->state.op = std::move(op);
-  self->state.metrics = std::make_shared<metrics_state>();
-  auto time_starting_guard
-    = make_timer_guard(self->state.metrics->values.time_scheduled,
-                       self->state.metrics->values.time_starting);
-  self->state.metrics->metrics_handler = std::move(metrics_handler);
-  self->state.metrics->values.operator_index = index;
-  self->state.metrics->values.operator_name = self->state.op->name();
-  self->state.metrics->values.inbound_measurement.unit
-    = operator_type_name<Input>();
-  self->state.metrics->values.outbound_measurement.unit
-    = operator_type_name<Output>();
+  auto time_starting_guard = make_timer_guard(
+    self->state.metrics.time_scheduled, self->state.metrics.time_starting);
+  self->state.metrics_handler = std::move(metrics_handler);
+  self->state.metrics.operator_index = index;
+  self->state.metrics.operator_name = self->state.op->name();
+  self->state.metrics.inbound_measurement.unit = operator_type_name<Input>();
+  self->state.metrics.outbound_measurement.unit = operator_type_name<Output>();
   // We make an exception here for transformations, which are always considered
   // internal as they cannot transport data outside of the pipeline.
-  self->state.metrics->values.internal
+  self->state.metrics.internal
     = self->state.op->internal()
       and (std::is_same_v<Input, std::monostate>
            or std::is_same_v<Output, std::monostate>);
@@ -727,35 +723,34 @@ auto exec_node(
   return {
     [self](atom::internal, atom::run) -> caf::result<void> {
       auto time_scheduled_guard
-        = make_timer_guard(self->state.metrics->values.time_scheduled);
+        = make_timer_guard(self->state.metrics.time_scheduled);
       return self->state.internal_run();
     },
     [self](atom::start,
            std::vector<caf::actor>& all_previous) -> caf::result<void> {
-      auto time_scheduled_guard
-        = make_timer_guard(self->state.metrics->values.time_scheduled,
-                           self->state.metrics->values.time_starting);
+      auto time_scheduled_guard = make_timer_guard(
+        self->state.metrics.time_scheduled, self->state.metrics.time_starting);
       return self->state.start(std::move(all_previous));
     },
     [self](atom::pause) -> caf::result<void> {
       auto time_scheduled_guard
-        = make_timer_guard(self->state.metrics->values.time_scheduled);
+        = make_timer_guard(self->state.metrics.time_scheduled);
       return self->state.pause();
     },
     [self](atom::resume) -> caf::result<void> {
       auto time_scheduled_guard
-        = make_timer_guard(self->state.metrics->values.time_scheduled);
+        = make_timer_guard(self->state.metrics.time_scheduled);
       return self->state.resume();
     },
     [self](diagnostic& diag) -> caf::result<void> {
       auto time_scheduled_guard
-        = make_timer_guard(self->state.metrics->values.time_scheduled);
+        = make_timer_guard(self->state.metrics.time_scheduled);
       self->state.ctrl->diagnostics().emit(std::move(diag));
       return {};
     },
     [self](atom::push, table_slice& events) -> caf::result<void> {
       auto time_scheduled_guard
-        = make_timer_guard(self->state.metrics->values.time_scheduled);
+        = make_timer_guard(self->state.metrics.time_scheduled);
       if constexpr (std::is_same_v<Input, table_slice>) {
         return self->state.push(std::move(events));
       } else {
@@ -766,7 +761,7 @@ auto exec_node(
     },
     [self](atom::push, chunk_ptr& bytes) -> caf::result<void> {
       auto time_scheduled_guard
-        = make_timer_guard(self->state.metrics->values.time_scheduled);
+        = make_timer_guard(self->state.metrics.time_scheduled);
       if constexpr (std::is_same_v<Input, chunk_ptr>) {
         return self->state.push(std::move(bytes));
       } else {
@@ -778,7 +773,7 @@ auto exec_node(
     [self](atom::pull, exec_node_sink_actor& sink,
            uint64_t batch_size) -> caf::result<void> {
       auto time_scheduled_guard
-        = make_timer_guard(self->state.metrics->values.time_scheduled);
+        = make_timer_guard(self->state.metrics.time_scheduled);
       if constexpr (not std::is_same_v<Output, std::monostate>) {
         return self->state.pull(std::move(sink), batch_size);
       } else {

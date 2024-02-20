@@ -68,11 +68,11 @@ struct series {
   auto values() const {
     if constexpr (concrete_type<Type>) {
       const auto* ct = caf::get_if<Type>(type);
-      TENZIR_ASSERT_CHEAP(ct);
-      TENZIR_ASSERT_CHEAP(array);
+      TENZIR_ASSERT(ct);
+      TENZIR_ASSERT(array);
       return tenzir::values(*ct, *array);
     } else {
-      TENZIR_ASSERT_CHEAP(array);
+      TENZIR_ASSERT(array);
       return tenzir::values(type, *array);
     }
   }

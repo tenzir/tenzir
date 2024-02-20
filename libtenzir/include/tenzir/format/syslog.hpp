@@ -124,7 +124,7 @@ struct header_parser : parser_base<header_parser> {
 /// A parameter of a structured data element.
 struct parameter {
   std::string key;
-  std::string value;
+  data value;
 };
 
 /// Parser for one structured data element parameter.
@@ -142,7 +142,14 @@ struct parameter_parser : parser_base<parameter_parser> {
     // ], ", \ must to be escaped.
     auto escaped = esc >> (ch<']'> | ch<'\\'> | ch<'"'>);
     auto value = escaped | (printable - ']' - '"' - '\\');
-    auto p = ' ' >> key >> '=' >> '"' >> *value >> '"';
+    auto value_data = (*value)->*[](std::string val) {
+      data d{};
+      if (not parsers::simple_data(val, d)) {
+        return data{std::move(val)};
+      }
+      return d;
+    };
+    auto p = ' ' >> key >> '=' >> '"' >> value_data >> '"';
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       return p(f, l, unused);
     } else {
@@ -152,7 +159,7 @@ struct parameter_parser : parser_base<parameter_parser> {
 };
 
 /// All parameters of a structured data element.
-using parameters = list;
+using parameters = record;
 
 /// Parser for all structured data element parameters.
 struct parameters_parser : parser_base<parameters_parser> {
@@ -162,8 +169,7 @@ struct parameters_parser : parser_base<parameters_parser> {
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
     auto param = parameter_parser{}->*[&](parameter in) {
       if constexpr (!std::is_same_v<Attribute, unused_type>) {
-        x.emplace_back(
-          record{{"key", std::move(in.key)}, {"value", std::move(in.value)}});
+        x.emplace(std::move(in.key), data{std::move(in.value)});
       }
     };
     auto p = +param;
@@ -203,7 +209,7 @@ struct structured_data_element_parser
 };
 
 /// Structured data of a Syslog message.
-using structured_data = list;
+using structured_data = record;
 
 /// Parser for structured data of a Syslog message.
 /// @relates structured_data
@@ -216,8 +222,7 @@ struct structured_data_parser : parser_base<structured_data_parser> {
     auto sd
       = structured_data_element_parser{}->*[&](structured_data_element in) {
           if constexpr (!std::is_same_v<Attribute, unused_type>) {
-            x.emplace_back(record{{"id", std::move(in.id)},
-                                  {"params", std::move(in.params)}});
+            x.emplace(std::move(in.id), tenzir::data{std::move(in.params)});
           }
         };
     auto p = maybe_null(+sd);
@@ -431,13 +436,7 @@ inline type make_syslog_type() {
       {"app_name", string_type{}},
       {"process_id", string_type{}},
       {"message_id", string_type{}},
-      {"structured_data", list_type{record_type{{
-                            {"id", string_type{}},
-                            {"params", list_type{record_type{{
-                                         {"key", string_type{}},
-                                         {"value", string_type{}},
-                                       }}}},
-                          }}}},
+      {"structured_data", record_type{}},
       {"message", string_type{}},
     }},
   };

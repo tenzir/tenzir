@@ -76,6 +76,7 @@ TEST(syslog parameters parser) {
   auto p = format::syslog::parameter_parser{};
   CHECK(p(" iut=\"3\"", attr));
   CHECK_EQUAL(attr.key, "iut");
-  CHECK_EQUAL(attr.value, "3");
+  REQUIRE(caf::holds_alternative<uint64_t>(attr.value));
+  CHECK_EQUAL(caf::get<uint64_t>(attr.value), uint64_t{3});
 }
 FIXTURE_SCOPE_END()

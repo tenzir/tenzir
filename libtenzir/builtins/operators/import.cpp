@@ -10,7 +10,6 @@
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
-#include <tenzir/import_stream.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/node_control.hpp>
 #include <tenzir/pipeline.hpp>
@@ -30,56 +29,35 @@ public:
     // TODO: Some of the the requests this operator makes are blocking, so we
     // have to create a scoped actor here; once the operator API uses async we
     // can offer a better mechanism here.
-    auto result = import_stream::make(ctrl.self(), ctrl.node());
-    if (not result) {
-      diagnostic::error(result.error())
-        .note("failed to create import stream")
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-    auto stream = std::move(*result);
+    auto self = caf::scoped_actor{ctrl.self().system()};
+    auto components = get_node_components<importer_actor>(self, ctrl.node());
+    TENZIR_ASSERT(components);
+    auto [importer] = std::move(*components);
     auto total_events = size_t{0};
     for (auto&& slice : input) {
-      if (stream.has_ended()) {
-        diagnostic::error(stream.error())
-          .note("import stream unexpectedly ended")
-          .emit(ctrl.diagnostics());
-        co_return;
-      }
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
       total_events += slice.rows();
-      stream.enqueue(std::move(slice));
-      while (stream.enqueued() > 0) {
-        co_yield {};
-      }
+      // TODO: This temporary solution does not apply back-pressure.
+      ctrl.self().send(importer, std::move(slice));
     }
-    stream.finish();
     TENZIR_VERBOSE(
       "waiting for completion of import after input stream has ended");
-    while (not stream.has_ended()) {
-      co_yield {};
-    }
-    if (auto err = stream.error()) {
-      diagnostic::error(err).emit(ctrl.diagnostics());
-      co_return;
-    }
     // We empirically need this sleep here for the flushing to take any effect
     // afterwards. I do not fully understand why, but since we're about to
     // rewrite this operator anyways to create partitions in-band and to
     // directly send then to the catalog we may as well leave this in here for
     // now. –- DL, Dec 2023
     std::this_thread::sleep_for(std::chrono::milliseconds{100});
-    // We yield once to the scheduler as the stream flushing only takes effect
-    // then.
-    co_yield {};
-    // // We implicitly flush at the importer.
-    if (auto err = stream.flush()) {
-      diagnostic::error("failed to flush import: {}", err)
-        .emit(ctrl.diagnostics());
-    }
+    ctrl.self()
+      .request(importer, caf::infinite, atom::flush_v)
+      .await([]() {},
+             [&](caf::error& err) {
+               diagnostic::error(add_context(err, "could not flush importer"))
+                 .emit(ctrl.diagnostics());
+             });
     co_yield {};
     const auto elapsed = std::chrono::steady_clock::now() - start_time;
     const auto rate

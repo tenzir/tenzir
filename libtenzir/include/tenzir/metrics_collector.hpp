@@ -11,7 +11,6 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/actors.hpp"
-#include "tenzir/import_stream.hpp"
 #include "tenzir/plugin.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
@@ -35,6 +34,8 @@ public:
 
   // -------- data members -----------------------------------------------------
 
+  metrics_collector_actor::pointer self;
+
   // A handle to the node actor.
   node_actor node;
 
@@ -47,7 +48,7 @@ public:
   caf::timespan collection_interval = std::chrono::seconds{60};
 
   // The output stream for writing metrics events.
-  std::unique_ptr<import_stream> importer = nullptr;
+  importer_actor importer;
 };
 
 /// Spawn a HEALTHCHECKER actor. Periodically queries `index` and erases all
@@ -56,7 +57,7 @@ public:
 /// @param index A handle to the INDEX.
 auto metrics_collector(
   metrics_collector_actor::stateful_pointer<metrics_collector_state> self,
-  caf::timespan collection_interval, const node_actor& node)
-  -> metrics_collector_actor::behavior_type;
+  caf::timespan collection_interval, const node_actor& node,
+  importer_actor importer) -> metrics_collector_actor::behavior_type;
 
 } // namespace tenzir

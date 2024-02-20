@@ -43,6 +43,7 @@ apt-get -y --no-install-recommends install \
     nmap \
     ninja-build \
     pandoc \
+    parallel \
     pkg-config \
     protobuf-compiler \
     protobuf-compiler-grpc \

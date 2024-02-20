@@ -9,6 +9,9 @@ context create <name> bloom-filter
     --capacity <capacity> --fp-probability <probability>
 context update <name> --key <field>
 context delete <name>
+context reset  <name>
+context load   <name>
+context save   <name>
 enrich <name> --field <field>
 lookup <name> --field <field>
 ```

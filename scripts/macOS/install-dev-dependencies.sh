@@ -24,6 +24,7 @@ brew install --overwrite \
     nmap \
     openssl \
     pandoc \
+    parallel \
     pipx \
     pkg-config \
     poetry \

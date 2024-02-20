@@ -30,10 +30,10 @@ caf::error authenticator_state::initialize_from(chunk_ptr chunk) {
   auto const* state = (*fb)->server_state_as_v0();
   if (state == nullptr)
     return caf::make_error(ec::format_error, "missing state");
-  TENZIR_ASSERT_CHEAP(state->auth_tokens() != nullptr);
+  TENZIR_ASSERT(state->auth_tokens() != nullptr);
   using clock = std::chrono::system_clock;
   for (auto const* token : *state->auth_tokens()) {
-    TENZIR_ASSERT_CHEAP(token);
+    TENZIR_ASSERT(token);
     auto token_desc = token_description{
       .name = token->name()->str(),
       .issued_at = clock::from_time_t(token->issued_at()),
@@ -126,7 +126,7 @@ get_authenticator(caf::scoped_actor& self, node_actor node,
                               "running without the web plugin");
         } else {
           // There should always only be one AUTHENTICATOR at a given time.
-          TENZIR_ASSERT_CHEAP(actors.size() == 1);
+          TENZIR_ASSERT(actors.size() == 1);
           maybe_authenticator = std::move(actors[0]);
         }
       },

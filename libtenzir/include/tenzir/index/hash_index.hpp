@@ -206,7 +206,7 @@ private:
 
   [[nodiscard]] caf::expected<ids>
   lookup_impl(relational_operator op, data_view x) const override {
-    TENZIR_ASSERT(rank(this->mask()) == digests_.size());
+    TENZIR_ASSERT_EXPENSIVE(rank(this->mask()) == digests_.size());
     // Some operations we just cannot handle with this index, but they are still
     // valid operations. So for them we need to return all IDs.
     if (caf::holds_alternative<view<pattern>>(x)

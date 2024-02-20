@@ -203,7 +203,7 @@ there exists an integration:
    standard input and output of a forked child as a byte stream into a
    pipeline.
 
-Please do not hesitate to reach out to us if you think something ism issing, by
+Please do not hesitate to reach out to us if you think something is missing, by
 [opening a GitHub
 Discussion](https://github.com/orgs/tenzir/discussions/new/choose) or swinging
 by our [Discord server](/discord).
