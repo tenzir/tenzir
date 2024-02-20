@@ -111,7 +111,8 @@ public:
     if (bloom_filter_.parameters().k) {
       params.field("k", *bloom_filter_.parameters().k);
     }
-    co_yield entry_builder.finish_assert_one_slice(dump_event_name());
+    co_yield entry_builder.finish_assert_one_slice(
+      fmt::format("tenzir.{}.info", context_type()));
   }
 
   /// Updates the context.

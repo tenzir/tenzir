@@ -103,11 +103,13 @@ public:
       row.field("key", key);
       row.field("value", value);
       if (entry_builder.length() >= context::dump_batch_size_limit) {
-        co_yield entry_builder.finish_assert_one_slice(dump_event_name());
+        co_yield entry_builder.finish_assert_one_slice(
+          fmt::format("tenzir.{}.info", context_type()));
       }
     }
     // Dump all remaining entries that did not reach the size limit.
-    co_yield entry_builder.finish_assert_one_slice(dump_event_name());
+    co_yield entry_builder.finish_assert_one_slice(
+      fmt::format("tenzir.{}.info", context_type()));
   }
 
   /// Updates the context.

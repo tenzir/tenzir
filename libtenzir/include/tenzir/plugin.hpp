@@ -733,9 +733,6 @@ public:
 
   virtual auto context_type() const -> std::string = 0;
 
-  virtual auto dump_event_name() const -> std::string {
-    return fmt::format("tenzir.{}.info", context_type());
-  }
   /// Emits context information for every event in `array` in order.
   virtual auto apply(series array) const -> caf::expected<std::vector<series>>
     = 0;
