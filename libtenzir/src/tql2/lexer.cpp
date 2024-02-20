@@ -21,14 +21,17 @@ auto lex(std::string_view content) -> std::vector<token> {
   using namespace parsers;
   auto continue_ident = alnum | chr{'_'};
   auto identifier = (alpha | chr{'_'}) >> *continue_ident;
+  auto digit_us = digit | chr{'_'};
   auto p
     = ignore(*xdigit >> chr{':'} >> *xdigit >> chr{':'} >> *xdigit >> *((chr{'.'} | chr{':'}) >> *xdigit))
       ->* [] { return token_kind::ipv6; }
     | ignore(+digit >> chr{'.'} >> +digit >> +(chr{'.'} >> +digit))
       ->* [] { return token_kind::ipv4; }
-    | ignore(+digit >> chr{'.'} >> +digit)
+    | ignore(+digit >> chr{'-'} >> +digit >> chr{'-'} >> +digit >> *(alnum | chr{':'} | chr{'+'} | chr{'-'}))
+      ->* [] { return token_kind::datetime; }
+    | ignore(digit >> *digit_us >> chr{'.'} >> *digit_us)
       ->* [] { return token_kind::real; }
-    | ignore(+digit)
+    | ignore(digit >> *digit_us)
       ->* [] { return token_kind::integer; }
     | ignore(chr{'"'} >> *(lit{"\\\""} | (any - chr{'"'})) >> chr{'"'})
       ->* [] { return token_kind::string; }
@@ -61,6 +64,8 @@ auto lex(std::string_view content) -> std::vector<token> {
     | X(")", rpar)
     | X("{", lbrace)
     | X("}", rbrace)
+    | X("[", lbracket)
+    | X("]", rbracket)
     | X(",", comma)
     | X(":", colon)
     | X("_", underscore)

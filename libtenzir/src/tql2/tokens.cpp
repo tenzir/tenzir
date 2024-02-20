@@ -21,6 +21,7 @@ auto describe(token_kind k) -> std::string_view {
     X(bang_equal, "`!=`");
     X(colon, "`:`");
     X(comma, "`,`");
+    X(datetime, "datetime");
     X(delim_comment, "`/*...*/`");
     X(dollar_ident, "dollar identifier");
     X(dot, "`.`");

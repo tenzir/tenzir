@@ -264,7 +264,7 @@ auto exec_pipeline2(std::string content,
     fmt::println("{:#?}", parsed);
     return {};
   }
-  diagnostic::note("input is valid TQL2")
+  diagnostic::warning("pipeline is valid, but execution is not yet implemented")
     .hint("use `--dump-ast` to show AST")
     .emit(im);
   return {};

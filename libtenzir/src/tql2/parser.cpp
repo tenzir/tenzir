@@ -360,15 +360,6 @@ private:
     // TODO
     auto expr = parse_unary_expression();
     while (true) {
-      if (auto dot = accept(tk::dot)) {
-        auto name = expect(tk::identifier);
-        expr = field_access{
-          std::move(expr),
-          dot.location,
-          name.as_identifier(),
-        };
-        continue;
-      }
       if (auto bin_op = peek_binary_op()) {
         auto new_prec = precedence(*bin_op);
         if (new_prec >= prec) {
@@ -397,7 +388,30 @@ private:
         std::move(expr),
       };
     }
-    return parse_primary_expression();
+    auto expr = parse_primary_expression();
+    while (true) {
+      if (auto dot = accept(tk::dot)) {
+        auto name = expect(tk::identifier);
+        expr = field_access{
+          std::move(expr),
+          dot.location,
+          name.as_identifier(),
+        };
+        continue;
+      }
+      if (auto lbracket = accept(tk::lbracket)) {
+        if (auto rbracket = accept(tk::rbracket)) {
+          expr = unpack{std::move(expr),
+                        lbracket.location.combine(rbracket.location)};
+        } else {
+          // TODO: Indexing.
+          throw_token();
+        }
+        continue;
+      }
+      break;
+    }
+    return expr;
   }
 
   auto parse_primary_expression() -> expression {
@@ -408,6 +422,9 @@ private:
       auto result = parse_expression();
       expect(tk::rpar);
       return result;
+    }
+    if (auto token = accept(tk::underscore)) {
+      return underscore{};
     }
     if (auto token = accept(tk::string)) {
       // TODO: Make this better and parse content?

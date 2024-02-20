@@ -39,6 +39,7 @@ struct pipeline;
 struct record;
 struct selector;
 struct unary_expr;
+struct unpack;
 
 struct identifier {
   identifier(std::string name, location location)
@@ -114,9 +115,16 @@ struct null : location {
 
 struct duration : located<tenzir::duration> {};
 
+struct underscore : location {
+  auto location() const -> location {
+    return *this;
+  }
+};
+
 using expression_kind
   = variant<record, selector, pipeline_expr, string, integer, boolean,
-            field_access, binary_expr, unary_expr, function_call, null>;
+            field_access, binary_expr, unary_expr, function_call, null,
+            underscore, unpack>;
 
 struct expression {
   template <class T>
@@ -154,6 +162,24 @@ struct expression {
       TENZIR_ASSERT(x.kind);
     }
     return f.apply(*detail::identity<Inspector>(x.kind));
+  }
+};
+
+struct unpack {
+  unpack(expression expr, location brackets)
+    : expr{std::move(expr)}, brackets{brackets} {
+  }
+
+  expression expr;
+  location brackets;
+
+  friend auto inspect(auto& f, unpack& x) -> bool {
+    return f.object(x).fields(f.field("expr", x.expr),
+                              f.field("brackets", x.brackets));
+  }
+
+  auto location() const -> location {
+    return expr.location().combine(brackets);
   }
 };
 

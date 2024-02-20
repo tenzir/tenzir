@@ -16,12 +16,14 @@ public:
 
 class entity_registry {
 public:
-  void add(std::unique_ptr<operator_definition> x);
+  void add(std::unique_ptr<operator_definition> x) {
+  }
 };
 
 class tql2_plugin : public plugin {
 public:
-  virtual void register_entities(entity_registry& r);
+  virtual void register_entities(entity_registry& r) {
+  }
 };
 
 } // namespace tenzir
