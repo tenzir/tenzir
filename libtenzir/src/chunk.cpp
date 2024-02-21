@@ -9,6 +9,7 @@
 #include "tenzir/chunk.hpp"
 
 #include "tenzir/detail/legacy_deserialize.hpp"
+#include "tenzir/detail/posix.hpp"
 #include "tenzir/detail/tracepoint.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/io/read.hpp"
@@ -250,7 +251,7 @@ chunk::mmap(const std::filesystem::path& filename, size_type size,
   if (map == MAP_FAILED)
     return caf::make_error(ec::filesystem_error,
                            fmt::format("failed to mmap file {}: {}", filename,
-                                       std::strerror(mmap_errno)));
+                                       detail::describe_errno(mmap_errno)));
   auto deleter = [=]() noexcept {
     ::munmap(map, size);
   };
@@ -332,7 +333,7 @@ caf::expected<chunk::size_type> chunk::incore() const noexcept {
 #  endif
   if (mincore(const_cast<value_type*>(data()), size(), buf.data()))
     return caf::make_error(ec::system_error,
-                           "failed in mincore(2):", std::strerror(errno));
+                           "failed in mincore(2):", detail::describe_errno());
   auto in_memory = std::accumulate(buf.begin(), buf.end(), 0ul,
                                    [](auto acc, auto current) {
                                      return acc + (current & 0x1);

@@ -8,6 +8,7 @@
 
 #include "tenzir/detail/env.hpp"
 
+#include "tenzir/detail/posix.hpp"
 #include "tenzir/error.hpp"
 
 #include <fmt/format.h>
@@ -43,7 +44,7 @@ caf::error setenv(std::string_view key, std::string_view value, int overwrite) {
     return {};
   return caf::make_error( //
     ec::system_error,
-    fmt::format("failed in setenv(3): {}", ::strerror(errno)));
+    fmt::format("failed in setenv(3): {}", detail::describe_errno()));
 }
 
 caf::error unsetenv(std::string_view var) {
@@ -53,7 +54,7 @@ caf::error unsetenv(std::string_view var) {
     return {};
   return caf::make_error( //
     ec::system_error,
-    fmt::format("failed in unsetenv(3): {}", ::strerror(errno)));
+    fmt::format("failed in unsetenv(3): {}", detail::describe_errno()));
 }
 
 generator<std::pair<std::string_view, std::string_view>> environment() {
