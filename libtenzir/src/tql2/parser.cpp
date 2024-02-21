@@ -49,9 +49,9 @@ auto precedence(unary_op x) -> int {
   switch (x) {
     case pos:
     case neg:
-      return 7;
+      return 8;
     case not_:
-      return 2;
+      return 3;
   };
   TENZIR_UNREACHABLE();
 }
@@ -61,22 +61,22 @@ auto precedence(binary_op x) -> int {
   switch (x) {
     case mul:
     case div:
-      return 6;
+      return 7;
     case add:
     case sub:
-      return 5;
+      return 6;
     case gt:
     case ge:
     case lt:
     case le:
-      return 4;
+      return 5;
     case eq:
     case neq:
-      return 3;
+      return 4;
     case and_:
-      return 1;
+      return 2;
     case or_:
-      return 0;
+      return 1;
   }
   TENZIR_UNREACHABLE();
 }
@@ -104,26 +104,6 @@ public:
 private:
   auto accept_stmt_sep() -> bool {
     return accept(tk::newline) || accept(tk::pipe);
-  }
-
-  auto parse_argument() -> expression {
-    // TOD: Refactor this into `parse_expression`?
-    auto expr = parse_expression();
-    if (auto equal = accept(tk::equal)) {
-      return expr.match(
-        [&](selector& y) -> expression {
-          auto left = std::move(y);
-          auto right = parse_expression();
-          return assignment{std::move(left), equal.location, std::move(right)};
-        },
-        [&](auto&) -> expression {
-          // TODO
-          diagnostic::error("left of = must be selector")
-            .primary(expr.location())
-            .throw_();
-        });
-    }
-    return expr;
   }
 
   auto parse_pipeline() -> pipeline {
@@ -254,7 +234,7 @@ private:
             }
             consume_trivia_with_newlines();
           }
-          args.push_back(parse_argument());
+          args.push_back(parse_expression());
         }
         steps.emplace_back(invocation{std::move(op), std::move(args)});
       } else {
@@ -361,7 +341,23 @@ private:
   auto parse_expression(int prec = 0) -> expression {
     // TODO
     auto expr = parse_unary_expression();
+    // foo = bar = baz
     while (true) {
+      if (prec == 0) {
+        if (auto equal = accept(tk::equal)) {
+          auto left = std::get_if<selector>(expr.kind.get());
+          if (not left) {
+            diagnostic::error("left of `=` must be selector")
+              .primary(expr.location())
+              .hint("equality comparison is done with `==`")
+              .throw_();
+          }
+          // TODO: Check precedence.
+          auto right = parse_expression();
+          expr = assignment{std::move(*left), equal.location, std::move(right)};
+          continue;
+        }
+      }
       if (auto bin_op = peek_binary_op()) {
         auto new_prec = precedence(*bin_op);
         if (new_prec >= prec) {
@@ -482,7 +478,7 @@ private:
               break;
             }
           }
-          args.push_back(parse_argument());
+          args.push_back(parse_expression());
         }
         return function_call{std::move(receiver), std::move(function),
                              std::move(args)};
