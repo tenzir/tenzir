@@ -31,11 +31,21 @@
 namespace tenzir::detail {
 
 auto describe_errno(int err) -> std::string {
-  // See https://www.club.cc.cmu.edu/~cmccabe/blog_strerror.html.
-  if (0 <= err && err < sys_nerr) {
-    return sys_errlist[err];
-  }
-  return fmt::format("<errno = {}>", err);
+  auto buffer = std::string(256, '\0');
+  auto result = ::strerror_r(err, buffer.data(), buffer.size());
+  return [&](auto result) {
+    if constexpr (std::same_as<decltype(result), int>) {
+      if (result != 0) {
+        return fmt::format("<errno = {}>", err);
+      }
+      buffer.erase(std::ranges::find(buffer, '\0'), buffer.end());
+      return std::move(buffer);
+    } else {
+      static_assert(std::same_as<decltype(result), char*>);
+      TENZIR_ASSERT(result);
+      return std::string(result);
+    }
+  }(result);
 }
 
 int uds_listen(const std::string& path) {
