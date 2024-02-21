@@ -23,7 +23,8 @@ depict your events graphically instead of in table form.
 
 Charting integrates seamlessly into your pipelines by simply adding the `chart`
 operator. For instance, plotting a bar chart representing the frequency of
-occurences for each protocol in `suricata.flow` events can be as simple as this:
+occurrences for each protocol in `suricata.flow` events can be as simple as
+this:
 
 TODO: Add screenshots for all charts
 
@@ -70,14 +71,14 @@ show partitions
 ```
 
 We're just getting started with charting! If you want to see further chart types
-added, have feedback on charting, or want to share examples of what your
+added, have feedback on charting, or want to share examples of your
 visualizations with the chart operator, we would love to [hear from
 you](/discord).
 
 :::info Coming Soon: Dashboards
 The `chart` operator is a first step towards having dashboards directly in
 Tenzir. Any result that you see in the Explorer you will soon be able to pin and
-freely arrange on customizable dashboard.
+freely arrange on a customizable dashboard.
 :::
 
 ## Bloom Filter Context
@@ -88,7 +89,7 @@ filter](https://en.wikipedia.org/wiki/Bloom_filter) to store sets in a compact
 way, at the cost of potential false positives when looking up an item.
 
 If you have massive amounts of indicators or a large amount of things you would
-liket to contextualize, this feature is for you.
+like to contextualize, this feature is for you.
 
 Create a Bloom filter context by using `bloom-filter` as context type:
 
@@ -128,8 +129,10 @@ Other noteworthy changes and improvements:
 - `tenzir.db-directory` is now `tenzir.state-directory`. The old option remains
   functional, but will be phased out in an upcoming release.
 - On the command-line, Tenzir now respects [`NO_COLOR`](https://no-color.org)
-  when printing diagnostics.
-- RFC 5424-style Syslog parsing no longer omits structured data fields.
+  when printing diagnostics. Additionally, colors are automatically disabled
+  when the output device is not a terminal.
+- RFC 5424-style Syslog parsing now emits a record with the structured data
+  fields.
 - The `--selector` option for the JSON parser now works with nested and
   non-string fields.
 - The `python` operator gained a `--file` option to read from a file instead of
