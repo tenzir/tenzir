@@ -126,7 +126,7 @@ struct underscore : location {
 using expression_kind
   = variant<record, list, selector, pipeline_expr, string, integer, boolean,
             field_access, index_expr, binary_expr, unary_expr, function_call,
-            null, underscore, unpack>;
+            null, underscore, unpack, assignment>;
 
 struct expression {
   template <class T>
@@ -245,16 +245,6 @@ struct assignment {
   }
 };
 
-struct argument : variant<expression, assignment> {
-  using variant::variant;
-
-  auto location() const -> location {
-    return match([](auto& x) {
-      return x.location();
-    });
-  }
-};
-
 struct entity {
   explicit entity(std::vector<identifier> path) : path{std::move(path)} {
   }
@@ -275,13 +265,13 @@ struct entity {
 
 struct function_call {
   function_call(std::optional<expression> receiver, entity fn,
-                std::vector<argument> args)
+                std::vector<expression> args)
     : receiver{std::move(receiver)}, fn{std::move(fn)}, args{std::move(args)} {
   }
 
   std::optional<expression> receiver;
   entity fn;
-  std::vector<argument> args;
+  std::vector<expression> args;
 
   auto location() const -> location {
     // TODO
@@ -403,7 +393,7 @@ struct record {
 
 struct invocation {
   entity op;
-  std::vector<argument> args;
+  std::vector<expression> args;
 
   friend auto inspect(auto& f, invocation& x) -> bool {
     return f.object(x).fields(f.field("op", x.op), f.field("args", x.args));

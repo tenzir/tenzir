@@ -106,16 +106,17 @@ private:
     return accept(tk::newline) || accept(tk::pipe);
   }
 
-  auto parse_argument() -> argument {
+  auto parse_argument() -> expression {
+    // TOD: Refactor this into `parse_expression`?
     auto expr = parse_expression();
     if (auto equal = accept(tk::equal)) {
       return expr.match(
-        [&](selector& y) -> argument {
+        [&](selector& y) -> expression {
           auto left = std::move(y);
           auto right = parse_expression();
           return assignment{std::move(left), equal.location, std::move(right)};
         },
-        [&](auto&) -> argument {
+        [&](auto&) -> expression {
           // TODO
           diagnostic::error("left of = must be selector")
             .primary(expr.location())
@@ -226,7 +227,7 @@ private:
         // TODO: Parse operator.
         // TODO: Proper entity.
         auto op = entity{{std::move(left.path[0])}};
-        auto args = std::vector<argument>{};
+        auto args = std::vector<expression>{};
         while (not accept_stmt_end()) {
           if (not args.empty()) {
             if (not accept(tk::comma)) {
@@ -466,7 +467,7 @@ private:
         if (selector.this_ || not selector.path.empty()) {
           receiver = std::move(selector);
         }
-        auto args = std::vector<argument>{};
+        auto args = std::vector<expression>{};
         while (true) {
           if (peek(tk::rpar)) {
             scope.done();
