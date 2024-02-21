@@ -91,6 +91,30 @@ public:
     };
   }
 
+  auto dump() -> generator<table_slice> override {
+    auto ptr = reinterpret_cast<const std::byte*>(bloom_filter_.data().data());
+    auto size = bloom_filter_.data().size();
+    auto data = std::basic_string<std::byte>{ptr, size};
+    auto entry_builder = series_builder{};
+    auto row = entry_builder.record();
+    row.field("num_elements", bloom_filter_.num_elements());
+    auto params = row.field("parameters").record();
+    if (bloom_filter_.parameters().m) {
+      params.field("m", *bloom_filter_.parameters().m);
+    }
+    if (bloom_filter_.parameters().n) {
+      params.field("n", *bloom_filter_.parameters().n);
+    }
+    if (bloom_filter_.parameters().p) {
+      params.field("p", *bloom_filter_.parameters().p);
+    }
+    if (bloom_filter_.parameters().k) {
+      params.field("k", *bloom_filter_.parameters().k);
+    }
+    co_yield entry_builder.finish_assert_one_slice(
+      fmt::format("tenzir.{}.info", context_type()));
+  }
+
   /// Updates the context.
   auto update(table_slice slice, context::parameter_map parameters)
     -> caf::expected<update_result> override {

@@ -18,6 +18,7 @@ context update <name> [<options>]
 context reset  <name>
 context save   <name>
 context load   <name>
+context inspect <name>
 ```
 
 ## Description
@@ -44,6 +45,9 @@ The `context` operator manages [context](../contexts.md) instances.
 - The `load` command takes in bytes, likely previously created with
   `context save`, and initializes the context with that data. The pipeline
   returns information about the populated context.
+
+- The `inspect` command dumps a specific context's user-provided data, usually
+  the context's content.
 
 ### `<name>`
 
@@ -80,4 +84,10 @@ Delete the context named `feodo`:
 
 ```
 context delete feodo
+```
+
+Inspect all data provided to `feodo`:
+
+```
+context inspect feodo
 ```

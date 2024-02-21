@@ -58,6 +58,13 @@ auto cast_128_bit_unsigned_to_64_bit(mmdb_uint128_t uint128) -> uint64_t {
 }
 #endif
 
+struct current_dump {
+  std::set<uint64_t> visited = {};
+  int status = MMDB_SUCCESS;
+  series_builder builder;
+};
+} // namespace
+
 class ctx final : public virtual context {
 public:
   ctx() noexcept = default;
@@ -340,6 +347,91 @@ public:
     return record{{path_key, db_path_}};
   }
 
+  auto dump_recurse(uint64_t node_number, uint8_t type, MMDB_entry_s* entry,
+                    current_dump& current_dump) -> generator<table_slice> {
+    if (current_dump.visited.contains(node_number)) {
+      co_return;
+    }
+    current_dump.visited.emplace(node_number);
+    switch (type) {
+      case MMDB_RECORD_TYPE_SEARCH_NODE: {
+        MMDB_search_node_s search_node{};
+        current_dump.status
+          = MMDB_read_node(&*mmdb_, node_number, &search_node);
+        if (current_dump.status != MMDB_SUCCESS) {
+          break;
+        }
+        for (auto&& x :
+             dump_recurse(search_node.left_record, search_node.left_record_type,
+                          &search_node.left_record_entry, current_dump)) {
+          if (current_dump.status != MMDB_SUCCESS) {
+            break;
+          }
+          co_yield x;
+        }
+        for (auto&& x : dump_recurse(
+               search_node.right_record, search_node.right_record_type,
+               &search_node.right_record_entry, current_dump)) {
+          if (current_dump.status != MMDB_SUCCESS) {
+            break;
+          }
+          co_yield x;
+        }
+        break;
+      }
+      case MMDB_RECORD_TYPE_EMPTY: {
+        // Stop search
+        break;
+      }
+      case MMDB_RECORD_TYPE_DATA: {
+        TENZIR_ASSERT(entry != nullptr);
+        MMDB_entry_data_list_s* entry_data_list = nullptr;
+        current_dump.status = MMDB_get_entry_data_list(entry, &entry_data_list);
+        if (current_dump.status != MMDB_SUCCESS) {
+          break;
+        }
+        auto free_entry_data_list = caf::detail::make_scope_guard([&] {
+          if (entry_data_list) {
+            MMDB_free_entry_data_list(entry_data_list);
+          }
+        });
+        auto output = list{};
+        entry_data_list_to_list(entry_data_list, &current_dump.status, output);
+        if (current_dump.status != MMDB_SUCCESS) {
+          break;
+        }
+        for (auto& x : output) {
+          current_dump.builder.data(x);
+          if (current_dump.builder.length() >= context::dump_batch_size_limit) {
+            co_yield current_dump.builder.finish_assert_one_slice(
+              fmt::format("tenzir.{}.info", context_type()));
+          }
+        }
+        break;
+      }
+      case MMDB_RECORD_TYPE_INVALID: {
+        current_dump.status = MMDB_INVALID_DATA_ERROR;
+        break;
+      }
+    }
+  }
+
+  auto dump() -> generator<table_slice> override {
+    TENZIR_ASSERT(mmdb_);
+    current_dump current_dump;
+    for (auto&& slice :
+         dump_recurse(0, MMDB_RECORD_TYPE_SEARCH_NODE, nullptr, current_dump)) {
+      co_yield slice;
+    }
+    // Dump all remaining entries that did not reach the size limit.
+    co_yield current_dump.builder.finish_assert_one_slice(
+      fmt::format("tenzir.{}.info", context_type()));
+    if (current_dump.status != MMDB_SUCCESS) {
+      TENZIR_ERROR("dump of GeoIP context ended prematurely: {}",
+                   MMDB_strerror(current_dump.status));
+    }
+  }
+
   /// Updates the context.
   auto update(table_slice, context::parameter_map)
     -> caf::expected<update_result> override {
@@ -427,8 +519,6 @@ class plugin : public virtual context_plugin {
     return std::make_unique<ctx>(std::move(params));
   }
 };
-
-} // namespace
 
 } // namespace tenzir::plugins::geoip
 

@@ -720,6 +720,8 @@ public:
   using make_query_type
     = std::function<caf::expected<expression>(parameter_map)>;
 
+  static constexpr auto dump_batch_size_limit = 65536;
+
   /// Information about a context update that gets propagated to live lookups.
   struct update_result {
     record update_info;
@@ -737,6 +739,9 @@ public:
 
   /// Inspects the context.
   virtual auto show() const -> record = 0;
+
+  /// Dumps the context content or a dumping error.
+  virtual auto dump() -> generator<table_slice> = 0;
 
   /// Updates the context.
   virtual auto update(table_slice events, parameter_map parameters)

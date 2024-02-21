@@ -96,6 +96,22 @@ public:
     return record{{"num_entries", context_entries.size()}};
   }
 
+  auto dump() -> generator<table_slice> override {
+    auto entry_builder = series_builder{};
+    for (const auto& [key, value] : context_entries) {
+      auto row = entry_builder.record();
+      row.field("key", key);
+      row.field("value", value);
+      if (entry_builder.length() >= context::dump_batch_size_limit) {
+        co_yield entry_builder.finish_assert_one_slice(
+          fmt::format("tenzir.{}.info", context_type()));
+      }
+    }
+    // Dump all remaining entries that did not reach the size limit.
+    co_yield entry_builder.finish_assert_one_slice(
+      fmt::format("tenzir.{}.info", context_type()));
+  }
+
   /// Updates the context.
   auto update(table_slice slice, context::parameter_map parameters)
     -> caf::expected<update_result> override {
