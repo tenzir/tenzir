@@ -23,6 +23,7 @@ apt-get -y --no-install-recommends install \
     libflatbuffers-dev \
     libfmt-dev \
     libgrpc-dev \
+    libgrpc++-dev \
     libhttp-parser-dev \
     libmaxminddb-dev \
     libpcap-dev tcpdump \
@@ -63,24 +64,13 @@ codename="$(lsb_release --codename --short)"
 wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-${codename}.deb"
 apt-get -y --no-install-recommends install ./"apache-arrow-apt-source-latest-${codename}.deb"
 apt-get update
-apt-get -y --no-install-recommends install libarrow-dev=13.0.0-1 libprotobuf-dev libparquet-dev=13.0.0-1
+# The apt download sometimes fails with a 403. We employ a similar workaround as
+# arrow itself: https://github.com/apache/arrow/pull/36836.
+# See also: https://github.com/apache/arrow/issues/35292.
+apt-get -y --no-install-recommends install libarrow-dev libprotobuf-dev libparquet-dev || \
+  apt-get -y --no-install-recommends install libarrow-dev libprotobuf-dev libparquet-dev || \
+  apt-get -y --no-install-recommends install libarrow-dev libprotobuf-dev libparquet-dev
 rm ./"apache-arrow-apt-source-latest-${codename}.deb"
-
-# Fluent-bit
-# TODO: The official package contains a conflicting static build of jemalloc.
-# https://github.com/fluent/fluent-bit/pull/8005 attempts to clean that up.
-#wget -O - 'https://packages.fluentbit.io/fluentbit.key' | tee /usr/share/keyrings/fluentbit.asc >/dev/null
-#echo "deb [signed-by=/usr/share/keyrings/fluentbit.asc] https://packages.fluentbit.io/debian/${codename} ${codename} main" | tee /etc/apt/sources.list.d/fluentbit.list
-#apt-get update
-#apt-get -y install fluent-bit
-# A custom package generated from git tag with
-# ```
-# cd packaging
-# FLB_JEMALLOC=OFF ./build.sh -d debian/bookworm
-# ```
-wget https://storage.googleapis.com/tenzir-public-data/fluent-bit-packages/debian/bookworm/fluent-bit_2.1.10_amd64.deb
-apt-get -y --no-install-recommends install ./fluent-bit_2.1.10_amd64.deb
-rm ./fluent-bit_2.1.10_amd64.deb
 
 # Node 18.x and Yarn
 NODE_MAJOR=18

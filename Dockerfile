@@ -1,3 +1,15 @@
+# -- fluent-bit-package -----------------------------------------------------------
+
+FROM debian:bookworm-slim AS fluent-bit-package
+
+ENV CC="gcc-12" \
+    CXX="g++-12"
+
+WORKDIR /tmp/fluent-bit
+COPY scripts/debian/build-fluent-bit.sh ./scripts/debian/
+RUN ./scripts/debian/build-fluent-bit.sh && \
+    rm -rf /var/lib/apt/lists/*
+
 # -- dependencies --------------------------------------------------------------
 
 FROM debian:bookworm-slim AS dependencies
@@ -8,9 +20,12 @@ ENV CC="gcc-12" \
 
 WORKDIR /tmp/tenzir
 
-COPY scripts ./scripts
-
-RUN ./scripts/debian/install-dev-dependencies.sh && rm -rf /var/lib/apt/lists/*
+COPY --from=fluent-bit-package /root/fluent-bit_*.deb /root/
+COPY scripts/debian/install-dev-dependencies.sh ./scripts/debian/
+RUN ./scripts/debian/install-dev-dependencies.sh && \
+    apt-get -y --no-install-recommends install /root/fluent-bit_*.deb && \
+    rm /root/fluent-bit_*.deb && \
+    rm -rf /var/lib/apt/lists/*
 
 # Tenzir
 COPY changelog ./changelog
@@ -20,6 +35,7 @@ COPY libtenzir_test ./libtenzir_test
 COPY plugins ./plugins
 COPY python ./python
 COPY schema ./schema
+COPY scripts ./scripts
 COPY tenzir ./tenzir
 COPY CMakeLists.txt LICENSE README.md tenzir.spdx.json VERSIONING.md \
      tenzir.yaml.example version.json ./
@@ -88,9 +104,10 @@ ENV PREFIX="/opt/tenzir" \
 
 RUN useradd --system --user-group tenzir
 COPY --from=development --chown=tenzir:tenzir $PREFIX/ $PREFIX/
-COPY --from=development --chown=tenzir:tenzir /var/cache/tenzir/ /var/cache/tenzir
-COPY --from=development --chown=tenzir:tenzir /var/lib/tenzir/ /var/lib/tenzir
-COPY --from=development --chown=tenzir:tenzir /var/log/tenzir/ /var/log/tenzir
+COPY --from=development --chown=tenzir:tenzir /var/cache/tenzir/ /var/cache/tenzir/
+COPY --from=development --chown=tenzir:tenzir /var/lib/tenzir/ /var/lib/tenzir/
+COPY --from=development --chown=tenzir:tenzir /var/log/tenzir/ /var/log/tenzir/
+COPY --from=fluent-bit-package /root/fluent-bit_*.deb /root/
 
 RUN apt-get update && \
     apt-get -y --no-install-recommends install \
@@ -127,10 +144,9 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install \
       ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
     apt-get update && \
-    apt-get -y --no-install-recommends install libarrow1300 libparquet1300 && \
-    wget "https://storage.googleapis.com/tenzir-public-data/fluent-bit-packages/debian/bookworm/fluent-bit_2.1.10_amd64.deb" && \
-    apt-get -y --no-install-recommends install ./fluent-bit_2.1.10_amd64.deb && \
-    rm ./fluent-bit_2.1.10_amd64.deb && \
+    apt-get -y --no-install-recommends install libarrow1500 libparquet1500 && \
+    apt-get -y --no-install-recommends install /root/fluent-bit_*.deb && \
+    rm /root/fluent-bit_*.deb && \
     rm -rf /var/lib/apt/lists/*
 
 USER tenzir:tenzir
