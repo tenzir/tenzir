@@ -116,7 +116,7 @@ arrow_fd_wrapper::arrow_fd_wrapper(int fd) : fd_{fd} {
   int result = ::close(fd_);
   fd_ = -1;
   if (result != 0)
-    return ::arrow::Status::IOError("close(2): ", std::strerror(errno));
+    return ::arrow::Status::IOError("close(2): ", detail::describe_errno());
   return ::arrow::Status::OK();
 }
 
