@@ -23,42 +23,44 @@ depict your events graphically instead of in table form.
 
 Charting integrates seamlessly into your pipelines by simply adding the `chart`
 operator. For instance, plotting a bar chart representing the frequency of
-occurrences for each protocol in `suricata.flow` events can be as simple as
-this:
-
-TODO: Add screenshots for all charts
+occurrences for each protocol in `zeek.conn` events can be as simple as this:
 
 ```
 export
-| where #schema == "suricata.flow"
+| where #schema == "zeek.conn"
 | top proto
 | chart bar --title "Protocols"
 ```
 
-This line chart depicts the load average over 15 minutes for the past two days,
-making use of the recently added `metrics` operator:
+![Protocols](https://github.com/tenzir/tenzir/assets/4488655/075cf3af-ed51-4aca-8885-6f682284831c)
+
+This line chart depicts the load average over 15 minutes, making use of the
+recently added `metrics` operator:
 
 ```
 metrics
 | where #schema == "tenzir.metrics.cpu"
-| where #import_time > 2 days ago
+| sort timestamp
 | chart line -x timestamp -y loadavg_15m --title "Load Average (15 min)"
 ```
 
-This area chart displays the total ingress across all pipelines for the past day
-in MiB/s.
+![Load Average (15 min)](https://github.com/tenzir/tenzir/assets/4488655/453bc8da-4be8-4a2c-9ef2-10328f02d682)
+
+This area chart displays the total ingress across all pipelines for the past 10
+minutes in MiB/s.
 
 ```
 metrics
 | where #schema == "tenzir.metrics.operator"
-| where #import_time > 1 day ago
+| where timestamp > 10 min ago
 | where source == true
 | where internal == false
-| summarize egress=sum(output.approx_bytes), duration=sum(duration) by timestamp resolution 10 seconds
 | sort timestamp
-| python 'self.egress_rate = self.egress / self.duration.total_seconds() / 2**20'
-| chart area -x timestamp -y egress_rate --title "Total Ingress MiB/s"
+| python 'self.egress_rate = self.output.approx_bytes / self.duration.total_seconds() / 2**20'
+| chart area -x timestamp -y egress_rate --title "Total Ingress (MiB/s)"
 ```
+
+![Total Ingress (MiB/s)](https://github.com/tenzir/tenzir/assets/4488655/a5313261-fe5d-413c-a7d9-8da781871aba)
 
 This pie chart shows the distribution of events stored at the node by disk
 usage:
@@ -66,9 +68,10 @@ usage:
 ```
 show partitions
 | summarize diskusage=sum(diskusage) by schema
-| python 'self.diskusage = self.diskusage / 2**30'
-| chart pie --title "Disk Usage (GiB)"
+| chart pie --title "Disk Usage (bytes)"
 ```
+
+![Disk Usage](https://github.com/tenzir/tenzir/assets/4488655/103bdb72-7708-414b-ac8c-d19562295ea3)
 
 We're just getting started with charting! If you want to see further chart types
 added, have feedback on charting, or want to share examples of your
