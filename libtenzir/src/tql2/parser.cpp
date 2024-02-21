@@ -405,8 +405,10 @@ private:
           expr = unpack{std::move(expr),
                         lbracket.location.combine(rbracket.location)};
         } else {
-          // TODO: Indexing.
-          throw_token();
+          auto index = parse_expression();
+          rbracket = expect(tk::rbracket);
+          expr = index_expr{std::move(expr), lbracket.location,
+                            std::move(index), rbracket.location};
         }
         continue;
       }

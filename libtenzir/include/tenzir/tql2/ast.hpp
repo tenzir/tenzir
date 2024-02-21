@@ -31,6 +31,7 @@ struct field_access;
 struct function_call;
 struct identifier;
 struct if_stmt;
+struct index_expr;
 struct invocation;
 struct let_stmt;
 struct list;
@@ -124,8 +125,8 @@ struct underscore : location {
 
 using expression_kind
   = variant<record, list, selector, pipeline_expr, string, integer, boolean,
-            field_access, binary_expr, unary_expr, function_call, null,
-            underscore, unpack>;
+            field_access, index_expr, binary_expr, unary_expr, function_call,
+            null, underscore, unpack>;
 
 struct expression {
   template <class T>
@@ -309,6 +310,32 @@ struct field_access {
   friend auto inspect(auto& f, field_access& x) -> bool {
     return f.object(x).fields(f.field("left", x.left), f.field("dot", x.dot),
                               f.field("name", x.name));
+  }
+};
+
+struct index_expr {
+  index_expr(expression expr, location lbracket, expression index,
+             location rbracket)
+    : expr{std::move(expr)},
+      lbracket{lbracket},
+      index{std::move(index)},
+      rbracket{rbracket} {
+  }
+
+  expression expr;
+  location lbracket;
+  expression index;
+  location rbracket;
+
+  friend auto inspect(auto& f, index_expr& x) -> bool {
+    return f.object(x).fields(f.field("expr", x.expr),
+                              f.field("lbracket", x.lbracket),
+                              f.field("index", x.index),
+                              f.field("rbracket", x.rbracket));
+  }
+
+  auto location() const -> location {
+    return expr.location().combine(rbracket);
   }
 };
 
