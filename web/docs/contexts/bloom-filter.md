@@ -10,8 +10,8 @@ context create <name> bloom-filter
 context update <name> --key <field>
 context delete <name>
 context reset  <name>
-context load   <name>
 context save   <name>
+context load   <name>
 enrich <name> --field <field>
 lookup <name> --field <field>
 ```

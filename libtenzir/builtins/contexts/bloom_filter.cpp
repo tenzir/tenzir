@@ -169,20 +169,37 @@ public:
     return show();
   }
 
-  auto save() const -> caf::expected<chunk_ptr> override {
+  auto save() const -> caf::expected<save_result> override {
     std::vector<std::byte> buffer;
     if (auto err = convert(bloom_filter_, buffer)) {
       return add_context(err, "failed to serialize Bloom filter context");
     }
-    return chunk::make(std::move(buffer));
+    return save_result{.data = chunk::make(std::move(buffer)), .version = 1};
   }
 
 private:
   dcso_bloom_filter bloom_filter_;
 };
 
+struct v1_loader : public context_loader {
+  auto version() const -> int {
+    return 1;
+  }
+
+  auto load(chunk_ptr serialized) const
+    -> caf::expected<std::unique_ptr<context>> {
+    TENZIR_ASSERT(serialized != nullptr);
+    auto bloom_filter = dcso_bloom_filter{};
+    if (auto err = convert(as_bytes(*serialized), bloom_filter)) {
+      return add_context(err, "failed to deserialize Bloom filter context");
+    }
+    return std::make_unique<bloom_filter_context>(std::move(bloom_filter));
+  }
+};
+
 class plugin : public virtual context_plugin {
   auto initialize(const record&, const record&) -> caf::error override {
+    register_loader(std::make_unique<v1_loader>());
     return caf::none;
   }
 
@@ -225,16 +242,6 @@ class plugin : public virtual context_plugin {
                              "--fp-probability not in (0,1)");
     }
     return std::make_unique<bloom_filter_context>(n, p);
-  }
-
-  auto load_context(chunk_ptr serialized) const
-    -> caf::expected<std::unique_ptr<context>> override {
-    TENZIR_ASSERT(serialized != nullptr);
-    auto bloom_filter = dcso_bloom_filter{};
-    if (auto err = convert(as_bytes(*serialized), bloom_filter)) {
-      return add_context(err, "failed to deserialize Bloom filter context");
-    }
-    return std::make_unique<bloom_filter_context>(std::move(bloom_filter));
   }
 };
 

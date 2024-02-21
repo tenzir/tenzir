@@ -8,8 +8,8 @@ A context for enriching IP addresses with geographical data.
 context create <name> geoip [--db-path <mmdb>]
 context delete <name>
 context reset  <name> [--db-path <mmdb>]
-context load   <name>
 context save   <name>
+context load   <name>
 enrich <name> --field <field>
 lookup <name> --field <field>
 ```
