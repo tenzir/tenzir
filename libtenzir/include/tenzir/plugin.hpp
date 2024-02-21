@@ -732,7 +732,8 @@ public:
   virtual auto context_type() const -> std::string = 0;
 
   /// Emits context information for every event in `array` in order.
-  virtual auto apply(series array) const -> caf::expected<std::vector<series>>
+  virtual auto apply(std::vector<series> array) const
+    -> caf::expected<std::vector<std::vector<series>>>
     = 0;
 
   /// Inspects the context.

@@ -53,19 +53,26 @@ public:
   }
 
   /// Emits context information for every event in `slice` in order.
-  auto apply(series s) const -> caf::expected<std::vector<series>> override {
+  auto apply(std::vector<series> series_v) const
+    -> caf::expected<std::vector<std::vector<series>>> override {
     auto builder = series_builder{};
-    for (const auto& value : s.values()) {
-      if (bloom_filter_.lookup(value)) {
-        auto ptr = bloom_filter_.data().data();
-        auto size = bloom_filter_.data().size();
-        auto r = builder.record();
-        r.field("data", std::basic_string<std::byte>{ptr, size});
-      } else {
-        builder.null();
+    auto res = std::vector<std::vector<series>>{};
+    for (const auto& s : series_v) {
+      for (const auto& value : s.values()) {
+        if (bloom_filter_.lookup(value)) {
+          auto ptr = bloom_filter_.data().data();
+          auto size = bloom_filter_.data().size();
+          auto r = builder.record();
+          r.field("data", std::basic_string<std::byte>{ptr, size});
+        } else {
+          builder.null();
+        }
+      }
+      if (builder.length() > 0) {
+        res.emplace_back(builder.finish());
       }
     }
-    return builder.finish();
+    return res;
   }
 
   auto snapshot(parameter_map) const -> caf::expected<expression> override {

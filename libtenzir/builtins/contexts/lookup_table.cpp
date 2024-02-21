@@ -51,16 +51,24 @@ public:
     return "lookup-table";
   }
 
-  auto apply(series s) const -> caf::expected<std::vector<series>> override {
+  auto apply(std::vector<series> series_v) const
+    -> caf::expected<std::vector<std::vector<series>>> override {
     auto builder = series_builder{};
-    for (const auto& value : s.values()) {
-      if (auto it = context_entries.find(value); it != context_entries.end()) {
-        builder.data(it->second);
-      } else {
-        builder.null();
+    auto res = std::vector<std::vector<series>>{};
+    for (const auto& s : series_v) {
+      for (const auto& value : s.values()) {
+        if (auto it = context_entries.find(value);
+            it != context_entries.end()) {
+          builder.data(it->second);
+        } else {
+          builder.null();
+        }
+      }
+      if (builder.length() > 0) {
+        res.emplace_back(builder.finish());
       }
     }
-    return builder.finish();
+    return res;
   }
 
   auto snapshot(parameter_map parameters) const
