@@ -38,6 +38,25 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
     = get_or(opts, "tenzir.state-directory", defaults::state_directory.data());
   auto detach_components = caf::get_or(opts, "tenzir.detach-components",
                                        defaults::detach_components);
+  TENZIR_INFO("spawn node opts: {}", opts);
+  auto default_components = caf::make_config_value_list(
+    "catalog", "index", "importer", "eraser", "disk-monitor");
+  auto maybe_components = get_or(opts, "tenzir.components", default_components);
+  auto components = get_as<caf::config_value::list>(maybe_components);
+  if (!components)
+    return add_context(ec::unrecognized_option,
+                       "tenzir.components must be a list of component names, "
+                       "but got {}",
+                       maybe_components);
+  auto needs_db_directory = false;
+  for (const auto& c : *components) {
+    auto component = get_as<std::string>(c);
+    TENZIR_INFO("{}", *component);
+    if (*component == "index" || *component == "archive") {
+      needs_db_directory = true;
+      break;
+    }
+  }
   std::error_code err{};
   const auto abs_dir = std::filesystem::absolute(db_dir, err);
   if (err)
@@ -45,32 +64,36 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
                            fmt::format("failed to get absolute path to "
                                        "state-directory {}: {}",
                                        db_dir, err.message()));
-  const auto dir_exists = std::filesystem::exists(abs_dir, err);
-  if (!dir_exists) {
-    if (auto created_dir = std::filesystem::create_directories(abs_dir, err);
-        !created_dir)
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("unable to create state-directory {}: "
-                                         "{}",
-                                         abs_dir, err.message()));
-  }
-  if (const auto is_writable = ::access(abs_dir.c_str(), W_OK) == 0;
-      !is_writable)
-    return caf::make_error(
-      ec::filesystem_error,
-      "unable to write to state-directory:", abs_dir.string());
-  // Acquire PID lock.
   auto pid_file = abs_dir / "pid.lock";
-  TENZIR_DEBUG("node acquires PID lock {}", pid_file.string());
-  if (auto err = detail::acquire_pid_file(pid_file))
-    return err;
-  // Remove old VERSION file if it exists. This can be removed once the minimum
-  // partition version is >= 3.
-  {
-    auto err = std::error_code{};
-    std::filesystem::remove(abs_dir / "VERSION", err);
-    if (err)
-      TENZIR_WARN("failed to remove outdated VERSION file: {}", err.message());
+  if (needs_db_directory) {
+    TENZIR_INFO("needs_db_directory");
+    const auto dir_exists = std::filesystem::exists(abs_dir, err);
+    if (!dir_exists) {
+      if (auto created_dir = std::filesystem::create_directories(abs_dir, err);
+          !created_dir)
+        return caf::make_error(ec::filesystem_error,
+                               fmt::format("unable to create db-directory {}: "
+                                           "{}",
+                                           abs_dir, err.message()));
+    }
+    if (const auto is_writable = ::access(abs_dir.c_str(), W_OK) == 0;
+        !is_writable)
+      return caf::make_error(
+        ec::filesystem_error,
+        "unable to write to state-directory:", abs_dir.string());
+    // Acquire PID lock.
+    TENZIR_DEBUG("node acquires PID lock {}", pid_file.string());
+    if (auto err = detail::acquire_pid_file(pid_file))
+      return err;
+    // Remove old VERSION file if it exists. This can be removed once the
+    // minimum partition version is >= 3.
+    {
+      auto err = std::error_code{};
+      std::filesystem::remove(abs_dir / "VERSION", err);
+      if (err)
+        TENZIR_WARN("failed to remove outdated VERSION file: {}",
+                    err.message());
+    }
   }
   // Register self as the termination handler.
   auto signal_reflector
@@ -91,14 +114,17 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
     //       In case we change this to RAII we need to add `scope_lock` like
     //       callback functionality to `scope_linked` instead.
     system.registry().erase("tenzir.node");
-    std::error_code err{};
-    std::filesystem::remove_all(pid_file, err);
-    if (err)
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("unable to remove pid file {} : {}",
-                                         pid_file, err.message()));
+    if (needs_db_directory) {
+      std::error_code err{};
+      std::filesystem::remove_all(pid_file, err);
+      if (err)
+        return caf::make_error(ec::filesystem_error,
+                               fmt::format("unable to remove pid file {} : {}",
+                                           pid_file, err.message()));
+    }
     return {};
   });
+
   self->system().registry().put("tenzir.node", actor);
   scope_linked<node_actor> node{std::move(actor)};
   // Logically everything below this comment should be part of the
@@ -117,15 +143,6 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
         });
     return result;
   };
-  auto default_components = caf::make_config_value_list(
-    "catalog", "index", "importer", "eraser", "disk-monitor");
-  auto maybe_components = get_or(opts, "tenzir.components", default_components);
-  auto components = get_as<caf::config_value::list>(maybe_components);
-  if (!components)
-    return add_context(ec::unrecognized_option,
-                       "tenzir.components must be a list of component names, "
-                       "but got {}",
-                       maybe_components);
   for (auto& c : *components) {
     auto component = get_as<std::string>(c);
     if (!component)
