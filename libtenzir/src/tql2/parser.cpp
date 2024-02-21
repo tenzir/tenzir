@@ -302,6 +302,7 @@ private:
       }
     }
     auto pipe = parse_pipeline();
+    scope.done();
     auto end = expect(tk::rbrace);
     return pipeline_expr{begin.location, std::move(pipe), end.location};
   }
@@ -442,6 +443,9 @@ private:
     }
     if (auto token = accept(tk::null)) {
       return null{token.location};
+    }
+    if (auto token = accept(tk::dollar_ident)) {
+      return dollar_variable{token.as_identifier()};
     }
     if (selector_start()) {
       // Check if we have identifier followed by `(` or `'`.

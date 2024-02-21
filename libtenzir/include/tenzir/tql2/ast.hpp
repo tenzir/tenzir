@@ -123,10 +123,16 @@ struct underscore : location {
   }
 };
 
+struct dollar_variable : identifier {
+  auto location() const -> tenzir::location {
+    return identifier::location;
+  }
+};
+
 using expression_kind
   = variant<record, list, selector, pipeline_expr, string, integer, boolean,
             field_access, index_expr, binary_expr, unary_expr, function_call,
-            null, underscore, unpack, assignment>;
+            null, underscore, unpack, assignment, dollar_variable>;
 
 struct expression {
   template <class T>
