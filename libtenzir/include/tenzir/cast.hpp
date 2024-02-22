@@ -889,7 +889,7 @@ struct cast_helper<enumeration_type, enumeration_type> {
     if (can) {
       return value;
     }
-    return std::move(can.error());
+    return can.error();
   }
 
   static auto

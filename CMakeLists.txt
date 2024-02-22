@@ -322,7 +322,6 @@ target_compile_options(
             # Never treat deprecation warnings as errors.
             -Wno-error=deprecated
             -Wno-error=deprecated-declarations>
-            $<$<CXX_COMPILER_ID:GNU>:-Wno-redundant-move>
             $<$<CXX_COMPILER_ID:GNU>:-Wno-error=bool-compare>)
 
 # -- build id ------------------------------------------------------------------
