@@ -146,7 +146,7 @@ uds_datagram_sender::make(const std::string& path) {
   result.dst.sun_family = AF_UNIX;
   std::strncpy(result.dst.sun_path, path.data(),
                sizeof(result.dst.sun_path) - 1);
-  return std::move(result);
+  return result;
 }
 
 caf::error uds_datagram_sender::send(std::span<char> data, int timeout_usec) {
