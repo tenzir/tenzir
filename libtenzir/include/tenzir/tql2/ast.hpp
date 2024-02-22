@@ -251,11 +251,29 @@ struct assignment {
   }
 };
 
+struct entity_id {
+  size_t id = std::numeric_limits<size_t>::max();
+
+  auto resolved() const -> bool {
+    return id != std::numeric_limits<size_t>::max();
+  }
+
+  friend auto inspect(auto& f, entity_id& x) -> bool {
+    if (auto dbg = as_debug_writer(f)) {
+      if (not x.resolved()) {
+        return dbg->fmt_value("<unresolved>");
+      }
+    }
+    return f.apply(x.id);
+  }
+};
+
 struct entity {
   explicit entity(std::vector<identifier> path) : path{std::move(path)} {
   }
 
   std::vector<identifier> path;
+  entity_id id;
 
   auto location() const -> location {
     if (path.empty()) {
@@ -265,7 +283,7 @@ struct entity {
   }
 
   friend auto inspect(auto& f, entity& x) -> bool {
-    return f.object(x).fields(f.field("path", x.path));
+    return f.object(x).fields(f.field("path", x.path), f.field("id", x.id));
   }
 };
 

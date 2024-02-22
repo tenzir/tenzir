@@ -394,6 +394,7 @@ private:
     while (true) {
       if (auto dot = accept(tk::dot)) {
         auto name = expect(tk::identifier);
+        // TODO: `accept(tk::lpar)` for method call
         expr = field_access{
           std::move(expr),
           dot.location,

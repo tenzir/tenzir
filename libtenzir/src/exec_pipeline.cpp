@@ -13,6 +13,7 @@
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/lexer.hpp>
 #include <tenzir/tql2/parser.hpp>
+#include <tenzir/tql2/resolve.hpp>
 
 #include <arrow/util/utf8.h>
 #include <caf/event_based_actor.hpp>
@@ -260,9 +261,13 @@ auto exec_pipeline2(std::string content,
   if (im.error()) {
     return ec::silent;
   }
+  tql2::resolve_entities(parsed, im);
   if (cfg.dump_ast) {
     fmt::println("{:#?}", parsed);
-    return {};
+    return im.error() ? ec::silent : ec::no_error;
+  }
+  if (im.error()) {
+    return ec::silent;
   }
   diagnostic::warning("pipeline is valid, but execution is not yet implemented")
     .hint("use `--dump-ast` to show AST")
