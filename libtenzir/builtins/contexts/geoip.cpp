@@ -277,75 +277,70 @@ public:
   }
 
   /// Emits context information for every event in `slice` in order.
-  auto apply(std::vector<series> series_v) const
-    -> caf::expected<std::vector<std::vector<series>>> override {
+  auto apply(series array) const
+    -> caf::expected<std::vector<series>> override {
     auto status = 0;
     MMDB_entry_data_list_s* entry_data_list = nullptr;
     auto builder = series_builder{};
-    auto res = std::vector<std::vector<series>>{};
-    for (const auto& s : series_v) {
-      for (const auto& value : s.values()) {
-        if (s.type != type{ip_type{}} and s.type != type{string_type{}}) {
-          builder.null();
-          continue;
-        }
-        auto address_info_error = 0;
-        auto ip_string = fmt::to_string(value);
-        if (s.type == type{string_type{}}) {
-          // Unquote IP strings.
-          ip_string.erase(0, 1);
-          ip_string.erase(ip_string.size() - 1);
-        }
-        auto result = MMDB_lookup_string(&*mmdb_, ip_string.data(),
-                                         &address_info_error, &status);
-        if (address_info_error != MMDB_SUCCESS) {
-          return caf::make_error(
-            ec::lookup_error,
-            fmt::format("error looking up IP address '{}' in "
-                        "GeoIP database: {}",
-                        ip_string, gai_strerror(address_info_error)));
-        }
+    if (array.type != type{ip_type{}} and array.type != type{string_type{}}) {
+      return caf::make_error(ec::lookup_error,
+                             fmt::format("error looking up IP address in "
+                                         "GeoIP database: invalid column "
+                                         "type, only IP or string types are "
+                                         "allowed"));
+    }
+    for (const auto& value : array.values()) {
+      auto address_info_error = 0;
+      auto ip_string = fmt::to_string(value);
+      if (array.type == type{string_type{}}) {
+        // Unquote IP strings.
+        ip_string.erase(0, 1);
+        ip_string.erase(ip_string.size() - 1);
+      }
+      auto result = MMDB_lookup_string(&*mmdb_, ip_string.data(),
+                                       &address_info_error, &status);
+      if (address_info_error != MMDB_SUCCESS) {
+        return caf::make_error(
+          ec::lookup_error,
+          fmt::format("error looking up IP address '{}' in "
+                      "GeoIP database: {}",
+                      ip_string, gai_strerror(address_info_error)));
+      }
+      if (status != MMDB_SUCCESS) {
+        return caf::make_error(
+          ec::lookup_error, fmt::format("error looking up IP address '{}' in "
+                                        "GeoIP database: {}",
+                                        ip_string, MMDB_strerror(status)));
+      }
+      if (result.found_entry) {
+        status = MMDB_get_entry_data_list(&result.entry, &entry_data_list);
+        auto free_entry_data_list = caf::detail::make_scope_guard([&] {
+          if (entry_data_list) {
+            MMDB_free_entry_data_list(entry_data_list);
+          }
+        });
         if (status != MMDB_SUCCESS) {
           return caf::make_error(
             ec::lookup_error, fmt::format("error looking up IP address '{}' in "
                                           "GeoIP database: {}",
                                           ip_string, MMDB_strerror(status)));
         }
-        if (result.found_entry) {
-          status = MMDB_get_entry_data_list(&result.entry, &entry_data_list);
-          auto free_entry_data_list = caf::detail::make_scope_guard([&] {
-            if (entry_data_list) {
-              MMDB_free_entry_data_list(entry_data_list);
-            }
-          });
-          if (status != MMDB_SUCCESS) {
-            return caf::make_error(
-              ec::lookup_error,
-              fmt::format("error looking up IP address '{}' in "
-                          "GeoIP database: {}",
-                          ip_string, MMDB_strerror(status)));
-          }
-          auto* entry_data_list_it = entry_data_list;
-          auto output = record{};
-          entry_data_list_it
-            = entry_data_list_to_record(entry_data_list_it, &status, output);
-          if (status != MMDB_SUCCESS) {
-            return caf::make_error(
-              ec::lookup_error,
-              fmt::format("error looking up IP address '{}' in "
-                          "GeoIP database: {}",
-                          ip_string, MMDB_strerror(status)));
-          }
-          builder.data(output);
-          continue;
+        auto* entry_data_list_it = entry_data_list;
+        auto output = record{};
+        entry_data_list_it
+          = entry_data_list_to_record(entry_data_list_it, &status, output);
+        if (status != MMDB_SUCCESS) {
+          return caf::make_error(
+            ec::lookup_error, fmt::format("error looking up IP address '{}' in "
+                                          "GeoIP database: {}",
+                                          ip_string, MMDB_strerror(status)));
         }
-        builder.null();
+        builder.data(output);
+        continue;
       }
-      if (builder.length() > 0) {
-        res.emplace_back(builder.finish());
-      }
+      builder.null();
     }
-    return res;
+    return builder.finish();
   }
 
   /// Inspects the context.
