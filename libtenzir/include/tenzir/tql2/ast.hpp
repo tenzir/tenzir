@@ -57,7 +57,8 @@ struct identifier {
 
   friend auto inspect(auto& f, identifier& x) -> bool {
     if (auto dbg = as_debug_writer(f)) {
-      return dbg->apply(x.name) && dbg->append(" @ {:?}", x.location);
+      return dbg->fmt_value("`{}`", x.name)
+             && dbg->append(" @ {:?}", x.location);
     }
     return f.object(x).fields(f.field("symbol", x.name),
                               f.field("location", x.location));

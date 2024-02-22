@@ -21,17 +21,23 @@ public:
   }
 
   void visit(ast::entity& x) {
-    if (context == context_t::op_name && x.path.size() == 1
-        && x.path[0].name == "foo") {
+    TENZIR_ASSERT(not x.path.empty());
+    if (x.path.size() > 1) {
+      diagnostic::error("module `{}` not found", x.path[0].name)
+        .primary(x.path[0].location)
+        .emit(diag);
+      return;
+    }
+    auto& name = x.path[0].name;
+    if (context == context_t::op_name && name == "drop") {
       x.id = ast::entity_id{123};
       return;
     }
-    if (context == context_t::fn_name && x.path.size() == 1
-        && x.path[0].name == "bar") {
+    if (context == context_t::fn_name && name == "bar") {
       x.id = ast::entity_id{456};
       return;
     }
-    auto name = std::invoke([&] {
+    auto category = std::invoke([&] {
       switch (context) {
         case context_t::none:
           return "entity";
@@ -43,7 +49,9 @@ public:
           return "method";
       }
     });
-    diagnostic::error("unknown {} name", name).primary(x.location()).emit(diag);
+    diagnostic::error("{} `{}` not found", category, name)
+      .primary(x.location())
+      .emit(diag);
   }
 
   void visit(ast::pipeline& x) {

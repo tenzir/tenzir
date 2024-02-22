@@ -261,11 +261,11 @@ auto exec_pipeline2(std::string content,
   if (im.error()) {
     return ec::silent;
   }
-  tql2::resolve_entities(parsed, im);
   if (cfg.dump_ast) {
     fmt::println("{:#?}", parsed);
-    return im.error() ? ec::silent : ec::no_error;
+    return {};
   }
+  tql2::resolve_entities(parsed, im);
   if (im.error()) {
     return ec::silent;
   }
