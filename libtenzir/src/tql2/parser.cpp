@@ -286,7 +286,10 @@ private:
       while (true) {
         if (not content.empty()) {
           // TODO: Check.
-          (void)accept(tk::comma);
+          if (not peek(tk::rbrace)) {
+            // TODO: Improve error message.
+            expect(tk::comma);
+          }
         }
         if (peek(tk::rbrace)) {
           scope.done();
@@ -451,22 +454,40 @@ private:
       // Check if we have identifier followed by `(` or `'`.
       // TODO: Accept entity as function name.
       auto selector = parse_selector();
+      auto ent = std::optional<entity>{};
+      if (accept(tk::single_quote)) {
+        if (selector.this_ || selector.path.size() != 1) {
+          diagnostic::error("todo: unexpected stuff before entity")
+            .primary(selector.location())
+            .throw_();
+        }
+        auto path = std::move(selector.path);
+        while (true) {
+          auto ident = expect(tk::identifier);
+          path.push_back(ident.as_identifier());
+          if (not accept(tk::single_quote)) {
+            break;
+          }
+        }
+        ent = entity{std::move(path)};
+      }
       if (accept(tk::lpar)) {
-        auto scope = ignore_newlines(true);
-        if (selector.this_) {
-          if (selector.path.empty()) {
+        // TODO: Chained method calls.
+        auto receiver = std::optional<expression>{};
+        if (not ent) {
+          if (selector.this_ and selector.path.empty()) {
             diagnostic::error("`this` cannot be called")
               .primary(*selector.this_)
               .throw_();
           }
+          TENZIR_ASSERT(not selector.path.empty());
+          ent = entity{{std::move(selector.path.back())}};
+          selector.path.pop_back();
+          if (selector.this_ || not selector.path.empty()) {
+            receiver = std::move(selector);
+          }
         }
-        TENZIR_ASSERT(not selector.path.empty());
-        auto function = entity{{std::move(selector.path.back())}};
-        selector.path.pop_back();
-        auto receiver = std::optional<expression>{};
-        if (selector.this_ || not selector.path.empty()) {
-          receiver = std::move(selector);
-        }
+        auto scope = ignore_newlines(true);
         auto args = std::vector<expression>{};
         while (true) {
           if (peek(tk::rpar)) {
@@ -484,7 +505,8 @@ private:
           }
           args.push_back(parse_expression());
         }
-        return function_call{std::move(receiver), std::move(function),
+        TENZIR_ASSERT(ent);
+        return function_call{std::move(receiver), std::move(*ent),
                              std::move(args)};
       }
       return selector;
