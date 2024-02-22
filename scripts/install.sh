@@ -102,7 +102,7 @@ else
     package_url="${package_url_base}/debian/tenzir-static-latest.deb"
   elif [ "${platform}" = "Linux" ]
   then
-    package_url="${package_url_base}/main/tarball/tenzir-static-latest.gz"
+    package_url="${package_url_base}/tarball/tenzir-static-latest.gz"
   elif [ "${platform}" = "NixOS" ]
   then
     echo "Try Tenzir with our ${bold}flake.nix${normal}:"
