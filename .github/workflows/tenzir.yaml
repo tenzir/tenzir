@@ -117,7 +117,7 @@ jobs:
           echo "version-matrix=${version_matrix}" >> $GITHUB_OUTPUT
           # Set a bunch of version numbers depending on how we triggered the PR
           # so they're consistent between jobs.
-          version="$(jq -r '."tenzir-version"' version.json)"
+          version="v$(jq -r '."tenzir-version"' version.json)"
           id_sha="${{ github.sha }}"
           release_version="${version}"
           build_version="${version}+g${id_sha:0:10}"
@@ -148,7 +148,7 @@ jobs:
             fi
           fi
           echo "tenzir-version-build-metadata=${tenzir_version_build_metadata}" >> $GITHUB_OUTPUT
-          echo "tenzir-docker-version-build-metadata=${tenzir_dockdr_version_build_metadata}" >> $GITHUB_OUTPUT
+          echo "tenzir-docker-version-build-metadata=${tenzir_docker_version_build_metadata}" >> $GITHUB_OUTPUT
           if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             tenzir_container_ref="${GITHUB_HEAD_REF_SLUG}"
           else
