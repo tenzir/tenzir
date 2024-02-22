@@ -285,6 +285,10 @@ public:
     auto res = std::vector<std::vector<series>>{};
     for (const auto& s : series_v) {
       for (const auto& value : s.values()) {
+        if (s.type != type{ip_type{}} and s.type != type{string_type{}}) {
+          builder.null();
+          continue;
+        }
         auto address_info_error = 0;
         auto ip_string = fmt::to_string(value);
         if (s.type == type{string_type{}}) {
@@ -333,9 +337,9 @@ public:
                           ip_string, MMDB_strerror(status)));
           }
           builder.data(output);
-        } else {
-          builder.null();
+          continue;
         }
+        builder.null();
       }
       if (builder.length() > 0) {
         res.emplace_back(builder.finish());
