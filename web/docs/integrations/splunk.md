@@ -87,7 +87,6 @@ services:
       - TENZIR_PLUGINS__PLATFORM__API_KEY=<PLATFORM_API_KEY>
       - TENZIR_PLUGINS__PLATFORM__TENANT_ID=<PLATFORM_TENANT_ID>
       - TENZIR_ENDPOINT=tenzir-node:5158
-      - TENZIR_ALLOW_UNSAFE_PIPELINES=true
     entrypoint:
       - tenzir-node
     volumes:

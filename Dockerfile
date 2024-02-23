@@ -244,8 +244,7 @@ COPY --from=tenzir-ce --chown=tenzir:tenzir \
        /var/cache/tenzir \
        /var/lib/tenzir/ \
        /var/log/tenzir
-ENV TENZIR_AUTOMATIC_REBUILD=0 \
-    TENZIR_ALLOW_UNSAFE_PIPELINES=true
+ENV TENZIR_AUTOMATIC_REBUILD=0
 RUN /demo-node/setup.bash
 
 ENTRYPOINT ["tenzir-node"]
