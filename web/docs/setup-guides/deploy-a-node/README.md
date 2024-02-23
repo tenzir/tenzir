@@ -131,19 +131,6 @@ IPv6 address:
 tenzir-node --endpoint=[::1]:42000
 ```
 
-:::caution Unsafe Pipelines
-Some pipeline operators are inherently unsafe due to their side effects, e.g.,
-reading from a file. When such operators run inside a node, you may
-involuntarily expose the file system to users that have access to the node, or
-when you connect the node to the Tenzir platform and manage it via
-[app.tenzir.com](https://app.tenzir.com). This may constitute a security risk.
-
-We therefore forbid pipelines with such side effects by default. If you are
-aware of the implications, you can remove this restriction by setting
-`tenzir.allow-unsafe-pipelines: true` in the `tenzir.yaml` of the respective
-node.
-:::
-
 ## Stop a node
 
 There exist two ways stop a server:
