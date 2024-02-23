@@ -65,6 +65,7 @@ jobs:
       before-sha: ${{ steps.configure.outputs.before-sha }}
       before-version: ${{ steps.configure.outputs.before-version }}
       release-version: ${{ steps.configure.outputs.release-version }}
+      ref-slug: ${{ steps.configure.outputs.ref-slug }}
       head-ref-slug: ${{ steps.configure.outputs.head-ref-slug }}
       base-ref-slug: ${{ steps.configure.outputs.base-ref-slug }}
       cmake-version-args: ${{ steps.configure.outputs.cmake-version-args }}
