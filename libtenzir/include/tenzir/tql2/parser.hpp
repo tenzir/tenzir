@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#pragma once
+
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/tokens.hpp"

@@ -35,7 +35,6 @@ auto describe(token_kind k) -> std::string_view {
     X(greater, "`>`");
     X(identifier, "identifier");
     X(if_, "`if`");
-    X(integer, "integer");
     X(ipv4, "ipv4");
     X(ipv6, "ipv6");
     X(lbrace, "`{`");
@@ -50,12 +49,12 @@ auto describe(token_kind k) -> std::string_view {
     X(newline, "newline");
     X(not_, "`not`");
     X(null, "`null`");
+    X(number, "number");
     X(or_, "`or`");
     X(pipe, "`|`");
     X(plus, "`+`");
     X(rbrace, "`}`");
     X(rbracket, "`]`");
-    X(real, "real");
     X(rpar, "`)`");
     X(single_quote, "`'`");
     X(slash, "`/`");

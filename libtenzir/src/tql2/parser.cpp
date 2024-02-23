@@ -8,9 +8,12 @@
 
 #include "tenzir/tql2/parser.hpp"
 
+#include "tenzir/concept/parseable/string.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql2/ast.hpp"
+
+#include <arrow/util/utf8.h>
 
 #include <ranges>
 
@@ -432,21 +435,67 @@ private:
       return underscore{};
     }
     if (auto token = accept(tk::string)) {
-      // TODO: Make this better and parse content?
-      return string{std::string{token.text.substr(1, token.text.size() - 2)},
-                    token.location};
+      // TODO: Make this better?
+      auto result = std::string{};
+      TENZIR_ASSERT(token.text.size() >= 2);
+      auto f = token.text.begin() + 1;
+      auto e = token.text.end() - 1;
+      for (auto it = f; it != e; ++it) {
+        auto x = *it;
+        if (x != '\\') {
+          result.push_back(x);
+          continue;
+        }
+        ++it;
+        if (it == e) {
+          // TODO: invalid, but cannot happen
+          break;
+        }
+        x = *it;
+        if (x == '\\') {
+          result.push_back('\\');
+        } else if (x == '"') {
+          result.push_back('"');
+        } else if (x == 'n') {
+          result.push_back('\n');
+        } else if (x == 'x') {
+          ++it;
+          if (it == e) {
+            TENZIR_TODO();
+          }
+          ++it;
+          if (it == e) {
+            TENZIR_TODO();
+          }
+          // TODO: Properly parse this.
+          result.push_back('\xFF');
+        } else {
+          diagnostic::error("found unknown escape sequence `{}`",
+                            token.text.substr(it - f, 2))
+            .primary(token.location.subloc(it - f, 2))
+            .throw_();
+        }
+      }
+      if (not arrow::util::ValidateUTF8(result)) {
+        // TODO: Would be nice to report the actual error location.
+        diagnostic::error("string contains invalid utf-8")
+          .primary(token.location)
+          .hint("consider using a blob instead: b{}", token.text)
+          .throw_();
+      }
+      return literal{std::move(result), token.location};
     }
-    if (auto token = accept(tk::integer)) {
-      return integer{token.as_string()};
+    if (auto token = accept(tk::number)) {
+      TENZIR_TODO();
     }
     if (auto token = accept(tk::true_)) {
-      return boolean{true, token.location};
+      TENZIR_TODO();
     }
     if (auto token = accept(tk::false_)) {
-      return boolean{false, token.location};
+      TENZIR_TODO();
     }
     if (auto token = accept(tk::null)) {
-      return null{token.location};
+      TENZIR_TODO();
     }
     if (auto token = accept(tk::dollar_ident)) {
       return dollar_variable{token.as_identifier()};

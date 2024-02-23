@@ -99,8 +99,8 @@ struct string : located<std::string> {
   using located::located;
 };
 
-struct integer : located<std::string> {
-  explicit integer(located<std::string> x) : located{std::move(x)} {
+struct number : located<std::string> {
+  explicit number(located<std::string> x) : located{std::move(x)} {
   }
 
   using located::located;
@@ -130,10 +130,43 @@ struct dollar_variable : identifier {
   }
 };
 
-using expression_kind
-  = variant<record, list, selector, pipeline_expr, string, integer, boolean,
-            field_access, index_expr, binary_expr, unary_expr, function_call,
-            null, underscore, unpack, assignment, dollar_variable>;
+struct literal {
+  // TODO: Think about numbers.
+  using kind = variant<bool, int64_t, uint64_t, double, std::string, blob,
+                       duration, caf::timestamp>;
+
+  literal(kind value, location source)
+    : value{std::move(value)}, source{source} {
+  }
+
+  kind value;
+  location source;
+
+  friend auto inspect(auto& f, literal& x) -> bool {
+    return f.object(x).fields(f.field("value", x.value),
+                              f.field("source", x.source));
+  }
+
+  auto location() const -> location {
+    return source;
+  }
+};
+
+using expression_kind = variant<
+  //
+  record, list,
+  //
+  selector,
+  //
+  pipeline_expr,
+  //
+  literal,
+  //
+  field_access, index_expr,
+  //
+  binary_expr, unary_expr,
+  //
+  function_call, underscore, unpack, assignment, dollar_variable>;
 
 struct expression {
   template <class T>

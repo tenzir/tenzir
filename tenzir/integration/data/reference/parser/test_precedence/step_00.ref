@@ -2,7 +2,7 @@
   assignment {
     left: {
       path: [
-        "foo" @ 0..3
+        `foo` @ 0..3
       ]
     },
     equals: 4..5,
@@ -47,7 +47,7 @@
             op: "neg" @ 43..44,
             expr: selector {
               path: [
-                "foo" @ 44..47
+                `foo` @ 44..47
               ]
             }
           },
@@ -61,7 +61,7 @@
         right: binary_expr {
           left: selector {
             path: [
-              "bar" @ 60..63
+              `bar` @ 60..63
             ]
           },
           op: "eq" @ 64..66,

@@ -29,10 +29,8 @@ auto lex(std::string_view content) -> std::vector<token> {
       ->* [] { return token_kind::ipv4; }
     | ignore(+digit >> chr{'-'} >> +digit >> chr{'-'} >> +digit >> *(alnum | chr{':'} | chr{'+'} | chr{'-'}))
       ->* [] { return token_kind::datetime; }
-    | ignore(digit >> *digit_us >> chr{'.'} >> *digit_us)
-      ->* [] { return token_kind::real; }
-    | ignore(digit >> *digit_us)
-      ->* [] { return token_kind::integer; }
+    | ignore(digit >> *digit_us >> -(chr{'.'} >> *digit_us) >> -identifier)
+      ->* [] { return token_kind::number; }
     | ignore(chr{'"'} >> *(lit{"\\\""} | (any - chr{'"'})) >> chr{'"'})
       ->* [] { return token_kind::string; }
     | ignore(chr{'"'} >> *(lit{"\\\""} | (any - chr{'"'})))

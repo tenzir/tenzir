@@ -2,28 +2,29 @@
   invocation {
     op: {
       path: [
-        "a" @ 0..1
-      ]
+        `a` @ 0..1
+      ],
+      id: <unresolved>
     },
     args: [
-      expression selector {
+      selector {
         path: [
-          "b" @ 2..3
+          `b` @ 2..3
         ]
       },
-      expression selector {
+      selector {
         path: [
-          "c" @ 7..8
+          `c` @ 7..8
         ]
       },
-      expression selector {
+      selector {
         path: [
-          "d" @ 12..13
+          `d` @ 12..13
         ]
       },
-      expression selector {
+      selector {
         path: [
-          "e" @ 15..16
+          `e` @ 15..16
         ]
       }
     ]
@@ -31,13 +32,14 @@
   invocation {
     op: {
       path: [
-        "f" @ 17..18
-      ]
+        `f` @ 17..18
+      ],
+      id: <unresolved>
     },
     args: [
-      expression selector {
+      selector {
         path: [
-          "g" @ 19..20
+          `g` @ 19..20
         ]
       }
     ]
@@ -45,23 +47,24 @@
   invocation {
     op: {
       path: [
-        "h" @ 21..22
-      ]
+        `h` @ 21..22
+      ],
+      id: <unresolved>
     },
     args: [
-      expression selector {
+      selector {
         path: [
-          "i" @ 27..28
+          `i` @ 27..28
         ]
       },
-      expression selector {
+      selector {
         path: [
-          "j" @ 32..33
+          `j` @ 32..33
         ]
       },
-      expression selector {
+      selector {
         path: [
-          "k" @ 38..39
+          `k` @ 38..39
         ]
       }
     ]
@@ -69,20 +72,21 @@
   invocation {
     op: {
       path: [
-        "l" @ 40..41
-      ]
+        `l` @ 40..41
+      ],
+      id: <unresolved>
     },
     args: [
-      expression binary_expr {
+      binary_expr {
         left: selector {
           path: [
-            "m" @ 42..43
+            `m` @ 42..43
           ]
         },
         op: "add" @ 44..45,
         right: selector {
           path: [
-            "n" @ 48..49
+            `n` @ 48..49
           ]
         }
       }

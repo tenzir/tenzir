@@ -2,8 +2,9 @@
   invocation {
     op: {
       path: [
-        "export" @ 0..6
-      ]
+        `export` @ 0..6
+      ],
+      id: <unresolved>
     },
     args: [
       
@@ -12,7 +13,7 @@
   assignment {
     left: {
       path: [
-        "foo" @ 9..12
+        `foo` @ 9..12
       ]
     },
     equals: 13..14,
@@ -21,14 +22,15 @@
   invocation {
     op: {
       path: [
-        "set" @ 20..23
-      ]
+        `set` @ 20..23
+      ],
+      id: <unresolved>
     },
     args: [
       assignment {
         left: {
           path: [
-            "bar" @ 24..27
+            `bar` @ 24..27
           ]
         },
         equals: 28..29,
@@ -39,31 +41,32 @@
   invocation {
     op: {
       path: [
-        "foo" @ 35..38
-      ]
+        `foo` @ 35..38
+      ],
+      id: <unresolved>
     },
     args: [
-      expression selector {
+      selector {
         path: [
-          "bar" @ 39..42
+          `bar` @ 39..42
         ]
       },
       assignment {
         left: {
           path: [
-            "baz" @ 44..47
+            `baz` @ 44..47
           ]
         },
         equals: 47..48,
         right: selector {
           path: [
-            "qux" @ 48..51
+            `qux` @ 48..51
           ]
         }
       },
-      expression selector {
+      selector {
         path: [
-          "quux" @ 53..57
+          `quux` @ 53..57
         ]
       }
     ]
@@ -71,8 +74,9 @@
   invocation {
     op: {
       path: [
-        "import" @ 60..66
-      ]
+        `import` @ 60..66
+      ],
+      id: <unresolved>
     },
     args: [
       

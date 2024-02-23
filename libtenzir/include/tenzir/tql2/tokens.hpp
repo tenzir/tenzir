@@ -22,7 +22,7 @@ TENZIR_ENUM(
   // keywords
   this_, if_, else_, match, not_, and_, or_, underscore, let,
   // literals
-  integer, real, true_, false_, null, string, ipv4, ipv6, datetime,
+  number, true_, false_, null, string, ipv4, ipv6, datetime,
   // operators
   dot, plus, minus, slash, star, equal_equal, bang_equal, less, less_equal,
   greater, greater_equal,

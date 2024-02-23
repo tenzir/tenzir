@@ -2,8 +2,9 @@
   invocation {
     op: {
       path: [
-        "a" @ 0..1
-      ]
+        `a` @ 0..1
+      ],
+      id: <unresolved>
     },
     args: [
       
@@ -13,7 +14,7 @@
     condition: binary_expr {
       left: selector {
         path: [
-          "b" @ 5..6
+          `b` @ 5..6
         ]
       },
       op: "eq" @ 7..9,
@@ -23,13 +24,14 @@
       invocation {
         op: {
           path: [
-            "c" @ 17..18
-          ]
+            `c` @ 17..18
+          ],
+          id: <unresolved>
         },
         args: [
-          expression selector {
+          selector {
             path: [
-              "d" @ 19..20
+              `d` @ 19..20
             ]
           }
         ]
@@ -37,20 +39,21 @@
       invocation {
         op: {
           path: [
-            "e" @ 23..24
-          ]
+            `e` @ 23..24
+          ],
+          id: <unresolved>
         },
         args: [
           assignment {
             left: {
               path: [
-                "f" @ 25..26
+                `f` @ 25..26
               ]
             },
             equals: 26..27,
             right: selector {
               path: [
-                "g" @ 27..28
+                `g` @ 27..28
               ]
             }
           }
@@ -61,8 +64,9 @@
   invocation {
     op: {
       path: [
-        "h" @ 31..32
-      ]
+        `h` @ 31..32
+      ],
+      id: <unresolved>
     },
     args: [
       
@@ -71,7 +75,7 @@
   if_stmt {
     condition: selector {
       path: [
-        "i" @ 36..37
+        `i` @ 36..37
       ]
     },
     then: [
@@ -84,8 +88,9 @@
   invocation {
     op: {
       path: [
-        "j" @ 49..50
-      ]
+        `j` @ 49..50
+      ],
+      id: <unresolved>
     },
     args: [
       
@@ -94,7 +99,7 @@
   match_stmt {
     expr: selector {
       path: [
-        "k" @ 57..58
+        `k` @ 57..58
       ]
     },
     cases: [
@@ -104,7 +109,7 @@
   match_stmt {
     expr: selector {
       path: [
-        "k" @ 68..69
+        `k` @ 68..69
       ]
     },
     cases: [
@@ -116,8 +121,9 @@
           invocation {
             op: {
               path: [
-                "bar" @ 83..86
-              ]
+                `bar` @ 83..86
+              ],
+              id: <unresolved>
             },
             args: [
               
@@ -130,7 +136,7 @@
   match_stmt {
     expr: selector {
       path: [
-        "k" @ 97..98
+        `k` @ 97..98
       ]
     },
     cases: [
@@ -142,8 +148,9 @@
           invocation {
             op: {
               path: [
-                "bar" @ 118..121
-              ]
+                `bar` @ 118..121
+              ],
+              id: <unresolved>
             },
             args: [
               
@@ -159,13 +166,14 @@
           invocation {
             op: {
               path: [
-                "foo" @ 140..143
-              ]
+                `foo` @ 140..143
+              ],
+              id: <unresolved>
             },
             args: [
-              expression selector {
+              selector {
                 path: [
-                  "bar" @ 144..147
+                  `bar` @ 144..147
                 ]
               }
             ]
@@ -173,13 +181,14 @@
           invocation {
             op: {
               path: [
-                "qux" @ 152..155
-              ]
+                `qux` @ 152..155
+              ],
+              id: <unresolved>
             },
             args: [
-              expression selector {
+              selector {
                 path: [
-                  "bar" @ 156..159
+                  `bar` @ 156..159
                 ]
               }
             ]
