@@ -22,6 +22,7 @@ jobs:
         with:
           path: ${{ inputs.path }}
           key: ${{ inputs.key }}
+          enableCrossOsArchive: true
       - name: Upload to GCS
         env:
           RCLONE_CONFIG_GCS_TYPE: gcs
