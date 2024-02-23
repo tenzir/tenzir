@@ -11,6 +11,7 @@
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/enum.hpp"
 #include "tenzir/location.hpp"
+#include "tenzir/tql2/entity_id.hpp"
 
 namespace tenzir::detail {
 
@@ -282,23 +283,6 @@ struct assignment {
 
   auto location() const -> location {
     return left.location().combine(right.location());
-  }
-};
-
-struct entity_id {
-  size_t id = std::numeric_limits<size_t>::max();
-
-  auto resolved() const -> bool {
-    return id != std::numeric_limits<size_t>::max();
-  }
-
-  friend auto inspect(auto& f, entity_id& x) -> bool {
-    if (auto dbg = as_debug_writer(f)) {
-      if (not x.resolved()) {
-        return dbg->fmt_value("<unresolved>");
-      }
-    }
-    return f.apply(x.id);
   }
 };
 

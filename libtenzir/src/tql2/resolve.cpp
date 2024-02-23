@@ -12,6 +12,7 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/plugin.hpp"
+#include "tenzir/tql2/registry.hpp"
 
 #include <tsl/robin_map.h>
 
@@ -19,49 +20,7 @@ namespace tenzir::tql2 {
 
 namespace {
 
-using namespace ast;
-
-// functions, operators, methods
-
-struct function_def {
-  std::string test;
-};
-
-struct operator_def {
-  std::string test;
-};
-
-using entity_def = variant<function_def, operator_def>;
-
-class registry {
-public:
-  auto add(function_def fn) -> entity_id {
-    defs_.emplace_back(std::move(fn));
-    return last_id();
-  }
-  auto add(operator_def op) -> entity_id {
-    defs_.emplace_back(std::move(op));
-    return last_id();
-  }
-
-  auto get(entity_id id) const -> const entity_def& {
-    TENZIR_ASSERT(id.id < defs_.size());
-    return defs_[id.id];
-  }
-
-  auto try_fn(entity_id id) const -> const function_def* {
-    return std::get_if<function_def>(&get(id));
-  }
-
-private:
-  auto last_id() const -> entity_id {
-    TENZIR_ASSERT(not defs_.empty());
-    return entity_id{defs_.size() - 1};
-  }
-
-  // TODO: Lifetimes.
-  std::vector<entity_def> defs_;
-};
+using namespace tenzir::tql2::ast;
 
 struct name_info {
   entity_id function;
@@ -182,6 +141,12 @@ public:
     });
   }
 
+  void visit(list& x) {
+    for (auto& y : x.items) {
+      visit(y);
+    }
+  }
+
   void visit(function_call& x) {
     if (x.receiver) {
       visit(*x.receiver);
@@ -195,6 +160,11 @@ public:
     }
   }
 
+  void visit(index_expr& x) {
+    visit(x.expr);
+    visit(x.index);
+  }
+
   void visit(selector& x) {
     (void)x;
   }
@@ -206,6 +176,10 @@ public:
 
   void visit(number& x) {
     (void)x;
+  }
+
+  void visit(let_stmt& x) {
+    visit(x.expr);
   }
 
   template <class T>
@@ -222,20 +196,14 @@ private:
 
 } // namespace
 
-void resolve_entities(ast::pipeline& pipe, diagnostic_handler& diag) {
-  auto provider = registry{};
-#if 0
-  for (auto p : plugins::get<tql_plugin>()) {
-    p->entities();
-  }
-#endif
+void resolve_entities(ast::pipeline& pipe, registry& reg,
+                      diagnostic_handler& diag) {
   auto scope_ = scope{};
-  auto sqrt_id = provider.add(function_def{"..."});
-  scope_.add_fn("sqrt", sqrt_id);
-  auto sort_id = provider.add(operator_def{"..."});
-  scope_.add_op("sort", sort_id);
-  auto from_id = provider.add(operator_def{"..."});
-  scope_.add_op("from", from_id);
+  // auto sqrt_id = provider.add(function_def{"..."});
+  // scope_.add_fn("sqrt", sqrt_id);
+  scope_.add_op("sort", entity_id{0});
+  // auto from_id = provider.add(operator_def{"..."});
+  // scope_.add_op("from", from_id);
   entity_resolver{scope_, diag}.visit(pipe);
 }
 

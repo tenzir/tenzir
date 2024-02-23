@@ -9,6 +9,7 @@
 #include "tenzir/tql2/parser.hpp"
 
 #include "tenzir/concept/parseable/string.hpp"
+#include "tenzir/concept/parseable/tenzir/data.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -486,6 +487,10 @@ private:
       return literal{std::move(result), token.location};
     }
     if (auto token = accept(tk::number)) {
+      // TODO: Properly parse this.
+      if (auto result = int64_t{0}; parsers::integer(token.text, result)) {
+        return literal{result, token.location};
+      }
       TENZIR_TODO();
     }
     if (auto token = accept(tk::true_)) {

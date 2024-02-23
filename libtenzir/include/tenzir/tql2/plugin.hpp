@@ -8,12 +8,13 @@
 
 #pragma once
 
-#include "tenzir/tql2/ast.hpp"
-#include "tenzir/tql2/registry.hpp"
+#include "tenzir/plugin.hpp"
 
 namespace tenzir::tql2 {
 
-void resolve_entities(ast::pipeline& pipe, registry& reg,
-                      diagnostic_handler& diag);
+class tql_plugin : public plugin {
+public:
+  virtual void entities() const;
+};
 
 } // namespace tenzir::tql2

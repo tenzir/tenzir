@@ -11,11 +11,8 @@
 #include <tenzir/pipeline.hpp>
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/tql/parser.hpp>
-#include <tenzir/tql2/lexer.hpp>
-#include <tenzir/tql2/parser.hpp>
-#include <tenzir/tql2/resolve.hpp>
+#include <tenzir/tql2/exec.hpp>
 
-#include <arrow/util/utf8.h>
 #include <caf/event_based_actor.hpp>
 #include <caf/expected.hpp>
 #include <caf/scoped_actor.hpp>
@@ -182,99 +179,6 @@ auto add_implicit_source_and_sink(pipeline pipe, exec_config const& config)
   return pipe;
 }
 
-auto exec_pipeline2(std::string content,
-                    std::unique_ptr<diagnostic_handler> diag,
-                    const exec_config& cfg, caf::actor_system& sys)
-  -> caf::expected<void> {
-  auto content_view = std::string_view{content};
-  auto tokens = tql2::lex(content);
-  // TODO: Refactor this.
-  arrow::util::InitializeUTF8();
-  if (not arrow::util::ValidateUTF8(content)) {
-    // Figure out the exact token.
-    auto last = size_t{0};
-    for (auto& token : tokens) {
-      if (not arrow::util::ValidateUTF8(content_view.substr(last, token.end))) {
-        // TODO: We can't really do this directly, unless we handle invalid
-        // UTF-8 in diagnostics.
-        diagnostic::error("invalid UTF8")
-          .primary(location{last, token.end})
-          .emit(*diag);
-      }
-      last = token.end;
-    }
-    return ec::silent;
-  }
-  if (cfg.dump_tokens) {
-    auto last = size_t{0};
-    auto has_error = false;
-    for (auto& token : tokens) {
-      fmt::print("{:>15} {:?}\n", token.kind,
-                 content_view.substr(last, token.end - last));
-      last = token.end;
-      has_error |= token.kind == tql2::token_kind::error;
-    }
-    if (has_error) {
-      return ec::silent;
-    }
-    return {};
-  }
-  auto error_emitted = false;
-  for (auto& token : tokens) {
-    if (token.kind == tql2::token_kind::error) {
-      auto begin = size_t{0};
-      if (&token != tokens.data()) {
-        begin = (&token - 1)->end;
-      }
-      diagnostic::error("could not parse token")
-        .primary(location{begin, token.end})
-        .emit(*diag);
-      error_emitted = true;
-    }
-  }
-  if (error_emitted) {
-    return ec::silent;
-  }
-  class improve_me final : public diagnostic_handler {
-  public:
-    explicit improve_me(std::unique_ptr<diagnostic_handler> inner)
-      : inner_{std::move(inner)} {
-    }
-
-    void emit(diagnostic d) override {
-      if (d.severity == severity::error) {
-        error_ = true;
-      }
-      inner_->emit(std::move(d));
-    }
-
-    auto error() const -> bool {
-      return error_;
-    }
-
-  private:
-    bool error_ = false;
-    std::unique_ptr<diagnostic_handler> inner_;
-  };
-  auto im = improve_me{std::move(diag)};
-  auto parsed = tql2::parse(tokens, content, im);
-  if (im.error()) {
-    return ec::silent;
-  }
-  if (cfg.dump_ast) {
-    fmt::println("{:#?}", parsed);
-    return {};
-  }
-  tql2::resolve_entities(parsed, im);
-  if (im.error()) {
-    return ec::silent;
-  }
-  diagnostic::warning("pipeline is valid, but execution is not yet implemented")
-    .hint("use `--dump-ast` to show AST")
-    .emit(im);
-  return {};
-}
-
 } // namespace
 
 auto exec_pipeline(std::string content,
@@ -282,7 +186,8 @@ auto exec_pipeline(std::string content,
                    const exec_config& cfg, caf::actor_system& sys)
   -> caf::expected<void> {
   if (cfg.tql2) {
-    return exec_pipeline2(std::move(content), std::move(diag), cfg, sys);
+    auto success = tql2::exec(std::move(content), std::move(diag), cfg, sys);
+    return success ? ec::no_error : ec::silent;
   }
   auto parsed = tql::parse(std::move(content), *diag);
   if (not parsed) {

@@ -8,12 +8,12 @@
 
 #pragma once
 
-#include "tenzir/tql2/ast.hpp"
-#include "tenzir/tql2/registry.hpp"
+#include <tenzir/diagnostics.hpp>
+#include <tenzir/exec_pipeline.hpp>
 
 namespace tenzir::tql2 {
 
-void resolve_entities(ast::pipeline& pipe, registry& reg,
-                      diagnostic_handler& diag);
+auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
+          const exec_config& cfg, caf::actor_system& sys) -> bool;
 
-} // namespace tenzir::tql2
+}
