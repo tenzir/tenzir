@@ -28,6 +28,7 @@ jobs:
           RCLONE_GCS_BUCKET_POLICY_ONLY: True
           RCLONE_GCS_SERVICE_ACCOUNT_CREDENTIALS: ${{ secrets.GCS_SERVICE_ACCOUNT_CREDENTIALS }}
         run: |
-          apt install -y rclone
+          apt-get update
+          apt-get install -y rclone
           tar -czf "${{ inputs.key }}.tar.gz" "${{ inputs.path }}"
           rclone -vv copyto "${{ inputs.key }}.tar.gz" "gcs:tenzir-dist-private/github-actions-cache-clones/${{ inputs.key }}.tar.gz"
