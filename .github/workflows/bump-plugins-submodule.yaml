@@ -48,8 +48,8 @@ jobs:
           set -x
 
           # Setup git
-          git config --global user.name 'CI Bot'
-          git config --global user.email 'tenzir-ci-app@users.noreply.github.com'
+          git config --global user.name 'tenzir-bot'
+          git config --global user.email 'engineering@tenzir.com'
           git remote set-url origin https://x-access-token:$GITHUB_APP_TOKEN@github.com/tenzir/tenzir.git
           git -C contrib/tenzir-plugins fetch -q origin main
 
