@@ -349,9 +349,14 @@ jobs:
         run: |
           git submodule update --init contrib/tenzir-plugins
           git -C contrib/tenzir-plugins fetch origin main
+          # Check that the plugins submodule commit is either already merged
+          # into `main` or descends from current `main`.
           git -C contrib/tenzir-plugins merge-base --is-ancestor \
             $(git -C contrib/tenzir-plugins rev-parse origin/main) \
-            $(git -C contrib/tenzir-plugins rev-parse HEAD)
+            $(git -C contrib/tenzir-plugins rev-parse HEAD) || \
+          git -C contrib/tenzir-plugins merge-base --is-ancestor \
+            $(git -C contrib/tenzir-plugins rev-parse HEAD) \
+            $(git -C contrib/tenzir-plugins rev-parse origin/main)
       - name: Generate a token
         id: generate_token
         uses: actions/create-github-app-token@v1
