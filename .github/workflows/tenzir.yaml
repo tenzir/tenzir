@@ -749,6 +749,7 @@ jobs:
         with:
           path: ${{ env.CCACHE_DIR }}
           key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.head-ref-slug }}-${{ github.sha }}
+          enableCrossOsArchive: true
       - name: Run Unit Tests
         env:
           CTEST_OUTPUT_ON_FAILURE: YES
