@@ -35,15 +35,20 @@ auto weak_run_delayed(caf::scheduled_actor* self, caf::timespan delay,
 /// @param self The hosting actor pointer.
 /// @param delay The delay after which to repeat the action.
 /// @param function The action to run with the signature () -> void.
+/// @param run_immediately Whether to run the function immediately.
 template <class Function>
   requires std::is_invocable_r_v<void, std::remove_reference_t<Function>&>
 void weak_run_delayed_loop(caf::scheduled_actor* self, caf::timespan delay,
-                           Function&& function) {
+                           Function&& function, bool run_immediately = true) {
+  if (run_immediately) {
+    std::invoke(function);
+  }
   weak_run_delayed(self, delay,
                    [self, delay,
                     function = std::forward<Function>(function)]() mutable {
                      std::invoke(function);
-                     weak_run_delayed_loop(self, delay, std::move(function));
+                     weak_run_delayed_loop(self, delay, std::move(function),
+                                           false);
                    });
 }
 
