@@ -105,7 +105,7 @@
         `k` @ 57..58
       ]
     },
-    cases: [
+    arms: [
       
     ]
   },
@@ -115,7 +115,7 @@
         `k` @ 68..69
       ]
     },
-    cases: [
+    arms: [
       {
         filter: [
           literal {
@@ -145,7 +145,7 @@
         `k` @ 97..98
       ]
     },
-    cases: [
+    arms: [
       {
         filter: [
           literal {

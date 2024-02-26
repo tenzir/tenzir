@@ -122,13 +122,25 @@ public:
   }
 
   template <class... Fs>
-  auto match(Fs&&... fs) -> decltype(auto) {
+  auto match(Fs&&... fs) & -> decltype(auto) {
     return std::visit(detail::overload{std::forward<Fs>(fs)...}, *this);
   }
 
   template <class... Fs>
-  auto match(Fs&&... fs) const -> decltype(auto) {
+  auto match(Fs&&... fs) const& -> decltype(auto) {
     return std::visit(detail::overload{std::forward<Fs>(fs)...}, *this);
+  }
+
+  template <class... Fs>
+  auto match(Fs&&... fs) && -> decltype(auto) {
+    return std::visit(detail::overload{std::forward<Fs>(fs)...},
+                      std::move(*this));
+  }
+
+  template <class... Fs>
+  auto match(Fs&&... fs) const&& -> decltype(auto) {
+    return std::visit(detail::overload{std::forward<Fs>(fs)...},
+                      std::move(*this));
   }
 };
 

@@ -143,7 +143,7 @@ private:
         //      "ok", 42 => { ... }
         //    }
         auto expr = parse_expression();
-        auto cases = std::vector<match_case>{};
+        auto arms = std::vector<match_stmt::arm>{};
         expect(tk::lbrace);
         auto scope = ignore_newlines(true);
         // TODO: Restrict this.
@@ -161,11 +161,11 @@ private:
           expect(tk::rbrace);
           // TODO: require comma or newline?
           (void)accept(tk::comma);
-          cases.emplace_back(std::move(filter), std::move(pipe));
+          arms.emplace_back(std::move(filter), std::move(pipe));
         }
         scope.done();
         expect(tk::rbrace);
-        steps.emplace_back(match_stmt{std::move(expr), std::move(cases)});
+        steps.emplace_back(match_stmt{std::move(expr), std::move(arms)});
         if (not accept_stmt_end()) {
           throw_token();
         }
@@ -496,7 +496,7 @@ private:
       }
     }
     if (auto token = accept(tk::dollar_ident)) {
-      return dollar_variable{token.as_identifier()};
+      return dollar_var{token.as_identifier()};
     }
     if (selector_start()) {
       // Check if we have identifier followed by `(` or `'`.

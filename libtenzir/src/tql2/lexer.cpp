@@ -15,33 +15,33 @@
 namespace tenzir::tql2 {
 
 auto lex(std::string_view content) -> std::vector<token> {
-  std::vector<token> result;
-  const auto* current = content.begin();
-  // clang-format off
+  // TODO: The char-class parsers (such as `parsers::alnum`) can cause undefined
+  // behavior. We should fix them or use something different here.
   using namespace parsers;
-  auto continue_ident = alnum | chr{'_'};
-  auto identifier = (alpha | chr{'_'}) >> *continue_ident;
-  auto digit_us = digit | chr{'_'};
+  // clang-format off
+  auto continue_ident = alnum | '_';
+  auto identifier = (alpha | '_') >> *continue_ident;
+  auto digit_us = digit | '_';
   auto p
-    = ignore(*xdigit >> chr{':'} >> *xdigit >> chr{':'} >> *xdigit >> *((chr{'.'} | chr{':'}) >> *xdigit))
+    = ignore(*xdigit >> ':' >> *xdigit >> ':' >> *xdigit >> *(('.' | ':') >> *xdigit))
       ->* [] { return token_kind::ip; }
-    | ignore(+digit >> chr{'.'} >> +digit >> +(chr{'.'} >> +digit))
+    | ignore(+digit >> '.' >> +digit >> +('.' >> +digit))
       ->* [] { return token_kind::ip; }
-    | ignore(+digit >> chr{'-'} >> +digit >> chr{'-'} >> +digit >> *(alnum | chr{':'} | chr{'+'} | chr{'-'}))
+    | ignore(+digit >> '-' >> +digit >> '-' >> +digit >> *(alnum | ':' | '+' | '-'))
       ->* [] { return token_kind::datetime; }
-    | ignore(digit >> *digit_us >> -(chr{'.'} >> *digit_us) >> -identifier)
+    | ignore(digit >> *digit_us >> -('.' >> *digit_us) >> -identifier)
       ->* [] { return token_kind::number; }
-    | ignore(chr{'"'} >> *((ch<'\\'> >> any) | (any - chr{'"'})) >> chr{'"'})
+    | ignore('"' >> *(('\\' >> any) | (any - '"')) >> '"')
       ->* [] { return token_kind::string; }
-    | ignore(chr{'"'} >> *((ch<'\\'> >> any) | (any - chr{'"'})))
+    | ignore('"' >> *(('\\' >> any) | (any - '"')))
       ->* [] { return token_kind::error; } // non-terminated string
-    | ignore((lit{"//"} | lit{"# "}) >> *(any - '\n'))
+    | ignore("//" >> *(any - '\n'))
       ->* [] { return token_kind::line_comment; }
-    | ignore(lit{"/*"} >> *(any - lit{"*/"}) >> lit{"*/"})
+    | ignore("/*" >> *(any - "*/") >> "*/")
       ->* [] { return token_kind::delim_comment; }
-    | ignore(lit{"/*"} >> *(any - lit{"*/"}))
+    | ignore("/*" >> *(any - "*/"))
       ->* [] { return token_kind::error; } // non-terminated comment
-    | ignore(chr{'@'})
+    | ignore(ch<'@'>)
       ->* [] { return token_kind::at; }
 #define X(x, y) ignore(lit{x}) ->* [] { return token_kind::y; }
     | X("=>", fat_arrow)
@@ -84,7 +84,7 @@ auto lex(std::string_view content) -> std::vector<token> {
     | X("this", this_)
     | X("true", true_)
 #undef X
-    | ignore(chr{'$'} >> identifier)
+    | ignore('$' >> identifier)
       ->* [] { return token_kind::dollar_ident; }
     | ignore(identifier)
       ->* [] { return token_kind::identifier; }
@@ -92,6 +92,8 @@ auto lex(std::string_view content) -> std::vector<token> {
       ->* [] { return token_kind::whitespace; }
   ;
   // clang-format on
+  auto result = std::vector<token>{};
+  auto current = content.begin();
   while (current != content.end()) {
     auto kind = token_kind{};
     if (p.parse(current, content.end(), kind)) {
