@@ -1,4 +1,4 @@
-error: expected one of: identifier, dollar identifier, `this`, `not`, `_`, integer, `true`, `false`, `null`, string, `-`, `(`, `)`, `{`, `[`
+error: expected one of: identifier, dollar identifier, `this`, `not`, `_`, number, `true`, `false`, `null`, string, datetime, `-`, `(`, `)`, `{`, `[`
  --> /dev/stdin:1:9
   |
 1 | a = b(c,,)

@@ -98,10 +98,7 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
       last = token.end;
       has_error |= token.kind == tql2::token_kind::error;
     }
-    if (has_error) {
-      return false;
-    }
-    return {};
+    return not has_error;
   }
   auto error_emitted = false;
   for (auto& token : tokens) {
@@ -147,7 +144,7 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   }
   auto reg = registry{};
   reg.add(std::make_unique<sort_definition>());
-  tql2::resolve_entities(parsed, reg, im);
+  // tql2::resolve_entities(parsed, reg, im);
   if (cfg.dump_ast) {
     with_thread_local_registry(reg, [&] {
       fmt::println("{:#?}", parsed);

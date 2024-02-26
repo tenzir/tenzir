@@ -31,9 +31,9 @@ auto lex(std::string_view content) -> std::vector<token> {
       ->* [] { return token_kind::datetime; }
     | ignore(digit >> *digit_us >> -(chr{'.'} >> *digit_us) >> -identifier)
       ->* [] { return token_kind::number; }
-    | ignore(chr{'"'} >> *(lit{"\\\""} | (any - chr{'"'})) >> chr{'"'})
+    | ignore(chr{'"'} >> *((ch<'\\'> >> any) | (any - chr{'"'})) >> chr{'"'})
       ->* [] { return token_kind::string; }
-    | ignore(chr{'"'} >> *(lit{"\\\""} | (any - chr{'"'})))
+    | ignore(chr{'"'} >> *((ch<'\\'> >> any) | (any - chr{'"'})))
       ->* [] { return token_kind::error; } // non-terminated string
     | ignore((lit{"//"} | lit{"# "}) >> *(any - '\n'))
       ->* [] { return token_kind::line_comment; }
@@ -71,17 +71,18 @@ auto lex(std::string_view content) -> std::vector<token> {
     | X("\n", newline)
 #undef X
 #define X(x, y) ignore(lit{x} >> !continue_ident) ->* [] { return token_kind::y; }
-    | X("this", this_)
-    | X("let", let)
-    | X("if", if_)
-    | X("else", else_)
-    | X("match", match)
     | X("and", and_)
-    | X("or", or_)
-    | X("not", not_)
-    | X("true", true_)
+    | X("else", else_)
     | X("false", false_)
+    | X("if", if_)
+    | X("in", in)
+    | X("let", let)
+    | X("match", match)
+    | X("not", not_)
     | X("null", null)
+    | X("or", or_)
+    | X("this", this_)
+    | X("true", true_)
 #undef X
     | ignore(chr{'$'} >> identifier)
       ->* [] { return token_kind::dollar_ident; }

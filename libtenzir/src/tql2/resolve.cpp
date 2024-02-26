@@ -174,10 +174,6 @@ public:
     visit(x.right);
   }
 
-  void visit(number& x) {
-    (void)x;
-  }
-
   void visit(let_stmt& x) {
     visit(x.expr);
   }

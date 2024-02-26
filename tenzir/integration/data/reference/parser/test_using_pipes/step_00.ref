@@ -17,7 +17,10 @@
       ]
     },
     equals: 13..14,
-    right: integer "42" @ 15..17
+    right: literal {
+      value: long%20long 42,
+      source: 15..17
+    }
   },
   invocation {
     op: {
@@ -34,7 +37,10 @@
           ]
         },
         equals: 28..29,
-        right: integer "43" @ 30..32
+        right: literal {
+          value: long%20long 43,
+          source: 30..32
+        }
       }
     ]
   },

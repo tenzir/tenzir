@@ -18,7 +18,10 @@
         ]
       },
       op: "eq" @ 7..9,
-      right: integer "42" @ 10..12
+      right: literal {
+        value: long%20long 42,
+        source: 10..12
+      }
     },
     then: [
       invocation {
@@ -115,7 +118,10 @@
     cases: [
       {
         filter: [
-          string "foo" @ 72..77
+          literal {
+            value: basic_string "foo",
+            source: 72..77
+          }
         ],
         pipe: [
           invocation {
@@ -142,7 +148,10 @@
     cases: [
       {
         filter: [
-          string "foo" @ 103..108
+          literal {
+            value: basic_string "foo",
+            source: 103..108
+          }
         ],
         pipe: [
           invocation {
@@ -160,7 +169,10 @@
       },
       {
         filter: [
-          integer "42" @ 128..130
+          literal {
+            value: long%20long 42,
+            source: 128..130
+          }
         ],
         pipe: [
           invocation {

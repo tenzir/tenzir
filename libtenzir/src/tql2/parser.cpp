@@ -22,30 +22,6 @@ namespace tenzir::tql2 {
 
 using namespace tenzir::tql2::ast;
 
-#if 1
-/*
-type foo = {...};
-context bar = {}
-
-read json, schema=foo
-
-bar.update()
-
-sort -x, y
-
-sort -$bar
-$bar = 42
-
-my_custom_operator foo
-...
-group foo {
-  head $group.foo
-}
-...
-*/
-
-#endif
-
 namespace {
 
 auto precedence(unary_op x) -> int {
@@ -53,7 +29,7 @@ auto precedence(unary_op x) -> int {
   switch (x) {
     case pos:
     case neg:
-      return 8;
+      return 7;
     case not_:
       return 3;
   };
@@ -65,17 +41,17 @@ auto precedence(binary_op x) -> int {
   switch (x) {
     case mul:
     case div:
-      return 7;
+      return 6;
     case add:
     case sub:
-      return 6;
+      return 5;
     case gt:
     case ge:
     case lt:
     case le:
-      return 5;
     case eq:
     case neq:
+    case in:
       return 4;
     case and_:
       return 2;
@@ -124,8 +100,10 @@ private:
       while (accept_stmt_sep()) {
       }
       if (accept(tk::let)) {
-        if (silent_peek(tk::identifier)) {
-          throw_token("expected `$` before identifier");
+        if (auto ident = accept(tk::identifier)) {
+          diagnostic::error("identifier after `let` must start with `$`")
+            .primary(ident.location, "try `${}` instead", ident.text)
+            .throw_();
         }
         auto name = expect(tk::dollar_ident);
         expect(tk::equal);
@@ -341,7 +319,8 @@ private:
     X(equal_equal, eq);
     X(bang_equal, neq);
     X(and_, and_);
-    X(or_, or_)
+    X(or_, or_);
+    X(in, in);
 #undef X
     return std::nullopt;
   }
@@ -450,7 +429,7 @@ private:
         ++it;
         if (it == e) {
           // TODO: invalid, but cannot happen
-          break;
+          TENZIR_UNREACHABLE();
         }
         x = *it;
         if (x == '\\') {
@@ -459,17 +438,6 @@ private:
           result.push_back('"');
         } else if (x == 'n') {
           result.push_back('\n');
-        } else if (x == 'x') {
-          ++it;
-          if (it == e) {
-            TENZIR_TODO();
-          }
-          ++it;
-          if (it == e) {
-            TENZIR_TODO();
-          }
-          // TODO: Properly parse this.
-          result.push_back('\xFF');
         } else {
           diagnostic::error("found unknown escape sequence `{}`",
                             token.text.substr(it - f, 2))
@@ -487,20 +455,41 @@ private:
       return literal{std::move(result), token.location};
     }
     if (auto token = accept(tk::number)) {
-      // TODO: Properly parse this.
-      if (auto result = int64_t{0}; parsers::integer(token.text, result)) {
+      // TODO: Make this better, do not use existing parsers.
+      if (auto result = int64_t{}; parsers::i64(token.text, result)) {
         return literal{result, token.location};
       }
-      TENZIR_TODO();
+      if (auto result = uint64_t{}; parsers::u64(token.text, result)) {
+        return literal{result, token.location};
+      }
+      if (auto result = double{}; parsers::real(token.text, result)) {
+        return literal{result, token.location};
+      }
+      if (auto result = duration{}; parsers::duration(token.text, result)) {
+        return literal{result, token.location};
+      }
+      diagnostic::error("could not parse number")
+        .primary(token.location)
+        .note("number parsing still is very rudimentary")
+        .throw_();
+    }
+    if (auto token = accept(tk::datetime)) {
+      // TODO: Make this better.
+      if (auto result = time{}; parsers::ymdhms(token.text, result)) {
+        return literal{result, token.location};
+      }
+      diagnostic::error("could not parse datetime")
+        .primary(token.location)
+        .throw_();
     }
     if (auto token = accept(tk::true_)) {
-      TENZIR_TODO();
+      return literal{true, token.location};
     }
     if (auto token = accept(tk::false_)) {
-      TENZIR_TODO();
+      return literal{false, token.location};
     }
     if (auto token = accept(tk::null)) {
-      TENZIR_TODO();
+      return literal{null{}, token.location};
     }
     if (auto token = accept(tk::dollar_ident)) {
       return dollar_variable{token.as_identifier()};

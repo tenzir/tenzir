@@ -96,28 +96,7 @@ struct selector {
   }
 };
 
-struct string : located<std::string> {
-  using located::located;
-};
-
-struct number : located<std::string> {
-  explicit number(located<std::string> x) : located{std::move(x)} {
-  }
-
-  using located::located;
-};
-
-struct boolean : located<bool> {
-  using located::located;
-};
-
-struct null : location {
-  auto location() const -> location {
-    return *this;
-  }
-};
-
-struct duration : located<tenzir::duration> {};
+struct null {};
 
 struct underscore : location {
   auto location() const -> location {
@@ -134,7 +113,7 @@ struct dollar_variable : identifier {
 struct literal {
   // TODO: Think about numbers.
   using kind = variant<bool, int64_t, uint64_t, double, std::string, blob,
-                       duration, caf::timestamp>;
+                       duration, caf::timestamp, null>;
 
   literal(kind value, location source)
     : value{std::move(value)}, source{source} {
@@ -226,7 +205,8 @@ struct unpack {
   }
 };
 
-TENZIR_ENUM(binary_op, add, sub, mul, div, eq, neq, gt, ge, lt, le, and_, or_);
+TENZIR_ENUM(binary_op, add, sub, mul, div, eq, neq, gt, ge, lt, le, and_, or_,
+            in);
 
 struct binary_expr {
   binary_expr(expression left, located<binary_op> op, expression right)

@@ -10,34 +10,61 @@
       left: binary_expr {
         left: binary_expr {
           left: binary_expr {
-            left: integer "1" @ 6..7,
+            left: literal {
+              value: long%20long 1,
+              source: 6..7
+            },
             op: "add" @ 8..9,
             right: binary_expr {
-              left: integer "2" @ 10..11,
+              left: literal {
+                value: long%20long 2,
+                source: 10..11
+              },
               op: "mul" @ 12..13,
-              right: integer "3" @ 14..15
+              right: literal {
+                value: long%20long 3,
+                source: 14..15
+              }
             }
           },
           op: "add" @ 16..17,
-          right: integer "4" @ 18..19
+          right: literal {
+            value: long%20long 4,
+            source: 18..19
+          }
         },
         op: "add" @ 20..21,
         right: binary_expr {
           left: binary_expr {
             left: binary_expr {
               left: binary_expr {
-                left: integer "5" @ 22..23,
+                left: literal {
+                  value: long%20long 5,
+                  source: 22..23
+                },
                 op: "mul" @ 24..25,
-                right: integer "6" @ 26..27
+                right: literal {
+                  value: long%20long 6,
+                  source: 26..27
+                }
               },
               op: "mul" @ 28..29,
-              right: integer "7" @ 30..31
+              right: literal {
+                value: long%20long 7,
+                source: 30..31
+              }
             },
             op: "div" @ 32..33,
-            right: integer "8" @ 34..35
+            right: literal {
+              value: long%20long 8,
+              source: 34..35
+            }
           },
           op: "div" @ 36..37,
-          right: integer "9" @ 38..39
+          right: literal {
+            value: long%20long 9,
+            source: 38..39
+          }
         }
       },
       op: "or_" @ 40..42,
@@ -54,7 +81,10 @@
           op: "add" @ 48..49,
           right: unary_expr {
             op: "not_" @ 50..53,
-            expr: integer "2" @ 54..55
+            expr: literal {
+              value: long%20long 2,
+              source: 54..55
+            }
           }
         },
         op: "and_" @ 56..59,
@@ -65,7 +95,10 @@
             ]
           },
           op: "eq" @ 64..66,
-          right: integer "42" @ 67..69
+          right: literal {
+            value: long%20long 42,
+            source: 67..69
+          }
         }
       }
     }
