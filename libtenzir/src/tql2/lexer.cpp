@@ -15,6 +15,7 @@
 namespace tenzir::tql2 {
 
 auto lex(std::string_view content) -> std::vector<token> {
+  auto result = std::vector<token>{};
   // TODO: The char-class parsers (such as `parsers::alnum`) can cause undefined
   // behavior. We should fix them or use something different here.
   using namespace parsers;
@@ -88,22 +89,28 @@ auto lex(std::string_view content) -> std::vector<token> {
       ->* [] { return token_kind::dollar_ident; }
     | ignore(identifier)
       ->* [] { return token_kind::identifier; }
-    | ignore(+((space - '\n') | ("\\" >> *(space - '\n') >> '\n')))
+    | ignore(
+        +((space - '\n') |
+        ("\\" >> *(space - '\n') >> '\n')) |
+        ("#!/" >> any - '\n').when([&] { return result.empty(); })
+      )
       ->* [] { return token_kind::whitespace; }
   ;
   // clang-format on
-  auto result = std::vector<token>{};
   auto current = content.begin();
   while (current != content.end()) {
     auto kind = token_kind{};
     if (p.parse(current, content.end(), kind)) {
       result.emplace_back(kind, current - content.begin());
     } else {
+      // We could not parse a token starting from `current`. Instead, we emit a
+      // special `error` token and go to the next character.
       ++current;
       auto end = current - content.begin();
       if (result.empty() || result.back().kind != token_kind::error) {
         result.emplace_back(token_kind::error, end);
       } else {
+        // If the last token is already an error, we just expand it instead.
         result.back().end = end;
       }
     }
