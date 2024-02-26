@@ -63,7 +63,7 @@ struct metrics_collector_state {
       }
     }
     if (instances.empty()) {
-      TENZIR_INFO("{} shuts down because all metrics are disabled", *self);
+      TENZIR_VERBOSE("{} shuts down because all metrics are disabled", *self);
       self->quit();
     }
     detail::weak_run_delayed_loop(
