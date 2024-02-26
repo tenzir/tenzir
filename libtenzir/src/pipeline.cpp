@@ -51,8 +51,10 @@ public:
     return *handler_;
   }
 
-  auto allow_unsafe_pipelines() const noexcept -> bool override {
-    return false;
+  auto no_location_overrides() const noexcept -> bool override {
+    // Location overrides cannot work for the local control plane, as it has no
+    // notion of a location.
+    return true;
   }
 
   auto has_terminal() const noexcept -> bool override {
@@ -173,8 +175,8 @@ auto pipeline::optimize_into_filter(const expression& filter) const
   auto opt = optimize(filter, event_order::ordered);
   auto* pipe = dynamic_cast<pipeline*>(opt.replacement.get());
   // We know that `pipeline::optimize` yields a pipeline and a filter.
-  TENZIR_ASSERT_CHEAP(pipe);
-  TENZIR_ASSERT_CHEAP(opt.filter);
+  TENZIR_ASSERT(pipe);
+  TENZIR_ASSERT(opt.filter);
   return {std::move(*opt.filter), std::move(*pipe)};
 }
 
@@ -265,7 +267,7 @@ auto operator_base::copy() const -> operator_ptr {
   auto p = plugins::find<operator_serialization_plugin>(name());
   if (not p) {
     TENZIR_ERROR("could not find serialization plugin `{}`", name());
-    TENZIR_ASSERT_CHEAP(false);
+    TENZIR_ASSERT(false);
   }
   auto buffer = caf::byte_buffer{};
   auto f = caf::binary_serializer{nullptr, buffer};
@@ -273,7 +275,7 @@ auto operator_base::copy() const -> operator_ptr {
   if (not success) {
     TENZIR_ERROR("failed to serialize `{}` operator: {}", name(),
                  f.get_error());
-    TENZIR_ASSERT_CHEAP(false);
+    TENZIR_ASSERT(false);
   }
   auto g = caf::binary_deserializer{nullptr, buffer};
   auto copy = operator_ptr{};
@@ -281,7 +283,7 @@ auto operator_base::copy() const -> operator_ptr {
   if (not copy) {
     TENZIR_ERROR("failed to deserialize `{}` operator: {}", name(),
                  g.get_error());
-    TENZIR_ASSERT_CHEAP(false);
+    TENZIR_ASSERT(false);
   }
   return copy;
 }

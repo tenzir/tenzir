@@ -163,9 +163,9 @@ public:
     return *diagnostic_handler_;
   }
 
-  auto allow_unsafe_pipelines() const noexcept -> bool override {
+  auto no_location_overrides() const noexcept -> bool override {
     return caf::get_or(content(state_.self->config()),
-                       "tenzir.allow-unsafe-pipelines", false);
+                       "tenzir.no-location-overrides", false);
   }
 
   auto has_terminal() const noexcept -> bool override {
@@ -428,7 +428,7 @@ struct exec_node_state {
     if constexpr (std::is_same_v<Output, std::monostate>) {
       // We never issue demand to the sink, so we cannot be at the end of the
       // generator here.
-      TENZIR_ASSERT_CHEAP(instance->it != instance->gen.end());
+      TENZIR_ASSERT(instance->it != instance->gen.end());
       TENZIR_TRACE("{} {} processes", *self, op->name());
       ++instance->it;
       if (self->getf(caf::abstract_actor::is_shutting_down_flag)) {
@@ -443,7 +443,7 @@ struct exec_node_state {
       if (not demand or instance->it == instance->gen.end()) {
         return;
       }
-      TENZIR_ASSERT_CHEAP(instance);
+      TENZIR_ASSERT(instance);
       TENZIR_TRACE("{} {} processes", *self, op->name());
       auto output = std::move(*instance->it);
       const auto output_size = size(output);

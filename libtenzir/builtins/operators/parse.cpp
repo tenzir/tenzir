@@ -59,9 +59,9 @@ public:
         .docs("https://docs.tenzir.com/operators/parse")
         .throw_();
     }
-    TENZIR_ASSERT_CHEAP(parser);
+    TENZIR_ASSERT(parser);
     parser_ = parser->parse_parser(p);
-    TENZIR_ASSERT_CHEAP(parser_);
+    TENZIR_ASSERT(parser_);
   }
 
   auto
@@ -91,11 +91,11 @@ public:
         co_return;
       }
       auto string_array = std::dynamic_pointer_cast<arrow::StringArray>(array);
-      TENZIR_ASSERT_CHEAP(string_array);
+      TENZIR_ASSERT(string_array);
       auto results = parser_->parse_strings(string_array, ctrl);
       auto total = int64_t{0};
       for (auto& [result_ty, result] : results) {
-        TENZIR_ASSERT_CHEAP(result_ty.to_arrow_type()->Equals(result->type()));
+        TENZIR_ASSERT(result_ty.to_arrow_type()->Equals(result->type()));
         total += result->length();
       }
       if (total == 0) {
@@ -106,7 +106,7 @@ public:
           .emit(ctrl.diagnostics());
         co_return;
       }
-      TENZIR_ASSERT_CHEAP(total == string_array->length());
+      TENZIR_ASSERT(total == string_array->length());
       const auto children
         = batch->ToStructArray().ValueOrDie()->Flatten().ValueOrDie();
       auto next = int64_t{0};

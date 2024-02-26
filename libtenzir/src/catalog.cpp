@@ -174,8 +174,8 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
           if (xs.partition_infos.empty())
             return xs; // short-circuit
           detail::inplace_intersect(result.partition_infos, xs.partition_infos);
-          TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                       result.partition_infos.end()));
+          TENZIR_ASSERT_EXPENSIVE(std::is_sorted(result.partition_infos.begin(),
+                                                 result.partition_infos.end()));
         }
       return result;
     },
@@ -187,11 +187,11 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
         auto xs = lookup_impl(op, schema);
         if (xs.partition_infos.size() == partition_synopses.size())
           return xs; // short-circuit
-        TENZIR_ASSERT(
+        TENZIR_ASSERT_EXPENSIVE(
           std::is_sorted(xs.partition_infos.begin(), xs.partition_infos.end()));
         detail::inplace_unify(result.partition_infos, xs.partition_infos);
-        TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                     result.partition_infos.end()));
+        TENZIR_ASSERT_EXPENSIVE(std::is_sorted(result.partition_infos.begin(),
+                                               result.partition_infos.end()));
       }
       return result;
     },
@@ -260,8 +260,8 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
                      detail::pretty_type_name(this), synopses_per_type.size(),
                      x, result.partition_infos.size());
         // Some calling paths require the result to be sorted.
-        TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                     result.partition_infos.end()));
+        TENZIR_ASSERT_EXPENSIVE(std::is_sorted(result.partition_infos.begin(),
+                                               result.partition_infos.end()));
         return result;
       };
       auto extract_expr = detail::overload{
@@ -284,22 +284,22 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
                   }
                 }
               }
-              TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                           result.partition_infos.end()));
+              TENZIR_ASSERT_EXPENSIVE(std::is_sorted(
+                result.partition_infos.begin(), result.partition_infos.end()));
               return result;
             }
             case meta_extractor::schema_id: {
               auto result = catalog_lookup_result::candidate_info{};
               for (const auto& [part_id, part_syn] : partition_synopses) {
-                TENZIR_ASSERT(part_syn->schema == schema);
+                TENZIR_ASSERT_EXPENSIVE(part_syn->schema == schema);
               }
               if (evaluate(schema.make_fingerprint(), x.op, d)) {
                 for (const auto& [part_id, part_syn] : partition_synopses) {
                   result.partition_infos.emplace_back(part_id, *part_syn);
                 }
               }
-              TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                           result.partition_infos.end()));
+              TENZIR_ASSERT_EXPENSIVE(std::is_sorted(
+                result.partition_infos.begin(), result.partition_infos.end()));
               return result;
             }
             case meta_extractor::import_time: {
@@ -317,8 +317,8 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
                   result.partition_infos.emplace_back(part_id, *part_syn);
                 }
               }
-              TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                           result.partition_infos.end()));
+              TENZIR_ASSERT_EXPENSIVE(std::is_sorted(
+                result.partition_infos.begin(), result.partition_infos.end()));
               return result;
             }
             case meta_extractor::internal: {
@@ -332,8 +332,8 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
                   result.partition_infos.emplace_back(part_id, *part_syn);
                 }
               };
-              TENZIR_ASSERT(std::is_sorted(result.partition_infos.begin(),
-                                           result.partition_infos.end()));
+              TENZIR_ASSERT_EXPENSIVE(std::is_sorted(
+                result.partition_infos.begin(), result.partition_infos.end()));
               return result;
             }
           }

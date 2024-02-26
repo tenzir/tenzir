@@ -91,10 +91,34 @@ public:
     };
   }
 
+  auto dump() -> generator<table_slice> override {
+    auto ptr = reinterpret_cast<const std::byte*>(bloom_filter_.data().data());
+    auto size = bloom_filter_.data().size();
+    auto data = std::basic_string<std::byte>{ptr, size};
+    auto entry_builder = series_builder{};
+    auto row = entry_builder.record();
+    row.field("num_elements", bloom_filter_.num_elements());
+    auto params = row.field("parameters").record();
+    if (bloom_filter_.parameters().m) {
+      params.field("m", *bloom_filter_.parameters().m);
+    }
+    if (bloom_filter_.parameters().n) {
+      params.field("n", *bloom_filter_.parameters().n);
+    }
+    if (bloom_filter_.parameters().p) {
+      params.field("p", *bloom_filter_.parameters().p);
+    }
+    if (bloom_filter_.parameters().k) {
+      params.field("k", *bloom_filter_.parameters().k);
+    }
+    co_yield entry_builder.finish_assert_one_slice(
+      fmt::format("tenzir.{}.info", context_type()));
+  }
+
   /// Updates the context.
   auto update(table_slice slice, context::parameter_map parameters)
     -> caf::expected<update_result> override {
-    TENZIR_ASSERT_CHEAP(slice.rows() != 0);
+    TENZIR_ASSERT(slice.rows() != 0);
     if (not parameters.contains("key")) {
       return caf::make_error(ec::invalid_argument, "missing 'key' parameter");
     }
@@ -140,25 +164,42 @@ public:
 
   auto reset(context::parameter_map) -> caf::expected<record> override {
     auto params = bloom_filter_.parameters();
-    TENZIR_ASSERT_CHEAP(params.n && params.p);
+    TENZIR_ASSERT(params.n && params.p);
     bloom_filter_ = dcso_bloom_filter{*params.n, *params.p};
     return show();
   }
 
-  auto save() const -> caf::expected<chunk_ptr> override {
+  auto save() const -> caf::expected<save_result> override {
     std::vector<std::byte> buffer;
     if (auto err = convert(bloom_filter_, buffer)) {
       return add_context(err, "failed to serialize Bloom filter context");
     }
-    return chunk::make(std::move(buffer));
+    return save_result{.data = chunk::make(std::move(buffer)), .version = 1};
   }
 
 private:
   dcso_bloom_filter bloom_filter_;
 };
 
+struct v1_loader : public context_loader {
+  auto version() const -> int {
+    return 1;
+  }
+
+  auto load(chunk_ptr serialized) const
+    -> caf::expected<std::unique_ptr<context>> {
+    TENZIR_ASSERT(serialized != nullptr);
+    auto bloom_filter = dcso_bloom_filter{};
+    if (auto err = convert(as_bytes(*serialized), bloom_filter)) {
+      return add_context(err, "failed to deserialize Bloom filter context");
+    }
+    return std::make_unique<bloom_filter_context>(std::move(bloom_filter));
+  }
+};
+
 class plugin : public virtual context_plugin {
   auto initialize(const record&, const record&) -> caf::error override {
+    register_loader(std::make_unique<v1_loader>());
     return caf::none;
   }
 
@@ -201,16 +242,6 @@ class plugin : public virtual context_plugin {
                              "--fp-probability not in (0,1)");
     }
     return std::make_unique<bloom_filter_context>(n, p);
-  }
-
-  auto load_context(chunk_ptr serialized) const
-    -> caf::expected<std::unique_ptr<context>> override {
-    TENZIR_ASSERT_CHEAP(serialized != nullptr);
-    auto bloom_filter = dcso_bloom_filter{};
-    if (auto err = convert(as_bytes(*serialized), bloom_filter)) {
-      return add_context(err, "failed to deserialize Bloom filter context");
-    }
-    return std::make_unique<bloom_filter_context>(std::move(bloom_filter));
   }
 };
 

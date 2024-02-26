@@ -95,8 +95,9 @@ public:
     // TODO: Adjust filter function return type.
     // TODO: Replace this with an Arrow-native filter function as soon as we
     // are able to directly evaluate expressions on a record batch.
-    if (expr)
+    if (expr) {
       return filter(slice, *expr).value_or(table_slice{});
+    }
     return {};
   }
 
@@ -110,7 +111,7 @@ public:
       return optimize_result{expr_.inner, order, nullptr};
     }
     auto combined = normalize_and_validate(conjunction{expr_.inner, filter});
-    TENZIR_ASSERT_CHEAP(combined);
+    TENZIR_ASSERT(combined);
     return optimize_result{std::move(*combined), order, nullptr};
   }
 

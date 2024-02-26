@@ -9,6 +9,7 @@
     ];
   };
 
+  inputs.isReleaseBuild.url = "github:boolean-option/false";
   inputs.nixpkgs.url = "github:nixos/nixpkgs/1f5d74db169236ad4bed54028c8e147298c7cf9d";
   inputs.flake-compat.url = "github:edolstra/flake-compat";
   inputs.flake-compat.flake = false;
@@ -34,31 +35,8 @@
     }
     // flake-utils.lib.eachSystem ["x86_64-linux" "x86_64-darwin" "aarch64-darwin" ] (
       system: let
-        overlay = import ./nix/overlay.nix {inherit inputs versionShortOverride versionLongOverride;};
+        overlay = import ./nix/overlay.nix {inherit inputs;};
         pkgs = nixpkgs.legacyPackages."${system}".appendOverlays [overlay];
-        inherit
-          (builtins.fromJSON (builtins.readFile ./version.json))
-          tenzir-version-fallback
-          tenzir-version-rev-count
-          ;
-        hasVersionSuffix = builtins.hasAttr "revCount" self;
-        versionSuffix =
-          if hasVersionSuffix
-          then "-${builtins.toString (self.revCount - tenzir-version-rev-count)}-g${builtins.substring 0 10 self.rev}"
-          else "";
-        # Simulate `git describe --abbrev=10 --match='v[0-9]*`.
-        # We would like to simulate `--dirty` too, but that is currently not
-        # possible (yet?: https://github.com/NixOS/nix/pull/5385).
-        versionShortOverride =
-          "${tenzir-version-fallback}"
-          # If self.revCount is equal to the refCount of the tagged commit, then
-          # self.rev must be the tagged commit and the fallback itself is the
-          # correct version. If not we append the difference between both counts
-          # and the abbreviated commit hash.
-          + pkgs.lib.optionalString (hasVersionSuffix && self.revCount > tenzir-version-rev-count)
-          versionSuffix;
-        # Simulate `git describe --abbrev=10 --long --match='v[0-9]*`.
-        versionLongOverride = "${tenzir-version-fallback}${versionSuffix}";
         stream-image = {
           entrypoint,
           name,

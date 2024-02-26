@@ -187,7 +187,8 @@ public:
       return {};
 #endif
     }
-    TENZIR_ASSERT(caf::holds_alternative<view<type_to_data_t<T>>>(result));
+    TENZIR_ASSERT_EXPENSIVE(
+      caf::holds_alternative<view<type_to_data_t<T>>>(result));
     return caf::get<view<type_to_data_t<T>>>(result);
   }
 

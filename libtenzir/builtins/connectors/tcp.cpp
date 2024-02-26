@@ -9,6 +9,7 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/config.hpp>
+#include <tenzir/detail/posix.hpp>
 #include <tenzir/detail/string_literal.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
@@ -373,13 +374,13 @@ public:
       // Verify that the files actually exist and are readable.
       // Ideally we'd also like to verify that the files contain valid
       // key material, but there's no straightforward API for this in OpenSSL.
-      TENZIR_ASSERT_CHEAP(args_.tls_keyfile);
-      TENZIR_ASSERT_CHEAP(args_.tls_certfile);
+      TENZIR_ASSERT(args_.tls_keyfile);
+      TENZIR_ASSERT(args_.tls_certfile);
       auto* keyfile = std::fopen(args_.tls_keyfile->c_str(), "r");
       if (keyfile) {
         std::fclose(keyfile);
       } else {
-        auto error = std::strerror(errno);
+        auto error = detail::describe_errno();
         diagnostic::error("failed to open TLS keyfile")
           .hint("{}", error)
           .emit(ctrl.diagnostics());
@@ -389,7 +390,7 @@ public:
       if (certfile) {
         std::fclose(certfile);
       } else {
-        auto error = std::strerror(errno);
+        auto error = detail::describe_errno();
         diagnostic::error("failed to open TLS certfile")
           .hint("{}", error)
           .emit(ctrl.diagnostics());
@@ -481,13 +482,13 @@ public:
       // Verify that the files actually exist and are readable.
       // Ideally we'd also like to verify that the files contain valid
       // key material, but there's no straightforward API for this in OpenSSL.
-      TENZIR_ASSERT_CHEAP(args_.tls_keyfile);
-      TENZIR_ASSERT_CHEAP(args_.tls_certfile);
+      TENZIR_ASSERT(args_.tls_keyfile);
+      TENZIR_ASSERT(args_.tls_certfile);
       auto* keyfile = std::fopen(args_.tls_keyfile->c_str(), "r");
       if (keyfile) {
         std::fclose(keyfile);
       } else {
-        auto error = std::strerror(errno);
+        auto error = detail::describe_errno();
         diagnostic::error("failed to open TLS keyfile")
           .hint("{}", error)
           .emit(ctrl.diagnostics());
@@ -497,7 +498,7 @@ public:
       if (certfile) {
         std::fclose(certfile);
       } else {
-        auto error = std::strerror(errno);
+        auto error = detail::describe_errno();
         diagnostic::error("failed to open TLS certfile")
           .hint("{}", error)
           .emit(ctrl.diagnostics());

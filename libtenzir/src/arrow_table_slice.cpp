@@ -143,22 +143,24 @@ arrow_table_slice<FlatBuffer>::arrow_table_slice(
     }
     if (schema) {
       state_.schema = std::move(schema);
-      TENZIR_ASSERT(state_.schema
-                    == type::from_arrow(*state_.record_batch->schema()));
+      TENZIR_ASSERT_EXPENSIVE(
+        state_.schema == type::from_arrow(*state_.record_batch->schema()));
     } else {
       state_.schema = type::from_arrow(*state_.record_batch->schema());
     }
     TENZIR_ASSERT(caf::holds_alternative<record_type>(state_.schema));
     state_.flat_columns = index_column_arrays(state_.record_batch);
-    TENZIR_ASSERT(state_.flat_columns.size()
-                  == caf::get<record_type>(state_.schema).num_leaves());
+    TENZIR_ASSERT_EXPENSIVE(
+      state_.flat_columns.size()
+      == caf::get<record_type>(state_.schema).num_leaves());
   } else {
     static_assert(detail::always_false_v<FlatBuffer>, "unhandled arrow table "
                                                       "slice version");
   }
 #if TENZIR_ENABLE_ASSERTIONS
   auto validate_status = state_.record_batch->Validate();
-  TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
+  TENZIR_ASSERT_EXPENSIVE(validate_status.ok(),
+                          validate_status.ToString().c_str());
 #endif // TENZIR_ENABLE_ASSERTIONS
 }
 
@@ -245,7 +247,7 @@ data_view arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
                                             table_slice::size_type column,
                                             const type& t) const {
   if constexpr (std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v2>) {
-    TENZIR_ASSERT(congruent(
+    TENZIR_ASSERT_EXPENSIVE(congruent(
       caf::get<record_type>(this->schema())
         .field(caf::get<record_type>(this->schema()).resolve_flat_index(column))
         .type,
@@ -292,19 +294,22 @@ arrow_table_slice<FlatBuffer>::record_batch() const noexcept {
 std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
   type schema, const std::shared_ptr<arrow::StructArray>& struct_array,
   const std::vector<indexed_transformation>& transformations) noexcept {
-  TENZIR_ASSERT(std::is_sorted(transformations.begin(), transformations.end()),
-                "transformations must be sorted by index");
-  TENZIR_ASSERT(transformations.end()
-                  == std::adjacent_find(
-                    transformations.begin(), transformations.end(),
-                    [](const auto& lhs, const auto& rhs) noexcept {
-                      const auto [lhs_mismatch, rhs_mismatch]
-                        = std::mismatch(lhs.index.begin(), lhs.index.end(),
-                                        rhs.index.begin(), rhs.index.end());
-                      return lhs_mismatch == lhs.index.end();
-                    }),
-                "transformation indices must not be a subset of the following "
-                "transformation's index");
+  TENZIR_ASSERT_EXPENSIVE(std::is_sorted(transformations.begin(),
+                                         transformations.end()),
+                          "transformations must be sorted by index");
+  TENZIR_ASSERT_EXPENSIVE(
+    transformations.end()
+      == std::adjacent_find(transformations.begin(), transformations.end(),
+                            [](const auto& lhs, const auto& rhs) noexcept {
+                              const auto [lhs_mismatch, rhs_mismatch]
+                                = std::mismatch(lhs.index.begin(),
+                                                lhs.index.end(),
+                                                rhs.index.begin(),
+                                                rhs.index.end());
+                              return lhs_mismatch == lhs.index.end();
+                            }),
+    "transformation indices must not be a subset of the following "
+    "transformation's index");
   // The current unpacked layer of the transformation, i.e., the pieces required
   // to re-assemble the current layer of both the record type and the record
   // batch.
@@ -401,9 +406,10 @@ std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
   TENZIR_ASSERT(current == sentinel, "index out of bounds");
   // Re-assemble the record batch after the transformation.
   TENZIR_ASSERT(layer.fields.size() == layer.arrays.size());
-  TENZIR_ASSERT(std::ranges::all_of(layer.arrays, [](const auto& x) -> bool {
-    return x != nullptr;
-  }));
+  TENZIR_ASSERT_EXPENSIVE(
+    std::ranges::all_of(layer.arrays, [](const auto& x) -> bool {
+      return x != nullptr;
+    }));
   auto new_schema = type{record_type{layer.fields}};
   new_schema.assign_metadata(schema);
   auto arrow_fields = arrow::FieldVector{};
@@ -426,7 +432,8 @@ std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
   }
 #if TENZIR_ENABLE_ASSERTIONS
   auto validate_status = new_struct_array->Validate();
-  TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
+  TENZIR_ASSERT_EXPENSIVE(validate_status.ok(),
+                          validate_status.ToString().c_str());
 #endif // TENZIR_ENABLE_ASSERTIONS
   return {
     std::move(new_schema),
@@ -458,12 +465,12 @@ table_slice transform_columns(
 std::pair<type, std::shared_ptr<arrow::RecordBatch>>
 select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
                const std::vector<offset>& indices) noexcept {
-  TENZIR_ASSERT(batch->schema()->Equals(schema.to_arrow_schema()),
-                "Tenzir schema and Arrow schema must match");
-  TENZIR_ASSERT(std::is_sorted(indices.begin(), indices.end()),
-                "indices must be "
-                "sorted");
-  TENZIR_ASSERT(
+  TENZIR_ASSERT_EXPENSIVE(batch->schema()->Equals(schema.to_arrow_schema()),
+                          "Tenzir schema and Arrow schema must match");
+  TENZIR_ASSERT_EXPENSIVE(std::is_sorted(indices.begin(), indices.end()),
+                          "indices must be "
+                          "sorted");
+  TENZIR_ASSERT_EXPENSIVE(
     indices.end()
       == std::adjacent_find(indices.begin(), indices.end(),
                             [](const auto& lhs, const auto& rhs) noexcept {

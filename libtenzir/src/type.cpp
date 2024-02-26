@@ -366,8 +366,9 @@ type::type(chunk_ptr&& table) noexcept {
   TENZIR_ASSERT(table->size() > 0);
   const auto* const data = reinterpret_cast<const uint8_t*>(table->data());
   auto verifier = flatbuffers::Verifier{data, table->size()};
-  TENZIR_ASSERT(fbs::GetType(data)->Verify(verifier),
-                "Encountered invalid tenzir.fbs.Type FlatBuffers table.");
+  TENZIR_ASSERT_EXPENSIVE(fbs::GetType(data)->Verify(verifier),
+                          "Encountered invalid tenzir.fbs.Type FlatBuffers "
+                          "table.");
 #  if defined(FLATBUFFERS_TRACK_VERIFIER_BUFFER_SIZE)
   TENZIR_ASSERT(verifier.GetComputedSize() == table->size(),
                 "Encountered unexpected excess bytes in tenzir.fbs.Type "
@@ -646,7 +647,7 @@ type type::from_legacy_type(const legacy_type& other) noexcept {
       return type{other.name(), string_type{}, std::move(attributes)};
     },
     [&](const legacy_pattern_type&) noexcept -> type {
-      die("unreachable");
+      TENZIR_UNREACHABLE();
     },
     [&](const legacy_address_type&) noexcept {
       return type{other.name(), ip_type{}, std::move(attributes)};
@@ -1140,7 +1141,7 @@ auto type::prune() const noexcept -> type {
       return type{list_type{lt.value_type().prune()}};
     },
     [](const map_type&) -> type {
-      die("unreachable");
+      TENZIR_UNREACHABLE();
     },
     [](const record_type& rt) -> type {
       auto fields = std::vector<record_type::field_view>{};
@@ -1641,8 +1642,8 @@ bool type_check(const type& x, const data& y) noexcept {
         // Technically lists can contain heterogeneous data,
         // but for optimization purposes we only check the
         // first element when assertions are disabled.
-        TENZIR_ASSERT(std::all_of(it + 1, u.end(), check), //
-                      "expected a homogenous list");
+        TENZIR_ASSERT_EXPENSIVE(std::all_of(it + 1, u.end(), check), //
+                                "expected a homogenous list");
         return true;
       }
       return false;
@@ -1660,8 +1661,8 @@ bool type_check(const type& x, const data& y) noexcept {
         // Technically maps can contain heterogeneous data,
         // but for optimization purposes we only check the
         // first element when assertions are disabled.
-        TENZIR_ASSERT(std::all_of(it + 1, u.end(), check), //
-                      "expected a homogenous map");
+        TENZIR_ASSERT_EXPENSIVE(std::all_of(it + 1, u.end(), check), //
+                                "expected a homogenous map");
         return true;
       }
       return false;
@@ -3373,19 +3374,22 @@ record_type::insert_after(std::vector<struct field> fields) noexcept {
 
 std::optional<record_type> record_type::transform(
   std::vector<transformation> transformations) const noexcept {
-  TENZIR_ASSERT(std::is_sorted(transformations.begin(), transformations.end()),
-                "transformations must be sorted by index");
-  TENZIR_ASSERT(transformations.end()
-                  == std::adjacent_find(
-                    transformations.begin(), transformations.end(),
-                    [](const auto& lhs, const auto& rhs) noexcept {
-                      const auto [lhs_mismatch, rhs_mismatch]
-                        = std::mismatch(lhs.index.begin(), lhs.index.end(),
-                                        rhs.index.begin(), rhs.index.end());
-                      return lhs_mismatch == lhs.index.end();
-                    }),
-                "transformation indices must not be a subset of the following "
-                "transformation's index");
+  TENZIR_ASSERT_EXPENSIVE(std::is_sorted(transformations.begin(),
+                                         transformations.end()),
+                          "transformations must be sorted by index");
+  TENZIR_ASSERT_EXPENSIVE(
+    transformations.end()
+      == std::adjacent_find(transformations.begin(), transformations.end(),
+                            [](const auto& lhs, const auto& rhs) noexcept {
+                              const auto [lhs_mismatch, rhs_mismatch]
+                                = std::mismatch(lhs.index.begin(),
+                                                lhs.index.end(),
+                                                rhs.index.begin(),
+                                                rhs.index.end());
+                              return lhs_mismatch == lhs.index.end();
+                            }),
+    "transformation indices must not be a subset of the following "
+    "transformation's index");
   // The current unpacked layer of the transformation, i.e., the pieces required
   // to re-assemble the current layer of both the record type and the record
   // batch.

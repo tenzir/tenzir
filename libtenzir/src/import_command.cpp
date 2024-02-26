@@ -11,6 +11,7 @@
 #include "tenzir/command.hpp"
 #include "tenzir/concept/parseable/tenzir/expression.hpp"
 #include "tenzir/concept/parseable/to.hpp"
+#include "tenzir/detail/env.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/exec_pipeline.hpp"
@@ -36,8 +37,11 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   TENZIR_WARN(
     "`tenzir-ctl import` is deprecated, use `tenzir '... | import'` instead");
   if (inv.name() == "json" || inv.name() == "suricata") {
-    auto printer = make_diagnostic_printer(std::nullopt, color_diagnostics::yes,
-                                           std::cerr);
+    auto color = isatty(STDERR_FILENO) == 1
+                 && detail::getenv("NO_COLOR").value_or("").empty();
+    auto printer = make_diagnostic_printer(
+      std::nullopt, color ? color_diagnostics::yes : color_diagnostics::no,
+      std::cerr);
     auto pipe = fmt::format("from stdin read {}", inv.name());
     if (inv.name() == "json") {
       if (auto const* selector = caf::get_if<std::string>(

@@ -132,7 +132,7 @@ auto print_node(auto& out, const View& value) -> void {
     }
     out << YAML::EndMap;
   } else if constexpr (detail::is_any_v<View, view<pattern>, view<map>>) {
-    die("unreachable");
+    TENZIR_UNREACHABLE();
   } else {
     static_assert(detail::always_false_v<View>, "missing overload");
   }
@@ -222,7 +222,7 @@ public:
         out->SetIndent(2);
         for (const auto& row :
              values(caf::get<record_type>(resolved_slice.schema()), *array)) {
-          TENZIR_ASSERT_CHEAP(row);
+          TENZIR_ASSERT(row);
           print_document(*out, *row);
         }
         // If the output failed, then we either failed to allocate memory or had

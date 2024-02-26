@@ -54,14 +54,17 @@ get_plugin_dirs(const caf::actor_system_config& cfg) {
   // specified when in bare-mode, it is safe to just read the option
   // `tenzir.plugin-dirs` even with bare-mode enabled.
   if (auto dirs = detail::unpack_config_list_to_vector<std::string>( //
-        cfg, "tenzir.plugin-dirs"))
+        cfg, "tenzir.plugin-dirs")) {
     result.insert(dirs->begin(), dirs->end());
-  else
+  } else {
     TENZIR_WARN("failed to to extract plugin dirs: {}", dirs.error());
-  if (!bare_mode)
-    if (auto home = detail::getenv("HOME"))
+  }
+  if (!bare_mode) {
+    if (auto home = detail::getenv("HOME")) {
       result.insert(std::filesystem::path{*home} / ".local" / "lib" / "tenzir"
                     / "plugins");
+    }
+  }
   result.insert(detail::install_plugindir());
   return result;
 }
@@ -74,8 +77,9 @@ resolve_plugin_name(const detail::stable_set<std::filesystem::path>& plugin_dirs
   for (const auto& dir : plugin_dirs) {
     auto maybe_path = dir / plugin_file_name;
     auto ec = std::error_code{};
-    if (std::filesystem::is_regular_file(maybe_path, ec))
+    if (std::filesystem::is_regular_file(maybe_path, ec)) {
       return maybe_path;
+    }
   }
   return caf::make_error(
     ec::invalid_configuration,
@@ -113,10 +117,12 @@ std::vector<std::string> expand_special_identifiers(
     for (const auto& dir : plugin_dirs) {
       auto ec = std::error_code{};
       for (const auto& file : std::filesystem::directory_iterator{dir, ec}) {
-        if (ec || !file.is_regular_file())
+        if (ec || !file.is_regular_file()) {
           break;
-        if (file.path().filename().string().starts_with("libtenzir-plugin-"))
+        }
+        if (file.path().filename().string().starts_with("libtenzir-plugin-")) {
           paths_or_names.push_back(file.path());
+        }
       }
     }
     // 'all' implies 'bundled'.
@@ -154,7 +160,7 @@ unload_disabled_static_plugins(std::vector<std::string> paths_or_names) {
       case plugin_ptr::type::builtin:
         return false;
     }
-    die("unreachable");
+    TENZIR_UNREACHABLE();
   };
   get_mutable().erase(std::remove_if(get_mutable().begin(), get_mutable().end(),
                                      check_and_remove_disabled_static_plugin),
@@ -169,15 +175,17 @@ caf::expected<detail::stable_set<std::string>> resolve_plugin_names(
   for (auto& path_or_name : paths_or_names) {
     // Ignore paths.
     if (auto maybe_path = std::filesystem::path{path_or_name};
-        maybe_path.is_absolute())
+        maybe_path.is_absolute()) {
       continue;
+    }
     // At this point, we only have names—that we need to resolve to
     // `{dir}/libtenzir-plugin-{name}.{ext}`. We take the first file that
     // exists.
-    if (auto path = resolve_plugin_name(plugin_dirs, path_or_name))
+    if (auto path = resolve_plugin_name(plugin_dirs, path_or_name)) {
       path_or_name = path->string();
-    else
+    } else {
       return std::move(path.error());
+    }
   }
   // Deduplicate plugins.
   // We dedup based on the filename instead of the full path, this is useful for
@@ -221,8 +229,9 @@ load(const std::vector<std::string>& bundled_plugins,
   // Get the necessary options.
   auto paths_or_names
     = caf::get_or(cfg, "tenzir.plugins", std::vector<std::string>{"all"});
-  if (paths_or_names.empty() && bundled_plugins.empty())
+  if (paths_or_names.empty() && bundled_plugins.empty()) {
     return loaded_plugin_paths;
+  }
   const auto plugin_dirs = get_plugin_dirs(cfg);
   // Resolve the 'bundled' and 'all' identifiers.
   paths_or_names = expand_special_identifiers(std::move(paths_or_names),
@@ -235,18 +244,20 @@ load(const std::vector<std::string>& bundled_plugins,
   // Try to resolve plugin names to plugin paths. After this step, the list only
   // contains deduplicated plugin paths.
   auto paths = resolve_plugin_names(std::move(paths_or_names), plugin_dirs);
-  if (!paths)
+  if (!paths) {
     return std::move(paths.error());
+  }
   // Load plugins.
   for (auto path : std::move(*paths)) {
     if (auto plugin = plugin_ptr::make_dynamic(path.c_str(), cfg)) {
       // Check for name clashes.
-      if (find((*plugin)->name()))
+      if (find((*plugin)->name())) {
         return caf::make_error(ec::invalid_configuration,
                                fmt::format("failed to load the {} plugin "
                                            "because another plugin already "
                                            "uses the name {}",
                                            path, (*plugin)->name()));
+      }
       get_mutable().push_back(std::move(*plugin));
       loaded_plugin_paths.emplace_back(std::move(path));
     } else {
@@ -335,20 +346,23 @@ caf::error initialize(caf::actor_system_config& cfg) {
       const auto yaml_path_exists = std::filesystem::exists(yaml_path, err);
       err.clear();
       const auto yml_path_exists = std::filesystem::exists(yml_path, err);
-      if (!yaml_path_exists && !yml_path_exists)
+      if (!yaml_path_exists && !yml_path_exists) {
         continue;
-      if (yaml_path_exists && yml_path_exists)
+      }
+      if (yaml_path_exists && yml_path_exists) {
         return caf::make_error(
           ec::invalid_configuration,
           fmt::format("detected configuration files for the "
                       "{} plugin at "
                       "conflicting paths {} and {}",
                       plugin->name(), yaml_path, yml_path));
+      }
       const auto& path = yaml_path_exists ? yaml_path : yml_path;
       if (auto opts = load_yaml(path)) {
         // Skip empty config files.
-        if (caf::holds_alternative<caf::none_t>(*opts))
+        if (caf::holds_alternative<caf::none_t>(*opts)) {
           continue;
+        }
         if (const auto& opts_data = caf::get_if<record>(&*opts)) {
           merge(*opts_data, merged_config, policy::merge_lists::yes);
           TENZIR_INFO("loaded plugin configuration file: {}", path);
@@ -365,14 +379,16 @@ caf::error initialize(caf::actor_system_config& cfg) {
       }
     }
     // Third, initialize the plugin with the merged configuration.
-    if (plugin.type() != plugin_ptr::type::builtin)
+    if (plugin.type() != plugin_ptr::type::builtin) {
       TENZIR_VERBOSE("initializing the {} plugin with options: {}",
                      plugin->name(), merged_config);
-    if (auto err = plugin->initialize(merged_config, global_config))
+    }
+    if (auto err = plugin->initialize(merged_config, global_config)) {
       return caf::make_error(ec::unspecified,
                              fmt::format("failed to initialize "
                                          "the {} plugin: {} ",
                                          plugin->name(), err));
+    }
   }
   return caf::none;
 }
@@ -393,10 +409,12 @@ std::string component_plugin::component_name() const {
 
 analyzer_plugin_actor
 analyzer_plugin::analyzer(node_actor::stateful_pointer<node_state> node) const {
-  if (auto handle = weak_handle_.lock())
+  if (auto handle = weak_handle_.lock()) {
     return handle;
-  if (spawned_once_ || !node)
+  }
+  if (spawned_once_ || !node) {
     return {};
+  }
   auto handle = make_analyzer(node);
   auto [importer] = node->state.registry.find<importer_actor>();
   TENZIR_ASSERT(importer);
@@ -437,8 +455,9 @@ store_plugin::make_store_builder(accountant_actor accountant,
                                  filesystem_actor fs,
                                  const tenzir::uuid& id) const {
   auto store = make_active_store();
-  if (!store)
+  if (!store) {
     return store.error();
+  }
   auto db_dir = std::filesystem::path{
     caf::get_or(content(fs->home_system().config()), "tenzir.state-directory",
                 defaults::state_directory.data())};
@@ -456,11 +475,13 @@ caf::expected<store_actor>
 store_plugin::make_store(accountant_actor accountant, filesystem_actor fs,
                          std::span<const std::byte> header) const {
   auto store = make_passive_store();
-  if (!store)
+  if (!store) {
     return store.error();
-  if (header.size() != uuid::num_bytes)
+  }
+  if (header.size() != uuid::num_bytes) {
     return caf::make_error(ec::invalid_argument, "header must have size of "
                                                  "single uuid");
+  }
   const auto id = uuid{header.subspan<0, uuid::num_bytes>()};
   auto db_dir = std::filesystem::path{
     caf::get_or(content(fs->home_system().config()), "tenzir.state-directory",
@@ -660,6 +681,32 @@ auto store_plugin::deserialize(deserializer f,
     x = nullptr;
   }
 }
+
+// -- context plugin -----------------------------------------------------------
+
+auto context_plugin::get_latest_loader() const -> const context_loader& {
+  TENZIR_ASSERT(not loaders_.empty());
+  return **std::ranges::max_element(loaders_, std::ranges::less{},
+                                    [](const auto& loader) {
+                                      return loader->version();
+                                    });
+}
+
+auto context_plugin::get_versioned_loader(int version) const
+  -> const context_loader* {
+  auto it = std::ranges::find(loaders_, version, [](const auto& loader) {
+    return loader->version();
+  });
+  if (it == loaders_.end()) {
+    return nullptr;
+  }
+  return it->get();
+}
+
+void context_plugin::register_loader(std::unique_ptr<context_loader> loader) {
+  loaders_.emplace_back(std::move(loader));
+}
+
 // -- aspect plugin ------------------------------------------------------------
 
 auto aspect_plugin::aspect_name() const -> std::string {
@@ -687,9 +734,9 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
     auto& last = output.back();
     auto null_builder = caf::get<record_type>(last.schema())
                           .make_arrow_builder(arrow::default_memory_pool());
-    TENZIR_ASSERT_CHEAP(null_builder->AppendNull().ok());
+    TENZIR_ASSERT(null_builder->AppendNull().ok());
     auto null_array = std::shared_ptr<arrow::StructArray>{};
-    TENZIR_ASSERT_CHEAP(null_builder->Finish(&null_array).ok());
+    TENZIR_ASSERT(null_builder->Finish(&null_array).ok());
     auto null_batch = arrow::RecordBatch::Make(
       last.schema().to_arrow_schema(), 1, null_array->Flatten().ValueOrDie());
     last
@@ -746,31 +793,36 @@ caf::expected<plugin_ptr>
 plugin_ptr::make_dynamic(const char* filename,
                          caf::actor_system_config& cfg) noexcept {
   auto* library = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
-  if (!library)
+  if (!library) {
     return caf::make_error(ec::system_error, "failed to load plugin", filename,
                            dlerror());
+  }
   auto libtenzir_version = reinterpret_cast<const char* (*)()>(
     dlsym(library, "tenzir_libtenzir_version"));
-  if (!libtenzir_version)
+  if (!libtenzir_version) {
     return caf::make_error(ec::system_error,
                            "failed to resolve symbol "
                            "tenzir_libtenzir_version in",
                            filename, dlerror());
-  if (strcmp(libtenzir_version(), version::version) != 0)
+  }
+  if (strcmp(libtenzir_version(), version::version) != 0) {
     return caf::make_error(ec::version_error, "libtenzir version mismatch in",
                            filename, libtenzir_version(), version::version);
+  }
   auto libtenzir_build_tree_hash = reinterpret_cast<const char* (*)()>(
     dlsym(library, "tenzir_libtenzir_build_tree_hash"));
-  if (!libtenzir_build_tree_hash)
+  if (!libtenzir_build_tree_hash) {
     return caf::make_error(ec::system_error,
                            "failed to resolve symbol "
                            "tenzir_libtenzir_build_tree_hash in",
                            filename, dlerror());
-  if (strcmp(libtenzir_build_tree_hash(), version::build::tree_hash) != 0)
+  }
+  if (strcmp(libtenzir_build_tree_hash(), version::build::tree_hash) != 0) {
     return caf::make_error(ec::version_error,
                            "libtenzir build tree hash mismatch in", filename,
                            libtenzir_build_tree_hash(),
                            version::build::tree_hash);
+  }
   auto plugin_version = reinterpret_cast<const char* (*)()>(
     dlsym(library, "tenzir_plugin_version"));
   if (not plugin_version) {
@@ -830,14 +882,17 @@ plugin_ptr::make_dynamic(const char* filename,
     // static plugins exactly once to always prefer them over dynamic plugins.
     static auto flag = std::once_flag{};
     std::call_once(flag, [&] {
-      for (const auto& [block, _] : plugins::get_static_type_id_blocks())
+      for (const auto& [block, _] : plugins::get_static_type_id_blocks()) {
         old_blocks.push_back(block);
+      }
     });
     auto new_block = plugin_type_id_block();
-    for (const auto& old_block : old_blocks)
-      if (new_block.begin < old_block.end && old_block.begin < new_block.end)
+    for (const auto& old_block : old_blocks) {
+      if (new_block.begin < old_block.end && old_block.begin < new_block.end) {
         return caf::make_error(ec::system_error,
                                "encountered type ID block clash in", filename);
+      }
+    }
     plugin_register_type_id_block(cfg);
     old_blocks.push_back(new_block);
   }
@@ -917,29 +972,36 @@ auto plugin_ptr::reference_dependencies() noexcept -> void {
 
 std::strong_ordering
 operator<=>(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept {
-  if (&lhs == &rhs)
+  if (&lhs == &rhs) {
     return std::strong_ordering::equal;
-  if (!lhs && !rhs)
+  }
+  if (!lhs && !rhs) {
     return std::strong_ordering::equal;
-  if (!lhs)
+  }
+  if (!lhs) {
     return std::strong_ordering::less;
-  if (!rhs)
+  }
+  if (!rhs) {
     return std::strong_ordering::greater;
+  }
   return lhs <=> rhs->name();
 }
 
 bool operator==(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept {
-  if (&lhs == &rhs)
+  if (&lhs == &rhs) {
     return true;
-  if (!lhs && !rhs)
+  }
+  if (!lhs && !rhs) {
     return true;
+  }
   return lhs == rhs->name();
 }
 
 std::strong_ordering
 operator<=>(const plugin_ptr& lhs, std::string_view rhs) noexcept {
-  if (!lhs)
+  if (!lhs) {
     return std::strong_ordering::less;
+  }
   auto lhs_name = lhs->name();
   // TODO: Replace implementation with `std::lexicographical_compare_three_way`
   // once that is implemented for all compilers we need to support. This does
@@ -949,10 +1011,12 @@ operator<=>(const plugin_ptr& lhs, std::string_view rhs) noexcept {
       = std::tolower(static_cast<unsigned char>(lhs_name[0]));
     const auto rhs_normalized
       = std::tolower(static_cast<unsigned char>(rhs[0]));
-    if (lhs_normalized < rhs_normalized)
+    if (lhs_normalized < rhs_normalized) {
       return std::strong_ordering::less;
-    if (lhs_normalized > rhs_normalized)
+    }
+    if (lhs_normalized > rhs_normalized) {
       return std::strong_ordering::greater;
+    }
     lhs_name = lhs_name.substr(1);
     rhs = rhs.substr(1);
   }
@@ -962,8 +1026,9 @@ operator<=>(const plugin_ptr& lhs, std::string_view rhs) noexcept {
 }
 
 bool operator==(const plugin_ptr& lhs, std::string_view rhs) noexcept {
-  if (!lhs)
+  if (!lhs) {
     return false;
+  }
   const auto lhs_name = lhs->name();
   return std::equal(lhs_name.begin(), lhs_name.end(), rhs.begin(), rhs.end(),
                     [](unsigned char lhs, unsigned char rhs) noexcept {
@@ -987,7 +1052,7 @@ plugin_ptr::control_block::control_block(void* library, plugin* instance,
 
 plugin_ptr::control_block::~control_block() noexcept {
   if (instance) {
-    TENZIR_ASSERT_CHEAP(deleter);
+    TENZIR_ASSERT(deleter);
     deleter(instance);
     instance = {};
     deleter = {};

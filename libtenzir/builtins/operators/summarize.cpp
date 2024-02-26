@@ -92,7 +92,7 @@ auto make_round_temporal_options(duration time_resolution) noexcept
   TRY_CAST_APPROXIMATELY(months, MONTH);
   TRY_CAST_APPROXIMATELY(years, YEAR);
 #undef TRY_CAST_APPROXIMATELY
-  die("unreachable");
+  TENZIR_UNREACHABLE();
 }
 
 /// The configuration of a summarize pipeline operator.

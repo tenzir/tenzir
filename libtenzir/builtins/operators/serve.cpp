@@ -117,7 +117,7 @@ constexpr auto SPEC_V0 = R"_(
                 type: bool
                 example: true
                 default: false
-                description: Use an experimental, more simple format for the contained schema.
+                description: Use an experimental, more simple format for the contained schema, and render durations as numbers representing seconds as opposed to human-readable strings.
     responses:
       200:
         description: Success.
@@ -688,6 +688,7 @@ struct serve_handler_state {
     auto printer = json_printer{{
       .indentation = 0,
       .oneline = true,
+      .numeric_durations = use_simple_format,
     }};
     auto result
       = next_continuation_token.empty()
@@ -713,9 +714,9 @@ struct serve_handler_state {
         first = false;
         out_iter = fmt::format_to(out_iter, R"("schema_id":"{}","data":)",
                                   slice.schema().make_fingerprint());
-        TENZIR_ASSERT_CHEAP(row);
+        TENZIR_ASSERT(row);
         const auto ok = printer.print(out_iter, *row);
-        TENZIR_ASSERT_CHEAP(ok);
+        TENZIR_ASSERT(ok);
       }
     }
     // Write schemas
@@ -735,7 +736,7 @@ struct serve_handler_state {
       const auto ok
         = printer.print(out_iter, use_simple_format ? schema.to_definition2()
                                                     : schema.to_definition());
-      TENZIR_ASSERT_CHEAP(ok);
+      TENZIR_ASSERT(ok);
     }
     out_iter = fmt::format_to(out_iter, R"(}}]}}{})", '\n');
     return result;

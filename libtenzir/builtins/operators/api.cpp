@@ -46,7 +46,7 @@ public:
             .emit(ctrl.diagnostics());
         });
     co_yield {};
-    TENZIR_ASSERT_CHEAP(response.has_value());
+    TENZIR_ASSERT(response.has_value());
     if (response->is_error()) {
       diagnostic::error("request failed with code {}", response->code())
         .note("body: {}", response->body())

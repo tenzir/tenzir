@@ -398,19 +398,12 @@ setup() {
   check tenzir 'version | set-attributes --first 123 | set-attributes --second 456 | get-attributes'
 }
 
-# bats test_tags=pipelines
-@test "Chart Attributes" {
-  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | chart pie --name e --value b"
-  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | chart pie --name e --value b | get-attributes"
-  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | chart pie --name e --value a"
-  check tenzir "from ${INPUTSDIR}/json/all-types.json read json | chart pie"
-
+# bats test_tags=pipelines,chart
+@test "Chart Arguments" {
   cat ${INPUTSDIR}/json/all-types.json |
     check ! tenzir "from stdin read json | chart pie -x b"
-
   cat ${INPUTSDIR}/json/all-types.json |
     check ! tenzir "from stdin read json | chart pie --value b -x e"
-
   cat ${INPUTSDIR}/json/all-types.json |
     check ! tenzir "from stdin read json | chart piett --value b"
 }
@@ -505,4 +498,22 @@ setup() {
   check tenzir "from ${INPUTSDIR}/txt/key_value_pairs.txt read lines | parse line kv \"(\s+)[A-Z][A-Z_]+\" \":\s*\""
   check ! tenzir 'parse line kv "(foo)(bar)" ""'
   check ! tenzir 'parse line kv "foo(?=bar)" ""'
+}
+
+@test "Parse JSON with numeric timestamp" {
+  local schemas="$BATS_RUN_TMPDIR/tmp/$BATS_TEST_NAME"
+  mkdir -p $schemas
+  local schema="$schemas/foo_bar.schema"
+  cat >$schema <<EOF
+type foo_bar = record {
+  foo: time #unit=ms,
+  bar: time #unit=ns,
+}
+EOF
+  check tenzir --schema-dirs=$schemas "from stdin read json --schema=foo_bar" <<EOF
+{
+  "foo": 1707736115592,
+  "bar": 1707736115592000000
+}
+EOF
 }

@@ -1,7 +1,5 @@
 {
   inputs,
-  versionShortOverride,
-  versionLongOverride,
 }: final: prev: let
   inherit (final) lib;
   inherit (final.stdenv.hostPlatform) isLinux isDarwin isStatic;
@@ -367,8 +365,9 @@ in {
   };
   unchecked = {
     tenzir-de = final.callPackage ./tenzir {
-      inherit stdenv versionShortOverride versionLongOverride;
+      inherit stdenv;
       pname = "tenzir-de";
+      isReleaseBuild = inputs.isReleaseBuild.value;
     };
     # Policy: The suffix-less `tenzir' packages come with a few closed source
     # plugins.

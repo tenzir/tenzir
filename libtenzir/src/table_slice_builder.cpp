@@ -70,7 +70,8 @@ create_table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch,
   // NOTE: There's also a ValidateFull function, but that always errors when
   // using nested struct arrays. Last tested with Arrow 7.0.0. -- DL.
   auto validate_status = record_batch->Validate();
-  TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
+  TENZIR_ASSERT_EXPENSIVE(validate_status.ok(),
+                          validate_status.ToString().c_str());
 #endif // TENZIR_ENABLE_ASSERTIONS
   auto fbs_ipc_buffer = flatbuffers::Offset<flatbuffers::Vector<uint8_t>>{};
   if (serialize == table_slice::serialize::yes) {
@@ -152,7 +153,7 @@ table_slice table_slice_builder::finish() {
 table_slice table_slice_builder::create(
   const std::shared_ptr<arrow::RecordBatch>& record_batch, type schema,
   table_slice::serialize serialize, size_t initial_buffer_size) {
-  TENZIR_ASSERT(verify_record_batch(*record_batch));
+  TENZIR_ASSERT_EXPENSIVE(verify_record_batch(*record_batch));
   auto builder = flatbuffers::FlatBufferBuilder{initial_buffer_size};
   return create_table_slice(record_batch, builder, std::move(schema),
                             serialize);
@@ -359,7 +360,7 @@ arrow::Status
 append_builder(const ip_type&, type_to_arrow_builder_t<ip_type>& builder,
                const view<type_to_data_t<ip_type>>& view) noexcept {
   const auto bytes = as_bytes(view);
-  TENZIR_ASSERT(bytes.size() == 16);
+  TENZIR_ASSERT_EXPENSIVE(bytes.size() == 16);
   return builder.Append(std::string_view{
     reinterpret_cast<const char*>(bytes.data()), bytes.size()});
 }

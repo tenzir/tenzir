@@ -11,7 +11,12 @@
 
 #include <caf/typed_event_based_actor.hpp>
 
-#include <filesystem>
+#ifdef _SC_AVPHYS_PAGES
+#  include <filesystem>
+#elif __has_include(<mach/mach.h>)
+#  include <mach/mach.h>
+#  include <mach/mach_host.h>
+#endif
 
 namespace tenzir::plugins::health_memory {
 
@@ -20,16 +25,46 @@ namespace {
 #ifdef _SC_AVPHYS_PAGES
 
 auto get_raminfo() -> caf::expected<record> {
-  auto result = record{};
-  static auto pagesize = ::sysconf(_SC_PAGESIZE);
-  auto phys_pages = ::sysconf(_SC_PHYS_PAGES);
-  auto available_pages = ::sysconf(_SC_AVPHYS_PAGES);
-  auto total_bytes = phys_pages * pagesize;
-  auto available_bytes = available_pages * pagesize;
-  result["total_bytes"] = total_bytes;
-  result["free_bytes"] = available_bytes;
-  result["used_bytes"] = total_bytes - available_bytes;
-  return result;
+  static const auto pagesize = ::sysconf(_SC_PAGESIZE);
+  const auto phys_pages = ::sysconf(_SC_PHYS_PAGES);
+  const auto available_pages = ::sysconf(_SC_AVPHYS_PAGES);
+  const auto total_bytes = phys_pages * pagesize;
+  const auto free_bytes = available_pages * pagesize;
+  return record{
+    {"total_bytes", total_bytes},
+    {"free_bytes", free_bytes},
+    {"used_bytes", total_bytes - free_bytes},
+  };
+}
+
+#elif __has_include(<mach/mach.h>)
+
+auto get_raminfo() -> caf::expected<record> {
+  static const auto page_size = getpagesize();
+  auto host_count = mach_msg_type_number_t{HOST_BASIC_INFO_COUNT};
+  auto host = host_basic_info_data_t{};
+  if (KERN_SUCCESS
+      != host_info(mach_host_self(), HOST_BASIC_INFO, (host_info_t)&host,
+                   &host_count)) {
+    return caf::make_error(ec::system_error,
+                           "failed to get mach host basic info");
+  }
+  auto vm_count = mach_msg_type_number_t{HOST_VM_INFO64_COUNT};
+  auto vm = vm_statistics64_data_t{};
+  if (KERN_SUCCESS
+      != host_statistics64(mach_host_self(), HOST_VM_INFO64, (host_info_t)&vm,
+                           &vm_count)) {
+    return caf::make_error(ec::system_error,
+                           "failed to get mach vm statistics");
+  }
+  const auto total_bytes = static_cast<uint64_t>(host.max_mem);
+  const auto free_bytes
+    = static_cast<uint64_t>(vm.free_count + vm.inactive_count) * page_size;
+  return record{
+    {"total_bytes", total_bytes},
+    {"free_bytes", free_bytes},
+    {"used_bytes", total_bytes - free_bytes},
+  };
 }
 
 #endif
@@ -42,6 +77,8 @@ public:
 
   auto make_collector() const -> caf::expected<collector> override {
 #ifdef _SC_AVPHYS_PAGES
+    return get_raminfo;
+#elif __has_include(<mach/mach.h>)
     return get_raminfo;
 #else
     return caf::make_error(ec::invalid_configuration,

@@ -82,7 +82,7 @@ auto parse_query_params(std::string_view text)
 }
 
 auto format_api_route(const rest_endpoint& endpoint) -> std::string {
-  TENZIR_ASSERT_CHEAP(endpoint.path[0] == '/');
+  TENZIR_ASSERT(endpoint.path[0] == '/');
   return fmt::format("/api/v{}{}", static_cast<uint8_t>(endpoint.version),
                      endpoint.path);
 }
@@ -328,7 +328,7 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
     = self->spawn(request_dispatcher, *server_config, *authenticator);
   // Set up router.
   auto router = std::make_unique<router_t>();
-  TENZIR_ASSERT_CHEAP(dispatcher);
+  TENZIR_ASSERT(dispatcher);
   // Set up API routes from plugins.
   std::vector<rest_handler_actor> handlers;
   std::vector<std::string> api_routes;

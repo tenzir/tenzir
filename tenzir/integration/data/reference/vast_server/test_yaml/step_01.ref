@@ -1,6 +1,6 @@
 ---
 tenzir:
-  allow-unsafe-pipelines: true
+  abort-on-panic: 1
   automatic-rebuild: 0
   bare-mode: true
   enable-metrics: false

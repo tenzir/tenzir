@@ -30,7 +30,7 @@ show config | write yaml
 ```yaml
 ---
 tenzir:
-  allow-unsafe-pipelines: true
+  no-location-overrides: true
   endpoint: my-custom-endpoint:42
 ...
 ```
@@ -42,6 +42,6 @@ from file ~/.config/tenzir/tenzir.yml | flatten | write csv
 ```
 
 ```tsv
-tenzir.allow-unsafe-pipelines,tenzir.endpoint
+tenzir.no-location-overrides,tenzir.endpoint
 true,my-custom-endpoint:42
 ```

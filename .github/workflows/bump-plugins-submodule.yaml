@@ -17,14 +17,13 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - name: Configure ssh-agent
-        uses: webfactory/ssh-agent@v0.8.0
+        uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: true
-          fetch-depth: 0
           persist-credentials: false
       - name: Generate a token
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

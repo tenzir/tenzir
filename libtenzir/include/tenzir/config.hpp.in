@@ -26,21 +26,22 @@
 
 namespace tenzir::version {
 
-/// Contains the full version string.
+/// Contains the base version string.
 extern const char* version;
+/// Contains a free-form version suffix.
+extern const char* build_metadata;
 
 /// The individual version components.
-extern const char* major;
-extern const char* minor;
-extern const char* patch;
-extern const char* tweak;
+extern const uint64_t major;
+extern const uint64_t minor;
+extern const uint64_t patch;
 
 /// The version number of the Tenzir partition format. Bump this whenever making
 /// changes that require partitions to be rebuilt.
 extern const uint64_t current_partition_version;
 
-/// Determines the supported Tenzir version range as [introduced, end_of_life] for
-/// a given partition version. The partition_version is still supported if
+/// Determines the supported Tenzir version range as [introduced, end_of_life]
+/// for a given partition version. The partition_version is still supported if
 /// end_of_life is not set.
 struct supported_versions {
   std::string_view introduced;
@@ -101,27 +102,27 @@ extern bool has_undefined_behavior_sanitizer;
 #if TENZIR_CLANG
 #  define TENZIR_DIAGNOSTIC_PUSH _Pragma("clang diagnostic push")
 #  define TENZIR_DIAGNOSTIC_POP _Pragma("clang diagnostic pop")
-#  define TENZIR_DIAGNOSTIC_IGNORE_DEPRECATED                                    \
+#  define TENZIR_DIAGNOSTIC_IGNORE_DEPRECATED                                  \
     _Pragma("clang diagnostic ignored \"-Wdeprecated\"")
-#  define TENZIR_DIAGNOSTIC_IGNORE_VLA_EXTENSION                                 \
+#  define TENZIR_DIAGNOSTIC_IGNORE_VLA_EXTENSION                               \
     _Pragma("clang diagnostic ignored \"-Wvla-extension\"")                    \
       _Pragma("clang diagnostic ignored \"-Wgnu-folding-constant\"")
 #  define TENZIR_DIAGNOSTIC_IGNORE_ADDRESS             /* nop */
 #  define TENZIR_DIAGNOSTIC_IGNORE_MAYBE_UNINITIALIZED /* nop */
-#  define TENZIR_DIAGNOSTIC_IGNORE_UNUSED_CONST_VARIABLE                         \
+#  define TENZIR_DIAGNOSTIC_IGNORE_UNUSED_CONST_VARIABLE                       \
     _Pragma("clang diagnostic ignored \"-Wunused-const-variable\"")
 #elif TENZIR_GCC
 #  define TENZIR_DIAGNOSTIC_PUSH _Pragma("GCC diagnostic push")
 #  define TENZIR_DIAGNOSTIC_POP _Pragma("GCC diagnostic pop")
-#  define TENZIR_DIAGNOSTIC_IGNORE_DEPRECATED                                    \
+#  define TENZIR_DIAGNOSTIC_IGNORE_DEPRECATED                                  \
     _Pragma("GCC diagnostic ignored \"-Wdeprecated-declarations\"")
-#  define TENZIR_DIAGNOSTIC_IGNORE_VLA_EXTENSION                                 \
+#  define TENZIR_DIAGNOSTIC_IGNORE_VLA_EXTENSION                               \
     _Pragma("GCC diagnostic ignored \"-Wvla\"")
-#  define TENZIR_DIAGNOSTIC_IGNORE_ADDRESS                                       \
+#  define TENZIR_DIAGNOSTIC_IGNORE_ADDRESS                                     \
     _Pragma("GCC diagnostic ignored \"-Waddress\"")
-#  define TENZIR_DIAGNOSTIC_IGNORE_MAYBE_UNINITIALIZED                           \
+#  define TENZIR_DIAGNOSTIC_IGNORE_MAYBE_UNINITIALIZED                         \
     _Pragma("GCC diagnostic ignored \"-Wmaybe-uninitialized\"")
-#  define TENZIR_DIAGNOSTIC_IGNORE_UNUSED_CONST_VARIABLE                         \
+#  define TENZIR_DIAGNOSTIC_IGNORE_UNUSED_CONST_VARIABLE                       \
     _Pragma("GCC diagnostic ignored \"-Wunused-const-variable\"")
 #endif
 
@@ -163,3 +164,14 @@ extern bool has_undefined_behavior_sanitizer;
 #if !__SIZEOF_INT128__
 #  error Tenzir requires support for __int128.
 #endif
+
+#if TENZIR_CLANG
+#  define TENZIR_NO_INLINE [[clang::noinline]]
+#elif TENZIR_GCC
+#  define TENZIR_NO_INLINE __attribute__((noinline))
+#else
+#  define TENZIR_NO_INLINE
+#endif
+
+#define TENZIR_UNUSED(...)                                                     \
+  void(sizeof(decltype(__VA_ARGS__ __VA_OPT__(, ) 0))) // NOLINT

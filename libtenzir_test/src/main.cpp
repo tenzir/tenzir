@@ -8,6 +8,7 @@
 
 #include "tenzir/configuration.hpp"
 #include "tenzir/data.hpp"
+#include "tenzir/detail/env.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/test/data.hpp"
@@ -95,6 +96,7 @@ std::vector<std::string> get_test_args(int argc, const char* const* argv) {
 } // namespace
 
 int main(int argc, char** argv) {
+  (void)tenzir::detail::setenv("TENZIR_ABORT_ON_PANIC", "1");
   std::string tenzir_loglevel = "quiet";
   auto test_args = get_test_args(argc, argv);
   if (!test_args.empty()) {
