@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/enum.hpp"
+#include "tenzir/ip.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/tql2/entity_id.hpp"
 
@@ -113,7 +114,7 @@ struct dollar_variable : identifier {
 struct literal {
   // TODO: Think about numbers.
   using kind = variant<bool, int64_t, uint64_t, double, std::string, blob,
-                       duration, caf::timestamp, null>;
+                       duration, caf::timestamp, null, ip>;
 
   literal(kind value, location source)
     : value{std::move(value)}, source{source} {

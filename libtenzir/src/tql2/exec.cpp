@@ -154,7 +154,8 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   if (im.error()) {
     return false;
   }
-  diagnostic::warning("pipeline is valid, but execution is not yet implemented")
+  diagnostic::warning(
+    "pipeline is syntactically valid, but execution is not yet implemented")
     .hint("use `--dump-ast` to show AST")
     .emit(im);
   return true;

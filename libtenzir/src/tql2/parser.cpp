@@ -404,8 +404,6 @@ private:
 
   auto parse_primary_expression() -> expression {
     // Literals: bool, duration, time, double, ipv4, ipv6, uint/int??, string
-    // x = 42 -> signed
-    // x = 9223372036854775808 -> unsigned
     if (accept(tk::lpar)) {
       auto result = parse_expression();
       expect(tk::rpar);
@@ -491,6 +489,12 @@ private:
     if (auto token = accept(tk::null)) {
       return literal{null{}, token.location};
     }
+    if (auto token = accept(tk::ip)) {
+      // TODO
+      if (auto result = ip{}; parsers::ip(token.text, result)) {
+        return literal{result, token.location};
+      }
+    }
     if (auto token = accept(tk::dollar_ident)) {
       return dollar_variable{token.as_identifier()};
     }
@@ -545,6 +549,17 @@ private:
               scope.done();
               (void)advance();
               break;
+            }
+          }
+          if (auto comma = accept(tk::comma)) {
+            if (args.empty()) {
+              diagnostic::error("unexpected comma before any arguments")
+                .primary(comma.location)
+                .throw_();
+            } else {
+              diagnostic::error("duplicate comma")
+                .primary(comma.location)
+                .throw_();
             }
           }
           args.push_back(parse_expression());

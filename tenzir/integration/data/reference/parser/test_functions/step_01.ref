@@ -1,6 +1,6 @@
-error: expected one of: identifier, dollar identifier, `this`, `not`, `_`, number, `true`, `false`, `null`, string, datetime, `-`, `(`, `)`, `{`, `[`
+error: unexpected comma before any arguments
  --> /dev/stdin:1:7
   |
 1 | a = b(,)
-  |       ^ got `,`
+  |       ^ 
   |
