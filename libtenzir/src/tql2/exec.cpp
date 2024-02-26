@@ -8,10 +8,10 @@
 
 #include "tenzir/tql2/exec.hpp"
 
-#include <tenzir/tql2/lexer.hpp>
 #include <tenzir/tql2/parser.hpp>
 #include <tenzir/tql2/registry.hpp>
 #include <tenzir/tql2/resolve.hpp>
+#include <tenzir/tql2/tokens.hpp>
 
 #include <arrow/util/utf8.h>
 
@@ -71,7 +71,7 @@ public:
 auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
           const exec_config& cfg, caf::actor_system& sys) -> bool {
   auto content_view = std::string_view{content};
-  auto tokens = tql2::lex(content);
+  auto tokens = tql2::tokenize(content);
   // TODO: Refactor this.
   arrow::util::InitializeUTF8();
   if (not arrow::util::ValidateUTF8(content)) {

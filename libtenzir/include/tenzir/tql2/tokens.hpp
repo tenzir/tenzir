@@ -47,4 +47,6 @@ struct token {
   size_t end;
 };
 
+auto tokenize(std::string_view content) -> std::vector<token>;
+
 } // namespace tenzir::tql2
