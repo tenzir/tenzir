@@ -64,6 +64,7 @@ jobs:
       before-sha: ${{ steps.configure.outputs.before-sha }}
       before-version: ${{ steps.configure.outputs.before-version }}
       release-version: ${{ steps.configure.outputs.release-version }}
+      ref-slug: ${{ steps.configure.outputs.ref-slug }}
       head-ref-slug: ${{ steps.configure.outputs.head-ref-slug }}
       base-ref-slug: ${{ steps.configure.outputs.base-ref-slug }}
       tenzir-container-ref: ${{ steps.configure.outputs.tenzir-container-ref }}
@@ -132,6 +133,7 @@ jobs:
           echo "before-version=${before_version}" >> $GITHUB_OUTPUT
           echo "release-version=${release_version}" >> $GITHUB_OUTPUT
           # Inject the branch slugs for cache names.
+          echo "ref-slug=${GITHUB_REF_SLUG}" >> $GITHUB_OUTPUT
           echo "head-ref-slug=${GITHUB_HEAD_REF_SLUG}" >> $GITHUB_OUTPUT
           echo "base-ref-slug=${GITHUB_BASE_REF_SLUG}" >> $GITHUB_OUTPUT
           if [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
@@ -702,10 +704,9 @@ jobs:
           # GitHub will only download artifacts that contain files whose locations matches `path`,
           # so if the `path` changes nothing will be downloaded even if the key name matches.
           path: ${{ env.CCACHE_DIR }}
-          key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.head-ref-slug }}-${{ github.sha }}
+          key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.ref-slug }}-${{ github.sha }}
           restore-keys: |
-            ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.head-ref-slug }}
-            ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.base-ref-slug }}
+            ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.ref-slug }}
             ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-main
             ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}
       - name: Configure
@@ -748,7 +749,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: ${{ env.CCACHE_DIR }}
-          key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.head-ref-slug }}-${{ github.sha }}
+          key: ${{ github.workflow }}-${{ matrix.tenzir.name }}-${{ matrix.tenzir.compiler }}-${{ needs.configure.outputs.ref-slug }}-${{ github.sha }}
           enableCrossOsArchive: true
       - name: Run Unit Tests
         env:
