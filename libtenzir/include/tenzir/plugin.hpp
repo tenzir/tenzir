@@ -827,6 +827,12 @@ public:
   /// platform the node is currently running on.
   [[nodiscard]] virtual auto make_collector() const -> caf::expected<collector>
     = 0;
+
+  /// Returns the frequency for collecting the metrics, expressed as the
+  /// interval between calls to the collector.
+  [[nodiscard]] virtual auto metric_frequency() const -> duration {
+    return std::chrono::seconds{1};
+  }
 };
 
 // -- aspect plugin ------------------------------------------------------------
