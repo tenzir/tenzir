@@ -33,26 +33,30 @@ namespace {
 auto constexpr path_key = "db-path";
 
 #if MMDB_UINT128_IS_BYTE_ARRAY
-auto cast_128_bit_unsigned_to_64_bit(uint8_t uint128[16]) -> uint64_t {
+auto cast_128_bit_unsigned_to_64_bit(uint8_t uint128[16],
+                                     diagnostic_handler& diag) -> uint64_t {
   auto low = uint64_t{};
   auto high = uint64_t{};
   std::memcpy(&low, uint128, 8);
   std::memcpy(&high, uint128 + 8, 8);
   if (high != 0) {
-    TENZIR_WARN("casting MDDB 128-bit to 64-bit unsigned will be lossy for "
-                "value [{},{}]",
-                high, low);
+    diagnostic::warning("casting MDDB 128-bit to 64-bit unsigned will be lossy "
+                        "for value [{},{}]",
+                        high, low)
+      .emit(diag);
   }
   return low;
 }
 #else
-auto cast_128_bit_unsigned_to_64_bit(mmdb_uint128_t uint128) -> uint64_t {
+auto cast_128_bit_unsigned_to_64_bit(mmdb_uint128_t uint128,
+                                     diagnostic_handler& diag) -> uint64_t {
   auto high = static_cast<uint64_t>(uint128 >> 64);
   auto low = static_cast<uint64_t>(uint128);
   if (high != 0) {
-    TENZIR_WARN("casting MDDB 128-bit to 64-bit unsigned will be lossy for "
-                "value [{},{}]",
-                high, low);
+    diagnostic::warning("casting MDDB 128-bit to 64-bit unsigned will be lossy "
+                        "for value [{},{}]",
+                        high, low)
+      .emit(diag);
   }
   return low;
 }
@@ -70,7 +74,8 @@ public:
   ctx() noexcept = default;
 
   explicit ctx(context::parameter_map parameters) noexcept {
-    reset(std::move(parameters));
+    null_diagnostic_handler diag{};
+    reset(std::move(parameters), diag);
   }
 
   ~ctx() override {
@@ -83,8 +88,9 @@ public:
     return "geoip";
   }
 
-  auto entry_data_list_to_list(MMDB_entry_data_list_s* entry_data_list,
-                               int* status, list& l) const
+  auto
+  entry_data_list_to_list(MMDB_entry_data_list_s* entry_data_list, int* status,
+                          list& l, diagnostic_handler& diag) const
     -> MMDB_entry_data_list_s* {
     switch (entry_data_list->entry_data.type) {
       case MMDB_DATA_TYPE_MAP: {
@@ -101,8 +107,8 @@ public:
                           entry_data_list->entry_data.data_size};
 
           entry_data_list = entry_data_list->next;
-          entry_data_list = entry_data_list_to_record(entry_data_list, status,
-                                                      sub_r, sub_record_key);
+          entry_data_list = entry_data_list_to_record(
+            entry_data_list, status, sub_r, diag, sub_record_key);
           if (*status != MMDB_SUCCESS) {
             return entry_data_list;
           }
@@ -116,7 +122,7 @@ public:
         for (entry_data_list = entry_data_list->next; size && entry_data_list;
              size--) {
           entry_data_list
-            = entry_data_list_to_list(entry_data_list, status, sub_l);
+            = entry_data_list_to_list(entry_data_list, status, sub_l, diag);
           if (*status != MMDB_SUCCESS) {
             return entry_data_list;
           }
@@ -164,8 +170,8 @@ public:
         entry_data_list = entry_data_list->next;
         break;
       case MMDB_DATA_TYPE_UINT128:
-        l.emplace_back(
-          cast_128_bit_unsigned_to_64_bit(entry_data_list->entry_data.uint128));
+        l.emplace_back(cast_128_bit_unsigned_to_64_bit(
+          entry_data_list->entry_data.uint128, diag));
         entry_data_list = entry_data_list->next;
         break;
       case MMDB_DATA_TYPE_INT32:
@@ -182,7 +188,8 @@ public:
 
   auto
   entry_data_list_to_record(MMDB_entry_data_list_s* entry_data_list,
-                            int* status, record& r, std::string key = {}) const
+                            int* status, record& r, diagnostic_handler& diag,
+                            std::string key = {}) const
     -> MMDB_entry_data_list_s* {
     switch (entry_data_list->entry_data.type) {
       case MMDB_DATA_TYPE_MAP: {
@@ -199,8 +206,8 @@ public:
                           entry_data_list->entry_data.data_size};
           auto sub_r = record{};
           entry_data_list = entry_data_list->next;
-          entry_data_list = entry_data_list_to_record(entry_data_list, status,
-                                                      sub_r, sub_record_key);
+          entry_data_list = entry_data_list_to_record(
+            entry_data_list, status, sub_r, diag, sub_record_key);
           if (*status != MMDB_SUCCESS) {
             return entry_data_list;
           }
@@ -220,7 +227,8 @@ public:
         auto sub_r = record{};
         for (entry_data_list = entry_data_list->next; size && entry_data_list;
              size--) {
-          entry_data_list = entry_data_list_to_list(entry_data_list, status, l);
+          entry_data_list
+            = entry_data_list_to_list(entry_data_list, status, l, diag);
           if (*status != MMDB_SUCCESS) {
             return entry_data_list;
           }
@@ -269,7 +277,7 @@ public:
         break;
       case MMDB_DATA_TYPE_UINT128:
         r[key] = cast_128_bit_unsigned_to_64_bit(
-          entry_data_list->entry_data.uint128);
+          entry_data_list->entry_data.uint128, diag);
         break;
       case MMDB_DATA_TYPE_INT32:
         r[key] = int64_t{entry_data_list->entry_data.int32};
@@ -284,7 +292,8 @@ public:
   }
 
   /// Emits context information for every event in `slice` in order.
-  auto apply(series s) const -> caf::expected<std::vector<series>> override {
+  auto apply(series s, diagnostic_handler& diag) const
+    -> caf::expected<std::vector<series>> override {
     auto status = 0;
     MMDB_entry_data_list_s* entry_data_list = nullptr;
     auto builder = series_builder{};
@@ -326,8 +335,8 @@ public:
         }
         auto* entry_data_list_it = entry_data_list;
         auto output = record{};
-        entry_data_list_it
-          = entry_data_list_to_record(entry_data_list_it, &status, output);
+        entry_data_list_it = entry_data_list_to_record(entry_data_list_it,
+                                                       &status, output, diag);
         if (status != MMDB_SUCCESS) {
           return caf::make_error(
             ec::lookup_error, fmt::format("error looking up IP address '{}' in "
@@ -343,12 +352,13 @@ public:
   }
 
   /// Inspects the context.
-  auto show() const -> record override {
+  auto show(diagnostic_handler&) const -> record override {
     return record{{path_key, db_path_}};
   }
 
   auto dump_recurse(uint64_t node_number, uint8_t type, MMDB_entry_s* entry,
-                    current_dump& current_dump) -> generator<table_slice> {
+                    current_dump& current_dump, diagnostic_handler& diag)
+    -> generator<table_slice> {
     if (current_dump.visited.contains(node_number)) {
       co_return;
     }
@@ -363,7 +373,7 @@ public:
         }
         for (auto&& x :
              dump_recurse(search_node.left_record, search_node.left_record_type,
-                          &search_node.left_record_entry, current_dump)) {
+                          &search_node.left_record_entry, current_dump, diag)) {
           if (current_dump.status != MMDB_SUCCESS) {
             break;
           }
@@ -371,7 +381,7 @@ public:
         }
         for (auto&& x : dump_recurse(
                search_node.right_record, search_node.right_record_type,
-               &search_node.right_record_entry, current_dump)) {
+               &search_node.right_record_entry, current_dump, diag)) {
           if (current_dump.status != MMDB_SUCCESS) {
             break;
           }
@@ -396,7 +406,8 @@ public:
           }
         });
         auto output = list{};
-        entry_data_list_to_list(entry_data_list, &current_dump.status, output);
+        entry_data_list_to_list(entry_data_list, &current_dump.status, output,
+                                diag);
         if (current_dump.status != MMDB_SUCCESS) {
           break;
         }
@@ -416,34 +427,35 @@ public:
     }
   }
 
-  auto dump() -> generator<table_slice> override {
+  auto dump(diagnostic_handler& diag) -> generator<table_slice> override {
     TENZIR_ASSERT(mmdb_);
     current_dump current_dump;
-    for (auto&& slice :
-         dump_recurse(0, MMDB_RECORD_TYPE_SEARCH_NODE, nullptr, current_dump)) {
+    for (auto&& slice : dump_recurse(0, MMDB_RECORD_TYPE_SEARCH_NODE, nullptr,
+                                     current_dump, diag)) {
       co_yield slice;
     }
     // Dump all remaining entries that did not reach the size limit.
     co_yield current_dump.builder.finish_assert_one_slice(
       fmt::format("tenzir.{}.info", context_type()));
     if (current_dump.status != MMDB_SUCCESS) {
-      TENZIR_ERROR("dump of GeoIP context ended prematurely: {}",
-                   MMDB_strerror(current_dump.status));
+      diagnostic::error("dump of GeoIP context ended prematurely: {}",
+                        MMDB_strerror(current_dump.status))
+        .emit(diag);
     }
   }
 
   /// Updates the context.
-  auto update(table_slice, context::parameter_map)
+  auto update(table_slice, context::parameter_map, diagnostic_handler&)
     -> caf::expected<update_result> override {
     return caf::make_error(ec::unimplemented,
                            "geoip context can not be updated with events");
   }
 
-  auto make_query() -> make_query_type override {
+  auto make_query(diagnostic_handler&) -> make_query_type override {
     return {};
   }
 
-  auto reset(context::parameter_map parameters)
+  auto reset(context::parameter_map parameters, diagnostic_handler& diag)
     -> caf::expected<record> override {
     if (parameters.contains(path_key) and parameters.at(path_key)) {
       db_path_ = *parameters[path_key];
@@ -460,15 +472,16 @@ public:
                                          "'{}': {}",
                                          db_path_, MMDB_strerror(status)));
     }
-    return show();
+    return show(diag);
   }
 
-  auto snapshot(parameter_map) const -> caf::expected<expression> override {
+  auto snapshot(parameter_map, diagnostic_handler&) const
+    -> caf::expected<expression> override {
     return caf::make_error(ec::unimplemented,
                            "geoip context does not support snapshots");
   }
 
-  auto save() const -> caf::expected<save_result> override {
+  auto save(diagnostic_handler&) const -> caf::expected<save_result> override {
     auto builder = flatbuffers::FlatBufferBuilder{};
     auto path = builder.CreateString(db_path_);
     fbs::context::geoip::GeoIPDataBuilder geoip_builder(builder);

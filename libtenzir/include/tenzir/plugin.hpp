@@ -744,33 +744,40 @@ public:
   virtual auto context_type() const -> std::string = 0;
 
   /// Emits context information for every event in `array` in order.
-  virtual auto apply(series array) const -> caf::expected<std::vector<series>>
+  virtual auto apply(series array, diagnostic_handler& diag) const
+    -> caf::expected<std::vector<series>>
     = 0;
 
   /// Inspects the context.
-  virtual auto show() const -> record = 0;
+  virtual auto show(diagnostic_handler& diag) const -> record = 0;
 
   /// Dumps the context content or a dumping error.
-  virtual auto dump() -> generator<table_slice> = 0;
+  virtual auto dump(diagnostic_handler& diag) -> generator<table_slice> = 0;
 
   /// Updates the context.
-  virtual auto update(table_slice events, parameter_map parameters)
+  virtual auto
+  update(table_slice events, parameter_map parameters, diagnostic_handler& diag)
     -> caf::expected<update_result>
     = 0;
 
   /// Clears the context state, with optional parameters.
-  virtual auto reset(parameter_map parameters) -> caf::expected<record> = 0;
+  virtual auto reset(parameter_map parameters, diagnostic_handler& diag)
+    -> caf::expected<record>
+    = 0;
 
   /// Create a snapshot of the initial expression.
-  virtual auto snapshot(parameter_map parameters) const
+  virtual auto
+  snapshot(parameter_map parameters, diagnostic_handler& diag) const
     -> caf::expected<expression>
     = 0;
 
   /// Serializes a context for persistence.
-  virtual auto save() const -> caf::expected<save_result> = 0;
+  virtual auto save(diagnostic_handler& diag) const
+    -> caf::expected<save_result>
+    = 0;
 
   /// Returns a callback for retroactive lookups.
-  virtual auto make_query() -> make_query_type = 0;
+  virtual auto make_query(diagnostic_handler& diag) -> make_query_type = 0;
 };
 
 class context_loader {

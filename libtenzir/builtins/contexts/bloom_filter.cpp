@@ -53,7 +53,8 @@ public:
   }
 
   /// Emits context information for every event in `slice` in order.
-  auto apply(series s) const -> caf::expected<std::vector<series>> override {
+  auto apply(series s, diagnostic_handler&) const
+    -> caf::expected<std::vector<series>> override {
     auto builder = series_builder{};
     for (const auto& value : s.values()) {
       if (bloom_filter_.lookup(value)) {
@@ -68,13 +69,14 @@ public:
     return builder.finish();
   }
 
-  auto snapshot(parameter_map) const -> caf::expected<expression> override {
+  auto snapshot(parameter_map, diagnostic_handler&) const
+    -> caf::expected<expression> override {
     return caf::make_error(ec::unimplemented,
                            "bloom filter doesn't support snapshots");
   }
 
   /// Inspects the context.
-  auto show() const -> record override {
+  auto show(diagnostic_handler&) const -> record override {
     auto ptr = reinterpret_cast<const std::byte*>(bloom_filter_.data().data());
     auto size = bloom_filter_.data().size();
     auto data = std::basic_string<std::byte>{ptr, size};
@@ -91,7 +93,7 @@ public:
     };
   }
 
-  auto dump() -> generator<table_slice> override {
+  auto dump(diagnostic_handler&) -> generator<table_slice> override {
     auto ptr = reinterpret_cast<const std::byte*>(bloom_filter_.data().data());
     auto size = bloom_filter_.data().size();
     auto data = std::basic_string<std::byte>{ptr, size};
@@ -116,7 +118,8 @@ public:
   }
 
   /// Updates the context.
-  auto update(table_slice slice, context::parameter_map parameters)
+  auto update(table_slice slice, context::parameter_map parameters,
+              diagnostic_handler& diag)
     -> caf::expected<update_result> override {
     TENZIR_ASSERT(slice.rows() != 0);
     if (not parameters.contains("key")) {
@@ -154,22 +157,23 @@ public:
         },
       };
     };
-    return update_result{.update_info = show(),
+    return update_result{.update_info = show(diag),
                          .make_query = std::move(query_f)};
   }
 
-  auto make_query() -> make_query_type override {
+  auto make_query(diagnostic_handler&) -> make_query_type override {
     return {};
   }
 
-  auto reset(context::parameter_map) -> caf::expected<record> override {
+  auto reset(context::parameter_map, diagnostic_handler& diag)
+    -> caf::expected<record> override {
     auto params = bloom_filter_.parameters();
     TENZIR_ASSERT(params.n && params.p);
     bloom_filter_ = dcso_bloom_filter{*params.n, *params.p};
-    return show();
+    return show(diag);
   }
 
-  auto save() const -> caf::expected<save_result> override {
+  auto save(diagnostic_handler&) const -> caf::expected<save_result> override {
     std::vector<std::byte> buffer;
     if (auto err = convert(bloom_filter_, buffer)) {
       return add_context(err, "failed to serialize Bloom filter context");

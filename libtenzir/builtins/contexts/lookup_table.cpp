@@ -51,7 +51,8 @@ public:
     return "lookup-table";
   }
 
-  auto apply(series s) const -> caf::expected<std::vector<series>> override {
+  auto apply(series s, diagnostic_handler&) const
+    -> caf::expected<std::vector<series>> override {
     auto builder = series_builder{};
     for (const auto& value : s.values()) {
       if (auto it = context_entries.find(value); it != context_entries.end()) {
@@ -63,7 +64,7 @@ public:
     return builder.finish();
   }
 
-  auto snapshot(parameter_map parameters) const
+  auto snapshot(parameter_map parameters, diagnostic_handler&) const
     -> caf::expected<expression> override {
     auto column = parameters["field"];
     auto keys = list{};
@@ -92,11 +93,11 @@ public:
   }
 
   /// Inspects the context.
-  auto show() const -> record override {
+  auto show(diagnostic_handler&) const -> record override {
     return record{{"num_entries", context_entries.size()}};
   }
 
-  auto dump() -> generator<table_slice> override {
+  auto dump(diagnostic_handler&) -> generator<table_slice> override {
     auto entry_builder = series_builder{};
     for (const auto& [key, value] : context_entries) {
       auto row = entry_builder.record();
@@ -113,7 +114,8 @@ public:
   }
 
   /// Updates the context.
-  auto update(table_slice slice, context::parameter_map parameters)
+  auto update(table_slice slice, context::parameter_map parameters,
+              diagnostic_handler& diag)
     -> caf::expected<update_result> override {
     // context does stuff on its own with slice & parameters
     if (parameters.contains("clear")) {
@@ -175,11 +177,11 @@ public:
         },
       };
     };
-    return update_result{.update_info = show(),
+    return update_result{.update_info = show(diag),
                          .make_query = std::move(query_f)};
   }
 
-  auto make_query() -> make_query_type override {
+  auto make_query(diagnostic_handler&) -> make_query_type override {
     auto key_values_list = list{};
     key_values_list.reserve(context_entries.size());
     for (const auto& entry : context_entries) {
@@ -203,12 +205,13 @@ public:
     };
   }
 
-  auto reset(context::parameter_map) -> caf::expected<record> override {
+  auto reset(context::parameter_map, diagnostic_handler& diag)
+    -> caf::expected<record> override {
     context_entries.clear();
-    return show();
+    return show(diag);
   }
 
-  auto save() const -> caf::expected<save_result> override {
+  auto save(diagnostic_handler&) const -> caf::expected<save_result> override {
     // We save the context by formatting into a record of this format:
     //   [{key: key, value: value}, ...]
     auto builder = flatbuffers::FlatBufferBuilder{};
