@@ -91,7 +91,7 @@ private:
     auto steps = std::vector<statement>{};
     auto end = [&] {
       // TODO: rbrace
-      return eoi() || peek(tk::rbrace);
+      return eoi() || silent_peek(tk::rbrace);
     };
     auto accept_stmt_end = [&] {
       return end() || accept_stmt_sep();
@@ -171,8 +171,7 @@ private:
         }
         continue;
       }
-      if (end()) {
-        // TODO: Use if(START) instead.
+      if (not selector_start()) {
         break;
       }
       // either selector followed by `=`, or entity (no_dollar)
