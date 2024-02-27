@@ -168,13 +168,15 @@ struct loader_args {
   std::optional<located<std::chrono::milliseconds>> timeout;
   std::optional<location> follow;
   std::optional<location> mmap;
+  std::optional<location> uds;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, loader_args& x) -> bool {
     return f.object(x)
       .pretty_name("loader_args")
       .fields(f.field("path", x.path), f.field("timeout", x.timeout),
-              f.field("follow", x.follow), f.field("mmap", x.mmap));
+              f.field("follow", x.follow), f.field("mmap", x.mmap),
+              f.field("uds", x.uds));
   }
 };
 
@@ -298,24 +300,37 @@ public:
     }
     auto err = std::error_code{};
     auto status = std::filesystem::status(args_.path.inner, err);
-    if (err == std::make_error_code(std::errc::no_such_file_or_directory)) {
-      // TODO: Unify and improve error descriptions.
-      diagnostic::error("the file `{}` does not exist", args_.path.inner, err)
-        .primary(args_.path.source)
-        .emit(ctrl.diagnostics());
-      return {};
-    }
-    if (err) {
-      diagnostic::error("could not access file `{}`", args_.path.inner, err)
-        .primary(args_.path.source)
-        .note("{}", err)
-        .emit(ctrl.diagnostics());
-      return {};
+    if (!args_.uds) {
+      if (err == std::make_error_code(std::errc::no_such_file_or_directory)) {
+        // TODO: Unify and improve error descriptions.
+        diagnostic::error("the file `{}` does not exist", args_.path.inner, err)
+          .primary(args_.path.source)
+          .emit(ctrl.diagnostics());
+        return {};
+      }
+      if (err) {
+        diagnostic::error("could not access file `{}`", args_.path.inner, err)
+          .primary(args_.path.source)
+          .note("{}", err)
+          .emit(ctrl.diagnostics());
+        return {};
+      }
     }
     if (status.type() == std::filesystem::file_type::socket) {
       auto uds = detail::unix_domain_socket::connect(args_.path.inner);
       if (!uds) {
         diagnostic::error("could not connect to UNIX domain socket at {}",
+                          args_.path.inner)
+          .primary(args_.path.source)
+          .emit(ctrl.diagnostics());
+        return {};
+      }
+      return make(timeout, fd_wrapper{uds.fd, true}, args_.follow.has_value());
+    }
+    if (args_.uds) {
+      auto uds = detail::unix_domain_socket::listen(args_.path.inner);
+      if (!uds) {
+        diagnostic::error("could not create UNIX domain socket at {}",
                           args_.path.inner)
           .primary(args_.path.source)
           .emit(ctrl.diagnostics());
@@ -479,6 +494,7 @@ public:
     parser.add("-f,--follow", args.follow);
     parser.add("-m,--mmap", args.mmap);
     parser.add("-t,--timeout", args.timeout, "<duration>");
+    parser.add("--uds", args.uds);
     parser.parse(p);
     args.path.inner = expand_path(args.path.inner);
     if (args.mmap) {
@@ -500,6 +516,14 @@ public:
         diagnostic::error("cannot have both `--timeout` and `--mmap`")
           .primary(args.timeout->source)
           .primary(*args.mmap)
+          .throw_();
+      }
+    }
+    if (args.uds) {
+      if (args.path.inner == "-") {
+        diagnostic::error("cannot have `--uds` with stdin")
+          .primary(*args.uds)
+          .primary(args.path.source)
           .throw_();
       }
     }
