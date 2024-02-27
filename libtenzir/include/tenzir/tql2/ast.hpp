@@ -442,15 +442,17 @@ struct pipeline {
 };
 
 struct let_stmt {
-  let_stmt(identifier name, expression expr)
-    : name{std::move(name)}, expr{std::move(expr)} {
+  let_stmt(location let, identifier name, expression expr)
+    : let{let}, name{std::move(name)}, expr{std::move(expr)} {
   }
 
+  location let;
   identifier name;
   expression expr;
 
   friend auto inspect(auto& f, let_stmt& x) -> bool {
-    return f.object(x).fields(f.field("name", x.name), f.field("expr", x.expr));
+    return f.object(x).fields(f.field("let", x.let), f.field("name", x.name),
+                              f.field("expr", x.expr));
   }
 };
 

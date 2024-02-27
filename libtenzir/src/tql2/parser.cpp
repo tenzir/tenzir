@@ -86,9 +86,159 @@ private:
     return accept(tk::newline) || accept(tk::pipe);
   }
 
+  auto parse_let_stmt() -> let_stmt {
+    auto let = expect(tk::let);
+    if (auto ident = accept(tk::identifier)) {
+      diagnostic::error("identifier after `let` must start with `$`")
+        .primary(ident.location, "try `${}` instead", ident.text)
+        .throw_();
+    }
+    auto name = expect(tk::dollar_ident);
+    expect(tk::equal);
+    auto expr = parse_expression();
+    return let_stmt{
+      let.location,
+      name.as_identifier(),
+      std::move(expr),
+    };
+  }
+
+  auto parse_if_stmt() -> if_stmt {
+    expect(tk::if_);
+    auto condition = parse_expression();
+    expect(tk::lbrace);
+    auto consequence = parse_pipeline();
+    expect(tk::rbrace);
+    auto alternative = std::optional<pipeline>{};
+    if (accept(tk::else_)) {
+      expect(tk::lbrace);
+      alternative = parse_pipeline();
+      expect(tk::rbrace);
+    }
+    return if_stmt{
+      std::move(condition),
+      std::move(consequence),
+      std::move(alternative),
+    };
+  }
+
+  auto parse_match_stmt_arm() -> match_stmt::arm {
+    auto filter = std::vector<expression>{};
+    while (true) {
+      filter.push_back(parse_expression());
+      if (accept(tk::fat_arrow)) {
+        break;
+      }
+      expect(tk::comma);
+    }
+    expect(tk::lbrace);
+    auto pipe = parse_pipeline();
+    expect(tk::rbrace);
+    return match_stmt::arm{
+      std::move(filter),
+      std::move(pipe),
+    };
+  }
+
+  auto parse_match_stmt() -> match_stmt {
+    // TODO: Decide exact syntax, useable for both single-line and
+    // multi-line TQL, and for expressions and statements.
+    //    match foo {
+    //      "ok", 42 => { ... }
+    //    }
+    auto expr = parse_expression();
+    auto arms = std::vector<match_stmt::arm>{};
+    expect(tk::lbrace);
+    auto scope = ignore_newlines(true);
+    // TODO: Restrict this.
+    while (not peek(tk::rbrace)) {
+      arms.push_back(parse_match_stmt_arm());
+      // TODO: require comma or newline?
+      (void)accept(tk::comma);
+    }
+    scope.done();
+    expect(tk::rbrace);
+    return match_stmt{
+      std::move(expr),
+      std::move(arms),
+    };
+  }
+
+  auto parse_invocation(entity op) -> invocation {
+    auto args = std::vector<expression>{};
+    while (not accept_stmt_end()) {
+      if (not args.empty()) {
+        if (not accept(tk::comma)) {
+          // Allow `{ ... }` without comma as final argument.
+          if (not peek(tk::lbrace)) {
+            diagnostic::error("unexpected continuation of arguments")
+              .primary(next_location())
+              .hint("try inserting a `,` before")
+              .throw_();
+          }
+          args.emplace_back(parse_record_or_pipeline());
+          if (accept_stmt_end()) {
+            break;
+          }
+          auto before = args.back().match([](auto& x) {
+            return x.location();
+          });
+          diagnostic::error("expected end of statement due to final argument")
+            .primary(next_location(), "expected end of statement")
+            .secondary(before, "final argument")
+            .hint("insert a `,` before `{` to continue arguments")
+            .throw_();
+        }
+        consume_trivia_with_newlines();
+      }
+      args.push_back(parse_expression());
+    }
+    return invocation{
+      std::move(op),
+      std::move(args),
+    };
+  }
+
+  auto parse_invocation_or_assignment() -> statement {
+    // either selector followed by `=`, or entity (no_dollar)
+    // TODO: Parse entities that consist of multiple identifiers.
+    auto left = parse_selector();
+    if (auto equal = accept(tk::equal)) {
+      auto right = parse_expression();
+      return assignment{
+        std::move(left),
+        equal.location,
+        std::move(right),
+      };
+    }
+    // TODO: Proper entity parsing.
+    if (not left.this_ and left.path.size() == 1) {
+      return parse_invocation(entity{std::move(left.path)});
+    }
+    diagnostic::error("expected operator name or `=` afterwards")
+      .primary(left.location())
+      .throw_();
+  }
+
+  auto parse_statement() -> statement {
+    if (peek(tk::let)) {
+      return parse_let_stmt();
+    }
+    if (peek(tk::if_)) {
+      return parse_if_stmt();
+    }
+    if (peek(tk::match)) {
+      return parse_match_stmt();
+    }
+    if (selector_start()) {
+      return parse_invocation_or_assignment();
+    }
+    throw_token();
+  }
+
   auto parse_pipeline() -> pipeline {
     auto scope = ignore_newlines(false);
-    auto steps = std::vector<statement>{};
+    auto body = std::vector<statement>{};
     auto end = [&] {
       // TODO: rbrace
       return eoi() || silent_peek(tk::rbrace);
@@ -99,132 +249,9 @@ private:
     while (true) {
       while (accept_stmt_sep()) {
       }
-      if (accept(tk::let)) {
-        if (auto ident = accept(tk::identifier)) {
-          diagnostic::error("identifier after `let` must start with `$`")
-            .primary(ident.location, "try `${}` instead", ident.text)
-            .throw_();
-        }
-        auto name = expect(tk::dollar_ident);
-        expect(tk::equal);
-        auto expr = parse_expression();
-        // TODO: Dollar ident.
-        steps.emplace_back(let_stmt{name.as_identifier(), std::move(expr)});
-        if (not accept_stmt_end()) {
-          throw_token();
-        }
-        continue;
-      }
-      if (accept(tk::if_)) {
-        auto condition = parse_expression();
-        expect(tk::lbrace);
-        auto consequence = parse_pipeline();
-        expect(tk::rbrace);
-        auto alternative = std::optional<pipeline>{};
-        if (accept(tk::else_)) {
-          expect(tk::lbrace);
-          alternative = parse_pipeline();
-          expect(tk::rbrace);
-        }
-        steps.emplace_back(if_stmt{
-          std::move(condition),
-          std::move(consequence),
-          std::move(alternative),
-        });
-        if (not accept_stmt_end()) {
-          throw_token();
-        }
-        continue;
-      }
-      if (accept(tk::match)) {
-        // TODO: Decide exact syntax, useable for both single-line and
-        // multi-line TQL, and for expressions and statements.
-        //    match foo {
-        //      "ok", 42 => { ... }
-        //    }
-        auto expr = parse_expression();
-        auto arms = std::vector<match_stmt::arm>{};
-        expect(tk::lbrace);
-        auto scope = ignore_newlines(true);
-        // TODO: Restrict this.
-        while (not peek(tk::rbrace)) {
-          auto filter = std::vector<expression>{};
-          while (true) {
-            filter.push_back(parse_expression());
-            if (accept(tk::fat_arrow)) {
-              break;
-            }
-            expect(tk::comma);
-          }
-          expect(tk::lbrace);
-          auto pipe = parse_pipeline();
-          expect(tk::rbrace);
-          // TODO: require comma or newline?
-          (void)accept(tk::comma);
-          arms.emplace_back(std::move(filter), std::move(pipe));
-        }
-        scope.done();
-        expect(tk::rbrace);
-        steps.emplace_back(match_stmt{std::move(expr), std::move(arms)});
-        if (not accept_stmt_end()) {
-          throw_token();
-        }
-        continue;
-      }
-      if (not selector_start()) {
-        break;
-      }
-      // either selector followed by `=`, or entity (no_dollar)
-      // TODO: Parse entities that consist of multiple identifiers.
-      auto left = parse_selector();
-      if (auto equal = accept(tk::equal)) {
-        auto right = parse_expression();
-        steps.emplace_back(
-          assignment{std::move(left), equal.location, std::move(right)});
-        if (not accept_stmt_end()) {
-          throw_token();
-        }
-      } else if (left.path.size() == 1) {
-        // TODO: Parse operator.
-        // TODO: Proper entity.
-        auto op = entity{{std::move(left.path[0])}};
-        auto args = std::vector<expression>{};
-        while (not accept_stmt_end()) {
-          if (not args.empty()) {
-            if (not accept(tk::comma)) {
-              // Allow `{ ... }` without comma as final argument.
-              if (not peek(tk::lbrace)) {
-                diagnostic::error("unexpected continuation of arguments")
-                  .primary(next_location())
-                  .hint("try inserting a `,` before")
-                  .throw_();
-              }
-              args.emplace_back(parse_record_or_pipeline());
-              if (accept_stmt_end()) {
-                break;
-              }
-              auto before = args.back().match([](auto& x) {
-                return x.location();
-              });
-              diagnostic::error(
-                "expected end of statement due to final argument")
-                .primary(next_location(), "expected end of statement")
-                .secondary(before, "final argument")
-                .hint("insert a `,` before `{` to continue arguments")
-                .throw_();
-            }
-            consume_trivia_with_newlines();
-          }
-          args.push_back(parse_expression());
-        }
-        steps.emplace_back(invocation{std::move(op), std::move(args)});
-      } else {
-        diagnostic::error("expected operator name or `=` afterwards")
-          .primary(left.location())
-          .throw_();
-      }
+      body.push_back(parse_statement());
     }
-    return pipeline{std::move(steps)};
+    return pipeline{std::move(body)};
   }
 
   auto selector_start() -> bool {
