@@ -174,19 +174,6 @@ connect_to_node(caf::scoped_actor& self, const caf::settings& opts) {
     return caf::make_error(ec::system_error,
                            "failed to connect to node: handle is invalid");
   }
-  self->request(*result, timeout, atom::get_v, atom::version_v)
-    .receive(
-      [&](record& remote_version) {
-        // TODO
-        (void)details::check_version(remote_version);
-      },
-      [&](caf::error& error) {
-        result = caf::make_error(ec::version_error,
-                                 fmt::format("failed to receive remote version "
-                                             "within specified "
-                                             "connection-timeout of {}: {}",
-                                             timeout, std::move(error)));
-      });
   return result;
 }
 
