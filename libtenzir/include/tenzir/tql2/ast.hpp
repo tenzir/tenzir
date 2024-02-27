@@ -20,7 +20,7 @@ namespace tenzir::detail {
 /// therefore be used to guide instantiation, for example, to prevent early
 /// instantiation of incomplete types.
 template <class T, class U>
-auto make_dependant(U&& x) -> U&& {
+auto make_dependent(U&& x) -> U&& {
   return std::forward<U>(x);
 }
 
@@ -166,7 +166,7 @@ struct expression {
     } else {
       TENZIR_ASSERT(x.kind);
     }
-    return f.apply(*detail::make_dependant<Inspector>(x.kind));
+    return f.apply(*detail::make_dependent<Inspector>(x.kind));
   }
 
   template <class... Fs>
