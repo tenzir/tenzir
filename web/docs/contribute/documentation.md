@@ -20,10 +20,6 @@ Then build and serve the site via:
 ```bash
 yarn start
 ```
-
-Browse to [localhost:3000](http://localhost:3000) to view the site. Docusaurus
-should spawn your default browser automatically upon invoking `yarn start`.
-
 ## Write content
 
 Docusaurus uses an [enhanced flavor of

@@ -1,11 +1,29 @@
 // @ts-check
 // Note: type annotations allow type checking and IDEs autocompletion
 
-import { visit } from 'unist-util-visit';
+import { visit } from "unist-util-visit";
 
-const lightCodeTheme = require('prism-react-renderer/themes/github');
-const darkCodeTheme = require('prism-react-renderer/themes/vsDark');
-const path = require('node:path');
+const lightCodeTheme = require("prism-react-renderer/themes/github");
+const darkCodeTheme = require("prism-react-renderer/themes/vsDark");
+const path = require("node:path");
+
+import fs from "node:fs/promises";
+import { optimize } from "svgo";
+
+const svgoPlugins = [
+  {
+    name: "preset-default",
+    params: {
+      overrides: {
+        // disable plugins
+        removeTitle: false,
+        removeDesc: false,
+      },
+    },
+  },
+  "removeXMLNS",
+  "removeDimensions",
+];
 
 async function createConfig() {
   /// BEGIN CUSTOM CODE ///
@@ -29,28 +47,76 @@ async function createConfig() {
 
   // This is not perfect but it works.
 
-  const inlineSVGTransform = (await import('remark-inline-svg')).transform;
+  const inlineSVGTransform = async (node, options) => {
+    const { alt, url } = node;
+
+    const image = await fs.readFile(url, "utf-8");
+    const result = await optimize(image, { plugins: svgoPlugins });
+
+    let { data: html } = result;
+
+    if (options.replace) {
+      Object.entries(options.replace).forEach(([str, replacement]) => {
+        const re = new RegExp(str, "g");
+
+        if (!!html === false) {
+          console.log(`[remark-inline-svg]: problem optimizing ${url}`);
+        }
+        html = html.replace(re, replacement);
+      });
+    }
+
+    const [, svgAttrs] = html.match(/<svg (.*?)>/);
+
+    html = html.replace(svgAttrs, `${svgAttrs} role="img" aria-hidden="true"`);
+
+    const className = options.className || "markdown-inline-svg";
+    // Convert the SVG content to a Base64-encoded data URI
+    const svgDataUri = `data:image/svg+xml;base64,${Buffer.from(html).toString("base64")}`;
+
+    // Construct the MDX element structure
+    node.type = "mdxJsxFlowElement";
+    node.name = "span";
+    node.attributes = [
+      { type: "mdxJsxAttribute", name: "className", value: className },
+      { type: "mdxJsxAttribute", name: "role", value: "img" },
+      { type: "mdxJsxAttribute", name: "aria-label", value: alt || "" },
+    ];
+    node.children = [
+      {
+        type: "mdxJsxFlowElement",
+        name: "img",
+        attributes: [
+          { type: "mdxJsxAttribute", name: "src", value: svgDataUri },
+          { type: "mdxJsxAttribute", name: "alt", value: alt || "" },
+        ],
+        children: [],
+        data: { _mdxExplicitJsx: true },
+      },
+    ];
+    node.data = { _mdxExplicitJsx: true };
+  };
 
   const inlineSVG = (options = {}) => {
-    const suffix = options.suffix || '.inline.svg';
-    const staticDir = options.staticDir || 'static';
+    const suffix = options.suffix || ".inline.svg";
+    const staticDir = options.staticDir || "static";
 
     return async (tree, file) => {
       const svgs = [];
 
-      visit(tree, 'image', (node) => {
-        const {url} = node;
+      visit(tree, "image", (node) => {
+        const { url } = node;
 
         if (url.endsWith(suffix)) {
           // if url is /img/something.svg, then we need to use our custom logic
-          if (url.startsWith('/img/')) {
+          if (url.startsWith("/img/")) {
             const fullPath = path.join(process.cwd(), staticDir, url);
             node.url = fullPath;
           }
           // otherwise we just use the original logic
           else {
             const markdownFileDir = path.dirname(file.history[0]);
-            node.url = path.resolve('./', markdownFileDir, url);
+            node.url = path.resolve("./", markdownFileDir, url);
           }
 
           svgs.push(node);
@@ -71,55 +137,55 @@ async function createConfig() {
 
   /// END CUSTOM CODE ///
   return {
-    title: 'Tenzir',
-    tagline: 'Easy data pipelines for security teams.',
-    url: 'https://docs.tenzir.com',
-    baseUrl: '/',
-    onBrokenLinks: 'throw',
-    onBrokenMarkdownLinks: 'throw',
-    favicon: 'img/tenzir-logo-black.svg',
-    organizationName: 'tenzir', // Usually your GitHub org/user name.
-    projectName: 'tenzir', // Usually your repo name.
+    title: "Tenzir",
+    tagline: "Easy data pipelines for security teams.",
+    url: "https://docs.tenzir.com",
+    baseUrl: "/",
+    onBrokenLinks: "throw",
+    onBrokenMarkdownLinks: "throw",
+    favicon: "img/tenzir-logo-black.svg",
+    organizationName: "tenzir", // Usually your GitHub org/user name.
+    projectName: "tenzir", // Usually your repo name.
     trailingSlash: false, // GitHub Pages already adds a slash
 
     markdown: {
       mermaid: true,
     },
-    themes: ['@docusaurus/theme-mermaid'],
+    themes: ["@docusaurus/theme-mermaid"],
 
     plugins: [
-      'docusaurus-plugin-sass',
+      "docusaurus-plugin-sass",
       [
-        '@docusaurus/plugin-client-redirects',
+        "@docusaurus/plugin-client-redirects",
         {
           redirects: [
             {
-              to: '/why-tenzir',
-              from: '/docs/about-vast',
+              to: "/why-tenzir",
+              from: "/docs/about-vast",
             },
             {
-              to: '/get-started',
-              from: '/docs/try-vast',
+              to: "/get-started",
+              from: "/docs/try-vast",
             },
             {
-              to: '/setup-guides',
-              from: '/docs/setup-vast',
+              to: "/setup-guides",
+              from: "/docs/setup-vast",
             },
             {
-              to: '/user-guides',
-              from: '/docs/use-vast',
+              to: "/user-guides",
+              from: "/docs/use-vast",
             },
             {
-              to: '/developer-guides',
-              from: '/docs/develop-vast',
+              to: "/developer-guides",
+              from: "/docs/develop-vast",
             },
             {
-              to: '/contribute',
-              from: '/docs/develop-vast/contributing',
+              to: "/contribute",
+              from: "/docs/develop-vast/contributing",
             },
             {
-              to: '/',
-              from: '/docs',
+              to: "/",
+              from: "/docs",
             },
           ],
         },
@@ -128,53 +194,53 @@ async function createConfig() {
 
     presets: [
       [
-        'classic',
+        "classic",
         /** @type {import('@docusaurus/preset-classic').Options} */
         ({
           docs: {
-            path: 'docs', // The directory in the filesystem.
-            routeBasePath: '/', // Serve the docs at the site's root.
-            sidebarPath: require.resolve('./sidebars.js'),
-            editUrl: 'https://github.com/tenzir/tenzir/tree/main/web',
+            path: "docs", // The directory in the filesystem.
+            routeBasePath: "/", // Serve the docs at the site's root.
+            sidebarPath: require.resolve("./sidebars.js"),
+            editUrl: "https://github.com/tenzir/tenzir/tree/main/web",
             // TODO: The last update author and time is always the person that
             // triggered the last deployment and the time of that deployment.
             // Ideally we'd show this information, but as-is it's unnecessary.
             showLastUpdateTime: false,
             showLastUpdateAuthor: false,
-            beforeDefaultRemarkPlugins: [[inlineSVG, {suffix: '.svg'}]],
+            beforeDefaultRemarkPlugins: [[inlineSVG, { suffix: ".svg" }]],
           },
           blog: {
-            blogTitle: 'Blog',
-            blogDescription: 'News from the Tenzir community',
+            blogTitle: "Blog",
+            blogDescription: "News from the Tenzir community",
             blogSidebarCount: 20,
-            blogSidebarTitle: 'Blog Posts',
+            blogSidebarTitle: "Blog Posts",
             postsPerPage: 20,
-            beforeDefaultRemarkPlugins: [[inlineSVG, {suffix: '.svg'}]],
+            beforeDefaultRemarkPlugins: [[inlineSVG, { suffix: ".svg" }]],
           },
           pages: {
-            beforeDefaultRemarkPlugins: [[inlineSVG, {suffix: '.svg'}]],
+            beforeDefaultRemarkPlugins: [[inlineSVG, { suffix: ".svg" }]],
           },
           theme: {
-            customCss: require.resolve('./src/css/custom.scss'),
+            customCss: require.resolve("./src/css/custom.scss"),
           },
           sitemap: {
-            changefreq: 'weekly',
+            changefreq: "weekly",
             priority: 0.5,
-            ignorePatterns: ['/tags/**'],
+            ignorePatterns: ["/tags/**"],
           },
         }),
       ],
       [
-        'redocusaurus',
+        "redocusaurus",
         {
           specs: [
             {
-              spec: 'openapi/openapi.yaml',
-              route: '/api/',
+              spec: "openapi/openapi.yaml",
+              route: "/api/",
             },
           ],
           theme: {
-            primaryColor: '#00a4f1',
+            primaryColor: "#00a4f1",
           },
         },
       ],
@@ -184,9 +250,9 @@ async function createConfig() {
       /** @type {import('@docusaurus/preset-classic').ThemeConfig} */
       ({
         algolia: {
-          appId: 'BVB58VRBDH',
-          apiKey: 'f7c2eb86ff85cd55d9634543ed1c60b2',
-          indexName: 'vast',
+          appId: "BVB58VRBDH",
+          apiKey: "f7c2eb86ff85cd55d9634543ed1c60b2",
+          indexName: "vast",
         },
         colorMode: {
           disableSwitch: false,
@@ -194,54 +260,54 @@ async function createConfig() {
         },
         navbar: {
           logo: {
-            alt: 'Tenzir',
-            href: 'https://tenzir.com',
-            src: 'img/tenzir-black.svg',
-            srcDark: 'img/tenzir-white.svg',
+            alt: "Tenzir",
+            href: "https://tenzir.com",
+            src: "img/tenzir-black.svg",
+            srcDark: "img/tenzir-white.svg",
             width: 120,
           },
           items: [
             {
-              type: 'doc',
-              docId: 'get-started',
-              position: 'left',
-              label: 'Docs',
+              type: "doc",
+              docId: "get-started",
+              position: "left",
+              label: "Docs",
             },
             {
-              to: 'blog',
-              label: 'Blog',
-              position: 'left',
+              to: "blog",
+              label: "Blog",
+              position: "left",
             },
             {
-              to: '/changelog',
-              label: 'Changelog',
-              position: 'left',
+              to: "/changelog",
+              label: "Changelog",
+              position: "left",
             },
             {
-              to: '/roadmap',
-              label: 'Roadmap',
-              position: 'left',
+              to: "/roadmap",
+              label: "Roadmap",
+              position: "left",
             },
             {
-              to: '/discord',
-              'aria-label': 'Discord',
-              className: 'header-discord-link',
-              position: 'right',
+              to: "/discord",
+              "aria-label": "Discord",
+              className: "header-discord-link",
+              position: "right",
             },
             {
-              href: 'https://github.com/tenzir/tenzir',
-              'aria-label': 'GitHub',
-              className: 'header-github-link',
-              position: 'right',
+              href: "https://github.com/tenzir/tenzir",
+              "aria-label": "GitHub",
+              className: "header-github-link",
+              position: "right",
             },
             {
-              type: 'docsVersionDropdown',
-              position: 'right',
+              type: "docsVersionDropdown",
+              position: "right",
               dropdownActiveClassDisabled: true,
             },
             {
-              type: 'search',
-              position: 'right',
+              type: "search",
+              position: "right",
             },
           ],
         },
@@ -254,61 +320,61 @@ async function createConfig() {
         footer: {
           links: [
             {
-              title: 'Resources',
+              title: "Resources",
               items: [
                 {
-                  label: 'Docs',
-                  to: '/',
+                  label: "Docs",
+                  to: "/",
                 },
                 {
-                  label: 'API',
-                  to: '/api',
+                  label: "API",
+                  to: "/api",
                 },
                 {
-                  label: 'Blog',
-                  to: '/blog',
+                  label: "Blog",
+                  to: "/blog",
                 },
                 {
-                  label: 'Changelog',
-                  to: '/changelog',
+                  label: "Changelog",
+                  to: "/changelog",
                 },
                 {
-                  label: 'Roadmap',
-                  to: '/roadmap',
+                  label: "Roadmap",
+                  to: "/roadmap",
                 },
               ],
             },
             {
-              title: 'Community',
+              title: "Community",
               items: [
                 {
-                  label: 'Discord',
-                  href: '/discord',
+                  label: "Discord",
+                  href: "/discord",
                 },
                 {
-                  label: 'GitHub',
-                  href: 'https://github.com/tenzir/tenzir',
+                  label: "GitHub",
+                  href: "https://github.com/tenzir/tenzir",
                 },
                 {
-                  label: 'Twitter',
-                  href: 'https://twitter.com/tenzir_company',
+                  label: "Twitter",
+                  href: "https://twitter.com/tenzir_company",
                 },
                 {
-                  label: 'LinkedIn',
-                  href: 'https://www.linkedin.com/company/tenzir',
+                  label: "LinkedIn",
+                  href: "https://www.linkedin.com/company/tenzir",
                 },
               ],
             },
             {
-              title: 'Tenzir',
+              title: "Tenzir",
               items: [
                 {
-                  label: 'Website',
-                  href: 'https://tenzir.com',
+                  label: "Website",
+                  href: "https://tenzir.com",
                 },
                 {
-                  label: 'Privacy Statement',
-                  to: '/privacy-statement',
+                  label: "Privacy Statement",
+                  to: "/privacy-statement",
                 },
               ],
             },
@@ -318,7 +384,7 @@ async function createConfig() {
         prism: {
           theme: lightCodeTheme,
           darkTheme: darkCodeTheme,
-          additionalLanguages: ['r'],
+          additionalLanguages: ["r"],
         },
       }),
 
@@ -326,21 +392,21 @@ async function createConfig() {
     // See more at https://github.com/facebook/docusaurus/issues/4765#issuecomment-841135926
     webpack: {
       jsLoader: (isServer) => ({
-        loader: require.resolve('esbuild-loader'),
+        loader: require.resolve("esbuild-loader"),
         options: {
-          loader: 'tsx',
-          format: isServer ? 'cjs' : undefined,
-          target: isServer ? 'node12' : 'es2017',
+          loader: "tsx",
+          format: isServer ? "cjs" : undefined,
+          target: isServer ? "node12" : "es2017",
         },
       }),
     },
 
     scripts: [
       {
-        src: 'https://plausible.io/js/script.js',
+        src: "https://plausible.io/js/script.js",
         aysnc: true,
         defer: true,
-        'data-domain': 'docs.tenzir.com',
+        "data-domain": "docs.tenzir.com",
       },
     ],
   };

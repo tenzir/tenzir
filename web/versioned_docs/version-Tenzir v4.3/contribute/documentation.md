@@ -21,7 +21,6 @@ Then build and serve the site via:
 yarn start
 ```
 
-Browse to <http://localhost:3000/> to view the site. Docusaurus should spawn
 your default browser automatically upon invoking `yarn start`.
 
 ## Write content
@@ -50,7 +49,6 @@ PNG or SVG images.
 
 Our editing workflow looks as follows:
 
-1. Open <https://excalidraw.com> and click *Upload* in the top left
 2. Select the SVG you would like to edit
 3. Make your edits in Excalidraw
 4. Uncheck the box "Background" to ensure a transparent background.

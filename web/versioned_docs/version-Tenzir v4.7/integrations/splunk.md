@@ -110,7 +110,6 @@ volumes:
 
 After you spun up the containers, configure Splunk as follows:
 
-1. Go to <http://localhost:8000> and login with `admin`:`tenzir123`
 2. Navigate to *Add data* → *Monitor* → *HTTP Event Collector*
 3. Configure the event collector:
    - Name: Tenzir
