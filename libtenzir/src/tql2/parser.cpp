@@ -146,7 +146,7 @@ private:
     //    match foo {
     //      "ok", 42 => { ... }
     //    }
-    auto match = expect(tk::match);
+    expect(tk::match);
     auto expr = parse_expression();
     auto arms = std::vector<match_stmt::arm>{};
     expect(tk::lbrace);
@@ -282,36 +282,40 @@ private:
                     std::move(path)};
   }
 
+  auto parse_record(location begin) -> record {
+    auto content = std::vector<record::content_kind>{};
+    while (not peek(tk::rbrace)) {
+      // TODO: Parse `{ foo: 42, ...bar }`.
+      auto name = expect(tk::identifier);
+      expect(tk::colon);
+      auto expr = parse_expression();
+      content.emplace_back(record::field{
+        name.as_identifier(),
+        std::move(expr),
+      });
+      if (not peek(tk::rbrace)) {
+        expect(tk::comma);
+      }
+    }
+    auto end = expect(tk::rbrace);
+    return record{
+      begin,
+      std::move(content),
+      end.location,
+    };
+  }
+
   auto parse_record_or_pipeline_expr() -> expression {
-    auto begin = expect(tk::lbrace);
     // { }       // unknown -> record
     // { test :  // record
     // OTHERWISE pipeline
-    // TODO: This does not respect trivia.
+    auto begin = expect(tk::lbrace);
     auto scope = ignore_newlines(true);
+    // TODO: Find a better solution than `raw_peek`.
     auto is_record = peek(tk::rbrace)
                      || (raw_peek(tk::identifier) && raw_peek(tk::colon, 1));
     if (is_record) {
-      auto content = std::vector<record::content_kind>{};
-      while (true) {
-        if (not content.empty()) {
-          // TODO: Check.
-          if (not peek(tk::rbrace)) {
-            // TODO: Improve error message.
-            expect(tk::comma);
-          }
-        }
-        if (peek(tk::rbrace)) {
-          auto end = expect(tk::rbrace);
-          return expression{
-            record{begin.location, std::move(content), end.location}};
-        }
-        auto name = expect(tk::identifier);
-        expect(tk::colon);
-        auto expr = parse_expression();
-        content.emplace_back(
-          record::field{identifier{name.text, name.location}, std::move(expr)});
-      }
+      return parse_record(begin.location);
     }
     auto pipe = parse_pipeline();
     auto end = expect(tk::rbrace);
