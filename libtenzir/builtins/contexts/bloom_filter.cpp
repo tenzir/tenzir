@@ -53,7 +53,8 @@ public:
   }
 
   /// Emits context information for every event in `slice` in order.
-  auto apply(series s) const -> caf::expected<std::vector<series>> override {
+  auto apply(series s, shared_diagnostic_handler) const
+    -> caf::expected<std::vector<series>> override {
     auto builder = series_builder{};
     for (const auto& value : s.values()) {
       if (bloom_filter_.lookup(value)) {
@@ -91,7 +92,7 @@ public:
     };
   }
 
-  auto dump() -> generator<table_slice> override {
+  auto dump(shared_diagnostic_handler) -> generator<table_slice> override {
     auto ptr = reinterpret_cast<const std::byte*>(bloom_filter_.data().data());
     auto size = bloom_filter_.data().size();
     auto data = std::basic_string<std::byte>{ptr, size};

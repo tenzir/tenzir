@@ -51,7 +51,8 @@ public:
     return "lookup-table";
   }
 
-  auto apply(series s) const -> caf::expected<std::vector<series>> override {
+  auto apply(series s, shared_diagnostic_handler) const
+    -> caf::expected<std::vector<series>> override {
     auto builder = series_builder{};
     for (const auto& value : s.values()) {
       if (auto it = context_entries.find(value); it != context_entries.end()) {
@@ -96,7 +97,9 @@ public:
     return record{{"num_entries", context_entries.size()}};
   }
 
-  auto dump() -> generator<table_slice> override {
+  auto dump(shared_diagnostic_handler diagnostics)
+    -> generator<table_slice> override {
+    diagnostic::error("Test from lookup_table::dump").emit(diagnostics);
     auto entry_builder = series_builder{};
     for (const auto& [key, value] : context_entries) {
       auto row = entry_builder.record();

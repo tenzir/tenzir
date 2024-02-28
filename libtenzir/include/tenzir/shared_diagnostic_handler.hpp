@@ -22,37 +22,29 @@ namespace tenzir {
 class shared_diagnostic_handler final : public diagnostic_handler {
 public:
   shared_diagnostic_handler() noexcept = default;
-  shared_diagnostic_handler(const shared_diagnostic_handler&) = default;
-  shared_diagnostic_handler& operator=(const shared_diagnostic_handler&)
-    = default;
-  shared_diagnostic_handler(shared_diagnostic_handler&&) noexcept = default;
-  shared_diagnostic_handler& operator=(shared_diagnostic_handler&&) noexcept
-    = default;
 
-  inline shared_diagnostic_handler(const exec_node_actor& exec_node) noexcept
-    : weak_exec_node_{exec_node} {
+  shared_diagnostic_handler(const receiver_actor<diagnostic>& receiver) noexcept
+    : receiver_{receiver} {
   }
 
-  ~shared_diagnostic_handler() noexcept override = default;
-
-  inline auto emit(diagnostic diag) -> void override {
+  auto emit(diagnostic diag) -> void override {
     std::as_const(*this).emit(std::move(diag));
   }
 
-  inline auto emit(diagnostic diag) const -> void {
-    if (auto exec_node = weak_exec_node_.lock()) {
-      caf::anon_send<caf::message_priority::high>(exec_node, std::move(diag));
+  auto emit(diagnostic diag) const -> void {
+    if (auto receiver = receiver_.lock()) {
+      caf::anon_send<caf::message_priority::high>(receiver, std::move(diag));
     }
   }
 
   friend auto inspect(auto& f, shared_diagnostic_handler& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.shared_diagnostic_handler")
-      .fields(f.field("weak_exec_node", x.weak_exec_node_));
+      .fields(f.field("receiver", x.receiver_));
   }
 
 private:
-  detail::weak_handle<exec_node_actor> weak_exec_node_ = {};
+  detail::weak_handle<receiver_actor<diagnostic>> receiver_ = {};
 };
 
 } // namespace tenzir

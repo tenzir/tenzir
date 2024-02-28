@@ -42,7 +42,7 @@ struct operator_control_plane {
 
   /// Return a version of the diagnostic handler that may be passed to other
   /// threads. NOTE: Unlike for the regular diagnostic handler, emitting an
-  /// erorr via the shared diagnostic handler does not shut down the operator
+  /// errpr via the shared diagnostic handler does not shut down the operator
   /// immediately.
   inline auto shared_diagnostics() noexcept -> shared_diagnostic_handler {
     return shared_diagnostic_handler{exec_node_actor{&(self())}};

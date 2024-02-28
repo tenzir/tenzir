@@ -744,14 +744,17 @@ public:
   virtual auto context_type() const -> std::string = 0;
 
   /// Emits context information for every event in `array` in order.
-  virtual auto apply(series array) const -> caf::expected<std::vector<series>>
+  virtual auto apply(series array, shared_diagnostic_handler diagnostics) const
+    -> caf::expected<std::vector<series>>
     = 0;
 
   /// Inspects the context.
   virtual auto show() const -> record = 0;
 
   /// Dumps the context content or a dumping error.
-  virtual auto dump() -> generator<table_slice> = 0;
+  virtual auto dump(shared_diagnostic_handler diagnostics)
+    -> generator<table_slice>
+    = 0;
 
   /// Updates the context.
   virtual auto update(table_slice events, parameter_map parameters)
