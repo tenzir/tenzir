@@ -416,12 +416,16 @@ private:
     while (true) {
       if (auto dot = accept(tk::dot)) {
         auto name = expect(tk::identifier);
-        // TODO: `accept(tk::lpar)` for method call
-        expr = field_access{
-          std::move(expr),
-          dot.location,
-          name.as_identifier(),
-        };
+        if (peek(tk::lpar)) {
+          expr = parse_function_call(std::move(expr),
+                                     entity{{name.as_identifier()}});
+        } else {
+          expr = field_access{
+            std::move(expr),
+            dot.location,
+            name.as_identifier(),
+          };
+        }
         continue;
       }
       if (auto lbracket = accept(tk::lbracket)) {
@@ -561,6 +565,33 @@ private:
     }
   }
 
+  auto parse_function_call(std::optional<expression> subject, entity fn)
+    -> function_call {
+    expect(tk::lpar);
+    auto scope = ignore_newlines(true);
+    auto args = std::vector<expression>{};
+    while (not accept(tk::rpar)) {
+      if (auto comma = accept(tk::comma)) {
+        if (args.empty()) {
+          diagnostic::error("unexpected comma before any arguments")
+            .primary(comma.location)
+            .throw_();
+        } else {
+          diagnostic::error("duplicate comma").primary(comma.location).throw_();
+        }
+      }
+      args.push_back(parse_expression());
+      if (not peek(tk::rpar)) {
+        expect(tk::comma);
+      }
+    }
+    return function_call{
+      std::move(subject),
+      std::move(fn),
+      std::move(args),
+    };
+  }
+
   auto parse_primary_expression() -> expression {
     if (accept(tk::lpar)) {
       auto scope = ignore_newlines(true);
@@ -603,9 +634,9 @@ private:
       }
       ent = entity{std::move(path)};
     }
-    if (accept(tk::lpar)) {
+    if (peek(tk::lpar)) {
       // TODO: Chained method calls.
-      auto receiver = std::optional<expression>{};
+      auto subject = std::optional<expression>{};
       if (not ent) {
         if (selector.this_ and selector.path.empty()) {
           diagnostic::error("`this` cannot be called")
@@ -616,35 +647,11 @@ private:
         ent = entity{{std::move(selector.path.back())}};
         selector.path.pop_back();
         if (selector.this_ || not selector.path.empty()) {
-          receiver = std::move(selector);
+          subject = std::move(selector);
         }
       }
-      auto scope = ignore_newlines(true);
-      auto args = std::vector<expression>{};
-      while (not accept(tk::rpar)) {
-        if (auto comma = accept(tk::comma)) {
-          if (args.empty()) {
-            diagnostic::error("unexpected comma before any arguments")
-              .primary(comma.location)
-              .throw_();
-          } else {
-            diagnostic::error("duplicate comma")
-              .primary(comma.location)
-              .throw_();
-          }
-        }
-        args.push_back(parse_expression());
-        if (not peek(tk::rpar)) {
-          expect(tk::comma);
-        }
-      }
-      scope.done();
       TENZIR_ASSERT(ent);
-      return function_call{
-        std::move(receiver),
-        std::move(*ent),
-        std::move(args),
-      };
+      return parse_function_call(std::move(subject), std::move(*ent));
     }
     return selector;
   }
@@ -730,12 +737,9 @@ private:
 
   void set_ignore_newlines(bool value) {
     if (value != ignore_newlines_) {
-      auto old_loc = next_location();
       ignore_newlines_ = value;
       next_ = last_ + 1;
-      auto mid_loc = next_location();
       consume_trivia();
-      auto new_loc = next_location();
     }
   }
 

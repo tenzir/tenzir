@@ -148,11 +148,11 @@ public:
   }
 
   void visit(function_call& x) {
-    if (x.receiver) {
-      visit(*x.receiver);
+    if (x.subject) {
+      visit(*x.subject);
     }
-    auto prev = std::exchange(context_, x.receiver ? context_t::method_name
-                                                   : context_t::fn_name);
+    auto prev = std::exchange(context_, x.subject ? context_t::method_name
+                                                  : context_t::fn_name);
     visit(x.fn);
     context_ = prev;
     for (auto& y : x.args) {
