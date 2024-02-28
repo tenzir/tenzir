@@ -290,8 +290,8 @@ struct function_call {
   std::vector<expression> args;
 
   friend auto inspect(auto& f, function_call& x) -> bool {
-    return f.object(x).fields(f.field("on", x.subject), f.field("fn", x.fn),
-                              f.field("args", x.args));
+    return f.object(x).fields(f.field("subject", x.subject),
+                              f.field("fn", x.fn), f.field("args", x.args));
   }
 
   auto location() const -> location {

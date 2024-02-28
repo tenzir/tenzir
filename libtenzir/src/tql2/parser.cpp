@@ -360,12 +360,12 @@ private:
     return std::nullopt;
   }
 
-  auto parse_expression(int prec = 0) -> expression {
+  auto parse_expression(int min_prec = 0) -> expression {
     // TODO
     auto expr = parse_unary_expression();
     // foo = bar = baz
     while (true) {
-      if (prec == 0) {
+      if (min_prec == 0) {
         if (auto equal = accept(tk::equal)) {
           auto left = std::get_if<selector>(expr.kind.get());
           if (not left) {
@@ -386,7 +386,7 @@ private:
       }
       if (auto bin_op = peek_binary_op()) {
         auto new_prec = precedence(*bin_op);
-        if (new_prec >= prec) {
+        if (new_prec >= min_prec) {
           auto location = advance();
           consume_trivia_with_newlines();
           auto right = parse_expression(new_prec + 1);

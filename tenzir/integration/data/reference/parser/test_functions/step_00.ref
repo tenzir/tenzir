@@ -171,7 +171,7 @@
     },
     args: [
       function_call {
-        receiver: selector {
+        subject: selector {
           path: [
             `a` @ 69..70
           ]
@@ -197,7 +197,7 @@
     },
     args: [
       function_call {
-        receiver: selector {
+        subject: selector {
           path: [
             `a` @ 79..80
           ]
@@ -227,7 +227,7 @@
     },
     args: [
       function_call {
-        receiver: selector {
+        subject: selector {
           path: [
             `a` @ 90..91
           ]
@@ -265,7 +265,7 @@
     },
     args: [
       function_call {
-        receiver: selector {
+        subject: selector {
           path: [
             `a` @ 103..104
           ]
@@ -308,7 +308,7 @@
     },
     args: [
       function_call {
-        receiver: selector {
+        subject: selector {
           path: [
             `a` @ 119..120
           ]
