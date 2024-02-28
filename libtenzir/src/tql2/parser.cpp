@@ -11,6 +11,7 @@
 #include "tenzir/concept/parseable/string.hpp"
 #include "tenzir/concept/parseable/tenzir/data.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql2/ast.hpp"
 
@@ -68,7 +69,7 @@ public:
   static auto parse_file(std::span<token> tokens, std::string_view source,
                          diagnostic_handler& diag) -> pipeline {
     try {
-      auto self = parser{tokens, source};
+      auto self = parser{tokens, source, diag};
       auto pipe = self.parse_pipeline();
       if (self.next_ != self.tokens_.size()) {
         self.throw_token("expected EOF");
@@ -543,16 +544,10 @@ private:
 
   auto parse_list() -> list {
     auto begin = expect(tk::lbracket);
+    auto scope = ignore_newlines(true);
     auto items = std::vector<expression>{};
     while (true) {
-      if (not items.empty()) {
-        if (not accept(tk::comma)) {
-          if (not peek(tk::rbracket)) {
-            throw_token();
-          }
-        }
-      }
-      if (auto end = accept(tk::rbracket)) {
+      if (auto end = accept(tk::lbrace)) {
         return list{
           begin.location,
           std::move(items),
@@ -560,12 +555,15 @@ private:
         };
       }
       items.push_back(parse_expression());
+      if (not peek(tk::rbracket)) {
+        expect(tk::comma);
+      }
     }
-    throw_token();
   }
 
   auto parse_primary_expression() -> expression {
     if (accept(tk::lpar)) {
+      auto scope = ignore_newlines(true);
       auto result = parse_expression();
       expect(tk::rpar);
       return result;
@@ -623,17 +621,7 @@ private:
       }
       auto scope = ignore_newlines(true);
       auto args = std::vector<expression>{};
-      while (true) {
-        if (peek(tk::rpar)) {
-          advance();
-          break;
-        }
-        if (not args.empty()) {
-          expect(tk::comma);
-          if (accept(tk::rpar)) {
-            break;
-          }
-        }
+      while (not accept(tk::rpar)) {
         if (auto comma = accept(tk::comma)) {
           if (args.empty()) {
             diagnostic::error("unexpected comma before any arguments")
@@ -646,10 +634,17 @@ private:
           }
         }
         args.push_back(parse_expression());
+        if (not peek(tk::rpar)) {
+          expect(tk::comma);
+        }
       }
+      scope.done();
       TENZIR_ASSERT(ent);
-      return function_call{std::move(receiver), std::move(*ent),
-                           std::move(args)};
+      return function_call{
+        std::move(receiver),
+        std::move(*ent),
+        std::move(args),
+      };
     }
     return selector;
   }
@@ -734,17 +729,20 @@ private:
   }
 
   void set_ignore_newlines(bool value) {
-    if (value != ignore_newline_) {
-      ignore_newline_ = value;
+    if (value != ignore_newlines_) {
+      auto old_loc = next_location();
+      ignore_newlines_ = value;
       next_ = last_ + 1;
+      auto mid_loc = next_location();
       consume_trivia();
+      auto new_loc = next_location();
     }
   }
 
   class [[nodiscard]] newline_scope {
   public:
     explicit newline_scope(parser* self, bool value)
-      : self_{self}, previous_{self->ignore_newline_} {
+      : self_{self}, previous_{self->ignore_newlines_} {
       self_->set_ignore_newlines(value);
     }
 
@@ -784,7 +782,7 @@ private:
       case tk::whitespace:
         return true;
       case tk::newline:
-        return ignore_newline_;
+        return ignore_newlines_;
       default:
         return false;
     }
@@ -848,17 +846,19 @@ private:
       fmt::join(tries_ | std::ranges::views::transform(describe), ", ")));
   }
 
-  parser(std::span<token> tokens, std::string_view source)
-    : tokens_{tokens}, source_{source} {
+  parser(std::span<token> tokens, std::string_view source,
+         diagnostic_handler& diag)
+    : tokens_{tokens}, source_{source}, diag_{diag} {
     consume_trivia();
   }
 
-  bool ignore_newline_ = false;
-  size_t next_ = 0;
-  size_t last_ = 0;
-  std::vector<token_kind> tries_;
   std::span<token> tokens_;
   std::string_view source_;
+  diagnostic_handler& diag_;
+  size_t next_ = 0;
+  size_t last_ = 0;
+  bool ignore_newlines_ = false;
+  std::vector<token_kind> tries_;
 };
 
 } // namespace
