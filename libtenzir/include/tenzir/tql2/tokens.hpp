@@ -21,6 +21,7 @@ TENZIR_ENUM(
   identifier, dollar_ident,
   // keywords
   this_, if_, else_, match, not_, and_, or_, underscore, let, in,
+  reserved_keyword,
   // literals
   number, true_, false_, null, string, ip, datetime,
   // operators

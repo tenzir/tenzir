@@ -616,15 +616,21 @@ private:
     }
     // Check if we have identifier followed by `(` or `'`.
     // TODO: Accept entity as function name.
-    auto selector = parse_selector();
+    if (not selector_start()) {
+      // TODO: This is maybe a bit hacky?
+      diagnostic::error("expected expression, got {}", next_description())
+        .primary(next_location(), "got {}", next_description())
+        .throw_();
+    }
+    auto sel = parse_selector();
     auto ent = std::optional<entity>{};
     if (accept(tk::single_quote)) {
-      if (selector.this_ || selector.path.size() != 1) {
+      if (sel.this_ || sel.path.size() != 1) {
         diagnostic::error("todo: unexpected stuff before entity")
-          .primary(selector.location())
+          .primary(sel.location())
           .throw_();
       }
-      auto path = std::move(selector.path);
+      auto path = std::move(sel.path);
       while (true) {
         auto ident = expect(tk::identifier);
         path.push_back(ident.as_identifier());
@@ -635,25 +641,25 @@ private:
       ent = entity{std::move(path)};
     }
     if (peek(tk::lpar)) {
-      // TODO: Chained method calls.
+      // TODO: Consider refactoring this.
       auto subject = std::optional<expression>{};
       if (not ent) {
-        if (selector.this_ and selector.path.empty()) {
+        if (sel.this_ and sel.path.empty()) {
           diagnostic::error("`this` cannot be called")
-            .primary(*selector.this_)
+            .primary(*sel.this_)
             .throw_();
         }
-        TENZIR_ASSERT(not selector.path.empty());
-        ent = entity{{std::move(selector.path.back())}};
-        selector.path.pop_back();
-        if (selector.this_ || not selector.path.empty()) {
-          subject = std::move(selector);
+        TENZIR_ASSERT(not sel.path.empty());
+        ent = entity{{std::move(sel.path.back())}};
+        sel.path.pop_back();
+        if (sel.this_ || not sel.path.empty()) {
+          subject = std::move(sel);
         }
       }
       TENZIR_ASSERT(ent);
       return parse_function_call(std::move(subject), std::move(*ent));
     }
-    return selector;
+    return sel;
   }
 
   struct accept_result {
@@ -831,15 +837,17 @@ private:
     return loc;
   }
 
-  [[noreturn]] void throw_token(std::string message) {
-    auto loc = next_location();
-    auto got = std::string_view{};
+  auto next_description() -> std::string_view {
     if (next_ < tokens_.size()) {
-      got = describe(tokens_[next_].kind);
-    } else {
-      got = "EOF";
+      return describe(tokens_[next_].kind);
     }
-    diagnostic::error("{}", message).primary(loc, "got {}", got).throw_();
+    return "EOF";
+  }
+
+  [[noreturn]] void throw_token(std::string message) {
+    diagnostic::error("{}", message)
+      .primary(next_location(), "got {}", next_description())
+      .throw_();
   }
 
   [[noreturn]] void throw_token() {
