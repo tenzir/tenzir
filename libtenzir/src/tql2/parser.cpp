@@ -157,7 +157,6 @@ private:
       // TODO: require comma or newline?
       (void)accept(tk::comma);
     }
-    scope.done();
     expect(tk::rbrace);
     return match_stmt{
       std::move(expr),
@@ -303,7 +302,6 @@ private:
           }
         }
         if (peek(tk::rbrace)) {
-          scope.done();
           auto end = expect(tk::rbrace);
           return expression{
             record{begin.location, std::move(content), end.location}};
@@ -316,7 +314,6 @@ private:
       }
     }
     auto pipe = parse_pipeline();
-    scope.done();
     auto end = expect(tk::rbrace);
     return pipeline_expr{
       begin.location,
@@ -624,15 +621,12 @@ private:
       auto args = std::vector<expression>{};
       while (true) {
         if (peek(tk::rpar)) {
-          scope.done();
-          (void)advance();
+          advance();
           break;
         }
         if (not args.empty()) {
           expect(tk::comma);
-          if (peek(tk::rpar)) {
-            scope.done();
-            (void)advance();
+          if (accept(tk::rpar)) {
             break;
           }
         }
@@ -674,10 +668,14 @@ private:
     }
   };
 
+  void find_next() {
+  }
+
   [[nodiscard]] auto advance() -> location {
     TENZIR_ASSERT(next_ < tokens_.size());
     auto begin = next_ == 0 ? 0 : tokens_[next_ - 1].end;
     auto end = tokens_[next_].end;
+    last_ = next_;
     ++next_;
     consume_trivia();
     tries_.clear();
@@ -731,39 +729,48 @@ private:
     }
   }
 
+  void set_ignore_newlines(bool value) {
+    if (value != ignore_newline_) {
+      ignore_newline_ = value;
+      next_ = last_ + 1;
+      consume_trivia();
+    }
+  }
+
   class [[nodiscard]] newline_scope {
   public:
-    explicit newline_scope(bool* ptr, bool value) : previous_{*ptr}, ptr_{ptr} {
-      *ptr = value;
+    explicit newline_scope(parser* self, bool value)
+      : self_{self}, previous_{self->ignore_newline_} {
+      self_->set_ignore_newlines(value);
     }
 
     void done() const {
-      TENZIR_ASSERT(ptr_);
-      *ptr_ = previous_;
+      TENZIR_ASSERT(self_);
+      self_->set_ignore_newlines(previous_);
     }
 
     ~newline_scope() {
-      if (ptr_) {
+      if (self_) {
         done();
       }
     }
 
-    newline_scope(newline_scope&& other) noexcept : ptr_{other.ptr_} {
-      other.ptr_ = nullptr;
+    newline_scope(newline_scope&& other) noexcept
+      : self_{other.self_}, previous_{other.previous_} {
+      other.self_ = nullptr;
     }
 
     newline_scope(const newline_scope& other) = delete;
     auto operator=(newline_scope&& other) -> newline_scope& = delete;
     auto operator=(const newline_scope& other) -> newline_scope& = delete;
 
-    bool previous_{};
-    bool* ptr_ = nullptr;
+  private:
+    parser* self_;
+    bool previous_;
   };
 
   auto ignore_newlines(bool value) -> newline_scope {
-    auto scope = newline_scope{&ignore_newline_, value};
-    consume_trivia();
-    return scope;
+    return newline_scope{this, value};
   }
 
   auto is_trivia(token_kind kind) const -> bool {
@@ -844,6 +851,7 @@ private:
 
   bool ignore_newline_ = false;
   size_t next_ = 0;
+  size_t last_ = 0;
   std::vector<token_kind> tries_;
   std::span<token> tokens_;
   std::string_view source_;
