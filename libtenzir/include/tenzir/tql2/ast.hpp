@@ -346,22 +346,21 @@ struct index_expr {
 };
 
 struct list {
-  list(location open, std::vector<expression> items, location close)
-    : open{open}, items{std::move(items)}, close{close} {
+  list(location begin, std::vector<expression> items, location end)
+    : begin{begin}, items{std::move(items)}, end{end} {
   }
 
-  location open;
+  location begin;
   std::vector<expression> items;
-  location close;
+  location end;
 
   friend auto inspect(auto& f, list& x) -> bool {
-    return f.object(x).fields(f.field("open", x.open),
-                              f.field("items", x.items),
-                              f.field("close", x.close));
+    return f.object(x).fields(f.field("begin", x.begin),
+                              f.field("items", x.items), f.field("end", x.end));
   }
 
   auto location() const -> location {
-    return open.combine(close);
+    return begin.combine(end);
   }
 };
 

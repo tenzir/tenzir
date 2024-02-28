@@ -146,6 +146,7 @@ private:
     //    match foo {
     //      "ok", 42 => { ... }
     //    }
+    auto match = expect(tk::match);
     auto expr = parse_expression();
     auto arms = std::vector<match_stmt::arm>{};
     expect(tk::lbrace);
@@ -166,7 +167,7 @@ private:
 
   auto parse_invocation(entity op) -> invocation {
     auto args = std::vector<expression>{};
-    while (not accept_stmt_end()) {
+    while (not at_statement_end()) {
       if (not args.empty()) {
         if (not accept(tk::comma)) {
           // Allow `{ ... }` without comma as final argument.
@@ -176,8 +177,8 @@ private:
               .hint("try inserting a `,` before")
               .throw_();
           }
-          args.emplace_back(parse_record_or_pipeline());
-          if (accept_stmt_end()) {
+          args.emplace_back(parse_record_or_pipeline_expr());
+          if (at_statement_end()) {
             break;
           }
           auto before = args.back().match([](auto& x) {
@@ -230,26 +231,31 @@ private:
     if (peek(tk::match)) {
       return parse_match_stmt();
     }
-    if (selector_start()) {
-      return parse_invocation_or_assignment();
-    }
-    throw_token();
+    return parse_invocation_or_assignment();
+  }
+
+  auto at_pipeline_end() -> bool {
+    return eoi() || silent_peek(tk::rbrace);
+  }
+
+  auto at_statement_end() -> bool {
+    return eoi() || peek(tk::newline) || peek(tk::pipe)
+           || silent_peek(tk::rbrace);
   }
 
   auto parse_pipeline() -> pipeline {
     auto scope = ignore_newlines(false);
     auto body = std::vector<statement>{};
-    auto end = [&] {
-      // TODO: rbrace
-      return eoi() || silent_peek(tk::rbrace);
-    };
-    auto accept_stmt_end = [&] {
-      return end() || accept_stmt_sep();
-    };
     while (true) {
-      while (accept_stmt_sep()) {
+      while (accept(tk::newline) || accept(tk::pipe)) {
+      }
+      if (at_pipeline_end()) {
+        break;
       }
       body.push_back(parse_statement());
+      if (not at_statement_end()) {
+        throw_token();
+      }
     }
     return pipeline{std::move(body)};
   }
@@ -277,11 +283,8 @@ private:
                     std::move(path)};
   }
 
-  auto parse_record_or_pipeline() -> expression {
-    auto begin = accept(tk::lbrace);
-    if (not begin) {
-      throw_token();
-    }
+  auto parse_record_or_pipeline_expr() -> expression {
+    auto begin = expect(tk::lbrace);
     // { }       // unknown -> record
     // { test :  // record
     // OTHERWISE pipeline
@@ -315,7 +318,11 @@ private:
     auto pipe = parse_pipeline();
     scope.done();
     auto end = expect(tk::rbrace);
-    return pipeline_expr{begin.location, std::move(pipe), end.location};
+    return pipeline_expr{
+      begin.location,
+      std::move(pipe),
+      end.location,
+    };
   }
 
   auto peek_unary_op() -> std::optional<unary_op> {
@@ -367,7 +374,11 @@ private:
           }
           // TODO: Check precedence.
           auto right = parse_expression();
-          expr = assignment{std::move(*left), equal.location, std::move(right)};
+          expr = assignment{
+            std::move(*left),
+            equal.location,
+            std::move(right),
+          };
           continue;
         }
       }
@@ -418,8 +429,12 @@ private:
         } else {
           auto index = parse_expression();
           rbracket = expect(tk::rbracket);
-          expr = index_expr{std::move(expr), lbracket.location,
-                            std::move(index), rbracket.location};
+          expr = index_expr{
+            std::move(expr),
+            lbracket.location,
+            std::move(index),
+            rbracket.location,
+          };
         }
         continue;
       }
@@ -428,74 +443,75 @@ private:
     return expr;
   }
 
-  auto parse_primary_expression() -> expression {
-    // Literals: bool, duration, time, double, ipv4, ipv6, uint/int??, string
-    if (accept(tk::lpar)) {
-      auto result = parse_expression();
-      expect(tk::rpar);
-      return result;
-    }
-    if (auto token = accept(tk::underscore)) {
-      return underscore{};
-    }
-    if (auto token = accept(tk::string)) {
-      // TODO: Make this better?
-      auto result = std::string{};
-      TENZIR_ASSERT(token.text.size() >= 2);
-      auto f = token.text.begin() + 1;
-      auto e = token.text.end() - 1;
-      for (auto it = f; it != e; ++it) {
-        auto x = *it;
-        if (x != '\\') {
-          result.push_back(x);
-          continue;
-        }
-        ++it;
-        if (it == e) {
-          // TODO: invalid, but cannot happen
-          TENZIR_UNREACHABLE();
-        }
-        x = *it;
-        if (x == '\\') {
-          result.push_back('\\');
-        } else if (x == '"') {
-          result.push_back('"');
-        } else if (x == 'n') {
-          result.push_back('\n');
-        } else {
-          diagnostic::error("found unknown escape sequence `{}`",
-                            token.text.substr(it - f, 2))
-            .primary(token.location.subloc(it - f, 2))
-            .throw_();
-        }
+  auto parse_string() -> literal {
+    auto token = expect(tk::string);
+    // TODO: Make this better?
+    auto result = std::string{};
+    TENZIR_ASSERT(token.text.size() >= 2);
+    auto f = token.text.begin() + 1;
+    auto e = token.text.end() - 1;
+    for (auto it = f; it != e; ++it) {
+      auto x = *it;
+      if (x != '\\') {
+        result.push_back(x);
+        continue;
       }
-      if (not arrow::util::ValidateUTF8(result)) {
-        // TODO: Would be nice to report the actual error location.
-        diagnostic::error("string contains invalid utf-8")
-          .primary(token.location)
-          .hint("consider using a blob instead: b{}", token.text)
+      ++it;
+      if (it == e) {
+        // TODO: invalid, but cannot happen
+        TENZIR_UNREACHABLE();
+      }
+      x = *it;
+      if (x == '\\') {
+        result.push_back('\\');
+      } else if (x == '"') {
+        result.push_back('"');
+      } else if (x == 'n') {
+        result.push_back('\n');
+      } else {
+        diagnostic::error("found unknown escape sequence `{}`",
+                          token.text.substr(it - f, 2))
+          .primary(token.location.subloc(it - f, 2))
           .throw_();
       }
-      return literal{std::move(result), token.location};
     }
-    if (auto token = accept(tk::number)) {
-      // TODO: Make this better, do not use existing parsers.
-      if (auto result = int64_t{}; parsers::i64(token.text, result)) {
-        return literal{result, token.location};
-      }
-      if (auto result = uint64_t{}; parsers::u64(token.text, result)) {
-        return literal{result, token.location};
-      }
-      if (auto result = double{}; parsers::real(token.text, result)) {
-        return literal{result, token.location};
-      }
-      if (auto result = duration{}; parsers::duration(token.text, result)) {
-        return literal{result, token.location};
-      }
-      diagnostic::error("could not parse number")
+    if (not arrow::util::ValidateUTF8(result)) {
+      // TODO: Would be nice to report the actual error location.
+      diagnostic::error("string contains invalid utf-8")
         .primary(token.location)
-        .note("number parsing still is very rudimentary")
+        .hint("consider using a blob instead: b{}", token.text)
         .throw_();
+    }
+    return literal{std::move(result), token.location};
+  }
+
+  auto parse_number() -> literal {
+    auto token = accept(tk::number);
+    // TODO: Make this better, do not use existing parsers.
+    if (auto result = int64_t{}; parsers::i64(token.text, result)) {
+      return literal{result, token.location};
+    }
+    if (auto result = uint64_t{}; parsers::u64(token.text, result)) {
+      return literal{result, token.location};
+    }
+    if (auto result = double{}; parsers::real(token.text, result)) {
+      return literal{result, token.location};
+    }
+    if (auto result = duration{}; parsers::duration(token.text, result)) {
+      return literal{result, token.location};
+    }
+    diagnostic::error("could not parse number")
+      .primary(token.location)
+      .note("number parsing still is very rudimentary")
+      .throw_();
+  }
+
+  auto accept_literal() -> std::optional<literal> {
+    if (peek(tk::string)) {
+      return parse_string();
+    }
+    if (peek(tk::number)) {
+      return parse_number();
     }
     if (auto token = accept(tk::datetime)) {
       // TODO: Make this better.
@@ -521,102 +537,123 @@ private:
         return literal{result, token.location};
       }
     }
+    return std::nullopt;
+  }
+
+  auto parse_list() -> list {
+    auto begin = expect(tk::lbracket);
+    auto items = std::vector<expression>{};
+    while (true) {
+      if (not items.empty()) {
+        if (not accept(tk::comma)) {
+          if (not peek(tk::rbracket)) {
+            throw_token();
+          }
+        }
+      }
+      if (auto end = accept(tk::rbracket)) {
+        return list{
+          begin.location,
+          std::move(items),
+          end.location,
+        };
+      }
+      items.push_back(parse_expression());
+    }
+    throw_token();
+  }
+
+  auto parse_primary_expression() -> expression {
+    if (accept(tk::lpar)) {
+      auto result = parse_expression();
+      expect(tk::rpar);
+      return result;
+    }
+    if (auto lit = accept_literal()) {
+      return std::move(*lit);
+    }
+    if (auto token = accept(tk::underscore)) {
+      return underscore{};
+    }
     if (auto token = accept(tk::dollar_ident)) {
       return dollar_var{token.as_identifier()};
     }
-    if (selector_start()) {
-      // Check if we have identifier followed by `(` or `'`.
-      // TODO: Accept entity as function name.
-      auto selector = parse_selector();
-      auto ent = std::optional<entity>{};
-      if (accept(tk::single_quote)) {
-        if (selector.this_ || selector.path.size() != 1) {
-          diagnostic::error("todo: unexpected stuff before entity")
-            .primary(selector.location())
+    if (peek(tk::lbrace)) {
+      return parse_record_or_pipeline_expr();
+    }
+    if (peek(tk::lbracket)) {
+      return parse_list();
+    }
+    // Check if we have identifier followed by `(` or `'`.
+    // TODO: Accept entity as function name.
+    auto selector = parse_selector();
+    auto ent = std::optional<entity>{};
+    if (accept(tk::single_quote)) {
+      if (selector.this_ || selector.path.size() != 1) {
+        diagnostic::error("todo: unexpected stuff before entity")
+          .primary(selector.location())
+          .throw_();
+      }
+      auto path = std::move(selector.path);
+      while (true) {
+        auto ident = expect(tk::identifier);
+        path.push_back(ident.as_identifier());
+        if (not accept(tk::single_quote)) {
+          break;
+        }
+      }
+      ent = entity{std::move(path)};
+    }
+    if (accept(tk::lpar)) {
+      // TODO: Chained method calls.
+      auto receiver = std::optional<expression>{};
+      if (not ent) {
+        if (selector.this_ and selector.path.empty()) {
+          diagnostic::error("`this` cannot be called")
+            .primary(*selector.this_)
             .throw_();
         }
-        auto path = std::move(selector.path);
-        while (true) {
-          auto ident = expect(tk::identifier);
-          path.push_back(ident.as_identifier());
-          if (not accept(tk::single_quote)) {
-            break;
-          }
+        TENZIR_ASSERT(not selector.path.empty());
+        ent = entity{{std::move(selector.path.back())}};
+        selector.path.pop_back();
+        if (selector.this_ || not selector.path.empty()) {
+          receiver = std::move(selector);
         }
-        ent = entity{std::move(path)};
       }
-      if (accept(tk::lpar)) {
-        // TODO: Chained method calls.
-        auto receiver = std::optional<expression>{};
-        if (not ent) {
-          if (selector.this_ and selector.path.empty()) {
-            diagnostic::error("`this` cannot be called")
-              .primary(*selector.this_)
-              .throw_();
-          }
-          TENZIR_ASSERT(not selector.path.empty());
-          ent = entity{{std::move(selector.path.back())}};
-          selector.path.pop_back();
-          if (selector.this_ || not selector.path.empty()) {
-            receiver = std::move(selector);
-          }
+      auto scope = ignore_newlines(true);
+      auto args = std::vector<expression>{};
+      while (true) {
+        if (peek(tk::rpar)) {
+          scope.done();
+          (void)advance();
+          break;
         }
-        auto scope = ignore_newlines(true);
-        auto args = std::vector<expression>{};
-        while (true) {
+        if (not args.empty()) {
+          expect(tk::comma);
           if (peek(tk::rpar)) {
             scope.done();
             (void)advance();
             break;
           }
-          if (not args.empty()) {
-            expect(tk::comma);
-            if (peek(tk::rpar)) {
-              scope.done();
-              (void)advance();
-              break;
-            }
-          }
-          if (auto comma = accept(tk::comma)) {
-            if (args.empty()) {
-              diagnostic::error("unexpected comma before any arguments")
-                .primary(comma.location)
-                .throw_();
-            } else {
-              diagnostic::error("duplicate comma")
-                .primary(comma.location)
-                .throw_();
-            }
-          }
-          args.push_back(parse_expression());
         }
-        TENZIR_ASSERT(ent);
-        return function_call{std::move(receiver), std::move(*ent),
-                             std::move(args)};
+        if (auto comma = accept(tk::comma)) {
+          if (args.empty()) {
+            diagnostic::error("unexpected comma before any arguments")
+              .primary(comma.location)
+              .throw_();
+          } else {
+            diagnostic::error("duplicate comma")
+              .primary(comma.location)
+              .throw_();
+          }
+        }
+        args.push_back(parse_expression());
       }
-      return selector;
+      TENZIR_ASSERT(ent);
+      return function_call{std::move(receiver), std::move(*ent),
+                           std::move(args)};
     }
-    if (peek(tk::lbrace)) {
-      return parse_record_or_pipeline();
-    }
-    if (auto open = accept(tk::lbracket)) {
-      auto items = std::vector<expression>{};
-      while (true) {
-        if (not items.empty()) {
-          if (not accept(tk::comma)) {
-            if (not peek(tk::rbracket)) {
-              throw_token();
-            }
-          }
-        }
-        if (auto close = accept(tk::rbracket)) {
-          return list{open.location, std::move(items), close.location};
-        }
-        items.push_back(parse_expression());
-      }
-      throw_token();
-    }
-    throw_token();
+    return selector;
   }
 
   struct accept_result {
