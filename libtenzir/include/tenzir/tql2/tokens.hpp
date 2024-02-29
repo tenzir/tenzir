@@ -23,7 +23,7 @@ TENZIR_ENUM(
   this_, if_, else_, match, not_, and_, or_, underscore, let, in,
   reserved_keyword,
   // literals
-  number, true_, false_, null, string, ip, datetime,
+  scalar, true_, false_, null, string, ip, datetime,
   // operators
   dot, plus, minus, slash, star, equal_equal, bang_equal, less, less_equal,
   greater, greater_equal,

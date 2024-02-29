@@ -523,8 +523,8 @@ private:
     return literal{std::move(result), token.location};
   }
 
-  auto parse_number() -> literal {
-    auto token = accept(tk::number);
+  auto parse_scalar() -> literal {
+    auto token = accept(tk::scalar);
     // TODO: Make this better, do not use existing parsers.
     if (auto result = int64_t{}; parsers::i64(token.text, result)) {
       return literal{result, token.location};
@@ -538,9 +538,9 @@ private:
     if (auto result = duration{}; parsers::duration(token.text, result)) {
       return literal{result, token.location};
     }
-    diagnostic::error("could not parse number")
+    diagnostic::error("could not parse scalar")
       .primary(token.location)
-      .note("number parsing still is very rudimentary")
+      .note("scalar parsing still is very rudimentary")
       .throw_();
   }
 
@@ -548,8 +548,8 @@ private:
     if (peek(tk::string)) {
       return parse_string();
     }
-    if (peek(tk::number)) {
-      return parse_number();
+    if (peek(tk::scalar)) {
+      return parse_scalar();
     }
     if (auto token = accept(tk::datetime)) {
       // TODO: Make this better.

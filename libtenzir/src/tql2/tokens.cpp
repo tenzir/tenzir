@@ -53,7 +53,6 @@ auto describe(token_kind k) -> std::string_view {
     X(newline, "newline");
     X(not_, "`not`");
     X(null, "`null`");
-    X(number, "number");
     X(or_, "`or`");
     X(pipe, "`|`");
     X(plus, "`+`");
@@ -61,6 +60,7 @@ auto describe(token_kind k) -> std::string_view {
     X(rbracket, "`]`");
     X(reserved_keyword, "reserved keyword");
     X(rpar, "`)`");
+    X(scalar, "scalar");
     X(single_quote, "`'`");
     X(slash, "`/`");
     X(star, "`*`");
@@ -92,7 +92,7 @@ auto tokenize(std::string_view content) -> std::vector<token> {
     | ignore(+digit >> '-' >> +digit >> '-' >> +digit >> *(alnum | ':' | '+' | '-'))
       ->* [] { return token_kind::datetime; }
     | ignore(digit >> *digit_us >> -('.' >> digit >> *digit_us) >> -identifier)
-      ->* [] { return token_kind::number; }
+      ->* [] { return token_kind::scalar; }
     | ignore('"' >> *(('\\' >> any) | (any - '"')) >> '"')
       ->* [] { return token_kind::string; }
     | ignore('"' >> *(('\\' >> any) | (any - '"')))

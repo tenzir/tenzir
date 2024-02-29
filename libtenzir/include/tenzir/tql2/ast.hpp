@@ -119,7 +119,7 @@ struct dollar_var : identifier {
 struct null {};
 
 struct literal {
-  // TODO: Think about numbers.
+  // TODO: Consider representing integers differently.
   using kind = variant<null, bool, int64_t, uint64_t, double, std::string, blob,
                        duration, caf::timestamp, ip>;
 
