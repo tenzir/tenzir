@@ -8,12 +8,9 @@
 
 #include "tenzir/tql2/parser.hpp"
 
-#include "tenzir/concept/parseable/string.hpp"
-#include "tenzir/concept/parseable/tenzir/data.hpp"
+#include "tenzir/concept/parseable/tenzir/ip.hpp"
+#include "tenzir/concept/parseable/tenzir/time.hpp"
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/diagnostics.hpp"
-#include "tenzir/plugin.hpp"
-#include "tenzir/tql2/ast.hpp"
 
 #include <arrow/util/utf8.h>
 
@@ -21,9 +18,9 @@
 
 namespace tenzir::tql2 {
 
-using namespace tenzir::tql2::ast;
-
 namespace {
+
+using namespace ast;
 
 auto precedence(unary_op x) -> int {
   using enum unary_op;
@@ -83,8 +80,34 @@ public:
   }
 
 private:
-  auto accept_stmt_sep() -> bool {
-    return accept(tk::newline) || accept(tk::pipe);
+  auto parse_pipeline() -> pipeline {
+    auto scope = ignore_newlines(false);
+    auto body = std::vector<statement>{};
+    while (true) {
+      while (accept(tk::newline) || accept(tk::pipe)) {
+      }
+      if (at_pipeline_end()) {
+        break;
+      }
+      body.push_back(parse_statement());
+      if (not at_statement_end()) {
+        throw_token();
+      }
+    }
+    return pipeline{std::move(body)};
+  }
+
+  auto parse_statement() -> statement {
+    if (peek(tk::let)) {
+      return parse_let_stmt();
+    }
+    if (peek(tk::if_)) {
+      return parse_if_stmt();
+    }
+    if (peek(tk::match)) {
+      return parse_match_stmt();
+    }
+    return parse_invocation_or_assignment();
   }
 
   auto parse_let_stmt() -> let_stmt {
@@ -124,24 +147,6 @@ private:
     };
   }
 
-  auto parse_match_stmt_arm() -> match_stmt::arm {
-    auto filter = std::vector<expression>{};
-    while (true) {
-      filter.push_back(parse_expression());
-      if (accept(tk::fat_arrow)) {
-        break;
-      }
-      expect(tk::comma);
-    }
-    expect(tk::lbrace);
-    auto pipe = parse_pipeline();
-    expect(tk::rbrace);
-    return match_stmt::arm{
-      std::move(filter),
-      std::move(pipe),
-    };
-  }
-
   auto parse_match_stmt() -> match_stmt {
     // TODO: Decide exact syntax, useable for both single-line and
     // multi-line TQL, and for expressions and statements.
@@ -164,6 +169,45 @@ private:
       std::move(expr),
       std::move(arms),
     };
+  }
+
+  auto parse_match_stmt_arm() -> match_stmt::arm {
+    auto filter = std::vector<expression>{};
+    while (true) {
+      filter.push_back(parse_expression());
+      if (accept(tk::fat_arrow)) {
+        break;
+      }
+      expect(tk::comma);
+    }
+    expect(tk::lbrace);
+    auto pipe = parse_pipeline();
+    expect(tk::rbrace);
+    return match_stmt::arm{
+      std::move(filter),
+      std::move(pipe),
+    };
+  }
+
+  auto parse_invocation_or_assignment() -> statement {
+    // either selector followed by `=`, or entity (no_dollar)
+    // TODO: Parse entities that consist of multiple identifiers.
+    auto left = parse_selector();
+    if (auto equal = accept(tk::equal)) {
+      auto right = parse_expression();
+      return assignment{
+        std::move(left),
+        equal.location,
+        std::move(right),
+      };
+    }
+    // TODO: Proper entity parsing.
+    if (not left.this_ and left.path.size() == 1) {
+      return parse_invocation(entity{std::move(left.path)});
+    }
+    diagnostic::error("expected operator name or `=` afterwards")
+      .primary(left.location())
+      .throw_();
   }
 
   auto parse_invocation(entity op) -> invocation {
@@ -199,171 +243,6 @@ private:
       std::move(op),
       std::move(args),
     };
-  }
-
-  auto parse_invocation_or_assignment() -> statement {
-    // either selector followed by `=`, or entity (no_dollar)
-    // TODO: Parse entities that consist of multiple identifiers.
-    auto left = parse_selector();
-    if (auto equal = accept(tk::equal)) {
-      auto right = parse_expression();
-      return assignment{
-        std::move(left),
-        equal.location,
-        std::move(right),
-      };
-    }
-    // TODO: Proper entity parsing.
-    if (not left.this_ and left.path.size() == 1) {
-      return parse_invocation(entity{std::move(left.path)});
-    }
-    diagnostic::error("expected operator name or `=` afterwards")
-      .primary(left.location())
-      .throw_();
-  }
-
-  auto parse_statement() -> statement {
-    if (peek(tk::let)) {
-      return parse_let_stmt();
-    }
-    if (peek(tk::if_)) {
-      return parse_if_stmt();
-    }
-    if (peek(tk::match)) {
-      return parse_match_stmt();
-    }
-    return parse_invocation_or_assignment();
-  }
-
-  auto at_pipeline_end() -> bool {
-    return eoi() || silent_peek(tk::rbrace);
-  }
-
-  auto at_statement_end() -> bool {
-    return eoi() || peek(tk::newline) || peek(tk::pipe)
-           || silent_peek(tk::rbrace);
-  }
-
-  auto parse_pipeline() -> pipeline {
-    auto scope = ignore_newlines(false);
-    auto body = std::vector<statement>{};
-    while (true) {
-      while (accept(tk::newline) || accept(tk::pipe)) {
-      }
-      if (at_pipeline_end()) {
-        break;
-      }
-      body.push_back(parse_statement());
-      if (not at_statement_end()) {
-        throw_token();
-      }
-    }
-    return pipeline{std::move(body)};
-  }
-
-  auto selector_start() -> bool {
-    return peek(tk::identifier) || peek(tk::this_);
-  }
-
-  auto parse_selector() -> selector {
-    auto this_ = accept(tk::this_);
-    auto path = std::vector<identifier>{};
-    while (true) {
-      if (this_ || not path.empty()) {
-        if (not accept(tk::dot)) {
-          break;
-        }
-      }
-      if (auto ident = accept(tk::identifier)) {
-        path.emplace_back(std::string{ident.text}, ident.location);
-      } else {
-        throw_token();
-      }
-    }
-    return selector{this_ ? this_.location : std::optional<location>{},
-                    std::move(path)};
-  }
-
-  auto parse_record(location begin) -> record {
-    auto content = std::vector<record::content_kind>{};
-    while (not peek(tk::rbrace)) {
-      // TODO: Parse `{ foo: 42, ...bar }`.
-      auto name = accept(tk::identifier);
-      if (not name) {
-        // TODO: Decide how to represent string fields in the AST.
-        name = expect(tk::string);
-        name.text = name.text.substr(1, name.text.size() - 2);
-      }
-      expect(tk::colon);
-      auto expr = parse_expression();
-      content.emplace_back(record::field{
-        name.as_identifier(),
-        std::move(expr),
-      });
-      if (not peek(tk::rbrace)) {
-        expect(tk::comma);
-      }
-    }
-    auto end = expect(tk::rbrace);
-    return record{
-      begin,
-      std::move(content),
-      end.location,
-    };
-  }
-
-  auto parse_record_or_pipeline_expr() -> expression {
-    // { }       // unknown -> record
-    // { test :  // record
-    // OTHERWISE pipeline
-    auto begin = expect(tk::lbrace);
-    auto scope = ignore_newlines(true);
-    // TODO: Find a better solution than `raw_peek`.
-    auto is_record = peek(tk::rbrace)
-                     || (raw_peek(tk::identifier) && raw_peek(tk::colon, 1));
-    if (is_record) {
-      return parse_record(begin.location);
-    }
-    auto pipe = parse_pipeline();
-    auto end = expect(tk::rbrace);
-    return pipeline_expr{
-      begin.location,
-      std::move(pipe),
-      end.location,
-    };
-  }
-
-  auto peek_unary_op() -> std::optional<unary_op> {
-#define X(x, y)                                                                \
-  if (peek(tk::x)) {                                                           \
-    return unary_op::y;                                                        \
-  }
-    X(not_, not_);
-    X(minus, neg);
-#undef X
-    return std::nullopt;
-  }
-
-  auto peek_binary_op() -> std::optional<binary_op> {
-#define X(x, y)                                                                \
-  if (peek(tk::x)) {                                                           \
-    return binary_op::y;                                                       \
-  }
-    X(plus, add);
-    X(minus, sub);
-    X(star, mul);
-    X(slash, div);
-    X(greater, gt);
-    X(greater_equal, ge);
-    X(less, le);
-    X(less_equal, le);
-    X(equal_equal, eq);
-    X(bang_equal, neq);
-    X(and_, and_);
-    X(or_, or_);
-    X(in, in);
-#undef X
-    return std::nullopt;
   }
 
   auto parse_expression(int min_prec = 0) -> expression {
@@ -434,9 +313,7 @@ private:
             name.as_identifier(),
           };
         }
-        continue;
-      }
-      if (auto lbracket = accept(tk::lbracket)) {
+      } else if (auto lbracket = accept(tk::lbracket)) {
         if (auto rbracket = accept(tk::rbracket)) {
           expr = unpack{std::move(expr),
                         lbracket.location.combine(rbracket.location)};
@@ -450,16 +327,163 @@ private:
             rbracket.location,
           };
         }
-        continue;
+      } else {
+        break;
       }
-      break;
     }
     return expr;
   }
 
+  auto parse_primary_expression() -> expression {
+    if (accept(tk::lpar)) {
+      auto scope = ignore_newlines(true);
+      auto result = parse_expression();
+      expect(tk::rpar);
+      return result;
+    }
+    if (auto lit = accept_literal()) {
+      return std::move(*lit);
+    }
+    if (auto token = accept(tk::underscore)) {
+      return underscore{};
+    }
+    if (auto token = accept(tk::dollar_ident)) {
+      return dollar_var{token.as_identifier()};
+    }
+    if (peek(tk::lbrace)) {
+      return parse_record_or_pipeline_expr();
+    }
+    if (peek(tk::lbracket)) {
+      return parse_list();
+    }
+    // Check if we have identifier followed by `(` or `'`.
+    // TODO: Accept entity as function name.
+    if (not selector_start()) {
+      // TODO: This is maybe a bit hacky?
+      diagnostic::error("expected expression, got {}", next_description())
+        .primary(next_location(), "got {}", next_description())
+        .throw_();
+    }
+    // TODO: The code below is a mess.
+    auto sel = parse_selector();
+    auto ent = std::optional<entity>{};
+    if (accept(tk::single_quote)) {
+      if (sel.this_ || sel.path.size() != 1) {
+        diagnostic::error("todo: unexpected stuff before entity")
+          .primary(sel.location())
+          .throw_();
+      }
+      auto path = std::move(sel.path);
+      while (true) {
+        auto ident = expect(tk::identifier);
+        path.push_back(ident.as_identifier());
+        if (not accept(tk::single_quote)) {
+          break;
+        }
+      }
+      ent = entity{std::move(path)};
+    }
+    if (peek(tk::lpar)) {
+      // TODO: Consider refactoring this.
+      auto subject = std::optional<expression>{};
+      if (not ent) {
+        if (sel.this_ and sel.path.empty()) {
+          diagnostic::error("`this` cannot be called")
+            .primary(*sel.this_)
+            .throw_();
+        }
+        TENZIR_ASSERT(not sel.path.empty());
+        ent = entity{{std::move(sel.path.back())}};
+        sel.path.pop_back();
+        if (sel.this_ || not sel.path.empty()) {
+          subject = std::move(sel);
+        }
+      }
+      TENZIR_ASSERT(ent);
+      return parse_function_call(std::move(subject), std::move(*ent));
+    }
+    if (ent) {
+      diagnostic::error("todo: referenced entity that is not a function call")
+        .primary(ent->location())
+        .throw_();
+    }
+    return sel;
+  }
+
+  auto selector_start() -> bool {
+    return peek(tk::identifier) || peek(tk::this_);
+  }
+
+  auto parse_selector() -> selector {
+    auto this_ = accept(tk::this_);
+    auto path = std::vector<identifier>{};
+    while (true) {
+      if (this_ || not path.empty()) {
+        if (not accept(tk::dot)) {
+          break;
+        }
+      }
+      if (auto ident = accept(tk::identifier)) {
+        path.emplace_back(std::string{ident.text}, ident.location);
+      } else {
+        throw_token();
+      }
+    }
+    return selector{this_ ? this_.location : std::optional<location>{},
+                    std::move(path)};
+  }
+
+  auto parse_record_or_pipeline_expr() -> expression {
+    auto begin = expect(tk::lbrace);
+    auto scope = ignore_newlines(true);
+    // TODO: Try to implement this better.
+    auto is_record
+      = silent_peek(tk::rbrace)
+        || ((silent_peek(tk::string) || silent_peek(tk::identifier))
+            && silent_peek_n(tk::colon, 1));
+    if (is_record) {
+      return parse_record(begin.location);
+    }
+    auto pipe = parse_pipeline();
+    auto end = expect(tk::rbrace);
+    return pipeline_expr{
+      begin.location,
+      std::move(pipe),
+      end.location,
+    };
+  }
+
+  auto parse_record(location begin) -> record {
+    auto content = std::vector<record::content_kind>{};
+    while (not peek(tk::rbrace)) {
+      // TODO: Parse `{ foo: 42, ...bar }`.
+      auto name = accept(tk::identifier);
+      if (not name) {
+        // TODO: Decide how to represent string fields in the AST.
+        name = expect(tk::string);
+        name.text = name.text.substr(1, name.text.size() - 2);
+      }
+      expect(tk::colon);
+      auto expr = parse_expression();
+      content.emplace_back(record::field{
+        name.as_identifier(),
+        std::move(expr),
+      });
+      if (not peek(tk::rbrace)) {
+        expect(tk::comma);
+      }
+    }
+    auto end = expect(tk::rbrace);
+    return record{
+      begin,
+      std::move(content),
+      end.location,
+    };
+  }
+
   auto parse_string() -> literal {
     auto token = expect(tk::string);
-    // TODO: Make this better?
+    // TODO: Implement this properly.
     auto result = std::string{};
     TENZIR_ASSERT(token.text.size() >= 2);
     auto f = token.text.begin() + 1;
@@ -600,79 +624,50 @@ private:
     };
   }
 
-  auto parse_primary_expression() -> expression {
-    if (accept(tk::lpar)) {
-      auto scope = ignore_newlines(true);
-      auto result = parse_expression();
-      expect(tk::rpar);
-      return result;
-    }
-    if (auto lit = accept_literal()) {
-      return std::move(*lit);
-    }
-    if (auto token = accept(tk::underscore)) {
-      return underscore{};
-    }
-    if (auto token = accept(tk::dollar_ident)) {
-      return dollar_var{token.as_identifier()};
-    }
-    if (peek(tk::lbrace)) {
-      return parse_record_or_pipeline_expr();
-    }
-    if (peek(tk::lbracket)) {
-      return parse_list();
-    }
-    // Check if we have identifier followed by `(` or `'`.
-    // TODO: Accept entity as function name.
-    if (not selector_start()) {
-      // TODO: This is maybe a bit hacky?
-      diagnostic::error("expected expression, got {}", next_description())
-        .primary(next_location(), "got {}", next_description())
-        .throw_();
-    }
-    auto sel = parse_selector();
-    auto ent = std::optional<entity>{};
-    if (accept(tk::single_quote)) {
-      if (sel.this_ || sel.path.size() != 1) {
-        diagnostic::error("todo: unexpected stuff before entity")
-          .primary(sel.location())
-          .throw_();
-      }
-      auto path = std::move(sel.path);
-      while (true) {
-        auto ident = expect(tk::identifier);
-        path.push_back(ident.as_identifier());
-        if (not accept(tk::single_quote)) {
-          break;
-        }
-      }
-      ent = entity{std::move(path)};
-    }
-    if (peek(tk::lpar)) {
-      // TODO: Consider refactoring this.
-      auto subject = std::optional<expression>{};
-      if (not ent) {
-        if (sel.this_ and sel.path.empty()) {
-          diagnostic::error("`this` cannot be called")
-            .primary(*sel.this_)
-            .throw_();
-        }
-        TENZIR_ASSERT(not sel.path.empty());
-        ent = entity{{std::move(sel.path.back())}};
-        sel.path.pop_back();
-        if (sel.this_ || not sel.path.empty()) {
-          subject = std::move(sel);
-        }
-      }
-      TENZIR_ASSERT(ent);
-      return parse_function_call(std::move(subject), std::move(*ent));
-    }
-    if (ent) {
-      diagnostic::error("todo: entity that is not a function call")
-        .primary(ent->location())
-        .throw_();
-    }
-    return sel;
+  auto peek_unary_op() -> std::optional<unary_op> {
+#define X(x, y)                                                                \
+  if (peek(tk::x)) {                                                           \
+    return unary_op::y;                                                        \
+  }
+    X(not_, not_);
+    X(minus, neg);
+#undef X
+    return std::nullopt;
+  }
+
+  auto peek_binary_op() -> std::optional<binary_op> {
+#define X(x, y)                                                                \
+  if (peek(tk::x)) {                                                           \
+    return binary_op::y;                                                       \
+  }
+    X(plus, add);
+    X(minus, sub);
+    X(star, mul);
+    X(slash, div);
+    X(greater, gt);
+    X(greater_equal, ge);
+    X(less, le);
+    X(less_equal, le);
+    X(equal_equal, eq);
+    X(bang_equal, neq);
+    X(and_, and_);
+    X(or_, or_);
+    X(in, in);
+#undef X
+    return std::nullopt;
+  }
+
+  auto at_pipeline_end() -> bool {
+    return eoi() || silent_peek(tk::rbrace);
+  }
+
+  auto at_statement_end() -> bool {
+    return eoi() || peek(tk::newline) || peek(tk::pipe)
+           || silent_peek(tk::rbrace);
+  }
+
+  auto accept_stmt_sep() -> bool {
+    return accept(tk::newline) || accept(tk::pipe);
   }
 
   struct accept_result {
@@ -692,9 +687,6 @@ private:
       return {text, location};
     }
   };
-
-  void find_next() {
-  }
 
   [[nodiscard]] auto advance() -> location {
     TENZIR_ASSERT(next_ < tokens_.size());
@@ -736,7 +728,8 @@ private:
     return silent_peek(kind);
   }
 
-  auto raw_peek(token_kind kind, size_t offset = 0) -> bool {
+  auto silent_peek_n(token_kind kind, size_t offset = 0) -> bool {
+    // TODO: Can we get rid of this?
     auto index = next_;
     while (true) {
       if (index >= tokens_.size()) {
