@@ -85,7 +85,7 @@ caf::expected<void> file::open(open_mode mode, bool append) {
     return {};
   }
   return caf::make_error(ec::filesystem_error,
-                         "failed in open(2):", std::strerror(errno));
+                         "failed in open(2):", detail::describe_errno());
 #else
   return caf::make_error(ec::filesystem_error, "not yet implemented");
 #endif // TENZIR_POSIX

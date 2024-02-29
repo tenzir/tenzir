@@ -106,7 +106,7 @@ arrow_istream_wrapper::Read(int64_t nbytes) {
                         Read(nbytes, buffer->mutable_data()));
   ARROW_RETURN_NOT_OK(buffer->Resize(bytes_read, false));
   buffer->ZeroPadding();
-  return std::move(buffer);
+  return buffer;
 }
 
 arrow_fd_wrapper::arrow_fd_wrapper(int fd) : fd_{fd} {
@@ -116,7 +116,7 @@ arrow_fd_wrapper::arrow_fd_wrapper(int fd) : fd_{fd} {
   int result = ::close(fd_);
   fd_ = -1;
   if (result != 0)
-    return ::arrow::Status::IOError("close(2): ", std::strerror(errno));
+    return ::arrow::Status::IOError("close(2): ", detail::describe_errno());
   return ::arrow::Status::OK();
 }
 
@@ -145,7 +145,7 @@ auto arrow_fd_wrapper::Read(int64_t nbytes)
                         Read(nbytes, buffer->mutable_data()));
   ARROW_RETURN_NOT_OK(buffer->Resize(bytes_read, false));
   buffer->ZeroPadding();
-  return std::move(buffer);
+  return buffer;
 }
 
 reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)

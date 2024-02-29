@@ -276,9 +276,8 @@ auto pipeline_executor(
   self->state.pipe = std::move(pipe);
   self->state.diagnostics = std::move(diagnostics);
   self->state.metrics = std::move(metrics);
-  self->state.allow_unsafe_pipelines
-    = caf::get_or(self->system().config(), "tenzir.allow-unsafe-pipelines",
-                  self->state.allow_unsafe_pipelines);
+  self->state.no_location_overrides = caf::get_or(
+    self->system().config(), "tenzir.no-location-overrides", false);
   self->state.has_terminal = has_terminal;
   self->set_down_handler([self](caf::down_msg& msg) {
     const auto exec_node

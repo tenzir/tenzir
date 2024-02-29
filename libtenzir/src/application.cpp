@@ -45,8 +45,8 @@ void add_root_opts(command& cmd) {
     "directories lookup and static and dynamic plugin "
     "autoloading (this may only be used on the command line)");
   cmd.options.add<bool>(
-    "?tenzir", "allow-unsafe-pipelines",
-    "allow unsafe location overrides for pipelines with the "
+    "?tenzir", "no-location-overrides",
+    "forbid unsafe location overrides for pipelines with the "
     "'local' and 'remote' keywords, e.g., remotely reading from "
     "a file");
   cmd.options.add<std::string>("?tenzir", "console-verbosity",

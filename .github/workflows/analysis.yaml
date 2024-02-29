@@ -34,8 +34,6 @@ jobs:
           apt-get -y install git
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Checkout submodules
         run: |
           git config --global --add safe.directory '*'
@@ -83,7 +81,7 @@ jobs:
           path: ${{ env.BUILD_DIR }}/ccov
           if-no-files-found: error
       - name: Upload to codecov.io
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.TENZIR_CODECOV_TOKEN }}
           files: ${{ env.BUILD_DIR }}/ccov/all-tests.info

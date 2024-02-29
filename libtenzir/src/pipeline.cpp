@@ -51,8 +51,10 @@ public:
     return *handler_;
   }
 
-  auto allow_unsafe_pipelines() const noexcept -> bool override {
-    return false;
+  auto no_location_overrides() const noexcept -> bool override {
+    // Location overrides cannot work for the local control plane, as it has no
+    // notion of a location.
+    return true;
   }
 
   auto has_terminal() const noexcept -> bool override {

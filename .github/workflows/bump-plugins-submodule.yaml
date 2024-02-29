@@ -17,14 +17,13 @@ jobs:
     runs-on: ubuntu-20.04
     steps:
       - name: Configure ssh-agent
-        uses: webfactory/ssh-agent@v0.8.0
+        uses: webfactory/ssh-agent@v0.9.0
         with:
           ssh-private-key: ${{ secrets.TENZIR_PLUGINS_DEPLOY_KEY }}
       - name: Checkout
         uses: actions/checkout@v4
         with:
           submodules: true
-          fetch-depth: 0
           persist-credentials: false
       - name: Generate a token
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -34,6 +33,11 @@ jobs:
           app-id: ${{ vars.TENZIR_AUTOBUMPER_APP_ID }}
           private-key: ${{ secrets.TENZIR_AUTOBUMPER_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
+      - uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.TENZIR_BOT_GPG_SIGNING_KEY }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
       - name: Bump plugins submodule
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
@@ -43,8 +47,8 @@ jobs:
           set -x
 
           # Setup git
-          git config --global user.name 'CI Bot'
-          git config --global user.email 'tenzir-ci-app@users.noreply.github.com'
+          git config --global user.name 'tenzir-bot'
+          git config --global user.email 'engineering@tenzir.com'
           git remote set-url origin https://x-access-token:$GITHUB_APP_TOKEN@github.com/tenzir/tenzir.git
           git -C contrib/tenzir-plugins fetch -q origin main
 

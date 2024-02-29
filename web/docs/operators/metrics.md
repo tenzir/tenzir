@@ -16,7 +16,8 @@ metrics [--live]
 
 ## Description
 
-The `metrics` operator retrieves metrics events from a Tenzir node.
+The `metrics` operator retrieves metrics events from a Tenzir node. Metrics
+events are collected every second.
 
 ### `--live`
 

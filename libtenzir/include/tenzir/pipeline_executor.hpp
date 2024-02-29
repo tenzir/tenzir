@@ -32,8 +32,8 @@ struct pipeline_executor_state {
   // nodes.
   receiver_actor<metric> metrics = {};
 
-  /// Flag for allowing unsafe pipelines.
-  bool allow_unsafe_pipelines = {};
+  /// Flag for disallowing location overrides.
+  bool no_location_overrides = {};
 
   /// True if the locally-run nodes shall have access to the terminal.
   bool has_terminal = {};

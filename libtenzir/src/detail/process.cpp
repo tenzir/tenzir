@@ -8,6 +8,7 @@
 
 #include "tenzir/detail/process.hpp"
 
+#include "tenzir/detail/posix.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/status.hpp"
@@ -109,7 +110,7 @@ static record get_status_rusage() {
   struct rusage ru;
   if (getrusage(RUSAGE_SELF, &ru) != 0) {
     TENZIR_WARN("{} failed to obtain rusage: {}", __func__,
-                std::strerror(errno));
+                detail::describe_errno());
     return result;
   }
   result["peak-memory-usage"] = uint64_t{ru.ru_maxrss * 1024ull};
@@ -184,7 +185,7 @@ caf::expected<std::string> execute_blocking(const std::string& command) {
   auto* out = ::popen(command.c_str(), "r");
   if (!out)
     return caf::make_error(ec::system_error,
-                           "popen() failed: "s + ::strerror(errno));
+                           "popen() failed: "s + detail::describe_errno());
   size_t nread = 0;
   do {
     nread = ::fread(buffer.data(), 1, buffer.size(), out);
@@ -193,7 +194,7 @@ caf::expected<std::string> execute_blocking(const std::string& command) {
   auto error = ::ferror(out);
   if (::pclose(out) < 0)
     return caf::make_error(ec::system_error,
-                           "pclose() failed: "s + ::strerror(errno));
+                           "pclose() failed: "s + detail::describe_errno());
   if (error)
     return caf::make_error(ec::system_error, "fread() failed");
   return result;

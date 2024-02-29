@@ -34,8 +34,8 @@ struct operator_control_plane {
   /// Returns the pipeline's diagnostic handler.
   virtual auto diagnostics() noexcept -> diagnostic_handler& = 0;
 
-  /// Returns whether the pipeline may do potentially unsafe things.
-  virtual auto allow_unsafe_pipelines() const noexcept -> bool = 0;
+  /// Returns whether the pipeline may override its location.
+  virtual auto no_location_overrides() const noexcept -> bool = 0;
 
   /// Returns true if the operator is hosted by process that has a terminal.
   virtual auto has_terminal() const noexcept -> bool = 0;

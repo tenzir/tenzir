@@ -45,14 +45,15 @@ public:
 
   auto instantiate(operator_input input, operator_control_plane& ctrl) const
     -> caf::expected<operator_output> override {
-    if (ctrl.allow_unsafe_pipelines()
+    if (not ctrl.no_location_overrides()
         || op_->location() == operator_location::anywhere
-        || op_->location() == location_)
+        || op_->location() == location_) {
       return op_->instantiate(std::move(input), ctrl);
+    }
     return caf::make_error(ec::invalid_configuration,
-                           "operator location overrides must be explicitly "
-                           "allowed by setting "
-                           "'tenzir.allow-unsafe-pipelines' to 'true'");
+                           "operator location overrides are forbidden because "
+                           "the option 'tenzir.no-location-overrides' is "
+                           "set to 'true'");
   }
 
   auto copy() const -> operator_ptr override {
@@ -95,13 +96,14 @@ class plugin final : public virtual operator_parser_plugin {
 public:
   auto initialize([[maybe_unused]] const record& plugin_config,
                   const record& global_config) -> caf::error override {
-    auto allow_unsafe_pipelines
-      = try_get_or(global_config, "tenzir.allow-unsafe-pipelines", false);
-    if (not allow_unsafe_pipelines) {
-      return caf::make_error(
-        ec::invalid_configuration,
-        fmt::format("failed to parse tenzir.allow-unsafe-pipelines option: {}",
-                    allow_unsafe_pipelines.error()));
+    auto no_location_overrides
+      = try_get_or(global_config, "tenzir.no-location-overrides", false);
+    if (not no_location_overrides) {
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("failed to parse "
+                                         "`tenzir.no-location-overrides` "
+                                         "option: {}",
+                                         no_location_overrides.error()));
     }
     return {};
   }

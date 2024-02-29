@@ -69,9 +69,7 @@ class top_rare_plugin final : public virtual operator_parser_plugin {
 
     // TODO: Replace this textual parsing with a subpipeline to improve
     // diagnostics for this operator.
-    auto repr = fmt::format("summarize "
-                            "{0}=count({1}) by "
-                            "{1} | sort {0} {2}",
+    auto repr = fmt::format("summarize {0}=count(.) by {1} | sort {0} {2}",
                             count_field->inner, field.inner, SortOrder.str());
     auto parsed = pipeline::internal_parse_as_operator(repr);
     if (not parsed) {

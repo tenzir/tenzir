@@ -54,16 +54,11 @@ things_done=""
 # Create a new branch that bases off of current origin/main.
 git fetch origin main
 git switch -C "topic/release-${new_version}" origin/main
-# Update the fallback version and its ancestor count.
-# We expect to make one change commit and one merge commit, which is then tagged
-# -> the tag's rev-count is that of HEAD + 2.
-rev_count="$(($(git rev-list --count HEAD) + 2))"
-version_json="$(jq --arg v "${new_version#v}" --arg cnt "${rev_count}" \
-  '."tenzir-version-fallback" = $v | ."tenzir-version-rev-count" = ($cnt|tonumber)' version.json)"
+# Update the version.
+version_json="$(jq --arg v "${new_version#v}" '."tenzir-version" = $v' version.json)"
 echo -E "${version_json}" > version.json
 things_done+="
-* Updated \`/version.json\` to ${new_version} and the expected rev-count of the
-  merge commit to ${rev_count}."
+* Updated \`/version.json\` to ${new_version}."
 
 # If the new version is not a release candidate, change mentions of the version
 # in README.md as well, and create a new docs version.
