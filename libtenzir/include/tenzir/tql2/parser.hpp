@@ -14,7 +14,6 @@
 
 namespace tenzir::tql2 {
 
-// TODO
 auto parse(std::span<token> tokens, std::string_view source,
            diagnostic_handler& diag) -> ast::pipeline;
 

@@ -190,8 +190,6 @@ private:
   }
 
   auto parse_invocation_or_assignment() -> statement {
-    // either selector followed by `=`, or entity (no_dollar)
-    // TODO: Parse entities that consist of multiple identifiers.
     auto left = parse_selector();
     if (auto equal = accept(tk::equal)) {
       auto right = parse_expression();
@@ -246,9 +244,7 @@ private:
   }
 
   auto parse_expression(int min_prec = 0) -> expression {
-    // TODO
     auto expr = parse_unary_expression();
-    // foo = bar = baz
     while (true) {
       if (min_prec == 0) {
         if (auto equal = accept(tk::equal)) {
@@ -356,7 +352,6 @@ private:
     if (peek(tk::lbracket)) {
       return parse_list();
     }
-    // Check if we have identifier followed by `(` or `'`.
     // TODO: Accept entity as function name.
     if (not selector_start()) {
       // TODO: This is maybe a bit hacky?
@@ -364,7 +359,7 @@ private:
         .primary(next_location(), "got {}", next_description())
         .throw_();
     }
-    // TODO: The code below is a mess.
+    // TODO: The code below is a mess and needs to be improved.
     auto sel = parse_selector();
     auto ent = std::optional<entity>{};
     if (accept(tk::single_quote)) {

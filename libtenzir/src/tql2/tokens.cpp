@@ -14,66 +14,6 @@
 
 namespace tenzir::tql2 {
 
-auto describe(token_kind k) -> std::string_view {
-  using enum token_kind;
-#define X(x, y)                                                                \
-  case x:                                                                      \
-    return y
-  switch (k) {
-    X(and_, "`and`");
-    X(at, "@");
-    X(bang_equal, "`!=`");
-    X(colon, "`:`");
-    X(comma, "`,`");
-    X(datetime, "datetime");
-    X(delim_comment, "`/*...*/`");
-    X(dollar_ident, "dollar identifier");
-    X(dot, "`.`");
-    X(else_, "`else`");
-    X(equal_equal, "`==`");
-    X(equal, "`=`");
-    X(error, "error");
-    X(false_, "`false`");
-    X(fat_arrow, "`=>`");
-    X(greater_equal, "`>=`");
-    X(greater, "`>`");
-    X(identifier, "identifier");
-    X(if_, "`if`");
-    X(in, "`in`");
-    X(ip, "ip");
-    X(lbrace, "`{`");
-    X(lbracket, "`[`");
-    X(less_equal, "`<=`");
-    X(less, "`<`");
-    X(let, "`let`");
-    X(line_comment, "`// ...`");
-    X(lpar, "`(`");
-    X(match, "`match`");
-    X(minus, "`-`");
-    X(newline, "newline");
-    X(not_, "`not`");
-    X(null, "`null`");
-    X(or_, "`or`");
-    X(pipe, "`|`");
-    X(plus, "`+`");
-    X(rbrace, "`}`");
-    X(rbracket, "`]`");
-    X(reserved_keyword, "reserved keyword");
-    X(rpar, "`)`");
-    X(scalar, "scalar");
-    X(single_quote, "`'`");
-    X(slash, "`/`");
-    X(star, "`*`");
-    X(string, "string");
-    X(this_, "`this`");
-    X(true_, "`true`");
-    X(underscore, "`_`");
-    X(whitespace, "whitespace");
-  }
-#undef X
-  TENZIR_UNREACHABLE();
-}
-
 auto tokenize(std::string_view content) -> std::vector<token> {
   auto result = std::vector<token>{};
   // TODO: The char-class parsers (such as `parsers::alnum`) can cause undefined
@@ -181,6 +121,66 @@ auto tokenize(std::string_view content) -> std::vector<token> {
     }
   }
   return result;
+}
+
+auto describe(token_kind k) -> std::string_view {
+  using enum token_kind;
+#define X(x, y)                                                                \
+  case x:                                                                      \
+    return y
+  switch (k) {
+    X(and_, "`and`");
+    X(at, "@");
+    X(bang_equal, "`!=`");
+    X(colon, "`:`");
+    X(comma, "`,`");
+    X(datetime, "datetime");
+    X(delim_comment, "`/*...*/`");
+    X(dollar_ident, "dollar identifier");
+    X(dot, "`.`");
+    X(else_, "`else`");
+    X(equal_equal, "`==`");
+    X(equal, "`=`");
+    X(error, "error");
+    X(false_, "`false`");
+    X(fat_arrow, "`=>`");
+    X(greater_equal, "`>=`");
+    X(greater, "`>`");
+    X(identifier, "identifier");
+    X(if_, "`if`");
+    X(in, "`in`");
+    X(ip, "ip");
+    X(lbrace, "`{`");
+    X(lbracket, "`[`");
+    X(less_equal, "`<=`");
+    X(less, "`<`");
+    X(let, "`let`");
+    X(line_comment, "`// ...`");
+    X(lpar, "`(`");
+    X(match, "`match`");
+    X(minus, "`-`");
+    X(newline, "newline");
+    X(not_, "`not`");
+    X(null, "`null`");
+    X(or_, "`or`");
+    X(pipe, "`|`");
+    X(plus, "`+`");
+    X(rbrace, "`}`");
+    X(rbracket, "`]`");
+    X(reserved_keyword, "reserved keyword");
+    X(rpar, "`)`");
+    X(scalar, "scalar");
+    X(single_quote, "`'`");
+    X(slash, "`/`");
+    X(star, "`*`");
+    X(string, "string");
+    X(this_, "`this`");
+    X(true_, "`true`");
+    X(underscore, "`_`");
+    X(whitespace, "whitespace");
+  }
+#undef X
+  TENZIR_UNREACHABLE();
 }
 
 } // namespace tenzir::tql2

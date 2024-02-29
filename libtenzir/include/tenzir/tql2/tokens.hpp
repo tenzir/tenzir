@@ -15,26 +15,25 @@
 namespace tenzir::tql2 {
 
 TENZIR_ENUM(
-  /// TODO
+  ///
   token_kind,
-  //
+  // identifiers
   identifier, dollar_ident,
   // keywords
   this_, if_, else_, match, not_, and_, or_, underscore, let, in,
   reserved_keyword,
   // literals
   scalar, true_, false_, null, string, ip, datetime,
-  // operators
+  // punctuation
   dot, plus, minus, slash, star, equal_equal, bang_equal, less, less_equal,
-  greater, greater_equal,
-  // other punctuation
-  at, equal, comma, colon, single_quote, fat_arrow,
+  greater, greater_equal, at, equal, comma, colon, single_quote, fat_arrow,
+  pipe,
   // parenthesis
   lpar, rpar, lbrace, rbrace, lbracket, rbracket,
-  //
-  pipe, newline,
-  // trivia
-  whitespace, delim_comment, line_comment,
+  // whitespace
+  newline, whitespace,
+  // comments
+  delim_comment, line_comment,
   // special
   error);
 
