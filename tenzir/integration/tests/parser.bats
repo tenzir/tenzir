@@ -95,3 +95,9 @@ EOF
 a = b(c,,)
 EOF
 }
+
+@test "modules" {
+  check tenzir -f /dev/stdin <<EOF
+a'b c, d'\$e, f'g()
+EOF
+}

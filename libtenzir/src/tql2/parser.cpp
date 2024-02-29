@@ -554,7 +554,7 @@ private:
     auto scope = ignore_newlines(true);
     auto items = std::vector<expression>{};
     while (true) {
-      if (auto end = accept(tk::lbrace)) {
+      if (auto end = accept(tk::rbracket)) {
         return list{
           begin.location,
           std::move(items),
@@ -759,15 +759,15 @@ private:
       self_->set_ignore_newlines(value);
     }
 
-    void done() const {
-      TENZIR_ASSERT(self_);
-      self_->set_ignore_newlines(previous_);
+    void done() {
+      if (self_) {
+        self_->set_ignore_newlines(previous_);
+      }
+      self_ = nullptr;
     }
 
     ~newline_scope() {
-      if (self_) {
-        done();
-      }
+      done();
     }
 
     newline_scope(newline_scope&& other) noexcept
