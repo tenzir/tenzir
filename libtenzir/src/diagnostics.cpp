@@ -84,7 +84,7 @@ public:
         break;
       }
       auto [line, col] = line_col_indices(annotation.source.begin);
-      indent_width = std::max(indent_width, std::to_string(line).size());
+      indent_width = std::max(indent_width, std::to_string(line + 1).size());
     }
     auto indent = std::string(indent_width, ' ');
     for (auto& annotation : diag.annotations) {
@@ -96,17 +96,18 @@ public:
         TENZIR_VERBOSE("annotation does not have source: {:?}", annotation);
         continue;
       }
-      auto [line, col] = line_col_indices(annotation.source.begin);
+      auto [line_idx, col] = line_col_indices(annotation.source.begin);
+      auto line = line_idx + 1;
       if (&annotation == &diag.annotations.front()) {
         fmt::print(stream_, "{}{}{}-->{} {}:{}:{}\n", indent, bold, blue, reset,
-                   filename_, line + 1, col + 1);
+                   filename_, line, col + 1);
         fmt::print(stream_, "{} {}{}|{}\n", indent, bold, blue, reset);
       } else {
         fmt::print(stream_, "{} {}{}⋮{}\n", indent, bold, blue, reset);
       }
       fmt::print(stream_, "{}{}{}{} |{} {}\n",
                  std::string(indent_width - std::to_string(line).size(), ' '),
-                 bold, blue, line + 1, reset, lines_[line]);
+                 bold, blue, line, reset, lines_[line_idx]);
       // TODO: This doesn't respect multi-line spans.
       auto count
         = std::max(size_t{1}, annotation.source.end - annotation.source.begin);
