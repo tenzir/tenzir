@@ -89,7 +89,8 @@ private:
 
   auto parse_let_stmt() -> let_stmt {
     auto let = expect(tk::let);
-    if (auto ident = accept(tk::identifier)) {
+    if (silent_peek(tk::identifier)) {
+      auto ident = expect(tk::identifier);
       diagnostic::error("identifier after `let` must start with `$`")
         .primary(ident.location, "try `${}` instead", ident.text)
         .throw_();
@@ -400,6 +401,8 @@ private:
       }
       break;
     }
+    // TODO: Does this improve error messages?
+    tries_.clear();
     return expr;
   }
 
@@ -851,11 +854,22 @@ private:
   }
 
   [[noreturn]] void throw_token() {
-    std::ranges::sort(tries_);
-    tries_.erase(std::ranges::unique(tries_).begin(), tries_.end());
+    auto tries = std::exchange(tries_, {});
+    std::ranges::sort(tries);
+    tries.erase(std::ranges::unique(tries).begin(), tries.end());
+    if (tries.empty()) {
+      throw_token("internal error: empty expected token set");
+    }
+    if (tries.size() == 1) {
+      throw_token(fmt::format("expected {}, got {}", describe(tries[0]),
+                              next_description()));
+    }
+    auto last = tries.back();
+    tries.pop_back();
     throw_token(fmt::format(
-      "expected one of: {}",
-      fmt::join(tries_ | std::ranges::views::transform(describe), ", ")));
+      "expected {} or {}",
+      fmt::join(tries | std::ranges::views::transform(describe), ", "),
+      describe(last)));
   }
 
   parser(std::span<token> tokens, std::string_view source,
