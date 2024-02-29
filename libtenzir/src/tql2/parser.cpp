@@ -288,7 +288,12 @@ private:
     auto content = std::vector<record::content_kind>{};
     while (not peek(tk::rbrace)) {
       // TODO: Parse `{ foo: 42, ...bar }`.
-      auto name = expect(tk::identifier);
+      auto name = accept(tk::identifier);
+      if (not name) {
+        // TODO: Decide how to represent string fields in the AST.
+        name = expect(tk::string);
+        name.text = name.text.substr(1, name.text.size() - 2);
+      }
       expect(tk::colon);
       auto expr = parse_expression();
       content.emplace_back(record::field{
@@ -661,6 +666,11 @@ private:
       }
       TENZIR_ASSERT(ent);
       return parse_function_call(std::move(subject), std::move(*ent));
+    }
+    if (ent) {
+      diagnostic::error("todo: entity that is not a function call")
+        .primary(ent->location())
+        .throw_();
     }
     return sel;
   }

@@ -84,13 +84,14 @@ auto tokenize(std::string_view content) -> std::vector<token> {
   auto identifier = (alpha | '_') >> *continue_ident;
   auto digit_us = digit | '_';
   auto p
-    = ignore(*xdigit >> ':' >> *xdigit >> ':' >> *xdigit >> *(('.' | ':') >> *xdigit))
+    = ignore(*xdigit >> ':' >> *xdigit >> ':' >> *xdigit
+             >> *(('.' >> +digit) | (':' >> *xdigit)))
       ->* [] { return token_kind::ip; }
     | ignore(+digit >> '.' >> +digit >> +('.' >> +digit))
       ->* [] { return token_kind::ip; }
     | ignore(+digit >> '-' >> +digit >> '-' >> +digit >> *(alnum | ':' | '+' | '-'))
       ->* [] { return token_kind::datetime; }
-    | ignore(digit >> *digit_us >> -('.' >> *digit_us) >> -identifier)
+    | ignore(digit >> *digit_us >> -('.' >> digit >> *digit_us) >> -identifier)
       ->* [] { return token_kind::number; }
     | ignore('"' >> *(('\\' >> any) | (any - '"')) >> '"')
       ->* [] { return token_kind::string; }

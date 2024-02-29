@@ -1,0 +1,836 @@
+[
+  assignment {
+    left: {
+      path: [
+        `activity_name` @ 0..13
+      ]
+    },
+    equals: 14..15,
+    right: literal {
+      value: basic_string "Launch",
+      source: 16..24
+    }
+  },
+  assignment {
+    left: {
+      path: [
+        `activity_id` @ 25..36
+      ]
+    },
+    equals: 37..38,
+    right: literal {
+      value: long%20long 1,
+      source: 39..40
+    }
+  },
+  assignment {
+    left: {
+      path: [
+        `actor` @ 41..46,
+        `process` @ 47..54
+      ]
+    },
+    equals: 55..56,
+    right: record {
+      begin: 57..58,
+      content: [
+        field {
+          name: `file` @ 61..65,
+          expr: record {
+            begin: 67..68,
+            content: [
+              field {
+                name: `path` @ 73..77,
+                expr: selector {
+                  path: [
+                    `path` @ 79..83
+                  ]
+                }
+              },
+              field {
+                name: `parent_folder` @ 89..102,
+                expr: function_call {
+                  fn: {
+                    path: [
+                      `std` @ 104..107,
+                      `path` @ 108..112,
+                      `parent` @ 113..119
+                    ],
+                    id: <unresolved>
+                  },
+                  args: [
+                    selector {
+                      path: [
+                        `src` @ 120..123,
+                        `event_data` @ 124..134,
+                        `ParentImage` @ 135..146
+                      ]
+                    }
+                  ]
+                }
+              },
+              field {
+                name: `name` @ 153..157,
+                expr: function_call {
+                  fn: {
+                    path: [
+                      `std` @ 159..162,
+                      `path` @ 163..167,
+                      `file_name` @ 168..177
+                    ],
+                    id: <unresolved>
+                  },
+                  args: [
+                    selector {
+                      path: [
+                        `src` @ 178..181,
+                        `event_data` @ 182..192,
+                        `ParentImage` @ 193..204
+                      ]
+                    }
+                  ]
+                }
+              },
+              field {
+                name: `type` @ 211..217,
+                expr: literal {
+                  value: basic_string "Unknown",
+                  source: 219..228
+                }
+              },
+              field {
+                name: `type_id` @ 234..241,
+                expr: literal {
+                  value: long%20long 0,
+                  source: 243..244
+                }
+              }
+            ],
+            end: 248..249
+          }
+        },
+        field {
+          name: `pid` @ 253..256,
+          expr: function_call {
+            fn: {
+              path: [
+                `int` @ 258..261
+              ],
+              id: <unresolved>
+            },
+            args: [
+              selector {
+                path: [
+                  `src` @ 262..265,
+                  `event_data` @ 266..276,
+                  `ParentProcessId` @ 277..292
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      end: 295..296
+    }
+  },
+  invocation {
+    op: {
+      path: [
+        `drop` @ 297..301
+      ],
+      id: <unresolved>
+    },
+    args: [
+      selector {
+        path: [
+          `src` @ 302..305,
+          `event_data` @ 306..316,
+          `ParentImage` @ 317..328
+        ]
+      },
+      selector {
+        path: [
+          `src` @ 330..333,
+          `event_data` @ 334..344,
+          `ParentProcessId` @ 345..360
+        ]
+      }
+    ]
+  },
+  assignment {
+    left: {
+      path: [
+        `actor` @ 361..366,
+        `user` @ 367..371
+      ]
+    },
+    equals: 372..373,
+    right: record {
+      begin: 374..375,
+      content: [
+        field {
+          name: `account_type` @ 378..390,
+          expr: literal {
+            value: basic_string "Windows Account",
+            source: 392..409
+          }
+        },
+        field {
+          name: `account_type_id` @ 413..428,
+          expr: literal {
+            value: long%20long 2,
+            source: 430..431
+          }
+        },
+        field {
+          name: `domain` @ 435..441,
+          expr: selector {
+            path: [
+              `src` @ 443..446,
+              `user` @ 447..451,
+              `domain` @ 452..458
+            ]
+          }
+        },
+        field {
+          name: `name` @ 462..466,
+          expr: selector {
+            path: [
+              `src` @ 468..471,
+              `user` @ 472..476,
+              `name` @ 477..481
+            ]
+          }
+        },
+        field {
+          name: `uid` @ 485..488,
+          expr: selector {
+            path: [
+              `src` @ 490..493,
+              `user` @ 494..498,
+              `identifier` @ 499..509
+            ]
+          }
+        }
+      ],
+      end: 511..512
+    }
+  },
+  invocation {
+    op: {
+      path: [
+        `drop` @ 513..517
+      ],
+      id: <unresolved>
+    },
+    args: [
+      selector {
+        path: [
+          `src` @ 518..521,
+          `user` @ 522..526,
+          `domain` @ 527..533
+        ]
+      },
+      selector {
+        path: [
+          `src` @ 535..538,
+          `user` @ 539..543,
+          `name` @ 544..548
+        ]
+      },
+      selector {
+        path: [
+          `src` @ 550..553,
+          `user` @ 554..558,
+          `identifier` @ 559..569
+        ]
+      }
+    ]
+  },
+  assignment {
+    left: {
+      path: [
+        `category_name` @ 570..583
+      ]
+    },
+    equals: 584..585,
+    right: literal {
+      value: basic_string "System Activity",
+      source: 586..603
+    }
+  },
+  assignment {
+    left: {
+      path: [
+        `category_uid` @ 604..616
+      ]
+    },
+    equals: 617..618,
+    right: function_call {
+      fn: {
+        path: [
+          `ocsf` @ 619..623,
+          `category_uid` @ 624..636
+        ],
+        id: <unresolved>
+      },
+      args: [
+        selector {
+          path: [
+            `category_name` @ 637..650
+          ]
+        }
+      ]
+    }
+  },
+  assignment {
+    left: {
+      path: [
+        `class_name` @ 652..662
+      ]
+    },
+    equals: 663..664,
+    right: literal {
+      value: basic_string "Process Activity",
+      source: 665..683
+    }
+  },
+  assignment {
+    left: {
+      path: [
+        `class_uid` @ 684..693
+      ]
+    },
+    equals: 694..695,
+    right: function_call {
+      fn: {
+        path: [
+          `ocsf` @ 696..700,
+          `class_uid` @ 701..710
+        ],
+        id: <unresolved>
+      },
+      args: [
+        selector {
+          path: [
+            `class_name` @ 711..721
+          ]
+        }
+      ]
+    }
+  },
+  assignment {
+    left: {
+      path: [
+        `device` @ 723..729
+      ]
+    },
+    equals: 730..731,
+    right: record {
+      begin: 732..733,
+      content: [
+        field {
+          name: `hostname` @ 736..744,
+          expr: selector {
+            path: [
+              `src` @ 746..749,
+              `computer_name` @ 750..763
+            ]
+          }
+        },
+        field {
+          name: `os` @ 767..769,
+          expr: record {
+            begin: 771..772,
+            content: [
+              field {
+                name: `name` @ 777..781,
+                expr: literal {
+                  value: basic_string "Windows",
+                  source: 783..792
+                }
+              },
+              field {
+                name: `type` @ 798..804,
+                expr: literal {
+                  value: basic_string "Windows",
+                  source: 806..815
+                }
+              },
+              field {
+                name: `type_id` @ 821..828,
+                expr: literal {
+                  value: long%20long 100,
+                  source: 830..833
+                }
+              }
+            ],
+            end: 837..838
+          }
+        },
+        field {
+          name: `type` @ 842..848,
+          expr: literal {
+            value: basic_string "Unknown",
+            source: 850..859
+          }
+        },
+        field {
+          name: `type_id` @ 863..870,
+          expr: literal {
+            value: long%20long 0,
+            source: 872..873
+          }
+        }
+      ],
+      end: 875..876
+    }
+  },
+  invocation {
+    op: {
+      path: [
+        `drop` @ 877..881
+      ],
+      id: <unresolved>
+    },
+    args: [
+      selector {
+        path: [
+          `src` @ 882..885,
+          `computer_name` @ 886..899
+        ]
+      }
+    ]
+  },
+  assignment {
+    left: {
+      path: [
+        `message` @ 900..907
+      ]
+    },
+    equals: 908..909,
+    right: literal {
+      value: basic_string "A new process has been created.",
+      source: 910..943
+    }
+  },
+  assignment {
+    left: {
+      path: [
+        `metadata` @ 944..952
+      ]
+    },
+    equals: 953..954,
+    right: record {
+      begin: 955..956,
+      content: [
+        field {
+          name: `original_time` @ 959..972,
+          expr: selector {
+            path: [
+              `src` @ 974..977,
+              `event_data` @ 978..988,
+              `UtcTime` @ 989..996
+            ]
+          }
+        },
+        field {
+          name: `product` @ 1000..1007,
+          expr: record {
+            begin: 1009..1010,
+            content: [
+              field {
+                name: `feature` @ 1015..1022,
+                expr: record {
+                  begin: 1024..1025,
+                  content: [
+                    field {
+                      name: `name` @ 1032..1036,
+                      expr: literal {
+                        value: basic_string "Security",
+                        source: 1038..1048
+                      }
+                    }
+                  ],
+                  end: 1054..1055
+                }
+              },
+              field {
+                name: `name` @ 1061..1065,
+                expr: literal {
+                  value: basic_string "Microsoft Windows",
+                  source: 1067..1086
+                }
+              },
+              field {
+                name: `vendor_name` @ 1092..1103,
+                expr: literal {
+                  value: basic_string "Microsoft",
+                  source: 1105..1116
+                }
+              }
+            ],
+            end: 1120..1121
+          }
+        },
+        field {
+          name: `profiles` @ 1125..1133,
+          expr: list {
+            begin: 1135..1136,
+            items: [
+              literal {
+                value: basic_string "host",
+                source: 1136..1142
+              }
+            ],
+            end: 1142..1143
+          }
+        },
+        field {
+          name: `uid` @ 1147..1150,
+          expr: selector {
+            path: [
+              `src` @ 1152..1155,
+              `record_id` @ 1156..1165
+            ]
+          }
+        },
+        field {
+          name: `version` @ 1169..1176,
+          expr: literal {
+            value: basic_string "1.1.0",
+            source: 1178..1185
+          }
+        }
+      ],
+      end: 1187..1188
+    }
+  },
+  invocation {
+    op: {
+      path: [
+        `drop` @ 1189..1193
+      ],
+      id: <unresolved>
+    },
+    args: [
+      selector {
+        path: [
+          `src` @ 1194..1197,
+          `event_data` @ 1198..1208,
+          `UtcTime` @ 1209..1216
+        ]
+      },
+      selector {
+        path: [
+          `src` @ 1218..1221,
+          `record_id` @ 1222..1231
+        ]
+      }
+    ]
+  },
+  assignment {
+    left: {
+      path: [
+        `process` @ 1232..1239
+      ]
+    },
+    equals: 1240..1241,
+    right: record {
+      begin: 1242..1243,
+      content: [
+        field {
+          name: `cmd_line` @ 1246..1254,
+          expr: selector {
+            path: [
+              `src` @ 1256..1259,
+              `event_data` @ 1260..1270,
+              `CommandLine` @ 1271..1282
+            ]
+          }
+        },
+        field {
+          name: `file` @ 1286..1290,
+          expr: record {
+            begin: 1292..1293,
+            content: [
+              field {
+                name: `path` @ 1298..1302,
+                expr: selector {
+                  path: [
+                    `src` @ 1304..1307,
+                    `event_data` @ 1308..1318,
+                    `Image` @ 1319..1324
+                  ]
+                }
+              },
+              field {
+                name: `parent_folder` @ 1330..1343,
+                expr: function_call {
+                  fn: {
+                    path: [
+                      `std` @ 1345..1348,
+                      `path` @ 1349..1353,
+                      `parent` @ 1354..1360
+                    ],
+                    id: <unresolved>
+                  },
+                  args: [
+                    selector {
+                      path: [
+                        `src` @ 1361..1364,
+                        `event_data` @ 1365..1375,
+                        `Image` @ 1376..1381
+                      ]
+                    }
+                  ]
+                }
+              },
+              field {
+                name: `name` @ 1388..1392,
+                expr: function_call {
+                  fn: {
+                    path: [
+                      `std` @ 1394..1397,
+                      `path` @ 1398..1402,
+                      `file_name` @ 1403..1412
+                    ],
+                    id: <unresolved>
+                  },
+                  args: [
+                    selector {
+                      path: [
+                        `src` @ 1413..1416,
+                        `event_data` @ 1417..1427,
+                        `Image` @ 1428..1433
+                      ]
+                    }
+                  ]
+                }
+              },
+              field {
+                name: `type` @ 1440..1446,
+                expr: literal {
+                  value: basic_string "Unknown",
+                  source: 1448..1457
+                }
+              },
+              field {
+                name: `type_id` @ 1463..1470,
+                expr: literal {
+                  value: long%20long 0,
+                  source: 1472..1473
+                }
+              }
+            ],
+            end: 1477..1478
+          }
+        },
+        field {
+          name: `pid` @ 1482..1485,
+          expr: function_call {
+            fn: {
+              path: [
+                `int` @ 1487..1490
+              ],
+              id: <unresolved>
+            },
+            args: [
+              selector {
+                path: [
+                  `src` @ 1491..1494,
+                  `event_data` @ 1495..1505,
+                  `ProcessId` @ 1506..1515
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      end: 1518..1519
+    }
+  },
+  invocation {
+    op: {
+      path: [
+        `drop` @ 1520..1524
+      ],
+      id: <unresolved>
+    },
+    args: [
+      selector {
+        path: [
+          `src` @ 1525..1528,
+          `event_data` @ 1529..1539,
+          `CommandLine` @ 1540..1551
+        ]
+      },
+      selector {
+        path: [
+          `src` @ 1553..1556,
+          `event_data` @ 1557..1567,
+          `Image` @ 1568..1573
+        ]
+      },
+      selector {
+        path: [
+          `src` @ 1575..1578,
+          `event_data` @ 1579..1589,
+          `ProcessId` @ 1590..1599
+        ]
+      }
+    ]
+  },
+  assignment {
+    left: {
+      path: [
+        `severity` @ 1600..1608
+      ]
+    },
+    equals: 1609..1610,
+    right: literal {
+      value: basic_string "Informational",
+      source: 1611..1626
+    }
+  },
+  assignment {
+    left: {
+      path: [
+        `severity_id` @ 1627..1638
+      ]
+    },
+    equals: 1639..1640,
+    right: literal {
+      value: long%20long 1,
+      source: 1641..1642
+    }
+  },
+  assignment {
+    left: {
+      path: [
+        `status` @ 1643..1649
+      ]
+    },
+    equals: 1650..1651,
+    right: literal {
+      value: basic_string "Success",
+      source: 1652..1661
+    }
+  },
+  assignment {
+    left: {
+      path: [
+        `status_id` @ 1662..1671
+      ]
+    },
+    equals: 1672..1673,
+    right: literal {
+      value: long%20long 1,
+      source: 1674..1675
+    }
+  },
+  assignment {
+    left: {
+      path: [
+        `time` @ 1676..1680
+      ]
+    },
+    equals: 1681..1682,
+    right: function_call {
+      fn: {
+        path: [
+          `round` @ 1683..1688
+        ],
+        id: <unresolved>
+      },
+      args: [
+        binary_expr {
+          left: function_call {
+            subject: function_call {
+              fn: {
+                path: [
+                  `time` @ 1689..1693
+                ],
+                id: <unresolved>
+              },
+              args: [
+                selector {
+                  path: [
+                    `metadata` @ 1694..1702,
+                    `original_time` @ 1703..1716
+                  ]
+                }
+              ]
+            },
+            fn: {
+              path: [
+                `timestamp` @ 1718..1727
+              ],
+              id: <unresolved>
+            },
+            args: [
+              
+            ]
+          },
+          op: "mul" @ 1730..1731,
+          right: literal {
+            value: long%20long 1000,
+            source: 1732..1736
+          }
+        }
+      ]
+    }
+  },
+  assignment {
+    left: {
+      path: [
+        `type_name` @ 1738..1747
+      ]
+    },
+    equals: 1748..1749,
+    right: literal {
+      value: basic_string "Process Activity: Launch",
+      source: 1750..1776
+    }
+  },
+  assignment {
+    left: {
+      path: [
+        `type_uid` @ 1777..1785
+      ]
+    },
+    equals: 1786..1787,
+    right: literal {
+      value: long%20long 100701,
+      source: 1788..1794
+    }
+  },
+  assignment {
+    left: {
+      path: [
+        `unmapped` @ 1795..1803
+      ]
+    },
+    equals: 1804..1805,
+    right: selector {
+      path: [
+        `src` @ 1806..1809
+      ]
+    }
+  },
+  invocation {
+    op: {
+      path: [
+        `drop` @ 1810..1814
+      ],
+      id: <unresolved>
+    },
+    args: [
+      selector {
+        path: [
+          `src` @ 1815..1818
+        ]
+      }
+    ]
+  }
+]
