@@ -12,7 +12,9 @@ platform:
 3. **Platform**: Manages nodes and global user data. Nodes connect to the
    platform and you can manage them through [app.tenzir.com][app].
 
-![Tenzir Moving Parts](moving-parts.excalidraw.svg)
+import MovingParts from './moving-parts.excalidraw.svg'
+
+<MovingParts className="excalidraw-svg" alt="Tenzir Moving Parts" />
 
 [app]: https://app.tenzir.com
 
