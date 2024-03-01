@@ -31,7 +31,6 @@
     "react-svg": "^16.1.32",
     "redocusaurus": "^2.0.0",
     "remark": "^15.0.1",
-    "remark-inline-svg": "^1.1.1",
     "sass": "^1.58.0",
     "strip-markdown": "^5.0.0"
   },
@@ -42,11 +41,7 @@
     "typescript": "^5.0.0"
   },
   "browserslist": {
-    "production": [
-      ">0.5%",
-      "not dead",
-      "not op_mini all"
-    ],
+    "production": [">0.5%", "not dead", "not op_mini all"],
     "development": [
       "last 1 chrome version",
       "last 1 firefox version",

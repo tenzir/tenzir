@@ -1,141 +1,10 @@
 // @ts-check
 // Note: type annotations allow type checking and IDEs autocompletion
 
-import { visit } from "unist-util-visit";
-
 const lightCodeTheme = require("prism-react-renderer/themes/github");
 const darkCodeTheme = require("prism-react-renderer/themes/vsDark");
-const path = require("node:path");
-
-import fs from "node:fs/promises";
-import { optimize } from "svgo";
-
-const svgoPlugins = [
-  {
-    name: "preset-default",
-    params: {
-      overrides: {
-        // disable plugins
-        removeTitle: false,
-        removeDesc: false,
-      },
-    },
-  },
-  "removeXMLNS",
-  "removeDimensions",
-];
 
 async function createConfig() {
-  /// BEGIN CUSTOM CODE ///
-
-  // This is customized version of
-  // https://github.com/alvinometric/remark-inline-svg/blob/e0c3b0ddb3f34a8766b7e39e05a1888a55347f7f/index.js
-  // in order to co-operate with Docusaurus.
-
-  // Problem: we store some images in /static/img folder and we want to reference
-  // them in markdown as ![image something](/img/something.svg).
-  // If we don't want to inline those images this works in docusaurus as docusaurus
-  // preprocesses all /img/something.svg correctly). But remark-inline-svg plugin does
-  // not support this - it tries to resolve relative to the markdown file.
-  // We also need to support relative links like ![image something](something.svg).
-
-  // Solution: we change the plugin's function to rewrite all /img/something.svg
-  // to the correct full path which is <ROOT>/static/img/something.svg
-  // NOTE: `static` is a default folder for static assets in docusaurus.
-  // We provide the option `staticDir` to override this.
-  // And in case of relative links we just prepend the path to the markdown file.
-
-  // This is not perfect but it works.
-
-  const inlineSVGTransform = async (node, options) => {
-    const { alt, url } = node;
-
-    const image = await fs.readFile(url, "utf-8");
-    const result = await optimize(image, { plugins: svgoPlugins });
-
-    let { data: html } = result;
-
-    if (options.replace) {
-      Object.entries(options.replace).forEach(([str, replacement]) => {
-        const re = new RegExp(str, "g");
-
-        if (!!html === false) {
-          console.log(`[remark-inline-svg]: problem optimizing ${url}`);
-        }
-        html = html.replace(re, replacement);
-      });
-    }
-
-    const [, svgAttrs] = html.match(/<svg (.*?)>/);
-
-    html = html.replace(svgAttrs, `${svgAttrs} role="img" aria-hidden="true"`);
-
-    const className = options.className || "markdown-inline-svg";
-    // Convert the SVG content to a Base64-encoded data URI
-    const svgDataUri = `data:image/svg+xml;base64,${Buffer.from(html).toString("base64")}`;
-
-    // Construct the MDX element structure
-    node.type = "mdxJsxFlowElement";
-    node.name = "span";
-    node.attributes = [
-      { type: "mdxJsxAttribute", name: "className", value: className },
-      { type: "mdxJsxAttribute", name: "role", value: "img" },
-      { type: "mdxJsxAttribute", name: "aria-label", value: alt || "" },
-    ];
-    node.children = [
-      {
-        type: "mdxJsxFlowElement",
-        name: "img",
-        attributes: [
-          { type: "mdxJsxAttribute", name: "src", value: svgDataUri },
-          { type: "mdxJsxAttribute", name: "alt", value: alt || "" },
-        ],
-        children: [],
-        data: { _mdxExplicitJsx: true },
-      },
-    ];
-    node.data = { _mdxExplicitJsx: true };
-  };
-
-  const inlineSVG = (options = {}) => {
-    const suffix = options.suffix || ".inline.svg";
-    const staticDir = options.staticDir || "static";
-
-    return async (tree, file) => {
-      const svgs = [];
-
-      visit(tree, "image", (node) => {
-        const { url } = node;
-
-        if (url.endsWith(suffix)) {
-          // if url is /img/something.svg, then we need to use our custom logic
-          if (url.startsWith("/img/")) {
-            const fullPath = path.join(process.cwd(), staticDir, url);
-            node.url = fullPath;
-          }
-          // otherwise we just use the original logic
-          else {
-            const markdownFileDir = path.dirname(file.history[0]);
-            node.url = path.resolve("./", markdownFileDir, url);
-          }
-
-          svgs.push(node);
-        }
-      });
-
-      if (svgs.length > 0) {
-        const promises = svgs.map(async (node) => {
-          return await inlineSVGTransform(node, options);
-        });
-
-        await Promise.all(promises);
-      }
-
-      return tree;
-    };
-  };
-
-  /// END CUSTOM CODE ///
   return {
     title: "Tenzir",
     tagline: "Easy data pipelines for security teams.",
@@ -207,7 +76,6 @@ async function createConfig() {
             // Ideally we'd show this information, but as-is it's unnecessary.
             showLastUpdateTime: false,
             showLastUpdateAuthor: false,
-            beforeDefaultRemarkPlugins: [[inlineSVG, { suffix: ".svg" }]],
           },
           blog: {
             blogTitle: "Blog",
@@ -215,11 +83,8 @@ async function createConfig() {
             blogSidebarCount: 20,
             blogSidebarTitle: "Blog Posts",
             postsPerPage: 20,
-            beforeDefaultRemarkPlugins: [[inlineSVG, { suffix: ".svg" }]],
           },
-          pages: {
-            beforeDefaultRemarkPlugins: [[inlineSVG, { suffix: ".svg" }]],
-          },
+          pages: {},
           theme: {
             customCss: require.resolve("./src/css/custom.scss"),
           },
