@@ -8,13 +8,25 @@
 
 #include "tenzir/tql2/entity_id.hpp"
 
+#include "tenzir/tql2/registry.hpp"
+
 namespace tenzir::tql2 {
 
 auto entity_id::debug_inspect(debug_writer& dbg) const -> bool {
   if (not resolved()) {
     return dbg.fmt_value("<unresolved>");
   }
-  return dbg.apply(id);
+  auto reg = thread_local_registry();
+  if (not reg) {
+    return dbg.apply(id);
+  }
+  return reg->get(*this).match(
+    [&](const std::unique_ptr<operator_def>& op) {
+      return dbg.fmt_value("<{}> (0)", op->name(), id);
+    },
+    [&](const function_def& def) {
+      return dbg.apply(def.test);
+    });
 }
 
 } // namespace tenzir::tql2
