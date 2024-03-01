@@ -9,6 +9,8 @@
 #include "tenzir/tql2/exec.hpp"
 
 #include "tenzir/tql2/parser.hpp"
+#include "tenzir/tql2/registry.hpp"
+#include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/tokens.hpp"
 
 #include <arrow/util/utf8.h>
@@ -38,6 +40,57 @@ public:
 private:
   bool error_ = false;
   std::unique_ptr<diagnostic_handler> inner_;
+};
+
+using namespace ast;
+
+struct sort_expr {
+  enum class direction { asc, desc };
+
+  sort_expr(expression expr, direction dir) : expr{std::move(expr)}, dir{dir} {
+  }
+
+  expression expr;
+  direction dir;
+};
+
+class sort_use final : public operator_use {
+public:
+  explicit sort_use(std::vector<sort_expr> exprs) : exprs_{std::move(exprs)} {
+  }
+
+private:
+  std::vector<sort_expr> exprs_;
+};
+
+class sort_definition final : public operator_def {
+public:
+  auto name() const -> std::string_view override {
+    return "std'sort";
+  }
+
+  auto make(std::vector<expression> args)
+    -> std::unique_ptr<operator_use> override {
+    auto exprs = std::vector<sort_expr>{};
+    exprs.reserve(args.size());
+    for (auto& arg : args) {
+      arg.match(
+        [&](tql2::ast::unary_expr& un_expr) {
+          if (un_expr.op.inner == tql2::ast::unary_op::neg) {
+            exprs.emplace_back(std::move(un_expr.expr),
+                               sort_expr::direction::desc);
+          } else {
+            exprs.emplace_back(std::move(un_expr.expr),
+                               sort_expr::direction::asc);
+          }
+        },
+        [&](auto&) {
+          exprs.emplace_back(std::move(arg), sort_expr::direction::asc);
+        });
+    }
+    // check_and_maybe_compile(arg);
+    return std::make_unique<sort_use>(std::move(exprs));
+  }
 };
 
 } // namespace
@@ -94,9 +147,18 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   if (diag_wrapper.error()) {
     return false;
   }
+  auto reg = registry{};
+  reg.add(std::make_unique<sort_definition>());
+  reg.add(function_def{"yo"});
+  tql2::resolve_entities(parsed, reg, diag_wrapper);
   if (cfg.dump_ast) {
-    fmt::print("{:#?}\n", parsed);
-    return true;
+    with_thread_local_registry(reg, [&] {
+      fmt::println("{:#?}", parsed);
+    });
+    return not diag_wrapper.error();
+  }
+  if (diag_wrapper.error()) {
+    return false;
   }
   diagnostic::warning(
     "pipeline is syntactically valid, but execution is not yet implemented")
