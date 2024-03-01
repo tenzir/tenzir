@@ -20,6 +20,8 @@ struct exec_config {
   bool dump_ast = false;
   bool dump_diagnostics = false;
   bool dump_metrics = false;
+  bool dump_tokens = false;
+  bool tql2 = false;
 };
 
 auto exec_pipeline(std::string content,

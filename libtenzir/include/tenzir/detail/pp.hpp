@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <boost/preprocessor.hpp>
+
 // Concatenation.
 // 1) Paste first, then evaluate the result.
 #define TENZIR_PP_CAT2(_1, _2) _1##_2
@@ -47,3 +49,9 @@
 // Stringification.
 #define TENZIR_PP_STRINGIFY(s) TENZIR_PP_STRINGIFY_IMPL(s)
 #define TENZIR_PP_STRINGIFY_IMPL(s) #s
+
+// Looping.
+#define TENZIR_PP_FOR_INNER(r, f, x) f(x)
+#define TENZIR_PP_FOR(f, ...)                                                  \
+  BOOST_PP_SEQ_FOR_EACH(TENZIR_PP_FOR_INNER, f,                                \
+                        BOOST_PP_VARIADIC_TO_SEQ(__VA_ARGS__))

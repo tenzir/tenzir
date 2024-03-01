@@ -1,0 +1,212 @@
+[
+  invocation {
+    op: {
+      path: [
+        `a` @ 0..1
+      ],
+      id: <unresolved>
+    },
+    args: [
+      
+    ]
+  },
+  if_stmt {
+    condition: binary_expr {
+      left: selector {
+        path: [
+          `b` @ 5..6
+        ]
+      },
+      op: "eq" @ 7..9,
+      right: literal {
+        value: int64 42,
+        source: 10..12
+      }
+    },
+    then: [
+      invocation {
+        op: {
+          path: [
+            `c` @ 17..18
+          ],
+          id: <unresolved>
+        },
+        args: [
+          selector {
+            path: [
+              `d` @ 19..20
+            ]
+          }
+        ]
+      },
+      invocation {
+        op: {
+          path: [
+            `e` @ 23..24
+          ],
+          id: <unresolved>
+        },
+        args: [
+          assignment {
+            left: {
+              path: [
+                `f` @ 25..26
+              ]
+            },
+            equals: 26..27,
+            right: selector {
+              path: [
+                `g` @ 27..28
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        `h` @ 31..32
+      ],
+      id: <unresolved>
+    },
+    args: [
+      
+    ]
+  },
+  if_stmt {
+    condition: selector {
+      path: [
+        `i` @ 36..37
+      ]
+    },
+    then: [
+      
+    ],
+    else: [
+      
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        `j` @ 49..50
+      ],
+      id: <unresolved>
+    },
+    args: [
+      
+    ]
+  },
+  match_stmt {
+    expr: selector {
+      path: [
+        `k` @ 57..58
+      ]
+    },
+    arms: [
+      
+    ]
+  },
+  match_stmt {
+    expr: selector {
+      path: [
+        `k` @ 68..69
+      ]
+    },
+    arms: [
+      {
+        filter: [
+          literal {
+            value: string "foo",
+            source: 72..77
+          }
+        ],
+        pipe: [
+          invocation {
+            op: {
+              path: [
+                `bar` @ 83..86
+              ],
+              id: <unresolved>
+            },
+            args: [
+              
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  match_stmt {
+    expr: selector {
+      path: [
+        `k` @ 97..98
+      ]
+    },
+    arms: [
+      {
+        filter: [
+          literal {
+            value: string "foo",
+            source: 103..108
+          }
+        ],
+        pipe: [
+          invocation {
+            op: {
+              path: [
+                `bar` @ 118..121
+              ],
+              id: <unresolved>
+            },
+            args: [
+              
+            ]
+          }
+        ]
+      },
+      {
+        filter: [
+          literal {
+            value: int64 42,
+            source: 128..130
+          }
+        ],
+        pipe: [
+          invocation {
+            op: {
+              path: [
+                `foo` @ 140..143
+              ],
+              id: <unresolved>
+            },
+            args: [
+              selector {
+                path: [
+                  `bar` @ 144..147
+                ]
+              }
+            ]
+          },
+          invocation {
+            op: {
+              path: [
+                `qux` @ 152..155
+              ],
+              id: <unresolved>
+            },
+            args: [
+              selector {
+                path: [
+                  `bar` @ 156..159
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

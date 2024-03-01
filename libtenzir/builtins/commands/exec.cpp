@@ -45,11 +45,13 @@ private:
 auto exec_command(const invocation& inv, caf::actor_system& sys)
   -> caf::expected<void> {
   const auto& args = inv.arguments;
-  if (args.size() != 1)
+  if (args.size() != 1) {
     return caf::make_error(
       ec::invalid_argument,
       fmt::format("expected exactly one argument, but got {}", args.size()));
+  }
   auto cfg = exec_config{};
+  cfg.dump_tokens = caf::get_or(inv.options, "tenzir.exec.dump-tokens", false);
   cfg.dump_ast = caf::get_or(inv.options, "tenzir.exec.dump-ast", false);
   cfg.dump_diagnostics
     = caf::get_or(inv.options, "tenzir.exec.dump-diagnostics", false);
@@ -66,6 +68,7 @@ auto exec_command(const invocation& inv, caf::actor_system& sys)
   cfg.implicit_events_source
     = caf::get_or(inv.options, "tenzir.exec.implicit-events-source",
                   cfg.implicit_events_source);
+  cfg.tql2 = caf::get_or(inv.options, "tenzir.exec.tql2", cfg.tql2);
   auto filename = std::string{};
   auto content = std::string{};
   if (as_file) {
@@ -111,6 +114,8 @@ public:
       "exec", "execute a pipeline locally",
       command::opts("?tenzir.exec")
         .add<bool>("file,f", "load the pipeline definition from a file")
+        .add<bool>("dump-tokens",
+                   "print a textual description of the tokens and then exit")
         .add<bool>("dump-ast",
                    "print a textual description of the AST and then exit")
         .add<bool>("dump-diagnostics",
@@ -128,7 +133,8 @@ public:
                           "(default: 'load file -')")
         .add<std::string>("implicit-events-source",
                           "implicit source for pipelines starting with events "
-                          "(default: 'from stdin read json'"));
+                          "(default: 'from stdin read json'")
+        .add<bool>("tql2", "use TQL version 2 (experimental)"));
     auto factory = command::factory{
       {"exec",
        [=](const invocation& inv, caf::actor_system& sys) -> caf::message {

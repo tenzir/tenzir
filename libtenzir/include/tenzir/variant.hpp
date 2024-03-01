@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/error.hpp"
 
@@ -25,8 +26,30 @@ class variant : public std::variant<Ts...> {
 public:
   using std::variant<Ts...>::variant;
 
+  template <class T>
+  static constexpr auto can_have = (std::same_as<T, Ts> || ...);
+
   template <class Inspector>
-  friend auto inspect(Inspector& f, variant& x) {
+  friend auto inspect(Inspector& f, variant& x) -> bool {
+    if (auto dbg = as_debug_writer(f)) {
+      return x.match([&]<class T>(const T& y) {
+        auto name = std::string{};
+        if constexpr (std::same_as<T, std::string>) {
+          name = "string";
+        } else if constexpr (std::same_as<T, std::int64_t>) {
+          name = "int64";
+        } else if constexpr (std::same_as<T, std::uint64_t>) {
+          name = "uint64";
+        } else {
+          name = caf::detail::pretty_type_name(typeid(T));
+          auto index = name.find_last_of('.');
+          if (index != std::string::npos) {
+            name = name.substr(index + 1);
+          }
+        }
+        return dbg->prepend("{} ", name) && dbg->apply(y);
+      });
+    }
     // Unlike `caf::inspector_access<std::variant<Ts...>>::apply(f, x)`, this
     // implementation does not need a CAF type-id, and it also works for
     // `caf::json_writer`. We use index-based serialization if the inspector
@@ -107,13 +130,25 @@ public:
   }
 
   template <class... Fs>
-  auto match(Fs&&... fs) -> decltype(auto) {
+  auto match(Fs&&... fs) & -> decltype(auto) {
     return std::visit(detail::overload{std::forward<Fs>(fs)...}, *this);
   }
 
   template <class... Fs>
-  auto match(Fs&&... fs) const -> decltype(auto) {
+  auto match(Fs&&... fs) const& -> decltype(auto) {
     return std::visit(detail::overload{std::forward<Fs>(fs)...}, *this);
+  }
+
+  template <class... Fs>
+  auto match(Fs&&... fs) && -> decltype(auto) {
+    return std::visit(detail::overload{std::forward<Fs>(fs)...},
+                      std::move(*this));
+  }
+
+  template <class... Fs>
+  auto match(Fs&&... fs) const&& -> decltype(auto) {
+    return std::visit(detail::overload{std::forward<Fs>(fs)...},
+                      std::move(*this));
   }
 };
 
