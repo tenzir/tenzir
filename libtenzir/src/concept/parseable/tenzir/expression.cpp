@@ -10,6 +10,7 @@
 
 #include "tenzir/concept/parseable/core/parser.hpp"
 #include "tenzir/concept/parseable/tenzir/data.hpp"
+#include "tenzir/concept/parseable/tenzir/identifier.hpp"
 #include "tenzir/concept/parseable/tenzir/legacy_type.hpp"
 #include "tenzir/concept/parseable/tenzir/pipeline.hpp"
 #include "tenzir/data.hpp"
@@ -204,7 +205,9 @@ auto make_operand_parser() {
 auto make_predicate_parser() {
   using parsers::alnum;
   using parsers::chr;
+  using parsers::identifier;
   using parsers::optional_ws_or_comment;
+  using parsers::required_ws_or_comment;
   using namespace parser_literals;
   // clang-format off
   auto operand = make_operand_parser();
@@ -219,10 +222,8 @@ auto make_predicate_parser() {
     | "!in"_p ->* [] { return relational_operator::not_in; }
     | "ni"_p  ->* [] { return relational_operator::ni; }
     | "!ni"_p ->* [] { return relational_operator::not_ni; }
-    | "[+"_p  ->* [] { return relational_operator::in; }
-    | "[-"_p  ->* [] { return relational_operator::not_in; }
-    | "+]"_p  ->* [] { return relational_operator::ni; }
-    | "-]"_p  ->* [] { return relational_operator::not_ni; }
+    | ("not"_p >> !&identifier) >> required_ws_or_comment >> "in"_p 
+      ->* [] { return relational_operator::not_in; }
     ;
   auto pred
     = (operand >> optional_ws_or_comment >> operation >> optional_ws_or_comment >> operand) ->* to_predicate
@@ -234,6 +235,7 @@ auto make_predicate_parser() {
 template <class Iterator>
 static auto make_expression_parser() {
   using namespace parser_literals;
+  using parsers::identifier;
   using parsers::optional_ws_or_comment;
   using chain = std::vector<std::tuple<bool_operator, expression>>;
   using raw_expr = std::tuple<expression, chain>;
@@ -279,13 +281,13 @@ static auto make_expression_parser() {
     ;
   group
     = '(' >> optional_ws_or_comment >> ref(expr) >> optional_ws_or_comment >> ')'
-    | '!' >> optional_ws_or_comment >> pred_expr ->* negate_expr
-    | '!' >> optional_ws_or_comment >> '(' >> optional_ws_or_comment >> (ref(expr) ->* negate_expr) >> optional_ws_or_comment >> ')'
+    | ('!'_p | ("not"_p >> !&identifier)) >> optional_ws_or_comment >> pred_expr ->* negate_expr
+    | ('!'_p |  ("not"_p >> !&identifier)) >> optional_ws_or_comment >> '(' >> optional_ws_or_comment >> (ref(expr) ->* negate_expr) >> optional_ws_or_comment >> ')'
     | pred_expr
     ;
   auto and_or
-    = "||"_p  ->* [] { return bool_operator::logical_or; }
-    | "&&"_p  ->* [] { return bool_operator::logical_and; }
+    = ("||"_p  | "or" )->* [] { return bool_operator::logical_or; }
+    | ("&&"_p  | "and" )->* [] { return bool_operator::logical_and; }
     ;
   expr
     // One embedding of the group rule is intentionally not wrapped in a

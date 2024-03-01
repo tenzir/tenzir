@@ -36,17 +36,17 @@ struct expression_printer : printer_base<expression_printer> {
     }
 
     bool operator()(const conjunction& c) const {
-      auto p = '(' << (expression_printer{} % " && ") << ')';
+      auto p = '(' << (expression_printer{} % " and ") << ')';
       return p(out_, c);
     }
 
     bool operator()(const disjunction& d) const {
-      auto p = '(' << (expression_printer{} % " || ") << ')';
+      auto p = '(' << (expression_printer{} % " or ") << ')';
       return p(out_, d);
     }
 
     bool operator()(const negation& n) const {
-      auto p = "! " << expression_printer{};
+      auto p = "not " << expression_printer{};
       return p(out_, n.expr());
     }
 

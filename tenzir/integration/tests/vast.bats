@@ -35,11 +35,11 @@ teardown() {
   import_zeek_conn
 
   check tenzir "export | where resp_h == 192.168.1.104 | sort ts"
-  check tenzir "export | where orig_bytes > 1k && orig_bytes < 1Ki | sort ts"
-  check tenzir 'export | where :string == "OrfTtuI5G4e" || :port == 67 || :uint64 == 67 | sort ts'
-  check tenzir 'export | where #schema == "zeek.conn" && resp_h == 192.168.1.104 | sort ts'
+  check tenzir "export | where orig_bytes > 1k and orig_bytes < 1Ki | sort ts"
+  check tenzir 'export | where :string == "OrfTtuI5G4e" or :port == 67 or :uint64 == 67 | sort ts'
+  check tenzir 'export | where #schema == "zeek.conn" and resp_h == 192.168.1.104 | sort ts'
   check tenzir 'export | where #schema != "zeek.conn" | sort ts'
-  check tenzir 'export | where #schema != "foobar" && resp_h == 192.168.1.104 | sort ts'
+  check tenzir 'export | where #schema != "foobar" and resp_h == 192.168.1.104 | sort ts'
 }
 
 # bats test_tags=node,import,export,zeek
@@ -60,7 +60,7 @@ teardown() {
   check tenzir "export | where resp_h == 192.168.1.104"
   check tenzir 'export | where resp_h == 192.168.1.104 | write zeek-tsv --disable-timestamp-tags'
   check tenzir "export | where :port == 53 | summarize count=count(.)"
-  check tenzir 'export | where :uint64 == 53 && #schema == "zeek.dns" | summarize count=count(.)'
+  check tenzir 'export | where :uint64 == 53 and #schema == "zeek.dns" | summarize count=count(.)'
 }
 
 # bats test_tags=node,import,export,zeek
@@ -93,7 +93,7 @@ teardown() {
 
 #bats test_tags=node,import,export,suricata,eve,import_filter
 @test "Node suricata alert" {
-  import_suricata_eve 'where #schema != "suricata.stats" && event_type != "flow"'
+  import_suricata_eve 'where #schema != "suricata.stats" and event_type != "flow"'
 
   export TENZIR_EXPORT__ZEEK__DISABLE_TIMESTAMP_TAGS=true
 
@@ -116,8 +116,8 @@ teardown() {
   gunzip -c ${INPUTSDIR}/csv/argus-M57-10k-pkts.csv.gz |
     tenzir-ctl import -b -t argus.record csv
 
-  check tenzir "export | where State != \"CON\" && Dur > 4900ms | sort StartTime"
-  check tenzir "export | where Cause == \"Status\" && Dur > 1s | sort StartTime"
+  check tenzir "export | where State != \"CON\" and Dur > 4900ms | sort StartTime"
+  check tenzir "export | where Cause == \"Status\" and Dur > 1s | sort StartTime"
 }
 
 #bats test_tags=node,import,export,argus,ssv,csv
@@ -204,7 +204,7 @@ teardown() {
 @test "Extractor Predicates" {
   import_suricata_eve
 
-  check tenzir "export | where timestamp && :ip | sort timestamp"
+  check tenzir "export | where timestamp and :ip | sort timestamp"
   check tenzir "export | where does_not_exist | sort timestamp"
   check tenzir "export | where flow.alerted | sort timestamp"
 }
