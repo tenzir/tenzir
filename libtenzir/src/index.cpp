@@ -560,14 +560,20 @@ caf::error index_state::load_from_disk() {
                       part_path, err.message());
           bitmap_file_size = 0u;
         }
-        ps.unshared().indexes_file = {
-          .url = fmt::format("file://{}", canonical(part_path)),
-          .size = bitmap_file_size,
-        };
-        ps.unshared().sketches_file = {
-          .url = fmt::format("file://{}", canonical(synopsis_path)),
-          .size = chunk->get()->size(),
-        };
+        if (const auto canonical_part_path = canonical(part_path, err);
+            not err) {
+          ps.unshared().indexes_file = {
+            .url = fmt::format("file://{}", canonical_part_path),
+            .size = bitmap_file_size,
+          };
+        }
+        if (const auto canonical_synopsis_path = canonical(synopsis_path, err);
+            not err) {
+          ps.unshared().sketches_file = {
+            .url = fmt::format("file://{}", canonical_synopsis_path),
+            .size = chunk->get()->size(),
+          };
+        }
         auto f = store_map.find(partition_uuid);
         if (f == store_map.end()) {
           // For completeness sake we could open the partition and look if the
@@ -587,10 +593,13 @@ caf::error index_state::load_from_disk() {
                       store_path, err.message());
           store_size = 0u;
         }
-        ps.unshared().store_file = {
-          .url = fmt::format("file://{}", canonical(store_path)),
-          .size = store_size,
-        };
+        if (const auto canonical_store_path = canonical(store_path, err);
+            not err) {
+          ps.unshared().store_file = {
+            .url = fmt::format("file://{}", canonical_store_path),
+            .size = store_size,
+          };
+        }
       }
       persisted_partitions.emplace(partition_uuid);
       synopses->emplace(partition_uuid, std::move(ps));
