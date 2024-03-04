@@ -67,10 +67,11 @@ struct series {
   template <type_or_concrete_type Type = type>
   auto values() const {
     if constexpr (concrete_type<Type>) {
-      const auto* ct = caf::get_if<Type>(type);
+      const auto* ct = caf::get_if<Type>(&type);
       TENZIR_ASSERT(ct);
       TENZIR_ASSERT(array);
-      return tenzir::values(*ct, *array);
+      return tenzir::values(
+        *ct, static_cast<const type_to_arrow_array_t<Type>&>(*array));
     } else {
       TENZIR_ASSERT(array);
       return tenzir::values(type, *array);

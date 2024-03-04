@@ -1150,13 +1150,9 @@ public:
         // data corresponding to exactly that schema.
         auto buffer = std::vector<char>{};
         auto resolved_slice = resolve_enumerations(slice);
-        auto array
-          = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
         auto out_iter = std::back_inserter(buffer);
-        for (const auto& row :
-             values(caf::get<record_type>(resolved_slice.schema()), *array)) {
-          TENZIR_ASSERT(row);
-          const auto ok = printer.print(out_iter, *row);
+        for (const auto& row : resolved_slice.values()) {
+          const auto ok = printer.print(out_iter, row);
           TENZIR_ASSERT(ok);
           out_iter = fmt::format_to(out_iter, "\n");
         }

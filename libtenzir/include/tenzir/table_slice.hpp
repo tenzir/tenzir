@@ -148,6 +148,12 @@ public:
 
   // -- data access ------------------------------------------------------------
 
+  /// Get all values in the slice, iterating row-wise.
+  auto values() const -> generator<view<record>>;
+
+  /// Get all values for the given path.
+  auto values(const struct offset& path) const -> generator<view<data>>;
+
   /// Appends all values in column `column` to `index`.
   /// @param `column` The index of the column to append.
   /// @param `index` the value index to append to.
