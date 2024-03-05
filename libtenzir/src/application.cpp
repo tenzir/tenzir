@@ -93,9 +93,6 @@ void add_root_opts(command& cmd) {
                                "cycles");
   cmd.options.add<std::string>("?tenzir", "aging-query",
                                "query for aging out obsolete data");
-  cmd.options.add<std::string>("?tenzir", "store-backend",
-                               "store plugin to use for imported "
-                               "data");
   cmd.options.add<std::string>("?tenzir", "connection-timeout",
                                "the timeout for connecting to "
                                "a Tenzir server (default: 5m)");
