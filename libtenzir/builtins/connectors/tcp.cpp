@@ -104,6 +104,14 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
                                fmt::format("failed to resolve '{}': {}",
                                            hostname, ec.message()));
       }
+#if TENZIR_LINUX
+      const auto& endpoint = endpoints.begin()->endpoint();
+      auto sfd
+        = ::socket(endpoint.protocol().family(), SOCK_STREAM | SOCK_CLOEXEC,
+                   endpoint.protocol().protocol());
+      TENZIR_ASSERT(sfd >= 0);
+      self->state.socket->assign(endpoint.protocol(), sfd);
+#endif
       if (tls) {
         self->state.ssl_ctx.emplace(boost::asio::ssl::context::tls_client);
         self->state.ssl_ctx->set_default_verify_paths();
@@ -127,15 +135,35 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
         [self, weak_hdl = caf::actor_cast<caf::weak_actor_ptr>(self)](
           boost::system::error_code ec,
           const boost::asio::ip::tcp::endpoint& endpoint) {
+#if TENZIR_MACOS
+          auto fcntl_error = std::optional<caf::error>{};
+          if (::fcntl(self->state.socket->native_handle(), F_SETFD, FD_CLOEXEC)
+              != 0) {
+            auto error = detail::describe_errno();
+            fcntl_error = diagnostic::error("failed to configure TLS socket")
+                            .hint("{}", error)
+                            .to_error();
+          }
+#endif
           if (auto hdl = weak_hdl.lock()) {
             caf::anon_send(
               caf::actor_cast<caf::actor>(hdl),
-              caf::make_action([self, ec, endpoint]() mutable {
+              caf::make_action([self, ec, endpoint
+#if TENZIR_MACOS
+                                ,
+                                fcntl_error
+#endif
+            ]() mutable {
                 if (ec) {
                   return self->state.connection_rp.deliver(caf::make_error(
                     ec::system_error,
                     fmt::format("connection failed: {}", ec.message())));
                 }
+#if TENZIR_MACOS
+                if (fcntl_error) {
+                  return self->state.connection_rp.deliver(*fcntl_error);
+                }
+#endif
                 if (self->state.tls_socket) {
                   self->state.tls_socket->handshake(
                     boost::asio::ssl::stream<
@@ -176,6 +204,13 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
         auto reuse_address = boost::asio::socket_base::reuse_address(true);
         self->state.acceptor->set_option(reuse_address);
         self->state.acceptor->bind(endpoint);
+        if (::fcntl(self->state.acceptor->native_handle(), F_SETFD, FD_CLOEXEC)
+            != 0) {
+          auto error = detail::describe_errno();
+          return diagnostic::error("failed to configure TLS socket")
+            .hint("{}", error)
+            .to_error();
+        }
         auto backlog = boost::asio::socket_base::max_connections;
         self->state.acceptor->listen(backlog);
       } catch (std::exception& e) {
@@ -191,15 +226,27 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
          weak_hdl = caf::actor_cast<caf::weak_actor_ptr>(self)](
           boost::system::error_code ec, boost::asio::ip::tcp::socket peer) {
           TENZIR_VERBOSE("tcp connector accepted incoming request");
+          auto fcntl_error = std::optional<caf::error>{};
+          if (::fcntl(peer.native_handle(), F_SETFD, FD_CLOEXEC) != 0) {
+            auto error = detail::describe_errno();
+            fcntl_error = diagnostic::error("failed to configure TLS socket")
+                            .hint("{}", error)
+                            .to_error();
+          }
           if (auto hdl = weak_hdl.lock()) {
             caf::anon_send(
               caf::actor_cast<caf::actor>(hdl),
               caf::make_action([self, certfile, keyfile, ec,
-                                peer = std::move(peer)]() mutable {
+                                peer = std::move(peer),
+                                fcntl_error
+                                = std::move(fcntl_error)]() mutable {
                 if (ec) {
                   return self->state.connection_rp.deliver(caf::make_error(
                     ec::system_error,
                     fmt::format("failed to accept: {}", ec.message())));
+                }
+                if (fcntl_error) {
+                  return self->state.connection_rp.deliver(*fcntl_error);
                 }
                 self->state.socket.emplace(std::move(peer));
                 if (!certfile.empty()) {
