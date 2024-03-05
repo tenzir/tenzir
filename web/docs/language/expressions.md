@@ -19,7 +19,7 @@ example.
 An *expression* is a function over an event that evaluates to `true` or
 `false`, indicating whether it qualifies as result. Expression operands are
 either sub-expressions or predicates, and can be composed via *conjunctions*
-(`&&`), *disjunctions* (`||`), and *negations* (`!`).
+(`and`), *disjunctions* (`or`), and *negations* (`not`).
 
 The following diagram shows an example expression in tree form:
 
@@ -28,7 +28,7 @@ The following diagram shows an example expression in tree form:
 When written out, it looks like this:
 
 ```c
-(dport <= 1024 || :ip in 10.0.0.0/8) && ! (#schema == /zeek.*/)
+(dport <= 1024 or :ip in 10.0.0.0/8) and not (#schema == /zeek.*/)
 ```
 
 In this example, the predicate operands `dport`, `:ip`, and `#schema` represent
@@ -40,9 +40,9 @@ Let's take a look at the expression components in more depth.
 
 There exist three logical connectives that connect sub-expressions:
 
-- `&&`: the logical AND between two expressions
-- `||`: the logical OR between two expressions
-- `!`: the logical NOT of one expression
+- `and`: the logical AND between two expressions
+- `or`: the logical OR between two expressions
+- `not`: the logical NOT of one expression
 
 ## Predicates
 
@@ -192,7 +192,7 @@ Values of type `subnet` expand more broadly. For example, the subnet
 `10.0.0.0/8` expands to:
 
 ```c
-:subnet == 10.0.0.0/8 || :ip in 10.0.0.0/8
+:subnet == 10.0.0.0/8 or :ip in 10.0.0.0/8
 ```
 
 This makes it easier to search for IP addresses belonging to a specific subnet.
