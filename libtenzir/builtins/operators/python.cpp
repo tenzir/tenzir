@@ -54,7 +54,18 @@ struct config {
   std::string implicit_requirements = {};
 
   // Base path for virtual environments.
-  std::optional<std::filesystem::path> venv_base_dir = {};
+  std::optional<std::string> venv_base_dir = {};
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, config& x) -> bool {
+    auto venv_base_dir_str = std::string{};
+    auto result
+      = f.object(x)
+          .pretty_name("tenzir.plugins.python.config")
+          .fields(f.field("implicit-requirements", x.implicit_requirements),
+                  f.field("venv-base-dir", x.venv_base_dir));
+    return result;
+  }
 };
 
 auto drain_pipe(bp::ipstream& pipe) -> std::string {
@@ -76,16 +87,15 @@ class python_operator final : public crtp_operator<python_operator> {
 public:
   python_operator() = default;
 
-  explicit python_operator(const config* config, std::string requirements,
+  explicit python_operator(struct config config, std::string requirements,
                            std::variant<std::filesystem::path, std::string> code)
-    : config_{config},
+    : config_{std::move(config)},
       requirements_{std::move(requirements)},
       code_{std::move(code)} {
   }
 
   auto execute(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    TENZIR_ASSERT(config_);
     try {
       // Get the code to be executed.
       auto maybe_code = std::visit(
@@ -120,10 +130,10 @@ public:
       auto env = boost::this_process::environment();
       // Automatically create a virtualenv with all requirements preinstalled,
       // unless disabled by node config.
-      if (config_->venv_base_dir) {
-        auto venv_id = hash(config_->implicit_requirements, requirements_);
-        auto venv_path
-          = config_->venv_base_dir.value() / fmt::format("{:x}", venv_id);
+      if (config_.venv_base_dir) {
+        auto venv_id = hash(config_.implicit_requirements, requirements_);
+        auto venv_path = std::filesystem::path{config_.venv_base_dir.value()}
+                         / fmt::format("{:x}", venv_id);
         auto venv = venv_path.string();
         env["VIRTUAL_ENV"] = venv;
         auto ec = std::error_code{};
@@ -139,7 +149,8 @@ public:
         // is smart enough to check if one is already present. We prevent this
         // hidden modification by starting the seamphore name with a slash.
         // This ensures that the truncation logic below is correct.
-        auto sem_name = fmt::format("/tnz-python-{:x}", venv_id);
+        auto sem_name = fmt::format("/tnz-{}.{}.{}-{:x}", version::major,
+                                    version::minor, version::patch, venv_id);
         // The semaphore name is restricted to a maximum length of 31 characters
         // (including the '\0') on macOS. This length has been experimentally
         // verified. We truncate it to this length unconditionally for
@@ -149,7 +160,15 @@ public:
           sem_name.erase(semaphore_name_max_length);
         auto sem = boost::interprocess::named_semaphore{
           boost::interprocess::open_or_create, sem_name.c_str(), 1u};
-        sem.wait();
+        const auto wait_ok = sem.timed_wait(std::chrono::system_clock::now()
+                                            + std::chrono::seconds{60});
+        if (not wait_ok) {
+          diagnostic::error("failed to initialize python venv")
+            .note("could not acquire named semaphore '{}' within 60 seconds",
+                  sem_name)
+            .emit(ctrl.diagnostics());
+          co_return;
+        }
         auto sem_guard = caf::detail::scope_guard{[&] {
           sem.post();
         }};
@@ -186,9 +205,9 @@ public:
           };
           // `split` creates an empty token in case the input was entirely
           // empty, but we don't want that so we need an extra guard.
-          if (!config_->implicit_requirements.empty()) {
-            auto implicit_requirements_vec = detail::split_escaped(
-              config_->implicit_requirements, " ", "\\");
+          if (!config_.implicit_requirements.empty()) {
+            auto implicit_requirements_vec
+              = detail::split_escaped(config_.implicit_requirements, " ", "\\");
             pip_invocation.insert(pip_invocation.end(),
                                   implicit_requirements_vec.begin(),
                                   implicit_requirements_vec.end());
@@ -329,15 +348,16 @@ public:
     return optimize_result{std::nullopt, event_order::unordered, copy()};
   }
 
-  friend auto inspect(auto& f, python_operator& x) {
+  friend auto inspect(auto& f, python_operator& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.plugins.python.python-operator")
-      .fields(f.field("requirements", x.requirements_),
+      .fields(f.field("config", x.config_),
+              f.field("requirements", x.requirements_),
               f.field("code", x.code_));
   }
 
 private:
-  const config* config_ = nullptr;
+  config config_ = {};
   std::string requirements_ = {};
   std::variant<std::filesystem::path, std::string> code_ = {};
 };
@@ -357,10 +377,11 @@ public:
     else if (const auto* cache_dir
              = get_if<std::string>(&global_config, "tenzir.cache-directory"))
       config.venv_base_dir
-        = std::filesystem::path{*cache_dir} / "python" / "venvs";
+        = (std::filesystem::path{*cache_dir} / "python" / "venvs").string();
     else
-      config.venv_base_dir = std::filesystem::temp_directory_path() / "tenzir"
-                             / "python" / "venvs";
+      config.venv_base_dir = (std::filesystem::temp_directory_path() / "tenzir"
+                              / "python" / "venvs")
+                               .string();
     auto implicit_requirements_default = std::string{
       detail::install_datadir() / "python"
       / fmt::format("tenzir-{}.{}.{}-py3-none-any.whl[operator]",
@@ -403,7 +424,7 @@ public:
     } else {
       code = std::filesystem::path{filename->inner};
     }
-    return std::make_unique<python_operator>(&config, std::move(requirements),
+    return std::make_unique<python_operator>(config, std::move(requirements),
                                              std::move(code));
   }
 };
