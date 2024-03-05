@@ -382,11 +382,11 @@ struct csv_parser_factory {
       if constexpr (std::is_same_v<U, duration_type>) {
         auto make_duration_parser = [&](auto period) {
           // clang-format off
-        return (-parsers::real ->* [](double x) {
+        return (-(parsers::real ->* [](double x) {
           using period_type = decltype(period);
           using double_duration = std::chrono::duration<double, period_type>;
           return std::chrono::duration_cast<duration>(double_duration{x});
-        }).with(add_t<duration>{bptr_});
+        })).with(add_t<duration>{bptr_});
           // clang-format on
         };
         if (auto unit = t.attribute("unit")) {

@@ -23,6 +23,7 @@
 #include "tenzir/fbs/utils.hpp"
 #include "tenzir/ids.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/series.hpp"
 #include "tenzir/table_slice_builder.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/value_index.hpp"
@@ -473,6 +474,23 @@ size_t table_slice::instances() noexcept {
 }
 
 // -- data access --------------------------------------------------------------
+
+auto table_slice::values() const -> generator<view<record>> {
+  auto path = tenzir::offset{};
+  auto [type, array] = path.get(*this);
+  const auto as_series = series{std::move(type), std::move(array)};
+  for (auto&& value : as_series.values<record_type>()) {
+    TENZIR_ASSERT_EXPENSIVE(value);
+    co_yield std::move(*value);
+  }
+}
+
+auto table_slice::values(const struct offset& path) const
+  -> generator<view<data>> {
+  auto [type, array] = path.get(*this);
+  const auto as_series = series{std::move(type), std::move(array)};
+  return as_series.values();
+}
 
 void table_slice::append_column_to_index(table_slice::size_type column,
                                          value_index& index) const {

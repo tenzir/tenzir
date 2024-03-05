@@ -163,9 +163,9 @@ public:
     return *diagnostic_handler_;
   }
 
-  auto allow_unsafe_pipelines() const noexcept -> bool override {
+  auto no_location_overrides() const noexcept -> bool override {
     return caf::get_or(content(state_.self->config()),
-                       "tenzir.allow-unsafe-pipelines", false);
+                       "tenzir.no-location-overrides", false);
   }
 
   auto has_terminal() const noexcept -> bool override {

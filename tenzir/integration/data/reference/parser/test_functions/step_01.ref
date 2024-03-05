@@ -1,0 +1,6 @@
+error: unexpected comma before any arguments
+ --> /dev/stdin:1:7
+  |
+1 | a = b(,)
+  |       ^ 
+  |

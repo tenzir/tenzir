@@ -1,0 +1,35 @@
+name: Copy Cache Entry to GCS
+on:
+  workflow_dispatch:
+    inputs:
+      path:
+        description: 'Must match the path value passed to actions/cache/save'
+        type: string
+        required: true
+        default: /tmp/ccache
+      key:
+        description: 'Must match the key value passed to actions/cache/save'
+        type: string
+        required: true
+
+jobs:
+  upload:
+    name: Copy Cache Entry to GCS
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Fetch Cache Entry
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ inputs.path }}
+          key: ${{ inputs.key }}
+          enableCrossOsArchive: true
+      - name: Upload to GCS
+        env:
+          RCLONE_CONFIG_GCS_TYPE: gcs
+          RCLONE_GCS_BUCKET_POLICY_ONLY: True
+          RCLONE_GCS_SERVICE_ACCOUNT_CREDENTIALS: ${{ secrets.GCS_SERVICE_ACCOUNT_CREDENTIALS }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rclone
+          tar -czf "${{ inputs.key }}.tar.gz" "${{ inputs.path }}"
+          rclone -vv copyto "${{ inputs.key }}.tar.gz" "gcs:tenzir-dist-private/github-actions-cache-clones/${{ inputs.key }}.tar.gz"

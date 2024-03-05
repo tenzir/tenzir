@@ -47,7 +47,7 @@ struct symbol_resolver {
 
   template <class Type>
   caf::expected<legacy_type> operator()(Type x) {
-    return std::move(x);
+    return x;
   }
 
   caf::expected<legacy_type> operator()(const legacy_none_type& x) {
@@ -63,7 +63,7 @@ struct symbol_resolver {
     if (!y)
       return y.error();
     x.value_type = *y;
-    return std::move(x);
+    return x;
   }
 
   caf::expected<legacy_type> operator()(legacy_list_type x) {
@@ -81,7 +81,7 @@ struct symbol_resolver {
     if (caf::holds_alternative<legacy_record_type>(x.value_type)
         && !has_skip_attribute(x))
       x.update_attributes({{"skip", caf::none}});
-    return std::move(x);
+    return x;
   }
 
   caf::expected<legacy_type> operator()(legacy_map_type x) {
@@ -93,7 +93,7 @@ struct symbol_resolver {
     if (!z)
       return z.error();
     x.key_type = *z;
-    return std::move(x);
+    return x;
   }
 
   caf::expected<legacy_type> operator()(legacy_record_type x) {
@@ -154,7 +154,7 @@ struct symbol_resolver {
         TENZIR_ASSERT(!field.name.empty());
       return acc.name(x.name());
     }
-    return std::move(x);
+    return x;
   }
 
   caf::expected<legacy_type> resolve(symbol_map::iterator next) {

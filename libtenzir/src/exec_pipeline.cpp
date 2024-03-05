@@ -11,6 +11,7 @@
 #include <tenzir/pipeline.hpp>
 #include <tenzir/pipeline_executor.hpp>
 #include <tenzir/tql/parser.hpp>
+#include <tenzir/tql2/exec.hpp>
 
 #include <caf/event_based_actor.hpp>
 #include <caf/expected.hpp>
@@ -182,6 +183,10 @@ auto exec_pipeline(std::string content,
                    std::unique_ptr<diagnostic_handler> diag,
                    const exec_config& cfg, caf::actor_system& sys)
   -> caf::expected<void> {
+  if (cfg.tql2) {
+    auto success = tql2::exec(std::move(content), std::move(diag), cfg, sys);
+    return success ? ec::no_error : ec::silent;
+  }
   auto parsed = tql::parse(std::move(content), *diag);
   if (not parsed) {
     return ec::silent;

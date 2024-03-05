@@ -48,7 +48,7 @@ As a slight variation of the above: use a nested field name and a temporal
 constraint of the field with name `ts`:
 
 ```
-where id.orig_h == 1.2.3.4 && ts > 1 hour ago
+where id.orig_h == 1.2.3.4 and ts > 1 hour ago
 ```
 
 Subnets are first-class values:
@@ -57,12 +57,13 @@ Subnets are first-class values:
 where 10.10.5.0/25
 ```
 
-This expression unfolds to `:ip in 10.10.5.0/25 || :subnet == 10.10.5.0/25`. It
+This expression unfolds to `:ip in 10.10.5.0/25 or :subnet == 10.10.5.0/25`. It
 means "select all events that contain a field of type `ip` in the subnet
 `10.10.5.0/25`, or a field of type `subnet` the exactly matches `10.10.5.0/25`".
 
-Expressions consist of predicates that can be connected with AND, OR, and NOT:
+Expressions consist of predicates that can be connected with `and`, `or`, and
+`not`:
 
 ```
-where 10.10.5.0/25 && (orig_bytes > 1 Mi || duration > 30 min)
+where 10.10.5.0/25 and (orig_bytes > 1 Mi or duration > 30 min)
 ```

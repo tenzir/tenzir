@@ -117,8 +117,7 @@ tenzir:
   # Names of plugins and builtins to explicitly forbid from being used in
   # Tenzir. For example, adding `shell` will prohibit use of the `shell`
   # operator builtin, and adding `kafka` will prohibit use of the `kafka`
-  # connector plugin. This allows more fine-grained control than the
-  # `tenzir.allow-unsafe-pipelines` option.
+  # connector plugin.
   disable-plugins: []
 
   # The unique ID of this node.
@@ -127,9 +126,9 @@ tenzir:
   # Spawn a node instead of connecting to one.
   node: false
 
-  # Allow unsafe location overrides for pipelines with the 'local' and 'remote'
+  # Forbid unsafe location overrides for pipelines with the 'local' and 'remote'
   # keywords, e.g., remotely reading from a file.
-  allow-unsafe-pipelines: false
+  no-location-overrides: false
 
   # The size of an index shard, expressed in number of events. This should
   # be a power of 2.
@@ -157,11 +156,7 @@ tenzir:
   # The amount of queries that can be executed in parallel.
   max-queries: 10
 
-  # The store backend to use. Can be 'feather', or the name of a user-provided
-  # store plugin.
-  store-backend: feather
-
-  # Zstd compression level applied to both Feather and Parquet store backends.
+  # Zstd compression level applied to the Feather store backend.
   # zstd-compression-level: <default>
 
   # Interval between two aging cycles.

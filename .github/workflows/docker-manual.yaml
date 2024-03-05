@@ -35,15 +35,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Fetch Tags
         run: git fetch origin +refs/tags/*:refs/tags/*
       - name: Calculate Version
         id: version
         run: |
-          version="$(git describe --abbrev=10 --long --dirty --match='v[0-9]*')"
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            id_sha="$(git merge-base origin/main HEAD)"
+          else
+            id_sha="${{ github.sha }}"
+          fi
+          tenzir_version_build_metadata="-g${id_sha:0:10}"
+          echo "tenzir-version-build-metadata=${tenzir_version_build_metadata}" >> "$GITHUB_OUTPUT"
       - name: Configure Docker
         id: docker
         run: |
@@ -96,8 +99,8 @@ jobs:
               else
                 empty
               end
-            ] | ."version" = $v | ."tags" = $ARGS.positional' \
-            --arg v "${{ steps.version.outputs.version }}" \
+            ] | ."version-build-metadata" = $vs | ."tags" = $ARGS.positional' \
+            --arg vs "${{ steps.version.outputs.version-build-metadata }}" \
             --args -- "${tags[@]}")"
           echo "docker-config=${docker_config}" >> "$GITHUB_OUTPUT"
           echo "::notice docker-config = ${docker_config}"

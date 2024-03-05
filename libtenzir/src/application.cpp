@@ -45,8 +45,8 @@ void add_root_opts(command& cmd) {
     "directories lookup and static and dynamic plugin "
     "autoloading (this may only be used on the command line)");
   cmd.options.add<bool>(
-    "?tenzir", "allow-unsafe-pipelines",
-    "allow unsafe location overrides for pipelines with the "
+    "?tenzir", "no-location-overrides",
+    "forbid unsafe location overrides for pipelines with the "
     "'local' and 'remote' keywords, e.g., remotely reading from "
     "a file");
   cmd.options.add<std::string>("?tenzir", "console-verbosity",
@@ -93,9 +93,6 @@ void add_root_opts(command& cmd) {
                                "cycles");
   cmd.options.add<std::string>("?tenzir", "aging-query",
                                "query for aging out obsolete data");
-  cmd.options.add<std::string>("?tenzir", "store-backend",
-                               "store plugin to use for imported "
-                               "data");
   cmd.options.add<std::string>("?tenzir", "connection-timeout",
                                "the timeout for connecting to "
                                "a Tenzir server (default: 5m)");

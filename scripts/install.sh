@@ -88,9 +88,33 @@ then
 fi
 echo "Found ${platform}."
 
+# Figure out if we can run privileged.
+can_root=
+sudo=
+if [ "$(id -u)" = 0 ]
+then
+  can_root=1
+  sudo=""
+elif check sudo
+then
+  can_root=1
+  sudo="sudo"
+elif check doas
+then
+  can_root=1
+  sudo="doas"
+fi
+if [ "$can_root" != "1" ]
+then
+  echo "Could not find ${bold}sudo${normal} or ${bold}doas${normal}."
+  echo "This installer needs to run commands as the ${bold}root${normal} user."
+  echo "Re-run this script as root or set up sudo/doas."
+  exit 1
+fi
+
 # The caller can supply a package URL with an environment variable. This should
 # only be used for testing modifications to the packaging.
-if [ -n "${TENZIR_PACKAGE_URL}" ]
+if [ -n "${TENZIR_PACKAGE_URL:-}" ]
 then
   package_url="${TENZIR_PACKAGE_URL}"
 else
@@ -102,7 +126,7 @@ else
     package_url="${package_url_base}/debian/tenzir-static-latest.deb"
   elif [ "${platform}" = "Linux" ]
   then
-    package_url="${package_url_base}/main/tarball/tenzir-static-latest.gz"
+    package_url="${package_url_base}/tarball/tenzir-static-latest.gz"
   elif [ "${platform}" = "NixOS" ]
   then
     echo "Try Tenzir with our ${bold}flake.nix${normal}:"
@@ -179,11 +203,6 @@ fi
 
 # Trigger installation.
 action "Installing package into ${prefix}"
-if ! check sudo
-then
-  echo "Could not find ${bold}sudo${normal} in \$PATH."
-  exit 1
-fi
 if [ "${platform}" = "Debian" ]
 then
   # adduser is required by the Debian package installation.
@@ -192,8 +211,8 @@ then
     echo "Could not find ${bold}adduser${normal} in \$PATH."
     exit 1
   fi
-  cmd1="sudo apt-get --yes install \"${tmpdir}/${package}\""
-  cmd2="sudo systemctl status tenzir-node || [ ! -d /run/systemd/system ]"
+  cmd1="$sudo apt-get --yes install \"${tmpdir}/${package}\""
+  cmd2="$sudo systemctl status tenzir-node || [ ! -d /run/systemd/system ]"
   echo "This script is about to run the following commands:"
   echo
   echo "  - ${cmd1}"
@@ -205,7 +224,7 @@ then
   eval "${cmd2}"
 elif [ "${platform}" = "Linux" ]
 then
-  cmd1="sudo tar xzf \"${tmpdir}/${package}\" -C /"
+  cmd1="$sudo tar xzf \"${tmpdir}/${package}\" -C /"
   echo "This script is about to run the following command:"
   echo
   echo "  - ${cmd1}"
@@ -214,7 +233,7 @@ then
   eval "${cmd1}"
 elif [ "${platform}" = "macOS" ]
 then
-  cmd1="sudo installer -pkg \"${tmpdir}/${package}\" -target /"
+  cmd1="$sudo installer -pkg \"${tmpdir}/${package}\" -target /"
   echo "This script is about to run the following command:"
   echo
   echo "  - ${cmd1}"

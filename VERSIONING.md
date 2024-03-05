@@ -3,39 +3,33 @@
 This document provides an overview of versioning in Tenzir, covers the semantics
 of version bumps, and describes the individual components subject to versioning.
 
-Tenzir has multiple components: The `tenzir` binary, the `libtenzir` C++ library, and
-optional plugin C++ libraries. The `tenzir` binary and the `libtenzir` C++ library
-are versioned together, and the plugin C++ libraries are versioned individually.
+Tenzirs User Interface and APIs are versioned independently:
+* The `tenzir` binary follows the [SemVer][semver] guidlines.
+* The internal storage component is guaranteed to be able to read data written
+  with by the previous major version.
+* The `libtenzir` C++ library, and optional plugin C++ libraries are
+  intentionally neither forwards nor backwards compatible.
 
-## Version Identification
+## The `tenzir` Binary Version
 
-Run `tenzir exec 'version'` operator to get Tenzir's current version, and the
-versions of its major dependencies that it currently uses:
+### Version Identification
+
+Run `tenzir 'version'` operator to get Tenzir's current version:
 
 ```json
 {
-  "version": "v3.1.0-132-g2987800ac5-dirty",
-  "plugins": [
-    {
-      "name": "parquet",
-      "version": "bundled"
-    },
-    {
-      "name": "pcap",
-      "version": "bundled"
-    },
-    {
-      "name": "web",
-      "version": "bundled"
-    }
-  ]
+  "version": "4.8.2+N70z9j274azhlanfmn3v0xxrsk1lbbyid",
+  "build": "N70z9j274azhlanfmn3v0xxrsk1lbbyid",
+  "major": 4,
+  "minor": 8,
+  "patch": 2
 }
 ```
 
-## Version Components
+### Version Components
 
 Tenzir's version number consists of three mandatory and two optional parts:
-`v<major>.<minor>.<patch>[-rc<candidate>][-<tag>]`. Every release on the default
+`v<major>.<minor>.<patch>[-rc<candidate>][+<build>]`. Every release on the default
 branch has an associated annotated and gpg-signed tag of the same name.
 
 This versioning scheme looks similar to [SemVer][semver], but differs from it in
@@ -44,51 +38,36 @@ that [Tenzir's API and ABI is explicitly unversioned][api-and-abi-versioning].
 [semver]: https://semver.org
 [api-and-abi-versioning]: #libtenzir-api-and-abi-versioning
 
-### Major
+#### Major
 
 A major version increment indicates that the release includes breaking changes,
 such as required changes to user configuration, removal of previously deprecated
 features, and updates to the minimum versions of required third-party
 dependencies.
 
-### Minor
+#### Minor
 
 A minor version increment indicates changes to functionality, e.g., the addition
 of new features and configuration, or the deprecation of existing features and
 configuration.
 
-### Patch
+#### Patch
 
 A patch version increment indicates backwards-compatible bug fixes.
 
-### Candidate (optional)
+#### Candidate (optional)
 
 For release candidates, the version includes an additional `-rc<number>`, e.g.,
 `v1.2.3-rc1` indicates the first release candidate for the release `v1.2.3`.
 
-### Tag (optional)
+#### Build Metadata (optional)
 
-Tenzir's build system uses [`git-describe`][git-describe] for versioning.
-Specifically, it runs:
+The Build Metadata from the SemVer spec is used as a free-form Version Appendinx
+that is useful for identifying the the exact version used to produce a given
+Tenzir binary. It may be one of:
 
-```
-git describe --abbrev=10 --long --dirty --match='v[0-9]*'
-```
-
-This includes a count of commits since the last release, the exact commit hash
-of the build abbreviated to 10 characters, and an optional `-dirty` suffix if
-the build contained uncommitted staged changes.
-
-E.g., `v1.23.45-rc1-67-g89abcdef12-dirty` indicates the first release candidate
-for the `v1.23.45`, and additional 67 commits since the tag, the commit hash
-`89abcdef12`, and the existence of uncommited staged changes.
-
-The tag is omitted if `git-describe` is unavailable at build time, or the build
-runs outside of the Tenzir Git repository. For the above example, this would
-result in `v1.23.45-rc1`, losing information that is relevant to developers
-only.
-
-[git-describe]: https://git-scm.com/docs/git-describe
+* A (potentially abbreviated) git commit hash
+* A Nix output hash
 
 ## Compatibility and Guarantees
 
@@ -119,12 +98,12 @@ E.g., the `libtenzir` C++ library shared object name for Tenzir
 
 ## Plugin Versioning
 
-The plugin version components exactly mirror the version components of Tenzir. The
-build system uses [`git-describe`] with the last commit to the plugin's source
-tree.
+Vendored plugins are not versioned independently, but considered part of the
+Tenzir software distribution. The UI and API versions, as well as persistance
+guarantees are the same as those described in the previous sections.
 
-We encourage plugin authors to version their plugins separately, and to follow
-the guidelines laid out in this document.
+We encourage authors of 3rd party plugins to version their plugins separately,
+and to follow the guidelines laid out in this document.
 
 Due to `libtenzir`'s unstable ABI, Tenzir plugins distributed as dynamic libraries
 must link against the exact same version of `libtenzir` as the `tenzir` binary

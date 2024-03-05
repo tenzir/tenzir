@@ -152,58 +152,6 @@ applies to a single field, `suricata.http.http.url`, and has false-positive rate
 of 0.5%. The second rule creates one sketch for all fields of type `ip` that has
 a false-positive rate of 10%.
 
-### Select the store format
-
-Tenzir arranges data in horizontal partitions for sharding. Each partition has a
-unique schema and is effectively a concatenation of batches. The *store* inside
-a partition holds this data and can have multiple formats:
-
-1. **Feather**: writes Apache Feather V2 files
-2. **Parquet**: writes [Apache Parquet](https://parquet.apache.org/) files
-
-Tenzir defaults to the `feather` store. To use the Parquet store, adjust
-`tenzir.store-backend`:
-
-```yaml
-tenzir:
-  plugins:
-    - parquet
-  store-backend: parquet
-```
-
-There's an inherent space-time tradeoff between the stores that affects CPU,
-memory, and storage characteristics. Compared to the Feather store, Parquet
-differs as follows:
-
-1. Parquet files occupy ~40% less space, which also reduces I/O pressure during
-   querying.
-2. Parquet utilizes more CPU cycles during ingest (~10%) and querying.
-
-Parquet has the major advantage that it's the de-facto standard for encoding
-columnar data in modern data architectures. This allows other applications that
-support reading from Parquet *native* access to the data.
-
-:::tip Recommendation
-
-Use Parquet when:
-
-1. Storage is scarce, and you want to increase data retention
-2. Workloads are I/O-bound and you have available CPU
-3. Reading data with with off-the-shelf data science tools is a use case
-
-For an in-depth comparison, take a look at our [blog post on Feather and
-Parquet](/blog/parquet-and-feather-writing-security-telemetry).
-
-One final word of caution: a query over a Parquet store is currently not
-interruptible and executes over the entire store. This is a deficiency in our
-implementation that we aim to fix in the future. We recommend Feather when tail
-latencies are an issue.
-:::
-
-Tenzir supports [rebuilding the entire database](#rebuild-partitions) in case
-you want to switch to a different store format. However, Tenzir works perfectly
-fine with a mixed-storage configuration, so a full rebuild is not required.
-
 ### Adjust the store compression
 
 Tenzir compresses partitions using Zstd for partitions at rest. To fine-tune the

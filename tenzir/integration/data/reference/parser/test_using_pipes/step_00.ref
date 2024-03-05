@@ -1,0 +1,91 @@
+[
+  invocation {
+    op: {
+      path: [
+        `export` @ 0..6
+      ],
+      id: <unresolved>
+    },
+    args: [
+      
+    ]
+  },
+  assignment {
+    left: {
+      path: [
+        `foo` @ 9..12
+      ]
+    },
+    equals: 13..14,
+    right: literal {
+      value: int64 42,
+      source: 15..17
+    }
+  },
+  invocation {
+    op: {
+      path: [
+        `set` @ 20..23
+      ],
+      id: <unresolved>
+    },
+    args: [
+      assignment {
+        left: {
+          path: [
+            `bar` @ 24..27
+          ]
+        },
+        equals: 28..29,
+        right: literal {
+          value: int64 43,
+          source: 30..32
+        }
+      }
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        `foo` @ 35..38
+      ],
+      id: <unresolved>
+    },
+    args: [
+      selector {
+        path: [
+          `bar` @ 39..42
+        ]
+      },
+      assignment {
+        left: {
+          path: [
+            `baz` @ 44..47
+          ]
+        },
+        equals: 47..48,
+        right: selector {
+          path: [
+            `qux` @ 48..51
+          ]
+        }
+      },
+      selector {
+        path: [
+          `quux` @ 53..57
+        ]
+      }
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        `import` @ 60..66
+      ],
+      id: <unresolved>
+    },
+    args: [
+      
+    ]
+  }
+]

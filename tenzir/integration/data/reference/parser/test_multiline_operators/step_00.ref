@@ -1,0 +1,95 @@
+[
+  invocation {
+    op: {
+      path: [
+        `a` @ 0..1
+      ],
+      id: <unresolved>
+    },
+    args: [
+      selector {
+        path: [
+          `b` @ 2..3
+        ]
+      },
+      selector {
+        path: [
+          `c` @ 7..8
+        ]
+      },
+      selector {
+        path: [
+          `d` @ 12..13
+        ]
+      },
+      selector {
+        path: [
+          `e` @ 15..16
+        ]
+      }
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        `f` @ 17..18
+      ],
+      id: <unresolved>
+    },
+    args: [
+      selector {
+        path: [
+          `g` @ 19..20
+        ]
+      }
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        `h` @ 21..22
+      ],
+      id: <unresolved>
+    },
+    args: [
+      selector {
+        path: [
+          `i` @ 27..28
+        ]
+      },
+      selector {
+        path: [
+          `j` @ 32..33
+        ]
+      },
+      selector {
+        path: [
+          `k` @ 38..39
+        ]
+      }
+    ]
+  },
+  invocation {
+    op: {
+      path: [
+        `l` @ 40..41
+      ],
+      id: <unresolved>
+    },
+    args: [
+      binary_expr {
+        left: selector {
+          path: [
+            `m` @ 42..43
+          ]
+        },
+        op: "add" @ 44..45,
+        right: selector {
+          path: [
+            `n` @ 48..49
+          ]
+        }
+      }
+    ]
+  }
+]

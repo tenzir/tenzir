@@ -56,7 +56,7 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
   auto handle = self->spawn(
     index, accountant, filesystem, catalog, indexdir,
     // TODO: Pass these options as a tenzir::data object instead.
-    opt("tenzir.store-backend", std::string{sd::store_backend}),
+    std::string{sd::store_backend},
     opt("tenzir.max-partition-size", sd::max_partition_size),
     opt("tenzir.active-partition-timeout", sd::active_partition_timeout),
     opt("tenzir.max-resident-partitions", sd::max_in_mem_partitions),

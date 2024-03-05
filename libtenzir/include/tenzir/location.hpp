@@ -46,6 +46,18 @@ struct location {
     return {first, last};
   }
 
+  auto combine(location other) const -> location {
+    if (not *this) {
+      return other;
+    }
+    if (not other) {
+      return *this;
+    }
+    other.begin = std::min(begin, other.begin);
+    other.end = std::max(end, other.end);
+    return other;
+  }
+
   auto operator<=>(const location&) const = default;
 
   friend auto inspect(auto& f, location& x) {

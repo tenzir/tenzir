@@ -370,7 +370,7 @@ TEST(parse print roundtrip) {
   MESSAGE("simple roundtrip");
   {
     auto str
-      = "((x == 5 && :bool == true) || (foo == /foo/ && ! (x == 5 || #schema == /bar/)))"s;
+      = "((x == 5 and :bool == true) or (foo == /foo/ and not (x == 5 or #schema == /bar/)))"s;
     auto expr = to_expr(str);
     CHECK_EQUAL(str, to_string(expr));
   }

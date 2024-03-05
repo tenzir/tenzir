@@ -38,6 +38,12 @@ auto offset::get(const table_slice& slice) const noexcept
   -> std::pair<type, std::shared_ptr<arrow::Array>> {
   if (slice.rows() == 0)
     return {};
+  if (empty()) {
+    return {
+      slice.schema(),
+      to_record_batch(slice)->ToStructArray().ValueOrDie(),
+    };
+  }
   return {
     caf::get<record_type>(slice.schema()).field(*this).type,
     get(*to_record_batch(slice)),

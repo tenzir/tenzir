@@ -16,7 +16,8 @@ metrics [--live]
 
 ## Description
 
-The `metrics` operator retrieves metrics events from a Tenzir node.
+The `metrics` operator retrieves metrics events from a Tenzir node. Metrics
+events are collected every second.
 
 ### `--live`
 
@@ -170,7 +171,7 @@ excluding pipelines run in the Explorer:
 metrics
 | where #schema == "tenzir.metrics.operator"
 | where timestamp > 1 week ago
-| where hidden == false && source == true
+| where hidden == false and source == true
 | summarize bytes=sum(output.approx_bytes) by timestamp resolution 1 day
 ```
 

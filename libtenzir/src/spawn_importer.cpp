@@ -30,8 +30,7 @@ spawn_importer(node_actor::stateful_pointer<node_state> self,
   // FIXME: Notify exporters with a continuous query.
   auto [index, accountant]
     = self->state.registry.find<index_actor, accountant_actor>();
-  auto store_backend = caf::get_or(args.inv.options, "tenzir.store-backend",
-                                   std::string{defaults::store_backend});
+  auto store_backend = std::string{defaults::store_backend};
   if (!index)
     return caf::make_error(ec::missing_component, "index");
   auto handle = self->spawn(importer, args.dir / args.label, index, accountant);

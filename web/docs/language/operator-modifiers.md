@@ -35,12 +35,12 @@ overrides:
 2. Change local operators to run remotely, to allow for reading a file from a
    remote host, e,g., `remote from file /tmp/suricata.sock read suricata`.
    Because such an operation allows for remotely reading files or executing
-   potentially unwanted operators, you must set the following configuration
-   option to enable running local operators remotely (and vice versa):
+   potentially unwanted operators, you can disable such overrides by setting the
+   following configuration option:
 
    ```yaml {0} title="tenzir.yaml"
    tenzir:
-     allow-unsafe-pipelines: true
+     no-location-overrides: true
    ```
 
    If you want more fine-grained control about which operators, operator
@@ -49,7 +49,6 @@ overrides:
 
    ```yaml {0} title="tenzir.yaml"
    tenzir:
-     allow-unsafe-pipelines: true
      disable-plugins:
        - shell
        - remote
