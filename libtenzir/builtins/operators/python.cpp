@@ -149,8 +149,7 @@ public:
         // is smart enough to check if one is already present. We prevent this
         // hidden modification by starting the seamphore name with a slash.
         // This ensures that the truncation logic below is correct.
-        auto sem_name = fmt::format("/tnz-{}.{}.{}-{:x}", version::major,
-                                    version::minor, version::patch, venv_id);
+        auto sem_name = fmt::format("/tnz-python-{:x}", venv_id);
         // The semaphore name is restricted to a maximum length of 31 characters
         // (including the '\0') on macOS. This length has been experimentally
         // verified. We truncate it to this length unconditionally for
@@ -167,6 +166,7 @@ public:
             .note("could not acquire named semaphore '{}' within 60 seconds",
                   sem_name)
             .emit(ctrl.diagnostics());
+          boost::interprocess::named_semaphore::remove(sem_name.c_str());
           co_return;
         }
         auto sem_guard = caf::detail::scope_guard{[&] {
