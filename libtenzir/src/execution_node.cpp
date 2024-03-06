@@ -20,6 +20,7 @@
 
 #include <arrow/config.h>
 #include <arrow/util/byte_size.h>
+#include <caf/after.hpp>
 #include <caf/downstream.hpp>
 #include <caf/exit_reason.hpp>
 #include <caf/typed_event_based_actor.hpp>
@@ -84,8 +85,9 @@ auto make_timer_guard(Duration&... elapsed) {
 // of table slices, excluding the schema and disregarding any overlap or custom
 // information from extension types.
 auto approx_bytes(const table_slice& events) -> uint64_t {
-  if (events.rows() == 0)
+  if (events.rows() == 0) {
     return 0;
+  }
   auto record_batch = to_record_batch(events);
   TENZIR_ASSERT(record_batch);
   // Note that this function can sometimes fail. Because we ultimately want to

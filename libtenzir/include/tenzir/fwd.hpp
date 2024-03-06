@@ -96,8 +96,9 @@ struct inspector_access<inbound_stream_slot<Slot>> {
   static auto apply(Inspector& f, inbound_stream_slot<T>& x) {
     auto val = x.value();
     auto result = f.apply(val);
-    if constexpr (Inspector::is_loading)
+    if constexpr (Inspector::is_loading) {
       x = inbound_stream_slot<T>{val};
+    }
     return result;
   }
 };
@@ -108,8 +109,9 @@ struct inspector_access<std::filesystem::path> {
   static auto apply(Inspector& f, std::filesystem::path& x) {
     auto str = x.string();
     auto result = f.apply(str);
-    if constexpr (Inspector::is_loading)
+    if constexpr (Inspector::is_loading) {
       x = {str};
+    }
     return result;
   }
 };

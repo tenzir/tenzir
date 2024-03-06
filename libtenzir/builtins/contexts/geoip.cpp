@@ -438,8 +438,10 @@ public:
     co_yield current_dump.builder.finish_assert_one_slice(
       fmt::format("tenzir.{}.info", context_type()));
     if (current_dump.status != MMDB_SUCCESS) {
-      TENZIR_ERROR("dump of GeoIP context ended prematurely: {}",
-                   MMDB_strerror(current_dump.status));
+      diagnostic::error("dump of GeoIP context ended prematurely: {}",
+                        MMDB_strerror(current_dump.status))
+        .emit(diagnostics);
+      co_yield {};
     }
   }
 

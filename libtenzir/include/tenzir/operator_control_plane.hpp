@@ -40,12 +40,17 @@ struct operator_control_plane {
   /// Returns true if the operator is hosted by process that has a terminal.
   virtual auto has_terminal() const noexcept -> bool = 0;
 
+  auto shared_diagnostics_receiver() noexcept -> receiver_actor<diagnostic> {
+    return exec_node_actor{&(self())};
+  }
+
   /// Return a version of the diagnostic handler that may be passed to other
   /// threads. NOTE: Unlike for the regular diagnostic handler, emitting an
-  /// errpr via the shared diagnostic handler does not shut down the operator
+  /// error via the shared diagnostic handler does not shut down the operator
   /// immediately.
-  inline auto shared_diagnostics() noexcept -> shared_diagnostic_handler {
-    return shared_diagnostic_handler{exec_node_actor{&(self())}};
+  auto shared_diagnostics(const auto& sender) noexcept
+    -> shared_diagnostic_handler {
+    return shared_diagnostic_handler{sender, shared_diagnostics_receiver()};
   }
 };
 

@@ -101,9 +101,10 @@ public:
     TENZIR_TRACE("writing {} bytes to child's stdin", buffer.size());
     const auto* data = reinterpret_cast<const char*>(buffer.data());
     auto size = detail::narrow_cast<std::streamsize>(buffer.size());
-    if (not stdin_.write(data, size))
+    if (not stdin_.write(data, size)) {
       return caf::make_error(ec::unspecified,
                              "failed to write into child's stdin");
+    }
     return caf::none;
   }
 
@@ -201,31 +202,32 @@ public:
         .emit(ctrl.diagnostics());
       co_return;
     }
-    // Read from child in separate thread because coroutine-based async
+    // Read from child in a separate thread because coroutine-based async
     // I/O is not (yet) feasible. The thread writes the chunks into a
-    // queue such that to this coroutine can yield them.
+    // queue such that this coroutine can yield them.
     auto chunks = std::queue<chunk_ptr>{};
     auto chunks_mutex = std::mutex{};
-    auto thread = std::thread([&child, &chunks, &chunks_mutex,
-                               diagnostics = ctrl.shared_diagnostics()]() {
-      auto buffer = std::vector<char>(block_size);
-      while (true) {
-        auto bytes_read = child->read(as_writeable_bytes(buffer));
-        if (not bytes_read) {
-          diagnostic::error(add_context(bytes_read.error(),
-                                        "failed to read from child process"))
-            .emit(diagnostics);
-          return;
+    auto thread = std::thread(
+      [&child, &chunks, &chunks_mutex,
+       diagnostics = ctrl.shared_diagnostics(ctrl.self())]() {
+        auto buffer = std::vector<char>(block_size);
+        while (true) {
+          auto bytes_read = child->read(as_writeable_bytes(buffer));
+          if (not bytes_read) {
+            diagnostic::error(add_context(bytes_read.error(),
+                                          "failed to read from child process"))
+              .emit(diagnostics);
+            return;
+          }
+          if (*bytes_read == 0) {
+            // Reading 0 bytes indicates EOF.
+            break;
+          }
+          auto chk = chunk::copy(std::span{buffer.data(), *bytes_read});
+          auto lock = std::lock_guard{chunks_mutex};
+          chunks.push(std::move(chk));
         }
-        if (*bytes_read == 0) {
-          // Reading 0 bytes indicates EOF.
-          break;
-        }
-        auto chk = chunk::copy(std::span{buffer.data(), *bytes_read});
-        auto lock = std::lock_guard{chunks_mutex};
-        chunks.push(std::move(chk));
-      }
-    });
+      });
     {
       // Coroutines require RAII-style exit handling.
       auto unplanned_exit = caf::detail::make_scope_guard([&] {
