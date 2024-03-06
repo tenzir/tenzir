@@ -17,39 +17,52 @@ namespace tenzir::plugins::pass {
 namespace {
 
 using diag_debug_actor
-  = typed_actor_fwd<auto(table_slice)->caf::result<table_slice>>::unwrap;
+  = caf::typed_actor<auto(table_slice)->caf::result<table_slice>>;
+
+struct diag_debug_state {
+  static constexpr inline const char* name = "diag-debug";
+
+  diag_debug_actor::pointer self = {};
+  receiver_actor<diagnostic> diagnostics = {};
+};
+
+auto diag_debug(diag_debug_actor::stateful_pointer<diag_debug_state> self,
+                receiver_actor<diagnostic> diagnostics)
+  -> diag_debug_actor::behavior_type {
+  self->state.self = self;
+  self->state.diagnostics = std::move(diagnostics);
+
+  diagnostic::warning("inside spawn")
+    .emit(shared_diagnostic_handler{*self, self->state.diagnostics});
+
+  return {[self](table_slice x) -> caf::result<table_slice> {
+    diagnostic::warning("inside behavior")
+      .emit(shared_diagnostic_handler{*self, self->state.diagnostics});
+    return x;
+  }};
+}
 
 // Does nothing with the input.
 class pass_operator final : public crtp_operator<pass_operator> {
 public:
   auto operator()(generator<table_slice> x, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    auto handle = ctrl.self().spawn(
-      [](diag_debug_actor::pointer self,
-         const receiver_actor<diagnostic>& diags)
-        -> diag_debug_actor::behavior_type {
-        diagnostic::warning("inside spawn")
-          .emit(shared_diagnostic_handler{*self, diags});
-        return {[=](table_slice x) -> caf::result<table_slice> {
-          // diagnostic::warning("inside actor")
-          //   .emit(shared_diagnostic_handler{*self, diags});
-          return x;
-        }};
-      },
-      caf::actor_cast<receiver_actor<diagnostic>>(&ctrl.self()));
+    auto handle
+      = ctrl.self().spawn(diag_debug, ctrl.shared_diagnostics_receiver());
     for (auto&& slice : x) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
       // diagnostic::warning("test from pass").emit(ctrl.shared_diagnostics());
       table_slice s;
       ctrl.self()
         .request(handle, caf::infinite, slice)
         .await(
           [&](table_slice& slice) {
-            TENZIR_WARN("inside await");
             s = std::move(slice);
           },
-          [](const caf::error&) {
-            TENZIR_WARN("inside await: err");
-          });
+          [](const caf::error&) {});
       co_yield {};
       co_yield s;
     }
