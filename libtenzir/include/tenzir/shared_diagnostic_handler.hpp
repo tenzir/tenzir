@@ -30,19 +30,14 @@ public:
       receiver_{receiver},
       send_callback_{[](caf::strong_actor_ptr erased_sender,
                         receiver_actor<diagnostic> receiver, diagnostic diag) {
-        // auto sender = caf::actor_cast<caf::typed_event_based_actor<Sigs...>>(
-        //   erased_sender->get());
         auto* sender = static_cast<caf::typed_event_based_actor<Sigs...>*>(
           erased_sender->get());
-        // sender->template send<caf::message_priority::high>(receiver,
-        //                                                    std::move(diag));
         sender
           ->template request<caf::message_priority::high>(receiver,
                                                           caf::infinite, diag)
           .then([]() {},
-                [/*receiver, diag*/](const caf::error& err) {
+                [](const caf::error& err) {
                   TENZIR_WARN("failed to deliver diagnostic: {}", err);
-                  // caf::anon_send<caf::message_priority::high>(receiver, diag);
                 });
       }} {
   }
@@ -57,14 +52,11 @@ public:
         send_callback_(sender, receiver, std::move(diag));
       }
     }
-    // send_callback_(sender_, receiver_, std::move(diag));
   }
 
 private:
   caf::weak_actor_ptr sender_ = {};
   detail::weak_handle<receiver_actor<diagnostic>> receiver_ = {};
-  // caf::strong_actor_ptr sender_ = {};
-  // receiver_actor<diagnostic> receiver_ = {};
   std::function<
     auto(caf::strong_actor_ptr, receiver_actor<diagnostic>, diagnostic)->void>
     send_callback_ = {};
