@@ -141,6 +141,16 @@ An operator is a [source](#source), [transformation](#transformation), or
 
 - See all available [operators](./operators.md)
 
+## PaC
+
+The acronym PaC stands for *Pipelines as Code*. It is meant as an adaptation of
+[Infrastructure as Code
+(IaC)](https://en.wikipedia.org/wiki/Infrastructure_as_code) with pipelines
+represent the (data) infrastructure that is provisioning as code.
+
+- Learn how to provision [piplines as
+  code](./user-guides/run-pipelines/README.md#as-code).
+
 ## Parser
 
 A [format](#format) that translates bytes into events.
