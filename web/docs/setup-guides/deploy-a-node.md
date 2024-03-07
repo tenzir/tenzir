@@ -1,3 +1,7 @@
+---
+sidebar_position: 1
+---
+
 # Deploy a node
 
 A *node* is a managed service for pipelines and storage.
