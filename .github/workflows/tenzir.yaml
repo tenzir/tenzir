@@ -102,8 +102,9 @@ jobs:
         run: |
           # Create a matrix with Tenzir versions greater or equal than
           # limit_version. If the version does not exist yet (e.g., because of
-          # an intentional break, only check latest).
-          limit_version=v4.0.0
+          # an intentional break), only check latest. We usually set this to the
+          # minimum supported version.
+          limit_version=v4.9.0
           if git rev-parse "${limit_version}" --; then
             dated_versions=$(git for-each-ref --format="%(creatordate:format:%s)#%(refname:short)" "refs/tags/v[1-9]*" | grep -v '\-rc[0-9]\+$')
             dated_limit_version=$(printf "$dated_versions" | grep $limit_version)
