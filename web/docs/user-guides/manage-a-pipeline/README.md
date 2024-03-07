@@ -4,11 +4,11 @@ sidebar_position: 1
 
 # Manage a pipeline
 
-A pipeline can enter many states after you [run it][run-a-pipeline]. The
+A pipeline can enter many states after you [run it][run-pipelines]. The
 [app](https://app.tenzir.com/) or [API](/api) allow you to manage the pipeline
 lifecycles.
 
-[run-a-pipeline]: ../run-a-pipeline/README.md
+[run-pipeline]: ../run-pipelines/README.md
 
 The diagram below illustrates the various states, where circles correspond to
 states and arrows to state transitions:
@@ -21,7 +21,7 @@ automatically based on system events.
 
 The states have the following meaning:
 
-- **Created**: the pipeline has just been [deployed][run-a-pipeline].
+- **Created**: the pipeline has just been [deployed][run-pipelines].
 - **Running**: the pipeline is actively processing data.
 - **Completed**: there is no more data to process.
 - **Failed**: an error occurred.

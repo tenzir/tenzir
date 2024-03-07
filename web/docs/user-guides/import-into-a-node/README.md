@@ -5,7 +5,7 @@ sidebar_position: 3
 # Import into a node
 
 Importing (or *ingesting*) data can be done by [running a
-pipeline](../run-a-pipeline/README.md) that ends with the
+pipeline](../run-pipelines/README.md) that ends with the
 [`import`](../../operators/import.md) sink operator. When managing a pipeline
 through the app or the API, all pipeline operators run within the node. When
 using the CLI, at least the `import` operator runs within the node.
@@ -23,4 +23,4 @@ from file Zeek/conn.log read zeek-tsv
 
 The `import` operator requires a node execution context. To invoke the above
 pipeline successfully, you need to [deploy a
-node](../../setup-guides/deploy-a-node/README.md) first.
+node](../../setup-guides/deploy-a-node.md) first.

@@ -174,7 +174,7 @@ on the inner workings.
 ## Does a Tenzir node run on platform *X*?
 
 We currently support the platforms that we mention in our [deployment
-instructions](setup-guides/deploy-a-node/README.md).
+instructions](setup-guides/deploy-a-node.md).
 
 For any other platform, the answer is most likely *no*. While we would love to
 support a wide variety of platforms, we are still a small team with limited

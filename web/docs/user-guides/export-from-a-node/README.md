@@ -5,7 +5,7 @@ sidebar_position: 4
 # Export from a node
 
 Exporting (or *querying*) data can be done by [running a
-pipeline](../run-a-pipeline/README.md) that begins with the
+pipeline](../run-pipelines/README.md) that begins with the
 [`export`](../../operators/export.md) source. When managing a pipeline through
 the app or the API, all pipeline operators run within the node. When using the
 CLI, at least the `export` operator runs within the node.
