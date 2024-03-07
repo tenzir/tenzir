@@ -165,10 +165,19 @@ in {
       prev.libbacktrace.overrideAttrs (old: {
         doCheck = false;
       });
-  rdkafka = prev.rdkafka.overrideAttrs (orig: {
+  rdkafka =
+    let
+      # The FindZLIB.cmake module from CMake breaks when multiple outputs are
+      # used.
+      zlib = final.zlib.overrideAttrs (orig: {
+        outputs = [ "out" ];
+        outputDoc = "out";
+        postInstall = "";
+      });
+    in prev.rdkafka.overrideAttrs (orig: {
     nativeBuildInputs = orig.nativeBuildInputs ++ [prev.buildPackages.cmake];
     # The cmake config file doesn't find them if they are not propagated.
-    propagatedBuildInputs = orig.buildInputs;
+    propagatedBuildInputs = (builtins.filter (x: x.pname == "zlib") orig.buildInputs) ++ [ zlib ];
     cmakeFlags =
       lib.optionals isStatic [
         "-DRDKAFKA_BUILD_STATIC=ON"
