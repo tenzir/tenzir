@@ -87,7 +87,7 @@ public:
     auto field_transformations = std::vector<indexed_transformation>{};
     if (!config_.fields.empty()) {
       for (const auto& field : config_.fields) {
-        if (auto index = schema.resolve_key_or_concept(field.from)) {
+        if (auto index = schema.resolve_key_or_concept_once(field.from)) {
           auto transformation
             = [&](struct record_type::field old_field,
                   std::shared_ptr<arrow::Array> array) noexcept

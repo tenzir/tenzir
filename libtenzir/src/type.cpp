@@ -1067,13 +1067,22 @@ type::make_arrow_builder(arrow::MemoryPool* pool) const noexcept {
   return caf::visit(f, *this);
 }
 
-std::optional<offset>
+generator<offset>
 type::resolve_key_or_concept(std::string_view key) const noexcept {
   const auto* rt = caf::get_if<record_type>(this);
   if (not rt) {
     return {};
   }
   return rt->resolve_key_or_concept(key, name());
+}
+
+std::optional<offset>
+type::resolve_key_or_concept_once(std::string_view key) const noexcept {
+  const auto* rt = caf::get_if<record_type>(this);
+  if (not rt) {
+    return {};
+  }
+  return rt->resolve_key_or_concept_once(key, name());
 }
 
 auto inspect(caf::detail::stringification_inspector& f, type& x) {
@@ -2910,7 +2919,7 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
   die("index out of bounds");
 }
 
-std::optional<offset> record_type::resolve_key_or_concept(
+generator<offset> record_type::resolve_key_or_concept(
   std::string_view key, std::string_view schema_name) const noexcept {
   auto index = offset{0};
   auto history = std::vector{std::pair{
@@ -2954,8 +2963,10 @@ std::optional<offset> record_type::resolve_key_or_concept(
       case fbs::type::Type::enumeration_type:
       case fbs::type::Type::list_type:
       case fbs::type::Type::map_type: {
-        if (remaining_key == field_name->string_view())
-          return index;
+        if (remaining_key == field_name->string_view()) {
+          co_yield std::move(index);
+          co_return;
+        }
         ++index.back();
         break;
       }
@@ -2964,8 +2975,10 @@ std::optional<offset> record_type::resolve_key_or_concept(
           = std::mismatch(remaining_key.begin(), remaining_key.end(),
                           field_name->begin(), field_name->end());
         if (field_name_mismatch == field_name->end()
-            && remaining_key_mismatch == remaining_key.end())
-          return index;
+            && remaining_key_mismatch == remaining_key.end()) {
+          co_yield std::move(index);
+          co_return;
+        }
         if (field_name_mismatch == field_name->end()
             && remaining_key_mismatch != remaining_key.end()
             && *remaining_key_mismatch == '.') {
@@ -2986,7 +2999,7 @@ std::optional<offset> record_type::resolve_key_or_concept(
   // As a fallback, try to resolve the key as a concept, if the schema name is
   // known.
   if (schema_name.empty()) {
-    return {};
+    co_return;
   }
   const auto try_strip_schema_name
     = [&schema_name](std::string_view key) -> std::optional<std::string_view> {
@@ -3004,16 +3017,23 @@ std::optional<offset> record_type::resolve_key_or_concept(
   for (const auto& resolved_key : resolved_keys) {
     if (auto key = try_strip_schema_name(resolved_key)) {
       if (auto result = resolve_key(*key)) {
-        return result;
+        co_yield std::move(*result);
       }
     }
   }
-  return {};
+}
+
+std::optional<offset> record_type::resolve_key_or_concept_once(
+  std::string_view key, std::string_view schema_name) const noexcept {
+  for (auto&& result : resolve_key_or_concept(key, schema_name)) {
+    return result;
+  }
+  return std::nullopt;
 }
 
 std::optional<offset>
 record_type::resolve_key(std::string_view key) const noexcept {
-  return resolve_key_or_concept(key, {});
+  return resolve_key_or_concept_once(key, {});
 }
 
 generator<offset>

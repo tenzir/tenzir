@@ -77,7 +77,7 @@ public:
       };
     };
     for (const auto& field_name : config_.fields) {
-      if (auto index = schema.resolve_key_or_concept(field_name)) {
+      if (auto index = schema.resolve_key_or_concept_once(field_name)) {
         auto index_type = caf::get<record_type>(schema).field(*index).type;
         if (!caf::holds_alternative<ip_type>(index_type)) {
           TENZIR_DEBUG("pseudonymize operator skips field '{}' of unsupported "

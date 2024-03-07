@@ -128,7 +128,7 @@ public:
       return caf::make_error(ec::invalid_argument,
                              "invalid 'key' parameter; 'key' must be a string");
     }
-    auto key_column = slice.schema().resolve_key_or_concept(*key_field);
+    auto key_column = slice.schema().resolve_key_or_concept_once(*key_field);
     if (not key_column) {
       // If there's no key column then we cannot do much.
       return update_result{record{}};

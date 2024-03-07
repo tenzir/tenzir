@@ -74,7 +74,7 @@ public:
       }
       auto batch = to_record_batch(slice);
       auto schema = caf::get<record_type>(slice.schema());
-      auto index = slice.schema().resolve_key_or_concept(input_.inner);
+      auto index = slice.schema().resolve_key_or_concept_once(input_.inner);
       if (not index) {
         diagnostic::error("could not resolve `{}` for schema `{}`",
                           input_.inner, slice.schema())

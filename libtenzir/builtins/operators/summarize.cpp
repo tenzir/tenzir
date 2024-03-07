@@ -228,7 +228,7 @@ struct binding {
     result.aggregation_columns.reserve(config.aggregations.size());
     auto const& rt = caf::get<record_type>(schema);
     for (auto const& field : config.group_by_extractors) {
-      if (auto offset = schema.resolve_key_or_concept(field)) {
+      if (auto offset = schema.resolve_key_or_concept_once(field)) {
         auto type = rt.field(*offset).type;
         result.group_by_columns.emplace_back(
           column{std::move(*offset), std::move(type)});
@@ -252,7 +252,7 @@ struct binding {
               TENZIR_ASSERT(aggr.function->name() == "count");
               return {{{}, type{int64_type{}}}};
             } else if (auto offset
-                       = schema.resolve_key_or_concept(aggr.input)) {
+                       = schema.resolve_key_or_concept_once(aggr.input)) {
               auto type = rt.field(*offset).type;
               return {{std::move(*offset), std::move(type)}};
             } else {

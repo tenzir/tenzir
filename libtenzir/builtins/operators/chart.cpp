@@ -248,7 +248,7 @@ private:
         || std::holds_alternative<attribute_value>(item.field_value)) {
       return true;
     }
-    auto idx = slice.schema().resolve_key_or_concept(field_name);
+    auto idx = slice.schema().resolve_key_or_concept_once(field_name);
     if (not idx) {
       diagnostic::error("could not find field `{}` in schema `{}`", field_name,
                         slice.schema().name())
@@ -348,7 +348,7 @@ private:
       // Used when the field name is explicitly specified as an argument,
       // through --x-axis/--y-axis/--name/--value
       [&](const field_name& f) -> std::optional<std::string_view> {
-        if (not schema.resolve_key_or_concept(f.field, schema_name_)) {
+        if (not schema.resolve_key_or_concept_once(f.field, schema_name_)) {
           diagnostic::error("field `{}` not found in input (schema `{}`), "
                             "but the chart operator expected it for `{}`",
                             f.field, schema_name_, item.key)
