@@ -22,9 +22,9 @@ Open Source Data Pipelines for Security Teams
 
 ## Start Here
 
-Dive right in for free at [app.tenzir.com][app] and explore the cloud-based
-Tenzir demo. When you're ready for deploying your own node, run our installer
-that guides your through setup process:
+Dive right in at [app.tenzir.com][app] and play with a cloud-based Tenzir demo.
+Once you're ready for deploying your own node, run our installer that guides
+your through setup process:
 
 ```bash
 curl https://get.tenzir.app | sh
@@ -32,19 +32,21 @@ curl https://get.tenzir.app | sh
 
 ## What is Tenzir?
 
-Tenzir processes and stores data security event data using *pipelines*, *nodes*,
-and the *platform*:
+Tenzir is a data pipeline solution for optimizing cloud and data costs, running
+detections and analytics, building a centralized security data lake, or creating
+a decentralized security data fabric.
+
+![Tenzir Moving Parts](./web/static/img/readme/platform-and-nodes.light.png#gh-light-mode-only)
+![Tenzir Moving Parts](./web/static/img/readme/platform-and-nodes.dark.png#gh-dark-mode-only)
+
+The key abstractions in Tenzir are:
 
 1. **Pipeline**: A dataflow of operators for producing, transforming, and
-   consuming data. The `tenzir` binary runs a pipeline.
-2. **Node**: Hosts concurrently running pipelines. A node also has a
-   storage engine with a thin layer of indexing on top of raw Parquet/Feather
-   partitions. The `tenzir-node` binary spawns a node.
-3. **Platform**: Manages nodes and account user data. Nodes connect to the
-   platform and you can manage them through [app.tenzir.com][app].
-
-![Tenzir Moving Parts](./web/static/img/readme/moving-parts.light.png#gh-light-mode-only)
-![Tenzir Moving Parts](./web/static/img/readme/moving-parts.dark.png#gh-dark-mode-only)
+   consuming data. The `tenzir` binary runs a pipeline stand-alone..
+2. **Node**: Manages pipelines. A node also has a custom storage engine built on
+   top of Parquet/Feather partitions. The `tenzir-node` binary spawns a node.
+3. **Platform**: Offers a management layer for nodes. Nodes connect to the
+   platform and you can manage them at [app.tenzir.com][app].
 
 Check out our [documentation](https://docs.tenzir.com) for detailed setup
 instructions, user guides, and reference material.
@@ -62,8 +64,9 @@ Use Tenzir if you want to:
 
 ## License
 
-The majority of our code is open source and comes with a **BSD 3-clause
-license**. Visit <https://tenzir.com/pricing> for commercial editions and [read
-the FAQs](https://docs.tenzir.com/faqs) for further details.
+The pipeline executor and majority of the node code is open source and comes
+with a **BSD 3-clause license**. Visit <https://tenzir.com/pricing> for
+commercial editions and [read the FAQs](https://docs.tenzir.com/faqs) for
+further details.
 
 [app]: https://app.tenzir.com

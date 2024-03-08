@@ -1,20 +1,10 @@
 # Get Started
 
-Tenzir is a platform for processing and storing security event data
-in a pipeline dataflow model. The Tenzir consists of pipelines, nodes, and the
-platform:
+Tenzir is a data pipeline solution for optimizing cloud and data costs, running
+detections and analytics, building a centralized security data lake, or creating
+a decentralized security data fabric.
 
-1. **Pipeline**: A dataflow that consists of operators for producing,
-   transforming, and consuming data. The `tenzir` binary runs a pipeline.
-2. **Node**: Hosts concurrently running pipelines. A node also has a
-   storage engine with a thin layer of indexing on top of raw Parquet/Feather
-   partitions. The `tenzir-node` binary spawns a node.
-3. **Platform**: Manages nodes and global user data. Nodes connect to the
-   platform and you can manage them through [app.tenzir.com][app].
-
-![Tenzir Moving Parts](moving-parts.excalidraw.svg)
-
-[app]: https://app.tenzir.com
+![Tenzir Moving Parts](platform-and-nodes.excalidraw.svg)
 
 ## Explore the demo node
 
