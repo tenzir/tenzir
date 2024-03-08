@@ -62,6 +62,34 @@ Use Tenzir if you want to:
 - Build your own security data lake and need an ETL layer
 - Create a federated detection and response architectures
 
+## Explore the demo node
+
+The easiest way to get started is try it out yourself. It takes just a few
+steps:
+
+1. [Create a free
+   account](https://docs.tenzir.com/setup-guides/set-up-an-account) by signing
+   in:
+
+![Sign in](./web/docs/example-signin.png)
+
+2. Go to the [Overview](https://app.tenzir.com/overview) page:
+
+![Overview](./web/docs/example-overview.png)
+
+3. Create a demo node by clicking the *Add* button in the nodes pane and select
+   *Cloud-hosted demo node*.:
+
+![Add node](./web/docs/example-add-node.png)
+
+5. Follow the guided tour after the node becomes available (~1 min).
+
+6. Start [learning TQL](https://docs.tenzir.com/language) and explore the
+   data set visually, e.g., to by running aggregations and
+   [plotting data](https://docs.tenzir.com/operators/chart):
+
+![Bar chart](./web/docs/example-barchart.png)
+
 ## License
 
 The pipeline executor and majority of the node code is open source and comes

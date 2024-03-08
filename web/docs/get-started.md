@@ -11,13 +11,28 @@ a decentralized security data fabric.
 The easiest way to get started is try it out yourself. It takes just a few
 steps:
 
-1. [Create a free account](setup-guides/set-up-an-account.md)
-2. Go to the [Overview](https://app.tenzir.com/overview) page
-3. Create a demo node by clicking the *Add* button in the nodes pane
-4. Select *Cloud-hosted demo node*
-5. Follow the guided tour after the node becomes available
+1. [Create a free account](setup-guides/set-up-an-account.md) by signing in:
 
-## A quick tour
+![Sign in](example-signin.png)
+
+2. Go to the [Overview](https://app.tenzir.com/overview) page:
+
+![Overview](example-overview.png)
+
+3. Create a demo node by clicking the *Add* button in the nodes pane and select
+   *Cloud-hosted demo node*.:
+
+![Add node](example-add-node.png)
+
+5. Follow the guided tour after the node becomes available (~1 min).
+
+6. Start [learning TQL](language.md) and explore the
+   data set visually, e.g., to by running aggregations and
+   [plotting data](operators/chart.md):
+
+![Bar chart](example-barchart.png)
+
+## A quick TQL tour
 
 Let's run a few example pipelines by copying the below examples
 and pasting them into the [Explorer](https://app.tenzir.com/explorer). We
