@@ -1,3 +1,7 @@
+---
+sidebar_position: 1
+---
+
 # Deploy a node
 
 A *node* is a managed service for pipelines and storage.
@@ -21,7 +25,7 @@ Install a node as follows:
    ```
 
 Edit the Docker Compose file and change [environment
-variables](../../configuration.md#environment-variables) to adjust the
+variables](../configuration.md#environment-variables) to adjust the
 configuration.
 
 ### Linux
@@ -34,7 +38,7 @@ Install a node as follows:
 2. Move the `platform.yaml` to `<sysconfdir>/tenzir/plugin/platform.yaml` so
    that the node can find it during startup where `<sysconfdir>` might be
    `/etc`. See the [configuration files
-   documentation](../../configuration.md#configuration-files) for more options.
+   documentation](../configuration.md#configuration-files) for more options.
 3. Run our installer to install a binary package on any Linux distribution:
    ```bash
    curl https://get.tenzir.app | sh
@@ -143,7 +147,114 @@ Sending the process a SIGTERM is the same as hitting CTRL+C.
 
 ## Automate the deployment
 
-Read our guides on automating the deployment of a node:
+Use [systemd](#systemd) or [Ansible](#ansible) to automate the deployment of a
+node.
 
-- [Systemd](systemd.md)
-- [Ansible](ansible.md)
+### systemd
+
+The Tenzir package bundles a systemd service unit under
+`<extraction_path>/lib/systemd/system/tenzir-node.service`. The service is
+sandboxed and runs with limited privileges.
+
+#### Prepare the host system
+
+Please note that all subsequent commands require `root` privileges. The service
+requires a user and group called `tenzir`. You can create them as follows.
+
+```bash
+useradd --system --user-group tenzir
+```
+
+Once the user exists, you should create the directory for Tenzir's persistent
+data and change the permissions such that it is owned by the new `tenzir` user:
+
+```bash
+mkdir -p /var/lib/tenzir
+chown -R tenzir:tenzir /var/lib/tenzir
+```
+
+#### Configure the unit
+
+Locate the lines beginning with `ExecStart=` and `ExecStop=` at the bottom
+of the `[Service]` section in the unit file. Depending on your installation path
+you might need to change the location of the `tenzir` binary.
+
+```
+ExecStart=/path/to/tenzir start
+```
+
+In case your Tenzir deployment needs elevated privileges, e.g., to capture
+packets, you can provide them as follows:
+
+```ini
+CapabilityBoundingSet=CAP_NET_RAW
+AmbientCapabilities=CAP_NET_RAW
+```
+
+Then link the unit file to your systemd search path:
+
+```bash
+systemctl link tenzir-node.service
+```
+
+To have the service start up automatically on system boot, `enable` it via
+`systemd`. Otherwise, just `start` it to run it immediately.
+
+```bash
+systemctl enable tenzir-node
+systemctl start tenzir-node
+```
+
+### Ansible
+
+The Ansible role for Tenzir allows for easy integration of Tenzir into
+existing Ansible setups. The role uses either the Tenzir Debian package or
+the tarball installation method depending on which is appropriate for the
+target environment. The role definition is in the
+[`ansible/roles/tenzir`][tenzir-repo-ansible] directory of the Tenzir
+repository. You need a local copy of this directory so you can use it in your
+playbook.
+
+[tenzir-repo-ansible]: https://github.com/tenzir/tenzir/tree/main/ansible/roles/tenzir
+
+#### Example
+
+This example playbook shows how to run a Tenzir service on the machine
+`example_tenzir_server`:
+
+```yaml
+- name: Deploy Tenzir
+  become: true
+  hosts: example_tenzir_server
+  remote_user: example_ansible_user
+  roles:
+    - role: tenzir
+      vars:
+        tenzir_config_dir: ./tenzir
+        tenzir_read_write_paths: [ /tmp ]
+        tenzir_archive: ./tenzir.tar.gz
+        tenzir_debian_package: ./tenzir.deb
+```
+
+#### Variables
+
+##### `tenzir_config_dir` (required)
+
+A path to directory containing a [`tenzir.yaml`](../configuration.md)
+relative to the playbook.
+
+##### `tenzir_read_write_paths`
+
+A list of paths that Tenzir shall be granted access to in addition to its own
+state and log directories.
+
+##### `tenzir_archive`
+
+A tarball of Tenzir structured like those that can be downloaded from the
+[GitHub Releases Page](https://github.com/tenzir/tenzir/releases). This is used
+for target distributions that are not based on the `apt` package manager.
+
+##### `tenzir_debian_package`
+
+A Debian package (`.deb`). This package is used for Debian and Debian based
+Linux distributions.

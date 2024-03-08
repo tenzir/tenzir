@@ -121,7 +121,7 @@ A host for [pipelines](#pipeline) and storage reachable over the network.
 The `tenzir-node` binary starts a node in a dedicated server process that
 listens on TCP port 5158.
 
-- [Deploy a node](./setup-guides/deploy-a-node/README.md)
+- [Deploy a node](./setup-guides/deploy-a-node.md)
 - Use the [REST API](./rest-api.md) to manage a node
 - [Import into a node](./user-guides/import-into-a-node/README.md)
 - [Export from a node](./user-guides/export-from-a-node/README.md)
@@ -140,6 +140,16 @@ An operator is a [source](#source), [transformation](#transformation), or
 [sink](#sink).
 
 - See all available [operators](./operators.md)
+
+## PaC
+
+The acronym PaC stands for *Pipelines as Code*. It is meant as an adaptation of
+[Infrastructure as Code
+(IaC)](https://en.wikipedia.org/wiki/Infrastructure_as_code) with pipelines
+represent the (data) infrastructure that is provisioning as code.
+
+- Learn how to provision [piplines as
+  code](./user-guides/run-pipelines/README.md#as-code).
 
 ## Parser
 
@@ -174,7 +184,7 @@ Combines a set of [operators](#operator) into a dataflow graph.
 
 - Understand [how pipelines work](./pipelines.md)
 - Understand the [pipeline language](./language.md)
-- [Run a pipeline](./user-guides/run-a-pipeline/README.md)
+- [Run a pipeline](./user-guides/run-pipelines/README.md)
 
 ## Platform
 

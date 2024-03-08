@@ -21,7 +21,7 @@ platform:
 The easiest way to get started is try it out yourself. It takes just a few
 steps:
 
-1. [Create a free account](setup-guides/setup-an-account.md)
+1. [Create a free account](setup-guides/set-up-an-account.md)
 2. Go to the [Overview](https://app.tenzir.com/overview) page
 3. Create a demo node by clicking the *Add* button in the nodes pane
 4. Select *Cloud-hosted demo node*
@@ -389,7 +389,7 @@ deploy your own node.
 ## Up next
 
 Now that you got a first impression of Tenzir pipelines, [onboard your own
-node](setup-guides/deploy-a-node/README.md) and dive deeper by
+node](setup-guides/deploy-a-node.md) and dive deeper by
 
 - following the [user guides](user-guides.md) with step-by-step tutorials of
   common use cases

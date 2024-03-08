@@ -2,7 +2,7 @@
 sidebar_position: 0
 ---
 
-# Run a pipeline
+# Run pipelines
 
 You can run a [pipeline](../../pipelines.md) in the
 [app](https://app.tenzir.com) or on the command line using the `tenzir` binary.
@@ -68,3 +68,30 @@ tenzir -f pipeline.tql
 ```
 
 This will interpret the file contents as pipeline and run it.
+
+## As Code
+
+In addition to running pipelines interactively, you can also deploy *pipelines as
+code (PaC)*. This infrastructure-as-code-like method differs from the app-based
+deployment in two ways:
+
+1. Pipelines deployed as code always start with the Tenzir node, ensuring
+   continuous operation.
+2. To safeguard them, deletion via the user interface is disallowed.
+
+Here's a an example of deploying a pipeline through your configuration:
+
+```yaml {0} title="<prefix>/etc/tenzir/tenzir.yaml"
+pipelines:
+  suricata-over-tcp:
+    name: Import Suricata from TCP
+    definition: |
+      from tcp://0.0.0.0:34343 read suricata
+      | import
+    start:
+      failed: true      # restart on failure
+      completed: false  # restart on completion
+```
+
+All boolean configuration flags default to `false`. In the above example, we
+assign `start.completed` only to showcase all available options.

@@ -4,7 +4,7 @@ sidebar_position: 2
 
 # Update a node
 
-To update a [deployed node](./deploy-a-node/README.md), proceed with the
+To update a [deployed node](./deploy-a-node.md), proceed with the
 platform-specific instructions below.
 
 ## Docker

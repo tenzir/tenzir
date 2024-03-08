@@ -2,7 +2,7 @@
 sidebar_position: 0
 ---
 
-# Setup an account
+# Set up an account
 
 In order to use the platform and the manage your nodes through our app, you must
 create an account. Everyone can freely use the [Community
