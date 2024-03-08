@@ -24,7 +24,7 @@ Open Source Data Pipelines for Security Teams
 
 Dive right in at [app.tenzir.com][app] and play with a cloud-based Tenzir demo.
 Once you're ready for deploying your own node, run our installer that guides
-your through setup process:
+you through the setup process:
 
 ```bash
 curl https://get.tenzir.app | sh
