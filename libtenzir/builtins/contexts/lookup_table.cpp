@@ -227,7 +227,7 @@ public:
   auto apply(series array) const
     -> caf::expected<std::vector<series>> override {
     auto builder = series_builder{};
-    for (const auto& value : s.values()) {
+    for (const auto& value : array.values()) {
       if (auto it = context_entries.find(materialize(value));
           it != context_entries.end()) {
         builder.data(it->second);
