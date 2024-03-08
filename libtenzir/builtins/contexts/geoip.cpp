@@ -1,4 +1,3 @@
-//    _   _____   __________
 //   | | / / _ | / __/_  __/     Visibility
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
@@ -450,7 +449,7 @@ public:
                            "geoip context can not be updated with events");
   }
 
-  auto make_query() -> make_query_type override {
+  auto get_keys() const -> list override {
     return {};
   }
 

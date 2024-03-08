@@ -345,50 +345,17 @@ public:
       ++context_it;
     }
     TENZIR_ASSERT(context_it == context_values.end());
-    auto query_f
-      = [key_values_list = std::move(key_values_list)](
-          parameter_map,
-          const std::vector<std::string>& fields) -> caf::expected<expression> {
-      auto result = disjunction{};
-      result.reserve(fields.size());
-      for (const auto& field : fields) {
-        auto lhs = to<operand>(field);
-        TENZIR_ASSERT(lhs);
-        result.emplace_back(predicate{
-          *lhs,
-          relational_operator::in,
-          data{key_values_list},
-        });
-      }
-      return result;
-    };
     return update_result{.update_info = show(),
-                         .make_query = std::move(query_f)};
+                         .keys = std::move(key_values_list)};
   }
 
-  auto make_query() -> make_query_type override {
+  auto get_keys() const -> list override {
     auto key_values_list = list{};
     key_values_list.reserve(context_entries.size());
     for (const auto& entry : context_entries) {
       entry.first.populate_snapshot_data(key_values_list);
     }
-    return
-      [key_values_list = std::move(key_values_list)](
-        parameter_map,
-        const std::vector<std::string>& fields) -> caf::expected<expression> {
-        auto result = disjunction{};
-        result.reserve(fields.size());
-        for (const auto& field : fields) {
-          auto lhs = to<operand>(field);
-          TENZIR_ASSERT(lhs);
-          result.emplace_back(predicate{
-            *lhs,
-            relational_operator::in,
-            data{key_values_list},
-          });
-        }
-        return result;
-      };
+    return key_values_list;
   }
 
   auto reset(context::parameter_map) -> caf::expected<record> override {

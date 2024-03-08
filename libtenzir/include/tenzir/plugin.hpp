@@ -717,18 +717,13 @@ class context {
 public:
   using parameter_map
     = std::unordered_map<std::string, std::optional<std::string>>;
-  using make_query_type
-    = std::function<auto(parameter_map parameters,
-                         const std::vector<std::string>& fields)
-                      ->caf::expected<expression>>;
 
   static constexpr auto dump_batch_size_limit = 65536;
 
   /// Information about a context update that gets propagated to live lookups.
   struct update_result {
     record update_info;
-    // Function for emitting an updated expression. Used for retroactive lookups.
-    make_query_type make_query = {};
+    list keys = {};
   };
 
   struct save_result {
@@ -772,8 +767,7 @@ public:
   /// Serializes a context for persistence.
   virtual auto save() const -> caf::expected<save_result> = 0;
 
-  /// Returns a callback for retroactive lookups.
-  virtual auto make_query() -> make_query_type = 0;
+  virtual auto get_keys() const -> list = 0;
 };
 
 class context_loader {
