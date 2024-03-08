@@ -48,20 +48,18 @@ struct s3_args {
   }
 };
 
-auto get_options(const s3_args& args) -> arrow::fs::S3Options {
+auto get_options(const s3_args& args) -> caf::expected<arrow::fs::S3Options> {
   auto opts = arrow::fs::S3Options::FromUri(args.uri.inner);
   if (not opts.ok()) {
-    diagnostic::error("failed to parse S3 options: {}",
-                      opts.status().ToString())
-      .throw_();
+    return diagnostic::error("failed to parse S3 options: {}",
+                             opts.status().ToString())
+      .to_error();
   }
   if (args.anonymous) {
     opts->ConfigureAnonymousCredentials();
   } else if (args.config) {
     opts->ConfigureAccessKey(args.config->access_key, args.config->secret_key,
                              args.config->session_token);
-  } else {
-    opts->ConfigureDefaultCredentials();
   }
   return opts.MoveValueUnsafe();
 }
@@ -92,7 +90,11 @@ public:
           co_return;
         }
         auto opts = get_options(args);
-        auto fs = arrow::fs::S3FileSystem::Make(opts);
+        if (not opts) {
+          diagnostic::error(opts.error()).emit(ctrl.diagnostics());
+          co_return;
+        }
+        auto fs = arrow::fs::S3FileSystem::Make(std::move(*opts));
         if (not fs.ok()) {
           diagnostic::error("failed to create Arrow S3 filesystem: {}",
                             fs.status().ToString())
@@ -170,7 +172,10 @@ public:
                                          parse_result.ToString()));
     }
     auto opts = get_options(args_);
-    auto fs = arrow::fs::S3FileSystem::Make(opts);
+    if (not opts) {
+      return std::move(opts.error());
+    }
+    auto fs = arrow::fs::S3FileSystem::Make(std::move(*opts));
     if (not fs.ok()) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed to create Arrow S3 "
@@ -254,7 +259,7 @@ public:
                                          initialized.ToString()));
     }
     if (plugin_config.empty()) {
-      {};
+      return {};
     }
     config_.emplace();
     for (const auto& [key, value] : plugin_config) {
@@ -272,8 +277,8 @@ public:
       .note("{} is configured as {}", key, value)                              \
       .to_error();                                                             \
   }
-      X("secret-key", secret_key)
       X("access-key", access_key)
+      X("secret-key", secret_key)
       X("session-token", session_token)
 #undef X
       return diagnostic::error(
