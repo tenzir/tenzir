@@ -12,8 +12,8 @@ and translates context updates into historical queries.
 ## Synopsis
 
 ```
-lookup <context> [<options>] [--live] [--retro] [--snapshot]
-lookup <field>=<context> [<options>] [--live] [--retro] [--snapshot]
+lookup <context>          [--field <field...>] [--live] [--retro] [--snapshot] [<context-options>]
+lookup <output>=<context> [--field <field...>] [--live] [--retro] [--snapshot] [<context-options>]
 ```
 
 ## Description
@@ -35,16 +35,15 @@ The diagram below illustrates how the operator works:
 
 The name of the context to lookup with.
 
-### `<field>`
+### `<output>`
 
 The name of the field in which to store the context's enrichment.
 
 Defaults to the name of the context.
 
-### `<options>`
+### `--field <field...>`
 
-Optional, context-specific options. Refer to the [`enrich` operator
-documentation](enrich.md) for more details.
+A comma-separated list of fields, type extractors, or concepts to match.
 
 ### `--live`
 
@@ -70,12 +69,17 @@ state.
 
 By default, snapshotting is disabled. Not all contexts support this operation.
 
+### `<context-options>`
+
+Optional, context-specific options in the format `--key value` or `--flag`.
+Refer to the documentation of the individual contexts for these.
+
 ## Examples
 
 Apply the context `feodo` to incoming `suricata.flow` events.
 
 ```
-lookup --live feodo --field=src_ip
+lookup --live feodo --field src_ip
 | where #schema == "suricata.flow"
 ```
 
@@ -83,7 +87,7 @@ Apply the context `feodo` to historical `suricata.flow` events with every update
 to `feodo`.
 
 ```
-lookup --retro feodo --field=src_ip
+lookup --retro feodo --field src_ip
 | where #schema == "suricata.flow"
 ```
 
@@ -91,6 +95,6 @@ Apply the context `feodo` to incoming `suricata.flow` events, and also apply the
 context after an update to `feodo`.
 
 ```
-lookup feodo --field=src_ip
+lookup feodo --field src_ip
 | where #schema == "suricata.flow"
 ```

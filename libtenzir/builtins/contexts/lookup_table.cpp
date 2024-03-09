@@ -238,9 +238,8 @@ public:
     return builder.finish();
   }
 
-  auto snapshot(parameter_map parameters) const
+  auto snapshot(parameter_map, const std::vector<std::string>& fields) const
     -> caf::expected<expression> override {
-    auto column = parameters["field"];
     auto keys = list{};
     keys.reserve(context_entries.size());
     auto first_index = std::optional<size_t>{};
@@ -257,13 +256,16 @@ public:
                                "heterogeneous keys");
       }
     }
-    return expression{
-      predicate{
-        field_extractor(*column),
+    auto result = disjunction{};
+    result.reserve(fields.size());
+    for (const auto& field : fields) {
+      result.emplace_back(predicate{
+        field_extractor(field),
         relational_operator::in,
         data{keys},
-      },
-    };
+      });
+    }
+    return result;
   }
 
   /// Inspects the context.
@@ -339,16 +341,20 @@ public:
       ++context_it;
     }
     TENZIR_ASSERT(context_it == context_values.end());
-    auto query_f = [key_values_list = std::move(key_values_list)](
-                     parameter_map params) -> caf::expected<expression> {
-      auto column = params["field"];
-      return expression{
-        predicate{
-          field_extractor(*column),
+    auto query_f
+      = [key_values_list = std::move(key_values_list)](
+          parameter_map,
+          const std::vector<std::string>& fields) -> caf::expected<expression> {
+      auto result = disjunction{};
+      result.reserve(fields.size());
+      for (const auto& field : fields) {
+        result.emplace_back(predicate{
+          field_extractor(field),
           relational_operator::in,
           data{key_values_list},
-        },
-      };
+        });
+      }
+      return result;
     };
     return update_result{.update_info = show(),
                          .make_query = std::move(query_f)};
@@ -360,22 +366,21 @@ public:
     for (const auto& entry : context_entries) {
       entry.first.populate_snapshot_data(key_values_list);
     }
-    return [key_values_list = std::move(key_values_list)](
-             parameter_map params) -> caf::expected<expression> {
-      auto column = params["field"];
-      if (not column) {
-        return caf::make_error(ec::invalid_argument,
-                               "missing 'field' parameter for lookup in "
-                               "lookup-table");
-      }
-      return expression{
-        predicate{
-          field_extractor(*column),
-          relational_operator::in,
-          data{key_values_list},
-        },
+    return
+      [key_values_list = std::move(key_values_list)](
+        parameter_map,
+        const std::vector<std::string>& fields) -> caf::expected<expression> {
+        auto result = disjunction{};
+        result.reserve(fields.size());
+        for (const auto& field : fields) {
+          result.emplace_back(predicate{
+            field_extractor(field),
+            relational_operator::in,
+            data{key_values_list},
+          });
+        }
+        return result;
       };
-    };
   }
 
   auto reset(context::parameter_map) -> caf::expected<record> override {

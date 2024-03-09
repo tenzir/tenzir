@@ -718,7 +718,9 @@ public:
   using parameter_map
     = std::unordered_map<std::string, std::optional<std::string>>;
   using make_query_type
-    = std::function<caf::expected<expression>(parameter_map)>;
+    = std::function<auto(parameter_map parameters,
+                         const std::vector<std::string>& fields)
+                      ->caf::expected<expression>>;
 
   static constexpr auto dump_batch_size_limit = 65536;
 
@@ -762,7 +764,8 @@ public:
   virtual auto reset(parameter_map parameters) -> caf::expected<record> = 0;
 
   /// Create a snapshot of the initial expression.
-  virtual auto snapshot(parameter_map parameters) const
+  virtual auto snapshot(parameter_map parameters,
+                        const std::vector<std::string>& fields) const
     -> caf::expected<expression>
     = 0;
 

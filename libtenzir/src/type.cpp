@@ -3221,10 +3221,11 @@ generator<offset> record_type::resolve_type_extractor(
       case fbs::type::Type::enriched_type: {
         const auto* enriched = field_type->type_as_enriched_type();
         TENZIR_ASSERT(enriched);
-        const auto* name = enriched->name();
-        TENZIR_ASSERT(name);
-        if (type_extractor == name->string_view())
-          matched_enriched_type = true;
+        if (const auto* name = enriched->name()) {
+          if (type_extractor == name->string_view()) {
+            matched_enriched_type = true;
+          }
+        }
         field_type = field_type->type_as_enriched_type()->type_nested_root();
         TENZIR_ASSERT(field_type);
         goto recurse_enriched_type; // NOLINT
