@@ -43,7 +43,7 @@ USER tenzir:tenzir
 # We install Poetry alongside Tenzir, they shouldn't disturb each other
 ENV POETRY_HOME=$PREFIX
 
-RUN curl -sSL https://install.python-poetry.org | python3 - --version 1.4.0
+RUN curl -sSL https://install.python-poetry.org | python3 - --version 1.8.2
 
 # Extra layers with configurations avoiding permission conflicts on host FS
 FROM quarto-base as quarto-bind
