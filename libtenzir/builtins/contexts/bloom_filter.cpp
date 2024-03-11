@@ -53,9 +53,10 @@ public:
   }
 
   /// Emits context information for every event in `slice` in order.
-  auto apply(series s) const -> caf::expected<std::vector<series>> override {
+  auto apply(series array) const
+    -> caf::expected<std::vector<series>> override {
     auto builder = series_builder{};
-    for (const auto& value : s.values()) {
+    for (const auto& value : array.values()) {
       if (bloom_filter_.lookup(value)) {
         auto ptr = bloom_filter_.data().data();
         auto size = bloom_filter_.data().size();
@@ -68,7 +69,8 @@ public:
     return builder.finish();
   }
 
-  auto snapshot(parameter_map) const -> caf::expected<expression> override {
+  auto snapshot(parameter_map, const std::vector<std::string>&) const
+    -> caf::expected<expression> override {
     return caf::make_error(ec::unimplemented,
                            "bloom filter doesn't support snapshots");
   }
@@ -127,7 +129,7 @@ public:
       return caf::make_error(ec::invalid_argument,
                              "invalid 'key' parameter; 'key' must be a string");
     }
-    auto key_column = slice.schema().resolve_key_or_concept(*key_field);
+    auto key_column = slice.schema().resolve_key_or_concept_once(*key_field);
     if (not key_column) {
       // If there's no key column then we cannot do much.
       return update_result{record{}};
@@ -143,16 +145,20 @@ public:
       bloom_filter_.add(materialized_key);
       key_values_list.emplace_back(std::move(materialized_key));
     }
-    auto query_f = [key_values_list = std::move(key_values_list)](
-                     parameter_map params) -> caf::expected<expression> {
-      auto column = params["field"];
-      return expression{
-        predicate{
-          field_extractor(*column),
+    auto query_f
+      = [key_values_list = std::move(key_values_list)](
+          parameter_map,
+          const std::vector<std::string>& fields) -> caf::expected<expression> {
+      auto result = disjunction{};
+      result.reserve(fields.size());
+      for (const auto& field : fields) {
+        result.emplace_back(predicate{
+          field_extractor(field),
           relational_operator::in,
           data{key_values_list},
-        },
-      };
+        });
+      }
+      return result;
     };
     return update_result{.update_info = show(),
                          .make_query = std::move(query_f)};

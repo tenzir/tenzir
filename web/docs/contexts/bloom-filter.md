@@ -5,15 +5,15 @@ A space-efficient data structure to represent large sets.
 ## Synopsis
 
 ```
-context create <name> bloom-filter
-    --capacity <capacity> --fp-probability <probability>
-context update <name> --key <field>
-context delete <name>
-context reset  <name>
-context save   <name>
-context load   <name>
-enrich <name> --field <field>
-lookup <name> --field <field>
+context create  <name> bloom-filter --capacity <capacity> --fp-probability <probability>
+context update  <name> --key <field>
+context delete  <name>
+context reset   <name>
+context save    <name>
+context load    <name>
+context inspect <name>
+enrich <name>
+lookup <name>
 ```
 
 ## Description
@@ -62,7 +62,3 @@ The field in the input to be inserted into the Bloom filter.
 
 If an element exists already in the Bloom filter, the update operation is a
 no-op.
-
-### `--field <field>`
-
-The name of the field to use as lookup key.

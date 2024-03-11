@@ -11,8 +11,8 @@ Enriches events with a context.
 ## Synopsis
 
 ```
-enrich <name> [<options>] [--filter]
-enrich <field>=<name> [<options>] [--filter]
+enrich <name>          [--field <field...>] [--filter] [<context-options>]
+enrich <output>=<name> [--field <field...>] [--filter] [<context-options>]
 ```
 
 ## Description
@@ -24,23 +24,24 @@ defined by the context.
 
 The name of the context to enrich with.
 
-### `<field>`
+### `<output>`
 
 The name of the field in which to store the context's enrichment. Defaults to
 the name of the context.
 
-### `<options>`
+### `--field <field...>`
 
-Optional, context-specific options in the format `--key value` or `--flag`.
-
-The following options are currently supported for the `lookup-table` context:
-- `--field <field>` (required): The field in the input events to evaluate
-  against the keys of the lookup table.
+A comma-separated list of fields, type extractors, or concepts to match.
 
 ### `--filter`
 
 An optional flag that enables the operator to filter events that do not
 contain a context.
+
+### `<context-options>`
+
+Optional, context-specific options in the format `--key value` or `--flag`.
+Refer to the documentation of the individual contexts for these.
 
 ## Examples
 

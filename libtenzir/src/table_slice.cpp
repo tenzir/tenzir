@@ -903,7 +903,7 @@ auto resolve_operand(const table_slice& slice, const operand& op)
       bind_value(value);
     },
     [&](const field_extractor& ex) {
-      if (auto index = slice.schema().resolve_key_or_concept(ex.field)) {
+      if (auto index = slice.schema().resolve_key_or_concept_once(ex.field)) {
         bind_array(*index);
         return;
       }

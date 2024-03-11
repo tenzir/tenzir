@@ -312,8 +312,13 @@ public:
 
   /// Resolves a key on a schema.
   /// @returns nullopt if the type is not a valid schema.
-  [[nodiscard]] std::optional<offset>
+  [[nodiscard]] generator<offset>
   resolve_key_or_concept(std::string_view key) const noexcept;
+
+  /// Resolves a key on a schema.
+  /// @returns nullopt if the type is not a valid schema.
+  [[nodiscard]] std::optional<offset>
+  resolve_key_or_concept_once(std::string_view key) const noexcept;
 
   /// Enables integration with CAF's type inspection.
   template <class Inspector>
@@ -1288,9 +1293,16 @@ public:
   /// Resolves a key or a concept into an offset.
   /// @note This only matches on full keys, so the key 'x.y'  matches 'x.y.z'
   /// but not 'x.y_other.z' .
-  [[nodiscard]] std::optional<offset>
+  [[nodiscard]] generator<offset>
   resolve_key_or_concept(std::string_view key,
                          std::string_view schema_name) const noexcept;
+
+  /// Resolves a key or a concept into an offset.
+  /// @note This only matches on full keys, so the key 'x.y'  matches 'x.y.z'
+  /// but not 'x.y_other.z' .
+  [[nodiscard]] std::optional<offset>
+  resolve_key_or_concept_once(std::string_view key,
+                              std::string_view schema_name) const noexcept;
 
   /// Resolves a key into an offset.
   /// @note This only matches on full keys, so the key 'x.y'  matches 'x.y.z'

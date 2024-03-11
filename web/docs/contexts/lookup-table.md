@@ -6,14 +6,15 @@ data.
 ## Synopsis
 
 ```
-context create <name> lookup-table
-context update <name> --key <field> [--clear]
-context delete <name>
-context reset  <name>
-context save   <name>
-context load   <name>
-enrich <name> --field <field>
-lookup <name> --field <field>
+context create  <name> lookup-table
+context update  <name> --key <field> [--clear]
+context delete  <name>
+context reset   <name>
+context save    <name>
+context load    <name>
+context inspect <name>
+enrich <name>
+lookup <name>
 ```
 
 ## Description
@@ -27,7 +28,3 @@ The field in the input that holds the unique key for the lookup table.
 ### `--clear`
 
 Erases all entries in the lookup table before updating.
-
-### `--field <field>`
-
-The name of the field to use as lookup table key.

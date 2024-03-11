@@ -203,7 +203,8 @@ public:
               .emit(ctrl.diagnostics());
             continue;
           }
-          if (auto index = slice.schema().resolve_key_or_concept(extractor)) {
+          if (auto index
+              = slice.schema().resolve_key_or_concept_once(extractor)) {
             index_to_operand.emplace_back(std::move(*index), &*operand);
           }
           for (const auto& index : layout.resolve_type_extractor(extractor)) {
