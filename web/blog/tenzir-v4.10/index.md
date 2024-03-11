@@ -41,7 +41,7 @@ pipelines:
 
 :::tip Want to learn more?
 Read our guide on PaC: 👉 [Deploy Pipelines as
-Code](/user-guides/run-pipelines#deploy-pipelines-as-code)
+Code](/user-guides/run-pipelines#as-code)
 :::
 
 ## arm64 Docker Images
