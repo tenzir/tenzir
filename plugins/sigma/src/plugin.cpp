@@ -71,6 +71,12 @@ public:
           .emit(ctrl.diagnostics());
         return;
       }
+      if (not caf::holds_alternative<record>(*yaml)) {
+        diagnostic::warning("sigma operator ignores rule '{}'", path.string())
+          .note("rule is not a YAML dictionary")
+          .emit(ctrl.diagnostics());
+        return;
+      }
       auto rule = parse_rule(*yaml);
       if (not rule) {
         diagnostic::warning("sigma operator ignores rule '{}'", path.string())
@@ -123,13 +129,14 @@ public:
           continue;
         }
         if (auto event = filter(slice, *expr)) {
-          const auto rule_schema
-            = caf::get<record_type>(type::infer(yaml).value_or(type{}));
+          auto rule_schema = type::infer(yaml);
+          TENZIR_ASSERT(rule_schema);
+          TENZIR_ASSERT(caf::holds_alternative<record_type>(*rule_schema));
           const auto result_schema = type{
             "tenzir.sigma",
             record_type{
               {"event", event->schema()},
-              {"rule", rule_schema},
+              {"rule", *rule_schema},
             },
           };
           auto result_builder
@@ -148,7 +155,7 @@ public:
               *row);
             TENZIR_ASSERT(append_event_result.ok());
             const auto append_rule_result = append_builder(
-              rule_schema,
+              caf::get<record_type>(*rule_schema),
               caf::get<arrow::StructBuilder>(
                 *caf::get<arrow::StructBuilder>(*result_builder)
                    .field_builder(1)),
