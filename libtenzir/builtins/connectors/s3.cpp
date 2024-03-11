@@ -21,28 +21,47 @@ namespace tenzir::plugins::s3 {
 
 namespace {
 
+struct s3_config {
+  std::string access_key = {};
+  std::string secret_key = {};
+  std::string session_token = {};
+
+  friend auto inspect(auto& f, s3_config& x) -> bool {
+    return f.object(x)
+      .pretty_name("s3_config")
+      .fields(f.field("access-key", x.access_key),
+              f.field("secret-key", x.secret_key),
+              f.field("session-token", x.session_token));
+  }
+};
+
 struct s3_args {
-  bool anonymous;
-  located<std::string> uri;
+  bool anonymous = {};
+  located<std::string> uri = {};
+  std::optional<s3_config> config = {};
 
   template <class Inspector>
   friend auto inspect(Inspector& f, s3_args& x) -> bool {
     return f.object(x).pretty_name("s3_args").fields(
-      f.field("anonymous", x.anonymous), f.field("uri", x.uri));
+      f.field("anonymous", x.anonymous), f.field("uri", x.uri),
+      f.field("config", x.config));
   }
 };
 
-auto get_options(const s3_args& args) -> arrow::fs::S3Options {
-  auto opts = arrow::fs::S3Options::Anonymous();
-  if (not args.anonymous) {
-    auto opts_from_uri = arrow::fs::S3Options::FromUri(args.uri.inner);
-    if (not opts_from_uri.ok()) {
-      opts = arrow::fs::S3Options::Defaults();
-    } else {
-      opts = *opts_from_uri;
-    }
+auto get_options(const s3_args& args) -> caf::expected<arrow::fs::S3Options> {
+  auto opts = arrow::fs::S3Options::FromUri(args.uri.inner);
+  if (not opts.ok()) {
+    return diagnostic::error("failed to parse S3 options: {}",
+                             opts.status().ToString())
+      .to_error();
   }
-  return opts;
+  if (args.anonymous) {
+    opts->ConfigureAnonymousCredentials();
+  } else if (args.config) {
+    opts->ConfigureAccessKey(args.config->access_key, args.config->secret_key,
+                             args.config->session_token);
+  }
+  return opts.MoveValueUnsafe();
 }
 
 // We use 2^20 for the upper bound of a chunk size, which exactly matches the
@@ -71,7 +90,11 @@ public:
           co_return;
         }
         auto opts = get_options(args);
-        auto fs = arrow::fs::S3FileSystem::Make(opts);
+        if (not opts) {
+          diagnostic::error(opts.error()).emit(ctrl.diagnostics());
+          co_return;
+        }
+        auto fs = arrow::fs::S3FileSystem::Make(std::move(*opts));
         if (not fs.ok()) {
           diagnostic::error("failed to create Arrow S3 filesystem: {}",
                             fs.status().ToString())
@@ -149,7 +172,10 @@ public:
                                          parse_result.ToString()));
     }
     auto opts = get_options(args_);
-    auto fs = arrow::fs::S3FileSystem::Make(opts);
+    if (not opts) {
+      return std::move(opts.error());
+    }
+    auto fs = arrow::fs::S3FileSystem::Make(std::move(*opts));
     if (not fs.ok()) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed to create Arrow S3 "
@@ -185,8 +211,9 @@ public:
     return [&ctrl, output_stream, uri = args_.uri.inner,
             stream_guard = std::make_shared<decltype(stream_guard)>(
               std::move(stream_guard))](chunk_ptr chunk) mutable {
-      if (!chunk || chunk->size() == 0)
+      if (!chunk || chunk->size() == 0) {
         return;
+      }
       auto status
         = output_stream.ValueUnsafe()->Write(chunk->data(), chunk->size());
       if (not output_stream.ok()) {
@@ -221,9 +248,9 @@ private:
 class plugin final : public virtual loader_plugin<s3_loader>,
                      public virtual saver_plugin<s3_saver> {
 public:
-  auto initialize([[maybe_unused]] const record& plugin_config,
-                  [[maybe_unused]] const record& global_config)
+  auto initialize(const record& plugin_config, const record& global_config)
     -> caf::error override {
+    (void)global_config;
     auto initialized = arrow::fs::EnsureS3Initialized();
     if (not initialized.ok()) {
       return caf::make_error(ec::filesystem_error,
@@ -231,7 +258,35 @@ public:
                                          "functionality: {}",
                                          initialized.ToString()));
     }
-    return caf::none;
+    if (plugin_config.empty()) {
+      return {};
+    }
+    config_.emplace();
+    for (const auto& [key, value] : plugin_config) {
+#define X(opt, var)                                                            \
+  if (key == (opt)) {                                                          \
+    if (value == data{}) {                                                     \
+      continue;                                                                \
+    }                                                                          \
+    if (const auto* str = caf::get_if<std::string>(&value)) {                  \
+      config_->var = *str;                                                     \
+      continue;                                                                \
+    }                                                                          \
+    return diagnostic::error("invalid S3 configuration: {} must be a string",  \
+                             key)                                              \
+      .note("{} is configured as {}", key, value)                              \
+      .to_error();                                                             \
+  }
+      X("access-key", access_key)
+      X("secret-key", secret_key)
+      X("session-token", session_token)
+#undef X
+      return diagnostic::error(
+               "invalid S3 configuration: unrecognized option {}", key)
+        .note("{} is configured as {}", key, value)
+        .to_error();
+    }
+    return {};
   }
 
   virtual auto deinitialize() -> void override {
@@ -252,8 +307,10 @@ public:
     parser.add(args.uri, "<uri>");
     parser.parse(p);
     // TODO: URI parser.
-    if (not args.uri.inner.starts_with("s3://"))
+    if (not args.uri.inner.starts_with("s3://")) {
       args.uri.inner = fmt::format("s3://{}", args.uri.inner);
+    }
+    args.config = config_;
     return std::make_unique<s3_loader>(std::move(args));
   }
 
@@ -267,14 +324,18 @@ public:
     parser.add(args.uri, "<uri>");
     parser.parse(p);
     // TODO: URI parser.
-    if (not args.uri.inner.starts_with("s3://"))
+    if (not args.uri.inner.starts_with("s3://")) {
       args.uri.inner = fmt::format("s3://{}", args.uri.inner);
+    }
+    args.config = config_;
     return std::make_unique<s3_saver>(std::move(args));
   }
 
   auto name() const -> std::string override {
     return "s3";
   }
+
+  std::optional<s3_config> config_ = {};
 };
 
 } // namespace tenzir::plugins::s3
