@@ -15,7 +15,7 @@ RUN apt-get update && \
 RUN mkdir -p /home/tenzir && chown tenzir:tenzir /home/tenzir
 USER tenzir:tenzir
 ENV POETRY_HOME=$PREFIX
-RUN curl -sSL https://install.python-poetry.org | python3 - --version 1.4.0
+RUN curl -sSL https://install.python-poetry.org | python3 - --version 1.8.2
 
 WORKDIR /tenzir/python/
 # Layer the Poetry install to optimize the dev experience.

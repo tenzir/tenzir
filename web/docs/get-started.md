@@ -1,33 +1,38 @@
 # Get Started
 
-Tenzir is a platform for processing and storing security event data
-in a pipeline dataflow model. The Tenzir consists of pipelines, nodes, and the
-platform:
+Tenzir is a data pipeline solution for optimizing cloud and data costs, running
+detections and analytics, building a centralized security data lake, or creating
+a decentralized security data fabric.
 
-1. **Pipeline**: A dataflow that consists of operators for producing,
-   transforming, and consuming data. The `tenzir` binary runs a pipeline.
-2. **Node**: Hosts concurrently running pipelines. A node also has a
-   storage engine with a thin layer of indexing on top of raw Parquet/Feather
-   partitions. The `tenzir-node` binary spawns a node.
-3. **Platform**: Manages nodes and global user data. Nodes connect to the
-   platform and you can manage them through [app.tenzir.com][app].
-
-![Tenzir Moving Parts](moving-parts.excalidraw.svg)
-
-[app]: https://app.tenzir.com
+![Tenzir Moving Parts](platform-and-nodes.excalidraw.svg)
 
 ## Explore the demo node
 
 The easiest way to get started is try it out yourself. It takes just a few
 steps:
 
-1. [Create a free account](setup-guides/set-up-an-account.md)
-2. Go to the [Overview](https://app.tenzir.com/overview) page
-3. Create a demo node by clicking the *Add* button in the nodes pane
-4. Select *Cloud-hosted demo node*
-5. Follow the guided tour after the node becomes available
+1. [Create a free account](setup-guides/set-up-an-account.md) by signing in:
 
-## A quick tour
+![Sign in](example-signin.png)
+
+2. Go to the [Overview](https://app.tenzir.com/overview) page:
+
+![Overview](example-overview.png)
+
+3. Create a demo node by clicking the *Add* button in the nodes pane and select
+   *Cloud-hosted demo node*.:
+
+![Add node](example-add-node.png)
+
+5. Follow the guided tour after the node becomes available (~1 min).
+
+6. Start [learning TQL](language.md) and explore the
+   data set visually, e.g., to by running aggregations and
+   [plotting data](operators/chart.md):
+
+![Bar chart](example-barchart.png)
+
+## A quick TQL tour
 
 Let's run a few example pipelines by copying the below examples
 and pasting them into the [Explorer](https://app.tenzir.com/explorer). We

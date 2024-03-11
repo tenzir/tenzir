@@ -78,12 +78,12 @@ private:
 
 struct unknown_syslog_builder {
 public:
-  using message_type = std::string;
+  using message_type = std::string_view;
 
   unknown_syslog_builder() : builder_(format::syslog::make_unknown_type()) {
   }
 
-  auto add(const message_type& line) -> bool {
+  auto add(message_type line) -> bool {
     return builder_.add(line);
   }
 

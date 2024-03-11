@@ -428,6 +428,7 @@ setup() {
 @test "Syslog format" {
   check tenzir "from ${INPUTSDIR}/syslog/syslog.log read syslog"
   check tenzir "from ${INPUTSDIR}/syslog/syslog-rfc3164.log read syslog"
+  check tenzir "from ${INPUTSDIR}/syslog/multiline.log read syslog"
 }
 
 # bats test_tags=pipelines
