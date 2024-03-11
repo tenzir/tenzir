@@ -75,7 +75,7 @@ emulation on other arm64-based systems like AWS Graviton.
 
 We've substituted the `tenzir.allow-unsafe-pipelines` feature with
 `tenzir.no-location-overrides`, flipping the default set-up and enhancing user
-experience. 
+experience.
 
 `tenzir.allow-unsafe-pipelines` had been historically puzzling for newcomers
 given its seemingly fearsome name and ambiguous implications. Why would someone
