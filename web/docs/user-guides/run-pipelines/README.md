@@ -89,9 +89,11 @@ pipelines:
       from tcp://0.0.0.0:34343 read suricata
       | import
     start:
+      created: false    # start automatically
       failed: true      # restart on failure
       completed: false  # restart on completion
 ```
 
-All boolean configuration flags default to `false`. In the above example, we
-assign `start.completed` only to showcase all available options.
+The boolean `start` configuration flags `completed` and `failed` default to
+`false`, `created` defaults to `true`.. In the above example, we assign
+`start.completed` only to showcase all available options.
