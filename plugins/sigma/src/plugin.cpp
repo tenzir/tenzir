@@ -60,6 +60,7 @@ public:
         diagnostic::warning("sigma operator ignores rule '{}'", path.string())
           .note("failed to read file: {}", query.error())
           .emit(ctrl.diagnostics());
+        return;
       }
       auto query_str = std::string_view{
         reinterpret_cast<const char*>(query->data()),
