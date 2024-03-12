@@ -22,51 +22,17 @@ namespace {
 
 using namespace tenzir::tql2::ast;
 
-struct name_info {
-  entity_id function;
-  entity_id operator_;
-  entity_id method;
-};
-
-class scope {
-public:
-  void add_fn(std::string name, entity_id id) {
-    auto& info = map_[std::move(name)];
-    if (info.function.resolved()) {
-      detail::panic("function `{}` already declared", name);
-    }
-    info.function = id;
-  }
-
-  void add_op(std::string name, entity_id id) {
-    auto& info = map_[std::move(name)];
-    if (info.operator_.resolved()) {
-      detail::panic("function `{}` already declared", name);
-    }
-    info.operator_ = id;
-  }
-
-  auto get(std::string_view name) const -> name_info {
-    // TODO
-    auto it = map_.find(std::string{name});
-    if (it == map_.end()) {
-      return {};
-    }
-    return it->second;
-  }
-
-private:
-  tsl::robin_map<std::string, name_info> map_;
-};
-
 class entity_resolver {
 public:
-  explicit entity_resolver(scope& scope, diagnostic_handler& diag)
-    : scope_{scope}, diag_{diag} {
+  entity_resolver(const registry& reg, diagnostic_handler& diag)
+    : reg_{reg}, diag_{diag} {
+    // Add every top-level package to `scope_` with its name.
+    // TODO: Add everything from `std::prelude` to `scope_`.
   }
 
   void visit(entity& x) {
     TENZIR_ASSERT(not x.path.empty());
+    TENZIR_ASSERT(context_ != context_t::none);
     if (x.path.size() > 1) {
       diagnostic::error("module `{}` not found", x.path[0].name)
         .primary(x.path[0].location)
@@ -74,40 +40,33 @@ public:
       return;
     }
     auto& name = x.path[0].name;
-    auto info = scope_.get(name);
-    if (context_ == context_t::op_name && info.operator_.resolved()) {
-      x.id = info.operator_;
-      return;
+    auto xyz = reg_.try_get(name);
+    if (not xyz) {
+      auto category = std::invoke([&] {
+        switch (context_) {
+          case context_t::op_name:
+            return "operator";
+          case context_t::fn_name:
+            return "function";
+          case context_t::method_name:
+            return "method";
+          case context_t::none:
+            TENZIR_UNREACHABLE();
+        }
+      });
+      diagnostic::error("{} `{}` not found", category, name)
+        .primary(x.get_location())
+        .emit(diag_);
     }
-    if (context_ == context_t::fn_name && info.function.resolved()) {
-      x.id = info.function;
-      return;
-    }
-    if (context_ == context_t::method_name && info.method.resolved()) {
-      x.id = info.method;
-      return;
-    }
-    auto category = std::invoke([&] {
-      switch (context_) {
-        case context_t::none:
-          return "entity";
-        case context_t::op_name:
-          return "operator";
-        case context_t::fn_name:
-          return "function";
-        case context_t::method_name:
-          return "method";
-      }
-    });
-    auto d = diagnostic::error("{} `{}` not found", category, name)
-               .primary(x.get_location());
-    if (info.function.resolved()) {
-      d = std::move(d).hint("but there exists a function with this name");
-    }
-    if (info.operator_.resolved()) {
-      d = std::move(d).hint("but there exists an operator with this name");
-    }
-    std::move(d).emit(diag_);
+    // TODO: Check if this entity has right type?
+    xyz->match(
+      [](const function_def&) {
+        // TODO: Methods?
+      },
+      [](const std::unique_ptr<operator_def>&) {
+
+      });
+    x.ref = entity_path{{name}};
   }
 
   void visit(pipeline& x) {
@@ -185,7 +144,7 @@ public:
 
 private:
   enum class context_t { none, op_name, fn_name, method_name };
-  scope scope_;
+  const registry& reg_;
   diagnostic_handler& diag_;
   context_t context_ = context_t::none;
 };
@@ -194,15 +153,7 @@ private:
 
 void resolve_entities(ast::pipeline& pipe, registry& reg,
                       diagnostic_handler& diag) {
-  (void)reg;
-  auto scope_ = scope{};
-  // auto sqrt_id = provider.add(function_def{"..."});
-  // scope_.add_fn("sqrt", sqrt_id);
-  scope_.add_op("sort", entity_id{0});
-  scope_.add_fn("sqrt", entity_id{1});
-  // auto from_id = provider.add(operator_def{"..."});
-  // scope_.add_op("from", from_id);
-  entity_resolver{scope_, diag}.visit(pipe);
+  entity_resolver{reg, diag}.visit(pipe);
 }
 
 } // namespace tenzir::tql2

@@ -63,7 +63,7 @@ private:
   std::vector<sort_expr> exprs_;
 };
 
-class sort_definition final : public operator_def {
+class sort_def final : public operator_def {
 public:
   auto name() const -> std::string_view override {
     return "std'sort";
@@ -80,8 +80,7 @@ public:
             exprs.emplace_back(std::move(un_expr.expr),
                                sort_expr::direction::desc);
           } else {
-            exprs.emplace_back(std::move(un_expr.expr),
-                               sort_expr::direction::asc);
+            exprs.emplace_back(std::move(arg), sort_expr::direction::asc);
           }
         },
         [&](auto&) {
@@ -148,8 +147,8 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
     return false;
   }
   auto reg = registry{};
-  reg.add(std::make_unique<sort_definition>());
-  reg.add(function_def{"yo"});
+  reg.add("sort", std::make_unique<sort_def>());
+  reg.add("sqrt", function_def{"yo"});
   tql2::resolve_entities(parsed, reg, diag_wrapper);
   if (cfg.dump_ast) {
     with_thread_local_registry(reg, [&] {

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/tql2/ast.hpp"
 
 namespace tenzir::tql2 {
@@ -36,33 +37,29 @@ using entity_def = variant<function_def, std::unique_ptr<operator_def>>;
 
 class registry {
 public:
-  auto add(function_def fn) -> entity_id {
-    defs_.emplace_back(std::move(fn));
-    return last_id();
+  void add(std::string name, entity_def fn) {
+    auto inserted = defs_.emplace(std::move(name), std::move(fn)).second;
+    TENZIR_ASSERT(inserted);
   }
 
-  auto add(std::unique_ptr<operator_def> op) -> entity_id {
-    defs_.emplace_back(std::move(op));
-    return last_id();
+  // TODO
+  auto try_get(std::string_view name) const -> const entity_def* {
+    auto it = defs_.find(name);
+    if (it == defs_.end()) {
+      return nullptr;
+    }
+    return &it->second;
   }
 
-  auto get(entity_id id) const -> const entity_def& {
-    TENZIR_ASSERT(id.id < defs_.size());
-    return defs_[id.id];
-  }
-
-  auto try_fn(entity_id id) const -> const function_def* {
-    return std::get_if<function_def>(&get(id));
+  auto get(std::string_view name) const -> const entity_def& {
+    auto result = try_get(name);
+    TENZIR_ASSERT(result);
+    return *result;
   }
 
 private:
-  auto last_id() const -> entity_id {
-    TENZIR_ASSERT(not defs_.empty());
-    return entity_id{defs_.size() - 1};
-  }
-
-  // TODO: Lifetimes.
-  std::vector<entity_def> defs_;
+  // TODO: Lifetime?
+  detail::heterogeneous_string_hashmap<entity_def> defs_;
 };
 
 auto thread_local_registry() -> const registry*;
@@ -71,9 +68,10 @@ void set_thread_local_registry(const registry* reg);
 
 template <class F>
 auto with_thread_local_registry(const registry& reg, F&& f) {
+  auto prev = thread_local_registry();
   set_thread_local_registry(&reg);
   std::forward<F>(f)();
-  set_thread_local_registry(nullptr);
+  set_thread_local_registry(prev);
 }
 
 } // namespace tenzir::tql2
