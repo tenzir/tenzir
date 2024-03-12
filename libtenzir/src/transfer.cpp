@@ -16,7 +16,7 @@ namespace tenzir {
 transfer::transfer(transfer_options opts) : options{std::move(opts)} {
 }
 
-auto transfer::prepare(const http::request& req) -> caf::error {
+auto transfer::prepare(http::request req) -> caf::error {
   TENZIR_DEBUG("preparing HTTP request");
   if (auto err = reset()) {
     return err;
@@ -75,25 +75,21 @@ auto transfer::prepare(const http::request& req) -> caf::error {
     if (auto err = to_error(easy.set_infilesize(size))) {
       return err;
     }
-    auto on_read
-      = [body = req.body](std::span<std::byte> buffer) mutable -> size_t {
-      if (body.empty()) {
+    auto on_read = [body = chunk::make(std::move(req.body))](
+                     std::span<std::byte> buffer) mutable -> size_t {
+      if (not body or body->size() == 0) {
         return 0;
       }
       TENZIR_DEBUG("reading {}-byte request body into {}-byte buffer",
-                   body.size(), buffer.size());
-      if (buffer.size() >= body.size()) {
-        // TODO: there's a *double* copy taking place: once the request body
-        // into the lambda, and once from the lambda into the libcurl buffer. We
-        // gotta figure out how to reduce this at some point, e.g., by capturing
-        // the entire request by value in this function.
-        std::memcpy(buffer.data(), body.data(), body.size());
-        auto bytes_copied = body.size();
-        body.clear();
+                   body->size(), buffer.size());
+      if (buffer.size() >= body->size()) {
+        std::memcpy(buffer.data(), body->data(), body->size());
+        auto bytes_copied = body->size();
+        body = {};
         return bytes_copied;
       }
-      std::memcpy(buffer.data(), body.data(), buffer.size());
-      body.erase(0, buffer.size());
+      std::memcpy(buffer.data(), body->data(), buffer.size());
+      body = body->slice(buffer.size());
       return buffer.size();
     };
     auto code = handle().set(on_read);
