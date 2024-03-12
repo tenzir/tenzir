@@ -233,7 +233,7 @@ application protocol, domain name, or hash value.
 Key-value stores alone are not suitable as foundation for running security
 analytics workloads. There are narrow use cases where key-value stores can
 facilitate certain capabilities, e.g., when processing watch lists. (Tenzir
-offers a *matcher* plugin for this purpose.)
+offers a *context* plugin for this purpose.)
 :::
 
 ### Tenzir vs. Graph DBs

@@ -387,7 +387,6 @@ in {
     in
       pkg.withPlugins (ps: [
         ps.context
-        ps.matcher
         ps.pipeline-manager
         ps.platform
       ]);
@@ -399,7 +398,6 @@ in {
       pkg.withPlugins (ps: [
         ps.compaction
         ps.context
-        ps.matcher
         ps.pipeline-manager
         ps.platform
       ]);

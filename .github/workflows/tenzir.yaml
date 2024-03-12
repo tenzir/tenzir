@@ -834,9 +834,6 @@ jobs:
           - name: NIC
             target: nic
             path: plugins/nic
-          - name: Matcher
-            target: matcher
-            path: contrib/tenzir-plugins/matcher
           - name: Parquet
             target: parquet
             path: plugins/parquet
