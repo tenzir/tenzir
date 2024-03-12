@@ -11,7 +11,8 @@ Executes Python code against each event of the input.
 ## Synopsis
 
 ```
-python [--requirements=<string>] <code>
+python [--requirements <string>] <code>
+python [--requirements <string>] --file <path>
 ```
 
 :::info Requirements
@@ -24,8 +25,29 @@ variable of the `tenzir` or `tenzir-node` process.
 The `python` operator executes user-provided Python code against each event of
 the input.
 
-The provided `<code>` describes an event-for-event transformation, i.e., it is
-executed once for each input event and produces exactly output event.
+By default, the Tenzir node executing the pipeline creates a virtual environment
+into which the `tenzir` Python package is installed. This behavior can be turned
+off in the node configuration using the `plugin.python.create-venvs` boolean
+option.
+
+:::note Performance
+The `python` operator implementation applies the provided Python code to each
+input row one bw one. We use
+[PyArrow](https://arrow.apache.org/docs/python/index.html) to convert the input
+values to native Python data types and back to the Tenzir data model after the
+transformation.
+:::
+
+### `--requirements <string>`
+
+The `--requirements` flag can be used to pass additional package dependencies in
+the pip format. When it is used, the argument is passed on to `pip install` in a
+dedicated virtual environment.
+
+### `<code>`
+
+The provided Python code describes an event-for-event transformation, i.e., it
+is executed once for each input event and produces exactly output event.
 
 An implicitly defined `self` variable represents the event. Modify it to alter
 the output of the operator. Fields of the event can be accessed with the dot
@@ -35,22 +57,10 @@ new fields are added by assigning to `self.fieldname` and existing fields can be
 removed by deleting them from `self`. When new fields are added, it is required
 that the new field has the same type for every row of the event.
 
-By default, the Tenzir node executing the pipeline creates a virtual environment
-into which the `tenzir` Python package is installed. This behavior can be turned
-off in the node configuration using the `plugin.python.create-venvs` boolean
-option.
+### `--file <path>`
 
-The `--requirements` flag can be used to pass additional package dependencies in
-the pip format. When it is used, the argument is passed on to `pip install` in a
-dedicated virtual environment.
-
-:::note Performance
-The `python` operator implementation applies the provided Python code to each
-input row one bw one. We use
-[PyArrow](https://arrow.apache.org/docs/python/index.html) to convert the input
-values to native Python data types and back to the Tenzir data model after the
-transformation.
-:::
+Instead of providing the code inline, the `--file` option allows for passing
+a path to a file containing the code the operator executes per event.
 
 ## Examples
 
