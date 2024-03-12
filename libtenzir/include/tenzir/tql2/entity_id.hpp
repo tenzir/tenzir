@@ -10,25 +10,30 @@
 
 #include "tenzir/detail/debug_writer.hpp"
 
-#include <limits>
-
 namespace tenzir::tql2 {
 
-struct entity_id {
-  size_t id = std::numeric_limits<size_t>::max();
+class entity_path {
+public:
+  explicit entity_path(std::vector<std::string> path) : path_{std::move(path)} {
+  }
 
   auto resolved() const -> bool {
-    return id != std::numeric_limits<size_t>::max();
+    return not path_.empty();
   }
 
-  auto debug_inspect(debug_writer& dbg) const -> bool;
-
-  friend auto inspect(auto& f, entity_id& x) -> bool {
-    if (auto dbg = as_debug_writer(f)) {
-      return x.debug_inspect(*dbg);
+  friend auto inspect(auto& f, entity_path& x) -> bool {
+    if (auto dbg = as_debug_writer(x)) {
+      if (not x.resolved()) {
+        return dbg->fmt_value("unresolved");
+      }
+      return dbg->fmt_value("{}", fmt::join(x.path_, "::"));
     }
-    return f.apply(x.id);
+    return f.apply(x.path_);
   }
+
+private:
+  // TODO: Storing resolved entities as strings is quite inefficient.
+  std::vector<std::string> path_;
 };
 
 } // namespace tenzir::tql2

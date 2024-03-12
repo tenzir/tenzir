@@ -266,10 +266,10 @@ struct entity {
   }
 
   std::vector<identifier> path;
-  entity_id id;
+  entity_path ref;
 
   friend auto inspect(auto& f, entity& x) -> bool {
-    return f.object(x).fields(f.field("path", x.path), f.field("id", x.id));
+    return f.object(x).fields(f.field("path", x.path), f.field("ref", x.ref));
   }
 
   auto get_location() const -> location {
