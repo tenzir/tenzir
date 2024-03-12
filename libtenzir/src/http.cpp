@@ -105,7 +105,8 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
   // If the user provided any request body data, we default to JSON encoding.
   // The user can override this behavior by setting a Content-Type header.
   const auto* content_type_header = req.header("Content-Type");
-  if (content_type_header != nullptr) {
+  if (content_type_header != nullptr
+      and not content_type_header->value.empty()) {
     // Encode request body based on provided Content-Type header value.
     const auto& content_type = content_type_header->value;
     if (content_type.starts_with("application/x-www-form-urlencoded")) {
