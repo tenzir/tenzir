@@ -377,6 +377,15 @@ private:
         }
         return add_value(builder, result.value_unsafe());
       }
+      case simdjson::ondemand::number_type::big_integer: {
+        // this can fail if the number is too big for a double
+        auto result = val.get_double();
+        if (result.error()) {
+          report_parse_err(val, "a number");
+          return false;
+        }
+        return add_value(builder, result.value_unsafe());
+      }
     }
     TENZIR_UNREACHABLE();
   }
