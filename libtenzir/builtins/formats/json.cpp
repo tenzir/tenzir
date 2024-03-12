@@ -377,8 +377,35 @@ private:
         }
         return add_value(builder, result.value_unsafe());
       }
+      default: {
+        // Newer versions of simdjson also have a `big_integer` number type.
+        // This check can be simplified once we require newer `simdjson` versions.
+        auto handle_big_integer = [&]<class T>(T kind) -> bool {
+          // This is written in a way where new number types lead to a
+          // compile-time warning/error.
+          if constexpr (requires { T::big_integer; }) {
+            switch (kind) {
+              case T::floating_point_number:
+              case T::signed_integer:
+              case T::unsigned_integer:
+                TENZIR_UNREACHABLE();
+              case T::big_integer:
+                report_parse_err(val, "a smaller number");
+                return false;
+            }
+          } else {
+            switch (kind) {
+              case T::floating_point_number:
+              case T::signed_integer:
+              case T::unsigned_integer:
+                TENZIR_UNREACHABLE();
+            }
+          }
+          TENZIR_UNREACHABLE();
+        };
+        return handle_big_integer(kind);
+      }
     }
-    TENZIR_UNREACHABLE();
   }
 
   [[nodiscard]] auto
