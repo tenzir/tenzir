@@ -18,17 +18,20 @@ transfer::transfer(transfer_options opts) : options{std::move(opts)} {
 
 auto transfer::prepare(const http::request& req) -> caf::error {
   TENZIR_DEBUG("preparing HTTP request");
-  if (auto err = reset())
+  if (auto err = reset()) {
     return err;
+  }
   auto& easy = handle();
   // Enable all supported built-in compressions by setting the empty string.
   // This can always be overriden by manually setting the Accept-Encoding
   // header.
-  if (auto err = to_error(easy.set(CURLOPT_ACCEPT_ENCODING, "")))
+  if (auto err = to_error(easy.set(CURLOPT_ACCEPT_ENCODING, ""))) {
     return err;
+  }
   // Ensure to follow HTTP redirects.
-  if (auto err = to_error(easy.set(CURLOPT_FOLLOWLOCATION, 1)))
+  if (auto err = to_error(easy.set(CURLOPT_FOLLOWLOCATION, 1))) {
     return err;
+  }
   TENZIR_DEBUG("setting URL: {}", req.uri);
   if (auto err = to_error(easy.set(CURLOPT_URL, req.uri))) {
     return err;
@@ -36,11 +39,13 @@ auto transfer::prepare(const http::request& req) -> caf::error {
   // Set method.
   TENZIR_DEBUG("setting method: {}", req.method);
   if (req.method == "GET") {
-    if (auto err = to_error(easy.set(CURLOPT_HTTPGET, 1)))
+    if (auto err = to_error(easy.set(CURLOPT_HTTPGET, 1))) {
       return err;
+    }
   } else if (req.method == "HEAD") {
-    if (auto err = to_error(easy.set(CURLOPT_NOBODY, 1)))
+    if (auto err = to_error(easy.set(CURLOPT_NOBODY, 1))) {
       return err;
+    }
   } else if (req.method == "POST") {
     if (auto err = to_error(easy.set(CURLOPT_POST, 1)))
       return err;
@@ -163,8 +168,9 @@ auto transfer::download() -> caf::expected<chunk_ptr> {
   auto code = easy_.set(on_write);
   TENZIR_ASSERT(code == curl::easy::code::ok);
   code = easy_.perform();
-  if (code != curl::easy::code::ok)
+  if (code != curl::easy::code::ok) {
     return to_error(code);
+  }
   return chunk::make(std::move(body));
 }
 
@@ -184,13 +190,16 @@ auto transfer::download_chunks() -> generator<caf::expected<chunk_ptr>> {
   });
   while (true) {
     if (auto still_running = multi.run(options.poll_timeout)) {
-      if (chunks.empty())
+      if (chunks.empty()) {
         co_yield chunk_ptr{};
-      for (auto&& chunk : chunks)
+      }
+      for (auto&& chunk : chunks) {
         co_yield chunk;
+      }
       chunks.clear();
-      if (*still_running == 0)
+      if (*still_running == 0) {
         break;
+      }
     } else {
       co_yield still_running.error();
       break;
@@ -227,8 +236,9 @@ auto transfer::handle() -> curl::easy& {
 auto download(http::request req, transfer_options opts)
   -> caf::expected<chunk_ptr> {
   auto tx = transfer{std::move(opts)};
-  if (auto err = tx.prepare(std::move(req)))
+  if (auto err = tx.prepare(std::move(req))) {
     return err;
+  }
   return tx.download();
 }
 
