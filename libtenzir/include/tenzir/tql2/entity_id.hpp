@@ -14,6 +14,8 @@ namespace tenzir::tql2 {
 
 class entity_path {
 public:
+  entity_path() = default;
+
   explicit entity_path(std::vector<std::string> path) : path_{std::move(path)} {
   }
 
