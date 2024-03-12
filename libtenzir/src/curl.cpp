@@ -15,10 +15,13 @@
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/error.hpp"
+#include "tenzir/si_literals.hpp"
 
 #include <fmt/format.h>
 
 namespace tenzir::curl {
+
+using namespace binary_byte_literals;
 
 auto slist::append(std::string_view str) -> void {
   auto* slist = slist_.release();
@@ -49,7 +52,6 @@ auto on_read(char* buffer, size_t size, size_t nitems, void* user_data)
   auto output = std::span<std::byte>{ptr, size * nitems};
   auto* f = reinterpret_cast<read_callback*>(user_data);
   auto n = (*f)(output);
-  TENZIR_ASSERT(n > 0);
   return n;
 }
 
@@ -58,8 +60,9 @@ easy::easy() : easy_{curl_easy_init()} {
 }
 
 easy::~easy() {
-  if (easy_ != nullptr)
+  if (easy_ != nullptr) {
     curl_easy_cleanup(easy_);
+  }
 }
 
 auto easy::unset(CURLoption option) -> code {
@@ -102,8 +105,27 @@ auto easy::set(mime handle) -> code {
   // Set MIME structure as the new thing.
   TENZIR_ASSERT(curl_code == CURLE_OK);
   curl_code = curl_easy_setopt(easy_, CURLOPT_MIMEPOST, handle.mime_.get());
-  if (curl_code == CURLE_OK)
+  if (curl_code == CURLE_OK) {
     mime_ = std::make_unique<mime>(std::move(handle));
+  }
+  return static_cast<code>(curl_code);
+}
+
+auto easy::set_infilesize(long size) -> code {
+  TENZIR_ASSERT(size >= 0);
+  auto unsigned_size = detail::narrow_cast<uint64_t>(size);
+  auto option
+    = unsigned_size > 2_GiB ? CURLOPT_INFILESIZE_LARGE : CURLOPT_INFILESIZE;
+  auto curl_code = curl_easy_setopt(easy_, option, size);
+  return static_cast<code>(curl_code);
+}
+
+auto easy::set_postfieldsize(long size) -> code {
+  TENZIR_ASSERT(size >= 0);
+  auto unsigned_size = detail::narrow_cast<uint64_t>(size);
+  auto option = unsigned_size > 2_GiB ? CURLOPT_POSTFIELDSIZE_LARGE
+                                      : CURLOPT_POSTFIELDSIZE;
+  auto curl_code = curl_easy_setopt(easy_, option, size);
   return static_cast<code>(curl_code);
 }
 
@@ -119,9 +141,11 @@ auto easy::set_http_header(std::string_view name, std::string_view value)
       // For the rare case that we overwrite a header, we're fine to pay the
       // quadratic overhead of rebuild the list.
       slist copy;
-      for (auto item : headers_.items())
-        if (header_name(item) != name)
+      for (auto item : headers_.items()) {
+        if (header_name(item) != name) {
           copy.append(item);
+        }
+      }
       headers_ = std::move(copy);
       break;
     }
@@ -157,8 +181,9 @@ auto to_string(easy::code code) -> std::string_view {
 }
 
 auto to_error(easy::code code) -> caf::error {
-  if (code == easy::code::ok)
+  if (code == easy::code::ok) {
     return {};
+  }
   return caf::make_error(ec::unspecified,
                          fmt::format("curl: {}", to_string(code)));
 }
@@ -192,18 +217,21 @@ auto multi::perform() -> std::pair<code, size_t> {
 
 auto multi::run(std::chrono::milliseconds timeout) -> caf::expected<size_t> {
   auto [result, num_running] = perform();
-  if (result == code::ok and num_running != 0)
+  if (result == code::ok and num_running != 0) {
     result = poll(timeout);
-  if (result != code::ok)
+  }
+  if (result != code::ok) {
     return to_error(result);
+  }
   return num_running;
 }
 
 auto multi::loop(std::chrono::milliseconds timeout) -> caf::error {
   while (true) {
     if (auto num_running = run(timeout)) {
-      if (*num_running == 0)
+      if (*num_running == 0) {
         return {};
+      }
     } else {
       return num_running.error();
     }
@@ -267,8 +295,9 @@ auto mime::add() -> mime::part {
 }
 
 auto to_error(multi::code code) -> caf::error {
-  if (code == multi::code::ok)
+  if (code == multi::code::ok) {
     return {};
+  }
   return caf::make_error(ec::unspecified,
                          fmt::format("curl: {}", to_string(code)));
 }
@@ -297,8 +326,9 @@ auto url::get(part url_part, unsigned int flags) const
   char* content = nullptr;
   auto curl_code = curl_url_get(url_.get(), curl_part, &content, flags);
   auto result = static_cast<code>(curl_code);
-  if (result != code::ok or content == nullptr)
+  if (result != code::ok or content == nullptr) {
     return {result, std::nullopt};
+  }
   auto string = std::string{content};
   curl_free(content);
   return {result, std::move(string)};
@@ -319,8 +349,9 @@ auto to_string(const url& x) -> std::string {
 
 /// @relates url
 auto to_error(url::code code) -> caf::error {
-  if (code == url::code::ok)
+  if (code == url::code::ok) {
     return {};
+  }
   return caf::make_error(ec::unspecified,
                          fmt::format("curl: {}", to_string(code)));
 }
