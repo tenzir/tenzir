@@ -190,14 +190,6 @@ RUN cmake -S contrib/tenzir-plugins/context -B build-context -G Ninja \
       DESTDIR=/plugin/context cmake --install build-context --strip --component Runtime && \
       rm -rf build-context
 
-FROM plugins-source AS matcher-plugin
-
-RUN cmake -S contrib/tenzir-plugins/matcher -B build-matcher -G Ninja \
-      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-      cmake --build build-matcher --parallel && \
-      DESTDIR=/plugin/matcher cmake --install build-matcher --strip --component Runtime && \
-      rm -rf build-matcher
-
 FROM plugins-source AS pipeline-manager-plugin
 
 RUN cmake -S contrib/tenzir-plugins/pipeline-manager -B build-pipeline-manager -G Ninja \
@@ -219,7 +211,6 @@ RUN cmake -S contrib/tenzir-plugins/platform -B build-platform -G Ninja \
 FROM tenzir-de AS tenzir-ce
 
 COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
-COPY --from=matcher-plugin --chown=tenzir:tenzir /plugin/matcher /
 COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline-manager /
 COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /
 
