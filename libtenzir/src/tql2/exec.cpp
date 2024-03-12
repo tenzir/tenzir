@@ -66,6 +66,7 @@ private:
 class sort_def final : public operator_def {
 public:
   auto name() const -> std::string_view override {
+    // [std, fn("sort")]
     return "std'sort";
   }
 

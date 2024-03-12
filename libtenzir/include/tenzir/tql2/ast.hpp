@@ -154,9 +154,9 @@ struct expression {
 
   ~expression();
   expression(const expression&) = delete;
-  expression(expression&&);
+  expression(expression&&) noexcept;
   auto operator=(const expression&) -> expression& = delete;
-  auto operator=(expression&&) -> expression&;
+  auto operator=(expression&&) noexcept -> expression&;
 
   std::unique_ptr<expression_kind> kind;
 
@@ -517,8 +517,9 @@ struct pipeline_expr {
 };
 
 inline expression::~expression() = default;
-inline expression::expression(expression&&) = default;
-inline auto expression::operator=(expression&&) -> expression& = default;
+inline expression::expression(expression&&) noexcept = default;
+inline auto expression::operator=(expression&&) noexcept
+  -> expression& = default;
 
 template <class... Fs>
 auto expression::match(Fs&&... fs) & -> decltype(auto) {
