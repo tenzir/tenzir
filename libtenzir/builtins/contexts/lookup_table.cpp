@@ -8,6 +8,8 @@
 
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/concept/parseable/numeric/bool.hpp>
+#include <tenzir/concept/parseable/tenzir/expression.hpp>
+#include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/range_map.hpp>
 #include <tenzir/expression.hpp>
@@ -259,8 +261,10 @@ public:
     auto result = disjunction{};
     result.reserve(fields.size());
     for (const auto& field : fields) {
+      auto lhs = to<operand>(field);
+      TENZIR_ASSERT(lhs);
       result.emplace_back(predicate{
-        field_extractor(field),
+        *lhs,
         relational_operator::in,
         data{keys},
       });
@@ -348,8 +352,10 @@ public:
       auto result = disjunction{};
       result.reserve(fields.size());
       for (const auto& field : fields) {
+        auto lhs = to<operand>(field);
+        TENZIR_ASSERT(lhs);
         result.emplace_back(predicate{
-          field_extractor(field),
+          *lhs,
           relational_operator::in,
           data{key_values_list},
         });
@@ -373,8 +379,10 @@ public:
         auto result = disjunction{};
         result.reserve(fields.size());
         for (const auto& field : fields) {
+          auto lhs = to<operand>(field);
+          TENZIR_ASSERT(lhs);
           result.emplace_back(predicate{
-            field_extractor(field),
+            *lhs,
             relational_operator::in,
             data{key_values_list},
           });
