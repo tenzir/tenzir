@@ -327,16 +327,15 @@ def _execute_user_code(__batch: pa.RecordBatch, __code: str) -> pa.RecordBatch:
         # Create the magic `self` variable.
         self = __buffer.start_row(__i)
         # == Run the user-provided code ===========
-        exec(__code, globals(), locals())
+        # TODO: This previously used `locals()` and `globals()`, which is why
+        # the code was uglified on purpose. Now that this is no longer the case,
+        # the rest of the file should be adapted accordingly.
+        env = {"self": self}
+        exec(__code, env)
         # =========================================
         if len(self) == 0:
             raise Exception("Empty output not allowed")
         __buffer.finish_row(self)
-        # Manual scope cleanup, to prevent user-defined variables
-        # from accidentally surviving into the next loop iteration.
-        new_locals = list(locals().keys())
-        for key in new_locals:
-            locals().pop(key, None)
     return __buffer.finish()
 
 
