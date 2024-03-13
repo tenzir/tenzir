@@ -20,7 +20,7 @@ steps:
 ![Overview](example-overview.png)
 
 3. Create a demo node by clicking the *Add* button in the nodes pane and select
-   *Cloud-hosted demo node*.:
+   *Cloud-hosted demo node*:
 
 ![Add node](example-add-node.png)
 
