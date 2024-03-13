@@ -109,16 +109,30 @@ public:
     for (auto& arg : x.args) {
       args.push_back(visit(arg));
     }
-    if (x.fn.ref.resolved()) {
-      // TODO: Check it for real.
-      auto fn = std::get_if<function_def>(&ctx_.reg().get(x.fn.ref));
-      TENZIR_ASSERT(fn);
-      if (fn->check) {
-        return fn->check(
-          function_def::args_info{x.fn.get_location(), x.args, args}, ctx_);
-      }
+    if (not x.fn.ref.resolved()) {
+      return std::nullopt;
     }
+    // TODO: Improve.
+    auto fn
+      = std::get_if<std::unique_ptr<function_def>>(&ctx_.reg().get(x.fn.ref));
+    TENZIR_ASSERT(fn);
+    TENZIR_ASSERT(*fn);
+    auto info = function_def::check_info{x.fn.get_location(), x.args, args};
+    return (*fn)->check(info, ctx_);
+  }
+
+  auto visit(assignment& x) -> result {
+    visit(x.right);
+    // TODO
+    diagnostic::error("unexpected assignment")
+      .primary(x.get_location())
+      .emit(ctx_.dh());
     return std::nullopt;
+  }
+
+  auto visit(pipeline_expr& x) -> result {
+    // TODO: How would this work?
+    visit(x.inner);
   }
 
   template <class T>
@@ -166,16 +180,18 @@ struct sort_expr {
 
 class sort_use final : public operator_use {
 public:
-  explicit sort_use(std::vector<sort_expr> exprs) : exprs_{std::move(exprs)} {
+  explicit sort_use(entity self, std::vector<sort_expr> exprs)
+    : self_{std::move(self)}, exprs_{std::move(exprs)} {
   }
 
 private:
+  entity self_;
   std::vector<sort_expr> exprs_;
 };
 
 class sort_def final : public operator_def {
 public:
-  auto make(std::vector<expression> args, context& ctx) const
+  auto make(ast::entity self, std::vector<expression> args, context& ctx) const
     -> std::unique_ptr<operator_use> override {
     auto exprs = std::vector<sort_expr>{};
     exprs.reserve(args.size());
@@ -191,7 +207,7 @@ public:
         },
         [&](assignment& x) {
           diagnostic::error("we don't like assignments around here")
-            .primary(x.equals)
+            .primary(x.get_location())
             .emit(ctx.dh());
         },
         [&](auto&) {
@@ -201,7 +217,112 @@ public:
     for (auto& expr : exprs) {
       type_checker{ctx}.visit(expr.expr);
     }
-    return std::make_unique<sort_use>(std::move(exprs));
+    return std::make_unique<sort_use>(std::move(self), std::move(exprs));
+  }
+};
+
+class from_use final : public operator_use {
+public:
+};
+
+class from_def final : public operator_def {
+public:
+  auto make(ast::entity self, std::vector<ast::expression> args,
+            context& ctx) const -> std::unique_ptr<operator_use> override {
+    (void)self;
+    if (args.size() != 1) {
+      diagnostic::error("`from` expects exactly one argument")
+        .primary(args.empty() ? self.get_location() : args[1].get_location())
+        .emit(ctx.dh());
+      return nullptr;
+    }
+    auto arg = std::move(args[0]);
+    auto ty = type_checker{ctx}.visit(arg);
+    if (ty && ty != string_type{}) {
+      diagnostic::error("expected `string` but got `{}`", *ty)
+        .primary(arg.get_location())
+        .emit(ctx.dh());
+      return nullptr;
+    }
+    // TODO: This should be some kind of const-eval, but for now, we just expect
+    // a string literal.
+    using result = std::optional<located<std::string>>;
+    auto url = arg.match(
+      [](literal& x) -> result {
+        return x.value.match(
+          [&](std::string& y) -> result {
+            return {{y, x.source}};
+          },
+          [](auto&) -> result {
+            return std::nullopt;
+          });
+      },
+      [](auto&) -> result {
+        return std::nullopt;
+      });
+    if (not url) {
+      diagnostic::error("expected a string literal")
+        .primary(arg.get_location())
+        .emit(ctx.dh());
+      return nullptr;
+    }
+    (void)url;
+    return std::make_unique<from_use>();
+  }
+};
+
+class group_def final : public operator_def {
+public:
+  auto make(ast::entity self, std::vector<ast::expression> args,
+            context& ctx) const -> std::unique_ptr<operator_use> override {
+    for (auto& arg : args) {
+      type_checker{ctx}.visit(arg);
+    }
+    diagnostic::error("not implemented yet")
+      .primary(self.get_location())
+      .emit(ctx.dh());
+    return nullptr;
+  }
+};
+
+class sqrt_def final : public function_def {
+public:
+  auto check(check_info info, context& ctx) const
+    -> std::optional<type> override {
+    auto dbl = type{double_type{}};
+    if (info.arg_count() == 0) {
+      diagnostic::error("`sqrt` expects one argument")
+        .primary(info.fn_loc())
+        .emit(ctx.dh());
+      return dbl;
+    }
+    auto& ty = info.arg_type(0);
+    if (ty && ty != dbl) {
+      // TODO: Use name of function?
+      diagnostic::error("`sqrt` expected `{}` but got `{}`", dbl, *ty)
+        .primary(info.arg_loc(0), "this is `{}`", *ty)
+        .secondary(info.fn_loc(), "this expected `{}`", dbl)
+        .emit(ctx.dh());
+    }
+    if (info.arg_count() > 1) {
+      diagnostic::error("`sqrt` expects only one argument")
+        .primary(info.arg_loc(1))
+        .emit(ctx.dh());
+    }
+    return dbl;
+  }
+};
+
+class now_def final : public function_def {
+public:
+  auto check(check_info info, context& ctx) const
+    -> std::optional<type> override {
+    if (info.arg_count() > 0) {
+      diagnostic::error("`now` does not expect any arguments")
+        .primary(info.arg_loc(0))
+        .emit(ctx.dh());
+    }
+    return type{duration_type{}};
   }
 };
 
@@ -261,44 +382,10 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   }
   auto reg = registry{};
   reg.add("sort", std::make_unique<sort_def>());
-  reg.add(
-    "sqrt",
-    function_def{
-      [](function_def::args_info args, context& ctx) -> std::optional<type> {
-        auto dbl = type{double_type{}};
-        if (args.arg_count() == 0) {
-          diagnostic::error("`sqrt` expects one argument")
-            .primary(args.fn_loc())
-            .emit(ctx.dh());
-          return dbl;
-        }
-        auto& ty = args.arg_type(0);
-        if (ty && ty != dbl) {
-          // TODO: Use name of function?
-          diagnostic::error("`sqrt` expected `{}` but got `{}`", dbl, *ty)
-            .primary(args.arg_loc(0), "this is `{}`", *ty)
-            .secondary(args.fn_loc(), "this expected `{}`", dbl)
-            .emit(ctx.dh());
-        }
-        if (args.arg_count() > 1) {
-          diagnostic::error("`sqrt` expects only one argument")
-            .primary(args.arg_loc(1))
-            .emit(ctx.dh());
-        }
-        return dbl;
-      },
-    });
-  reg.add("now", function_def{
-                   [](function_def::args_info info,
-                      context& ctx) -> std::optional<type> {
-                     if (info.arg_count() > 0) {
-                       diagnostic::error("`now` does not expect any arguments")
-                         .primary(info.arg_loc(0))
-                         .emit(ctx.dh());
-                     }
-                     return type{duration_type{}};
-                   },
-                 });
+  reg.add("from", std::make_unique<from_def>());
+  reg.add("group", std::make_unique<group_def>());
+  reg.add("sqrt", std::make_unique<sqrt_def>());
+  reg.add("now", std::make_unique<now_def>());
   tql2::resolve_entities(parsed, reg, diag_wrapper);
   if (cfg.dump_ast) {
     with_thread_local_registry(reg, [&] {
@@ -324,12 +411,33 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
           = std::get_if<std::unique_ptr<operator_def>>(&reg.get(x.op.ref));
         TENZIR_ASSERT(def);
         TENZIR_ASSERT(*def);
-        auto use = (*def)->make(std::move(x.args), ctx);
+        auto use = (*def)->make(x.op, std::move(x.args), ctx);
         if (use) {
           ops.push_back(std::move(use));
         } else {
           TENZIR_ASSERT(diag_wrapper.error());
         }
+      },
+      [&](assignment& x) {
+        // TODO: This is just for testing.
+        class test final : public operator_use {
+        public:
+          explicit test(assignment x) : x_{std::move(x)} {
+          }
+
+        private:
+          assignment x_;
+        };
+        auto ty = type_checker{ctx}.visit(x.right);
+        if (x.left.path.empty()) {
+          TENZIR_ASSERT(x.left.this_);
+          if (ty && *ty != type{record_type{}}) {
+            diagnostic::error("only records can be assigned to `this`")
+              .primary(x.right.get_location(), "this is `{}`", *ty)
+              .emit(ctx.dh());
+          }
+        }
+        ops.push_back(std::make_unique<test>(std::move(x)));
       },
       [&](auto& x) {
         diagnostic::error("unimplemented: {}", typeid(x).name())

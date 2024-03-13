@@ -62,7 +62,7 @@ public:
     }
     // TODO: Check if this entity has right type?
     xyz->match(
-      [&](const function_def&) {
+      [&](const std::unique_ptr<function_def>&) {
         // TODO: Methods?
         x.ref = entity_path{{name}};
       },
