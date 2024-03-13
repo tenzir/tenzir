@@ -18,15 +18,16 @@ class context;
 
 // TODO: Change `entity_def` and everything related to it.
 
-struct function_def {
+class function_def {
+public:
   // bad argument count
   // bad argument type error
   // + maybe type
 
-  class args_info {
+  class check_info {
   public:
-    args_info(location fn, std::span<const ast::expression> exprs,
-              std::span<const std::optional<type>> types)
+    check_info(location fn, std::span<const ast::expression> exprs,
+               std::span<const std::optional<type>> types)
       : fn_{fn}, exprs_{exprs}, types_{types} {
     }
 
@@ -54,7 +55,10 @@ struct function_def {
     std::span<const std::optional<type>> types_;
   };
 
-  std::function<auto(args_info, context& ctx)->std::optional<type>> check;
+  virtual ~function_def() = default;
+
+  virtual auto check(check_info info, context& ctx) const -> std::optional<type>
+    = 0;
 };
 
 class operator_use {
@@ -66,12 +70,14 @@ class operator_def {
 public:
   virtual ~operator_def() = default;
 
-  virtual auto make(std::vector<ast::expression> args, context& ctx) const
+  virtual auto
+  make(ast::entity self, std::vector<ast::expression> args, context& ctx) const
     -> std::unique_ptr<operator_use>
     = 0;
 };
 
-using entity_def = variant<function_def, std::unique_ptr<operator_def>>;
+using entity_def
+  = variant<std::unique_ptr<function_def>, std::unique_ptr<operator_def>>;
 
 class entity_def2 {
 public:

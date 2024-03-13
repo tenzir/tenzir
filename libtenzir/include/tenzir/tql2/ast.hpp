@@ -614,6 +614,10 @@ public:
     go(x.args);
   }
 
+  void enter(pipeline_expr& x) {
+    go(x.inner);
+  }
+
   template <class T>
   void enter(T&) {
     TENZIR_WARN("missed {}", typeid(T).name());
