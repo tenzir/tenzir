@@ -8,16 +8,128 @@
 
 #include "tenzir/tql2/exec.hpp"
 
+#include "tenzir/detail/assert.hpp"
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/registry.hpp"
 #include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/tokens.hpp"
+#include "tenzir/type.hpp"
 
 #include <arrow/util/utf8.h>
 
 namespace tenzir::tql2 {
 
 namespace {
+
+using namespace ast;
+
+class type_checker {
+public:
+  using result = std::optional<type>;
+
+  explicit type_checker(context& ctx) : ctx_{ctx} {
+  }
+
+  auto visit(literal& x) -> result {
+    return x.value.match(
+      []<class T>(T&) -> type {
+        return type{data_to_type_t<T>{}};
+      },
+      [](null&) -> type {
+        return type{null_type{}};
+      });
+  }
+
+  auto visit(selector&) -> result {
+    return std::nullopt;
+  }
+
+  auto visit(expression& x) -> result {
+    return x.match([&](auto& y) {
+      return visit(y);
+    });
+  }
+
+  auto visit(binary_expr& x) -> result {
+    // TODO: This is just for testing.
+    auto left = visit(x.left);
+    auto right = visit(x.right);
+    if (left && right && left != right) {
+      diagnostic::error("cannot {} `{}` and `{}`", x.op.inner, *left, *right)
+        .primary(x.op.source)
+        .secondary(x.left.get_location(), "this is `{}`", *left)
+        .secondary(x.right.get_location(), "this is `{}`", *right)
+        .emit(ctx_.dh());
+      return std::nullopt;
+    }
+    if (left) {
+      return left;
+    }
+    return right;
+  }
+
+  auto visit(unary_expr& x) -> result {
+    // TODO
+    auto ty_opt = visit(x.expr);
+    if (not ty_opt) {
+      return {};
+    }
+    auto ty = std::move(*ty_opt);
+    switch (x.op.inner) {
+      case unary_op::pos:
+      case unary_op::neg:
+        if (ty != type{int64_type{}}) {
+          diagnostic::error("cannot {} `{}`", x.op.inner, ty)
+            .primary(x.op.source)
+            .secondary(x.expr.get_location(), "this is `{}`", ty)
+            .emit(ctx_.dh());
+          return std::nullopt;
+        }
+        return ty;
+      case unary_op::not_:
+        if (ty != type{bool_type{}}) {
+          diagnostic::error("cannot {} `{}`", x.op.inner, ty)
+            .primary(x.op.source)
+            .secondary(x.expr.get_location(), "this is `{}`", ty)
+            .emit(ctx_.dh());
+          return std::nullopt;
+        }
+        return ty;
+    }
+    TENZIR_UNREACHABLE();
+  }
+
+  auto visit(function_call& x) -> result {
+    auto subject = std::optional<result>{};
+    if (x.subject) {
+      subject = visit(*x.subject);
+    }
+    auto args = std::vector<result>{};
+    for (auto& arg : x.args) {
+      args.push_back(visit(arg));
+    }
+    if (x.fn.ref.resolved()) {
+      // TODO: Check it for real.
+      auto fn = std::get_if<function_def>(&ctx_.reg().get(x.fn.ref));
+      TENZIR_ASSERT(fn);
+      if (fn->check) {
+        return fn->check(
+          function_def::args_info{x.fn.get_location(), x.args, args}, ctx_);
+      }
+    }
+    return std::nullopt;
+  }
+
+  template <class T>
+  auto visit(T&) -> result {
+    TENZIR_WARN("missed: {}", typeid(T).name());
+    return std::nullopt;
+  }
+
+private:
+  context& ctx_;
+};
 
 /// A diagnostic handler that remembers when it has emits an error.
 class diagnostic_handler_wrapper final : public diagnostic_handler {
@@ -42,8 +154,6 @@ private:
   std::unique_ptr<diagnostic_handler> inner_;
 };
 
-using namespace ast;
-
 struct sort_expr {
   enum class direction { asc, desc };
 
@@ -65,12 +175,7 @@ private:
 
 class sort_def final : public operator_def {
 public:
-  auto name() const -> std::string_view override {
-    // [std, fn("sort")]
-    return "std'sort";
-  }
-
-  auto make(std::vector<expression> args)
+  auto make(std::vector<expression> args, context& ctx) const
     -> std::unique_ptr<operator_use> override {
     auto exprs = std::vector<sort_expr>{};
     exprs.reserve(args.size());
@@ -84,11 +189,18 @@ public:
             exprs.emplace_back(std::move(arg), sort_expr::direction::asc);
           }
         },
+        [&](assignment& x) {
+          diagnostic::error("we don't like assignments around here")
+            .primary(x.equals)
+            .emit(ctx.dh());
+        },
         [&](auto&) {
           exprs.emplace_back(std::move(arg), sort_expr::direction::asc);
         });
     }
-    // check_and_maybe_compile(arg);
+    for (auto& expr : exprs) {
+      type_checker{ctx}.visit(expr.expr);
+    }
     return std::make_unique<sort_use>(std::move(exprs));
   }
 };
@@ -149,13 +261,80 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   }
   auto reg = registry{};
   reg.add("sort", std::make_unique<sort_def>());
-  reg.add("sqrt", function_def{"yo"});
+  reg.add(
+    "sqrt",
+    function_def{
+      [](function_def::args_info args, context& ctx) -> std::optional<type> {
+        auto dbl = type{double_type{}};
+        if (args.arg_count() == 0) {
+          diagnostic::error("`sqrt` expects one argument")
+            .primary(args.fn_loc())
+            .emit(ctx.dh());
+          return dbl;
+        }
+        auto& ty = args.arg_type(0);
+        if (ty && ty != dbl) {
+          // TODO: Use name of function?
+          diagnostic::error("`sqrt` expected `{}` but got `{}`", dbl, *ty)
+            .primary(args.arg_loc(0), "this is `{}`", *ty)
+            .secondary(args.fn_loc(), "this expected `{}`", dbl)
+            .emit(ctx.dh());
+        }
+        if (args.arg_count() > 1) {
+          diagnostic::error("`sqrt` expects only one argument")
+            .primary(args.arg_loc(1))
+            .emit(ctx.dh());
+        }
+        return dbl;
+      },
+    });
+  reg.add("now", function_def{
+                   [](function_def::args_info info,
+                      context& ctx) -> std::optional<type> {
+                     if (info.arg_count() > 0) {
+                       diagnostic::error("`now` does not expect any arguments")
+                         .primary(info.arg_loc(0))
+                         .emit(ctx.dh());
+                     }
+                     return type{duration_type{}};
+                   },
+                 });
   tql2::resolve_entities(parsed, reg, diag_wrapper);
   if (cfg.dump_ast) {
     with_thread_local_registry(reg, [&] {
       fmt::println("{:#?}", parsed);
     });
     return not diag_wrapper.error();
+  }
+  // TODO
+  auto ops = std::vector<std::unique_ptr<operator_use>>{};
+  auto ctx = context{reg, diag_wrapper};
+  for (auto& stmt : parsed.body) {
+    // assignment, let_stmt, if_stmt, match_stmt
+    stmt.match(
+      [&](invocation& x) {
+        if (not x.op.ref.resolved()) {
+          // This was already reported. We don't know how the operator would
+          // interpret its arguments, hence we make no attempt of reporting
+          // additional errors for them.
+          return;
+        }
+        // TODO: Where do we check that this succeeds?
+        auto def
+          = std::get_if<std::unique_ptr<operator_def>>(&reg.get(x.op.ref));
+        TENZIR_ASSERT(def);
+        TENZIR_ASSERT(*def);
+        auto use = (*def)->make(std::move(x.args), ctx);
+        if (use) {
+          ops.push_back(std::move(use));
+        } else {
+          TENZIR_ASSERT(diag_wrapper.error());
+        }
+      },
+      [&](auto& x) {
+        diagnostic::error("unimplemented: {}", typeid(x).name())
+          .emit(diag_wrapper);
+      });
   }
   if (diag_wrapper.error()) {
     return false;

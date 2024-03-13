@@ -597,7 +597,15 @@ private:
     expect(tk::lpar);
     auto scope = ignore_newlines(true);
     auto args = std::vector<expression>{};
-    while (not accept(tk::rpar)) {
+    while (true) {
+      if (auto rpar = accept(tk::rpar)) {
+        return function_call{
+          std::move(subject),
+          std::move(fn),
+          std::move(args),
+          rpar.location,
+        };
+      }
       if (auto comma = accept(tk::comma)) {
         if (args.empty()) {
           diagnostic::error("unexpected comma before any arguments")
@@ -612,11 +620,6 @@ private:
         expect(tk::comma);
       }
     }
-    return function_call{
-      std::move(subject),
-      std::move(fn),
-      std::move(args),
-    };
   }
 
   auto peek_unary_op() -> std::optional<unary_op> {
