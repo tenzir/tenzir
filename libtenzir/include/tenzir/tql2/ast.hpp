@@ -282,13 +282,17 @@ struct entity {
 
 struct function_call {
   function_call(std::optional<expression> subject, entity fn,
-                std::vector<expression> args)
-    : subject{std::move(subject)}, fn{std::move(fn)}, args(std::move(args)) {
+                std::vector<expression> args, location rpar)
+    : subject{std::move(subject)},
+      fn{std::move(fn)},
+      args(std::move(args)),
+      rpar{rpar} {
   }
 
   std::optional<expression> subject;
   entity fn;
   std::vector<expression> args;
+  location rpar;
 
   friend auto inspect(auto& f, function_call& x) -> bool {
     return f.object(x).fields(f.field("subject", x.subject),
@@ -296,8 +300,13 @@ struct function_call {
   }
 
   auto get_location() const -> location {
-    // TODO
-    return fn.get_location();
+    auto left = location{};
+    if (subject) {
+      left = subject->get_location();
+    } else {
+      left = fn.get_location();
+    }
+    return left.combine(rpar);
   }
 };
 
@@ -550,6 +559,89 @@ inline pipeline::pipeline(std::vector<statement> body) : body{std::move(body)} {
 inline pipeline::~pipeline() = default;
 inline pipeline::pipeline(pipeline&&) noexcept = default;
 inline auto pipeline::operator=(pipeline&&) noexcept -> pipeline& = default;
+
+template <class Self>
+class visitor {
+public:
+  void enter(pipeline& x) {
+    go(x.body);
+  }
+
+  void enter(statement& x) {
+    match(x);
+  }
+
+  void enter(assignment& x) {
+    go(x.left);
+    go(x.right);
+  }
+
+  void enter(invocation& x) {
+    go(x.op);
+    go(x.args);
+  }
+
+  void enter(entity& x) {
+    (void)x;
+  }
+
+  void enter(expression& x) {
+    match(x);
+  }
+
+  void enter(selector& x) {
+    (void)x;
+  }
+
+  void enter(binary_expr& x) {
+    go(x.left);
+    go(x.right);
+  }
+
+  void enter(unary_expr& x) {
+    go(x.expr);
+  }
+
+  void enter(literal& x) {
+    (void)x;
+  }
+
+  void enter(function_call& x) {
+    if (x.subject) {
+      go(x.subject);
+    }
+    go(x.fn);
+    go(x.args);
+  }
+
+  template <class T>
+  void enter(T&) {
+    TENZIR_WARN("missed {}", typeid(T).name());
+  }
+
+private:
+  template <class T>
+  void match(T& x) {
+    x.match([&](auto& y) {
+      self().visit(y);
+    });
+  }
+
+  template <class T>
+  void go(T& x) {
+    if constexpr (std::ranges::range<T>) {
+      for (auto& y : x) {
+        self().visit(y);
+      }
+    } else {
+      self().visit(x);
+    }
+  }
+
+  auto self() -> Self {
+    return static_cast<Self&>(*this);
+  }
+};
 
 } // namespace tenzir::tql2::ast
 

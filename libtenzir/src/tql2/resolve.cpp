@@ -22,7 +22,7 @@ namespace {
 
 using namespace tenzir::tql2::ast;
 
-class entity_resolver {
+class entity_resolver : public visitor<entity_resolver> {
 public:
   entity_resolver(const registry& reg, diagnostic_handler& diag)
     : reg_{reg}, diag_{diag} {
@@ -40,45 +40,41 @@ public:
       return;
     }
     auto& name = x.path[0].name;
-    auto xyz = reg_.try_get(name);
+    // TODO: We pretend here that every name directly maps to its path.
+    auto xyz = reg_.try_get(entity_path{{name}});
+    auto expected = std::invoke([&] {
+      switch (context_) {
+        case context_t::op_name:
+          return "operator";
+        case context_t::fn_name:
+          return "function";
+        case context_t::method_name:
+          return "method";
+        case context_t::none:
+          TENZIR_UNREACHABLE();
+      }
+    });
     if (not xyz) {
-      auto category = std::invoke([&] {
-        switch (context_) {
-          case context_t::op_name:
-            return "operator";
-          case context_t::fn_name:
-            return "function";
-          case context_t::method_name:
-            return "method";
-          case context_t::none:
-            TENZIR_UNREACHABLE();
-        }
-      });
-      diagnostic::error("{} `{}` not found", category, name)
+      diagnostic::error("{} `{}` not found", expected, name)
         .primary(x.get_location())
         .emit(diag_);
+      return;
     }
     // TODO: Check if this entity has right type?
     xyz->match(
-      [](const function_def&) {
+      [&](const function_def&) {
         // TODO: Methods?
+        x.ref = entity_path{{name}};
       },
-      [](const std::unique_ptr<operator_def>&) {
-
+      [&](const std::unique_ptr<operator_def>&) {
+        if (context_ != context_t::op_name) {
+          diagnostic::error("expected {}, got operator", expected)
+            .primary(x.get_location())
+            .emit(diag_);
+          return;
+        }
+        x.ref = entity_path{{name}};
       });
-    x.ref = entity_path{{name}};
-  }
-
-  void visit(pipeline& x) {
-    for (auto& y : x.body) {
-      visit(y);
-    }
-  }
-
-  void visit(statement& x) {
-    x.match([&](auto& y) {
-      visit(y);
-    });
   }
 
   void visit(invocation& x) {
@@ -86,22 +82,6 @@ public:
     visit(x.op);
     context_ = prev;
     for (auto& y : x.args) {
-      visit(y);
-    }
-  }
-
-  void visit(assignment& x) {
-    visit(x.right);
-  }
-
-  void visit(expression& x) {
-    x.match([&](auto& y) {
-      visit(y);
-    });
-  }
-
-  void visit(list& x) {
-    for (auto& y : x.items) {
       visit(y);
     }
   }
@@ -119,27 +99,9 @@ public:
     }
   }
 
-  void visit(index_expr& x) {
-    visit(x.expr);
-    visit(x.index);
-  }
-
-  void visit(selector& x) {
-    (void)x;
-  }
-
-  void visit(binary_expr& x) {
-    visit(x.left);
-    visit(x.right);
-  }
-
-  void visit(let_stmt& x) {
-    visit(x.expr);
-  }
-
   template <class T>
-  void visit(T&) {
-    // detail::panic("todo: {}", typeid(T).name());
+  void visit(T& x) {
+    enter(x);
   }
 
 private:
