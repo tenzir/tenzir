@@ -41,8 +41,9 @@ public:
 private:
   struct curl_slist_deleter {
     auto operator()(curl_slist* ptr) const noexcept -> void {
-      if (ptr)
+      if (ptr) {
         curl_slist_free_all(ptr);
+      }
     }
   };
 
@@ -206,6 +207,16 @@ public:
   /// Sets a MIME handle.
   auto set(mime handle) -> code;
 
+  /// Sets `CURLOPT_INFILESIZE` and `CURLOPT_INFILESIZE_LARGE` based on the
+  /// input value.
+  /// @param size The size of the file.
+  auto set_infilesize(long size) -> code;
+
+  /// Sets ` CURLOPT_POSTFIELDSIZE` and `CURLOPT_POSTFIELDSIZE_LARGE` based on
+  /// the input value.
+  /// @param size The size of the post data.
+  auto set_postfieldsize(long size) -> code;
+
   /// Sets a value of a HTTP header.
   /// @param name The header name, e.g., "User-Agent"
   /// @param value The header value, e.g., "Tenzir". If empty, the header will
@@ -298,8 +309,9 @@ private:
       // (3) Clean up the multi handle
       // We cannot enforce (1) and (2) here because our easy handles don't have
       // shared ownership semantics. It's up to the user to add and remove them.
-      if (ptr)
+      if (ptr) {
         curl_multi_cleanup(ptr);
+      }
     }
   };
 
@@ -358,8 +370,9 @@ public:
 private:
   struct curl_mime_deleter {
     auto operator()(curl_mime* ptr) const noexcept -> void {
-      if (ptr)
+      if (ptr) {
         curl_mime_free(ptr);
+      }
     }
   };
 
@@ -460,8 +473,9 @@ public:
 private:
   struct curl_url_deleter {
     auto operator()(CURLU* ptr) const noexcept -> void {
-      if (ptr)
+      if (ptr) {
         curl_url_cleanup(ptr);
+      }
     }
   };
 

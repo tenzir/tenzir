@@ -44,7 +44,7 @@ public:
 
   /// Prepares a transfer with an HTTP request.
   /// @note resets the transfer.
-  auto prepare(const http::request& req) -> caf::error;
+  auto prepare(http::request req) -> caf::error;
 
   /// Prepares a transfer with an URL.
   /// @param url The URL to use.

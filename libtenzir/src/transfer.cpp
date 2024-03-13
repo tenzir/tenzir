@@ -16,19 +16,22 @@ namespace tenzir {
 transfer::transfer(transfer_options opts) : options{std::move(opts)} {
 }
 
-auto transfer::prepare(const http::request& req) -> caf::error {
+auto transfer::prepare(http::request req) -> caf::error {
   TENZIR_DEBUG("preparing HTTP request");
-  if (auto err = reset())
+  if (auto err = reset()) {
     return err;
+  }
   auto& easy = handle();
   // Enable all supported built-in compressions by setting the empty string.
   // This can always be overriden by manually setting the Accept-Encoding
   // header.
-  if (auto err = to_error(easy.set(CURLOPT_ACCEPT_ENCODING, "")))
+  if (auto err = to_error(easy.set(CURLOPT_ACCEPT_ENCODING, ""))) {
     return err;
+  }
   // Ensure to follow HTTP redirects.
-  if (auto err = to_error(easy.set(CURLOPT_FOLLOWLOCATION, 1)))
+  if (auto err = to_error(easy.set(CURLOPT_FOLLOWLOCATION, 1))) {
     return err;
+  }
   TENZIR_DEBUG("setting URL: {}", req.uri);
   if (auto err = to_error(easy.set(CURLOPT_URL, req.uri))) {
     return err;
@@ -36,52 +39,83 @@ auto transfer::prepare(const http::request& req) -> caf::error {
   // Set method.
   TENZIR_DEBUG("setting method: {}", req.method);
   if (req.method == "GET") {
-    if (auto err = to_error(easy.set(CURLOPT_HTTPGET, 1)))
-      return err;
-  } else if (req.method == "HEAD") {
-    if (auto err = to_error(easy.set(CURLOPT_NOBODY, 1)))
-      return err;
-  } else if (req.method == "POST") {
-    if (auto err = to_error(easy.set(CURLOPT_POST, 1)))
-      return err;
-  } else if (not req.method.empty()) {
-    const auto* method = req.method.c_str();
-    if (auto err = to_error(easy.set(CURLOPT_CUSTOMREQUEST, method)))
-      return err;
-  }
-  // Set body.
-  if (not req.body.empty()) {
-    auto size = detail::narrow_cast<long>(req.body.size());
-    TENZIR_DEBUG("setting {}-byte body", size);
-    if (auto err = to_error(easy.set(CURLOPT_POSTFIELDSIZE, size))) {
+    if (auto err = to_error(easy.set(CURLOPT_HTTPGET, 1))) {
       return err;
     }
-    // Setting body data via CURLOPT_[COPY]POSTFIELDS implicitly sets the
-    // Content-Type header to 'application/x-www-form-urlencoded' unless we
-    // provide a Content-Type header that overrides it.
-    // TODO: in the future, do not copy but rather keep the buffer alive outside
-    // of cURL.
-    if (auto err = to_error(easy.set(CURLOPT_COPYPOSTFIELDS, req.body)))
+  } else if (req.method == "HEAD") {
+    if (auto err = to_error(easy.set(CURLOPT_NOBODY, 1))) {
       return err;
-  } else if (req.method == "POST" or req.method == "PUT") {
-    // If we have no body, we still set an empty sized body for POST and PUT.
-    TENZIR_DEBUG("setting body size to 0");
-    if (auto err = to_error(easy.set(CURLOPT_POSTFIELDSIZE, 0)))
+    }
+  } else if (req.method == "POST") {
+    if (auto err = to_error(easy.set(CURLOPT_POST, 1))) {
       return err;
+    }
+    auto size = detail::narrow_cast<long>(req.body.size());
+    TENZIR_DEBUG("setting {}-byte POST body", size);
+    if (auto err = to_error(easy.set_postfieldsize(size))) {
+      return err;
+    }
+    if (not req.body.empty()) {
+      // Setting body data via CURLOPT_[COPY]POSTFIELDS implicitly sets the
+      // Content-Type header to 'application/x-www-form-urlencoded' unless we
+      // provide a Content-Type header that overrides it.
+      // TODO: Figure out a way to avoid the extra copy here, but this requires
+      // moving the request in some fashion and tying it to the handle.
+      if (auto err = to_error(easy.set(CURLOPT_COPYPOSTFIELDS, req.body))) {
+        return err;
+      }
+    }
+  } else if (req.method == "PUT") {
+    if (auto err = to_error(easy.set(CURLOPT_UPLOAD, 1))) {
+      return err;
+    }
+    // Using CURLOPT_UPLOAD expects that we go through the read callback, and we
+    // must set CURLOPT_INFILESIZE(_LARGE).
+    auto size = detail::narrow_cast<long>(req.body.size());
+    if (auto err = to_error(easy.set_infilesize(size))) {
+      return err;
+    }
+    auto on_read = [body = chunk::make(std::move(req.body))](
+                     std::span<std::byte> buffer) mutable -> size_t {
+      if (not body or body->size() == 0) {
+        return 0;
+      }
+      TENZIR_DEBUG("reading {}-byte request body into {}-byte buffer",
+                   body->size(), buffer.size());
+      if (buffer.size() >= body->size()) {
+        std::memcpy(buffer.data(), body->data(), body->size());
+        auto bytes_copied = body->size();
+        body = {};
+        return bytes_copied;
+      }
+      std::memcpy(buffer.data(), body->data(), buffer.size());
+      body = body->slice(buffer.size());
+      return buffer.size();
+    };
+    auto code = handle().set(on_read);
+    TENZIR_ASSERT(code == curl::easy::code::ok);
+  } else if (not req.method.empty()) {
+    const auto* method = req.method.c_str();
+    if (auto err = to_error(easy.set(CURLOPT_CUSTOMREQUEST, method))) {
+      return err;
+    }
   }
-  auto add_header = [&](std::string_view name, std::string_view value) {
+  // Add headers
+  auto set_header = [&](std::string_view name, std::string_view value) {
     TENZIR_DEBUG("setting HTTP header {}: {}", name, value);
     auto code = easy.set_http_header(name, value);
     TENZIR_ASSERT(code == curl::easy::code::ok);
   };
   // Add default headers.
-  if (req.header("Accept") == nullptr)
-    add_header("Accept", "*/*");
-  if (req.header("User-Agent") == nullptr)
-    add_header("User-Agent", fmt::format("Tenzir/{}", version::version));
+  if (req.header("Accept") == nullptr) {
+    set_header("Accept", "*/*");
+  }
+  if (req.header("User-Agent") == nullptr) {
+    set_header("User-Agent", fmt::format("Tenzir/{}", version::version));
+  }
   // Set user-provided headers.
   for (const auto& [name, value] : req.headers) {
-    add_header(name, value);
+    set_header(name, value);
   }
   return {};
 }
@@ -93,37 +127,35 @@ auto transfer::prepare(std::string_view url) -> caf::error {
 
 auto transfer::prepare(chunk_ptr chunk) -> caf::error {
   TENZIR_ASSERT(chunk);
-  // Disable the default behavior of libcurl that prints the response to stdout.
-  auto on_write = [](std::span<const std::byte> buffer) {
-    TENZIR_DEBUG("got {}-byte response chunk", buffer.size());
-  };
-  auto code = easy_.set(on_write);
-  TENZIR_ASSERT(code == curl::easy::code::ok);
-  TENZIR_DEBUG("preparing transfer with {}-byte chunk", chunk->size());
-  auto chunk_size = detail::narrow_cast<long>(chunk->size());
-  if (auto err = to_error(easy_.set(CURLOPT_POSTFIELDSIZE, chunk_size))) {
-    return err;
-  }
+  // Set Content-Type header based on chunk content type.
   const auto& content_type = chunk->metadata().content_type;
   if (content_type) {
     TENZIR_DEBUG("found chunk content type: {}", *content_type);
     auto found = false;
     for (auto [name, value] : easy_.headers()) {
       if (name == "Content-Type") {
-        if (value != *content_type)
+        if (value.empty()) {
+          TENZIR_DEBUG("found deleted content type header");
+        } else if (value != *content_type) {
           return caf::make_error(ec::unspecified,
                                  fmt::format("Content-Type mismatch: expected "
                                              "{}, got {}",
                                              value, *content_type));
+        }
         found = true;
+        TENZIR_DEBUG("found matching content type in header");
         break;
       }
     }
-    if (found) {
-      TENZIR_DEBUG("found matching content type in header");
-    } else {
+    if (not found) {
       easy_.set_http_header("Content-Type", *chunk->metadata().content_type);
     }
+  }
+  // Prepare request body.
+  TENZIR_DEBUG("preparing transfer with {}-byte chunk", chunk->size());
+  auto chunk_size = detail::narrow_cast<long>(chunk->size());
+  if (auto err = to_error(easy_.set_infilesize(chunk_size))) {
+    return err;
   }
   auto on_read =
     [chunk = std::move(chunk)](std::span<std::byte> buffer) mutable -> size_t {
@@ -143,7 +175,14 @@ auto transfer::prepare(chunk_ptr chunk) -> caf::error {
     chunk = chunk->slice(buffer.size());
     return buffer.size();
   };
-  handle().set(on_read);
+  auto code = handle().set(on_read);
+  TENZIR_ASSERT(code == curl::easy::code::ok);
+  // Disable the default behavior of libcurl that prints the response to stdout.
+  auto on_write = [](std::span<const std::byte> buffer) {
+    TENZIR_DEBUG("got {}-byte response chunk", buffer.size());
+  };
+  code = easy_.set(on_write);
+  TENZIR_ASSERT(code == curl::easy::code::ok);
   return {};
 }
 
@@ -163,8 +202,9 @@ auto transfer::download() -> caf::expected<chunk_ptr> {
   auto code = easy_.set(on_write);
   TENZIR_ASSERT(code == curl::easy::code::ok);
   code = easy_.perform();
-  if (code != curl::easy::code::ok)
+  if (code != curl::easy::code::ok) {
     return to_error(code);
+  }
   return chunk::make(std::move(body));
 }
 
@@ -184,13 +224,16 @@ auto transfer::download_chunks() -> generator<caf::expected<chunk_ptr>> {
   });
   while (true) {
     if (auto still_running = multi.run(options.poll_timeout)) {
-      if (chunks.empty())
+      if (chunks.empty()) {
         co_yield chunk_ptr{};
-      for (auto&& chunk : chunks)
+      }
+      for (auto&& chunk : chunks) {
         co_yield chunk;
+      }
       chunks.clear();
-      if (*still_running == 0)
+      if (*still_running == 0) {
         break;
+      }
     } else {
       co_yield still_running.error();
       break;
@@ -227,8 +270,9 @@ auto transfer::handle() -> curl::easy& {
 auto download(http::request req, transfer_options opts)
   -> caf::expected<chunk_ptr> {
   auto tx = transfer{std::move(opts)};
-  if (auto err = tx.prepare(std::move(req)))
+  if (auto err = tx.prepare(std::move(req))) {
     return err;
+  }
   return tx.download();
 }
 
