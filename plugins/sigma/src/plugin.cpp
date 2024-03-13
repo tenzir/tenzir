@@ -21,6 +21,7 @@
 #include <tenzir/io/read.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice_builder.hpp>
 
 #include <arrow/record_batch.h>
@@ -28,8 +29,6 @@
 #include <caf/expected.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
-
-#include <thread>
 
 namespace tenzir::plugins::sigma {
 
@@ -99,7 +98,6 @@ public:
           TENZIR_VERBOSE("removed Sigma rule {}", path);
         }
       }
-      return;
     }
 
     std::filesystem::path path;
@@ -130,44 +128,26 @@ public:
           continue;
         }
         if (auto event = filter(slice, *expr)) {
-          auto rule_schema = type::infer(yaml);
-          TENZIR_ASSERT(rule_schema);
-          TENZIR_ASSERT(caf::holds_alternative<record_type>(*rule_schema));
+          auto [event_schema, event_array] = offset{}.get(*event);
+          auto [rule_schema, rule_array] = [&] {
+            auto rule_builder = series_builder{};
+            for (size_t i = 0; i < event->rows(); ++i) {
+              rule_builder.data(yaml);
+            }
+            return rule_builder.finish_assert_one_array();
+          }();
           const auto result_schema = type{
             "tenzir.sigma",
             record_type{
-              {"event", event->schema()},
-              {"rule", *rule_schema},
+              {"event", event_schema},
+              {"rule", rule_schema},
             },
           };
-          auto result_builder
-            = result_schema.make_arrow_builder(arrow::default_memory_pool());
-          auto array = to_record_batch(*event)->ToStructArray().ValueOrDie();
-          for (const auto& row :
-               values(caf::get<record_type>(slice.schema()), *array)) {
-            const auto append_row_result
-              = caf::get<arrow::StructBuilder>(*result_builder).Append();
-            TENZIR_ASSERT(append_row_result.ok());
-            const auto append_event_result = append_builder(
-              caf::get<record_type>(event->schema()),
-              caf::get<arrow::StructBuilder>(
-                *caf::get<arrow::StructBuilder>(*result_builder)
-                   .field_builder(0)),
-              *row);
-            TENZIR_ASSERT(append_event_result.ok());
-            const auto append_rule_result = append_builder(
-              caf::get<record_type>(*rule_schema),
-              caf::get<arrow::StructBuilder>(
-                *caf::get<arrow::StructBuilder>(*result_builder)
-                   .field_builder(1)),
-              caf::get<view<record>>(make_view(yaml)));
-            TENZIR_ASSERT(append_rule_result.ok());
-          }
-          auto result = result_builder->Finish().ValueOrDie();
-          auto rb = arrow::RecordBatch::Make(
-            result_schema.to_arrow_schema(), event->rows(),
-            caf::get<arrow::StructArray>(*result).fields());
-          co_yield table_slice{rb, result_schema};
+          auto batch = arrow::RecordBatch::Make(
+            result_schema.to_arrow_schema(),
+            detail::narrow_cast<int64_t>(event->rows()),
+            {std::move(event_array), std::move(rule_array)});
+          co_yield table_slice{batch, result_schema};
         }
       }
     }
