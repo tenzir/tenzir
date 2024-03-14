@@ -618,6 +618,26 @@ public:
     go(x.inner);
   }
 
+  void enter(record& x) {
+    for (auto& y : x.content) {
+      y.match(
+        [&](record::field& z) {
+          go(z.expr);
+        },
+        [&](record::spread& z) {
+          go(z.expr);
+        });
+    }
+  }
+
+  void enter(list& x) {
+    go(x.items);
+  }
+
+  void enter(field_access& x) {
+    go(x.left);
+  }
+
   template <class T>
   void enter(T&) {
     TENZIR_WARN("missed {}", typeid(T).name());
