@@ -226,13 +226,15 @@ public:
     return "lookup-table";
   }
 
-  auto apply(series array) const
+  auto apply(series array, bool replace) const
     -> caf::expected<std::vector<series>> override {
     auto builder = series_builder{};
     for (const auto& value : array.values()) {
       if (auto it = context_entries.find(materialize(value));
           it != context_entries.end()) {
         builder.data(it->second);
+      } else if (replace) {
+        builder.data(value);
       } else {
         builder.null();
       }

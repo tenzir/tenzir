@@ -1067,6 +1067,17 @@ type::make_arrow_builder(arrow::MemoryPool* pool) const noexcept {
   return caf::visit(f, *this);
 }
 
+generator<offset> type::resolve(std::string_view key) const noexcept {
+  const auto* rt = caf::get_if<record_type>(this);
+  if (not rt) {
+    return {};
+  }
+  if (key.starts_with(':')) {
+    return rt->resolve_type_extractor(key);
+  }
+  return rt->resolve_key_or_concept(key, name());
+}
+
 generator<offset>
 type::resolve_key_or_concept(std::string_view key) const noexcept {
   const auto* rt = caf::get_if<record_type>(this);

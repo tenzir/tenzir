@@ -11,8 +11,10 @@ Enriches events with a context.
 ## Synopsis
 
 ```
-enrich <name>          [--field <field...>] [--filter] [<context-options>]
-enrich <output>=<name> [--field <field...>] [--filter] [<context-options>]
+enrich <name>          [--field <field...>] [--replace] [--filter] [--separate]
+                       [<context-options>]
+enrich <output>=<name> [--field <field...>] [--filter] [--separate]
+                       [<context-options>]
 ```
 
 ## Description
@@ -33,10 +35,22 @@ the name of the context.
 
 A comma-separated list of fields, type extractors, or concepts to match.
 
+### `--replace`
+
+Replace the given fields with their respective context, omitting all
+meta-information.
+
 ### `--filter`
 
-An optional flag that enables the operator to filter events that do not
-contain a context.
+Filter events that do not match the context.
+
+This option is incompatible with `--replace`.
+
+### `--separate`
+
+When multiple fields are provided, e.g., when using `--field :ip` to enrich all
+IP address fields, duplicate the event for every provided field and enrich them
+individually.
 
 ### `<context-options>`
 

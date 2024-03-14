@@ -12,8 +12,12 @@ and translates context updates into historical queries.
 ## Synopsis
 
 ```
-lookup <context>          [--field <field...>] [--live] [--retro] [--snapshot] [<context-options>]
-lookup <output>=<context> [--field <field...>] [--live] [--retro] [--snapshot] [<context-options>]
+lookup <context>          [--field <field...>] [--separate]
+                          [--live] [--retro] [--snapshot]
+                          [<context-options>]
+lookup <output>=<context> [--field <field...>] [--separate]
+                          [--live] [--retro] [--snapshot]
+                          [<context-options>]
 ```
 
 ## Description
@@ -44,6 +48,12 @@ Defaults to the name of the context.
 ### `--field <field...>`
 
 A comma-separated list of fields, type extractors, or concepts to match.
+
+### `--separate`
+
+When multiple fields are provided, e.g., when using `--field :ip` to enrich all
+IP address fields, duplicate the event for every provided field and enrich them
+individually.
 
 ### `--live`
 

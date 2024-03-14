@@ -746,7 +746,11 @@ public:
   virtual auto context_type() const -> std::string = 0;
 
   /// Emits context information for every event in `array` in order.
-  virtual auto apply(series array) const -> caf::expected<std::vector<series>>
+  /// @param array The values to look up in the context.
+  /// @param replace If true, return the input values for missing fields rather
+  /// than nulls.
+  virtual auto apply(series array, bool replace) const
+    -> caf::expected<std::vector<series>>
     = 0;
 
   /// Inspects the context.
