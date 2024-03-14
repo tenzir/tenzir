@@ -41,7 +41,10 @@ public:
       });
   }
 
-  auto visit(selector&) -> result {
+  auto visit(selector& x) -> result {
+    if (x.this_ && x.path.empty()) {
+      return type{record_type{}};
+    }
     return std::nullopt;
   }
 
@@ -124,15 +127,53 @@ public:
   auto visit(assignment& x) -> result {
     visit(x.right);
     // TODO
-    diagnostic::error("unexpected assignment")
+    diagnostic::error("assignments are not allowed here")
       .primary(x.get_location())
+      .hint("if you want to compare for equality, use `==` instead")
       .emit(ctx_.dh());
     return std::nullopt;
   }
 
   auto visit(pipeline_expr& x) -> result {
     // TODO: How would this work?
-    visit(x.inner);
+    (void)x;
+    return std::nullopt;
+  }
+
+  auto visit(record& x) -> result {
+    // TODO: Don't we want to propagate fields etc?
+    // Or can we perhaps do this with const eval?
+    for (auto& y : x.content) {
+      y.match(
+        [&](record::field& z) {
+          visit(z.expr);
+        },
+        [&](record::spread& z) {
+          diagnostic::error("not implemented yet")
+            .primary(z.expr.get_location())
+            .emit(ctx_.dh());
+        });
+    }
+    return type{record_type{}};
+  }
+
+  auto visit(list& x) -> result {
+    // TODO: Content type?
+    for (auto& y : x.items) {
+      visit(y);
+    }
+    return type{list_type{null_type{}}};
+  }
+
+  auto visit(field_access& x) -> result {
+    // TODO: Field types?
+    auto ty = visit(x.left);
+    if (ty && ty->kind().is_not<record_type>()) {
+      diagnostic::error("type `{}` has no fields", *ty)
+        .primary(x.name.location)
+        .emit(ctx_.dh());
+    }
+    return std::nullopt;
   }
 
   template <class T>
@@ -234,7 +275,9 @@ public:
       diagnostic::error("`from` expects exactly one argument")
         .primary(args.empty() ? self.get_location() : args[1].get_location())
         .emit(ctx.dh());
-      return nullptr;
+      if (args.empty()) {
+        return nullptr;
+      }
     }
     auto arg = std::move(args[0]);
     auto ty = type_checker{ctx}.visit(arg);
@@ -268,6 +311,99 @@ public:
     }
     (void)url;
     return std::make_unique<from_use>();
+  }
+};
+
+class load_file_use final : public operator_use {
+public:
+  explicit load_file_use(std::optional<ast::expression> path)
+    : path_{std::move(path)} {
+  }
+
+private:
+  std::optional<ast::expression> path_;
+};
+
+class load_file_def final : public operator_def {
+public:
+  auto make(ast::entity self, std::vector<ast::expression> args,
+            context& ctx) const -> std::unique_ptr<operator_use> override {
+    (void)self;
+    (void)args;
+    if (args.empty()) {
+      diagnostic::error("expected at least one argument")
+        .primary(self.get_location())
+        .emit(ctx.dh());
+    }
+    // assume we want `"foo.json"` and `path="foo.json"`.
+    auto path = std::optional<ast::expression>{};
+    for (auto& arg : args) {
+      arg.match(
+        [&](assignment& x) {
+          auto ty = type_checker{ctx}.visit(x.right);
+          if (not x.left.this_ && x.left.path.size() == 1
+              && x.left.path[0].name == "path") {
+            if (ty && ty != type{string_type{}}) {
+              diagnostic::error("expected `string` but got `{}`", *ty)
+                .primary(x.right.get_location())
+                .emit(ctx.dh());
+            }
+            path = std::move(x.right);
+          } else {
+            diagnostic::error("expected `path`")
+              .primary(x.left.get_location())
+              .emit(ctx.dh());
+          }
+        },
+        [&](auto& x) {
+          auto ty = type_checker{ctx}.visit(x);
+          if (path) {
+            diagnostic::error("path was already specified")
+              .primary(x.get_location())
+              .secondary(path->get_location(), "here")
+              .emit(ctx.dh());
+            return;
+          }
+          if (ty && ty != type{string_type{}}) {
+            diagnostic::error("expected `string`, got `{}`", *ty)
+              .primary(x.get_location())
+              .emit(ctx.dh());
+          }
+          path = std::move(x);
+        });
+    };
+    return std::make_unique<load_file_use>(std::move(path));
+  }
+};
+
+class drop_use final : public operator_use {
+public:
+  explicit drop_use(std::vector<selector> selectors)
+    : selectors_{std::move(selectors)} {
+  }
+
+private:
+  std::vector<selector> selectors_;
+};
+
+class drop_def final : public operator_def {
+public:
+  auto make(ast::entity self, std::vector<ast::expression> args,
+            context& ctx) const -> std::unique_ptr<operator_use> override {
+    (void)self;
+    auto selectors = std::vector<selector>{};
+    for (auto& arg : args) {
+      arg.match(
+        [&](selector& x) {
+          selectors.push_back(std::move(x));
+        },
+        [&](auto& x) {
+          diagnostic::error("expected selector")
+            .primary(x.get_location())
+            .emit(ctx.dh());
+        });
+    }
+    return std::make_unique<drop_use>(std::move(selectors));
   }
 };
 
@@ -381,11 +517,15 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
     return false;
   }
   auto reg = registry{};
-  reg.add("sort", std::make_unique<sort_def>());
+  // operators
+  reg.add("drop", std::make_unique<drop_def>());
   reg.add("from", std::make_unique<from_def>());
   reg.add("group", std::make_unique<group_def>());
-  reg.add("sqrt", std::make_unique<sqrt_def>());
+  reg.add("load_file", std::make_unique<load_file_def>());
+  reg.add("sort", std::make_unique<sort_def>());
+  // functions
   reg.add("now", std::make_unique<now_def>());
+  reg.add("sqrt", std::make_unique<sqrt_def>());
   tql2::resolve_entities(parsed, reg, diag_wrapper);
   if (cfg.dump_ast) {
     with_thread_local_registry(reg, [&] {
