@@ -15,25 +15,47 @@ using namespace std::chrono_literals;
 
 namespace tenzir::plugins::email {
 
-constexpr auto default_smtp_server = "localhost";
-constexpr auto default_from = "Tenzir <noreply@tenzir.com>";
-constexpr auto default_subject = "Tenzir Pipeline Data";
+constexpr auto default_smtp_server = "smtp://localhost:25";
 
 namespace {
 
 struct saver_args {
   std::string smtp_server;
-  std::string from;
   std::string to;
-  std::string subject;
+  std::optional<std::string> from;
+  std::optional<std::string> subject;
+  std::optional<std::string> username;
+  std::optional<std::string> password;
+  bool skip_peer_verification;
+  bool skip_hostname_verification;
+  bool verbose;
 
   friend auto inspect(auto& f, saver_args& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.plugins.email.saver_args")
-      .fields(f.field("smtp_server", x.smtp_server), f.field("from", x.from),
-              f.field("to", x.to), f.field("subject", x.subject));
+      .fields(f.field("smtp_server", x.smtp_server), f.field("to", x.to),
+              f.field("from", x.from), f.field("subject", x.subject),
+              f.field("username", x.username), f.field("password", x.password),
+              f.field("skip_peer_verification", x.skip_peer_verification),
+              f.field("skip_host_verification", x.skip_hostname_verification),
+              f.field("verbose", x.verbose));
   }
 };
+
+auto make_header(const saver_args& args) {
+  auto result = std::string{};
+  // According to RFC 5322, the Date and From headers are mandatory.
+  auto now = fmt::localtime(std::time(nullptr));
+  result += fmt::format("Date: {:%a, %d %b %Y %H:%M:%S %z}\r\n", now);
+  result += fmt::format("To: {}\r\n", args.to);
+  if (args.from) {
+    result += fmt::format("From: {}\r\n", *args.from);
+  }
+  if (args.subject) {
+    result += fmt::format("Subject: {}\r\n", *args.subject);
+  }
+  return result;
+}
 
 class saver final : public plugin_saver {
 public:
@@ -45,6 +67,10 @@ public:
   auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
     auto easy = curl::easy{};
+    if (args_.verbose) {
+      auto code = easy.set(CURLOPT_VERBOSE, 1);
+      TENZIR_ASSERT(code == curl::easy::code::ok);
+    }
     auto code = easy.set(CURLOPT_URL, args_.smtp_server);
     if (code != curl::easy::code::ok) {
       auto err = to_error(code);
@@ -54,14 +80,52 @@ public:
         .emit(ctrl.diagnostics());
       return err;
     }
-    // This option isn't strictly required and we may consider making it
-    // optional.
-    code = easy.set(CURLOPT_MAIL_FROM, args_.from);
+    if (args_.skip_peer_verification) {
+      code = easy.set(CURLOPT_SSL_VERIFYPEER, 0);
+      TENZIR_ASSERT(code == curl::easy::code::ok);
+    }
+    if (args_.skip_hostname_verification) {
+      code = easy.set(CURLOPT_SSL_VERIFYHOST, 0);
+      TENZIR_ASSERT(code == curl::easy::code::ok);
+    }
+    if (args_.username) {
+      code = easy.set(CURLOPT_USERNAME, *args_.username);
+      if (code != curl::easy::code::ok) {
+        auto err = to_error(code);
+        diagnostic::error("failed to set user name")
+          .note("{}", err)
+          .emit(ctrl.diagnostics());
+        return err;
+      }
+    }
+    if (args_.password) {
+      code = easy.set(CURLOPT_PASSWORD, *args_.password);
+      if (code != curl::easy::code::ok) {
+        auto err = to_error(code);
+        diagnostic::error("failed to set password")
+          .note("{}", err)
+          .emit(ctrl.diagnostics());
+        return err;
+      }
+    }
+    if (args_.from) {
+      code = easy.set(CURLOPT_MAIL_FROM, *args_.from);
+      if (code != curl::easy::code::ok) {
+        auto err = to_error(code);
+        diagnostic::error("failed to set From header")
+          .note("from: {}", *args_.from)
+          .note("{}", err)
+          .emit(ctrl.diagnostics());
+        return err;
+      }
+    }
+    // Allow one of the recipients to fail and still consider it okay.
+    code = easy.set(CURLOPT_MAIL_RCPT_ALLOWFAILS, 1);
     if (code != curl::easy::code::ok) {
       auto err = to_error(code);
-      diagnostic::error("failed to set From header")
-        .note("from: {}", args_.from)
+      diagnostic::error("failed to adjust recipient failure mode")
         .note("{}", err)
+        .note("cURL option: CURLOPT_MAIL_RCPT_ALLOWFAILS")
         .emit(ctrl.diagnostics());
       return err;
     }
@@ -74,27 +138,34 @@ public:
         .emit(ctrl.diagnostics());
       return err;
     }
-    return [&ctrl, easy = std::make_shared<curl::easy>(std::move(easy))](
-             chunk_ptr chunk) mutable {
+    return [&ctrl, easy = std::make_shared<curl::easy>(std::move(easy)),
+            args = args_](chunk_ptr chunk) mutable {
       if (not chunk || chunk->size() == 0) {
         return;
       }
-      // Unless we clean up the cURL handle, we're not going to send the SMPT
-      // QUIT command. This allows us to reuse the same connection, but it might
-      // not be a good idea because the server will ultimately time out our
-      // connection.
-      if (auto err = upload(*easy, chunk)) {
-        diagnostic::error("failed to set email body")
+      auto header = make_header(args);
+      auto body = std::string_view{reinterpret_cast<const char*>(chunk->data()),
+                                   chunk->size()};
+      // The RFC demands that we end with `.<CR><LF>`.
+      auto mail = fmt::format("{}\r\n{}.\r\n", header, body);
+      TENZIR_DEBUG("sending {}-byte chunk as email to {}", chunk->size(),
+                   args.to);
+      if (auto err = upload(*easy, chunk::make(std::move(mail)))) {
+        diagnostic::error("failed to assign message")
           .note("{}", err)
           .emit(ctrl.diagnostics());
         return;
       }
       if (auto err = to_error(easy->perform())) {
-        diagnostic::error("failed to send email")
+        diagnostic::error("failed to send message")
           .note("{}", err)
           .emit(ctrl.diagnostics());
         return;
       }
+      // Unless we clean up the cURL handle, we're not going to send a QUIT
+      // command. This allows us to reuse the same connection, but it might
+      // not be a good idea because the server will ultimately time out our
+      // connection.
     };
   }
 
@@ -126,10 +197,14 @@ public:
       name(),
       fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
     auto args = saver_args{};
-    parser.add(args.smtp_server, "<server>");
-    parser.add(args.from, "-f,--from");
-    parser.add(args.to, "-t,--to");
-    parser.add(args.subject, "-s,--subject");
+    parser.add("-S,--server", args.smtp_server, "<string>");
+    parser.add("-f,--from", args.from, "<email>");
+    parser.add("-s,--subject", args.subject, "<string>");
+    parser.add("-P,--skip-peer-verification", args.skip_peer_verification);
+    parser.add("-H,--skip-hostname-verification",
+               args.skip_hostname_verification);
+    parser.add("-v,--verbose", args.verbose);
+    parser.add(args.to, "<email>");
     parser.parse(p);
     if (args.smtp_server.empty()) {
       args.smtp_server = default_smtp_server;
@@ -139,16 +214,10 @@ public:
       args.smtp_server.erase(0, 5);
       args.smtp_server.insert(0, "smtp");
     }
-    if (args.from.empty()) {
-      args.from = default_from;
-    }
     if (args.to.empty()) {
       diagnostic::error("no recipient specified")
         .hint("add --to <recipient> to your invocation")
         .throw_();
-    }
-    if (args.subject.empty()) {
-      args.subject = default_subject;
     }
     return std::make_unique<saver>(std::move(args));
   }
