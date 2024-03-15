@@ -241,7 +241,7 @@ private:
   std::unique_ptr<write_callback> on_write_{};
   std::unique_ptr<read_callback> on_read_{};
   std::unique_ptr<mime> mime_{};
-  slist headers_;
+  slist http_headers_;
   slist mail_recipients_;
 };
 

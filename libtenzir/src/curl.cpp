@@ -144,30 +144,30 @@ auto easy::set_http_header(std::string_view name, std::string_view value)
     TENZIR_ASSERT(i != std::string_view::npos);
     return str.substr(0, i);
   };
-  for (auto header : headers_.items()) {
+  for (auto header : http_headers_.items()) {
     if (header_name(header) == name) {
       // For the rare case that we overwrite a header, we're fine to pay the
       // quadratic overhead of rebuild the list.
       slist copy;
-      for (auto item : headers_.items()) {
+      for (auto item : http_headers_.items()) {
         if (header_name(item) != name) {
           copy.append(item);
         }
       }
-      headers_ = std::move(copy);
+      http_headers_ = std::move(copy);
       break;
     }
   }
   auto header = fmt::format("{}: {}", name, value);
-  headers_.append(header);
+  http_headers_.append(header);
   auto curl_code
-    = curl_easy_setopt(easy_, CURLOPT_HTTPHEADER, headers_.slist_.get());
+    = curl_easy_setopt(easy_, CURLOPT_HTTPHEADER, http_headers_.slist_.get());
   return static_cast<code>(curl_code);
 }
 
 auto easy::headers()
   -> generator<std::pair<std::string_view, std::string_view>> {
-  for (auto str : headers_.items()) {
+  for (auto str : http_headers_.items()) {
     auto split = detail::split(str, ": ");
     TENZIR_ASSERT(split.size() == 2);
     co_yield std::pair{split[0], split[1]};
