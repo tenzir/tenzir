@@ -22,11 +22,13 @@
 
 namespace tenzir::parsers {
 
-const inline auto comment_start = str{"/*"};
+const inline auto comment_start = str{"/*"} | "//";
 /// Parses a '/* ... */' style comment. The attribute of the parser is the
 /// comment between the '/*' and '*/' delimiters.
-const inline auto comment
-  = comment_start >> *(any - (chr{'*'} >> &chr{'/'})) >> "*/";
+const inline auto delim_comment
+  = "/*" >> *(any - (chr{'*'} >> &chr{'/'})) >> "*/";
+const inline auto line_comment = "//" >> *(any - '\n') >> ('\n' | eoi);
+const inline auto comment = delim_comment | line_comment;
 
 const inline auto required_ws_or_comment = ignore(+(space | comment));
 const inline auto optional_ws_or_comment = ignore(*(space | comment));
