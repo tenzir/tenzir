@@ -61,15 +61,33 @@ public:
     if (left && right && left != right) {
       diagnostic::error("cannot {} `{}` and `{}`", x.op.inner, *left, *right)
         .primary(x.op.source)
-        .secondary(x.left.get_location(), "this is `{}`", *left)
-        .secondary(x.right.get_location(), "this is `{}`", *right)
+        .secondary(x.left.get_location(), "{}", *left)
+        .secondary(x.right.get_location(), "{}", *right)
         .emit(ctx_.dh());
       return std::nullopt;
     }
-    if (left) {
-      return left;
+    using enum binary_op;
+    switch (x.op.inner) {
+      case add:
+      case sub:
+      case mul:
+      case div:
+        if (left) {
+          return left;
+        }
+        return right;
+      case eq:
+      case neq:
+      case gt:
+      case ge:
+      case lt:
+      case le:
+      case and_:
+      case or_:
+      case in:
+        return type{bool_type{}};
     }
-    return right;
+    TENZIR_UNREACHABLE();
   }
 
   auto visit(unary_expr& x) -> result {
@@ -85,7 +103,7 @@ public:
         if (ty != type{int64_type{}}) {
           diagnostic::error("cannot {} `{}`", x.op.inner, ty)
             .primary(x.op.source)
-            .secondary(x.expr.get_location(), "this is `{}`", ty)
+            .secondary(x.expr.get_location(), "{}", ty)
             .emit(ctx_.dh());
           return std::nullopt;
         }
@@ -94,7 +112,7 @@ public:
         if (ty != type{bool_type{}}) {
           diagnostic::error("cannot {} `{}`", x.op.inner, ty)
             .primary(x.op.source)
-            .secondary(x.expr.get_location(), "this is `{}`", ty)
+            .secondary(x.expr.get_location(), "{}", ty)
             .emit(ctx_.dh());
           return std::nullopt;
         }
@@ -225,6 +243,9 @@ public:
     : self_{std::move(self)}, exprs_{std::move(exprs)} {
   }
 
+  // void, byte, chunk, event
+  // void, chunk_ptr, vector<chunk_ptr>, table_slice
+
 private:
   entity self_;
   std::vector<sort_expr> exprs_;
@@ -330,9 +351,13 @@ public:
             context& ctx) const -> std::unique_ptr<operator_use> override {
     (void)self;
     (void)args;
+    auto usage = "load_file path, follow=false, mmap=false, timeout=null";
+    auto docs = "https://docs.tenzir.com/operators/load_file";
     if (args.empty()) {
       diagnostic::error("expected at least one argument")
         .primary(self.get_location())
+        .usage(usage)
+        .docs(docs)
         .emit(ctx.dh());
     }
     // assume we want `"foo.json"` and `path="foo.json"`.
@@ -346,12 +371,16 @@ public:
             if (ty && ty != type{string_type{}}) {
               diagnostic::error("expected `string` but got `{}`", *ty)
                 .primary(x.right.get_location())
+                .usage(usage)
+                .docs(docs)
                 .emit(ctx.dh());
             }
             path = std::move(x.right);
           } else {
-            diagnostic::error("expected `path`")
+            diagnostic::error("unknown named argument")
               .primary(x.left.get_location())
+              .usage(usage)
+              .docs(docs)
               .emit(ctx.dh());
           }
         },
@@ -359,14 +388,18 @@ public:
           auto ty = type_checker{ctx}.visit(x);
           if (path) {
             diagnostic::error("path was already specified")
-              .primary(x.get_location())
-              .secondary(path->get_location(), "here")
+              .secondary(path->get_location(), "previous definition")
+              .primary(x.get_location(), "new definition")
+              .usage(usage)
+              .docs(docs)
               .emit(ctx.dh());
             return;
           }
           if (ty && ty != type{string_type{}}) {
             diagnostic::error("expected `string`, got `{}`", *ty)
               .primary(x.get_location())
+              .usage(usage)
+              .docs(docs)
               .emit(ctx.dh());
           }
           path = std::move(x);
@@ -407,6 +440,78 @@ public:
   }
 };
 
+struct compiled_pipeline {
+  compiled_pipeline() = default;
+
+  explicit compiled_pipeline(std::vector<std::unique_ptr<operator_use>> ops)
+    : ops{std::move(ops)} {
+  }
+
+  std::vector<std::unique_ptr<operator_use>> ops;
+};
+
+class if_use final : public operator_use {
+public:
+  explicit if_use(expression condition, compiled_pipeline then,
+                  std::optional<compiled_pipeline> else_)
+    : condition_{std::move(condition)},
+      then_{std::move(then)},
+      else_{std::move(else_)} {
+  }
+
+private:
+  expression condition_;
+  compiled_pipeline then_;
+  std::optional<compiled_pipeline> else_;
+};
+
+class set_use final : public operator_use {
+public:
+  explicit set_use(std::vector<assignment> assignments)
+    : assignments_{std::move(assignments)} {
+  }
+
+private:
+  std::vector<assignment> assignments_;
+};
+
+void check_assignment(assignment& x, context& ctx) {
+  auto ty = type_checker{ctx}.visit(x.right);
+  if (x.left.this_ && x.left.path.empty()) {
+    if (ty && *ty != type{record_type{}}) {
+      diagnostic::error("only records can be assigned to `this`")
+        .primary(x.right.get_location(), "this is `{}`", *ty)
+        .emit(ctx.dh());
+    }
+  }
+}
+
+class set_def final : public operator_def {
+public:
+  auto make(ast::entity self, std::vector<ast::expression> args,
+            context& ctx) const -> std::unique_ptr<operator_use> override {
+    (void)self;
+    auto usage = "set <path>=<expr>...";
+    auto docs = "https://docs.tenzir.com/operators/set";
+    auto assignments = std::vector<assignment>{};
+    for (auto& arg : args) {
+      arg.match(
+        [&](assignment& x) {
+          check_assignment(x, ctx);
+          assignments.push_back(std::move(x));
+        },
+        [&](auto&) {
+          diagnostic::error("expected assignment")
+            .primary(arg.get_location())
+            .usage(usage)
+            .docs(docs)
+            .emit(ctx.dh());
+        });
+    }
+    return std::make_unique<set_use>(std::move(assignments));
+  }
+};
+
 class group_def final : public operator_def {
 public:
   auto make(ast::entity self, std::vector<ast::expression> args,
@@ -418,6 +523,61 @@ public:
       .primary(self.get_location())
       .emit(ctx.dh());
     return nullptr;
+  }
+};
+
+class source_use final : public operator_use {
+public:
+  explicit source_use(std::vector<record> events) : events_{std::move(events)} {
+  }
+
+private:
+  std::vector<record> events_;
+};
+
+class source_def final : public operator_def {
+public:
+  auto make(ast::entity self, std::vector<ast::expression> args,
+            context& ctx) const -> std::unique_ptr<operator_use> override {
+    auto usage = "source [{...}, ...]";
+    auto docs = "https://docs.tenzir.com/operators/source";
+    if (args.size() != 1) {
+      diagnostic::error("expected exactly one argument")
+        .primary(self.get_location())
+        .usage(usage)
+        .docs(docs)
+        .emit(ctx.dh());
+    }
+    if (args.empty()) {
+      return nullptr;
+    }
+    // TODO: We want to const-eval instead.
+    type_checker{ctx}.visit(args[0]);
+    auto events = std::vector<record>{};
+    args[0].match(
+      [&](ast::list& x) {
+        for (auto& y : x.items) {
+          y.match(
+            [&](ast::record& z) {
+              events.push_back(std::move(z));
+            },
+            [&](auto&) {
+              diagnostic::error("expected record")
+                .primary(y.get_location())
+                .usage(usage)
+                .docs(docs)
+                .emit(ctx.dh());
+            });
+        }
+      },
+      [&](auto&) {
+        diagnostic::error("expected list")
+          .primary(args[0].get_location())
+          .usage(usage)
+          .docs(docs)
+          .emit(ctx.dh());
+      });
+    return std::make_unique<source_use>(std::move(events));
   }
 };
 
@@ -461,6 +621,60 @@ public:
     return type{duration_type{}};
   }
 };
+
+auto compile_pipeline(pipeline&& pipe, context& ctx) -> compiled_pipeline {
+  auto result = compiled_pipeline{};
+  for (auto& stmt : pipe.body) {
+    // let_stmt, if_stmt, match_stmt
+    stmt.match(
+      [&](invocation& x) {
+        if (not x.op.ref.resolved()) {
+          // This was already reported. We don't know how the operator would
+          // interpret its arguments, hence we make no attempt of reporting
+          // additional errors for them.
+          return;
+        }
+        // TODO: Where do we check that this succeeds?
+        auto def = std::get_if<std::unique_ptr<operator_def>>(
+          &ctx.reg().get(x.op.ref));
+        TENZIR_ASSERT(def);
+        TENZIR_ASSERT(*def);
+        auto use = (*def)->make(x.op, std::move(x.args), ctx);
+        if (use) {
+          result.ops.push_back(std::move(use));
+        } else {
+          // We assume we emitted an error.
+        }
+      },
+      [&](assignment& x) {
+        check_assignment(x, ctx);
+        auto assignments = std::vector<assignment>();
+        assignments.push_back(std::move(x));
+        result.ops.push_back(std::make_unique<set_use>(std::move(assignments)));
+      },
+      [&](if_stmt& x) {
+        auto ty = type_checker{ctx}.visit(x.condition);
+        if (ty && *ty != type{bool_type{}}) {
+          diagnostic::error("condition type must be `bool`, but is `{}`", *ty)
+            .primary(x.condition.get_location())
+            .emit(ctx.dh());
+        }
+        auto then = compile_pipeline(std::move(x.then), ctx);
+        auto else_ = std::optional<compiled_pipeline>{};
+        if (x.else_) {
+          else_ = compile_pipeline(std::move(*x.else_), ctx);
+        }
+        result.ops.push_back(std::make_unique<if_use>(
+          std::move(x.condition), std::move(then), std::move(else_)));
+      },
+      [&](auto& x) {
+        diagnostic::error("statement not implemented yet")
+          .primary(x.get_location())
+          .emit(ctx.dh());
+      });
+  }
+  return result;
+}
 
 } // namespace
 
@@ -522,7 +736,9 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   reg.add("from", std::make_unique<from_def>());
   reg.add("group", std::make_unique<group_def>());
   reg.add("load_file", std::make_unique<load_file_def>());
+  reg.add("set", std::make_unique<set_def>());
   reg.add("sort", std::make_unique<sort_def>());
+  reg.add("source", std::make_unique<source_def>());
   // functions
   reg.add("now", std::make_unique<now_def>());
   reg.add("sqrt", std::make_unique<sqrt_def>());
@@ -534,56 +750,8 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
     return not diag_wrapper.error();
   }
   // TODO
-  auto ops = std::vector<std::unique_ptr<operator_use>>{};
   auto ctx = context{reg, diag_wrapper};
-  for (auto& stmt : parsed.body) {
-    // assignment, let_stmt, if_stmt, match_stmt
-    stmt.match(
-      [&](invocation& x) {
-        if (not x.op.ref.resolved()) {
-          // This was already reported. We don't know how the operator would
-          // interpret its arguments, hence we make no attempt of reporting
-          // additional errors for them.
-          return;
-        }
-        // TODO: Where do we check that this succeeds?
-        auto def
-          = std::get_if<std::unique_ptr<operator_def>>(&reg.get(x.op.ref));
-        TENZIR_ASSERT(def);
-        TENZIR_ASSERT(*def);
-        auto use = (*def)->make(x.op, std::move(x.args), ctx);
-        if (use) {
-          ops.push_back(std::move(use));
-        } else {
-          TENZIR_ASSERT(diag_wrapper.error());
-        }
-      },
-      [&](assignment& x) {
-        // TODO: This is just for testing.
-        class test final : public operator_use {
-        public:
-          explicit test(assignment x) : x_{std::move(x)} {
-          }
-
-        private:
-          assignment x_;
-        };
-        auto ty = type_checker{ctx}.visit(x.right);
-        if (x.left.path.empty()) {
-          TENZIR_ASSERT(x.left.this_);
-          if (ty && *ty != type{record_type{}}) {
-            diagnostic::error("only records can be assigned to `this`")
-              .primary(x.right.get_location(), "this is `{}`", *ty)
-              .emit(ctx.dh());
-          }
-        }
-        ops.push_back(std::make_unique<test>(std::move(x)));
-      },
-      [&](auto& x) {
-        diagnostic::error("unimplemented: {}", typeid(x).name())
-          .emit(diag_wrapper);
-      });
-  }
+  auto compiled = compile_pipeline(std::move(parsed), ctx);
   if (diag_wrapper.error()) {
     return false;
   }

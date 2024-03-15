@@ -463,6 +463,10 @@ struct let_stmt {
     return f.object(x).fields(f.field("let", x.let), f.field("name", x.name),
                               f.field("expr", x.expr));
   }
+
+  auto get_location() const -> location {
+    return let.combine(expr.get_location());
+  }
 };
 
 struct if_stmt {
@@ -480,6 +484,11 @@ struct if_stmt {
     return f.object(x).fields(f.field("condition", x.condition),
                               f.field("then", x.then),
                               f.field("else", x.else_));
+  }
+
+  auto get_location() const -> location {
+    // TODO
+    return condition.get_location();
   }
 };
 
@@ -503,6 +512,11 @@ struct match_stmt {
 
   friend auto inspect(auto& f, match_stmt& x) -> bool {
     return f.object(x).fields(f.field("expr", x.expr), f.field("arms", x.arms));
+  }
+
+  auto get_location() const -> location {
+    // TODO
+    return expr.get_location();
   }
 };
 
@@ -579,6 +593,14 @@ public:
   void enter(invocation& x) {
     go(x.op);
     go(x.args);
+  }
+
+  void enter(if_stmt& x) {
+    go(x.condition);
+    go(x.then);
+    if (x.else_) {
+      go(*x.else_);
+    }
   }
 
   void enter(entity& x) {
