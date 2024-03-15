@@ -128,7 +128,13 @@ public:
     }
     auto args = std::vector<result>{};
     for (auto& arg : x.args) {
-      args.push_back(visit(arg));
+      arg.match(
+        [&](assignment& x) {
+          args.push_back(visit(x.right));
+        },
+        [&](auto&) {
+          args.push_back(visit(arg));
+        });
     }
     if (not x.fn.ref.resolved()) {
       return std::nullopt;
@@ -138,6 +144,7 @@ public:
       = std::get_if<std::unique_ptr<function_def>>(&ctx_.reg().get(x.fn.ref));
     TENZIR_ASSERT(fn);
     TENZIR_ASSERT(*fn);
+    // TODO: This does not respect named arguments.
     auto info = function_def::check_info{x.fn.get_location(), x.args, args};
     return (*fn)->check(info, ctx_);
   }
@@ -204,7 +211,7 @@ private:
   context& ctx_;
 };
 
-/// A diagnostic handler that remembers when it has emits an error.
+/// A diagnostic handler that remembers when it emits an error.
 class diagnostic_handler_wrapper final : public diagnostic_handler {
 public:
   explicit diagnostic_handler_wrapper(std::unique_ptr<diagnostic_handler> inner)
