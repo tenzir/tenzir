@@ -5,3 +5,8 @@ resulting in a leaner output.
 The `--separate` option makes the `enrich` and `lookup` operators handle each
 field individually, duplicating the event for each relevant field, and
 returning at most one context per output event.
+
+The `--yield <field>` option allows for adding only a part of a context with the
+`enrich` and `lookup` operators. For example, with a `geoip` context with a
+MaxMind country database, `--yield registered_country.iso_code` will cause the
+enrichment to only consist of the country's ISO code.

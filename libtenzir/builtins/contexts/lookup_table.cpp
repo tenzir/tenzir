@@ -233,7 +233,7 @@ public:
       if (auto it = context_entries.find(materialize(value));
           it != context_entries.end()) {
         builder.data(it->second);
-      } else if (replace) {
+      } else if (replace and not caf::holds_alternative<caf::none_t>(value)) {
         builder.data(value);
       } else {
         builder.null();

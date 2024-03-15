@@ -2,8 +2,8 @@
 type extractors and concepts. This no longer happens. For example, `drop :time`
 drops all fields with type `time` from events.
 
-Enriching a field adjacent events in `lookup` and `enrich` with a `lookup-table`
-context sometimes crashed when the lookup-table referred to values of different
-types.
+Enriching a field in adjacent events in `lookup` and `enrich` with a
+`lookup-table` context sometimes crashed when the lookup-table referred to
+values of different types.
 
 The `geoip` context sometimes returned incorrect values. This no longer happens.

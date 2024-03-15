@@ -323,7 +323,7 @@ public:
                                         ip_string, MMDB_strerror(status)));
       }
       if (not result.found_entry) {
-        if (replace) {
+        if (replace and not caf::holds_alternative<caf::none_t>(value)) {
           builder.data(value);
         } else {
           builder.null();

@@ -12,9 +12,9 @@ Enriches events with a context.
 
 ```
 enrich <name>          [--field <field...>] [--replace] [--filter] [--separate]
-                       [<context-options>]
+                       [--yield <field>] [<context-options>]
 enrich <output>=<name> [--field <field...>] [--filter] [--separate]
-                       [<context-options>]
+                       [--yield <field>] [<context-options>]
 ```
 
 ## Description
@@ -51,6 +51,15 @@ This option is incompatible with `--replace`.
 When multiple fields are provided, e.g., when using `--field :ip` to enrich all
 IP address fields, duplicate the event for every provided field and enrich them
 individually.
+
+When using the option, the context moves from `<output>.context.<path...>` to
+`<output>` in the resulting event, with a new field `<output>.path` containing
+the enriched path.
+
+### `--yield <path>`
+
+Provide a field into the context object to use as the context instead. If the
+key does not exist within the context, a `null` value is used instead.
 
 ### `<context-options>`
 

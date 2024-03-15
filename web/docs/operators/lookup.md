@@ -14,10 +14,10 @@ and translates context updates into historical queries.
 ```
 lookup <context>          [--field <field...>] [--separate]
                           [--live] [--retro] [--snapshot]
-                          [<context-options>]
+                          [--yield <field>] [<context-options>]
 lookup <output>=<context> [--field <field...>] [--separate]
                           [--live] [--retro] [--snapshot]
-                          [<context-options>]
+                          [--yield <field>] [<context-options>]
 ```
 
 ## Description
@@ -55,6 +55,10 @@ When multiple fields are provided, e.g., when using `--field :ip` to enrich all
 IP address fields, duplicate the event for every provided field and enrich them
 individually.
 
+When using the option, the context moves from `<output>.context.<path...>` to
+`<output>` in the resulting event, with a new field `<output>.path` containing
+the enriched path.
+
 ### `--live`
 
 Enables live lookup for incoming events.
@@ -78,6 +82,11 @@ Creates a snapshot of the context at the time of execution. In combination with
 state.
 
 By default, snapshotting is disabled. Not all contexts support this operation.
+
+### `--yield <path>`
+
+Provide a field into the context object to use as the context instead. If the
+key does not exist within the context, a `null` value is used instead.
 
 ### `<context-options>`
 
