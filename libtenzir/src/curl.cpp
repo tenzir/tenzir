@@ -130,6 +130,13 @@ auto easy::set_postfieldsize(long size) -> code {
   return static_cast<code>(curl_code);
 }
 
+auto easy::add_mail_recipient(std::string_view mail) -> easy::code {
+  mail_recipients_.append(mail);
+  auto curl_code
+    = curl_easy_setopt(easy_, CURLOPT_MAIL_RCPT, mail_recipients_.slist_.get());
+  return static_cast<code>(curl_code);
+}
+
 auto easy::set_http_header(std::string_view name, std::string_view value)
   -> code {
   auto header_name = [](std::string_view str) {

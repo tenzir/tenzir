@@ -223,6 +223,10 @@ public:
   /// be deleted instead.
   auto set_http_header(std::string_view name, std::string_view value) -> code;
 
+  /// Adds a recipient to the internal list for `CURLOPT_MAIL_RCPT`.
+  /// @param mail The email address of a recipient.
+  auto add_mail_recipient(std::string_view mail) -> code;
+
   /// Enumerates the list of all added headers.
   auto headers() -> generator<std::pair<std::string_view, std::string_view>>;
 
@@ -238,6 +242,7 @@ private:
   std::unique_ptr<read_callback> on_read_{};
   std::unique_ptr<mime> mime_{};
   slist headers_;
+  slist mail_recipients_;
 };
 
 /// @relates easy
