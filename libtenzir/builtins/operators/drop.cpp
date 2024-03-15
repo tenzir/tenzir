@@ -79,8 +79,8 @@ public:
     };
     auto transformations = std::vector<indexed_transformation>{};
     for (const auto& field : config_.fields) {
-      if (auto index = schema.resolve_key_or_concept_once(field)) {
-        transformations.push_back({std::move(*index), transform_fn});
+      for (auto index : schema.resolve(field)) {
+        transformations.push_back({std::move(index), transform_fn});
       }
     }
     // transform_columns requires the transformations to be sorted, and that may
@@ -88,6 +88,9 @@ public:
     // again in that case.
     if (config_.fields.size() > 1)
       std::sort(transformations.begin(), transformations.end());
+    transformations.erase(std::unique(transformations.begin(),
+                                      transformations.end()),
+                          transformations.end());
     return transformations;
   }
 

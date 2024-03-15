@@ -310,6 +310,10 @@ public:
   [[nodiscard]] std::shared_ptr<arrow::ArrayBuilder>
   make_arrow_builder(arrow::MemoryPool* pool) const noexcept;
 
+  /// Resolves a field extractor, concept, or type extractor on a schema.
+  /// @returns nullopt if the type is not a valid schema.
+  [[nodiscard]] generator<offset> resolve(std::string_view key) const noexcept;
+
   /// Resolves a key on a schema.
   /// @returns nullopt if the type is not a valid schema.
   [[nodiscard]] generator<offset>

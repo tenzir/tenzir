@@ -284,7 +284,7 @@ public:
   }
 
   /// Emits context information for every event in `slice` in order.
-  auto apply(series array) const
+  auto apply(series array, bool replace) const
     -> caf::expected<std::vector<series>> override {
     auto status = 0;
     MMDB_entry_data_list_s* entry_data_list = nullptr;
@@ -322,8 +322,12 @@ public:
                                         "GeoIP database: {}",
                                         ip_string, MMDB_strerror(status)));
       }
-      if (result.found_entry) {
-        builder.null();
+      if (not result.found_entry) {
+        if (replace and not caf::holds_alternative<caf::none_t>(value)) {
+          builder.data(value);
+        } else {
+          builder.null();
+        }
         continue;
       }
       status = MMDB_get_entry_data_list(&result.entry, &entry_data_list);

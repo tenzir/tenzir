@@ -55,18 +55,13 @@ public:
   }
 
   /// Emits context information for every event in `slice` in order.
-  auto apply(series array) const
+  auto apply(series array, bool replace) const
     -> caf::expected<std::vector<series>> override {
+    (void)replace;
     auto builder = series_builder{};
     for (const auto& value : array.values()) {
-      if (bloom_filter_.lookup(value)) {
-        auto ptr = bloom_filter_.data().data();
-        auto size = bloom_filter_.data().size();
-        auto r = builder.record();
-        r.field("data", std::basic_string<std::byte>{ptr, size});
-      } else {
-        builder.null();
-      }
+      const auto contained = bloom_filter_.lookup(value);
+      builder.data(contained);
     }
     return builder.finish();
   }
