@@ -7,11 +7,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/concept/parseable/tenzir/identifier.hpp>
-#include <tenzir/curl.hpp>
 #include <tenzir/detail/file_path_to_plugin_name.hpp>
 #include <tenzir/detail/loader_saver_resolver.hpp>
 #include <tenzir/prepend_token.hpp>
 #include <tenzir/tql/parser.hpp>
+
+#include <arrow/util/uri.h>
 
 namespace tenzir::detail {
 
@@ -54,8 +55,8 @@ auto try_plugin_by_url(located<std::string_view> src)
   // Not using caf::uri for anything else but checking for URL validity
   // This is because it makes the interaction with located<...> very difficult
   // TODO: We don't want to allow just any URIs, only URLs
-  auto url = curl::url{};
-  if (url.set(curl::url::part::url, src.inner) != curl::url::code::ok) {
+  auto uri = arrow::internal::Uri{};
+  if (not uri.Parse(std::string{src.inner}).ok()) {
     return {};
   }
   // In a valid URL, the first ':' is guaranteed to separate the scheme from
