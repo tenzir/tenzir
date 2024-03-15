@@ -87,7 +87,7 @@ auto tokenize(std::string_view content) -> std::vector<token> {
     | X("true", true_)
 #undef X
     | ignore((
-        lit{"self"} | "is" | "as" | "use" | "type" | "return" | "def" | "function"
+        lit{"self"} | "is" | "as" | "use" /*| "type"*/ | "return" | "def" | "function"
         | "fn" | "pipeline" | "meta" | "super" | "for" | "while" | "mod" | "module"
       ) >> !continue_ident) ->* [] { return token_kind::reserved_keyword; }
     | ignore('$' >> identifier)
