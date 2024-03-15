@@ -501,4 +501,8 @@ auto escape(std::string_view str) -> std::string;
 /// @returns The encoded string.
 auto escape(const record& xs) -> std::string;
 
+/// Instructs an easy handle to upload a chunk. This sets `CURLOPT_UPLOAD` and
+/// sets the read callback to read the chunk.
+auto upload(easy& handle, chunk_ptr chunk) -> caf::error;
+
 } // namespace tenzir::curl

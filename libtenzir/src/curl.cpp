@@ -8,6 +8,7 @@
 
 #include "tenzir/curl.hpp"
 
+#include "tenzir/chunk.hpp"
 #include "tenzir/concept/parseable/numeric.hpp"
 #include "tenzir/concept/printable/tenzir/data.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
@@ -393,6 +394,39 @@ auto escape(const record& xs) -> std::string {
     kvps.push_back(fmt::format("{}={}", escaped_key, escaped_value));
   }
   return fmt::format("{}", fmt::join(kvps, "&"));
+}
+
+auto upload(easy& handle, chunk_ptr chunk) -> caf::error {
+  TENZIR_ASSERT(chunk);
+  TENZIR_ASSERT(chunk->size() > 0);
+  if (auto err = to_error(handle.set(CURLOPT_UPLOAD, 1))) {
+    return err;
+  }
+  // Using CURLOPT_UPLOAD expects that we go through the read callback, and we
+  // must set CURLOPT_INFILESIZE(_LARGE).
+  auto size = detail::narrow_cast<long>(chunk->size());
+  if (auto err = to_error(handle.set_infilesize(size))) {
+    return err;
+  }
+  auto on_read = [chunk](std::span<std::byte> buffer) mutable -> size_t {
+    if (not chunk or chunk->size() == 0) {
+      return 0;
+    }
+    TENZIR_DEBUG("reading {} bytes into {}-byte buffer", chunk->size(),
+                 buffer.size());
+    if (buffer.size() >= chunk->size()) {
+      // Read the chunk in one shot.
+      std::memcpy(buffer.data(), chunk->data(), chunk->size());
+      auto bytes_copied = chunk->size();
+      chunk = {};
+      return bytes_copied;
+    }
+    // Do multiple rounds.
+    std::memcpy(buffer.data(), chunk->data(), buffer.size());
+    chunk = chunk->slice(buffer.size());
+    return buffer.size();
+  };
+  return to_error(handle.set(on_read));
 }
 
 } // namespace tenzir::curl
