@@ -358,7 +358,7 @@ public:
     /// @param buffer The data to copy into the part.
     auto data(std::span<const std::byte> buffer) -> easy::code;
 
-    /// Sets the data by menas of a read callback.
+    /// Sets the data by means of a read callback.
     /// @param on_read The read callback to read in parts. The caller must
     /// ensure that the pointer remains valid.
     /// @pre `on_read != nullptr`
