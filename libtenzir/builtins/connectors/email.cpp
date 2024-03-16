@@ -20,7 +20,7 @@ constexpr auto default_smtp_server = "smtp://localhost:25";
 namespace {
 
 struct saver_args {
-  std::string smtp_server;
+  std::string endpoint;
   std::string to;
   std::optional<std::string> from;
   std::optional<std::string> subject;
@@ -28,31 +28,32 @@ struct saver_args {
   std::optional<std::string> password;
   bool skip_peer_verification;
   bool skip_hostname_verification;
+  bool mime;
   bool verbose;
 
   friend auto inspect(auto& f, saver_args& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.plugins.email.saver_args")
-      .fields(f.field("smtp_server", x.smtp_server), f.field("to", x.to),
+      .fields(f.field("endpoint", x.endpoint), f.field("to", x.to),
               f.field("from", x.from), f.field("subject", x.subject),
               f.field("username", x.username), f.field("password", x.password),
               f.field("skip_peer_verification", x.skip_peer_verification),
               f.field("skip_host_verification", x.skip_hostname_verification),
-              f.field("verbose", x.verbose));
+              f.field("mime", x.mime), f.field("verbose", x.verbose));
   }
 };
 
-auto make_header(const saver_args& args) {
-  auto result = std::string{};
+auto make_headers(const saver_args& args) {
+  auto result = std::vector<std::pair<std::string, std::string>>{};
   // According to RFC 5322, the Date and From headers are mandatory.
   auto now = fmt::localtime(std::time(nullptr));
-  result += fmt::format("Date: {:%a, %d %b %Y %H:%M:%S %z}\r\n", now);
-  result += fmt::format("To: {}\r\n", args.to);
+  result.emplace_back("Date", fmt::format("{:%a, %d %b %Y %H:%M:%S %z}", now));
+  result.emplace_back("To", args.to);
   if (args.from) {
-    result += fmt::format("From: {}\r\n", *args.from);
+    result.emplace_back("From", *args.from);
   }
   if (args.subject) {
-    result += fmt::format("Subject: {}\r\n", *args.subject);
+    result.emplace_back("Subject", *args.subject);
   }
   return result;
 }
@@ -71,11 +72,11 @@ public:
       auto code = easy.set(CURLOPT_VERBOSE, 1);
       TENZIR_ASSERT(code == curl::easy::code::ok);
     }
-    auto code = easy.set(CURLOPT_URL, args_.smtp_server);
+    auto code = easy.set(CURLOPT_URL, args_.endpoint);
     if (code != curl::easy::code::ok) {
       auto err = to_error(code);
       diagnostic::error("failed to set SMTP server request")
-        .note("server: {}", args_.smtp_server)
+        .note("server: {}", args_.endpoint)
         .note("{}", err)
         .emit(ctrl.diagnostics());
       return err;
@@ -112,7 +113,7 @@ public:
       code = easy.set(CURLOPT_MAIL_FROM, *args_.from);
       if (code != curl::easy::code::ok) {
         auto err = to_error(code);
-        diagnostic::error("failed to set From header")
+        diagnostic::error("failed to set MAIL FROM")
           .note("from: {}", *args_.from)
           .note("{}", err)
           .emit(ctrl.diagnostics());
@@ -130,7 +131,6 @@ public:
       auto err = to_error(code);
       diagnostic::error("failed to adjust recipient failure mode")
         .note("{}", err)
-        .note("cURL option: CURLOPT_MAIL_RCPT_ALLOWFAILS")
         .emit(ctrl.diagnostics());
       return err;
     }
@@ -143,16 +143,55 @@ public:
         .emit(ctrl.diagnostics());
       return err;
     }
+    if (args_.mime) {
+      return [&ctrl, easy = std::make_shared<curl::easy>(std::move(easy)),
+              args = args_](chunk_ptr chunk) mutable {
+        if (not chunk || chunk->size() == 0) {
+          return;
+        }
+        // When sending a MIME message, we set the mail headers via
+        // CURLOPT_HTTPHEADER as opposed to building the entire message
+        // manually.
+        auto headers = make_headers(args);
+        for (const auto& [name, value] : headers) {
+          auto code = easy->set_http_header(name, value);
+          TENZIR_ASSERT(code == curl::easy::code::ok);
+        }
+        // Create the MIME parts.
+        auto mime = curl::mime{*easy};
+        auto part = mime.add();
+        auto code = part.data(as_bytes(chunk));
+        TENZIR_ASSERT(code == curl::easy::code::ok);
+        code = part.type(chunk->metadata().content_type
+                           ? *chunk->metadata().content_type
+                           : "text/plain");
+        TENZIR_ASSERT(code == curl::easy::code::ok);
+        code = easy->set(std::move(mime));
+        TENZIR_ASSERT(code == curl::easy::code::ok);
+        // Send the message.
+        if (auto err = to_error(easy->perform())) {
+          diagnostic::error("failed to send message")
+            .note("{}", err)
+            .emit(ctrl.diagnostics());
+          return;
+        }
+      };
+    }
     return [&ctrl, easy = std::make_shared<curl::easy>(std::move(easy)),
             args = args_](chunk_ptr chunk) mutable {
       if (not chunk || chunk->size() == 0) {
         return;
       }
-      auto header = make_header(args);
+      // Format headers.
+      auto headers = std::vector<std::string>{};
+      for (const auto& [name, value] : make_headers(args)) {
+        headers.push_back(fmt::format("{}: {}", name, value));
+      }
       auto body = std::string_view{reinterpret_cast<const char*>(chunk->data()),
                                    chunk->size()};
-      // The RFC demands that we end with `.<CR><LF>`.
-      auto mail = fmt::format("{}\r\n{}.\r\n", header, body);
+      // The RFC demands that we end with `<CR><LF>.<CR><LF>`.
+      auto mail
+        = fmt::format("{}\r\n{}\r\n.\r\n", fmt::join(headers, "\r\n"), body);
       TENZIR_DEBUG("sending {}-byte chunk as email to {}", chunk->size(),
                    args.to);
       if (auto err = upload(*easy, chunk::make(std::move(mail)))) {
@@ -161,16 +200,13 @@ public:
           .emit(ctrl.diagnostics());
         return;
       }
+      // Send the message.
       if (auto err = to_error(easy->perform())) {
         diagnostic::error("failed to send message")
           .note("{}", err)
           .emit(ctrl.diagnostics());
         return;
       }
-      // Unless we clean up the cURL handle, we're not going to send a QUIT
-      // command. This allows us to reuse the same connection, but it might
-      // not be a good idea because the server will ultimately time out our
-      // connection.
     };
   }
 
@@ -202,22 +238,23 @@ public:
       name(),
       fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
     auto args = saver_args{};
-    parser.add("-m,--server", args.smtp_server, "<string>");
+    parser.add("-e,--endpoint", args.endpoint, "<string>");
     parser.add("-f,--from", args.from, "<email>");
     parser.add("-s,--subject", args.subject, "<string>");
     parser.add("-P,--skip-peer-verification", args.skip_peer_verification);
     parser.add("-H,--skip-hostname-verification",
                args.skip_hostname_verification);
+    parser.add("-m,--mime", args.mime);
     parser.add("-v,--verbose", args.verbose);
     parser.add(args.to, "<email>");
     parser.parse(p);
-    if (args.smtp_server.empty()) {
-      args.smtp_server = default_smtp_server;
-    } else if (args.smtp_server.find("://") == std::string_view::npos) {
-      args.smtp_server.insert(0, "smtps://");
-    } else if (args.smtp_server.starts_with("email://")) {
-      args.smtp_server.erase(0, 5);
-      args.smtp_server.insert(0, "smtp");
+    if (args.endpoint.empty()) {
+      args.endpoint = default_smtp_server;
+    } else if (args.endpoint.find("://") == std::string_view::npos) {
+      args.endpoint.insert(0, "smtps://");
+    } else if (args.endpoint.starts_with("email://")) {
+      args.endpoint.erase(0, 5);
+      args.endpoint.insert(0, "smtp");
     }
     if (args.to.empty()) {
       diagnostic::error("no recipient specified")

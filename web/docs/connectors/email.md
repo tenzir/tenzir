@@ -11,9 +11,9 @@ Emails pipeline data through a SMTP server.
 ## Synopsis
 
 ```
-email [-m|--server] [-f|--from <email>] [-s|--subject <string>]
+email [-e|--endpoint] [-f|--from <email>] [-s|--subject <string>]
       [-P|--skip-peer-verification] [-H|--skip-hostname-verification]
-      [-v|--verbose]
+      [-m|--mime] [-v|--verbose]
       <recipient>
 ```
 
@@ -31,9 +31,9 @@ The recipient of the mail.
 The expected format is either `Name <user@example.org>` with the email in angle
 brackets, or a plain email adress, such as `user@example.org`.
 
-### `-m|--server`
+### `-e|--endpoint`
 
-The address of the mail server.
+The endpoint of the mail server.
 
 To choose between SMTP and SMTPS, provide a URL with with the corresponding
 scheme. For example, `smtp://127.0.0.1:25` will establish an unencrypted
@@ -79,6 +79,13 @@ matches the hostname in the URL.
 
 Providing this flag skips this check, but it makes the connection insecure.
 
+### `-m|--mime`
+
+Wraps the chunk into a MIME part.
+
+The saver takes the uses the metadata of the byte chunk for the `Content-Type`
+MIME header.
+
 ### `-v|--verbose`
 
 Enables verbose output on stderr.
@@ -95,4 +102,28 @@ version
 | save email user@example.org
 ```
 
-Send an email through a remote  `user@example.org`:
+Send the email body as MIME part:
+
+```
+version
+| write json
+| save email --mime user@example.org
+```
+
+This may result in the following email body:
+
+```
+--------------------------s89ecto6c12ILX7893YOEf
+Content-Type: application/json
+Content-Transfer-Encoding: quoted-printable
+
+{
+  "version": "4.10.4+ge0a060567b-dirty",
+  "build": "ge0a060567b-dirty",
+  "major": 4,
+  "minor": 10,
+  "patch": 4
+}
+
+--------------------------s89ecto6c12ILX7893YOEf--
+```
