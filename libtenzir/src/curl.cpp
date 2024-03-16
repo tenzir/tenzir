@@ -99,7 +99,6 @@ auto easy::set(mime handle) -> code {
   auto curl_code = curl_easy_setopt(easy_.get(), CURLOPT_READFUNCTION, nullptr);
   TENZIR_ASSERT(curl_code == CURLE_OK);
   // Set MIME structure as the new thing.
-  TENZIR_ASSERT(curl_code == CURLE_OK);
   curl_code
     = curl_easy_setopt(easy_.get(), CURLOPT_MIMEPOST, handle.mime_.get());
   if (curl_code == CURLE_OK) {
@@ -140,10 +139,10 @@ auto easy::set_http_header(std::string_view name, std::string_view value)
     TENZIR_ASSERT(i != std::string_view::npos);
     return str.substr(0, i);
   };
+  // Check if we are overwriting a header. Since slits are immutable, this
+  // would require rebuilding the list (and has quadratic overhead).
   for (auto header : http_headers_.items()) {
     if (header_name(header) == name) {
-      // For the rare case that we overwrite a header, we're fine to pay the
-      // quadratic overhead of rebuild the list.
       slist copy;
       for (auto item : http_headers_.items()) {
         if (header_name(item) != name) {
