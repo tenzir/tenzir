@@ -209,7 +209,7 @@ public:
     if (args.smtp_server.empty()) {
       args.smtp_server = default_smtp_server;
     } else if (args.smtp_server.find("://") == std::string_view::npos) {
-      args.smtp_server.insert(0, "smtp://");
+      args.smtp_server.insert(0, "smtps://");
     } else if (args.smtp_server.starts_with("email://")) {
       args.smtp_server.erase(0, 5);
       args.smtp_server.insert(0, "smtp");
