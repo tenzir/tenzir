@@ -120,7 +120,12 @@ public:
       }
     }
     // Allow one of the recipients to fail and still consider it okay.
-    code = easy.set(CURLOPT_MAIL_RCPT_ALLOWFAILS, 1);
+#if LIBCURL_VERSION_NUM < 0x080200
+    auto allowfails = CURLOPT_MAIL_RCPT_ALLLOWFAILS;
+#else
+    auto allowfails = CURLOPT_MAIL_RCPT_ALLOWFAILS;
+#endif
+    code = easy.set(allowfails, 1);
     if (code != curl::easy::code::ok) {
       auto err = to_error(code);
       diagnostic::error("failed to adjust recipient failure mode")
