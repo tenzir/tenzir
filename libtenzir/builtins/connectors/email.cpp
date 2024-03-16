@@ -197,7 +197,7 @@ public:
       name(),
       fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
     auto args = saver_args{};
-    parser.add("-S,--server", args.smtp_server, "<string>");
+    parser.add("-m,--server", args.smtp_server, "<string>");
     parser.add("-f,--from", args.from, "<email>");
     parser.add("-s,--subject", args.subject, "<string>");
     parser.add("-P,--skip-peer-verification", args.skip_peer_verification);
