@@ -202,7 +202,7 @@ public:
         }
         if (result->bytes_written > 0) {
           TENZIR_ASSERT(result->bytes_written
-                        < detail::narrow_cast<int64_t>(out_buffer.size()));
+                        <= detail::narrow_cast<int64_t>(out_buffer.size()));
           co_yield chunk::copy(
             as_bytes(out_buffer).subspan(0, result->bytes_written));
         } else {
