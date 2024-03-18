@@ -12,6 +12,7 @@ Emails pipeline data through a SMTP server.
 
 ```
 email [-e|--endpoint] [-f|--from <email>] [-s|--subject <string>]
+      [-u|--username <string>] [-p|--password <string>]
       [-P|--skip-peer-verification] [-H|--skip-hostname-verification]
       [-m|--mime] [-v|--verbose]
       <recipient>
@@ -52,6 +53,14 @@ server which might cause the email to be rejected.
 ### `-s|--subject <string>`
 
 The `Subject` header.
+
+### `-u|--username <string>`
+
+The username in an authenticated SMTP connection.
+
+### `-p|--password <string>`
+
+The password in an authenticated SMTP connection.
 
 ### `-P|--skip-peer-verification`
 

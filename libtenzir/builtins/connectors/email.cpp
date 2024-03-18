@@ -241,6 +241,8 @@ public:
     parser.add("-e,--endpoint", args.endpoint, "<string>");
     parser.add("-f,--from", args.from, "<email>");
     parser.add("-s,--subject", args.subject, "<string>");
+    parser.add("-u,--username", args.username, "<string>");
+    parser.add("-p,--password", args.password, "<string>");
     parser.add("-P,--skip-peer-verification", args.skip_peer_verification);
     parser.add("-H,--skip-hostname-verification",
                args.skip_hostname_verification);
