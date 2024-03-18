@@ -13,6 +13,7 @@ Emails pipeline data through a SMTP server.
 ```
 email [-e|--endpoint] [-f|--from <email>] [-s|--subject <string>]
       [-u|--username <string>] [-p|--password <string>]
+      [-i|--authzid <string>] [-a|--authorization <string>]
       [-P|--skip-peer-verification] [-H|--skip-hostname-verification]
       [-m|--mime] [-v|--verbose]
       <recipient>
@@ -62,9 +63,24 @@ The username in an authenticated SMTP connection.
 
 The password in an authenticated SMTP connection.
 
-### `-a|--authzid <string>`
+### `-i|--authzid <string>`
 
 The authorization identity in an authenticated SMTP connection.
+
+This option is only applicable to the PLAIN SASL authentication mechanism where
+it is optional. When not specified only the authentication identity (`authcid`)
+as specified by the username is sent to the server, along with the password. The
+server derives an `authzid` from the `authcid` when not provided, which it then
+uses internally. When the `authzid` is specified it can be used to access
+another user's inbox, that the user has been granted access to, or a shared
+mailbox.
+
+### `-a|--authorization <string>`
+
+The authorization options for an authenticated SMTP connection.
+
+This login option defines the preferred authentication mechanism, e.g.,
+`AUTH=PLAIN`, `AUTH=LOGIN`, or `AUTH=*`.
 
 ### `-P|--skip-peer-verification`
 

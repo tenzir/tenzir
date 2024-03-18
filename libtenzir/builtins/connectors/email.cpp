@@ -26,6 +26,8 @@ struct saver_args {
   std::optional<std::string> subject;
   std::optional<std::string> username;
   std::optional<std::string> password;
+  std::optional<std::string> authzid;
+  std::optional<std::string> authorization;
   bool skip_peer_verification;
   bool skip_hostname_verification;
   bool mime;
@@ -37,6 +39,8 @@ struct saver_args {
       .fields(f.field("endpoint", x.endpoint), f.field("to", x.to),
               f.field("from", x.from), f.field("subject", x.subject),
               f.field("username", x.username), f.field("password", x.password),
+              f.field("authzid", x.authzid),
+              f.field("authorization", x.authorization),
               f.field("skip_peer_verification", x.skip_peer_verification),
               f.field("skip_host_verification", x.skip_hostname_verification),
               f.field("mime", x.mime), f.field("verbose", x.verbose));
@@ -104,6 +108,26 @@ public:
       if (code != curl::easy::code::ok) {
         auto err = to_error(code);
         diagnostic::error("failed to set password")
+          .note("{}", err)
+          .emit(ctrl.diagnostics());
+        return err;
+      }
+    }
+    if (args_.authzid) {
+      code = easy.set(CURLOPT_SASL_AUTHZID, *args_.authzid);
+      if (code != curl::easy::code::ok) {
+        auto err = to_error(code);
+        diagnostic::error("failed to set authorization identity")
+          .note("{}", err)
+          .emit(ctrl.diagnostics());
+        return err;
+      }
+    }
+    if (args_.authorization) {
+      code = easy.set(CURLOPT_LOGIN_OPTIONS, *args_.authorization);
+      if (code != curl::easy::code::ok) {
+        auto err = to_error(code);
+        diagnostic::error("failed to set login authorization method")
           .note("{}", err)
           .emit(ctrl.diagnostics());
         return err;
@@ -241,6 +265,8 @@ public:
     parser.add("-s,--subject", args.subject, "<string>");
     parser.add("-u,--username", args.username, "<string>");
     parser.add("-p,--password", args.password, "<string>");
+    parser.add("-i,--authzid", args.authzid, "<string>");
+    parser.add("-a,--authorization", args.authorization, "<string>");
     parser.add("-P,--skip-peer-verification", args.skip_peer_verification);
     parser.add("-H,--skip-hostname-verification",
                args.skip_hostname_verification);
