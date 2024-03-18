@@ -189,9 +189,7 @@ public:
       }
       auto body = std::string_view{reinterpret_cast<const char*>(chunk->data()),
                                    chunk->size()};
-      // The RFC demands that we end with `<CR><LF>.<CR><LF>`.
-      auto mail
-        = fmt::format("{}\r\n{}\r\n.\r\n", fmt::join(headers, "\r\n"), body);
+      auto mail = fmt::format("{}\r\n{}", fmt::join(headers, "\r\n"), body);
       TENZIR_DEBUG("sending {}-byte chunk as email to {}", chunk->size(),
                    args.to);
       if (auto err = upload(*easy, chunk::make(std::move(mail)))) {
