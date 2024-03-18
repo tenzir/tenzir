@@ -267,6 +267,10 @@ public:
   auto name() const -> std::string override {
     return "email";
   }
+
+  auto supported_uri_scheme() const -> std::string override {
+    return "mailto";
+  }
 };
 
 } // namespace
