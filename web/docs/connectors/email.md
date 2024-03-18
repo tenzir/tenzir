@@ -62,6 +62,10 @@ The username in an authenticated SMTP connection.
 
 The password in an authenticated SMTP connection.
 
+### `-a|--authzid <string>`
+
+The authorization identity in an authenticated SMTP connection.
+
 ### `-P|--skip-peer-verification`
 
 Skips certificate verification.
