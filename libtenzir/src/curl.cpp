@@ -8,6 +8,7 @@
 
 #include "tenzir/curl.hpp"
 
+#include "tenzir/chunk.hpp"
 #include "tenzir/concept/parseable/numeric.hpp"
 #include "tenzir/concept/printable/tenzir/data.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
@@ -59,52 +60,47 @@ easy::easy() : easy_{curl_easy_init()} {
   TENZIR_ASSERT(easy_ != nullptr);
 }
 
-easy::~easy() {
-  if (easy_ != nullptr) {
-    curl_easy_cleanup(easy_);
-  }
-}
-
 auto easy::unset(CURLoption option) -> code {
-  auto curl_code = curl_easy_setopt(easy_, option, nullptr);
+  auto curl_code = curl_easy_setopt(easy_.get(), option, nullptr);
   return static_cast<code>(curl_code);
 }
 
 auto easy::set(CURLoption option, long parameter) -> code {
-  auto curl_code = curl_easy_setopt(easy_, option, parameter);
+  auto curl_code = curl_easy_setopt(easy_.get(), option, parameter);
   return static_cast<code>(curl_code);
 }
 
 auto easy::set(CURLoption option, std::string_view parameter) -> code {
-  auto curl_code = curl_easy_setopt(easy_, option, parameter.data());
+  auto curl_code = curl_easy_setopt(easy_.get(), option, parameter.data());
   return static_cast<code>(curl_code);
 }
 
 auto easy::set(write_callback fun) -> code {
   TENZIR_ASSERT(fun);
   on_write_ = std::make_unique<write_callback>(std::move(fun));
-  auto curl_code = curl_easy_setopt(easy_, CURLOPT_WRITEFUNCTION, on_write);
+  auto curl_code
+    = curl_easy_setopt(easy_.get(), CURLOPT_WRITEFUNCTION, on_write);
   TENZIR_ASSERT(curl_code == CURLE_OK);
-  curl_code = curl_easy_setopt(easy_, CURLOPT_WRITEDATA, on_write_.get());
+  curl_code = curl_easy_setopt(easy_.get(), CURLOPT_WRITEDATA, on_write_.get());
   return static_cast<code>(curl_code);
 }
 
 auto easy::set(read_callback fun) -> code {
   TENZIR_ASSERT(fun);
   on_read_ = std::make_unique<read_callback>(std::move(fun));
-  auto curl_code = curl_easy_setopt(easy_, CURLOPT_READFUNCTION, on_read);
+  auto curl_code = curl_easy_setopt(easy_.get(), CURLOPT_READFUNCTION, on_read);
   TENZIR_ASSERT(curl_code == CURLE_OK);
-  curl_code = curl_easy_setopt(easy_, CURLOPT_READDATA, on_read_.get());
+  curl_code = curl_easy_setopt(easy_.get(), CURLOPT_READDATA, on_read_.get());
   return static_cast<code>(curl_code);
 }
 
 auto easy::set(mime handle) -> code {
   // We do not support reading MIME parts through a callback.
-  auto curl_code = curl_easy_setopt(easy_, CURLOPT_READFUNCTION, nullptr);
+  auto curl_code = curl_easy_setopt(easy_.get(), CURLOPT_READFUNCTION, nullptr);
   TENZIR_ASSERT(curl_code == CURLE_OK);
   // Set MIME structure as the new thing.
-  TENZIR_ASSERT(curl_code == CURLE_OK);
-  curl_code = curl_easy_setopt(easy_, CURLOPT_MIMEPOST, handle.mime_.get());
+  curl_code
+    = curl_easy_setopt(easy_.get(), CURLOPT_MIMEPOST, handle.mime_.get());
   if (curl_code == CURLE_OK) {
     mime_ = std::make_unique<mime>(std::move(handle));
   }
@@ -116,7 +112,7 @@ auto easy::set_infilesize(long size) -> code {
   auto unsigned_size = detail::narrow_cast<uint64_t>(size);
   auto option
     = unsigned_size > 2_GiB ? CURLOPT_INFILESIZE_LARGE : CURLOPT_INFILESIZE;
-  auto curl_code = curl_easy_setopt(easy_, option, size);
+  auto curl_code = curl_easy_setopt(easy_.get(), option, size);
   return static_cast<code>(curl_code);
 }
 
@@ -125,7 +121,14 @@ auto easy::set_postfieldsize(long size) -> code {
   auto unsigned_size = detail::narrow_cast<uint64_t>(size);
   auto option = unsigned_size > 2_GiB ? CURLOPT_POSTFIELDSIZE_LARGE
                                       : CURLOPT_POSTFIELDSIZE;
-  auto curl_code = curl_easy_setopt(easy_, option, size);
+  auto curl_code = curl_easy_setopt(easy_.get(), option, size);
+  return static_cast<code>(curl_code);
+}
+
+auto easy::add_mail_recipient(std::string_view mail) -> easy::code {
+  mail_recipients_.append(mail);
+  auto curl_code = curl_easy_setopt(easy_.get(), CURLOPT_MAIL_RCPT,
+                                    mail_recipients_.slist_.get());
   return static_cast<code>(curl_code);
 }
 
@@ -136,30 +139,30 @@ auto easy::set_http_header(std::string_view name, std::string_view value)
     TENZIR_ASSERT(i != std::string_view::npos);
     return str.substr(0, i);
   };
-  for (auto header : headers_.items()) {
+  // Check if we are overwriting a header. Since slits are immutable, this
+  // would require rebuilding the list (and has quadratic overhead).
+  for (auto header : http_headers_.items()) {
     if (header_name(header) == name) {
-      // For the rare case that we overwrite a header, we're fine to pay the
-      // quadratic overhead of rebuild the list.
       slist copy;
-      for (auto item : headers_.items()) {
+      for (auto item : http_headers_.items()) {
         if (header_name(item) != name) {
           copy.append(item);
         }
       }
-      headers_ = std::move(copy);
+      http_headers_ = std::move(copy);
       break;
     }
   }
   auto header = fmt::format("{}: {}", name, value);
-  headers_.append(header);
-  auto curl_code
-    = curl_easy_setopt(easy_, CURLOPT_HTTPHEADER, headers_.slist_.get());
+  http_headers_.append(header);
+  auto curl_code = curl_easy_setopt(easy_.get(), CURLOPT_HTTPHEADER,
+                                    http_headers_.slist_.get());
   return static_cast<code>(curl_code);
 }
 
 auto easy::headers()
   -> generator<std::pair<std::string_view, std::string_view>> {
-  for (auto str : headers_.items()) {
+  for (auto str : http_headers_.items()) {
     auto split = detail::split(str, ": ");
     TENZIR_ASSERT(split.size() == 2);
     co_yield std::pair{split[0], split[1]};
@@ -167,12 +170,12 @@ auto easy::headers()
 }
 
 auto easy::perform() -> code {
-  auto curl_code = curl_easy_perform(easy_);
+  auto curl_code = curl_easy_perform(easy_.get());
   return static_cast<code>(curl_code);
 }
 
 auto easy::reset() -> void {
-  curl_easy_reset(easy_);
+  curl_easy_reset(easy_.get());
 }
 
 auto to_string(easy::code code) -> std::string_view {
@@ -192,12 +195,12 @@ multi::multi() : multi_{curl_multi_init(), curlm_deleter{}} {
 }
 
 auto multi::add(easy& handle) -> code {
-  auto curl_code = curl_multi_add_handle(multi_.get(), handle.easy_);
+  auto curl_code = curl_multi_add_handle(multi_.get(), handle.easy_.get());
   return static_cast<code>(curl_code);
 }
 
 auto multi::remove(easy& handle) -> code {
-  auto curl_code = curl_multi_remove_handle(multi_.get(), handle.easy_);
+  auto curl_code = curl_multi_remove_handle(multi_.get(), handle.easy_.get());
   return static_cast<code>(curl_code);
 }
 
@@ -287,7 +290,7 @@ mime::part::part(curl_mimepart* ptr) : part_{ptr} {
 }
 
 mime::mime(easy& handle)
-  : mime_{curl_mime_init(handle.easy_), curl_mime_deleter{}} {
+  : mime_{curl_mime_init(handle.easy_.get()), curl_mime_deleter{}} {
 }
 
 auto mime::add() -> mime::part {
@@ -393,6 +396,39 @@ auto escape(const record& xs) -> std::string {
     kvps.push_back(fmt::format("{}={}", escaped_key, escaped_value));
   }
   return fmt::format("{}", fmt::join(kvps, "&"));
+}
+
+auto upload(easy& handle, chunk_ptr chunk) -> caf::error {
+  TENZIR_ASSERT(chunk);
+  TENZIR_ASSERT(chunk->size() > 0);
+  if (auto err = to_error(handle.set(CURLOPT_UPLOAD, 1))) {
+    return err;
+  }
+  // Using CURLOPT_UPLOAD expects that we go through the read callback, and we
+  // must set CURLOPT_INFILESIZE(_LARGE).
+  auto size = detail::narrow_cast<long>(chunk->size());
+  if (auto err = to_error(handle.set_infilesize(size))) {
+    return err;
+  }
+  auto on_read = [chunk](std::span<std::byte> buffer) mutable -> size_t {
+    if (not chunk or chunk->size() == 0) {
+      return 0;
+    }
+    TENZIR_DEBUG("reading {} bytes into {}-byte buffer", chunk->size(),
+                 buffer.size());
+    if (buffer.size() >= chunk->size()) {
+      // Read the chunk in one shot.
+      std::memcpy(buffer.data(), chunk->data(), chunk->size());
+      auto bytes_copied = chunk->size();
+      chunk = {};
+      return bytes_copied;
+    }
+    // Do multiple rounds.
+    std::memcpy(buffer.data(), chunk->data(), buffer.size());
+    chunk = chunk->slice(buffer.size());
+    return buffer.size();
+  };
+  return to_error(handle.set(on_read));
 }
 
 } // namespace tenzir::curl

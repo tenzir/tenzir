@@ -182,11 +182,6 @@ public:
   };
 
   easy();
-  easy(easy&) = delete;
-  auto operator=(easy&) -> easy& = delete;
-  easy(easy&&) = default;
-  auto operator=(easy&&) -> easy& = default;
-  ~easy();
 
   /// Sets an option to NULL / nullptr.
   auto unset(CURLoption option) -> code;
@@ -223,6 +218,11 @@ public:
   /// be deleted instead.
   auto set_http_header(std::string_view name, std::string_view value) -> code;
 
+  /// Adds a recipient to the internal list for `CURLOPT_MAIL_RCPT`.
+  /// @param mail The email address of a recipient. The format should be either
+  /// `User <user@example.org>` or a plain address `user@example.org`
+  auto add_mail_recipient(std::string_view mail) -> code;
+
   /// Enumerates the list of all added headers.
   auto headers() -> generator<std::pair<std::string_view, std::string_view>>;
 
@@ -233,11 +233,20 @@ public:
   auto reset() -> void;
 
 private:
-  CURL* easy_{nullptr};
+  struct curl_deleter {
+    auto operator()(CURL* ptr) const noexcept -> void {
+      if (ptr) {
+        curl_easy_cleanup(ptr);
+      }
+    }
+  };
+
+  std::unique_ptr<CURL, curl_deleter> easy_;
   std::unique_ptr<write_callback> on_write_{};
   std::unique_ptr<read_callback> on_read_{};
   std::unique_ptr<mime> mime_{};
-  slist headers_;
+  slist http_headers_;
+  slist mail_recipients_;
 };
 
 /// @relates easy
@@ -349,7 +358,7 @@ public:
     /// @param buffer The data to copy into the part.
     auto data(std::span<const std::byte> buffer) -> easy::code;
 
-    /// Sets the data by menas of a read callback.
+    /// Sets the data by means of a read callback.
     /// @param on_read The read callback to read in parts. The caller must
     /// ensure that the pointer remains valid.
     /// @pre `on_read != nullptr`
@@ -500,5 +509,9 @@ auto escape(std::string_view str) -> std::string;
 /// @param xs The key-value pairs to encode.
 /// @returns The encoded string.
 auto escape(const record& xs) -> std::string;
+
+/// Instructs an easy handle to upload a chunk. This sets `CURLOPT_UPLOAD` and
+/// sets the read callback to read the chunk.
+auto upload(easy& handle, chunk_ptr chunk) -> caf::error;
 
 } // namespace tenzir::curl
