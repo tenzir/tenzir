@@ -72,6 +72,7 @@ RUN cmake -B build -G Ninja \
       -D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
       ${TENZIR_BUILD_OPTIONS} && \
     cmake --build build --parallel && \
+    cmake --build build --target integration && \
     cmake --install build --strip && \
     rm -rf build
 
@@ -179,6 +180,7 @@ FROM plugins-source AS compaction-plugin
 RUN cmake -S contrib/tenzir-plugins/compaction -B build-compaction -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-compaction --parallel && \
+      cmake --build build-compaction --target integration && \
       DESTDIR=/plugin/compaction cmake --install build-compaction --strip --component Runtime && \
       rm -rf build-compaction
 
@@ -187,6 +189,7 @@ FROM plugins-source AS context-plugin
 RUN cmake -S contrib/tenzir-plugins/context -B build-context -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-context --parallel && \
+      cmake --build build-context --target integration && \
       DESTDIR=/plugin/context cmake --install build-context --strip --component Runtime && \
       rm -rf build-context
 
@@ -195,6 +198,7 @@ FROM plugins-source AS matcher-plugin
 RUN cmake -S contrib/tenzir-plugins/matcher -B build-matcher -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-matcher --parallel && \
+      cmake --build build-matcher --target integration && \
       DESTDIR=/plugin/matcher cmake --install build-matcher --strip --component Runtime && \
       rm -rf build-matcher
 
@@ -203,6 +207,7 @@ FROM plugins-source AS pipeline-manager-plugin
 RUN cmake -S contrib/tenzir-plugins/pipeline-manager -B build-pipeline-manager -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-pipeline-manager --parallel && \
+      cmake --build build-pipeline-manager --target integration && \
       DESTDIR=/plugin/pipeline-manager cmake --install build-pipeline-manager --strip --component Runtime && \
       rm -rf build-pipeline-manager
 
@@ -211,6 +216,7 @@ FROM plugins-source AS platform-plugin
 RUN cmake -S contrib/tenzir-plugins/platform -B build-platform -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-platform --parallel && \
+      cmake --build build-platform --target integration && \
       DESTDIR=/plugin/platform cmake --install build-platform --strip --component Runtime && \
       rm -rf build-platform
 

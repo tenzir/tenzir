@@ -8,7 +8,7 @@ Before building the image, make sure to fetch all submodules:
 ```bash
 git clone --recursive https://github.com/tenzir/tenzir
 cd tenzir
-git submodule update --init --recursive -- libtenzir plugins
+git submodule update --init --recursive -- libtenzir plugins tenzir
 ```
 
 ## Build the production image
