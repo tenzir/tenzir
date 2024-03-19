@@ -962,6 +962,11 @@ jobs:
         working-directory: ${{ env.BUILD_DIR }}
         run: |
           ctest --parallel
+      - name: Work around https://github.blog/2022-04-12-git-security-vulnerability-announced/
+        run: |
+          # This command is set identically in actions/checkout, but for some
+          # reason the setting gets removed again later.
+          git config --global --add safe.directory /__w/tenzir/tenzir
       - name: Run Integration Tests
         id: integration_tests
         run: |
