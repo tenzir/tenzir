@@ -601,7 +601,7 @@ public:
   [[nodiscard]] auto find_node(patricia_key const& key) noexcept
     -> node_pointer;
 
-  [[nodiscard]] auto prefix_match(patricia_key const& key) noexcept
+  [[nodiscard]] auto prefix_match(patricia_key const& key) const noexcept
     -> node_pointer;
 
   auto insert_node(patricia_key const& key) -> node_pointer;
@@ -1134,11 +1134,11 @@ auto patricia_trie<T, Allocator>::find_node(patricia_key const& key) noexcept
 }
 
 /*************************************************************************
- * patricia_trie<T>::upper_bound
+ * patricia_trie<T>::prefix_match
  */
 template <typename T, typename Allocator>
-auto patricia_trie<T, Allocator>::prefix_match(patricia_key const& key) noexcept
-  -> node_pointer {
+auto patricia_trie<T, Allocator>::prefix_match(
+  patricia_key const& key) const noexcept -> node_pointer {
   SK_PATRICIA_TRACE_MSG("prefix_match: start search key<{}>, root={}\n",
                         format_key(key), (void*)root);
   if (!root) {
