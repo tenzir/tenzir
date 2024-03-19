@@ -26,8 +26,7 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef SK_PATRICIA_HXX_INCLUDED
-#define SK_PATRICIA_HXX_INCLUDED
+#pragma once
 
 // #define SK_PATRICIA_TRACE
 
@@ -1900,5 +1899,3 @@ public:
 };
 
 } // namespace sk
-
-#endif // SK_PATRICIA_HXX_INCLUDED
