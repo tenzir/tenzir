@@ -1760,6 +1760,29 @@ private:
     return _find_node(key);
   }
 
+  auto _prefix_match_node(patricia_key const& key) noexcept -> node_ptr {
+    return _trie.prefix_match(key);
+  }
+
+  auto _prefix_match_node(patricia_key const& key) const noexcept
+    -> const_node_ptr {
+    return _trie.prefix_match(key);
+  }
+
+  template <typename V>
+  auto _prefix_match_node(V const& value) noexcept -> node_ptr {
+    typename KeyMaker::template rebind<V>::other key_maker;
+    auto key = key_maker(value);
+    return _prefix_match_node(key);
+  }
+
+  template <typename V>
+  auto _prefix_match_node(V const& value) const noexcept -> const_node_ptr {
+    typename KeyMaker::template rebind<V>::other key_maker;
+    auto key = key_maker(value);
+    return _prefix_match_node(key);
+  }
+
 public:
   patricia_map() noexcept = default;
   ~patricia_map() noexcept(std::is_nothrow_destructible_v<trie_type>) = default;
@@ -1829,6 +1852,28 @@ public:
   template <typename V>
   auto find(V const& key) const noexcept -> const_iterator {
     auto node = _find_node(key);
+
+    if (node && node->value.has_value()) {
+      return const_iterator(node);
+    }
+
+    return const_iterator();
+  }
+
+  template <typename V>
+  auto prefix_match(V const& key) noexcept -> iterator {
+    auto node = _prefix_match_node(key);
+
+    if (node && node->value.has_value()) {
+      return iterator(node);
+    }
+
+    return iterator();
+  }
+
+  template <typename V>
+  auto prefix_match(V const& key) const noexcept -> const_iterator {
+    auto node = _prefix_match_node(key);
 
     if (node && node->value.has_value()) {
       return const_iterator(node);
