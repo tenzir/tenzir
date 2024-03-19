@@ -33,7 +33,6 @@ auto make_alarm_clock(alarm_clock_actor::pointer self)
       });
       return rp;
     },
-
   };
 }
 

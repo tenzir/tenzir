@@ -1,0 +1,35 @@
+: "${BATS_TEST_TIMEOUT:=10}"
+
+setup() {
+  bats_load_library bats-support
+  bats_load_library bats-assert
+  bats_load_library bats-tenzir
+
+  setup_node_with_default_config
+
+  # We don't care about the actual events, just the number of them.
+  export TENZIR_EXEC__IMPLICIT_EVENTS_SINK="enumerate index | put index | write json --compact-output | save -"
+}
+
+teardown() {
+  teardown_node
+}
+
+@test "every modifier" {
+  check tenzir "every 5ms version | head"
+  check ! tenzir "version | every 1s head"
+  check ! tenzir "version | head | write yaml | every 1s save stdout"
+}
+
+@test "every with remote" {
+  check tenzir "every 5ms remote version | head"
+  check tenzir "remote every 5ms version | head"
+}
+
+@test "every errors" {
+  check ! tenzir "every 1s from ./this-file-does-not-exist.json"
+  check ! tenzir "every -1s version"
+  check ! tenzir "every 0s version"
+  check ! tenzir "every 0 version"
+  check ! tenzir "every version"
+}

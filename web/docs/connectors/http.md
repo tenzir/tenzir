@@ -148,3 +148,10 @@ Send pipeline data as request body in a POST request:
 ```
 version | to http://pie.dev/put X-API-Token:123
 ```
+
+Issue a HTTP GET request every second using an operator modifier for [scheduled
+executions](/language/operator-modifiers#scheduled-executions).
+
+```
+every 1s from http://pie.dev/get
+```

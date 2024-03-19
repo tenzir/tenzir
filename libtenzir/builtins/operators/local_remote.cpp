@@ -36,10 +36,20 @@ public:
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     auto result = op_->optimize(filter, order);
-    if (result.replacement) {
-      result.replacement = std::make_unique<local_remote_operator>(
-        std::move(result.replacement), location_);
+    if (not result.replacement) {
+      return result;
     }
+    if (auto* pipe = dynamic_cast<pipeline*>(result.replacement.get())) {
+      auto ops = std::move(*pipe).unwrap();
+      for (auto& op : ops) {
+        op = std::make_unique<local_remote_operator>(
+          std::move(result.replacement), location_);
+      }
+      result.replacement = std::make_unique<pipeline>(std::move(ops));
+      return result;
+    }
+    result.replacement = std::make_unique<local_remote_operator>(
+      std::move(result.replacement), location_);
     return result;
   }
 
@@ -70,6 +80,10 @@ public:
 
   auto internal() const -> bool override {
     return op_->internal();
+  }
+
+  auto input_independent() const -> bool override {
+    return op_->input_independent();
   }
 
   auto infer_type_impl(operator_type input) const

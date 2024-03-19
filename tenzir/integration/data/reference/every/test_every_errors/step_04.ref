@@ -1,0 +1,6 @@
+error: could not parse data
+ --> <input>:1:7
+  |
+1 | every version
+  |       ^ 
+  |
