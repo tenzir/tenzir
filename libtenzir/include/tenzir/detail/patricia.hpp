@@ -62,7 +62,7 @@
 #  define SK_PATRICIA_INVARIANT(c) ((void)0)
 #endif
 
-namespace sk {
+namespace tenzir::detail::sk {
 
 using bit_t = std::size_t;
 
@@ -1898,4 +1898,4 @@ public:
   }
 };
 
-} // namespace sk
+} // namespace tenzir::detail::sk
