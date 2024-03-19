@@ -22,7 +22,7 @@ jobs:
           - runner: ubuntu-20.04
             arch: linux/amd64
             tag: amd64
-          - runner: ubicloud-standard-2-arm
+          - runner: ubicloud-standard-4-arm
             arch: linux/arm64
             tag: arm64
     steps:
@@ -45,6 +45,7 @@ jobs:
           git config --global --add safe.directory '*'
           git submodule update --init --recursive libtenzir
           git submodule update --init --recursive plugins
+          git submodule update --init --recursive tenzir
       - name: Configure
         id: cfg
         run: |
