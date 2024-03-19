@@ -6,6 +6,19 @@ sidebar_position: 5
 
 Operator modifiers are keywords that may occur before an operator.
 
+## Scheduled Executions
+
+The special keyword `every` enables scheduled execution of a source operator.
+
+Use the operator modifier like this:
+
+```
+every <interval> <operator> [<args...>]
+```
+
+For example, `version` prints the version number exactly once, but `every 1s
+version` prints the version number once every second.
+
 ## Location Overrides
 
 Pipelines run across multiple processes:
@@ -23,6 +36,13 @@ an operator explicitly. They may occur before any operator. For example, the
 pipeline `read json | remote pass | write json` reads JSON from stdin locally,
 transfers it to a remote node to do nothing with the data, and
 then transfers it back to write JSON to stdout locally.
+
+Use the operator modifier like this:
+
+```
+local  <operator> [<args...>]
+remote <operator> [<args...>]
+```
 
 There are generally two scenarios in which you may want to use location
 overrides:
