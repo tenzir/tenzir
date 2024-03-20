@@ -616,6 +616,8 @@ jobs:
               # - The http-parser package is disabled on Hoembrew, which means
               #   we cannot build the web plugin on macOS anymore. Last checked
               #   on 2024-01-31.
+              # - The SQS integration tests require Docker, but that is not
+              #   installed on the macOS CI runners. Last checked on 2024-03-20.
               - plugins/[^(parquet)(web)(sqs)]*
               - contrib/tenzir-plugins/*
     env:
