@@ -134,6 +134,7 @@ private:
       diagnostic::error("failed to get URL for SQS queue")
         .primary(name_.source)
         .note("{}", outcome.GetError().GetMessage())
+        .hint("ensure that $AWS_ENDPOINT_URL points to valid endpoint")
         .throw_();
     }
     return outcome.GetResult().GetQueueUrl();
@@ -226,9 +227,13 @@ public:
     -> caf::expected<std::function<void(chunk_ptr)>> override {
     auto poll_time
       = args_.poll_time ? args_.poll_time->inner : default_poll_time;
-    auto queue = sqs_queue{args_.queue, poll_time};
-    return [&ctrl, queue = std::make_shared<sqs_queue>(std::move(queue))](
-             chunk_ptr chunk) mutable {
+    auto queue = std::shared_ptr<sqs_queue>{};
+    try {
+      queue = std::make_shared<sqs_queue>(args_.queue, poll_time);
+    } catch (const diagnostic& d) {
+      return d.to_error();
+    }
+    return [&ctrl, queue = std::move(queue)](chunk_ptr chunk) mutable {
       if (!chunk || chunk->size() == 0) {
         return;
       }
