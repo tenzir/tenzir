@@ -30,6 +30,8 @@
 
 // #define SK_PATRICIA_TRACE
 
+#include "tenzir/detail/assert.hpp"
+
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -51,16 +53,7 @@
 #  define SK_PATRICIA_TRACE_MSG(...) ((void)0)
 #endif
 
-#if !defined(NDEBUG) && !defined(SK_PATRICIA_NO_INVARIANTS)
-#  include <cassert>
-#  if __has_include(<fmt/core.h>)
-#    include <fmt/core.h>
-#    define SK_PATRICIA_HAVE_FMT
-#  endif
-#  define SK_PATRICIA_INVARIANT(c) assert(c)
-#else
-#  define SK_PATRICIA_INVARIANT(c) ((void)0)
-#endif
+#define SK_PATRICIA_INVARIANT(c) TENZIR_ASSERT(c)
 
 namespace tenzir::detail::sk {
 
