@@ -107,7 +107,7 @@ public:
     }
     co_yield {};
     auto [importer] = std::move(*components);
-    auto bridge = ctrl.self().spawn(make_bridge, importer, expr_);
+    auto bridge = ctrl.self().spawn<caf::linked>(make_bridge, importer, expr_);
     auto next = table_slice{};
     while (true) {
       ctrl.self()
