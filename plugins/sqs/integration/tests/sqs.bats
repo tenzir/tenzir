@@ -4,12 +4,13 @@ export AWS_SECRET_ACCESS_KEY="dummy"
 export AWS_ENDPOINT_URL="http://localhost:9324"
 
 setup() {
+  DATADIR="${BATS_TEST_DIRNAME}/../data"
   bats_load_library bats-support
   bats_load_library bats-assert
   bats_load_library bats-tenzir
   container_id=$(docker run -d -p 9324:9324 \
     -e AWS_DEFAULT_REGION \
-    -v "${MISCDIR}/elasticmq.conf:/opt/elasticmq.conf" \
+    -v "${DATADIR}/misc/elasticmq.conf:/opt/elasticmq.conf" \
     softwaremill/elasticmq-native)
   export CONTAINER_ID="${container_id}"
 }
@@ -25,7 +26,7 @@ teardown() {
 
 # bats test_tags=docker
 @test "send and receive messages" {
-  check tenzir "version | put foo=42 | repeat 10 | enumerate n | to sqs://tenzir"
+  check tenzir "version | put foo=42 | repeat 3 | to sqs://tenzir"
   # FIXME: simply piping to `head 10` does not work. But it should. We
   # workaround this weirdness by doing a `head 1`, which works.
   #
@@ -38,5 +39,5 @@ teardown() {
   #     });
   #
   # This smells like an issue with the executor.
-  check tenzir "from sqs://tenzir | select foo | head 1"
+  check tenzir "from sqs://tenzir | select foo | head 3"
 }
