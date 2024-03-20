@@ -1163,8 +1163,7 @@ auto patricia_trie<T, Allocator>::prefix_match(
                         format_key(key), (void*)node, format_key(node->key));
 
   // Walk up the tree until we find a match.
-  while (node != nullptr
-         && (node->key.bits > keybits || !prefix_compare(node->key, key))) {
+  while (node != nullptr && !prefix_compare(node->key, key)) {
     SK_PATRICIA_TRACE_MSG("prefix_match: no match at node<{}>\n    "
                           "node={},\n     key={}\n",
                           (void*)node, format_key(node->key), format_key(key));
