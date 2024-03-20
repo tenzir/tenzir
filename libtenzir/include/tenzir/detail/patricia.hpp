@@ -1803,8 +1803,7 @@ public:
 
   auto operator=(patricia_map&&) noexcept -> patricia_map& = default;
 
-  auto clear() const noexcept(std::is_nothrow_destructible_v<value_type>)
-    -> void {
+  auto clear() noexcept(std::is_nothrow_destructible_v<value_type>) -> void {
     _trie.clear();
   }
 
