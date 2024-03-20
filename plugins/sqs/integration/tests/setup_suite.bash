@@ -2,7 +2,7 @@ setup_suite() {
   bats_require_minimum_version 1.8.0
   bats_load_library bats-tenzir
 
-  bats_tenzir_initialize
+  export_default_paths
 }
 
 libpath_relative_to_binary="$(realpath "$(dirname "$(command -v tenzir)")")/../share/tenzir/integration/lib"
