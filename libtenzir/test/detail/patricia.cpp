@@ -44,6 +44,9 @@ TEST(prefix matching) {
   xs[sn_0_25] = 1;
   xs[sn_1_24] = 2;
   xs[sn_0_23] = 3;
+  // Check for true negatives.
+  CHECK_EQUAL(xs.prefix_match(*to<ip>("192.168.2.1")), xs.end());
+  CHECK_EQUAL(xs.prefix_match(*to<ip>("10.0.0.1")), xs.end());
   // Prefix match of IP addresses.
   auto i0 = xs.prefix_match(*to<ip>("192.168.0.1"));
   REQUIRE_NOT_EQUAL(i0, xs.end());
@@ -69,4 +72,41 @@ TEST(prefix matching) {
   REQUIRE_NOT_EQUAL(j0, ys.end());
   CHECK_EQUAL(j0->first, sn_1_24);
   CHECK_EQUAL(j0->second, 2);
+}
+
+namespace {
+
+struct sliced_byte {
+  std::byte byte{0xFF};
+  size_t bits{8};
+};
+
+auto slice = [](auto byte, size_t bits) {
+  return sliced_byte{static_cast<std::byte>(byte), bits};
+};
+
+struct sliced_byte_keymaker {
+  template <class U>
+  struct rebind {
+    using other = sliced_byte_keymaker;
+  };
+
+  auto operator()(sliced_byte x) -> sk::patricia_key {
+    return {std::span<const std::byte>{&x.byte, 1}, x.bits};
+  }
+};
+
+} // namespace
+
+TEST(ensure no false positives during prefix match) {
+  auto xs = sk::patricia_map<sliced_byte, int8_t, sliced_byte_keymaker>{};
+  xs[slice(0xff, 4)] = 42;
+  CHECK_EQUAL(xs.prefix_match(slice(0xff, 1)), xs.end());
+  CHECK_EQUAL(xs.prefix_match(slice(0xff, 2)), xs.end());
+  CHECK_EQUAL(xs.prefix_match(slice(0xff, 3)), xs.end());
+  CHECK_NOT_EQUAL(xs.prefix_match(slice(0xff, 4)), xs.end());
+  CHECK_NOT_EQUAL(xs.prefix_match(slice(0xff, 5)), xs.end());
+  CHECK_NOT_EQUAL(xs.prefix_match(slice(0xff, 6)), xs.end());
+  CHECK_NOT_EQUAL(xs.prefix_match(slice(0xff, 7)), xs.end());
+  CHECK_NOT_EQUAL(xs.prefix_match(slice(0xff, 8)), xs.end());
 }
