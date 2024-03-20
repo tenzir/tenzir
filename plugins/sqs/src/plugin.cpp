@@ -71,7 +71,7 @@ public:
   auto receive_messages(size_t num_messages, std::chrono::seconds poll_time) {
     TENZIR_ASSERT(num_messages > 0);
     TENZIR_ASSERT(num_messages <= 10);
-    TENZIR_DEBUG("receiving messages from {}", url_);
+    TENZIR_DEBUG("receiving {} messages from {}", num_messages, url_);
     auto request = Aws::SQS::Model::ReceiveMessageRequest{};
     request.SetQueueUrl(url_);
     // TODO: adjust once we have limit pushdown. We still can lose messages
@@ -174,7 +174,7 @@ public:
         auto queue = sqs_queue{args.queue, poll_time};
         co_yield {};
         while (true) {
-          constexpr auto num_messages = size_t{10};
+          constexpr auto num_messages = size_t{1};
           auto messages = queue.receive_messages(num_messages, poll_time);
           if (messages.empty()) {
             co_yield {};
