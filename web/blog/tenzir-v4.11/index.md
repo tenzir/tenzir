@@ -1,8 +1,8 @@
 ---
 title: Tenzir v4.11
 authors: [dominiklohmann]
-date: 2024-03-21
-tags: [contexts, every, email]
+date: 2024-03-22
+tags: [contexts, every, set, email, sqs]
 comments: true
 ---
 
@@ -199,7 +199,7 @@ For example, to send all Suricata alerts arriving at a node via email, use:
 export --live
 | where #schema == "suricata.alert"
 | write json
-| save email --from "tenzir@example.org" --subject Alert alerts@example.org
+| save email alerts@example.org --from "tenzir@example.org" --subject Alert
 ```
 
 The `email` saver supports both SMTP and SMTPS. The default endpoint is
@@ -207,9 +207,6 @@ The `email` saver supports both SMTP and SMTPS. The default endpoint is
 the rendered JSON directly into the email body, you can also provide the
 `--mime` to send a MIME-encoded chunk that uses the MIME type according to the
 format you provided.
-
-To control the number of events per email, use the [`batch`](/operator/batch)
-operator prior to rendering the pipeline data with a printer.
 
 ## Other Changes
 
