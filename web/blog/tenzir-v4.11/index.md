@@ -169,6 +169,24 @@ of IOCs to create separate alerts per IOC even within a single event.
 }
 ```
 
+## The Sweet Spot Between Extend and Replace
+
+The [`set`](/next/operators/set) operator "upserts" into events. Its syntax
+exactly matches the syntax of the existing [`extend`](/next/operators/extend),
+[`replace`](/next/operators/replace), and [`put`](/next/operators/put)
+operators.
+
+If a specified field already exists, the `set` operator replaces its value. If
+it does not, the `set` operator extends the event with new field. We found this
+behavior to be quite intuitive, and in most cases we now reach for `set` instead
+of `replace` and `extend`.
+
+:::tip Setting the Schema Name
+The `set`, `put`, and `replace` operator support changing the schema name of
+events. For example, `set #schema="foo.bar"` will show up as a schema `bar` in
+the category `foo` in the Explorer on [app.tenzir.com](https://app.tenzir.com).
+:::
+
 ## Send Emails from a Pipeline
 
 The new [`email`](/next/connectors/email) saver sends away pipeline contents as
