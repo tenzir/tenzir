@@ -85,13 +85,89 @@ they exists. The option `--yield <field>` trims down the enrichment to just a
 specific field within the context. The `--yield` option is also available for
 the [`lookup`](/operators/lookup) operator.
 
+```json title="Before"
+{
+  "source_ip": 212.12.56.176,
+  "source_iso_code": "DE",
+  "dest_ip": 8.8.8.8,
+  "dest_iso_code": "US"
+}
+```
+
+```json title="After"
+{
+  "source_ip": 212.12.56.176,
+  "source_iso_code": "🇩🇪",
+  "dest_ip": 8.8.8.8,
+  "dest_iso_code": "🇺🇸"
+}
+```
+
 The other new option of `lookup` and `enrich` is `--separate`, which creates
 separate events for every enrichment. This causes events to be duplicated for
 every enrichment from a context that applies, with one enrichment per event in
 the result. This is particularly useful in `lookup` when evaluating a large set
 of IOCs to create separate alerts per IOC even within a single event.
 
-TODO Dominik: example
+```json title="Enriched as one event"
+{
+  "source_ip": 212.12.56.176,
+  "source_iso_code": "DE",
+  "dest_ip": 8.8.8.8,
+  "dest_iso_code": "US",
+  "flags": {
+    "source_ip": {
+      "value": "212.12.56.176"
+      "timestamp": "2024-03-21T15:12:07.493155",
+      "mode": "enrich",
+      "context": {
+        "flag": "🇩🇪"
+      }
+    }
+    "dest_ip": {
+      "value": "8.8.8.8"
+      "timestamp": "2024-03-21T15:12:07.493155",
+      "mode": "enrich",
+      "context": {
+        "flag": "🇺🇸"
+      }
+    }
+  }
+}
+```
+
+```json title="Enriched as separate events"
+{
+  "source_ip": 212.12.56.176,
+  "source_iso_code": "DE",
+  "dest_ip": 8.8.8.8,
+  "dest_iso_code": "US",
+  "flags": {
+    "path": "source_ip",
+    "value": "212.12.56.176"
+    "timestamp": "2024-03-21T15:12:07.493155",
+    "mode": "enrich",
+    "context": {
+      "flag": "🇩🇪"
+    }
+  }
+}
+{
+  "source_ip": 212.12.56.176,
+  "source_iso_code": "DE",
+  "dest_ip": 8.8.8.8,
+  "dest_iso_code": "US",
+  "flags": {
+    "path": "source_ip",
+    "value": "8.8.8.8"
+    "timestamp": "2024-03-21T15:12:07.493155",
+    "mode": "enrich",
+    "context": {
+      "flag": "🇺🇸"
+    }
+  }
+}
+```
 
 ## Send Emails from a Pipeline
 
