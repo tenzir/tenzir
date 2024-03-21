@@ -60,8 +60,11 @@ public:
     (void)replace;
     auto builder = series_builder{};
     for (const auto& value : array.values()) {
-      const auto contained = bloom_filter_.lookup(value);
-      builder.data(contained);
+      if (bloom_filter_.lookup(value)) {
+        builder.data(true);
+      } else {
+        builder.null();
+      }
     }
     return builder.finish();
   }
