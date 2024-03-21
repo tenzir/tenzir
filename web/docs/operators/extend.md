@@ -16,14 +16,17 @@ extend <field=operand>...
 
 ## Description
 
-The `extend` appends a specified list of fields to the input. All existing
-fields remain intact.
+The `extend` operator appends a specified list of fields to the input. All
+existing fields remain intact.
 
 The difference between `extend` and [`put`](put.md) is that `put` drops all
 fields not explicitly specified, whereas `extend` only appends fields.
 
 The difference between `extend` and [`replace`](replace.md) is that `replace`
 overwrites existing fields, whereas `extend` doesn't touch the input.
+
+The difference between `extend` and [`set`](set.md) is that `set` does not
+ignore fields that do already exist in the data.
 
 ### `<field=operand>`
 

@@ -30,6 +30,7 @@ enum class mode {
   put,
   extend,
   replace,
+  set,
 };
 
 constexpr auto operator_name(enum mode mode) -> std::string_view {
@@ -40,6 +41,8 @@ constexpr auto operator_name(enum mode mode) -> std::string_view {
       return "extend";
     case mode::replace:
       return "replace";
+    case mode::set:
+      return "set";
   }
   return "<unknown>";
 }
@@ -151,22 +154,45 @@ public:
     if (slice.rows() == 0)
       return {};
     const auto& layout = caf::get<record_type>(slice.schema());
-    auto transformations = std::vector<indexed_transformation>{};
+    auto transformations1 = std::vector<indexed_transformation>{};
+    auto transformations2 = std::vector<indexed_transformation>{};
     auto replace_schema_name = std::optional<std::string>{};
+    // The additional assignments config needs to live until after we call
+    // transform_columns, and is only relevant for set and put. It has to be in
+    // this outer scope.
+    auto modified_config = configuration{};
     switch (Mode) {
       case mode::put: {
         // For `put` we drop all fields except for the last one, and then
         // replace the last with the new one.
+        modified_config = config_;
+        std::erase_if(modified_config.extractor_to_operand, [&](const auto& x) {
+          const auto& [extractor, operand] = x;
+          if (extractor == "#schema") {
+            replace_schema_name
+              = caf::get<std::string>(caf::get<data>(*operand));
+            return true;
+          }
+          return false;
+        });
+        // If we only rename the schema then we have no fields left, which we
+        // special-case here. That's not good, but better than crashing.
+        if (modified_config.extractor_to_operand.empty()) {
+          for (size_t i = 0; i < layout.num_fields(); ++i) {
+            transformations1.push_back({{i}, make_drop()});
+          }
+          break;
+        }
         for (size_t i = 0; i < layout.num_fields() - 1; ++i) {
-          transformations.push_back({{i}, make_drop()});
+          transformations1.push_back({{i}, make_drop()});
         }
         auto duplicates = std::unordered_set<std::string>{};
-        duplicates.reserve(config_.extractor_to_operand.size());
+        duplicates.reserve(modified_config.extractor_to_operand.size());
         const auto override = true;
-        transformations.push_back(
+        transformations1.push_back(
           {{layout.num_fields() - 1},
-           make_extend<Mode>(slice, config_, ctrl, std::move(duplicates),
-                             override)});
+           make_extend<Mode>(slice, modified_config, ctrl,
+                             std::move(duplicates), override)});
         break;
       }
       case mode::extend: {
@@ -179,14 +205,16 @@ public:
           duplicates.insert(layout.key(leaf.index));
         }
         const auto override = false;
-        transformations.push_back(
+        transformations1.push_back(
           {{layout.num_fields() - 1},
            make_extend<Mode>(slice, config_, ctrl, std::move(duplicates),
                              override)});
         break;
       }
-      case mode::replace: {
-        // For `replace` we need to treat the field as an extractor.
+      case mode::replace:
+      case mode::set: {
+        // For `replace` we need to treat the field as an extractor. For `set`,
+        // we additionally extend with the remaining extractors.
         auto index_to_operand
           = std::vector<std::pair<offset, const operand*>>{};
         for (const auto& [extractor, operand] : config_.extractor_to_operand) {
@@ -203,12 +231,15 @@ public:
               .emit(ctrl.diagnostics());
             continue;
           }
-          if (auto index
-              = slice.schema().resolve_key_or_concept_once(extractor)) {
-            index_to_operand.emplace_back(std::move(*index), &*operand);
-          }
-          for (const auto& index : layout.resolve_type_extractor(extractor)) {
+          auto resolved = false;
+          for (const auto& index : slice.schema().resolve(extractor)) {
             index_to_operand.emplace_back(index, &*operand);
+            resolved = true;
+          }
+          if (not resolved and Mode == mode::set
+              and not extractor.starts_with(':')) {
+            modified_config.extractor_to_operand.emplace_back(extractor,
+                                                              operand);
           }
         }
         // Remove adjacent duplicates.
@@ -224,19 +255,23 @@ public:
         index_to_operand.erase(duplicate_it, index_to_operand.end());
         // Create the transformation.
         for (const auto& [index, operand] : index_to_operand) {
-          transformations.push_back(
+          transformations1.push_back(
             {index, make_replace(slice, *operand, ctrl)});
+        }
+        if (not modified_config.extractor_to_operand.empty()) {
+          transformations2.push_back(
+            {{layout.num_fields() - 1},
+             make_extend<Mode>(slice, modified_config, ctrl, {}, false)});
         }
         break;
       }
     }
-    // Lastly, apply our transformation.
-    auto result = transform_columns(slice, transformations);
+    // Lastly, apply our transformations.
+    auto result = transform_columns(transform_columns(slice, transformations1),
+                                    transformations2);
     if (replace_schema_name) {
-      result = cast(result, type{*replace_schema_name,
-                                 caf::get<record_type>(slice.schema())});
-    }
-    if (Mode == mode::put) {
+      result = cast(result, type{*replace_schema_name, result.schema()});
+    } else if (Mode == mode::put) {
       auto renamed_schema
         = type{"tenzir.put", caf::get<record_type>(result.schema())};
       result = cast(std::move(result), renamed_schema);
@@ -293,7 +328,7 @@ public:
     }
     for (auto& [ex, op] : config.extractor_to_operand) {
       if (ex == "#schema") {
-        if constexpr (Mode == mode::replace) {
+        if constexpr (Mode != mode::extend) {
           auto* op_ptr = op ? &*op : nullptr;
           // FIXME: Chaining `caf::get_if` leads to a segfault.
           auto* data_ptr = op_ptr ? caf::get_if<data>(op_ptr) : nullptr;
@@ -327,6 +362,7 @@ public:
 using put_plugin = plugin<mode::put>;
 using extend_plugin = plugin<mode::extend>;
 using replace_plugin = plugin<mode::replace>;
+using set_plugin = plugin<mode::set>;
 
 } // namespace
 
@@ -335,3 +371,4 @@ using replace_plugin = plugin<mode::replace>;
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::put_extend_replace::put_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::put_extend_replace::extend_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::put_extend_replace::replace_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::put_extend_replace::set_plugin)

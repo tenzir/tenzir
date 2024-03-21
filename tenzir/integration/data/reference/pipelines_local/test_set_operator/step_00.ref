@@ -1,0 +1,1 @@
+{"version": 123, "build": null, "major": -1, "minor": -1, "patch": -1, "foo": "patch", "baz": 4, "qux": null, "schema": "tenzir.version", "schema2": "foo.bar"}
