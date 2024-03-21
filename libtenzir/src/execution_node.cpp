@@ -321,7 +321,7 @@ struct exec_node_state {
           self->quit(msg.reason);
           return;
         }
-        TENZIR_DEBUG("{} {} got down message from previous execution node with "
+        TENZIR_DEBUG("{} {} got exit message from previous execution node with "
                      "address {}: {}",
                      *self, op->name(), msg.source, msg.reason);
         if (msg.reason and msg.reason != caf::exit_reason::unreachable) {
