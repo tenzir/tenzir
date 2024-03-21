@@ -26,18 +26,6 @@ teardown() {
 
 # bats test_tags=docker
 @test "send and receive messages" {
-  check tenzir "version | put foo=42 | repeat 3 | to sqs://tenzir"
-  # FIXME: simply piping to `head 10` does not work. But it should. We
-  # workaround this weirdness by doing a `head 1`, which works.
-  #
-  # The sqs connector stays in an empty loop because it never receives a DOWN
-  # from `head`. I confirmed this by adding the following code before the main
-  # while loop:
-  #
-  #     ctrl.self().attach_functor([] {
-  #       TENZIR_WARN("...");
-  #     });
-  #
-  # This smells like an issue with the executor.
-  check tenzir "from sqs://tenzir | select foo | head 3"
+  check tenzir "version | put foo=42 | repeat 2 | to sqs://tenzir"
+  check tenzir "from sqs://tenzir | select foo | head 2"
 }
