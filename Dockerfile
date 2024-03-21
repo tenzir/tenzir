@@ -26,6 +26,8 @@ RUN ./scripts/debian/install-dev-dependencies.sh && \
     apt-get -y --no-install-recommends install /root/fluent-bit_*.deb && \
     rm /root/fluent-bit_*.deb && \
     rm -rf /var/lib/apt/lists/*
+COPY scripts/debian/install-aws-sdk.sh ./scripts/debian/
+RUN ./scripts/debian/install-aws-sdk.sh
 
 # Tenzir
 COPY changelog ./changelog
@@ -60,6 +62,7 @@ ENV TENZIR_CACHE_DIRECTORY="/var/cache/tenzir" \
 ARG TENZIR_BUILD_OPTIONS
 
 RUN cmake -B build -G Ninja \
+      -D CMAKE_PREFIX_PATH="/opt/aws-sdk-cpp" \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" \
       -D CMAKE_BUILD_TYPE:STRING="Release" \
       -D TENZIR_ENABLE_AVX_INSTRUCTIONS:BOOL="OFF" \
@@ -108,6 +111,7 @@ COPY --from=development --chown=tenzir:tenzir $PREFIX/ $PREFIX/
 COPY --from=development --chown=tenzir:tenzir /var/cache/tenzir/ /var/cache/tenzir/
 COPY --from=development --chown=tenzir:tenzir /var/lib/tenzir/ /var/lib/tenzir/
 COPY --from=development --chown=tenzir:tenzir /var/log/tenzir/ /var/log/tenzir/
+COPY --from=development /opt/aws-sdk-cpp/lib/ /opt/aws-sdk-cpp/lib/
 COPY --from=fluent-bit-package /root/fluent-bit_*.deb /root/
 
 RUN apt-get update && \
@@ -148,7 +152,9 @@ RUN apt-get update && \
     apt-get -y --no-install-recommends install libarrow1500 libparquet1500 && \
     apt-get -y --no-install-recommends install /root/fluent-bit_*.deb && \
     rm /root/fluent-bit_*.deb && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && \
+    echo "/opt/aws-sdk-cpp/lib" > /etc/ld.so.conf.d/aws-cpp-sdk.conf && \
+    ldconfig
 
 USER tenzir:tenzir
 
