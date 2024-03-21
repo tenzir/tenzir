@@ -292,6 +292,12 @@ struct exec_node_state {
                                            "not have a previous exec-node",
                                            *self));
       }
+      self->set_exit_handler([this](const caf::exit_msg& msg) {
+        TENZIR_DEBUG("{} {} got exit message from the next execution node or "
+                     "its executor with address {}: {}",
+                     *self, op->name(), msg.source, msg.reason);
+        self->quit(msg.reason);
+      });
     } else {
       // The previous exec-node must be set when the operator is not a source.
       if (all_previous.empty()) {
