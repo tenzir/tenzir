@@ -33,10 +33,10 @@ auto get_diskspace_info(const std::string& path) -> caf::expected<record> {
 
 class plugin final : public virtual metrics_plugin {
 public:
-  auto initialize(const record& config, const record& /*plugin_config*/)
+  auto initialize(const record& /*plugin_config*/, const record& global_config)
     -> caf::error override {
-    state_directory_
-      = get_or(config, "tenzir.state-directory", defaults::state_directory);
+    state_directory_ = get_or(global_config, "tenzir.state-directory",
+                              defaults::state_directory);
     return {};
   }
 
