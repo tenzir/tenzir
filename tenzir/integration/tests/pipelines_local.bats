@@ -518,3 +518,7 @@ EOF
 }
 EOF
 }
+
+@test "set operator" {
+  check tenzir 'version | set foo="patch", :uint64=-1, :ip=1.1.1.1, baz=patch, qux=foo, version=123, #schema="foo.bar", schema=#schema, build=null | set schema2=#schema'
+}

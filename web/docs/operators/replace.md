@@ -27,7 +27,8 @@ The assignment consists of an `extractor` that matches against existing fields
 and an `operand` that defines the new field value.
 
 If `field` does not exist in the input, the operator degenerates to
-[`pass`](pass.md).
+[`pass`](pass.md). Use the [`set`](set.md) operator to extend fields that cannot
+be replaced.
 
 ### Examples
 
