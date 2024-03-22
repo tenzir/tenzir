@@ -157,6 +157,13 @@ public:
         constexpr auto semaphore_name_max_length = 30u;
         if (sem_name.size() > semaphore_name_max_length)
           sem_name.erase(semaphore_name_max_length);
+        // The initial venv creation tends to take a very long time, and often
+        // causes the pipline creation to take longer then what our FE tolerate
+        // in terms of wait time. As a workaround we yield early, so that the
+        // pipeline appears as created and do the actual venv setup on first
+        // call. At that point the delay is not problematic any more because
+        // `/serve` takes care of it gracefully.
+        co_yield {};
         auto sem = boost::interprocess::named_semaphore{
           boost::interprocess::open_or_create, sem_name.c_str(), 1u};
         const auto wait_ok = sem.timed_wait(std::chrono::system_clock::now()
