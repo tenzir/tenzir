@@ -272,8 +272,8 @@ async function createConfig() {
                   to: '/changelog',
                 },
                 {
-                  label: 'Roadmap',
-                  to: '/roadmap',
+                  label: 'Release Notes',
+                  href: 'https://docs.google.com/presentation/d/1R59T2nuGJg43g6PVKogZbb6DjcJXRYBx3Bih8W-A-oM/present',
                 },
               ],
             },
