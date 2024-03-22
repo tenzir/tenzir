@@ -208,6 +208,16 @@ the rendered JSON directly into the email body, you can also provide the
 `--mime` to send a MIME-encoded chunk that uses the MIME type according to the
 format you provided.
 
+## Working with Amazon SQS Queues
+
+The new [`sqs`](/next/connectors/sqs) enables reading from and writing to Amazon
+SQS queues. For example, importing JSON from an SQS queue named `tenzir` into a
+node looks like this:
+
+```
+from sqs://tenzir | import
+```
+
 ## Other Changes
 
 As usual, the complete list of bug fixes, adjustments, and enhancements
