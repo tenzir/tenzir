@@ -6,7 +6,7 @@ tags: [contexts, every, set, email, sqs]
 comments: true
 ---
 
-Our latest [v4.11](https://github.com/tenzir/tenzir/releases/tag/v4.11.0)
+Our latest [v4.11](https://github.com/tenzir/tenzir/releases/tag/v4.11.1)
 release delivers powerful automation features, such as scheduling pipelines in a
 given time interval and sending pipeline data as emails.
 
