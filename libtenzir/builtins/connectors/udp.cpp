@@ -68,6 +68,8 @@ struct socket_endpoint {
     // Parse port.
     if (uri.port() > 0) {
       result.addr.sin_port = htons(uri.port());
+    } else {
+      return caf::make_error(ec::parse_error, "missing port");
     }
     return result;
   }
