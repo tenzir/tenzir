@@ -15,6 +15,9 @@
 #include <arrow/util/uri.h>
 #include <caf/uri.hpp>
 #include <sys/socket.h>
+#include <sys/types.h>
+
+#include <netdb.h>
 
 using namespace std::chrono_literals;
 
@@ -36,6 +39,24 @@ struct loader_args {
   }
 };
 
+auto to_string(const sockaddr_in* addr) -> std::string {
+  std::array<char, INET_ADDRSTRLEN> buf = {};
+  const auto* ptr = reinterpret_cast<const sockaddr_in*>(addr);
+  socklen_t size = buf.size();
+  auto result = inet_ntop(AF_INET, &addr->sin_addr, buf.data(), size);
+  TENZIR_ASSERT(result != nullptr);
+  return std::string{buf.data()};
+}
+
+auto to_string(const sockaddr_in6* addr) -> std::string {
+  std::array<char, INET6_ADDRSTRLEN> buf = {};
+  const auto* ptr = reinterpret_cast<const sockaddr_in*>(addr);
+  socklen_t size = buf.size();
+  auto result = inet_ntop(AF_INET6, &addr->sin6_addr, buf.data(), size);
+  TENZIR_ASSERT(result != nullptr);
+  return std::string{buf.data()};
+}
+
 enum class socket_type {
   invalid,
   tcp,
@@ -52,7 +73,6 @@ struct socket_endpoint {
       return ec::parse_error;
     }
     auto result = socket_endpoint{};
-    result.addr.sin_family = AF_INET;
     if (uri.scheme() == "udp") {
       result.type = socket_type::udp;
     } else if (uri.scheme() == "tcp") {
@@ -60,9 +80,44 @@ struct socket_endpoint {
     } else {
       return caf::make_error(ec::parse_error, "invalid URL scheme");
     }
-    // Parse host.
-    // TODO: use getaddrinfo
-    if (inet_pton(AF_INET, uri.host().c_str(), &result.addr.sin_addr) < 0) {
+    // Resolve host.
+    addrinfo hints = {};
+    std::memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC; // AF_INET6 to force IPv6
+    if (result.type == socket_type::tcp) {
+      hints.ai_socktype = SOCK_STREAM;
+    } else if (result.type == socket_type::udp) {
+      hints.ai_socktype = SOCK_DGRAM;
+    } else {
+      die("invalid socket transport layer");
+    }
+    addrinfo* res = nullptr;
+    TENZIR_DEBUG("resolving {}", uri.host());
+    auto status = getaddrinfo(uri.host().c_str(), nullptr, &hints, &res);
+    if (status != 0) {
+      return caf::make_error(ec::parse_error, gai_strerror(status));
+    }
+    // We may resolve to multiple addresses. But we can only pick one, and we'll
+    // go with the first entry.
+    auto found = false;
+    for (auto* ptr = res; ptr != nullptr; ptr = ptr->ai_next) {
+      if (ptr->ai_family == AF_INET) {
+        auto* addr = reinterpret_cast<sockaddr_in*>(ptr->ai_addr);
+        TENZIR_DEBUG("resolved to {}", to_string(addr));
+        std::memcpy(&result.addr, addr, ptr->ai_addrlen);
+      } else if (ptr->ai_family == AF_INET6) {
+        auto* addr = reinterpret_cast<sockaddr_in6*>(ptr->ai_addr);
+        TENZIR_DEBUG("resolved to {}", to_string(addr));
+        // TODO: support IPv6. For now we just skip IPv6 addresses.
+        continue;
+      } else {
+        die("unsupported IP address family");
+      }
+      found = true;
+      break;
+    }
+    freeaddrinfo(res);
+    if (not found) {
       return caf::make_error(ec::parse_error, "failed to resolve host");
     }
     // Parse port.
@@ -150,9 +205,9 @@ auto udp_loader_impl(operator_control_plane& ctrl, loader_args args)
       .emit(ctrl.diagnostics());
     co_return;
   };
-  // A UDP packet contains its length as 16-bit field in the header, giving rise
-  // to packets sized up to 65,535 bytes (including the header). When we go
-  // over IPv4, we have a limit of 65,507 bytes (65,535 bytes − 8-byte UDP
+  // A UDP packet contains its length as 16-bit field in the header, giving
+  // rise to packets sized up to 65,535 bytes (including the header). When we
+  // go over IPv4, we have a limit of 65,507 bytes (65,535 bytes − 8-byte UDP
   // header − 20-byte IP header). At the moment we are not supporting IPv6
   // jumbograms, which in theory get up to 2^32 - 1 bytes.
   auto buffer = std::array<char, 65'536>{};
