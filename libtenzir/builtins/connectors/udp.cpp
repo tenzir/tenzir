@@ -7,9 +7,12 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/as_bytes.hpp>
+#include <tenzir/detail/posix.hpp>
 #include <tenzir/plugin.hpp>
 
 #include <arpa/inet.h>
+#include <arrow/util/uri.h>
 #include <caf/uri.hpp>
 #include <sys/socket.h>
 
@@ -20,60 +23,156 @@ namespace tenzir::plugins::udp {
 namespace {
 
 struct loader_args {
-  std::string host = {};
-  uint16_t port = {};
+  std::string url = {};
   bool insert_newlines = {};
 
   template <class Inspector>
   friend auto inspect(Inspector& f, loader_args& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.plugins.udp.loader_args")
-      .fields(f.field("host", x.host), f.field("port", x.port),
+      .fields(f.field("url", x.url),
               f.field("insert_newlines", x.insert_newlines));
   }
 };
 
+enum class socket_type {
+  invalid,
+  tcp,
+  udp,
+};
+
+/// Small wrapper to facilitate interacting with socket addreses.
+struct socket_endpoint {
+  /// Parses a URL-like string into a socket endpoint, e.g., tcp://localhost:42
+  /// or udp://1.2.3.4
+  static auto parse(std::string_view url) -> caf::expected<socket_endpoint> {
+    auto uri = arrow::internal::Uri{};
+    if (not uri.Parse(std::string{url}).ok()) {
+      return ec::parse_error;
+    }
+    auto result = socket_endpoint{};
+    result.addr.sin_family = AF_INET;
+    if (uri.scheme() == "udp") {
+      result.type = socket_type::udp;
+    } else if (uri.scheme() == "tcp") {
+      result.type = socket_type::tcp;
+    } else {
+      return caf::make_error(ec::parse_error, "invalid URL scheme");
+    }
+    // Parse host.
+    // TODO: use getaddrinfo
+    if (inet_pton(AF_INET, uri.host().c_str(), &result.addr.sin_addr) < 0) {
+      return caf::make_error(ec::parse_error, "failed to resolve host");
+    }
+    // Parse port.
+    if (uri.port() > 0) {
+      result.addr.sin_port = htons(uri.port());
+    }
+    return result;
+  }
+
+  socket_endpoint() {
+    std::memset(&addr, 0, sizeof(addr));
+  }
+
+  auto as_sockaddr() -> sockaddr* {
+    return reinterpret_cast<sockaddr*>(&addr);
+  }
+
+  sockaddr_in addr = {};
+  socket_type type = {};
+};
+
+/// Minimalistic RAII wrapper around a plain socket.
+struct socket {
+  socket() = default;
+
+  explicit socket(socket_type type) {
+    switch (type) {
+      case socket_type::invalid:
+        fd = -1;
+        break;
+      case socket_type::udp:
+        fd = ::socket(AF_INET, SOCK_DGRAM, 0);
+        break;
+      case socket_type::tcp:
+        fd = ::socket(AF_INET, SOCK_STREAM, 0);
+        break;
+    }
+  }
+
+  ~socket() {
+    if (*this) {
+      ::close(fd);
+    }
+  }
+
+  explicit operator bool() const {
+    return fd >= 0;
+  }
+
+  auto bind(socket_endpoint endpoint) {
+    auto* addr = endpoint.as_sockaddr();
+    constexpr socklen_t addr_len = sizeof(sockaddr_in);
+    return ::bind(fd, addr, addr_len);
+  }
+
+  auto recv(std::span<std::byte> buffer, int flags = 0) {
+    return ::recv(fd, buffer.data(), buffer.size(), flags);
+  }
+
+  auto recvfrom(std::span<std::byte> buffer, socket_endpoint& endpoint,
+                int flags = 0) {
+    auto* addr = endpoint.as_sockaddr();
+    socklen_t addr_len = sizeof(sockaddr_in);
+    return ::recvfrom(fd, buffer.data(), buffer.size(), flags, addr, &addr_len);
+  }
+
+  int fd = -1;
+  socket_type type = socket_type::invalid;
+};
+
 auto udp_loader_impl(operator_control_plane& ctrl, loader_args args)
   -> generator<chunk_ptr> {
-  auto sockfd = ::socket(AF_INET, SOCK_DGRAM, 0);
-  if (sockfd < 0) {
-    // TODO: handle failrue
+  auto sock = socket{socket_type::udp};
+  if (not sock) {
+    diagnostic::error("failed to create UDP socket")
+      .note("error: {}", detail::describe_errno())
+      .emit(ctrl.diagnostics());
     co_return;
   };
-  auto sockfd_guard = caf::detail::make_scope_guard([sockfd] {
-    close(sockfd);
-  });
-  auto buffer = std::array<char, 65536>{};
-  struct sockaddr_in server = {};
-  struct sockaddr_in client = {};
-  socklen_t client_length = sizeof(client);
-  memset(&server, 0, sizeof(server));
-  memset(&client, 0, sizeof(client));
-  server.sin_family = AF_INET;
-  server.sin_port = htons(args.port);
-  // TODO: resolve host with getaddrinfo
-  const auto inet_pton_result
-    = inet_pton(AF_INET, args.host.c_str(), &server.sin_addr);
-  if (inet_pton_result <= 0) {
-    TENZIR_WARN("inet_pton failure {}", inet_pton_result);
+  // A UDP packet contains its length as 16-bit field in the header, giving rise
+  // to packets sized up to 65,535 bytes (including the header). When we go
+  // over IPv4, we have a limit of 65,507 bytes (65,535 bytes − 8-byte UDP
+  // header − 20-byte IP header). At the moment we are not supporting IPv6
+  // jumbograms, which in theory get up to 2^32 - 1 bytes.
+  auto buffer = std::array<char, 65'536>{};
+  auto client = socket_endpoint{};
+  auto server = socket_endpoint::parse(args.url);
+  if (not server) {
+    diagnostic::error("invalid UDP endpoint")
+      .note("{}", server.error())
+      .emit(ctrl.diagnostics());
     co_return;
   }
-  if (bind(sockfd, (struct sockaddr*)&server, sizeof(server)) < 0) {
-    TENZIR_WARN("bind failure");
+  if (sock.bind(*server) < 0) {
+    diagnostic::error("failed to bind to socket")
+      .note("error: {}", detail::describe_errno())
+      .emit(ctrl.diagnostics());
     co_return;
   }
   while (true) {
-    TENZIR_WARN("recvfrom");
-    auto received_bytes
-      = recvfrom(sockfd, buffer.data(), buffer.size() - 1, 0,
-                 reinterpret_cast<sockaddr*>(&client), &client_length);
+    auto received_bytes = sock.recvfrom(as_writeable_bytes(buffer), client);
     if (received_bytes < 0) {
-      TENZIR_WARN("received_bytes failure");
+      diagnostic::error("failed to receive data from socket")
+        .note("error: {}", detail::describe_errno())
+        .emit(ctrl.diagnostics());
       co_return;
     }
     TENZIR_ASSERT(received_bytes
                   < detail::narrow_cast<ssize_t>(buffer.size()) - 1);
-    if (args.insert_newlines) {
+    // Append a newline unless we have one already.
+    if (args.insert_newlines && buffer[received_bytes - 1] != '\n') {
       buffer[received_bytes++] = '\n';
     }
     co_yield chunk::copy(as_bytes(buffer).subspan(0, received_bytes));
@@ -123,18 +222,11 @@ public:
     parser.add(endpoint, "<endpoint>");
     parser.add("-n,--insert-newlines", args.insert_newlines);
     parser.parse(p);
-    if (endpoint.inner.starts_with("udp://")) {
-      endpoint.inner = std::move(endpoint.inner).substr(6);
+    if (not endpoint.inner.starts_with("udp://")) {
+      args.url = fmt::format("udp://{}", endpoint.inner);
+    } else {
+      args.url = std::move(endpoint.inner);
     }
-    auto split = detail::split(endpoint.inner, ":", 1);
-    if (split.size() != 2) {
-      diagnostic::error("malformed endpoint")
-        .primary(endpoint.source)
-        .hint("format must be 'udp://address:port'")
-        .throw_();
-    }
-    args.host = std::string{split[0]};
-    args.port = stoul(std::string{split[1]});
     return std::make_unique<udp_loader>(std::move(args));
   }
 };
