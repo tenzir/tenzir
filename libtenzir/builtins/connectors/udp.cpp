@@ -235,6 +235,7 @@ auto udp_loader_impl(operator_control_plane& ctrl, loader_args args)
       co_return;
     }
   }
+  co_yield {};
   while (true) {
     TENZIR_DEBUG("receiving bytes");
     auto received_bytes = sock.recvfrom(as_writeable_bytes(buffer), *endpoint);
