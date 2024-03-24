@@ -24,13 +24,14 @@ namespace {
 
 struct loader_args {
   std::string url = {};
+  bool connect = {};
   bool insert_newlines = {};
 
   template <class Inspector>
   friend auto inspect(Inspector& f, loader_args& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.plugins.udp.loader_args")
-      .fields(f.field("url", x.url),
+      .fields(f.field("url", x.url), f.field("connect", x.connect),
               f.field("insert_newlines", x.insert_newlines));
   }
 };
@@ -111,6 +112,12 @@ struct socket {
     return fd >= 0;
   }
 
+  auto connect(socket_endpoint endpoint) {
+    auto* addr = endpoint.as_sockaddr();
+    constexpr socklen_t addr_len = sizeof(sockaddr_in);
+    return ::connect(fd, addr, addr_len);
+  }
+
   auto bind(socket_endpoint endpoint) {
     auto* addr = endpoint.as_sockaddr();
     constexpr socklen_t addr_len = sizeof(sockaddr_in);
@@ -147,28 +154,40 @@ auto udp_loader_impl(operator_control_plane& ctrl, loader_args args)
   // header − 20-byte IP header). At the moment we are not supporting IPv6
   // jumbograms, which in theory get up to 2^32 - 1 bytes.
   auto buffer = std::array<char, 65'536>{};
-  auto client = socket_endpoint{};
-  auto server = socket_endpoint::parse(args.url);
-  if (not server) {
+  auto endpoint = socket_endpoint::parse(args.url);
+  if (not endpoint) {
     diagnostic::error("invalid UDP endpoint")
-      .note("{}", server.error())
+      .note("{}", endpoint.error())
       .emit(ctrl.diagnostics());
     co_return;
   }
-  if (sock.bind(*server) < 0) {
-    diagnostic::error("failed to bind to socket")
-      .note("error: {}", detail::describe_errno())
-      .emit(ctrl.diagnostics());
-    co_return;
+  if (args.connect) {
+    TENZIR_DEBUG("connecting to {}", args.url);
+    if (sock.connect(*endpoint) < 0) {
+      diagnostic::error("failed to connect to socket")
+        .note("error: {}", detail::describe_errno())
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+  } else {
+    TENZIR_DEBUG("binding to {}", args.url);
+    if (sock.bind(*endpoint) < 0) {
+      diagnostic::error("failed to bind to socket")
+        .note("error: {}", detail::describe_errno())
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
   }
   while (true) {
-    auto received_bytes = sock.recvfrom(as_writeable_bytes(buffer), client);
+    TENZIR_DEBUG("receiving bytes");
+    auto received_bytes = sock.recvfrom(as_writeable_bytes(buffer), *endpoint);
     if (received_bytes < 0) {
       diagnostic::error("failed to receive data from socket")
         .note("error: {}", detail::describe_errno())
         .emit(ctrl.diagnostics());
       co_return;
     }
+    TENZIR_DEBUG("got {} bytes", received_bytes);
     TENZIR_ASSERT(received_bytes
                   < detail::narrow_cast<ssize_t>(buffer.size()) - 1);
     // Append a newline unless we have one already.
@@ -220,6 +239,7 @@ public:
     auto endpoint = located<std::string>{};
     auto args = loader_args{};
     parser.add(endpoint, "<endpoint>");
+    parser.add("-c,--connect", args.connect);
     parser.add("-n,--insert-newlines", args.insert_newlines);
     parser.parse(p);
     if (not endpoint.inner.starts_with("udp://")) {
