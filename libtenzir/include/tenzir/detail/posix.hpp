@@ -24,7 +24,7 @@ namespace tenzir::detail {
 // function is thread-safe.
 auto describe_errno(int err = errno) -> std::string;
 
-enum class socket_type { datagram, stream, fd };
+enum class uds_socket_type { datagram, stream, fd };
 
 /// Holds the necessary state to send unix datagrams to a destination socket.
 struct uds_datagram_sender {
@@ -70,7 +70,7 @@ int uds_accept(int socket);
 /// @param path The file system path where to the existing domain socket.
 /// @param type The socket type.
 /// @returns The descriptor of the domain socket on success or -1 on failure.
-int uds_connect(const std::string& path, socket_type type);
+int uds_connect(const std::string& path, uds_socket_type type);
 
 /// Sends a single message over a UNIX domain socket.
 /// @param socket The domain socket descriptor.
@@ -110,7 +110,8 @@ struct [[nodiscard]] unix_domain_socket {
   /// @param type The socket type.
   /// @returns A UNIX domain socket handle.
   static unix_domain_socket
-  connect(const std::string& path, socket_type type = socket_type::stream);
+  connect(const std::string& path, uds_socket_type type
+                                   = uds_socket_type::stream);
 
   /// Checks whether the UNIX domain socket is in working state.
   /// @returns `true` if the UNIX domain socket is open and operable.
