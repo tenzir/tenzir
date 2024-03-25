@@ -59,6 +59,11 @@ public:
 
   virtual auto check(check_info info, context& ctx) const -> std::optional<type>
     = 0;
+
+  virtual auto
+  evaluate(location fn, std::vector<located<data>> args, context& ctx) const
+    -> std::optional<data>
+    = 0;
 };
 
 class operator_use {
@@ -78,19 +83,6 @@ public:
 
 using entity_def
   = variant<std::unique_ptr<function_def>, std::unique_ptr<operator_def>>;
-
-class entity_def2 {
-public:
-  struct roles {
-    bool function = false;
-    bool operator_ = false;
-    bool method = false;
-  };
-
-  virtual ~entity_def2() = default;
-
-  virtual auto roles() -> roles = 0;
-};
 
 class registry {
 public:
