@@ -45,7 +45,7 @@ public:
   /// @returns An IPv4 address constructed from *bytes*.
   template <class Byte>
     requires(sizeof(Byte) == 1)
-  static ip v4(std::span<Byte, 4> bytes) {
+  static auto v4(std::span<Byte, 4> bytes) -> ip {
     ip result;
     std::memcpy(&result.bytes_[0], v4_mapped_prefix.data(), 12);
     std::memcpy(&result.bytes_[12], bytes.data(), 4);
@@ -57,9 +57,10 @@ public:
   /// @param bytes The 32-bit integer representing an IPv4 address.
   /// @returns The IP address.
   template <std::endian Endian = std::endian::native>
-  static ip v4(uint32_t bytes) {
-    if constexpr (Endian == std::endian::little)
+  static auto v4(uint32_t bytes) -> ip {
+    if constexpr (Endian == std::endian::little) {
       bytes = detail::byteswap(bytes);
+    }
     auto ptr = reinterpret_cast<const byte_type*>(&bytes);
     return v4(std::span<const byte_type, 4>{ptr, 4});
   }
@@ -69,21 +70,22 @@ public:
   /// @returns An IPv6 address constructed from *bytes*.
   template <class Byte>
     requires(sizeof(Byte) == 1)
-  static ip v6(std::span<Byte, 16> bytes) {
+  static auto v6(std::span<Byte, 16> bytes) -> ip {
     ip result;
     std::memcpy(result.bytes_.data(), bytes.data(), 16);
     return result;
   }
 
   template <std::endian Endian = std::endian::native>
-  static ip v6(std::span<uint32_t, 4> bytes) {
+  static auto v6(std::span<uint32_t, 4> bytes) -> ip {
     ip result;
     std::memcpy(result.bytes_.data(), bytes.data(), 16);
     if constexpr (Endian == std::endian::little) {
       auto ptr = reinterpret_cast<uint32_t*>(result.bytes_.data());
       auto span = std::span<uint32_t, 4>{ptr, 4};
-      for (auto& block : span)
+      for (auto& block : span) {
         block = detail::byteswap(block);
+      }
     }
     return result;
   }
@@ -92,9 +94,9 @@ public:
   /// @param original The address to be pseudonymized.
   /// @param seed 256-bit seed for the cipher and padding.
   /// @returns A copy of the `original` address with pseudonymized bytes.
-  static ip pseudonymize(
+  static auto pseudonymize(
     const ip& original,
-    const std::array<byte_type, pseudonymization_seed_array_size>& seed);
+    const std::array<byte_type, pseudonymization_seed_array_size>& seed) -> ip;
 
   /// Default-constructs an (invalid) address.
   constexpr ip() {
@@ -114,26 +116,26 @@ public:
 
   /// Determines whether the address is IPv4.
   /// @returns @c true iff the address is an IPv4 address.
-  [[nodiscard]] bool is_v4() const;
+  [[nodiscard]] auto is_v4() const -> bool;
 
   /// Determines whether the address is IPv4.
   /// @returns `true` iff the address is an IPv4 address.
-  [[nodiscard]] bool is_v6() const;
+  [[nodiscard]] auto is_v6() const -> bool;
 
   /// Determines whether the address is an IPv4 loopback address.
   /// @returns `true` if the address is v4 and its first byte has the
   /// value 127.
-  [[nodiscard]] bool is_loopback() const;
+  [[nodiscard]] auto is_loopback() const -> bool;
 
   /// Determines whether the address is an IPv4 broadcast address.
   /// @returns `true` if the address is v4 and has the value 255.255.255.255.
-  [[nodiscard]] bool is_broadcast() const;
+  [[nodiscard]] auto is_broadcast() const -> bool;
 
   /// Determines whether the address is a multicast address. For v4
   /// addresses, this means the first byte equals to 224. For v6 addresses,
   /// this means the first bytes equals 255.
   /// @returns `true` if the address is a multicast address.
-  [[nodiscard]] bool is_multicast() const;
+  [[nodiscard]] auto is_multicast() const -> bool;
 
   /// Masks out lower bits of the address.
   /// @param top_bits_to_keep The number of bits *not* to mask out,
@@ -144,36 +146,36 @@ public:
   ///                         112 (i.e., 96 + 16). The value must be in the
   ///                         range from 0 to 128.
   /// @returns `true` on success.
-  bool mask(unsigned top_bits_to_keep);
+  auto mask(unsigned top_bits_to_keep) -> bool;
 
   /// AND's another address to this instance.
   /// @param other The other address.
   /// @returns A reference to `*this`.
-  ip& operator&=(const ip& other);
+  auto operator&=(const ip& other) -> ip&;
 
   /// OR's another address to this instance.
   /// @param other The other address.
   /// @returns A reference to `*this`.
-  ip& operator|=(const ip& other);
+  auto operator|=(const ip& other) -> ip&;
 
   /// XOR's another address to this instance.
   /// @param other The other address.
   /// @returns A reference to `*this`.
-  ip& operator^=(const ip& other);
+  auto operator^=(const ip& other) -> ip&;
 
   /// Compares the top-k bits of this address with another one.
   /// @param other The other address.
   /// @param k The number of bits to compare, starting from the top.
   /// @returns `true` if the first *k* bits of both addresses are equal
   /// @pre `k > 0 && k <= 128`
-  [[nodiscard]] bool compare(const ip& other, size_t k) const;
+  [[nodiscard]] auto compare(const ip& other, size_t k) const -> bool;
 
   explicit constexpr operator byte_array() const {
     return bytes_;
   }
 
-  friend bool operator==(const ip& x, const ip& y);
-  friend bool operator<(const ip& x, const ip& y);
+  friend auto operator==(const ip& x, const ip& y) -> bool;
+  friend auto operator<(const ip& x, const ip& y) -> bool;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, ip& x) {
@@ -181,7 +183,7 @@ public:
   }
 
   template <class Byte = std::byte>
-  friend std::span<const Byte, 16> as_bytes(const ip& x) {
+  friend auto as_bytes(const ip& x) -> std::span<const Byte, 16> {
     auto ptr = reinterpret_cast<const Byte*>(x.bytes_.data());
     return std::span<const Byte, 16>{ptr, 16};
   }
@@ -204,10 +206,11 @@ template <>
 struct is_uniquely_hashable<ip, legacy_hash> : std::false_type {};
 
 inline auto hash_append(legacy_hash& h, const ip& x) {
-  if (x.is_v4())
+  if (x.is_v4()) {
     hash_append(h, as_bytes(x).subspan<12, 4>());
-  else
+  } else {
     hash_append(h, as_bytes(x).subspan<0, 16>());
+  }
 }
 
 } // namespace tenzir
@@ -216,7 +219,7 @@ namespace std {
 
 template <>
 struct hash<tenzir::ip> {
-  size_t operator()(const tenzir::ip& x) const {
+  auto operator()(const tenzir::ip& x) const -> size_t {
     return tenzir::hash(x);
   }
 };
