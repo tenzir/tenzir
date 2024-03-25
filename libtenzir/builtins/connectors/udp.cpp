@@ -10,6 +10,7 @@
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/detail/posix.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/socket.hpp>
 
 #include <arpa/inet.h>
 #include <arrow/util/uri.h>
@@ -39,172 +40,8 @@ struct loader_args {
   }
 };
 
-auto to_string(const sockaddr_in* addr) -> std::string {
-  std::array<char, INET_ADDRSTRLEN> buf = {};
-  const auto* ptr = reinterpret_cast<const sockaddr_in*>(addr);
-  socklen_t size = buf.size();
-  auto result = inet_ntop(AF_INET, &addr->sin_addr, buf.data(), size);
-  TENZIR_ASSERT(result != nullptr);
-  return std::string{buf.data()};
-}
-
-auto to_string(const sockaddr_in6* addr) -> std::string {
-  std::array<char, INET6_ADDRSTRLEN> buf = {};
-  const auto* ptr = reinterpret_cast<const sockaddr_in*>(addr);
-  socklen_t size = buf.size();
-  auto result = inet_ntop(AF_INET6, &addr->sin6_addr, buf.data(), size);
-  TENZIR_ASSERT(result != nullptr);
-  return std::string{buf.data()};
-}
-
-enum class socket_type {
-  invalid,
-  tcp,
-  udp,
-};
-
-/// Small wrapper to facilitate interacting with socket addreses.
-struct socket_endpoint {
-  /// Parses a URL-like string into a socket endpoint, e.g., tcp://localhost:42
-  /// or udp://1.2.3.4
-  static auto parse(std::string_view url) -> caf::expected<socket_endpoint> {
-    auto uri = arrow::internal::Uri{};
-    if (not uri.Parse(std::string{url}).ok()) {
-      return ec::parse_error;
-    }
-    auto result = socket_endpoint{};
-    if (uri.scheme() == "udp") {
-      result.type = socket_type::udp;
-    } else if (uri.scheme() == "tcp") {
-      result.type = socket_type::tcp;
-    } else {
-      return caf::make_error(ec::parse_error, "invalid URL scheme");
-    }
-    // Resolve host.
-    addrinfo hints = {};
-    std::memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC; // AF_INET6 to force IPv6
-    if (result.type == socket_type::tcp) {
-      hints.ai_socktype = SOCK_STREAM;
-    } else if (result.type == socket_type::udp) {
-      hints.ai_socktype = SOCK_DGRAM;
-    } else {
-      die("invalid socket transport layer");
-    }
-    addrinfo* res = nullptr;
-    TENZIR_DEBUG("resolving {}", uri.host());
-    auto status = getaddrinfo(uri.host().c_str(), nullptr, &hints, &res);
-    if (status != 0) {
-      return caf::make_error(ec::parse_error, gai_strerror(status));
-    }
-    // We may resolve to multiple addresses. But we can only pick one, and we'll
-    // go with the first entry.
-    auto found = false;
-    for (auto* ptr = res; ptr != nullptr; ptr = ptr->ai_next) {
-      if (ptr->ai_family == AF_INET) {
-        auto* addr = reinterpret_cast<sockaddr_in*>(ptr->ai_addr);
-        TENZIR_DEBUG("resolved to {}", to_string(addr));
-        std::memcpy(&result.addr, addr, ptr->ai_addrlen);
-      } else if (ptr->ai_family == AF_INET6) {
-        auto* addr = reinterpret_cast<sockaddr_in6*>(ptr->ai_addr);
-        TENZIR_DEBUG("resolved to {}", to_string(addr));
-        // TODO: support IPv6. For now we just skip IPv6 addresses.
-        continue;
-      } else {
-        die("unsupported IP address family");
-      }
-      found = true;
-      break;
-    }
-    freeaddrinfo(res);
-    if (not found) {
-      return caf::make_error(ec::parse_error, "failed to resolve host");
-    }
-    // Parse port.
-    if (uri.port() > 0) {
-      result.addr.sin_port = htons(uri.port());
-    } else {
-      return caf::make_error(ec::parse_error, "missing port");
-    }
-    return result;
-  }
-
-  socket_endpoint() {
-    std::memset(&addr, 0, sizeof(addr));
-  }
-
-  auto as_sockaddr() -> sockaddr* {
-    return reinterpret_cast<sockaddr*>(&addr);
-  }
-
-  sockaddr_in addr = {};
-  socket_type type = {};
-};
-
-/// Minimalistic RAII wrapper around a plain socket.
-struct socket {
-  socket() = default;
-
-  explicit socket(socket_type type) {
-    switch (type) {
-      case socket_type::invalid:
-        fd = -1;
-        break;
-      case socket_type::udp:
-        fd = ::socket(AF_INET, SOCK_DGRAM, 0);
-        break;
-      case socket_type::tcp:
-        fd = ::socket(AF_INET, SOCK_STREAM, 0);
-        break;
-    }
-  }
-
-  ~socket() {
-    if (*this) {
-      ::close(fd);
-    }
-  }
-
-  explicit operator bool() const {
-    return fd >= 0;
-  }
-
-  auto connect(socket_endpoint endpoint) {
-    auto* addr = endpoint.as_sockaddr();
-    constexpr socklen_t addr_len = sizeof(sockaddr_in);
-    return ::connect(fd, addr, addr_len);
-  }
-
-  auto bind(socket_endpoint endpoint) {
-    auto* addr = endpoint.as_sockaddr();
-    constexpr socklen_t addr_len = sizeof(sockaddr_in);
-    return ::bind(fd, addr, addr_len);
-  }
-
-  auto recv(std::span<std::byte> buffer, int flags = 0) {
-    return ::recv(fd, buffer.data(), buffer.size(), flags);
-  }
-
-  auto recvfrom(std::span<std::byte> buffer, socket_endpoint& endpoint,
-                int flags = 0) {
-    auto* addr = endpoint.as_sockaddr();
-    socklen_t addr_len = sizeof(sockaddr_in);
-    return ::recvfrom(fd, buffer.data(), buffer.size(), flags, addr, &addr_len);
-  }
-
-  int fd = -1;
-  socket_type type = socket_type::invalid;
-};
-
 auto udp_loader_impl(operator_control_plane& ctrl, loader_args args)
   -> generator<chunk_ptr> {
-  auto sock = socket{socket_type::udp};
-  if (not sock) {
-    diagnostic::error("failed to create UDP socket")
-      .note("error: {}", detail::describe_errno())
-      .emit(ctrl.diagnostics());
-    co_return;
-  };
   // A UDP packet contains its length as 16-bit field in the header, giving
   // rise to packets sized up to 65,535 bytes (including the header). When we
   // go over IPv4, we have a limit of 65,507 bytes (65,535 bytes − 8-byte UDP
@@ -218,19 +55,29 @@ auto udp_loader_impl(operator_control_plane& ctrl, loader_args args)
       .emit(ctrl.diagnostics());
     co_return;
   }
+  auto socket = tenzir::socket{*endpoint};
+  if (not socket) {
+    diagnostic::error("failed to create UDP socket")
+      .note(detail::describe_errno())
+      .note("endpoint: {}", endpoint->addr)
+      .emit(ctrl.diagnostics());
+    co_return;
+  };
   if (args.connect) {
     TENZIR_DEBUG("connecting to {}", args.url);
-    if (sock.connect(*endpoint) < 0) {
+    if (socket.connect(*endpoint) < 0) {
       diagnostic::error("failed to connect to socket")
-        .note("error: {}", detail::describe_errno())
+        .note(detail::describe_errno())
+        .note("endpoint: {}", endpoint->addr)
         .emit(ctrl.diagnostics());
       co_return;
     }
   } else {
     TENZIR_DEBUG("binding to {}", args.url);
-    if (sock.bind(*endpoint) < 0) {
+    if (socket.bind(*endpoint) < 0) {
       diagnostic::error("failed to bind to socket")
-        .note("error: {}", detail::describe_errno())
+        .note(detail::describe_errno())
+        .note("endpoint: {}", endpoint->addr)
         .emit(ctrl.diagnostics());
       co_return;
     }
@@ -238,10 +85,11 @@ auto udp_loader_impl(operator_control_plane& ctrl, loader_args args)
   co_yield {};
   while (true) {
     TENZIR_DEBUG("receiving bytes");
-    auto received_bytes = sock.recvfrom(as_writeable_bytes(buffer), *endpoint);
+    auto received_bytes
+      = socket.recvfrom(as_writeable_bytes(buffer), *endpoint);
     if (received_bytes < 0) {
       diagnostic::error("failed to receive data from socket")
-        .note("error: {}", detail::describe_errno())
+        .note(detail::describe_errno())
         .emit(ctrl.diagnostics());
       co_return;
     }

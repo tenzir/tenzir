@@ -15,6 +15,7 @@
 #include "tenzir/word.hpp"
 
 #include <arpa/inet.h>
+#include <fmt/format.h>
 #include <netinet/in.h>
 #include <openssl/crypto.h>
 #include <openssl/err.h>
@@ -205,3 +206,22 @@ auto operator<(const ip& x, const ip& y) -> bool {
 }
 
 } // namespace tenzir
+
+auto fmt::formatter<tenzir::ip>::format(const tenzir::ip& value,
+                                        format_context& ctx) const
+  -> format_context::iterator {
+  auto buffer = std::array<char, INET6_ADDRSTRLEN>{};
+  buffer.fill(0);
+  auto bytes = as_bytes(value);
+  if (value.is_v4()) {
+    const auto* result
+      = inet_ntop(AF_INET, &bytes[12], buffer.data(), INET_ADDRSTRLEN);
+    TENZIR_ASSERT(result != nullptr);
+  } else {
+    const auto* result
+      = inet_ntop(AF_INET6, bytes.data(), buffer.data(), INET6_ADDRSTRLEN);
+    TENZIR_ASSERT(result != nullptr);
+  }
+  auto str = std::string_view{buffer.data()};
+  return formatter<string_view>::format(str, ctx);
+}

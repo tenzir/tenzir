@@ -215,6 +215,12 @@ inline auto hash_append(legacy_hash& h, const ip& x) {
 
 } // namespace tenzir
 
+template <>
+struct fmt::formatter<tenzir::ip> : formatter<string_view> {
+  auto format(const tenzir::ip& x, format_context& ctx) const
+    -> format_context::iterator;
+};
+
 namespace std {
 
 template <>
