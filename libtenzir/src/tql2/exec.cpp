@@ -10,13 +10,17 @@
 
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/registry.hpp"
 #include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/tokens.hpp"
 #include "tenzir/type.hpp"
 
+#include <arrow/compute/api.h>
 #include <arrow/util/utf8.h>
+
+#include <chrono>
 
 namespace tenzir::tql2 {
 
@@ -100,7 +104,7 @@ public:
     switch (x.op.inner) {
       case unary_op::pos:
       case unary_op::neg:
-        if (ty != type{int64_type{}}) {
+        if (ty.kind().none_of<int64_type, double_type>()) {
           diagnostic::error("cannot {} `{}`", x.op.inner, ty)
             .primary(x.op.source)
             .secondary(x.expr.get_location(), "{}", ty)
@@ -447,10 +451,10 @@ public:
   }
 };
 
-struct compiled_pipeline {
-  compiled_pipeline() = default;
+struct pipeline_use {
+  pipeline_use() = default;
 
-  explicit compiled_pipeline(std::vector<std::unique_ptr<operator_use>> ops)
+  explicit pipeline_use(std::vector<std::unique_ptr<operator_use>> ops)
     : ops{std::move(ops)} {
   }
 
@@ -459,8 +463,8 @@ struct compiled_pipeline {
 
 class if_use final : public operator_use {
 public:
-  explicit if_use(expression condition, compiled_pipeline then,
-                  std::optional<compiled_pipeline> else_)
+  explicit if_use(expression condition, pipeline_use then,
+                  std::optional<pipeline_use> else_)
     : condition_{std::move(condition)},
       then_{std::move(then)},
       else_{std::move(else_)} {
@@ -468,8 +472,8 @@ public:
 
 private:
   expression condition_;
-  compiled_pipeline then_;
-  std::optional<compiled_pipeline> else_;
+  pipeline_use then_;
+  std::optional<pipeline_use> else_;
 };
 
 class set_use final : public operator_use {
@@ -519,27 +523,115 @@ public:
   }
 };
 
+class head_use final : public operator_use {
+public:
+  explicit head_use(uint64_t count) : count_{count} {
+  }
+
+private:
+  uint64_t count_;
+};
+
+class head_def final : public operator_def {
+public:
+  auto make(ast::entity self, std::vector<ast::expression> args,
+            context& ctx) const -> std::unique_ptr<operator_use> override {
+    if (args.empty()) {
+      diagnostic::error("expected number")
+        .primary(self.get_location())
+        .emit(ctx.dh());
+      return nullptr;
+    }
+    if (args.size() > 1) {
+      diagnostic::error("expected only one argument")
+        .primary(args[1].get_location())
+        .emit(ctx.dh());
+    }
+    // TODO: We want to have better errors here.
+    auto value = evaluate(args[0], ctx);
+    if (not value) {
+      return nullptr;
+    }
+    // TODO: Better promotion?
+    auto count = caf::get_if<int64_t>(&*value);
+    if (not count) {
+      diagnostic::error("expected integer")
+        .primary(args[0].get_location())
+        .emit(ctx.dh());
+      return nullptr;
+    }
+    if (*count < 0) {
+      diagnostic::error("expected count to be non-negative but got {}", *count)
+        .primary(args[0].get_location(), "this is {}")
+        .emit(ctx.dh());
+      return nullptr;
+    }
+    return std::make_unique<head_use>(detail::narrow<uint64_t>(*count));
+  }
+};
+
+class group_use final : public operator_use {
+public:
+};
+
 class group_def final : public operator_def {
 public:
   auto make(ast::entity self, std::vector<ast::expression> args,
             context& ctx) const -> std::unique_ptr<operator_use> override {
+    if (args.empty()) {
+      diagnostic::error("expected at least one argument")
+        .primary(self.get_location())
+        .emit(ctx.dh());
+      return nullptr;
+    }
     for (auto& arg : args) {
       type_checker{ctx}.visit(arg);
     }
+    // evaluate(args.back(), ctx);
     diagnostic::error("not implemented yet")
       .primary(self.get_location())
       .emit(ctx.dh());
-    return nullptr;
+    return std::make_unique<group_use>();
+  }
+};
+
+class where_use final : public operator_use {
+public:
+  explicit where_use(ast::expression expr) : expr_{std::move(expr)} {
+  }
+
+private:
+  ast::expression expr_;
+};
+
+class where_def final : public operator_def {
+public:
+  auto make(ast::entity self, std::vector<ast::expression> args,
+            context& ctx) const -> std::unique_ptr<operator_use> override {
+    if (args.size() != 1) {
+      diagnostic::error("expected exactly one argument")
+        .primary(self.get_location())
+        .emit(ctx.dh());
+      return nullptr;
+    }
+    auto ty = type_checker{ctx}.visit(args[0]);
+    if (ty && ty->kind().is_not<bool_type>()) {
+      diagnostic::error("expected `bool`, got `{}`", *ty)
+        .primary(args[0].get_location())
+        .emit(ctx.dh());
+    }
+    return std::make_unique<where_use>(std::move(args[0]));
   }
 };
 
 class source_use final : public operator_use {
 public:
-  explicit source_use(std::vector<record> events) : events_{std::move(events)} {
+  explicit source_use(std::vector<tenzir::record> events)
+    : events_{std::move(events)} {
   }
 
 private:
-  std::vector<record> events_;
+  std::vector<tenzir::record> events_;
 };
 
 class source_def final : public operator_def {
@@ -559,26 +651,28 @@ public:
       return nullptr;
     }
     // TODO: We want to const-eval instead.
-    type_checker{ctx}.visit(args[0]);
-    auto events = std::vector<record>{};
+    auto events = std::vector<tenzir::record>{};
     args[0].match(
       [&](ast::list& x) {
         for (auto& y : x.items) {
-          y.match(
-            [&](ast::record& z) {
-              events.push_back(std::move(z));
-            },
-            [&](auto&) {
-              diagnostic::error("expected record")
-                .primary(y.get_location())
-                .usage(usage)
-                .docs(docs)
-                .emit(ctx.dh());
-            });
+          auto item = evaluate(y, ctx);
+          if (not item) {
+            continue;
+          }
+          auto rec = caf::get_if<tenzir::record>(&*item);
+          if (not rec) {
+            diagnostic::error("expected a record")
+              .primary(y.get_location())
+              .usage(usage)
+              .docs(docs)
+              .emit(ctx.dh());
+            continue;
+          }
+          events.push_back(std::move(*rec));
         }
       },
       [&](auto&) {
-        diagnostic::error("expected list")
+        diagnostic::error("expected a list")
           .primary(args[0].get_location())
           .usage(usage)
           .docs(docs)
@@ -614,6 +708,105 @@ public:
     }
     return dbl;
   }
+
+  auto evaluate(location fn, std::vector<located<data>> args,
+                context& ctx) const -> std::optional<data> override {
+    // TODO: integrate this with `check`?
+    (void)fn;
+    TENZIR_ASSERT(args.size() == 1);
+    auto arg = caf::get_if<double>(&args[0].inner);
+    if (not arg) {
+      // TODO
+      diagnostic::error("`sqrt` expected `double` bot got `{}`", args[0].inner)
+        .primary(args[0].source)
+        .emit(ctx.dh());
+      return std::nullopt;
+    }
+    // TODO: nan, inf, negative, etc?
+    auto val = *arg;
+    if (val < 0.0) {
+      diagnostic::error("`sqrt` received negative value `{}`", val)
+        .primary(args[0].source)
+        .emit(ctx.dh());
+      return std::nullopt;
+    }
+    return std::sqrt(*arg);
+  }
+
+  auto test(const arrow::DoubleArray& x) const
+    -> std::shared_ptr<arrow::DoubleArray> {
+    // TODO: This is a test!!
+    {
+      // TODO: This is UB and useless. Do not copy. Do not even read. Stop!
+#if 0
+      auto alloc = arrow::AllocateBuffer(x.length() * sizeof(double));
+      TENZIR_ASSERT(alloc.ok());
+      auto buffer = std::move(*alloc);
+      TENZIR_ASSERT(buffer);
+      auto target = new (buffer->mutable_data()) double[x.length()];
+      auto begin = x.raw_values();
+      auto end = begin + x.length();
+      auto null_alloc = arrow::AllocateBuffer((x.length() + 7) / 8);
+      TENZIR_ASSERT(null_alloc.ok());
+      auto null_buffer = std::move(*null_alloc);
+      TENZIR_ASSERT(null_buffer);
+      auto null_target = null_buffer->mutable_data();
+      if (auto nulls = x.null_bitmap()) {
+        std::memcpy(null_target, nulls->data(), nulls->size());
+      } else {
+        std::memset(null_target, 0xFF, (x.length() + 7) / 8);
+      }
+      while (begin != end) {
+        auto val = *begin;
+        if (val < 0.0) [[unlikely]] {
+          auto mask = 0xFF ^ (0x01 << ((begin - end) % 8));
+          null_target[(begin - end) / 8] &= mask;
+        }
+        *target = std::sqrt(*begin);
+        ++begin;
+        ++target;
+      }
+      return std::make_shared<arrow::DoubleArray>(x.length(), std::move(buffer),
+                                                  std::move(null_buffer));
+#endif
+    }
+    // TODO
+    auto b = arrow::DoubleBuilder{};
+    (void)b.Reserve(x.length());
+    for (auto y : x) {
+      if (not y) {
+        // TODO: Warning?
+        b.UnsafeAppendNull();
+        continue;
+      }
+      auto z = *y;
+      if (z < 0.0) {
+        // TODO: Warning?
+        b.UnsafeAppendNull();
+        continue;
+      }
+      b.UnsafeAppend(std::sqrt(z));
+    }
+    auto result = std::shared_ptr<arrow::DoubleArray>{};
+    (void)b.Finish(&result);
+    return result;
+  }
+};
+
+class random_def final : public function_def {
+public:
+  auto check(check_info info, context& ctx) const
+    -> std::optional<type> override {
+    // TODO
+    TENZIR_UNUSED(info, ctx);
+    return type{double_type{}};
+  }
+
+  auto evaluate(location fn, std::vector<located<data>> args,
+                context& ctx) const -> std::optional<data> override {
+    // TODO
+    return 123.45;
+  }
 };
 
 class now_def final : public function_def {
@@ -627,10 +820,16 @@ public:
     }
     return type{duration_type{}};
   }
+
+  auto evaluate(location fn, std::vector<located<data>> args,
+                context& ctx) const -> std::optional<data> override {
+    TENZIR_ASSERT(args.empty());
+    return time{time::clock::now()};
+  }
 };
 
-auto compile_pipeline(pipeline&& pipe, context& ctx) -> compiled_pipeline {
-  auto result = compiled_pipeline{};
+auto prepare_pipeline(pipeline&& pipe, context& ctx) -> pipeline_use {
+  auto result = pipeline_use{};
   for (auto& stmt : pipe.body) {
     // let_stmt, if_stmt, match_stmt
     stmt.match(
@@ -666,10 +865,10 @@ auto compile_pipeline(pipeline&& pipe, context& ctx) -> compiled_pipeline {
             .primary(x.condition.get_location())
             .emit(ctx.dh());
         }
-        auto then = compile_pipeline(std::move(x.then), ctx);
-        auto else_ = std::optional<compiled_pipeline>{};
+        auto then = prepare_pipeline(std::move(x.then), ctx);
+        auto else_ = std::optional<pipeline_use>{};
         if (x.else_) {
-          else_ = compile_pipeline(std::move(*x.else_), ctx);
+          else_ = prepare_pipeline(std::move(*x.else_), ctx);
         }
         result.ops.push_back(std::make_unique<if_use>(
           std::move(x.condition), std::move(then), std::move(else_)));
@@ -742,10 +941,12 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   reg.add("drop", std::make_unique<drop_def>());
   reg.add("from", std::make_unique<from_def>());
   reg.add("group", std::make_unique<group_def>());
+  reg.add("head", std::make_unique<head_def>());
   reg.add("load_file", std::make_unique<load_file_def>());
   reg.add("set", std::make_unique<set_def>());
   reg.add("sort", std::make_unique<sort_def>());
   reg.add("source", std::make_unique<source_def>());
+  reg.add("where", std::make_unique<where_def>());
   // functions
   reg.add("now", std::make_unique<now_def>());
   reg.add("sqrt", std::make_unique<sqrt_def>());
@@ -758,7 +959,7 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   }
   // TODO
   auto ctx = context{reg, diag_wrapper};
-  auto compiled = compile_pipeline(std::move(parsed), ctx);
+  auto pipe = prepare_pipeline(std::move(parsed), ctx);
   if (diag_wrapper.error()) {
     return false;
   }
