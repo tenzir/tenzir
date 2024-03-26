@@ -1036,15 +1036,14 @@ auto dynamic_builder::prepare() -> detail::typed_builder<Type>* {
   //    We can differentiate between (2) and (3) by finishing the previous
   //    events, which we have to do anyway. If data remains in the builder,
   //    then we know that there is a conflict within the current event.
-  auto have_kind = builder_->kind();
-  auto want_kind = type_kind::make<Type>();
-  TENZIR_ASSERT(have_kind != want_kind);
+  auto current = builder_->kind();
+  auto request = type_kind::make<Type>();
+  TENZIR_ASSERT(current != request);
   TENZIR_ASSERT(not protected_, fmt::format("type mismatch for prepared type: "
                                             "expected {} but got {}",
-                                            want_kind, have_kind)
-                                  .c_str());
-  TENZIR_TRACE("finishing events due to conflict: requested {} but got {}",
-               want_kind, have_kind);
+                                            current, request));
+  TENZIR_TRACE("finishing events due to conflict: expected {} but got {}",
+               current, request);
   root_->finish_previous_events(this);
   if (length() > 0) {
     TENZIR_VERBOSE("switching to conflict builder");
