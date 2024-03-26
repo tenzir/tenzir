@@ -17,39 +17,40 @@
 
 namespace tenzir {
 
-inline std::span<const std::byte>
-as_bytes(const void* data, size_t size) noexcept {
+inline auto as_bytes(const void* data, size_t size) noexcept
+  -> std::span<const std::byte> {
   return {reinterpret_cast<const std::byte*>(data), size};
 }
 
-inline std::span<std::byte>
-as_writeable_bytes(void* data, size_t size) noexcept {
+inline auto as_writeable_bytes(void* data, size_t size) noexcept
+  -> std::span<std::byte> {
   return {reinterpret_cast<std::byte*>(data), size};
 }
 
 template <concepts::integral T, size_t N>
-constexpr std::span<const std::byte, N * sizeof(T)>
-as_bytes(const std::array<T, N>& xs) noexcept {
-  const auto data = reinterpret_cast<const std::byte*>(xs.data());
+constexpr auto as_bytes(const std::array<T, N>& xs) noexcept
+  -> std::span<const std::byte, N * sizeof(T)> {
+  const auto* const data = reinterpret_cast<const std::byte*>(xs.data());
   return std::span<const std::byte, N * sizeof(T)>{data, N * sizeof(T)};
 }
 
 template <concepts::integral T, size_t N>
-constexpr std::span<std::byte, N * sizeof(T)>
-as_writeable_bytes(std::array<T, N>& xs) noexcept {
-  const auto data = reinterpret_cast<std::byte*>(xs.data());
+constexpr auto as_writeable_bytes(std::array<T, N>& xs) noexcept
+  -> std::span<std::byte, N * sizeof(T)> {
+  auto* const data = reinterpret_cast<std::byte*>(xs.data());
   return std::span<std::byte, N * sizeof(T)>{data, N * sizeof(T)};
 }
 
 template <concepts::byte_container Buffer>
-constexpr std::span<const std::byte> as_bytes(const Buffer& xs) noexcept {
-  const auto data = reinterpret_cast<const std::byte*>(std::data(xs));
+constexpr auto as_bytes(const Buffer& xs) noexcept
+  -> std::span<const std::byte> {
+  const auto* const data = reinterpret_cast<const std::byte*>(std::data(xs));
   return {data, std::size(xs)};
 }
 
 template <concepts::byte_container Buffer>
-constexpr std::span<std::byte> as_writeable_bytes(Buffer& xs) noexcept {
-  const auto data = reinterpret_cast<std::byte*>(std::data(xs));
+constexpr auto as_writeable_bytes(Buffer& xs) noexcept -> std::span<std::byte> {
+  auto* const data = reinterpret_cast<std::byte*>(std::data(xs));
   return {data, std::size(xs)};
 }
 
