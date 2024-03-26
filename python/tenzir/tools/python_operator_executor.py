@@ -12,6 +12,7 @@ from typing import (
     SupportsIndex,
     Tuple,
     TypeVar,
+    Union
 )
 
 import pyarrow as pa
@@ -61,7 +62,7 @@ class _ListWrapper(BoxList):
         self._modified = True
         super().__setitem__(key, value)
 
-    def __delitem__(self: "_ListWrapper", key: SupportsIndex | slice) -> None:
+    def __delitem__(self: "_ListWrapper", key: Union[SupportsIndex, slice]) -> None:
         self._modified = True
         super().__delitem__(key)
 
@@ -222,7 +223,7 @@ def _unflatten_batch(
     )
 
 
-def _find_first_nonnull(xs: list[T | None]) -> T | None:
+def _find_first_nonnull(xs: list[Union[T,None]]) -> Union[T, None]:
     return next((x for x in xs if x is not None), None)
 
 
