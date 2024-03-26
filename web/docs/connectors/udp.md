@@ -20,7 +20,7 @@ tcp [-c|--connect] [-n|--insert-newlines] <endpoint>
 Saver:
 
 ```
-tcp [-l|--listen] [-n|--insert-newlines] <endpoint>
+tcp [-n|--insert-newlines] <endpoint>
 ```
 
 ## Description
@@ -29,9 +29,7 @@ The `udp` connector supports UDP sockets. The loader reads blocks of
 bytes from the socket, and the saver writes them to the socket.
 
 The loader defaults to creating a socket in listening mode. Use `--connect` if
-the loader should initiate the connection instead. The saver defaults to
-creating a socket in connect mode. Use `--listen` if the saver should instead
-listen on a socket.
+the loader should initiate the connection instead.
 
 When you have a socket in listening mode, use `0.0.0.0` to accept connections on
 all interfaces. The [`nics`](../operators/nics.md) operator lists all all
@@ -45,10 +43,6 @@ bind address when using `--listen`.
 ### `-c,--connect` (Loader)
 
 Connect to `<endpoint>` instead of listening at it.
-
-### `-l,--listen` (Saver)
-
-Listen at `<endpoint>` instead of connecting to it.
 
 ### `-n,--insert-newlines` (Saver, Loader)
 

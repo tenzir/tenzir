@@ -108,63 +108,61 @@ auto socket_endpoint::sock_addr_len() const -> socklen_t {
   return std::visit(size, sock_addr);
 }
 
-socket::socket(ip::family family, socket_type type) {
-  auto domain = family == ip::ipv4 ? AF_INET : AF_INET6;
-  switch (type) {
-    case socket_type::invalid:
-      fd = -1;
-      break;
-    case socket_type::udp:
-      fd = ::socket(domain, SOCK_DGRAM, 0);
-      break;
-    case socket_type::tcp:
-      fd = ::socket(domain, SOCK_STREAM, 0);
-      break;
-  }
+socket::socket() : fd{std::make_unique<int>(-1)} {
 }
 
-socket::socket(socket_endpoint endpoint) {
+socket::socket(socket_endpoint endpoint) : socket{} {
   auto domain = endpoint.addr.is_v4() ? AF_INET : AF_INET6;
   switch (endpoint.type) {
     case socket_type::invalid:
-      fd = -1;
+      *fd = -1;
       break;
     case socket_type::udp:
-      fd = ::socket(domain, SOCK_DGRAM, 0);
+      *fd = ::socket(domain, SOCK_DGRAM, 0);
       break;
     case socket_type::tcp:
-      fd = ::socket(domain, SOCK_STREAM, 0);
+      *fd = ::socket(domain, SOCK_STREAM, 0);
       break;
   }
 }
 
 socket::~socket() {
   if (*this) {
-    ::close(fd);
+    ::close(*fd);
   }
 }
 
 socket::operator bool() const {
-  return fd >= 0;
+  return fd and *fd >= 0;
 }
 
 auto socket::connect(socket_endpoint peer) -> int {
-  return ::connect(fd, peer.as_sock_addr(), peer.sock_addr_len());
+  return ::connect(*fd, peer.as_sock_addr(), peer.sock_addr_len());
 }
 
 auto socket::bind(socket_endpoint local) -> int {
-  return ::bind(fd, local.as_sock_addr(), local.sock_addr_len());
+  return ::bind(*fd, local.as_sock_addr(), local.sock_addr_len());
 }
 
 auto socket::recv(std::span<std::byte> buffer, int flags) -> ssize_t {
-  return ::recv(fd, buffer.data(), buffer.size(), flags);
+  return ::recv(*fd, buffer.data(), buffer.size(), flags);
 }
 
 auto socket::recvfrom(std::span<std::byte> buffer, socket_endpoint& endpoint,
                       int flags) -> ssize_t {
   auto sock_addr_len = endpoint.sock_addr_len();
-  return ::recvfrom(fd, buffer.data(), buffer.size(), flags,
+  return ::recvfrom(*fd, buffer.data(), buffer.size(), flags,
                     endpoint.as_sock_addr(), &sock_addr_len);
+}
+
+auto socket::send(std::span<const std::byte> buffer, int flags) -> ssize_t {
+  return ::send(*fd, buffer.data(), buffer.size(), flags);
+}
+
+auto socket::sendto(std::span<const std::byte> buffer,
+                    socket_endpoint& endpoint, int flags) -> ssize_t {
+  return ::sendto(*fd, buffer.data(), buffer.size(), flags,
+                  endpoint.as_sock_addr(), endpoint.sock_addr_len());
 }
 
 auto resolve(std::string_view hostname) -> caf::expected<std::vector<ip>> {

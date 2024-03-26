@@ -45,11 +45,12 @@ struct socket_endpoint {
 
 /// RAII wrapper around a plain socket.
 struct socket {
-  socket() = default;
-
-  socket(ip::family family, socket_type type);
+  socket();
 
   explicit socket(socket_endpoint endpoint);
+
+  socket(socket&&) = default;
+  auto operator=(socket&&) -> socket& = default;
 
   ~socket();
 
@@ -64,7 +65,12 @@ struct socket {
   auto recvfrom(std::span<std::byte> buffer, socket_endpoint& endpoint,
                 int flags = 0) -> ssize_t;
 
-  int fd = -1;
+  auto send(std::span<const std::byte> buffer, int flags = 0) -> ssize_t;
+
+  auto sendto(std::span<const std::byte> buffer, socket_endpoint& endpoint,
+              int flags = 0) -> ssize_t;
+
+  std::unique_ptr<int> fd = {};
 };
 
 /// Performs DNS resolution of a given hostname.
