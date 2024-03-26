@@ -14,13 +14,13 @@ Loads bytes from and saves bytes to a UDP socket.
 Loader:
 
 ```
-tcp [-c|--connect] [-n|--insert-newlines] <endpoint>
+udp [-c|--connect] [-n|--insert-newlines] <endpoint>
 ```
 
 Saver:
 
 ```
-tcp [-n|--insert-newlines] <endpoint>
+udp [-n|--insert-newlines] <endpoint>
 ```
 
 ## Description
