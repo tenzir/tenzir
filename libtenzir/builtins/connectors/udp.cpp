@@ -82,9 +82,34 @@ auto udp_loader_impl(operator_control_plane& ctrl, loader_args args)
       co_return;
     }
   }
+  // We're using a nonblocking socket and polling because blocking recvfrom(2)
+  // doesn't deliver the data fast enough. We were always one datagram behind.
+  if (auto err = detail::make_nonblocking(socket.fd)) {
+    diagnostic::error("failed to make socket nonblocking")
+      .note(detail::describe_errno())
+      .note("{}", err)
+      .emit(ctrl.diagnostics());
+    co_return;
+  }
   co_yield {};
   while (true) {
-    TENZIR_DEBUG("receiving bytes");
+    constexpr auto poll_timeout = 500ms;
+    constexpr auto usec
+      = std::chrono::duration_cast<std::chrono::microseconds>(poll_timeout)
+          .count();
+    TENZIR_DEBUG("polling socket");
+    auto ready = detail::rpoll(socket.fd, usec);
+    if (not ready) {
+      diagnostic::error("failed to poll socket")
+        .note(detail::describe_errno())
+        .note("{}", ready.error())
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    if (not *ready) {
+      co_yield {};
+      continue;
+    }
     auto received_bytes
       = socket.recvfrom(as_writeable_bytes(buffer), *endpoint);
     if (received_bytes < 0) {
