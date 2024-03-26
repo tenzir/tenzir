@@ -34,12 +34,13 @@ struct socket_endpoint {
 
   socket_endpoint() = default;
 
+  auto as_sock_addr() -> sockaddr*;
+  auto sock_addr_len() const -> socklen_t;
+
   socket_type type = {};
   ip addr = {};
   uint16_t port = {};
-  // For convenient use by C APIs.
-  sockaddr sock_addr = {};
-  socklen_t sock_addr_len = 0;
+  std::variant<sockaddr_in, sockaddr_in6> sock_addr;
 };
 
 /// RAII wrapper around a plain socket.
@@ -74,7 +75,6 @@ auto resolve(std::string_view hostname) -> caf::expected<std::vector<ip>>;
 // Conversion utilities.
 auto convert(const ip& in, sockaddr_in& out) -> caf::error;
 auto convert(const ip& in, sockaddr_in6& out) -> caf::error;
-auto convert(const ip& in, sockaddr& out) -> caf::error;
 
 auto convert(const sockaddr_in& in, ip& out) -> caf::error;
 auto convert(const sockaddr_in6& in, ip& out) -> caf::error;

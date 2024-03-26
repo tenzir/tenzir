@@ -60,25 +60,52 @@ auto socket_endpoint::parse(std::string_view url)
     return addr.is_v6();
   });
   TENZIR_ASSERT(v4 != ips->end() || v6 != ips->end());
-  std::memset(&result.sock_addr, 0, sizeof(sockaddr));
   if (v4 != ips->end()) {
     TENZIR_DEBUG("selecting first IPv4 address: {}", *v4);
     result.addr = *v4;
-    auto* ptr = reinterpret_cast<sockaddr_in*>(&result.sock_addr);
-    auto err = convert(*v4, *ptr);
-    TENZIR_ASSERT(not err);
-    ptr->sin_port = detail::to_network_order(result.port);
-    result.sock_addr_len = sizeof(sockaddr_in);
   } else {
     TENZIR_DEBUG("selecting first IPv6 address: {}", *v6);
     result.addr = *v6;
-    auto* ptr = reinterpret_cast<sockaddr_in6*>(&result.sock_addr);
-    auto err = convert(*v6, *ptr);
+  }
+  // Populate sockaddr variant.
+  if (result.addr.is_v4()) {
+    auto sa = sockaddr_in{};
+    auto err = convert(result.addr, sa);
     TENZIR_ASSERT(not err);
-    ptr->sin6_port = detail::to_network_order(result.port);
-    result.sock_addr_len = sizeof(sockaddr_in6);
+    sa.sin_port = detail::to_network_order(result.port);
+    result.sock_addr = sa;
+  } else {
+    auto sa = sockaddr_in6{};
+    auto err = convert(result.addr, sa);
+    TENZIR_ASSERT(not err);
+    sa.sin6_port = detail::to_network_order(result.port);
+    result.sock_addr = sa;
   }
   return result;
+}
+
+auto socket_endpoint::as_sock_addr() -> sockaddr* {
+  auto cast = detail::overload{
+    [](sockaddr_in& sa) {
+      return reinterpret_cast<sockaddr*>(&sa);
+    },
+    [](sockaddr_in6& sa) {
+      return reinterpret_cast<sockaddr*>(&sa);
+    },
+  };
+  return std::visit(cast, sock_addr);
+}
+
+auto socket_endpoint::sock_addr_len() const -> socklen_t {
+  auto size = detail::overload{
+    [](const sockaddr_in&) {
+      return sizeof(sockaddr_in);
+    },
+    [](const sockaddr_in6&) {
+      return sizeof(sockaddr_in6);
+    },
+  };
+  return std::visit(size, sock_addr);
 }
 
 socket::socket(ip::family family, socket_type type) {
@@ -122,11 +149,11 @@ socket::operator bool() const {
 }
 
 auto socket::connect(socket_endpoint peer) -> int {
-  return ::connect(fd, &peer.sock_addr, peer.sock_addr_len);
+  return ::connect(fd, peer.as_sock_addr(), peer.sock_addr_len());
 }
 
 auto socket::bind(socket_endpoint local) -> int {
-  return ::bind(fd, &local.sock_addr, local.sock_addr_len);
+  return ::bind(fd, local.as_sock_addr(), local.sock_addr_len());
 }
 
 auto socket::recv(std::span<std::byte> buffer, int flags) -> ssize_t {
@@ -135,8 +162,9 @@ auto socket::recv(std::span<std::byte> buffer, int flags) -> ssize_t {
 
 auto socket::recvfrom(std::span<std::byte> buffer, socket_endpoint& endpoint,
                       int flags) -> ssize_t {
+  auto sock_addr_len = endpoint.sock_addr_len();
   return ::recvfrom(fd, buffer.data(), buffer.size(), flags,
-                    &endpoint.sock_addr, &endpoint.sock_addr_len);
+                    endpoint.as_sock_addr(), &sock_addr_len);
 }
 
 auto resolve(std::string_view hostname) -> caf::expected<std::vector<ip>> {
@@ -181,10 +209,10 @@ auto convert(const ip& in, sockaddr_in& out) -> caf::error {
 
 auto convert(const ip& in, sockaddr_in6& out) -> caf::error {
   TENZIR_ASSERT(in.is_v6());
-  auto bytes = as_bytes(in);
   std::memset(&out, 0, sizeof(out));
   out.sin6_family = AF_INET6;
-  std::memcpy(&out.sin6_addr, bytes.data(), 16);
+  auto bytes = as_bytes(in);
+  std::memcpy(&out.sin6_addr, bytes.data(), bytes.size());
   return {};
 }
 
