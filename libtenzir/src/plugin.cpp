@@ -463,7 +463,7 @@ store_plugin::make_store_builder(accountant_actor accountant,
                 defaults::state_directory.data())};
   std::error_code err{};
   const auto abs_dir = std::filesystem::absolute(db_dir, err);
-  auto path = abs_dir / "archive" / fmt::format("{}.{}", id, name());
+  auto path = abs_dir / "archive" / fmt::format("{}.{}", id, store_filename());
   auto store_builder = fs->home_system().spawn<caf::lazy_init>(
     default_active_store, std::move(*store), fs, std::move(accountant),
     std::move(path), name());
