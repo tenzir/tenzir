@@ -27,7 +27,7 @@
 #include <arrow/util/iterator.h>
 #include <arrow/util/key_value_metadata.h>
 
-namespace tenzir::plugins::feather {
+namespace tenzir::plugins::feather_store {
 
 namespace {
 
@@ -295,7 +295,7 @@ class plugin final : public virtual store_plugin {
   }
 
   [[nodiscard]] std::string name() const override {
-    return "feather";
+    return "feather-store";
   }
 
   [[nodiscard]] caf::expected<std::unique_ptr<passive_store>>
@@ -316,6 +316,6 @@ private:
 
 } // namespace
 
-} // namespace tenzir::plugins::feather
+} // namespace tenzir::plugins::feather_store
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::feather::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::feather_store::plugin)
