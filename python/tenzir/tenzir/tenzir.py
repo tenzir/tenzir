@@ -84,13 +84,10 @@ class Tenzir:
     @staticmethod
     def _export_args(mode: ExportMode, limit: int):
         args = {}
-        match mode:
-            case ExportMode.CONTINUOUS:
-                args["continuous"] = True
-            case ExportMode.UNIFIED:
-                args["unified"] = True
-            case ExportMode.HISTORICAL:
-                pass
+        if mode == ExportMode.CONTINUOUS:
+            args["continuous"] = True
+        elif mode == ExportMode.UNIFIED:
+            args["unified"] = True
         if limit > 0:
             args["max_events"] = limit
         return args

@@ -5,7 +5,7 @@ import itertools
 import copy
 from datetime import datetime, timedelta
 from types import MappingProxyType
-from typing import Iterable, Optional, Sequence, SupportsBytes, SupportsIndex, TypeAlias
+from typing import Iterable, Optional, Sequence, SupportsBytes, SupportsIndex, Union
 
 import pyarrow as pa
 
@@ -20,7 +20,7 @@ except ImportError:
         pass
 
 class IPScalar(pa.ExtensionScalar):
-    def as_py(self: "IPScalar") -> ip.IPv4Address | ip.IPv6Address | None:
+    def as_py(self: "IPScalar") -> Union[ip.IPv4Address, ip.IPv6Address, None]:
         return None if self.value is None else unpack_ip(self.value.as_py())
 
 
@@ -56,7 +56,7 @@ class IPType(pa.ExtensionType):
 
 
 class SubnetScalar(pa.ExtensionScalar):
-    def as_py(self: "SubnetScalar") -> ip.IPv4Network | ip.IPv6Network | None:
+    def as_py(self: "SubnetScalar") -> Union[ip.IPv4Network, ip.IPv6Network, None]:
         address = self.value[0].as_py()
         length = self.value[1].as_py()
         if address is None or length is None:
@@ -113,7 +113,7 @@ class SubnetType(pa.ExtensionType):
 class EnumScalar(pa.ExtensionScalar):
     """Adapter for Tenzir enumeration values."""
 
-    def as_py(self: "EnumScalar") -> str | None:
+    def as_py(self: "EnumScalar") -> Union[str, None]:
         return None if self.value is None else self.value.as_py()
 
 
@@ -174,23 +174,22 @@ def name(schema: pa.Schema) -> str:
     return xs[0] if xs[0] else ""
 
 
-def pack_ip(address: str | ip.IPv4Address | ip.IPv6Address) -> bytes:
+def pack_ip(address: Union[str, ip.IPv4Address, ip.IPv6Address]) -> bytes:
     """Convert an ip address to arrow array bytes."""
-    match address:
-        case str():
-            return pack_ip(ip.ip_address(address))
-        case ip.IPv4Address():
-            prefix = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff"
-            return prefix + address.packed
-        case ip.IPv6Address():
-            return address.packed
+    if isinstance(address, str):
+        return pack_ip(ip.ip_address(address))
+    elif isinstance(address, ip.IPv4Address):
+        prefix = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff"
+        return prefix + address.packed
+    elif isinstance(address, ip.IPv6Address):
+        return address.packed
 
 
 # Accepts a 128-bit buffer holding an IPv6 address and returns an IPv4 or IPv6
 # address.
 def unpack_ip(
-    buffer: Iterable[SupportsIndex] | SupportsBytes,
-) -> ip.IPv4Address | ip.IPv6Address:
+    buffer: Union[Iterable[SupportsIndex], SupportsBytes],
+) -> Union[ip.IPv4Address, ip.IPv6Address]:
     """Construct an ip address from a slice of bytes."""
     num = int.from_bytes(buffer, byteorder="big")
     # Convert IPv4 mapped addresses back to regular IPv4.
@@ -202,22 +201,21 @@ def unpack_ip(
 
 
 def pack_subnet(
-    subnet: str | ip.IPv4Network | ip.IPv6Network | None,
-) -> tuple[bytes | None, int | None]:
+    subnet: Union[str, ip.IPv4Network, ip.IPv6Network, None],
+) -> tuple[Union[bytes, None], Union[int, None]]:
     """Convert a subnet to arrow array bytes."""
     if subnet is None:
         return (None, None)
-    match subnet:
-        case str():
-            return pack_subnet(ip.ip_network(subnet))
-        case ip.IPv4Network():
-            prefix = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff"
-            return (prefix + subnet.network_address.packed, subnet.prefixlen + 96)
-        case ip.IPv6Network():
-            return (subnet.network_address.packed, subnet.prefixlen)
+    if isinstance(subnet, str):
+        return pack_subnet(ip.ip_network(subnet))
+    elif isinstance(subnet, ip.IPv4Network):
+        prefix = b"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff"
+        return (prefix + subnet.network_address.packed, subnet.prefixlen + 96)
+    elif isinstance(subnet, ip.IPv6Network):
+        return (subnet.network_address.packed, subnet.prefixlen)
 
 
-VastExtensionType = IPType | EnumType | SubnetType
+VastExtensionType = Union[IPType, EnumType, SubnetType]
 
 
 def py_dict_to_arrow_dict(x: dict[str, int]) -> pa.StringArray:
@@ -237,34 +235,34 @@ def py_dict_to_arrow_dict(x: dict[str, int]) -> pa.StringArray:
 
 def extension_array_scalar(obj: Sequence, datatype: pa.DataType) -> pa.Array:
     """Create a `pyarrow.Array` from a Python object with extension type support."""
-    match datatype:
-        case IPType():
-            arr = (pack_ip(e) for e in obj)
-            storage = pa.array(arr, pa.binary(16))
-            return pa.ExtensionArray.from_storage(datatype, storage)
-        case SubnetType():
-            arrs = list(zip(*[pack_subnet(e) for e in obj]))
-            addr_storage = pa.array(arrs[0], pa.binary(16))
-            addr_array = pa.ExtensionArray.from_storage(IPType(), addr_storage)
-            prefix_array = pa.array(arrs[1], pa.uint8())
-            storage = pa.StructArray.from_arrays(
-                [
-                    addr_array,
-                    prefix_array,
-                ],
-                names=["address", "length"],
-            )
-            return pa.ExtensionArray.from_storage(datatype, storage)
-        case EnumType(fields=fields):
-            # use the mappings in the `fields` metadata as indices for building
-            # the dictionary
-            indices_py = [None if e is None else fields[e] for e in obj]
-            indices = pa.array(indices_py, EnumType.DICTIONARY_INDEX_TYPE)
-            dictionary = py_dict_to_arrow_dict(fields)
-            storage = pa.DictionaryArray.from_arrays(indices, dictionary)
-            return pa.ExtensionArray.from_storage(datatype, storage)
-        case _:
-            return pa.array(obj, datatype)
+    if isinstance(datatype, IPType):
+        arr = (pack_ip(e) for e in obj)
+        storage = pa.array(arr, pa.binary(16))
+        return pa.ExtensionArray.from_storage(datatype, storage)
+    elif isinstance(datatype,  SubnetType):
+        arrs = list(zip(*[pack_subnet(e) for e in obj]))
+        addr_storage = pa.array(arrs[0], pa.binary(16))
+        addr_array = pa.ExtensionArray.from_storage(IPType(), addr_storage)
+        prefix_array = pa.array(arrs[1], pa.uint8())
+        storage = pa.StructArray.from_arrays(
+            [
+                addr_array,
+                prefix_array,
+            ],
+            names=["address", "length"],
+        )
+        return pa.ExtensionArray.from_storage(datatype, storage)
+    elif isinstance(datatype,  EnumType):
+        fields = datatype.fields
+        # use the mappings in the `fields` metadata as indices for building
+        # the dictionary
+        indices_py = [None if e is None else fields[e] for e in obj]
+        indices = pa.array(indices_py, EnumType.DICTIONARY_INDEX_TYPE)
+        dictionary = py_dict_to_arrow_dict(fields)
+        storage = pa.DictionaryArray.from_arrays(indices, dictionary)
+        return pa.ExtensionArray.from_storage(datatype, storage)
+    else:
+        return pa.array(obj, datatype)
 
 
 def extension_array(obj: Sequence, datatype: pa.DataType) -> pa.Array:
@@ -288,7 +286,7 @@ def extension_array(obj: Sequence, datatype: pa.DataType) -> pa.Array:
         inner_type = datatype.value_type
         # Offset computation according to the rules in [1]
         # [1]: https://arrow.apache.org/docs/python/generated/pyarrow.ListArray.html#pyarrow.ListArray.from_arrays
-        offsets: list[int | None] = []
+        offsets: list[Union[int, None]] = []
         last_notnull_offset = 0
         inner_sequence: list[pa.Array] = []
         for lst in obj:
@@ -305,21 +303,21 @@ def extension_array(obj: Sequence, datatype: pa.DataType) -> pa.Array:
         return extension_array_scalar(obj, datatype)
 
 
-TenzirType: TypeAlias = (
-    ip.IPv4Address
-    | ip.IPv6Address
-    | ip.IPv4Network
-    | ip.IPv6Network
-    | str
-    | bool
-    | int
-    | float
-    | datetime
-    | bytes
-    | None
-    | dict[str, "TenzirType"]
-    | list["TenzirType"]
-)
+TenzirType = Union[
+    ip.IPv4Address,
+    ip.IPv6Address,
+    ip.IPv4Network,
+    ip.IPv6Network,
+    str,
+    bool,
+    int,
+    float,
+    datetime,
+    bytes,
+    None,
+    dict[str, "TenzirType"],
+    list["TenzirType"]
+]
 
 
 def infer_type(obj: TenzirType) -> pa.DataType:
@@ -381,7 +379,7 @@ def make_record_batch(
     system.
     """
 
-    def find_first_nonnull(xs: list[TenzirType | None]) -> TenzirType | None:
+    def find_first_nonnull(xs: list[Union[TenzirType, None]]) -> TenzirType | None:
         return next((x for x in xs if x is not None), None)
 
     arrays = []
