@@ -222,9 +222,7 @@ auto convert(const sockaddr_in& in, ip& out) -> caf::error {
 }
 
 auto convert(const sockaddr_in6& in, ip& out) -> caf::error {
-  const auto* ptr = reinterpret_cast<const std::byte*>(&in.sin6_addr);
-  auto bytes = std::span<const std::byte, 16>{ptr, 16};
-  out = ip::v6(bytes);
+  out = ip::v6(as_bytes<16>(&in.sin6_addr));
   return {};
 }
 

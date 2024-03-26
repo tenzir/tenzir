@@ -13,9 +13,19 @@
 #include <array>
 #include <cstddef>
 #include <span>
-#include <type_traits>
 
 namespace tenzir {
+
+template <size_t Size>
+auto as_bytes(const void* data) noexcept {
+  return std::span<const std::byte, Size>{
+    reinterpret_cast<const std::byte*>(data), Size};
+}
+
+template <size_t Size>
+auto as_writeable_bytes(void* data) noexcept {
+  return std::span<std::byte, Size>{reinterpret_cast<std::byte*>(data), Size};
+}
 
 inline auto as_bytes(const void* data, size_t size) noexcept
   -> std::span<const std::byte> {
