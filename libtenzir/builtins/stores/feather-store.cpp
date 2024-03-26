@@ -50,6 +50,8 @@ struct configuration {
   }
 };
 
+
+
 auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
   return value_at(time_type{}, *time_col, time_col->length() - 1);
 }
@@ -294,8 +296,13 @@ class plugin final : public virtual store_plugin {
     return convert(plugin_config, feather_config_);
   }
 
+
   [[nodiscard]] std::string name() const override {
     return "feather-store";
+  }
+
+  std::string store_filename() const override {
+    return "feather";
   }
 
   [[nodiscard]] caf::expected<std::unique_ptr<passive_store>>

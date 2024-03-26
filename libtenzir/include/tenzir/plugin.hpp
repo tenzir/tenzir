@@ -664,6 +664,8 @@ class store_plugin : public virtual store_actor_plugin,
                      public virtual parser_serialization_plugin,
                      public virtual printer_serialization_plugin {
 public:
+  virtual std::string store_filename() const = 0;
+
   /// Create a store for passive partitions.
   [[nodiscard]] virtual caf::expected<std::unique_ptr<passive_store>>
   make_passive_store() const = 0;
