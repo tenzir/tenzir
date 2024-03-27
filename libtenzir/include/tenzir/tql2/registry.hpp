@@ -69,6 +69,23 @@ public:
 class operator_use {
 public:
   virtual ~operator_use() = default;
+
+  virtual auto debug(debug_writer& f) -> bool {
+    TENZIR_UNUSED(f);
+    TENZIR_TODO();
+  }
+
+  friend auto inspect(caf::serializer& f, operator_use& x) -> bool {
+    if (auto dbg = as_debug_writer(f)) {
+      auto name = caf::detail::pretty_type_name(typeid(x));
+      auto dot = name.find_last_of('.');
+      if (dot != std::string::npos) {
+        name.erase(0, dot + 1);
+      }
+      return dbg->prepend("{} ", name) && x.debug(*dbg);
+    }
+    TENZIR_TODO();
+  }
 };
 
 class operator_def {

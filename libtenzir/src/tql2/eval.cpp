@@ -40,7 +40,7 @@ public:
               .throw_();
           }
         },
-        [](const auto& y) {
+        [](const auto&) {
           // TODO
           diagnostic::error("not implemented").throw_();
         });
