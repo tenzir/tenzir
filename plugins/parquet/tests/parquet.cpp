@@ -146,8 +146,7 @@ FIXTURE_SCOPE(filesystem_tests, fixture)
 TEST(parquet store roundtrip) {
   auto xs = std::vector<tenzir::table_slice>{suricata_dns_log[0]};
   auto uuid = tenzir::uuid::random();
-  const auto* plugin
-    = tenzir::plugins::find<tenzir::store_actor_plugin>("parquet");
+  const auto* plugin = tenzir::plugins::find_store("parquet");
   REQUIRE(plugin);
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, uuid);
@@ -282,8 +281,7 @@ TEST(active parquet store fetchall query) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
   auto uuid = tenzir::uuid::random();
-  const auto* plugin
-    = tenzir::plugins::find<tenzir::store_actor_plugin>("parquet");
+  const auto* plugin = tenzir::plugins::find_store("parquet");
   REQUIRE(plugin);
   auto builder
     = plugin->make_store_builder(accountant, filesystem, uuid)->store_builder;
@@ -300,8 +298,7 @@ TEST(passive parquet store fetchall small row group size) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
   auto uuid = tenzir::uuid::random();
-  const auto* plugin
-    = tenzir::plugins::find<tenzir::store_actor_plugin>("parquet");
+  const auto* plugin = tenzir::plugins::find_store("parquet");
   REQUIRE(plugin);
   // We know that initialize may be called multiple times for this plugin.
   auto _
@@ -330,8 +327,7 @@ TEST(passive parquet store selective count query) {
   auto slice = f.slice;
   auto expr = to<expression>("f1 == \"n1\"");
   auto uuid = tenzir::uuid::random();
-  const auto* plugin
-    = tenzir::plugins::find<tenzir::store_actor_plugin>("parquet");
+  const auto* plugin = tenzir::plugins::find_store("parquet");
   REQUIRE(plugin);
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, uuid);
@@ -355,8 +351,7 @@ TEST(passive parquet store fetchall query) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
   auto uuid = tenzir::uuid::random();
-  const auto* plugin
-    = tenzir::plugins::find<tenzir::store_actor_plugin>("parquet");
+  const auto* plugin = tenzir::plugins::find_store("parquet");
   REQUIRE(plugin);
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, uuid);
@@ -381,8 +376,7 @@ TEST(passive parquet store selective query) {
   auto slice = f.slice;
   auto expr = to<expression>("f1 == \"n1\"");
   auto uuid = tenzir::uuid::random();
-  const auto* plugin
-    = tenzir::plugins::find<tenzir::store_actor_plugin>("parquet");
+  const auto* plugin = tenzir::plugins::find_store("parquet");
   REQUIRE(plugin);
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, uuid);
@@ -407,8 +401,7 @@ TEST(passive parquet store selective query) {
 TEST(passive parquet store erase) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
-  const auto* plugin
-    = tenzir::plugins::find<tenzir::store_actor_plugin>("parquet");
+  const auto* plugin = tenzir::plugins::find_store("parquet");
   REQUIRE(plugin);
   auto builder_and_header = plugin->make_store_builder(accountant, filesystem,
                                                        tenzir::uuid::random());
@@ -429,8 +422,7 @@ TEST(passive parquet store erase) {
 TEST(active parquet store erase) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
-  const auto* plugin
-    = tenzir::plugins::find<tenzir::store_actor_plugin>("parquet");
+  const auto* plugin = tenzir::plugins::find_store("parquet");
   REQUIRE(plugin);
   auto builder
     = plugin->make_store_builder(accountant, filesystem, tenzir::uuid::random())
@@ -454,8 +446,7 @@ TEST(active parquet store erase) {
 TEST(active parquet store status) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
-  const auto* plugin
-    = tenzir::plugins::find<tenzir::store_actor_plugin>("parquet");
+  const auto* plugin = tenzir::plugins::find_store("parquet");
   REQUIRE(plugin);
   auto uuid = tenzir::uuid::random();
   auto builder

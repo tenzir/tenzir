@@ -144,8 +144,7 @@ FIXTURE_SCOPE(feather_tests, fixture)
 TEST(feather store roundtrip) {
   auto xs = std::vector<tenzir::table_slice>{suricata_dns_log[0]};
   auto uuid = tenzir::uuid::random();
-  const auto* plugin
-    = tenzir::plugins::find<tenzir::store_actor_plugin>("feather-store");
+  const auto* plugin = tenzir::plugins::find_store("feather");
   REQUIRE(plugin);
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, uuid);
@@ -280,8 +279,7 @@ TEST(active feather store fetchall query) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
   auto uuid = tenzir::uuid::random();
-  const auto* plugin
-    = tenzir::plugins::find<tenzir::store_actor_plugin>("feather-store");
+  const auto* plugin = tenzir::plugins::find_store("feather");
   REQUIRE(plugin);
   auto builder
     = plugin->make_store_builder(accountant, filesystem, uuid)->store_builder;
@@ -299,8 +297,7 @@ TEST(passive feather store fetchall query) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
   auto uuid = tenzir::uuid::random();
-  const auto* plugin
-    = tenzir::plugins::find<tenzir::store_actor_plugin>("feather-store");
+  const auto* plugin = tenzir::plugins::find_store("feather");
   REQUIRE(plugin);
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, uuid);
@@ -325,8 +322,7 @@ TEST(passive feather store selective count query) {
   auto slice = f.slice;
   auto expr = to<expression>("f1 == \"n1\"");
   auto uuid = tenzir::uuid::random();
-  const auto* plugin
-    = tenzir::plugins::find<tenzir::store_actor_plugin>("feather-store");
+  const auto* plugin = tenzir::plugins::find_store("feather");
   REQUIRE(plugin);
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, uuid);
@@ -351,8 +347,7 @@ TEST(passive feather store selective query) {
   auto slice = f.slice;
   auto expr = to<expression>("f1 == \"n1\"");
   auto uuid = tenzir::uuid::random();
-  const auto* plugin
-    = tenzir::plugins::find<tenzir::store_actor_plugin>("feather-store");
+  const auto* plugin = tenzir::plugins::find_store("feather");
   REQUIRE(plugin);
   auto builder_and_header
     = plugin->make_store_builder(accountant, filesystem, uuid);
@@ -378,8 +373,7 @@ TEST(passive feather store selective query) {
 TEST(passive feather store erase) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
-  const auto* plugin
-    = tenzir::plugins::find<tenzir::store_actor_plugin>("feather-store");
+  const auto* plugin = tenzir::plugins::find_store("feather");
   REQUIRE(plugin);
   auto builder_and_header = plugin->make_store_builder(accountant, filesystem,
                                                        tenzir::uuid::random());
@@ -400,8 +394,7 @@ TEST(passive feather store erase) {
 TEST(active feather store erase) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
-  const auto* plugin
-    = tenzir::plugins::find<tenzir::store_actor_plugin>("feather-store");
+  const auto* plugin = tenzir::plugins::find_store("feather");
   REQUIRE(plugin);
   auto builder
     = plugin->make_store_builder(accountant, filesystem, tenzir::uuid::random())
@@ -425,8 +418,7 @@ TEST(active feather store erase) {
 TEST(active feather store status) {
   auto f = table_slice_fixture();
   auto slice = f.slice;
-  const auto* plugin
-    = tenzir::plugins::find<tenzir::store_actor_plugin>("feather-store");
+  const auto* plugin = tenzir::plugins::find_store("feather");
   REQUIRE(plugin);
   auto uuid = tenzir::uuid::random();
   auto builder
@@ -450,7 +442,7 @@ TEST(active feather store status) {
       const auto expected = record{
         {"events", 4_c},
         {"path", path},
-        {"store-type", "feather-store"},
+        {"store-type", "feather"},
       };
       CHECK_EQUAL(expected, status);
     },

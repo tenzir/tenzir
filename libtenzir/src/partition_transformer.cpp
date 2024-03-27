@@ -415,8 +415,7 @@ auto partition_transformer(
       // ...otherwise, prepare for writing out the transformed data by creating
       // new stores, sending out the slices and requesting new idspace.
       auto store_id = self->state.store_id;
-      auto const* store_actor_plugin
-        = plugins::find<tenzir::store_actor_plugin>(store_id);
+      auto const* store_actor_plugin = plugins::find_store(store_id);
       if (!store_actor_plugin) {
         self->state.stream_error
           = caf::make_error(ec::invalid_argument,

@@ -1200,8 +1200,7 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.accept_queries = true;
   self->state.max_concurrent_partition_lookups
     = max_concurrent_partition_lookups;
-  self->state.store_actor_plugin
-    = plugins::find<store_actor_plugin>(store_backend);
+  self->state.store_actor_plugin = plugins::find_store(store_backend);
   if (!self->state.store_actor_plugin) {
     auto error = caf::make_error(ec::invalid_configuration,
                                  fmt::format("could not find "
@@ -1793,7 +1792,7 @@ index(index_actor::stateful_pointer<index_state> self,
       }
       if (corrected_partitions.empty())
         return std::vector<partition_info>{};
-      auto store_id = std::string{self->state.store_actor_plugin->name()};
+      auto store_id = std::string{self->state.store_actor_plugin->store_name()};
       auto partition_path_template
         = self->state.transformer_partition_path_template();
       auto partition_synopsis_path_template
