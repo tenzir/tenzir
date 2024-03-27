@@ -351,6 +351,7 @@ active_partition_actor::behavior_type active_partition(
   std::shared_ptr<tenzir::taxonomies> taxonomies) {
   TENZIR_TRACE_SCOPE("active partition {} {}", TENZIR_ARG(self->id()),
                      TENZIR_ARG(id));
+  TENZIR_ASSERT(store_plugin);
   self->state.self = self;
   self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);
@@ -446,7 +447,7 @@ active_partition_actor::behavior_type active_partition(
       caf::policy::arg<caf::broadcast_downstream_manager<table_slice>>{});
   };
   self->state.stage = make_stage();
-  self->state.data.store_id = self->state.store_plugin->name();
+  self->state.data.store_id = self->state.store_plugin->store_name();
   auto builder_and_header = self->state.store_plugin->make_store_builder(
     self->state.accountant, self->state.filesystem, self->state.data.id);
   if (!builder_and_header) {

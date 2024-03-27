@@ -655,6 +655,9 @@ public:
   make_store(accountant_actor accountant, filesystem_actor fs,
              std::span<const std::byte> header) const
     = 0;
+
+  /// Returns the name by which we find the store.
+  virtual std::string store_name() const = 0;
 };
 
 /// A base class for plugins that add new store backends.
@@ -1030,6 +1033,22 @@ inline const operator_parser_plugin*
 find_operator(std::string_view name) noexcept {
   for (const auto* plugin : get<operator_parser_plugin>()) {
     const auto current_name = plugin->operator_name();
+    const auto match
+      = std::equal(current_name.begin(), current_name.end(), name.begin(),
+                   name.end(), [](const char lhs, const char rhs) {
+                     return std::tolower(static_cast<unsigned char>(lhs))
+                            == std::tolower(static_cast<unsigned char>(rhs));
+                   });
+    if (match) {
+      return plugin;
+    }
+  }
+  return nullptr;
+}
+
+inline const store_actor_plugin* find_store(std::string_view name) noexcept {
+  for (const auto* plugin : get<store_actor_plugin>()) {
+    const auto current_name = plugin->store_name();
     const auto match
       = std::equal(current_name.begin(), current_name.end(), name.begin(),
                    name.end(), [](const char lhs, const char rhs) {
