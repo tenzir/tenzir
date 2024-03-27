@@ -62,10 +62,11 @@ from udp://127.0.0.1:56789
 
 Use a shell to test the UDP loader with netcat:
 
-```bash
-# Shell 1
+```bash title="Shell 1"
 tenzir 'from udp://127.0.0.1:56789'
-# Shell 2
+```
+
+```bash title="Shell 2"
 jq -n '{foo: 42}' | nc -u 127.0.0.1 56789
 ```
 
