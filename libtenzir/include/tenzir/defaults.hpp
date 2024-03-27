@@ -237,7 +237,7 @@ inline constexpr size_t taste_partitions = 5;
 inline constexpr size_t num_query_supervisors = 10;
 
 /// The store backend to use.
-inline constexpr const char* store_backend = "feather-store";
+inline constexpr const char* store_backend = "feather";
 
 /// Rate at which telemetry data is sent to the ACCOUNTANT.
 inline constexpr std::chrono::milliseconds telemetry_rate

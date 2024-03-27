@@ -130,8 +130,8 @@ TEST(No dense indexes serialization when create dense index in config is false) 
   auto filesystem = sys.spawn(dummy_filesystem, std::ref(last_written_chunks));
   const auto partition_id = tenzir::uuid::random();
   // TODO: We should implement a mock store and use that for this test.
-  const auto* store_plugin = tenzir::plugins::find<tenzir::store_actor_plugin>(
-    tenzir::defaults::store_backend);
+  const auto* store_plugin
+    = tenzir::plugins::find_store(tenzir::defaults::store_backend);
   REQUIRE(store_plugin);
   auto sut = sys.spawn(tenzir::active_partition, schema_, partition_id,
                        tenzir::accountant_actor{}, filesystem, caf::settings{},
@@ -206,8 +206,8 @@ TEST(No dense indexes serialization when create dense index in config is false) 
 
 TEST(delegate query to the store) {
   // FIXME: We should implement a mock store plugin and use that for this test.
-  const auto* store_plugin = tenzir::plugins::find<tenzir::store_actor_plugin>(
-    tenzir::defaults::store_backend);
+  const auto* store_plugin
+    = tenzir::plugins::find_store(tenzir::defaults::store_backend);
   std::map<std::filesystem::path, std::vector<tenzir::chunk_ptr>>
     last_written_chunks;
   auto filesystem = sys.spawn(dummy_filesystem, std::ref(last_written_chunks));

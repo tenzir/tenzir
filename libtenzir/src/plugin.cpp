@@ -463,10 +463,10 @@ store_plugin::make_store_builder(accountant_actor accountant,
                 defaults::state_directory.data())};
   std::error_code err{};
   const auto abs_dir = std::filesystem::absolute(db_dir, err);
-  auto path = abs_dir / "archive" / fmt::format("{}.{}", id, store_filename());
+  auto path = abs_dir / "archive" / fmt::format("{}.{}", id, store_name());
   auto store_builder = fs->home_system().spawn<caf::lazy_init>(
     default_active_store, std::move(*store), fs, std::move(accountant),
-    std::move(path), name());
+    std::move(path), store_name());
   auto header = chunk::copy(id);
   return builder_and_header{store_builder, header};
 }
@@ -488,11 +488,11 @@ store_plugin::make_store(accountant_actor accountant, filesystem_actor fs,
                 defaults::state_directory.data())};
   std::error_code err{};
   const auto abs_dir = std::filesystem::absolute(db_dir, err);
-  auto path = abs_dir / "archive" / fmt::format("{}.{}", id, store_filename());
+  auto path = abs_dir / "archive" / fmt::format("{}.{}", id, store_name());
   return fs->home_system().spawn<caf::lazy_init>(default_passive_store,
                                                  std::move(*store), fs,
                                                  std::move(accountant),
-                                                 std::move(path), name());
+                                                 std::move(path), store_name());
 }
 
 static auto

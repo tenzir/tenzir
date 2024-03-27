@@ -112,12 +112,12 @@ TEST(query pruning with index config) {
   auto id = tenzir::uuid::random();
   auto accountant = tenzir::accountant_actor{};
   auto store = tenzir::store_actor{};
-  auto store_id = std::string{"test-store"};
+  auto store_id = std::string{"feather"};
   auto store_header = tenzir::chunk::make_empty();
   auto fs = self->spawn(memory_filesystem);
   auto index_opts = caf::settings{};
-  const auto* store_plugin = tenzir::plugins::find<tenzir::store_actor_plugin>(
-    tenzir::defaults::store_backend);
+  const auto* store_plugin
+    = tenzir::plugins::find_store(tenzir::defaults::store_backend);
   auto partition
     = self->spawn(tenzir::active_partition, tenzir::type{}, id, accountant, fs,
                   index_opts, config1, store_plugin,

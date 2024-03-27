@@ -495,7 +495,7 @@ class plugin final : public virtual store_plugin {
     return "parquet-store";
   }
 
-  [[nodiscard]] std::string store_filename() const override {
+  [[nodiscard]] std::string store_name() const override {
     return "parquet";
   }
 

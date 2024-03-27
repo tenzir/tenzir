@@ -225,8 +225,8 @@ TEST(full partition roundtrip) {
   auto fs = self->spawn(tenzir::posix_filesystem, directory,
                         tenzir::accountant_actor{});
   auto partition_uuid = tenzir::uuid::random();
-  const auto* store_plugin = tenzir::plugins::find<tenzir::store_actor_plugin>(
-    tenzir::defaults::store_backend);
+  const auto* store_plugin
+    = tenzir::plugins::find_store(tenzir::defaults::store_backend);
   REQUIRE(store_plugin);
   auto partition = sys.spawn(tenzir::active_partition, schema, partition_uuid,
                              tenzir::accountant_actor{}, fs, caf::settings{},
