@@ -522,3 +522,44 @@ EOF
 @test "set operator" {
   check tenzir 'version | set foo="patch", :uint64=-1, :ip=1.1.1.1, qux=foo, version=123, #schema="foo.bar", schema=#schema, build=null | set schema2=#schema, baz=patch'
 }
+
+# bats test_tags=pipelines, deduplicate
+@test "Deduplicate operator" {
+  check tenzir "from ${INPUTSDIR}/json/all-types.json | deduplicate --limit 1"
+  check tenzir "from ${INPUTSDIR}/json/all-types.json | deduplicate e --limit 1"
+  check tenzir "from ${INPUTSDIR}/json/all-types.json | deduplicate b --limit 1"
+  check tenzir "from ${INPUTSDIR}/json/all-types.json | batch 1 | deduplicate b --limit 1"
+  check tenzir "from ${INPUTSDIR}/json/all-types.json | deduplicate b --limit 1 --distance 1"
+  check tenzir "from ${INPUTSDIR}/json/all-types.json | deduplicate b,e --limit 1"
+
+  check tenzir "from stdin read json | deduplicate :ip --limit 2" <<EOF
+{"value": "192.168.1.1", "tag": 1}
+{"value": "192.168.1.2", "tag": 2}
+{"value": "192.168.1.3", "tag": 3}
+{"value": "192.168.1.2", "tag": 4}
+{"value": "192.168.1.1", "tag": 5}
+{"value": "192.168.1.2", "tag": 6}
+{"value": "192.168.1.3", "tag": 7}
+{"value": "192.168.1.2", "tag": 8}
+{"value": "192.168.1.1", "tag": 9}
+EOF
+
+  check tenzir "from stdin read json | deduplicate :ip --distance 3 --limit 1" <<EOF
+{"value": "192.168.1.1", "tag": 1}
+{"value": "192.168.1.2", "tag": 2}
+{"value": "192.168.1.3", "tag": 3}
+{"value": "192.168.1.2", "tag": 4}
+{"value": "192.168.1.1", "tag": 5}
+{"value": "192.168.1.2", "tag": 6}
+{"value": "192.168.1.3", "tag": 7}
+{"value": "192.168.1.2", "tag": 8}
+{"value": "192.168.1.1", "tag": 9}
+EOF
+
+  # Potentially flaky, if `tenzir` takes more than (8s - 100ms) to start up:
+  # (
+  #   echo "{\"value\": \"A\", \"tag\": 1}"
+  #   sleep 8s
+  #   echo "{\"value\": \"A\", \"tag\": 2}"
+  # ) | check tenzir "from stdin read json | deduplicate value --limit 1 --timeout 100ms"
+}
