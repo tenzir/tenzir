@@ -17,17 +17,17 @@
 
 namespace tenzir {
 
-struct socket_type_parser : parser_base<socket_type_parser> {
-  using attribute = detail::socket_type;
+struct uds_socket_type_parser : parser_base<uds_socket_type_parser> {
+  using attribute = detail::uds_socket_type;
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
     using namespace parser_literals;
     // clang-format off
     auto p
-      = ( "datagram"_p ->* [] { return detail::socket_type::datagram; }
-        | "stream"_p ->* [] { return detail::socket_type::stream; }
-        | "fd"_p ->* [] { return detail::socket_type::fd; }
+      = ( "datagram"_p ->* [] { return detail::uds_socket_type::datagram; }
+        | "stream"_p ->* [] { return detail::uds_socket_type::stream; }
+        | "fd"_p ->* [] { return detail::uds_socket_type::fd; }
         );
     // clang-format on
     return p(f, l, x);
@@ -35,13 +35,13 @@ struct socket_type_parser : parser_base<socket_type_parser> {
 };
 
 template <>
-struct parser_registry<detail::socket_type> {
-  using type = socket_type_parser;
+struct parser_registry<detail::uds_socket_type> {
+  using type = uds_socket_type_parser;
 };
 
 namespace parsers {
 
-auto const socket_type = socket_type_parser{};
+auto const uds_socket_type = uds_socket_type_parser{};
 
 } // namespace parsers
 

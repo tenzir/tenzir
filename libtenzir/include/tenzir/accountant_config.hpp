@@ -34,7 +34,7 @@ struct accountant_config {
     bool enable = false;
     bool real_time = false;
     std::string path;
-    detail::socket_type type;
+    detail::uds_socket_type type;
   };
 
   self_sink self_sink;

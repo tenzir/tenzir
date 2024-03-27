@@ -292,7 +292,7 @@ struct accountant_state_impl {
       uds_sink.reset(nullptr);
     }
     if (start_uds_sink) {
-      if (cfg.uds_sink.type == detail::socket_type::datagram) {
+      if (cfg.uds_sink.type == detail::uds_socket_type::datagram) {
         auto s = detail::uds_datagram_sender::make(root / cfg.uds_sink.path);
         if (s) {
           TENZIR_INFO("{} writes metrics to {}", *self, cfg.uds_sink.path);

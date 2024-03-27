@@ -190,15 +190,15 @@ caf::error uds_datagram_sender::send(std::span<char> data, int timeout_usec) {
   return ec::timeout;
 }
 
-int uds_connect(const std::string& path, socket_type type) {
+int uds_connect(const std::string& path, uds_socket_type type) {
   int fd{};
   switch (type) {
-    case socket_type::stream:
-    case socket_type::fd:
+    case uds_socket_type::stream:
+    case uds_socket_type::fd:
       if ((fd = ::socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
         return fd;
       break;
-    case socket_type::datagram:
+    case uds_socket_type::datagram:
       if ((fd = ::socket(AF_UNIX, SOCK_DGRAM, 0)) < 0)
         return fd;
       ::sockaddr_un clt;
@@ -219,7 +219,7 @@ int uds_connect(const std::string& path, socket_type type) {
   srv.sun_family = AF_UNIX;
   std::strncpy(srv.sun_path, path.data(), sizeof(srv.sun_path) - 1);
   if (::connect(fd, reinterpret_cast<sockaddr*>(&srv), sizeof(srv)) < 0) {
-    if (!(type == socket_type::datagram && errno == ENOENT)) {
+    if (!(type == uds_socket_type::datagram && errno == ENOENT)) {
       TENZIR_WARN("{} failed in connect: {}", __func__,
                   detail::describe_errno());
       return -1;
@@ -329,7 +329,7 @@ unix_domain_socket unix_domain_socket::accept(const std::string& path) {
 }
 
 unix_domain_socket
-unix_domain_socket::connect(const std::string& path, socket_type type) {
+unix_domain_socket::connect(const std::string& path, uds_socket_type type) {
   return unix_domain_socket{detail::uds_connect(path, type)};
 }
 
