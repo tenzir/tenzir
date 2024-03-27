@@ -41,13 +41,11 @@ struct loader_args {
 
 struct saver_args {
   std::string url = {};
-  bool insert_newlines = {};
 
   friend auto inspect(auto& f, saver_args& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.plugins.udp.saver_args")
-      .fields(f.field("url", x.url),
-              f.field("insert_newlines", x.insert_newlines));
+      .fields(f.field("url", x.url));
   }
 };
 
@@ -275,7 +273,6 @@ public:
     auto endpoint = located<std::string>{};
     auto args = saver_args{};
     parser.add(endpoint, "<endpoint>");
-    parser.add("-n,--insert-newlines", args.insert_newlines);
     parser.parse(p);
     if (not endpoint.inner.starts_with("udp://")) {
       args.url = fmt::format("udp://{}", endpoint.inner);

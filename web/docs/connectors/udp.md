@@ -20,7 +20,7 @@ udp [-c|--connect] [-n|--insert-newlines] <endpoint>
 Saver:
 
 ```
-udp [-n|--insert-newlines] <endpoint>
+udp <endpoint>
 ```
 
 ## Description
