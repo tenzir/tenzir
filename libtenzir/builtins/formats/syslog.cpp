@@ -18,88 +18,160 @@ namespace tenzir::plugins::syslog {
 
 namespace {
 
+template <typename Message>
+struct syslog_row {
+  syslog_row(Message msg, size_t line_no)
+    : parsed(std::move(msg)), starting_line_no(line_no) {
+  }
+
+  void emit_diag(std::string_view parser_name, diagnostic_handler& diag) const {
+    if (line_count == 1) {
+      diagnostic::error("syslog parser ({}) failed", parser_name)
+        .note("input line number {}", starting_line_no)
+        .emit(diag);
+      return;
+    }
+    diagnostic::error("syslog parser ({}) failed", parser_name)
+      .note("input lines number {} to {}", starting_line_no,
+            starting_line_no + line_count - 1)
+      .emit(diag);
+  }
+
+  Message parsed;
+  size_t starting_line_no;
+  size_t line_count{1};
+};
+
 struct syslog_builder {
 public:
   using message_type = format::syslog::message;
+  using row_type = syslog_row<message_type>;
 
-  syslog_builder() : builder_(format::syslog::make_syslog_type()) {
+  syslog_builder() = default;
+
+  auto add_new(row_type&& row) -> void {
+    rows_.emplace_back(std::move(row));
   }
 
-  auto add(const message_type& msg) -> bool {
-    record r{
-      {"facility", msg.hdr.facility},     {"severity", msg.hdr.severity},
-      {"version", msg.hdr.version},       {"timestamp", msg.hdr.ts},
-      {"hostname", msg.hdr.hostname},     {"app_name", msg.hdr.app_name},
-      {"process_id", msg.hdr.process_id}, {"message_id", msg.hdr.msg_id},
-      {"structured_data", msg.data},      {"message", msg.msg},
-    };
-    return builder_.try_data(r).operator bool();
+  auto add_line_to_latest(std::string_view line) -> void {
+    TENZIR_ASSERT(not rows_.empty());
+    auto& latest = rows_.back();
+    if (not latest.parsed.msg) {
+      latest.parsed.msg.emplace(line);
+    } else {
+      latest.parsed.msg->push_back('\n');
+      latest.parsed.msg->append(line);
+    }
+    ++latest.line_count;
   }
 
   auto rows() -> size_t {
-    return static_cast<size_t>(builder_.length());
+    return rows_.size();
   }
 
-  auto finish() -> std::vector<table_slice> {
-    return builder_.finish_as_table_slice();
+  auto finish(diagnostic_handler& diag) -> std::optional<table_slice> {
+    series_builder builder{format::syslog::make_syslog_type()};
+    for (auto& row : rows_) {
+      auto& msg = row.parsed;
+      const record r{
+        {"facility", msg.hdr.facility},
+        {"severity", msg.hdr.severity},
+        {"version", msg.hdr.version},
+        {"timestamp", msg.hdr.ts},
+        {"hostname", std::move(msg.hdr.hostname)},
+        {"app_name", std::move(msg.hdr.app_name)},
+        {"process_id", msg.hdr.process_id},
+        {"message_id", msg.hdr.msg_id},
+        {"structured_data", std::move(msg.data)},
+        {"message", std::move(msg.msg)},
+      };
+      if (not builder.try_data(r)) {
+        row.emit_diag("RFC 5242", diag);
+        return std::nullopt;
+      }
+    }
+    rows_.clear();
+    return builder.finish_assert_one_slice();
   }
 
 private:
-  series_builder builder_;
+  std::vector<row_type> rows_{};
 };
 
 struct legacy_syslog_builder {
 public:
   using message_type = format::syslog::legacy_message;
+  using row_type = syslog_row<message_type>;
 
-  legacy_syslog_builder()
-    : builder_(format::syslog::make_legacy_syslog_type()) {
+  legacy_syslog_builder() = default;
+
+  auto add_new(row_type&& row) -> void {
+    rows_.emplace_back(std::move(row));
   }
 
-  auto add(const message_type& msg) -> bool {
-    return builder_.add(msg.facility, msg.severity, msg.timestamp, msg.host,
-                        msg.app_name, msg.process_id, msg.content);
+  auto add_line_to_latest(std::string_view line) -> void {
+    TENZIR_ASSERT(not rows_.empty());
+    auto& latest = rows_.back();
+    latest.parsed.content.push_back('\n');
+    latest.parsed.content.append(line);
+    ++latest.line_count;
   }
 
   auto rows() -> size_t {
-    return builder_.rows();
+    return rows_.size();
   }
 
-  auto finish() -> std::vector<table_slice> {
-    if (rows() == 0) {
-      return {};
+  auto finish(diagnostic_handler& diag) -> std::optional<table_slice> {
+    table_slice_builder builder{format::syslog::make_legacy_syslog_type()};
+    for (auto& row : rows_) {
+      auto& msg = row.parsed;
+      if (not builder.add(msg.facility, msg.severity, msg.timestamp, msg.host,
+                          msg.app_name, msg.process_id, msg.content)) {
+        row.emit_diag("RFC 3164", diag);
+        return std::nullopt;
+      }
     }
-    return {builder_.finish()};
+    rows_.clear();
+    return builder.finish();
   }
 
 private:
-  table_slice_builder builder_;
+  std::vector<row_type> rows_{};
 };
 
 struct unknown_syslog_builder {
 public:
-  using message_type = std::string_view;
+  using message_type = std::string;
+  using row_type = syslog_row<message_type>;
 
-  unknown_syslog_builder() : builder_(format::syslog::make_unknown_type()) {
+  unknown_syslog_builder() = default;
+
+  auto add_new(row_type&& row) -> void {
+    rows_.emplace_back(std::move(row.parsed));
   }
 
-  auto add(message_type line) -> bool {
-    return builder_.add(line);
+  auto add_line_to_latest(std::string_view) -> void {
+    TENZIR_UNREACHABLE();
   }
 
   auto rows() -> size_t {
-    return builder_.rows();
+    return rows_.size();
   }
 
-  auto finish() -> std::vector<table_slice> {
-    if (rows() == 0) {
-      return {};
+  auto finish(diagnostic_handler&) -> std::optional<table_slice> {
+    table_slice_builder builder{format::syslog::make_unknown_type()};
+    for (auto& row : rows_) {
+      // Adding a `syslog.unknown` can never fail,
+      // it's just a field containing a string.
+      auto r = builder.add(row);
+      TENZIR_ASSERT(r);
     }
-    return {builder_.finish()};
+    rows_.clear();
+    return builder.finish();
   }
 
 private:
-  table_slice_builder builder_;
+  std::vector<std::string> rows_;
 };
 
 auto impl(generator<std::optional<std::string_view>> lines,
@@ -109,7 +181,7 @@ auto impl(generator<std::optional<std::string_view>> lines,
   const auto finish = [&]() {
     return std::visit(
       [&](auto& b) {
-        return b.finish();
+        return b.finish(ctrl.diagnostics());
       },
       builder);
   };
@@ -120,13 +192,13 @@ auto impl(generator<std::optional<std::string_view>> lines,
       },
       builder);
   };
-  const auto add = [&](const auto& msg) {
-    return std::visit(
-      [&](auto& b) -> bool {
-        if constexpr (std::is_same_v<std::remove_cvref_t<decltype(msg)>,
-                                     typename std::remove_reference_t<
-                                       decltype(b)>::message_type>) {
-          return b.add(msg);
+  const auto add_new = [&]<typename Message>(Message&& msg, size_t line_no) {
+    std::visit(
+      [&]<typename Builder>(Builder& b) {
+        if constexpr (std::is_constructible_v<typename Builder::message_type,
+                                              std::remove_cvref_t<Message>>) {
+          b.add_new(
+            typename Builder::row_type{std::forward<Message>(msg), line_no});
         } else {
           TENZIR_UNREACHABLE();
         }
@@ -134,9 +206,9 @@ auto impl(generator<std::optional<std::string_view>> lines,
       builder);
   };
   const auto change_builder
-    = [&]<typename Builder>(tag<Builder>) -> std::vector<table_slice> {
+    = [&]<typename Builder>(tag<Builder>) -> std::optional<table_slice> {
     if (std::holds_alternative<Builder>(builder)) {
-      return {};
+      return table_slice{};
     }
     auto finished = finish();
     builder.template emplace<Builder>();
@@ -149,8 +221,10 @@ auto impl(generator<std::optional<std::string_view>> lines,
     if (rows() >= defaults::import::table_slice_size
         or last_finish + defaults::import::batch_timeout < now) {
       last_finish = now;
-      for (auto&& slice : finish()) {
-        co_yield std::move(slice);
+      if (auto slice = finish(); not slice) {
+        co_return;
+      } else if (slice->rows() > 0) {
+        co_yield std::move(*slice);
       }
     }
     if (not line) {
@@ -168,46 +242,43 @@ auto impl(generator<std::optional<std::string_view>> lines,
     format::syslog::message msg{};
     format::syslog::legacy_message legacy_msg{};
     if (auto parser = format::syslog::message_parser{}; parser(f, l, msg)) {
-      for (auto&& slice : change_builder(tag_v<syslog_builder>)) {
-        co_yield std::move(slice);
-      }
-      if (not add(msg)) {
-        diagnostic::error(
-          "syslog parser (RFC 5242) failed to produce table slice")
-          .note("line number {}", line_nr)
-          .hint("line: `{}`", *line)
-          .emit(ctrl.diagnostics());
+      // This line is a valid new-RFC (5424) syslog message.
+      // Store it in the builder
+      if (auto slice = change_builder(tag_v<syslog_builder>); not slice) {
         co_return;
+      } else if (slice->rows() > 0) {
+        co_yield std::move(*slice);
       }
+      add_new(std::move(msg), line_nr);
     } else if (auto legacy_parser = format::syslog::legacy_message_parser{};
                legacy_parser(f, l, legacy_msg)) {
-      for (auto&& slice : change_builder(tag_v<legacy_syslog_builder>)) {
-        co_yield std::move(slice);
-      }
-      if (not add(legacy_msg)) {
-        diagnostic::error(
-          "syslog parser (RFC 3164) failed to produce table slice")
-          .note("line number {}", line_nr)
-          .hint("line: `{}`", *line)
-          .emit(ctrl.diagnostics());
+      // Same as above, except it's an old-RFC (3164) syslog message.
+      if (auto slice = change_builder(tag_v<legacy_syslog_builder>);
+          not slice) {
         co_return;
+      } else if (slice->rows() > 0) {
+        co_yield std::move(*slice);
       }
+      add_new(std::move(legacy_msg), line_nr);
+    } else if (std::holds_alternative<unknown_syslog_builder>(builder)) {
+      // This line is not a valid syslog message.
+      // The current builder is `unknown_syslog_builder`,
+      // so this line will also become an event of type `syslog.unknown`.
+      add_new(std::string{*line}, line_nr);
     } else {
-      for (auto&& slice : change_builder(tag_v<unknown_syslog_builder>)) {
-        co_yield std::move(slice);
-      }
-      if (not add(*line)) {
-        diagnostic::error(
-          "syslog parser (unknown format) failed to produce table slice")
-          .note("line number {}", line_nr)
-          .hint("line: `{}`", *line)
-          .emit(ctrl.diagnostics());
-        co_return;
-      }
+      // This line is not a valid syslog message,
+      // but the previous line was.
+      // Let's assume that we have a multiline syslog message,
+      // and append this current line to the previous message.
+      std::visit(
+        [&](auto& b) {
+          b.add_line_to_latest(*line);
+        },
+        builder);
     }
   }
-  for (auto slices = finish(); auto&& slice : slices) {
-    co_yield std::move(slice);
+  if (auto slice = finish(); slice && slice->rows() > 0) {
+    co_yield std::move(*slice);
   }
 }
 
