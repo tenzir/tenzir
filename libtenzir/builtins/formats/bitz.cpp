@@ -6,6 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+// The BITZ format is a size-prefixed dump of Tenzir's wire format as laid out
+// in the tenzir.fbs.FlatTableSlice FlatBuffers table. The size prefix occupies
+// 64 bit and is stored in network byte order.
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/make_byte_reader.hpp>
@@ -39,7 +43,8 @@ public:
           }
           if (header->size() < sizeof(uint64_t)) {
             if (header->size() != 0) {
-              diagnostic::error("unexpected header length {}", header->size())
+              diagnostic::error("unexpected BITZ header length {}",
+                                header->size())
                 .note("expected {}", sizeof(uint64_t))
                 .emit(ctrl.diagnostics());
             }
@@ -62,7 +67,10 @@ public:
           auto deserializer = caf::binary_deserializer{nullptr, *message};
           auto result = table_slice{};
           const auto ok = deserializer.apply(result);
-          TENZIR_ASSERT(ok);
+          if (not ok) [[unlikely]] {
+            diagnostic::warning("failed to deserialize BITZ message")
+              .emit(ctrl.diagnostics());
+          }
           co_yield std::move(result);
         }
       },
@@ -87,12 +95,22 @@ public:
     (void)input_schema;
     (void)ctrl;
     return printer_instance::make(
-      [](table_slice slice) -> generator<chunk_ptr> {
+      [&ctrl](table_slice slice) -> generator<chunk_ptr> {
+        if (slice.rows() == 0) {
+          co_yield {};
+          co_return;
+        }
         auto buffer = caf::byte_buffer{};
         buffer.resize(sizeof(uint64_t));
         auto serializer = caf::binary_serializer{nullptr, buffer};
         const auto ok = serializer.apply(slice);
-        TENZIR_ASSERT(ok);
+        if (not ok) [[unlikely]] {
+          diagnostic::warning("failed to serialize BITZ message")
+            .note("skipping {} events with schema {}", slice.rows(),
+                  slice.schema())
+            .emit(ctrl.diagnostics());
+          co_return;
+        }
         const auto size = detail::to_network_order(
           detail::narrow_cast<uint64_t>(buffer.size() - sizeof(uint64_t)));
         TENZIR_ASSERT(size > 0);
