@@ -21,6 +21,7 @@
 #include <arrow/util/utf8.h>
 
 #include <chrono>
+#include <ranges>
 
 namespace tenzir::tql2 {
 
@@ -238,14 +239,19 @@ private:
   std::unique_ptr<diagnostic_handler> inner_;
 };
 
-struct sort_expr {
-  enum class direction { asc, desc };
+TENZIR_ENUM(sort_direction, asc, desc);
 
-  sort_expr(expression expr, direction dir) : expr{std::move(expr)}, dir{dir} {
+struct sort_expr {
+  sort_expr(expression expr, sort_direction dir)
+    : expr{std::move(expr)}, dir{dir} {
   }
 
   expression expr;
-  direction dir;
+  sort_direction dir;
+
+  friend auto inspect(auto& f, sort_expr& x) -> bool {
+    return f.object(x).fields(f.field("expr", x.expr), f.field("dir", x.dir));
+  }
 };
 
 class sort_use final : public operator_use {
@@ -256,6 +262,11 @@ public:
 
   // void, byte, chunk, event
   // void, chunk_ptr, vector<chunk_ptr>, table_slice
+
+  auto debug(debug_writer& f) -> bool override {
+    return f.object(*this).fields(f.field("self", self_),
+                                  f.field("exprs", exprs_));
+  }
 
 private:
   entity self_;
@@ -272,10 +283,9 @@ public:
       arg.match(
         [&](tql2::ast::unary_expr& un_expr) {
           if (un_expr.op.inner == tql2::ast::unary_op::neg) {
-            exprs.emplace_back(std::move(un_expr.expr),
-                               sort_expr::direction::desc);
+            exprs.emplace_back(std::move(un_expr.expr), sort_direction::desc);
           } else {
-            exprs.emplace_back(std::move(arg), sort_expr::direction::asc);
+            exprs.emplace_back(std::move(arg), sort_direction::asc);
           }
         },
         [&](assignment& x) {
@@ -284,7 +294,7 @@ public:
             .emit(ctx.dh());
         },
         [&](auto&) {
-          exprs.emplace_back(std::move(arg), sort_expr::direction::asc);
+          exprs.emplace_back(std::move(arg), sort_direction::asc);
         });
     }
     for (auto& expr : exprs) {
@@ -426,6 +436,10 @@ public:
     : selectors_{std::move(selectors)} {
   }
 
+  auto debug(debug_writer& f) -> bool override {
+    return f.apply(selectors_);
+  }
+
 private:
   std::vector<selector> selectors_;
 };
@@ -459,6 +473,18 @@ struct pipeline_use {
   }
 
   std::vector<std::unique_ptr<operator_use>> ops;
+
+  friend auto inspect(auto& f, pipeline_use& x) -> bool {
+    if (not f.begin_sequence(x.ops.size())) {
+      return false;
+    }
+    for (auto& op : x.ops) {
+      if (not f.apply(*op)) {
+        return false;
+      }
+    }
+    return f.end_sequence();
+  }
 };
 
 class if_use final : public operator_use {
@@ -480,6 +506,10 @@ class set_use final : public operator_use {
 public:
   explicit set_use(std::vector<assignment> assignments)
     : assignments_{std::move(assignments)} {
+  }
+
+  auto debug(debug_writer& f) -> bool override {
+    return f.apply(assignments_);
   }
 
 private:
@@ -717,7 +747,16 @@ public:
     auto arg = caf::get_if<double>(&args[0].inner);
     if (not arg) {
       // TODO
-      diagnostic::error("`sqrt` expected `double` bot got `{}`", args[0].inner)
+      auto kind = caf::visit(detail::overload{
+                               []<class T>(const T&) {
+                                 return type_kind::of<data_to_type_t<T>>;
+                               },
+                               [](const pattern&) -> type_kind {
+                                 TENZIR_UNREACHABLE();
+                               },
+                             },
+                             args[0].inner);
+      diagnostic::error("`sqrt` expected `double` but got `{}`", kind)
         .primary(args[0].source)
         .emit(ctx.dh());
       return std::nullopt;
@@ -805,6 +844,7 @@ public:
   auto evaluate(location fn, std::vector<located<data>> args,
                 context& ctx) const -> std::optional<data> override {
     // TODO
+    TENZIR_UNUSED(fn, args, ctx);
     return 123.45;
   }
 };
@@ -823,6 +863,7 @@ public:
 
   auto evaluate(location fn, std::vector<located<data>> args,
                 context& ctx) const -> std::optional<data> override {
+    TENZIR_UNUSED(fn, ctx);
     TENZIR_ASSERT(args.empty());
     return time{time::clock::now()};
   }
@@ -960,6 +1001,7 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   // TODO
   auto ctx = context{reg, diag_wrapper};
   auto pipe = prepare_pipeline(std::move(parsed), ctx);
+  TENZIR_WARN("{:#?}", use_default_formatter(pipe));
   if (diag_wrapper.error()) {
     return false;
   }
