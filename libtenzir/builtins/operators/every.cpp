@@ -201,6 +201,7 @@ public:
         .throw_();
     }
     auto result = plugin->parse_operator(p);
+    TENZIR_ASSERT(result);
     if (auto* pipe = dynamic_cast<pipeline*>(result.get())) {
       auto ops = std::move(*pipe).unwrap();
       for (auto& op : ops) {
