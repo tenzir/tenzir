@@ -86,6 +86,45 @@ public:
       val);
   }
 
+  auto eval(const ast::binary_expr& x) -> data {
+    auto left = eval(x.left);
+    auto right = eval(x.right);
+    auto not_implemented = [&] {
+      diagnostic::error("binary op eval not implemented")
+        .primary(x.get_location())
+        .throw_();
+    };
+    return caf::visit(
+      [&]<class L, class R>(const L& l, const R& r) -> data {
+        if constexpr (std::same_as<L, R>) {
+          using T = L;
+          if constexpr (std::signed_integral<T> || std::floating_point<T>) {
+            switch (x.op.inner) {
+              case ast::binary_op::add:
+                if (l > 0 && r > std::numeric_limits<T>::max() - l) {
+                  diagnostic::error("integer overflow")
+                    .primary(x.get_location())
+                    .throw_();
+                }
+                if (l < 0 && r < std::numeric_limits<T>::min() - l) {
+                  diagnostic::error("integer underflow")
+                    .primary(x.get_location())
+                    .throw_();
+                }
+                return l + r;
+              case ast::binary_op::sub:
+                return l - r;
+              default:
+                break;
+            }
+          }
+        }
+        not_implemented();
+        TENZIR_UNREACHABLE();
+      },
+      left, right);
+  }
+
   auto eval(const ast::function_call& x) -> data {
     if (not x.fn.ref.resolved()) {
       throw std::monostate{};
@@ -108,9 +147,17 @@ public:
     return std::move(*result);
   }
 
+  auto eval(const ast::dollar_var& x) -> data {
+    diagnostic::error("TODO: eval dollar").primary(x.get_location()).throw_();
+  }
+
+  auto eval(const ast::entity& x) -> data {
+    // we know this must be a constant
+  }
+
   template <class T>
   auto eval(const T& x) -> data {
-    diagnostic::error("not implemented").primary(x.get_location()).throw_();
+    diagnostic::error("eval not implemented").primary(x.get_location()).throw_();
   }
 
 private:

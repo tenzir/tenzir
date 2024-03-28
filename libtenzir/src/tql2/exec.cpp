@@ -592,7 +592,7 @@ public:
     }
     if (*count < 0) {
       diagnostic::error("expected count to be non-negative but got {}", *count)
-        .primary(args[0].get_location(), "this is {}")
+        .primary(args[0].get_location())
         .emit(ctx.dh());
       return nullptr;
     }
@@ -1001,7 +1001,7 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   // TODO
   auto ctx = context{reg, diag_wrapper};
   auto pipe = prepare_pipeline(std::move(parsed), ctx);
-  TENZIR_WARN("{:#?}", use_default_formatter(pipe));
+  // TENZIR_WARN("{:#?}", use_default_formatter(pipe));
   if (diag_wrapper.error()) {
     return false;
   }
