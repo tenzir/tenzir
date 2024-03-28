@@ -9,28 +9,49 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/plugin.hpp>
 
+#include <arrow/array.h>
+#include <arrow/compute/cast.h>
+#include <arrow/io/api.h>
+#include <arrow/ipc/api.h>
+#include <arrow/table.h>
+#include <arrow/util/key_value_metadata.h>
+#include <caf/expected.hpp>
 #include <arrow/record_batch.h>
+#include <arrow/ipc/writer.h>
+
 
 namespace tenzir::plugins::feather2 {
 namespace {
 
 auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
   -> generator<table_slice> {
-  // TOOD: implement
   co_return;
 }
 
 auto print_feather(table_slice input, operator_control_plane& ctrl)
   -> generator<chunk_ptr> {
-  // TOOD: implement
   auto batch = to_record_batch(input); // work with this instead
+  auto event_array = batch->ToStructArray().ValueOrDie();
+  auto batch_schema = batch->schema()->metadata();
+  auto sink = arrow::io::BufferOutputStream::Create().ValueOrDie();
+  const arrow::ipc::IpcWriteOptions &options = arrow::ipc::IpcWriteOptions::Defaults();
+  //is schema info correct?
+  auto schema = arrow::schema(
+    {arrow::field("import_time", time_type::to_arrow_type()),
+     arrow::field("event", event_array->type(), batch_schema)});
+  auto stream_writer_result = arrow::ipc::MakeStreamWriter(sink, schema, options);
+  auto stream_writer = stream_writer_result.ValueOrDie();
+  auto status = stream_writer->WriteRecordBatch(*batch); // do I need custom metadata?
+  auto finished_buffer_result = sink->Finish();
+  auto finished_buffer = finished_buffer_result.MoveValueUnsafe();
+  auto chunk = chunk::make(finished_buffer); // must be cpu buffer, how to get it over without copying
+  co_yield chunk;
   co_return;
 }
 
 class feather2_parser final : public plugin_parser {
 public:
   feather2_parser() = default;
-
   auto name() const -> std::string override {
     return "feather2";
   }
