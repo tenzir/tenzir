@@ -35,7 +35,7 @@ understand how it can redefine the way your organization approaches data
 management and analysis. The journey towards more effective and efficient data
 operations starts here.
 
-## Why deduplicate?
+## Why Deduplicate?
 
 Deduplication of operational event data is vital in various contexts dealing
 with large volumes of data, as it helps streamline information, eliminate
