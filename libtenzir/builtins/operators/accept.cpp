@@ -19,25 +19,61 @@
 #include <arrow/type.h>
 #include <caf/typed_event_based_actor.hpp>
 
+#include <queue>
+
 namespace tenzir::plugins::accept {
 
 namespace {
 
-using alarm_clock_actor = caf::typed_actor<
-  // Waits for `delay` before returning.
-  auto(duration delay)->caf::result<void>>;
+using bridge_actor = caf::typed_actor<
+  // Forwards slices from the connection actors to the operator
+  auto(table_slice slice)->caf::result<void>,
+  auto(atom::get)->caf::result<table_slice>>;
 
-auto make_alarm_clock(alarm_clock_actor::pointer self)
-  -> alarm_clock_actor::behavior_type {
+struct bridge_state {
+  std::queue<table_slice> buffer;
+  caf::typed_response_promise<table_slice> buffer_rp;
+};
+
+auto make_bridge(bridge_actor::stateful_pointer<bridge_state> self)
+  -> bridge_actor::behavior_type {
   return {
-    [self](duration delay) -> caf::result<void> {
-      auto rp = self->make_response_promise<void>();
-      detail::weak_run_delayed(self, delay, [rp]() mutable {
-        rp.deliver();
-      });
-      return rp;
+    [self](table_slice& slice) -> caf::result<void> {
+      if (self->state.buffer_rp.pending()) {
+        TENZIR_ASSERT(self->state.buffer.empty());
+        self->state.buffer_rp.deliver(std::move(slice));
+        return {};
+      }
+      self->state.buffer.push(std::move(slice));
+      return {};
+    },
+    [self](atom::get) -> caf::result<table_slice> {
+      TENZIR_ASSERT(not self->state.buffer_rp.pending());
+      if (self->state.buffer.empty()) {
+        self->state.buffer_rp = self->make_response_promise<table_slice>();
+        return self->state.buffer_rp;
+      }
+      auto ts = std::move(self->state.buffer.front());
+      self->state.buffer.pop();
+      return ts;
     },
   };
+}
+
+struct connection_manager_state {};
+
+auto make_connection_manager(caf::stateful_actor<connection_manager_state>* self,
+                             bridge_actor bridge) -> caf::behavior {
+  return {};
+}
+
+struct connection_state {};
+
+auto make_connection_actor(caf::stateful_actor<connection_state>* self,
+                           bridge_actor bridge,
+                           boost::asio::ip::tcp::socket socket, bool use_tls)
+  -> caf::behavior {
+  return {};
 }
 
 class accept_operator final : public operator_base {
