@@ -35,11 +35,15 @@ using bridge_actor = caf::typed_actor<
   auto(table_slice slice)->caf::result<void>,
   auto(atom::get)->caf::result<table_slice>>;
 
-struct connection_state {};
+struct connection_state {
+  caf::event_based_actor* self;
+  bridge_actor bridge;
+  operator_ptr read;
+};
 
 auto make_connection(caf::stateful_actor<connection_state>* self,
                      bridge_actor bridge, boost::asio::ip::tcp::socket socket,
-                     bool use_tls) -> caf::behavior {
+                     operator_ptr read, bool use_tls) -> caf::behavior {
   return {};
 }
 
@@ -47,6 +51,7 @@ struct connection_manager_state {
   caf::event_based_actor* self;
   bridge_actor bridge;
   operator_ptr read;
+  bool use_tls;
 
   boost::asio::io_service io_service;
   std::optional<boost::asio::ip::tcp::acceptor> acceptor;
@@ -59,21 +64,22 @@ struct connection_manager_state {
       auto socket = tcp::socket(io_service);
       acceptor->accept(socket);
       connections.push_back(
-        self->spawn(make_connection, std::move(socket), false));
+        self->spawn(make_connection, std::move(socket), use_tls));
       run();
     });
   }
 };
 
-auto make_connection_manager(
-  caf::stateful_actor<connection_manager_state>* self, bridge_actor bridge,
-  operator_ptr read, boost::asio::ip::tcp::endpoint endpoint) -> caf::behavior {
+auto make_connection_manager(caf::stateful_actor<connection_manager_state>* self,
+                             bridge_actor bridge,
+                             const boost::asio::ip::tcp::endpoint& endpoint,
+                             operator_ptr read, bool use_tls) -> caf::behavior {
   using boost::asio::ip::tcp;
   self->state.self = self;
   self->state.bridge = std::move(bridge);
   self->state.read = std::move(read);
-  self->state.acceptor
-    = tcp::acceptor(self->state.io_service, std::move(endpoint));
+  self->state.use_tls = use_tls;
+  self->state.acceptor = tcp::acceptor(self->state.io_service, endpoint);
   self->state.run();
   return {};
 }
@@ -85,10 +91,13 @@ struct bridge_state {
   caf::actor connection_manager = {};
 };
 
-auto make_bridge(bridge_actor::stateful_pointer<bridge_state> self)
+auto make_bridge(bridge_actor::stateful_pointer<bridge_state> self,
+                 const boost::asio::ip::tcp::endpoint& endpoint,
+                 operator_ptr read, bool use_tls)
   -> bridge_actor::behavior_type {
   self->state.connection_manager
-    = self->spawn(make_connection_manager, bridge_actor{self});
+    = self->spawn(make_connection_manager, bridge_actor{self}, endpoint,
+                  std::move(read), use_tls);
   return {
     [self](table_slice& slice) -> caf::result<void> {
       if (self->state.buffer_rp.pending()) {
@@ -114,9 +123,10 @@ auto make_bridge(bridge_actor::stateful_pointer<bridge_state> self)
 
 class accept_operator final : public crtp_operator<accept_operator> {
 public:
-  template <operator_input_batch T>
-  auto operator()(T x) const -> T {
-    return x;
+  auto operator()(operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    auto bridge = ctrl.self().spawn(make_bridge, endpoint, read, false);
+    co_yield {};
   }
 
   auto name() const -> std::string override {
@@ -131,6 +141,9 @@ public:
   friend auto inspect(auto& f, accept_operator& x) -> bool {
     return f.object(x).fields();
   }
+
+private:
+  boost::asio::ip::tcp::endpoint endpoint;
 };
 
 class plugin final : public virtual operator_plugin<accept_operator> {
