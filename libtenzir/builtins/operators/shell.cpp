@@ -18,15 +18,304 @@
 #include <tenzir/si_literals.hpp>
 
 #include <boost/asio.hpp>
-#include <boost/process.hpp>
+// #include <boost/process.hpp>
+#include <boost/process/v2.hpp>
+#include <boost/process/v2/shell.hpp>
 #include <caf/detail/scope_guard.hpp>
 
 #include <mutex>
 #include <queue>
 #include <thread>
 
-namespace bp = boost::process;
+namespace bp = boost::process::v2;
 
+namespace tenzir::plugins::shell {
+namespace {
+
+using namespace tenzir::binary_byte_literals;
+
+/// The block size when reading from the child's stdin.
+constexpr auto block_size = 16_KiB;
+
+using child_process_actor = caf::typed_actor<
+  auto(atom::read, uint64_t buffer_size)->caf::result<chunk_ptr>,
+  auto(atom::write, chunk_ptr chunk)->caf::result<void>,
+  auto(atom::status)->caf::result<void>>;
+
+struct child_process_state {
+  static constexpr auto name = "child-process";
+
+  std::shared_ptr<boost::asio::io_context> io_ctx = {};
+
+  std::shared_ptr<bp::process> child = {};
+
+  std::optional<boost::asio::readable_pipe> read_pipe = {};
+  std::optional<boost::asio::writable_pipe> write_pipe = {};
+
+  caf::typed_response_promise<chunk_ptr> read_rp = {};
+  caf::typed_response_promise<void> write_rp = {};
+
+  std::vector<char> read_buffer = {};
+};
+
+auto make_child_process(
+  child_process_actor::stateful_pointer<child_process_state> self,
+  std::string command) -> child_process_actor::behavior_type {
+  self->state.io_ctx = std::make_shared<boost::asio::io_context>();
+  auto cmd = bp::shell(command);
+  self->state.read_pipe.emplace(*self->state.io_ctx);
+  self->state.write_pipe.emplace(*self->state.io_ctx);
+  self->state.child = std::make_shared<bp::process>(
+    *self->state.io_ctx, cmd.exe(), cmd.args(),
+    bp::process_stdio{*self->state.write_pipe, *self->state.read_pipe, {}});
+  auto worker = std::thread([io_ctx = self->state.io_ctx] {
+    auto guard = boost::asio::make_work_guard(*io_ctx);
+    io_ctx->run();
+  });
+  self->attach_functor([worker = std::move(worker), io_ctx = self->state.io_ctx,
+                        child = self->state.child]() mutable {
+    {
+      bp::error_code ec{};
+      child->terminate(ec);
+    }
+    io_ctx->stop();
+    worker.join();
+  });
+  return {
+    [self](atom::read, uint64_t buffer_size) -> caf::result<chunk_ptr> {
+      TENZIR_ASSERT(buffer_size != 0);
+      if (self->state.read_rp.pending()) {
+        return caf::make_error(ec::logic_error,
+                               fmt::format("{} cannot read while a connect "
+                                           "request is pending",
+                                           *self));
+      }
+      self->state.read_buffer.resize(buffer_size);
+      self->state.read_rp = self->make_response_promise<chunk_ptr>();
+      auto on_read = [self, weak_hdl
+                            = caf::actor_cast<caf::weak_actor_ptr>(self)](
+                       boost::system::error_code ec, size_t length) {
+        if (auto hdl = weak_hdl.lock()) {
+          caf::anon_send(
+            caf::actor_cast<caf::actor>(hdl),
+            caf::make_action([self, ec, length] {
+              if (ec) {
+                return self->state.read_rp.deliver(caf::make_error(
+                  ec::system_error,
+                  fmt::format("failed to read from pipe: {}", ec.message())));
+              }
+              self->state.read_buffer.resize(length);
+              self->state.read_buffer.shrink_to_fit();
+              return self->state.read_rp.deliver(
+                chunk::make(std::exchange(self->state.read_buffer, {})));
+            }));
+        }
+      };
+      auto asio_buffer
+        = boost::asio::buffer(self->state.read_buffer, buffer_size);
+      self->state.read_pipe->async_read_some(asio_buffer, on_read);
+      return self->state.read_rp;
+    },
+    [self](atom::write, chunk_ptr chunk) -> caf::result<void> {
+      TENZIR_ASSERT(chunk);
+      if (self->state.write_rp.pending()) {
+        return caf::make_error(ec::logic_error,
+                               fmt::format("{} cannot write while a write "
+                                           "request is pending",
+                                           *self));
+      }
+      self->state.write_rp = self->make_response_promise<void>();
+      auto on_write
+        = [self, chunk, weak_hdl = caf::actor_cast<caf::weak_actor_ptr>(self)](
+            boost::system::error_code ec, size_t length) {
+            if (auto hdl = weak_hdl.lock()) {
+              caf::anon_send(caf::actor_cast<caf::actor>(hdl),
+                             caf::make_action([self, chunk, ec, length] {
+                               if (ec) {
+                                 self->state.write_rp.deliver(caf::make_error(
+                                   ec::system_error,
+                                   fmt::format("failed to write to pipe: {}",
+                                               ec.message())));
+                                 return;
+                               }
+                               if (length < chunk->size()) {
+                                 auto remainder = chunk->slice(length);
+                                 self->state.write_rp.delegate(
+                                   static_cast<child_process_actor>(self),
+                                   atom::write_v, std::move(remainder));
+                                 return;
+                               }
+                               TENZIR_ASSERT(length == chunk->size());
+                               self->state.write_rp.deliver();
+                             }));
+            }
+          };
+      auto asio_buffer = boost::asio::buffer(chunk->data(), chunk->size());
+      self->state.write_pipe->async_write_some(asio_buffer, on_write);
+      return self->state.write_rp;
+    },
+    [self](atom::status) -> caf::result<void> {
+      if (self->state.child->running()) {
+        return {};
+      }
+      return caf::make_error(ec::silent, "");
+    }};
+}
+
+class shell_operator final : public crtp_operator<shell_operator> {
+public:
+  shell_operator() = default;
+
+  explicit shell_operator(std::string command) : command_{std::move(command)} {
+  }
+
+  auto operator()(generator<chunk_ptr> input,
+                  operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    auto child = ctrl.self().spawn(make_child_process, command_);
+    co_yield {};
+    auto output = chunk_ptr{};
+    bool running = true;
+    auto input_it = input.begin();
+    while (running) {
+      {
+        ctrl.self()
+          .request(child, caf::infinite, atom::status_v)
+          .await([&]() {},
+                 [&](const caf::error&) {
+                   running = false;
+                 });
+        co_yield {};
+      }
+      if (input_it != input.end()) {
+        auto&& next = *input_it;
+        if (next) {
+          ctrl.self()
+            .request(child, caf::infinite, atom::write_v, std::move(next))
+            .await(
+              [&]() {
+                ++input_it;
+              },
+              [](const caf::error& err) {
+                TENZIR_ERROR("write_v err: {}", err);
+              });
+        }
+        co_yield {};
+      }
+      {
+        constexpr auto buffer_size = uint64_t{65'536};
+        ctrl.self()
+          .request(child, caf::infinite, atom::read_v, buffer_size)
+          .await(
+            [&](chunk_ptr& chunk) {
+              output = std::move(chunk);
+            },
+            [&](const caf::error& err) {
+              TENZIR_ERROR("read_v err: {}", err);
+              running = false;
+            });
+        co_yield {};
+        co_yield std::exchange(output, {});
+      }
+    }
+  }
+
+#if 0
+  auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    boost::asio::io_context ctx{};
+    auto worker = std::thread([&ctx]() {
+      ctx.run();
+    });
+    auto cmd = bp::shell(command_);
+    boost::asio::readable_pipe read_pipe(ctx);
+    bp::process child(ctx, cmd.exe(), cmd.args(),
+                      bp::process_stdio{{}, read_pipe, {}});
+    co_yield {};
+    std::mutex mtx;
+    std::condition_variable cv;
+    TENZIR_ASSERT(read_pipe.is_open());
+    while (true) {
+      std::vector<char> read_buffer(block_size);
+      auto buffer = boost::asio::buffer(read_buffer);
+      read_pipe.async_read_some(buffer, [&](boost::system::error_code ec,
+                                            size_t len) {
+        TENZIR_INFO("callback: {}", std::this_thread::get_id());
+#  if 0
+                                  std::unique_lock lk(mtx);
+                                  read_buffer.resize(len);
+                                  lk.unlock();
+                                  cv.notify_one();
+#  endif
+      });
+      TENZIR_INFO("main loop: {}", std::this_thread::get_id());
+      std::this_thread::sleep_for(std::chrono::milliseconds{500});
+#  if 0
+      std::unique_lock lk(mtx);
+      cv.wait(lk);
+      co_yield chunk::make(std::move(read_buffer));
+#  endif
+    }
+  }
+#endif
+
+  auto location() const -> operator_location override {
+    // The user expectation is that shell executes relative to the
+    // currently executing process.
+    return operator_location::local;
+  }
+
+  auto detached() const -> bool override {
+    // We may execute blocking syscalls.
+    return true;
+  }
+
+  auto input_independent() const -> bool override {
+    // We may produce results without receiving any further input.
+    return true;
+  }
+
+  auto name() const -> std::string override {
+    return "shell";
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)filter, (void)order;
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, shell_operator& x) -> bool {
+    return f.apply(x.command_);
+  }
+
+private:
+  std::string command_;
+};
+
+class plugin final : public virtual operator_plugin<shell_operator> {
+public:
+  auto signature() const -> operator_signature override {
+    return {
+      .source = true,
+      .transformation = true,
+    };
+  }
+
+  auto parse_operator(parser_interface& p) const -> operator_ptr override {
+    auto command = std::string{};
+    auto parser = argument_parser{"shell", "https://docs.tenzir.com/next/"
+                                           "operators/transformations/shell"};
+    parser.add(command, "<command>");
+    parser.parse(p);
+    return std::make_unique<shell_operator>(std::move(command));
+  }
+};
+
+} // namespace
+} // namespace tenzir::plugins::shell
+
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::shell::plugin)
+
+#if 0
 namespace tenzir::plugins::shell {
 namespace {
 
@@ -345,3 +634,4 @@ public:
 } // namespace tenzir::plugins::shell
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::shell::plugin)
+#endif
