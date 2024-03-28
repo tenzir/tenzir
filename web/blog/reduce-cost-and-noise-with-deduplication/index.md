@@ -35,6 +35,12 @@ understand how it can redefine the way your organization approaches data
 management and analysis. The journey towards more effective and efficient data
 operations starts here.
 
+:::note Available in Tenzir v4.12
+We're releasing Tenzir v4.12 next week, which will include the `deduplicate`
+operator. Until then, you can play with it on the main branch on our [GitHub
+repo](https://github.com/tenzir/tenzir). Stay tuned.
+:::
+
 ## Why Deduplicate?
 
 Deduplication of operational event data is vital in various contexts dealing
