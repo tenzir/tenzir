@@ -592,4 +592,15 @@ EOF
   ]
 }
 EOF
+
+  # Make sure that we can duplicate records that contain enumerations.
+  check tenzir 'read suricata | unroll vlan' <<EOF
+{"event_type": "dns", "vlan": [0, null], "dns": {"type": "answer"}}
+EOF
+
+  # Make sure that we can duplicate enumerations that sit next to the unrolled list.
+  check tenzir 'read suricata | unroll dns.answers' <<EOF
+{"event_type": "dns", "dns": {"type": "answer", "answers": [{}, null]}}
+EOF
+
 }

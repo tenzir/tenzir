@@ -552,29 +552,6 @@ private:
 };
 
 template <class T>
-  requires basic_type<T> || std::same_as<T, enumeration_type>
-auto append_array_slice(auto& builder, const T& type, const arrow::Array& array,
-                        int64_t offset, int64_t length) {
-  using arrow_type = type_to_arrow_type_t<T>;
-  using array_type = arrow::TypeTraits<arrow_type>::ArrayType;
-  if constexpr (arrow::is_extension_type<arrow_type>::value) {
-    // TODO: `AppendArraySlice(...)` throws a `std::bad_cast` with extension
-    // types (Arrow 13.0.0). Hence, we have to use some custom logic here.
-    auto slice
-      = std::static_pointer_cast<array_type>(array.Slice(offset, length));
-    for (auto view : values(type, *slice)) {
-      if (view) {
-        check(append_builder(type, builder, *view));
-      } else {
-        check(builder.AppendNull());
-      }
-    }
-  } else {
-    check(builder.AppendArraySlice(*array.data(), offset, length));
-  }
-}
-
-template <class T>
   requires((basic_type<T> && not std::same_as<T, null_type>)
            || std::same_as<T, enumeration_type>)
 class typed_builder<T> final : public detail::builder_base {
@@ -606,7 +583,7 @@ public:
     TENZIR_ASSERT(count <= array->length());
     auto rest_begin = count;
     auto rest_count = array->length() - rest_begin;
-    append_array_slice(*inner_, type_, *array, rest_begin, rest_count);
+    check(append_array_slice(*inner_, type_, *array, rest_begin, rest_count));
     return {type_, array->SliceSafe(0, count).ValueOrDie()};
   }
 
@@ -633,7 +610,7 @@ public:
     } else if (current > new_length) {
       // TODO: This could be optimized, but we do not deem it necessary right now.
       auto array = finish();
-      append_array_slice(*inner_, type_, *array, 0, new_length);
+      check(append_array_slice(*inner_, type_, *array, 0, new_length));
     }
   }
 

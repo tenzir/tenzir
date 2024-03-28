@@ -9,8 +9,7 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/plugin.hpp>
-
-#include <caf/sum_type.hpp>
+#include <tenzir/table_slice_builder.hpp>
 
 namespace tenzir::plugins::unroll {
 
@@ -41,20 +40,27 @@ auto unroll_type(const type& src, const offset& off, size_t index = 0) -> type {
 
 class unroller {
 public:
-  unroller(int64_t row, arrow::ArraySpan list, const offset& offset)
-    : row_{row}, list_{std::move(list)}, offset_{offset} {
+  unroller(const offset& offset, const arrow::ListArray& list_array,
+           int64_t row)
+    : offset_{offset},
+      list_array_{list_array},
+      row_{row},
+      list_begin_{list_array.value_offset(row)},
+      list_length_{list_array.value_offset(row + 1) - list_begin_} {
   }
 
-  void run(arrow::StructBuilder& builder, const arrow::StructArray& source) {
+  void run(arrow::StructBuilder& builder, const arrow::StructArray& source,
+           const record_type& ty) {
     TENZIR_ASSERT(row_ < source.length());
-    process_struct(builder, source, 0);
+    process_struct(builder, source, ty, 0);
   }
 
 private:
   void process_struct(arrow::StructBuilder& builder,
-                      const arrow::StructArray& source, size_t index) {
+                      const arrow::StructArray& source, const record_type& ty,
+                      size_t index) {
     TENZIR_ASSERT(index < offset_.size());
-    for (auto i = 0; i < list_.length; ++i) {
+    for (auto i = 0; i < list_length_; ++i) {
       auto result = builder.Append();
       TENZIR_ASSERT(result.ok());
     }
@@ -62,24 +68,26 @@ private:
     for (auto current = 0; current < builder.num_fields(); ++current) {
       if (current == target) {
         process(*builder.field_builder(target), *source.field(target),
-                index + 1);
+                ty.field(current).type, index + 1);
       } else {
-        auto outer = arrow::ArraySpan{*source.field(current)->data()};
-        outer.SetSlice(row_, 1);
-        for (auto i = 0; i < list_.length; ++i) {
-          auto fb = builder.field_builder(current);
-          auto result = fb->AppendArraySlice(outer, 0, 1);
-          TENZIR_ASSERT(result.ok());
+        for (auto i = int64_t{0}; i < list_length_; ++i) {
+          auto status = append_array_slice(*builder.field_builder(current),
+                                           ty.field(current).type,
+                                           *source.field(current), row_, 1);
+          TENZIR_ASSERT(status.ok(), status.ToString());
         }
       }
     }
   }
 
   void process(arrow::ArrayBuilder& builder, const arrow::Array& source,
-               size_t index) {
+               const type& ty, size_t index) {
     TENZIR_ASSERT(index <= offset_.size());
     if (index == offset_.size()) {
-      auto result = builder.AppendArraySlice(list_, 0, list_.length);
+      // We arrived at the offset where the list values shall be placed.
+      auto result
+        = append_array_slice(builder, caf::get<list_type>(ty).value_type(),
+                             *list_array_.values(), list_begin_, list_length_);
       TENZIR_ASSERT(result.ok());
       return;
     }
@@ -87,12 +95,16 @@ private:
     TENZIR_ASSERT(fb);
     auto fs = dynamic_cast<const arrow::StructArray*>(&source);
     TENZIR_ASSERT(fs);
-    process_struct(*fb, *fs, index);
+    auto ty2 = caf::get_if<record_type>(&ty);
+    TENZIR_ASSERT(ty2);
+    process_struct(*fb, *fs, *ty2, index);
   }
 
-  int64_t row_;
-  arrow::ArraySpan list_;
   const offset& offset_;
+  const arrow::ListArray& list_array_;
+  int64_t row_;
+  int64_t list_begin_;
+  int64_t list_length_;
 };
 
 /// Unrolls the list located at `offset` by duplicating the surrounding data,
@@ -104,7 +116,6 @@ auto unroll(const table_slice& slice, const offset& offset) -> table_slice {
   auto list_offsets
     = std::dynamic_pointer_cast<arrow::Int32Array>(list_array->offsets());
   TENZIR_ASSERT(list_offsets);
-  auto list_values = list_array->values();
   auto result_ty = unroll_type(slice.schema(), offset);
   auto builder = std::dynamic_pointer_cast<arrow::StructBuilder>(
     result_ty.make_arrow_builder(arrow::default_memory_pool()));
@@ -120,12 +131,11 @@ auto unroll(const table_slice& slice, const offset& offset) -> table_slice {
     if (begin == end) {
       continue;
     }
-    auto list = arrow::ArraySpan{*list_values->data()};
-    list.SetSlice(begin, end - begin);
     auto source = to_record_batch(slice)->ToStructArray();
     TENZIR_ASSERT(source.ok());
     TENZIR_ASSERT(*source);
-    unroller{row, list, offset}.run(*builder, **source);
+    unroller{offset, *list_array, row}.run(
+      *builder, **source, caf::get<record_type>(slice.schema()));
   }
   auto result = std::shared_ptr<arrow::StructArray>{};
   auto status = builder->Finish(&result);
