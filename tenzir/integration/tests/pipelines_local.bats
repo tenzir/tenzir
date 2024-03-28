@@ -570,3 +570,44 @@ EOF
   #   echo "{\"value\": \"A\", \"tag\": 2}"
   # ) | check tenzir "from stdin read json | deduplicate value --limit 1 --timeout 100ms"
 }
+
+# bats test_tags=pipelines
+@test "unroll operator" {
+  check tenzir 'unroll b' <<EOF
+{"a": 1, "b": [1, 2, 3]}
+{"a": 2, "b": [1]}
+{"a": 3, "b": []}
+{"a": 4, "b": null}
+EOF
+
+  check tenzir 'unroll conn | where conn.dest !in 192.168.0.0/16 || active > 100ms' <<EOF
+{
+  "src": "192.168.0.5",
+  "conn": [
+    {
+      "dest": "192.168.0.34",
+      "active": "381ms"
+    },
+    {
+      "dest": "192.168.0.120",
+      "active": "42ms"
+    },
+    {
+      "dest": "1.2.3.4",
+      "active": "67ms"
+    }
+  ]
+}
+EOF
+
+  # Make sure that we can duplicate records that contain enumerations.
+  check tenzir 'read suricata | unroll vlan' <<EOF
+{"event_type": "dns", "vlan": [0, null], "dns": {"type": "answer"}}
+EOF
+
+  # Make sure that we can duplicate enumerations that sit next to the unrolled list.
+  check tenzir 'read suricata | unroll dns.answers' <<EOF
+{"event_type": "dns", "dns": {"type": "answer", "answers": [{}, null]}}
+EOF
+
+}
