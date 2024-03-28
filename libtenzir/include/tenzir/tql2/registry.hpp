@@ -75,7 +75,7 @@ public:
     TENZIR_TODO();
   }
 
-  friend auto inspect(caf::serializer& f, operator_use& x) -> bool {
+  friend auto inspect(auto& f, operator_use& x) -> bool {
     if (auto dbg = as_debug_writer(f)) {
       auto name = caf::detail::pretty_type_name(typeid(x));
       auto dot = name.find_last_of('.');
