@@ -26,11 +26,11 @@ behavior:
 1. **Limit**: the multiplicity of the events until they are supressed as
    duplicates. A limit of 1 is equivalent to emission of unique events. A limit
    of *N* means that events with a unique key (defined by the fields) get
-   emitted at most *N* times. For example, `AAABAABBAC` with a limit of 2 yields
-   `AABBC`.
+   emitted at most *N* times. For example, `GGGYBYYBGYGB` with a limit of 2
+   yields `GGYBYB`.
 2. **Distance**: The number of events in sequence since the last occurrence of
-   a unique event. For example, deduplicating a stream `AABABACBABB` with
-   distance 3 yields `ABC`.
+   a unique event. For example, deduplicating a stream `GGGYBYYBGYGB` with
+   distance 2 yields `GYBBGYB`.
 3. **Timeout**: The time that needs to pass until a surpressed event is no
    longer considered a duplicate. When an event with surpressed key is seen
    before the timeout is reached, the timer resets.
