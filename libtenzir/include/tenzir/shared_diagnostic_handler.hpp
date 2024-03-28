@@ -41,6 +41,8 @@ public:
 
   inline auto emit(diagnostic diag) const -> void {
     if (auto exec_node = weak_exec_node_.lock()) {
+      // FIXME: The diagnostics sent by this do not appear at the target
+      // actor when that utilizes request/await.
       caf::anon_send<caf::message_priority::high>(exec_node, std::move(diag));
     }
   }

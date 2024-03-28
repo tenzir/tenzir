@@ -7,11 +7,11 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
-#include <tenzir/concept/parseable/string/char_class.hpp>
-#include <tenzir/concept/parseable/tenzir/pipeline.hpp>
-#include <tenzir/detail/string_literal.hpp>
+#include <tenzir/config.hpp>
+#include <tenzir/detail/posix.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/error.hpp>
+#include <tenzir/location.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>
@@ -30,6 +30,62 @@ namespace tenzir::plugins::accept {
 
 namespace {
 
+struct accept_args {
+  std::string hostname = {};
+  std::string port = {};
+  bool tls = false;
+  std::optional<std::string> tls_certfile = {};
+  std::optional<std::string> tls_keyfile = {};
+  operator_box op = {};
+  bool has_terminal = false;
+  bool no_location_overrides = false;
+
+  friend auto inspect(auto& f, accept_args& x) -> bool {
+    return f.object(x).fields(
+      f.field("hostname", x.hostname), f.field("port", x.port),
+      f.field("tls", x.tls), f.field("tls_certfile", x.tls_certfile),
+      f.field("tls_keyfile", x.tls_keyfile), f.field("op", x.op),
+      f.field("has_terminal", x.has_terminal),
+      f.field("no_location_overrides", x.no_location_overrides));
+  }
+};
+
+class accept_control_plane final : public operator_control_plane {
+public:
+  accept_control_plane(shared_diagnostic_handler diagnostics, bool has_terminal,
+                       bool no_location_overrides)
+    : diagnostics_{std::move(diagnostics)},
+      has_terminal_{has_terminal},
+      no_location_overrides_{no_location_overrides} {
+  }
+
+  auto self() noexcept -> exec_node_actor::base& override {
+    TENZIR_UNIMPLEMENTED();
+  }
+
+  auto node() noexcept -> node_actor override {
+    TENZIR_UNIMPLEMENTED();
+  }
+
+  auto diagnostics() noexcept -> diagnostic_handler& override {
+    TENZIR_WARN("returning diags handler");
+    return diagnostics_;
+  }
+
+  auto no_location_overrides() const noexcept -> bool override {
+    return no_location_overrides_;
+  }
+
+  auto has_terminal() const noexcept -> bool override {
+    return has_terminal_;
+  }
+
+private:
+  shared_diagnostic_handler diagnostics_;
+  bool has_terminal_;
+  bool no_location_overrides_;
+};
+
 using bridge_actor = caf::typed_actor<
   // Forwards slices from the connection actors to the operator
   auto(table_slice slice)->caf::result<void>,
@@ -38,50 +94,148 @@ using bridge_actor = caf::typed_actor<
 struct connection_state {
   caf::event_based_actor* self;
   bridge_actor bridge;
-  operator_ptr read;
+  accept_args args;
+  std::unique_ptr<operator_control_plane> ctrl;
+
+  generator<table_slice> gen = {};
+  generator<table_slice>::iterator it = {};
 };
 
 auto make_connection(caf::stateful_actor<connection_state>* self,
-                     bridge_actor bridge, boost::asio::ip::tcp::socket socket,
-                     operator_ptr read, bool use_tls) -> caf::behavior {
-  return {};
+                     boost::asio::ip::tcp::socket socket, bridge_actor bridge,
+                     accept_args args, shared_diagnostic_handler diagnostics)
+  -> caf::behavior {
+  self->state.self = self;
+  self->state.bridge = std::move(bridge);
+  self->state.args = std::move(args);
+  self->state.ctrl = std::make_unique<accept_control_plane>(
+    std::move(diagnostics), args.has_terminal, args.no_location_overrides);
+  // TODO: Handle TLS options.
+  auto input = [](boost::asio::ip::tcp::socket socket,
+                  operator_control_plane& ctrl) -> generator<chunk_ptr> {
+    auto buffer = std::array<char, 65'536>{};
+    auto ec = boost::system::error_code{};
+    while (true) {
+      auto length = socket.read_some(boost::asio::buffer(buffer), ec);
+      if (ec == boost::asio::error::eof) {
+        TENZIR_ASSERT(length == 0);
+        co_return;
+      }
+      if (ec) {
+        diagnostic::error("{}", ec.message())
+          .note("failed to read from socket")
+          .emit(ctrl.diagnostics());
+      }
+      co_yield chunk::copy(as_bytes(buffer).subspan(0, length));
+    }
+  }(std::move(socket), *self->state.ctrl);
+  auto gen
+    = self->state.args.op->instantiate(std::move(input), *self->state.ctrl);
+  if (not gen) {
+    diagnostic::error(gen.error()).emit(self->state.ctrl->diagnostics());
+    return {};
+  }
+  auto* typed_gen = std::get_if<generator<table_slice>>(&*gen);
+  TENZIR_ASSERT(typed_gen);
+  self->state.gen = std::move(*typed_gen);
+  self->state.it = self->state.gen.begin();
+  detail::weak_run_delayed_loop(self, duration::zero(), [self] {
+    if (self->state.it == self->state.gen.end()) {
+      self->quit();
+      return;
+    }
+    auto slice = std::move(*self->state.it);
+    self->request(self->state.bridge, caf::infinite, std::move(slice))
+      .then(
+        []() {
+          // nop
+        },
+        [self](caf::error& err) {
+          diagnostic::error(err)
+            .note("failed to send events to accept connection manager")
+            .emit(self->state.ctrl->diagnostics());
+          self->quit(std::move(err));
+        });
+    ++self->state.it;
+  });
+  return {
+    [](int) {
+      // dummy because no behavior means quitting
+    },
+  };
 }
 
 struct connection_manager_state {
   caf::event_based_actor* self;
   bridge_actor bridge;
-  operator_ptr read;
-  bool use_tls;
+  accept_args args;
+  shared_diagnostic_handler diagnostics;
 
-  boost::asio::io_service io_service;
+  boost::asio::io_context io_context;
+  std::optional<boost::asio::ip::tcp::endpoint> endpoint;
   std::optional<boost::asio::ip::tcp::acceptor> acceptor;
 
   std::vector<caf::actor> connections;
 
   auto run() -> void {
     detail::weak_run_delayed(self, duration::zero(), [this] {
-      using boost::asio::ip::tcp;
-      auto socket = tcp::socket(io_service);
+      auto socket = boost::asio::ip::tcp::socket(io_context);
+#if TENZIR_LINUX
+      auto sfd
+        = ::socket(endpoint.protocol().family(), SOCK_STREAM | SOCK_CLOEXEC,
+                   endpoint.protocol().protocol());
+      TENZIR_ASSERT(sfd >= 0);
+      socket.assign(endpoint.protocol(), sfd);
+#endif
       acceptor->accept(socket);
-      connections.push_back(
-        self->spawn(make_connection, std::move(socket), use_tls));
+#if TENZIR_MACOS
+      if (::fcntl(socket.native_handle(), F_SETFD, FD_CLOEXEC) == -1) {
+        diagnostic::error("{}", detail::describe_errno())
+          .note("failed to configure TLS socket")
+          .throw_();
+      }
+#endif
+      connections.push_back(self->spawn<caf::monitored + caf::detached>(
+        make_connection, std::move(socket), bridge, args, diagnostics));
       run();
     });
   }
 };
 
-auto make_connection_manager(caf::stateful_actor<connection_manager_state>* self,
-                             bridge_actor bridge,
-                             const boost::asio::ip::tcp::endpoint& endpoint,
-                             operator_ptr read, bool use_tls) -> caf::behavior {
-  using boost::asio::ip::tcp;
+auto make_connection_manager(
+  caf::stateful_actor<connection_manager_state>* self, bridge_actor bridge,
+  accept_args args, shared_diagnostic_handler diagnostics) -> caf::behavior {
   self->state.self = self;
   self->state.bridge = std::move(bridge);
-  self->state.read = std::move(read);
-  self->state.use_tls = use_tls;
-  self->state.acceptor = tcp::acceptor(self->state.io_service, endpoint);
+  self->state.args = std::move(args);
+  self->state.diagnostics = std::move(diagnostics);
+  auto resolver = boost::asio::ip::tcp::resolver{self->state.io_context};
+  auto endpoints
+    = resolver.resolve(self->state.args.hostname, self->state.args.port);
+  if (endpoints.empty()) {
+    diagnostic::error("failed to resolve {}:{}", self->state.args.hostname,
+                      self->state.args.port)
+      .emit(self->state.diagnostics);
+    return {};
+  }
+  self->state.endpoint = endpoints.begin()->endpoint();
+  self->state.acceptor = boost::asio::ip::tcp::acceptor(self->state.io_context,
+                                                        *self->state.endpoint);
+  self->state.acceptor->listen(boost::asio::socket_base::max_connections);
+  self->set_down_handler([self](const caf::down_msg& msg) {
+    std::erase_if(self->state.connections, [&](const auto& conn) {
+      return conn.address() == msg.source;
+    });
+    if (msg.reason) {
+      self->quit(msg.reason);
+    }
+  });
   self->state.run();
-  return {};
+  return {
+    [](int) {
+      // dummy because no behavior means quitting
+    },
+  };
 }
 
 struct bridge_state {
@@ -92,12 +246,11 @@ struct bridge_state {
 };
 
 auto make_bridge(bridge_actor::stateful_pointer<bridge_state> self,
-                 const boost::asio::ip::tcp::endpoint& endpoint,
-                 operator_ptr read, bool use_tls)
+                 accept_args args, shared_diagnostic_handler diagnostics)
   -> bridge_actor::behavior_type {
   self->state.connection_manager
-    = self->spawn(make_connection_manager, bridge_actor{self}, endpoint,
-                  std::move(read), use_tls);
+    = self->spawn<caf::detached>(make_connection_manager, bridge_actor{self},
+                                 std::move(args), std::move(diagnostics));
   return {
     [self](table_slice& slice) -> caf::result<void> {
       if (self->state.buffer_rp.pending()) {
@@ -123,39 +276,115 @@ auto make_bridge(bridge_actor::stateful_pointer<bridge_state> self,
 
 class accept_operator final : public crtp_operator<accept_operator> {
 public:
+  accept_operator() = default;
+
+  explicit accept_operator(accept_args args) : args_{std::move(args)} {
+    // nop
+  }
+
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    auto bridge = ctrl.self().spawn(make_bridge, endpoint, read, false);
-    co_yield {};
+    auto args = args_;
+    args.no_location_overrides = ctrl.no_location_overrides();
+    args.has_terminal = ctrl.has_terminal();
+    auto bridge = ctrl.self().spawn<caf::linked>(make_bridge, std::move(args),
+                                                 ctrl.shared_diagnostics());
+    while (true) {
+      auto slice = table_slice{};
+      ctrl.self()
+        .request(bridge, caf::infinite, atom::get_v)
+        .await(
+          [&](table_slice& result) {
+            slice = std::move(result);
+          },
+          [&](const caf::error& err) {
+            diagnostic::error(err).emit(ctrl.diagnostics());
+          });
+      co_yield {};
+      co_yield std::move(slice);
+    }
   }
 
   auto name() const -> std::string override {
     return "accept";
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(const expression& filter, event_order order) const
     -> optimize_result override {
-    return optimize_result{filter, order, nullptr};
+    auto result = args_.op->optimize(filter, order);
+    if (not result.replacement) {
+      return result;
+    }
+    TENZIR_ASSERT(not dynamic_cast<pipeline*>(result.replacement.get()));
+    auto args = args_;
+    args.op = std::move(result.replacement);
+    result.replacement = std::make_unique<accept_operator>(std::move(args));
+    return result;
   }
 
   friend auto inspect(auto& f, accept_operator& x) -> bool {
-    return f.object(x).fields();
+    return f.object(x).fields(f.field("args", x.args_));
   }
 
 private:
-  boost::asio::ip::tcp::endpoint endpoint;
+  accept_args args_ = {};
 };
 
 class plugin final : public virtual operator_plugin<accept_operator> {
 public:
   auto signature() const -> operator_signature override {
-    return {.transformation = true};
+    return {
+      .source = true,
+      .transformation = false,
+      .sink = false,
+    };
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    argument_parser{"accept", "https://docs.tenzir.com/operators/accept"}.parse(
-      p);
-    return std::make_unique<accept_operator>();
+    // accept <endpoint> [<args...>] read [<op_args...>]
+    auto parser
+      = argument_parser{"accept", "https://docs.tenzir.com/operators/accept"};
+    auto q = until_keyword_parser{"read", p};
+    auto args = accept_args{};
+    auto endpoint = located<std::string>{};
+    parser.add(endpoint, "<endpoint>");
+    parser.add("--tls", args.tls);
+    parser.add("--certfile", args.tls_certfile, "<TLS certificate>");
+    parser.add("--keyfile", args.tls_keyfile, "<TLS private key>");
+    parser.parse(q);
+    if (endpoint.inner.starts_with("tcp://")) {
+      endpoint.inner = std::move(endpoint.inner).substr(6);
+    }
+    const auto split = detail::split(endpoint.inner, ":", 1);
+    if (split.size() != 2) {
+      diagnostic::error("malformed endpoint")
+        .primary(endpoint.source)
+        .hint("format must be 'tcp://address:port'")
+        .throw_();
+    } else {
+      args.hostname = std::string{split[0]};
+      args.port = std::string{split[1]};
+    }
+    auto op_name = p.accept_identifier();
+    if (not op_name) {
+      diagnostic::error("expected operator name")
+        .primary(p.current_span())
+        .throw_();
+    }
+    TENZIR_ASSERT(*op_name == "read");
+    const auto* plugin = plugins::find_operator(op_name->name);
+    if (not plugin) {
+      diagnostic::error("operator `{}` does not exist", op_name->name)
+        .primary(op_name->source)
+        .throw_();
+    }
+    args.op = plugin->parse_operator(p);
+    TENZIR_ASSERT(args.op);
+    TENZIR_ASSERT(not dynamic_cast<pipeline*>(args.op.get()));
+    if (const auto ok = args.op->check_type<chunk_ptr, table_slice>(); not ok) {
+      diagnostic::error(ok.error()).throw_();
+    }
+    return std::make_unique<accept_operator>(std::move(args));
   }
 };
 

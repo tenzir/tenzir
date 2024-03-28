@@ -79,3 +79,6 @@ fail_assertion(const char* expr, std::source_location source
 
 /// Used to mark code as unfinished. Reaching it throws a panic.
 #define TENZIR_TODO() ::tenzir::detail::panic("todo")
+
+/// Used to mark code as unimplemented. Reaching it throws a panic.
+#define TENZIR_UNIMPLEMENTED() ::tenzir::detail::panic("unimplemented")
