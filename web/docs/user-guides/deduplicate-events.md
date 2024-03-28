@@ -1,4 +1,4 @@
-# Deduplicate Events
+# Deduplicate events
 
 Tenzir's [`deduplicate`](../operators/deduplicate.md) provides is a powerful
 mechanism to remove duplicate events in a pipeline.
