@@ -110,6 +110,12 @@ Here's a more in-depth description of the controls:
 You can decide the fields to apply these knobs on by specifying a list of field
 extractors. By default, the operator works on the entire event.
 
+:::tip Real-world examples
+Let's make the abstract concrete and dive right in! Read our [user
+guide](/next/user-guides/deduplicate-events) on deduplicating events for
+hands-on examples.
+:::
+
 By bringing together these strategically implemented parameters, the
 `deduplicate` becomes a flexible, customizable tool for decluttering your data
 streams. It makes the daunting process of manual deduplication a thing of the
