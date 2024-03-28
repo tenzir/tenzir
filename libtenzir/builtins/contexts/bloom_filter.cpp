@@ -79,7 +79,6 @@ public:
   auto show() const -> record override {
     auto ptr = reinterpret_cast<const std::byte*>(bloom_filter_.data().data());
     auto size = bloom_filter_.data().size();
-    auto data = std::basic_string<std::byte>{ptr, size};
     return record{
       {"num_elements", bloom_filter_.num_elements()},
       {"parameters",
@@ -89,7 +88,6 @@ public:
          {"p", bloom_filter_.parameters().p},
          {"k", bloom_filter_.parameters().k},
        }},
-      {"data", std::move(data)},
     };
   }
 
