@@ -1547,6 +1547,9 @@ struct type_to_arrow_builder
   : std::type_identity<
       typename arrow::TypeTraits<typename T::arrow_type>::BuilderType> {};
 
+template <>
+struct type_to_arrow_builder<type> : std::type_identity<arrow::ArrayBuilder> {};
+
 /// @copydoc type_to_arrow_builder
 template <type_or_concrete_type T>
 using type_to_arrow_builder_t = typename type_to_arrow_builder<T>::type;

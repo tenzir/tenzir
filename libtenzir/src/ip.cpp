@@ -15,6 +15,7 @@
 #include "tenzir/word.hpp"
 
 #include <arpa/inet.h>
+#include <fmt/format.h>
 #include <netinet/in.h>
 #include <openssl/crypto.h>
 #include <openssl/err.h>
@@ -29,7 +30,7 @@ namespace tenzir {
 
 namespace {
 
-inline uint32_t bitmask32(size_t bottom_bits) {
+inline auto bitmask32(size_t bottom_bits) -> uint32_t {
   return bottom_bits >= 32 ? 0xffffffff : ((uint32_t{1} << bottom_bits) - 1);
 }
 
@@ -63,8 +64,8 @@ private:
   int block_size_ = {};
   std::vector<ip::byte_type> pad_ = {};
 
-  std::vector<ip::byte_type>
-  generate_one_time_pad(std::span<ip::byte_type> bytes_to_encrypt) {
+  auto generate_one_time_pad(std::span<ip::byte_type> bytes_to_encrypt)
+    -> std::vector<ip::byte_type> {
     auto out_len = 0;
     auto cipher_input = std::vector<ip::byte_type>(pad_);
     auto cipher_output = std::vector<ip::byte_type>(pad_);
@@ -95,100 +96,132 @@ private:
 
 } // namespace
 
-ip ip::pseudonymize(
+auto ip::pseudonymize(
   const ip& original,
-  const std::array<byte_type, pseudonymization_seed_array_size>& seed) {
+  const std::array<byte_type, pseudonymization_seed_array_size>& seed) -> ip {
   auto byte_offset = (original.is_v4() ? 12 : 0);
   address_encryptor encryptor(seed);
   auto pseudonymized_bytes = encryptor(original.bytes_, byte_offset);
   return ip(pseudonymized_bytes);
 }
 
-bool ip::is_v4() const {
+auto ip::is_v4() const -> bool {
   return std::memcmp(&bytes_, &v4_mapped_prefix, 12) == 0;
 }
 
-bool ip::is_v6() const {
+auto ip::is_v6() const -> bool {
   return !is_v4();
 }
 
-bool ip::is_loopback() const {
-  if (is_v4())
+auto ip::is_loopback() const -> bool {
+  if (is_v4()) {
     return bytes_[12] == 127;
-  else
+  } else {
     return ((bytes_[0] == 0) && (bytes_[1] == 0) && (bytes_[2] == 0)
             && (bytes_[3] == 0) && (bytes_[4] == 0) && (bytes_[5] == 0)
             && (bytes_[6] == 0) && (bytes_[7] == 0) && (bytes_[8] == 0)
             && (bytes_[9] == 0) && (bytes_[10] == 0) && (bytes_[11] == 0)
             && (bytes_[12] == 0) && (bytes_[13] == 0) && (bytes_[14] == 0)
             && (bytes_[15] == 1));
+  }
 }
 
-bool ip::is_broadcast() const {
+auto ip::is_broadcast() const -> bool {
   return is_v4() && bytes_[12] == 0xff && bytes_[13] == 0xff
          && bytes_[14] == 0xff && bytes_[15] == 0xff;
 }
 
-bool ip::is_multicast() const {
+auto ip::is_multicast() const -> bool {
   return is_v4() ? bytes_[12] == 224 : bytes_[0] == 0xff;
 }
 
-bool ip::mask(unsigned top_bits_to_keep) {
-  if (top_bits_to_keep > 128)
+auto ip::mask(unsigned top_bits_to_keep) -> bool {
+  if (top_bits_to_keep > 128) {
     return false;
+  }
   uint32_t m[4] = {0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff};
   auto r = std::ldiv(top_bits_to_keep, 32);
-  if (r.quot < 4)
+  if (r.quot < 4) {
     m[r.quot] = detail::to_network_order(m[r.quot] & ~bitmask32(32 - r.rem));
-  for (size_t i = r.quot + 1; i < 4; ++i)
+  }
+  for (size_t i = r.quot + 1; i < 4; ++i) {
     m[i] = 0;
+  }
   auto p = reinterpret_cast<uint32_t*>(std::launder(&bytes_[0]));
-  for (size_t i = 0; i < 4; ++i)
+  for (size_t i = 0; i < 4; ++i) {
     p[i] &= m[i];
+  }
   return true;
 }
 
-ip& ip::operator&=(const ip& other) {
-  for (auto i = 0u; i < 16u; ++i)
+auto ip::operator&=(const ip& other) -> ip& {
+  for (auto i = 0u; i < 16u; ++i) {
     bytes_[i] &= other.bytes_[i];
+  }
   return *this;
 }
 
-ip& ip::operator|=(const ip& other) {
-  for (auto i = 0u; i < 16u; ++i)
+auto ip::operator|=(const ip& other) -> ip& {
+  for (auto i = 0u; i < 16u; ++i) {
     bytes_[i] |= other.bytes_[i];
+  }
   return *this;
 }
 
-ip& ip::operator^=(const ip& other) {
-  if (is_v4() || other.is_v4())
-    for (auto i = 12u; i < 16u; ++i)
+auto ip::operator^=(const ip& other) -> ip& {
+  if (is_v4() || other.is_v4()) {
+    for (auto i = 12u; i < 16u; ++i) {
       bytes_[i] ^= other.bytes_[i];
-  else
-    for (auto i = 0u; i < 16u; ++i)
+    }
+  } else {
+    for (auto i = 0u; i < 16u; ++i) {
       bytes_[i] ^= other.bytes_[i];
+    }
+  }
   return *this;
 }
 
-bool ip::compare(const ip& other, size_t k) const {
+auto ip::compare(const ip& other, size_t k) const -> bool {
   TENZIR_ASSERT(k <= 128);
-  if (k == 0) // trivially true
+  if (k == 0) { // trivially true
     return true;
+  }
   auto x = bytes_.data();
   auto y = other.bytes_.data();
-  for (; k > 8; k -= 8)
-    if (*x++ != *y++)
+  for (; k > 8; k -= 8) {
+    if (*x++ != *y++) {
       return false;
+    }
+  }
   auto mask = word<byte_type>::msb_fill(k);
   return (*x & mask) == (*y & mask);
 }
 
-bool operator==(const ip& x, const ip& y) {
+auto operator==(const ip& x, const ip& y) -> bool {
   return x.bytes_ == y.bytes_;
 }
 
-bool operator<(const ip& x, const ip& y) {
+auto operator<(const ip& x, const ip& y) -> bool {
   return x.bytes_ < y.bytes_;
 }
 
 } // namespace tenzir
+
+auto fmt::formatter<tenzir::ip>::format(const tenzir::ip& value,
+                                        format_context& ctx) const
+  -> format_context::iterator {
+  auto buffer = std::array<char, INET6_ADDRSTRLEN>{};
+  buffer.fill(0);
+  auto bytes = as_bytes(value);
+  if (value.is_v4()) {
+    const auto* result
+      = inet_ntop(AF_INET, &bytes[12], buffer.data(), INET_ADDRSTRLEN);
+    TENZIR_ASSERT(result != nullptr);
+  } else {
+    const auto* result
+      = inet_ntop(AF_INET6, bytes.data(), buffer.data(), INET6_ADDRSTRLEN);
+    TENZIR_ASSERT(result != nullptr);
+  }
+  auto str = std::string_view{buffer.data()};
+  return formatter<string_view>::format(str, ctx);
+}

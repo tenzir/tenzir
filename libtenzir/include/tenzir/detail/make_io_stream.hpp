@@ -22,7 +22,7 @@
 namespace tenzir::detail {
 
 caf::expected<std::unique_ptr<std::ostream>>
-make_output_stream(const std::string& output, socket_type st);
+make_output_stream(const std::string& output, uds_socket_type st);
 
 caf::expected<std::unique_ptr<std::ostream>>
 make_output_stream(const std::string& output,

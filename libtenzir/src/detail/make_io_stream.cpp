@@ -93,21 +93,23 @@ make_input_stream(const caf::settings& options) {
 }
 
 caf::expected<std::unique_ptr<std::ostream>>
-make_output_stream(const std::string& output, socket_type st) {
+make_output_stream(const std::string& output, uds_socket_type st) {
   if (output == "-")
     return caf::make_error(ec::filesystem_error, "cannot use STDOUT as UNIX "
                                                  "domain socket");
   auto connect_st = st;
-  if (connect_st == socket_type::fd)
-    connect_st = socket_type::stream;
+  if (connect_st == uds_socket_type::fd) {
+    connect_st = uds_socket_type::stream;
+  }
   auto uds = unix_domain_socket::connect(output, st);
   if (!uds)
     return caf::make_error(ec::filesystem_error,
                            "failed to connect to UNIX domain socket at",
                            output);
   auto remote_fd = uds.fd;
-  if (st == socket_type::fd)
+  if (st == uds_socket_type::fd) {
     remote_fd = uds.recv_fd();
+  }
   // TODO
   TENZIR_DIAGNOSTIC_PUSH
   TENZIR_DIAGNOSTIC_IGNORE_DEPRECATED

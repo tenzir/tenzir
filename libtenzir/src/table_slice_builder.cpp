@@ -8,6 +8,7 @@
 
 #include "tenzir/table_slice_builder.hpp"
 
+#include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/concept/parseable/core.hpp"
 #include "tenzir/concept/parseable/numeric.hpp"
 #include "tenzir/config.hpp"
@@ -452,5 +453,80 @@ arrow::Status append_builder(const type& hint,
   };
   return caf::visit(f, hint);
 }
+
+#define TRY ARROW_RETURN_NOT_OK
+
+template <concrete_type Ty>
+auto append_array_slice(type_to_arrow_builder_t<Ty>& builder, const Ty& ty,
+                        const type_to_arrow_array_t<Ty>& array, int64_t offset,
+                        int64_t length) -> arrow::Status {
+  using arrow_type = type_to_arrow_type_t<Ty>;
+  if constexpr (arrow::is_extension_type<arrow_type>::value) {
+    // TODO: `AppendArraySlice(...)` throws a `std::bad_cast` with extension
+    // types (Arrow 13.0.0). Hence, we have to use some custom logic here.
+    for (auto row = offset; row < offset + length; ++row) {
+      if (array.IsNull(row)) {
+        TRY(builder.AppendNull());
+      } else {
+        TRY(append_builder(ty, builder, value_at(ty, *array.storage(), row)));
+      }
+    }
+  } else if constexpr (std::same_as<Ty, record_type>) {
+    TRY(builder.Reserve(array.length()));
+    for (auto i = int64_t{0}; i < length; ++i) {
+      TRY(builder.Append(array.IsValid(i)));
+    }
+    for (auto field = 0; field < builder.num_fields(); ++field) {
+      TRY(append_array_slice(*builder.field_builder(field),
+                             ty.field(field).type, *array.field(field), offset,
+                             length));
+    }
+  } else if constexpr (std::same_as<Ty, list_type>) {
+    TRY(builder.Reserve(array.length()));
+    for (auto i = int64_t{0}; i < length; ++i) {
+      auto valid = array.IsValid(i);
+      TRY(builder.Append(valid));
+      if (valid) {
+        auto begin = array.value_offset(offset + i);
+        auto end = array.value_offset(offset + i + 1);
+        TRY(append_array_slice(*builder.value_builder(), ty.value_type(),
+                               *array.values(), begin, end - begin));
+      }
+    }
+
+  } else if constexpr (std::same_as<Ty, map_type>) {
+    TENZIR_UNREACHABLE();
+  } else {
+    static_assert(basic_type<Ty>);
+    TRY(builder.AppendArraySlice(*array.data(), offset, length));
+  }
+  return arrow::Status::OK();
+}
+
+auto append_array_slice(arrow::ArrayBuilder& builder, const type& ty,
+                        const arrow::Array& array, int64_t offset,
+                        int64_t length) -> arrow::Status {
+  return caf::visit(
+    [&]<class Ty>(const Ty& ty) {
+      return append_array_slice(caf::get<type_to_arrow_builder_t<Ty>>(builder),
+                                ty, caf::get<type_to_arrow_array_t<Ty>>(array),
+                                offset, length);
+    },
+    ty);
+}
+
+// Make sure that `append_array_slice<...>` is emitted for every type.
+template <std::monostate>
+struct instantiate_append_array_slice {
+  template <class... T>
+  struct inner {
+    static constexpr auto value = std::tuple{&append_array_slice<T>...};
+  };
+
+  static constexpr auto value
+    = caf::detail::tl_apply_t<concrete_types, inner>::value;
+};
+
+template struct instantiate_append_array_slice<std::monostate{}>;
 
 } // namespace tenzir
