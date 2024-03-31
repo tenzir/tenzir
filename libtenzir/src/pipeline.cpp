@@ -61,6 +61,14 @@ public:
     return false;
   }
 
+  auto suspend() noexcept -> void override {
+    TENZIR_UNIMPLEMENTED();
+  }
+
+  auto resume() noexcept -> void override {
+    TENZIR_UNIMPLEMENTED();
+  }
+
 private:
   caf::error error_{};
   std::unique_ptr<diagnostic_handler> handler_{};
