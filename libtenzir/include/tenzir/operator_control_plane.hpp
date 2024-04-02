@@ -13,6 +13,7 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/shared_diagnostic_handler.hpp"
+#include "tenzir/table_slice.hpp"
 
 #include <caf/typed_actor.hpp>
 
@@ -46,6 +47,13 @@ struct operator_control_plane {
   /// immediately.
   inline auto shared_diagnostics() noexcept -> shared_diagnostic_handler {
     return shared_diagnostic_handler{exec_node_actor{&(self())}};
+  }
+
+  virtual auto push(table_slice) -> bool {
+    return false;
+  }
+  virtual auto push(chunk_ptr) -> bool {
+    return false;
   }
 };
 

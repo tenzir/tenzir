@@ -28,6 +28,7 @@
 #include <thread>
 
 namespace bp = boost::process::v2;
+namespace asio = boost::asio;
 
 namespace tenzir::plugins::shell {
 namespace {
@@ -37,6 +38,7 @@ using namespace tenzir::binary_byte_literals;
 /// The block size when reading from the child's stdin.
 constexpr auto block_size = 16_KiB;
 
+#if 0
 using child_process_actor = caf::typed_actor<
   auto(atom::read, uint64_t buffer_size)->caf::result<chunk_ptr>,
   auto(atom::write, chunk_ptr chunk)->caf::result<void>,
@@ -67,13 +69,16 @@ auto make_child_process(
   self->state.write_pipe.emplace(*self->state.io_ctx);
   self->state.child = std::make_shared<bp::process>(
     *self->state.io_ctx, cmd.exe(), cmd.args(),
-    bp::process_stdio{*self->state.write_pipe, *self->state.read_pipe, {}});
+    bp::process_stdio{
+      .in = *self->state.write_pipe, .out = *self->state.read_pipe, .err = {}});
+  TENZIR_ASSERT(self->state.child->is_open());
   auto worker = std::thread([io_ctx = self->state.io_ctx] {
     auto guard = boost::asio::make_work_guard(*io_ctx);
     io_ctx->run();
   });
   self->attach_functor([worker = std::move(worker), io_ctx = self->state.io_ctx,
                         child = self->state.child]() mutable {
+    TENZIR_ERROR("actor functor");
     {
       bp::error_code ec{};
       child->terminate(ec);
@@ -81,8 +86,10 @@ auto make_child_process(
     io_ctx->stop();
     worker.join();
   });
+  TENZIR_ERROR("actor return");
   return {
     [self](atom::read, uint64_t buffer_size) -> caf::result<chunk_ptr> {
+      TENZIR_ERROR("actor read");
       TENZIR_ASSERT(buffer_size != 0);
       if (self->state.read_rp.pending()) {
         return caf::make_error(ec::logic_error,
@@ -90,15 +97,22 @@ auto make_child_process(
                                            "request is pending",
                                            *self));
       }
+      if (not self->state.read_pipe->is_open()) {
+        return caf::make_error(ec::logic_error,
+                               fmt::format("{} cannot read from a closed pipe",
+                                           *self));
+      }
       self->state.read_buffer.resize(buffer_size);
       self->state.read_rp = self->make_response_promise<chunk_ptr>();
       auto on_read = [self, weak_hdl
                             = caf::actor_cast<caf::weak_actor_ptr>(self)](
                        boost::system::error_code ec, size_t length) {
+        TENZIR_ERROR("actor on_read");
         if (auto hdl = weak_hdl.lock()) {
           caf::anon_send(
             caf::actor_cast<caf::actor>(hdl),
             caf::make_action([self, ec, length] {
+              TENZIR_ERROR("actor on_read action");
               if (ec) {
                 return self->state.read_rp.deliver(caf::make_error(
                   ec::system_error,
@@ -117,6 +131,7 @@ auto make_child_process(
       return self->state.read_rp;
     },
     [self](atom::write, chunk_ptr chunk) -> caf::result<void> {
+      TENZIR_ERROR("actor write");
       TENZIR_ASSERT(chunk);
       if (self->state.write_rp.pending()) {
         return caf::make_error(ec::logic_error,
@@ -124,13 +139,20 @@ auto make_child_process(
                                            "request is pending",
                                            *self));
       }
+      if (not self->state.write_pipe->is_open()) {
+        return caf::make_error(ec::logic_error,
+                               fmt::format("{} cannot write to a closed pipe",
+                                           *self));
+      }
       self->state.write_rp = self->make_response_promise<void>();
       auto on_write
         = [self, chunk, weak_hdl = caf::actor_cast<caf::weak_actor_ptr>(self)](
             boost::system::error_code ec, size_t length) {
+            TENZIR_ERROR("actor on_write");
             if (auto hdl = weak_hdl.lock()) {
               caf::anon_send(caf::actor_cast<caf::actor>(hdl),
                              caf::make_action([self, chunk, ec, length] {
+                               TENZIR_ERROR("actor on_write action");
                                if (ec) {
                                  self->state.write_rp.deliver(caf::make_error(
                                    ec::system_error,
@@ -155,12 +177,14 @@ auto make_child_process(
       return self->state.write_rp;
     },
     [self](atom::status) -> caf::result<void> {
+      TENZIR_ERROR("actor status");
       if (self->state.child->running()) {
         return {};
       }
       return caf::make_error(ec::silent, "");
     }};
 }
+#endif
 
 class shell_operator final : public crtp_operator<shell_operator> {
 public:
@@ -171,54 +195,147 @@ public:
 
   auto operator()(generator<chunk_ptr> input,
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    auto child = ctrl.self().spawn(make_child_process, command_);
-    co_yield {};
-    auto output = chunk_ptr{};
-    bool running = true;
-    auto input_it = input.begin();
-    while (running) {
+    asio::io_context ctx{};
+    auto cmd = bp::shell(command_);
+    asio::readable_pipe read_pipe(ctx);
+    asio::writable_pipe write_pipe(ctx);
+    bp::process child(
+      ctx, cmd.exe(), cmd.args(),
+      bp::process_stdio{.in = write_pipe, .out = read_pipe, .err = {}});
+    bool read_waiting = false;
+    std::vector<char> read_buffer(65'536);
+    std::vector<chunk_ptr> unpushed{};
+    std::vector<chunk_ptr> unwritten{};
+    auto exit = caf::detail::make_scope_guard([&] {
       {
-        ctrl.self()
-          .request(child, caf::infinite, atom::status_v)
-          .await([&]() {},
-                 [&](const caf::error&) {
-                   running = false;
-                 });
-        co_yield {};
+        bp::error_code ec;
+        child.terminate(ec);
       }
-      if (input_it != input.end()) {
-        auto&& next = *input_it;
-        if (next) {
-          ctrl.self()
-            .request(child, caf::infinite, atom::write_v, std::move(next))
-            .await(
-              [&]() {
-                ++input_it;
-              },
-              [](const caf::error& err) {
-                TENZIR_ERROR("write_v err: {}", err);
-              });
+      ctx.stop();
+    });
+    // FIXME:
+    std::signal(SIGPIPE, SIG_IGN);
+    for (auto&& chunk : input) {
+      if (not child.running()) {
+        break;
+      }
+      if (not read_waiting) {
+        read_waiting = true;
+        read_pipe.async_read_some(
+          asio::buffer(read_buffer), [&unpushed, &read_buffer, &read_waiting](
+                                       bp::error_code ec, size_t len) {
+            if (not ec) {
+              read_buffer.resize(len);
+              read_buffer.shrink_to_fit();
+              unpushed.push_back(chunk::make(std::move(read_buffer)));
+              read_buffer = std::vector<char>(65'536);
+            }
+            read_waiting = false;
+          });
+      }
+      if (not unpushed.empty()) {
+        for (auto&& to_push : unpushed) {
+          co_yield std::move(to_push);
         }
-        co_yield {};
+        unpushed.clear();
       }
-      {
-        constexpr auto buffer_size = uint64_t{65'536};
-        ctrl.self()
-          .request(child, caf::infinite, atom::read_v, buffer_size)
-          .await(
-            [&](chunk_ptr& chunk) {
-              output = std::move(chunk);
-            },
-            [&](const caf::error& err) {
-              TENZIR_ERROR("read_v err: {}", err);
-              running = false;
-            });
-        co_yield {};
-        co_yield std::exchange(output, {});
+      if (not unwritten.empty()) {
+        write_pipe.async_write_some(
+          asio::buffer(unwritten.front()->data(), unwritten.front()->size()),
+          [&](bp::error_code ec, size_t len) {
+            if (ec) {
+              return;
+            }
+            if (len < unwritten.front()->size()) {
+              unwritten.front() = unwritten.front()->slice(len);
+            } else {
+              unwritten.erase(unwritten.begin());
+            }
+          });
+      } else if (chunk) {
+        write_pipe.async_write_some(asio::buffer(chunk->data(), chunk->size()),
+                                    [&chunk, &unwritten](bp::error_code ec,
+                                                         size_t len) {
+                                      if (ec) {
+                                        return;
+                                      }
+                                      if (len < chunk->size()) {
+                                        unwritten.push_back(chunk->slice(len));
+                                      }
+                                    });
       }
+      ctx.run_for(std::chrono::milliseconds{200});
+      co_yield {};
+    }
+    for (auto&& to_push : unpushed) {
+      co_yield std::move(to_push);
     }
   }
 
+#if 0
+            bool running = true;
+  auto input_it = input.begin();
+  for (; running && input_it != input.end(); ++input_it) {
+    {
+      TENZIR_ERROR("requesting status");
+      ctrl.self()
+        .request(child, caf::infinite, atom::status_v)
+        .then(
+          [&]() {
+            TENZIR_ERROR("status: then");
+          },
+          [&](const caf::error&) {
+            TENZIR_ERROR("status: err");
+            running = false;
+          });
+      co_yield {};
+      if (not running) {
+        co_return;
+      }
+    }
+    while (input_it != input.end()) {
+      auto&& next_input = *input_it;
+      if (next_input) {
+        TENZIR_ERROR("requesting write");
+        ctrl.self()
+          .request(child, caf::infinite, atom::write_v, std::move(next_input))
+          .then(
+            [&]() {
+              TENZIR_ERROR("write: then");
+            },
+            [](const caf::error& err) {
+              TENZIR_ERROR("write_v err: {}", err);
+            });
+        co_yield {};
+        if (not running) {
+          co_return;
+        }
+        ++input_it;
+      }
+    }
+    {
+      TENZIR_ERROR("requesting read");
+      auto output = chunk_ptr{};
+      constexpr auto buffer_size = uint64_t{65'536};
+      ctrl.self()
+        .request(child, caf::infinite, atom::read_v, buffer_size)
+        .then(
+          [&](chunk_ptr& chunk) {
+            TENZIR_ERROR("read: then");
+            output = std::move(chunk);
+          },
+          [&](const caf::error& err) {
+            TENZIR_ERROR("read_v err: {}", err);
+            running = false;
+          });
+      co_yield {};
+      co_yield std::move(output);
+      if (not running) {
+        co_return;
+      }
+    }
+  }
+#endif
 #if 0
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     boost::asio::io_context ctx{};

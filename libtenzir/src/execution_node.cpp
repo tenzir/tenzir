@@ -84,8 +84,9 @@ auto make_timer_guard(Duration&... elapsed) {
 // of table slices, excluding the schema and disregarding any overlap or custom
 // information from extension types.
 auto approx_bytes(const table_slice& events) -> uint64_t {
-  if (events.rows() == 0)
+  if (events.rows() == 0) {
     return 0;
+  }
   auto record_batch = to_record_batch(events);
   TENZIR_ASSERT(record_batch);
   // Note that this function can sometimes fail. Because we ultimately want to
@@ -172,7 +173,27 @@ public:
     return has_terminal_;
   }
 
+  auto push(table_slice in) -> bool override {
+    return push_impl(std::move(in));
+  }
+  auto push(chunk_ptr in) -> bool override {
+    return push_impl(std::move(in));
+  }
+
 private:
+  template <typename T>
+  auto push_impl(T in) -> bool {
+    if constexpr (std::is_same_v<Output, T>) {
+      if (not state_.demand) {
+        return false;
+      }
+      state_.push_output(std::move(in), false);
+      return true;
+    } else {
+      return false;
+    }
+  }
+
   exec_node_state<Input, Output>& state_;
   std::unique_ptr<exec_node_diagnostic_handler<Input, Output>> diagnostic_handler_
     = {};
@@ -465,58 +486,61 @@ struct exec_node_state {
         return;
       }
       produced_output = true;
-      metrics.outbound_measurement.num_elements += output_size;
-      metrics.outbound_measurement.num_batches += 1;
-      metrics.outbound_measurement.num_approx_bytes += approx_bytes(output);
-      TENZIR_TRACE("{} {} produced and pushes {} elements", *self, op->name(),
-                   output_size);
-      if (demand->remaining <= output_size) {
-        demand->remaining = 0;
-      } else {
-        // TODO: Should we make demand->remaining available in the operator
-        // control plane?
-        demand->remaining -= output_size;
-      }
-      self
-        ->request(demand->sink, caf::infinite, atom::push_v, std::move(output))
-        .then(
-          [this, output_size, should_quit]() {
-            auto time_scheduled_guard
-              = make_timer_guard(metrics.time_scheduled);
-            TENZIR_TRACE("{} {} pushed {} elements", *self, op->name(),
-                         output_size);
-            if (demand and demand->remaining == 0) {
-              demand->rp.deliver();
-              demand.reset();
-            }
-            if (should_quit) {
-              TENZIR_TRACE("{} {} completes processing", *self, op->name());
-              if (demand and demand->rp.pending()) {
-                demand->rp.deliver();
-              }
-              self->quit();
-              return;
-            }
-            schedule_run(false);
-          },
-          [this, output_size](const caf::error& err) {
-            TENZIR_DEBUG("{} {} failed to push {} elements", *self, op->name(),
-                         output_size);
-            auto time_scheduled_guard
-              = make_timer_guard(metrics.time_scheduled);
-            if (err == caf::sec::request_receiver_down) {
-              if (demand and demand->rp.pending()) {
-                demand->rp.deliver();
-              }
-              self->quit();
-              return;
-            }
-            diagnostic::error(err)
-              .note("{} {} failed to push to next execution node", *self,
-                    op->name())
-              .emit(ctrl->diagnostics());
-          });
+      push_output(std::move(output), should_quit);
     }
+  }
+
+  auto push_output(Output output, bool should_quit) -> void {
+    TENZIR_ASSERT(demand);
+    const auto output_size = size(output);
+    metrics.outbound_measurement.num_elements += output_size;
+    metrics.outbound_measurement.num_batches += 1;
+    metrics.outbound_measurement.num_approx_bytes += approx_bytes(output);
+    TENZIR_TRACE("{} {} produced and pushes {} elements", *self, op->name(),
+                 output_size);
+    if (demand->remaining <= output_size) {
+      demand->remaining = 0;
+    } else {
+      // TODO: Should we make demand->remaining available in the operator
+      // control plane?
+      demand->remaining -= output_size;
+    }
+    self->request(demand->sink, caf::infinite, atom::push_v, std::move(output))
+      .then(
+        [this, output_size, should_quit]() {
+          auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+          TENZIR_TRACE("{} {} pushed {} elements", *self, op->name(),
+                       output_size);
+          if (demand and demand->remaining == 0) {
+            demand->rp.deliver();
+            demand.reset();
+          }
+          if (should_quit) {
+            TENZIR_TRACE("{} {} completes processing", *self, op->name());
+            if (demand and demand->rp.pending()) {
+              demand->rp.deliver();
+            }
+            self->quit();
+            return;
+          }
+          schedule_run(false);
+        },
+        [this, output_size](const caf::error& err) {
+          TENZIR_DEBUG("{} {} failed to push {} elements", *self, op->name(),
+                       output_size);
+          auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
+          if (err == caf::sec::request_receiver_down) {
+            if (demand and demand->rp.pending()) {
+              demand->rp.deliver();
+            }
+            self->quit();
+            return;
+          }
+          diagnostic::error(err)
+            .note("{} {} failed to push to next execution node", *self,
+                  op->name())
+            .emit(ctrl->diagnostics());
+        });
   }
 
   auto make_input_adapter() -> std::monostate
