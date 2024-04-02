@@ -1,4 +1,5 @@
 """User code wrapper of the Tenzir python operator."""
+
 import os
 import sys
 from collections import defaultdict
@@ -8,11 +9,10 @@ from typing import (
     Dict,
     Generator,
     Iterable,
-    Optional,
     SupportsIndex,
     Tuple,
     TypeVar,
-    Union
+    Union,
 )
 
 import pyarrow as pa
@@ -33,7 +33,7 @@ export TENZIR_PLUGINS__PYTHON__IMPLICIT_REQUIREMENTS="-e /path/to/tenzir/python[
 """
 
 
-def _log(*args):
+def log(*args):
     prefix = "debug: "
     z = " ".join(map(str, args))
     y = prefix + " " + z.replace("\n", "\n" + prefix + " ")
@@ -43,18 +43,18 @@ def _log(*args):
 T = TypeVar("T")
 
 
-class _ListWrapper(BoxList):
-    def __init__(self: "_ListWrapper", *args) -> None:
+class ListWrapper(BoxList):
+    def __init__(self: "ListWrapper", *args) -> None:
         self._modified = False
-        super().__init__(*args, box_intact_types=(_ListWrapper, _DictWrapper))
+        super().__init__(*args, box_intact_types=(ListWrapper, DictWrapper))
 
-    def __setattr__(self: "_ListWrapper", key: str, value) -> None:
+    def __setattr__(self: "ListWrapper", key: str, value) -> None:
         if key == "_modified":
             self.__dict__["_modified"] = value
         else:
             super().__setattr__(key, value)
 
-    def append(self: "_ListWrapper", value) -> None:
+    def append(self: "ListWrapper", value) -> None:
         self._modified = True
         super().append(value)
 
@@ -62,58 +62,58 @@ class _ListWrapper(BoxList):
         self._modified = True
         super().__setitem__(key, value)
 
-    def __delitem__(self: "_ListWrapper", key: Union[SupportsIndex, slice]) -> None:
+    def __delitem__(self: "ListWrapper", key: Union[SupportsIndex, slice]) -> None:
         self._modified = True
         super().__delitem__(key)
 
 
-class _DictWrapper(Box):
-    def __init__(self: "_DictWrapper", *args, **kwargs) -> None:
+class DictWrapper(Box):
+    def __init__(self: "DictWrapper", *args, **kwargs) -> None:
         self._modified: set[str] = set()
         kwargs["box_intact_types"] = tuple(
-            {_ListWrapper, _DictWrapper, *kwargs.get("box_intact_types", ())},
+            {ListWrapper, DictWrapper, *kwargs.get("box_intact_types", ())},
         )
         super().__init__(*args, **kwargs)
 
-    def __setattr__(self: "_DictWrapper", key: str, value: Any) -> None:
+    def __setattr__(self: "DictWrapper", key: str, value: Any) -> None:
         if key == "_modified":
             self.__dict__["_modified"] = value
         else:
             super().__setattr__(key, value)
 
-    def __setitem__(self: "_DictWrapper", key: str, value) -> None:
+    def __setitem__(self: "DictWrapper", key: str, value) -> None:
         self._modified.add(key)
         super().__setitem__(key, value)
 
-    def __delitem__(self: "_DictWrapper", key: str) -> None:
+    def __delitem__(self: "DictWrapper", key: str) -> None:
         self._modified.add(key)
         return super().__delitem__(key)
 
 
-def _is_modified(obj: object) -> bool:
-    if isinstance(obj, _DictWrapper):
+def is_modified(obj: object) -> bool:
+    if isinstance(obj, DictWrapper):
         return len(obj._modified) > 0 or any(
-            _is_modified(child) for child in obj.values()
+            is_modified(child) for child in obj.values()
         )
-    if isinstance(obj, _ListWrapper):
-        return obj._modified or any(_is_modified(child) for child in obj)
+    if isinstance(obj, ListWrapper):
+        return obj._modified or any(is_modified(child) for child in obj)
     return False
 
 
-def _reset_modified(obj: object) -> None:
-    if isinstance(obj, _DictWrapper):
+def reset_modified(obj: object) -> None:
+    if isinstance(obj, DictWrapper):
         obj._modified = set()
         for value in obj.values():
-            _reset_modified(value)
-    elif isinstance(obj, _ListWrapper):
+            reset_modified(value)
+    elif isinstance(obj, ListWrapper):
         obj._modified = False
         for x in obj:
-            _reset_modified(x)
+            reset_modified(x)
     else:
         return
 
 
-def _wrap_recursive(fieldname: str, obj: object, fieldtype: pa.DataType):
+def wrap_recursive(fieldname: str, obj: object, fieldtype: pa.DataType):
     """Wrap a nested structure of fields.
 
     e.g. {"foo": [1,2,3]} -> _DictWrapper("foo": _ListWrapper([1,2,3]))
@@ -129,66 +129,64 @@ def _wrap_recursive(fieldname: str, obj: object, fieldtype: pa.DataType):
         items = (
             (
                 key,
-                _wrap_recursive(
-                    fieldname + "." + key, value, fieldtype.field(key).type
-                ),
+                wrap_recursive(fieldname + "." + key, value, fieldtype.field(key).type),
             )
             for key, value in obj.items()
         )
-        return _DictWrapper(items)
+        return DictWrapper(items)
     if isinstance(obj, list):
         assert isinstance(fieldtype, pa.ListType)
         items = (
-            _wrap_recursive(f"{fieldname}[{i}]", value, fieldtype.value_type)
+            wrap_recursive(f"{fieldname}[{i}]", value, fieldtype.value_type)
             for i, value in enumerate(obj)
         )
-        return _ListWrapper(items)
+        return ListWrapper(items)
     return obj
 
 
-def _flatten_struct_array(field: pa.Field, array: pa.Array) -> Generator:
+def flatten_struct_array(field: pa.Field, array: pa.Array) -> Generator:
     if isinstance(array, pa.StructArray):
         for x, y in zip(field.flatten(), array.flatten()):
-            yield from _flatten_struct_array(x, y)
+            yield from flatten_struct_array(x, y)
     else:
         yield field, array
 
 
-def _flatten_batch(batch: pa.RecordBatch) -> Generator:
+def flatten_batch(batch: pa.RecordBatch) -> Generator:
     for i, field in enumerate(batch.schema):
         array = batch.column(i)
-        yield from _flatten_struct_array(field, array)
+        yield from flatten_struct_array(field, array)
 
 
-def _flatten_object(
+def flatten_object(
     parent_key: str,
     o: object,
     *,
     parent_changed: bool,
 ) -> Generator[tuple[str, object, bool], None, None]:
-    if isinstance(o, _DictWrapper):
+    if isinstance(o, DictWrapper):
         for key, value in o.items():
             changed = key in o._modified
-            yield from _flatten_object(
+            yield from flatten_object(
                 f"{parent_key}.{key}",
                 value,
                 parent_changed=changed,
             )
-    elif isinstance(o, _ListWrapper):
+    elif isinstance(o, ListWrapper):
         # We stop flattening at lists, analogous to `RecordBatch.flatten()`.
         # We still need to continue the recursion to check if anything was
         # modified.
-        yield parent_key, o, _is_modified(o)
+        yield parent_key, o, is_modified(o)
     else:
         yield parent_key, o, parent_changed
 
 
-def _unflatten_nested(box: Box) -> pa.RecordBatch:
+def unflatten_nested(box: Box) -> pa.RecordBatch:
     arrays = []
     fields = []
     for name, value in box.items():
         if isinstance(value, Box):
-            inner_batch = _unflatten_nested(value)
+            inner_batch = unflatten_nested(value)
             arrays.append(inner_batch.to_struct_array())
             fields.append(pa.field(name, pa.struct(inner_batch.schema)))
         else:
@@ -198,7 +196,7 @@ def _unflatten_nested(box: Box) -> pa.RecordBatch:
     return pa.RecordBatch.from_arrays(arrays=arrays, schema=pa.schema(fields))
 
 
-def _unflatten_batch(
+def unflatten_batch(
     fields: Iterable[pa.Field],
     arrays: Iterable[pa.Array],
 ) -> pa.RecordBatch:
@@ -210,7 +208,7 @@ def _unflatten_batch(
     unflat_arrays = []
     for key, value in outbox.items():
         if isinstance(value, Box):
-            inner_batch = _unflatten_nested(value)
+            inner_batch = unflatten_nested(value)
             field = pa.field(key, pa.struct(inner_batch.schema))
             array = inner_batch.to_struct_array()
         else:
@@ -223,18 +221,18 @@ def _unflatten_batch(
     )
 
 
-def _find_first_nonnull(xs: list[Union[T,None]]) -> Union[T, None]:
+def find_first_nonnull(xs: list[Union[T, None]]) -> Union[T, None]:
     return next((x for x in xs if x is not None), None)
 
 
-class _ResultsBuffer:
+class ResultsBuffer:
     """Stores the values produced by the user code.
 
     Builds a new record batch from the all the scalars with the `finish`
     function.
     """
 
-    def __init__(self: "_ResultsBuffer", original_batch: pa.RecordBatch) -> None:
+    def __init__(self: "ResultsBuffer", original_batch: pa.RecordBatch) -> None:
         self.original_batch = original_batch
         self.input_values = original_batch.to_pydict()
         # self.input_values = filter_sporadic_nulls(self.original_batch)
@@ -243,24 +241,24 @@ class _ResultsBuffer:
         self.changed: set[str] = set()
 
     def start_row(
-        self: "_ResultsBuffer",
+        self: "ResultsBuffer",
         i: int,
-    ) -> _DictWrapper:
+    ) -> DictWrapper:
         self.current_row = i
         # conversion_box: Automatically mangle field names to allow safe access
         #                 (ie. "3rd field" -> out.x3rd_field = 0)
         # default_box: Allow recursive definitions (ie. out.foo.bar = 3)
-        out = _DictWrapper(
-            conversion_box=True, default_box=True, default_box_attr=_DictWrapper
+        out = DictWrapper(
+            conversion_box=True, default_box=True, default_box_attr=DictWrapper
         )
         for key, values in self.input_values.items():
             field = self.original_batch.schema.field(key)
-            wrapped_value = _wrap_recursive(key, values[i], field.type)
+            wrapped_value = wrap_recursive(key, values[i], field.type)
             out[key] = wrapped_value
-        _reset_modified(out)
+        reset_modified(out)
         return out
 
-    def finish_row(self: "_ResultsBuffer", local_vars: _DictWrapper) -> None:
+    def finish_row(self: "ResultsBuffer", local_vars: DictWrapper) -> None:
         i = self.current_row
         if i < 0:
             msg = f"row index should be >=0, got {i}"
@@ -270,10 +268,8 @@ class _ResultsBuffer:
             if isinstance(value, ModuleType):
                 continue
             # Ignore all variables starting with an underscore.
-            if key.startswith("_"):
-                continue
             changed = key in local_vars._modified
-            for flat_key, flat_value, was_touched in _flatten_object(
+            for flat_key, flat_value, was_touched in flatten_object(
                 key,
                 value,
                 parent_changed=changed,
@@ -288,13 +284,13 @@ class _ResultsBuffer:
                 if was_touched:
                     self.changed.add(flat_key)
 
-    def finish(self: "_ResultsBuffer") -> pa.RecordBatch:
+    def finish(self: "ResultsBuffer") -> pa.RecordBatch:
         output_data: Dict[str, Tuple[pa.Field, pa.Array]] = {}
         original_fieldnames = set()
         # Construct flattened output batch. This implicitly handles deleted
         # fields as well, since those won't have any recorded output values:
         input_rows = self.original_batch.num_rows
-        for field, array in _flatten_batch(self.original_batch):
+        for field, array in flatten_batch(self.original_batch):
             original_fieldnames.add(field.name)
             if field.name in self.output_values:
                 output_data[field.name] = (field, array)
@@ -308,7 +304,7 @@ class _ResultsBuffer:
             for _ in range(0, input_rows - len(values)):
                 values.append(None)
             # Build the new output array
-            example_value = _find_first_nonnull(values)
+            example_value = find_first_nonnull(values)
             try:
                 type_ = infer_type(example_value)
                 field = pa.field(key, type_)
@@ -319,25 +315,21 @@ class _ResultsBuffer:
 
         # Construct final record batch and revert the flattening.
         fields, arrays = zip(*output_data.values())
-        return _unflatten_batch(fields, arrays)
+        return unflatten_batch(fields, arrays)
 
 
-def _execute_user_code(__batch: pa.RecordBatch, __code: str) -> pa.RecordBatch:
-    __buffer = _ResultsBuffer(__batch)
-    for __i in range(__batch.num_rows):
+def execute_user_code(batch: pa.RecordBatch, code: str) -> pa.RecordBatch:
+    buffer = ResultsBuffer(batch)
+    for i in range(batch.num_rows):
         # Create the magic `self` variable.
-        self = __buffer.start_row(__i)
-        # == Run the user-provided code ===========
-        # TODO: This previously used `locals()` and `globals()`, which is why
-        # the code was uglified on purpose. Now that this is no longer the case,
-        # the rest of the file should be adapted accordingly.
+        self = buffer.start_row(i)
         env = {"self": self}
-        exec(__code, env)
-        # =========================================
+        # Run the user-provided code
+        exec(code, env)
         if len(self) == 0:
             raise Exception("Empty output not allowed")
-        __buffer.finish_row(self)
-    return __buffer.finish()
+        buffer.finish_row(self)
+    return buffer.finish()
 
 
 def main() -> int:
@@ -372,7 +364,7 @@ def main() -> int:
                 reader.read_next_batch()
             except StopIteration:
                 pass
-            batch_out = _execute_user_code(batch_in, code.decode())
+            batch_out = execute_user_code(batch_in, code.decode())
             writer = pa.ipc.RecordBatchStreamWriter(ostream, batch_out.schema)
             writer.write_batch(batch_out)
             writer.close()
