@@ -8,7 +8,9 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/pcap.hpp>
+#include <tenzir/make_byte_reader.hpp>
+#include <tenzir/table_slice.hpp>
+
 
 #include <arrow/array.h>
 #include <arrow/compute/cast.h>
@@ -19,19 +21,72 @@
 #include <caf/expected.hpp>
 #include <arrow/record_batch.h>
 #include <arrow/ipc/writer.h>
+#include <arrow/ipc/reader.h>
+
+#include <queue>
 
 
 namespace tenzir::plugins::feather2 {
 namespace {
 
+  class CallbackListener : public arrow::ipc::Listener {
+        public:
+            CallbackListener() = default;
+
+            arrow::Status OnRecordBatchDecoded(std::shared_ptr<arrow::RecordBatch> record_batch) override {
+              record_batch_buffer.push(record_batch);
+              return arrow::Status::OK();
+            }
+            
+            std::queue<std::shared_ptr<arrow::RecordBatch>> record_batch_buffer;
+    };            
+
 auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
   -> generator<table_slice> {
-  //auto bytes = tenzir::plugins::pcap::make_byte_reader(input);
-  auto listener = std::make_shared<arrow::ipc::Listener>(arrow::ipc::Listener()); // expiremental API
+  
+  TENZIR_INFO("parsing");
+
+  auto byte_reader = make_byte_reader(std::move(input)); // what does move do
+  auto listener = std::make_shared<CallbackListener>(); // expiremental API
   auto stream_decoder = arrow::ipc::StreamDecoder(listener);
+  TENZIR_INFO("init steps done");
 
+  while (true) {
+    TENZIR_INFO("inside loop");
 
-  co_return;
+    auto required_size = detail::narrow_cast<size_t>(stream_decoder.next_required_size());
+    auto payload = byte_reader(required_size); // how big should buffer be?
+
+    if (!payload) {
+      co_yield {};
+      continue;
+    } 
+
+    
+    auto decode_result = stream_decoder.Consume(reinterpret_cast<const uint8_t*>(payload->data()), payload->size()); // TODO: consider using the buffer overload of consume
+
+    // does this force code to wait?
+    if (!decode_result.ok()) {
+      diagnostic::error("failed to decode the byte stream into a record batch").note("{}", decode_result.ToString()).emit(ctrl.diagnostics());
+      co_return;
+    }
+
+    while (!listener->record_batch_buffer.empty()) {
+      TENZIR_INFO("queue logic");
+      auto batch = listener->record_batch_buffer.front();
+      TENZIR_INFO("fronted");
+      listener->record_batch_buffer.pop();
+      TENZIR_INFO("popped");
+      co_yield table_slice(batch); //record batch, schema, serialize, do we want no serialize?
+    }
+
+    //
+    if (payload->size() < required_size) {
+      TENZIR_INFO("returning");
+      co_return;
+    }
+
+  }
 }
 
 auto print_feather(table_slice input, operator_control_plane& ctrl, const std::shared_ptr<arrow::ipc::RecordBatchWriter>& stream_writer, const std::shared_ptr<arrow::io::BufferOutputStream>& sink)
@@ -48,6 +103,7 @@ auto print_feather(table_slice input, operator_control_plane& ctrl, const std::s
   }
   auto finished_buffer = finished_buffer_result.ValueOrDie();;
   auto chunk = chunk::make(finished_buffer); //does chunk make already have error handling
+  // TENZIR_INFO("printing");
   co_yield chunk;
   auto reset_buffer_result = sink->Reset();
   if(!reset_buffer_result.ok()) {
@@ -55,7 +111,6 @@ auto print_feather(table_slice input, operator_control_plane& ctrl, const std::s
   }
 }
 
-// git work tree
 
 class feather2_parser final : public plugin_parser {
 public:
