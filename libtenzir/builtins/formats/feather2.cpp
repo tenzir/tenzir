@@ -52,8 +52,6 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
   TENZIR_INFO("init steps done");
 
   while (true) {
-    TENZIR_INFO("inside loop");
-
     auto required_size = detail::narrow_cast<size_t>(stream_decoder.next_required_size());
     auto payload = byte_reader(required_size); // how big should buffer be?
 
@@ -62,27 +60,23 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
       continue;
     } 
 
-    
-    auto decode_result = stream_decoder.Consume(reinterpret_cast<const uint8_t*>(payload->data()), payload->size()); // TODO: consider using the buffer overload of consume
-
-    // does this force code to wait?
+    auto decode_result = stream_decoder.Consume(as_arrow_buffer(chunk::copy(*payload)));
     if (!decode_result.ok()) {
       diagnostic::error("failed to decode the byte stream into a record batch").note("{}", decode_result.ToString()).emit(ctrl.diagnostics());
       co_return;
     }
 
     while (!listener->record_batch_buffer.empty()) {
-      TENZIR_INFO("queue logic");
       auto batch = listener->record_batch_buffer.front();
-      TENZIR_INFO("fronted");
       listener->record_batch_buffer.pop();
-      TENZIR_INFO("popped");
-      co_yield table_slice(batch); //record batch, schema, serialize, do we want no serialize?
+      auto validate_status = batch->Validate();
+      TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
+      co_yield table_slice(batch);
     }
 
-    //
+
+    //There can be some data loss at the end of the buffer depending on the timing of the OnRecordBatchDecoded timing 
     if (payload->size() < required_size) {
-      TENZIR_INFO("returning");
       co_return;
     }
 
@@ -91,7 +85,10 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
 
 auto print_feather(table_slice input, operator_control_plane& ctrl, const std::shared_ptr<arrow::ipc::RecordBatchWriter>& stream_writer, const std::shared_ptr<arrow::io::BufferOutputStream>& sink)
   -> generator<chunk_ptr> {
-  auto batch = to_record_batch(input); // work with this instead
+  auto batch = to_record_batch(input);
+  auto validate_status = batch->Validate();
+  TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
+
   auto stream_writer_status = stream_writer->WriteRecordBatch(*batch);
   if (!stream_writer_status.ok()){
     diagnostic::error("failed to write a record batch to the stream").note("{}", stream_writer_status.ToString()).emit(ctrl.diagnostics());
@@ -102,13 +99,13 @@ auto print_feather(table_slice input, operator_control_plane& ctrl, const std::s
     co_return;
   }
   auto finished_buffer = finished_buffer_result.ValueOrDie();;
-  auto chunk = chunk::make(finished_buffer); //does chunk make already have error handling
-  // TENZIR_INFO("printing");
+  auto chunk = chunk::make(finished_buffer); 
   co_yield chunk;
-  auto reset_buffer_result = sink->Reset();
+  auto reset_buffer_result = sink->Reset(); // the buffer is reinit with newly allocated memory because the API does not offer a Reset that just clears the original data
   if(!reset_buffer_result.ok()) {
     diagnostic::error("failed to reset buffer").note("{}", reset_buffer_result.ToString()).emit(ctrl.diagnostics());
   }
+
 }
 
 
