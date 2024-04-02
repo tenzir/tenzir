@@ -356,7 +356,7 @@ chunk::iterator chunk::end() const noexcept {
 // -- accessors ----------------------------------------------------------------
 
 chunk_ptr chunk::slice(size_type start, size_type length) const {
-  TENZIR_ASSERT(start < size());
+  TENZIR_ASSERT(start <= size());
   if (length > size() - start)
     length = size() - start;
   return slice(view_.subspan(start, length));

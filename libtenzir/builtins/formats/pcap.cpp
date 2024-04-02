@@ -68,7 +68,7 @@ public:
                    bool emit_file_headers) -> generator<table_slice> {
       // A PCAP file starts with a 24-byte header.
       auto input_file_header = file_header{};
-      auto read_n = make_byte_reader(std::move(input));
+      auto read_n = make_byte_view_reader(std::move(input));
       co_yield {};
       while (true) {
         auto length = sizeof(file_header);
