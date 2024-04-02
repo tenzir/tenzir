@@ -68,7 +68,6 @@ public:
   }
 
   auto diagnostics() noexcept -> diagnostic_handler& override {
-    TENZIR_WARN("returning diags handler");
     return diagnostics_;
   }
 
@@ -100,10 +99,6 @@ using bridge_actor = caf::typed_actor<
   auto(atom::get)->caf::result<table_slice>>;
 
 struct connection_state {
-  ~connection_state() noexcept {
-    TENZIR_WARN("connection shut down");
-  }
-
   caf::event_based_actor* self;
   detail::weak_handle<bridge_actor> bridge;
   accept_args args;
@@ -183,50 +178,30 @@ auto make_connection(caf::stateful_actor<connection_state>* self,
 }
 
 struct connection_manager_state {
-  ~connection_manager_state() noexcept {
-    TENZIR_WARN("connection manager shut down");
-  }
-
   caf::event_based_actor* self;
   detail::weak_handle<bridge_actor> bridge;
   accept_args args;
   shared_diagnostic_handler diagnostics;
 
-  std::shared_ptr<boost::asio::io_context> io_context;
+  boost::asio::io_context io_context;
+  std::optional<boost::asio::ip::tcp::socket> socket;
   std::optional<boost::asio::ip::tcp::endpoint> endpoint;
   std::optional<boost::asio::ip::tcp::acceptor> acceptor;
-  // bool accepting = false;
 
   std::vector<caf::actor> connections;
 
-  auto run() -> void {
-    detail::weak_run_delayed(self, duration::zero(), [this] {
-      run();
-      // if (accepting) {
-      //   TENZIR_WARN("run_for");
-      //   auto guard =
-      //   boost::asio::make_work_guard(io_context->get_executor()); const auto
-      //   num_runs = io_context->run_for(std::chrono::seconds{1}); return;
-      // }
-      TENZIR_WARN("accepting");
-      // accepting = true;
-      auto socket = boost::asio::ip::tcp::socket(*io_context);
-#if TENZIR_LINUX
-      auto sfd
-        = ::socket(endpoint.protocol().family(), SOCK_STREAM | SOCK_CLOEXEC,
-                   endpoint.protocol().protocol());
-      TENZIR_ASSERT(sfd >= 0);
-      socket.assign(endpoint.protocol(), sfd);
-#endif
-      acceptor->accept(socket);
-      // acceptor->async_accept([this](boost::system::error_code ec,
-      //                               boost::asio::ip::tcp::socket socket) {
-      TENZIR_WARN("accepted");
-      // accepting = false;
+  auto accept() {
+    acceptor->async_accept([this](boost::system::error_code ec,
+                                  boost::asio::ip::tcp::socket socket) {
+      if (ec) {
+        diagnostic::error("{}", ec.message())
+          .note("failed to accept connection")
+          .throw_();
+      }
 #if TENZIR_MACOS
       if (::fcntl(socket.native_handle(), F_SETFD, FD_CLOEXEC) == -1) {
         diagnostic::error("{}", detail::describe_errno())
-          .note("failed to configure TLS socket")
+          .note("failed to configure socket")
           .throw_();
       }
 #endif
@@ -238,21 +213,35 @@ struct connection_manager_state {
       connections.push_back(self->spawn<caf::linked + caf::detached>(
         make_connection, std::move(socket), std::move(handle), args,
         diagnostics));
-      // });
+    });
+    run();
+  }
+
+  auto run() -> void {
+    detail::weak_run_delayed(self, duration::zero(), [this] {
+      const auto num_runs = [&] {
+        auto guard = boost::asio::make_work_guard(io_context);
+        return io_context.run_one_for(std::chrono::milliseconds{500});
+      }();
+      if (num_runs == 0) {
+        run();
+        return;
+      }
+      TENZIR_ASSERT(num_runs == 1);
+      io_context.restart();
+      accept();
     });
   }
 };
 
 auto make_connection_manager(
-  caf::stateful_actor<connection_manager_state>* self,
-  std::shared_ptr<boost::asio::io_context> io_context, bridge_actor bridge,
+  caf::stateful_actor<connection_manager_state>* self, bridge_actor bridge,
   accept_args args, shared_diagnostic_handler diagnostics) -> caf::behavior {
   self->state.self = self;
-  self->state.io_context = std::move(io_context);
   self->state.bridge = std::move(bridge);
   self->state.args = std::move(args);
   self->state.diagnostics = std::move(diagnostics);
-  auto resolver = boost::asio::ip::tcp::resolver{*self->state.io_context};
+  auto resolver = boost::asio::ip::tcp::resolver{self->state.io_context};
   auto endpoints
     = resolver.resolve(self->state.args.hostname, self->state.args.port);
   if (endpoints.empty()) {
@@ -262,10 +251,18 @@ auto make_connection_manager(
     return {};
   }
   self->state.endpoint = endpoints.begin()->endpoint();
-  self->state.acceptor = boost::asio::ip::tcp::acceptor(*self->state.io_context,
+  self->state.acceptor = boost::asio::ip::tcp::acceptor(self->state.io_context,
                                                         *self->state.endpoint);
   self->state.acceptor->listen(boost::asio::socket_base::max_connections);
-  self->state.run();
+  self->state.socket = boost::asio::ip::tcp::socket(self->state.io_context);
+#if TENZIR_LINUX
+  auto sfd = ::socket(self->state.endpoint->protocol().family(),
+                      SOCK_STREAM | SOCK_CLOEXEC,
+                      self->state.endpoint->protocol().protocol());
+  TENZIR_ASSERT(sfd >= 0);
+  self->state.socket->assign(self->state.endpoint->protocol(), sfd);
+#endif
+  self->state.accept();
   return {
     [](int) {
       // dummy because no behavior means quitting
@@ -274,12 +271,6 @@ auto make_connection_manager(
 }
 
 struct bridge_state {
-  ~bridge_state() noexcept {
-    TENZIR_WARN("bridge shut down");
-    io_context->stop();
-  }
-
-  std::shared_ptr<boost::asio::io_context> io_context;
   std::queue<table_slice> buffer;
   caf::typed_response_promise<table_slice> buffer_rp;
 
@@ -289,10 +280,9 @@ struct bridge_state {
 auto make_bridge(bridge_actor::stateful_pointer<bridge_state> self,
                  accept_args args, shared_diagnostic_handler diagnostics)
   -> bridge_actor::behavior_type {
-  self->state.io_context = std::make_shared<boost::asio::io_context>();
   self->state.connection_manager = self->spawn<caf::linked + caf::detached>(
-    make_connection_manager, self->state.io_context, bridge_actor{self},
-    std::move(args), std::move(diagnostics));
+    make_connection_manager, bridge_actor{self}, std::move(args),
+    std::move(diagnostics));
   return {
     [self](table_slice& slice) -> caf::result<void> {
       if (self->state.buffer_rp.pending()) {

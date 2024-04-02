@@ -266,7 +266,7 @@ struct exec_node_state {
   bool produced_output = false;
 
   ~exec_node_state() noexcept {
-    TENZIR_WARN("{} {} shut down", *self, op->name());
+    TENZIR_DEBUG("{} {} shut down", *self, op->name());
     instance.reset();
     ctrl.reset();
     emit_metrics();
