@@ -26,13 +26,15 @@
 
 #include <queue>
 
-namespace tenzir::plugins::accept {
+namespace tenzir::plugins::tcp_listen {
 
 namespace {
 
-struct accept_args {
+struct tcp_listen_args {
   std::string hostname = {};
   std::string port = {};
+  bool connect = false;
+  bool listen_once = false;
   bool tls = false;
   std::optional<std::string> tls_certfile = {};
   std::optional<std::string> tls_keyfile = {};
@@ -40,20 +42,22 @@ struct accept_args {
   bool has_terminal = false;
   bool no_location_overrides = false;
 
-  friend auto inspect(auto& f, accept_args& x) -> bool {
+  friend auto inspect(auto& f, tcp_listen_args& x) -> bool {
     return f.object(x).fields(
       f.field("hostname", x.hostname), f.field("port", x.port),
-      f.field("tls", x.tls), f.field("tls_certfile", x.tls_certfile),
+      f.field("tls", x.tls), f.field("connect", x.connect),
+      f.field("listen_once", x.listen_once),
+      f.field("tls_certfile", x.tls_certfile),
       f.field("tls_keyfile", x.tls_keyfile), f.field("op", x.op),
       f.field("has_terminal", x.has_terminal),
       f.field("no_location_overrides", x.no_location_overrides));
   }
 };
 
-class accept_control_plane final : public operator_control_plane {
+class tcp_listen_control_plane final : public operator_control_plane {
 public:
-  accept_control_plane(shared_diagnostic_handler diagnostics, bool has_terminal,
-                       bool no_location_overrides)
+  tcp_listen_control_plane(shared_diagnostic_handler diagnostics,
+                           bool has_terminal, bool no_location_overrides)
     : diagnostics_{std::move(diagnostics)},
       has_terminal_{has_terminal},
       no_location_overrides_{no_location_overrides} {
@@ -101,7 +105,7 @@ using bridge_actor = caf::typed_actor<
 struct connection_state {
   caf::event_based_actor* self;
   detail::weak_handle<bridge_actor> bridge;
-  accept_args args;
+  tcp_listen_args args;
   std::unique_ptr<operator_control_plane> ctrl;
 
   generator<table_slice> gen = {};
@@ -110,12 +114,12 @@ struct connection_state {
 
 auto make_connection(caf::stateful_actor<connection_state>* self,
                      boost::asio::ip::tcp::socket socket, bridge_actor bridge,
-                     accept_args args, shared_diagnostic_handler diagnostics)
-  -> caf::behavior {
+                     tcp_listen_args args,
+                     shared_diagnostic_handler diagnostics) -> caf::behavior {
   self->state.self = self;
   self->state.bridge = std::move(bridge);
   self->state.args = std::move(args);
-  self->state.ctrl = std::make_unique<accept_control_plane>(
+  self->state.ctrl = std::make_unique<tcp_listen_control_plane>(
     std::move(diagnostics), args.has_terminal, args.no_location_overrides);
   // TODO: Handle TLS options.
   auto input = [](boost::asio::ip::tcp::socket socket,
@@ -164,7 +168,7 @@ auto make_connection(caf::stateful_actor<connection_state>* self,
         },
         [self](caf::error& err) {
           diagnostic::error(err)
-            .note("failed to send events to accept connection manager")
+            .note("failed to send events to tcp_listen connection manager")
             .emit(self->state.ctrl->diagnostics());
           self->quit(std::move(err));
         });
@@ -180,7 +184,7 @@ auto make_connection(caf::stateful_actor<connection_state>* self,
 struct connection_manager_state {
   caf::event_based_actor* self;
   detail::weak_handle<bridge_actor> bridge;
-  accept_args args;
+  tcp_listen_args args;
   shared_diagnostic_handler diagnostics;
 
   boost::asio::io_context io_context;
@@ -190,12 +194,12 @@ struct connection_manager_state {
 
   std::vector<caf::actor> connections;
 
-  auto accept() {
+  auto tcp_listen() {
     acceptor->async_accept([this](boost::system::error_code ec,
                                   boost::asio::ip::tcp::socket socket) {
       if (ec) {
         diagnostic::error("{}", ec.message())
-          .note("failed to accept connection")
+          .note("failed to tcp_listen connection")
           .throw_();
       }
 #if TENZIR_MACOS
@@ -229,14 +233,15 @@ struct connection_manager_state {
       }
       TENZIR_ASSERT(num_runs == 1);
       io_context.restart();
-      accept();
+      tcp_listen();
     });
   }
 };
 
-auto make_connection_manager(
-  caf::stateful_actor<connection_manager_state>* self, bridge_actor bridge,
-  accept_args args, shared_diagnostic_handler diagnostics) -> caf::behavior {
+auto make_connection_manager(caf::stateful_actor<connection_manager_state>* self,
+                             bridge_actor bridge, tcp_listen_args args,
+                             shared_diagnostic_handler diagnostics)
+  -> caf::behavior {
   self->state.self = self;
   self->state.bridge = std::move(bridge);
   self->state.args = std::move(args);
@@ -262,7 +267,7 @@ auto make_connection_manager(
   TENZIR_ASSERT(sfd >= 0);
   self->state.socket->assign(self->state.endpoint->protocol(), sfd);
 #endif
-  self->state.accept();
+  self->state.tcp_listen();
   return {
     [](int) {
       // dummy because no behavior means quitting
@@ -278,7 +283,7 @@ struct bridge_state {
 };
 
 auto make_bridge(bridge_actor::stateful_pointer<bridge_state> self,
-                 accept_args args, shared_diagnostic_handler diagnostics)
+                 tcp_listen_args args, shared_diagnostic_handler diagnostics)
   -> bridge_actor::behavior_type {
   self->state.connection_manager = self->spawn<caf::linked + caf::detached>(
     make_connection_manager, bridge_actor{self}, std::move(args),
@@ -306,11 +311,11 @@ auto make_bridge(bridge_actor::stateful_pointer<bridge_state> self,
   };
 }
 
-class accept_operator final : public crtp_operator<accept_operator> {
+class tcp_listen_operator final : public crtp_operator<tcp_listen_operator> {
 public:
-  accept_operator() = default;
+  tcp_listen_operator() = default;
 
-  explicit accept_operator(accept_args args) : args_{std::move(args)} {
+  explicit tcp_listen_operator(tcp_listen_args args) : args_{std::move(args)} {
     // nop
   }
 
@@ -340,7 +345,7 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "accept";
+    return "tcp-listen";
   }
 
   auto optimize(const expression& filter, event_order order) const
@@ -352,19 +357,19 @@ public:
     TENZIR_ASSERT(not dynamic_cast<pipeline*>(result.replacement.get()));
     auto args = args_;
     args.op = std::move(result.replacement);
-    result.replacement = std::make_unique<accept_operator>(std::move(args));
+    result.replacement = std::make_unique<tcp_listen_operator>(std::move(args));
     return result;
   }
 
-  friend auto inspect(auto& f, accept_operator& x) -> bool {
+  friend auto inspect(auto& f, tcp_listen_operator& x) -> bool {
     return f.object(x).fields(f.field("args", x.args_));
   }
 
 private:
-  accept_args args_ = {};
+  tcp_listen_args args_ = {};
 };
 
-class plugin final : public virtual operator_plugin<accept_operator> {
+class plugin final : public virtual operator_plugin<tcp_listen_operator> {
 public:
   auto signature() const -> operator_signature override {
     return {
@@ -375,13 +380,15 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    // accept <endpoint> [<args...>] read [<op_args...>]
+    // tcp_listen <endpoint> [<args...>] read [<op_args...>]
     auto parser
-      = argument_parser{"accept", "https://docs.tenzir.com/operators/accept"};
+      = argument_parser{"tcp-listen", "https://docs.tenzir.com/connectors/tcp"};
     auto q = until_keyword_parser{"read", p};
-    auto args = accept_args{};
+    auto args = tcp_listen_args{};
     auto endpoint = located<std::string>{};
     parser.add(endpoint, "<endpoint>");
+    parser.add("-c,--connect", args.connect);
+    parser.add("-o,--listen-once", args.listen_once);
     parser.add("--tls", args.tls);
     parser.add("--certfile", args.tls_certfile, "<TLS certificate>");
     parser.add("--keyfile", args.tls_keyfile, "<TLS private key>");
@@ -406,24 +413,47 @@ public:
         .throw_();
     }
     TENZIR_ASSERT(*op_name == "read");
-    const auto* plugin = plugins::find_operator(op_name->name);
-    if (not plugin) {
+    const auto* read_plugin = plugins::find_operator(op_name->name);
+    if (not read_plugin) {
       diagnostic::error("operator `{}` does not exist", op_name->name)
         .primary(op_name->source)
         .throw_();
     }
-    args.op = plugin->parse_operator(p);
+    args.op = read_plugin->parse_operator(p);
     TENZIR_ASSERT(args.op);
     TENZIR_ASSERT(not dynamic_cast<pipeline*>(args.op.get()));
     if (const auto ok = args.op->check_type<chunk_ptr, table_slice>(); not ok) {
       diagnostic::error(ok.error()).throw_();
     }
-    return std::make_unique<accept_operator>(std::move(args));
+    // If connect or listen-once are specified, we fall back to the TCP lodaer.
+    // This is obviously a hack, but we don't have a better solution for this
+    // for now. Similarly, `from tcp` will dispatch to this undocumented
+    // `tcp-listen` operator under the hood to allow multiple parallel
+    // connections to be accepted, which the connector API cannot handle.
+    if (args.connect or args.listen_once) {
+      const auto load_definition = fmt::format(
+        "load tcp {}:{} {}{}{}{}{}", args.hostname, args.port,
+        args.connect ? " --connect" : "",
+        args.listen_once ? " --listen-once" : "", args.tls ? " --tls" : "",
+        args.tls_certfile ? fmt::format(" --certfile {}", args.tls_certfile)
+                          : "",
+        args.tls_keyfile ? fmt::format(" --keyfile {}", args.tls_keyfile) : "");
+      auto load_read = pipeline::internal_parse(load_definition);
+      TENZIR_ASSERT(load_read);
+      if (not load_read) {
+        diagnostic::warning("`{}` failed to parse: {}", load_definition,
+                            load_read.error())
+          .throw_();
+      }
+      load_read->append(std::move(args.op));
+      return std::make_unique<pipeline>(std::move(*load_read));
+    }
+    return std::make_unique<tcp_listen_operator>(std::move(args));
   }
 };
 
 } // namespace
 
-} // namespace tenzir::plugins::accept
+} // namespace tenzir::plugins::tcp_listen
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::accept::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::tcp_listen::plugin)
