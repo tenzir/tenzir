@@ -60,7 +60,10 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
       continue;
     } 
 
-    auto decode_result = stream_decoder.Consume(as_arrow_buffer(chunk::copy(*payload)));
+    const auto done = payload->size() < required_size;
+    auto decode_result
+      = stream_decoder.Consume(as_arrow_buffer(std::move(payload)));
+
     if (!decode_result.ok()) {
       diagnostic::error("failed to decode the byte stream into a record batch").note("{}", decode_result.ToString()).emit(ctrl.diagnostics());
       co_return;
@@ -74,9 +77,9 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
       co_yield table_slice(batch);
     }
 
-
     //There can be some data loss at the end of the buffer depending on the timing of the OnRecordBatchDecoded timing 
-    if (payload->size() < required_size) {
+    if (done) {
+      TENZIR_INFO("returning");
       co_return;
     }
 
