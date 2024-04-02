@@ -8,6 +8,7 @@
 
 #include "tenzir/tql2/exec.hpp"
 
+#include "tenzir/bitmap.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -625,14 +626,38 @@ public:
   }
 };
 
+class where_use_test final : public operator_base {
+public:
+  where_use_test() = default;
+
+  auto name() const -> std::string override {
+    return "where2";
+  }
+};
+
 class where_use final : public operator_use {
 public:
+  // TODO: Better solution?
+  // struct for_overwrite {};
+  where_use() : expr_{ast::literal{"not initialized", location::unknown}} {
+  }
+
   explicit where_use(ast::expression expr) : expr_{std::move(expr)} {
+  }
+
+  friend auto inspect(auto& f, where_use& x) -> bool {
+    return f.apply(x.expr_);
+  }
+
+  auto name() const -> std::string {
+    return "where2";
   }
 
 private:
   ast::expression expr_;
 };
+
+class plugin : public inspection_plugin<operator_use, where_use> {};
 
 class where_def final : public operator_def {
 public:
@@ -712,6 +737,89 @@ public:
   }
 };
 
+#if 1
+// evaluation model !?!
+
+// data
+// arrow::Array
+// bitmap (?) <-- probably not as function input?
+
+// maybe input a `ids` for which we care about the output?
+// or for which we want to `&&` the result?
+
+// if evaluation "fails" -> use `null` for now (for whole expression??)
+// and emit diagnostic
+
+struct eval_input {
+  location fn;
+  std::span<located<variant<data, std::shared_ptr<arrow::Array>, bitmap>>> args;
+};
+
+class my_special_sqrt {
+public:
+  void signature() {
+    // sqrt(double)
+
+    // foo(bar, baz, qux=true)
+  }
+
+  auto eval(arrow::DoubleArray& input, context& ctx)
+    -> std::shared_ptr<arrow::DoubleArray> {
+    auto builder = arrow::DoubleBuilder{};
+    auto length = input.length();
+    (void)builder.Reserve(length);
+    for (auto idx = int64_t{0}; idx < length; ++idx) {
+      if (input.IsNull(idx)) {
+        builder.UnsafeAppendNull();
+        continue;
+      }
+      auto value = input.Value(idx);
+      if (value < 0.0) [[unlikely]] {
+        // TODO: We only want to emit the diagnostic once... for this batch?
+        // No, for the whole input, but with the given location.
+        // Irrespective of schema?
+        if (not complained_) {
+          diagnostic::warning("tried to take `sqrt` of negative value")
+            .primary(fn_)
+            .note("happened with `{}`", value)
+            .emit(ctx.dh());
+          complained_ = true;
+        }
+        builder.UnsafeAppendNull();
+        continue;
+      }
+      builder.UnsafeAppend(std::sqrt(input.Value(0)));
+    }
+    auto result = std::shared_ptr<arrow::DoubleArray>();
+    (void)builder.Finish(&result);
+    return result;
+  }
+
+  auto eval_one(std::optional<double> input, context& ctx)
+    -> std::optional<double> {
+    auto builder = arrow::DoubleBuilder{};
+    (void)builder.AppendOrNull(input);
+    auto result = std::shared_ptr<arrow::DoubleArray>();
+    (void)builder.Finish(&result);
+    auto output = eval(*result, ctx);
+    TENZIR_ASSERT(output->length() == 1);
+    return (*output)[0];
+  }
+
+private:
+  location fn_;
+  bool complained_ = false;
+};
+
+auto eval_sqrt(eval_input input, context& ctx) -> bool {
+  TENZIR_ASSERT(input.args.size() == 1);
+  auto& arg = input.args[0];
+  auto constant = std::get_if<data>(&arg.inner);
+  if (constant) {
+  }
+}
+#endif
+
 class sqrt_def final : public function_def {
 public:
   auto check(check_info info, context& ctx) const
@@ -738,6 +846,9 @@ public:
     }
     return dbl;
   }
+
+  // std::vector<located<data | arrow::Array>>{};
+  // get("MUST_BE_CONSTANT")
 
   auto evaluate(location fn, std::vector<located<data>> args,
                 context& ctx) const -> std::optional<data> override {
@@ -800,6 +911,7 @@ public:
         if (val < 0.0) [[unlikely]] {
           auto mask = 0xFF ^ (0x01 << ((begin - end) % 8));
           null_target[(begin - end) / 8] &= mask;
+          // TODO: Emit warning/error?
         }
         *target = std::sqrt(*begin);
         ++begin;

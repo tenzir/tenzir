@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
+#include "tenzir/pipeline.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
 
@@ -159,9 +160,32 @@ public:
     return dh_;
   }
 
+  operator diagnostic_handler&() {
+    return dh_;
+  }
+
 private:
   registry& reg_;
   diagnostic_handler& dh_;
 };
 
 } // namespace tenzir::tql2
+
+namespace caf {
+
+template <>
+struct inspector_access<std::unique_ptr<tenzir::tql2::operator_use>> {
+  template <class Inspector>
+  static auto
+  apply(Inspector& f, std::unique_ptr<tenzir::tql2::operator_use>& x) {
+    if constexpr (Inspector::is_loading) {
+      x = nullptr;
+      auto f = [](tenzir::deserializer& f,
+                  std::unique_ptr<tenzir::tql2::operator_use>& x) {};
+      f(tenzir::deserializer{f}, x);
+    } else {
+    }
+  }
+};
+
+} // namespace caf
