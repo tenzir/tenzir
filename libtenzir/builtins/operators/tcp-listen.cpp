@@ -104,6 +104,10 @@ using bridge_actor = caf::typed_actor<
 
 struct connection_state {
   caf::event_based_actor* self;
+  std::optional<boost::asio::ip::tcp::socket> socket = {};
+  std::optional<boost::asio::ssl::context> ssl_ctx = {};
+  std::optional<boost::asio::ssl::stream<boost::asio::ip::tcp::socket&>>
+    tls_socket = {};
   detail::weak_handle<bridge_actor> bridge;
   tcp_listen_args args;
   std::unique_ptr<operator_control_plane> ctrl;
@@ -117,17 +121,59 @@ auto make_connection(caf::stateful_actor<connection_state>* self,
                      tcp_listen_args args,
                      shared_diagnostic_handler diagnostics) -> caf::behavior {
   self->state.self = self;
+  self->state.socket = std::move(socket);
   self->state.bridge = std::move(bridge);
   self->state.args = std::move(args);
   self->state.ctrl = std::make_unique<tcp_listen_control_plane>(
     std::move(diagnostics), args.has_terminal, args.no_location_overrides);
-  // TODO: Handle TLS options.
-  auto input = [](boost::asio::ip::tcp::socket socket,
-                  operator_control_plane& ctrl) -> generator<chunk_ptr> {
+  if (self->state.args.tls) {
+    self->state.ssl_ctx.emplace(boost::asio::ssl::context::tls_client);
+    self->state.ssl_ctx->set_default_verify_paths();
+    self->state.ssl_ctx->set_verify_mode(
+      boost::asio::ssl::verify_peer
+      | boost::asio::ssl::verify_fail_if_no_peer_cert);
+    self->state.tls_socket.emplace(*self->state.socket, *self->state.ssl_ctx);
+    auto tls_handle = self->state.tls_socket->native_handle();
+    if (SSL_set1_host(tls_handle, self->state.args.hostname.c_str()) != 1) {
+      diagnostic::error("failed to enable host name verification")
+        .emit(self->state.ctrl->diagnostics());
+      return {};
+    }
+    if (not SSL_set_tlsext_host_name(tls_handle,
+                                     self->state.args.hostname.c_str())) {
+      diagnostic::error("failed to set SNI")
+        .emit(self->state.ctrl->diagnostics());
+      return {};
+    }
+    auto ec = boost::system::error_code{};
+    self->state.ssl_ctx.emplace(boost::asio::ssl::context::tls_server);
+    if (self->state.args.tls_certfile) {
+      self->state.ssl_ctx->use_certificate_chain_file(
+        *self->state.args.tls_certfile);
+    }
+    if (self->state.args.tls_keyfile) {
+      self->state.ssl_ctx->use_private_key_file(*self->state.args.tls_keyfile,
+                                                boost::asio::ssl::context::pem);
+    }
+    self->state.ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none);
+    self->state.tls_socket.emplace(*self->state.socket, *self->state.ssl_ctx);
+    self->state.tls_socket->handshake(
+      boost::asio::ssl::stream<boost::asio::ip::tcp::socket>::server, ec);
+    if (ec) {
+      diagnostic::error("{}", ec.message())
+        .note("TLS handshake failed")
+        .emit(self->state.ctrl->diagnostics());
+      return {};
+    }
+  }
+  auto input = [](connection_state& state) -> generator<chunk_ptr> {
     auto buffer = std::array<char, 65'536>{};
     auto ec = boost::system::error_code{};
     while (true) {
-      auto length = socket.read_some(boost::asio::buffer(buffer), ec);
+      const auto length
+        = state.tls_socket
+            ? state.tls_socket->read_some(boost::asio::buffer(buffer), ec)
+            : state.socket->read_some(boost::asio::buffer(buffer), ec);
       if (ec == boost::asio::error::eof) {
         TENZIR_ASSERT(length == 0);
         co_return;
@@ -135,11 +181,12 @@ auto make_connection(caf::stateful_actor<connection_state>* self,
       if (ec) {
         diagnostic::error("{}", ec.message())
           .note("failed to read from socket")
-          .emit(ctrl.diagnostics());
+          .emit(state.ctrl->diagnostics());
+        co_return;
       }
       co_yield chunk::copy(as_bytes(buffer).subspan(0, length));
     }
-  }(std::move(socket), *self->state.ctrl);
+  }(self->state);
   auto gen
     = self->state.args.op->instantiate(std::move(input), *self->state.ctrl);
   if (not gen) {

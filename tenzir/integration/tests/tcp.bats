@@ -39,6 +39,28 @@ setup() {
   rm "${key_and_cert}"
 }
 
+@test "listen with multiple connections with SSL" {
+  key_and_cert=$(mktemp)
+  openssl req -x509 -newkey rsa:2048 \
+    -keyout "${key_and_cert}" \
+    -out "${key_and_cert}" \
+    -days 365 \
+    -nodes \
+    -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=www.example.com" >/dev/null 2>/dev/null
+  check --bg listen \
+    tenzir "from tcp://127.0.0.1:4000 --tls --certfile ${key_and_cert} --keyfile ${key_and_cert} read json | deduplicate foo | head 2 | sort foo"
+  timeout 10 bash -c 'until lsof -i :4000; do sleep 0.2; done'
+  coproc CLIENT1 {
+    while true; do jq -n '{foo: 1}'; sleep 1; done | openssl s_client 127.0.0.1:4000
+  }
+  coproc CLIENT2 {
+    while true; do jq -n '{foo: 2}'; sleep 1; done | openssl s_client 127.0.0.1:4000
+  }
+  wait_all "${listen[@]}"
+  kill "${CLIENT1_PID}" "${CLIENT2_PID}"
+  rm "${key_and_cert}"
+}
+
 @test "saver - connect" {
   coproc SERVER {
     check exec socat TCP-LISTEN:7000 -
