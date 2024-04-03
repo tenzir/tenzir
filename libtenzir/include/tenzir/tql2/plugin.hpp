@@ -14,7 +14,7 @@
 
 namespace tenzir::tql2 {
 
-class operator_def_plugin : public virtual plugin {
+class operator_factory_plugin : public virtual plugin {
 public:
   virtual auto
   make_operator(ast::entity self, std::vector<ast::expression> args,
@@ -23,7 +23,7 @@ public:
 };
 
 template <class Operator>
-class operator_plugin : public virtual operator_def_plugin,
+class operator_plugin : public virtual operator_factory_plugin,
                         public virtual operator_inspection_plugin<Operator> {};
 
 } // namespace tenzir::tql2

@@ -63,7 +63,7 @@ public:
         .primary(self.get_location())
         .usage(usage)
         .docs(docs)
-        .emit(ctx.dh());
+        .emit(ctx);
     }
     if (args.empty()) {
       return nullptr;
@@ -83,7 +83,7 @@ public:
               .primary(y.get_location())
               .usage(usage)
               .docs(docs)
-              .emit(ctx.dh());
+              .emit(ctx);
             continue;
           }
           events.push_back(std::move(*rec));
@@ -94,7 +94,7 @@ public:
           .primary(args[0].get_location())
           .usage(usage)
           .docs(docs)
-          .emit(ctx.dh());
+          .emit(ctx);
       });
     return std::make_unique<source_use>(std::move(events));
   }

@@ -49,6 +49,14 @@ public:
     return result;
   }
 
+  auto eval(const ast::list& x) -> data {
+    auto result = list{};
+    for (auto& y : x.items) {
+      result.push_back(eval(y));
+    }
+    return result;
+  }
+
   auto eval(const ast::selector& x) -> data {
     diagnostic::error("expected a constant expression")
       .primary(x.get_location())

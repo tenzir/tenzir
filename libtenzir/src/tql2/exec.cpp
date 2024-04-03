@@ -311,7 +311,7 @@ public:
 
 class plugin_operator_def : public operator_def {
 public:
-  explicit plugin_operator_def(const operator_def_plugin* plugin)
+  explicit plugin_operator_def(const operator_factory_plugin* plugin)
     : plugin_{plugin} {
   }
 
@@ -325,7 +325,7 @@ public:
   }
 
 private:
-  const operator_def_plugin* plugin_;
+  const operator_factory_plugin* plugin_;
 };
 
 class from_use final : public operator_use {
@@ -1089,10 +1089,10 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   // not want the mere *existence* to be dependant on which plugins are loaded.
   // Instead, we should always register all operators and then emit an helpful
   // error if the corresponding plugin is not loaded.
-  for (auto plugin : plugins::get<tql2::operator_def_plugin>()) {
+  for (auto plugin : plugins::get<tql2::operator_factory_plugin>()) {
     auto name = plugin->name();
     // TODO
-    TENZIR_ASSERT(std::string_view{name}.substr(0, 4) != "tql.");
+    TENZIR_ASSERT(std::string_view{name}.substr(0, 5) == "tql2.");
     reg.add(name.substr(5), std::make_unique<plugin_operator_def>(plugin));
   }
   // functions
