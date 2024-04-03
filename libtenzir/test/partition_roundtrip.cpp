@@ -80,7 +80,6 @@ TEST(index roundtrip) {
   flatbuffers::FlatBufferBuilder builder;
   auto index = pack(builder, state);
   REQUIRE(index);
-  tenzir::fbs::FinishIndexBuffer(builder, *index);
   auto fb = builder.GetBufferPointer();
   auto sz = builder.GetSize();
   auto span = std::span(fb, sz);
