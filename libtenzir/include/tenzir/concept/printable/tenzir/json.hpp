@@ -19,6 +19,7 @@
 
 #include <fmt/format.h>
 
+#include <cmath>
 #include <optional>
 
 namespace tenzir {
@@ -58,6 +59,14 @@ struct json_printer : printer_base<json_printer> {
     }
 
     auto operator()(view<double> x) noexcept -> bool {
+      switch (std::fpclassify(x)) {
+        case FP_NORMAL:
+        case FP_SUBNORMAL:
+        case FP_ZERO:
+          break;
+        default:
+          return (*this)(caf::none);
+      }
       if (double i; std::modf(x, &i) == 0.0) // NOLINT
         out_ = fmt::format_to(out_, options_.style.number, "{}.0", i);
       else
