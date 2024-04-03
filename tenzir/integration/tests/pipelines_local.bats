@@ -563,6 +563,20 @@ EOF
 {"value": "192.168.1.1", "tag": 9}
 EOF
 
+  check tenzir "from stdin read json | deduplicate value --limit 1" <<EOF
+{"value": 123, "tag": 1}
+{"value": null, "tag": 2}
+{"value": 123, "tag": 3}
+{"tag": 4}
+EOF
+
+  check ! tenzir "from stdin read json | deduplicate :ip --limit 1" <<EOF
+{"value": 123, "tag": 1}
+{"value": null, "tag": 2}
+{"value": 123, "tag": 3}
+{"tag": 4}
+EOF
+
   # Potentially flaky, if `tenzir` takes more than (8s - 100ms) to start up:
   # (
   #   echo "{\"value\": \"A\", \"tag\": 1}"

@@ -82,7 +82,7 @@ auto make_extend(const table_slice& slice, const configuration& config,
          it < config.extractor_to_operand.rend(); ++it) {
       auto [field, operand] = *it;
       if (not duplicates.insert(field).second) {
-        diagnostic::warning("duplicate or conflicting assigmnent for field {}",
+        diagnostic::warning("duplicate or conflicting assignment for field {}",
                             field)
           .hint("schema {}", slice.schema())
           .note("from `{}`", operator_name(Mode))
