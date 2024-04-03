@@ -11,6 +11,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/context.hpp"
 
 namespace tenzir::tql2 {
 
@@ -153,6 +154,8 @@ public:
 
   auto eval(const ast::entity& x) -> data {
     // we know this must be a constant
+    TENZIR_UNUSED(x);
+    return caf::none;
   }
 
   template <class T>

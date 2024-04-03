@@ -147,6 +147,8 @@ using expression_kind
             unpack, assignment, dollar_var>;
 
 struct expression {
+  expression() = default;
+
   template <class T>
   explicit(false) expression(T&& x)
     : kind{std::make_unique<expression_kind>(std::forward<T>(x))} {

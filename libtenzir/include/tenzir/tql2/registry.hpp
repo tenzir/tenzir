@@ -97,6 +97,17 @@ public:
   make(ast::entity self, std::vector<ast::expression> args, context& ctx) const
     -> std::unique_ptr<operator_use>
     = 0;
+
+  virtual auto serialize(serializer f, const operator_use& x) const -> bool {
+    TENZIR_UNUSED(f, x);
+    TENZIR_TODO();
+  }
+
+  virtual auto deserialize(deserializer f) const
+    -> std::unique_ptr<operator_use> {
+    TENZIR_UNUSED(f);
+    TENZIR_TODO();
+  }
 };
 
 using entity_def
@@ -146,28 +157,6 @@ auto with_thread_local_registry(const registry& reg, F&& f) {
   std::forward<F>(f)();
   set_thread_local_registry(prev);
 }
-
-class context {
-public:
-  context(registry& reg, diagnostic_handler& dh) : reg_{reg}, dh_{dh} {
-  }
-
-  auto reg() -> registry& {
-    return reg_;
-  }
-
-  auto dh() -> diagnostic_handler& {
-    return dh_;
-  }
-
-  operator diagnostic_handler&() {
-    return dh_;
-  }
-
-private:
-  registry& reg_;
-  diagnostic_handler& dh_;
-};
 
 } // namespace tenzir::tql2
 

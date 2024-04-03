@@ -9,12 +9,21 @@
 #pragma once
 
 #include "tenzir/plugin.hpp"
+#include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/context.hpp"
 
 namespace tenzir::tql2 {
 
-class tql_plugin : public plugin {
+class operator_def_plugin : public virtual plugin {
 public:
-  virtual void entities() const;
+  virtual auto
+  make_operator(ast::entity self, std::vector<ast::expression> args,
+                tql2::context& ctx) const -> operator_ptr
+    = 0;
 };
+
+template <class Operator>
+class operator_plugin : public virtual operator_def_plugin,
+                        public virtual operator_inspection_plugin<Operator> {};
 
 } // namespace tenzir::tql2

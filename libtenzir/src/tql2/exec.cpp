@@ -11,8 +11,12 @@
 #include "tenzir/bitmap.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/pipeline.hpp"
+#include "tenzir/series_builder.hpp"
+#include "tenzir/tql2/context.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/parser.hpp"
+#include "tenzir/tql2/plugin.hpp"
 #include "tenzir/tql2/registry.hpp"
 #include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/tokens.hpp"
@@ -305,8 +309,30 @@ public:
   }
 };
 
+class plugin_operator_def : public operator_def {
+public:
+  explicit plugin_operator_def(const operator_def_plugin* plugin)
+    : plugin_{plugin} {
+  }
+
+  auto make(ast::entity self, std::vector<expression> args, context& ctx) const
+    -> std::unique_ptr<operator_use> override {
+    TENZIR_UNUSED(args);
+    diagnostic::error("todo: plugin_operator_def")
+      .primary(self.get_location())
+      .emit(ctx);
+    return nullptr;
+  }
+
+private:
+  const operator_def_plugin* plugin_;
+};
+
 class from_use final : public operator_use {
 public:
+  explicit from_use(located<std::string> url) {
+    TENZIR_UNUSED(url);
+  }
 };
 
 class from_def final : public operator_def {
@@ -323,37 +349,27 @@ public:
       }
     }
     auto arg = std::move(args[0]);
-    auto ty = type_checker{ctx}.visit(arg);
-    if (ty && ty != string_type{}) {
-      diagnostic::error("expected `string` but got `{}`", *ty)
-        .primary(arg.get_location())
-        .emit(ctx.dh());
+    // TODO: We don't need this, do we?
+    // auto ty = type_checker{ctx}.visit(arg);
+    // if (ty && ty != string_type{}) {
+    //   diagnostic::error("expected `string` but got `{}`", *ty)
+    //     .primary(arg.get_location())
+    //     .emit(ctx.dh());
+    //   return nullptr;
+    // }
+    auto url_data = evaluate(arg, ctx);
+    if (not url_data) {
       return nullptr;
     }
-    // TODO: This should be some kind of const-eval, but for now, we just expect
-    // a string literal.
-    using result = std::optional<located<std::string>>;
-    auto url = arg.match(
-      [](literal& x) -> result {
-        return x.value.match(
-          [&](std::string& y) -> result {
-            return {{y, x.source}};
-          },
-          [](auto&) -> result {
-            return std::nullopt;
-          });
-      },
-      [](auto&) -> result {
-        return std::nullopt;
-      });
+    auto url = caf::get_if<std::string>(&*url_data);
     if (not url) {
-      diagnostic::error("expected a string literal")
+      diagnostic::error("expected a string")
         .primary(arg.get_location())
         .emit(ctx.dh());
       return nullptr;
     }
-    (void)url;
-    return std::make_unique<from_use>();
+    return std::make_unique<from_use>(
+      located{std::move(*url), arg.get_location()});
   }
 };
 
@@ -638,26 +654,54 @@ public:
 class where_use final : public operator_use {
 public:
   // TODO: Better solution?
-  // struct for_overwrite {};
-  where_use() : expr_{ast::literal{"not initialized", location::unknown}} {
-  }
+  where_use() = default;
 
   explicit where_use(ast::expression expr) : expr_{std::move(expr)} {
-  }
-
-  friend auto inspect(auto& f, where_use& x) -> bool {
-    return f.apply(x.expr_);
   }
 
   auto name() const -> std::string {
     return "where2";
   }
 
+  friend auto inspect(auto& f, where_use& x) -> bool {
+    return f.apply(x.expr_);
+  }
+
 private:
   ast::expression expr_;
 };
 
-class plugin : public inspection_plugin<operator_use, where_use> {};
+class plugin : public virtual serialization_plugin<operator_base> {
+public:
+  auto serialize(serializer f, const operator_base& x) const -> bool override {
+    return std::visit(
+      [&](auto& f) -> bool {
+        TENZIR_TODO();
+      },
+      f);
+  }
+
+  void deserialize(deserializer f,
+                   std::unique_ptr<operator_base>& x) const override {
+    x = nullptr;
+    std::visit(
+      [&](auto& f) {
+        auto name = std::string{};
+        if (not f.get().apply(name)) {
+          return;
+        }
+        // TODO: Find `operator_def`?
+        static_cast<context*>(nullptr);
+        auto def = static_cast<operator_def*>(nullptr);
+        if (not def) {
+          // TODO: error message
+          return;
+        }
+        auto use = def->deserialize(f);
+      },
+      f);
+  }
+};
 
 class where_def final : public operator_def {
 public:
@@ -676,64 +720,6 @@ public:
         .emit(ctx.dh());
     }
     return std::make_unique<where_use>(std::move(args[0]));
-  }
-};
-
-class source_use final : public operator_use {
-public:
-  explicit source_use(std::vector<tenzir::record> events)
-    : events_{std::move(events)} {
-  }
-
-private:
-  std::vector<tenzir::record> events_;
-};
-
-class source_def final : public operator_def {
-public:
-  auto make(ast::entity self, std::vector<ast::expression> args,
-            context& ctx) const -> std::unique_ptr<operator_use> override {
-    auto usage = "source [{...}, ...]";
-    auto docs = "https://docs.tenzir.com/operators/source";
-    if (args.size() != 1) {
-      diagnostic::error("expected exactly one argument")
-        .primary(self.get_location())
-        .usage(usage)
-        .docs(docs)
-        .emit(ctx.dh());
-    }
-    if (args.empty()) {
-      return nullptr;
-    }
-    // TODO: We want to const-eval instead.
-    auto events = std::vector<tenzir::record>{};
-    args[0].match(
-      [&](ast::list& x) {
-        for (auto& y : x.items) {
-          auto item = evaluate(y, ctx);
-          if (not item) {
-            continue;
-          }
-          auto rec = caf::get_if<tenzir::record>(&*item);
-          if (not rec) {
-            diagnostic::error("expected a record")
-              .primary(y.get_location())
-              .usage(usage)
-              .docs(docs)
-              .emit(ctx.dh());
-            continue;
-          }
-          events.push_back(std::move(*rec));
-        }
-      },
-      [&](auto&) {
-        diagnostic::error("expected a list")
-          .primary(args[0].get_location())
-          .usage(usage)
-          .docs(docs)
-          .emit(ctx.dh());
-      });
-    return std::make_unique<source_use>(std::move(events));
   }
 };
 
@@ -1098,8 +1084,17 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   reg.add("load_file", std::make_unique<load_file_def>());
   reg.add("set", std::make_unique<set_def>());
   reg.add("sort", std::make_unique<sort_def>());
-  reg.add("source", std::make_unique<source_def>());
   reg.add("where", std::make_unique<where_def>());
+  // TODO: While we want to be able to operator definitions in plugins, we do
+  // not want the mere *existence* to be dependant on which plugins are loaded.
+  // Instead, we should always register all operators and then emit an helpful
+  // error if the corresponding plugin is not loaded.
+  for (auto plugin : plugins::get<tql2::operator_def_plugin>()) {
+    auto name = plugin->name();
+    // TODO
+    TENZIR_ASSERT(std::string_view{name}.substr(0, 4) != "tql.");
+    reg.add(name.substr(5), std::make_unique<plugin_operator_def>(plugin));
+  }
   // functions
   reg.add("now", std::make_unique<now_def>());
   reg.add("sqrt", std::make_unique<sqrt_def>());
