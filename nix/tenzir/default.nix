@@ -59,7 +59,7 @@
         "plugins/fluent-bit"
         "plugins/kafka"
         "plugins/nic"
-        "plugins/parquet"
+        "plugins/parquet-store"
         "plugins/sigma"
         "plugins/velociraptor"
         "plugins/web"

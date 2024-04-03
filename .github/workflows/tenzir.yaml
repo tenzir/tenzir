@@ -616,7 +616,7 @@ jobs:
               # - The http-parser package is disabled on Hoembrew, which means
               #   we cannot build the web plugin on macOS anymore. Last checked
               #   on 2024-01-31.
-              - plugins/[^(parquet)(web)]*
+              - plugins/[^(parquet-store)(web)]*
               - contrib/tenzir-plugins/*
     env:
       BUILD_DIR: build
@@ -838,8 +838,8 @@ jobs:
             target: matcher
             path: contrib/tenzir-plugins/matcher
           - name: Parquet
-            target: parquet
-            path: plugins/parquet
+            target: parquet-store
+            path: plugins/parquet-store
           - name: Pipeline Manager
             target: pipeline-manager
             path: contrib/tenzir-plugins/pipeline-manager

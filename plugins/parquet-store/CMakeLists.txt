@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.19...3.28 FATAL_ERROR)
 
 project(
-  parquet
+  parquet-store
   DESCRIPTION "Parquet store plugin for Tenzir"
   LANGUAGES CXX)
 
@@ -13,7 +13,7 @@ include(CTest)
 
 find_package(Tenzir REQUIRED)
 TenzirRegisterPlugin(
-  TARGET parquet
+  TARGET parquet-store
   ENTRYPOINT parquet.cpp
   TEST_SOURCES tests/parquet.cpp)
 
@@ -27,16 +27,16 @@ find_package(Parquet)
 if (Parquet_VERSION_MAJOR LESS 12)
   message(
     FATAL_ERROR
-      "The Parquet plugin requires at least Parquet version 12.0, but found ${PARQUET_VERSION}"
+      "The Parquet-store plugin requires at least Parquet version 12.0, but found ${PARQUET_VERSION}"
   )
 endif ()
 
-target_link_libraries(parquet PRIVATE "${PARQUET_LIBRARY}")
+target_link_libraries(parquet-store PRIVATE "${PARQUET_LIBRARY}")
 
 if (TENZIR_ENABLE_STATIC_EXECUTABLE)
   # Work around missing dependency links in the Parquet target
   list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
   find_package(Thrift REQUIRED)
-  target_link_libraries(parquet PRIVATE thrift::thrift)
+  target_link_libraries(parquet-store PRIVATE thrift::thrift)
   list(POP_BACK CMAKE_MODULE_PATH)
 endif ()
