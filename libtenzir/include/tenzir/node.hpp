@@ -90,6 +90,10 @@ struct node_state {
 
   /// Flag to signal if the node received an exit message.
   bool tearing_down = false;
+
+  /// Weak handles to remotely spawned and monitored exec ndoes for cleanup on
+  /// node shutdown.
+  std::unordered_set<caf::actor_addr> monitored_exec_nodes = {};
 };
 
 /// Spawns a node.
