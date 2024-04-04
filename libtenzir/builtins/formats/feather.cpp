@@ -3,9 +3,10 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
+// SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/collect.hpp>
@@ -15,40 +16,33 @@
 #include <tenzir/error.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/generator.hpp>
+#include <tenzir/make_byte_reader.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/store.hpp>
 #include <tenzir/table_slice.hpp>
 
+#include <arrow/array.h>
+#include <arrow/compute/cast.h>
+#include <arrow/io/api.h>
 #include <arrow/io/file.h>
 #include <arrow/io/memory.h>
+#include <arrow/ipc/api.h>
 #include <arrow/ipc/feather.h>
 #include <arrow/ipc/reader.h>
+#include <arrow/ipc/writer.h>
+#include <arrow/record_batch.h>
 #include <arrow/table.h>
 #include <arrow/util/iterator.h>
 #include <arrow/util/key_value_metadata.h>
+#include <caf/expected.hpp>
+
+#include <queue>
 
 namespace tenzir::plugins::feather {
 
 namespace {
 
-/// Configuration for the Feather plugin.
-struct configuration {
-  int64_t zstd_compression_level{
-    arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
-      .ValueOrDie()};
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, configuration& x) {
-    return f.apply(x.zstd_compression_level);
-  }
-
-  static const record_type& schema() noexcept {
-    static auto result = record_type{
-      {"zstd-compression-level", int64_type{}},
-    };
-    return result;
-  }
-};
+namespace store {
 
 auto derive_import_time(const std::shared_ptr<arrow::Array>& time_col) {
   return value_at(time_type{}, *time_col, time_col->length() - 1);
@@ -71,8 +65,9 @@ unwrap_record_batch(const std::shared_ptr<arrow::RecordBatch>& rb) {
 auto make_import_time_col(const time& import_time, int64_t rows) {
   auto v = import_time.time_since_epoch().count();
   auto builder = time_type::make_arrow_builder(arrow::default_memory_pool());
-  if (auto status = builder->Reserve(rows); !status.ok())
+  if (auto status = builder->Reserve(rows); !status.ok()) {
     die(fmt::format("make time column failed: '{}'", status.ToString()));
+  }
   for (int i = 0; i < rows; ++i) {
     auto status = builder->Append(v);
     TENZIR_ASSERT(status.ok());
@@ -105,32 +100,37 @@ auto decode_ipc_stream(chunk_ptr chunk)
   if (chunk->size() < arrow_magic_bytes.length()
       || std::memcmp(chunk->data(), arrow_magic_bytes.data(),
                      arrow_magic_bytes.size())
-           != 0)
+           != 0) {
     return caf::make_error(ec::format_error, "not an Apache Feather v1 or "
                                              "Arrow IPC file");
+  }
   auto open_reader_result
     = arrow::ipc::RecordBatchFileReader::Open(as_arrow_file(std::move(chunk)));
-  if (!open_reader_result.ok())
+  if (!open_reader_result.ok()) {
     return caf::make_error(ec::format_error,
                            fmt::format("failed to open reader: {}",
                                        open_reader_result.status().ToString()));
+  }
   auto reader = open_reader_result.MoveValueUnsafe();
   auto get_generator_result = reader->GetRecordBatchGenerator();
-  if (!get_generator_result.ok())
+  if (!get_generator_result.ok()) {
     return caf::make_error(
       ec::format_error, fmt::format("failed to get batch generator: {}",
                                     get_generator_result.status().ToString()));
+  }
   auto gen = get_generator_result.MoveValueUnsafe();
   return []([[maybe_unused]] auto reader,
             auto gen) -> generator<std::shared_ptr<arrow::RecordBatch>> {
     while (true) {
       auto next = gen();
-      if (!next.is_finished())
+      if (!next.is_finished()) {
         next.Wait();
+      }
       TENZIR_ASSERT(next.is_finished());
       auto result = next.MoveResult().ValueOrDie();
-      if (arrow::IsIterationEnd(result))
+      if (arrow::IsIterationEnd(result)) {
         co_return;
+      }
       co_yield std::move(result);
     }
   }(std::move(reader), std::move(gen));
@@ -139,10 +139,11 @@ auto decode_ipc_stream(chunk_ptr chunk)
 class passive_feather_store final : public passive_store {
   [[nodiscard]] caf::error load(chunk_ptr chunk) override {
     auto decode_result = decode_ipc_stream(std::move(chunk));
-    if (!decode_result)
+    if (!decode_result) {
       return caf::make_error(ec::format_error,
                              fmt::format("failed to load feather store: {}",
                                          decode_result.error()));
+    }
     remaining_slices_generator_ = std::move(*decode_result);
     remaining_slices_iterator_ = remaining_slices_generator_.begin();
     return {};
@@ -177,14 +178,16 @@ class passive_feather_store final : public passive_store {
   }
 
   [[nodiscard]] uint64_t num_events() const override {
-    if (cached_num_events_ == 0)
+    if (cached_num_events_ == 0) {
       cached_num_events_ = rows(collect(slices()));
+    }
     return cached_num_events_;
   }
 
   [[nodiscard]] type schema() const override {
-    for (const auto& slice : slices())
+    for (const auto& slice : slices()) {
       return slice.schema();
+    }
     die("store must not be empty");
   }
 
@@ -200,9 +203,7 @@ private:
 
 class active_feather_store final : public active_store {
 public:
-  explicit active_feather_store(const configuration& config)
-    : feather_config_(config) {
-  }
+  active_feather_store() = default;
 
   [[nodiscard]] caf::error add(std::vector<table_slice> new_slices) override {
     new_slices_.reserve(new_slices.size() + new_slices_.size());
@@ -212,8 +213,9 @@ public:
       // slices not to have an offset at all. We should fix the unit tests
       // properly, but that takes time we did not want to spend when migrating
       // to partition-local ids. -- DL
-      if (slice.offset() == invalid_id)
+      if (slice.offset() == invalid_id) {
         slice.offset(num_events_);
+      }
       TENZIR_ASSERT(slice.offset() == num_events_);
       num_events_ += slice.rows();
       num_new_events_ += slice.rows();
@@ -235,24 +237,26 @@ public:
     }
     auto record_batches = arrow::RecordBatchVector{};
     record_batches.reserve(rebatched_slices_.size());
-    for (const auto& slice : rebatched_slices_)
+    for (const auto& slice : rebatched_slices_) {
       record_batches.push_back(wrap_record_batch(slice));
+    }
     const auto table = ::arrow::Table::FromRecordBatches(record_batches);
-    if (!table.ok())
+    if (!table.ok()) {
       return caf::make_error(ec::system_error, table.status().ToString());
+    }
     auto output_stream = arrow::io::BufferOutputStream::Create().ValueOrDie();
     auto write_properties = arrow::ipc::feather::WriteProperties::Defaults();
     // TODO: Set write_properties.chunksize to the expected batch size
     write_properties.compression = arrow::Compression::ZSTD;
-    write_properties.compression_level
-      = detail::narrow<int>(feather_config_.zstd_compression_level);
     const auto write_status = ::arrow::ipc::feather::WriteTable(
       *table.ValueUnsafe(), output_stream.get(), write_properties);
-    if (!write_status.ok())
+    if (!write_status.ok()) {
       return caf::make_error(ec::system_error, write_status.ToString());
+    }
     auto buffer = output_stream->Finish();
-    if (!buffer.ok())
+    if (!buffer.ok()) {
       return caf::make_error(ec::system_error, buffer.status().ToString());
+    }
     return chunk::make(buffer.MoveValueUnsafe());
   }
 
@@ -261,10 +265,12 @@ public:
     // may get invalidated while we iterate over it.
     auto rebatched_slices = rebatched_slices_;
     auto new_slices = new_slices_;
-    for (auto& slice : rebatched_slices)
+    for (auto& slice : rebatched_slices) {
       co_yield std::move(slice);
-    for (auto& slice : new_slices)
+    }
+    for (auto& slice : new_slices) {
       co_yield std::move(slice);
+    }
   }
 
   [[nodiscard]] uint64_t num_events() const override {
@@ -274,44 +280,221 @@ public:
 private:
   std::vector<table_slice> rebatched_slices_ = {};
   std::vector<table_slice> new_slices_ = {};
-  configuration feather_config_ = {};
   size_t num_new_events_ = {};
   size_t num_events_ = {};
 };
 
-class plugin final : public virtual store_plugin {
-  auto initialize(const record& plugin_config, const record& global_config)
-    -> caf::error override {
-    const auto default_compression_level
-      = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
-          .ValueOrDie();
-    auto level = try_get_or(global_config, "tenzir.zstd-compression-level",
-                            default_compression_level);
-    if (!level) {
-      return std::move(level.error());
-    }
-    zstd_compression_level_ = *level;
-    return convert(plugin_config, feather_config_);
+} // namespace store
+
+class callback_listener : public arrow::ipc::Listener {
+public:
+  callback_listener() = default;
+
+  arrow::Status OnRecordBatchDecoded(
+    std::shared_ptr<arrow::RecordBatch> record_batch) override {
+    record_batch_buffer.push(std::move(record_batch));
+    return arrow::Status::OK();
   }
 
-  [[nodiscard]] std::string name() const override {
+  std::queue<std::shared_ptr<arrow::RecordBatch>> record_batch_buffer;
+};
+
+auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
+  -> generator<table_slice> {
+  auto byte_reader = make_byte_reader(std::move(input));
+  auto listener = std::make_shared<callback_listener>();
+  auto stream_decoder = arrow::ipc::StreamDecoder(listener);
+  auto truncated_bytes = size_t{0};
+  auto decoded_once = false;
+  while (true) {
+    auto required_size
+      = detail::narrow_cast<size_t>(stream_decoder.next_required_size());
+    auto payload = byte_reader(required_size);
+    if (!payload) {
+      co_yield {};
+      continue;
+    }
+    truncated_bytes += payload->size();
+    if (payload->size() < required_size) {
+      if (truncated_bytes != 0 and payload->size() != 0) {
+        // Ideally this always would be just a warning, but the stream decoder
+        // happily continues to consume invalid bytes. E.g., trying to read a
+        // JSON file with this parser will just swallow all bytes, emitting this
+        // one error at the very end. Not a single time does consuming a buffer
+        // actually fail. We should probably look into limiting the memory usage
+        // here, as the stream decoder will keep consumed-but-not-yet-converted
+        // buffers in memory.
+        diagnostic::warning("truncated {} trailing bytes", truncated_bytes)
+          .severity(decoded_once ? severity::warning : severity::error)
+          .emit(ctrl.diagnostics());
+      }
+      co_return;
+    }
+    auto decode_result
+      = stream_decoder.Consume(as_arrow_buffer(std::move(payload)));
+    if (!decode_result.ok()) {
+      diagnostic::error("{}", decode_result.ToString())
+        .note("failed to decode the byte stream into a record batch")
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    while (!listener->record_batch_buffer.empty()) {
+      decoded_once = true;
+      truncated_bytes = 0;
+      auto batch = listener->record_batch_buffer.front();
+      listener->record_batch_buffer.pop();
+      auto validate_status = batch->Validate();
+      TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
+      // We check whether the name metadatum from Tenzir's conversion to record
+      // batches is still present. If it is not, then we stop parsing because we
+      // cannot feasibly continue.
+      // TODO: Implement a best-effort conversion for record batches coming from
+      // other tools to Tenzir's supported subset and required metadata.
+      const auto& metadata = batch->schema()->metadata();
+      if (not metadata
+          or std::find(metadata->keys().begin(), metadata->keys().end(),
+                       "TENZIR:name:0")
+               == metadata->keys().end()) {
+        diagnostic::error("not implemented")
+          .note("cannot convert Feather without Tenzir metadata")
+          .emit(ctrl.diagnostics());
+        co_return;
+      }
+      co_yield table_slice(batch);
+    }
+  }
+}
+
+auto print_feather(
+  table_slice input, operator_control_plane& ctrl,
+  const std::shared_ptr<arrow::ipc::RecordBatchWriter>& stream_writer,
+  const std::shared_ptr<arrow::io::BufferOutputStream>& sink)
+  -> generator<chunk_ptr> {
+  auto batch = to_record_batch(input);
+  auto validate_status = batch->Validate();
+  TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
+  auto stream_writer_status = stream_writer->WriteRecordBatch(*batch);
+  if (!stream_writer_status.ok()) {
+    diagnostic::error("{}", stream_writer_status.ToString())
+      .note("failed to write record batch")
+      .emit(ctrl.diagnostics());
+    co_return;
+  }
+  // We must finish the clear the buffer because the provided APIs do not offer
+  // a scrape and rewrite on the allocated same memory.
+  auto finished_buffer_result = sink->Finish();
+  if (!finished_buffer_result.ok()) {
+    diagnostic::error("{}", finished_buffer_result.status().ToString())
+      .note("failed to finish stream")
+      .emit(ctrl.diagnostics());
+    co_return;
+  }
+  co_yield chunk::make(finished_buffer_result.MoveValueUnsafe());
+  // The buffer is reinit with newly allocated memory because the API does not
+  // offer a Reset that just clears the original data.
+  auto reset_buffer_result = sink->Reset();
+  if (!reset_buffer_result.ok()) {
+    diagnostic::error("{}", reset_buffer_result.ToString())
+      .note("failed to reset stream")
+      .emit(ctrl.diagnostics());
+  }
+}
+
+class feather_parser final : public plugin_parser {
+public:
+  feather_parser() = default;
+  auto name() const -> std::string override {
     return "feather";
+  }
+
+  auto
+  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> std::optional<generator<table_slice>> override {
+    return parse_feather(std::move(input), ctrl);
+  }
+
+  friend auto inspect(auto& f, feather_parser& x) -> bool {
+    return f.object(x).fields();
+  }
+};
+
+class feather_printer final : public plugin_printer {
+public:
+  feather_printer() = default;
+
+  auto name() const -> std::string override {
+    // FIXME: Rename this and the file to just feather.
+    return "feather";
+  }
+
+  auto instantiate([[maybe_unused]] type input_schema,
+                   operator_control_plane& ctrl) const
+    -> caf::expected<std::unique_ptr<printer_instance>> override {
+    auto sink = arrow::io::BufferOutputStream::Create();
+    if (not sink.ok()) {
+      return diagnostic::error("{}", sink.status().ToString())
+        .note("failed to created BufferOutputStream")
+        .to_error();
+    }
+    const arrow::ipc::IpcWriteOptions& options
+      = arrow::ipc::IpcWriteOptions::Defaults();
+    auto schema = input_schema.to_arrow_schema();
+    auto stream_writer_result
+      = arrow::ipc::MakeStreamWriter(sink.ValueUnsafe(), schema, options);
+    if (!stream_writer_result.ok()) {
+      return diagnostic::error("{}", stream_writer_result.status().ToString())
+        .note("failed to create StreamWriter")
+        .to_error();
+    }
+    auto stream_writer = stream_writer_result.MoveValueUnsafe();
+    return printer_instance::make([&ctrl, sink = sink.MoveValueUnsafe(),
+                                   stream_writer = std::move(stream_writer)](
+                                    table_slice slice) -> generator<chunk_ptr> {
+      return print_feather(std::move(slice), ctrl, stream_writer, sink);
+    });
+  }
+
+  auto allows_joining() const -> bool override {
+    return false;
+  };
+
+  friend auto inspect(auto& f, feather_printer& x) -> bool {
+    return f.object(x).fields();
+  }
+};
+
+class plugin final : public virtual parser_plugin<feather_parser>,
+                     public virtual printer_plugin<feather_printer>,
+                     public virtual store_plugin {
+  auto name() const -> std::string override {
+    return "feather";
+  }
+
+  auto parse_parser(parser_interface& p) const
+    -> std::unique_ptr<plugin_parser> override {
+    auto parser = argument_parser{"feather", "https://docs.tenzir.com/next/"
+                                             "formats/feather"};
+    parser.parse(p);
+    return std::make_unique<feather_parser>();
+  }
+
+  auto parse_printer(parser_interface& p) const
+    -> std::unique_ptr<plugin_printer> override {
+    auto parser = argument_parser{"feather", "https://docs.tenzir.com/next/"
+                                             "formats/feather"};
+    parser.parse(p);
+    return std::make_unique<feather_printer>();
   }
 
   [[nodiscard]] caf::expected<std::unique_ptr<passive_store>>
   make_passive_store() const override {
-    return std::make_unique<passive_feather_store>();
+    return std::make_unique<store::passive_feather_store>();
   }
 
   [[nodiscard]] caf::expected<std::unique_ptr<active_store>>
   make_active_store() const override {
-    return std::make_unique<active_feather_store>(
-      configuration{zstd_compression_level_});
+    return std::make_unique<store::active_feather_store>();
   }
-
-private:
-  int zstd_compression_level_ = {};
-  configuration feather_config_ = {};
 };
 
 } // namespace
