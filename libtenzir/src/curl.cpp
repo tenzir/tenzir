@@ -398,14 +398,9 @@ auto escape(const record& xs) -> std::string {
   return fmt::format("{}", fmt::join(kvps, "&"));
 }
 
-auto upload(easy& handle, chunk_ptr chunk) -> caf::error {
+auto set(easy& handle, chunk_ptr chunk) -> caf::error {
   TENZIR_ASSERT(chunk);
   TENZIR_ASSERT(chunk->size() > 0);
-  if (auto err = to_error(handle.set(CURLOPT_UPLOAD, 1))) {
-    return err;
-  }
-  // Using CURLOPT_UPLOAD expects that we go through the read callback, and we
-  // must set CURLOPT_INFILESIZE(_LARGE).
   auto size = detail::narrow_cast<long>(chunk->size());
   if (auto err = to_error(handle.set_infilesize(size))) {
     return err;

@@ -72,6 +72,9 @@ public:
   auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
     auto easy = curl::easy{};
+    if (auto err = to_error(easy.set(CURLOPT_UPLOAD, 1))) {
+      return err;
+    }
     if (args_.verbose) {
       auto code = easy.set(CURLOPT_VERBOSE, 1);
       TENZIR_ASSERT(code == curl::easy::code::ok);
@@ -216,7 +219,7 @@ public:
       auto mail = fmt::format("{}\r\n{}", fmt::join(headers, "\r\n"), body);
       TENZIR_DEBUG("sending {}-byte chunk as email to {}", chunk->size(),
                    args.to);
-      if (auto err = upload(*easy, chunk::make(std::move(mail)))) {
+      if (auto err = set(*easy, chunk::make(std::move(mail)))) {
         diagnostic::error("failed to assign message")
           .note("{}", err)
           .emit(ctrl.diagnostics());
