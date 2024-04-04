@@ -268,3 +268,8 @@ END
     | python --file ${BATS_TEST_TMPDIR}/code.py
 END
 }
+
+# bats test_tags=python
+@test "python operator empty input" {
+  check tenzir 'version | put x=42 | python ""'
+}

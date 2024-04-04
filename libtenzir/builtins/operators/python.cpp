@@ -121,7 +121,7 @@ public:
           .emit(ctrl.diagnostics());
         co_return;
       }
-      auto code = *maybe_code;
+      auto code = detail::strip_leading_indentation(std::string{*maybe_code});
       // Setup python prerequisites.
       bp::pipe std_out;
       bp::pipe std_in;
@@ -254,7 +254,13 @@ public:
                     env,
                     bp::std_out > std_out,
                     bp::std_in < std_in};
-      codepipe << detail::strip_leading_indentation(std::string{code});
+      if (code.empty()) {
+        // The current implementation always expects a non-empty input.
+        // Otherwise, it blocks forever on a `read` call.
+        codepipe << " ";
+      } else {
+        codepipe << code;
+      }
       codepipe.close();
       ::close(errpipe.pipe().native_sink());
       co_yield {}; // signal successful startup
