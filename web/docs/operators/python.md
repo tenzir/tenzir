@@ -44,6 +44,9 @@ The `--requirements` flag can be used to pass additional package dependencies in
 the pip format. When it is used, the argument is passed on to `pip install` in a
 dedicated virtual environment.
 
+The string is passed verbatim to `pip install`. To add multiple dependencies,
+separate them with a space: `--requirements "foo bar"`.
+
 ### `<code>`
 
 The provided Python code describes an event-for-event transformation, i.e., it
