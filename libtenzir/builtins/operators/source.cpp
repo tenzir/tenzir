@@ -55,7 +55,7 @@ class plugin final : public tql2::operator_plugin<source_use> {
 public:
   auto make_operator(ast::entity self, std::vector<ast::expression> args,
                      tql2::context& ctx) const -> operator_ptr override {
-    auto usage = "source [{...}, ...]";
+    auto usage = "source (<record> | [<record>, ...])";
     auto docs = "https://docs.tenzir.com/operators/source";
     if (args.size() != 1) {
       diagnostic::error("expected exactly one argument")
@@ -87,6 +87,13 @@ public:
           }
           events.push_back(std::move(*rec));
         }
+      },
+      [&](record& x) {
+        auto event = evaluate(x, ctx);
+        if (not event) {
+          return;
+        }
+        events.push_back(caf::get<record>(*event));
       },
       [&](auto&) {
         diagnostic::error("expected a list")
