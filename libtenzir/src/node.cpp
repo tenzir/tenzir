@@ -433,7 +433,7 @@ auto node_state::get_endpoint_handler(const http_request_description& desc)
 
 node_actor::behavior_type
 node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
-     std::filesystem::path dir, detach_components detach_filesystem) {
+     std::filesystem::path dir) {
   self->state.self = self;
   self->state.dir = std::move(dir);
   // Initialize component and command factories.
@@ -442,10 +442,8 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
   // Initialize the accountant.
   auto accountant = spawn_accountant(self);
   // Initialize the file system with the node directory as root.
-  auto fs = detach_filesystem == detach_components::yes
-              ? self->spawn<caf::detached>(posix_filesystem, self->state.dir,
-                                           accountant)
-              : self->spawn(posix_filesystem, self->state.dir, accountant);
+  auto fs
+    = self->spawn<caf::detached>(posix_filesystem, self->state.dir, accountant);
   auto err
     = register_component(self, caf::actor_cast<caf::actor>(fs), "filesystem");
   TENZIR_ASSERT(err == caf::none); // Registration cannot fail; empty registry.
