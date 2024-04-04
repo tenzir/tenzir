@@ -27,35 +27,32 @@
 namespace tenzir::plugins::feather2 {
 namespace {
 
-class CallbackListener : public arrow::ipc::Listener {
+class callback_listener : public arrow::ipc::Listener {
 public:
-  CallbackListener() = default;
+  callback_listener() = default;
 
   arrow::Status OnRecordBatchDecoded(
     std::shared_ptr<arrow::RecordBatch> record_batch) override {
-    record_batch_buffer.push(record_batch);
+    record_batch_buffer.push(std::move(record_batch)));
     return arrow::Status::OK();
   }
 
   std::queue<std::shared_ptr<arrow::RecordBatch>> record_batch_buffer;
-};
+}
 
 auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
   -> generator<table_slice> {
   auto byte_reader = make_byte_reader(std::move(input));
   auto listener = std::make_shared<CallbackListener>();
   auto stream_decoder = arrow::ipc::StreamDecoder(listener);
-
   while (true) {
     auto required_size
       = detail::narrow_cast<size_t>(stream_decoder.next_required_size());
     auto payload = byte_reader(required_size);
-
     if (!payload) {
       co_yield {};
       continue;
     }
-
     const auto done = payload->size() < required_size;
     auto decode_result
       = stream_decoder.Consume(as_arrow_buffer(std::move(payload)));
@@ -65,7 +62,6 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
         .emit(ctrl.diagnostics());
       co_return;
     }
-
     while (!listener->record_batch_buffer.empty()) {
       auto batch = listener->record_batch_buffer.front();
       listener->record_batch_buffer.pop();
@@ -73,9 +69,7 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
       TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
       co_yield table_slice(batch);
     }
-
     if (done) {
-      TENZIR_INFO("returning");
       co_return;
     }
   }
@@ -89,36 +83,29 @@ auto print_feather(
   auto batch = to_record_batch(input);
   auto validate_status = batch->Validate();
   TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
-
   auto stream_writer_status = stream_writer->WriteRecordBatch(*batch);
   if (!stream_writer_status.ok()) {
     diagnostic::error("failed to write a record batch to the stream")
       .note("{}", stream_writer_status.ToString())
       .emit(ctrl.diagnostics());
+      co_return;
   }
+  // We must finish the clear the buffer because the provided APIs do not offer a scrape and rewrite on the allocated same memory.
   auto finished_buffer_result = sink->Finish();
   if (!finished_buffer_result.ok()) {
     diagnostic::error("failed to close the stream and return the buffer")
       .note("{}", finished_buffer_result.status().ToString())
       .emit(ctrl.diagnostics());
     co_return;
-  }
-  auto finished_buffer = finished_buffer_result.ValueOrDie();
-  ;
-  auto chunk = chunk::make(finished_buffer);
-  co_yield chunk;
-  auto reset_buffer_result
-    = sink->Reset(); // the buffer is reinit with newly allocated memory because
-                     // the API does not offer a Reset that just clears the
-                     // original data
+  co_yield chunk::make(finished_buffer_result.MoveValueUnsafe());
+  // The buffer is reinit with newly allocated memory because the API does not offer a Reset that just clears the original data.
+  auto reset_buffer_result = sink->Reset(); 
   if (!reset_buffer_result.ok()) {
     diagnostic::error("failed to reset buffer")
       .note("{}", reset_buffer_result.ToString())
       .emit(ctrl.diagnostics());
   }
 }
-
-// questions: should be include logic to ensure entire record batch recorded ()
 
 class feather2_parser final : public plugin_parser {
 public:
@@ -150,14 +137,16 @@ public:
   auto instantiate([[maybe_unused]] type input_schema,
                    operator_control_plane& ctrl) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
-    auto sink = arrow::io::BufferOutputStream::Create().ValueOrDie();
+    auto sink = arrow::io::BufferOutputStream::Create().MoveValueUnsafe();
     const arrow::ipc::IpcWriteOptions& options
       = arrow::ipc::IpcWriteOptions::Defaults();
     auto schema = input_schema.to_arrow_schema();
     auto stream_writer_result
       = arrow::ipc::MakeStreamWriter(sink, schema, options);
-    auto stream_writer = stream_writer_result.ValueOrDie();
-
+    if (!stream_writer_result.ok()) {  
+      return diagnostic::error(...).to_error();  
+    }  
+    auto stream_writer = stream_writer_result.MoveValueUnsafe();
     return printer_instance::make(
       [&ctrl, sink = std::move(sink), stream_writer = std::move(stream_writer)](
         table_slice slice) -> generator<chunk_ptr> {
