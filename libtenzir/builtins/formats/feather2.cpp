@@ -57,8 +57,8 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
     auto decode_result
       = stream_decoder.Consume(as_arrow_buffer(std::move(payload)));
     if (!decode_result.ok()) {
-      diagnostic::error("failed to decode the byte stream into a record batch")
-        .note("{}", decode_result.ToString())
+      diagnostic::error("{}", decode_result.ToString())
+        .note("failed to decode the byte stream into a record batch")
         .emit(ctrl.diagnostics());
       co_return;
     }
@@ -100,8 +100,8 @@ auto print_feather(
   TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
   auto stream_writer_status = stream_writer->WriteRecordBatch(*batch);
   if (!stream_writer_status.ok()) {
-    diagnostic::error("failed to write a record batch to the stream")
-      .note("{}", stream_writer_status.ToString())
+    diagnostic::error("{}", stream_writer_status.ToString())
+      .note("failed to write record batch")
       .emit(ctrl.diagnostics());
     co_return;
   }
@@ -109,8 +109,8 @@ auto print_feather(
   // a scrape and rewrite on the allocated same memory.
   auto finished_buffer_result = sink->Finish();
   if (!finished_buffer_result.ok()) {
-    diagnostic::error("failed to close the stream and return the buffer")
-      .note("{}", finished_buffer_result.status().ToString())
+    diagnostic::error("{}", finished_buffer_result.status().ToString())
+      .note("failed to finish stream")
       .emit(ctrl.diagnostics());
     co_return;
   }
@@ -119,8 +119,8 @@ auto print_feather(
   // offer a Reset that just clears the original data.
   auto reset_buffer_result = sink->Reset();
   if (!reset_buffer_result.ok()) {
-    diagnostic::error("failed to reset buffer")
-      .note("{}", reset_buffer_result.ToString())
+    diagnostic::error("{}", reset_buffer_result.ToString())
+      .note("failed to reset stream")
       .emit(ctrl.diagnostics());
   }
 }
@@ -155,23 +155,28 @@ public:
   auto instantiate([[maybe_unused]] type input_schema,
                    operator_control_plane& ctrl) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
-    auto sink = arrow::io::BufferOutputStream::Create().MoveValueUnsafe();
+    auto sink = arrow::io::BufferOutputStream::Create();
+    if (not sink.ok()) {
+      return diagnostic::error("{}", sink.status().ToString())
+        .note("failed to created BufferOutputStream")
+        .to_error();
+    }
     const arrow::ipc::IpcWriteOptions& options
       = arrow::ipc::IpcWriteOptions::Defaults();
     auto schema = input_schema.to_arrow_schema();
     auto stream_writer_result
-      = arrow::ipc::MakeStreamWriter(sink, schema, options);
+      = arrow::ipc::MakeStreamWriter(sink.ValueUnsafe(), schema, options);
     if (!stream_writer_result.ok()) {
       return diagnostic::error("{}", stream_writer_result.status().ToString())
-        .note("failed to create Feather stream writer")
+        .note("failed to create StreamWriter")
         .to_error();
     }
     auto stream_writer = stream_writer_result.MoveValueUnsafe();
-    return printer_instance::make(
-      [&ctrl, sink = std::move(sink), stream_writer = std::move(stream_writer)](
-        table_slice slice) -> generator<chunk_ptr> {
-        return print_feather(std::move(slice), ctrl, stream_writer, sink);
-      });
+    return printer_instance::make([&ctrl, sink = sink.MoveValueUnsafe(),
+                                   stream_writer = std::move(stream_writer)](
+                                    table_slice slice) -> generator<chunk_ptr> {
+      return print_feather(std::move(slice), ctrl, stream_writer, sink);
+    });
   }
 
   auto allows_joining() const -> bool override {
