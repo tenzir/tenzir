@@ -248,28 +248,30 @@ private:
       // No extractors specified, match over the entire input
       return std::pair{slice.schema(), to_record_batch(slice)};
     }
-    auto projection_it = cache.find(slice.schema());
+    auto [flattened_slice, _] = flatten(slice);
+    auto projection_it = cache.find(flattened_slice.schema());
     if (projection_it == cache.end()) {
-      auto new_projection = make_projection(slice, diag);
+      auto new_projection = make_projection(flattened_slice, diag);
       if (not new_projection) {
         return {{}, nullptr};
       }
       std::tie(projection_it, std::ignore)
-        = cache.emplace(slice.schema(), std::move(*new_projection));
+        = cache.emplace(flattened_slice.schema(), std::move(*new_projection));
     } else {
       projection_it->second.last_use = steady_clock::now();
     }
     auto& projection = projection_it->second;
     TENZIR_ASSERT(not projection.indices.empty());
     if (not projection.transformation_factory) {
-      return select_columns(slice.schema(), to_record_batch(slice),
+      return select_columns(flattened_slice.schema(),
+                            to_record_batch(flattened_slice),
                             projection.indices);
     }
     // Has `transformation_factory`, need to call it to transform the input
     // before calling `select_columns`.
     // (`projection.indices` are indices into this transformed input)
     auto transformed_slice = transform_columns(
-      slice, std::vector{projection.transformation_factory(slice)});
+      slice, std::vector{projection.transformation_factory(flattened_slice)});
     return select_columns(transformed_slice.schema(),
                           to_record_batch(transformed_slice),
                           projection.indices);
