@@ -50,29 +50,42 @@ auto transfer::prepare(http::request req) -> caf::error {
     if (auto err = to_error(easy.set(CURLOPT_POST, 1))) {
       return err;
     }
+    // We set the POST body size here, even if the request body is empty, i.e.,
+    // the size is 0. This allows us to send POST requests that are empty, which
+    // is actually a valid scenario.
     auto size = detail::narrow_cast<long>(req.body.size());
     TENZIR_DEBUG("setting {}-byte POST body", size);
     if (auto err = to_error(easy.set_postfieldsize(size))) {
       return err;
     }
-    if (not req.body.empty()) {
-      // Setting body data via CURLOPT_[COPY]POSTFIELDS implicitly sets the
-      // Content-Type header to 'application/x-www-form-urlencoded' unless we
-      // provide a Content-Type header that overrides it.
-      // TODO: Figure out a way to avoid the extra copy here, but this requires
-      // moving the request in some fashion and tying it to the handle.
-      if (auto err = to_error(easy.set(CURLOPT_COPYPOSTFIELDS, req.body))) {
-        return err;
-      }
-    }
   } else if (req.method == "PUT") {
-    if (auto err = upload(easy, chunk::make(std::move(req.body)))) {
+    if (auto err = to_error(easy.set(CURLOPT_UPLOAD, 1))) {
       return err;
     }
   } else if (not req.method.empty()) {
     const auto* method = req.method.c_str();
     if (auto err = to_error(easy.set(CURLOPT_CUSTOMREQUEST, method))) {
       return err;
+    }
+  }
+  // Set the body.
+  if (not req.body.empty()) {
+    if (req.method == "POST") {
+      // Setting body data via CURLOPT_[COPY]POSTFIELDS implicitly sets the
+      // Content-Type header to 'application/x-www-form-urlencoded' unless we
+      // provide a Content-Type header that overrides it.
+      // TODO: Figure out a way to avoid the extra copy here, but this requires
+      // moving the request in some fashion and tying its lifetime to the
+      // handle.
+      if (auto err = to_error(easy.set(CURLOPT_COPYPOSTFIELDS, req.body))) {
+        return err;
+      }
+    } else if (req.method == "PUT") {
+      if (auto err = set(easy, chunk::make(std::move(req.body)))) {
+        return err;
+      }
+    } else {
+      TENZIR_WARN("unexpected request body with HTTP {} method", req.method);
     }
   }
   // Add headers
