@@ -33,17 +33,17 @@ public:
 
   arrow::Status OnRecordBatchDecoded(
     std::shared_ptr<arrow::RecordBatch> record_batch) override {
-    record_batch_buffer.push(std::move(record_batch)));
+    record_batch_buffer.push(std::move(record_batch));
     return arrow::Status::OK();
   }
 
   std::queue<std::shared_ptr<arrow::RecordBatch>> record_batch_buffer;
-}
+};
 
 auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
   -> generator<table_slice> {
   auto byte_reader = make_byte_reader(std::move(input));
-  auto listener = std::make_shared<CallbackListener>();
+  auto listener = std::make_shared<callback_listener>();
   auto stream_decoder = arrow::ipc::StreamDecoder(listener);
   while (true) {
     auto required_size
@@ -88,18 +88,21 @@ auto print_feather(
     diagnostic::error("failed to write a record batch to the stream")
       .note("{}", stream_writer_status.ToString())
       .emit(ctrl.diagnostics());
-      co_return;
+    co_return;
   }
-  // We must finish the clear the buffer because the provided APIs do not offer a scrape and rewrite on the allocated same memory.
+  // We must finish the clear the buffer because the provided APIs do not offer
+  // a scrape and rewrite on the allocated same memory.
   auto finished_buffer_result = sink->Finish();
   if (!finished_buffer_result.ok()) {
     diagnostic::error("failed to close the stream and return the buffer")
       .note("{}", finished_buffer_result.status().ToString())
       .emit(ctrl.diagnostics());
     co_return;
+  }
   co_yield chunk::make(finished_buffer_result.MoveValueUnsafe());
-  // The buffer is reinit with newly allocated memory because the API does not offer a Reset that just clears the original data.
-  auto reset_buffer_result = sink->Reset(); 
+  // The buffer is reinit with newly allocated memory because the API does not
+  // offer a Reset that just clears the original data.
+  auto reset_buffer_result = sink->Reset();
   if (!reset_buffer_result.ok()) {
     diagnostic::error("failed to reset buffer")
       .note("{}", reset_buffer_result.ToString())
@@ -143,9 +146,11 @@ public:
     auto schema = input_schema.to_arrow_schema();
     auto stream_writer_result
       = arrow::ipc::MakeStreamWriter(sink, schema, options);
-    if (!stream_writer_result.ok()) {  
-      return diagnostic::error(...).to_error();  
-    }  
+    if (!stream_writer_result.ok()) {
+      return diagnostic::error("{}", stream_writer_result.status().ToString())
+        .note("failed to create Feather stream writer")
+        .to_error();
+    }
     auto stream_writer = stream_writer_result.MoveValueUnsafe();
     return printer_instance::make(
       [&ctrl, sink = std::move(sink), stream_writer = std::move(stream_writer)](
