@@ -17,13 +17,18 @@ underlying pipeline execution engine. Use with caution!
 ## Synopsis
 
 ```
-batch [<limit>]
+batch [--timeout <duration>] [<limit>]
 ```
 
 ## Description
 
 The `batch` operator takes its input and rewrites it into batches of up to the
 desired size.
+
+### `--timeout <duration>`
+
+Specifies a maximum latency for events passing through the batch operator. When
+unspecified, an infinite duration is used.
 
 ### `<limit>`
 
