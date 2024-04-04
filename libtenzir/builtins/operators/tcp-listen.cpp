@@ -83,11 +83,8 @@ public:
     return has_terminal_;
   }
 
-  auto suspend() noexcept -> void override {
-    TENZIR_UNIMPLEMENTED();
-  }
-
-  auto resume() noexcept -> void override {
+  auto set_waiting(bool value) noexcept -> void override {
+    (void)value;
     TENZIR_UNIMPLEMENTED();
   }
 
@@ -375,12 +372,12 @@ public:
                                                  ctrl.shared_diagnostics());
     while (true) {
       auto slice = table_slice{};
-      ctrl.suspend();
+      ctrl.set_waiting(true);
       ctrl.self()
         .request(bridge, caf::infinite, atom::get_v)
         .then(
           [&](table_slice& result) {
-            ctrl.resume();
+            ctrl.set_waiting(false);
             slice = std::move(result);
           },
           [&](const caf::error& err) {

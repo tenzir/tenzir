@@ -172,15 +172,12 @@ public:
     return has_terminal_;
   }
 
-  auto suspend() noexcept -> void override {
-    TENZIR_ASSERT(not state_.suspended);
-    state_.suspended = true;
-  }
-
-  auto resume() noexcept -> void override {
-    TENZIR_ASSERT(state_.suspended);
-    state_.suspended = false;
-    state_.schedule_run(false);
+  auto set_waiting(bool value) noexcept -> void override {
+    TENZIR_ASSERT(state_.waiting != value);
+    state_.waiting = value;
+    if (not state_.waiting) {
+      state_.schedule_run(false);
+    }
   }
 
 private:
@@ -224,8 +221,8 @@ struct exec_node_state {
   /// Whether this execution node is paused, and when it was.
   std::optional<std::chrono::steady_clock::time_point> paused_at = {};
 
-  /// Whether this execution node is currently suspended.
-  bool suspended = {};
+  /// Whether this execution node is currently waiting for a response.
+  bool waiting = {};
 
   /// A handle to the previous execution node.
   exec_node_actor previous = {};
@@ -635,7 +632,7 @@ struct exec_node_state {
   }
 
   auto run() -> void {
-    if (suspended or paused_at or not instance) {
+    if (waiting or paused_at or not instance) {
       return;
     }
     TENZIR_TRACE("{} {} enters run loop", *self, op->name());

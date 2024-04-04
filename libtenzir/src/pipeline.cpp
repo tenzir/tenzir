@@ -61,11 +61,8 @@ public:
     return false;
   }
 
-  auto suspend() noexcept -> void override {
-    TENZIR_UNIMPLEMENTED();
-  }
-
-  auto resume() noexcept -> void override {
+  auto set_waiting(bool value) noexcept -> void override {
+    (void)value;
     TENZIR_UNIMPLEMENTED();
   }
 
