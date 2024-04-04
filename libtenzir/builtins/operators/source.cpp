@@ -20,8 +20,7 @@ class source_use final : public crtp_operator<source_use> {
 public:
   source_use() = default;
 
-  explicit source_use(std::vector<tenzir::record> events)
-    : events_{std::move(events)} {
+  explicit source_use(std::vector<record> events) : events_{std::move(events)} {
   }
 
   auto name() const -> std::string override {
@@ -38,7 +37,7 @@ public:
     }
   }
 
-  auto optimize(tenzir::expression const& filter, event_order order) const
+  auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
@@ -49,7 +48,7 @@ public:
   }
 
 private:
-  std::vector<tenzir::record> events_;
+  std::vector<record> events_;
 };
 
 class plugin final : public tql2::operator_plugin<source_use> {
@@ -69,7 +68,7 @@ public:
       return nullptr;
     }
     // TODO: We want to const-eval instead.
-    auto events = std::vector<tenzir::record>{};
+    auto events = std::vector<record>{};
     args[0].match(
       [&](ast::list& x) {
         for (auto& y : x.items) {
@@ -77,7 +76,7 @@ public:
           if (not item) {
             continue;
           }
-          auto rec = caf::get_if<tenzir::record>(&*item);
+          auto rec = caf::get_if<record>(&*item);
           if (not rec) {
             diagnostic::error("expected a record")
               .primary(y.get_location())
