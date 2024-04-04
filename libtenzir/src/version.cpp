@@ -90,6 +90,9 @@ auto tenzir_features() -> std::vector<std::string> {
     "chart_operator",
     // The `/serve` endpoint supports the new `use_simple_format: bool` option.
     "serve_use_simple_format_option",
+    // The node supports HTTP PUT upload to a platform-provided URL for
+    // downloading Explorer results.
+    "http_put_upload",
   };
 }
 
