@@ -45,6 +45,8 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
   auto byte_reader = make_byte_reader(std::move(input));
   auto listener = std::make_shared<callback_listener>();
   auto stream_decoder = arrow::ipc::StreamDecoder(listener);
+  auto truncated_bytes = size_t{0};
+  auto decoded_once = false;
   while (true) {
     auto required_size
       = detail::narrow_cast<size_t>(stream_decoder.next_required_size());
@@ -53,7 +55,22 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
       co_yield {};
       continue;
     }
-    const auto done = payload->size() < required_size;
+    truncated_bytes += payload->size();
+    if (payload->size() < required_size) {
+      if (truncated_bytes != 0 and payload->size() != 0) {
+        // Ideally this always would be just a warning, but the stream decoder
+        // happily continues to consume invalid bytes. E.g., trying to read a
+        // JSON file with this parser will just swallow all bytes, emitting this
+        // one error at the very end. Not a single time does consuming a buffer
+        // actually fail. We should probably look into limiting the memory usage
+        // here, as the stream decoder will keep consumed-but-not-yet-converted
+        // buffers in memory.
+        diagnostic::warning("truncated {} trailing bytes", truncated_bytes)
+          .severity(decoded_once ? severity::warning : severity::error)
+          .emit(ctrl.diagnostics());
+      }
+      co_return;
+    }
     auto decode_result
       = stream_decoder.Consume(as_arrow_buffer(std::move(payload)));
     if (!decode_result.ok()) {
@@ -63,6 +80,8 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
       co_return;
     }
     while (!listener->record_batch_buffer.empty()) {
+      decoded_once = true;
+      truncated_bytes = 0;
       auto batch = listener->record_batch_buffer.front();
       listener->record_batch_buffer.pop();
       auto validate_status = batch->Validate();
@@ -83,9 +102,6 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
         co_return;
       }
       co_yield table_slice(batch);
-    }
-    if (done) {
-      co_return;
     }
   }
 }
