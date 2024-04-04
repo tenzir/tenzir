@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/tql2/ast.hpp"
 
@@ -28,6 +29,20 @@ public:
 
   auto name() const -> std::string override {
     return "tql2.set";
+  }
+
+  auto
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    TENZIR_UNUSED(input);
+    for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      diagnostic::error("set not implemented yet").emit(ctrl.diagnostics());
+      co_yield {};
+    }
   }
 
   auto optimize(expression const& filter, event_order order) const

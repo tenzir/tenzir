@@ -764,9 +764,22 @@ auto prepare_pipeline(pipeline&& pipe, context& ctx) -> tenzir::pipeline {
       },
       [&](assignment& x) {
         check_assignment(x, ctx);
+#if 0
+        // TODO: Cannot do this right now (release typeid problem).
         auto assignments = std::vector<assignment>();
         assignments.push_back(std::move(x));
         ops.push_back(std::make_unique<set_operator>(std::move(assignments)));
+#else
+        auto plugin = plugins::find<operator_factory_plugin>("tql2.set");
+        TENZIR_ASSERT(plugin);
+        auto args = std::vector<expression>{};
+        args.emplace_back(std::move(x));
+        auto op = plugin->make_operator(
+          entity{{identifier{std::string{"set"}, location::unknown}}},
+          std::move(args), ctx);
+        TENZIR_ASSERT(op);
+        ops.push_back(std::move(op));
+#endif
       },
       [&](if_stmt& x) {
         auto ty = check_type(x.condition, ctx);
