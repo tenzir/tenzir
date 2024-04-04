@@ -67,6 +67,21 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
       listener->record_batch_buffer.pop();
       auto validate_status = batch->Validate();
       TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
+      // We check whether the name metadatum from Tenzir's conversion to record
+      // batches is still present. If it is not, then we stop parsing because we
+      // cannot feasibly continue.
+      // TODO: Implement a best-effort conversion for record batches coming from
+      // other tools to Tenzir's supported subset and required metadata.
+      const auto& metadata = batch->schema()->metadata();
+      if (not metadata
+          or std::find(metadata->keys().begin(), metadata->keys().end(),
+                       "TENZIR:name:0")
+               == metadata->keys().end()) {
+        diagnostic::error("not implemented")
+          .note("cannot convert Feather without Tenzir metadata")
+          .emit(ctrl.diagnostics());
+        co_return;
+      }
       co_yield table_slice(batch);
     }
     if (done) {
