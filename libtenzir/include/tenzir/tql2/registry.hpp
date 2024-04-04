@@ -11,6 +11,7 @@
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/plugin.hpp"
 #include "tenzir/type.hpp"
 
 namespace tenzir::tql2 {
@@ -111,7 +112,7 @@ public:
 };
 
 using entity_def
-  = variant<std::unique_ptr<function_def>, std::unique_ptr<operator_def>>;
+  = variant<std::unique_ptr<function_def>, const operator_factory_plugin*>;
 
 class registry {
 public:

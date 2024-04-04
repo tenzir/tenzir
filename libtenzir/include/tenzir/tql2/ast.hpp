@@ -14,6 +14,10 @@
 #include "tenzir/location.hpp"
 #include "tenzir/tql2/entity_id.hpp"
 
+#include <caf/detail/is_one_of.hpp>
+
+#include <type_traits>
+
 namespace tenzir::detail {
 
 /// This function makes a value dependant on the type paramater `T` and can
@@ -53,6 +57,8 @@ struct underscore;
 struct unpack;
 
 struct identifier {
+  identifier() = default;
+
   identifier(std::string name, location location)
     : name{std::move(name)}, location{location} {
   }
@@ -75,6 +81,8 @@ struct identifier {
 };
 
 struct selector {
+  selector() = default;
+
   selector(std::optional<location> this_, std::vector<identifier> path)
     : this_{this_}, path{std::move(path)} {
   }
@@ -124,6 +132,8 @@ struct literal {
   using kind = variant<null, bool, int64_t, uint64_t, double, std::string, blob,
                        duration, caf::timestamp, ip>;
 
+  literal() = default;
+
   literal(kind value, location source)
     : value{std::move(value)}, source{source} {
   }
@@ -141,15 +151,20 @@ struct literal {
   }
 };
 
-using expression_kind
-  = variant<record, list, selector, pipeline_expr, literal, field_access,
-            index_expr, binary_expr, unary_expr, function_call, underscore,
-            unpack, assignment, dollar_var>;
+using expression_kinds
+  = caf::detail::type_list<record, list, selector, pipeline_expr, literal,
+                           field_access, index_expr, binary_expr, unary_expr,
+                           function_call, underscore, unpack, assignment,
+                           dollar_var>;
+
+using expression_kind = caf::detail::tl_apply_t<expression_kinds, variant>;
 
 struct expression {
   expression() = default;
 
   template <class T>
+    requires(
+      caf::detail::tl_contains<expression_kinds, std::remove_cvref_t<T>>::value)
   explicit(false) expression(T&& x)
     : kind{std::make_unique<expression_kind>(std::forward<T>(x))} {
   }
@@ -185,6 +200,8 @@ struct expression {
 };
 
 struct unpack {
+  unpack() = default;
+
   unpack(expression expr, location brackets)
     : expr{std::move(expr)}, brackets{brackets} {
   }
@@ -206,6 +223,8 @@ TENZIR_ENUM(binary_op, add, sub, mul, div, eq, neq, gt, ge, lt, le, and_, or_,
             in);
 
 struct binary_expr {
+  binary_expr() = default;
+
   binary_expr(expression left, located<binary_op> op, expression right)
     : left{std::move(left)}, op{op}, right{std::move(right)} {
   }
@@ -227,6 +246,8 @@ struct binary_expr {
 TENZIR_ENUM(unary_op, pos, neg, not_);
 
 struct unary_expr {
+  unary_expr() = default;
+
   unary_expr(located<unary_op> op, expression expr)
     : op{op}, expr{std::move(expr)} {
   }
@@ -244,6 +265,8 @@ struct unary_expr {
 };
 
 struct assignment {
+  assignment() = default;
+
   assignment(selector left, location equals, expression right)
     : left{std::move(left)}, equals{equals}, right{std::move(right)} {
   }
@@ -264,6 +287,8 @@ struct assignment {
 };
 
 struct entity {
+  entity() = default;
+
   explicit entity(std::vector<identifier> path) : path{std::move(path)} {
   }
 
@@ -283,6 +308,8 @@ struct entity {
 };
 
 struct function_call {
+  function_call() = default;
+
   function_call(std::optional<expression> subject, entity fn,
                 std::vector<expression> args, location rpar)
     : subject{std::move(subject)},
@@ -313,6 +340,8 @@ struct function_call {
 };
 
 struct field_access {
+  field_access() = default;
+
   field_access(expression left, location dot, identifier name)
     : left{std::move(left)}, dot{dot}, name{std::move(name)} {
   }
@@ -332,6 +361,8 @@ struct field_access {
 };
 
 struct index_expr {
+  index_expr() = default;
+
   index_expr(expression expr, location lbracket, expression index,
              location rbracket)
     : expr{std::move(expr)},
@@ -358,6 +389,8 @@ struct index_expr {
 };
 
 struct list {
+  list() = default;
+
   list(location begin, std::vector<expression> items, location end)
     : begin{begin}, items(std::move(items)), end{end} {
   }
@@ -386,6 +419,8 @@ struct record {
   };
 
   struct field {
+    field() = default;
+
     field(identifier name, expression expr)
       : name{std::move(name)}, expr{std::move(expr)} {
     }
@@ -400,6 +435,8 @@ struct record {
   };
 
   using content_kind = variant<field, spread>;
+
+  record() = default;
 
   record(location begin, std::vector<content_kind> content, location end)
     : begin{begin}, content{std::move(content)}, end{end} {
@@ -421,6 +458,8 @@ struct record {
 };
 
 struct invocation {
+  invocation() = default;
+
   invocation(entity op, std::vector<expression> args)
     : op{std::move(op)}, args(std::move(args)) {
   }
@@ -437,6 +476,7 @@ using statement
   = variant<invocation, assignment, let_stmt, if_stmt, match_stmt>;
 
 struct pipeline {
+  pipeline() = default;
   explicit pipeline(std::vector<statement> body);
   ~pipeline();
   pipeline(const pipeline&) = delete;
@@ -453,6 +493,8 @@ struct pipeline {
 };
 
 struct let_stmt {
+  let_stmt() = default;
+
   let_stmt(location let, identifier name, expression expr)
     : let{let}, name{std::move(name)}, expr{std::move(expr)} {
   }
@@ -472,6 +514,8 @@ struct let_stmt {
 };
 
 struct if_stmt {
+  if_stmt() = default;
+
   if_stmt(expression condition, pipeline then, std::optional<pipeline> else_)
     : condition{std::move(condition)},
       then{std::move(then)},
@@ -505,6 +549,8 @@ struct match_stmt {
     }
   };
 
+  match_stmt() = default;
+
   match_stmt(expression expr, std::vector<arm> arms)
     : expr{std::move(expr)}, arms{std::move(arms)} {
   }
@@ -523,6 +569,8 @@ struct match_stmt {
 };
 
 struct pipeline_expr {
+  pipeline_expr() = default;
+
   pipeline_expr(location begin, pipeline inner, location end)
     : begin{begin}, inner{std::move(inner)}, end{end} {
   }

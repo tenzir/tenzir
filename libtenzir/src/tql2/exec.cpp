@@ -11,14 +11,17 @@
 #include "tenzir/bitmap.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/exec_pipeline.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/series_builder.hpp"
+#include "tenzir/tql2/check_type.hpp"
 #include "tenzir/tql2/context.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/tql2/registry.hpp"
 #include "tenzir/tql2/resolve.hpp"
+#include "tenzir/tql2/set.hpp"
 #include "tenzir/tql2/tokens.hpp"
 #include "tenzir/type.hpp"
 
@@ -33,193 +36,6 @@ namespace tenzir::tql2 {
 namespace {
 
 using namespace ast;
-
-class type_checker {
-public:
-  using result = std::optional<type>;
-
-  explicit type_checker(context& ctx) : ctx_{ctx} {
-  }
-
-  auto visit(literal& x) -> result {
-    return x.value.match(
-      []<class T>(T&) -> type {
-        return type{data_to_type_t<T>{}};
-      },
-      [](null&) -> type {
-        return type{null_type{}};
-      });
-  }
-
-  auto visit(selector& x) -> result {
-    if (x.this_ && x.path.empty()) {
-      return type{record_type{}};
-    }
-    return std::nullopt;
-  }
-
-  auto visit(expression& x) -> result {
-    return x.match([&](auto& y) {
-      return visit(y);
-    });
-  }
-
-  auto visit(binary_expr& x) -> result {
-    // TODO: This is just for testing.
-    auto left = visit(x.left);
-    auto right = visit(x.right);
-    if (left && right && left != right) {
-      diagnostic::error("cannot {} `{}` and `{}`", x.op.inner, *left, *right)
-        .primary(x.op.source)
-        .secondary(x.left.get_location(), "{}", *left)
-        .secondary(x.right.get_location(), "{}", *right)
-        .emit(ctx_.dh());
-      return std::nullopt;
-    }
-    using enum binary_op;
-    switch (x.op.inner) {
-      case add:
-      case sub:
-      case mul:
-      case div:
-        if (left) {
-          return left;
-        }
-        return right;
-      case eq:
-      case neq:
-      case gt:
-      case ge:
-      case lt:
-      case le:
-      case and_:
-      case or_:
-      case in:
-        return type{bool_type{}};
-    }
-    TENZIR_UNREACHABLE();
-  }
-
-  auto visit(unary_expr& x) -> result {
-    // TODO
-    auto ty_opt = visit(x.expr);
-    if (not ty_opt) {
-      return {};
-    }
-    auto ty = std::move(*ty_opt);
-    switch (x.op.inner) {
-      case unary_op::pos:
-      case unary_op::neg:
-        if (ty.kind().none_of<int64_type, double_type>()) {
-          diagnostic::error("cannot {} `{}`", x.op.inner, ty)
-            .primary(x.op.source)
-            .secondary(x.expr.get_location(), "{}", ty)
-            .emit(ctx_.dh());
-          return std::nullopt;
-        }
-        return ty;
-      case unary_op::not_:
-        if (ty != type{bool_type{}}) {
-          diagnostic::error("cannot {} `{}`", x.op.inner, ty)
-            .primary(x.op.source)
-            .secondary(x.expr.get_location(), "{}", ty)
-            .emit(ctx_.dh());
-          return std::nullopt;
-        }
-        return ty;
-    }
-    TENZIR_UNREACHABLE();
-  }
-
-  auto visit(function_call& x) -> result {
-    auto subject = std::optional<result>{};
-    if (x.subject) {
-      subject = visit(*x.subject);
-    }
-    auto args = std::vector<result>{};
-    for (auto& arg : x.args) {
-      arg.match(
-        [&](assignment& x) {
-          args.push_back(visit(x.right));
-        },
-        [&](auto&) {
-          args.push_back(visit(arg));
-        });
-    }
-    if (not x.fn.ref.resolved()) {
-      return std::nullopt;
-    }
-    // TODO: Improve.
-    auto fn
-      = std::get_if<std::unique_ptr<function_def>>(&ctx_.reg().get(x.fn.ref));
-    TENZIR_ASSERT(fn);
-    TENZIR_ASSERT(*fn);
-    // TODO: This does not respect named arguments.
-    auto info = function_def::check_info{x.fn.get_location(), x.args, args};
-    return (*fn)->check(info, ctx_);
-  }
-
-  auto visit(assignment& x) -> result {
-    visit(x.right);
-    // TODO
-    diagnostic::error("assignments are not allowed here")
-      .primary(x.get_location())
-      .hint("if you want to compare for equality, use `==` instead")
-      .emit(ctx_.dh());
-    return std::nullopt;
-  }
-
-  auto visit(pipeline_expr& x) -> result {
-    // TODO: How would this work?
-    (void)x;
-    return std::nullopt;
-  }
-
-  auto visit(record& x) -> result {
-    // TODO: Don't we want to propagate fields etc?
-    // Or can we perhaps do this with const eval?
-    for (auto& y : x.content) {
-      y.match(
-        [&](record::field& z) {
-          visit(z.expr);
-        },
-        [&](record::spread& z) {
-          diagnostic::error("not implemented yet")
-            .primary(z.expr.get_location())
-            .emit(ctx_.dh());
-        });
-    }
-    return type{record_type{}};
-  }
-
-  auto visit(list& x) -> result {
-    // TODO: Content type?
-    for (auto& y : x.items) {
-      visit(y);
-    }
-    return type{list_type{null_type{}}};
-  }
-
-  auto visit(field_access& x) -> result {
-    // TODO: Field types?
-    auto ty = visit(x.left);
-    if (ty && ty->kind().is_not<record_type>()) {
-      diagnostic::error("type `{}` has no fields", *ty)
-        .primary(x.name.location)
-        .emit(ctx_.dh());
-    }
-    return std::nullopt;
-  }
-
-  template <class T>
-  auto visit(T&) -> result {
-    TENZIR_WARN("missed: {}", typeid(T).name());
-    return std::nullopt;
-  }
-
-private:
-  context& ctx_;
-};
 
 /// A diagnostic handler that remembers when it emits an error.
 class diagnostic_handler_wrapper final : public diagnostic_handler {
@@ -239,11 +55,16 @@ public:
     return error_;
   }
 
+  auto inner() && -> std::unique_ptr<diagnostic_handler> {
+    return std::move(inner_);
+  }
+
 private:
   bool error_ = false;
   std::unique_ptr<diagnostic_handler> inner_;
 };
 
+#if 0
 TENZIR_ENUM(sort_direction, asc, desc);
 
 struct sort_expr {
@@ -519,57 +340,6 @@ private:
   std::optional<pipeline_use> else_;
 };
 
-class set_use final : public operator_use {
-public:
-  explicit set_use(std::vector<assignment> assignments)
-    : assignments_{std::move(assignments)} {
-  }
-
-  auto debug(debug_writer& f) -> bool override {
-    return f.apply(assignments_);
-  }
-
-private:
-  std::vector<assignment> assignments_;
-};
-
-void check_assignment(assignment& x, context& ctx) {
-  auto ty = type_checker{ctx}.visit(x.right);
-  if (x.left.this_ && x.left.path.empty()) {
-    if (ty && *ty != type{record_type{}}) {
-      diagnostic::error("only records can be assigned to `this`")
-        .primary(x.right.get_location(), "this is `{}`", *ty)
-        .emit(ctx.dh());
-    }
-  }
-}
-
-class set_def final : public operator_def {
-public:
-  auto make(ast::entity self, std::vector<ast::expression> args,
-            context& ctx) const -> std::unique_ptr<operator_use> override {
-    (void)self;
-    auto usage = "set <path>=<expr>...";
-    auto docs = "https://docs.tenzir.com/operators/set";
-    auto assignments = std::vector<assignment>{};
-    for (auto& arg : args) {
-      arg.match(
-        [&](assignment& x) {
-          check_assignment(x, ctx);
-          assignments.push_back(std::move(x));
-        },
-        [&](auto&) {
-          diagnostic::error("expected assignment")
-            .primary(arg.get_location())
-            .usage(usage)
-            .docs(docs)
-            .emit(ctx.dh());
-        });
-    }
-    return std::make_unique<set_use>(std::move(assignments));
-  }
-};
-
 class head_use final : public operator_use {
 public:
   explicit head_use(uint64_t count) : count_{count} {
@@ -722,6 +492,7 @@ public:
     return std::make_unique<where_use>(std::move(args[0]));
   }
 };
+#endif
 
 #if 1
 // evaluation model !?!
@@ -967,8 +738,8 @@ public:
   }
 };
 
-auto prepare_pipeline(pipeline&& pipe, context& ctx) -> pipeline_use {
-  auto result = pipeline_use{};
+auto prepare_pipeline(pipeline&& pipe, context& ctx) -> tenzir::pipeline {
+  auto ops = std::vector<operator_ptr>{};
   for (auto& stmt : pipe.body) {
     // let_stmt, if_stmt, match_stmt
     stmt.match(
@@ -980,13 +751,13 @@ auto prepare_pipeline(pipeline&& pipe, context& ctx) -> pipeline_use {
           return;
         }
         // TODO: Where do we check that this succeeds?
-        auto def = std::get_if<std::unique_ptr<operator_def>>(
+        auto def = std::get_if<const tql2::operator_factory_plugin*>(
           &ctx.reg().get(x.op.ref));
         TENZIR_ASSERT(def);
         TENZIR_ASSERT(*def);
-        auto use = (*def)->make(x.op, std::move(x.args), ctx);
-        if (use) {
-          result.ops.push_back(std::move(use));
+        auto op = (*def)->make_operator(x.op, std::move(x.args), ctx);
+        if (op) {
+          ops.push_back(std::move(op));
         } else {
           // We assume we emitted an error.
         }
@@ -995,22 +766,23 @@ auto prepare_pipeline(pipeline&& pipe, context& ctx) -> pipeline_use {
         check_assignment(x, ctx);
         auto assignments = std::vector<assignment>();
         assignments.push_back(std::move(x));
-        result.ops.push_back(std::make_unique<set_use>(std::move(assignments)));
+        ops.push_back(std::make_unique<set_operator>(std::move(assignments)));
       },
       [&](if_stmt& x) {
-        auto ty = type_checker{ctx}.visit(x.condition);
+        auto ty = check_type(x.condition, ctx);
         if (ty && *ty != type{bool_type{}}) {
           diagnostic::error("condition type must be `bool`, but is `{}`", *ty)
             .primary(x.condition.get_location())
             .emit(ctx.dh());
         }
         auto then = prepare_pipeline(std::move(x.then), ctx);
-        auto else_ = std::optional<pipeline_use>{};
+        auto else_ = std::optional<tenzir::pipeline>{};
         if (x.else_) {
           else_ = prepare_pipeline(std::move(*x.else_), ctx);
         }
-        result.ops.push_back(std::make_unique<if_use>(
-          std::move(x.condition), std::move(then), std::move(else_)));
+        TENZIR_TODO();
+        // ops.push_back(std::make_unique<if_use>(
+        //   std::move(x.condition), std::move(then), std::move(else_)));
       },
       [&](auto& x) {
         diagnostic::error("statement not implemented yet")
@@ -1018,7 +790,7 @@ auto prepare_pipeline(pipeline&& pipe, context& ctx) -> pipeline_use {
           .emit(ctx.dh());
       });
   }
-  return result;
+  return tenzir::pipeline{std::move(ops)};
 }
 
 } // namespace
@@ -1077,14 +849,14 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   }
   auto reg = registry{};
   // operators
-  reg.add("drop", std::make_unique<drop_def>());
-  reg.add("from", std::make_unique<from_def>());
-  reg.add("group", std::make_unique<group_def>());
-  reg.add("head", std::make_unique<head_def>());
-  reg.add("load_file", std::make_unique<load_file_def>());
-  reg.add("set", std::make_unique<set_def>());
-  reg.add("sort", std::make_unique<sort_def>());
-  reg.add("where", std::make_unique<where_def>());
+  // reg.add("drop", std::make_unique<drop_def>());
+  // reg.add("from", std::make_unique<from_def>());
+  // reg.add("group", std::make_unique<group_def>());
+  // reg.add("head", std::make_unique<head_def>());
+  // reg.add("load_file", std::make_unique<load_file_def>());
+  // reg.add("set", std::make_unique<set_def>());
+  // reg.add("sort", std::make_unique<sort_def>());
+  // reg.add("where", std::make_unique<where_def>());
   // TODO: While we want to be able to operator definitions in plugins, we do
   // not want the mere *existence* to be dependant on which plugins are loaded.
   // Instead, we should always register all operators and then emit an helpful
@@ -1093,7 +865,7 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
     auto name = plugin->name();
     // TODO
     TENZIR_ASSERT(std::string_view{name}.substr(0, 5) == "tql2.");
-    reg.add(name.substr(5), std::make_unique<plugin_operator_def>(plugin));
+    reg.add(name.substr(5), plugin);
   }
   // functions
   reg.add("now", std::make_unique<now_def>());
@@ -1112,10 +884,11 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   if (diag_wrapper.error()) {
     return false;
   }
-  diagnostic::warning(
-    "pipeline is syntactically valid, but execution is not yet implemented")
-    .hint("use `--dump-ast` to show AST")
-    .emit(diag_wrapper);
+  exec_pipeline(std::move(pipe), std::move(diag_wrapper).inner(), cfg, sys);
+  // diagnostic::warning(
+  //   "pipeline is syntactically valid, but execution is not yet
+  //   implemented") .hint("use `--dump-ast` to show AST")
+  //   .emit(diag_wrapper);
   return true;
 }
 

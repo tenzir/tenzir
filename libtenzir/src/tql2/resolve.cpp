@@ -66,7 +66,7 @@ public:
         // TODO: Methods?
         x.ref = entity_path{{name}};
       },
-      [&](const std::unique_ptr<operator_def>&) {
+      [&](const operator_factory_plugin*) {
         if (context_ != context_t::op_name) {
           diagnostic::error("expected {}, got operator", expected)
             .primary(x.get_location())

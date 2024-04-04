@@ -16,11 +16,12 @@ namespace {
 
 using namespace tql2;
 
-class source_use final : public crtp_operator<source_use> {
+class source_operator final : public crtp_operator<source_operator> {
 public:
-  source_use() = default;
+  source_operator() = default;
 
-  explicit source_use(std::vector<record> events) : events_{std::move(events)} {
+  explicit source_operator(std::vector<record> events)
+    : events_{std::move(events)} {
   }
 
   auto name() const -> std::string override {
@@ -43,7 +44,7 @@ public:
     return do_not_optimize(*this);
   }
 
-  friend auto inspect(auto& f, source_use& x) -> bool {
+  friend auto inspect(auto& f, source_operator& x) -> bool {
     return f.apply(x.events_);
   }
 
@@ -51,11 +52,11 @@ private:
   std::vector<record> events_;
 };
 
-class plugin final : public tql2::operator_plugin<source_use> {
+class plugin final : public tql2::operator_plugin<source_operator> {
 public:
   auto make_operator(ast::entity self, std::vector<ast::expression> args,
                      tql2::context& ctx) const -> operator_ptr override {
-    auto usage = "source (<record> | [<record>, ...])";
+    auto usage = "source {...} | [...]";
     auto docs = "https://docs.tenzir.com/operators/source";
     if (args.size() != 1) {
       diagnostic::error("expected exactly one argument")
@@ -88,8 +89,9 @@ public:
           events.push_back(std::move(*rec));
         }
       },
-      [&](record& x) {
-        auto event = evaluate(x, ctx);
+      [&](ast::record& x) {
+        // TODO
+        auto event = evaluate(ast::expression{std::move(x)}, ctx);
         if (not event) {
           return;
         }
@@ -102,7 +104,7 @@ public:
           .docs(docs)
           .emit(ctx);
       });
-    return std::make_unique<source_use>(std::move(events));
+    return std::make_unique<source_operator>(std::move(events));
   }
 };
 
