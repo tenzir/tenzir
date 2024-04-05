@@ -1,2 +1,2 @@
-The `batch` operator gained a new `--timeout <duration>` option that control the
-maixmum latency for withholding events for batching.
+The `batch` operator gained a new `--timeout <duration>` option that controls
+the maixmum latency for withholding events for batching.
