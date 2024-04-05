@@ -14,6 +14,7 @@
 
 namespace tenzir::tql2 {
 
-auto evaluate(const ast::expression& expr, context& ctx) -> std::optional<data>;
+auto const_eval(const ast::expression& expr, context& ctx)
+  -> std::optional<data>;
 
 } // namespace tenzir::tql2

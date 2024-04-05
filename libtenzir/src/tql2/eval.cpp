@@ -177,7 +177,7 @@ private:
 
 } // namespace
 
-auto evaluate(const ast::expression& expr, context& ctx)
+auto const_eval(const ast::expression& expr, context& ctx)
   -> std::optional<data> {
   try {
     return evaluator{ctx}.eval(expr);

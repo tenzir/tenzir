@@ -73,7 +73,7 @@ public:
     args[0].match(
       [&](ast::list& x) {
         for (auto& y : x.items) {
-          auto item = evaluate(y, ctx);
+          auto item = const_eval(y, ctx);
           if (not item) {
             continue;
           }
@@ -91,7 +91,7 @@ public:
       },
       [&](ast::record& x) {
         // TODO
-        auto event = evaluate(ast::expression{std::move(x)}, ctx);
+        auto event = const_eval(ast::expression{std::move(x)}, ctx);
         if (not event) {
           return;
         }

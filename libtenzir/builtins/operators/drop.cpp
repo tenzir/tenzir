@@ -6,6 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/pipeline.hpp"
+#include "tenzir/tql2/set.hpp"
+
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
@@ -14,6 +17,7 @@
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/type.hpp>
 
 #include <arrow/type.h>
@@ -152,8 +156,79 @@ public:
   }
 };
 
+class drop_operator2 final : public crtp_operator<drop_operator2> {
+public:
+  drop_operator2() = default;
+
+  explicit drop_operator2(std::vector<tql2::ast::selector> selectors)
+    : selectors_{std::move(selectors)} {
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.drop";
+  }
+
+  auto operator()(generator<table_slice> input) const
+    -> generator<table_slice> {
+    for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      auto transformations = std::vector<indexed_transformation>{};
+      for (auto& sel : selectors_) {
+        auto resolved = tql2::resolve(sel, slice.schema());
+        if (auto off = std::get_if<offset>(&resolved)) {
+          transformations.emplace_back(
+            std::move(*off),
+            [](struct record_type::field, std::shared_ptr<arrow::Array>) {
+              return indexed_transformation::result_type{};
+            });
+        }
+      }
+      co_yield transform_columns(slice, transformations);
+    }
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, drop_operator2& x) -> bool {
+    return f.apply(x.selectors_);
+  }
+
+private:
+  std::vector<tql2::ast::selector> selectors_;
+};
+
+class plugin2 final : public virtual tql2::operator_plugin<drop_operator2> {
+public:
+  auto
+  make_operator(tql2::ast::entity self, std::vector<tql2::ast::expression> args,
+                tql2::context& ctx) const -> operator_ptr override {
+    TENZIR_UNUSED(self);
+    auto selectors = std::vector<tql2::ast::selector>{};
+    for (auto& arg : args) {
+      arg.match(
+        [&](tql2::ast::selector& x) {
+          selectors.push_back(std::move(x));
+        },
+        [&](auto& x) {
+          diagnostic::error("expected selector")
+            .primary(x.get_location())
+            .emit(ctx.dh());
+        });
+    }
+    return std::make_unique<drop_operator2>(std::move(selectors));
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::drop
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::drop::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::drop::plugin2)

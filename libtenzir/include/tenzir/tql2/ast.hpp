@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/data.hpp"
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/enum.hpp"
 #include "tenzir/ip.hpp"
@@ -144,6 +145,16 @@ struct literal {
   friend auto inspect(auto& f, literal& x) -> bool {
     return f.object(x).fields(f.field("value", x.value),
                               f.field("source", x.source));
+  }
+
+  auto as_data() const -> data {
+    return value.match(
+      [](const auto& x) -> data {
+        return x;
+      },
+      [](const null&) -> data {
+        return caf::none;
+      });
   }
 
   auto get_location() const -> location {

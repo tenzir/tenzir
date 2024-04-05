@@ -31,19 +31,8 @@ public:
     return "tql2.set";
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    TENZIR_UNUSED(input);
-    for (auto&& slice : input) {
-      if (slice.rows() == 0) {
-        co_yield {};
-        continue;
-      }
-      diagnostic::error("set not implemented yet").emit(ctrl.diagnostics());
-      co_yield {};
-    }
-  }
+  auto operator()(generator<table_slice> input,
+                  operator_control_plane& ctrl) const -> generator<table_slice>;
 
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
@@ -58,5 +47,18 @@ public:
 private:
   std::vector<ast::assignment> assignments_;
 };
+
+struct resolve_error {
+  ast::identifier segment;
+  // If set: Expected record, found type.
+  // If unset: Field not found.
+  std::optional<type> type;
+};
+
+auto resolve(const ast::selector& sel, const table_slice& slice)
+  -> variant<series, resolve_error>;
+
+auto resolve(const ast::selector& sel, type ty)
+  -> variant<offset, resolve_error>;
 
 } // namespace tenzir::tql2
