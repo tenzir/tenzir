@@ -38,23 +38,30 @@ namespace tenzir {
 /// shutdown sequence.
 /// @param self The actor to terminate.
 /// @param xs Actors that need to shutdown before *self* quits.
+/// @param reason The error message to terminate with; defaults to
+/// caf::exit_reason::user_shutdown.
 /// @relates terminate
 template <class Policy>
-void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs);
+void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,
+              caf::error reason = caf::exit_reason::user_shutdown);
 
 template <class Policy, class... Ts>
 void shutdown(caf::typed_event_based_actor<Ts...>* self,
-              std::vector<caf::actor> xs) {
+              std::vector<caf::actor> xs,
+              caf::error reason = caf::exit_reason::user_shutdown) {
   auto handle = caf::actor_cast<caf::event_based_actor*>(self);
-  shutdown<Policy>(handle, std::move(xs));
+  shutdown<Policy>(handle, std::move(xs), std::move(reason));
 }
 
 template <class Policy>
-void shutdown(caf::scoped_actor& self, std::vector<caf::actor> xs);
+void shutdown(caf::scoped_actor& self, std::vector<caf::actor> xs,
+              caf::error reason = caf::exit_reason::user_shutdown);
 
 template <class Policy, class Actor>
-void shutdown(Actor&& self, caf::actor x) {
-  shutdown<Policy>(std::forward<Actor>(self), std::vector{std::move(x)});
+void shutdown(Actor&& self, caf::actor x,
+              caf::error reason = caf::exit_reason::user_shutdown) {
+  shutdown<Policy>(std::forward<Actor>(self), std::vector{std::move(x)},
+                   std::move(reason));
 }
 
 } // namespace tenzir
