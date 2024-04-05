@@ -452,6 +452,9 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
   // Remove monitored components.
   self->set_down_handler([=](const caf::down_msg& msg) {
     TENZIR_DEBUG("{} got DOWN from {}", *self, msg.source);
+    if (self->state.monitored_exec_nodes.erase(msg.source) > 0) {
+      return;
+    }
     if (!self->state.tearing_down) {
       auto actor = caf::actor_cast<caf::actor>(msg.source);
       auto component = self->state.registry.remove(actor);
@@ -468,6 +471,12 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     TENZIR_DEBUG("{} got EXIT from {}", *self, msg.source);
     self->state.tearing_down = true;
+    for (auto&& exec_node :
+         std::exchange(self->state.monitored_exec_nodes, {})) {
+      if (auto handle = caf::actor_cast<caf::actor>(exec_node)) {
+        self->send_exit(handle, msg.reason);
+      }
+    }
     // Ignore duplicate EXIT messages except for hard kills.
     self->set_exit_handler([=](const caf::exit_msg& msg) {
       if (msg.reason == caf::exit_reason::kill) {
@@ -713,6 +722,8 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
                                            *self, description,
                                            spawn_result.error()));
       }
+      self->monitor(spawn_result->first);
+      self->state.monitored_exec_nodes.insert(spawn_result->first->address());
       // TODO: Check output type.
       return spawn_result->first;
     },
