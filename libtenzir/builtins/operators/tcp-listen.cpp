@@ -100,6 +100,15 @@ using bridge_actor = caf::typed_actor<
   auto(atom::get)->caf::result<table_slice>>;
 
 struct connection_state {
+  ~connection_state() noexcept {
+    if (tls_socket) {
+      tls_socket->shutdown();
+      tls_socket->lowest_layer().close();
+    } else if (socket) {
+      socket->close();
+    }
+  }
+
   caf::event_based_actor* self;
   std::optional<boost::asio::ip::tcp::socket> socket = {};
   std::optional<boost::asio::ssl::context> ssl_ctx = {};
