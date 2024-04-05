@@ -21,14 +21,10 @@ namespace fixtures {
 node::node(std::string_view suite)
   : fixtures::deterministic_actor_system_and_events(suite) {
   MESSAGE("spawning node");
-  test_node = self->spawn(tenzir::node, "test", directory / "node",
-                          detach_components::no);
+  test_node = self->spawn(tenzir::node, "test", directory / "node");
   run();
   auto settings = caf::settings{};
   auto tenzir_settings = caf::settings{};
-  // Don't run the catalog in a separate thread, otherwise it is
-  // invisible to the `test_coordinator`.
-  caf::put(settings, "tenzir.detach-components", false);
   // Set the timeout to zero to prevent the index telemetry loop,
   // which will cause any call to `run()` to hang indefinitely.
   caf::put(settings, "tenzir.active-partition-timeout", caf::timespan{0});

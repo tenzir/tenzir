@@ -36,8 +36,6 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   auto id = get_or(opts, "tenzir.node-id", defaults::node_id.data());
   auto db_dir
     = get_or(opts, "tenzir.state-directory", defaults::state_directory.data());
-  auto detach_components = caf::get_or(opts, "tenzir.detach-components",
-                                       defaults::detach_components);
   std::error_code err{};
   const auto abs_dir = std::filesystem::absolute(db_dir, err);
   if (err)
@@ -79,9 +77,7 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   // Spawn the node.
   TENZIR_DEBUG("{} spawns local node: {}", __func__, id);
   // Pointer to the root command to node.
-  auto detach_filesystem
-    = detach_components ? detach_components::yes : detach_components::no;
-  auto actor = self->spawn(node, id, abs_dir, detach_filesystem);
+  auto actor = self->spawn(node, id, abs_dir);
   actor->attach_functor([=, pid_file = std::move(pid_file),
                          &system = self->system()](
                           const caf::error&) -> caf::result<void> {
