@@ -34,7 +34,6 @@ auto resolve(const ast::selector& sel, const table_slice& slice)
 auto resolve(const ast::selector& sel, type ty)
   -> variant<offset, resolve_error> {
   // TODO: Write this properly.
-  TENZIR_WARN("resolving {:?} against {}", use_default_formatter(sel), ty);
   auto sel_index = size_t{0};
   auto result = offset{};
   result.reserve(sel.path.size());
@@ -106,6 +105,31 @@ public:
     return x.as_data();
   }
 
+  auto eval(const ast::record& x) -> value {
+    auto result = record{};
+    for (auto& item : x.content) {
+      item.match(
+        [&](const ast::record::field& field) {
+          auto val = eval(field.expr);
+          auto cval = std::get_if<data>(&val);
+          if (not cval) {
+            TENZIR_TODO();
+          }
+          auto [_, inserted]
+            = result.emplace(field.name.name, std::move(*cval));
+          if (not inserted) {
+            diagnostic::warning("todo: overwrite existing?")
+              .primary(field.name.location)
+              .emit(dh_);
+          }
+        },
+        [](const ast::record::spread&) {
+          TENZIR_TODO();
+        });
+    }
+    return result;
+  }
+
   auto eval(const ast::selector& x) -> value {
     auto result = resolve(x, input_);
     return result.match(
@@ -114,16 +138,21 @@ public:
       },
       [&](resolve_error& err) -> value {
         if (err.type) {
-          diagnostic::error("expected record, found {}", err.type->kind())
+          diagnostic::warning("expected record, found {}", err.type->kind())
             .primary(err.segment.location)
             .emit(dh_);
         } else {
-          diagnostic::error("field `{}` not found", err.segment.name)
+          diagnostic::warning("field `{}` not found", err.segment.name)
             .primary(err.segment.location)
             .emit(dh_);
         }
         return caf::none;
       });
+  }
+
+  auto eval(const ast::function_call& x) -> value {
+    TENZIR_ASSERT(x.fn.ref.resolved());
+    return not_implemented(x);
   }
 
   auto eval(const ast::binary_expr& x) -> value {
@@ -133,8 +162,8 @@ public:
     auto l = eval(x.left);
     auto r = eval(x.right);
     auto add
-      = []<bool Swap>(std::bool_constant<Swap>, series& l, data& r) -> value {
-      auto f = []<class Array, class Data>(const Array& l, Data& r) -> value {
+      = [&]<bool Swap>(std::bool_constant<Swap>, series& l, data& r) -> value {
+      auto f = [&]<class Array, class Data>(const Array& l, Data& r) -> value {
         if constexpr (std::same_as<Data, pattern>) {
           TENZIR_UNREACHABLE();
         } else if constexpr (std::same_as<Data, caf::none_t>) {
@@ -168,7 +197,11 @@ public:
             return caf::none;
           }
         } else {
-          // TODO: Not same type.
+          // TODO: warn only once?!
+          diagnostic::warning("cannot add {} and {}",
+                              type_kind::of<data_to_type_t<Data>>, "TODO")
+            .primary(x.get_location())
+            .emit(dh_);
           return caf::none;
         }
       };
@@ -275,7 +308,6 @@ private:
 auto set_operator::operator()(generator<table_slice> input,
                               operator_control_plane& ctrl) const
   -> generator<table_slice> {
-  TENZIR_UNUSED(input);
   for (auto&& slice : input) {
     if (slice.rows() == 0) {
       co_yield {};
@@ -289,11 +321,6 @@ auto set_operator::operator()(generator<table_slice> input,
     for (auto& assignment : assignments_) {
       // We are using `slice` here, not `result`!
       auto res = evaluator{slice, ctrl.diagnostics()}.eval(assignment.right);
-      if (auto val = std::get_if<data>(&res)) {
-        TENZIR_WARN("evaluated constant: {}", *val);
-      } else {
-        TENZIR_WARN("evaluated array");
-      }
       auto s = value_to_series(res, slice.rows());
       auto resolved = resolve(assignment.left, result.schema());
       auto off = std::get_if<offset>(&resolved);
