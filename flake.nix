@@ -59,9 +59,6 @@
                 "TENZIR_LOG_FILE=/var/log/tenzir/server.log"
                 "TENZIR_ENDPOINT=0.0.0.0"
               ];
-              ExposedPorts = {
-                "5158/tcp" = {};
-              };
               WorkingDir = "${tenzir-dir}";
               Volumes = {
                 "${tenzir-dir}" = {};

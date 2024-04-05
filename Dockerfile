@@ -85,8 +85,6 @@ RUN mkdir -p \
       /var/lib/tenzir \
       /var/log/tenzir
 
-EXPOSE 5158/tcp
-
 WORKDIR /var/lib/tenzir
 VOLUME ["/var/lib/tenzir"]
 
@@ -158,7 +156,6 @@ RUN apt-get update && \
 
 USER tenzir:tenzir
 
-EXPOSE 5158/tcp
 WORKDIR /var/lib/tenzir
 VOLUME ["/var/cache/tenzir", "/var/lib/tenzir"]
 
