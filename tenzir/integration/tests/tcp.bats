@@ -6,6 +6,11 @@ setup() {
   bats_load_library bats-tenzir
 }
 
+wait_for_tcp() {
+  port=$1
+  timeout 10 bash -c "until lsof -i :$port; do sleep 0.2; done"
+}
+
 @test "loader - connect" {
   coproc SERVER {
     exec echo foo | socat - TCP-LISTEN:8000
@@ -40,6 +45,7 @@ setup() {
 }
 
 @test "listen with multiple connections with SSL" {
+  export port=44445
   key_and_cert=$(mktemp)
   openssl req -x509 -newkey rsa:2048 \
     -keyout "${key_and_cert}" \
@@ -48,22 +54,22 @@ setup() {
     -nodes \
     -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=www.example.com" >/dev/null 2>/dev/null
   check --bg listen \
-    tenzir "from tcp://127.0.0.1:4000 --tls --certfile ${key_and_cert} --keyfile ${key_and_cert} read json | deduplicate foo | head 2 | sort foo"
-  timeout 10 bash -c 'until lsof -i :4000; do sleep 0.2; done'
+    tenzir "from tcp://127.0.0.1:$port --tls --certfile ${key_and_cert} --keyfile ${key_and_cert} read json | deduplicate foo | head 2 | sort foo"
+  wait_for_tcp $port
   coproc CLIENT1 {
-    while true; do
-      jq -n '{foo: 1}'
+    while :; do
+      jq -n '{foo: 1}' | openssl s_client "127.0.0.1:$port"
       sleep 1
-    done | openssl s_client 127.0.0.1:4000
+    done
   }
   coproc CLIENT2 {
-    while true; do
-      jq -n '{foo: 2}'
+    while :; do
+      jq -n '{foo: 2}' | openssl s_client "127.0.0.1:$port"
       sleep 1
-    done | openssl s_client 127.0.0.1:4000
+    done
   }
   wait_all "${listen[@]}"
-  kill "${CLIENT1_PID}" "${CLIENT2_PID}"
+  kill -- "${CLIENT1_PID}" "${CLIENT2_PID}"
   rm "${key_and_cert}"
 }
 
