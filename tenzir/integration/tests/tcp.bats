@@ -58,15 +58,15 @@ wait_for_tcp() {
   wait_for_tcp $port
   coproc CLIENT1 {
     while :; do
-      jq -n '{foo: 1}' | openssl s_client "127.0.0.1:$port"
+      jq -n '{foo: 1}'
       sleep 1
-    done
+    done | openssl s_client "127.0.0.1:$port"
   }
   coproc CLIENT2 {
     while :; do
-      jq -n '{foo: 2}' | openssl s_client "127.0.0.1:$port"
+      jq -n '{foo: 2}'
       sleep 1
-    done
+    done | openssl s_client "127.0.0.1:$port"
   }
   wait_all "${listen[@]}"
   kill -- "${CLIENT1_PID}" "${CLIENT2_PID}"
