@@ -179,6 +179,7 @@ public:
                                ? arrow::compute::NullPlacement::AtStart
                                : arrow::compute::NullPlacement::AtEnd;
     auto state = sort_state{key_, options};
+    co_yield {};
     for (auto&& slice : input) {
       co_yield state.try_add(std::move(slice), ctrl);
     }

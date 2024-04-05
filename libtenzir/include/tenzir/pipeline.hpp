@@ -698,6 +698,7 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<remove_generator_t<output_type>> {
+    co_yield {};
     auto states = std::unordered_map<type, state_type>{};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {

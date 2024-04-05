@@ -766,6 +766,7 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
+    co_yield {};
     auto impl = implementation{};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
