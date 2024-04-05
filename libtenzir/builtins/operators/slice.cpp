@@ -36,6 +36,7 @@ public:
     if (end <= begin) {
       co_return;
     }
+    co_yield {};
     auto offset = int64_t{0};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
@@ -59,6 +60,7 @@ public:
     -> generator<table_slice> {
     TENZIR_ASSERT(begin >= 0);
     TENZIR_ASSERT(end <= 0);
+    co_yield {};
     auto offset = int64_t{0};
     auto buffer = std::vector<table_slice>{};
     for (auto&& slice : input) {
@@ -95,6 +97,7 @@ public:
     -> generator<table_slice> {
     TENZIR_ASSERT(begin <= 0);
     TENZIR_ASSERT(end >= 0);
+    co_yield {};
     auto offset = int64_t{0};
     auto buffer = std::vector<table_slice>{};
     for (auto&& slice : input) {
@@ -137,6 +140,7 @@ public:
     if (end <= begin) {
       co_return;
     }
+    co_yield {};
     auto offset = int64_t{0};
     auto buffer = std::vector<table_slice>{};
     for (auto&& slice : input) {
