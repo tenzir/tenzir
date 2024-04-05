@@ -1,4 +1,4 @@
-: "${BATS_TEST_TIMEOUT:=10}"
+: "${BATS_TEST_TIMEOUT:=30}"
 
 setup() {
   bats_load_library bats-support
@@ -56,20 +56,21 @@ wait_for_tcp() {
   check --bg listen \
     tenzir "from tcp://127.0.0.1:$port --tls --certfile ${key_and_cert} --keyfile ${key_and_cert} read json | deduplicate foo | head 2 | sort foo"
   wait_for_tcp $port
-  coproc CLIENT1 {
+  (
     while :; do
       jq -n '{foo: 1}'
       sleep 1
     done | openssl s_client "127.0.0.1:$port"
-  }
-  coproc CLIENT2 {
+  ) &
+  CLIENT1_PID=$!
+  (
     while :; do
       jq -n '{foo: 2}'
       sleep 1
     done | openssl s_client "127.0.0.1:$port"
-  }
-  wait_all "${listen[@]}"
-  kill -- "${CLIENT1_PID}" "${CLIENT2_PID}"
+  ) &
+  CLIENT2_PID=$!
+  wait_all "${listen[@]}" "${CLIENT1_PID}" "${CLIENT2_PID}"
   rm "${key_and_cert}"
 }
 
