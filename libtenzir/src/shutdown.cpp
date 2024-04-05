@@ -22,7 +22,8 @@
 namespace tenzir {
 
 template <class Policy>
-void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs) {
+void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,
+              caf::error reason) {
   // Ignore duplicate EXIT messages except for hard kills.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     if (msg.reason == caf::exit_reason::kill) {
@@ -36,9 +37,9 @@ void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs) {
   // Terminate actors as requested.
   terminate<Policy>(self, std::move(xs))
     .then(
-      [=](atom::done) {
+      [=, reason = std::move(reason)](atom::done) mutable {
         TENZIR_DEBUG("{} terminates after shutting down all dependents", *self);
-        self->quit(caf::exit_reason::user_shutdown);
+        self->quit(std::move(reason));
       },
       [=](const caf::error& err) {
         die(
@@ -47,17 +48,21 @@ void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs) {
 }
 
 template void
-shutdown<policy::sequential>(caf::event_based_actor*, std::vector<caf::actor>);
+shutdown<policy::sequential>(caf::event_based_actor*, std::vector<caf::actor>,
+                             caf::error reason);
 
 template void
-shutdown<policy::parallel>(caf::event_based_actor*, std::vector<caf::actor>);
+shutdown<policy::parallel>(caf::event_based_actor*, std::vector<caf::actor>,
+                           caf::error reason);
 
 template <class Policy>
-void shutdown(caf::scoped_actor& self, std::vector<caf::actor> xs) {
+void shutdown(caf::scoped_actor& self, std::vector<caf::actor> xs,
+              caf::error reason) {
   terminate<Policy>(self, std::move(xs))
     .receive(
       [&](atom::done) {
         TENZIR_DEBUG("{} terminates after shutting down all dependents", *self);
+        self->send_exit(self, std::move(reason));
       },
       [&](const caf::error& err) {
         die(
@@ -66,9 +71,11 @@ void shutdown(caf::scoped_actor& self, std::vector<caf::actor> xs) {
 }
 
 template void
-shutdown<policy::sequential>(caf::scoped_actor&, std::vector<caf::actor>);
+shutdown<policy::sequential>(caf::scoped_actor&, std::vector<caf::actor>,
+                             caf::error reason);
 
 template void
-shutdown<policy::parallel>(caf::scoped_actor&, std::vector<caf::actor>);
+shutdown<policy::parallel>(caf::scoped_actor&, std::vector<caf::actor>,
+                           caf::error reason);
 
 } // namespace tenzir

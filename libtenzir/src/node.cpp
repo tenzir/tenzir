@@ -522,9 +522,11 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     auto core_shutdown_sequence
       = [=, core_shutdown_handles = std::move(core_shutdown_handles),
          filesystem_handle = std::move(filesystem_handle)]() mutable {
-          for (const auto& comp : core_shutdown_handles)
+          for (const auto& comp : core_shutdown_handles) {
             self->demonitor(comp);
-          shutdown<policy::sequential>(self, std::move(core_shutdown_handles));
+          }
+          shutdown<policy::sequential>(self, std::move(core_shutdown_handles),
+                                       msg.reason);
           // We deliberately do not send an exit message to the filesystem
           // actor, as that would mean that actors not tracked by the component
           // registry which hold a strong handle to the filesystem actor cannot
