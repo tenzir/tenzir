@@ -17,7 +17,6 @@
 #include "tenzir/error.hpp"
 #include "tenzir/import_command.hpp"
 #include "tenzir/plugin.hpp"
-#include "tenzir/remote_command.hpp"
 #include "tenzir/start_command.hpp"
 #include "tenzir/writer_command.hpp"
 
@@ -181,17 +180,6 @@ auto make_export_command() {
   return export_;
 }
 
-auto make_status_command() {
-  return std::make_unique<command>(
-    "status",
-    "shows properties of a server process by component; optional positional "
-    "arguments allow for filtering by component name",
-    opts("?tenzir.status")
-      .add<std::string>("timeout", "how long to wait for components to report")
-      .add<bool>("detailed", "add more information to the output")
-      .add<bool>("debug", "include extra debug information"));
-}
-
 auto make_start_command() {
   return std::make_unique<command>(
     "start", "starts a node",
@@ -230,7 +218,6 @@ auto make_command_factory() {
     {"import zeek", import_command},
     {"import zeek-json", import_command},
     {"import arrow", import_command},
-    {"status", remote_command},
   };
   // clang-format on
   return result;
@@ -244,7 +231,6 @@ auto make_root_command(std::string_view name) {
   root->add_subcommand(make_count_command());
   root->add_subcommand(make_export_command());
   root->add_subcommand(make_import_command());
-  root->add_subcommand(make_status_command());
   return root;
 }
 

@@ -429,8 +429,6 @@ using exec_node_actor = typed_actor_fwd<
 
 /// The interface of the NODE actor.
 using node_actor = typed_actor_fwd<
-  // Run an invocation in the node.
-  auto(atom::run, invocation)->caf::result<caf::message>,
   // Execute a REST endpoint on this node.
   // Note that nodes connected via CAF trust each other completely,
   // so this skips all authorization and access control mechanisms
