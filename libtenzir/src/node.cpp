@@ -45,7 +45,6 @@
 #include "tenzir/spawn_catalog.hpp"
 #include "tenzir/spawn_counter.hpp"
 #include "tenzir/spawn_disk_monitor.hpp"
-#include "tenzir/spawn_eraser.hpp"
 #include "tenzir/spawn_exporter.hpp"
 #include "tenzir/spawn_importer.hpp"
 #include "tenzir/spawn_index.hpp"
@@ -99,9 +98,8 @@ bool is_singleton(std::string_view type) {
   // change the node to work with type IDs over actor names everywhere. This
   // refactoring will be much easier once the NODE itself is a typed actor, so
   // let's hold off until then.
-  const char* singletons[]
-    = {"accountant", "disk-monitor", "eraser", "filesystem",
-       "importer",   "index",        "catalog"};
+  const char* singletons[] = {"accountant", "disk-monitor", "filesystem",
+                              "importer",   "index",        "catalog"};
   auto pred = [&](const char* x) {
     return x == type;
   };
@@ -210,7 +208,6 @@ auto make_component_factory() {
     {"spawn accountant", lift_component_factory<spawn_accountant>()},
     {"spawn counter", lift_component_factory<spawn_counter>()},
     {"spawn disk-monitor", lift_component_factory<spawn_disk_monitor>()},
-    {"spawn eraser", lift_component_factory<spawn_eraser>()},
     {"spawn exporter", lift_component_factory<spawn_exporter>()},
     {"spawn importer", lift_component_factory<spawn_importer>()},
     {"spawn catalog", lift_component_factory<spawn_catalog>()},
@@ -226,7 +223,6 @@ auto make_command_factory() {
     {"spawn accountant", node_state::spawn_command},
     {"spawn counter", node_state::spawn_command},
     {"spawn disk-monitor", node_state::spawn_command},
-    {"spawn eraser", node_state::spawn_command},
     {"spawn exporter", node_state::spawn_command},
     {"spawn importer", node_state::spawn_command},
     {"spawn catalog", node_state::spawn_command},

@@ -152,9 +152,6 @@
 // the disk monitor, who looks at the file system and identifies those partitions
 // that shall be removed. This is done by the `atom::erase` handler.
 //
-// The other is data-driven and comes from the `eraser`, who sends us a `tenzir::query_context`
-// whose results shall be deleted from disk.
-//
 // clang-format on
 
 namespace {

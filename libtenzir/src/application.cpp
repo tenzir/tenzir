@@ -87,11 +87,6 @@ void add_root_opts(command& cmd) {
     "?tenzir", "disable-plugins",
     "plugins and builtins to explicitly disable; use to forbid use of "
     "operators, connectors, or formats by policy.");
-  cmd.options.add<std::string>("?tenzir", "aging-frequency",
-                               "interval between two aging "
-                               "cycles");
-  cmd.options.add<std::string>("?tenzir", "aging-query",
-                               "query for aging out obsolete data");
   cmd.options.add<std::string>("?tenzir", "connection-timeout",
                                "the timeout for connecting to "
                                "a Tenzir server (default: 5m)");

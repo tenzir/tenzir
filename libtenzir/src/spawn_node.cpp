@@ -110,8 +110,7 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
         });
     return result;
   };
-  std::list components
-    = {"catalog", "index", "importer", "eraser", "disk-monitor"};
+  std::list components = {"catalog", "index", "importer", "disk-monitor"};
   for (auto& c : components) {
     if (auto err = spawn_component(c)) {
       TENZIR_ERROR("node failed to spawn {}: {}", c, err);
