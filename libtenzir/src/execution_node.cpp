@@ -376,6 +376,10 @@ struct exec_node_state {
         return {};
       }
     }
+    if constexpr (detail::are_same_v<std::monostate, Input, Output>) {
+      schedule_run(false);
+      return {};
+    }
     if constexpr (std::is_same_v<Output, std::monostate>) {
       auto rp = self->make_response_promise<void>();
       self
@@ -637,11 +641,13 @@ struct exec_node_state {
     //   b. The operator has downstream demand and can produce output
     //      independently from receiving input.
     //   c. The operator has input it can consume.
+    //   d. The operator is a command, i.e., has both a source and a sink.
     const auto should_continue
-      = instance->it != instance->gen.end()                      // (1)
-        and (not previous                                        // (2a)
-             or (demand.has_value() and op->input_independent()) // (2b)
-             or not inbound_buffer.empty());                     // (2c)
+      = instance->it != instance->gen.end()                         // (1)
+        and (not previous                                           // (2a)
+             or (demand.has_value() and op->input_independent())    // (2b)
+             or not inbound_buffer.empty()                          // (2c)
+             or detail::are_same_v<std::monostate, Input, Output>); // (2d)
     if (should_continue) {
       schedule_run(false);
     } else if (demand.has_value() or std::is_same_v<Output, std::monostate>) {
@@ -817,15 +823,11 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
         = std::conditional_t<std::is_void_v<Input>, std::monostate, Input>;
       using output_type
         = std::conditional_t<std::is_void_v<Output>, std::monostate, Output>;
-      if constexpr (std::is_void_v<Input> and std::is_void_v<Output>) {
-        die("unimplemented");
-      } else {
-        auto result = self->spawn<SpawnOptions>(
-          exec_node<input_type, output_type>, std::move(op), std::move(node),
-          std::move(diagnostics_handler), std::move(metrics_handler), index,
-          has_terminal);
-        return result;
-      }
+      auto result = self->spawn<SpawnOptions>(
+        exec_node<input_type, output_type>, std::move(op), std::move(node),
+        std::move(diagnostics_handler), std::move(metrics_handler), index,
+        has_terminal);
+      return result;
     };
   };
   return std::pair{

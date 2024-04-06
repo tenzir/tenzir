@@ -119,8 +119,11 @@ public:
     if (output->is<table_slice>()) {
       return run<table_slice>(op_->copy(), interval_, std::move(input), ctrl);
     }
-    TENZIR_ASSERT(output->is<chunk_ptr>());
-    return run<chunk_ptr>(op_->copy(), interval_, std::move(input), ctrl);
+    if (output->is<chunk_ptr>()) {
+      return run<chunk_ptr>(op_->copy(), interval_, std::move(input), ctrl);
+    }
+    TENZIR_ASSERT(output->is<void>());
+    return run<std::monostate>(op_->copy(), interval_, std::move(input), ctrl);
   }
 
   auto copy() const -> operator_ptr override {
