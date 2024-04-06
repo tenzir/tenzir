@@ -8,7 +8,7 @@ the test output against a known reference file.
 
 # Running integration tests
 
-To run all tests, execute the `integration` target from cmake.
+To run all tests, execute the `integration` target from CMake.
 
 To run all tests in this directory, use `bats tests/`.
 
@@ -27,8 +27,8 @@ run the test file.
 
 # Updating and creating references
 
-To update or create reference files, set the `UPDATE=1` environment
-variable and run `bats`.
+To update or create reference files, run the `update-integration` target from
+CMake, or set the `UPDATE=1` environment variable and run `bats`.
 
 To update the references for one specific test, add the `bats:focus`
 tag to that test and run bats with `UPDATE=1`. Only that test will

@@ -1,5 +1,15 @@
 include_guard(GLOBAL)
 
+# Define a target for updating integration test references.
+macro (TenzirDefineUpdateIntegrationTarget _target)
+  add_custom_target(
+    update-${_target}
+    COMMAND "${CMAKE_COMMAND}" -E env UPDATE=1 "${CMAKE_COMMAND}" --build
+            "${CMAKE_BINARY_DIR}" --target ${_target}
+    COMMENT "Updating ${_target} test references..."
+    USES_TERMINAL)
+endmacro ()
+
 # Normalize the GNUInstallDirs to be relative paths, if possible.
 macro (TenzirNormalizeInstallDirs)
   foreach (
@@ -789,6 +799,7 @@ function (TenzirRegisterPlugin)
   # define integration tests.
   if (NOT TARGET integration)
     add_custom_target(integration)
+    TenzirDefineUpdateIntegrationTarget(integration)
   endif ()
 
   # Setup integration tests.
@@ -815,6 +826,7 @@ function (TenzirRegisterPlugin)
       USES_TERMINAL)
     unset(parallel_level)
     unset(TENZIR_PATH)
+    TenzirDefineUpdateIntegrationTarget(integration-${PLUGIN_TARGET})
 
     add_dependencies(integration-${PLUGIN_TARGET} tenzir::tenzir)
     add_dependencies(integration integration-${PLUGIN_TARGET})
