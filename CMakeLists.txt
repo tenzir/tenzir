@@ -933,28 +933,6 @@ install(
 
 # -- scripts -------------------------------------------------------------------
 
-# TODO: Make other scripts installable as well.
-
-option(TENZIR_ENABLE_CORELIGHT_CAT "Install corelight-cat with Tenzir" OFF)
-add_feature_info("TENZIR_ENABLE_CORELIGHT_CAT" TENZIR_ENABLE_CORELIGHT_CAT
-                 "install corelight-cat with Tenzir.")
-if (TENZIR_ENABLE_CORELIGHT_CAT)
-  install(
-    FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/corelight-cat"
-    # These should be inherited from the source but they
-    # get lost in CPack, so we set them explicitly.
-    PERMISSIONS
-      OWNER_READ
-      OWNER_WRITE
-      OWNER_EXECUTE
-      GROUP_READ
-      GROUP_EXECUTE
-      WORLD_READ
-      WORLD_EXECUTE
-    DESTINATION "${CMAKE_INSTALL_BINDIR}"
-    COMPONENT Runtime)
-endif ()
-
 option(TENZIR_ENABLE_TENZIR_DF_PERCENT
        "Install tenzir-df-percent.sh with Tenzir" ON)
 add_feature_info(
