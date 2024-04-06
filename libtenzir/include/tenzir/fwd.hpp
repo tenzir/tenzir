@@ -191,7 +191,6 @@ struct component_state;
 struct concept_;
 struct conjunction;
 struct connect_request;
-struct count_query_context;
 struct curried_predicate;
 struct data_extractor;
 struct data_point;
@@ -403,7 +402,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::blob))
   TENZIR_ADD_TYPE_ID((tenzir::chunk_ptr))
   TENZIR_ADD_TYPE_ID((tenzir::conjunction))
-  TENZIR_ADD_TYPE_ID((tenzir::count_query_context))
   TENZIR_ADD_TYPE_ID((tenzir::curried_predicate))
   TENZIR_ADD_TYPE_ID((tenzir::data))
   TENZIR_ADD_TYPE_ID((tenzir::data_extractor))

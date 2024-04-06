@@ -69,21 +69,6 @@ teardown() {
   check tenzir 'export | where "net.src.ip == 192.168.168.100" | summarize count=count(.)'
 }
 
-# bats test_tags=import,arrow
-@test "Arrow Import" {
-  if ! python -c "import pyarrow"; then
-    skip "pyarrow isn't installed"
-  fi
-
-  # the input corresponds to conn.log.gz + eve.json (see above)
-  cat ${INPUTSDIR}/suricata/arrow_ipc.bin |
-    tenzir-ctl import -b --batch-encoding=arrow arrow
-
-  check -c "tenzir-ctl export -n 10 arrow 'where #schema == \"zeek.conn\"' | python3 ${MISCDIR}/scripts/print-arrow.py"
-  check -c "tenzir-ctl export arrow 'where #schema == \"suricata.http\"' | python3 ${MISCDIR}/scripts/print-arrow.py"
-  check tenzir-ctl count
-}
-
 # bats test_tags=server,client,import,export,transforms
 @test "Export pipeline operator parsing everything but summarize" {
   import_suricata_eve

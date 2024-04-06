@@ -43,7 +43,6 @@
 #include "tenzir/shutdown.hpp"
 #include "tenzir/spawn_arguments.hpp"
 #include "tenzir/spawn_catalog.hpp"
-#include "tenzir/spawn_counter.hpp"
 #include "tenzir/spawn_disk_monitor.hpp"
 #include "tenzir/spawn_exporter.hpp"
 #include "tenzir/spawn_importer.hpp"
@@ -206,7 +205,6 @@ node_state::component_factory_fun lift_component_factory() {
 auto make_component_factory() {
   auto result = node_state::named_component_factory{
     {"spawn accountant", lift_component_factory<spawn_accountant>()},
-    {"spawn counter", lift_component_factory<spawn_counter>()},
     {"spawn disk-monitor", lift_component_factory<spawn_disk_monitor>()},
     {"spawn exporter", lift_component_factory<spawn_exporter>()},
     {"spawn importer", lift_component_factory<spawn_importer>()},
@@ -221,7 +219,6 @@ auto make_command_factory() {
   // application.cpp as well iff necessary
   auto result = command::factory{
     {"spawn accountant", node_state::spawn_command},
-    {"spawn counter", node_state::spawn_command},
     {"spawn disk-monitor", node_state::spawn_command},
     {"spawn exporter", node_state::spawn_command},
     {"spawn importer", node_state::spawn_command},

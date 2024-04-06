@@ -165,16 +165,3 @@ class Tenzir:
                     msg = f"tenzir-ctl status failed with code {proc.returncode}"
                     raise Exception(msg)
                 await asyncio.sleep(retry_delay)
-
-    async def count(self, *args, **kwargs) -> int:
-        """
-        Executes the Tenzir-ctl count command and return the response number.
-        Examples: `count()`, `count("#schema == /suricata.alert/", estimate=True)`.
-        """
-        proc = await self.cli.count(*args, **kwargs).exec()
-        stdout, stderr = await proc.communicate()
-        logger.debug(stderr.decode())
-        if proc.returncode != 0:
-            msg = f"tenzir-ctl count failed with code {proc.returncode}"
-            raise Exception(msg)
-        return int(stdout.decode("utf-8"))

@@ -1527,10 +1527,6 @@ index(index_actor::stateful_pointer<index_state> self,
             auto query_id = query_context.id;
             auto client = caf::visit(
               detail::overload{
-                [&](count_query_context& count) {
-                  return caf::actor_cast<receiver_actor<atom::done>>(
-                    count.sink);
-                },
                 [&](extract_query_context& extract) {
                   return caf::actor_cast<receiver_actor<atom::done>>(
                     extract.sink);

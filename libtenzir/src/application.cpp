@@ -11,7 +11,6 @@
 #include "tenzir/command.hpp"
 #include "tenzir/config.hpp"
 #include "tenzir/configuration.hpp"
-#include "tenzir/count_command.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/process.hpp"
 #include "tenzir/error.hpp"
@@ -114,15 +113,6 @@ void add_root_opts(command& cmd) {
                             "triggered (default: 2h)");
 }
 
-auto make_count_command() {
-  return std::make_unique<command>(
-    "count", "count hits for a query without exporting data",
-    opts("?tenzir.count")
-      .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
-      .add<bool>("estimate,e", "estimate an upper bound by "
-                               "skipping candidate checks"));
-}
-
 auto make_export_command() {
   auto export_ = std::make_unique<command>(
     "export",
@@ -198,7 +188,6 @@ auto make_command_factory() {
   // well iff necessary
   // clang-format off
   auto result = command::factory{
-    {"count", count_command},
     {"export ascii", make_writer_command("ascii")},
     {"export csv", make_writer_command("csv")},
     {"export json", make_writer_command("json")},
@@ -223,7 +212,6 @@ auto make_root_command(std::string_view name) {
   auto ob = opts("?tenzir");
   auto root = std::make_unique<command>(name, "", std::move(ob));
   add_root_opts(*root);
-  root->add_subcommand(make_count_command());
   root->add_subcommand(make_export_command());
   root->add_subcommand(make_import_command());
   return root;
