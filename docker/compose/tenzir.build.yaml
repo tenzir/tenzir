@@ -1,6 +1,0 @@
-version: "3"
-services:
-  tenzir:
-    pull_policy: build
-    build:
-      context: ../..

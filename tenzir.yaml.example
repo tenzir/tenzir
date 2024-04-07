@@ -159,12 +159,6 @@ tenzir:
   # Zstd compression level applied to the Feather store backend.
   # zstd-compression-level: <default>
 
-  # Interval between two aging cycles.
-  aging-frequency: 24h
-
-  # Query for aging out obsolete data.
-  aging-query:
-
   # The `index` key is used to adjust the false-positive rate of
   # the first-level lookup data structures (called synopses) in the
   # catalog. The lower the false-positive rate the more space will be

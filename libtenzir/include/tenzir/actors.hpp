@@ -88,15 +88,6 @@ using signal_reflector_actor = typed_actor_fwd<
   // Subscribe to one or more signals.
   auto(atom::subscribe)->caf::result<void>>::unwrap;
 
-/// The ERASER actor interface.
-using eraser_actor = typed_actor_fwd<
-  /// The periodic loop of the ERASER.
-  auto(atom::ping)->caf::result<void>,
-  // Trigger a new eraser cycle.
-  auto(atom::run)->caf::result<atom::ok>>
-  // Conform to the protocol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
-
 /// The STORE actor interface.
 using store_actor = typed_actor_fwd<
   // Handles an extraction for the given expression.
@@ -429,8 +420,6 @@ using exec_node_actor = typed_actor_fwd<
 
 /// The interface of the NODE actor.
 using node_actor = typed_actor_fwd<
-  // Run an invocation in the node.
-  auto(atom::run, invocation)->caf::result<caf::message>,
   // Execute a REST endpoint on this node.
   // Note that nodes connected via CAF trust each other completely,
   // so this skips all authorization and access control mechanisms

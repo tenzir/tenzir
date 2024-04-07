@@ -94,18 +94,3 @@ clean:
 	rm -f $(CONTRIBUTING_DIR)/security.md
 	rm -f $(CONTRIBUTING_DIR)/workflow.md
 	rm -rf $(QUARTO_MD_OUTPUTS) $(QUARTO_FILES_OUTPUTS)
-
-
-# A straightforward target to enable `make docker TARGET=bash`
-bash:
-	@bash
-
-# Run this makefile from within the Quarto Docker image.
-# You can specify another target using the TARGET variable:
-# make docker TARGET=clean
-docker:
-	HOST_UID=$$(id -u) HOST_GID=$$(id -g) docker compose \
-		-f ../docker/compose/quarto.yaml \
-		-f ../docker/compose/quarto.bind.yaml \
-		run quarto \
-		make -C web $(TARGET)

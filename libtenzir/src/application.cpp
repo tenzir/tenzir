@@ -11,13 +11,11 @@
 #include "tenzir/command.hpp"
 #include "tenzir/config.hpp"
 #include "tenzir/configuration.hpp"
-#include "tenzir/count_command.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/process.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/import_command.hpp"
 #include "tenzir/plugin.hpp"
-#include "tenzir/remote_command.hpp"
 #include "tenzir/start_command.hpp"
 #include "tenzir/writer_command.hpp"
 
@@ -88,11 +86,6 @@ void add_root_opts(command& cmd) {
     "?tenzir", "disable-plugins",
     "plugins and builtins to explicitly disable; use to forbid use of "
     "operators, connectors, or formats by policy.");
-  cmd.options.add<std::string>("?tenzir", "aging-frequency",
-                               "interval between two aging "
-                               "cycles");
-  cmd.options.add<std::string>("?tenzir", "aging-query",
-                               "query for aging out obsolete data");
   cmd.options.add<std::string>("?tenzir", "connection-timeout",
                                "the timeout for connecting to "
                                "a Tenzir server (default: 5m)");
@@ -118,15 +111,6 @@ void add_root_opts(command& cmd) {
   cmd.options.add<duration>("?tenzir", "rebuild-interval",
                             "timespan after which an automatic rebuild is "
                             "triggered (default: 2h)");
-}
-
-auto make_count_command() {
-  return std::make_unique<command>(
-    "count", "count hits for a query without exporting data",
-    opts("?tenzir.count")
-      .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
-      .add<bool>("estimate,e", "estimate an upper bound by "
-                               "skipping candidate checks"));
 }
 
 auto make_export_command() {
@@ -181,17 +165,6 @@ auto make_export_command() {
   return export_;
 }
 
-auto make_status_command() {
-  return std::make_unique<command>(
-    "status",
-    "shows properties of a server process by component; optional positional "
-    "arguments allow for filtering by component name",
-    opts("?tenzir.status")
-      .add<std::string>("timeout", "how long to wait for components to report")
-      .add<bool>("detailed", "add more information to the output")
-      .add<bool>("debug", "include extra debug information"));
-}
-
 auto make_start_command() {
   return std::make_unique<command>(
     "start", "starts a node",
@@ -215,7 +188,6 @@ auto make_command_factory() {
   // well iff necessary
   // clang-format off
   auto result = command::factory{
-    {"count", count_command},
     {"export ascii", make_writer_command("ascii")},
     {"export csv", make_writer_command("csv")},
     {"export json", make_writer_command("json")},
@@ -230,7 +202,6 @@ auto make_command_factory() {
     {"import zeek", import_command},
     {"import zeek-json", import_command},
     {"import arrow", import_command},
-    {"status", remote_command},
   };
   // clang-format on
   return result;
@@ -241,10 +212,8 @@ auto make_root_command(std::string_view name) {
   auto ob = opts("?tenzir");
   auto root = std::make_unique<command>(name, "", std::move(ob));
   add_root_opts(*root);
-  root->add_subcommand(make_count_command());
   root->add_subcommand(make_export_command());
   root->add_subcommand(make_import_command());
-  root->add_subcommand(make_status_command());
   return root;
 }
 

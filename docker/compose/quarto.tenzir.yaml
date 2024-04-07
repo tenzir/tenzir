@@ -1,9 +1,0 @@
-version: "3"
-services:
-  quarto:
-    environment:
-      - TENZIR_ENDPOINT=tenzir:5158
-    networks:
-      - tenzir
-    depends_on:
-      - tenzir

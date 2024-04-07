@@ -511,15 +511,9 @@ partition_actor::behavior_type passive_partition(
                        });
             // TODO: Use the first path if the expression can be evaluated
             // exactly.
-            auto* count = caf::get_if<count_query_context>(&query_context.cmd);
-            if (count && count->mode == count_query_context::estimate) {
-              self->send(count->sink, rank(hits));
-              rp.deliver(rank(hits));
-            } else {
-              query_context.ids = hits;
-              rp.delegate(self->state.store, atom::query_v,
-                          std::move(query_context));
-            }
+            query_context.ids = hits;
+            rp.delegate(self->state.store, atom::query_v,
+                        std::move(query_context));
           },
           [rp](caf::error& err) mutable {
             rp.deliver(std::move(err));

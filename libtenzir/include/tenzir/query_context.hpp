@@ -19,31 +19,6 @@
 
 namespace tenzir {
 
-/// A count query to collect the number of hits for the expression.
-struct count_query_context {
-  enum mode { estimate, exact };
-
-  friend bool
-  operator==(const count_query_context& lhs, const count_query_context& rhs) {
-    return lhs.sink == rhs.sink && lhs.mode == rhs.mode;
-  }
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, mode& x) {
-    return detail::inspect_enum(f, x);
-  }
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, count_query_context& x) {
-    return f.object(x)
-      .pretty_name("tenzir.query.count")
-      .fields(f.field("sink", x.sink), f.field("mode", x.mode));
-  }
-
-  receiver_actor<uint64_t> sink;
-  enum mode mode = {};
-};
-
 /// An extract query to retrieve the events that match the expression.
 struct extract_query_context {
   receiver_actor<table_slice> sink;
@@ -64,7 +39,7 @@ struct extract_query_context {
 /// A wrapper for an expression related command.
 struct query_context {
   /// The query command type.
-  using command = caf::variant<count_query_context, extract_query_context>;
+  using command = caf::variant<extract_query_context>;
 
   // -- constructor & destructor -----------------------------------------------
 
@@ -82,17 +57,6 @@ struct query_context {
   ~query_context() noexcept = default;
 
   // -- helper functions to make query creation less boiler-platey -------------
-
-  template <class Actor>
-  static query_context
-  make_count(std::string issuer, const Actor& sink,
-             enum count_query_context::mode m, expression expr) {
-    return {
-      std::move(issuer),
-      count_query_context{caf::actor_cast<receiver_actor<uint64_t>>(sink), m},
-      std::move(expr),
-    };
-  }
 
   template <class Actor>
   static query_context
@@ -169,17 +133,6 @@ struct formatter<tenzir::query_context> {
     -> decltype(ctx.out()) {
     auto out = ctx.out();
     auto f = tenzir::detail::overload{
-      [&](const tenzir::count_query_context& cmd) {
-        out = fmt::format_to(out, "count(");
-        switch (cmd.mode) {
-          case tenzir::count_query_context::estimate:
-            out = fmt::format_to(out, "estimate, ");
-            break;
-          case tenzir::count_query_context::exact:
-            out = fmt::format_to(out, "exact, ");
-            break;
-        }
-      },
       [&](const tenzir::extract_query_context&) {
         out = fmt::format_to(out, "extract(");
       },

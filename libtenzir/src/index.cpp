@@ -152,9 +152,6 @@
 // the disk monitor, who looks at the file system and identifies those partitions
 // that shall be removed. This is done by the `atom::erase` handler.
 //
-// The other is data-driven and comes from the `eraser`, who sends us a `tenzir::query_context`
-// whose results shall be deleted from disk.
-//
 // clang-format on
 
 namespace {
@@ -1530,10 +1527,6 @@ index(index_actor::stateful_pointer<index_state> self,
             auto query_id = query_context.id;
             auto client = caf::visit(
               detail::overload{
-                [&](count_query_context& count) {
-                  return caf::actor_cast<receiver_actor<atom::done>>(
-                    count.sink);
-                },
                 [&](extract_query_context& extract) {
                   return caf::actor_cast<receiver_actor<atom::done>>(
                     extract.sink);

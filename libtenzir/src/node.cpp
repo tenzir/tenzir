@@ -43,9 +43,7 @@
 #include "tenzir/shutdown.hpp"
 #include "tenzir/spawn_arguments.hpp"
 #include "tenzir/spawn_catalog.hpp"
-#include "tenzir/spawn_counter.hpp"
 #include "tenzir/spawn_disk_monitor.hpp"
-#include "tenzir/spawn_eraser.hpp"
 #include "tenzir/spawn_exporter.hpp"
 #include "tenzir/spawn_importer.hpp"
 #include "tenzir/spawn_index.hpp"
@@ -99,9 +97,8 @@ bool is_singleton(std::string_view type) {
   // change the node to work with type IDs over actor names everywhere. This
   // refactoring will be much easier once the NODE itself is a typed actor, so
   // let's hold off until then.
-  const char* singletons[]
-    = {"accountant", "disk-monitor", "eraser", "filesystem",
-       "importer",   "index",        "catalog"};
+  const char* singletons[] = {"accountant", "disk-monitor", "filesystem",
+                              "importer",   "index",        "catalog"};
   auto pred = [&](const char* x) {
     return x == type;
   };
@@ -119,90 +116,6 @@ auto find_endpoint_plugin(const http_request_description& desc)
         return rest_plugin;
   }
   return nullptr;
-}
-
-void collect_component_status(node_actor::stateful_pointer<node_state> self,
-                              status_verbosity v, duration timeout,
-                              const std::vector<std::string>& components) {
-  const auto has_component = [&](std::string_view name) {
-    return components.empty()
-           || std::any_of(components.begin(), components.end(),
-                          [&](const auto& component) {
-                            return component == name;
-                          });
-  };
-  struct extra_state {
-    size_t memory_usage = 0;
-    static void deliver(caf::typed_response_promise<std::string>&& promise,
-                        record&& content) {
-      // We strip and sort the output for a cleaner presentation of the data.
-      if (auto json = to_json(sort(strip(content))))
-        promise.deliver(std::move(*json));
-    }
-    // In-place sort each level of the tree.
-    static record& sort(record&& r) {
-      std::sort(r.begin(), r.end());
-      for (auto& [_, value] : r)
-        if (auto* nested = caf::get_if<record>(&value))
-          sort(std::move(*nested));
-      return r;
-    };
-  };
-  auto rs = make_status_request_state<extra_state, std::string>(self);
-  // Pre-fill the version information.
-  if (has_component("version")) {
-    auto version = retrieve_versions();
-    rs->content["version"] = version;
-  }
-  // Pre-fill our result with system stats.
-  if (has_component("system")) {
-    auto system = record{};
-    if (v >= status_verbosity::info) {
-      auto now = time::clock::now();
-      system["timestamp"] = fmt::format(
-        "{:%FT%T%z}", fmt::localtime(time::clock::to_time_t(now)));
-      system["uptime"] = to_string(now - self->state.start_time);
-      system["in-memory-table-slices"] = uint64_t{table_slice::instances()};
-      system["database-path"] = self->state.dir.string();
-      merge(detail::get_status(), system, policy::merge_lists::no);
-    }
-    if (v >= status_verbosity::detailed) {
-      auto config_files = list{};
-      std::transform(loaded_config_files().begin(), loaded_config_files().end(),
-                     std::back_inserter(config_files),
-                     [](const std::filesystem::path& x) {
-                       return x.string();
-                     });
-      std::transform(plugins::loaded_config_files().begin(),
-                     plugins::loaded_config_files().end(),
-                     std::back_inserter(config_files),
-                     [](const std::filesystem::path& x) {
-                       return x.string();
-                     });
-      system["config-files"] = std::move(config_files);
-    }
-    if (v >= status_verbosity::debug) {
-      auto& sys = self->system();
-      system["running-actors"] = uint64_t{sys.registry().running()};
-      system["detached-actors"] = uint64_t{sys.detached_actors()};
-      system["worker-threads"] = uint64_t{sys.scheduler().num_workers()};
-    }
-    rs->content["system"] = std::move(system);
-  }
-  // Send out requests and collects answers.
-  for (const auto& [label, component] : self->state.registry.components()) {
-    // Requests to busy remote sources and sinks can easily delay the combined
-    // response because the status requests don't get scheduled soon enough.
-    // NOTE: We must use `caf::actor::node` rather than
-    // `caf::actor_node`, because the actor system for remote actors is
-    // proxied, so using `component.actor.home_system().node()` will result in
-    // a different `node_id` from the one we actually want to compare.
-    if (component.actor.node() != self->node())
-      continue;
-    if (!has_component(component.type))
-      continue;
-    collect_status(rs, timeout, v, component.actor, rs->content, label);
-  }
 }
 
 /// Registers (and monitors) a component through the node.
@@ -250,37 +163,6 @@ spawn_accountant(node_actor::stateful_pointer<node_state> self) {
 
 } // namespace
 
-caf::message status_command(const invocation& inv, caf::actor_system&) {
-  if (caf::get_or(inv.options, "tenzir.node", false)) {
-    return caf::make_message(caf::make_error( //
-      ec::invalid_configuration,
-      "unable to execute status command when spawning a "
-      "node locally instead of connecting to one; please "
-      "unset the option tenzir.node"));
-  }
-  auto self = this_node;
-  auto verbosity = status_verbosity::info;
-  if (caf::get_or(inv.options, "tenzir.status.detailed", false))
-    verbosity = status_verbosity::detailed;
-  if (caf::get_or(inv.options, "tenzir.status.debug", false))
-    verbosity = status_verbosity::debug;
-  auto timeout_value = get_or_duration(inv.options, "tenzir.status.timeout",
-                                       defaults::status_request_timeout);
-  if (!timeout_value) {
-    return caf::make_message(caf::make_error(
-      ec::parse_error,
-      fmt::format("failed to read status timeout: {}", timeout_value.error())));
-  }
-  auto timeout = *timeout_value;
-  if (inv.arguments.empty())
-    TENZIR_VERBOSE("{} collects status for all components", *self);
-  else
-    TENZIR_VERBOSE("{} collects status for components {}", *self,
-                   inv.arguments);
-  collect_component_status(self, verbosity, timeout, inv.arguments);
-  return {};
-}
-
 caf::expected<caf::actor>
 spawn_accountant(node_actor::stateful_pointer<node_state> self,
                  spawn_arguments& args) {
@@ -323,9 +205,7 @@ node_state::component_factory_fun lift_component_factory() {
 auto make_component_factory() {
   auto result = node_state::named_component_factory{
     {"spawn accountant", lift_component_factory<spawn_accountant>()},
-    {"spawn counter", lift_component_factory<spawn_counter>()},
     {"spawn disk-monitor", lift_component_factory<spawn_disk_monitor>()},
-    {"spawn eraser", lift_component_factory<spawn_eraser>()},
     {"spawn exporter", lift_component_factory<spawn_exporter>()},
     {"spawn importer", lift_component_factory<spawn_importer>()},
     {"spawn catalog", lift_component_factory<spawn_catalog>()},
@@ -339,14 +219,11 @@ auto make_command_factory() {
   // application.cpp as well iff necessary
   auto result = command::factory{
     {"spawn accountant", node_state::spawn_command},
-    {"spawn counter", node_state::spawn_command},
     {"spawn disk-monitor", node_state::spawn_command},
-    {"spawn eraser", node_state::spawn_command},
     {"spawn exporter", node_state::spawn_command},
     {"spawn importer", node_state::spawn_command},
     {"spawn catalog", node_state::spawn_command},
     {"spawn index", node_state::spawn_command},
-    {"status", status_command},
   };
   return result;
 }
@@ -550,13 +427,6 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
   });
   // Define the node behavior.
   return {
-    [self](atom::run, const invocation& inv) -> caf::result<caf::message> {
-      TENZIR_DEBUG("{} got command {} with options {} and arguments {}", *self,
-                   inv.full_name, inv.options, inv.arguments);
-      // Run the command.
-      this_node = self;
-      return run(inv, self->system(), node_state::command_factory);
-    },
     [self](atom::proxy,
            http_request_description& desc) -> caf::result<rest_response> {
       TENZIR_VERBOSE("{} proxying request to {}", *self, desc.canonical_path);

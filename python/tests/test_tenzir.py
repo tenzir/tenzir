@@ -59,18 +59,6 @@ def integration_data(path):
 
 
 @pytest.mark.asyncio
-async def test_count(endpoint):
-    tenzir = Tenzir(endpoint)
-    result = await tenzir.count()
-    assert result == 0
-    await tenzir_exec(
-        endpoint, f"load {integration_data('suricata/eve.json')} | read suricata | import",
-    )
-    result = await tenzir.count()
-    assert result == 8
-
-
-@pytest.mark.asyncio
 async def test_export_collect_pyarrow(endpoint):
     await tenzir_exec(
         endpoint, f"load {integration_data('suricata/eve.json')} | read suricata | import",
