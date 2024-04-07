@@ -146,7 +146,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           deb_file="$(basename ./packages/debian/tenzir*.deb)"
-          docker build docker/systemd-test -t installer-test
+          docker build tenzir/services/systemd/test -t installer-test
           docker run -d --name installer-test \
                  --privileged \
                  --volume=.:/src/tenzir:ro \
