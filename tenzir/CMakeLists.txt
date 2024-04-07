@@ -118,6 +118,7 @@ endif ()
 # -- integration tests ---------------------------------------------------------
 
 add_custom_target(integration)
+TenzirDefineUpdateIntegrationTarget(integration)
 
 include(ProcessorCount)
 ProcessorCount(parallel_level)
@@ -125,13 +126,14 @@ math(EXPR parallel_level "${parallel_level} + 2")
 add_custom_target(
   integration-core
   COMMAND
-    ${CMAKE_COMMAND} -E env
+    "${CMAKE_COMMAND}" -E env
     PATH="$<TARGET_FILE_DIR:tenzir::tenzir>:\$\$PATH:${CMAKE_CURRENT_SOURCE_DIR}/integration/lib/bats/bin"
     bats "-r" "-T" "--jobs" "${parallel_level}"
     "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests"
   COMMENT "Executing integration tests..."
   USES_TERMINAL)
 unset(parallel_level)
+TenzirDefineUpdateIntegrationTarget(integration-core)
 
 add_dependencies(integration-core tenzir)
 add_dependencies(integration integration-core)
@@ -139,9 +141,11 @@ add_dependencies(integration integration-core)
 # link the full
 add_custom_target(
   link-integration
-  COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/share/tenzir"
+  COMMAND "${CMAKE_COMMAND}" -E make_directory
+          "${CMAKE_BINARY_DIR}/share/tenzir"
   COMMAND
-    ${CMAKE_COMMAND} -E create_symlink "${CMAKE_CURRENT_SOURCE_DIR}/integration"
+    "${CMAKE_COMMAND}" -E create_symlink
+    "${CMAKE_CURRENT_SOURCE_DIR}/integration"
     "${CMAKE_BINARY_DIR}/share/tenzir/integration"
   COMMENT "Linking integration test directory")
 

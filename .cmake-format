@@ -5,6 +5,12 @@ with section("parse"):
 
     # Specify structure for custom cmake functions
     additional_commands = {
+        "tenzirdefineupdateintegrationtarget": {
+            "spelling": "TenzirDefineUpdateIntegrationTarget",
+            "pargs": {
+                "nargs": 1,
+            },
+        },
         "tenzirexportcompilecommands": {
             "spelling": "TenzirExportCompileCommands",
             "pargs": {

@@ -570,13 +570,6 @@ if (TENZIR_ENABLE_DEVELOPER_MODE OR TENZIR_ENABLE_BUILDID)
     INTERFACE "-fdebug-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.")
 endif ()
 
-option(TENZIR_ENABLE_UPDATE_INTEGRATION_REFERENCES
-       "Update references when running in integration tests" OFF)
-add_feature_info(
-  "TENZIR_ENABLE_UPDATE_INTEGRATION_REFERENCES"
-  TENZIR_ENABLE_UPDATE_INTEGRATION_REFERENCES
-  "update references when running integration tests.")
-
 # -- additional warnings -------------------------------------------------------
 
 option(TENZIR_ENABLE_MORE_WARNINGS "Enable addditional warnings" OFF)
