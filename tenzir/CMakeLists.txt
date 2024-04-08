@@ -119,24 +119,32 @@ endif ()
 
 add_custom_target(integration)
 TenzirDefineUpdateIntegrationTarget(integration)
+add_custom_target(integration-tenzir)
+add_dependencies(integration integration-tenzir)
+TenzirDefineUpdateIntegrationTarget(integration-tenzir)
 
 include(ProcessorCount)
 ProcessorCount(parallel_level)
 math(EXPR parallel_level "${parallel_level} + 2")
-add_custom_target(
-  integration-core
-  COMMAND
-    "${CMAKE_COMMAND}" -E env
-    PATH="$<TARGET_FILE_DIR:tenzir::tenzir>:\$\$PATH:${CMAKE_CURRENT_SOURCE_DIR}/integration/lib/bats/bin"
-    bats "-r" "-T" "--jobs" "${parallel_level}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests"
-  COMMENT "Executing integration tests..."
-  USES_TERMINAL)
-unset(parallel_level)
-TenzirDefineUpdateIntegrationTarget(integration-core)
 
-add_dependencies(integration-core tenzir)
-add_dependencies(integration integration-core)
+file(GLOB_RECURSE _suites CONFIGURE_DEPENDS
+     "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests/*.bats")
+foreach (suite IN LISTS _suites)
+  get_filename_component(suite_name "${suite}" NAME_WE)
+  add_custom_target(
+    "integration-tenzir-${suite_name}"
+    COMMAND
+      "${CMAKE_COMMAND}" -E env
+      PATH="$<TARGET_FILE_DIR:tenzir::tenzir>:\$\$PATH:${CMAKE_CURRENT_SOURCE_DIR}/integration/lib/bats/bin"
+      bats "-T" "--jobs" "${parallel_level}" "${suite}"
+    COMMENT "Executing integration test suite ${suite_name}..."
+    USES_TERMINAL)
+  add_dependencies(integration-tenzir-${suite_name} tenzir)
+  add_dependencies(integration-tenzir integration-tenzir-${suite_name})
+  TenzirDefineUpdateIntegrationTarget(integration-tenzir-${suite_name})
+endforeach ()
+
+unset(parallel_level)
 
 # link the full
 add_custom_target(
