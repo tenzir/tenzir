@@ -25,7 +25,6 @@ Printer:
 feather [—compression-type=<type>] [—compression-level=<level] [—min—space-savings=<rate>]
 ```
 
-
 ## Description
 
 The `feather` format provides both a parser and a printer for Feather files and
@@ -34,7 +33,6 @@ Apache Arrow IPC streams.
 ### `--compression-type` (Printer)
 
 An optional output file type, either LZ4_FRAME or ZSTD. If compression-type is not specified uncompressed Feather is the default output type. The compression-type variable should be lowercase, lz4 or zstd, respectively. A default compression-level and min-space-savings are choosen if not specified.
-
 
 ### `--compression-level` (Printer)
 

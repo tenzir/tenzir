@@ -26,7 +26,7 @@ setup() {
 @test "invalid format" {
   tmp_file = $(mktemp)
   ${tmp_file} 
-  check ! tenzir 'from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write json | read feather'
+  check ! tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write json | read feather"
 }
 
 @test "Additional write options" {
