@@ -17,6 +17,7 @@
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/detail/passthrough.hpp"
 #include "tenzir/detail/string.hpp"
+#include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/fbs/table_slice.hpp"
@@ -158,28 +159,29 @@ auto count_substring_occurrences(std::string_view input,
 }
 
 auto make_unflattened_struct_array(
-  const arrow::FieldVector& fields,
+  const arrow::StructArray& input,
   const std::unordered_map<std::string_view, unflatten_field*>&
-    original_field_name_to_new_field_map) {
-  std::vector<std::shared_ptr<arrow::Array>> new_columns;
-  std::vector<std::string> new_field_names;
+    original_field_name_to_new_field_map)
+  -> std::shared_ptr<arrow::StructArray> {
+  auto new_fields
+    = std::vector<std::pair<std::string, std::shared_ptr<arrow::Array>>>{};
   // Fields that were unflattened may have the same parent field. E.g foo.bar
   // and foo.baz will have the same parent field (foo). foo.bar and foo.baz map
   // to the same unflatten_field that already handles nested children fields.
   // This means we can only use to_arrow method only once as it will produce a
   // foo struct array with bar and baz as children
   std::unordered_set<unflatten_field*> handled_fields;
-  for (const auto& field : fields) {
+  for (const auto& field : input.type()->fields()) {
     TENZIR_ASSERT_EXPENSIVE(
       original_field_name_to_new_field_map.contains(field->name()));
     auto* f = original_field_name_to_new_field_map.at(field->name());
     if (not handled_fields.contains(f)) {
-      new_columns.push_back(f->to_arrow());
-      new_field_names.push_back(std::string{f->field_name_});
+      new_fields.emplace_back(f->field_name_, f->to_arrow());
       handled_fields.insert(f);
     }
   }
-  return arrow::StructArray::Make(new_columns, new_field_names).ValueOrDie();
+  return make_struct_array(input.length(), input.null_bitmap(),
+                           std::move(new_fields));
 }
 
 auto append_columns(const record_type& schema,
@@ -1367,7 +1369,7 @@ auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
       }
     }
   }
-  return make_unflattened_struct_array(slice_array->struct_type()->fields(),
+  return make_unflattened_struct_array(*slice_array,
                                        original_field_name_to_new_field_map);
 }
 

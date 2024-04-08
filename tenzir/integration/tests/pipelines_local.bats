@@ -627,3 +627,10 @@ python "
 put inf, nan, subnormal, zero
 EOF
 }
+
+@test "unflatten empty record and empty record null" {
+  check tenzir 'read json | unflatten' <<EOF
+{"foo": {}}
+{"foo": null}
+EOF
+}

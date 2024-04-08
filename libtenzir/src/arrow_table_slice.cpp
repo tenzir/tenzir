@@ -11,6 +11,7 @@
 #include "tenzir/config.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/overload.hpp"
+#include "tenzir/detail/zip_iterator.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/fbs/table_slice.hpp"
 #include "tenzir/fbs/utils.hpp"
@@ -352,12 +353,11 @@ std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
         }
         ++current;
       } else if (is_prefix_match) {
+        auto& nested_array
+          = caf::get<arrow::StructArray>(*layer.arrays[index.back()]);
         auto nested_layer = unpacked_layer{
           .fields = {},
-          .arrays = caf::get<type_to_arrow_array_t<record_type>>(
-                      *layer.arrays[index.back()])
-                      .Flatten()
-                      .ValueOrDie(),
+          .arrays = nested_array.Flatten().ValueOrDie(),
         };
         nested_layer.fields.reserve(nested_layer.arrays.size());
         for (auto&& [name, type] :
@@ -378,8 +378,8 @@ std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
             nested_arrow_fields.push_back(
               nested_field.type.to_arrow_field(nested_field.name));
           result.arrays.push_back(
-            arrow::StructArray::Make(nested_layer.arrays, nested_arrow_fields)
-              .ValueOrDie());
+            make_struct_array(nested_array.length(), nested_array.null_bitmap(),
+                              nested_arrow_fields, nested_layer.arrays));
         }
       } else {
         result.fields.push_back(std::move(layer.fields[index.back()]));
@@ -515,12 +515,11 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
         result.arrays.push_back(std::move(layer.arrays[index.back()]));
         ++current;
       } else if (is_prefix_match) {
+        auto& nested_array
+          = caf::get<arrow::StructArray>(*layer.arrays[index.back()]);
         auto nested_layer = unpacked_layer{
           .fields = {},
-          .arrays = caf::get<type_to_arrow_array_t<record_type>>(
-                      *layer.arrays[index.back()])
-                      .Flatten()
-                      .ValueOrDie(),
+          .arrays = nested_array.Flatten().ValueOrDie(),
         };
         nested_layer.fields.reserve(nested_layer.arrays.size());
         for (auto&& [name, type] :
@@ -540,8 +539,8 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
           nested_arrow_fields.push_back(
             nested_field.type.to_arrow_field(nested_field.name));
         result.arrays.push_back(
-          arrow::StructArray::Make(nested_layer.arrays, nested_arrow_fields)
-            .ValueOrDie());
+          make_struct_array(nested_array.length(), nested_array.null_bitmap(),
+                            nested_arrow_fields, nested_layer.arrays));
       }
     }
     return result;
@@ -586,6 +585,46 @@ table_slice select_columns(const table_slice& slice,
   result.offset(slice.offset());
   result.import_time(slice.import_time());
   return result;
+}
+
+auto make_struct_array(int64_t length,
+                       std::shared_ptr<arrow::Buffer> null_bitmap,
+                       const arrow::FieldVector& field_types,
+                       const arrow::ArrayVector& field_arrays)
+  -> std::shared_ptr<arrow::StructArray> {
+  auto type = std::make_shared<arrow::StructType>(field_types);
+  return std::make_shared<arrow::StructArray>(
+    std::move(type), length, field_arrays, std::move(null_bitmap));
+}
+
+auto make_struct_array(int64_t length,
+                       std::shared_ptr<arrow::Buffer> null_bitmap,
+                       std::vector<std::string> field_names,
+                       const arrow::ArrayVector& field_arrays)
+  -> std::shared_ptr<arrow::StructArray> {
+  auto field_types = arrow::FieldVector{};
+  for (auto [name, array] : detail::zip(field_names, field_arrays)) {
+    field_types.push_back(std::make_shared<arrow::Field>(name, array->type()));
+  }
+  return make_struct_array(length, std::move(null_bitmap), field_types,
+                           field_arrays);
+}
+
+auto make_struct_array(
+  int64_t length, std::shared_ptr<arrow::Buffer> null_bitmap,
+  std::vector<std::pair<std::string, std::shared_ptr<arrow::Array>>> fields)
+  -> std::shared_ptr<arrow::StructArray> {
+  auto field_types = arrow::FieldVector{};
+  field_types.reserve(fields.size());
+  auto field_arrays = std::vector<std::shared_ptr<arrow::Array>>{};
+  field_arrays.reserve(fields.size());
+  for (auto& field : fields) {
+    field_types.push_back(
+      std::make_shared<arrow::Field>(field.first, field.second->type()));
+    field_arrays.push_back(std::move(field.second));
+  }
+  return make_struct_array(length, std::move(null_bitmap), field_types,
+                           field_arrays);
 }
 
 // -- template machinery -------------------------------------------------------
