@@ -20,7 +20,7 @@ namespace tenzir::tql2 {
 #define TRY(name, expr)                                                        \
   auto _tmp = (expr);                                                          \
   if (auto err = std::get_if<1>(&_tmp)) {                                      \
-    return *err;                                                               \
+    return std::move(*err);                                                    \
   }                                                                            \
   name = *std::get_if<0>(&_tmp)
 
@@ -42,7 +42,8 @@ auto resolve(const ast::selector& sel, type ty)
     if (not rty) {
       // TODO
       TENZIR_ASSERT(sel_index > 0);
-      return resolve_error{sel.path[sel_index - 1], ty};
+      return resolve_error{sel.path[sel_index - 1],
+                           resolve_error::not_a_record{ty}};
     }
     auto found = false;
     auto field_index = size_t{0};
@@ -56,7 +57,8 @@ auto resolve(const ast::selector& sel, type ty)
       ++field_index;
     }
     if (not found) {
-      return resolve_error{sel.path[sel_index], std::nullopt};
+      return resolve_error{sel.path[sel_index],
+                           resolve_error::field_not_found{}};
     }
     result.push_back(field_index);
   }
@@ -137,15 +139,17 @@ public:
         return std::move(x);
       },
       [&](resolve_error& err) -> value {
-        if (err.type) {
-          diagnostic::warning("expected record, found {}", err.type->kind())
-            .primary(err.segment.location)
-            .emit(dh_);
-        } else {
-          diagnostic::warning("field `{}` not found", err.segment.name)
-            .primary(err.segment.location)
-            .emit(dh_);
-        }
+        err.reason.match(
+          [&](resolve_error::not_a_record& reason) {
+            diagnostic::warning("expected record, found {}", reason.type.kind())
+              .primary(err.ident.location)
+              .emit(dh_);
+          },
+          [&](resolve_error::field_not_found&) {
+            diagnostic::warning("field `{}` not found", err.ident.name)
+              .primary(err.ident.location)
+              .emit(dh_);
+          });
         return caf::none;
       });
   }
@@ -252,7 +256,7 @@ public:
       },
       [&](series& l, series& r) -> value {
         return caf::visit(
-          [&]<class L, class R>(const L& lty, const R& rty) -> value {
+          [&]<class L, class R>(const L&, const R&) -> value {
             if constexpr (not std::same_as<L, R>) {
               return caf::none;
             } else {
@@ -350,7 +354,7 @@ auto set_operator::operator()(generator<table_slice> input,
               auto result = indexed_transformation::result_type{};
               result.emplace_back(std::move(field), std::move(array));
               result.emplace_back(decltype(field){assignment.left.path[0].name,
-                                                  std::move(s.type)},
+                                                  s.type},
                                   std::move(s.array));
               return result;
             },
