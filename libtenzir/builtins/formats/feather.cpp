@@ -489,7 +489,7 @@ public:
       ipc_write_options.codec = codec_result.MoveValueUnsafe();
       ipc_write_options.min_space_savings = options_.min_space_savings->inner;
     }
-    auto schema = input_schema.to_arrow_schema();
+    const auto schema = input_schema.to_arrow_schema();
     auto stream_writer_result = arrow::ipc::MakeStreamWriter(
       sink.ValueUnsafe(), schema, ipc_write_options);
     if (!stream_writer_result.ok()) {

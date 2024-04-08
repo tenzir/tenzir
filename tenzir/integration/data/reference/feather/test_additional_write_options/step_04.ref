@@ -1,0 +1,2 @@
+error: Invalid: min_space_savings not in range [0,1]. Provided: 10
+ = note: failed to write record batch
