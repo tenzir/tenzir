@@ -103,8 +103,13 @@ struct connection_state {
   ~connection_state() noexcept {
     if (tls_socket) {
       tls_socket->shutdown();
+      tls_socket->lowest_layer().shutdown(
+        boost::asio::ip::tcp::socket::shutdown_both);
+      tls_socket->lowest_layer().cancel();
       tls_socket->lowest_layer().close();
     } else if (socket) {
+      socket->shutdown(boost::asio::ip::tcp::socket::shutdown_both);
+      socket->cancel();
       socket->close();
     }
   }
