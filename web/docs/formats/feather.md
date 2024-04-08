@@ -16,11 +16,13 @@ Reads and writes the [Feather][feather] file format, a thin wrapper around
 ## Synopsis
 
 Parser:
+
 ```
 feather
 ```
 
 Printer:
+
 ```
 feather [—compression-type=<type>] [—compression-level=<level] [—min—space-savings=<rate>]
 ```
@@ -30,10 +32,6 @@ feather [—compression-type=<type>] [—compression-level=<level] [—min—spa
 The `feather` format provides both a parser and a printer for Feather files and
 Apache Arrow IPC streams.  
 
-:::note Compression
-feather printer offers a more efficent alternative to the [`compress`](../operators/compress.md). The feather printer can more efficent batch the data because it knows the underlying data.
-:::
-
 :::note Limitation
 Tenzir currently assumes that all Feather files and Arrow IPC streams use
 metadata recognized by Tenzir. We plan to lift this restriction in the future.
@@ -41,29 +39,49 @@ metadata recognized by Tenzir. We plan to lift this restriction in the future.
 
 ### `--compression-type` (Printer)
 
-An optional output file type, either LZ4_FRAME or ZSTD. If compression-type is not specified uncompressed Feather is the default output type. The compression-type variable should be lowercase, lz4 or zstd, respectively. A default compression-level and min-space-savings are choosen if not specified.
+Specifies an optional compression type. Supported options are `zstd` for
+[Zstandard][zstd-docs]http://facebook.github.io/zstd/ compression and `lz4` for
+[LZ4 Frame][lz4-docs] compression.
+
+[zstd-docs]: http://facebook.github.io/zstd/
+[lz4-docs]: https://android.googlesource.com/platform/external/lz4/+/HEAD/doc/lz4_Frame_format.md
+
+:::info Why would I use this over the `compress` operator?
+The Feather format offers more efficient compression for LZ4 and Zstd compared
+to the [`compress`](../operators/compress.md) operator. This is because it
+compresses the data column-by-column, leaving metadata that needs to be accessed
+frequently uncompressed.
+:::
 
 ### `--compression-level` (Printer)
 
-An optional compression level for the corresponding compression-type. If no compression-type was supplied, this option is ignored.
+An optional compression level for the corresponding compression type. This
+option is ignored if no compression type is specified.
+
+Defaults to the compression type's default compression level.
 
 ### `--min-space-savings` (Printer)
 
-An optional minimum space savings percentage required for compression. Space savings is calculated as '1.0 - compressed_size / uncompressed_size'. For example, if 'min_space_savings = 0.1', a 100-byte body buffer won’t undergo compression if its expected compressed size exceeds 90 bytes. If this option is unset, compression will be used indiscriminately. If no compression-type was supplied, this option is ignored. Values outside of the range [0,1] are handled as errors.
+An optional minimum space savings percentage required for compression to be
+applied. This option is ignored if no compression is specified. The provided
+value must be between 0 and 1 inclusive.
 
+Defaults to 0, i.e., always applying compression.
+
+Space savings are calculated as `1.0 - compressed_size / uncompressed_size`.
+E.g., for a minimum space savings rate of 0.1 a 100-byte body buffer will not
+be compressed if its expected compressed size exceeds 90 bytes.
 
 ## Examples
 
 Read a Feather file via the [`from`](../operators/from.md) operator:
 
 ```
-from file --mmap /tmp/data.feather read feather
+from /tmp/data.feather --mmap read feather
 ```
 
-Write a Feather file via [`to`](../operators/to.md) operator:
+Write a Zstd-compressed Feather file via [`to`](../operators/to.md) operator:
+
 ```
-from file --mmap /tmp/data.json | write feather
-```
-```
-from file tmp/suricata.json | to file tmp/suricata.feather write feather --compression-level -1 --compression-type lz4 --min-space-savings 0.6
+to /tmp/suricata.feather write feather --compression-type zstd
 ```
