@@ -110,6 +110,7 @@ struct connection_state {
   }
 
   caf::event_based_actor* self;
+  std::shared_ptr<boost::asio::io_context> io_context = {};
   std::optional<boost::asio::ip::tcp::socket> socket = {};
   std::optional<boost::asio::ssl::context> ssl_ctx = {};
   std::optional<boost::asio::ssl::stream<boost::asio::ip::tcp::socket&>>
@@ -123,10 +124,12 @@ struct connection_state {
 };
 
 auto make_connection(caf::stateful_actor<connection_state>* self,
+                     std::shared_ptr<boost::asio::io_context> io_context,
                      boost::asio::ip::tcp::socket socket, bridge_actor bridge,
                      tcp_listen_args args,
                      shared_diagnostic_handler diagnostics) -> caf::behavior {
   self->state.self = self;
+  self->state.io_context = std::move(io_context);
   self->state.socket = std::move(socket);
   self->state.bridge = std::move(bridge);
   self->state.args = std::move(args);
@@ -240,7 +243,7 @@ struct connection_manager_state {
   tcp_listen_args args;
   shared_diagnostic_handler diagnostics;
 
-  boost::asio::io_context io_context;
+  std::shared_ptr<boost::asio::io_context> io_context;
   std::optional<boost::asio::ip::tcp::socket> socket;
   std::optional<boost::asio::ip::tcp::endpoint> endpoint;
   std::optional<boost::asio::ip::tcp::acceptor> acceptor;
@@ -268,7 +271,7 @@ struct connection_manager_state {
         return;
       }
       connections.push_back(self->spawn<caf::linked + caf::detached>(
-        make_connection, std::move(socket), std::move(handle), args,
+        make_connection, io_context, std::move(socket), std::move(handle), args,
         diagnostics));
     });
     run();
@@ -278,14 +281,14 @@ struct connection_manager_state {
     detail::weak_run_delayed(self, duration::zero(), [this] {
       const auto num_runs = [&] {
         auto guard = boost::asio::make_work_guard(io_context);
-        return io_context.run_one_for(std::chrono::milliseconds{500});
+        return io_context->run_one_for(std::chrono::milliseconds{500});
       }();
       if (num_runs == 0) {
         run();
         return;
       }
       TENZIR_ASSERT(num_runs == 1);
-      io_context.restart();
+      io_context->restart();
       tcp_listen();
     });
   }
@@ -296,10 +299,11 @@ auto make_connection_manager(caf::stateful_actor<connection_manager_state>* self
                              shared_diagnostic_handler diagnostics)
   -> caf::behavior {
   self->state.self = self;
+  self->state.io_context = std::make_shared<boost::asio::io_context>();
   self->state.bridge = std::move(bridge);
   self->state.args = std::move(args);
   self->state.diagnostics = std::move(diagnostics);
-  auto resolver = boost::asio::ip::tcp::resolver{self->state.io_context};
+  auto resolver = boost::asio::ip::tcp::resolver{*self->state.io_context};
   auto endpoints
     = resolver.resolve(self->state.args.hostname, self->state.args.port);
   if (endpoints.empty()) {
@@ -309,10 +313,10 @@ auto make_connection_manager(caf::stateful_actor<connection_manager_state>* self
     return {};
   }
   self->state.endpoint = endpoints.begin()->endpoint();
-  self->state.acceptor = boost::asio::ip::tcp::acceptor(self->state.io_context,
+  self->state.acceptor = boost::asio::ip::tcp::acceptor(*self->state.io_context,
                                                         *self->state.endpoint);
   self->state.acceptor->listen(boost::asio::socket_base::max_connections);
-  self->state.socket = boost::asio::ip::tcp::socket(self->state.io_context);
+  self->state.socket = boost::asio::ip::tcp::socket(*self->state.io_context);
 #if TENZIR_LINUX
   auto sfd = ::socket(self->state.endpoint->protocol().family(),
                       SOCK_STREAM | SOCK_CLOEXEC,
