@@ -12,8 +12,12 @@ setup() {
 }
 
 @test "batch sizes" {
+  if ! command -v python3; then
+    skip "python3 must be in PATH"
+  fi
+
   venv_dir=$(mktemp -d)
-  python -m venv --system-site-packages "${venv_dir}"
+  python3 -m venv --system-site-packages "${venv_dir}"
   . "${venv_dir}/bin/activate"
   if ! python -c pyarrow; then
     pip install pyarrow
