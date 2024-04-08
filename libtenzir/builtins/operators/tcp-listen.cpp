@@ -154,8 +154,6 @@ auto make_connection(caf::stateful_actor<connection_state>* self,
         .emit(self->state.ctrl->diagnostics());
       return {};
     }
-    auto ec = boost::system::error_code{};
-    self->state.ssl_ctx.emplace(boost::asio::ssl::context::tls_server);
     if (self->state.args.tls_certfile) {
       self->state.ssl_ctx->use_certificate_chain_file(
         *self->state.args.tls_certfile);
@@ -166,6 +164,7 @@ auto make_connection(caf::stateful_actor<connection_state>* self,
     }
     self->state.ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none);
     self->state.tls_socket.emplace(*self->state.socket, *self->state.ssl_ctx);
+    auto ec = boost::system::error_code{};
     self->state.tls_socket->handshake(
       boost::asio::ssl::stream<boost::asio::ip::tcp::socket>::server, ec);
     if (ec) {
