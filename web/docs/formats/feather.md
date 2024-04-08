@@ -28,7 +28,16 @@ feather [—compression-type=<type>] [—compression-level=<level] [—min—spa
 ## Description
 
 The `feather` format provides both a parser and a printer for Feather files and
-Apache Arrow IPC streams.
+Apache Arrow IPC streams.  
+
+:::note Compression
+feather printer offers a more efficent alternative to the [`compress`](../operators/compress.md). The feather printer can more efficent batch the data because it knows the underlying data.
+:::
+
+:::note Limitation
+Tenzir currently assumes that all Feather files and Arrow IPC streams use
+metadata recognized by Tenzir. We plan to lift this restriction in the future.
+:::
 
 ### `--compression-type` (Printer)
 
@@ -40,12 +49,8 @@ An optional compression level for the corresponding compression-type. If no comp
 
 ### `--min-space-savings` (Printer)
 
-Minimum space savings percentage required for compression. Space savings is calculated as (1.0 - compressed_size / uncompressed_size). For example, if min_space_savings = 0.1, a 100-byte body buffer won’t undergo compression if its expected compressed size exceeds 90 bytes. If this option is unset, compression will be used indiscriminately. If no compression-type was supplied, this option is ignored. Values outside of the range [0,1] are handled as errors.
+An optional minimum space savings percentage required for compression. Space savings is calculated as '1.0 - compressed_size / uncompressed_size'. For example, if 'min_space_savings = 0.1', a 100-byte body buffer won’t undergo compression if its expected compressed size exceeds 90 bytes. If this option is unset, compression will be used indiscriminately. If no compression-type was supplied, this option is ignored. Values outside of the range [0,1] are handled as errors.
 
-:::note Limitation
-Tenzir currently assumes that all Feather files and Arrow IPC streams use
-metadata recognized by Tenzir. We plan to lift this restriction in the future.
-:::
 
 ## Examples
 
@@ -58,5 +63,7 @@ from file --mmap /tmp/data.feather read feather
 Write a Feather file via [`to`](../operators/to.md) operator:
 ```
 from file --mmap /tmp/data.json | write feather
+```
+```
 from file tmp/suricata.json | to file tmp/suricata.feather write feather --compression-level -1 --compression-type lz4 --min-space-savings 0.6
 ```

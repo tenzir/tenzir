@@ -25,37 +25,35 @@ setup() {
 
 @test "invalid format" {
   tmp_file = $(mktemp)
-  ${tmp_file} 
+  ${tmp_file}
   check ! tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write json | read feather"
 }
 
 @test "Additional write options" {
   check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/suricata/eve.json | write feather --compression-type uncompressed | read feather"
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write feather --compression-level 10 --compression-type zstd --min-space-savings .6"
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write feather --compression-level -1 --compression-type lz4 --min-space-savings 1"
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write feather --compression-level -1 --compression-type zstd --min-space-savings 0"
-  check ! tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch 256 | write feather --compression-level -1 --compression-type zstd --min-space-savings 10"
+  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write feather --compression-level 10 --compression-type zstd --min-space-savings .6 | read feather"
+  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write feather --compression-level -1 --compression-type lz4 --min-space-savings 1 | read feather"
+  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write feather --compression-level -1 --compression-type zstd --min-space-savings 0 | read feather"
+  check ! tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch 256 | write feather --compression-level -1 --compression-type zstd --min-space-savings 10 | read feather"
 }
 
 @test "Verify compression" {
-    file1=$(mktemp)
-    file2=$(mktemp)
-    check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/suricata/eve.json | batch 256 | to ${file1} write feather --compression-type uncompressed"
-    check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/suricata/eve.json | batch 256 | to ${file2} write feather --compression-level -1 --compression-type lz4 --min-space-savings 1"
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        # macOS
-        size1=$(stat -f%z "$file1")
-        size2=$(stat -f%z "$file2")
-        check [ "$size1" -gt "$size2" ]
-    else
-        # Linux
-        size1=$(stat -c %s "$file1")
-        size2=$(stat -c %s "$file2")
-        check [ "$size1" -gt "$size2" ]
-    fi
+  file1=$(mktemp)
+  file2=$(mktemp)
+  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/suricata/eve.json | batch 256 | to ${file1} write feather --compression-type uncompressed"
+  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/suricata/eve.json | batch 256 | to ${file2} write feather --compression-level -1 --compression-type lz4 --min-space-savings 1"
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    # macOS
+    size1=$(stat -f%z "$file1")
+    size2=$(stat -f%z "$file2")
+    check [ "$size1" -gt "$size2" ]
+  else
+    # Linux
+    size1=$(stat -c %s "$file1")
+    size2=$(stat -c %s "$file2")
+    check [ "$size1" -gt "$size2" ]
+  fi
 }
-
-
 
 @test "truncated input" {
   file=$(mktemp)
@@ -63,5 +61,10 @@ setup() {
   dd "if=${file}" "of=${file}.10k" bs=1 count=10000
   dd "if=${file}" "of=${file}.1M" bs=1 count=1000000
   check ! tenzir "from ${file}.10k read feather | summarize count(.)"
-  check tenzir "from ${file}.1M read feather | summarize count(.)"
+  # This test emits a warning that looks like this:
+  #   warning: truncated 60584 trailing bytes
+  # The exact number of trailing bytes is different between Arrow versions, so
+  # we modify the warning to just say X bytes.
+  tenzir "from ${file}.1M read feather | summarize count(.)" |
+    check perl -pe 's/truncated \d+/truncated X/g'
 }

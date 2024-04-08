@@ -21,12 +21,7 @@
 #include <tenzir/store.hpp>
 #include <tenzir/table_slice.hpp>
 
-#include <arrow/array.h>
-#include <arrow/compute/cast.h>
-#include <arrow/io/api.h>
-#include <arrow/io/file.h>
 #include <arrow/io/memory.h>
-#include <arrow/ipc/api.h>
 #include <arrow/ipc/feather.h>
 #include <arrow/ipc/reader.h>
 #include <arrow/ipc/writer.h>
@@ -456,21 +451,16 @@ public:
     }
     auto ipc_write_options = arrow::ipc::IpcWriteOptions::Defaults();
     if (!options_.compression_type) {
-      if (options_.min_space_savings && options_.compression_level) {
-        diagnostic::warning("{}", "min space savings and compression level "
-                                  "provided without compression type. Printing "
-                                  "as uncompressed. ")
+      if (options_.min_space_savings) {
+        diagnostic::warning("ignoring min space savings option")
+          .note("has no effect without `--compression-type`")
           .primary(options_.min_space_savings->source)
           .emit(ctrl.diagnostics());
-      } else if (options_.min_space_savings) {
-        diagnostic::warning("{}", "min space savings provided without "
-                                  "compression type. Printing as uncompressed.")
-          .primary(options_.min_space_savings->source)
-          .emit(ctrl.diagnostics());
-      } else if (options_.compression_level) {
-        diagnostic::warning("{}", "compression level provided without "
-                                  "compression type. Printing as uncompressed.")
-          .primary(options_.min_space_savings->source)
+      }
+      if (options_.compression_level) {
+        diagnostic::warning("ignoring compression level option")
+          .note("has no effect without `--compression-type`")
+          .primary(options_.compression_level->source)
           .emit(ctrl.diagnostics());
       }
     } else {
@@ -479,8 +469,9 @@ public:
       if (!result_compression_type.ok()) {
         return diagnostic::error("{}",
                                  result_compression_type.status().ToString())
-          .note(
-            "failed to parse compression type. Type should be all lower case.")
+          .note("failed to parse compression type")
+          .note("must be `lz4` or `zstd`")
+          .primary(options_.compression_type->source)
           .to_error();
       }
       auto compression_level = options_.compression_level
@@ -489,9 +480,10 @@ public:
       auto codec_result = arrow::util::Codec::Create(
         result_compression_type.MoveValueUnsafe(), compression_level);
       if (!codec_result.ok()) {
-        return diagnostic::error("{}",
-                                 result_compression_type.status().ToString())
-          .note("failed to create Codec")
+        return diagnostic::error("{}", codec_result.status().ToString())
+          .note("failed to create codec")
+          .primary(options_.compression_type->source)
+          .primary(options_.compression_level->source)
           .to_error();
       }
       ipc_write_options.codec = codec_result.MoveValueUnsafe();
@@ -502,7 +494,6 @@ public:
       sink.ValueUnsafe(), schema, ipc_write_options);
     if (!stream_writer_result.ok()) {
       return diagnostic::error("{}", stream_writer_result.status().ToString())
-        .note("failed to create StreamWriter")
         .to_error();
     }
     auto stream_writer = stream_writer_result.MoveValueUnsafe();
