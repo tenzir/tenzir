@@ -169,7 +169,7 @@ auto make_connection(caf::stateful_actor<connection_state>* self,
     self->state.tls_socket->handshake(
       boost::asio::ssl::stream<boost::asio::ip::tcp::socket>::server, ec);
     if (ec) {
-      diagnostic::error("{}", ec.message())
+      diagnostic::warning("{}", ec.message())
         .note("TLS handshake failed")
         .emit(self->state.ctrl->diagnostics());
       return {};
