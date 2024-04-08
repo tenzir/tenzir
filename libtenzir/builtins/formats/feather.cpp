@@ -400,9 +400,24 @@ auto print_feather(
   }
 }
 
+class feather_options {
+public:
+  std::optional<located<int>> compression_level{};
+  std::optional<located<std::string>> compression_type{};
+  std::optional<located<double>> min_space_savings{};
+
+  friend auto inspect(auto& f, feather_options& x) -> bool {
+    return f.object(x).fields(f.field("compression_level", x.compression_level),
+                              f.field("compression_type", x.compression_type),
+                              f.field("min_space_savings",
+                                      x.min_space_savings));
+  }
+};
+
 class feather_parser final : public plugin_parser {
 public:
   feather_parser() = default;
+
   auto name() const -> std::string override {
     return "feather";
   }
@@ -421,6 +436,9 @@ public:
 class feather_printer final : public plugin_printer {
 public:
   feather_printer() = default;
+  feather_printer(feather_options write_options)
+    : options_{std::move(write_options)} {
+  }
 
   auto name() const -> std::string override {
     // FIXME: Rename this and the file to just feather.
@@ -436,11 +454,52 @@ public:
         .note("failed to created BufferOutputStream")
         .to_error();
     }
-    const arrow::ipc::IpcWriteOptions& options
-      = arrow::ipc::IpcWriteOptions::Defaults();
+    auto ipc_write_options = arrow::ipc::IpcWriteOptions::Defaults();
+    if (!options_.compression_type) {
+      if (options_.min_space_savings && options_.compression_level) {
+        diagnostic::warning("{}", "min space savings and compression level "
+                                  "provided without compression type. Printing "
+                                  "as uncompressed. ")
+          .primary(options_.min_space_savings->source)
+          .emit(ctrl.diagnostics());
+      } else if (options_.min_space_savings) {
+        diagnostic::warning("{}", "min space savings provided without "
+                                  "compression type. Printing as uncompressed.")
+          .primary(options_.min_space_savings->source)
+          .emit(ctrl.diagnostics());
+      } else if (options_.compression_level) {
+        diagnostic::warning("{}", "compression level provided without "
+                                  "compression type. Printing as uncompressed.")
+          .primary(options_.min_space_savings->source)
+          .emit(ctrl.diagnostics());
+      }
+    } else {
+      auto result_compression_type = arrow::util::Codec::GetCompressionType(
+        options_.compression_type->inner);
+      if (!result_compression_type.ok()) {
+        return diagnostic::error("{}",
+                                 result_compression_type.status().ToString())
+          .note(
+            "failed to parse compression type. Type should be all lower case.")
+          .to_error();
+      }
+      auto compression_level = options_.compression_level
+                                 ? options_.compression_level->inner
+                                 : arrow::util::kUseDefaultCompressionLevel;
+      auto codec_result = arrow::util::Codec::Create(
+        result_compression_type.MoveValueUnsafe(), compression_level);
+      if (!codec_result.ok()) {
+        return diagnostic::error("{}",
+                                 result_compression_type.status().ToString())
+          .note("failed to create Codec")
+          .to_error();
+      }
+      ipc_write_options.codec = codec_result.MoveValueUnsafe();
+      ipc_write_options.min_space_savings = options_.min_space_savings->inner;
+    }
     auto schema = input_schema.to_arrow_schema();
-    auto stream_writer_result
-      = arrow::ipc::MakeStreamWriter(sink.ValueUnsafe(), schema, options);
+    auto stream_writer_result = arrow::ipc::MakeStreamWriter(
+      sink.ValueUnsafe(), schema, ipc_write_options);
     if (!stream_writer_result.ok()) {
       return diagnostic::error("{}", stream_writer_result.status().ToString())
         .note("failed to create StreamWriter")
@@ -459,8 +518,11 @@ public:
   };
 
   friend auto inspect(auto& f, feather_printer& x) -> bool {
-    return f.object(x).fields();
+    return f.object(x).fields(f.field("options", x.options_));
   }
+
+private:
+  feather_options options_;
 };
 
 class plugin final : public virtual parser_plugin<feather_parser>,
@@ -480,10 +542,14 @@ class plugin final : public virtual parser_plugin<feather_parser>,
 
   auto parse_printer(parser_interface& p) const
     -> std::unique_ptr<plugin_printer> override {
+    auto options = feather_options{};
     auto parser = argument_parser{"feather", "https://docs.tenzir.com/next/"
                                              "formats/feather"};
+    parser.add("--compression-level", options.compression_level, "<level>");
+    parser.add("--compression-type", options.compression_type, "<type>");
+    parser.add("--min-space-savings", options.min_space_savings, "<rate>");
     parser.parse(p);
-    return std::make_unique<feather_printer>();
+    return std::make_unique<feather_printer>(std::move(options));
   }
 
   [[nodiscard]] caf::expected<std::unique_ptr<passive_store>>
