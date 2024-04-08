@@ -594,6 +594,12 @@ EOF
 {"b": 2, "a": 1, "tag": 3}
 EOF
 
+  check tenzir "from stdin read json | deduplicate --limit 1" <<EOF
+{"a": 1, "b": 2}
+{"b": "reset"}
+{"b": 2, "a": 1}
+EOF
+
   # Potentially flaky, if `tenzir` takes more than (8s - 100ms) to start up:
   # (
   #   echo "{\"value\": \"A\", \"tag\": 1}"

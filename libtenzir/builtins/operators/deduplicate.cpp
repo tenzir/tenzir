@@ -13,7 +13,6 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql/parser.hpp>
 
-#include <concepts>
 #include <ranges>
 
 namespace tenzir::plugins::deduplicate {
@@ -22,14 +21,12 @@ namespace {
 
 using std::chrono::steady_clock;
 
-template <typename>
-struct debug;
-
+/// Returns `true` if
+///  - `d` is a flat record (depth of 0 or 1), and
+///  - the keys of `d` are sorted.
+/// Requires `d` to be a record.
 auto is_sorted_and_flattened(const data_view& d) -> bool {
-  const auto is_record = caf::holds_alternative<view<record>>(d);
-  if (not is_record) {
-    return false;
-  }
+  TENZIR_ASSERT(caf::holds_alternative<view<record>>(d));
   const auto& rec = caf::get<view<record>>(d);
   for (const auto& [_, val] : rec) {
     if (caf::holds_alternative<view<record>>(val)) {
@@ -42,11 +39,12 @@ auto is_sorted_and_flattened(const data_view& d) -> bool {
                         });
 }
 
+/// Returns `true` if
+///  - `d` is a flat record (depth of 0 or 1), and
+///  - the keys of `d` are sorted.
+/// Requires `d` to be a record.
 auto is_sorted_and_flattened(const data& d) -> bool {
-  const auto is_record = caf::holds_alternative<record>(d);
-  if (not is_record) {
-    return false;
-  }
+  TENZIR_ASSERT(caf::holds_alternative<record>(d));
   const auto& rec = caf::get<record>(d);
   if (depth(rec) > 1) {
     return false;
@@ -54,6 +52,9 @@ auto is_sorted_and_flattened(const data& d) -> bool {
   return std::ranges::is_sorted(rec | std::views::keys);
 }
 
+/// Flattens `d`, and sorts it keys.
+/// Postcondition: `is_sorted_and_flattened(d)` is `true`.
+/// Requires `d` to be a record.
 void make_sorted_and_flattened(data& d) {
   TENZIR_ASSERT(caf::holds_alternative<record>(d));
   auto& rec = caf::get<record>(d);
@@ -63,26 +64,19 @@ void make_sorted_and_flattened(data& d) {
   std::ranges::sort(rec, std::ranges::less{}, &record::value_type::first);
 }
 
-// `data`, except that all records are always flat and with their keys sorted
+/// A wrapper for `data`, where the contained data is always a `record`, and
+/// `is_sorted_and_flattened(get())` is always `true`.
+///
+/// Used as the key in the `matches` hashmap in `deduplicate`,
+/// to allow for transparent comparison irrespective of field ordering.
 class sorted_flat_data {
 public:
   sorted_flat_data() = default;
 
-  sorted_flat_data(const data& x) {
-    if (is_sorted_and_flattened(x)) {
-      inner_ = x;
-      return;
-    }
-    auto y = x;
-    make_sorted_and_flattened(y);
-    inner_ = std::move(y);
+  sorted_flat_data(const data& x) : inner_(construct(x)) {
   }
 
-  sorted_flat_data(data&& x) {
-    if (not is_sorted_and_flattened(x)) {
-      make_sorted_and_flattened(x);
-    }
-    inner_ = std::move(x);
+  sorted_flat_data(data&& x) : inner_(construct(std::move(x))) {
   }
 
   auto get() -> data& {
@@ -97,30 +91,40 @@ public:
   }
 
 private:
-  data inner_{};
+  static auto construct(const data& x) -> data {
+    if (is_sorted_and_flattened(x)) {
+      return x;
+    }
+    auto y = x;
+    make_sorted_and_flattened(y);
+    return y;
+  }
+
+  static auto construct(data&& x) -> data {
+    if (not is_sorted_and_flattened(x)) {
+      make_sorted_and_flattened(x);
+    }
+    return x;
+  }
+
+  data inner_{record{}};
 };
 
-// Same as `sorted_flat_data`, except can also hold a `data_view`, to avoid
-// unneeded materialization
+/// Same as `sorted_flat_data`, except can also hold a `data_view`,
+/// if it's constructed from a `data_view` for which
+/// `is_sorted_and_flattened()` is `true`.
+///
+/// Used for transparent key lookup into the `matches` hashmap in `deduplicate`,
+/// to avoid needless materialization of `data_view`s.
 class sorted_flat_data_view {
 public:
   sorted_flat_data_view() = default;
 
-  sorted_flat_data_view(const data_view& x) {
-    if (is_sorted_and_flattened(x)) {
-      inner_.emplace<data_view>(x);
-      return;
-    }
-    auto y = materialize(x);
-    make_sorted_and_flattened(y);
-    inner_.emplace<data>(std::move(y));
+  sorted_flat_data_view(const data_view& x) : inner_(construct(x)) {
   }
 
   auto get() const -> data_view {
     return std::visit(detail::overload{
-                        [](std::monostate) -> data_view {
-                          TENZIR_UNREACHABLE();
-                        },
                         [](const data_view& x) {
                           return x;
                         },
@@ -136,7 +140,16 @@ public:
   }
 
 private:
-  std::variant<std::monostate, data_view, data> inner_{};
+  static auto construct(const data_view& x) -> std::variant<data_view, data> {
+    if (is_sorted_and_flattened(x)) {
+      return x;
+    }
+    auto y = materialize(x);
+    make_sorted_and_flattened(y);
+    return y;
+  }
+
+  std::variant<data_view, data> inner_{data{record{}}};
 };
 
 struct sorted_flat_data_hash {
@@ -195,6 +208,13 @@ public:
         co_yield {};
         continue;
       }
+      // Project given input based on the fields given in `configuration`.
+      // Essentially, `project` returns a modified table slice,
+      // which contains records that only have the fields
+      // that are used for deduplication.
+      // These projected records are also what are stored in `matches`.
+      // The actual records we yield from this operator are subslices
+      // of the input, not these projected slices.
       auto [projected_type, projected_batch]
         = project(cached_projections, slice, ctrl.diagnostics());
       if (not projected_batch) {
@@ -252,8 +272,35 @@ private:
     using transformation_factory_type
       = std::function<auto(const table_slice&)->indexed_transformation>;
 
+    /// Make a new `cached_projection`,
+    /// for input with the same schema as `slice`, using the fields in `fields`.
+    /// `flattened_slice` must be flat.
+    static auto
+    make(const table_slice& flattened_slice,
+         std::span<const std::string> fields, diagnostic_handler& diag)
+      -> std::optional<cached_projection>;
+
+    /// Apply the projection contained in `*this` to `flattened_slice`.
+    /// `flattened_slice` must be flat.
+    /// `last_use` is not modified (`apply` is `const`).
+    auto apply(const table_slice& flattened_slice) const
+      -> std::pair<type, std::shared_ptr<arrow::RecordBatch>>;
+
+    /// Record indices/offsets that are used for the projection.
+    /// The input must be flattened first,
+    /// and the result of `transformation_factory` applied, if present.
+    /// An empty `indices` means matching over the entire event:
+    /// all columns are selected, none are dropped.
     std::vector<offset> indices;
+
+    /// If present, contains a transformation that must be applied to the input
+    /// after flattening it, but before selecting `indices`.
+    /// Currently used to insert `null` values for missing columns.
     transformation_factory_type transformation_factory;
+
+    /// Contains the time this projection was last used.
+    /// Used for cleanup purposes:
+    /// (if needed, unused projections are cleaned up first).
     steady_clock::time_point last_use{steady_clock::now()};
   };
   using projection_cache = std::unordered_map<type, cached_projection>;
@@ -267,122 +314,17 @@ private:
     = std::unordered_map<sorted_flat_data, match_type, sorted_flat_data_hash,
                          std::equal_to<>>;
 
-  auto make_projection(const table_slice& slice, diagnostic_handler& diag) const
-    -> std::optional<cached_projection> {
-    std::vector<offset> indices{};
-    std::vector<std::string> missing_fields{};
-    const auto& schema = slice.schema();
-    for (const auto& field : cfg_.fields) {
-      bool resolved = false;
-      for (auto idx : schema.resolve(field)) {
-        indices.emplace_back(std::move(idx));
-        resolved = true;
-      }
-      if (not resolved) {
-        TENZIR_ASSERT(not field.empty());
-        if (field.starts_with(':')) {
-          // We can't easily deal with missing type extractors, just erroring out.
-          diagnostic::error(
-            "failed to deduplicate due to unmatched type extractor")
-            .note("`{}` matched no fields in schema `{}`", field, schema.name())
-            .emit(diag);
-          return std::nullopt;
-        }
-        missing_fields.emplace_back(field);
-      }
-    }
-    if (missing_fields.empty()) {
-      // Every field in `cfg_.fields` was found in `slice.schema()`.
-      // Clean up the indices and return.
-      std::ranges::sort(indices);
-      {
-        auto uniq = std::ranges::unique(indices);
-        indices.erase(uniq.begin(), uniq.end());
-      }
-      return cached_projection{
-        .indices = std::move(indices),
-        .transformation_factory = {},
-      };
-    }
-    // Some fields were missing.
-    // Construct a `transformation_factory`, that'll add these fields in, with a
-    // value of `null`.
-    TENZIR_ASSERT_EXPENSIVE(std::unordered_set<std::string>(
-                              missing_fields.begin(), missing_fields.end())
-                              .size()
-                            == missing_fields.size());
-    const auto& layout = caf::get<record_type>(schema);
-    auto transformation_callback =
-      [missing_fields](int64_t rows, struct record_type::field input_field,
-                       std::shared_ptr<arrow::Array> input_array) {
-        auto result = std::vector<
-          std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>>{};
-        result.reserve(missing_fields.size() + 1);
-        result.emplace_back(std::move(input_field), std::move(input_array));
-        for (const auto& missing_field : missing_fields) {
-          auto builder
-            = null_type::make_arrow_builder(arrow::default_memory_pool());
-          {
-            const auto append_result = builder->AppendNulls(rows);
-            TENZIR_ASSERT(append_result.ok(), append_result.ToString().c_str());
-          }
-          using field_type = struct record_type::field;
-          result.emplace_back(field_type{missing_field, type{null_type{}}},
-                              builder->Finish().ValueOrDie());
-        }
-        return result;
-      };
-    auto transformation_factory
-      = [num_fields = layout.num_fields(),
-         transformation_callback = std::move(transformation_callback)](
-          const table_slice& slice) -> indexed_transformation {
-      return {
-        {num_fields - 1},
-        [rows = slice.rows(),
-         &transformation_callback](struct record_type::field input_field,
-                                   std::shared_ptr<arrow::Array> input_array) {
-          return transformation_callback(static_cast<int64_t>(rows),
-                                         std::move(input_field),
-                                         std::move(input_array));
-        },
-      };
-    };
-    // Transform the current `slice` with the just-constructed
-    // `transformation_factory`,
-    // and extract the indices of the new null fields.
-    auto extended_slice
-      = transform_columns(slice, std::vector{transformation_factory(slice)});
-    const auto& extended_schema = extended_slice.schema();
-    for (const auto& missing_field : missing_fields) {
-      bool resolved = false;
-      for (auto idx : extended_schema.resolve(missing_field)) {
-        indices.emplace_back(std::move(idx));
-        resolved = true;
-      }
-      TENZIR_ASSERT(resolved);
-    }
-    std::ranges::sort(indices);
-    {
-      auto uniq = std::ranges::unique(indices);
-      indices.erase(uniq.begin(), uniq.end());
-    }
-    return cached_projection{
-      .indices = std::move(indices),
-      .transformation_factory = std::move(transformation_factory),
-    };
-  }
-
+  /// Project `slice` based on the configuration,
+  /// and return the projected table slice.
+  /// On error, returns `pair{null_type, nullptr}`.
   auto project(projection_cache& cache, const table_slice& slice,
                diagnostic_handler& diag) const
     -> std::pair<type, std::shared_ptr<arrow::RecordBatch>> {
-    if (cfg_.fields.empty()) {
-      // No extractors specified, match over the entire input
-      return std::pair{slice.schema(), to_record_batch(slice)};
-    }
     auto [flattened_slice, _] = flatten(slice);
     auto projection_it = cache.find(slice.schema());
     if (projection_it == cache.end()) {
-      auto new_projection = make_projection(flattened_slice, diag);
+      auto new_projection
+        = cached_projection::make(flattened_slice, cfg_.fields, diag);
       if (not new_projection) {
         return {{}, nullptr};
       }
@@ -392,36 +334,23 @@ private:
       projection_it->second.last_use = steady_clock::now();
     }
     auto& projection = projection_it->second;
-    TENZIR_ASSERT(not projection.indices.empty());
-    if (not projection.transformation_factory) {
-      return select_columns(flattened_slice.schema(),
-                            to_record_batch(flattened_slice),
-                            projection.indices);
-    }
-    // Has `transformation_factory`, need to call it to transform the input
-    // before calling `select_columns`.
-    // (`projection.indices` are indices into this transformed input)
-    auto transformed_slice = transform_columns(
-      flattened_slice,
-      std::vector{projection.transformation_factory(flattened_slice)});
-    return select_columns(transformed_slice.schema(),
-                          to_record_batch(transformed_slice),
-                          projection.indices);
+    return projection.apply(flattened_slice);
   }
 
   auto deduplicate(match_store& matches, int64_t& row_number,
-                   const table_slice& slice, const type& ty,
-                   const arrow::Array& elements) const
+                   const table_slice& slice, const type& projected_type,
+                   const arrow::Array& projected_elements) const
     -> generator<table_slice> {
     size_t begin{};
     const auto now = steady_clock::now();
     // Logic adapted from the `unique` operator
     for (size_t row = 0; row < slice.rows(); ++row) {
-      auto element_view = value_at(ty, elements, static_cast<int64_t>(row));
-      auto match_it = matches.find(element_view);
+      auto projected_value_view = value_at(projected_type, projected_elements,
+                                           static_cast<int64_t>(row));
+      auto match_it = matches.find(projected_value_view);
       if (match_it == matches.end()) {
         std::tie(match_it, std::ignore)
-          = matches.emplace(materialize(element_view), match_type{});
+          = matches.emplace(materialize(projected_value_view), match_type{});
       }
       auto& match = match_it->second;
       // This value hasn't been matched within the timeout,
@@ -493,6 +422,147 @@ private:
 
   configuration cfg_{};
 };
+
+auto deduplicate_operator::cached_projection::make(
+  const table_slice& flattened_slice, std::span<const std::string> fields,
+  diagnostic_handler& diag)
+  -> std::optional<deduplicate_operator::cached_projection> {
+  TENZIR_ASSERT_EXPENSIVE(flattened_slice == flatten(flattened_slice).slice);
+  if (fields.empty()) {
+    // `fields` is empty, match on the entire event/record.
+    // This is indicated by an empty `indices` vector.
+    // Because we're matching on the entire input, by definition we won't have
+    // any missing fields, then, either.
+    return cached_projection{
+      .indices = {},
+      .transformation_factory = {},
+    };
+  }
+  std::vector<offset> indices{};
+  std::vector<std::string> missing_fields{};
+  const auto& schema = flattened_slice.schema();
+  TENZIR_ASSERT(caf::holds_alternative<record_type>(schema));
+  // Resolve indices in `schema`.
+  // If a field is missing, the field name is added to `missing_fields`.
+  for (const auto& field : fields) {
+    bool resolved = false;
+    for (auto idx : schema.resolve(field)) {
+      indices.emplace_back(std::move(idx));
+      resolved = true;
+    }
+    if (not resolved) {
+      TENZIR_ASSERT(not field.empty());
+      if (field.starts_with(':')) {
+        // We can't easily deal with missing type extractors, just erroring out.
+        diagnostic::error(
+          "failed to deduplicate due to unmatched type extractor")
+          .note("`{}` matched no fields in schema `{}`", field, schema.name())
+          .emit(diag);
+        return std::nullopt;
+      }
+      missing_fields.emplace_back(field);
+    }
+  }
+  if (missing_fields.empty()) {
+    // Every field in `cfg_.fields` was found in `slice.schema()`.
+    // Clean up the indices and return.
+    std::ranges::sort(indices);
+    {
+      auto uniq = std::ranges::unique(indices);
+      indices.erase(uniq.begin(), uniq.end());
+    }
+    return cached_projection{
+      .indices = std::move(indices),
+      .transformation_factory = {},
+    };
+  }
+  // Some fields were missing.
+  // Construct a `transformation_factory`, that'll add these fields in, with a
+  // value of `null`.
+  TENZIR_ASSERT_EXPENSIVE(std::unordered_set<std::string>(
+                            missing_fields.begin(), missing_fields.end())
+                            .size()
+                          == missing_fields.size());
+  const auto& layout = caf::get<record_type>(schema);
+  auto transformation_callback =
+    [missing_fields](int64_t rows, struct record_type::field input_field,
+                     std::shared_ptr<arrow::Array> input_array) {
+      auto result = std::vector<
+        std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>>{};
+      result.reserve(missing_fields.size() + 1);
+      result.emplace_back(std::move(input_field), std::move(input_array));
+      for (const auto& missing_field : missing_fields) {
+        auto builder
+          = null_type::make_arrow_builder(arrow::default_memory_pool());
+        {
+          const auto append_result = builder->AppendNulls(rows);
+          TENZIR_ASSERT(append_result.ok(), append_result.ToString().c_str());
+        }
+        using field_type = struct record_type::field;
+        result.emplace_back(field_type{missing_field, type{null_type{}}},
+                            builder->Finish().ValueOrDie());
+      }
+      return result;
+    };
+  auto transformation_factory
+    = [num_fields = layout.num_fields(), transformation_callback
+                                         = std::move(transformation_callback)](
+        const table_slice& slice) -> indexed_transformation {
+    return {
+      {num_fields - 1},
+      [rows = slice.rows(),
+       &transformation_callback](struct record_type::field input_field,
+                                 std::shared_ptr<arrow::Array> input_array) {
+        return transformation_callback(static_cast<int64_t>(rows),
+                                       std::move(input_field),
+                                       std::move(input_array));
+      },
+    };
+  };
+  // Transform the current `flattened_slice` with the just-constructed
+  // `transformation_factory`,
+  // and extract the indices of the new null fields.
+  auto extended_slice = transform_columns(
+    flattened_slice, std::vector{transformation_factory(flattened_slice)});
+  const auto& extended_schema = extended_slice.schema();
+  for (const auto& missing_field : missing_fields) {
+    bool resolved = false;
+    for (auto idx : extended_schema.resolve(missing_field)) {
+      indices.emplace_back(std::move(idx));
+      resolved = true;
+    }
+    TENZIR_ASSERT(resolved);
+  }
+  std::ranges::sort(indices);
+  {
+    auto uniq = std::ranges::unique(indices);
+    indices.erase(uniq.begin(), uniq.end());
+  }
+  return cached_projection{
+    .indices = std::move(indices),
+    .transformation_factory = std::move(transformation_factory),
+  };
+}
+
+auto deduplicate_operator::cached_projection::apply(
+  const table_slice& flattened_slice) const
+  -> std::pair<type, std::shared_ptr<arrow::RecordBatch>> {
+  TENZIR_ASSERT_EXPENSIVE(flattened_slice == flatten(flattened_slice).slice);
+  if (indices.empty()) {
+    return {flattened_slice.schema(), to_record_batch(flattened_slice)};
+  }
+  if (not transformation_factory) {
+    return select_columns(flattened_slice.schema(),
+                          to_record_batch(flattened_slice), indices);
+  }
+  // Has `transformation_factory`, need to call it to transform the input
+  // before calling `select_columns`.
+  // (`projection.indices` are indices into this transformed input)
+  auto transformed_slice = transform_columns(
+    flattened_slice, std::vector{transformation_factory(flattened_slice)});
+  return select_columns(transformed_slice.schema(),
+                        to_record_batch(transformed_slice), indices);
+}
 
 class plugin final : public virtual operator_plugin<deduplicate_operator> {
 public:
