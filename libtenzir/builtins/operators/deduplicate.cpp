@@ -13,11 +13,151 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql/parser.hpp>
 
+#include <concepts>
+#include <ranges>
+
 namespace tenzir::plugins::deduplicate {
 
 namespace {
 
 using std::chrono::steady_clock;
+
+template <typename>
+struct debug;
+
+auto is_sorted_and_flattened(const data_view& d) -> bool {
+  const auto is_record = caf::holds_alternative<view<record>>(d);
+  if (not is_record) {
+    return false;
+  }
+  const auto& rec = caf::get<view<record>>(d);
+  for (const auto& [_, val] : rec) {
+    if (caf::holds_alternative<view<record>>(val)) {
+      return false;
+    }
+  }
+  return std::is_sorted(rec->begin(), rec->end(),
+                        [](const auto& a, const auto& b) {
+                          return a.first < b.first;
+                        });
+}
+
+auto is_sorted_and_flattened(const data& d) -> bool {
+  const auto is_record = caf::holds_alternative<record>(d);
+  if (not is_record) {
+    return false;
+  }
+  const auto& rec = caf::get<record>(d);
+  if (depth(rec) > 1) {
+    return false;
+  }
+  return std::ranges::is_sorted(rec | std::views::keys);
+}
+
+void make_sorted_and_flattened(data& d) {
+  TENZIR_ASSERT(caf::holds_alternative<record>(d));
+  auto& rec = caf::get<record>(d);
+  if (depth(rec) > 1) {
+    rec = flatten(rec);
+  }
+  std::ranges::sort(rec, std::ranges::less{}, &record::value_type::first);
+}
+
+// `data`, except that all records are always flat and with their keys sorted
+class sorted_flat_data {
+public:
+  sorted_flat_data() = default;
+
+  sorted_flat_data(const data& x) {
+    if (is_sorted_and_flattened(x)) {
+      inner_ = x;
+      return;
+    }
+    auto y = x;
+    make_sorted_and_flattened(y);
+    inner_ = std::move(y);
+  }
+
+  sorted_flat_data(data&& x) {
+    if (not is_sorted_and_flattened(x)) {
+      make_sorted_and_flattened(x);
+    }
+    inner_ = std::move(x);
+  }
+
+  auto get() -> data& {
+    return inner_;
+  }
+  auto get() const -> const data& {
+    return inner_;
+  }
+
+  auto operator==(const sorted_flat_data& other) const -> bool {
+    return inner_ == other.inner_;
+  }
+
+private:
+  data inner_{};
+};
+
+// Same as `sorted_flat_data`, except can also hold a `data_view`, to avoid
+// unneeded materialization
+class sorted_flat_data_view {
+public:
+  sorted_flat_data_view() = default;
+
+  sorted_flat_data_view(const data_view& x) {
+    if (is_sorted_and_flattened(x)) {
+      inner_.emplace<data_view>(x);
+      return;
+    }
+    auto y = materialize(x);
+    make_sorted_and_flattened(y);
+    inner_.emplace<data>(std::move(y));
+  }
+
+  auto get() const -> data_view {
+    return std::visit(detail::overload{
+                        [](std::monostate) -> data_view {
+                          TENZIR_UNREACHABLE();
+                        },
+                        [](const data_view& x) {
+                          return x;
+                        },
+                        [](const data& x) {
+                          return make_data_view(x);
+                        },
+                      },
+                      inner_);
+  }
+
+  auto operator==(const sorted_flat_data_view& other) const -> bool {
+    return get() == other.get();
+  }
+
+private:
+  std::variant<std::monostate, data_view, data> inner_{};
+};
+
+struct sorted_flat_data_hash {
+  using is_transparent = void;
+
+  auto operator()(const sorted_flat_data& x) const -> size_t {
+    return std::hash<data>{}(x.get());
+  }
+  auto operator()(const sorted_flat_data_view& x) const -> size_t {
+    return std::hash<data_view>{}(x.get());
+  }
+};
+
+[[maybe_unused]] auto
+operator==(const sorted_flat_data& x, const sorted_flat_data_view& y) -> bool {
+  return x.get() == y.get();
+}
+[[maybe_unused]] auto
+operator==(const sorted_flat_data_view& x, const sorted_flat_data& y) -> bool {
+  return x.get() == y.get();
+}
 
 struct configuration {
   friend auto inspect(auto& f, configuration& x) -> bool {
@@ -123,18 +263,9 @@ private:
     int64_t last_row_number{0};
     steady_clock::time_point last_time{steady_clock::now()};
   };
-  struct match_hash {
-    using is_transparent = void;
-
-    auto operator()(const data& x) const -> size_t {
-      return std::hash<data>{}(x);
-    }
-    auto operator()(const data_view& x) const -> size_t {
-      return std::hash<data_view>{}(x);
-    }
-  };
   using match_store
-    = std::unordered_map<data, match_type, match_hash, std::equal_to<>>;
+    = std::unordered_map<sorted_flat_data, match_type, sorted_flat_data_hash,
+                         std::equal_to<>>;
 
   auto make_projection(const table_slice& slice, diagnostic_handler& diag) const
     -> std::optional<cached_projection> {
@@ -249,14 +380,14 @@ private:
       return std::pair{slice.schema(), to_record_batch(slice)};
     }
     auto [flattened_slice, _] = flatten(slice);
-    auto projection_it = cache.find(flattened_slice.schema());
+    auto projection_it = cache.find(slice.schema());
     if (projection_it == cache.end()) {
       auto new_projection = make_projection(flattened_slice, diag);
       if (not new_projection) {
         return {{}, nullptr};
       }
       std::tie(projection_it, std::ignore)
-        = cache.emplace(flattened_slice.schema(), std::move(*new_projection));
+        = cache.emplace(slice.schema(), std::move(*new_projection));
     } else {
       projection_it->second.last_use = steady_clock::now();
     }
@@ -271,7 +402,8 @@ private:
     // before calling `select_columns`.
     // (`projection.indices` are indices into this transformed input)
     auto transformed_slice = transform_columns(
-      slice, std::vector{projection.transformation_factory(flattened_slice)});
+      flattened_slice,
+      std::vector{projection.transformation_factory(flattened_slice)});
     return select_columns(transformed_slice.schema(),
                           to_record_batch(transformed_slice),
                           projection.indices);

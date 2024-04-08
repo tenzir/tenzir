@@ -530,7 +530,7 @@ EOF
   check tenzir 'version | set foo="patch", :uint64=-1, :ip=1.1.1.1, qux=foo, version=123, #schema="foo.bar", schema=#schema, build=null | set schema2=#schema, baz=patch'
 }
 
-# bats test_tags=pipelines, deduplicate, bats:focus
+# bats test_tags=pipelines, deduplicate
 @test "Deduplicate operator" {
   check tenzir "from ${INPUTSDIR}/json/all-types.json | deduplicate --limit 1"
   check tenzir "from ${INPUTSDIR}/json/all-types.json | deduplicate e --limit 1"
@@ -586,6 +586,12 @@ EOF
 {"value": null, "tag": 2}
 {"value": 123, "tag": 3}
 {"tag": 4}
+EOF
+
+  check tenzir "from stdin read json | deduplicate a, b --limit 1" <<EOF
+{"a": 1, "b": 2, "tag": 1}
+{"b": "reset", "tag": 2}
+{"b": 2, "a": 1, "tag": 3}
 EOF
 
   # Potentially flaky, if `tenzir` takes more than (8s - 100ms) to start up:
