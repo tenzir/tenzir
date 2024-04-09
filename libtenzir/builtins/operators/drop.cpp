@@ -186,6 +186,7 @@ public:
             });
         }
       }
+      std::ranges::sort(transformations);
       co_yield transform_columns(slice, transformations);
     }
   }

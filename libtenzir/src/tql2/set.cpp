@@ -9,11 +9,14 @@
 #include "tenzir/tql2/set.hpp"
 
 #include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/collect.hpp"
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
+
+#include <ranges>
 
 namespace tenzir::tql2 {
 
@@ -112,7 +115,7 @@ public:
   }
 
   auto eval(const ast::record& x) -> value {
-#if 1
+    // TODO: Soooo bad.
     auto fields = detail::stable_map<std::string, series>{};
     for (auto& item : x.content) {
       item.match(
@@ -129,31 +132,55 @@ public:
           TENZIR_TODO();
         });
     }
+    auto field_names = fields | std::ranges::views::transform([](auto& x) {
+                         return x.first;
+                       });
+    auto field_arrays = fields | std::ranges::views::transform([](auto& x) {
+                          return x.second.array;
+                        });
+    auto field_types = fields | std::ranges::views::transform([](auto& x) {
+                         return record_type::field_view{x.first, x.second.type};
+                       });
+    auto result = make_struct_array(
+      detail::narrow<int64_t>(input_.rows()), nullptr,
+      std::vector(field_names.begin(), field_names.end()),
+      std::vector(field_arrays.begin(), field_arrays.end()));
+    return series{
+      type{record_type{std::vector(field_types.begin(), field_types.end())}},
+      std::move(result),
+    };
+  }
 
-#else
-    auto result = record{};
-    for (auto& item : x.content) {
-      item.match(
-        [&](const ast::record::field& field) {
-          auto val = eval(field.expr);
-          auto cval = std::get_if<data>(&val);
-          if (not cval) {
-            TENZIR_TODO();
-          }
-          auto [_, inserted]
-            = result.emplace(field.name.name, std::move(*cval));
-          if (not inserted) {
-            diagnostic::warning("todo: overwrite existing?")
-              .primary(field.name.location)
-              .emit(dh_);
-          }
-        },
-        [](const ast::record::spread&) {
-          TENZIR_TODO();
-        });
+  auto eval(const ast::list& x) -> value {
+    // [a, b]
+    //
+    // {a: 1, b: 2}
+    // {a: 3, b: 4}
+    //
+    // <1, 2, 3, 4>
+    // |^^^^|
+    //       |^^^^|
+    auto arrays = std::vector<series>{};
+    for (auto& item : x.items) {
+      auto array = to_series(eval(item));
+      if (not arrays.empty()) {
+        // TODO:
+        TENZIR_ASSERT(array.type == arrays[0].type);
+      }
+      arrays.push_back(std::move(array));
     }
-    return result;
-#endif
+    // arrays = [<1, 3>, <2, 4>]
+    // TODO:
+    TENZIR_ASSERT(not arrays.empty());
+    auto b = series_builder{type{list_type{arrays[0].type}}};
+    for (auto row = int64_t{0}; row < arrays[0].length(); ++row) {
+      auto l = b.list();
+      for (auto& array : arrays) {
+        // TODO: This is not very good.
+        l.data(value_at(array.type, *array.array, row));
+      }
+    }
+    return b.finish_assert_one_array();
   }
 
   auto eval(const ast::selector& x) -> value {
