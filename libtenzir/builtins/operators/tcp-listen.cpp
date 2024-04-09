@@ -144,7 +144,7 @@ auto make_connection(caf::stateful_actor<connection_state>* self,
   self->state.ctrl = std::make_unique<tcp_listen_control_plane>(
     std::move(diagnostics), args.has_terminal, args.no_location_overrides);
   if (self->state.args.tls) {
-    self->state.ssl_ctx.emplace(boost::asio::ssl::context::tls_client);
+    self->state.ssl_ctx.emplace(boost::asio::ssl::context::tls_server);
     self->state.ssl_ctx->set_default_verify_paths();
     self->state.ssl_ctx->set_verify_mode(
       boost::asio::ssl::verify_peer
@@ -172,9 +172,10 @@ auto make_connection(caf::stateful_actor<connection_state>* self,
     }
     self->state.ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none);
     self->state.tls_socket.emplace(*self->state.socket, *self->state.ssl_ctx);
+    auto server_context
+      = boost::asio::ssl::stream<boost::asio::ip::tcp::socket>::server;
     auto ec = boost::system::error_code{};
-    self->state.tls_socket->handshake(
-      boost::asio::ssl::stream<boost::asio::ip::tcp::socket>::server, ec);
+    self->state.tls_socket->handshake(server_context, ec);
     if (ec) {
       diagnostic::warning("{}", ec.message())
         .note("TLS handshake failed")
