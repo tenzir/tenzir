@@ -257,7 +257,7 @@ teardown() {
 @test "Line chart" {
   import_zeek_conn
 
-  check tenzir "export | head 10 | sort ts asc | chart line -x ts -y orig_bytes | get-attributes"
-  check tenzir "export | head 10 | sort ts asc | chart line -x ts -y orig_bytes"
-  check ! tenzir "export | head 10 | sort ts desc | chart line -x ts -y orig_bytes"
+  check tenzir "export | head 10 | sort ts asc | chart line x=ts y=orig_bytes | get-attributes"
+  check tenzir "export | head 10 | sort ts asc | chart line x=ts y=orig_bytes"
+  check ! tenzir "export | head 10 | sort ts desc | chart line x=ts y=orig_bytes"
 }

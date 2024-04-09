@@ -1,1 +1,1 @@
-{"chart": "bar", "title": "zeek.conn", "x": "ts", "y": "uid"}
+{"chart": "bar", "x": "ts", "y": "uid"}

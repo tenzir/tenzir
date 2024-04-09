@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/cast.hpp>
 #include <tenzir/detail/flat_map.hpp>
@@ -384,6 +383,121 @@ enum class flag_type {
   attribute_value,
 };
 
+// A little bit like `argument_parser`, but:
+//  - supports a `key=value` syntax (instead of shell-like `--key value`)
+class chart_argument_parser {
+public:
+  chart_argument_parser(std::string name, std::string docs)
+    : op_name_(std::move(name)), docs_(std::move(docs)) {
+  }
+
+  template <typename T>
+  auto add(std::string arg_name, T& value, std::string meta) -> void {
+    static_assert(std::is_same_v<T, std::string>
+                  || std::is_same_v<T, std::optional<std::string>>);
+    arguments_.emplace(std::move(arg_name),
+                       argument_info{
+                         .meta = std::move(meta),
+                         .save =
+                           [&](std::string&& val) {
+                             value = std::move(val);
+                           },
+                         .required = std::is_same_v<T, std::string>,
+                       });
+  }
+
+  auto parse(parser_interface& p) -> void {
+    while (not p.at_end()) {
+      auto arg_name = p.accept_identifier();
+      if (not arg_name) {
+        diagnostic::error("expected argument for `{}`", op_name_)
+          .primary(p.current_span())
+          .usage(make_usage())
+          .docs(docs_)
+          .throw_();
+      }
+      if (not p.accept_equals()) {
+        diagnostic::error("expected `=` after `{}`", arg_name->name)
+          .primary(p.current_span())
+          .usage(make_usage())
+          .docs(docs_)
+          .throw_();
+      }
+      auto arg_value = p.accept_shell_arg();
+      if (not arg_value) {
+        diagnostic::error("expected value for option `{}`", arg_name->name)
+          .primary(p.current_span())
+          .usage(make_usage())
+          .docs(docs_)
+          .throw_();
+      }
+      auto args_it = arguments_.find(arg_name->name);
+      if (args_it == arguments_.end()) {
+        if (arg_name->name.starts_with('-')) {
+          diagnostic::error("unknown option `{}`", arg_name->name)
+            .hint("{} operator uses a key=value syntax instead of the "
+                  "shell-like --key value",
+                  op_name_)
+            .primary(arg_name->source)
+            .usage(make_usage())
+            .docs(docs_)
+            .throw_();
+        }
+        diagnostic::error("unknown option `{}`", arg_name->name)
+          .primary(arg_name->source)
+          .usage(make_usage())
+          .docs(docs_)
+          .throw_();
+      }
+      auto& arg_info = args_it->second;
+      if (arg_info.read) {
+        diagnostic::error("disallowed duplicate value for option `{}`",
+                          arg_name->name)
+          .primary(arg_name->source.combine(arg_value->source))
+          .usage(make_usage())
+          .docs(docs_)
+          .throw_();
+      }
+      arg_info.save(std::move(arg_value->inner));
+      arg_info.read = true;
+    }
+    for (auto& [arg_name, info] : arguments_) {
+      if (info.required && not info.read) {
+        diagnostic::error("missing value for required argument `{}`", arg_name)
+          .primary(p.current_span())
+          .usage(make_usage())
+          .docs(docs_)
+          .throw_();
+      }
+    }
+  }
+
+private:
+  auto make_usage() const -> std::string {
+    auto args
+      = fmt::join(arguments_ | std::views::transform([](const auto& elem) {
+                    const auto& [name, info] = elem;
+                    if (not info.required) {
+                      return fmt::format("[{}={}]", name, info.meta);
+                    }
+                    return fmt::format("{}={}", name, info.meta);
+                  }),
+                  " ");
+    return fmt::format("{} {}", op_name_, std::move(args));
+  }
+
+  struct argument_info {
+    std::string meta;
+    std::function<void(std::string&&)> save;
+    bool required{false};
+    bool read{false};
+  };
+
+  std::string op_name_{};
+  std::string docs_{};
+  detail::stable_map<std::string, argument_info> arguments_{};
+};
+
 struct chart_definition {
   struct required_argument_definition {
     std::string_view attr;
@@ -410,7 +524,8 @@ struct chart_definition {
 
   auto parse_arguments(parser_interface& p, std::string&& docs) const
     -> configuration {
-    argument_parser parser{fmt::format("chart {}", type), std::move(docs)};
+    chart_argument_parser parser{fmt::format("chart {}", type),
+                                 std::move(docs)};
     // Build up lists of arguments to be given to the `argument_parser`,
     // based on the definitions
     auto required_arguments
@@ -466,7 +581,7 @@ struct chart_definition {
 
 private:
   template <typename ArgumentType, typename Field>
-  auto build_argument_list(argument_parser& parser,
+  auto build_argument_list(chart_argument_parser& parser,
                            const std::vector<Field>& defs) const
     -> detail::stable_map<std::string_view,
                           value_and_definition<ArgumentType, Field>> {
@@ -479,7 +594,7 @@ private:
         = arguments.emplace(def.attr, value_and_definition<ArgumentType, Field>{
                                         ArgumentType{}, &def});
       TENZIR_DIAG_ASSERT(inserted);
-      parser.add(def.flag, iter->second.value, [&]() {
+      parser.add(std::string{def.flag}, iter->second.value, [&]() {
         if (def.type == flag_type::field_name) {
           return std::string{"<field>"};
         }
@@ -498,31 +613,27 @@ chart_definition chart_definitions[] = {
   {.type = "line",
    .required_flags = {},
    .optional_flags
-   = {{.attr = "x", .flag = "-x,--x-axis", .type = flag_type::field_name, .default_ = nth_field{0}, .req = requirement::strictly_increasing,},
-      {.attr = "y", .flag = "-y,--y-axis", .type = flag_type::field_name, .default_ = nth_field{1},},
-      {.attr = "title", .flag = "--title", .type = flag_type::attribute_value, .default_ = schema_name{},},}},
+   = {{.attr = "x", .flag = "x", .type = flag_type::field_name, .default_ = nth_field{0}, .req = requirement::strictly_increasing,},
+      {.attr = "y", .flag = "y", .type = flag_type::field_name, .default_ = nth_field{1},},}},
   // `area` is equivalent to `line`
   {.type = "area",
    .required_flags = {},
    .optional_flags
-   = {{.attr = "x", .flag = "-x,--x-axis", .type = flag_type::field_name, .default_ = nth_field{0}, .req = requirement::strictly_increasing,},
-      {.attr = "y", .flag = "-y,--y-axis", .type = flag_type::field_name, .default_ = nth_field{1},},
-      {.attr = "title", .flag = "--title", .type = flag_type::attribute_value, .default_ = schema_name{},},}},
+   = {{.attr = "x", .flag = "x", .type = flag_type::field_name, .default_ = nth_field{0}, .req = requirement::strictly_increasing,},
+      {.attr = "y", .flag = "y", .type = flag_type::field_name, .default_ = nth_field{1},},}},
   // `bar` is equivalent to `line`
   {.type = "bar",
    .required_flags = {},
    .optional_flags
-   = {{.attr = "x", .flag = "-x,--x-axis", .type = flag_type::field_name, .default_ = nth_field{0}, .req = requirement::unique,},
-      {.attr = "y", .flag = "-y,--y-axis", .type = flag_type::field_name, .default_ = nth_field{1},},
-      {.attr = "title", .flag = "--title", .type = flag_type::attribute_value, .default_ = schema_name{},},}},
+   = {{.attr = "x", .flag = "x", .type = flag_type::field_name, .default_ = nth_field{0}, .req = requirement::unique,},
+      {.attr = "y", .flag = "y", .type = flag_type::field_name, .default_ = nth_field{1},},}},
   // `pie` chart is equivalent to `line` and `bar`, except
   // --x-axis is called --name, and --y-axis is called --value
   {.type = "pie",
    .required_flags = {},
    .optional_flags
-   = {{.attr = "x", .flag = "--name", .type = flag_type::field_name, .default_ = nth_field{0}, .req = requirement::unique,},
-      {.attr = "y", .flag = "--value", .type = flag_type::field_name, .default_ = nth_field{1},},
-      {.attr = "title", .flag = "--title", .type = flag_type::attribute_value, .default_ = schema_name{},},}},
+   = {{.attr = "x", .flag = "name", .type = flag_type::field_name, .default_ = nth_field{0}, .req = requirement::unique,},
+      {.attr = "y", .flag = "value", .type = flag_type::field_name, .default_ = nth_field{1},},}},
 };
 
 class plugin final : public virtual operator_plugin<chart_operator> {

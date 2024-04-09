@@ -401,11 +401,11 @@ setup() {
 # bats test_tags=pipelines,chart
 @test "Chart Arguments" {
   cat ${INPUTSDIR}/json/all-types.json |
-    check ! tenzir "from stdin read json | chart pie -x b"
+    check ! tenzir "from stdin read json | chart pie x=b"
   cat ${INPUTSDIR}/json/all-types.json |
-    check ! tenzir "from stdin read json | chart pie --value b -x e"
+    check ! tenzir "from stdin read json | chart pie value=b x=e"
   cat ${INPUTSDIR}/json/all-types.json |
-    check ! tenzir "from stdin read json | chart piett --value b"
+    check ! tenzir "from stdin read json | chart piett value=b"
 }
 
 # bats test_tags=pipelines
