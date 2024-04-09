@@ -69,9 +69,9 @@ namespace {
 
 using value = variant<data, series>;
 
-auto value_to_series(value& val, int64_t length) -> series {
+auto value_to_series(const value& val, int64_t length) -> series {
   return val.match(
-    [&](data& x) {
+    [&](const data& x) {
       // TODO: This is overkill.
       auto b = series_builder{};
       for (auto i = int64_t{0}; i < length; ++i) {
@@ -79,7 +79,7 @@ auto value_to_series(value& val, int64_t length) -> series {
       }
       return b.finish_assert_one_array();
     },
-    [&](series& x) {
+    [&](const series& x) {
       TENZIR_ASSERT(x.length() == length);
       return x;
     });
@@ -97,6 +97,10 @@ public:
     : input_{input}, dh_{dh} {
   }
 
+  auto to_series(const value& val) -> series {
+    return value_to_series(val, detail::narrow<int64_t>(input_.rows()));
+  }
+
   auto eval(const ast::expression& x) -> value {
     return x.match([&](auto& y) {
       return eval(y);
@@ -108,6 +112,25 @@ public:
   }
 
   auto eval(const ast::record& x) -> value {
+#if 1
+    auto fields = detail::stable_map<std::string, series>{};
+    for (auto& item : x.content) {
+      item.match(
+        [&](const ast::record::field& field) {
+          auto val = to_series(eval(field.expr));
+          auto [_, inserted] = fields.emplace(field.name.name, std::move(val));
+          if (not inserted) {
+            diagnostic::warning("todo: overwrite existing?")
+              .primary(field.name.location)
+              .emit(dh_);
+          }
+        },
+        [](const ast::record::spread&) {
+          TENZIR_TODO();
+        });
+    }
+
+#else
     auto result = record{};
     for (auto& item : x.content) {
       item.match(
@@ -130,6 +153,7 @@ public:
         });
     }
     return result;
+#endif
   }
 
   auto eval(const ast::selector& x) -> value {
@@ -347,7 +371,8 @@ auto set_operator::operator()(generator<table_slice> input,
         TENZIR_ASSERT(assignment.left.path.size() == 1);
         TENZIR_ASSERT(slice.columns() > 0);
         transformation = indexed_transformation{
-          .index = offset{slice.columns() - 1},
+          .index
+          = offset{caf::get<record_type>(slice.schema()).num_fields() - 1},
           .fun =
             [&](struct record_type::field field,
                 std::shared_ptr<arrow::Array> array) {
