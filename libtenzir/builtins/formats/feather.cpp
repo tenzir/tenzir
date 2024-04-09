@@ -328,7 +328,7 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
     auto decode_result
       = stream_decoder.Consume(as_arrow_buffer(std::move(payload)));
     if (!decode_result.ok()) {
-      diagnostic::error("{}", decode_result.ToString())
+      diagnostic::error("{}", decode_result.ToStringWithoutContextLines())
         .note("failed to decode the byte stream into a record batch")
         .emit(ctrl.diagnostics());
       co_return;
@@ -370,7 +370,7 @@ auto print_feather(
   TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
   auto stream_writer_status = stream_writer->WriteRecordBatch(*batch);
   if (!stream_writer_status.ok()) {
-    diagnostic::error("{}", stream_writer_status.ToString())
+    diagnostic::error("{}", stream_writer_status.ToStringWithoutContextLines())
       .note("failed to write record batch")
       .emit(ctrl.diagnostics());
     co_return;
@@ -379,7 +379,8 @@ auto print_feather(
   // a scrape and rewrite on the allocated same memory.
   auto finished_buffer_result = sink->Finish();
   if (!finished_buffer_result.ok()) {
-    diagnostic::error("{}", finished_buffer_result.status().ToString())
+    diagnostic::error(
+      "{}", finished_buffer_result.status().ToStringWithoutContextLines())
       .note("failed to finish stream")
       .emit(ctrl.diagnostics());
     co_return;
@@ -389,7 +390,7 @@ auto print_feather(
   // offer a Reset that just clears the original data.
   auto reset_buffer_result = sink->Reset();
   if (!reset_buffer_result.ok()) {
-    diagnostic::error("{}", reset_buffer_result.ToString())
+    diagnostic::error("{}", reset_buffer_result.ToStringWithoutContextLines())
       .note("failed to reset stream")
       .emit(ctrl.diagnostics());
   }
@@ -445,7 +446,8 @@ public:
     -> caf::expected<std::unique_ptr<printer_instance>> override {
     auto sink = arrow::io::BufferOutputStream::Create();
     if (not sink.ok()) {
-      return diagnostic::error("{}", sink.status().ToString())
+      return diagnostic::error("{}",
+                               sink.status().ToStringWithoutContextLines())
         .note("failed to created BufferOutputStream")
         .to_error();
     }
@@ -467,8 +469,9 @@ public:
       auto result_compression_type = arrow::util::Codec::GetCompressionType(
         options_.compression_type->inner);
       if (!result_compression_type.ok()) {
-        return diagnostic::error("{}",
-                                 result_compression_type.status().ToString())
+        return diagnostic::error(
+                 "{}",
+                 result_compression_type.status().ToStringWithoutContextLines())
           .note("failed to parse compression type")
           .note("must be `lz4` or `zstd`")
           .primary(options_.compression_type->source)
@@ -480,7 +483,8 @@ public:
       auto codec_result = arrow::util::Codec::Create(
         result_compression_type.MoveValueUnsafe(), compression_level);
       if (!codec_result.ok()) {
-        return diagnostic::error("{}", codec_result.status().ToString())
+        return diagnostic::error(
+                 "{}", codec_result.status().ToStringWithoutContextLines())
           .note("failed to create codec")
           .primary(options_.compression_type->source)
           .primary(options_.compression_level->source)
@@ -493,7 +497,9 @@ public:
     auto stream_writer_result = arrow::ipc::MakeStreamWriter(
       sink.ValueUnsafe(), schema, ipc_write_options);
     if (!stream_writer_result.ok()) {
-      return diagnostic::error("{}", stream_writer_result.status().ToString())
+      return diagnostic::error(
+               "{}",
+               stream_writer_result.status().ToStringWithoutContextLines())
         .to_error();
     }
     auto stream_writer = stream_writer_result.MoveValueUnsafe();
