@@ -65,15 +65,18 @@ fix_enum_array(const enumeration_type& et,
     case arrow::Type::STRING: {
       auto values = static_pointer_cast<arrow::StringArray>(arr);
       auto builder = enumeration_type::builder_type(et.to_arrow_type());
-      if (!builder.Reserve(values->length()).ok())
+      if (!builder.Reserve(values->length()).ok()) {
         die("failed to reserve builder capacity for dict indices");
+      }
       for (auto v : *values) {
         if (v) {
-          if (!builder.Append(*et.resolve(*v)).ok())
+          if (!builder.Append(*et.resolve(*v)).ok()) {
             die("unable to append dict value");
+          }
         } else {
-          if (!builder.AppendNull().ok())
+          if (!builder.AppendNull().ok()) {
             die("unable to append null to dict indices");
+          }
         }
       }
       return builder.Finish().ValueOrDie();
@@ -95,10 +98,11 @@ map_chunked_array(const VastType& t,
   chunks.reserve(arr->num_chunks());
   for (const auto& chunk : arr->chunks()) {
     // short-circuit: if the first transform is a no-op, skip remaining chunks
-    if (std::shared_ptr<arrow::Array> c = m(t, chunk))
+    if (std::shared_ptr<arrow::Array> c = m(t, chunk)) {
       chunks.push_back(std::move(c));
-    else
+    } else {
       return arr;
+    }
   }
   auto result = arrow::ChunkedArray::Make(chunks);
   return result.ValueOrDie();
@@ -116,14 +120,16 @@ align_array_to_type(const tenzir::type& t,
       return fix_enum_array(et, array);
     },
     [&](const ip_type&) -> std::shared_ptr<arrow::Array> {
-      if (ip_type::to_arrow_type()->Equals(array->type()))
+      if (ip_type::to_arrow_type()->Equals(array->type())) {
         return {}; // address is not always wrong, only when inside maps
+      }
       return std::make_shared<ip_type::array_type>(ip_type::to_arrow_type(),
                                                    array);
     },
     [&](const subnet_type&) -> std::shared_ptr<arrow::Array> {
-      if (subnet_type::to_arrow_type()->Equals(array->type()))
+      if (subnet_type::to_arrow_type()->Equals(array->type())) {
         return {};
+      }
       auto sa = std::static_pointer_cast<arrow::StructArray>(array);
       auto ip_array = std::make_shared<ip_type::array_type>(
         ip_type::to_arrow_type(), sa->field(0));
@@ -142,18 +148,20 @@ align_array_to_type(const tenzir::type& t,
     [&](const list_type& lt) -> std::shared_ptr<arrow::Array> {
       auto list_array = std::static_pointer_cast<arrow::ListArray>(array);
       if (auto fixed_array
-          = align_array_to_type(lt.value_type(), list_array->values()))
+          = align_array_to_type(lt.value_type(), list_array->values())) {
         return std::make_shared<arrow::ListArray>(
           lt.to_arrow_type(), list_array->length(), list_array->value_offsets(),
           fixed_array, list_array->null_bitmap(), list_array->null_count());
+      }
       return {};
     },
     [&](const map_type& mt) -> std::shared_ptr<arrow::Array> {
       auto ma = std::static_pointer_cast<arrow::MapArray>(array);
       auto key_array = align_array_to_type(mt.key_type(), ma->keys());
       auto val_array = align_array_to_type(mt.value_type(), ma->items());
-      if (!key_array && !val_array)
+      if (!key_array && !val_array) {
         return {};
+      }
       auto ka = key_array ? key_array : ma->keys();
       auto va = val_array ? val_array : ma->items();
       return std::make_shared<arrow::MapArray>(mt.to_arrow_type(), ma->length(),
@@ -177,8 +185,9 @@ align_array_to_type(const tenzir::type& t,
         }
         ++it;
       }
-      if (!modified)
+      if (!modified) {
         return {};
+      }
       return std::make_shared<arrow::StructArray>(
         rt.to_arrow_type(), struct_array->length(), children,
         struct_array->null_bitmap(), struct_array->null_count());
@@ -229,10 +238,11 @@ align_table_to_schema(const std::shared_ptr<arrow::Schema>& target_schema,
   auto rt = caf::get<record_type>(type::from_arrow(*target_schema));
   for (int i = 0; i < table->num_columns(); ++i) {
     if (auto new_arr
-        = restore_enum_chunk_array(rt.field(i).type, table->column(i)))
+        = restore_enum_chunk_array(rt.field(i).type, table->column(i))) {
       arrays.push_back(new_arr);
-    else
+    } else {
       arrays.push_back(table->column(i));
+    }
   }
   auto new_table = arrow::Table::Make(target_schema, arrays, table->num_rows());
   const auto delta = std::chrono::steady_clock::now() - start;
@@ -279,19 +289,22 @@ create_table_slices(const std::shared_ptr<arrow::RecordBatch>& rb,
 
 std::shared_ptr<arrow::Schema> parse_arrow_schema_from_metadata(
   const std::shared_ptr<::parquet::FileMetaData>& parquet_metadata) {
-  if (!parquet_metadata)
+  if (!parquet_metadata) {
     return {};
+  }
   auto arrow_metadata
     = parquet_metadata->key_value_metadata()->Get("ARROW:schema");
-  if (!arrow_metadata.ok())
+  if (!arrow_metadata.ok()) {
     return {};
+  }
   auto decoded = detail::base64::decode(*arrow_metadata);
   auto schema_buf = std::make_shared<arrow::Buffer>(std::move(decoded));
   auto dict_memo = arrow::ipc::DictionaryMemo{};
   auto input = arrow::io::BufferReader{std::move(schema_buf)};
   auto arrow_schema = arrow::ipc::ReadSchema(&input, &dict_memo);
-  if (!arrow_schema.ok())
+  if (!arrow_schema.ok()) {
     return {};
+  }
   return *arrow_schema;
 }
 
@@ -306,11 +319,13 @@ read_parquet_buffer(const chunk_ptr& chunk) {
   std::unique_ptr<::parquet::arrow::FileReader> file_reader{};
   if (auto st = ::parquet::arrow::OpenFile(bufr, arrow::default_memory_pool(),
                                            &file_reader);
-      !st.ok())
+      !st.ok()) {
     return caf::make_error(ec::parse_error, st.ToString());
+  }
   std::shared_ptr<arrow::Table> table{};
-  if (auto st = file_reader->ReadTable(&table); !st.ok())
+  if (auto st = file_reader->ReadTable(&table); !st.ok()) {
     return caf::make_error(ec::parse_error, st.ToString());
+  }
   return align_table_to_schema(arrow_schema, table);
 }
 
@@ -335,8 +350,9 @@ std::shared_ptr<::parquet::ArrowWriterProperties> arrow_writer_properties() {
 auto make_import_time_col(const time& import_time, int64_t rows) {
   auto v = import_time.time_since_epoch().count();
   auto builder = time_type::make_arrow_builder(arrow::default_memory_pool());
-  if (auto status = builder->Reserve(rows); !status.ok())
+  if (auto status = builder->Reserve(rows); !status.ok()) {
     die(fmt::format("make time column failed: '{}'", status.ToString()));
+  }
   for (int i = 0; i < rows; ++i) {
     auto status = builder->Append(v);
     TENZIR_ASSERT(status.ok());
@@ -364,8 +380,9 @@ auto write_parquet_buffer(const std::vector<table_slice>& slices,
                           const configuration& config) {
   auto sink = arrow::io::BufferOutputStream::Create().ValueOrDie();
   auto batches = arrow::RecordBatchVector{};
-  for (const auto& slice : slices)
+  for (const auto& slice : slices) {
     batches.push_back(wrap_record_batch(slice));
+  }
   auto table = arrow::Table::FromRecordBatches(batches).ValueOrDie();
   auto writer_props = writer_properties(config);
   auto arrow_writer_props = arrow_writer_properties();
@@ -387,13 +404,15 @@ public:
   /// @returns An error on failure.
   [[nodiscard]] caf::error load(chunk_ptr chunk) override {
     auto table = read_parquet_buffer(chunk);
-    if (!table)
+    if (!table) {
       return table.error();
+    }
     for (const auto& rb : arrow::TableBatchReader(*table)) {
-      if (!rb.ok())
+      if (!rb.ok()) {
         return caf::make_error(ec::system_error,
                                fmt::format("unable to read record batch: {}",
                                            rb.status().ToString()));
+      }
       auto slices_for_batch = create_table_slices(
         *rb, detail::narrow_cast<int64_t>(parquet_config_.row_group_size));
       slices_.reserve(slices_for_batch.size() + slices_.size());
@@ -411,8 +430,9 @@ public:
     // We need to make a copy of the slices here because the slices_ vector may
     // get invalidated while we iterate over it.
     auto slices = slices_;
-    for (auto& slice : slices)
+    for (auto& slice : slices) {
       co_yield std::move(slice);
+    }
   }
 
   [[nodiscard]] uint64_t num_events() const override {
@@ -441,8 +461,9 @@ public:
       // slices not to have an offset at all. We should fix the unit tests
       // properly, but that takes time we did not want to spend when migrating
       // to partition-local ids. -- DL
-      if (slice.offset() == invalid_id)
+      if (slice.offset() == invalid_id) {
         slice.offset(num_rows_);
+      }
       TENZIR_ASSERT(slice.offset() == num_rows_);
       num_rows_ += slice.rows();
       slices_.push_back(std::move(slice));
@@ -462,8 +483,9 @@ public:
   /// Retrieve all of the store's slices.
   /// @returns The store's slices.
   [[nodiscard]] generator<table_slice> slices() const override {
-    for (const auto& slice : slices_)
+    for (const auto& slice : slices_) {
       co_yield slice;
+    }
   }
 
   [[nodiscard]] uint64_t num_events() const override {
@@ -517,3 +539,5 @@ private:
 
 // Finally, register our plugin.
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::parquet::plugin)
+
+// initial commit
