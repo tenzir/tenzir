@@ -1,0 +1,4 @@
+error: failed to infer fields to use for charting
+ = hint: either specify `x` and `y` as arguments explicitly, or none of them, and utilize the `select` operator
+ = usage: chart bar [x=<field>] [y=<fields>] [position=<position>]
+ = docs: https://docs.tenzir/operators/chart

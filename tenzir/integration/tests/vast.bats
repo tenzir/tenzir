@@ -247,9 +247,10 @@ teardown() {
 @test "Bar chart" {
   import_zeek_conn
 
-  check tenzir "export | chart bar | get-attributes"
   check tenzir "export | top id.orig_h | chart bar"
-  check tenzir "export | rare id.orig_h | chart bar"
+  check tenzir "export | top id.orig_h | chart bar | get-attributes"
+  check tenzir "export | top id.orig_h | chart bar x=id.orig_h y=count"
+  check tenzir "export | top id.orig_h | chart bar x=id.orig_h y=count | get-attributes"
   check ! tenzir "export | top id.orig_h | repeat 2 | chart bar"
 }
 
@@ -257,7 +258,9 @@ teardown() {
 @test "Line chart" {
   import_zeek_conn
 
-  check tenzir "export | head 10 | sort ts asc | chart line x=ts y=orig_bytes | get-attributes"
+  check tenzir "export | head 10 | sort ts asc | select ts, orig_bytes | chart line"
+  check tenzir "export | head 10 | sort ts asc | select ts, orig_bytes | chart line | get-attributes"
   check tenzir "export | head 10 | sort ts asc | chart line x=ts y=orig_bytes"
+  check tenzir "export | head 10 | sort ts asc | chart line x=ts y=orig_bytes | get-attributes"
   check ! tenzir "export | head 10 | sort ts desc | chart line x=ts y=orig_bytes"
 }

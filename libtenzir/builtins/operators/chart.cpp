@@ -8,6 +8,7 @@
 
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/cast.hpp>
+#include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/detail/flat_map.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/plugin.hpp>
@@ -23,12 +24,15 @@ struct unset_default_tag {
   }
 };
 struct nth_field {
+  static constexpr size_t all_the_rest = std::numeric_limits<size_t>::max();
+
   size_t index;
+  size_t count{1};
 
   friend auto inspect(auto& f, nth_field& x) -> bool {
     return f.object(x)
       .pretty_name("nth_field")
-      .fields(f.field("index", x.index));
+      .fields(f.field("index", x.index), f.field("count", x.count));
   }
 };
 struct schema_name {
@@ -37,12 +41,12 @@ struct schema_name {
   }
 };
 struct field_name {
-  std::string field;
+  std::vector<std::string> fields;
 
   friend auto inspect(auto& f, field_name& x) -> bool {
     return f.object(x)
-      .pretty_name("field_name")
-      .fields(f.field("field", x.field));
+      .pretty_name("field_names")
+      .fields(f.field("field", x.fields));
   }
 };
 struct attribute_value {
@@ -102,6 +106,53 @@ struct configuration_item {
   field_value_type field_value;
   requirement req{requirement::none};
 
+  // Using a `deque` to guarantee reference validity after a growing `resize`,
+  // which may happen in `get_attribute_key` if a type has more fields
+  // than the previous one.
+  mutable std::deque<std::string> indexed_attribute_keys{};
+
+  /// Returns the number of fields this `configuration_item`
+  /// refers to in the input.
+  auto count_fields(const record_type& ty) const -> size_t {
+    return std::visit(detail::overload{
+                        [](const auto&) -> size_t {
+                          return 1;
+                        },
+                        [&](const nth_field& x) -> size_t {
+                          if (x.count == nth_field::all_the_rest) {
+                            return ty.num_fields() - x.index;
+                          }
+                          return x.count;
+                        },
+                        [](const field_name& x) -> size_t {
+                          return x.fields.size();
+                        },
+                      },
+                      field_value);
+  }
+
+  /// Returns a `string_view`, valid for the lifetime of `*this`,
+  /// which contains the name of the attribute `*this` describes.
+  /// (Required by the constructor of `type`, which takes
+  /// `attribute_view`s, which contain `string_view`s).
+  ///
+  /// If `count_fields() == 1`, returns `key`, otherwise returns
+  /// `format("{}{}", key, index)`.
+  auto get_attribute_key(const record_type& ty, size_t index) const
+    -> std::string_view {
+    const auto field_count = count_fields(ty);
+    if (field_count == 1) {
+      return key;
+    }
+    if (index >= indexed_attribute_keys.size()) {
+      indexed_attribute_keys.resize(field_count);
+    }
+    if (indexed_attribute_keys[index].empty()) {
+      indexed_attribute_keys[index] = fmt::format("{}{}", key, index);
+    }
+    return indexed_attribute_keys[index];
+  }
+
   friend auto inspect(auto& f, configuration_item& x) -> bool {
     return f.object(x)
       .pretty_name("configuration_item")
@@ -119,13 +170,14 @@ public:
   explicit chart_operator(configuration&& cfg) : cfg_(std::move(cfg)) {
   }
 
-  // Keys are keys into `cfg_`
+  // Keys are keys into `cfg_`, combined with an index
+  // ((`y`, 0) refers to the first `y`-field, etc.).
   // Values are a set of all the previously encountered values in that field
   //
   // An entry is only added if the field's `req` value is not
   // `requirement::none`.
   using previous_values_type
-    = detail::flat_map<std::string_view, std::unordered_set<data>>;
+    = detail::flat_map<std::pair<std::string, size_t>, std::unordered_set<data>>;
 
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
@@ -189,17 +241,21 @@ private:
     const auto& record_schema = *record_schema_ptr;
     auto struct_array = to_record_batch(slice)->ToStructArray().ValueOrDie();
     for (const auto& item : cfg_) {
+      const auto count = item.count_fields(record_schema);
       if (item.req == requirement::none) {
         continue;
       }
-      auto field_name = resolve_attribute_value(item, record_schema,
-                                                slice.schema().name(), ctrl);
-      if (not field_name) {
-        return false;
-      }
-      if (not verify_single_field(item, slice, *struct_array, record_schema,
-                                  *field_name, previous_values, ctrl)) {
-        return false;
+      for (size_t index = 0; index < count; ++index) {
+        auto field_name = resolve_attribute_value(
+          item, record_schema, slice.schema().name(), index, ctrl);
+        if (not field_name) {
+          return false;
+        }
+        if (not verify_single_field(item, slice, *struct_array, record_schema,
+                                    *field_name, previous_values, index,
+                                    ctrl)) {
+          return false;
+        }
       }
     }
     return true;
@@ -219,16 +275,21 @@ private:
     auto struct_array = to_record_batch(slice)->ToStructArray().ValueOrDie();
     std::vector<type::attribute_view> result{};
     for (const auto& item : cfg_) {
-      auto field_name = resolve_attribute_value(item, record_schema,
-                                                slice.schema().name(), ctrl);
-      if (not field_name) {
-        return std::nullopt;
+      const auto count = item.count_fields(record_schema);
+      for (size_t index = 0; index < count; ++index) {
+        auto field_name = resolve_attribute_value(
+          item, record_schema, slice.schema().name(), index, ctrl);
+        if (not field_name) {
+          return std::nullopt;
+        }
+        if (not verify_single_field(item, slice, *struct_array, record_schema,
+                                    *field_name, previous_values, index,
+                                    ctrl)) {
+          return std::nullopt;
+        }
+        result.emplace_back(item.get_attribute_key(record_schema, index),
+                            *field_name);
       }
-      if (not verify_single_field(item, slice, *struct_array, record_schema,
-                                  *field_name, previous_values, ctrl)) {
-        return std::nullopt;
-      }
-      result.emplace_back(item.key, *field_name);
     }
     return result;
   }
@@ -238,7 +299,7 @@ private:
                       const arrow::StructArray& struct_array,
                       const record_type& record_schema,
                       std::string_view field_name,
-                      previous_values_type& previous_values,
+                      previous_values_type& previous_values, size_t index,
                       operator_control_plane& ctrl) const -> bool {
     if (item.req == requirement::none) {
       return true;
@@ -258,7 +319,7 @@ private:
     const auto& element_type = record_schema.field(*idx).type;
     auto element_array = idx->get(struct_array);
     TENZIR_ASSERT(element_array);
-    auto& prev_values = previous_values[item.key];
+    auto& prev_values = previous_values[std::pair{item.key, index}];
     for (auto&& element : values(element_type, *element_array)) {
       auto data = materialize(element);
       switch (item.req) {
@@ -305,30 +366,36 @@ private:
 
   auto resolve_attribute_value(const configuration_item& item,
                                const record_type& schema,
-                               std::string_view schema_name_,
+                               std::string_view schema_name_, size_t index,
                                operator_control_plane& ctrl) const
     -> std::optional<std::string_view> {
     auto visitor = detail::overload{
       // `nth_field`:
       // Value of the attribute is the name of the `f.index`th field.
-      // Default for --x-axis and --y-axis
-      [&](nth_field f) -> std::optional<std::string_view> {
-        if (schema.num_fields() <= f.index) {
+      // Default for `x` and `y`.
+      [&](const nth_field& f) -> std::optional<std::string_view> {
+        if (schema.num_fields() <= f.index + index) {
           diagnostic::error("field at index {} not found in input "
                             "(schema `{}`), but the chart operator "
-                            "expected it "
-                            "for `{}`",
-                            f.index, schema_name_, item.key)
+                            "expected it for `{}`",
+                            f.index + index, schema_name_,
+                            item.get_attribute_key(schema, index))
             .note("from `{}`", name())
             .emit(ctrl.diagnostics());
           return std::nullopt;
         }
-        auto field = schema.field(f.index);
+        auto field = schema.field(f.index + index);
         if (is_container(field.type)) {
-          diagnostic::error(
-            "field at index {} (name: `{}`) in input (schema `{}`) has an "
-            "incompatible type (`{}`) for use as `{}`",
-            f.index, field.name, schema_name_, field.type.name(), item.key)
+          diagnostic::error("field at index {} (name: `{}`) in input (schema "
+                            "`{}`) has an "
+                            "incompatible type (`{}`) for use as `{}`",
+                            f.index + index, field.name, schema_name_,
+                            field.type.name(),
+                            item.get_attribute_key(schema, index))
+            .hint("to be charted, a value cannot be a list or a record")
+            .hint("either explicitly specify fields to use for charting in "
+                  "`chart`, or choose the fields with the `select` or `drop` "
+                  "operator")
             .note("from `{}`", name())
             .emit(ctrl.diagnostics());
           return std::nullopt;
@@ -337,31 +404,49 @@ private:
       },
       // `schema_name`:
       // Value of the attribute is the name of the schema.
-      // Default for --title
+      // Used to be the default for `title` (such option no longer exists).
       [&](schema_name) -> std::optional<std::string_view> {
+        TENZIR_ASSERT(index == 0);
         return schema_name_;
       },
       // `field_name`:
       // Value of the attribute is `f.field`.
       // The schema is checked for such a field.
       // Used when the field name is explicitly specified as an argument,
-      // through --x-axis/--y-axis/--name/--value
+      // through `x`/`y`/`name`/`value`.
       [&](const field_name& f) -> std::optional<std::string_view> {
-        if (not schema.resolve_key_or_concept_once(f.field, schema_name_)) {
+        auto offset
+          = schema.resolve_key_or_concept_once(f.fields[index], schema_name_);
+        if (not offset) {
           diagnostic::error("field `{}` not found in input (schema `{}`), "
                             "but the chart operator expected it for `{}`",
-                            f.field, schema_name_, item.key)
+                            f.fields[index], schema_name_,
+                            item.get_attribute_key(schema, index))
+            .note("from `{}`", name())
+            .emit(ctrl.diagnostics());
+          return {};
+        }
+        if (auto field = schema.field(*offset); is_container(field.type)) {
+          diagnostic::error("field `{}` in input (schema `{}`) has an "
+                            "incompatible type (`{}`) for use as `{}`",
+                            f.fields[index], schema_name_, field.type.name(),
+                            item.get_attribute_key(schema, index))
+            .hint("to be charted, a value cannot be a list or a record")
+            .hint("either explicitly specify fields to use for charting in "
+                  "`chart`, or choose the fields with the `select` or `drop` "
+                  "operator")
             .note("from `{}`", name())
             .emit(ctrl.diagnostics());
           return std::nullopt;
         }
-        return f.field;
+        return f.fields[index];
       },
       // `attribute_value`:
       // Value of the attribute is `a.attr`, as-is.
       // Used for the chart type attribute, and when the title is explicitly
-      // specified as an argument through --title
-      [](const attribute_value& a) -> std::optional<std::string_view> {
+      // specified as an argument through `title`.
+      [&](const attribute_value& a) -> std::optional<std::string_view> {
+        TENZIR_ASSERT(index == 0);
         return a.attr;
       },
       [](unset_default_tag) -> std::optional<std::string_view> {
@@ -385,29 +470,72 @@ enum class flag_type {
 
 // A little bit like `argument_parser`, but:
 //  - supports a `key=value` syntax (instead of shell-like `--key value`)
+//  - allows for reading lists (`[...]`) as argument values
 class chart_argument_parser {
 public:
   chart_argument_parser(std::string name, std::string docs)
     : op_name_(std::move(name)), docs_(std::move(docs)) {
   }
 
-  template <typename T>
-  auto add(std::string arg_name, T& value, std::string meta) -> void {
-    static_assert(std::is_same_v<T, std::string>
-                  || std::is_same_v<T, std::optional<std::string>>);
+  auto add(std::string arg_name, std::string& value, std::string meta) -> void {
+    arguments_.emplace(std::move(arg_name), argument_info{
+                                              .meta = std::move(meta),
+                                              .save =
+                                                [&](std::string&& val) {
+                                                  value = std::move(val);
+                                                },
+                                              .required = true,
+                                              .list = false,
+                                            });
+  }
+
+  auto add(std::string arg_name, std::optional<std::string>& value,
+           std::string meta) -> void {
+    arguments_.emplace(std::move(arg_name), argument_info{
+                                              .meta = std::move(meta),
+                                              .save =
+                                                [&](std::string&& val) {
+                                                  value.emplace(std::move(val));
+                                                },
+                                              .required = false,
+                                              .list = false,
+                                            });
+  }
+
+  auto add(std::string arg_name, std::vector<std::string>& value,
+           std::string meta) -> void {
     arguments_.emplace(std::move(arg_name),
                        argument_info{
                          .meta = std::move(meta),
                          .save =
                            [&](std::string&& val) {
-                             value = std::move(val);
+                             value.emplace_back(std::move(val));
                            },
-                         .required = std::is_same_v<T, std::string>,
+                         .required = true,
+                         .list = true,
+                       });
+  }
+
+  auto add(std::string arg_name, std::optional<std::vector<std::string>>& value,
+           std::string meta) -> void {
+    arguments_.emplace(std::move(arg_name),
+                       argument_info{
+                         .meta = std::move(meta),
+                         .save =
+                           [&](std::string&& val) {
+                             if (not value) {
+                               value.emplace();
+                             }
+                             value->emplace_back(std::move(val));
+                           },
+                         .required = false,
+                         .list = true,
                        });
   }
 
   auto parse(parser_interface& p) -> void {
     while (not p.at_end()) {
+      // Read argument name
       auto arg_name = p.accept_identifier();
       if (not arg_name) {
         diagnostic::error("expected argument for `{}`", op_name_)
@@ -416,21 +544,7 @@ public:
           .docs(docs_)
           .throw_();
       }
-      if (not p.accept_equals()) {
-        diagnostic::error("expected `=` after `{}`", arg_name->name)
-          .primary(p.current_span())
-          .usage(make_usage())
-          .docs(docs_)
-          .throw_();
-      }
-      auto arg_value = p.accept_shell_arg();
-      if (not arg_value) {
-        diagnostic::error("expected value for option `{}`", arg_name->name)
-          .primary(p.current_span())
-          .usage(make_usage())
-          .docs(docs_)
-          .throw_();
-      }
+      // Look it up
       auto args_it = arguments_.find(arg_name->name);
       if (args_it == arguments_.end()) {
         if (arg_name->name.starts_with('-')) {
@@ -453,7 +567,93 @@ public:
       if (arg_info.read) {
         diagnostic::error("disallowed duplicate value for option `{}`",
                           arg_name->name)
-          .primary(arg_name->source.combine(arg_value->source))
+          .primary(arg_name->source)
+          .usage(make_usage())
+          .docs(docs_)
+          .throw_();
+      }
+      // Read `=`
+      if (not p.accept_equals()) {
+        diagnostic::error("expected `=` after `{}`", arg_name->name)
+          .primary(p.current_span())
+          .usage(make_usage())
+          .docs(docs_)
+          .throw_();
+      }
+      // Read argument value
+      if (auto open_sq_bracket = p.accept_char('[')) {
+        if (not arg_info.list) {
+          diagnostic::error("option `{}` can only accept a single value, not a "
+                            "list",
+                            arg_name->name)
+            .primary(open_sq_bracket->combine(p.current_span()))
+            .usage(make_usage())
+            .docs(docs_)
+            .throw_();
+        }
+        // Read a list value
+        // A _bit_ hacky
+        std::string values_str{};
+        location list_location{*open_sq_bracket};
+        while (not p.at_end()) {
+          auto val = p.accept_shell_arg();
+          if (not val) {
+            diagnostic::error("unexpected end of value for option `{}`",
+                              arg_name->name)
+              .note("expected a list of values, in square brackets, delimited "
+                    "by commas")
+              .primary(p.current_span().combine(*open_sq_bracket))
+              .usage(make_usage())
+              .docs(docs_)
+              .throw_();
+          }
+          list_location = list_location.combine(val->source);
+          if (val->inner.ends_with(',') && val->inner.size() > 1) {
+            values_str.append(
+              fmt::format("{}, ", escape_operator_arg(val->inner.substr(
+                                    0, val->inner.size() - 1))));
+            continue;
+          }
+          if (val->inner.ends_with(']') && val->inner.size() > 1) {
+            values_str.append(
+              fmt::format("{}]", escape_operator_arg(val->inner.substr(
+                                   0, val->inner.size() - 1))));
+            break;
+          }
+          values_str.append(val->inner);
+        }
+        std::vector<std::string> values{};
+        // Logic lifted from `parsers::operator_arg`
+        auto unquoted_list_element_parser
+          = (&!(parsers::ch<'\''> | '"'))
+            >> +(parsers::printable - parsers::space - parsers::comment_start
+                 - parsers::ch<','> - parsers::ch<']'>);
+        if (auto list_parser
+            = ((parsers::qstr | parsers::qqstr | unquoted_list_element_parser)
+               % (parsers::optional_ws_or_comment
+                  >> parsers::ch<','> >> parsers::optional_ws_or_comment))
+              >> ignore(parsers::optional_ws_or_comment)
+              >> ignore(parsers::ch<']'>);
+            not list_parser(values_str, values)) {
+          diagnostic::error("invalid value for option `{}`", arg_name->name)
+            .note("expected a list of values, in square brackets, delimited "
+                  "by commas")
+            .primary(list_location)
+            .usage(make_usage())
+            .docs(docs_)
+            .throw_();
+        }
+        for (auto&& val : values) {
+          arg_info.save(std::move(val));
+        }
+        arg_info.read = true;
+        continue;
+      }
+      // Parse a non-list value
+      auto arg_value = p.accept_shell_arg();
+      if (not arg_value) {
+        diagnostic::error("expected value for option `{}`", arg_name->name)
+          .primary(p.current_span())
           .usage(make_usage())
           .docs(docs_)
           .throw_();
@@ -472,7 +672,16 @@ public:
     }
   }
 
-private:
+  /// Sorts the internal list of arguments,
+  /// which is the order used in the return value of `make_usage()`.
+  ///
+  /// Before calling this,
+  /// the arguments are in the order they were added with `add()`.
+  template <typename Predicate>
+  auto sort_arguments(Predicate pred) -> void {
+    std::ranges::sort(arguments_, pred);
+  }
+
   auto make_usage() const -> std::string {
     auto args
       = fmt::join(arguments_ | std::views::transform([](const auto& elem) {
@@ -486,10 +695,12 @@ private:
     return fmt::format("{} {}", op_name_, std::move(args));
   }
 
+private:
   struct argument_info {
     std::string meta;
     std::function<void(std::string&&)> save;
     bool required{false};
+    bool list{false};
     bool read{false};
   };
 
@@ -503,6 +714,7 @@ struct chart_definition {
     std::string_view attr;
     std::string_view flag;
     flag_type type;
+    bool allow_lists{false};
     requirement req{requirement::none};
   };
   struct optional_argument_definition {
@@ -510,6 +722,7 @@ struct chart_definition {
     std::string_view flag;
     flag_type type;
     field_value_type default_;
+    bool allow_lists{false};
     requirement req{requirement::none};
   };
   template <typename Val, typename Def>
@@ -518,26 +731,67 @@ struct chart_definition {
     const Def* definition;
   };
 
+  using verification_callback
+    = std::function<auto(configuration&)->std::optional<diagnostic>>;
+
   std::string_view type;
   std::vector<required_argument_definition> required_flags;
   std::vector<optional_argument_definition> optional_flags;
+  std::vector<verification_callback> verifications{};
 
   auto parse_arguments(parser_interface& p, std::string&& docs) const
     -> configuration {
-    chart_argument_parser parser{fmt::format("chart {}", type),
-                                 std::move(docs)};
+    auto op_name = fmt::format("chart {}", type);
+    chart_argument_parser parser{op_name, docs};
     // Build up lists of arguments to be given to the `argument_parser`,
     // based on the definitions
-    auto required_arguments
-      = build_argument_list<std::string>(parser, required_flags);
-    auto optional_arguments
-      = build_argument_list<std::optional<std::string>>(parser, optional_flags);
+    auto required_single_arguments = build_argument_list<std::string>(
+      parser, required_flags | std::views::filter([](const auto& def) {
+                return not def.allow_lists;
+              }));
+    auto required_list_arguments
+      = build_argument_list<std::vector<std::string>>(
+        parser, required_flags | std::views::filter([](const auto& def) {
+                  return def.allow_lists;
+                }));
+    auto optional_single_arguments
+      = build_argument_list<std::optional<std::string>>(
+        parser, optional_flags | std::views::filter([](const auto& def) {
+                  return not def.allow_lists;
+                }));
+    auto optional_list_arguments
+      = build_argument_list<std::optional<std::vector<std::string>>>(
+        parser, optional_flags | std::views::filter([](const auto& def) {
+                  return def.allow_lists;
+                }));
+    // Re-sort the arguments in `parser` to the order they are in
+    // `required_flags`/`optional_flags`.
+    //
+    // They are currently in the order they were added in,
+    // which causes the non-list arguments to appear before the list arguments
+    // in the return value of `parser.make_usage()`.
+    parser.sort_arguments([&](const auto& a, const auto& b) -> bool {
+      auto get_flag_index = [&](const auto& name) -> size_t {
+        if (auto req_it = std::ranges::find(
+              required_flags, name, &required_argument_definition::attr);
+            req_it != required_flags.end()) {
+          return static_cast<size_t>(
+            std::ranges::distance(required_flags.begin(), req_it));
+        }
+        return required_flags.size()
+               + static_cast<size_t>(std::ranges::distance(
+                 optional_flags.begin(),
+                 std::ranges::find(optional_flags, name,
+                                   &optional_argument_definition::attr)));
+      };
+      return get_flag_index(a.first) < get_flag_index(b.first);
+    });
     parser.parse(p);
     configuration result;
     result.emplace_back("chart", attribute_value{std::string{type}});
     // Go through the arguments,
     // and populate `result` with the specified attributes
-    for (auto&& [attr, arg] : required_arguments) {
+    for (auto&& [attr, arg] : required_single_arguments) {
       if (arg.definition->req != requirement::none
           && arg.definition->type != flag_type::field_name) {
         diagnostic::error("flag_type other than field_name is only compatible "
@@ -546,7 +800,8 @@ struct chart_definition {
           .throw_();
       }
       if (arg.definition->type == flag_type::field_name) {
-        result.emplace_back(std::string{attr}, field_name{std::move(arg.value)},
+        result.emplace_back(std::string{attr},
+                            field_name{{std::move(arg.value)}},
                             arg.definition->req);
       } else {
         result.emplace_back(std::string{attr},
@@ -554,7 +809,24 @@ struct chart_definition {
                             arg.definition->req);
       }
     }
-    for (auto&& [attr, arg] : optional_arguments) {
+    for (auto&& [attr, arg] : required_list_arguments) {
+      if (arg.definition->req != requirement::none
+          && arg.definition->type != flag_type::field_name) {
+        diagnostic::error("flag_type other than field_name is only compatible "
+                          "with requirement::none")
+          .note("internal configuration logic error in `chart`")
+          .throw_();
+      }
+      if (arg.definition->type != flag_type::field_name) {
+        diagnostic::error(
+          "allow_lists=true is only compatible with flag_type::field_name")
+          .note("internal configuration logic error in `chart`")
+          .throw_();
+      }
+      result.emplace_back(std::string{attr}, field_name{std::move(arg.value)},
+                          arg.definition->req);
+    }
+    for (auto&& [attr, arg] : optional_single_arguments) {
       if (arg.definition->req != requirement::none
           && arg.definition->type != flag_type::field_name) {
         diagnostic::error("flag_type other than field_name is only compatible "
@@ -568,7 +840,7 @@ struct chart_definition {
                             arg.definition->req);
       } else if (arg.definition->type == flag_type::field_name) {
         result.emplace_back(std::string{attr},
-                            field_name{std::move(*arg.value)},
+                            field_name{{std::move(*arg.value)}},
                             arg.definition->req);
       } else {
         result.emplace_back(std::string{attr},
@@ -576,26 +848,58 @@ struct chart_definition {
                             arg.definition->req);
       }
     }
+    for (auto&& [attr, arg] : optional_list_arguments) {
+      if (arg.definition->req != requirement::none
+          && arg.definition->type != flag_type::field_name) {
+        diagnostic::error("flag_type other than field_name is only compatible "
+                          "with requirement::none")
+          .note("internal configuration logic error in `chart`")
+          .throw_();
+      }
+      if (arg.definition->type != flag_type::field_name) {
+        diagnostic::error(
+          "allow_lists=true is only compatible with flag_type::field_name")
+          .note("internal configuration logic error in `chart`")
+          .throw_();
+      }
+      if (!arg.value) {
+        result.emplace_back(std::string{attr}, arg.definition->default_,
+                            arg.definition->req);
+      } else {
+        result.emplace_back(std::string{attr},
+                            field_name{std::move(*arg.value)},
+                            arg.definition->req);
+      }
+    }
+    for (const auto& verify : verifications) {
+      if (auto diag = verify(result)) {
+        std::move(*diag).modify().usage(parser.make_usage()).docs(docs).throw_();
+      }
+    }
     return result;
   }
 
 private:
-  template <typename ArgumentType, typename Field>
-  auto build_argument_list(chart_argument_parser& parser,
-                           const std::vector<Field>& defs) const
+  template <typename ArgumentType, std::ranges::forward_range Definitions,
+            typename FieldType = std::ranges::range_value_t<Definitions>>
+  auto
+  build_argument_list(chart_argument_parser& parser, Definitions&& defs) const
     -> detail::stable_map<std::string_view,
-                          value_and_definition<ArgumentType, Field>> {
+                          value_and_definition<ArgumentType, FieldType>> {
     detail::stable_map<std::string_view,
-                       value_and_definition<ArgumentType, Field>>
+                       value_and_definition<ArgumentType, FieldType>>
       arguments;
-    arguments.reserve(defs.size());
+    arguments.reserve(std::ranges::distance(defs));
     for (const auto& def : defs) {
-      auto [iter, inserted]
-        = arguments.emplace(def.attr, value_and_definition<ArgumentType, Field>{
-                                        ArgumentType{}, &def});
+      auto [iter, inserted] = arguments.emplace(
+        def.attr,
+        value_and_definition<ArgumentType, FieldType>{ArgumentType{}, &def});
       TENZIR_DIAG_ASSERT(inserted);
       parser.add(std::string{def.flag}, iter->second.value, [&]() {
         if (def.type == flag_type::field_name) {
+          if (def.allow_lists) {
+            return std::string{"<fields>"};
+          }
           return std::string{"<field>"};
         }
         return fmt::format("<{}>", def.attr);
@@ -605,35 +909,134 @@ private:
   }
 };
 
+auto disallow_mixmatch_between_explicit_and_implicit_arguments(
+  std::vector<std::string_view> args)
+  -> chart_definition::verification_callback {
+  return
+    [args = std::move(args)](configuration& cfg) -> std::optional<diagnostic> {
+      if (args.empty()) {
+        return std::nullopt;
+      }
+      bool has_nth_field_args = false;
+      bool has_field_name_args = false;
+      for (const auto& item : cfg) {
+        if (std::holds_alternative<nth_field>(item.field_value)) {
+          has_nth_field_args = true;
+        } else if (std::holds_alternative<field_name>(item.field_value)) {
+          has_field_name_args = true;
+        }
+      }
+      if (has_nth_field_args && has_field_name_args) {
+        const auto args_spelled_out = [&]() -> std::string {
+          if (args.size() == 1) {
+            return fmt::format("`{}`", args.front());
+          }
+          if (args.size() == 2) {
+            return fmt::format("`{}` and `{}`", args[0], args[1]);
+          }
+          return fmt::format(
+            "{}, and `{}`",
+            fmt::join(args | std::views::take(args.size() - 1)
+                        | std::views::transform([](const auto& val) {
+                            return fmt::format("`{}`", val);
+                          }),
+                      ", "),
+            args.back());
+        }();
+        return diagnostic::error("failed to infer fields to use for charting")
+          .hint("either specify {} as {}, and "
+                "utilize the `select` operator",
+                args_spelled_out,
+                args.size() == 1 ? "an argument explicitly, or don't"
+                                 : "arguments explicitly, or none of them")
+          .done();
+      }
+      return std::nullopt;
+    };
+}
+
+auto require_attribute_value_one_of(std::string_view attr,
+                                    std::vector<std::string_view> values)
+  -> chart_definition::verification_callback {
+  return [attr, values = std::move(values)](
+           configuration& cfg) -> std::optional<diagnostic> {
+    auto cfg_it = std::ranges::find(cfg, attr, &configuration_item::key);
+    TENZIR_ASSERT(cfg_it != cfg.end());
+    auto& cfg_item = *cfg_it;
+    TENZIR_ASSERT(
+      std::holds_alternative<attribute_value>(cfg_item.field_value));
+    auto& attr_value = std::get<attribute_value>(cfg_item.field_value);
+    if (not std::ranges::any_of(values, [&](std::string_view sv) {
+          return sv == attr_value.attr;
+        })) {
+      return diagnostic::error("invalid value for option `{}`", attr)
+        .hint("value must be one of the following: {}", fmt::join(values, ", "))
+        .done();
+    }
+    return std::nullopt;
+  };
+}
+
 // Definitions of all supported chart types
 chart_definition chart_definitions[] = {
-  // `line` chart has flags --x-axis, --y-axis and --title
-  // --x-axis defaults to the first field, --y-axis to the second,
-  // --title to the schema name
-  {.type = "line",
-   .required_flags = {},
-   .optional_flags
-   = {{.attr = "x", .flag = "x", .type = flag_type::field_name, .default_ = nth_field{0}, .req = requirement::strictly_increasing,},
-      {.attr = "y", .flag = "y", .type = flag_type::field_name, .default_ = nth_field{1},},}},
-  // `area` is equivalent to `line`
-  {.type = "area",
-   .required_flags = {},
-   .optional_flags
-   = {{.attr = "x", .flag = "x", .type = flag_type::field_name, .default_ = nth_field{0}, .req = requirement::strictly_increasing,},
-      {.attr = "y", .flag = "y", .type = flag_type::field_name, .default_ = nth_field{1},},}},
-  // `bar` is equivalent to `line`
-  {.type = "bar",
-   .required_flags = {},
-   .optional_flags
-   = {{.attr = "x", .flag = "x", .type = flag_type::field_name, .default_ = nth_field{0}, .req = requirement::unique,},
-      {.attr = "y", .flag = "y", .type = flag_type::field_name, .default_ = nth_field{1},},}},
+  // `line` chart has flags `x`, `y`, and `position`.
+  // `x` defaults to the first field, `y` to all the rest.
+  // If `x` or `y` is specified, the other must be, too
+  // (specified by the `disallow_mixmatch...` verification).
+  {
+    .type = "line",
+    .required_flags = {},
+    .optional_flags = {
+      {.attr = "x", .flag = "x", .type = flag_type::field_name, .default_ = nth_field{0}, .allow_lists = false, .req = requirement::strictly_increasing,},
+      {.attr = "y", .flag = "y", .type = flag_type::field_name, .default_ = nth_field{1, nth_field::all_the_rest}, .allow_lists = true,},
+      {.attr = "position", .flag = "position", .type = flag_type::attribute_value, .default_ = attribute_value{"grouped"}, .allow_lists = false,},
+    },
+    .verifications = {
+      disallow_mixmatch_between_explicit_and_implicit_arguments({"x", "y"}),
+      require_attribute_value_one_of("position", {"grouped", "stacked"}),
+    },
+  },
+  // `area` is equivalent to `line`.
+  {
+    .type = "area",
+    .required_flags = {},
+    .optional_flags = {
+      {.attr = "x", .flag = "x", .type = flag_type::field_name, .default_ = nth_field{0}, .allow_lists = false, .req = requirement::strictly_increasing,},
+      {.attr = "y", .flag = "y", .type = flag_type::field_name, .default_ = nth_field{1, nth_field::all_the_rest}, .allow_lists = true,},
+      {.attr = "position", .flag = "position", .type = flag_type::attribute_value, .default_ = attribute_value{"grouped"}, .allow_lists = false,},
+    },
+    .verifications = {
+      disallow_mixmatch_between_explicit_and_implicit_arguments({"x", "y"}),
+      require_attribute_value_one_of("position", {"grouped", "stacked"}),
+    },
+  },
+  // `bar` is equivalent to `line`, except the requirement on `x` is for the values to be unique.
+  {
+    .type = "bar",
+    .required_flags = {},
+    .optional_flags = {
+      {.attr = "x", .flag = "x", .type = flag_type::field_name, .default_ = nth_field{0}, .allow_lists = false, .req = requirement::unique,},
+      {.attr = "y", .flag = "y", .type = flag_type::field_name, .default_ = nth_field{1, nth_field::all_the_rest}, .allow_lists = true,},
+      {.attr = "position", .flag = "position", .type = flag_type::attribute_value, .default_ = attribute_value{"grouped"}, .allow_lists = false,},
+    },
+    .verifications = {
+      disallow_mixmatch_between_explicit_and_implicit_arguments({"x", "y"}),
+      require_attribute_value_one_of("position", {"grouped", "stacked"}),
+    },
+  },
   // `pie` chart is equivalent to `line` and `bar`, except
-  // --x-axis is called --name, and --y-axis is called --value
-  {.type = "pie",
-   .required_flags = {},
-   .optional_flags
-   = {{.attr = "x", .flag = "name", .type = flag_type::field_name, .default_ = nth_field{0}, .req = requirement::unique,},
-      {.attr = "y", .flag = "value", .type = flag_type::field_name, .default_ = nth_field{1},},}},
+  // `x` is called `name`, and `y` is called `value`.
+  {
+    .type = "pie",
+    .required_flags = {},
+    .optional_flags = {
+      {.attr = "x", .flag = "name", .type = flag_type::field_name, .default_ = nth_field{0}, .allow_lists = false, .req = requirement::unique,},
+      {.attr = "y", .flag = "value", .type = flag_type::field_name, .default_ = nth_field{1, nth_field::all_the_rest}, .allow_lists = true,},
+    },
+    .verifications = {
+      disallow_mixmatch_between_explicit_and_implicit_arguments({"x", "y"}),
+    },
+  },
 };
 
 class plugin final : public virtual operator_plugin<chart_operator> {

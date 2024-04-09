@@ -406,6 +406,16 @@ setup() {
     check ! tenzir "from stdin read json | chart pie value=b x=e"
   cat ${INPUTSDIR}/json/all-types.json |
     check ! tenzir "from stdin read json | chart piett value=b"
+  cat ${INPUTSDIR}/json/all-types.json |
+    check ! tenzir "from stdin read json | chart bar x=[foo, bar] y=field"
+  cat ${INPUTSDIR}/json/all-types.json |
+    check ! tenzir "from stdin read json | chart bar x=field"
+
+  check tenzir "from stdin read json | chart bar x=first y=[second, third]" <<EOF
+{"first": 1, "second": "Hello world", "third": "foo"}
+{"first": 2, "second": "Hallo Welt", "third": "bar"}
+{"first": 3, "second": "Hei maailma", "third": "baz"}
+EOF
 }
 
 # bats test_tags=pipelines

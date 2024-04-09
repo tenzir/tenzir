@@ -11,10 +11,10 @@ Add metadata to a schema, necessary for rendering as a chart.
 ## Synopsis
 
 ```
-chart line [x=<field>] [y=<field>]
-chart area [x=<field>] [y=<field>]
-chart bar  [x=<field>] [y=<field>]
-chart pie  [name=<field>] [value=<field>]
+chart line [x=<field>] [y=<fields>] [position=<position>]
+chart area [x=<field>] [y=<fields>] [position=<position>]
+chart bar  [x=<field>] [y=<fields>] [position=<position>]
+chart pie  [name=<field>] [value=<fields>]
 ```
 
 ## Description
@@ -23,7 +23,7 @@ The `chart` operator adds attributes to the schema of the input events,
 that are used to guide rendering of the data as a chart.
 The operator does no rendering itself.
 
-### `x=<field>` (`line`, `area`, and `bar` charts only)
+### `x=<fields>` (`line`, `area`, and `bar` charts only)
 
 Set the field used for the X-axis. Defaults to the first field in the schema.
 
@@ -32,9 +32,18 @@ Values in this field must be strictly increasing
 when creating a `line` or `area` chart,
 or unique when creating a `bar` chart.
 
-### `y=<field>` (`line`, `area`, and `bar` charts only)
+### `y=<fields>` (`line`, `area`, and `bar` charts only)
 
-Set the field used for the Y-axis. Defaults to the second field in the schema.
+Set the fields used for the Y-axis.
+Can either be a single field, or a list of fields spelled with
+a list syntax (`[field1, field2]`).
+Defaults to every field but the first one.
+
+### `position=<position>` (`line`, `area`, and `bar` charts only)
+
+Control how the values are grouped when rendered as a chart.
+Possible values are `grouped` and `stacked`.
+Defaults to `grouped`.
 
 ### `name=<field>` (`pie` chart only)
 
@@ -43,10 +52,12 @@ Defaults to the first field in the schema.
 
 Values in this field must be unique.
 
-### `value=<field>` (`pie` chart only)
+### `value=<fields>` (`pie` chart only)
 
-Set the field used for the value of a segment.
-Defaults to the second field in the schema.
+Set the fields used for the value of a segment.
+Can either be a single field, or a list of fields spelled with
+a list syntax (`[field1, field2]`).
+Defaults to every field but the first one.
 
 ## Examples
 
