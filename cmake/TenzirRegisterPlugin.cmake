@@ -815,21 +815,31 @@ function (TenzirRegisterPlugin)
     include(ProcessorCount)
     ProcessorCount(parallel_level)
     math(EXPR parallel_level "${parallel_level} + 2")
-    add_custom_target(
-      integration-${PLUGIN_TARGET}
-      COMMAND
-        ${CMAKE_COMMAND} -E env
-        PATH="${TENZIR_PATH}:\$\$PATH:${TENZIR_PATH}/../share/tenzir/integration/lib/bats/bin"
-        bats "-r" "-T" "--jobs" "${parallel_level}"
-        "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests"
-      COMMENT "Executing ${PLUGIN_TARGET} integration tests..."
-      USES_TERMINAL)
+    file(GLOB_RECURSE _suites CONFIGURE_DEPENDS
+         "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests/*.bats")
+    add_custom_target(integration-${PLUGIN_TARGET})
+    add_dependencies(integration integration-${PLUGIN_TARGET})
+    TenzirDefineUpdateIntegrationTarget(integration-${PLUGIN_TARGET})
+    foreach (suite IN LISTS _suites)
+      get_filename_component(suite_name "${suite}" NAME_WE)
+      add_custom_target(
+        integration-${PLUGIN_TARGET}-${suite_name}
+        COMMAND
+          ${CMAKE_COMMAND} -E env
+          PATH="${TENZIR_PATH}:\$\$PATH:${TENZIR_PATH}/../share/tenzir/integration/lib/bats/bin"
+          bats "-r" "-T" "--jobs" "${parallel_level}" "${suite}"
+        COMMENT
+          "Executing ${PLUGIN_TARGET} integration test suite ${suite_name}..."
+        USES_TERMINAL)
+      add_dependencies(integration-${PLUGIN_TARGET}-${suite_name}
+                       tenzir::tenzir)
+      add_dependencies(integration-${PLUGIN_TARGET}
+                       integration-${PLUGIN_TARGET}-${suite_name})
+      TenzirDefineUpdateIntegrationTarget(
+        integration-${PLUGIN_TARGET}-${suite_name})
+    endforeach ()
     unset(parallel_level)
     unset(TENZIR_PATH)
-    TenzirDefineUpdateIntegrationTarget(integration-${PLUGIN_TARGET})
-
-    add_dependencies(integration-${PLUGIN_TARGET} tenzir::tenzir)
-    add_dependencies(integration integration-${PLUGIN_TARGET})
   endif ()
 
   if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
