@@ -101,16 +101,19 @@ using bridge_actor = caf::typed_actor<
 
 struct connection_state {
   ~connection_state() noexcept {
+    // We ignore errors on shutdown. Just trying to close as much as possible
+    // here.
+    auto ec = boost::system::error_code{};
     if (tls_socket) {
-      tls_socket->shutdown();
+      tls_socket->shutdown(ec);
       tls_socket->lowest_layer().shutdown(
-        boost::asio::ip::tcp::socket::shutdown_both);
-      tls_socket->lowest_layer().cancel();
-      tls_socket->lowest_layer().close();
+        boost::asio::ip::tcp::socket::shutdown_both, ec);
+      tls_socket->lowest_layer().cancel(ec);
+      tls_socket->lowest_layer().close(ec);
     } else if (socket) {
-      socket->shutdown(boost::asio::ip::tcp::socket::shutdown_both);
-      socket->cancel();
-      socket->close();
+      socket->shutdown(boost::asio::ip::tcp::socket::shutdown_both, ec);
+      socket->cancel(ec);
+      socket->close(ec);
     }
   }
 
