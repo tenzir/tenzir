@@ -91,6 +91,9 @@ public:
         for (auto&& chunk : (*p)->process(std::move(slice))) {
           co_yield std::move(chunk);
         }
+        if (ctrl.self().getf(caf::abstract_actor::is_shutting_down_flag)) {
+          co_return;
+        }
       }
       for (auto&& chunk : (*p)->finish()) {
         co_yield std::move(chunk);
@@ -123,6 +126,9 @@ public:
         }
         for (auto&& chunk : state->first->process(std::move(slice))) {
           co_yield std::move(chunk);
+        }
+        if (ctrl.self().getf(caf::abstract_actor::is_shutting_down_flag)) {
+          co_return;
         }
       }
       if (state)

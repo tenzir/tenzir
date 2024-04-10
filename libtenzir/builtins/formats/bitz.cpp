@@ -74,7 +74,7 @@ public:
           co_yield std::move(result);
         }
       },
-      make_byte_reader(std::move(input)), ctrl);
+      make_byte_view_reader(std::move(input)), ctrl);
   }
 
   friend auto inspect(auto& f, bitz_parser& x) -> bool {

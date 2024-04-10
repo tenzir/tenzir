@@ -658,11 +658,7 @@ public:
 };
 
 /// A base class for plugins that add new store backends.
-class store_plugin : public virtual store_actor_plugin,
-                     public virtual parser_parser_plugin,
-                     public virtual printer_parser_plugin,
-                     public virtual parser_serialization_plugin,
-                     public virtual printer_serialization_plugin {
+class store_plugin : public virtual store_actor_plugin {
 public:
   /// Create a store for passive partitions.
   [[nodiscard]] virtual caf::expected<std::unique_ptr<passive_store>>
@@ -673,18 +669,6 @@ public:
   [[nodiscard]] virtual caf::expected<std::unique_ptr<active_store>>
   make_active_store() const = 0;
 
-  [[nodiscard]] auto serialize(serializer f, const plugin_parser& x) const
-    -> bool override;
-
-  auto deserialize(deserializer f, std::unique_ptr<plugin_parser>& x) const
-    -> void override;
-
-  [[nodiscard]] auto serialize(serializer f, const plugin_printer& x) const
-    -> bool override;
-
-  auto deserialize(deserializer f, std::unique_ptr<plugin_printer>& x) const
-    -> void override;
-
 private:
   [[nodiscard]] caf::expected<builder_and_header>
   make_store_builder(accountant_actor accountant, filesystem_actor fs,
@@ -693,12 +677,6 @@ private:
   [[nodiscard]] caf::expected<store_actor>
   make_store(accountant_actor accountant, filesystem_actor fs,
              std::span<const std::byte> header) const final;
-
-  auto parse_parser(parser_interface& p) const
-    -> std::unique_ptr<plugin_parser> final;
-
-  auto parse_printer(parser_interface& p) const
-    -> std::unique_ptr<plugin_printer> final;
 };
 
 // -- lookup table plugin -----------
