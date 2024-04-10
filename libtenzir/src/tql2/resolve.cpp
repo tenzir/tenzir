@@ -62,8 +62,14 @@ public:
     }
     // TODO: Check if this entity has right type?
     xyz->match(
-      [&](const std::unique_ptr<function_def>&) {
+      [&](const function_plugin*) {
         // TODO: Methods?
+        if (context_ != context_t::fn_name) {
+          diagnostic::error("expected {}, got function", expected)
+            .primary(x.get_location())
+            .emit(diag_);
+          return;
+        }
         x.ref = entity_path{{name}};
       },
       [&](const operator_factory_plugin*) {

@@ -135,13 +135,14 @@ public:
       return std::nullopt;
     }
     // TODO: Improve.
-    auto fn
-      = std::get_if<std::unique_ptr<function_def>>(&ctx_.reg().get(x.fn.ref));
-    TENZIR_ASSERT(fn);
-    TENZIR_ASSERT(*fn);
-    // TODO: This does not respect named arguments.
-    auto info = function_def::check_info{x.fn.get_location(), x.args, args};
-    return (*fn)->check(info, ctx_);
+    return std::nullopt;
+    // auto fn
+    //   = std::get_if<std::unique_ptr<function_def>>(&ctx_.reg().get(x.fn.ref));
+    // TENZIR_ASSERT(fn);
+    // TENZIR_ASSERT(*fn);
+    // // TODO: This does not respect named arguments.
+    // auto info = function_def::check_info{x.fn.get_location(), x.args, args};
+    // return (*fn)->check(info, ctx_);
   }
 
   auto visit(const assignment& x) -> result {

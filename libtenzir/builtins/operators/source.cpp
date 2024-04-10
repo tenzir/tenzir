@@ -30,10 +30,21 @@ public:
 
   auto operator()() const -> generator<table_slice> {
     auto sb = series_builder{};
+#if 1
     for (auto& event : events_) {
       sb.data(event);
     }
-    for (auto& slice : sb.finish_as_table_slice("tenzir.source")) {
+    auto slices = sb.finish_as_table_slice("tenzir.source");
+#else
+    for (auto i = 0; i < 1'000'000; ++i) {
+      for (auto& event : events_) {
+        sb.data(event);
+      }
+    }
+    auto slices = sb.finish_as_table_slice("tenzir.source");
+    std::cerr << "--- DONE ---\n" << std::flush;
+#endif
+    for (auto& slice : slices) {
       co_yield std::move(slice);
     }
   }

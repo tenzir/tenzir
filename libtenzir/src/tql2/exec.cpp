@@ -874,15 +874,20 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   // not want the mere *existence* to be dependant on which plugins are loaded.
   // Instead, we should always register all operators and then emit an helpful
   // error if the corresponding plugin is not loaded.
-  for (auto plugin : plugins::get<tql2::operator_factory_plugin>()) {
-    auto name = plugin->name();
+  for (auto op : plugins::get<tql2::operator_factory_plugin>()) {
+    auto name = op->name();
     // TODO
     TENZIR_ASSERT(std::string_view{name}.substr(0, 5) == "tql2.");
-    reg.add(name.substr(5), plugin);
+    reg.add(name.substr(5), op);
   }
-  // functions
-  reg.add("now", std::make_unique<now_def>());
-  reg.add("sqrt", std::make_unique<sqrt_def>());
+  for (auto fn : plugins::get<tql2::function_plugin>()) {
+    auto name = fn->name();
+    // TODO
+    TENZIR_ASSERT(std::string_view{name}.substr(0, 5) == "tql2.");
+    reg.add(name.substr(5), fn);
+  }
+  // reg.add("now", std::make_unique<now_def>());
+  // reg.add("sqrt", std::make_unique<sqrt_def>());
   tql2::resolve_entities(parsed, reg, diag_wrapper);
   if (cfg.dump_ast) {
     with_thread_local_registry(reg, [&] {

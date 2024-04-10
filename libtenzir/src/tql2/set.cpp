@@ -14,9 +14,15 @@
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/plugin.hpp"
 #include "tenzir/type.hpp"
 
+#include <arrow/compute/api_scalar.h>
+#include <caf/detail/is_complete.hpp>
+#include <caf/detail/is_one_of.hpp>
+
 #include <ranges>
+#include <type_traits>
 
 namespace tenzir::tql2 {
 
@@ -92,6 +98,71 @@ auto value_to_series(const value& val, int64_t length) -> series {
 template <class T>
 concept Addable = requires(T x, T y) {
   { x + y } -> std::same_as<T>;
+};
+
+template <class T>
+concept numeric_type
+  = std::same_as<T, int64_type> || std::same_as<T, uint64_type>
+    || std::same_as<T, double_type>;
+
+template <ast::binary_op Op, concrete_type L, concrete_type R>
+struct EvalBinOp;
+
+template <numeric_type L, numeric_type R>
+struct EvalBinOp<ast::binary_op::add, L, R> {
+  // double + (u)int -> double
+  // uint + int -> int? uint?
+
+  static auto
+  eval(const type_to_arrow_array_t<L>& l, const type_to_arrow_array_t<R>& r)
+    -> std::shared_ptr<arrow::Array> {
+    // if constexpr (std::same_as<L, double_type>
+    //               || std::same_as<R, double_type>) {
+    //   // double
+    // } else {
+    //   // if both uint -> uint
+    //   // otherwise int?
+    // }
+    // TODO: Do we actually want to use this?
+    // For example, range error leads to no result at all.
+    auto opts = arrow::compute::ArithmeticOptions{};
+    opts.check_overflow = true;
+    auto res = arrow::compute::Add(l, r, opts).ValueOrDie();
+    TENZIR_ASSERT(res.is_array());
+    return res.make_array();
+  }
+};
+
+template <>
+struct EvalBinOp<ast::binary_op::add, string_type, string_type> {
+  static auto eval(const arrow::StringArray& l, const arrow::StringArray& r)
+    -> std::shared_ptr<arrow::Array> {
+    auto b = arrow::StringBuilder{};
+    for (auto i = int64_t{0}; i < l.length(); ++i) {
+      if (l.IsNull(i) || r.IsNull(i)) {
+        (void)b.AppendNull();
+        continue;
+      }
+      auto lv = l.GetView(i);
+      auto rv = r.GetView(i);
+      (void)b.Append(lv);
+      (void)b.ExtendCurrent(rv);
+    }
+    return b.Finish().ValueOrDie();
+  }
+};
+
+template <numeric_type L, numeric_type R>
+struct EvalBinOp<ast::binary_op::mul, L, R> {
+  static auto
+  eval(const type_to_arrow_array_t<L>& l, const type_to_arrow_array_t<R>& r)
+    -> std::shared_ptr<arrow::Array> {
+    auto opts = arrow::compute::ArithmeticOptions{};
+    opts.check_overflow = true;
+    auto res = arrow::compute::Multiply(l, r, opts).ValueOrDie();
+    TENZIR_ASSERT(res.is_array());
+    return res.make_array();
+  }
 };
 
 class evaluator {
@@ -207,11 +278,60 @@ public:
 
   auto eval(const ast::function_call& x) -> value {
     TENZIR_ASSERT(x.fn.ref.resolved());
-    x.fn.ref;
-    return not_implemented(x);
+    auto segments = x.fn.ref.segments();
+    TENZIR_ASSERT(segments.size() == 1);
+    auto fn = plugins::find<function_plugin>("tql2." + segments[0]);
+    TENZIR_ASSERT(fn);
+    auto args = std::vector<series>{};
+    for (auto& arg : x.args) {
+      args.push_back(to_series(eval(arg)));
+    }
+    auto ret = fn->eval(x, input_.rows(), std::move(args), dh_);
+    TENZIR_ASSERT(ret.length() == detail::narrow<int64_t>(input_.rows()));
+    return ret;
+  }
+
+  template <ast::binary_op Op>
+  auto eval(const ast::binary_expr& x, const series& l, const series& r)
+    -> value {
+    TENZIR_ASSERT(x.op.inner == Op);
+    TENZIR_ASSERT(l.length() == r.length());
+    return caf::visit(
+      [&]<concrete_type L, concrete_type R>(const L&, const R&) -> value {
+        if constexpr (caf::detail::is_complete<EvalBinOp<Op, L, R>>) {
+          using LA = type_to_arrow_array_t<L>;
+          using RA = type_to_arrow_array_t<R>;
+          auto& la = caf::get<LA>(*l.array);
+          auto& ra = caf::get<RA>(*r.array);
+          auto oa = EvalBinOp<Op, L, R>::eval(la, ra);
+          auto ot = type::from_arrow(*oa->type());
+          return series{std::move(ot), std::move(oa)};
+        } else {
+          // TODO: Not possible? Where coercion?
+          diagnostic::warning("binary operator `{}` not implemented for `{}` "
+                              "and `{}`",
+                              x.op.inner, l.type.kind(), r.type.kind())
+            .primary(x.op.source)
+            .emit(dh_);
+          return caf::none;
+        }
+      },
+      l.type, r.type);
   }
 
   auto eval(const ast::binary_expr& x) -> value {
+#if 1
+    auto l = to_series(eval(x.left));
+    auto r = to_series(eval(x.right));
+    switch (x.op.inner) {
+      case ast::binary_op::add:
+        return eval<ast::binary_op::add>(x, l, r);
+      case ast::binary_op::mul:
+        return eval<ast::binary_op::mul>(x, l, r);
+      default:
+        return not_implemented(x);
+    }
+#else
     if (x.op.inner != ast::binary_op::add) {
       return not_implemented(x);
     }
@@ -341,6 +461,7 @@ public:
       },
     };
     return std::visit(f, l, r);
+#endif
   } // namespace
 
   auto eval(const auto& x) -> value {
@@ -413,7 +534,22 @@ auto set_operator::operator()(generator<table_slice> input,
             },
         };
       }
-      result = transform_columns(result, {transformation});
+      // TODO
+      if (transformation.index.empty()) {
+        auto record = caf::get_if<arrow::StructArray>(&*s.array);
+        if (s.type.name().empty()) {
+          s.type = type{"tenzir.set", s.type};
+        }
+        // TODO
+        TENZIR_ASSERT(record);
+        auto fields = record->Flatten().ValueOrDie();
+        result = table_slice{arrow::RecordBatch::Make(s.type.to_arrow_schema(),
+                                                      s.length(), fields),
+                             s.type};
+        TENZIR_ASSERT_EXPENSIVE(to_record_batch(result)->Validate().ok());
+      } else {
+        result = transform_columns(result, {transformation});
+      }
       // TODO!!
     }
     co_yield result;

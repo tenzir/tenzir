@@ -26,6 +26,12 @@ template <class Operator>
 class operator_plugin : public virtual operator_factory_plugin,
                         public virtual operator_inspection_plugin<Operator> {};
 
-class function_plugin : public virtual plugin {};
+class function_plugin : public virtual plugin {
+public:
+  virtual auto eval(const ast::function_call& self, size_t length,
+                    std::vector<series> args, diagnostic_handler& dh) const
+    -> series
+    = 0;
+};
 
 } // namespace tenzir::tql2

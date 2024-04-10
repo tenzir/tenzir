@@ -112,15 +112,15 @@ public:
 };
 
 using entity_def
-  = variant<std::unique_ptr<function_def>, const operator_factory_plugin*>;
+  = variant<const function_plugin*, const operator_factory_plugin*>;
 
 class registry {
 public:
   // TODO: The interface of this class is drastically simplified for now. It
   // must be changed eventually to properly enable modules and use an interned
   // representation of `entity_path`.
-  void add(std::string name, entity_def fn) {
-    auto inserted = defs_.emplace(std::move(name), std::move(fn)).second;
+  void add(std::string name, entity_def def) {
+    auto inserted = defs_.emplace(std::move(name), def).second;
     TENZIR_ASSERT(inserted);
   }
 

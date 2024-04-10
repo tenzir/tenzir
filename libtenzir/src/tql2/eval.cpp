@@ -138,6 +138,9 @@ public:
     if (not x.fn.ref.resolved()) {
       throw std::monostate{};
     }
+#if 1
+    diagnostic::error("not implemented eval for function").throw_();
+#else
     auto& entity = ctx_.reg().get(x.fn.ref);
     auto fn = std::get_if<std::unique_ptr<function_def>>(&entity);
     // TODO
@@ -154,6 +157,7 @@ public:
       throw std::monostate{};
     }
     return std::move(*result);
+#endif
   }
 
   auto eval(const ast::dollar_var& x) -> data {
