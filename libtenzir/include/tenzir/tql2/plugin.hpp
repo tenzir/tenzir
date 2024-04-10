@@ -26,4 +26,6 @@ template <class Operator>
 class operator_plugin : public virtual operator_factory_plugin,
                         public virtual operator_inspection_plugin<Operator> {};
 
+class function_plugin : public virtual plugin {};
+
 } // namespace tenzir::tql2

@@ -207,6 +207,7 @@ public:
 
   auto eval(const ast::function_call& x) -> value {
     TENZIR_ASSERT(x.fn.ref.resolved());
+    x.fn.ref;
     return not_implemented(x);
   }
 
@@ -374,7 +375,7 @@ auto set_operator::operator()(generator<table_slice> input,
     // set foo={bar: 42}, foo.bar=foo.bar+42
     auto result = slice;
     for (auto& assignment : assignments_) {
-      // We are using `slice` here, not `result`!
+      // TODO: We are using `slice` here, not `result`. Okay?
       auto res = evaluator{slice, ctrl.diagnostics()}.eval(assignment.right);
       auto s = value_to_series(res, slice.rows());
       auto resolved = resolve(assignment.left, result.schema());
