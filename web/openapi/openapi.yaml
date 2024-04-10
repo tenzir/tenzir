@@ -50,6 +50,14 @@ components:
           $ref: "#/components/schemas/PipelineAutostart"
         autodelete:
           $ref: "#/components/schemas/PipelineAutodelete"
+        retry_delay:
+          type: string
+          description: If `autostart.failed` is `true`, this value is both a threshold
+            and delay for restarting a failed pipeline. If the lifetime
+            of a running pipeline reaches this value, restart upon failure will be
+            instantaneous. Else, it will restart after this value.
+          default: 3s
+          example: 500ms
     Diagnostic:
       type: object
       properties:
@@ -96,6 +104,18 @@ components:
               type: integer
               description: The maximum number of events to keep in the `serve` operator.
               example: 4000
+    Launch Response For Pipeline Without Explicit Sink:
+      type: object
+      properties:
+        id:
+          type: string
+          description: The ID of the successfully created pipeline.
+    Launch Response For Pipeline With Explicit Sink:
+      type: object
+      properties:
+        deployable:
+          type: boolean
+          description: Returns this property with the value `true`.
     Location:
       type: object
       description: A region in the source code, defined by byte offsets.
@@ -178,6 +198,9 @@ components:
           type: integer
           format: int64
           description: The Unix timestamp of the last pipeline modification in nanoseconds.
+        start_time:
+          type: string
+          description: If the pipeline has been started, the ISO 8601 timestamp of the most recent start.
         total_runs:
           type: integer
           description: The total amount of runs this pipeline has attempted so far.
@@ -196,6 +219,13 @@ components:
           $ref: "#/components/schemas/Diagnostics"
         labels:
           $ref: "#/components/schemas/PipelineLabels"
+        retry_delay:
+          type: string
+          description: If `autostart.failed` is `true`, this value is both a threshold
+            and delay for restarting a failed pipeline in nanoseconds. If the lifetime
+            of a running pipeline reaches this value, restart upon failure will be
+            instantaneous. Else, it will restart after this value.
+          example: 10s
         autostart:
           $ref: "#/components/schemas/PipelineAutostart"
         autodelete:
@@ -331,21 +361,16 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/LaunchParameters"
+              $ref: '#/components/schemas/LaunchParameters'
       responses:
         200:
           description: Success.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                    description: (If the pipeline does not end with a predefined sink) The ID of the successfully created pipeline.
-                  deployable:
-                    type: boolean
-                    description: (If the pipeline ends with a predefined sink) Returns this property with the value `true`.
+                oneOf:
+                  - $ref: '#/components/schemas/Launch Response For Pipeline With Explicit Sink'
+                  - $ref: '#/components/schemas/Launch Response For Pipeline Without Explicit Sink'
   /pipeline/list:
     post:
       summary: List all existing pipelines
@@ -480,6 +505,17 @@ paths:
                   example: zeek-monitoring-pipeline
                 labels:
                   $ref: "#/components/schemas/PipelineLabels"
+                autostart:
+                  $ref: "#/components/schemas/PipelineAutostart"
+                autodelete:
+                  $ref: "#/components/schemas/PipelineAutodelete"
+                retry_delay:
+                  type: string
+                  description: If `autostart.failed` is `true`, this value is both a threshold
+                    and delay for restarting a failed pipeline. If the lifetime
+                    of a running pipeline reaches this value, restart upon failure will be
+                    instantaneous. Else, it will restart after this value.
+                  example: 500ms
       responses:
         200:
           description: Success.
