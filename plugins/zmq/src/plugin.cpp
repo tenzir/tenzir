@@ -113,8 +113,9 @@ class engine {
       TENZIR_DEBUG("creating monitor on {}", endpoint);
       int rc
         = zmq_socket_monitor(socket.handle(), endpoint.c_str(), ZMQ_EVENT_ALL);
-      if (rc != 0)
+      if (rc != 0) {
         throw ::zmq::error_t{}; // fit into the cppzmq error paradigm
+      }
       monitor_socket_ = ::zmq::socket_t{ctx, ::zmq::socket_type::pair};
       monitor_socket_.connect(endpoint);
     }
@@ -127,8 +128,9 @@ class engine {
     auto events(std::optional<std::chrono::milliseconds> timeout = {})
       -> generator<monitor_event> {
       auto ready = engine::poll(monitor_socket_, ZMQ_POLLIN, timeout);
-      if (not ready)
+      if (not ready) {
         co_return;
+      }
       do {
         monitor_event result;
         auto event_msg = ::zmq::message_t{};
@@ -158,10 +160,11 @@ public:
     try {
       auto result = engine{::zmq::socket_type::sub};
       auto endpoint = args.endpoint ? args.endpoint->inner : default_endpoint;
-      if (args.listen)
+      if (args.listen) {
         result.listen(endpoint);
-      else
+      } else {
         result.connect(endpoint);
+      }
       auto filter = args.filter ? args.filter->inner : "";
       result.socket_.set(::zmq::sockopt::subscribe, filter);
       return result;
@@ -174,10 +177,11 @@ public:
     try {
       auto result = engine{::zmq::socket_type::pub};
       auto endpoint = args.endpoint ? args.endpoint->inner : default_endpoint;
-      if (args.connect)
+      if (args.connect) {
         result.connect(endpoint);
-      else
+      } else {
         result.listen(endpoint);
+      }
       return result;
     } catch (const ::zmq::error_t& e) {
       return make_error(e);
@@ -188,8 +192,9 @@ public:
                              = {}) -> caf::error {
     try {
       TENZIR_DEBUG("waiting until socket is ready to send");
-      if (not poll(socket_, ZMQ_POLLOUT, timeout))
+      if (not poll(socket_, ZMQ_POLLOUT, timeout)) {
         return caf::make_error(ec::timeout, "timed out while polling socket");
+      }
       auto message = ::zmq::message_t{*chunk};
       auto flags = ::zmq::send_flags::none;
       auto bytes = socket_.send(message, flags);
@@ -205,8 +210,9 @@ public:
     -> caf::expected<chunk_ptr> {
     try {
       TENZIR_DEBUG("waiting until socket is ready to receive");
-      if (not poll(socket_, ZMQ_POLLIN, timeout))
+      if (not poll(socket_, ZMQ_POLLIN, timeout)) {
         return caf::make_error(ec::timeout, "timed out while polling socket");
+      }
       auto message = std::make_shared<::zmq::message_t>();
       auto flags = ::zmq::recv_flags::none;
       auto bytes = socket_.recv(*message, flags);
@@ -235,10 +241,11 @@ public:
           ++num_peers_;
           break;
         case ZMQ_EVENT_DISCONNECTED:
-          if (num_peers_ == 0)
+          if (num_peers_ == 0) {
             TENZIR_WARN("logic error: disconnect while no one is connected");
-          else
+          } else {
             --num_peers_;
+          }
           break;
       }
     }
@@ -272,8 +279,9 @@ private:
     auto infinite = std::chrono::milliseconds(-1);
     auto ms = timeout ? *timeout : infinite;
     auto num_events_signaled = ::zmq::poll(items.data(), items.size(), ms);
-    if (num_events_signaled == 0)
+    if (num_events_signaled == 0) {
       return false;
+    }
     TENZIR_ASSERT(num_events_signaled > 0);
     TENZIR_ASSERT((items[0].revents & flags) != 0);
     return true;
@@ -385,8 +393,9 @@ public:
     }
     return [&ctrl, engine = std::make_shared<class engine>(std::move(*engine))](
              chunk_ptr chunk) mutable {
-      if (not chunk || chunk->size() == 0)
+      if (not chunk || chunk->size() == 0) {
         return;
+      }
       // Block until we have at least one peer, or fast-track with a zero
       // timeout when in steady state.
       do {
@@ -433,14 +442,17 @@ public:
     parser.add("-l,--listen", args.listen);
     parser.add("-c,--connect", args.connect);
     parser.parse(p);
-    if (args.listen && args.connect)
+    if (args.listen && args.connect) {
       diagnostic::error("both --listen and --connect provided")
         .primary(*args.listen)
         .primary(*args.connect)
         .hint("--listen and --connect are mutually exclusive")
         .throw_();
-    if (args.endpoint && args.endpoint->inner.find("://") == std::string::npos)
+    }
+    if (args.endpoint
+        and args.endpoint->inner.find("://") == std::string::npos) {
       args.endpoint->inner = fmt::format("tcp://{}", args.endpoint->inner);
+    }
     return std::make_unique<zmq_loader>(std::move(args));
   }
 
@@ -454,16 +466,18 @@ public:
     parser.add("-l,--listen", args.listen);
     parser.add("-c,--connect", args.connect);
     parser.parse(p);
-    if (args.listen && args.connect)
+    if (args.listen && args.connect) {
       diagnostic::error("both --listen and --connect provided")
         .primary(*args.listen)
         .primary(*args.connect)
         .hint("--listen and --connect are mutually exclusive")
         .throw_();
+    }
     if (args.endpoint
         and not std::regex_match(args.endpoint->inner,
-                                 std::regex{"^\\w+://.*"}))
+                                 std::regex{"^\\w+://.*"})) {
       args.endpoint->inner = fmt::format("tcp://{}", args.endpoint->inner);
+    }
     return std::make_unique<zmq_saver>(std::move(args));
   }
 
