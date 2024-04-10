@@ -17,8 +17,7 @@ teardown() {
 
 @test "every modifier" {
   check tenzir "every 5ms version | head"
-  check ! tenzir "version | every 1s head"
-  check ! tenzir "version | head | write yaml | every 1s save stdout"
+  check tenzir "every 5ms version | every 500ms tail 1 | head 1"
 }
 
 @test "every with remote" {

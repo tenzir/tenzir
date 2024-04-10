@@ -8,7 +8,7 @@ Operator modifiers are keywords that may occur before an operator.
 
 ## Scheduled Executions
 
-The special keyword `every` enables scheduled execution of a source operator.
+The special keyword `every` enables scheduled execution of an operator.
 
 Use the operator modifier like this:
 
