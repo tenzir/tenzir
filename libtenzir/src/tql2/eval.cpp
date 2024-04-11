@@ -368,7 +368,7 @@ void ensure(const arrow::Status& status) {
 }
 
 template <class T>
-auto ensure(arrow::Result<T> result) -> T {
+[[nodiscard]] auto ensure(arrow::Result<T> result) -> T {
   ensure(result.status());
   return result.MoveValueUnsafe();
 }
@@ -607,6 +607,13 @@ public:
 
   auto eval(const ast::binary_expr& x) -> value {
 #if 1
+    // TODO: How does short circuiting work?
+    if (x.op.inner == ast::binary_op::and_) {
+      // 1) Evaluate left.
+      auto l = to_series(eval(x.left));
+      // 2) Evaluate right, but discard diagnostics if false.
+      TENZIR_TODO();
+    }
     auto l = to_series(eval(x.left));
     auto r = to_series(eval(x.right));
     switch (x.op.inner) {

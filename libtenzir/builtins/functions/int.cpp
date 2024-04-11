@@ -40,20 +40,30 @@ public:
         return std::make_shared<arrow::Int64Array>(arg.data());
       },
       [&](const arrow::StringArray& arg) {
+        auto report = false;
         auto b = arrow::Int64Builder{};
+        (void)b.Reserve(arg.length());
         for (auto row = int64_t{0}; row < detail::narrow<int64_t>(length);
              ++row) {
           if (arg.IsNull(row)) {
-            (void)b.AppendNull();
+            // TODO: Do we want to report this?
+            (void)b.UnsafeAppendNull();
           } else {
             auto result = int64_t{};
             if (parsers::integer(arg.GetView(row), result)) {
-              (void)b.Append(result);
+              (void)b.UnsafeAppend(result);
             } else {
-              // TODO: Can we report this?
-              (void)b.AppendNull();
+              (void)b.UnsafeAppendNull();
+              report = true;
             }
           }
+        }
+        if (report) {
+          // TODO: It would be helpful to know what string, but then
+          // deduplication doesn't work? Perhaps some unique identifier.
+          diagnostic::warning("`int` failed to convert some string")
+            .primary(self.get_location())
+            .emit(dh);
         }
         auto ret = std::shared_ptr<arrow::Int64Array>{};
         (void)b.Finish(&ret);
