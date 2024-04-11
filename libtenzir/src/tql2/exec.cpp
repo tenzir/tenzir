@@ -412,34 +412,6 @@ public:
   }
 };
 
-class where_use_test final : public operator_base {
-public:
-  where_use_test() = default;
-
-  auto name() const -> std::string override {
-    return "where2";
-  }
-};
-
-class where_use final : public operator_use {
-public:
-  // TODO: Better solution?
-  where_use() = default;
-
-  explicit where_use(ast::expression expr) : expr_{std::move(expr)} {
-  }
-
-  auto name() const -> std::string {
-    return "where2";
-  }
-
-  friend auto inspect(auto& f, where_use& x) -> bool {
-    return f.apply(x.expr_);
-  }
-
-private:
-  ast::expression expr_;
-};
 
 class plugin : public virtual serialization_plugin<operator_base> {
 public:
@@ -473,25 +445,6 @@ public:
   }
 };
 
-class where_def final : public operator_def {
-public:
-  auto make(ast::entity self, std::vector<ast::expression> args,
-            context& ctx) const -> std::unique_ptr<operator_use> override {
-    if (args.size() != 1) {
-      diagnostic::error("expected exactly one argument")
-        .primary(self.get_location())
-        .emit(ctx.dh());
-      return nullptr;
-    }
-    auto ty = type_checker{ctx}.visit(args[0]);
-    if (ty && ty->kind().is_not<bool_type>()) {
-      diagnostic::error("expected `bool`, got `{}`", *ty)
-        .primary(args[0].get_location())
-        .emit(ctx.dh());
-    }
-    return std::make_unique<where_use>(std::move(args[0]));
-  }
-};
 #endif
 
 #if 1

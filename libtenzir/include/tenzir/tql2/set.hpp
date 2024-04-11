@@ -48,26 +48,4 @@ private:
   std::vector<ast::assignment> assignments_;
 };
 
-struct resolve_error {
-  struct field_not_found {};
-  struct not_a_record {
-    type type;
-  };
-
-  using reason_t = variant<field_not_found, not_a_record>;
-
-  resolve_error(ast::identifier ident, reason_t reason)
-    : ident{std::move(ident)}, reason{std::move(reason)} {
-  }
-
-  ast::identifier ident;
-  reason_t reason;
-};
-
-auto resolve(const ast::selector& sel, const table_slice& slice)
-  -> variant<series, resolve_error>;
-
-auto resolve(const ast::selector& sel, type ty)
-  -> variant<offset, resolve_error>;
-
 } // namespace tenzir::tql2

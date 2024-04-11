@@ -6,6 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/operator_control_plane.hpp"
+#include "tenzir/tql2/eval.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
@@ -23,6 +26,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/tql/basic.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
 #include <caf/expected.hpp>
@@ -150,7 +154,118 @@ public:
   }
 };
 
+using namespace tql2;
+
+class where_operator2 final : public crtp_operator<where_operator2> {
+public:
+  where_operator2() = default;
+
+  explicit where_operator2(ast::expression expr) : expr_{std::move(expr)} {
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.where";
+  }
+
+  auto
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    // TODO: This might be quite inefficient compared to what we could do.
+    for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      auto filter = eval(expr_, slice, ctrl.diagnostics());
+      auto array = caf::get_if<arrow::BooleanArray>(&*filter.array);
+      if (not array) {
+        diagnostic::warning("expected `bool`, got `{}`", filter.type.kind())
+          .primary(expr_.get_location())
+          .emit(ctrl.diagnostics());
+        co_yield {};
+        continue;
+      }
+#if 1
+      auto length = array->length();
+      auto current_value = array->Value(0);
+      auto current_begin = int64_t{0};
+      // Add `false` at index `length` to flush.
+      for (auto i = int64_t{1}; i < length + 1; ++i) {
+        auto next = i != length && array->Value(i);
+        if (current_value == next) {
+          continue;
+        }
+        if (current_value) {
+          // emit
+          co_yield subslice(slice, current_begin, i);
+        } else {
+          // discard
+        }
+        current_value = next;
+        current_begin = i;
+      }
+#else
+      // TODO: This ignores nulls.
+      auto length = array->length();
+      auto begin = length;
+      for (auto i = int64_t{0}; i < length; ++i) {
+        if (array->Value(i)) {
+          begin = i;
+          break;
+        }
+      }
+      if (begin == length) {
+        // done
+      }
+      auto end = length;
+      for (auto i = begin + 1; i < length; ++i) {
+        if (not array->Value(i)) {
+          end = i;
+          break;
+        }
+      }
+      // TODO: Merge small.
+      co_yield subslice(slice, begin, end);
+#endif
+    }
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    // TODO
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, where_operator2& x) -> bool {
+    return f.apply(x.expr_);
+  }
+
+private:
+  ast::expression expr_;
+};
+
+class plugin2 final : public virtual tql2::operator_plugin<where_operator2> {
+public:
+  auto make_operator(ast::entity self, std::vector<ast::expression> args,
+                     tql2::context& ctx) const -> operator_ptr override {
+    if (args.size() != 1) {
+      diagnostic::error("expected exactly one argument")
+        .primary(self.get_location())
+        .emit(ctx.dh());
+      return nullptr;
+    }
+    // auto ty = type_checker{ctx}.visit(args[0]);
+    // if (ty && ty->kind().is_not<bool_type>()) {
+    //   diagnostic::error("expected `bool`, got `{}`", *ty)
+    //     .primary(args[0].get_location())
+    //     .emit(ctx.dh());
+    // }
+    return std::make_unique<where_operator2>(std::move(args[0]));
+  }
+};
+
 } // namespace
 } // namespace tenzir::plugins::where
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::plugin2)
