@@ -92,13 +92,13 @@ list, create, or delete workspaces, respectively.
 #### `<owner_namespace>`
 
 Either `user` or `organization`, depending on whether the workspace is
-associated with a user or an organization, respectively.
+associated with a user or an organization.
 
 #### `<owner_id>`
 
-The unique id of the workspace owner:
-- If `<owner_namespace>` is `user`, then this matches the user's `sub` claim in the
-  OIDC token.
+The unique ID of the workspace owner:
+- If `<owner_namespace>` is `user`, then this matches the user's `sub` claim in
+  the OIDC token.
 - If `<owner_namespace>` is `organization`, then this is an arbitrary string
   uniquely identifiying the organization the workspace belongs to.
 
@@ -108,7 +108,7 @@ The name of the workspace as shown in the app.
 
 #### `<workspace_id>`
 
-The unique id of the workspace, as shown in `tenzir-platform workspace list` or
+The unique ID of the workspace, as shown in `tenzir-platform workspace list` or
 `tenzir-platform admin list-global-workspaces`.
 
 ## Manage Nodes
@@ -133,7 +133,7 @@ respectively.
 
 The following commands interact with the selected workspace:
 - `tenzir-platform node list` lists all nodes in the selected workspace,
-  including their id, name, and connection status.
+  including their ID, name, and connection status.
 - `tenzir-platform node ping` pings the specified node.
 - `tenzir-platform node create` registers a new node at the platform so that it
   can be connected to the platform. Note that this neither starts a new node nor
@@ -147,12 +147,12 @@ The following commands interact with the selected workspace:
 
 #### `<workspace_id>`
 
-The unique id of the workspace, as shown in `tenzir-platform workspace list` or
+The unique ID of the workspace, as shown in `tenzir-platform workspace list` or
 `tenzir-platform admin list-global-workspaces`.
 
 #### `<node_id>`
 
-The unique id of the node, as shown in `tenzir-platform node list`.
+The unique ID of the node, as shown in `tenzir-platform node list`.
 
 #### `<node_name>`
 

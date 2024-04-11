@@ -10,9 +10,9 @@ dashboards.
 
 :::warning Sovereign Edition Required
 Tenzir offers a free and cloud-hosted version of the Tenzir Platform on
-[app.tenzir.com](https://app.tenzir.com) for all users. This guide explains how
-to run the platform on your own premises as a user of the [Sovereign
-Edition](https://tenzir.com/pricing).
+[app.tenzir.com](https://app.tenzir.com) for all users of the Community Edition.
+This guide explains how to run the platform on your own premises as a user of
+the [Sovereign Edition](https://tenzir.com/pricing).
 :::
 
 ## Configuration
@@ -22,14 +22,14 @@ configured separately.
 
 ### HTTP Reverse Proxy
 
-The platform requires has four URLs that require a HTTP reverse proxy to be set
-up. The URLs may be mapped to the same or different hostnames.
+The platform uses four URLs that require a HTTP reverse proxy to be set
+up. These URLs may be mapped to the same or different hostnames.
 
 1. The URL that the user's browser connects to, e.g.,
-   `app.platform.example.org`. This servs a web frontend on which the user can
+   `app.platform.example.org`. This serves a web frontend where the user can
    interact with the platform.
 2. The URL that the nodes connect to, e.g., `nodes.platform.example.org`. Tenzir
-   Nodes connect to this URL to establish long-running websocket connections.
+   Nodes connect to this URL to establish long-running WebSocket connections.
 3. The URL that the platform's S3-compatible blob storage is accessible at,
    e.g., `blob.platform.example.org`.
 4. The URL that the Tenzir Platform CLI connects to, e.g.,
@@ -42,7 +42,7 @@ You must provide the following environment variables for the platform:
 # `http://` or `https://` scheme.
 TENZIR_PLATFORM_DOMAIN=https://app.platform.example.org
 
-# The endpoint to which tenzir nodes should connect. Must include the `ws://`
+# The endpoint to which Tenzir nodes should connect. Must include the `ws://`
 # or `wss://` scheme.
 TENZIR_PLATFORM_CONTROL_ENDPOINT=wss://nodes.platform.example.org
 
@@ -53,11 +53,11 @@ TENZIR_PLATFORM_BLOBS_URL=https://nodes.platform.example.org
 TENZIR_PLATFORM_CLI_API_ENDPOINT=https://api.platform.example.org
 ```
 
-### Identity Provider
+### Identity Provider (IdP)
 
-The platform requires an external identity provider supporting the OIDC
-protocol. This must provide valid RS256 id tokens. The platform must be able to
-access the identity provider's issuer URL.
+The platform requires an external Identity Provider (IdP) supporting the OIDC
+protocol. The IdP must provide valid RS256 ID tokens. The platform must be able
+to access the IdP's issuer URL.
 
 You must provide the following environment variables for the OIDC provider
 configuration used for logging into the platform:
@@ -101,8 +101,8 @@ TENZIR_PLATFORM_POSTGRES_HOSTNAME=YOUR_POSTGRES_HOSTNAME
 
 ### Docker
 
-The Tenzir Platform is shipped as a Docker Compose file. To be able to run it,
-Docker and Docker Compose must be installed.
+The Tenzir Platform is shipped as a Docker Compose file. To run it, Docker and
+Docker Compose must be installed.
 
 As part of your distribution, you were provided an authentication token to be
 able to fetch the Docker images. On the machine on which you want to run the
@@ -159,8 +159,8 @@ It takes up to a minute for all services to be fully available.
 Install the [`tenzir-platform`](https://pypi.org/project/tenzir-platform/)
 package from PyPI.
 
-The `tenzir-platform` command-line utility makes managing users and
-organizations, and their workspaces and nodes in the platform simple.
+The `tenzir-platform` command-line utility makes it simple to manage users,
+organizations, and their workspaces and nodes.
 
 You must provide the following environment variables for interacting with the
 platform through the CLI:
