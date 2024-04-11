@@ -141,7 +141,11 @@ const sidebars = {
     },
     {
       type: 'doc',
-      id: 'python',
+      id: 'python-library',
+    },
+    {
+      type: 'doc',
+      id: 'platform-cli',
     },
     {
       type: 'doc',
