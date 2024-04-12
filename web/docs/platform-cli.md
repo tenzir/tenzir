@@ -116,6 +116,15 @@ list, create, or delete workspaces, respectively.
 Either `user` or `organization`, depending on whether the workspace is
 associated with a user or an organization.
 
+The selected namespace will determine the *default* access rules for the
+workspace:
+
+ - For a user workspace, a single access rule will be created that allows
+   access to the user whose user id matches the given `owner_id`
+ - For an organization workspace, no rules will be created by default and
+   they have to be manually added using the `add-auth-rule` subcommand
+   described below.
+
 ##### `<owner_id>`
 
 The unique ID of the workspace owner:
