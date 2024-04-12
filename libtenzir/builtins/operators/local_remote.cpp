@@ -135,27 +135,21 @@ public:
   };
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto op_name = p.accept_identifier();
-    if (!op_name) {
-      diagnostic::error("expected operator name")
-        .primary(p.current_span())
+    auto result = p.parse_operator();
+    if (not result.inner) {
+      diagnostic::error("failed to parse operator")
+        .primary(result.source)
         .throw_();
     }
-    const auto* plugin = plugins::find_operator(op_name->name);
-    if (!plugin) {
-      diagnostic::error("operator `{}` does not exist", op_name->name)
-        .primary(op_name->source)
-        .throw_();
-    }
-    auto result = plugin->parse_operator(p);
-    if (auto* pipe = dynamic_cast<pipeline*>(result.get())) {
+    if (auto* pipe = dynamic_cast<pipeline*>(result.inner.get())) {
       auto ops = std::move(*pipe).unwrap();
       for (auto& op : ops) {
         op = std::make_unique<local_remote_operator>(std::move(op), Location);
       }
       return std::make_unique<pipeline>(std::move(ops));
     }
-    return std::make_unique<local_remote_operator>(std::move(result), Location);
+    return std::make_unique<local_remote_operator>(std::move(result.inner),
+                                                   Location);
   }
 };
 

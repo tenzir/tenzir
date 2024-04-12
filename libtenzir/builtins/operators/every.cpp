@@ -74,25 +74,50 @@ public:
     return result;
   }
 
-  template <class T>
+  template <class Input, class Output>
   static auto run(operator_ptr op, duration interval, operator_input input,
-                  operator_control_plane& ctrl) -> generator<T> {
-    TENZIR_ASSERT(std::holds_alternative<std::monostate>(input));
+                  operator_control_plane& ctrl) -> generator<Output> {
     auto alarm_clock = ctrl.self().spawn(make_alarm_clock);
-    auto next_run = time::clock::now() + interval;
+    auto now = time::clock::now();
+    auto next_run = now + interval;
     co_yield {};
+    auto make_input = [input = std::move(input), &now, &next_run]() mutable {
+      if constexpr (std::is_same_v<Input, std::monostate>) {
+        (void)now;
+        (void)next_run;
+        TENZIR_ASSERT(std::holds_alternative<std::monostate>(input));
+        return []() -> std::monostate {
+          return {};
+        };
+      } else {
+        TENZIR_ASSERT(std::holds_alternative<generator<Input>>(input));
+        auto typed_input = std::move(std::get<generator<Input>>(input));
+        // We prime the generator's coroutine manually so that we can use
+        // `unsafe_current()` in the adapted generator.
+        typed_input.begin();
+        return [input = std::move(typed_input), &now,
+                &next_run]() mutable -> generator<Input> {
+          auto it = input.unsafe_current();
+          now = time::clock::now();
+          while (now < next_run and it != input.end()) {
+            co_yield std::move(*it);
+            ++it;
+            now = time::clock::now();
+          }
+        };
+      }
+    }();
     while (true) {
-      auto gen = op->instantiate(std::monostate{}, ctrl);
+      auto gen = op->instantiate(make_input(), ctrl);
       if (not gen) {
         diagnostic::error(gen.error()).emit(ctrl.diagnostics());
         co_return;
       }
-      auto typed_gen = std::get_if<generator<T>>(&*gen);
+      auto typed_gen = std::get_if<generator<Output>>(&*gen);
       TENZIR_ASSERT(typed_gen);
       for (auto&& result : *typed_gen) {
         co_yield std::move(result);
       }
-      const auto now = time::clock::now();
       const auto delta = next_run - now;
       if (delta < duration::zero()) {
         next_run = now + interval;
@@ -113,17 +138,31 @@ public:
 
   auto instantiate(operator_input input, operator_control_plane& ctrl) const
     -> caf::expected<operator_output> override {
-    auto output = infer_type<void>();
-    TENZIR_ASSERT(output);
-    TENZIR_ASSERT(output->is_not<void>());
-    if (output->is<table_slice>()) {
-      return run<table_slice>(op_->copy(), interval_, std::move(input), ctrl);
-    }
-    if (output->is<chunk_ptr>()) {
-      return run<chunk_ptr>(op_->copy(), interval_, std::move(input), ctrl);
-    }
-    TENZIR_ASSERT(output->is<void>());
-    return run<std::monostate>(op_->copy(), interval_, std::move(input), ctrl);
+    auto f = [&]<class Input>(const Input&) -> caf::expected<operator_output> {
+      using generator_type
+        = std::conditional_t<std::is_same_v<Input, std::monostate>,
+                             generator<std::monostate>, Input>;
+      using input_type = typename generator_type::value_type;
+      using tag_type
+        = std::conditional_t<std::is_same_v<input_type, std::monostate>,
+                             tag<void>, tag<input_type>>;
+      auto output = infer_type_impl(tag_type{});
+      if (not output) {
+        return std::move(output.error());
+      }
+      if (output->template is<table_slice>()) {
+        return run<input_type, table_slice>(op_->copy(), interval_,
+                                            std::move(input), ctrl);
+      }
+      if (output->template is<chunk_ptr>()) {
+        return run<input_type, chunk_ptr>(op_->copy(), interval_,
+                                          std::move(input), ctrl);
+      }
+      TENZIR_ASSERT(output->template is<void>());
+      return run<input_type, std::monostate>(op_->copy(), interval_,
+                                             std::move(input), ctrl);
+    };
+    return std::visit(f, input);
   }
 
   auto copy() const -> operator_ptr override {
@@ -148,11 +187,6 @@ public:
 
   auto infer_type_impl(operator_type input) const
     -> caf::expected<operator_type> override {
-    if (not input.is<void>()) {
-      return caf::make_error(
-        ec::invalid_argument,
-        fmt::format("`{}` must be used with a source operator", name()));
-    }
     return op_->infer_type(input);
   }
 
@@ -175,6 +209,8 @@ public:
   auto signature() const -> operator_signature override {
     return {
       .source = true,
+      .transformation = true,
+      .sink = true,
     };
   }
 
@@ -191,21 +227,13 @@ public:
         .primary(interval_data.source)
         .throw_();
     }
-    auto op_name = p.accept_identifier();
-    if (!op_name) {
-      diagnostic::error("expected operator name")
-        .primary(p.current_span())
+    auto result = p.parse_operator();
+    if (not result.inner) {
+      diagnostic::error("failed to parse operator")
+        .primary(result.source)
         .throw_();
     }
-    const auto* plugin = plugins::find_operator(op_name->name);
-    if (!plugin) {
-      diagnostic::error("operator `{}` does not exist", op_name->name)
-        .primary(op_name->source)
-        .throw_();
-    }
-    auto result = plugin->parse_operator(p);
-    TENZIR_ASSERT(result);
-    if (auto* pipe = dynamic_cast<pipeline*>(result.get())) {
+    if (auto* pipe = dynamic_cast<pipeline*>(result.inner.get())) {
       auto ops = std::move(*pipe).unwrap();
       for (auto& op : ops) {
         op = std::make_unique<every_operator>(std::move(op), *interval);
@@ -214,7 +242,7 @@ public:
       }
       return std::make_unique<pipeline>(std::move(ops));
     }
-    return std::make_unique<every_operator>(std::move(result), *interval);
+    return std::make_unique<every_operator>(std::move(result.inner), *interval);
   }
 };
 
