@@ -1,7 +1,7 @@
 # Platform CLI
 
-The *Tenzir Platform CLI* manages authentication, workspaces, and nodes for the
-*Tenzir Platform*.
+The *Tenzir Platform CLI* allows users to interact with the *Tenzir Platform* from the command-line
+to manage their workspaces and nodes.
 
 ## Installation
 
@@ -18,6 +18,127 @@ pip install tenzir-platform
 
 ```
 tenzir-platform auth login
+tenzir-platform workspace list
+tenzir-platform workspace select <workspace_id>
+```
+
+### Description
+
+The `tenzir-platform auth login` command authenticates the current user.
+
+The `tenzir-platform workspace list` and `tenzir-platform workspace select`
+commands show workspaces available to the authenticated user and select one,
+respectively.
+
+#### `<workspace_id>`
+
+The unique ID of the workspace, as shown in `tenzir-platform workspace list`.
+
+
+## Manage Nodes
+
+### Synopsis
+
+```
+tenzir-platform node list
+tenzir-platform node ping <node_id>
+tenzir-platform node create [--name <node_name>]
+tenzir-platform node delete <node_id>
+tenzir-platform node run [--name <node_name>] [--image <container_image>]
+```
+
+### Description
+
+The following commands interact with the selected workspace. See [Authentication](#authentication)
+above for how to select a workspace:
+- `tenzir-platform node list` lists all nodes in the selected workspace,
+  including their ID, name, and connection status.
+- `tenzir-platform node ping` pings the specified node.
+- `tenzir-platform node create` registers a new node at the platform so that it
+  can be connected to the platform. Note that this neither starts a new node nor
+  configures one, it just creates a new API key that a node can use to connect
+  to the platform with.
+- `tenzir-platform node delete` removes a node from the platform. Note that this
+  does not stop the node, it just removes it from the platform.
+- `tenzir-platform node run` creates and registers an ad-hoc node, and starts it
+  on the local host. Requires Docker Compose to be available.
+  The node is temporary and will be deleted when the `run` command is stopped.
+
+
+#### `<node_id>`
+
+The unique ID of the node, as shown in `tenzir-platform node list`.
+
+#### `<node_name>`
+
+The name of the node as shown in the app.
+
+#### `<container_image>`
+
+The Docker image to use for ad-hoc created node. We recommend using one of the
+following images:
+- `tenzir/tenzir:v4.11.2` to use the specified release.
+- `tenzir/tenzir:latest` to use the last release.
+- `tenzir/tenzir:main` to use the currnet development version.
+
+
+## Manage the Platform
+
+:::warning On-Premise Setup Required
+This functionality of the CLI can only be used in combination
+with an on-premise platform deployment, which is available to users
+of the [Sovereign Edition](https://tenzir.com/pricing).
+:::
+
+These CLI commands are only available to platform administrators.
+The `TENZIR_PLATFORM_OIDC_ADMIN_RULES` variable described
+[here](setup-guides/deploy-the-platform#identity-provider-idp) is used
+to define who is an administrator in your platform deployment.
+
+### Manage Workspaces
+
+#### Synopsis
+
+```
+tenzir-platform admin list-global-workspaces
+tenzir-platform admin create-workspace <owner_namespace> <owner_id> [--name <workspace_name>]
+tenzir-platform admin delete-workspace <workspace_id>
+```
+
+#### Description
+
+The `tenzir-platform workspace admin list-global-workspaces`, `tenzir-platform
+admin create-workspace`, and `tenzir-platform admin delete-workspace` commands
+list, create, or delete workspaces, respectively.
+
+##### `<owner_namespace>`
+
+Either `user` or `organization`, depending on whether the workspace is
+associated with a user or an organization.
+
+##### `<owner_id>`
+
+The unique ID of the workspace owner:
+- If `<owner_namespace>` is `user`, then this matches the user's `sub` claim in
+  the OIDC token.
+- If `<owner_namespace>` is `organization`, then this is an arbitrary string
+  uniquely identifiying the organization the workspace belongs to.
+
+##### `--name <workspace_name>`
+
+The name of the workspace as shown in the app.
+
+##### `<workspace_id>`
+
+The unique ID of the workspace, as shown in `tenzir-platform workspace list` or
+`tenzir-platform admin list-global-workspaces`.
+
+
+### Configure Access Rules
+
+#### Synopsis
+
+```
 tenzir-platform admin list-auth-rules <workspace_id>
 tenzir-platform admin add-auth-rule [--dry-run]
     email-domain <workspace_id> <connection> <domain>
@@ -30,9 +151,7 @@ tenzir-platform admin add-auth-rule [--dry-run]
 tenzir-platform admin delete-auth-rule <workspace_id> <auth_rule_index>
 ```
 
-### Description
-
-The `tenzir-platform auth login` command authenticates the current user.
+#### Description
 
 Users with admin permissions can additionally use the `tenzir-platform admin
 list-auth-rules`, `tenzir-platform admin add-auth-rule`, and `tenzir-platform
@@ -73,95 +192,7 @@ rules exist:
   `id_token` contains a field `sub` that exactly matches the provided
   `<user_id>`.
 
-## Manage Workspaces
 
-### Synopsis
 
-```
-tenzir-platform admin list-global-workspaces
-tenzir-platform admin create-workspace <owner_namespace> <owner_id> [--name <workspace_name>]
-tenzir-platform admin delete-workspace <workspace_id>
-```
 
-### Description
 
-The `tenzir-platform workspace admin list-global-workspaces`, `tenzir-platform
-admin create-workspace`, and `tenzir-platform admin delete-workspace` commands
-list, create, or delete workspaces, respectively.
-
-#### `<owner_namespace>`
-
-Either `user` or `organization`, depending on whether the workspace is
-associated with a user or an organization.
-
-#### `<owner_id>`
-
-The unique ID of the workspace owner:
-- If `<owner_namespace>` is `user`, then this matches the user's `sub` claim in
-  the OIDC token.
-- If `<owner_namespace>` is `organization`, then this is an arbitrary string
-  uniquely identifiying the organization the workspace belongs to.
-
-#### `--name <workspace_name>`
-
-The name of the workspace as shown in the app.
-
-#### `<workspace_id>`
-
-The unique ID of the workspace, as shown in `tenzir-platform workspace list` or
-`tenzir-platform admin list-global-workspaces`.
-
-## Manage Nodes
-
-### Synopsis
-
-```
-tenzir-platform workspace list
-tenzir-platform workspace select <workspace_id>
-tenzir-platform node list
-tenzir-platform node ping <node_id>
-tenzir-platform node create [--name <node_name>]
-tenzir-platform node delete <node_id>
-tenzir-platform node run [--name <node_name>] [--image <container_image>]
-```
-
-### Description
-
-The `tenzir-platform workspace list` and `tenzir-platform workspace select`
-commands show workspaces available to the authenticated user and select one,
-respectively.
-
-The following commands interact with the selected workspace:
-- `tenzir-platform node list` lists all nodes in the selected workspace,
-  including their ID, name, and connection status.
-- `tenzir-platform node ping` pings the specified node.
-- `tenzir-platform node create` registers a new node at the platform so that it
-  can be connected to the platform. Note that this neither starts a new node nor
-  configures one, it just creates a new API key that a node can use to connect
-  to the platform with.
-- `tenzir-platform node delete` removes a node from the platform. Note that this
-  does not stop the node, it just removes it from the platform.
-- `tenzir-platform node run` creates, starts, and registers a node on the local
-  host. Requires Docker Compose to be available.
-  platform's docker network.
-
-#### `<workspace_id>`
-
-The unique ID of the workspace, as shown in `tenzir-platform workspace list` or
-`tenzir-platform admin list-global-workspaces`.
-
-#### `<node_id>`
-
-The unique ID of the node, as shown in `tenzir-platform node list`.
-
-#### `<node_name>`
-
-The name of the node as shown in the app.
-
-#### `<container_image>`
-
-The Docker image to use for ad-hoc created node. We recommend using one of the
-following images:
-- `tenzir/tenzir:v4.11.2` to use the specified release.
-- `tenzir/tenzir:latest` to use the last release.
-- `tenzir/tenzir:main` to use the currnet development version.
