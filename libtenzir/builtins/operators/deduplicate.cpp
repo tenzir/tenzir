@@ -16,82 +16,56 @@
 #include <ranges>
 
 namespace tenzir::plugins::deduplicate {
-
 namespace {
 
-using std::chrono::steady_clock;
-
 /// Returns `true` if
-///  - `d` is a flat record (depth of 0 or 1), and
-///  - the keys of `d` are sorted.
+///  - `rec` is a flat record (depth of 0 or 1), and
+///  - the keys of `rec` are sorted.
 /// Requires `d` to be a record.
-auto is_sorted_and_flattened(const data_view& d) -> bool {
-  TENZIR_ASSERT(caf::holds_alternative<view<record>>(d));
-  const auto& rec = caf::get<view<record>>(d);
-  for (const auto& [_, val] : rec) {
-    if (caf::holds_alternative<view<record>>(val)) {
-      return false;
-    }
-  }
-  return std::is_sorted(rec->begin(), rec->end(),
-                        [](const auto& a, const auto& b) {
-                          return a.first < b.first;
-                        });
-}
-
-/// Returns `true` if
-///  - `d` is a flat record (depth of 0 or 1), and
-///  - the keys of `d` are sorted.
-/// Requires `d` to be a record.
-auto is_sorted_and_flattened(const data& d) -> bool {
-  TENZIR_ASSERT(caf::holds_alternative<record>(d));
-  const auto& rec = caf::get<record>(d);
+auto is_sorted_and_flattened(const record& rec) -> bool {
   if (depth(rec) > 1) {
     return false;
   }
   return std::ranges::is_sorted(rec | std::views::keys);
 }
 
-/// Flattens `d`, and sorts it keys.
-/// Postcondition: `is_sorted_and_flattened(d)` is `true`.
-/// Requires `d` to be a record.
-void make_sorted_and_flattened(data& d) {
-  TENZIR_ASSERT(caf::holds_alternative<record>(d));
-  auto& rec = caf::get<record>(d);
+/// Flattens `rec`, and sorts it keys.
+/// Postcondition: `is_sorted_and_flattened(rec)` is `true`.
+void make_sorted_and_flattened(record& rec) {
   if (depth(rec) > 1) {
     rec = flatten(rec);
   }
   std::ranges::sort(rec, std::ranges::less{}, &record::value_type::first);
 }
 
-/// A wrapper for `data`, where the contained data is always a `record`, and
-/// `is_sorted_and_flattened(get())` is always `true`.
+/// A wrapper for `record`,
+/// where `is_sorted_and_flattened(get())` is always `true`.
 ///
 /// Used as the key in the `matches` hashmap in `deduplicate`,
 /// to allow for transparent comparison irrespective of field ordering.
-class sorted_flat_data {
+class sorted_flat_record {
 public:
-  sorted_flat_data() = default;
+  sorted_flat_record() = default;
 
-  sorted_flat_data(const data& x) : inner_(construct(x)) {
+  sorted_flat_record(const record& x) : inner_(construct(x)) {
   }
 
-  sorted_flat_data(data&& x) : inner_(construct(std::move(x))) {
+  sorted_flat_record(record&& x) : inner_(construct(std::move(x))) {
   }
 
-  auto get() -> data& {
+  auto get() -> record& {
     return inner_;
   }
-  auto get() const -> const data& {
+  auto get() const -> const record& {
     return inner_;
   }
 
-  auto operator==(const sorted_flat_data& other) const -> bool {
+  auto operator==(const sorted_flat_record& other) const -> bool {
     return inner_ == other.inner_;
   }
 
 private:
-  static auto construct(const data& x) -> data {
+  static auto construct(const record& x) -> record {
     if (is_sorted_and_flattened(x)) {
       return x;
     }
@@ -100,77 +74,33 @@ private:
     return y;
   }
 
-  static auto construct(data&& x) -> data {
+  static auto construct(record&& x) -> record {
     if (not is_sorted_and_flattened(x)) {
       make_sorted_and_flattened(x);
     }
     return x;
   }
 
-  data inner_{record{}};
+  record inner_{};
 };
+} // namespace
+} // namespace tenzir::plugins::deduplicate
 
-/// Same as `sorted_flat_data`, except can also hold a `data_view`,
-/// if it's constructed from a `data_view` for which
-/// `is_sorted_and_flattened()` is `true`.
-///
-/// Used for transparent key lookup into the `matches` hashmap in `deduplicate`,
-/// to avoid needless materialization of `data_view`s.
-class sorted_flat_data_view {
-public:
-  sorted_flat_data_view() = default;
-
-  sorted_flat_data_view(const data_view& x) : inner_(construct(x)) {
-  }
-
-  auto get() const -> data_view {
-    return std::visit(detail::overload{
-                        [](const data_view& x) {
-                          return x;
-                        },
-                        [](const data& x) {
-                          return make_data_view(x);
-                        },
-                      },
-                      inner_);
-  }
-
-  auto operator==(const sorted_flat_data_view& other) const -> bool {
-    return get() == other.get();
-  }
-
-private:
-  static auto construct(const data_view& x) -> std::variant<data_view, data> {
-    if (is_sorted_and_flattened(x)) {
-      return x;
-    }
-    auto y = materialize(x);
-    make_sorted_and_flattened(y);
-    return y;
-  }
-
-  std::variant<data_view, data> inner_{data{record{}}};
-};
-
-struct sorted_flat_data_hash {
-  using is_transparent = void;
-
-  auto operator()(const sorted_flat_data& x) const -> size_t {
-    return std::hash<data>{}(x.get());
-  }
-  auto operator()(const sorted_flat_data_view& x) const -> size_t {
-    return std::hash<data_view>{}(x.get());
+namespace std {
+template <>
+struct hash<tenzir::plugins::deduplicate::sorted_flat_record> {
+  auto
+  operator()(const tenzir::plugins::deduplicate::sorted_flat_record& x) const
+    -> size_t {
+    return tenzir::hash(x.get());
   }
 };
+} // namespace std
 
-[[maybe_unused]] auto
-operator==(const sorted_flat_data& x, const sorted_flat_data_view& y) -> bool {
-  return x.get() == y.get();
-}
-[[maybe_unused]] auto
-operator==(const sorted_flat_data_view& x, const sorted_flat_data& y) -> bool {
-  return x.get() == y.get();
-}
+namespace tenzir::plugins::deduplicate {
+namespace {
+
+using std::chrono::steady_clock;
 
 struct configuration {
   friend auto inspect(auto& f, configuration& x) -> bool {
@@ -310,9 +240,7 @@ private:
     int64_t last_row_number{0};
     steady_clock::time_point last_time{steady_clock::now()};
   };
-  using match_store
-    = std::unordered_map<sorted_flat_data, match_type, sorted_flat_data_hash,
-                         std::equal_to<>>;
+  using match_store = std::unordered_map<sorted_flat_record, match_type>;
 
   /// Project `slice` based on the configuration,
   /// and return the projected table slice.
@@ -347,10 +275,13 @@ private:
     for (size_t row = 0; row < slice.rows(); ++row) {
       auto projected_value_view = value_at(projected_type, projected_elements,
                                            static_cast<int64_t>(row));
-      auto match_it = matches.find(projected_value_view);
+      auto projected_value = materialize(projected_value_view);
+      TENZIR_ASSERT(caf::holds_alternative<record>(projected_value));
+      auto& projected_record = caf::get<record>(projected_value);
+      auto match_it = matches.find(projected_record);
       if (match_it == matches.end()) {
         std::tie(match_it, std::ignore)
-          = matches.emplace(materialize(projected_value_view), match_type{});
+          = matches.emplace(std::move(projected_record), match_type{});
       }
       auto& match = match_it->second;
       // This value hasn't been matched within the timeout,
