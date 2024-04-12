@@ -333,8 +333,11 @@ private:
   }
 
   /// Starts listening on the provided endpoint.
-  auto listen(const std::string& endpoint) -> void {
+  auto listen(const std::string& endpoint,
+              std::chrono::milliseconds reconnect_interval = 1s) -> void {
     TENZIR_VERBOSE("listening to endpoint {}", endpoint);
+    auto ms = detail::narrow_cast<int>(reconnect_interval.count());
+    socket_.set(::zmq::sockopt::reconnect_ivl, ms); // for TCP only, not inproc
     socket_.bind(endpoint);
   }
 
@@ -343,7 +346,7 @@ private:
                std::chrono::milliseconds reconnect_interval = 1s) -> void {
     TENZIR_VERBOSE("connecting to endpoint {}", endpoint);
     auto ms = detail::narrow_cast<int>(reconnect_interval.count());
-    socket_.set(::zmq::sockopt::reconnect_ivl, ms);
+    socket_.set(::zmq::sockopt::reconnect_ivl, ms); // for TCP only, not inproc
     socket_.connect(endpoint);
   }
 
