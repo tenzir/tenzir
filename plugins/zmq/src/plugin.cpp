@@ -36,13 +36,14 @@ struct saver_args {
   std::optional<located<std::string>> endpoint;
   std::optional<location> connect;
   std::optional<location> listen;
+  std::optional<location> monitor;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, saver_args& x) -> bool {
     return f.object(x)
       .pretty_name("saver_args")
       .fields(f.field("endpoint", x.endpoint), f.field("listen", x.listen),
-              f.field("connect", x.connect));
+              f.field("connect", x.connect), f.field("monitor", x.monitor));
   }
 };
 
@@ -51,13 +52,15 @@ struct loader_args {
   std::optional<located<std::string>> filter;
   std::optional<location> connect;
   std::optional<location> listen;
+  std::optional<location> monitor;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, loader_args& x) -> bool {
     return f.object(x)
       .pretty_name("loader_args")
       .fields(f.field("endpoint", x.endpoint), f.field("filter", x.filter),
-              f.field("listen", x.listen), f.field("connect", x.connect));
+              f.field("listen", x.listen), f.field("connect", x.connect),
+              f.field("monitor", x.monitor));
   }
 };
 
@@ -167,7 +170,11 @@ public:
     -> caf::expected<connection> {
     try {
       auto result = connection{std::move(ctx), ::zmq::socket_type::sub};
-      auto endpoint = args.endpoint ? args.endpoint->inner : default_endpoint;
+      const auto& endpoint = args.endpoint->inner;
+      if (args.monitor) {
+        TENZIR_ASSERT(endpoint.starts_with("tcp://"));
+        result.monitor();
+      }
       if (args.listen) {
         result.listen(endpoint);
       } else {
@@ -185,7 +192,11 @@ public:
                         const saver_args& args) -> caf::expected<connection> {
     try {
       auto result = connection{std::move(ctx), ::zmq::socket_type::pub};
-      auto endpoint = args.endpoint ? args.endpoint->inner : default_endpoint;
+      const auto& endpoint = args.endpoint->inner;
+      if (args.monitor) {
+        TENZIR_ASSERT(endpoint.starts_with("tcp://"));
+        result.monitor();
+      }
       if (args.connect) {
         result.connect(endpoint);
       } else {
@@ -316,19 +327,20 @@ private:
     socket_.set(::zmq::sockopt::linger, 0);
   }
 
-  void listen(const std::string& endpoint) {
-    if (endpoint.starts_with("tcp://")) {
-      monitor_ = {*ctx_, socket_};
-    }
+  /// Sets up a monitoring socket for this connection.
+  auto monitor() -> void {
+    monitor_ = {*ctx_, socket_};
+  }
+
+  /// Starts listening on the provided endpoint.
+  auto listen(const std::string& endpoint) -> void {
     TENZIR_VERBOSE("listening to endpoint {}", endpoint);
     socket_.bind(endpoint);
   }
 
-  void connect(const std::string& endpoint,
-               std::chrono::milliseconds reconnect_interval = 1s) {
-    if (endpoint.starts_with("tcp://")) {
-      monitor_ = {*ctx_, socket_};
-    }
+  /// Connects to the provided endpoint.
+  auto connect(const std::string& endpoint,
+               std::chrono::milliseconds reconnect_interval = 1s) -> void {
     TENZIR_VERBOSE("connecting to endpoint {}", endpoint);
     auto ms = detail::narrow_cast<int>(reconnect_interval.count());
     socket_.set(::zmq::sockopt::reconnect_ivl, ms);
@@ -337,7 +349,7 @@ private:
 
   std::shared_ptr<::zmq::context_t> ctx_;
   ::zmq::socket_t socket_;
-  std::optional<monitor> monitor_;
+  std::optional<class monitor> monitor_;
   size_t num_peers_{0};
 };
 
@@ -477,6 +489,7 @@ public:
     parser.add("-f,--filter", args.filter, "<prefix>");
     parser.add("-l,--listen", args.listen);
     parser.add("-c,--connect", args.connect);
+    parser.add("-m,--monitor", args.monitor);
     parser.parse(p);
     if (args.listen && args.connect) {
       diagnostic::error("both --listen and --connect provided")
@@ -485,9 +498,17 @@ public:
         .hint("--listen and --connect are mutually exclusive")
         .throw_();
     }
-    if (args.endpoint
-        and args.endpoint->inner.find("://") == std::string::npos) {
+    if (not args.endpoint) {
+      args.endpoint = located<std::string>{default_endpoint, location::unknown};
+    } else if (args.endpoint->inner.find("://") == std::string::npos) {
       args.endpoint->inner = fmt::format("tcp://{}", args.endpoint->inner);
+    }
+    if (not args.endpoint->inner.starts_with("tcp://") and args.monitor) {
+      diagnostic::error("--monitor with incompatible scheme")
+        .primary(*args.monitor)
+        .note("--monitor requires a TCP endpoint")
+        .hint("switch to tcp://host:port or remove --monitor")
+        .throw_();
     }
     return std::make_unique<zmq_loader>(std::move(args));
   }
@@ -501,6 +522,7 @@ public:
     parser.add(args.endpoint, "<endpoint>");
     parser.add("-l,--listen", args.listen);
     parser.add("-c,--connect", args.connect);
+    parser.add("-m,--monitor", args.monitor);
     parser.parse(p);
     if (args.listen && args.connect) {
       diagnostic::error("both --listen and --connect provided")
@@ -509,10 +531,17 @@ public:
         .hint("--listen and --connect are mutually exclusive")
         .throw_();
     }
-    if (args.endpoint
-        and not std::regex_match(args.endpoint->inner,
-                                 std::regex{"^\\w+://.*"})) {
+    if (not args.endpoint) {
+      args.endpoint = located<std::string>{default_endpoint, location::unknown};
+    } else if (args.endpoint->inner.find("://") == std::string::npos) {
       args.endpoint->inner = fmt::format("tcp://{}", args.endpoint->inner);
+    }
+    if (not args.endpoint->inner.starts_with("tcp://") and args.monitor) {
+      diagnostic::error("--monitor with incompatible scheme")
+        .primary(*args.monitor)
+        .note("--monitor requires a TCP endpoint")
+        .hint("switch to tcp://host:port or remove --monitor")
+        .throw_();
     }
     return std::make_unique<zmq_saver>(std::move(args));
   }
