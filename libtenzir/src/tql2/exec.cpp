@@ -387,64 +387,6 @@ public:
   }
 };
 
-class group_use final : public operator_use {
-public:
-};
-
-class group_def final : public operator_def {
-public:
-  auto make(ast::entity self, std::vector<ast::expression> args,
-            context& ctx) const -> std::unique_ptr<operator_use> override {
-    if (args.empty()) {
-      diagnostic::error("expected at least one argument")
-        .primary(self.get_location())
-        .emit(ctx.dh());
-      return nullptr;
-    }
-    for (auto& arg : args) {
-      type_checker{ctx}.visit(arg);
-    }
-    // evaluate(args.back(), ctx);
-    diagnostic::error("not implemented yet")
-      .primary(self.get_location())
-      .emit(ctx.dh());
-    return std::make_unique<group_use>();
-  }
-};
-
-
-class plugin : public virtual serialization_plugin<operator_base> {
-public:
-  auto serialize(serializer f, const operator_base& x) const -> bool override {
-    return std::visit(
-      [&](auto& f) -> bool {
-        TENZIR_TODO();
-      },
-      f);
-  }
-
-  void deserialize(deserializer f,
-                   std::unique_ptr<operator_base>& x) const override {
-    x = nullptr;
-    std::visit(
-      [&](auto& f) {
-        auto name = std::string{};
-        if (not f.get().apply(name)) {
-          return;
-        }
-        // TODO: Find `operator_def`?
-        static_cast<context*>(nullptr);
-        auto def = static_cast<operator_def*>(nullptr);
-        if (not def) {
-          // TODO: error message
-          return;
-        }
-        auto use = def->deserialize(f);
-      },
-      f);
-  }
-};
-
 #endif
 
 #if 1
@@ -465,231 +407,7 @@ struct eval_input {
   std::span<located<variant<data, std::shared_ptr<arrow::Array>, bitmap>>> args;
 };
 
-class my_special_sqrt {
-public:
-  void signature() {
-    // sqrt(double)
-
-    // foo(bar, baz, qux=true)
-  }
-
-  auto eval(arrow::DoubleArray& input, context& ctx)
-    -> std::shared_ptr<arrow::DoubleArray> {
-    auto builder = arrow::DoubleBuilder{};
-    auto length = input.length();
-    (void)builder.Reserve(length);
-    for (auto idx = int64_t{0}; idx < length; ++idx) {
-      if (input.IsNull(idx)) {
-        builder.UnsafeAppendNull();
-        continue;
-      }
-      auto value = input.Value(idx);
-      if (value < 0.0) [[unlikely]] {
-        // TODO: We only want to emit the diagnostic once... for this batch?
-        // No, for the whole input, but with the given location.
-        // Irrespective of schema?
-        if (not complained_) {
-          diagnostic::warning("tried to take `sqrt` of negative value")
-            .primary(fn_)
-            .note("happened with `{}`", value)
-            .emit(ctx.dh());
-          complained_ = true;
-        }
-        builder.UnsafeAppendNull();
-        continue;
-      }
-      builder.UnsafeAppend(std::sqrt(input.Value(0)));
-    }
-    auto result = std::shared_ptr<arrow::DoubleArray>();
-    (void)builder.Finish(&result);
-    return result;
-  }
-
-  auto eval_one(std::optional<double> input, context& ctx)
-    -> std::optional<double> {
-    auto builder = arrow::DoubleBuilder{};
-    (void)builder.AppendOrNull(input);
-    auto result = std::shared_ptr<arrow::DoubleArray>();
-    (void)builder.Finish(&result);
-    auto output = eval(*result, ctx);
-    TENZIR_ASSERT(output->length() == 1);
-    return (*output)[0];
-  }
-
-private:
-  location fn_;
-  bool complained_ = false;
-};
-
-auto eval_sqrt(eval_input input, context& ctx) -> bool {
-  TENZIR_ASSERT(input.args.size() == 1);
-  auto& arg = input.args[0];
-  auto constant = std::get_if<data>(&arg.inner);
-  if (constant) {
-  }
-}
 #endif
-
-class sqrt_def final : public function_def {
-public:
-  auto check(check_info info, context& ctx) const
-    -> std::optional<type> override {
-    auto dbl = type{double_type{}};
-    if (info.arg_count() == 0) {
-      diagnostic::error("`sqrt` expects one argument")
-        .primary(info.fn_loc())
-        .emit(ctx.dh());
-      return dbl;
-    }
-    auto& ty = info.arg_type(0);
-    if (ty && ty != dbl) {
-      // TODO: Use name of function?
-      diagnostic::error("`sqrt` expected `{}` but got `{}`", dbl, *ty)
-        .primary(info.arg_loc(0), "this is `{}`", *ty)
-        .secondary(info.fn_loc(), "this expected `{}`", dbl)
-        .emit(ctx.dh());
-    }
-    if (info.arg_count() > 1) {
-      diagnostic::error("`sqrt` expects only one argument")
-        .primary(info.arg_loc(1))
-        .emit(ctx.dh());
-    }
-    return dbl;
-  }
-
-  // std::vector<located<data | arrow::Array>>{};
-  // get("MUST_BE_CONSTANT")
-
-  auto evaluate(location fn, std::vector<located<data>> args,
-                context& ctx) const -> std::optional<data> override {
-    // TODO: integrate this with `check`?
-    (void)fn;
-    TENZIR_ASSERT(args.size() == 1);
-    auto arg = caf::get_if<double>(&args[0].inner);
-    if (not arg) {
-      // TODO
-      auto kind = caf::visit(detail::overload{
-                               []<class T>(const T&) {
-                                 return type_kind::of<data_to_type_t<T>>;
-                               },
-                               [](const pattern&) -> type_kind {
-                                 TENZIR_UNREACHABLE();
-                               },
-                             },
-                             args[0].inner);
-      diagnostic::error("`sqrt` expected `double` but got `{}`", kind)
-        .primary(args[0].source)
-        .emit(ctx.dh());
-      return std::nullopt;
-    }
-    // TODO: nan, inf, negative, etc?
-    auto val = *arg;
-    if (val < 0.0) {
-      diagnostic::error("`sqrt` received negative value `{}`", val)
-        .primary(args[0].source)
-        .emit(ctx.dh());
-      return std::nullopt;
-    }
-    return std::sqrt(*arg);
-  }
-
-  auto test(const arrow::DoubleArray& x) const
-    -> std::shared_ptr<arrow::DoubleArray> {
-    // TODO: This is a test!!
-    {
-      // TODO: This is UB and useless. Do not copy. Do not even read. Stop!
-#if 0
-      auto alloc = arrow::AllocateBuffer(x.length() * sizeof(double));
-      TENZIR_ASSERT(alloc.ok());
-      auto buffer = std::move(*alloc);
-      TENZIR_ASSERT(buffer);
-      auto target = new (buffer->mutable_data()) double[x.length()];
-      auto begin = x.raw_values();
-      auto end = begin + x.length();
-      auto null_alloc = arrow::AllocateBuffer((x.length() + 7) / 8);
-      TENZIR_ASSERT(null_alloc.ok());
-      auto null_buffer = std::move(*null_alloc);
-      TENZIR_ASSERT(null_buffer);
-      auto null_target = null_buffer->mutable_data();
-      if (auto nulls = x.null_bitmap()) {
-        std::memcpy(null_target, nulls->data(), nulls->size());
-      } else {
-        std::memset(null_target, 0xFF, (x.length() + 7) / 8);
-      }
-      while (begin != end) {
-        auto val = *begin;
-        if (val < 0.0) [[unlikely]] {
-          auto mask = 0xFF ^ (0x01 << ((begin - end) % 8));
-          null_target[(begin - end) / 8] &= mask;
-          // TODO: Emit warning/error?
-        }
-        *target = std::sqrt(*begin);
-        ++begin;
-        ++target;
-      }
-      return std::make_shared<arrow::DoubleArray>(x.length(), std::move(buffer),
-                                                  std::move(null_buffer));
-#endif
-    }
-    // TODO
-    auto b = arrow::DoubleBuilder{};
-    (void)b.Reserve(x.length());
-    for (auto y : x) {
-      if (not y) {
-        // TODO: Warning?
-        b.UnsafeAppendNull();
-        continue;
-      }
-      auto z = *y;
-      if (z < 0.0) {
-        // TODO: Warning?
-        b.UnsafeAppendNull();
-        continue;
-      }
-      b.UnsafeAppend(std::sqrt(z));
-    }
-    auto result = std::shared_ptr<arrow::DoubleArray>{};
-    (void)b.Finish(&result);
-    return result;
-  }
-};
-
-class random_def final : public function_def {
-public:
-  auto check(check_info info, context& ctx) const
-    -> std::optional<type> override {
-    // TODO
-    TENZIR_UNUSED(info, ctx);
-    return type{double_type{}};
-  }
-
-  auto evaluate(location fn, std::vector<located<data>> args,
-                context& ctx) const -> std::optional<data> override {
-    // TODO
-    TENZIR_UNUSED(fn, args, ctx);
-    return 123.45;
-  }
-};
-
-class now_def final : public function_def {
-public:
-  auto check(check_info info, context& ctx) const
-    -> std::optional<type> override {
-    if (info.arg_count() > 0) {
-      diagnostic::error("`now` does not expect any arguments")
-        .primary(info.arg_loc(0))
-        .emit(ctx.dh());
-    }
-    return type{duration_type{}};
-  }
-
-  auto evaluate(location fn, std::vector<located<data>> args,
-                context& ctx) const -> std::optional<data> override {
-    TENZIR_UNUSED(fn, ctx);
-    TENZIR_ASSERT(args.empty());
-    return time{time::clock::now()};
-  }
-};
 
 auto prepare_pipeline(pipeline&& pipe, context& ctx) -> tenzir::pipeline {
   auto ops = std::vector<operator_ptr>{};
@@ -830,14 +548,18 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   for (auto op : plugins::get<tql2::operator_factory_plugin>()) {
     auto name = op->name();
     // TODO
-    TENZIR_ASSERT(std::string_view{name}.substr(0, 5) == "tql2.");
-    reg.add(name.substr(5), op);
+    if (name.starts_with("tql2.")) {
+      name = name.substr(5);
+    }
+    reg.add(name, op);
   }
   for (auto fn : plugins::get<tql2::function_plugin>()) {
     auto name = fn->name();
     // TODO
-    TENZIR_ASSERT(std::string_view{name}.substr(0, 5) == "tql2.");
-    reg.add(name.substr(5), fn);
+    if (name.starts_with("tql2.")) {
+      name = name.substr(5);
+    }
+    reg.add(name, fn);
   }
   // reg.add("now", std::make_unique<now_def>());
   // reg.add("sqrt", std::make_unique<sqrt_def>());

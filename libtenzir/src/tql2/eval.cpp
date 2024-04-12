@@ -187,19 +187,6 @@ private:
 
 } // namespace
 
-auto const_eval(const ast::expression& expr, context& ctx)
-  -> std::optional<data> {
-  try {
-    return const_evaluator{ctx}.eval(expr);
-  } catch (diagnostic& d) {
-    ctx.dh().emit(std::move(d));
-    // TODO
-    return std::nullopt;
-  } catch (std::monostate) {
-    return std::nullopt;
-  }
-}
-
 #define TRY(name, expr)                                                        \
   auto _tmp = (expr);                                                          \
   if (auto err = std::get_if<1>(&_tmp)) {                                      \
@@ -424,12 +411,16 @@ struct EvalUnOp<ast::unary_op::not_, bool_type> {
 
 class evaluator {
 public:
-  explicit evaluator(const table_slice& input, diagnostic_handler& dh)
+  explicit evaluator(const table_slice* input, diagnostic_handler& dh)
     : input_{input}, dh_{dh} {
   }
 
-  auto to_series(const value& val) -> series {
-    return value_to_series(val, detail::narrow<int64_t>(input_.rows()));
+  auto length() const -> int64_t {
+    return input_ ? detail::narrow<int64_t>(input_->rows()) : 1;
+  }
+
+  auto to_series(const value& val) const -> series {
+    return value_to_series(val, length());
   }
 
   auto eval(const ast::expression& x) -> value {
@@ -470,8 +461,7 @@ public:
                          return record_type::field_view{x.first, x.second.type};
                        });
     auto result = make_struct_array(
-      detail::narrow<int64_t>(input_.rows()), nullptr,
-      std::vector(field_names.begin(), field_names.end()),
+      length(), nullptr, std::vector(field_names.begin(), field_names.end()),
       std::vector(field_arrays.begin(), field_arrays.end()));
     return series{
       type{record_type{std::vector(field_types.begin(), field_types.end())}},
@@ -499,6 +489,13 @@ public:
     }
     // arrays = [<1, 3>, <2, 4>]
     // TODO:
+    if (arrays.empty()) {
+      auto b = series_builder{type{null_type{}}};
+      for (auto i = int64_t{0}; i < length(); ++i) {
+        b.list();
+      }
+      return b.finish_assert_one_array();
+    }
     TENZIR_ASSERT(not arrays.empty());
     auto b = series_builder{type{list_type{arrays[0].type}}};
     for (auto row = int64_t{0}; row < arrays[0].length(); ++row) {
@@ -512,7 +509,13 @@ public:
   }
 
   auto eval(const ast::selector& x) -> value {
-    auto result = resolve(x, input_);
+    if (not input_) {
+      diagnostic::error("expected a constant expression")
+        .primary(x.get_location())
+        .emit(dh_);
+      return caf::none;
+    }
+    auto result = resolve(x, *input_);
     return result.match(
       [](series& x) -> value {
         return std::move(x);
@@ -543,8 +546,8 @@ public:
     for (auto& arg : x.args) {
       args.push_back(to_series(eval(arg)));
     }
-    auto ret = fn->eval(x, input_.rows(), std::move(args), dh_);
-    TENZIR_ASSERT(ret.length() == detail::narrow<int64_t>(input_.rows()));
+    auto ret = fn->eval(x, length(), std::move(args), dh_);
+    TENZIR_ASSERT(ret.length() == length());
     return ret;
   }
 
@@ -793,7 +796,7 @@ public:
   }
 
 private:
-  const table_slice& input_;
+  const table_slice* input_;
   diagnostic_handler& dh_;
 };
 
@@ -801,7 +804,23 @@ private:
 
 auto eval(const ast::expression& expr, const table_slice& input,
           diagnostic_handler& dh) -> series {
-  return value_to_series(evaluator{input, dh}.eval(expr), input.rows());
+  return value_to_series(evaluator{&input, dh}.eval(expr), input.rows());
+}
+
+auto const_eval(const ast::expression& expr, context& ctx)
+  -> std::optional<data> {
+  auto result = value_to_series(evaluator{nullptr, ctx.dh()}.eval(expr), 1);
+  TENZIR_ASSERT(result.length() == 1);
+  return materialize(value_at(result.type, *result.array, 0));
+  // try {
+  //   return const_evaluator{ctx}.eval(expr);
+  // } catch (diagnostic& d) {
+  //   ctx.dh().emit(std::move(d));
+  //   // TODO
+  //   return std::nullopt;
+  // } catch (std::monostate) {
+  //   return std::nullopt;
+  // }
 }
 
 } // namespace tenzir::tql2

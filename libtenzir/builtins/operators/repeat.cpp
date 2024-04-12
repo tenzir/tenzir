@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/tql2/plugin.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -78,7 +80,8 @@ private:
   uint64_t repetitions_;
 };
 
-class plugin final : public virtual operator_plugin<repeat_operator> {
+class plugin final : public virtual operator_plugin<repeat_operator>,
+                     public virtual tql2::operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
@@ -92,6 +95,38 @@ public:
     parser.parse(p);
     return std::make_unique<repeat_operator>(
       repetitions.value_or(std::numeric_limits<uint64_t>::max()));
+  }
+
+  auto
+  make_operator(tql2::ast::entity self, std::vector<tql2::ast::expression> args,
+                tql2::context& ctx) const -> operator_ptr override {
+    using namespace tql2;
+    if (args.size() != 1) {
+      diagnostic::error("`repeat` expects exactly one argument, got {}",
+                        args.size())
+        .primary(self.get_location())
+        .emit(ctx);
+      return nullptr;
+    }
+    auto count = args[0].match(
+      [](ast::literal& x) {
+        return x.value.match(
+          [](int64_t x) -> std::optional<int64_t> {
+            return x;
+          },
+          [](auto&) -> std::optional<int64_t> {
+            return std::nullopt;
+          });
+      },
+      [](auto&) -> std::optional<int64_t> {
+        return std::nullopt;
+      });
+    if (not count) {
+      diagnostic::error("expected integer")
+        .primary(args[0].get_location())
+        .emit(ctx);
+    }
+    return std::make_unique<repeat_operator>(*count);
   }
 };
 
