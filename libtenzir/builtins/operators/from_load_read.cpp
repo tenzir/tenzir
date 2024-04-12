@@ -134,7 +134,9 @@ throw_loader_not_found(located<std::string_view> x, bool use_uri_schemes) {
   auto available = std::vector<std::string>{};
   for (auto const* p : plugins::get<loader_parser_plugin>()) {
     if (use_uri_schemes) {
-      available.push_back(p->supported_uri_scheme());
+      for (auto uri_scheme : p->supported_uri_schemes()) {
+        available.push_back(std::move(uri_scheme));
+      }
     } else {
       available.push_back(p->name());
     }

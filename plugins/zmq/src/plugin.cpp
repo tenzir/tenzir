@@ -552,6 +552,10 @@ public:
   auto name() const -> std::string override {
     return "zmq";
   }
+
+  auto supported_uri_schemes() const -> std::vector<std::string> override {
+    return {"zmq", "inproc"};
+  }
 };
 
 } // namespace
