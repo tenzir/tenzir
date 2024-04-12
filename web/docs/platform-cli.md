@@ -34,7 +34,6 @@ respectively.
 
 The unique ID of the workspace, as shown in `tenzir-platform workspace list`.
 
-
 ## Manage Nodes
 
 ### Synopsis
@@ -64,7 +63,6 @@ above for how to select a workspace:
   on the local host. Requires Docker Compose to be available.
   The node is temporary and will be deleted when the `run` command is stopped.
 
-
 #### `<node_id>`
 
 The unique ID of the node, as shown in `tenzir-platform node list`.
@@ -80,7 +78,6 @@ following images:
 - `tenzir/tenzir:v4.11.2` to use the specified release.
 - `tenzir/tenzir:latest` to use the last release.
 - `tenzir/tenzir:main` to use the currnet development version.
-
 
 ## Manage the Platform
 
@@ -142,7 +139,6 @@ The name of the workspace as shown in the app.
 The unique ID of the workspace, as shown in `tenzir-platform workspace list` or
 `tenzir-platform admin list-global-workspaces`.
 
-
 ### Configure Access Rules
 
 #### Synopsis
@@ -200,8 +196,3 @@ rules exist:
 - **User Rule**: `tenzir-platform admin add-auth-rule user` allows access if the
   `id_token` contains a field `sub` that exactly matches the provided
   `<user_id>`.
-
-
-
-
-
