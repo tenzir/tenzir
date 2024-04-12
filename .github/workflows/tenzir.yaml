@@ -818,6 +818,9 @@ jobs:
           - name: Sigma
             target: sigma
             path: plugins/sigma
+          - name: VAST
+            target: vast
+            path: contrib/tenzir-plugins/vast
           - name: Velociraptor
             target: velociraptor
             path: plugins/velociraptor

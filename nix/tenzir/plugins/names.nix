@@ -4,4 +4,5 @@
   "matcher"
   "pipeline-manager"
   "platform"
+  "vast"
 ]
