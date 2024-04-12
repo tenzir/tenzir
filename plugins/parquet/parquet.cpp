@@ -6,22 +6,31 @@
 // SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "parquet/contiguous_buffer_stream.hpp"
+
+#include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/detail/base64.hpp>
 #include <tenzir/detail/inspection_common.hpp>
+#include <tenzir/fwd.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/store.hpp>
 
 #include <arrow/array.h>
 #include <arrow/compute/cast.h>
 #include <arrow/io/api.h>
+#include <arrow/io/file.h>
 #include <arrow/ipc/api.h>
 #include <arrow/table.h>
 #include <arrow/util/key_value_metadata.h>
 #include <caf/expected.hpp>
 #include <parquet/arrow/reader.h>
 #include <parquet/arrow/writer.h>
+
+#include <cstdint>
+#include <memory>
+#include <string>
 
 namespace tenzir::plugins::parquet {
 
@@ -497,10 +506,160 @@ private:
   std::vector<table_slice> slices_ = {};
   configuration parquet_config_ = {};
 };
+auto parse_parquet() -> generator<table_slice> {
+  co_return;
+}
 
-class plugin final : public virtual store_plugin {
-  caf::error initialize(const record& plugin_config,
-                        const record& global_config) override {
+class parquet_parser final : public plugin_parser {
+public:
+  parquet_parser() = default;
+
+  auto name() const -> std::string override {
+    return "parquet";
+  }
+
+  auto
+  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> std::optional<generator<table_slice>> override {
+    return parse_parquet();
+  }
+
+  friend auto inspect(auto& f, parquet_parser& x) -> bool {
+    return f.object(x).fields();
+  }
+};
+
+class parquet_printer final : public plugin_printer {
+public:
+  auto name() const -> std::string override {
+    return "parquet";
+  }
+
+  auto instantiate(type input_schema, operator_control_plane& ctrl) const
+    -> caf::expected<std::unique_ptr<printer_instance>> override {
+    return parquet_printer_instance::make(ctrl, input_schema);
+  }
+
+  auto allows_joining() const -> bool override {
+    return false;
+  }
+
+  friend auto inspect(auto& f, parquet_printer& x) -> bool {
+    return f.object(x).fields();
+  }
+
+  class parquet_printer_instance : public printer_instance {
+  public:
+    static auto make(operator_control_plane& ctrl, type input_schema)
+      -> caf::expected<std::unique_ptr<printer_instance>> {
+      const auto schema = input_schema.to_arrow_schema();
+      auto out_buffer_result = contiguous_buffer_stream::Create();
+      if (!out_buffer_result.ok()) {
+        return diagnostic::error("{}", out_buffer_result.status().ToString())
+          .to_error();
+      }
+      auto out_buffer = out_buffer_result.MoveValueUnsafe();
+      auto file_result = ::parquet::arrow::FileWriter::Open(
+        *schema, arrow::default_memory_pool(), out_buffer);
+      if (!file_result.ok()) {
+        return diagnostic::error("{}", file_result.status().ToString())
+          .to_error();
+      }
+      auto writer = file_result.MoveValueUnsafe();
+      return std::make_unique<parquet_printer_instance>(ctrl,
+                                                        std::move(input_schema),
+                                                        std::move(out_buffer),
+                                                        std::move(writer));
+    }
+
+    // Override the process function
+    auto process(table_slice input) -> generator<chunk_ptr> override {
+      if (input.rows() == 0) {
+        co_yield {};
+        co_return;
+      }
+      auto record_batch = to_record_batch(input); // const ref
+      auto record_batch_status = writer_->WriteRecordBatch(*record_batch);
+      if (!record_batch_status.ok()) {
+        diagnostic::error("{}", record_batch_status.ToString())
+          .note("failed write record batch")
+          .emit(ctrl_.diagnostics());
+        co_return;
+      }
+      auto new_buffered_row_status = writer_->NewBufferedRowGroup();
+      if (!new_buffered_row_status.ok()) {
+        diagnostic::error("{}", new_buffered_row_status.ToString())
+          .note("failed to write a new row")
+          .emit(ctrl_.diagnostics());
+        co_return;
+      }
+      auto purge_buffer_result = out_buffer_->Purge();
+      if (!purge_buffer_result.ok()) {
+        diagnostic::error("{}", purge_buffer_result.status().ToString())
+          .note("failed to retrieve stream output")
+          .emit(ctrl_.diagnostics());
+        co_return;
+      }
+      co_yield chunk::make(purge_buffer_result.MoveValueUnsafe());
+      auto purge_reset_status = out_buffer_->PurgeReset();
+      if (!purge_reset_status.ok()) {
+        diagnostic::error("{}", purge_reset_status.ToString())
+          .note("failed to reset purge")
+          .emit(ctrl_.diagnostics());
+        co_return;
+      }
+    }
+
+    auto finish() -> generator<chunk_ptr> override {
+      auto close_status = writer_->Close();
+      auto finished_buffer_result = out_buffer_->Finish();
+      if (!finished_buffer_result.ok()) {
+        diagnostic::error("{}", finished_buffer_result.status().ToString())
+          .note("failed to finish stream")
+          .emit(ctrl_.diagnostics());
+        co_return;
+      }
+      co_yield chunk::make(finished_buffer_result.MoveValueUnsafe());
+    }
+
+    parquet_printer_instance(
+      operator_control_plane& ctrl, type input_schema,
+      std::shared_ptr<tenzir::contiguous_buffer_stream> out_buffer,
+      std::unique_ptr<::parquet::arrow::FileWriter> writer)
+      : ctrl_{ctrl},
+        writer_{std::move(writer)},
+        out_buffer_{std::move(out_buffer)},
+        input_schema_{std::move(input_schema)} {
+    }
+
+  private:
+    operator_control_plane& ctrl_;
+    std::unique_ptr<::parquet::arrow::FileWriter> writer_;
+    std::shared_ptr<contiguous_buffer_stream> out_buffer_;
+    type input_schema_;
+  };
+};
+
+class plugin final : public virtual store_plugin,
+                     public virtual parser_plugin<parquet_parser>,
+                     public virtual printer_plugin<parquet_printer> {
+  auto parse_parser(parser_interface& p) const
+    -> std::unique_ptr<plugin_parser> override {
+    auto parser = argument_parser{"feather", "https://docs.tenzir.com/next/"
+                                             "formats/feather"};
+    parser.parse(p);
+    return std::make_unique<parquet_parser>();
+  }
+
+  auto parse_printer(parser_interface& p) const
+    -> std::unique_ptr<plugin_printer> override {
+    auto parser = argument_parser{"feather", "https://docs.tenzir.com/next/"
+                                             "formats/feather"};
+    parser.parse(p);
+    return std::make_unique<parquet_printer>();
+  }
+  auto initialize(const record& plugin_config, const record& global_config)
+    -> caf::error override {
     const auto default_compression_level
       = arrow::util::Codec::DefaultCompressionLevel(arrow::Compression::ZSTD)
           .ValueOrDie();
@@ -539,5 +698,3 @@ private:
 
 // Finally, register our plugin.
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::parquet::plugin)
-
-// initial commit

@@ -14,7 +14,9 @@ include(CTest)
 find_package(Tenzir REQUIRED)
 TenzirRegisterPlugin(
   TARGET parquet
-  ENTRYPOINT parquet.cpp)
+  ENTRYPOINT parquet.cpp
+  SOURCES GLOB "src/*.cpp"
+  INCLUDE_DIRECTORIES include)
 
 if (BUILD_SHARED_LIBS)
   set(PARQUET_LIBRARY Parquet::parquet_shared)
