@@ -553,12 +553,7 @@ public:
     static auto make(operator_control_plane& ctrl, type input_schema)
       -> caf::expected<std::unique_ptr<printer_instance>> {
       const auto schema = input_schema.to_arrow_schema();
-      auto out_buffer_result = contiguous_buffer_stream::Create();
-      if (!out_buffer_result.ok()) {
-        return diagnostic::error("{}", out_buffer_result.status().ToString())
-          .to_error();
-      }
-      auto out_buffer = out_buffer_result.MoveValueUnsafe();
+      auto out_buffer = std::make_shared<contiguous_buffer_stream>();
       auto file_result = ::parquet::arrow::FileWriter::Open(
         *schema, arrow::default_memory_pool(), out_buffer);
       if (!file_result.ok()) {
@@ -593,33 +588,12 @@ public:
           .emit(ctrl_.diagnostics());
         co_return;
       }
-      auto purge_buffer_result = out_buffer_->Purge();
-      if (!purge_buffer_result.ok()) {
-        diagnostic::error("{}", purge_buffer_result.status().ToString())
-          .note("failed to retrieve stream output")
-          .emit(ctrl_.diagnostics());
-        co_return;
-      }
-      co_yield chunk::make(purge_buffer_result.MoveValueUnsafe());
-      auto purge_reset_status = out_buffer_->PurgeReset();
-      if (!purge_reset_status.ok()) {
-        diagnostic::error("{}", purge_reset_status.ToString())
-          .note("failed to reset purge")
-          .emit(ctrl_.diagnostics());
-        co_return;
-      }
+      co_yield out_buffer_->purge();
     }
 
     auto finish() -> generator<chunk_ptr> override {
       auto close_status = writer_->Close();
-      auto finished_buffer_result = out_buffer_->Finish();
-      if (!finished_buffer_result.ok()) {
-        diagnostic::error("{}", finished_buffer_result.status().ToString())
-          .note("failed to finish stream")
-          .emit(ctrl_.diagnostics());
-        co_return;
-      }
-      co_yield chunk::make(finished_buffer_result.MoveValueUnsafe());
+      co_yield out_buffer_->finish();
     }
 
     parquet_printer_instance(
