@@ -236,11 +236,16 @@ public:
     }
   }
 
+  /// Checks whether the socket is equipped with a monitor
+  auto monitored() const -> bool {
+    return monitor_ != std::nullopt;
+  }
+
   /// Returns the number of processed monitoring events.
   auto poll_monitor(std::optional<std::chrono::milliseconds> timeout = {})
     -> size_t {
     auto num_events = size_t{0};
-    for (auto&& event : monitor_.events(timeout)) {
+    for (auto&& event : monitor_->events(timeout)) {
       ++num_events;
       TENZIR_DEBUG("got monitor event: {}", render_event(event.event));
       switch (event.event) {
@@ -300,9 +305,7 @@ private:
 
   connection(std::shared_ptr<::zmq::context_t> ctx,
              ::zmq::socket_type socket_type)
-    : ctx_{std::move(ctx)},
-      socket_{*ctx_, socket_type},
-      monitor_{*ctx_, socket_} {
+    : ctx_{std::move(ctx)}, socket_{*ctx_, socket_type} {
     // The linger period determines how long pending messages which have yet
     // to be sent to a peer shall linger in memory after a socket is closed
     // with zmq_close(3), and further affects the termination of the socket's
@@ -314,12 +317,18 @@ private:
   }
 
   void listen(const std::string& endpoint) {
+    if (endpoint.starts_with("tcp://")) {
+      monitor_ = {*ctx_, socket_};
+    }
     TENZIR_VERBOSE("listening to endpoint {}", endpoint);
     socket_.bind(endpoint);
   }
 
   void connect(const std::string& endpoint,
                std::chrono::milliseconds reconnect_interval = 1s) {
+    if (endpoint.starts_with("tcp://")) {
+      monitor_ = {*ctx_, socket_};
+    }
     TENZIR_VERBOSE("connecting to endpoint {}", endpoint);
     auto ms = detail::narrow_cast<int>(reconnect_interval.count());
     socket_.set(::zmq::sockopt::reconnect_ivl, ms);
@@ -328,7 +337,7 @@ private:
 
   std::shared_ptr<::zmq::context_t> ctx_;
   ::zmq::socket_t socket_;
-  monitor monitor_;
+  std::optional<monitor> monitor_;
   size_t num_peers_{0};
 };
 
@@ -349,13 +358,15 @@ public:
     auto make = [](operator_control_plane& ctrl,
                    connection conn) mutable -> generator<chunk_ptr> {
       while (true) {
-        // Poll in larger strides when we have no peers. If we have at least
-        // one peer, there is no need to wait on the monitor.
-        auto timeout = conn.num_peers() == 0 ? 500ms : 0ms;
-        conn.poll_monitor(timeout);
-        if (conn.num_peers() == 0) {
-          co_yield {};
-          continue;
+        if (conn.monitored()) {
+          // Poll in larger strides if we have no peers. Once we have at least
+          // one peer, there is no need to wait on monitoring events.
+          auto timeout = conn.num_peers() == 0 ? 500ms : 0ms;
+          conn.poll_monitor(timeout);
+          if (conn.num_peers() == 0) {
+            co_yield {};
+            continue;
+          }
         }
         if (auto message = conn.receive(250ms)) {
           co_yield *message;
@@ -408,12 +419,14 @@ public:
       if (not chunk || chunk->size() == 0) {
         return;
       }
-      // Block until we have at least one peer, or fast-track with a zero
-      // timeout when in steady state.
-      do {
-        auto timeout = conn->num_peers() == 0 ? 500ms : 0ms;
-        conn->poll_monitor(timeout);
-      } while (conn->num_peers() == 0);
+      if (conn->monitored()) {
+        // Block until we have at least one peer, or fast-track with a zero
+        // timeout when in steady state.
+        do {
+          auto timeout = conn->num_peers() == 0 ? 500ms : 0ms;
+          conn->poll_monitor(timeout);
+        } while (conn->num_peers() == 0);
+      }
       if (auto error = conn->send(chunk)) {
         diagnostic::error(error).emit(ctrl.diagnostics());
       }
