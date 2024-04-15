@@ -566,20 +566,25 @@ struct match_stmt {
 
   match_stmt() = default;
 
-  match_stmt(expression expr, std::vector<arm> arms)
-    : expr{std::move(expr)}, arms{std::move(arms)} {
+  match_stmt(location begin, expression expr, std::vector<arm> arms,
+             location end)
+    : begin{begin}, expr{std::move(expr)}, arms{std::move(arms)}, end{end} {
   }
 
+  location begin;
   expression expr;
   std::vector<arm> arms;
+  location end;
 
   friend auto inspect(auto& f, match_stmt& x) -> bool {
-    return f.object(x).fields(f.field("expr", x.expr), f.field("arms", x.arms));
+    return f.object(x).fields(f.field("begin", x.begin),
+                              f.field("expr", x.expr), f.field("arms", x.arms),
+                              f.field("end", x.end));
   }
 
   auto get_location() const -> location {
     // TODO
-    return expr.get_location();
+    return begin.combine(end);
   }
 };
 

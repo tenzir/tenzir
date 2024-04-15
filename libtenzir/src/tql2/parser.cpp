@@ -153,7 +153,7 @@ private:
     //    match foo {
     //      "ok", 42 => { ... }
     //    }
-    expect(tk::match);
+    auto begin = expect(tk::match);
     auto expr = parse_expression();
     auto arms = std::vector<match_stmt::arm>{};
     expect(tk::lbrace);
@@ -164,10 +164,12 @@ private:
       // TODO: require comma or newline?
       (void)accept(tk::comma);
     }
-    expect(tk::rbrace);
+    auto end = expect(tk::rbrace);
     return match_stmt{
+      begin.location,
       std::move(expr),
       std::move(arms),
+      end.location,
     };
   }
 

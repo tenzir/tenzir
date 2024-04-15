@@ -443,6 +443,11 @@ auto prepare_pipeline(pipeline&& pipe, context& ctx) -> tenzir::pipeline {
         TENZIR_ASSERT(op);
         ops.push_back(std::move(op));
       },
+      [&](match_stmt& x) {
+        diagnostic::error("`match` not yet implemented, try using `if` instead")
+          .primary(x.get_location())
+          .emit(ctx.dh());
+      },
       [&](auto& x) {
         diagnostic::error("statement not implemented yet")
           .primary(x.get_location())
