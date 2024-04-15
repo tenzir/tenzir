@@ -157,7 +157,6 @@ auto pipeline::optimize_if_closed() const -> pipeline {
                  *this, filter);
     return *this;
   }
-  TENZIR_WARN("TODO: {:#?}", use_default_formatter(pipe));
   auto out = pipe.infer_type<void>();
   if (not out) {
     TENZIR_ERROR("closed pipeline was optimized into invalid pipeline: {}",

@@ -401,8 +401,8 @@ auto prepare_pipeline(pipeline&& pipe, context& ctx) -> tenzir::pipeline {
       },
       [&](assignment& x) {
         check_assignment(x, ctx);
+      // TODO: Cannot do this right now (release typeid problem).
 #if 0
-        // TODO: Cannot do this right now (release typeid problem).
         auto assignments = std::vector<assignment>();
         assignments.push_back(std::move(x));
         ops.push_back(std::make_unique<set_operator>(std::move(assignments)));
@@ -425,14 +425,23 @@ auto prepare_pipeline(pipeline&& pipe, context& ctx) -> tenzir::pipeline {
             .primary(x.condition.get_location())
             .emit(ctx.dh());
         }
-        auto then = prepare_pipeline(std::move(x.then), ctx);
-        auto else_ = std::optional<tenzir::pipeline>{};
+        // TODO: Same problem. Very, very hacky!
+        auto args = std::vector<ast::expression>{};
+        args.reserve(3);
+        args.push_back(std::move(x.condition));
+        args.emplace_back(pipeline_expr{location::unknown, std::move(x.then),
+                                        location::unknown});
         if (x.else_) {
-          else_ = prepare_pipeline(std::move(*x.else_), ctx);
+          args.emplace_back(pipeline_expr{
+            location::unknown, std::move(*x.else_), location::unknown});
         }
-        TENZIR_TODO();
-        // ops.push_back(std::make_unique<if_use>(
-        //   std::move(x.condition), std::move(then), std::move(else_)));
+        auto plugin = plugins::find<operator_factory_plugin>("tql2.if");
+        TENZIR_ASSERT(plugin);
+        auto op = plugin->make_operator(
+          entity{{identifier{std::string{"if"}, location::unknown}}},
+          std::move(args), ctx);
+        TENZIR_ASSERT(op);
+        ops.push_back(std::move(op));
       },
       [&](auto& x) {
         diagnostic::error("statement not implemented yet")
@@ -526,7 +535,7 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   // TODO
   auto ctx = context{reg, diag_wrapper};
   auto pipe = prepare_pipeline(std::move(parsed), ctx);
-  TENZIR_WARN("{:#?}", use_default_formatter(pipe));
+  // TENZIR_WARN("{:#?}", use_default_formatter(pipe));
   if (diag_wrapper.error()) {
     return false;
   }

@@ -193,6 +193,10 @@ struct expression {
     if constexpr (Inspector::is_loading) {
       x.kind = std::make_unique<expression_kind>();
     } else {
+      if (auto dbg = as_debug_writer(f);
+          dbg && not detail::make_dependent<Inspector>(x.kind)) {
+        return dbg->fmt_value("<invalid>");
+      }
       TENZIR_ASSERT(x.kind);
     }
     return f.apply(*detail::make_dependent<Inspector>(x.kind));
