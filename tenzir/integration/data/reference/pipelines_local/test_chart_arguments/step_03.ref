@@ -1,8 +1,1 @@
-error: option `x` can only accept a single value, not a list
- --> <input>:1:36
-  |
-1 | from stdin read json | chart bar x=[foo, bar] y=field
-  |                                    ^^ 
-  |
-  = usage: chart bar [x=<field>] [y=<fields>] [position=<position>]
-  = docs: https://docs.tenzir/operators/chart
+error: option `-x,--x-axis` can only accept a single value, not a list

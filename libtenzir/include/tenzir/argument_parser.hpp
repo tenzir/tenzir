@@ -12,6 +12,7 @@
 #include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/concept/parseable/tenzir/time.hpp"
 #include "tenzir/concept/parseable/to.hpp"
+#include "tenzir/detail/string.hpp"
 #include "tenzir/parser_interface.hpp"
 #include "tenzir/tql/expression.hpp"
 
@@ -183,6 +184,9 @@ private:
   static auto convert_or_throw(located<std::string> x) -> located<T> {
     if constexpr (std::is_same_v<T, std::string>) {
       return x;
+    } else if constexpr (std::is_same_v<T, std::vector<std::string>>) {
+      // This is a temporary hack to support lists as used by `chart`.
+      return {detail::to_strings(detail::split(x.inner, ",")), x.source};
     } else {
       auto result = tenzir::to<T>(std::move(x.inner));
       if (!result) {

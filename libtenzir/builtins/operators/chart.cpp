@@ -6,9 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/cast.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
+#include <tenzir/detail/algorithms.hpp>
 #include <tenzir/detail/flat_map.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/plugin.hpp>
@@ -413,7 +415,7 @@ private:
       // Value of the attribute is `f.field`.
       // The schema is checked for such a field.
       // Used when the field name is explicitly specified as an argument,
-      // through `x`/`y`/`name`/`value`.
+      // through `-x`/`-y`/`--name`/`--value`.
       [&](const field_name& f) -> std::optional<std::string_view> {
         auto offset
           = schema.resolve_key_or_concept_once(f.fields[index], schema_name_);
@@ -444,7 +446,7 @@ private:
       // `attribute_value`:
       // Value of the attribute is `a.attr`, as-is.
       // Used for the chart type attribute, and when the title is explicitly
-      // specified as an argument through `title`.
+      // specified as an argument through `--title`.
       [&](const attribute_value& a) -> std::optional<std::string_view> {
         TENZIR_ASSERT(index == 0);
         return a.attr;
@@ -466,247 +468,6 @@ enum class flag_type {
   // --flag <value>,
   // where <value> specified the actual value to use for the attribute.
   attribute_value,
-};
-
-// A little bit like `argument_parser`, but:
-//  - supports a `key=value` syntax (instead of shell-like `--key value`)
-//  - allows for reading lists (`[...]`) as argument values
-class chart_argument_parser {
-public:
-  chart_argument_parser(std::string name, std::string docs)
-    : op_name_(std::move(name)), docs_(std::move(docs)) {
-  }
-
-  auto add(std::string arg_name, std::string& value, std::string meta) -> void {
-    arguments_.emplace(std::move(arg_name), argument_info{
-                                              .meta = std::move(meta),
-                                              .save =
-                                                [&](std::string&& val) {
-                                                  value = std::move(val);
-                                                },
-                                              .required = true,
-                                              .list = false,
-                                            });
-  }
-
-  auto add(std::string arg_name, std::optional<std::string>& value,
-           std::string meta) -> void {
-    arguments_.emplace(std::move(arg_name), argument_info{
-                                              .meta = std::move(meta),
-                                              .save =
-                                                [&](std::string&& val) {
-                                                  value.emplace(std::move(val));
-                                                },
-                                              .required = false,
-                                              .list = false,
-                                            });
-  }
-
-  auto add(std::string arg_name, std::vector<std::string>& value,
-           std::string meta) -> void {
-    arguments_.emplace(std::move(arg_name),
-                       argument_info{
-                         .meta = std::move(meta),
-                         .save =
-                           [&](std::string&& val) {
-                             value.emplace_back(std::move(val));
-                           },
-                         .required = true,
-                         .list = true,
-                       });
-  }
-
-  auto add(std::string arg_name, std::optional<std::vector<std::string>>& value,
-           std::string meta) -> void {
-    arguments_.emplace(std::move(arg_name),
-                       argument_info{
-                         .meta = std::move(meta),
-                         .save =
-                           [&](std::string&& val) {
-                             if (not value) {
-                               value.emplace();
-                             }
-                             value->emplace_back(std::move(val));
-                           },
-                         .required = false,
-                         .list = true,
-                       });
-  }
-
-  auto parse(parser_interface& p) -> void {
-    while (not p.at_end()) {
-      // Read argument name
-      auto arg_name = p.accept_identifier();
-      if (not arg_name) {
-        diagnostic::error("expected argument for `{}`", op_name_)
-          .primary(p.current_span())
-          .usage(make_usage())
-          .docs(docs_)
-          .throw_();
-      }
-      // Look it up
-      auto args_it = arguments_.find(arg_name->name);
-      if (args_it == arguments_.end()) {
-        if (arg_name->name.starts_with('-')) {
-          diagnostic::error("unknown option `{}`", arg_name->name)
-            .hint("{} operator uses a key=value syntax instead of the "
-                  "shell-like --key value",
-                  op_name_)
-            .primary(arg_name->source)
-            .usage(make_usage())
-            .docs(docs_)
-            .throw_();
-        }
-        diagnostic::error("unknown option `{}`", arg_name->name)
-          .primary(arg_name->source)
-          .usage(make_usage())
-          .docs(docs_)
-          .throw_();
-      }
-      auto& arg_info = args_it->second;
-      if (arg_info.read) {
-        diagnostic::error("disallowed duplicate value for option `{}`",
-                          arg_name->name)
-          .primary(arg_name->source)
-          .usage(make_usage())
-          .docs(docs_)
-          .throw_();
-      }
-      // Read `=`
-      if (not p.accept_equals()) {
-        diagnostic::error("expected `=` after `{}`", arg_name->name)
-          .primary(p.current_span())
-          .usage(make_usage())
-          .docs(docs_)
-          .throw_();
-      }
-      // Read argument value
-      if (auto open_sq_bracket = p.accept_char('[')) {
-        if (not arg_info.list) {
-          diagnostic::error("option `{}` can only accept a single value, not a "
-                            "list",
-                            arg_name->name)
-            .primary(open_sq_bracket->combine(p.current_span()))
-            .usage(make_usage())
-            .docs(docs_)
-            .throw_();
-        }
-        // Read a list value
-        // A _bit_ hacky
-        std::string values_str{};
-        location list_location{*open_sq_bracket};
-        while (not p.at_end()) {
-          auto val = p.accept_shell_arg();
-          if (not val) {
-            diagnostic::error("unexpected end of value for option `{}`",
-                              arg_name->name)
-              .note("expected a list of values, in square brackets, delimited "
-                    "by commas")
-              .primary(p.current_span().combine(*open_sq_bracket))
-              .usage(make_usage())
-              .docs(docs_)
-              .throw_();
-          }
-          list_location = list_location.combine(val->source);
-          if (val->inner.ends_with(',') && val->inner.size() > 1) {
-            values_str.append(
-              fmt::format("{}, ", escape_operator_arg(val->inner.substr(
-                                    0, val->inner.size() - 1))));
-            continue;
-          }
-          if (val->inner.ends_with(']') && val->inner.size() > 1) {
-            values_str.append(
-              fmt::format("{}]", escape_operator_arg(val->inner.substr(
-                                   0, val->inner.size() - 1))));
-            break;
-          }
-          values_str.append(val->inner);
-        }
-        std::vector<std::string> values{};
-        // Logic lifted from `parsers::operator_arg`
-        auto unquoted_list_element_parser
-          = (&!(parsers::ch<'\''> | '"'))
-            >> +(parsers::printable - parsers::space - parsers::comment_start
-                 - parsers::ch<','> - parsers::ch<']'>);
-        if (auto list_parser
-            = ((parsers::qstr | parsers::qqstr | unquoted_list_element_parser)
-               % (parsers::optional_ws_or_comment
-                  >> parsers::ch<','> >> parsers::optional_ws_or_comment))
-              >> ignore(parsers::optional_ws_or_comment)
-              >> ignore(parsers::ch<']'>);
-            not list_parser(values_str, values)) {
-          diagnostic::error("invalid value for option `{}`", arg_name->name)
-            .note("expected a list of values, in square brackets, delimited "
-                  "by commas")
-            .primary(list_location)
-            .usage(make_usage())
-            .docs(docs_)
-            .throw_();
-        }
-        for (auto&& val : values) {
-          arg_info.save(std::move(val));
-        }
-        arg_info.read = true;
-        continue;
-      }
-      // Parse a non-list value
-      auto arg_value = p.accept_shell_arg();
-      if (not arg_value) {
-        diagnostic::error("expected value for option `{}`", arg_name->name)
-          .primary(p.current_span())
-          .usage(make_usage())
-          .docs(docs_)
-          .throw_();
-      }
-      arg_info.save(std::move(arg_value->inner));
-      arg_info.read = true;
-    }
-    for (auto& [arg_name, info] : arguments_) {
-      if (info.required && not info.read) {
-        diagnostic::error("missing value for required argument `{}`", arg_name)
-          .primary(p.current_span())
-          .usage(make_usage())
-          .docs(docs_)
-          .throw_();
-      }
-    }
-  }
-
-  /// Sorts the internal list of arguments,
-  /// which is the order used in the return value of `make_usage()`.
-  ///
-  /// Before calling this,
-  /// the arguments are in the order they were added with `add()`.
-  template <typename Predicate>
-  auto sort_arguments(Predicate pred) -> void {
-    std::ranges::sort(arguments_, pred);
-  }
-
-  auto make_usage() const -> std::string {
-    auto args
-      = fmt::join(arguments_ | std::views::transform([](const auto& elem) {
-                    const auto& [name, info] = elem;
-                    if (not info.required) {
-                      return fmt::format("[{}={}]", name, info.meta);
-                    }
-                    return fmt::format("{}={}", name, info.meta);
-                  }),
-                  " ");
-    return fmt::format("{} {}", op_name_, std::move(args));
-  }
-
-private:
-  struct argument_info {
-    std::string meta;
-    std::function<void(std::string&&)> save;
-    bool required{false};
-    bool list{false};
-    bool read{false};
-  };
-
-  std::string op_name_{};
-  std::string docs_{};
-  detail::stable_map<std::string, argument_info> arguments_{};
 };
 
 struct chart_definition {
@@ -741,8 +502,7 @@ struct chart_definition {
 
   auto parse_arguments(parser_interface& p, std::string&& docs) const
     -> configuration {
-    auto op_name = fmt::format("chart {}", type);
-    chart_argument_parser parser{op_name, docs};
+    argument_parser parser{fmt::format("chart {}", type), std::move(docs)};
     // Build up lists of arguments to be given to the `argument_parser`,
     // based on the definitions
     auto required_single_arguments = build_argument_list<std::string>(
@@ -764,31 +524,29 @@ struct chart_definition {
         parser, optional_flags | std::views::filter([](const auto& def) {
                   return def.allow_lists;
                 }));
-    // Re-sort the arguments in `parser` to the order they are in
-    // `required_flags`/`optional_flags`.
-    //
-    // They are currently in the order they were added in,
-    // which causes the non-list arguments to appear before the list arguments
-    // in the return value of `parser.make_usage()`.
-    parser.sort_arguments([&](const auto& a, const auto& b) -> bool {
-      auto get_flag_index = [&](const auto& name) -> size_t {
-        if (auto req_it = std::ranges::find(
-              required_flags, name, &required_argument_definition::attr);
-            req_it != required_flags.end()) {
-          return static_cast<size_t>(
-            std::ranges::distance(required_flags.begin(), req_it));
-        }
-        return required_flags.size()
-               + static_cast<size_t>(std::ranges::distance(
-                 optional_flags.begin(),
-                 std::ranges::find(optional_flags, name,
-                                   &optional_argument_definition::attr)));
-      };
-      return get_flag_index(a.first) < get_flag_index(b.first);
-    });
+    // TODO: Before this was rebased to use the normal argument parser again,
+    // the arguments added to the custom parser were put into the right order.
+    // However, the normal argument parser does not support this. This causes
+    // the arguments to appear in a different order than desired.
     parser.parse(p);
     configuration result;
     result.emplace_back("chart", attribute_value{std::string{type}});
+    for (auto& arg : required_single_arguments) {
+      if (detail::contains(arg.second.value, ',')) {
+        diagnostic::error("option `{}` can only accept a single value, not a "
+                          "list",
+                          arg.second.definition->flag)
+          .throw_();
+      }
+    }
+    for (auto& arg : optional_single_arguments) {
+      if (arg.second.value && detail::contains(*arg.second.value, ',')) {
+        diagnostic::error("option `{}` can only accept a single value, not a "
+                          "list",
+                          arg.second.definition->flag)
+          .throw_();
+      }
+    }
     // Go through the arguments,
     // and populate `result` with the specified attributes
     for (auto&& [attr, arg] : required_single_arguments) {
@@ -873,7 +631,7 @@ struct chart_definition {
     }
     for (const auto& verify : verifications) {
       if (auto diag = verify(result)) {
-        std::move(*diag).modify().usage(parser.make_usage()).docs(docs).throw_();
+        std::move(*diag).modify().usage(parser.usage()).docs(docs).throw_();
       }
     }
     return result;
@@ -882,8 +640,7 @@ struct chart_definition {
 private:
   template <typename ArgumentType, std::ranges::forward_range Definitions,
             typename FieldType = std::ranges::range_value_t<Definitions>>
-  auto
-  build_argument_list(chart_argument_parser& parser, Definitions&& defs) const
+  auto build_argument_list(argument_parser& parser, Definitions&& defs) const
     -> detail::stable_map<std::string_view,
                           value_and_definition<ArgumentType, FieldType>> {
     detail::stable_map<std::string_view,
@@ -895,7 +652,7 @@ private:
         def.attr,
         value_and_definition<ArgumentType, FieldType>{ArgumentType{}, &def});
       TENZIR_DIAG_ASSERT(inserted);
-      parser.add(std::string{def.flag}, iter->second.value, [&]() {
+      parser.add(def.flag, iter->second.value, [&]() {
         if (def.type == flag_type::field_name) {
           if (def.allow_lists) {
             return std::string{"<fields>"};
@@ -987,9 +744,9 @@ chart_definition chart_definitions[] = {
     .type = "line",
     .required_flags = {},
     .optional_flags = {
-      {.attr = "x", .flag = "x", .type = flag_type::field_name, .default_ = nth_field{0}, .allow_lists = false, .req = requirement::strictly_increasing,},
-      {.attr = "y", .flag = "y", .type = flag_type::field_name, .default_ = nth_field{1, nth_field::all_the_rest}, .allow_lists = true,},
-      {.attr = "position", .flag = "position", .type = flag_type::attribute_value, .default_ = attribute_value{"grouped"}, .allow_lists = false,},
+      {.attr = "x", .flag = "-x,--x-axis", .type = flag_type::field_name, .default_ = nth_field{0}, .allow_lists = false, .req = requirement::strictly_increasing,},
+      {.attr = "y", .flag = "-y,--y-axis", .type = flag_type::field_name, .default_ = nth_field{1, nth_field::all_the_rest}, .allow_lists = true,},
+      {.attr = "position", .flag = "--position", .type = flag_type::attribute_value, .default_ = attribute_value{"grouped"}, .allow_lists = false,},
     },
     .verifications = {
       disallow_mixmatch_between_explicit_and_implicit_arguments({"x", "y"}),
@@ -1001,9 +758,9 @@ chart_definition chart_definitions[] = {
     .type = "area",
     .required_flags = {},
     .optional_flags = {
-      {.attr = "x", .flag = "x", .type = flag_type::field_name, .default_ = nth_field{0}, .allow_lists = false, .req = requirement::strictly_increasing,},
-      {.attr = "y", .flag = "y", .type = flag_type::field_name, .default_ = nth_field{1, nth_field::all_the_rest}, .allow_lists = true,},
-      {.attr = "position", .flag = "position", .type = flag_type::attribute_value, .default_ = attribute_value{"grouped"}, .allow_lists = false,},
+      {.attr = "x", .flag = "-x,--x-axis", .type = flag_type::field_name, .default_ = nth_field{0}, .allow_lists = false, .req = requirement::strictly_increasing,},
+      {.attr = "y", .flag = "-y,--y-axis", .type = flag_type::field_name, .default_ = nth_field{1, nth_field::all_the_rest}, .allow_lists = true,},
+      {.attr = "position", .flag = "--position", .type = flag_type::attribute_value, .default_ = attribute_value{"grouped"}, .allow_lists = false,},
     },
     .verifications = {
       disallow_mixmatch_between_explicit_and_implicit_arguments({"x", "y"}),
@@ -1015,9 +772,9 @@ chart_definition chart_definitions[] = {
     .type = "bar",
     .required_flags = {},
     .optional_flags = {
-      {.attr = "x", .flag = "x", .type = flag_type::field_name, .default_ = nth_field{0}, .allow_lists = false, .req = requirement::unique,},
-      {.attr = "y", .flag = "y", .type = flag_type::field_name, .default_ = nth_field{1, nth_field::all_the_rest}, .allow_lists = true,},
-      {.attr = "position", .flag = "position", .type = flag_type::attribute_value, .default_ = attribute_value{"grouped"}, .allow_lists = false,},
+      {.attr = "x", .flag = "-x,--x-axis", .type = flag_type::field_name, .default_ = nth_field{0}, .allow_lists = false, .req = requirement::unique,},
+      {.attr = "y", .flag = "-y,--y-axis", .type = flag_type::field_name, .default_ = nth_field{1, nth_field::all_the_rest}, .allow_lists = true,},
+      {.attr = "position", .flag = "--position", .type = flag_type::attribute_value, .default_ = attribute_value{"grouped"}, .allow_lists = false,},
     },
     .verifications = {
       disallow_mixmatch_between_explicit_and_implicit_arguments({"x", "y"}),
@@ -1030,8 +787,8 @@ chart_definition chart_definitions[] = {
     .type = "pie",
     .required_flags = {},
     .optional_flags = {
-      {.attr = "x", .flag = "name", .type = flag_type::field_name, .default_ = nth_field{0}, .allow_lists = false, .req = requirement::unique,},
-      {.attr = "y", .flag = "value", .type = flag_type::field_name, .default_ = nth_field{1, nth_field::all_the_rest}, .allow_lists = true,},
+      {.attr = "x", .flag = "--name", .type = flag_type::field_name, .default_ = nth_field{0}, .allow_lists = false, .req = requirement::unique,},
+      {.attr = "y", .flag = "--value", .type = flag_type::field_name, .default_ = nth_field{1, nth_field::all_the_rest}, .allow_lists = true,},
     },
     .verifications = {
       disallow_mixmatch_between_explicit_and_implicit_arguments({"x", "y"}),

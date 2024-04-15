@@ -114,8 +114,8 @@ public:
   }
 
   template <class RHS>
-    requires(!detail::is_same_or_derived_v<type_erased_parser, RHS>)
-  type_erased_parser(RHS&& rhs)
+  requires(!detail::is_same_or_derived_v<type_erased_parser, RHS>)
+    type_erased_parser(RHS&& rhs)
     : parser_{make_parser<RHS>(std::forward<RHS>(rhs))} {
     static_assert(parser<std::decay_t<RHS>>);
   }
@@ -126,8 +126,9 @@ public:
   }
 
   template <class RHS>
-    requires(!detail::is_same_or_derived_v<type_erased_parser, RHS>)
-  type_erased_parser& operator=(RHS&& rhs) {
+  requires(!detail::is_same_or_derived_v<type_erased_parser, RHS>)
+    type_erased_parser&
+    operator=(RHS&& rhs) {
     static_assert(parser<std::decay_t<RHS>>);
     parser_ = make_parser<RHS>(std::forward<RHS>(rhs));
     return *this;
@@ -153,9 +154,6 @@ class rule : public parser_base<rule<Iterator, Attribute>> {
     // static_assert(is_compatible_attribute<RHS, typename RHS::attribute>{},
     //              "incompatible parser attributes");
     using rule_type = detail::rule_definition<RHS, Iterator, Attribute>;
-    if (not parser_) {
-      parser_ = std::make_shared<rule_pointer>();
-    }
     *parser_ = std::make_unique<rule_type>(std::forward<RHS>(rhs));
   }
 
@@ -166,14 +164,12 @@ public:
   }
 
   template <parser RHS>
-    requires(!detail::is_same_or_derived_v<rule, RHS>)
-  rule(RHS&& rhs) : rule{} {
+  requires(!detail::is_same_or_derived_v<rule, RHS>) rule(RHS&& rhs) : rule{} {
     make_parser<RHS>(std::forward<RHS>(rhs));
   }
 
   template <parser RHS>
-    requires(!detail::is_same_or_derived_v<rule, RHS>)
-  auto operator=(RHS&& rhs) {
+  requires(!detail::is_same_or_derived_v<rule, RHS>) auto operator=(RHS&& rhs) {
     make_parser<RHS>(std::forward<RHS>(rhs));
   }
 
@@ -227,9 +223,7 @@ public:
     return (*ptr)->parse(f, l, x);
   }
 
-  bool parse(Iterator& f, const Iterator& l, Attribute& x) const
-    requires(not std::is_same_v<Attribute, unused_type>)
-  {
+  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
     auto ptr = parser_.lock();
     TENZIR_ASSERT(ptr != nullptr);
     return (*ptr)->parse(f, l, x);

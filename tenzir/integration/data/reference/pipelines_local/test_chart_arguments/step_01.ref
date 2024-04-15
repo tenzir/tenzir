@@ -1,8 +1,8 @@
-error: unknown option `x`
- --> <input>:1:42
+error: unknown option `-x`
+ --> <input>:1:44
   |
-1 | from stdin read json | chart pie value=b x=e
-  |                                          ^ 
+1 | from stdin read json | chart pie --value b -x e
+  |                                            ^^ 
   |
-  = usage: chart pie [name=<field>] [value=<fields>]
+  = usage: chart pie [--name <field>] [--value <fields>]
   = docs: https://docs.tenzir/operators/chart
