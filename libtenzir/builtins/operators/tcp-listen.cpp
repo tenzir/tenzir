@@ -220,22 +220,20 @@ auto make_connection(caf::stateful_actor<connection_state>* self,
       return;
     }
     auto slice = std::move(*self->state.it);
-    auto handle = self->state.bridge.lock();
-    if (not handle) {
-      self->quit();
-      return;
+    {
+      auto handle = self->state.bridge.lock();
+      if (not handle) {
+        self->quit();
+        return;
+      }
+      // Using self->request here would internally hold a strong handle on the
+      // bridge, and would keep it alive that way until a response comes back.
+      // This becomes a problem when multiple connections are present while the
+      // operator terminates. If the windows in which the connections relinquish
+      // their handles don't overlap the bridge and all connections are kept
+      // alive indefinitely.
+      caf::anon_send(handle, std::move(slice));
     }
-    self->request(handle, caf::infinite, std::move(slice))
-      .then(
-        []() {
-          // nop
-        },
-        [self](caf::error& err) {
-          diagnostic::error(err)
-            .note("failed to send events to tcp_listen connection manager")
-            .emit(self->state.ctrl->diagnostics());
-          self->quit(std::move(err));
-        });
     ++self->state.it;
   });
   return {
