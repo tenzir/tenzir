@@ -48,8 +48,8 @@ struct field_name {
 
   friend auto inspect(auto& f, field_name& x) -> bool {
     return f.object(x)
-      .pretty_name("field_names")
-      .fields(f.field("field", x.fields));
+      .pretty_name("field_name")
+      .fields(f.field("fields", x.fields));
   }
 };
 struct attribute_value {
