@@ -14,6 +14,7 @@
 #include <tenzir/detail/flat_map.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/variant.hpp>
 
 #include <ranges>
 
@@ -61,32 +62,8 @@ struct attribute_value {
   }
 };
 
-using field_value_type = std::variant<unset_default_tag, nth_field, schema_name,
-                                      field_name, attribute_value>;
-
-} // namespace
-} // namespace tenzir::plugins::chart
-
-TENZIR_DIAGNOSTIC_PUSH
-TENZIR_DIAGNOSTIC_IGNORE_UNUSED_CONST_VARIABLE
-
-CAF_BEGIN_TYPE_ID_BLOCK(tenzir_chart_operator_config_types, 3200)
-  CAF_ADD_TYPE_ID(tenzir_chart_operator_config_types,
-                  (tenzir::plugins::chart::unset_default_tag));
-  CAF_ADD_TYPE_ID(tenzir_chart_operator_config_types,
-                  (tenzir::plugins::chart::nth_field));
-  CAF_ADD_TYPE_ID(tenzir_chart_operator_config_types,
-                  (tenzir::plugins::chart::schema_name));
-  CAF_ADD_TYPE_ID(tenzir_chart_operator_config_types,
-                  (tenzir::plugins::chart::field_name));
-  CAF_ADD_TYPE_ID(tenzir_chart_operator_config_types,
-                  (tenzir::plugins::chart::attribute_value));
-CAF_END_TYPE_ID_BLOCK(tenzir_chart_operator_config_types)
-
-TENZIR_DIAGNOSTIC_POP
-
-namespace tenzir::plugins::chart {
-namespace {
+using field_value_type = variant<unset_default_tag, nth_field, schema_name,
+                                 field_name, attribute_value>;
 
 enum class requirement {
   none,
