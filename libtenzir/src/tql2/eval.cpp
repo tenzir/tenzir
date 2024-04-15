@@ -344,7 +344,8 @@ public:
       diagnostic::error("expected a constant expression")
         .primary(x.get_location())
         .emit(dh_);
-      return null();
+      // TODO: This is pretty bad.
+      throw std::monostate{};
     }
     auto result = resolve(x, *input_);
     return result.match(
@@ -509,9 +510,13 @@ auto eval(const ast::expression& expr, const table_slice& input,
 
 auto const_eval(const ast::expression& expr, context& ctx)
   -> std::optional<data> {
-  auto result = evaluator{nullptr, ctx.dh()}.eval(expr);
-  TENZIR_ASSERT(result.length() == 1);
-  return materialize(value_at(result.type, *result.array, 0));
+  try {
+    auto result = evaluator{nullptr, ctx.dh()}.eval(expr);
+    TENZIR_ASSERT(result.length() == 1);
+    return materialize(value_at(result.type, *result.array, 0));
+  } catch (std::monostate) {
+    return std::nullopt;
+  }
 }
 
 } // namespace tenzir::tql2

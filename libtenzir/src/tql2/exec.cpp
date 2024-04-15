@@ -268,41 +268,6 @@ public:
   }
 };
 
-class drop_use final : public operator_use {
-public:
-  explicit drop_use(std::vector<selector> selectors)
-    : selectors_{std::move(selectors)} {
-  }
-
-  auto debug(debug_writer& f) -> bool override {
-    return f.apply(selectors_);
-  }
-
-private:
-  std::vector<selector> selectors_;
-};
-
-class drop_def final : public operator_def {
-public:
-  auto make(ast::entity self, std::vector<ast::expression> args,
-            context& ctx) const -> std::unique_ptr<operator_use> override {
-    (void)self;
-    auto selectors = std::vector<selector>{};
-    for (auto& arg : args) {
-      arg.match(
-        [&](selector& x) {
-          selectors.push_back(std::move(x));
-        },
-        [&](auto& x) {
-          diagnostic::error("expected selector")
-            .primary(x.get_location())
-            .emit(ctx.dh());
-        });
-    }
-    return std::make_unique<drop_use>(std::move(selectors));
-  }
-};
-
 struct pipeline_use {
   pipeline_use() = default;
 
@@ -408,6 +373,7 @@ struct eval_input {
 };
 
 #endif
+} // namespace
 
 auto prepare_pipeline(pipeline&& pipe, context& ctx) -> tenzir::pipeline {
   auto ops = std::vector<operator_ptr>{};
@@ -477,8 +443,6 @@ auto prepare_pipeline(pipeline&& pipe, context& ctx) -> tenzir::pipeline {
   return tenzir::pipeline{std::move(ops)};
 }
 
-} // namespace
-
 auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
           const exec_config& cfg, caf::actor_system& sys) -> bool {
   (void)sys;
@@ -532,15 +496,6 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
     return false;
   }
   auto reg = registry{};
-  // operators
-  // reg.add("drop", std::make_unique<drop_def>());
-  // reg.add("from", std::make_unique<from_def>());
-  // reg.add("group", std::make_unique<group_def>());
-  // reg.add("head", std::make_unique<head_def>());
-  // reg.add("load_file", std::make_unique<load_file_def>());
-  // reg.add("set", std::make_unique<set_def>());
-  // reg.add("sort", std::make_unique<sort_def>());
-  // reg.add("where", std::make_unique<where_def>());
   // TODO: While we want to be able to operator definitions in plugins, we do
   // not want the mere *existence* to be dependant on which plugins are loaded.
   // Instead, we should always register all operators and then emit an helpful
@@ -561,8 +516,6 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
     }
     reg.add(name, fn);
   }
-  // reg.add("now", std::make_unique<now_def>());
-  // reg.add("sqrt", std::make_unique<sqrt_def>());
   tql2::resolve_entities(parsed, reg, diag_wrapper);
   if (cfg.dump_ast) {
     with_thread_local_registry(reg, [&] {

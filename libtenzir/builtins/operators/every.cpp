@@ -6,6 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/tql2/eval.hpp"
+#include "tenzir/tql2/exec.hpp"
+
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/detail/string_literal.hpp>
@@ -15,6 +18,7 @@
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
 #include <caf/typed_event_based_actor.hpp>
@@ -207,7 +211,8 @@ private:
   duration interval_;
 };
 
-class every_plugin final : public virtual operator_plugin<every_operator> {
+class every_plugin final : public virtual operator_plugin<every_operator>,
+                           public virtual tql2::operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {
@@ -246,6 +251,37 @@ public:
       return std::make_unique<pipeline>(std::move(ops));
     }
     return std::make_unique<every_operator>(std::move(result.inner), *interval);
+  }
+
+  auto
+  make_operator(tql2::ast::entity self, std::vector<tql2::ast::expression> args,
+                tql2::context& ctx) const -> operator_ptr override {
+    if (args.size() != 2) {
+      diagnostic::error("TODO").primary(self.get_location()).emit(ctx);
+      return nullptr;
+    }
+    auto interval_data = tql2::const_eval(args[0], ctx);
+    if (not interval_data) {
+      return nullptr;
+    }
+    auto interval = caf::get_if<duration>(&*interval_data);
+    if (not interval) {
+      diagnostic::error("expected a duration")
+        .primary(args[0].get_location())
+        .emit(ctx);
+      return nullptr;
+    }
+    auto pipe_expr = std::get_if<tql2::ast::pipeline_expr>(&*args[1].kind);
+    if (not pipe_expr) {
+      diagnostic::error("expected a pipeline expression")
+        .primary(args[1].get_location())
+        .emit(ctx);
+      return nullptr;
+    }
+    auto pipe = tql2::prepare_pipeline(std::move(pipe_expr->inner), ctx);
+    // TODO: Create a `tenzir::pipeline` from `args[1]`.
+    return std::make_unique<every_operator>(
+      std::make_unique<pipeline>(std::move(pipe)), *interval);
   }
 };
 

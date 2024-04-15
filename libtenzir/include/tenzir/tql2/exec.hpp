@@ -10,10 +10,12 @@
 
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/exec_pipeline.hpp"
+#include "tenzir/tql2/ast.hpp"
 
 namespace tenzir::tql2 {
 
 auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
           const exec_config& cfg, caf::actor_system& sys) -> bool;
 
+auto prepare_pipeline(ast::pipeline&& pipe, context& ctx) -> tenzir::pipeline;
 }
