@@ -279,9 +279,10 @@ public:
       return nullptr;
     }
     auto pipe = tql2::prepare_pipeline(std::move(pipe_expr->inner), ctx);
-    // TODO: Create a `tenzir::pipeline` from `args[1]`.
-    return std::make_unique<every_operator>(
-      std::make_unique<pipeline>(std::move(pipe)), *interval);
+    // TODO: Fix `every`?
+    auto ops = std::move(pipe).unwrap();
+    TENZIR_ASSERT(ops.size() == 1);
+    return std::make_unique<every_operator>(std::move(ops[0]), *interval);
   }
 };
 

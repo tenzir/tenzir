@@ -80,6 +80,8 @@ public:
       return nullptr;
     }
     // TODO: We want to const-eval instead.
+    // TODO: And we want to const-eval when the operator is instantiated.
+    // For example: `every 1s { source { ts: now() } }`
     auto events = std::vector<record>{};
     args[0].match(
       [&](ast::list& x) {
