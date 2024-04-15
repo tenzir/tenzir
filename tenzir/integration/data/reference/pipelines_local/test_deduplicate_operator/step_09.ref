@@ -1,0 +1,2 @@
+{"foo": {"bar": 123}, "tag": 1}
+{"foo": {"bar": null}, "tag": 2}

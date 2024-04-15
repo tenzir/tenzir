@@ -1,0 +1,2 @@
+error: failed to deduplicate due to unmatched type extractor
+ = note: `:ip` matched no fields in schema `tenzir.json`
