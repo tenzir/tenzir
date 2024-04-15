@@ -14,185 +14,23 @@
 #include "tenzir/series_builder.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/context.hpp"
+#include "tenzir/try.hpp"
 
 #include <arrow/compute/api_scalar.h>
 
 #include <ranges>
 
+/// TODO:
+/// - Reduce series expansion. For example, `src_ip in [1.2.3.4, 1.2.3.5]`
+///   currently creates `length` copies of the list.
+/// - Optimize expressions, e.g., constant folding, compute offsets.
+/// - Short circuiting, active rows.
+/// - Stricter behavior for const-eval, or same behavior? For example, overflow.
+/// - Modes for "must be constant", "prefer constant", "prefer runtime", "must
+///   be runtime".
+/// - Integrate type checker?
+
 namespace tenzir::tql2 {
-
-namespace {
-
-class const_evaluator {
-public:
-  explicit const_evaluator(context& ctx) : ctx_{ctx} {
-  }
-
-  auto eval(const ast::expression& x) -> data {
-    return x.match([&](auto& y) {
-      return eval(y);
-    });
-  }
-
-  auto eval(const ast::record& x) -> data {
-    auto result = record{};
-    for (auto& y : x.content) {
-      y.match(
-        [&](const ast::record::field& y) {
-          auto val = eval(y.expr);
-          auto inserted = result.emplace(y.name.name, val).second;
-          if (not inserted) {
-            diagnostic::error("field `{}` already exists", y.name.name)
-              .primary(y.name.location)
-              .throw_();
-          }
-        },
-        [](const auto&) {
-          // TODO
-          diagnostic::error("not implemented").throw_();
-        });
-    }
-    return result;
-  }
-
-  auto eval(const ast::list& x) -> data {
-    auto result = list{};
-    for (auto& y : x.items) {
-      result.push_back(eval(y));
-    }
-    return result;
-  }
-
-  auto eval(const ast::selector& x) -> data {
-    diagnostic::error("expected a constant expression")
-      .primary(x.get_location())
-      .throw_();
-  }
-
-  auto eval(const ast::literal& x) -> data {
-    return x.value.match(
-      [&](const auto& y) -> data {
-        return y;
-      },
-      [&](ast::null) -> data {
-        return caf::none;
-      });
-  }
-
-  auto eval(const ast::unary_expr& x) -> data {
-    // TODO
-    auto val = eval(x.expr);
-    auto not_implemented = [&] {
-      diagnostic::error("unary op eval not implemented")
-        .primary(x.get_location())
-        .throw_();
-    };
-    return caf::visit(
-      [&]<class T>(const T& y) -> data {
-        if constexpr (std::signed_integral<T> || std::floating_point<T>) {
-          if (x.op.inner != ast::unary_op::neg) {
-            not_implemented();
-          }
-          return -y;
-        }
-        not_implemented();
-        TENZIR_UNREACHABLE();
-      },
-      val);
-  }
-
-  auto eval(const ast::binary_expr& x) -> data {
-    auto left = eval(x.left);
-    auto right = eval(x.right);
-    auto not_implemented = [&] {
-      diagnostic::error("binary op eval not implemented")
-        .primary(x.get_location())
-        .throw_();
-    };
-    return caf::visit(
-      [&]<class L, class R>(const L& l, const R& r) -> data {
-        if constexpr (std::same_as<L, R>) {
-          using T = L;
-          if constexpr (std::signed_integral<T> || std::floating_point<T>) {
-            switch (x.op.inner) {
-              case ast::binary_op::add:
-                if (l > 0 && r > std::numeric_limits<T>::max() - l) {
-                  diagnostic::error("integer overflow")
-                    .primary(x.get_location())
-                    .throw_();
-                }
-                if (l < 0 && r < std::numeric_limits<T>::min() - l) {
-                  diagnostic::error("integer underflow")
-                    .primary(x.get_location())
-                    .throw_();
-                }
-                return l + r;
-              case ast::binary_op::sub:
-                return l - r;
-              default:
-                break;
-            }
-          }
-        }
-        not_implemented();
-        TENZIR_UNREACHABLE();
-      },
-      left, right);
-  }
-
-  auto eval(const ast::function_call& x) -> data {
-    if (not x.fn.ref.resolved()) {
-      throw std::monostate{};
-    }
-#if 1
-    diagnostic::error("not implemented eval for function").throw_();
-#else
-    auto& entity = ctx_.reg().get(x.fn.ref);
-    auto fn = std::get_if<std::unique_ptr<function_def>>(&entity);
-    // TODO
-    TENZIR_ASSERT(fn);
-    TENZIR_ASSERT(*fn);
-    auto args = std::vector<located<data>>{};
-    args.reserve(x.args.size());
-    for (auto& arg : x.args) {
-      auto val = eval(arg);
-      args.emplace_back(val, arg.get_location());
-    }
-    auto result = (*fn)->evaluate(x.fn.get_location(), std::move(args), ctx_);
-    if (not result) {
-      throw std::monostate{};
-    }
-    return std::move(*result);
-#endif
-  }
-
-  auto eval(const ast::dollar_var& x) -> data {
-    diagnostic::error("TODO: eval dollar").primary(x.get_location()).throw_();
-  }
-
-  auto eval(const ast::entity& x) -> data {
-    // we know this must be a constant
-    TENZIR_UNUSED(x);
-    return caf::none;
-  }
-
-  template <class T>
-  auto eval(const T& x) -> data {
-    diagnostic::error("eval not implemented").primary(x.get_location()).throw_();
-  }
-
-private:
-  [[maybe_unused]] context& ctx_;
-};
-
-} // namespace
-
-#define TRY(name, expr)                                                        \
-  auto _tmp = (expr);                                                          \
-  if (auto err = std::get_if<1>(&_tmp)) {                                      \
-    return std::move(*err);                                                    \
-  }                                                                            \
-  name = *std::get_if<0>(&_tmp)
 
 auto resolve(const ast::selector& sel, const table_slice& slice)
   -> variant<series, resolve_error> {
@@ -237,22 +75,13 @@ auto resolve(const ast::selector& sel, type ty)
 
 namespace {
 
-using value = variant<data, series>;
-
-auto value_to_series(const value& val, int64_t length) -> series {
-  return val.match(
-    [&](const data& x) {
-      // TODO: This is overkill.
-      auto b = series_builder{};
-      for (auto i = int64_t{0}; i < length; ++i) {
-        b.data(x);
-      }
-      return b.finish_assert_one_array();
-    },
-    [&](const series& x) {
-      TENZIR_ASSERT(x.length() == length);
-      return x;
-    });
+auto data_to_series(const data& x, int64_t length) -> series {
+  // TODO: This is overkill.
+  auto b = series_builder{};
+  for (auto i = int64_t{0}; i < length; ++i) {
+    b.data(x);
+  }
+  return b.finish_assert_one_array();
 }
 
 // TODO: not good.
@@ -412,34 +241,36 @@ struct EvalUnOp<ast::unary_op::not_, bool_type> {
 class evaluator {
 public:
   explicit evaluator(const table_slice* input, diagnostic_handler& dh)
-    : input_{input}, dh_{dh} {
+    : input_{input},
+      length_{input ? detail::narrow<int64_t>(input->rows()) : 1},
+      dh_{dh} {
   }
 
-  auto length() const -> int64_t {
-    return input_ ? detail::narrow<int64_t>(input_->rows()) : 1;
-  }
+  // auto to_series(const value& val) -> series {
+  //   return value_to_series(val, length());
+  // }
 
-  auto to_series(const value& val) const -> series {
-    return value_to_series(val, length());
-  }
-
-  auto eval(const ast::expression& x) -> value {
+  auto eval(const ast::expression& x) -> series {
     return x.match([&](auto& y) {
       return eval(y);
     });
   }
 
-  auto eval(const ast::literal& x) -> value {
-    return x.as_data();
+  auto eval(const ast::literal& x) -> series {
+    return data_to_series(x.as_data(), length_);
   }
 
-  auto eval(const ast::record& x) -> value {
+  auto null() -> series {
+    return data_to_series(caf::none, length_);
+  }
+
+  auto eval(const ast::record& x) -> series {
     // TODO: Soooo bad.
     auto fields = detail::stable_map<std::string, series>{};
     for (auto& item : x.content) {
       item.match(
         [&](const ast::record::field& field) {
-          auto val = to_series(eval(field.expr));
+          auto val = eval(field.expr);
           auto [_, inserted] = fields.emplace(field.name.name, std::move(val));
           if (not inserted) {
             diagnostic::warning("todo: overwrite existing?")
@@ -461,7 +292,7 @@ public:
                          return record_type::field_view{x.first, x.second.type};
                        });
     auto result = make_struct_array(
-      length(), nullptr, std::vector(field_names.begin(), field_names.end()),
+      length_, nullptr, std::vector(field_names.begin(), field_names.end()),
       std::vector(field_arrays.begin(), field_arrays.end()));
     return series{
       type{record_type{std::vector(field_types.begin(), field_types.end())}},
@@ -469,7 +300,7 @@ public:
     };
   }
 
-  auto eval(const ast::list& x) -> value {
+  auto eval(const ast::list& x) -> series {
     // [a, b]
     //
     // {a: 1, b: 2}
@@ -480,7 +311,7 @@ public:
     //       |^^^^|
     auto arrays = std::vector<series>{};
     for (auto& item : x.items) {
-      auto array = to_series(eval(item));
+      auto array = eval(item);
       if (not arrays.empty()) {
         // TODO:
         TENZIR_ASSERT(array.type == arrays[0].type);
@@ -490,8 +321,8 @@ public:
     // arrays = [<1, 3>, <2, 4>]
     // TODO:
     if (arrays.empty()) {
-      auto b = series_builder{type{null_type{}}};
-      for (auto i = int64_t{0}; i < length(); ++i) {
+      auto b = series_builder{type{list_type{null_type{}}}};
+      for (auto i = int64_t{0}; i < length_; ++i) {
         b.list();
       }
       return b.finish_assert_one_array();
@@ -508,19 +339,19 @@ public:
     return b.finish_assert_one_array();
   }
 
-  auto eval(const ast::selector& x) -> value {
+  auto eval(const ast::selector& x) -> series {
     if (not input_) {
       diagnostic::error("expected a constant expression")
         .primary(x.get_location())
         .emit(dh_);
-      return caf::none;
+      return null();
     }
     auto result = resolve(x, *input_);
     return result.match(
-      [](series& x) -> value {
+      [](series& x) -> series {
         return std::move(x);
       },
-      [&](resolve_error& err) -> value {
+      [&](resolve_error& err) -> series {
         err.reason.match(
           [&](resolve_error::not_a_record& reason) {
             diagnostic::warning("expected record, found {}", reason.type.kind())
@@ -532,11 +363,11 @@ public:
               .primary(err.ident.location)
               .emit(dh_);
           });
-        return caf::none;
+        return null();
       });
   }
 
-  auto eval(const ast::function_call& x) -> value {
+  auto eval(const ast::function_call& x) -> series {
     TENZIR_ASSERT(x.fn.ref.resolved());
     auto segments = x.fn.ref.segments();
     TENZIR_ASSERT(segments.size() == 1);
@@ -544,20 +375,20 @@ public:
     TENZIR_ASSERT(fn);
     auto args = std::vector<series>{};
     for (auto& arg : x.args) {
-      args.push_back(to_series(eval(arg)));
+      args.push_back(eval(arg));
     }
-    auto ret = fn->eval(x, length(), std::move(args), dh_);
-    TENZIR_ASSERT(ret.length() == length());
+    auto ret = fn->eval(x, length_, std::move(args), dh_);
+    TENZIR_ASSERT(ret.length() == length_);
     return ret;
   }
 
   template <ast::binary_op Op>
   auto eval(const ast::binary_expr& x, const series& l, const series& r)
-    -> value {
+    -> series {
     TENZIR_ASSERT(x.op.inner == Op);
     TENZIR_ASSERT(l.length() == r.length());
     return caf::visit(
-      [&]<concrete_type L, concrete_type R>(const L&, const R&) -> value {
+      [&]<concrete_type L, concrete_type R>(const L&, const R&) -> series {
         if constexpr (caf::detail::is_complete<EvalBinOp<Op, L, R>>) {
           using LA = type_to_arrow_array_t<L>;
           using RA = type_to_arrow_array_t<R>;
@@ -574,51 +405,50 @@ public:
                               x.op.inner, l.type.kind(), r.type.kind())
             .primary(x.op.source)
             .emit(dh_);
-          return caf::none;
+          return null();
         }
       },
       l.type, r.type);
   }
 
   template <ast::unary_op Op>
-  auto eval(const ast::unary_expr& x, const series& v) -> value {
+  auto eval(const ast::unary_expr& x, const series& v) -> series {
     // auto v = to_series(eval(x.expr));
     TENZIR_ASSERT(x.op.inner == Op);
     return caf::visit(
-      [&]<concrete_type T>(const T&) -> value {
+      [&]<concrete_type T>(const T&) -> series {
         if constexpr (caf::detail::is_complete<EvalUnOp<Op, T>>) {
           auto& a = caf::get<type_to_arrow_array_t<T>>(*v.array);
           auto oa = EvalUnOp<Op, T>::eval(a);
           auto ot = type::from_arrow(*oa->type());
           return series{std::move(ot), std::move(oa)};
         } else {
-          return caf::none;
+          return null();
         }
       },
       v.type);
   }
 
-  auto eval(const ast::unary_expr& x) -> value {
-    auto v = to_series(eval(x.expr));
+  auto eval(const ast::unary_expr& x) -> series {
+    auto v = eval(x.expr);
     switch (x.op.inner) {
       case ast::unary_op::not_:
         return eval<ast::unary_op::not_>(x, v);
       default:
-        return caf::none;
+        return null();
     }
   }
 
-  auto eval(const ast::binary_expr& x) -> value {
-#if 1
+  auto eval(const ast::binary_expr& x) -> series {
     // TODO: How does short circuiting work?
     if (x.op.inner == ast::binary_op::and_) {
       // 1) Evaluate left.
-      auto l = to_series(eval(x.left));
+      auto l = eval(x.left);
       // 2) Evaluate right, but discard diagnostics if false.
       TENZIR_TODO();
     }
-    auto l = to_series(eval(x.left));
-    auto r = to_series(eval(x.right));
+    auto l = eval(x.left);
+    auto r = eval(x.right);
     switch (x.op.inner) {
       case ast::binary_op::add:
         return eval<ast::binary_op::add>(x, l, r);
@@ -629,148 +459,17 @@ public:
       default:
         return not_implemented(x);
     }
-#else
-    if (x.op.inner != ast::binary_op::add) {
-      return not_implemented(x);
-    }
-    auto l = eval(x.left);
-    auto r = eval(x.right);
-    auto add
-      = [&]<bool Swap>(std::bool_constant<Swap>, series& l, data& r) -> value {
-      auto f = [&]<class Array, class Data>(const Array& l, Data& r) -> value {
-        if constexpr (std::same_as<Data, pattern>) {
-          TENZIR_UNREACHABLE();
-        } else if constexpr (std::same_as<Data, caf::none_t>) {
-          return caf::none;
-        } else if constexpr (std::same_as<Array, arrow::NullArray>) {
-          return caf::none;
-        } else if constexpr (std::same_as<Array, type_to_arrow_array_t<
-                                                   data_to_type_t<Data>>>) {
-          if constexpr (Addable<Data>) {
-            auto ty = data_to_type_t<Data>{};
-            auto b = series_builder{type{ty}};
-            // TODO: This code is obviously very bad.
-            for (auto row = int64_t{0}; row < l.length(); ++row) {
-              if (l.IsNull(row)) {
-                b.null();
-              } else {
-                auto val = materialize(value_at(ty, l, row));
-                b.data(Swap ? r + val : val + r);
-              }
-            }
-            // for (auto&& lv : l) {
-            //   if (lv) {
-            //     b.data(*lv + r);
-            //   } else {
-            //     b.null();
-            //   }
-            // }
-            return b.finish_assert_one_array();
-          } else {
-            // TODO: Same type, but not addable.
-            return caf::none;
-          }
-        } else {
-          // TODO: warn only once?!
-          diagnostic::warning("cannot add {} and {}",
-                              type_kind::of<data_to_type_t<Data>>, "TODO")
-            .primary(x.get_location())
-            .emit(dh_);
-          return caf::none;
-        }
-      };
-      return caf::visit(f, *l.array, r);
-    };
-    auto f = detail::overload{
-      [](data& l, data& r) -> value {
-        // TODO: This is basically const eval.
-        return caf::visit(detail::overload{
-                            []<Addable T>(T& l, T& r) -> data {
-                              return l + r;
-                            },
-                            [](auto l, auto r) -> data {
-                              TENZIR_WARN("not addable: {}",
-                                          typeid(decltype(l)).name());
-                              TENZIR_UNUSED(l, r);
-                              return caf::none;
-                            },
-                          },
-                          l, r);
-      },
-      [&](series& l, data& r) -> value {
-        return add(std::bool_constant<false>{}, l, r);
-        // auto l2 =
-        // caf::get_if<arrow::Int64Array>(&*l.array); auto
-        // r2 = caf::get_if<int64_t>(&r); if (not l2 ||
-        // not r2) {
-        //   return not_implemented(x);
-        // }
-        // // TODO
-        // auto b = arrow::Int64Builder{};
-        // (void)b.Reserve(l.length());
-        // for (auto lv : *l2) {
-        //   if (lv) {
-        //     (void)b.Append(*lv + *r2);
-        //   } else {
-        //     // TODO: Warn here?
-        //     (void)b.AppendNull();
-        //   }
-        // }
-        // auto res =
-        // std::shared_ptr<arrow::Int64Array>();
-        // (void)b.Finish(&res);
-        // return series{int64_type{}, std::move(res)};
-      },
-      [&](data& l, series& r) {
-        return add(std::bool_constant<true>{}, r, l);
-      },
-      [&](series& l, series& r) -> value {
-        return caf::visit(
-          [&]<class L, class R>(const L&, const R&) -> value {
-            if constexpr (not std::same_as<L, R>) {
-              return caf::none;
-            } else {
-              using Ty = L;
-              using Array = type_to_arrow_array_t<Ty>;
-              auto& la = caf::get<Array>(*l.array);
-              auto& ra = caf::get<Array>(*r.array);
-              using Data = type_to_data_t<Ty>;
-              if constexpr (Addable<Data>) {
-                TENZIR_ASSERT(l.length() == r.length());
-                auto ty = Ty{};
-                // TODO: Bad bad bad.
-                auto b = series_builder{type{ty}};
-                for (auto row = int64_t{0}; row < l.length(); ++row) {
-                  if (l.array->IsNull(row) || r.array->IsNull(row)) {
-                    b.null();
-                  } else {
-                    auto lv = materialize(value_at(ty, la, row));
-                    auto rv = materialize(value_at(ty, ra, row));
-                    b.data(lv + rv);
-                  }
-                }
-                return b.finish_assert_one_array();
-              } else {
-                return caf::none;
-              }
-            }
-          },
-          l.type, r.type);
-      },
-    };
-    return std::visit(f, l, r);
-#endif
   } // namespace
 
-  auto eval(const ast::field_access& x) -> value {
-    auto l = to_series(eval(x.left));
+  auto eval(const ast::field_access& x) -> series {
+    auto l = eval(x.left);
     auto rec_ty = caf::get_if<record_type>(&l.type);
     if (not rec_ty) {
-      diagnostic::error("cannot access field of non-record type")
+      diagnostic::warning("cannot access field of non-record type")
         .primary(x.dot.combine(x.name.location))
         .secondary(x.left.get_location(), "type `{}`", l.type.kind())
         .emit(dh_);
-      return caf::none;
+      return null();
     }
     auto& s = caf::get<arrow::StructArray>(*l.array);
     for (auto [i, field] : detail::enumerate<int>(rec_ty->fields())) {
@@ -778,25 +477,26 @@ public:
         return series{field.type, s.field(i)};
       }
     }
-    diagnostic::error("record does not have this field")
+    diagnostic::warning("record does not have this field")
       .primary(x.name.location)
       .emit(dh_);
-    return caf::none;
+    return null();
   }
 
-  auto eval(const auto& x) -> value {
+  auto eval(const auto& x) -> series {
     return not_implemented(x);
   }
 
-  auto not_implemented(const auto& x) -> value {
+  auto not_implemented(const auto& x) -> series {
     diagnostic::warning("eval not implemented yet")
       .primary(x.get_location())
       .emit(dh_);
-    return caf::none;
+    return null();
   }
 
 private:
   const table_slice* input_;
+  int64_t length_;
   diagnostic_handler& dh_;
 };
 
@@ -804,23 +504,14 @@ private:
 
 auto eval(const ast::expression& expr, const table_slice& input,
           diagnostic_handler& dh) -> series {
-  return value_to_series(evaluator{&input, dh}.eval(expr), input.rows());
+  return evaluator{&input, dh}.eval(expr);
 }
 
 auto const_eval(const ast::expression& expr, context& ctx)
   -> std::optional<data> {
-  auto result = value_to_series(evaluator{nullptr, ctx.dh()}.eval(expr), 1);
+  auto result = evaluator{nullptr, ctx.dh()}.eval(expr);
   TENZIR_ASSERT(result.length() == 1);
   return materialize(value_at(result.type, *result.array, 0));
-  // try {
-  //   return const_evaluator{ctx}.eval(expr);
-  // } catch (diagnostic& d) {
-  //   ctx.dh().emit(std::move(d));
-  //   // TODO
-  //   return std::nullopt;
-  // } catch (std::monostate) {
-  //   return std::nullopt;
-  // }
 }
 
 } // namespace tenzir::tql2
