@@ -81,9 +81,8 @@ public:
     auto now = time::clock::now();
     auto next_run = now + interval;
     co_yield {};
-    auto make_input = [input = std::move(input), &now, &next_run]() mutable {
+    auto make_input = [input = std::move(input), &next_run]() mutable {
       if constexpr (std::is_same_v<Input, std::monostate>) {
-        (void)now;
         (void)next_run;
         TENZIR_ASSERT(std::holds_alternative<std::monostate>(input));
         return []() -> std::monostate {
@@ -95,14 +94,12 @@ public:
         // We prime the generator's coroutine manually so that we can use
         // `unsafe_current()` in the adapted generator.
         typed_input.begin();
-        return [input = std::move(typed_input), &now,
+        return [input = std::move(typed_input),
                 &next_run]() mutable -> generator<Input> {
           auto it = input.unsafe_current();
-          now = time::clock::now();
-          while (now < next_run and it != input.end()) {
+          while (time::clock::now() < next_run and it != input.end()) {
             co_yield std::move(*it);
             ++it;
-            now = time::clock::now();
           }
         };
       }
@@ -118,6 +115,7 @@ public:
       for (auto&& result : *typed_gen) {
         co_yield std::move(result);
       }
+      now = time::clock::now();
       const auto delta = next_run - now;
       if (delta < duration::zero()) {
         next_run = now + interval;
