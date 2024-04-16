@@ -382,7 +382,7 @@ public:
     -> std::unique_ptr<plugin_loader>
     = 0;
 
-  virtual auto supported_uri_scheme() const -> std::string;
+  virtual auto supported_uri_schemes() const -> std::vector<std::string>;
 };
 
 using loader_serialization_plugin = serialization_plugin<plugin_loader>;
@@ -546,7 +546,7 @@ public:
     -> std::unique_ptr<plugin_saver>
     = 0;
 
-  virtual auto supported_uri_scheme() const -> std::string;
+  virtual auto supported_uri_schemes() const -> std::vector<std::string>;
 };
 
 using saver_serialization_plugin = serialization_plugin<plugin_saver>;

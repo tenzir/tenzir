@@ -265,8 +265,8 @@ public:
     return "gcs";
   }
 
-  auto supported_uri_scheme() const -> std::string override {
-    return "gs";
+  auto supported_uri_schemes() const -> std::vector<std::string> override {
+    return {"gs"};
   }
 };
 

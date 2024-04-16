@@ -106,7 +106,7 @@ auto udp_loader_impl(operator_control_plane& ctrl, loader_args args)
     constexpr auto usec
       = std::chrono::duration_cast<std::chrono::microseconds>(poll_timeout)
           .count();
-    TENZIR_DEBUG("polling socket");
+    TENZIR_TRACE("polling socket");
     auto ready = detail::rpoll(*socket.fd, usec);
     if (not ready) {
       diagnostic::error("failed to poll socket")
@@ -127,7 +127,7 @@ auto udp_loader_impl(operator_control_plane& ctrl, loader_args args)
         .emit(ctrl.diagnostics());
       co_return;
     }
-    TENZIR_DEBUG("got {} bytes", received_bytes);
+    TENZIR_TRACE("got {} bytes", received_bytes);
     TENZIR_ASSERT(received_bytes
                   < detail::narrow_cast<ssize_t>(buffer.size()) - 1);
     // Append a newline unless we have one already.
@@ -210,7 +210,7 @@ public:
           .emit(ctrl.diagnostics());
         return;
       }
-      TENZIR_DEBUG("sent {} bytes", sent_bytes);
+      TENZIR_TRACE("sent {} bytes", sent_bytes);
       if (detail::narrow_cast<size_t>(sent_bytes) < chunk->size()) {
         diagnostic::warning("incomplete UDP send operation")
           .note("got {} bytes but sent only {}", sent_bytes, chunk->size())

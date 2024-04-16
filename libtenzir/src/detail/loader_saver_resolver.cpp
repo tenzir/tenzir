@@ -43,9 +43,13 @@ struct try_plugin_by_url_result {
 
 template <typename Plugin>
 auto find_plugin_by_scheme(std::string_view scheme) -> const Plugin* {
-  for (auto&& plugin : plugins::get<Plugin>())
-    if (plugin->supported_uri_scheme() == scheme)
-      return plugin;
+  for (auto&& plugin : plugins::get<Plugin>()) {
+    for (const auto& supported_uri_scheme : plugin->supported_uri_schemes()) {
+      if (supported_uri_scheme == scheme) {
+        return plugin;
+      }
+    }
+  }
   return nullptr;
 }
 
