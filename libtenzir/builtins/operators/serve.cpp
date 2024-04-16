@@ -260,9 +260,7 @@ struct managed_serve_operator {
   /// not enough results are buffered.
   /// @returns Whether the results were delivered.
   auto try_deliver_results(bool force_underful) -> bool {
-    if (not get_rp.pending()) {
-      return false;
-    }
+    TENZIR_ASSERT(get_rp.pending());
     // If we throttled the serve operator, then we can continue its operation
     // again if we have less events buffered than desired.
     if (put_rp.pending() and rows(buffer) < std::max(buffer_size, requested)) {
@@ -345,6 +343,7 @@ struct serve_manager_state {
       if (found != ops.end()) {
         expired_ids.emplace(found->serve_id, reason);
         if (found->get_rp.pending()) {
+          found->delayed_attempt.dispose();
           found->get_rp.deliver(reason);
         }
         ops.erase(found);
@@ -486,21 +485,24 @@ struct serve_manager_state {
     if (delivered) {
       return found->get_rp;
     }
+    found->delayed_attempt.dispose();
     found->delayed_attempt = detail::weak_run_delayed(
       self, request.limits.timeout,
-      [this, continuation_token = request.continuation_token]() mutable {
+      [this, serve_id = request.serve_id,
+       continuation_token = request.continuation_token]() mutable {
         const auto found
           = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
-              return op.continuation_token == continuation_token;
+              return op.serve_id == serve_id;
             });
         if (found == ops.end()) {
           TENZIR_DEBUG("unable to find serve request after timeout expired");
           return;
         }
+        TENZIR_ASSERT(not found->done);
+        TENZIR_ASSERT(found->continuation_token == continuation_token);
+        TENZIR_ASSERT(found->get_rp.pending());
         const auto delivered = found->try_deliver_results(true);
-        if (not delivered) {
-          TENZIR_DEBUG("failed to deliver results after timeout expired");
-        }
+        TENZIR_ASSERT(delivered);
       });
     return found->get_rp;
   }
@@ -982,7 +984,7 @@ public:
 
   auto make_component(node_actor::stateful_pointer<node_state> node) const
     -> component_plugin_actor override {
-    return node->spawn(serve_manager);
+    return node->spawn<caf::linked>(serve_manager);
   }
 
   auto openapi_endpoints(api_version version) const -> record override {
