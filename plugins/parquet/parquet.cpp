@@ -7,6 +7,10 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "parquet/contiguous_buffer_stream.hpp"
+#include "tenzir/aliases.hpp"
+#include "tenzir/concept/parseable/numeric/real.hpp"
+#include "tenzir/detail/assert.hpp"
+#include "tenzir/table_slice_builder.hpp"
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
@@ -23,9 +27,11 @@
 #include <arrow/io/file.h>
 #include <arrow/ipc/api.h>
 #include <arrow/table.h>
+#include <arrow/util/base64.h>
 #include <arrow/util/key_value_metadata.h>
 #include <caf/expected.hpp>
 #include <parquet/arrow/reader.h>
+#include <parquet/arrow/schema.h>
 #include <parquet/arrow/writer.h>
 
 #include <cstdint>
@@ -506,8 +512,65 @@ private:
   std::vector<table_slice> slices_ = {};
   configuration parquet_config_ = {};
 };
-auto parse_parquet() -> generator<table_slice> {
-  co_return;
+auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
+  -> generator<table_slice> {
+  auto chunks_as_bytes = std::vector<std::byte>{};
+  for (auto&& chunk : input) {
+    if (not chunk || chunk->size() == 0) {
+      co_yield {};
+      continue;
+    }
+    for (size_t i = 0; i < chunk->size(); i++) {
+      chunks_as_bytes.insert(chunks_as_bytes.end(), chunk->begin(),
+                             chunk->end());
+    }
+    // The chunk gets deleted on each loop?
+    co_yield {};
+  }
+
+  chunk_ptr parquet_as_chunk_input = chunk::make(std::move(chunks_as_bytes));
+  auto input_file = as_arrow_file(std::move(parquet_as_chunk_input));
+
+  // Construct a Parquet reader
+  auto parquet_reader_properties
+    = ::parquet::ReaderProperties(arrow::default_memory_pool());
+  parquet_reader_properties.enable_buffered_stream();
+  auto input_buffer = ::parquet::ParquetFileReader::Open(
+    std::move(input_file), parquet_reader_properties);
+
+  // Construct an arrow reader
+  std::unique_ptr<::parquet::arrow::FileReader> out_buffer;
+  ::arrow::Status arrow_file_reader_status = ::parquet::arrow::FileReader::Make(
+    arrow::default_memory_pool(), std::move(input_buffer),
+    ::parquet::ArrowReaderProperties(), &out_buffer);
+  if (!arrow_file_reader_status.ok()) {
+    diagnostic::error("{}", arrow_file_reader_status.ToString())
+      .note("")
+      .emit(ctrl.diagnostics());
+    co_return;
+  }
+  // Construct a Record Batch reader. A Record Batch Generator is an
+  // alternative. Should we look into this?
+  std::shared_ptr<::arrow::RecordBatchReader> rb_reader;
+  auto record_batch_reader_status
+    = out_buffer->GetRecordBatchReader(&rb_reader);
+  if (!record_batch_reader_status.ok()) {
+    diagnostic::error("{}", record_batch_reader_status.ToString())
+      .note("failed create record batches from input data")
+      .emit(ctrl.diagnostics());
+    co_return;
+  }
+
+  for (arrow::Result<std::shared_ptr<arrow::RecordBatch>> maybe_batch :
+       *rb_reader) {
+    if (!maybe_batch.ok()) {
+      diagnostic::error("{}", maybe_batch.status().ToString())
+        .note("failed read record batch")
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    co_yield table_slice(maybe_batch.MoveValueUnsafe());
+  }
 }
 
 class parquet_parser final : public plugin_parser {
@@ -521,7 +584,7 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    return parse_parquet();
+    return parse_parquet(std::move(input), ctrl);
   }
 
   friend auto inspect(auto& f, parquet_parser& x) -> bool {
@@ -552,12 +615,20 @@ public:
   public:
     static auto make(operator_control_plane& ctrl, type input_schema)
       -> caf::expected<std::unique_ptr<printer_instance>> {
+      // Create Arrow Writer which creates a Parquet Writer under the hood
+      auto arrow_writer_props_builder
+        = ::parquet::ArrowWriterProperties::Builder();
+      arrow_writer_props_builder.store_schema();
+      auto arrow_writer_props = arrow_writer_props_builder.build();
+
       const auto schema = input_schema.to_arrow_schema();
       auto out_buffer = std::make_shared<contiguous_buffer_stream>();
       auto file_result = ::parquet::arrow::FileWriter::Open(
-        *schema, arrow::default_memory_pool(), out_buffer);
+        *schema, arrow::default_memory_pool(), out_buffer,
+        ::parquet::default_writer_properties(), arrow_writer_props);
       if (!file_result.ok()) {
-        return diagnostic::error("{}", file_result.status().ToString())
+        return diagnostic::error("failed to read schema",
+                                 file_result.status().ToString())
           .to_error();
       }
       auto writer = file_result.MoveValueUnsafe();
@@ -567,13 +638,13 @@ public:
                                                         std::move(writer));
     }
 
-    // Override the process function
     auto process(table_slice input) -> generator<chunk_ptr> override {
+      // Need to force at least one co_yield
       if (input.rows() == 0) {
         co_yield {};
         co_return;
       }
-      auto record_batch = to_record_batch(input); // const ref
+      auto record_batch = to_record_batch(input);
       auto record_batch_status = writer_->WriteRecordBatch(*record_batch);
       if (!record_batch_status.ok()) {
         diagnostic::error("{}", record_batch_status.ToString())
@@ -581,6 +652,8 @@ public:
           .emit(ctrl_.diagnostics());
         co_return;
       }
+
+      // We may not need this because WriteRecordBatch calls NewBufferedRowGroup
       auto new_buffered_row_status = writer_->NewBufferedRowGroup();
       if (!new_buffered_row_status.ok()) {
         diagnostic::error("{}", new_buffered_row_status.ToString())
@@ -593,6 +666,12 @@ public:
 
     auto finish() -> generator<chunk_ptr> override {
       auto close_status = writer_->Close();
+      if (!close_status.ok()) {
+        diagnostic::error("{}", close_status.ToString())
+          .note("failed to write metadata and close")
+          .emit(ctrl_.diagnostics());
+        co_return;
+      }
       co_yield out_buffer_->finish();
     }
 
@@ -619,16 +698,16 @@ class plugin final : public virtual store_plugin,
                      public virtual printer_plugin<parquet_printer> {
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
-    auto parser = argument_parser{"feather", "https://docs.tenzir.com/next/"
-                                             "formats/feather"};
+    auto parser = argument_parser{"parquet", "https://docs.tenzir.com/next/"
+                                             "formats/parquet"};
     parser.parse(p);
     return std::make_unique<parquet_parser>();
   }
 
   auto parse_printer(parser_interface& p) const
     -> std::unique_ptr<plugin_printer> override {
-    auto parser = argument_parser{"feather", "https://docs.tenzir.com/next/"
-                                             "formats/feather"};
+    auto parser = argument_parser{"parquet", "https://docs.tenzir.com/next/"
+                                             "formats/parquet"};
     parser.parse(p);
     return std::make_unique<parquet_printer>();
   }
@@ -666,7 +745,7 @@ private:
   configuration parquet_config_ = {};
 };
 
-} // namespace
+}; // namespace
 
 } // namespace tenzir::plugins::parquet
 
