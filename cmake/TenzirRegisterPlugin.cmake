@@ -822,6 +822,7 @@ function (TenzirRegisterPlugin)
     TenzirDefineUpdateIntegrationTarget(integration-${PLUGIN_TARGET})
     foreach (suite IN LISTS _suites)
       get_filename_component(suite_name "${suite}" NAME_WE)
+      string(REGEX REPLACE "_" "-" suite_name "${suite_name}")
       add_custom_target(
         integration-${PLUGIN_TARGET}-${suite_name}
         COMMAND
