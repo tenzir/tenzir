@@ -19,7 +19,7 @@
 #include <arrow/type.h>
 #include <caf/typed_event_based_actor.hpp>
 
-namespace tenzir::plugins::every {
+namespace tenzir::plugins::every_timeout {
 
 namespace {
 
@@ -40,16 +40,17 @@ auto make_alarm_clock(alarm_clock_actor::pointer self)
   };
 }
 
-class every_operator final : public operator_base {
+template <detail::string_literal Name, bool ResetTimeout>
+class every_timeout_operator final : public operator_base {
 public:
-  every_operator() = default;
+  every_timeout_operator() = default;
 
-  every_operator(operator_ptr op, duration interval)
+  every_timeout_operator(operator_ptr op, duration interval)
     : op_{std::move(op)}, interval_{interval} {
-    if (auto* op = dynamic_cast<every_operator*>(op_.get())) {
+    if (auto* op = dynamic_cast<every_timeout_operator*>(op_.get())) {
       op_ = std::move(op->op_);
     }
-    TENZIR_ASSERT(not dynamic_cast<const every_operator*>(op_.get()));
+    TENZIR_ASSERT(not dynamic_cast<const every_timeout_operator*>(op_.get()));
   }
 
   auto optimize(expression const& filter, event_order order) const
@@ -61,15 +62,15 @@ public:
     if (auto* pipe = dynamic_cast<pipeline*>(result.replacement.get())) {
       auto ops = std::move(*pipe).unwrap();
       for (auto& op : ops) {
-        op = std::make_unique<every_operator>(std::move(result.replacement),
-                                              interval_);
+        op = std::make_unique<every_timeout_operator>(
+          std::move(result.replacement), interval_);
         // Only the first operator can be a source and needs to be replaced.
         break;
       }
       result.replacement = std::make_unique<pipeline>(std::move(ops));
       return result;
     }
-    result.replacement = std::make_unique<every_operator>(
+    result.replacement = std::make_unique<every_timeout_operator>(
       std::move(result.replacement), interval_);
     return result;
   }
@@ -81,9 +82,8 @@ public:
     auto now = time::clock::now();
     auto next_run = now + interval;
     co_yield {};
-    auto make_input = [input = std::move(input), &next_run]() mutable {
+    auto make_input = [&, input = std::move(input)]() mutable {
       if constexpr (std::is_same_v<Input, std::monostate>) {
-        (void)next_run;
         TENZIR_ASSERT(std::holds_alternative<std::monostate>(input));
         return []() -> std::monostate {
           return {};
@@ -94,12 +94,24 @@ public:
         // We prime the generator's coroutine manually so that we can use
         // `unsafe_current()` in the adapted generator.
         typed_input.begin();
-        return [input = std::move(typed_input),
-                &next_run]() mutable -> generator<Input> {
+        return [&, input
+                   = std::move(typed_input)]() mutable -> generator<Input> {
           auto it = input.unsafe_current();
-          while (time::clock::now() < next_run and it != input.end()) {
+          now = time::clock::now();
+          while (now < next_run and it != input.end()) {
+            if constexpr (ResetTimeout and std::is_same_v<Input, table_slice>) {
+              if ((*it).rows() != 0) {
+                next_run = now + interval;
+              }
+            } else if constexpr (ResetTimeout) {
+              static_assert(std::is_same_v<Input, chunk_ptr>);
+              if (*it != nullptr) {
+                next_run = now + interval;
+              }
+            }
             co_yield std::move(*it);
             ++it;
+            now = time::clock::now();
           }
         };
       }
@@ -164,7 +176,7 @@ public:
   }
 
   auto copy() const -> operator_ptr override {
-    return std::make_unique<every_operator>(op_->copy(), interval_);
+    return std::make_unique<every_timeout_operator>(op_->copy(), interval_);
   };
 
   auto location() const -> operator_location override {
@@ -189,10 +201,10 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "every";
+    return std::string{Name.str()};
   }
 
-  friend auto inspect(auto& f, every_operator& x) -> bool {
+  friend auto inspect(auto& f, every_timeout_operator& x) -> bool {
     return f.object(x).fields(f.field("op", x.op_),
                               f.field("interval", x.interval_));
   }
@@ -202,7 +214,9 @@ private:
   duration interval_;
 };
 
-class every_plugin final : public virtual operator_plugin<every_operator> {
+template <detail::string_literal Name, bool ResetTimeout>
+class plugin final
+  : public virtual operator_plugin<every_timeout_operator<Name, ResetTimeout>> {
 public:
   auto signature() const -> operator_signature override {
     return {
@@ -234,18 +248,24 @@ public:
     if (auto* pipe = dynamic_cast<pipeline*>(result.inner.get())) {
       auto ops = std::move(*pipe).unwrap();
       for (auto& op : ops) {
-        op = std::make_unique<every_operator>(std::move(op), *interval);
+        op = std::make_unique<every_timeout_operator<Name, ResetTimeout>>(
+          std::move(op), *interval);
         // Only the first operator can be a source and needs to be replaced.
         break;
       }
       return std::make_unique<pipeline>(std::move(ops));
     }
-    return std::make_unique<every_operator>(std::move(result.inner), *interval);
+    return std::make_unique<every_timeout_operator<Name, ResetTimeout>>(
+      std::move(result.inner), *interval);
   }
 };
 
+using every_plugin = plugin<"every", false>;
+using timeout_plugin = plugin<"timeout", true>;
+
 } // namespace
 
-} // namespace tenzir::plugins::every
+} // namespace tenzir::plugins::every_timeout
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::every::every_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_timeout::every_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_timeout::timeout_plugin)

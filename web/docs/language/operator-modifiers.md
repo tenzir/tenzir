@@ -8,16 +8,26 @@ Operator modifiers are keywords that may occur before an operator.
 
 ## Scheduled Executions
 
-The special keyword `every` enables scheduled execution of an operator.
+The special keywords `every` and `timeout` enable scheduled execution of an
+operator.
 
 Use the operator modifier like this:
 
 ```
 every <interval> <operator> [<args...>]
+timeout <interval> <operator> [<args...>]
 ```
 
 For example, `version` prints the version number exactly once, but `every 1s
 version` prints the version number once every second.
+
+While `every` starts the interval from the last time the operator was started,
+`timeout` starts it when the operator last received an input. This is pretty
+useful with operators like `summarize`. For example, while `summarize count(.)`
+blocks until it has received all input before then emitting a count of received
+events, `every 30s summarize count(.)` prints the count every 30 seconds, and
+`timeout 30s summarize count(.)` prints it whenever no events were received for
+30 seconds.
 
 ## Location Overrides
 
