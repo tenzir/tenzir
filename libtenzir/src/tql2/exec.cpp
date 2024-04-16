@@ -12,6 +12,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/exec_pipeline.hpp"
+#include "tenzir/hash/hash.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/tql2/check_type.hpp"
@@ -27,9 +28,7 @@
 
 #include <arrow/compute/api.h>
 #include <arrow/util/utf8.h>
-
-#include <chrono>
-#include <ranges>
+#include <tsl/robin_set.h>
 
 namespace tenzir::tql2 {
 
@@ -37,7 +36,8 @@ namespace {
 
 using namespace ast;
 
-/// A diagnostic handler that remembers when it emits an error.
+/// A diagnostic handler that remembers when it emits an error, and also
+/// does not emit the same diagnostic twice.
 class diagnostic_handler_wrapper final : public diagnostic_handler {
 public:
   explicit diagnostic_handler_wrapper(std::unique_ptr<diagnostic_handler> inner)
@@ -45,6 +45,16 @@ public:
   }
 
   void emit(diagnostic d) override {
+    // TODO: This is obviously quite bad great.
+    auto locations = std::vector<location>{};
+    for (auto& annotation : d.annotations) {
+      locations.push_back(annotation.source);
+    }
+    auto inserted
+      = seen_.emplace(std::pair{d.message, std::move(locations)}).second;
+    if (not inserted) {
+      return;
+    }
     if (d.severity == severity::error) {
       error_ = true;
     }
@@ -60,7 +70,21 @@ public:
   }
 
 private:
+  using seen_t = std::pair<std::string, std::vector<location>>;
+
+  struct hasher {
+    auto operator()(const seen_t& x) const -> size_t {
+      // TODO: Very, very, very bad!!
+      auto result = std::hash<std::string>{}(x.first);
+      for (auto& loc : x.second) {
+        result ^= loc.begin << 1 ^ loc.end;
+      }
+      return result;
+    }
+  };
+
   bool error_ = false;
+  tsl::robin_set<seen_t, hasher> seen_;
   std::unique_ptr<diagnostic_handler> inner_;
 };
 
@@ -462,7 +486,8 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   (void)sys;
   auto content_view = std::string_view{content};
   auto tokens = tql2::tokenize(content);
-  auto diag_wrapper = diagnostic_handler_wrapper{std::move(diag)};
+  auto diag_wrapper
+    = std::make_unique<diagnostic_handler_wrapper>(std::move(diag));
   // TODO: Refactor this.
   arrow::util::InitializeUTF8();
   if (not arrow::util::ValidateUTF8(content)) {
@@ -474,7 +499,7 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
         // UTF-8 in diagnostics.
         diagnostic::error("invalid UTF8")
           .primary(location{last, token.end})
-          .emit(diag_wrapper);
+          .emit(*diag_wrapper);
       }
       last = token.end;
     }
@@ -499,14 +524,14 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
       }
       diagnostic::error("could not parse token")
         .primary(location{begin, token.end})
-        .emit(diag_wrapper);
+        .emit(*diag_wrapper);
     }
   }
-  if (diag_wrapper.error()) {
+  if (diag_wrapper->error()) {
     return false;
   }
-  auto parsed = tql2::parse(tokens, content, diag_wrapper);
-  if (diag_wrapper.error()) {
+  auto parsed = tql2::parse(tokens, content, *diag_wrapper);
+  if (diag_wrapper->error()) {
     return false;
   }
   auto reg = registry{};
@@ -530,21 +555,21 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
     }
     reg.add(name, fn);
   }
-  tql2::resolve_entities(parsed, reg, diag_wrapper);
+  tql2::resolve_entities(parsed, reg, *diag_wrapper);
   if (cfg.dump_ast) {
     with_thread_local_registry(reg, [&] {
       fmt::println("{:#?}", parsed);
     });
-    return not diag_wrapper.error();
+    return not diag_wrapper->error();
   }
   // TODO
-  auto ctx = context{reg, diag_wrapper};
+  auto ctx = context{reg, *diag_wrapper};
   auto pipe = prepare_pipeline(std::move(parsed), ctx);
   // TENZIR_WARN("{:#?}", use_default_formatter(pipe));
-  if (diag_wrapper.error()) {
+  if (diag_wrapper->error()) {
     return false;
   }
-  exec_pipeline(std::move(pipe), std::move(diag_wrapper).inner(), cfg, sys);
+  exec_pipeline(std::move(pipe), std::move(diag_wrapper), cfg, sys);
   // diagnostic::warning(
   //   "pipeline is syntactically valid, but execution is not yet
   //   implemented") .hint("use `--dump-ast` to show AST")

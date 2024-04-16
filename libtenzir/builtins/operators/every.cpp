@@ -266,7 +266,7 @@ public:
     }
     auto interval = caf::get_if<duration>(&*interval_data);
     if (not interval) {
-      diagnostic::error("expected a duration")
+      diagnostic::error("expected a duration, got `{}`", *interval_data)
         .primary(args[0].get_location())
         .emit(ctx);
       return nullptr;

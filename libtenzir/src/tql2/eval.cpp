@@ -75,6 +75,16 @@ auto resolve(const ast::selector& sel, type ty)
 
 namespace {
 
+void ensure(const arrow::Status& status) {
+  TENZIR_ASSERT(status.ok(), status.ToString());
+}
+
+template <class T>
+[[nodiscard]] auto ensure(arrow::Result<T> result) -> T {
+  ensure(result.status());
+  return result.MoveValueUnsafe();
+}
+
 auto data_to_series(const data& x, int64_t length) -> series {
   // TODO: This is overkill.
   auto b = series_builder{};
@@ -179,27 +189,88 @@ struct EvalBinOp<ast::binary_op::eq, int64_type, int64_type> {
   }
 };
 
-void ensure(const arrow::Status& status) {
-  TENZIR_ASSERT(status.ok(), status.ToString());
-}
+template <>
+struct EvalBinOp<ast::binary_op::gt, double_type, double_type> {
+  static auto eval(const arrow::DoubleArray& l, const arrow::DoubleArray& r)
+    -> std::shared_ptr<arrow::Array> {
+    auto b = arrow::BooleanBuilder{};
+    (void)b.Reserve(l.length());
+    for (auto i = int64_t{0}; i < l.length(); ++i) {
+      auto ln = l.IsNull(i);
+      auto rn = r.IsNull(i);
+      if (ln || rn) {
+        b.UnsafeAppendNull();
+      } else {
+        auto lv = l.Value(i);
+        auto rv = r.Value(i);
+        b.UnsafeAppend(lv > rv);
+      }
+    }
+    return b.Finish().ValueOrDie();
+  }
+};
 
-template <class T>
-[[nodiscard]] auto ensure(arrow::Result<T> result) -> T {
-  ensure(result.status());
-  return result.MoveValueUnsafe();
-}
+// TODO: We probably don't want this.
+template <>
+struct EvalBinOp<ast::binary_op::and_, bool_type, bool_type> {
+  static auto eval(const arrow::BooleanArray& l, const arrow::BooleanArray& r)
+    -> std::shared_ptr<arrow::BooleanArray> {
+    // TODO: Bad.
+    auto has_null = l.null_bitmap() || r.null_bitmap();
+    auto has_offset = l.offset() != 0 || r.offset() != 0;
+    if (not has_null && not has_offset) {
+      auto buffer = ensure(arrow::AllocateBitmap(l.length()));
+      auto size = (l.length() + 7) / 8;
+      TENZIR_ASSERT(l.values()->size() >= size);
+      TENZIR_ASSERT(r.values()->size() >= size);
+      auto l_ptr = l.values()->data();
+      auto r_ptr = r.values()->data();
+      auto o_ptr = buffer->mutable_data();
+      for (auto i = int64_t{0}; i < size; ++i) {
+        o_ptr[i] = l_ptr[i] & r_ptr[i];
+      }
+      return std::make_shared<arrow::BooleanArray>(l.length(),
+                                                   std::move(buffer));
+    }
+    auto b = arrow::BooleanBuilder{};
+    ensure(b.Reserve(l.length()));
+    for (auto i = int64_t{0}; i < l.length(); ++i) {
+      auto lv = l.Value(i);
+      auto rv = r.Value(i);
+      auto ln = l.IsNull(i);
+      auto rn = r.IsNull(i);
+      auto lt = not ln && lv;
+      auto lf = not ln && not lv;
+      auto rt = not rn && rv;
+      auto rf = not rn && not rv;
+      if (lt && rt) {
+        b.UnsafeAppend(true);
+      } else if (lf || rf) {
+        b.UnsafeAppend(false);
+      } else {
+        b.UnsafeAppendNull();
+      }
+    }
+    auto result = std::shared_ptr<arrow::BooleanArray>{};
+    auto status = b.Finish(&result);
+    TENZIR_ASSERT(status.ok());
+    return result;
+  }
+};
 
-template <concrete_type L>
-struct EvalBinOp<ast::binary_op::eq, L, null_type> {
+template <ast::binary_op Op, concrete_type L>
+  requires(Op == ast::binary_op::eq || Op == ast::binary_op::neq)
+struct EvalBinOp<Op, L, null_type> {
   static auto eval(const type_to_arrow_array_t<L>& l, const arrow::NullArray& r)
     -> std::shared_ptr<arrow::Array> {
+    constexpr auto invert = Op == ast::binary_op::neq;
     // TODO: This is bad.
     TENZIR_UNUSED(r);
     auto buffer = ensure(arrow::AllocateBitmap(l.length()));
     auto& null_bitmap = l.null_bitmap();
     if (not null_bitmap) {
       // All non-null, except if `null_type`.
-      auto value = std::same_as<L, null_type> ? 0xFF : 0x00;
+      auto value = (std::same_as<L, null_type> != invert) ? 0xFF : 0x00;
       std::memset(buffer->mutable_data(), value, buffer->size());
     } else {
       TENZIR_ASSERT(buffer->size() == null_bitmap->size());
@@ -208,10 +279,20 @@ struct EvalBinOp<ast::binary_op::eq, L, null_type> {
       auto length = detail::narrow<size_t>(buffer->size());
       for (auto i = size_t{0}; i < length; ++i) {
         // TODO
-        buffer_ptr[i] = ~null_ptr[i];
+        buffer_ptr[i] = invert ? null_ptr[i] : ~null_ptr[i];
       }
     }
     return std::make_shared<arrow::BooleanArray>(l.length(), std::move(buffer));
+  }
+};
+
+template <ast::binary_op Op, concrete_type R>
+  requires((Op == ast::binary_op::eq || Op == ast::binary_op::neq)
+           && not std::same_as<R, null_type>)
+struct EvalBinOp<Op, null_type, R> {
+  static auto eval(const arrow::NullArray& l, const type_to_arrow_array_t<R>& r)
+    -> std::shared_ptr<arrow::Array> {
+    return EvalBinOp<Op, R, null_type>::eval(r, l);
   }
 };
 
@@ -383,6 +464,43 @@ public:
     return ret;
   }
 
+  template <ast::unary_op Op>
+  auto eval(const ast::unary_expr& x, const series& v) -> series {
+    // auto v = to_series(eval(x.expr));
+    TENZIR_ASSERT(x.op.inner == Op);
+    return caf::visit(
+      [&]<concrete_type T>(const T&) -> series {
+        if constexpr (caf::detail::is_complete<EvalUnOp<Op, T>>) {
+          auto& a = caf::get<type_to_arrow_array_t<T>>(*v.array);
+          auto oa = EvalUnOp<Op, T>::eval(a);
+          auto ot = type::from_arrow(*oa->type());
+          return series{std::move(ot), std::move(oa)};
+        } else {
+          diagnostic::warning("unary operator `{}` not implemented for `{}`",
+                              x.op.inner, v.type.kind())
+            .primary(x.get_location())
+            .emit(dh_);
+          return null();
+        }
+      },
+      v.type);
+  }
+
+  auto eval(const ast::unary_expr& x) -> series {
+    auto v = eval(x.expr);
+    using enum ast::unary_op;
+    switch (x.op.inner) {
+#define X(op)                                                                  \
+  case op:                                                                     \
+    return eval<op>(x, v)
+      X(pos);
+      X(neg);
+      X(not_);
+#undef X
+    }
+    TENZIR_UNREACHABLE();
+  }
+
   template <ast::binary_op Op>
   auto eval(const ast::binary_expr& x, const series& l, const series& r)
     -> series {
@@ -404,7 +522,7 @@ public:
           diagnostic::warning("binary operator `{}` not implemented for `{}` "
                               "and `{}`",
                               x.op.inner, l.type.kind(), r.type.kind())
-            .primary(x.op.source)
+            .primary(x.get_location())
             .emit(dh_);
           return null();
         }
@@ -412,55 +530,38 @@ public:
       l.type, r.type);
   }
 
-  template <ast::unary_op Op>
-  auto eval(const ast::unary_expr& x, const series& v) -> series {
-    // auto v = to_series(eval(x.expr));
-    TENZIR_ASSERT(x.op.inner == Op);
-    return caf::visit(
-      [&]<concrete_type T>(const T&) -> series {
-        if constexpr (caf::detail::is_complete<EvalUnOp<Op, T>>) {
-          auto& a = caf::get<type_to_arrow_array_t<T>>(*v.array);
-          auto oa = EvalUnOp<Op, T>::eval(a);
-          auto ot = type::from_arrow(*oa->type());
-          return series{std::move(ot), std::move(oa)};
-        } else {
-          return null();
-        }
-      },
-      v.type);
-  }
-
-  auto eval(const ast::unary_expr& x) -> series {
-    auto v = eval(x.expr);
-    switch (x.op.inner) {
-      case ast::unary_op::not_:
-        return eval<ast::unary_op::not_>(x, v);
-      default:
-        return null();
-    }
-  }
-
   auto eval(const ast::binary_expr& x) -> series {
-    // TODO: How does short circuiting work?
-    if (x.op.inner == ast::binary_op::and_) {
-      // 1) Evaluate left.
-      auto l = eval(x.left);
-      // 2) Evaluate right, but discard diagnostics if false.
-      TENZIR_TODO();
-    }
-    auto l = eval(x.left);
-    auto r = eval(x.right);
+    using enum ast::binary_op;
     switch (x.op.inner) {
-      case ast::binary_op::add:
-        return eval<ast::binary_op::add>(x, l, r);
-      case ast::binary_op::mul:
-        return eval<ast::binary_op::mul>(x, l, r);
-      case ast::binary_op::eq:
-        return eval<ast::binary_op::eq>(x, l, r);
-      default:
-        return not_implemented(x);
+#define X(op)                                                                  \
+  case op:                                                                     \
+    return eval<op>(x, eval(x.left), eval(x.right))
+      X(add);
+      X(sub);
+      X(mul);
+      X(div);
+      X(eq);
+      X(neq);
+      X(gt);
+      X(ge);
+      X(lt);
+      X(le);
+      X(in);
+#undef X
+      case and_: {
+        // TODO: How does short circuiting work?
+        // 1) Evaluate left.
+        auto l = eval(x.left);
+        // 2) Evaluate right, but discard diagnostics if false.
+        // TODO
+        auto r = eval(x.right);
+        return eval<and_>(x, l, r);
+      }
+      case or_:
+        TENZIR_TODO();
     }
-  } // namespace
+    TENZIR_UNREACHABLE();
+  }
 
   auto eval(const ast::field_access& x) -> series {
     auto l = eval(x.left);
@@ -484,12 +585,20 @@ public:
     return null();
   }
 
+  auto eval(const ast::assignment& x) -> series {
+    diagnostic::warning("unexpected assignment")
+      .primary(x.get_location())
+      .emit(dh_);
+    return null();
+  }
+
   auto eval(const auto& x) -> series {
     return not_implemented(x);
   }
 
   auto not_implemented(const auto& x) -> series {
-    diagnostic::warning("eval not implemented yet")
+    diagnostic::warning("eval not implemented yet for: {:?}",
+                        use_default_formatter(x))
       .primary(x.get_location())
       .emit(dh_);
     return null();

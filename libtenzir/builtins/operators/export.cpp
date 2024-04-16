@@ -6,6 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/eval.hpp"
+#include "tenzir/tql2/plugin.hpp"
+
 #include <tenzir/actors.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/atoms.hpp>
@@ -257,7 +261,8 @@ private:
   bool live_;
 };
 
-class plugin final : public virtual operator_plugin<export_operator> {
+class plugin final : public virtual operator_plugin<export_operator>,
+                     public virtual tql2::operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.source = true};
@@ -276,6 +281,75 @@ public:
     // The --low-priority option is currently a no-op, and will be brought back
     // alongside the database plugin.
     (void)low_priority;
+    return std::make_unique<export_operator>(
+      expression{
+        predicate{
+          meta_extractor{meta_extractor::internal},
+          relational_operator::equal,
+          data{internal},
+        },
+      },
+      live);
+  }
+
+  auto
+  make_operator(tql2::ast::entity self, std::vector<tql2::ast::expression> args,
+                tql2::context& ctx) const -> operator_ptr override {
+    // auto usage = "export live=<bool>, internal=<bool>";
+    auto usage = "export live=false, internal=false";
+    auto docs = "https://docs.tenzir.com/operators/export";
+    auto live = false;
+    auto internal = false;
+    for (auto& arg : args) {
+      auto assignment = std::get_if<tql2::ast::assignment>(arg.kind.get());
+      if (not assignment) {
+        diagnostic::error("unexpected positional argument")
+          .primary(arg.get_location())
+          .usage(usage)
+          .docs(docs)
+          .emit(ctx);
+        continue;
+      }
+      if (assignment->left.path.size() == 1) {
+        if (assignment->left.path[0].name == "live") {
+          auto result = tql2::const_eval(assignment->right, ctx);
+          if (not result) {
+            continue;
+          }
+          auto bool_res = caf::get_if<bool>(&*result);
+          if (not bool_res) {
+            diagnostic::error("expected bool")
+              .primary(assignment->right.get_location())
+              .usage(usage)
+              .docs(docs)
+              .emit(ctx);
+            continue;
+          }
+          live = *bool_res;
+        } else if (assignment->left.path[0].name == "internal") {
+          auto result = tql2::const_eval(assignment->right, ctx);
+          if (not result) {
+            continue;
+          }
+          auto bool_res = caf::get_if<bool>(&*result);
+          if (not bool_res) {
+            diagnostic::error("expected bool")
+              .primary(assignment->right.get_location())
+              .usage(usage)
+              .docs(docs)
+              .emit(ctx);
+            continue;
+          }
+          internal = *bool_res;
+        } else {
+          diagnostic::error("unexpected named argument")
+            .primary(assignment->left.get_location())
+            .usage(usage)
+            .docs(docs)
+            .emit(ctx);
+        }
+      }
+    }
     return std::make_unique<export_operator>(
       expression{
         predicate{

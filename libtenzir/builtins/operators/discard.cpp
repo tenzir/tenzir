@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/tql2/plugin.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/plugin.hpp>
 
@@ -44,13 +46,23 @@ public:
   }
 };
 
-class plugin final : public virtual operator_plugin<discard_operator> {
+class plugin final : public virtual operator_plugin<discard_operator>,
+                     public virtual tql2::operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.sink = true};
   }
 
   auto parse_operator(parser_interface&) const -> operator_ptr override {
+    return std::make_unique<discard_operator>();
+  }
+
+  auto
+  make_operator(tql2::ast::entity self, std::vector<tql2::ast::expression> args,
+                tql2::context& ctx) const -> operator_ptr override {
+    if (not args.empty()) {
+      diagnostic::error("TODO").primary(self.get_location()).emit(ctx);
+    }
     return std::make_unique<discard_operator>();
   }
 };

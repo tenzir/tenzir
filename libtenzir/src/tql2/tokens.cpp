@@ -48,7 +48,7 @@ auto tokenize(std::string_view content) -> std::vector<token> {
 #define X(x, y) ignore(lit{x}) ->* [] { return token_kind::y; }
     | X("=>", fat_arrow)
     | X("==", equal_equal)
-    | X("!=", equal_equal)
+    | X("!=", bang_equal)
     | X(">=", greater_equal)
     | X("<=", less_equal)
     | X(">", greater)

@@ -583,7 +583,6 @@ struct match_stmt {
   }
 
   auto get_location() const -> location {
-    // TODO
     return begin.combine(end);
   }
 };
