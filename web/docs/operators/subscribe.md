@@ -6,18 +6,20 @@ sidebar_custom_props:
 
 # subscribe
 
-Subscribes to events at a Tenzir Node. The dual to [`publish`](publish.md).
+Subscribes to events from a channel with a topic. The dual to
+[`publish`](publish.md).
 
 ## Synopsis
 
 ```
 subscribe [<topic>]
 ```
+
 ## Description
 
-The `subscribe` operator subscribes to events at a Tenzir Node from a channel
-with the specified topic. Multiple `subscribe` operators with the same topic
-receive the same events.
+The `subscribe` operator subscribes to events Node from a channel with the
+specified topic. Multiple `subscribe` operators with the same topic receive the
+same events.
 
 ### `<topic>`
 
