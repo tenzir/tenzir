@@ -79,7 +79,7 @@ following images:
 - `tenzir/tenzir:latest` to use the last release.
 - `tenzir/tenzir:main` to use the currnet development version.
 
-## Manage the Platform
+## Manage Workspaces
 
 :::warning On-Premise Setup Required
 This functionality of the CLI can only be used in combination
@@ -87,14 +87,12 @@ with an on-premise platform deployment, which is available to users
 of the [Sovereign Edition](https://tenzir.com/pricing).
 :::
 
-These CLI commands are only available to platform administrators.
+These CLI commands are only available to local platform administrators.
 The `TENZIR_PLATFORM_OIDC_ADMIN_RULES` variable described
 [here](setup-guides/deploy-the-platform#identity-provider-idp) is used
 to define who is an administrator in your platform deployment.
 
-### Manage Workspaces
-
-#### Synopsis
+### Synopsis
 
 ```
 tenzir-platform admin list-global-workspaces
@@ -102,13 +100,13 @@ tenzir-platform admin create-workspace <owner_namespace> <owner_id> [--name <wor
 tenzir-platform admin delete-workspace <workspace_id>
 ```
 
-#### Description
+### Description
 
 The `tenzir-platform workspace admin list-global-workspaces`, `tenzir-platform
 admin create-workspace`, and `tenzir-platform admin delete-workspace` commands
 list, create, or delete workspaces, respectively.
 
-##### `<owner_namespace>`
+#### `<owner_namespace>`
 
 Either `user` or `organization`, depending on whether the workspace is
 associated with a user or an organization.
@@ -122,7 +120,7 @@ workspace:
    they have to be manually added using the `add-auth-rule` subcommand
    described below.
 
-##### `<owner_id>`
+#### `<owner_id>`
 
 The unique ID of the workspace owner:
 - If `<owner_namespace>` is `user`, then this matches the user's `sub` claim in
@@ -130,18 +128,29 @@ The unique ID of the workspace owner:
 - If `<owner_namespace>` is `organization`, then this is an arbitrary string
   uniquely identifiying the organization the workspace belongs to.
 
-##### `--name <workspace_name>`
+#### `--name <workspace_name>`
 
 The name of the workspace as shown in the app.
 
-##### `<workspace_id>`
+#### `<workspace_id>`
 
 The unique ID of the workspace, as shown in `tenzir-platform workspace list` or
 `tenzir-platform admin list-global-workspaces`.
 
-### Configure Access Rules
+## Configure Access Rules
 
-#### Synopsis
+:::warning On-Premise Setup Required
+This functionality of the CLI can only be used in combination
+with an on-premise platform deployment, which is available to users
+of the [Sovereign Edition](https://tenzir.com/pricing).
+:::
+
+These CLI commands are only available to local platform administrators.
+The `TENZIR_PLATFORM_OIDC_ADMIN_RULES` variable described
+[here](setup-guides/deploy-the-platform#identity-provider-idp) is used
+to define who is an administrator in your platform deployment.
+
+### Synopsis
 
 ```
 tenzir-platform admin list-auth-rules <workspace_id>
@@ -156,7 +165,7 @@ tenzir-platform admin add-auth-rule [--dry-run]
 tenzir-platform admin delete-auth-rule <workspace_id> <auth_rule_index>
 ```
 
-#### Description
+### Description
 
 Users with admin permissions can additionally use the `tenzir-platform admin
 list-auth-rules`, `tenzir-platform admin add-auth-rule`, and `tenzir-platform
