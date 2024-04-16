@@ -17,9 +17,9 @@ subscribe [<topic>]
 
 ## Description
 
-The `subscribe` operator subscribes to events Node from a channel with the
-specified topic. Multiple `subscribe` operators with the same topic receive the
-same events.
+The `subscribe` operator subscribes to events from a channel with the specified
+topic. Multiple `subscribe` operators with the same topic receive the same
+events.
 
 ### `<topic>`
 

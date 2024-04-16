@@ -105,6 +105,11 @@ img[alt$="#width600"] {
   fill: none;
 }
 
+/* We do not want font ligatures in code blocks. */
+code, pre {
+  font-variant-ligatures: none;
+}
+
 @mixin MakeHeaderLogo($name, $srcLight, $srcDark) {
 	.header-#{$name}-link {
 		padding: 5px;
