@@ -43,7 +43,7 @@ components:
           example: false
         ttl:
           type: string
-          description: "A duration string specifying the maximum time for this pipeline to exist. No value means the pipeline is allowed to exist forever.\nThis parameter must be defined if the `hidden` parameter is true.\n"
+          description: "A duration string specifying the maximum time for this pipeline to\nexist. No value means the pipeline is allowed to exist forever.\nThis parameter must be defined if the `hidden` parameter is true.\n"
           default: null
           example: 5.0m
         autostart:
@@ -52,12 +52,9 @@ components:
           $ref: "#/components/schemas/PipelineAutodelete"
         retry_delay:
           type: string
-          description: If `autostart.failed` is `true`, this value is both a threshold
-            and delay for restarting a failed pipeline. If the lifetime
-            of a running pipeline reaches this value, restart upon failure will be
-            instantaneous. Else, it will restart after this value.
-          default: 3s
-          example: 500ms
+          description: "A duration string specifying the minimum time between automatic restarts\nof a pipeline when an error occurs. Takes no effect if restarting on\nfailure is disabled.\n"
+          default: 1.0m
+          example: 500.0ms
     Diagnostic:
       type: object
       properties:
@@ -85,6 +82,18 @@ components:
       type: array
       items:
         $ref: "#/components/schemas/Diagnostic"
+    Launch Response For Pipeline With Explicit Sink:
+      type: object
+      properties:
+        deployable:
+          type: boolean
+          description: Returns this property with the value `true`.
+    Launch Response For Pipeline Without Explicit Sink:
+      type: object
+      properties:
+        id:
+          type: string
+          description: (If the pipeline does not end with a predefined sink) The ID of the successfully created pipeline.
     LaunchParameters:
       allOf:
         - $ref: "#/components/schemas/CreateParameters"
@@ -104,18 +113,6 @@ components:
               type: integer
               description: The maximum number of events to keep in the `serve` operator.
               example: 4000
-    Launch Response For Pipeline Without Explicit Sink:
-      type: object
-      properties:
-        id:
-          type: string
-          description: The ID of the successfully created pipeline.
-    Launch Response For Pipeline With Explicit Sink:
-      type: object
-      properties:
-        deployable:
-          type: boolean
-          description: Returns this property with the value `true`.
     Location:
       type: object
       description: A region in the source code, defined by byte offsets.
@@ -190,6 +187,9 @@ components:
         definition:
           type: string
           description: The pipeline definition.
+        hidden:
+          type: bool
+          description: Whether this pipeline is hidden. Hidden pipelines are only available through the `show pipelines` operator.
         created_at:
           type: integer
           format: int64
@@ -221,11 +221,8 @@ components:
           $ref: "#/components/schemas/PipelineLabels"
         retry_delay:
           type: string
-          description: If `autostart.failed` is `true`, this value is both a threshold
-            and delay for restarting a failed pipeline in nanoseconds. If the lifetime
-            of a running pipeline reaches this value, restart upon failure will be
-            instantaneous. Else, it will restart after this value.
-          example: 10s
+          description: "A duration string specifying the minimum time between automatic restarts\nof a pipeline when an error occurs. Takes no effect if restarting on\nfailure is disabled.\n"
+          example: 10.0s
         autostart:
           $ref: "#/components/schemas/PipelineAutostart"
         autodelete:
@@ -361,7 +358,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LaunchParameters'
+              $ref: "#/components/schemas/LaunchParameters"
       responses:
         200:
           description: Success.
@@ -369,8 +366,8 @@ paths:
             application/json:
               schema:
                 oneOf:
-                  - $ref: '#/components/schemas/Launch Response For Pipeline With Explicit Sink'
-                  - $ref: '#/components/schemas/Launch Response For Pipeline Without Explicit Sink'
+                  - $ref: "#/components/schemas/Launch Response For Pipeline With Explicit Sink"
+                  - $ref: "#/components/schemas/Launch Response For Pipeline Without Explicit Sink"
   /pipeline/list:
     post:
       summary: List all existing pipelines
@@ -393,6 +390,7 @@ paths:
                     - id: 4c7f2b11-6169-4d1b-89b4-4fc0a68b3d4a
                       name: user-assigned-name
                       definition: export | where foo | publish /bar
+                      hidden: false
                       created_at: 1706180157837037485
                       last_modifed: 1706180157837038016
                       state: running
@@ -402,8 +400,9 @@ paths:
                     - id: 08446737-da9b-4787-8599-97d85c48c3bb
                       name: wrong-pipeline
                       definition: export asdf
-                      created_at: null
-                      last_modifed: null
+                      hidden: false
+                      created_at: 1706180157837037485
+                      last_modifed: 1706180157837038016
                       state: failed
                       error: format 'asdf' not found
                       diagnostics:
@@ -511,11 +510,8 @@ paths:
                   $ref: "#/components/schemas/PipelineAutodelete"
                 retry_delay:
                   type: string
-                  description: If `autostart.failed` is `true`, this value is both a threshold
-                    and delay for restarting a failed pipeline. If the lifetime
-                    of a running pipeline reaches this value, restart upon failure will be
-                    instantaneous. Else, it will restart after this value.
-                  example: 500ms
+                  description: "A duration string specifying the minimum time between automatic restarts\nof a pipeline when an error occurs. Takes no effect if restarting on\nfailure is disabled.\n"
+                  example: 500.0ms
       responses:
         200:
           description: Success.
