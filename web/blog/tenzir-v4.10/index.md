@@ -29,14 +29,15 @@ interface is disallowed for pipelines deployed as code.
 Here's a simple example to get you started:
 
 ```yaml {0} title="<prefix>/etc/tenzir/tenzir.yaml"
-pipelines:
-  suricata-over-tcp:
-    name: Import Suricata from TCP
-    definition: |
-      from tcp://0.0.0.0:34343 read suricata
-      | import
-    start:
-      failed: true  # always restart on failure
+tenzir:
+  pipelines:
+    suricata-over-tcp:
+      name: Import Suricata from TCP
+      definition: |
+        from tcp://0.0.0.0:34343 read suricata
+        | import
+      start:
+        failed: true  # always restart on failure
 ```
 
 :::tip Want to learn more?
