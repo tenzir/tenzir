@@ -82,18 +82,25 @@ deployment in two ways:
 Here's a an example of deploying a pipeline through your configuration:
 
 ```yaml {0} title="<prefix>/etc/tenzir/tenzir.yaml"
-pipelines:
-  suricata-over-tcp:
-    name: Import Suricata from TCP
-    definition: |
-      from tcp://0.0.0.0:34343 read suricata
-      | import
-    start:
-      created: false    # start automatically
-      failed: true      # restart on failure
-      completed: false  # restart on completion
+tenzir:
+  pipelines:
+    # A unique identifier for the pipeline that's used for metrics, diagnostics,
+    # and API calls interacting with the pipeline.
+    suricata-over-tcp:
+      # An optional user-facing name for the pipeline. Defaults to the id.
+      name: Import Suricata from TCP
+      # The definition of the pipeline. Configured pipelines that fail to start
+      # cause the node to fail to start.
+      definition: |
+        from tcp://0.0.0.0:34343 read suricata
+        | import
+      # Pipelines that encounter an error stop running and show an error state.
+      # This option causes pipelines to automatically restart when they
+      # encounter an error instead. The first restart happens immediately, and
+      # subsequent restarts after the configured delay, defaulting to 1 minute.
+      # The following values are valid for this option:
+      # - Omit the option, or set it to null or false to disable.
+      # - Set the option to true to enable with the default delay of 1 minute.
+      # - Set the option to a valid duration to enable with a custom delay.
+      retry-on-error: 1 minute
 ```
-
-The boolean `start` configuration flags `completed` and `failed` default to
-`false`, `created` defaults to `true`.. In the above example, we assign
-`start.completed` only to showcase all available options.
