@@ -82,16 +82,17 @@ deployment in two ways:
 Here's a an example of deploying a pipeline through your configuration:
 
 ```yaml {0} title="<prefix>/etc/tenzir/tenzir.yaml"
-pipelines:
-  suricata-over-tcp:
-    name: Import Suricata from TCP
-    definition: |
-      from tcp://0.0.0.0:34343 read suricata
-      | import
-    start:
-      created: false    # start automatically
-      failed: true      # restart on failure
-      completed: false  # restart on completion
+tenzir:
+  pipelines:
+    suricata-over-tcp:
+      name: Import Suricata from TCP
+      definition: |
+        from tcp://0.0.0.0:34343 read suricata
+        | import
+      start:
+        created: false    # start automatically
+        failed: true      # restart on failure
+        completed: false  # restart on completion
 ```
 
 The boolean `start` configuration flags `completed` and `failed` default to
