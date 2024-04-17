@@ -31,7 +31,6 @@
 #include <tsl/robin_set.h>
 
 namespace tenzir::tql2 {
-
 namespace {
 
 using namespace ast;
@@ -443,12 +442,12 @@ auto prepare_pipeline(pipeline&& pipe, context& ctx) -> tenzir::pipeline {
 #endif
       },
       [&](if_stmt& x) {
-        auto ty = check_type(x.condition, ctx);
-        if (ty && *ty != type{bool_type{}}) {
-          diagnostic::error("condition type must be `bool`, but is `{}`", *ty)
-            .primary(x.condition.get_location())
-            .emit(ctx.dh());
-        }
+        // auto ty = check_type(x.condition, ctx);
+        // if (ty && *ty != type{bool_type{}}) {
+        //   diagnostic::error("condition type must be `bool`, but is `{}`", *ty)
+        //     .primary(x.condition.get_location())
+        //     .emit(ctx.dh());
+        // }
         // TODO: Same problem. Very, very hacky!
         auto args = std::vector<ast::expression>{};
         args.reserve(3);

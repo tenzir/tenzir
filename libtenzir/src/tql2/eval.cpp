@@ -166,9 +166,10 @@ struct EvalBinOp<ast::binary_op::mul, L, R> {
 };
 
 // TODO: Generalize.
-template <>
-struct EvalBinOp<ast::binary_op::eq, int64_type, int64_type> {
-  static auto eval(const arrow::Int64Array& l, const arrow::Int64Array& r)
+template <numeric_type T>
+struct EvalBinOp<ast::binary_op::eq, T, T> {
+  static auto
+  eval(const type_to_arrow_array_t<T>& l, const type_to_arrow_array_t<T>& r)
     -> std::shared_ptr<arrow::Array> {
     auto b = arrow::BooleanBuilder{};
     (void)b.Reserve(l.length());
@@ -189,9 +190,10 @@ struct EvalBinOp<ast::binary_op::eq, int64_type, int64_type> {
   }
 };
 
-template <>
-struct EvalBinOp<ast::binary_op::gt, double_type, double_type> {
-  static auto eval(const arrow::DoubleArray& l, const arrow::DoubleArray& r)
+template <numeric_type T>
+struct EvalBinOp<ast::binary_op::gt, T, T> {
+  static auto
+  eval(const type_to_arrow_array_t<T>& l, const type_to_arrow_array_t<T>& r)
     -> std::shared_ptr<arrow::Array> {
     auto b = arrow::BooleanBuilder{};
     (void)b.Reserve(l.length());
@@ -293,6 +295,30 @@ struct EvalBinOp<Op, null_type, R> {
   static auto eval(const arrow::NullArray& l, const type_to_arrow_array_t<R>& r)
     -> std::shared_ptr<arrow::Array> {
     return EvalBinOp<Op, R, null_type>::eval(r, l);
+  }
+};
+
+template <ast::binary_op Op>
+  requires(Op == ast::binary_op::eq || Op == ast::binary_op::neq)
+struct EvalBinOp<Op, string_type, string_type> {
+  static auto eval(const arrow::StringArray& l, const arrow::StringArray& r)
+    -> std::shared_ptr<arrow::Array> {
+    // TODO: This is bad.
+    constexpr auto invert = Op == ast::binary_op::neq;
+    auto b = arrow::BooleanBuilder{};
+    ensure(b.Reserve(l.length()));
+    for (auto i = int64_t{0}; i < l.length(); ++i) {
+      auto ln = l.IsNull(i);
+      auto rn = r.IsNull(i);
+      if (ln != rn) {
+        b.UnsafeAppend(false != invert);
+      } else if (ln && rn) {
+        b.UnsafeAppend(true != invert);
+      } else {
+        b.UnsafeAppend((l.Value(i) == r.Value(i)) != invert);
+      }
+    }
+    return ensure(b.Finish());
   }
 };
 
