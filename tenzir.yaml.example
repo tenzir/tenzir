@@ -159,24 +159,20 @@ tenzir:
   # Zstd compression level applied to the Feather store backend.
   # zstd-compression-level: <default>
 
-  # Configured contexts can be declared here. The key specifies the context
-  # name, the value is an object with a required `type` and a set of arguments
-  # as mandated by the context type.
+  # Context configured as part of the configuration that are always available.
   contexts:
-    # Example:
-    # ```
-    # lt:
-    #   type: lookup-table
-    # geoip:
-    #   type: geoip
-    #   arguments:
-    #     db-path: /data/GeoLite2-ASN.mmdb
-    # bf:
-    #   type: bloom-filter
-    #   arguments:
-    #     capacity: 100
-    #     fp-probability: 0.1
-    # ```
+    # A unique name for the context that's used in the context, enrich, and
+    # lookup operators to refer to the context.
+    indicators:
+      # The type of the context.
+      type: bloom-filter
+      # Arguments for creating the context, depending on the type. Refer to the
+      # documentation of the individual context types to see the arguments they
+      # require. Note that changes to these arguments to not apply to any
+      # contexts that were previously created.
+      arguments:
+        capacity: 1B
+        fp-probability: 0.001
 
   # The `index` key is used to adjust the false-positive rate of
   # the first-level lookup data structures (called synopses) in the
