@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/collect.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/node.hpp>
