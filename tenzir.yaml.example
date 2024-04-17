@@ -237,6 +237,34 @@ tenzir:
             --set logging.outputs.0.console.enabled=no"
      | read suricata
 
+  # In addition to running pipelines interactively, you can also deploy
+  # *Pipelines as Code*. This infrastrucutre-as-code-like method differs from
+  # pipelines run on the command-line or through app.tenzir.com in two ways:
+  # 1. Pipelines deployed as code always start alongside the Tenzir node.
+  # 2. Deletion via the user interface is not allowed for pipelines configured
+  #    as code.
+  pipelines:
+    # A unique identifier for the pipeline that's used for metrics, diagnostics,
+    # and API calls interacting with the pipeline.
+    publish-suricata:
+      # An optional user-facing name for the pipeline. Defaults to the id.
+      name: Import Suricata from TCP
+      # The definition of the pipeline. Configured pipelines that fail to start
+      # cause the node to fail to start.
+      definition: |
+        from tcp://0.0.0.0:34343 read suricata --no-infer
+        | where event_type != "stats"
+        | publish suricata
+      # Pipelines that encounter an error stop running and show an error state.
+      # This option causes pipelines to automatically restart when they
+      # encounter an error instead. The first restart happens immediately, and
+      # subsequent restarts after the configured delay, defaulting to 1 minute.
+      # The following values are valid for this option:
+      # - Omit the option, or set it to null or false to disable.
+      # - Set the option to true to enable with the default delay of 1 minute.
+      # - Set the option to a valid duration to enable with a custom delay.
+      restart-on-error: 1 minute
+
 # The below settings are internal to CAF, and aren't checked by Tenzir directly.
 # Please be careful when changing these options. Note that some CAF options may
 # be in conflict with Tenzir options, and are only listed here for completeness.

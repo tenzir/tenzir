@@ -131,6 +131,7 @@ file(GLOB_RECURSE _suites CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests/*.bats")
 foreach (suite IN LISTS _suites)
   get_filename_component(suite_name "${suite}" NAME_WE)
+  string(REGEX REPLACE "_" "-" suite_name "${suite_name}")
   add_custom_target(
     "integration-tenzir-${suite_name}"
     COMMAND
