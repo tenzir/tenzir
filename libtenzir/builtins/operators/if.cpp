@@ -107,11 +107,12 @@ public:
       auto mask = eval(condition_, slice, ctrl.diagnostics());
       auto array = caf::get_if<arrow::BooleanArray>(&*mask.array);
       if (not array) {
-        diagnostic::error("condition must be `bool`, not `{}`",
-                          mask.type.kind())
+        diagnostic::warning("condition must be `bool`, not `{}`",
+                            mask.type.kind())
           .primary(condition_.get_location())
           .emit(ctrl.diagnostics());
-        co_return;
+        co_yield {};
+        continue;
       }
       TENZIR_ASSERT(array); // TODO
       then_input = mask_slice(slice, *array, true);
