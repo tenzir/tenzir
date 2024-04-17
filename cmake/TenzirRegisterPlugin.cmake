@@ -200,12 +200,12 @@ function (TenzirCompileFlatBuffers)
     )
   endif ()
 
-  if ("${CMAKE_PROJECT_NAME}" STREQUAL "Tenzir")
+  if ("${PROJECT_NAME}" STREQUAL "Tenzir")
+    target_link_libraries(${FBS_TARGET} INTERFACE "${flatbuffers_target}")
     dependency_summary("FlatBuffers" ${flatbuffers_target} "Dependencies")
   endif ()
 
   set(output_prefix "${CMAKE_CURRENT_BINARY_DIR}/${FBS_TARGET}/include")
-  target_link_libraries(${FBS_TARGET} INTERFACE "${flatbuffers_target}")
   # We include the generated files uisng -isystem because there's
   # nothing we can realistically do about the warnings in them, which
   # are especially annoying with clang-tidy enabled.

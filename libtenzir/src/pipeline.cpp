@@ -61,6 +61,11 @@ public:
     return false;
   }
 
+  auto set_waiting(bool value) noexcept -> void override {
+    (void)value;
+    TENZIR_UNIMPLEMENTED();
+  }
+
 private:
   caf::error error_{};
   std::unique_ptr<diagnostic_handler> handler_{};

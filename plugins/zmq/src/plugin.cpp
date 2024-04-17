@@ -9,6 +9,7 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/uuid.hpp>
 
 #include <memory>
 #include <optional>
@@ -25,17 +26,24 @@ namespace {
 /// The default ZeroMQ socket endpoint.
 constexpr auto default_endpoint = "tcp://127.0.0.1:5555";
 
+/// This is the 0mq context singleton. There exists exactly one context per
+/// process so that inproc sockets can be used across pipelines within the same
+/// node. The plugin initializes and deinitializes the singleton. Since
+/// accessing a 0mq context instance is thread-safe, we can share it globally.
+std::shared_ptr<::zmq::context_t> context;
+
 struct saver_args {
   std::optional<located<std::string>> endpoint;
   std::optional<location> connect;
   std::optional<location> listen;
+  std::optional<location> monitor;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, saver_args& x) -> bool {
     return f.object(x)
       .pretty_name("saver_args")
       .fields(f.field("endpoint", x.endpoint), f.field("listen", x.listen),
-              f.field("connect", x.connect));
+              f.field("connect", x.connect), f.field("monitor", x.monitor));
   }
 };
 
@@ -44,13 +52,15 @@ struct loader_args {
   std::optional<located<std::string>> filter;
   std::optional<location> connect;
   std::optional<location> listen;
+  std::optional<location> monitor;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, loader_args& x) -> bool {
     return f.object(x)
       .pretty_name("loader_args")
       .fields(f.field("endpoint", x.endpoint), f.field("filter", x.filter),
-              f.field("listen", x.listen), f.field("connect", x.connect));
+              f.field("listen", x.listen), f.field("connect", x.connect),
+              f.field("monitor", x.monitor));
   }
 };
 
@@ -91,8 +101,8 @@ auto render_event(uint16_t event) -> std::string_view {
   }
 }
 
-/// A 0mq utility for use as source or sink operator.
-class engine {
+/// A 0mq socket that comes with a built-in monitoring socket.
+class connection {
   /// Data from one monitoring cycle, i.e., one event and one address message.
   struct monitor_event {
     uint16_t event{0};
@@ -107,14 +117,14 @@ class engine {
     monitor() = default;
 
     /// Constructs a monitor for a given socket.
-    monitor(::zmq::context_t& ctx, ::zmq::socket_t& socket,
-            const char* addr = "monitor") {
-      auto endpoint = fmt::format("inproc://{}", addr);
+    monitor(::zmq::context_t& ctx, ::zmq::socket_t& socket) {
+      auto endpoint = fmt::format("inproc://monitor-{}", uuid::random());
       TENZIR_DEBUG("creating monitor on {}", endpoint);
       int rc
         = zmq_socket_monitor(socket.handle(), endpoint.c_str(), ZMQ_EVENT_ALL);
-      if (rc != 0)
+      if (rc != 0) {
         throw ::zmq::error_t{}; // fit into the cppzmq error paradigm
+      }
       monitor_socket_ = ::zmq::socket_t{ctx, ::zmq::socket_type::pair};
       monitor_socket_.connect(endpoint);
     }
@@ -126,9 +136,10 @@ class engine {
     /// are available within the polling window.
     auto events(std::optional<std::chrono::milliseconds> timeout = {})
       -> generator<monitor_event> {
-      auto ready = engine::poll(monitor_socket_, ZMQ_POLLIN, timeout);
-      if (not ready)
+      auto ready = connection::poll(monitor_socket_, ZMQ_POLLIN, timeout);
+      if (not ready) {
         co_return;
+      }
       do {
         monitor_event result;
         auto event_msg = ::zmq::message_t{};
@@ -143,7 +154,7 @@ class engine {
         TENZIR_ASSERT(bytes); // only nullopt in non-blocking mode.
         result.address = addr_msg.to_string();
         co_yield result;
-      } while (engine::poll(monitor_socket_, ZMQ_POLLIN, 0ms));
+      } while (connection::poll(monitor_socket_, ZMQ_POLLIN, 0ms));
     }
 
   private:
@@ -154,14 +165,21 @@ class engine {
   };
 
 public:
-  static auto make_source(const loader_args& args) -> caf::expected<engine> {
+  static auto
+  make_source(std::shared_ptr<::zmq::context_t> ctx, const loader_args& args)
+    -> caf::expected<connection> {
     try {
-      auto result = engine{::zmq::socket_type::sub};
-      auto endpoint = args.endpoint ? args.endpoint->inner : default_endpoint;
-      if (args.listen)
+      auto result = connection{std::move(ctx), ::zmq::socket_type::sub};
+      const auto& endpoint = args.endpoint->inner;
+      if (args.monitor) {
+        TENZIR_ASSERT(endpoint.starts_with("tcp://"));
+        result.monitor();
+      }
+      if (args.listen) {
         result.listen(endpoint);
-      else
+      } else {
         result.connect(endpoint);
+      }
       auto filter = args.filter ? args.filter->inner : "";
       result.socket_.set(::zmq::sockopt::subscribe, filter);
       return result;
@@ -170,14 +188,20 @@ public:
     }
   }
 
-  static auto make_sink(const saver_args& args) -> caf::expected<engine> {
+  static auto make_sink(std::shared_ptr<::zmq::context_t> ctx,
+                        const saver_args& args) -> caf::expected<connection> {
     try {
-      auto result = engine{::zmq::socket_type::pub};
-      auto endpoint = args.endpoint ? args.endpoint->inner : default_endpoint;
-      if (args.connect)
+      auto result = connection{std::move(ctx), ::zmq::socket_type::pub};
+      const auto& endpoint = args.endpoint->inner;
+      if (args.monitor) {
+        TENZIR_ASSERT(endpoint.starts_with("tcp://"));
+        result.monitor();
+      }
+      if (args.connect) {
         result.connect(endpoint);
-      else
+      } else {
         result.listen(endpoint);
+      }
       return result;
     } catch (const ::zmq::error_t& e) {
       return make_error(e);
@@ -188,8 +212,9 @@ public:
                              = {}) -> caf::error {
     try {
       TENZIR_DEBUG("waiting until socket is ready to send");
-      if (not poll(socket_, ZMQ_POLLOUT, timeout))
+      if (not poll(socket_, ZMQ_POLLOUT, timeout)) {
         return caf::make_error(ec::timeout, "timed out while polling socket");
+      }
       auto message = ::zmq::message_t{*chunk};
       auto flags = ::zmq::send_flags::none;
       auto bytes = socket_.send(message, flags);
@@ -205,8 +230,9 @@ public:
     -> caf::expected<chunk_ptr> {
     try {
       TENZIR_DEBUG("waiting until socket is ready to receive");
-      if (not poll(socket_, ZMQ_POLLIN, timeout))
+      if (not poll(socket_, ZMQ_POLLIN, timeout)) {
         return caf::make_error(ec::timeout, "timed out while polling socket");
+      }
       auto message = std::make_shared<::zmq::message_t>();
       auto flags = ::zmq::recv_flags::none;
       auto bytes = socket_.recv(*message, flags);
@@ -221,11 +247,16 @@ public:
     }
   }
 
+  /// Checks whether the socket is equipped with a monitor
+  auto monitored() const -> bool {
+    return monitor_ != std::nullopt;
+  }
+
   /// Returns the number of processed monitoring events.
   auto poll_monitor(std::optional<std::chrono::milliseconds> timeout = {})
     -> size_t {
     auto num_events = size_t{0};
-    for (auto&& event : monitor_.events(timeout)) {
+    for (auto&& event : monitor_->events(timeout)) {
       ++num_events;
       TENZIR_DEBUG("got monitor event: {}", render_event(event.event));
       switch (event.event) {
@@ -235,10 +266,11 @@ public:
           ++num_peers_;
           break;
         case ZMQ_EVENT_DISCONNECTED:
-          if (num_peers_ == 0)
+          if (num_peers_ == 0) {
             TENZIR_WARN("logic error: disconnect while no one is connected");
-          else
+          } else {
             --num_peers_;
+          }
           break;
       }
     }
@@ -272,17 +304,19 @@ private:
     auto infinite = std::chrono::milliseconds(-1);
     auto ms = timeout ? *timeout : infinite;
     auto num_events_signaled = ::zmq::poll(items.data(), items.size(), ms);
-    if (num_events_signaled == 0)
+    if (num_events_signaled == 0) {
       return false;
+    }
     TENZIR_ASSERT(num_events_signaled > 0);
     TENZIR_ASSERT((items[0].revents & flags) != 0);
     return true;
   }
 
-  engine() = default;
+  connection() = default;
 
-  explicit engine(::zmq::socket_type socket_type)
-    : socket_{ctx_, socket_type}, monitor_{ctx_, socket_} {
+  connection(std::shared_ptr<::zmq::context_t> ctx,
+             ::zmq::socket_type socket_type)
+    : ctx_{std::move(ctx)}, socket_{*ctx_, socket_type} {
     // The linger period determines how long pending messages which have yet
     // to be sent to a peer shall linger in memory after a socket is closed
     // with zmq_close(3), and further affects the termination of the socket's
@@ -293,22 +327,32 @@ private:
     socket_.set(::zmq::sockopt::linger, 0);
   }
 
-  void listen(const std::string& endpoint) {
+  /// Sets up a monitoring socket for this connection.
+  auto monitor() -> void {
+    monitor_ = {*ctx_, socket_};
+  }
+
+  /// Starts listening on the provided endpoint.
+  auto listen(const std::string& endpoint,
+              std::chrono::milliseconds reconnect_interval = 1s) -> void {
     TENZIR_VERBOSE("listening to endpoint {}", endpoint);
+    auto ms = detail::narrow_cast<int>(reconnect_interval.count());
+    socket_.set(::zmq::sockopt::reconnect_ivl, ms); // for TCP only, not inproc
     socket_.bind(endpoint);
   }
 
-  void connect(const std::string& endpoint,
-               std::chrono::milliseconds reconnect_interval = 1s) {
+  /// Connects to the provided endpoint.
+  auto connect(const std::string& endpoint,
+               std::chrono::milliseconds reconnect_interval = 1s) -> void {
     TENZIR_VERBOSE("connecting to endpoint {}", endpoint);
     auto ms = detail::narrow_cast<int>(reconnect_interval.count());
-    socket_.set(::zmq::sockopt::reconnect_ivl, ms);
+    socket_.set(::zmq::sockopt::reconnect_ivl, ms); // for TCP only, not inproc
     socket_.connect(endpoint);
   }
 
-  ::zmq::context_t ctx_;
+  std::shared_ptr<::zmq::context_t> ctx_;
   ::zmq::socket_t socket_;
-  monitor monitor_;
+  std::optional<class monitor> monitor_;
   size_t num_peers_{0};
 };
 
@@ -321,23 +365,25 @@ public:
 
   auto instantiate(operator_control_plane& ctrl) const
     -> std::optional<generator<chunk_ptr>> override {
-    auto engine = engine::make_source(args_);
-    if (not engine) {
-      TENZIR_ERROR(engine.error());
+    auto conn = connection::make_source(context, args_);
+    if (not conn) {
+      TENZIR_ERROR(conn.error());
       return std::nullopt;
     }
     auto make = [](operator_control_plane& ctrl,
-                   class engine engine) mutable -> generator<chunk_ptr> {
+                   connection conn) mutable -> generator<chunk_ptr> {
       while (true) {
-        // Poll in larger strides when we have no peers. If we have at least one
-        // peer, there is no need to wait on the monitor.
-        auto timeout = engine.num_peers() == 0 ? 500ms : 0ms;
-        engine.poll_monitor(timeout);
-        if (engine.num_peers() == 0) {
-          co_yield {};
-          continue;
+        if (conn.monitored()) {
+          // Poll in larger strides if we have no peers. Once we have at least
+          // one peer, there is no need to wait on monitoring events.
+          auto timeout = conn.num_peers() == 0 ? 500ms : 0ms;
+          conn.poll_monitor(timeout);
+          if (conn.num_peers() == 0) {
+            co_yield {};
+            continue;
+          }
         }
-        if (auto message = engine.receive(250ms)) {
+        if (auto message = conn.receive(250ms)) {
           co_yield *message;
         } else if (message == ec::timeout) {
           co_yield {};
@@ -347,7 +393,7 @@ public:
         }
       }
     };
-    return make(ctrl, std::move(*engine));
+    return make(ctrl, std::move(*conn));
   }
 
   auto name() const -> std::string override {
@@ -377,23 +423,26 @@ public:
 
   auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
-    auto engine = engine::make_sink(args_);
-    if (not engine) {
+    auto conn = connection::make_sink(context, args_);
+    if (not conn) {
       return caf::make_error(ec::unspecified,
                              fmt::format("failed to setup ZeroMQ: {}",
-                                         engine.error()));
+                                         conn.error()));
     }
-    return [&ctrl, engine = std::make_shared<class engine>(std::move(*engine))](
+    return [&ctrl, conn = std::make_shared<connection>(std::move(*conn))](
              chunk_ptr chunk) mutable {
-      if (not chunk || chunk->size() == 0)
+      if (not chunk || chunk->size() == 0) {
         return;
-      // Block until we have at least one peer, or fast-track with a zero
-      // timeout when in steady state.
-      do {
-        auto timeout = engine->num_peers() == 0 ? 500ms : 0ms;
-        engine->poll_monitor(timeout);
-      } while (engine->num_peers() == 0);
-      if (auto error = engine->send(chunk)) {
+      }
+      if (conn->monitored()) {
+        // Block until we have at least one peer, or fast-track with a zero
+        // timeout when in steady state.
+        do {
+          auto timeout = conn->num_peers() == 0 ? 500ms : 0ms;
+          conn->poll_monitor(timeout);
+        } while (conn->num_peers() == 0);
+      }
+      if (auto error = conn->send(chunk)) {
         diagnostic::error(error).emit(ctrl.diagnostics());
       }
     };
@@ -422,6 +471,17 @@ private:
 class plugin final : public virtual loader_plugin<zmq_loader>,
                      public virtual saver_plugin<zmq_saver> {
 public:
+  auto initialize(const record&, const record&) -> caf::error override {
+    // Create the singleton.
+    context = std::make_shared<::zmq::context_t>();
+    return {};
+  }
+
+  auto deinitialize() -> void override {
+    // Destroy the singleton.
+    context.reset();
+  }
+
   auto parse_loader(parser_interface& p) const
     -> std::unique_ptr<plugin_loader> override {
     auto parser = argument_parser{
@@ -432,15 +492,27 @@ public:
     parser.add("-f,--filter", args.filter, "<prefix>");
     parser.add("-l,--listen", args.listen);
     parser.add("-c,--connect", args.connect);
+    parser.add("-m,--monitor", args.monitor);
     parser.parse(p);
-    if (args.listen && args.connect)
+    if (args.listen && args.connect) {
       diagnostic::error("both --listen and --connect provided")
         .primary(*args.listen)
         .primary(*args.connect)
         .hint("--listen and --connect are mutually exclusive")
         .throw_();
-    if (args.endpoint && args.endpoint->inner.find("://") == std::string::npos)
+    }
+    if (not args.endpoint) {
+      args.endpoint = located<std::string>{default_endpoint, location::unknown};
+    } else if (args.endpoint->inner.find("://") == std::string::npos) {
       args.endpoint->inner = fmt::format("tcp://{}", args.endpoint->inner);
+    }
+    if (not args.endpoint->inner.starts_with("tcp://") and args.monitor) {
+      diagnostic::error("--monitor with incompatible scheme")
+        .primary(*args.monitor)
+        .note("--monitor requires a TCP endpoint")
+        .hint("switch to tcp://host:port or remove --monitor")
+        .throw_();
+    }
     return std::make_unique<zmq_loader>(std::move(args));
   }
 
@@ -453,22 +525,36 @@ public:
     parser.add(args.endpoint, "<endpoint>");
     parser.add("-l,--listen", args.listen);
     parser.add("-c,--connect", args.connect);
+    parser.add("-m,--monitor", args.monitor);
     parser.parse(p);
-    if (args.listen && args.connect)
+    if (args.listen && args.connect) {
       diagnostic::error("both --listen and --connect provided")
         .primary(*args.listen)
         .primary(*args.connect)
         .hint("--listen and --connect are mutually exclusive")
         .throw_();
-    if (args.endpoint
-        and not std::regex_match(args.endpoint->inner,
-                                 std::regex{"^\\w+://.*"}))
+    }
+    if (not args.endpoint) {
+      args.endpoint = located<std::string>{default_endpoint, location::unknown};
+    } else if (args.endpoint->inner.find("://") == std::string::npos) {
       args.endpoint->inner = fmt::format("tcp://{}", args.endpoint->inner);
+    }
+    if (not args.endpoint->inner.starts_with("tcp://") and args.monitor) {
+      diagnostic::error("--monitor with incompatible scheme")
+        .primary(*args.monitor)
+        .note("--monitor requires a TCP endpoint")
+        .hint("switch to tcp://host:port or remove --monitor")
+        .throw_();
+    }
     return std::make_unique<zmq_saver>(std::move(args));
   }
 
   auto name() const -> std::string override {
     return "zmq";
+  }
+
+  auto supported_uri_schemes() const -> std::vector<std::string> override {
+    return {"zmq", "inproc"};
   }
 };
 

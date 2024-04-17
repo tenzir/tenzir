@@ -40,6 +40,10 @@ struct operator_control_plane {
   /// Returns true if the operator is hosted by process that has a terminal.
   virtual auto has_terminal() const noexcept -> bool = 0;
 
+  /// Suspend or resume the operator's runloop. A suspended operator will not
+  /// get resumed after it yielded to the executor.
+  virtual auto set_waiting(bool value) noexcept -> void = 0;
+
   /// Return a version of the diagnostic handler that may be passed to other
   /// threads. NOTE: Unlike for the regular diagnostic handler, emitting an
   /// erorr via the shared diagnostic handler does not shut down the operator

@@ -297,8 +297,8 @@ public:
     return "email";
   }
 
-  auto supported_uri_scheme() const -> std::string override {
-    return "mailto";
+  auto supported_uri_schemes() const -> std::vector<std::string> override {
+    return {"mailto"};
   }
 };
 

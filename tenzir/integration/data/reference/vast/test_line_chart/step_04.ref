@@ -1,0 +1,2 @@
+error: chart operator requires the value for `x` (in field `ts`) to hold strictly increasing values
+ = note: offending value: `2009-11-18T08:12:19.613070`, highest value: `2009-11-18T08:14:06.693816`

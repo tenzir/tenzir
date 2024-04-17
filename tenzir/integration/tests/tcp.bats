@@ -1,9 +1,14 @@
-: "${BATS_TEST_TIMEOUT:=10}"
+: "${BATS_TEST_TIMEOUT:=30}"
 
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
   bats_load_library bats-tenzir
+}
+
+wait_for_tcp() {
+  port=$1
+  timeout 10 bash -c "until lsof -i :$port; do sleep 0.2; done"
 }
 
 @test "loader - connect" {
@@ -36,6 +41,36 @@ setup() {
   timeout 10 bash -c 'until lsof -i :4000; do sleep 0.2; done'
   echo foo | openssl s_client 127.0.0.1:4000
   wait_all "${listen[@]}"
+  rm "${key_and_cert}"
+}
+
+@test "listen with multiple connections with SSL" {
+  export port=44445
+  key_and_cert=$(mktemp)
+  openssl req -x509 -newkey rsa:2048 \
+    -keyout "${key_and_cert}" \
+    -out "${key_and_cert}" \
+    -days 365 \
+    -nodes \
+    -subj "/C=US/ST=Denial/L=Springfield/O=Dis/CN=www.example.com" >/dev/null 2>/dev/null
+  check --bg listen \
+    tenzir "from tcp://127.0.0.1:$port --tls --certfile ${key_and_cert} --keyfile ${key_and_cert} read json | deduplicate foo | head 2 | sort foo"
+  wait_for_tcp $port
+  (
+    while :; do
+      jq -n '{foo: 1}'
+      sleep 1
+    done | openssl s_client "127.0.0.1:$port"
+  ) &
+  CLIENT1_PID=$!
+  (
+    while :; do
+      jq -n '{foo: 2}'
+      sleep 1
+    done | openssl s_client "127.0.0.1:$port"
+  ) &
+  CLIENT2_PID=$!
+  wait_all "${listen[@]}" "${CLIENT1_PID}" "${CLIENT2_PID}"
   rm "${key_and_cert}"
 }
 

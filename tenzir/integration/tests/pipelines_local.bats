@@ -405,7 +405,17 @@ setup() {
   cat ${INPUTSDIR}/json/all-types.json |
     check ! tenzir "from stdin read json | chart pie --value b -x e"
   cat ${INPUTSDIR}/json/all-types.json |
-    check ! tenzir "from stdin read json | chart piett --value b"
+    check ! tenzir "from stdin read json | chart piett --value=b"
+  cat ${INPUTSDIR}/json/all-types.json |
+    check ! tenzir "from stdin read json | chart bar -x=foo,bar -y=field"
+  cat ${INPUTSDIR}/json/all-types.json |
+    check ! tenzir "from stdin read json | chart bar --x-axis field"
+
+  check tenzir "from stdin read json | chart bar -x first -y=second,third" <<EOF
+{"first": 1, "second": "Hello world", "third": "foo"}
+{"first": 2, "second": "Hallo Welt", "third": "bar"}
+{"first": 3, "second": "Hei maailma", "third": "baz"}
+EOF
 }
 
 # bats test_tags=pipelines
@@ -561,6 +571,43 @@ EOF
 {"value": "192.168.1.3", "tag": 7}
 {"value": "192.168.1.2", "tag": 8}
 {"value": "192.168.1.1", "tag": 9}
+EOF
+
+  check tenzir "from stdin read json | deduplicate value --limit 1" <<EOF
+{"value": 123, "tag": 1}
+{"value": null, "tag": 2}
+{"value": 123, "tag": 3}
+{"tag": 4}
+EOF
+
+  check tenzir "from stdin read json | deduplicate foo.bar --limit 1" <<EOF
+{"foo": {"bar": 123}, "tag": 1}
+{"foo": {"bar": null}, "tag": 2}
+{"foo": 123, "tag": 3}
+{"foo": {}, "tag": 4}
+{"foo": 123, "tag": 5}
+{"tag": 6}
+{"foo": null, "tag": 7}
+{"foo": {"bar": 123}, "tag": 8}
+EOF
+
+  check ! tenzir "from stdin read json | deduplicate :ip --limit 1" <<EOF
+{"value": 123, "tag": 1}
+{"value": null, "tag": 2}
+{"value": 123, "tag": 3}
+{"tag": 4}
+EOF
+
+  check tenzir "from stdin read json | deduplicate a, b --limit 1" <<EOF
+{"a": 1, "b": 2, "tag": 1}
+{"b": "reset", "tag": 2}
+{"b": 2, "a": 1, "tag": 3}
+EOF
+
+  check tenzir "from stdin read json | deduplicate --limit 1" <<EOF
+{"a": 1, "b": 2}
+{"b": "reset"}
+{"b": 2, "a": 1}
 EOF
 
   # Potentially flaky, if `tenzir` takes more than (8s - 100ms) to start up:

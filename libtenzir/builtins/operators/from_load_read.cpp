@@ -9,6 +9,7 @@
 #include <tenzir/detail/loader_saver_resolver.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/prepend_token.hpp>
 #include <tenzir/tql/fwd.hpp>
 #include <tenzir/tql/parser.hpp>
 
@@ -134,17 +135,20 @@ throw_loader_not_found(located<std::string_view> x, bool use_uri_schemes) {
   auto available = std::vector<std::string>{};
   for (auto const* p : plugins::get<loader_parser_plugin>()) {
     if (use_uri_schemes) {
-      available.push_back(p->supported_uri_scheme());
+      for (auto uri_scheme : p->supported_uri_schemes()) {
+        available.push_back(std::move(uri_scheme));
+      }
     } else {
       available.push_back(p->name());
     }
   }
-  if (use_uri_schemes)
+  if (use_uri_schemes) {
     diagnostic::error("loader for `{}` scheme could not be found", x.inner)
       .primary(x.source)
       .hint("must be one of {}", fmt::join(available, ", "))
       .docs("https://docs.tenzir.com/next/connectors")
       .throw_();
+  }
   diagnostic::error("loader `{}` could not be found", x.inner)
     .primary(x.source)
     .hint("must be one of {}", fmt::join(available, ", "))
@@ -194,6 +198,19 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto usage = "from <loader> <args>... [read <parser> <args>...]";
     auto docs = "https://docs.tenzir.com/operators/from";
+    if (const auto peek_tcp = p.peek_shell_arg();
+        peek_tcp
+        and (peek_tcp->inner == "tcp"
+             or peek_tcp->inner.starts_with("tcp://"))) {
+      if (peek_tcp->inner == "tcp") {
+        (void)p.accept_identifier();
+      }
+      const auto* accept_plugin = plugins::find_operator("tcp-listen");
+      if (not accept_plugin) {
+        diagnostic::error("`tcp-listen` plugin is required").throw_();
+      }
+      return accept_plugin->parse_operator(p);
+    }
     auto q = until_keyword_parser{"read", p};
     auto [loader, loader_path] = get_loader(q, usage, docs);
     TENZIR_DIAG_ASSERT(loader);
@@ -224,8 +241,9 @@ public:
     }
     auto ops = std::vector<operator_ptr>{};
     ops.push_back(std::make_unique<load_operator>(std::move(loader)));
-    if (decompress)
+    if (decompress) {
       ops.push_back(std::move(decompress));
+    }
     ops.push_back(std::make_unique<class read_operator>(std::move(parser)));
     return std::make_unique<pipeline>(std::move(ops));
   }

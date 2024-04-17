@@ -43,7 +43,7 @@ refer to events of different schemas.
 ### `<extractor>...`
 
 A comma-separated list of extractors that identify the fields used for
-deduplicating.
+deduplicating. Missing fields are treated as if they had the value `null`.
 
 Defaults to the entire event.
 
@@ -91,10 +91,19 @@ For `deduplicate --limit 1`, all duplicate events are removed:
 {"bar": "b"}
 ```
 
-But for `deduplicate bar --limit 1` is used, only field `bar` is considered when
+If `deduplicate bar --limit 1` is used, only the field `bar` is considered when
 determining whether an event is a duplicate:
 
 ```json
 {"foo": 1, "bar": "a"}
 {"foo": 1, "bar": "b"}
+```
+
+And for `deduplicate foo --limit 1`, only the field `foo` is considered.
+Note, how the missing `foo` field is treated as if it had the value `null`,
+i.e., it's not included in the output.
+
+```json
+{"foo": 1, "bar": "a"}
+{"foo": null, "bar": "b"}
 ```

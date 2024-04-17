@@ -223,6 +223,15 @@ RUN cmake -S contrib/tenzir-plugins/platform -B build-platform -G Ninja \
       DESTDIR=/plugin/platform cmake --install build-platform --strip --component Runtime && \
       rm -rf build-platform
 
+FROM plugins-source AS vast-plugin
+
+RUN cmake -S contrib/tenzir-plugins/vast -B build-vast -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-vast --parallel && \
+      cmake --build build-vast --target integration && \
+      DESTDIR=/plugin/vast cmake --install build-vast --strip --component Runtime && \
+      rm -rf build-vast
+
 # -- tenzir-ce -------------------------------------------------------------------
 
 FROM tenzir-de AS tenzir-ce
@@ -231,6 +240,7 @@ COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
 COPY --from=matcher-plugin --chown=tenzir:tenzir /plugin/matcher /
 COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline-manager /
 COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /
+COPY --from=vast-plugin --chown=tenzir:tenzir /plugin/vast /
 
 # -- tenzir-node-ce ------------------------------------------------------------
 
@@ -263,7 +273,6 @@ ENTRYPOINT ["tenzir-node"]
 FROM tenzir-ce AS tenzir-ee
 
 COPY --from=compaction-plugin --chown=tenzir:tenzir /plugin/compaction /
-COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
 
 # -- tenzir-node-ee ------------------------------------------------------------
 
