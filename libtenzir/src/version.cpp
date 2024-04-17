@@ -94,7 +94,7 @@ auto tenzir_features() -> std::vector<std::string> {
     // downloading Explorer results.
     "http_put_upload",
     // The node supports a customizable pipeline retry delay.
-    "custom_pipeline_retry_delay",
+    "retry_delay",
   };
 }
 
