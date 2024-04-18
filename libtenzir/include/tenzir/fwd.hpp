@@ -470,6 +470,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::send_initial_dbstate))
 
   TENZIR_ADD_TYPE_ID((std::pair<std::string, tenzir::data>))
+  TENZIR_ADD_TYPE_ID((std::vector<tenzir::diagnostic>))
   TENZIR_ADD_TYPE_ID((std::vector<uint32_t>))
   TENZIR_ADD_TYPE_ID((std::vector<uint64_t>))
   TENZIR_ADD_TYPE_ID((std::vector<std::string>))
