@@ -514,41 +514,46 @@ private:
 };
 auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
   -> generator<table_slice> {
-  auto chunks_as_bytes = std::vector<std::byte>{};
-  // if only single chunk dont copy it
-  for (auto&& chunk : input) {
-    if (not chunk || chunk->size() == 0) {
+  chunk_ptr parquet_as_chunk_input{}; // better way to do this?
+
+  // Optimization if only one chunk in the input
+  if (std::next(input.begin()) != input.end()) {
+    parquet_as_chunk_input = *input.begin();
+  } else {
+    auto chunks_as_bytes = std::vector<std::byte>{};
+    for (auto&& chunk : input) {
+      if (not chunk || chunk->size() == 0) {
+        co_yield {};
+        continue;
+      }
+      chunks_as_bytes.insert(chunks_as_bytes.end(), chunk->begin(),
+                             chunk->end());
+
       co_yield {};
-      continue;
     }
-    chunks_as_bytes.insert(chunks_as_bytes.end(), chunk->begin(), chunk->end());
-
-    co_yield {};
+    parquet_as_chunk_input = chunk::make(std::move(chunks_as_bytes));
   }
-
-  chunk_ptr parquet_as_chunk_input = chunk::make(std::move(chunks_as_bytes));
   auto input_file = as_arrow_file(std::move(parquet_as_chunk_input));
 
   // Construct a parquet reader and arrow reader properties
   auto parquet_reader_properties
     = ::parquet::ReaderProperties(arrow::default_memory_pool());
   parquet_reader_properties.enable_buffered_stream();
-
   std::unique_ptr<::parquet::arrow::FileReader> out_buffer;
   auto arrow_reader_properties = ::parquet::ArrowReaderProperties();
+
+  // 2^16 is the largest batch size allowed in a table slice
   arrow_reader_properties.set_batch_size(65536);
 
   // Construct an arrow reader and parquet reader
   auto input_buffer = ::parquet::ParquetFileReader::Open(
     std::move(input_file), parquet_reader_properties);
-
   ::arrow::Status arrow_file_reader_status
     = ::parquet::arrow::FileReader::Make(arrow::default_memory_pool(),
                                          std::move(input_buffer),
                                          arrow_reader_properties, &out_buffer);
   if (!arrow_file_reader_status.ok()) {
     diagnostic::error("{}", arrow_file_reader_status.ToString())
-      .note("")
       .emit(ctrl.diagnostics());
     co_return;
   }
@@ -561,7 +566,6 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
       .emit(ctrl.diagnostics());
     co_return;
   }
-
   for (arrow::Result<std::shared_ptr<arrow::RecordBatch>> maybe_batch :
        *rb_reader) {
     if (!maybe_batch.ok()) {
@@ -570,7 +574,6 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
         .emit(ctrl.diagnostics());
       co_return;
     }
-    TENZIR_WARN(maybe_batch.ValueUnsafe()->num_rows());
     co_yield table_slice(maybe_batch.MoveValueUnsafe());
   }
 }
@@ -633,10 +636,9 @@ public:
       -> caf::expected<std::unique_ptr<printer_instance>> {
       // Create Arrow Writer which creates a Parquet Writer under the hood
       auto arrow_writer_props_builder
-        = ::parquet::ArrowWriterProperties::Builder(); // Can add Codec options
+        = ::parquet::ArrowWriterProperties::Builder();
       arrow_writer_props_builder.store_schema();
       auto arrow_writer_props = arrow_writer_props_builder.build();
-
       auto parquet_writer_props_builder
         = ::parquet::WriterProperties::Builder();
       if (!options.compression_type) {
@@ -665,7 +667,6 @@ public:
       parquet_writer_props_builder.version(
         ::parquet::ParquetVersion::PARQUET_2_6);
       auto parquet_writer_props = parquet_writer_props_builder.build();
-
       const auto schema = input_schema.to_arrow_schema();
       auto out_buffer = std::make_shared<contiguous_buffer_stream>();
       auto file_result = ::parquet::arrow::FileWriter::Open(

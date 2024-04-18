@@ -23,7 +23,7 @@ setup() {
     pip install pyarrow
   fi
 
-  tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch 512 | write feather" |
+  tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch 512 | write parquet" |
     check python "${BATS_TENZIR_MISCDIR}/scripts/print-arrow-batch-size.py"
 }
 
