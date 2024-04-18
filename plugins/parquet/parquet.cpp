@@ -515,42 +515,43 @@ private:
 auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
   -> generator<table_slice> {
   auto chunks_as_bytes = std::vector<std::byte>{};
+  // if only single chunk dont copy it
   for (auto&& chunk : input) {
     if (not chunk || chunk->size() == 0) {
       co_yield {};
       continue;
     }
-    for (size_t i = 0; i < chunk->size(); i++) {
-      chunks_as_bytes.insert(chunks_as_bytes.end(), chunk->begin(),
-                             chunk->end());
-    }
-    // The chunk gets deleted on each loop?
+    chunks_as_bytes.insert(chunks_as_bytes.end(), chunk->begin(), chunk->end());
+
     co_yield {};
   }
 
   chunk_ptr parquet_as_chunk_input = chunk::make(std::move(chunks_as_bytes));
   auto input_file = as_arrow_file(std::move(parquet_as_chunk_input));
 
-  // Construct a Parquet reader
+  // Construct a parquet reader and arrow reader properties
   auto parquet_reader_properties
     = ::parquet::ReaderProperties(arrow::default_memory_pool());
   parquet_reader_properties.enable_buffered_stream();
+
+  std::unique_ptr<::parquet::arrow::FileReader> out_buffer;
+  auto arrow_reader_properties = ::parquet::ArrowReaderProperties();
+  arrow_reader_properties.set_batch_size(65536);
+
+  // Construct an arrow reader and parquet reader
   auto input_buffer = ::parquet::ParquetFileReader::Open(
     std::move(input_file), parquet_reader_properties);
 
-  // Construct an arrow reader
-  std::unique_ptr<::parquet::arrow::FileReader> out_buffer;
-  ::arrow::Status arrow_file_reader_status = ::parquet::arrow::FileReader::Make(
-    arrow::default_memory_pool(), std::move(input_buffer),
-    ::parquet::ArrowReaderProperties(), &out_buffer);
+  ::arrow::Status arrow_file_reader_status
+    = ::parquet::arrow::FileReader::Make(arrow::default_memory_pool(),
+                                         std::move(input_buffer),
+                                         arrow_reader_properties, &out_buffer);
   if (!arrow_file_reader_status.ok()) {
     diagnostic::error("{}", arrow_file_reader_status.ToString())
       .note("")
       .emit(ctrl.diagnostics());
     co_return;
   }
-  // Construct a Record Batch reader. A Record Batch Generator is an
-  // alternative. Should we look into this?
   std::shared_ptr<::arrow::RecordBatchReader> rb_reader;
   auto record_batch_reader_status
     = out_buffer->GetRecordBatchReader(&rb_reader);
@@ -569,9 +570,21 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
         .emit(ctrl.diagnostics());
       co_return;
     }
+    TENZIR_WARN(maybe_batch.ValueUnsafe()->num_rows());
     co_yield table_slice(maybe_batch.MoveValueUnsafe());
   }
 }
+
+class parquet_options {
+public:
+  std::optional<located<int>> compression_level{};
+  std::optional<located<std::string>> compression_type{};
+
+  friend auto inspect(auto& f, parquet_options& x) -> bool {
+    return f.object(x).fields(f.field("compression_level", x.compression_level),
+                              f.field("compression_type", x.compression_type));
+  }
+};
 
 class parquet_parser final : public plugin_parser {
 public:
@@ -594,38 +607,70 @@ public:
 
 class parquet_printer final : public plugin_printer {
 public:
+  parquet_printer() = default;
+  parquet_printer(parquet_options write_options)
+    : options_{std::move(write_options)} {
+  }
   auto name() const -> std::string override {
     return "parquet";
   }
 
   auto instantiate(type input_schema, operator_control_plane& ctrl) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
-    return parquet_printer_instance::make(ctrl, input_schema);
+    return parquet_printer_instance::make(
+      ctrl, std::move(input_schema),
+      options_); // why is options const here
   }
 
   auto allows_joining() const -> bool override {
     return false;
   }
 
-  friend auto inspect(auto& f, parquet_printer& x) -> bool {
-    return f.object(x).fields();
-  }
-
   class parquet_printer_instance : public printer_instance {
   public:
-    static auto make(operator_control_plane& ctrl, type input_schema)
+    static auto make(operator_control_plane& ctrl, type input_schema,
+                     const parquet_options& options)
       -> caf::expected<std::unique_ptr<printer_instance>> {
       // Create Arrow Writer which creates a Parquet Writer under the hood
       auto arrow_writer_props_builder
-        = ::parquet::ArrowWriterProperties::Builder();
+        = ::parquet::ArrowWriterProperties::Builder(); // Can add Codec options
       arrow_writer_props_builder.store_schema();
       auto arrow_writer_props = arrow_writer_props_builder.build();
+
+      auto parquet_writer_props_builder
+        = ::parquet::WriterProperties::Builder();
+      if (!options.compression_type) {
+        if (options.compression_level) {
+          diagnostic::warning("ignoring compression level option")
+            .note("has no effect without `--compression-type`")
+            .primary(options.compression_level->source)
+            .emit(ctrl.diagnostics());
+        }
+      } else {
+        auto result_compression_type = arrow::util::Codec::GetCompressionType(
+          options.compression_type->inner);
+        if (!result_compression_type.ok()) {
+          return diagnostic::error("{}", result_compression_type.status()
+                                           .ToStringWithoutContextLines())
+            .note("failed to parse compression type")
+            .note("must be `lz4` or `zstd`")
+            .primary(options.compression_type->source)
+            .to_error();
+        }
+        parquet_writer_props_builder.compression(
+          result_compression_type.MoveValueUnsafe());
+        parquet_writer_props_builder.compression_level(
+          options.compression_level->inner);
+      }
+      parquet_writer_props_builder.version(
+        ::parquet::ParquetVersion::PARQUET_2_6);
+      auto parquet_writer_props = parquet_writer_props_builder.build();
 
       const auto schema = input_schema.to_arrow_schema();
       auto out_buffer = std::make_shared<contiguous_buffer_stream>();
       auto file_result = ::parquet::arrow::FileWriter::Open(
         *schema, arrow::default_memory_pool(), out_buffer,
-        ::parquet::default_writer_properties(), arrow_writer_props);
+        std::move(parquet_writer_props), std::move(arrow_writer_props));
       if (!file_result.ok()) {
         return diagnostic::error("failed to read schema",
                                  file_result.status().ToString())
@@ -649,15 +694,6 @@ public:
       if (!record_batch_status.ok()) {
         diagnostic::error("{}", record_batch_status.ToString())
           .note("failed write record batch")
-          .emit(ctrl_.diagnostics());
-        co_return;
-      }
-
-      // We may not need this because WriteRecordBatch calls NewBufferedRowGroup
-      auto new_buffered_row_status = writer_->NewBufferedRowGroup();
-      if (!new_buffered_row_status.ok()) {
-        diagnostic::error("{}", new_buffered_row_status.ToString())
-          .note("failed to write a new row")
           .emit(ctrl_.diagnostics());
         co_return;
       }
@@ -691,6 +727,12 @@ public:
     std::shared_ptr<contiguous_buffer_stream> out_buffer_;
     type input_schema_;
   };
+  friend auto inspect(auto& f, parquet_printer& x) -> bool {
+    return f.object(x).fields(f.field("options", x.options_));
+  }
+
+private:
+  parquet_options options_;
 };
 
 class plugin final : public virtual store_plugin,
@@ -708,8 +750,11 @@ class plugin final : public virtual store_plugin,
     -> std::unique_ptr<plugin_printer> override {
     auto parser = argument_parser{"parquet", "https://docs.tenzir.com/next/"
                                              "formats/parquet"};
+    auto options = parquet_options{};
+    parser.add("--compression-level", options.compression_level, "<level>");
+    parser.add("--compression-type", options.compression_type, "<type>");
     parser.parse(p);
-    return std::make_unique<parquet_printer>();
+    return std::make_unique<parquet_printer>(std::move(options));
   }
   auto initialize(const record& plugin_config, const record& global_config)
     -> caf::error override {
