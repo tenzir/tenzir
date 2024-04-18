@@ -86,14 +86,21 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
   arrow_reader_properties.set_batch_size(65536);
 
   // Construct an arrow reader and parquet reader
-  auto input_buffer = ::parquet::ParquetFileReader::Open(
-    std::move(input_file), parquet_reader_properties);
-  ::arrow::Status arrow_file_reader_status
-    = ::parquet::arrow::FileReader::Make(arrow::default_memory_pool(),
-                                         std::move(input_buffer),
-                                         arrow_reader_properties, &out_buffer);
-  if (!arrow_file_reader_status.ok()) {
-    diagnostic::error("{}", arrow_file_reader_status.ToString())
+  try {
+    auto input_buffer = ::parquet::ParquetFileReader::Open(
+      std::move(input_file), parquet_reader_properties);
+    ::arrow::Status arrow_file_reader_status
+      = ::parquet::arrow::FileReader::Make(arrow::default_memory_pool(),
+                                           std::move(input_buffer),
+                                           arrow_reader_properties,
+                                           &out_buffer);
+    if (!arrow_file_reader_status.ok()) {
+      diagnostic::error("{}", arrow_file_reader_status.ToString())
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+  } catch (const ::parquet::ParquetInvalidOrCorruptedFileException& err) {
+    diagnostic::error("invalid or corrupted parquet file: {}", err.what())
       .emit(ctrl.diagnostics());
     co_return;
   }

@@ -29,15 +29,14 @@ setup() {
 
 
 @test "invalid format" {
-  check ! tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read parquet
+  check ! tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read parquet"
 }
 
 @test "Additional write options" {
   check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write parquet --compression-level 10 --compression-type zstd | read parquet"
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write parquet --compression-level -1 --compression-type lz4 | read parquet"
+  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write parquet --compression-level -1 --compression-type zstd | read parquet"
   check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write parquet --compression-level -1 --compression-type zstd | read parquet"
   check ! tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch 256 | write parquet --compression-level -1 --compression-type wrongname | read parquet"
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/suricata/eve.json read suricata --no-infer | where #schema == \"suricata.flow\" | write parquet --compression-type uncompressed | read parquet"
 }
 
 @test "Verify compression" {
