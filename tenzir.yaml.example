@@ -159,6 +159,21 @@ tenzir:
   # Zstd compression level applied to the Feather store backend.
   # zstd-compression-level: <default>
 
+  # Context configured as part of the configuration that are always available.
+  contexts:
+    # A unique name for the context that's used in the context, enrich, and
+    # lookup operators to refer to the context.
+    indicators:
+      # The type of the context.
+      type: bloom-filter
+      # Arguments for creating the context, depending on the type. Refer to the
+      # documentation of the individual context types to see the arguments they
+      # require. Note that changes to these arguments to not apply to any
+      # contexts that were previously created.
+      arguments:
+        capacity: 1B
+        fp-probability: 0.001
+
   # The `index` key is used to adjust the false-positive rate of
   # the first-level lookup data structures (called synopses) in the
   # catalog. The lower the false-positive rate the more space will be

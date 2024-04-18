@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/collect.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/node.hpp>
@@ -62,10 +63,7 @@ struct metrics_collector_state {
         return std::move(ok.error());
       }
     }
-    if (instances.empty()) {
-      TENZIR_VERBOSE("{} shuts down because all metrics are disabled", *self);
-      self->quit();
-    }
+    TENZIR_ASSERT(not instances.empty());
     detail::weak_run_delayed_loop(
       self, std::chrono::seconds{30},
       [this] {
@@ -141,8 +139,11 @@ public:
 
   auto make_component(node_actor::stateful_pointer<node_state> node) const
     -> component_plugin_actor override {
+    if (collect(plugins::get<metrics_plugin>()).empty()) {
+      return {};
+    }
     auto [importer] = node->state.registry.find<importer_actor>();
-    return node->spawn(metrics_collector, std::move(importer));
+    return node->spawn<caf::linked>(metrics_collector, std::move(importer));
   }
 };
 
