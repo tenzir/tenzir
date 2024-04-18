@@ -31,7 +31,8 @@ up. These URLs may be mapped to the same or different hostnames.
 2. The URL that the nodes connect to, e.g., `nodes.platform.example.org`. Tenzir
    Nodes connect to this URL to establish long-running WebSocket connections.
 3. The URL that the platform's S3-compatible blob storage is accessible at,
-   e.g., `blob.platform.example.org`.
+   e.g., `downloads.platform.example.org`. When using the 'Download' button
+   the platform generates download links under this URL.
 4. The URL that the Tenzir Platform CLI connects to, e.g.,
    `api.platform.example.org`.
 
@@ -47,10 +48,10 @@ TENZIR_PLATFORM_DOMAIN=https://app.platform.example.org
 TENZIR_PLATFORM_CONTROL_ENDPOINT=wss://nodes.platform.example.org
 
 # The URL at which the platform's S3-compatible blob storage is accessible at.
-TENZIR_PLATFORM_BLOBS_URL=https://nodes.platform.example.org
+TENZIR_PLATFORM_BLOBS_ENDPOINT=https://downloads.platform.example.org
 
 # The URL at which the platform's S3-compatible blob storage is accessible at.
-TENZIR_PLATFORM_CLI_API_ENDPOINT=https://api.platform.example.org
+TENZIR_PLATFORM_API_ENDPOINT=https://api.platform.example.org
 ```
 
 ### Identity Provider (IdP)
