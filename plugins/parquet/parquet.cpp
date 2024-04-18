@@ -21,13 +21,10 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/store.hpp>
 
-#include <arrow/array.h>
 #include <arrow/compute/cast.h>
-#include <arrow/io/api.h>
 #include <arrow/io/file.h>
 #include <arrow/ipc/api.h>
 #include <arrow/table.h>
-#include <arrow/util/base64.h>
 #include <arrow/util/key_value_metadata.h>
 #include <caf/expected.hpp>
 #include <parquet/arrow/reader.h>
@@ -512,29 +509,60 @@ private:
   std::vector<table_slice> slices_ = {};
   configuration parquet_config_ = {};
 };
+
+auto drain_bytes(generator<chunk_ptr> input) -> generator<chunk_ptr> {
+  auto result = chunk_ptr{};
+  auto it = input.begin();
+  while (it != input.end()) {
+    auto chunk = std::move(*it);
+    ++it;
+    if (not chunk) {
+      co_yield {};
+      continue;
+    }
+    result = std::move(chunk);
+    break;
+  }
+  if (not result) {
+    co_return;
+  }
+  auto byte_buffer = std::vector<std::byte>{};
+  while (it != input.end()) {
+    auto chunk = std::move(*it);
+    ++it;
+    if (not chunk) {
+      co_yield {};
+      continue;
+    }
+    if (result) [[unlikely]] {
+      byte_buffer.reserve(result->size());
+      byte_buffer.insert(byte_buffer.end(), result->begin(), result->end());
+      result = {};
+    }
+    byte_buffer.reserve(byte_buffer.size() + chunk->size());
+    byte_buffer.insert(byte_buffer.end(), chunk->begin(), chunk->end());
+    break;
+  }
+  if (not result) {
+    result = chunk::make(std::move(byte_buffer));
+  } else {
+    TENZIR_ASSERT(byte_buffer.empty());
+  }
+  co_yield std::move(result);
+}
+
 auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
   -> generator<table_slice> {
-  chunk_ptr parquet_as_chunk_input{}; // better way to do this?
-
-  // Optimization if only one chunk in the input
-  if (std::next(input.begin()) != input.end()) {
-    parquet_as_chunk_input = *input.begin();
-  } else {
-    auto chunks_as_bytes = std::vector<std::byte>{};
-    for (auto&& chunk : input) {
-      if (not chunk || chunk->size() == 0) {
-        co_yield {};
-        continue;
-      }
-      chunks_as_bytes.insert(chunks_as_bytes.end(), chunk->begin(),
-                             chunk->end());
-
+  auto parquet_chunk = chunk_ptr{};
+  for (auto&& chunk : drain_bytes(std::move(input))) {
+    if (not chunk) {
       co_yield {};
+      continue;
     }
-    parquet_as_chunk_input = chunk::make(std::move(chunks_as_bytes));
+    TENZIR_ASSERT(not parquet_chunk);
+    parquet_chunk = std::move(chunk);
   }
-  auto input_file = as_arrow_file(std::move(parquet_as_chunk_input));
-
+  auto input_file = as_arrow_file(std::move(parquet_chunk));
   // Construct a parquet reader and arrow reader properties
   auto parquet_reader_properties
     = ::parquet::ReaderProperties(arrow::default_memory_pool());
@@ -655,7 +683,7 @@ public:
           return diagnostic::error("{}", result_compression_type.status()
                                            .ToStringWithoutContextLines())
             .note("failed to parse compression type")
-            .note("must be `lz4` or `zstd`")
+            .note("must be `snappy`, `gzip`, or `zstd`")
             .primary(options.compression_type->source)
             .to_error();
         }
@@ -694,7 +722,7 @@ public:
       auto record_batch_status = writer_->WriteRecordBatch(*record_batch);
       if (!record_batch_status.ok()) {
         diagnostic::error("{}", record_batch_status.ToString())
-          .note("failed write record batch")
+          .note("failed to write record batch")
           .emit(ctrl_.diagnostics());
         co_return;
       }
