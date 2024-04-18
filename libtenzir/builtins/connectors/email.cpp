@@ -260,8 +260,7 @@ public:
   auto parse_saver(parser_interface& p) const
     -> std::unique_ptr<plugin_saver> override {
     auto parser = argument_parser{
-      name(),
-      fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
+      name(), fmt::format("https://docs.tenzir.com/connectors/{}", name())};
     auto args = saver_args{};
     parser.add("-e,--endpoint", args.endpoint, "<string>");
     parser.add("-f,--from", args.from, "<email>");

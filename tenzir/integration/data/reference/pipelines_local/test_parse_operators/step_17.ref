@@ -5,4 +5,4 @@ error: expected 1 positional arguments, but got 0
   |          ^ 
   |
   = usage: file <path> [-f|--follow] [-m|--mmap] [-t|--timeout <duration>]
-  = docs: https://docs.tenzir.com/next/connectors/file
+  = docs: https://docs.tenzir.com/connectors/file

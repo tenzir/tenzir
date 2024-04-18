@@ -868,7 +868,7 @@ public:
 
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
-    argument_parser{"zeek-tsv", "https://docs.tenzir.com/next/formats/zeek-tsv"}
+    argument_parser{"zeek-tsv", "https://docs.tenzir.com/formats/zeek-tsv"}
       .parse(p);
     return std::make_unique<zeek_tsv_parser>();
   }
@@ -877,7 +877,7 @@ public:
     -> std::unique_ptr<plugin_printer> override {
     auto args = zeek_tsv_printer::args{};
     auto set_separator = std::optional<located<std::string>>{};
-    auto parser = argument_parser{"zeek-tsv", "https://docs.tenzir.com/next/"
+    auto parser = argument_parser{"zeek-tsv", "https://docs.tenzir.com/"
                                               "formats/zeek-tsv"};
     parser.add("-s,--set-separator", set_separator, "<sep>");
     parser.add("-e,--empty-field", args.empty_field, "<str>");

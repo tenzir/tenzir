@@ -43,8 +43,7 @@ struct xsv_options {
 
   static auto try_parse(parser_interface& p, std::string name, bool is_parser)
     -> xsv_options {
-    auto parser
-      = argument_parser{"xsv", "https://docs.tenzir.com/next/formats/xsv"};
+    auto parser = argument_parser{"xsv", "https://docs.tenzir.com/formats/xsv"};
     auto allow_comments = bool{};
     auto auto_expand = bool{};
     auto field_sep_str = located<std::string>{};

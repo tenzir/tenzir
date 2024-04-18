@@ -5,4 +5,4 @@ error: unexpected positional argument
   |         ^^ 
   |
   = usage: version (takes no arguments)
-  = docs: https://docs.tenzir.com/next/operators/sources/version
+  = docs: https://docs.tenzir.com/operators/version

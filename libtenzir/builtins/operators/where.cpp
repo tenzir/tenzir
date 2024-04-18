@@ -133,8 +133,8 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"where", "https://docs.tenzir.com/next/"
-                                           "operators/transformations/where"};
+    auto parser = argument_parser{"where", "https://docs.tenzir.com/"
+                                           "operators/where"};
     auto expr = located<tenzir::expression>{};
     parser.add(expr, "<expr>");
     parser.parse(p);
@@ -142,7 +142,7 @@ public:
     if (!normalized_and_validated) {
       diagnostic::error("invalid expression")
         .primary(expr.source)
-        .docs("https://tenzir.com/docs/expressions")
+        .docs("https://tenzir.com/language/expressions")
         .throw_();
     }
     expr.inner = std::move(*normalized_and_validated);

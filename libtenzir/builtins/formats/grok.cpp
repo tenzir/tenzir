@@ -379,8 +379,7 @@ public:
   explicit grok_parser(parser_interface& p)
     : patterns_(get_builtin_pattern_store()) {
     auto parser
-      = argument_parser{"grok", "https://docs.tenzir.com/next/operators/"
-                                "transformations/grok"};
+      = argument_parser{"grok", "https://docs.tenzir.com/operators/grok"};
     parser.add(input_pattern_.raw_pattern, "<input_pattern>");
     std::optional<std::string> pattern_definitions{};
     parser.add("--pattern-definitions", pattern_definitions, "<patterns>");

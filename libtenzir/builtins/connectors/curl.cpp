@@ -350,7 +350,7 @@ private:
     } else {
       auto parser = argument_parser{
         protocol(),
-        fmt::format("https://docs.tenzir.com/docs/connectors/{}", protocol())};
+        fmt::format("https://docs.tenzir.com/connectors/{}", protocol())};
       parser.add("-v,--verbose", result.transfer_opts.verbose);
       parser.add(result.url, "<url>");
       parser.parse(p);

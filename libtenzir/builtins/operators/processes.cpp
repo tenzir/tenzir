@@ -57,8 +57,8 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"processes", "https://docs.tenzir.com/next/"
-                                               "operators/sources/processes"};
+    auto parser = argument_parser{"processes", "https://docs.tenzir.com/"
+                                               "operators/processes"};
     parser.parse(p);
     return std::make_unique<processes_operator>();
   }

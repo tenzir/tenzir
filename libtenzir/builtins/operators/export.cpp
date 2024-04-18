@@ -264,8 +264,8 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"export", "https://docs.tenzir.com/next/"
-                                            "operators/sources/export"};
+    auto parser = argument_parser{"export", "https://docs.tenzir.com/"
+                                            "operators/export"};
     bool live = false;
     auto internal = false;
     auto low_priority = false;

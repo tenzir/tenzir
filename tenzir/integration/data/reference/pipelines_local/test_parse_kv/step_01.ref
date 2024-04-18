@@ -4,4 +4,4 @@ error: regex must have at most one capturing group
 1 | parse line kv "(foo)(bar)" ""
   |               ^^^^^^^^^^^^ 
   |
-  = docs: https://docs.tenzir.com/docs/next/formats/kv
+  = docs: https://docs.tenzir.com/formats/kv

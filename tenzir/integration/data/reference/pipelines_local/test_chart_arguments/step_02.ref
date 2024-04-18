@@ -5,4 +5,4 @@ error: invalid chart type
   |                              ^^^^^ 
   |
   = hint: valid chart types are: line, area, bar, pie
-  = docs: https://docs.tenzir/operators/chart
+  = docs: https://docs.tenzir.com/operators/chart

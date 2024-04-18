@@ -485,8 +485,7 @@ public:
   auto parse_loader(parser_interface& p) const
     -> std::unique_ptr<plugin_loader> override {
     auto parser = argument_parser{
-      name(),
-      fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
+      name(), fmt::format("https://docs.tenzir.com/connectors/{}", name())};
     auto args = loader_args{};
     parser.add(args.endpoint, "<endpoint>");
     parser.add("-f,--filter", args.filter, "<prefix>");
@@ -519,8 +518,7 @@ public:
   auto parse_saver(parser_interface& p) const
     -> std::unique_ptr<plugin_saver> override {
     auto parser = argument_parser{
-      name(),
-      fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
+      name(), fmt::format("https://docs.tenzir.com/connectors/{}", name())};
     auto args = saver_args{};
     parser.add(args.endpoint, "<endpoint>");
     parser.add("-l,--listen", args.listen);

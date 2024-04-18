@@ -27,7 +27,7 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"diagnostics", "https://docs.tenzir.com/next/"
+    auto parser = argument_parser{"diagnostics", "https://docs.tenzir.com/"
                                                  "operators/diagnostics"};
     bool live = false;
     parser.add("--live", live);

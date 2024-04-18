@@ -222,8 +222,8 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"slice", "https://docs.tenzir.com/next/"
-                                           "operators/transformations/slice"};
+    auto parser = argument_parser{"slice", "https://docs.tenzir.com/"
+                                           "operators/slice"};
     auto begin = std::optional<int64_t>{};
     auto end = std::optional<int64_t>{};
     parser.add("--begin", begin, "<begin>");

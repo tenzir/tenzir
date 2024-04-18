@@ -31,10 +31,10 @@ class top_rare_plugin final : public virtual operator_parser_plugin {
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{
-      std::string{Name.str()}, fmt::format("https://docs.tenzir.com/docs/next/"
-                                           "operators/transformations/{}",
-                                           Name.str())};
+    auto parser = argument_parser{std::string{Name.str()},
+                                  fmt::format("https://docs.tenzir.com/"
+                                              "operators/{}",
+                                              Name.str())};
     auto field = located<std::string>{};
     auto count_field = std::optional<located<std::string>>{};
     parser.add(field, "<str>");

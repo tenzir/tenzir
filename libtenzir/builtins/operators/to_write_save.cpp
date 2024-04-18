@@ -37,7 +37,7 @@ namespace {
   diagnostic::error("printer `{}` could not be found", x.inner)
     .primary(x.source)
     .hint("must be one of {}", fmt::join(available, ", "))
-    .docs("https://docs.tenzir.com/next/formats")
+    .docs("https://docs.tenzir.com/formats")
     .throw_();
 }
 
@@ -57,12 +57,12 @@ throw_saver_not_found(located<std::string_view> x, bool use_uri_schemes) {
     diagnostic::error("saver for `{}` scheme could not be found", x.inner)
       .primary(x.source)
       .hint("must be one of {}", fmt::join(available, ", "))
-      .docs("https://docs.tenzir.com/next/connectors")
+      .docs("https://docs.tenzir.com/connectors")
       .throw_();
   diagnostic::error("saver `{}` could not be found", x.inner)
     .primary(x.source)
     .hint("must be one of {}", fmt::join(available, ", "))
-    .docs("https://docs.tenzir.com/next/connectors")
+    .docs("https://docs.tenzir.com/connectors")
     .throw_();
 }
 

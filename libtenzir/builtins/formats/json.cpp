@@ -1212,7 +1212,7 @@ public:
     auto args = parser_args{};
     auto selector = std::optional<located<std::string>>{};
     auto parser
-      = argument_parser{name(), "https://docs.tenzir.com/next/formats/json"};
+      = argument_parser{name(), "https://docs.tenzir.com/formats/json"};
     parser.add("--selector", selector, "<selector>");
     parser.add("--schema", args.schema, "<schema>");
     parser.add("--unnest-separator", args.unnest_separator, "<separator>");
@@ -1244,7 +1244,7 @@ public:
     -> std::unique_ptr<plugin_printer> override {
     auto args = printer_args{};
     auto parser
-      = argument_parser{name(), "https://docs.tenzir.com/next/formats/json"};
+      = argument_parser{name(), "https://docs.tenzir.com/formats/json"};
     // We try to follow 'jq' option naming.
     parser.add("-c,--compact-output", args.compact_output);
     parser.add("-C,--color-output", args.color_output);
@@ -1267,7 +1267,7 @@ public:
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{
-      name(), fmt::format("https://docs.tenzir.com/next/formats/{}", name())};
+      name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
     auto args = parser_args{};
     add_common_options_to_parser(parser, args);
     parser.parse(p);
@@ -1287,7 +1287,7 @@ public:
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{
-      name(), fmt::format("https://docs.tenzir.com/next/formats/{}", name())};
+      name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
     auto args = parser_args{};
     add_common_options_to_parser(parser, args);
     parser.parse(p);

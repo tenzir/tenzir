@@ -136,7 +136,7 @@ class plugin final : public virtual parser_plugin<bitz_parser>,
 
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
-    auto parser = argument_parser{"bitz", "https://docs.tenzir.com/next/"
+    auto parser = argument_parser{"bitz", "https://docs.tenzir.com/"
                                           "formats/bitz"};
     parser.parse(p);
     return std::make_unique<bitz_parser>();
@@ -144,7 +144,7 @@ class plugin final : public virtual parser_plugin<bitz_parser>,
 
   auto parse_printer(parser_interface& p) const
     -> std::unique_ptr<plugin_printer> override {
-    auto parser = argument_parser{"bitz", "https://docs.tenzir.com/next/"
+    auto parser = argument_parser{"bitz", "https://docs.tenzir.com/"
                                           "formats/bitz"};
     parser.parse(p);
     return std::make_unique<bitz_printer>();
