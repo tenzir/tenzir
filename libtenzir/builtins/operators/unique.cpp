@@ -91,8 +91,8 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"unique", "https://docs.tenzir.com/next/"
-                                            "operators/transformations/unique"};
+    auto parser = argument_parser{"unique", "https://docs.tenzir.com/"
+                                            "operators/unique"};
     parser.parse(p);
     return std::make_unique<unique_operator>();
   }

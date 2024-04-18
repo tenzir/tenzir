@@ -300,8 +300,7 @@ public:
   auto parse_loader(parser_interface& p) const
     -> std::unique_ptr<plugin_loader> override {
     auto parser = argument_parser{
-      name(),
-      fmt::format("https://docs.tenzir.com/docs/next/connectors/{}", name())};
+      name(), fmt::format("https://docs.tenzir.com/connectors/{}", name())};
     auto args = s3_args{};
     parser.add("--anonymous", args.anonymous);
     parser.add(args.uri, "<uri>");
@@ -317,8 +316,7 @@ public:
   auto parse_saver(parser_interface& p) const
     -> std::unique_ptr<plugin_saver> override {
     auto parser = argument_parser{
-      name(),
-      fmt::format("https://docs.tenzir.com/docs/next/connectors/{}", name())};
+      name(), fmt::format("https://docs.tenzir.com/connectors/{}", name())};
     auto args = s3_args{};
     parser.add("--anonymous", args.anonymous);
     parser.add(args.uri, "<uri>");

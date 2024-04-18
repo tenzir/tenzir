@@ -390,7 +390,7 @@ public:
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{
-      name(), fmt::format("https://docs.tenzir.com/docs/formats/{}", name())};
+      name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
     parser.parse(p);
     return std::make_unique<syslog_parser>();
   }

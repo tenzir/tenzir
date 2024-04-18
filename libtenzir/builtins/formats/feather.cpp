@@ -531,7 +531,7 @@ class plugin final : public virtual parser_plugin<feather_parser>,
 
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
-    auto parser = argument_parser{"feather", "https://docs.tenzir.com/next/"
+    auto parser = argument_parser{"feather", "https://docs.tenzir.com/"
                                              "formats/feather"};
     parser.parse(p);
     return std::make_unique<feather_parser>();
@@ -540,7 +540,7 @@ class plugin final : public virtual parser_plugin<feather_parser>,
   auto parse_printer(parser_interface& p) const
     -> std::unique_ptr<plugin_printer> override {
     auto options = feather_options{};
-    auto parser = argument_parser{"feather", "https://docs.tenzir.com/next/"
+    auto parser = argument_parser{"feather", "https://docs.tenzir.com/"
                                              "formats/feather"};
     parser.add("--compression-level", options.compression_level, "<level>");
     parser.add("--compression-type", options.compression_type, "<type>");

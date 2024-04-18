@@ -333,8 +333,8 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto command = std::string{};
-    auto parser = argument_parser{"shell", "https://docs.tenzir.com/next/"
-                                           "operators/transformations/shell"};
+    auto parser = argument_parser{"shell", "https://docs.tenzir.com/"
+                                           "operators/shell"};
     parser.add(command, "<command>");
     parser.parse(p);
     return std::make_unique<shell_operator>(std::move(command));

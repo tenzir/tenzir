@@ -1029,8 +1029,8 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto buffer_size = located<uint64_t>{1 << 16, location::unknown};
     auto id = located<std::string>{};
-    auto parser = argument_parser{"serve", "https://docs.tenzir.com/next/"
-                                           "operators/sinks/serve"};
+    auto parser = argument_parser{"serve", "https://docs.tenzir.com/"
+                                           "operators/serve"};
     parser.add("--buffer-size", buffer_size, "<size>");
     parser.add(id, "<id>");
     parser.parse(p);

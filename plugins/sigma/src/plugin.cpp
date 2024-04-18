@@ -188,8 +188,8 @@ class plugin final : public virtual operator_plugin<sigma_operator> {
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"sigma", "https://docs.tenzir.com/next/"
-                                           "operators/transformations/batch"};
+    auto parser = argument_parser{"sigma", "https://docs.tenzir.com/"
+                                           "operators/batch"};
     auto refresh_interval = duration{std::chrono::seconds{5}};
     auto refresh_interval_arg = std::optional<located<std::string>>{};
     auto path = std::string{};

@@ -146,13 +146,13 @@ throw_loader_not_found(located<std::string_view> x, bool use_uri_schemes) {
     diagnostic::error("loader for `{}` scheme could not be found", x.inner)
       .primary(x.source)
       .hint("must be one of {}", fmt::join(available, ", "))
-      .docs("https://docs.tenzir.com/next/connectors")
+      .docs("https://docs.tenzir.com/connectors")
       .throw_();
   }
   diagnostic::error("loader `{}` could not be found", x.inner)
     .primary(x.source)
     .hint("must be one of {}", fmt::join(available, ", "))
-    .docs("https://docs.tenzir.com/next/connectors")
+    .docs("https://docs.tenzir.com/connectors")
     .throw_();
 }
 
@@ -164,7 +164,7 @@ throw_loader_not_found(located<std::string_view> x, bool use_uri_schemes) {
   diagnostic::error("parser `{}` could not be found", x.inner)
     .primary(x.source)
     .hint("must be one of {}", fmt::join(available, ", "))
-    .docs("https://docs.tenzir.com/next/formats")
+    .docs("https://docs.tenzir.com/formats")
     .throw_();
 }
 

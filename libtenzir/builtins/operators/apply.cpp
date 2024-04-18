@@ -40,10 +40,9 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto file = located<std::string>{};
-    auto parser
-      = argument_parser{name(), fmt::format("https://docs.tenzir.com/next/"
-                                            "operators/transformations/{}",
-                                            name())};
+    auto parser = argument_parser{name(), fmt::format("https://docs.tenzir.com/"
+                                                      "operators/{}",
+                                                      name())};
     parser.add(file, "<file>");
     parser.parse(p);
     auto completed_path = std::invoke([&] {

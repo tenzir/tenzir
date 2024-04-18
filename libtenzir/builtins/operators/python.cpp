@@ -414,8 +414,8 @@ public:
     auto command = std::optional<located<std::string>>{};
     auto requirements = std::string{};
     auto filename = std::optional<located<std::string>>{};
-    auto parser = argument_parser{"python", "https://docs.tenzir.com/next/"
-                                            "operators/transformations/python"};
+    auto parser = argument_parser{"python", "https://docs.tenzir.com/"
+                                            "operators/python"};
     parser.add("-r,--requirements", requirements, "<requirements>");
     parser.add("-f,--file", filename, "<filename>");
     parser.add(command, "<command>");

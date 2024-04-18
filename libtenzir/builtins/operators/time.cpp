@@ -35,7 +35,7 @@ namespace tenzir::plugins::time {
 
 namespace {
 
-constexpr auto docs = "https://docs.tenzir.com/docs/next/formats/time";
+constexpr auto docs = "https://docs.tenzir.com/formats/time";
 
 #if TENZIR_HAS_DATE_H
 auto find_tz_by_name(std::string_view tz_name, diagnostic_handler& diag)

@@ -5,4 +5,4 @@ error: unknown option `-x`
   |                                            ^^ 
   |
   = usage: chart pie [--name <field>] [--value <fields>]
-  = docs: https://docs.tenzir/operators/chart
+  = docs: https://docs.tenzir.com/operators/chart

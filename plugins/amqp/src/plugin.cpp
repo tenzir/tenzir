@@ -652,8 +652,7 @@ public:
   template <class Args>
   auto parse_args(parser_interface& p) const -> std::pair<Args, record> {
     auto parser = argument_parser{
-      name(),
-      fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
+      name(), fmt::format("https://docs.tenzir.com/connectors/{}", name())};
     auto args = Args{};
     parser.add("-c,--channel", args.channel, "<channel>");
     parser.add("-e,--exchange", args.exchange, "<exchange>");

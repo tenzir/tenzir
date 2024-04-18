@@ -92,8 +92,8 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"show", "https://docs.tenzir.com/next/"
-                                          "operators/sources/show"};
+    auto parser = argument_parser{"show", "https://docs.tenzir.com/"
+                                          "operators/show"};
     auto aspect = std::optional<located<std::string>>{};
     parser.add(aspect, "<aspect>");
     parser.parse(p);

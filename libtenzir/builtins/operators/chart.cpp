@@ -780,7 +780,7 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto docs = fmt::format("https://docs.tenzir/operators/{}", name());
+    auto docs = fmt::format("https://docs.tenzir.com/operators/{}", name());
     // The chart operator is of the form
     // `chart <type> [args...]`
     // Here, we'll parse the <type>

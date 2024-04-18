@@ -400,10 +400,9 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser
-      = argument_parser{name(), fmt::format("https://docs.tenzir.com/next/"
-                                            "operators/transformations/{}",
-                                            name())};
+    auto parser = argument_parser{name(), fmt::format("https://docs.tenzir.com/"
+                                                      "operators/{}",
+                                                      name())};
     operator_args args;
     parser.add("-v,--vxlan", args.vxlan_port, "<count>");
     parser.parse(p);

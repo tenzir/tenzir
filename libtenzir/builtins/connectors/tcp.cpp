@@ -639,8 +639,7 @@ public:
   template <class Args>
   auto parse_args(parser_interface& p) const -> Args {
     auto parser = argument_parser{
-      name(),
-      fmt::format("https://docs.tenzir.com/docs/connectors/{}", name())};
+      name(), fmt::format("https://docs.tenzir.com/connectors/{}", name())};
     auto args = Args{};
     auto uri = located<std::string>{};
     parser.add(uri, "<endpoint>");

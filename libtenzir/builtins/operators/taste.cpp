@@ -68,8 +68,8 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"taste", "https://docs.tenzir.com/next/"
-                                           "operators/transformations/taste"};
+    auto parser = argument_parser{"taste", "https://docs.tenzir.com/"
+                                           "operators/taste"};
     auto count = std::optional<uint64_t>{};
     parser.add(count, "<limit>");
     parser.parse(p);

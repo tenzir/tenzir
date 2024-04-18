@@ -5,4 +5,4 @@ error: printer `zeek` could not be found
   |                                  ^^^^ 
   |
   = hint: must be one of bitz, csv, feather, json, lines, pcap, ssv, tsv, xsv, yaml, zeek-tsv
-  = docs: https://docs.tenzir.com/next/formats
+  = docs: https://docs.tenzir.com/formats

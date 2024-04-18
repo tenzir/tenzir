@@ -121,7 +121,7 @@ class plugin : public virtual saver_plugin<directory_saver> {
 public:
   auto parse_saver(parser_interface& p) const
     -> std::unique_ptr<plugin_saver> override {
-    auto parser = argument_parser{name(), "https://docs.tenzir.com/next/"
+    auto parser = argument_parser{name(), "https://docs.tenzir.com/"
                                           "connectors/directory"};
     auto args = saver_args{};
     parser.add(args.path, "<path>");
