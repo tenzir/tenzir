@@ -390,9 +390,9 @@ paths:
       summary: Launch a new pipeline
       description: >-
         Depending on whether the pipeline ends with a sink, create the pipeline
-        with a [`serve` sink](https://docs.tenzir.com/operators/sinks/serve)
-        with the provided `/pipeline/create` parameters or notify that this
-        pipeline is deployable for further action.
+        with a [`serve` sink](https://docs.tenzir.com/operators/serve) with the
+        provided `/pipeline/create` parameters or notify that this pipeline is
+        deployable for further action.
       requestBody:
         required: true
         content:
