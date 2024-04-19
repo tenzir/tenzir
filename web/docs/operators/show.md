@@ -40,6 +40,7 @@ look at what's going on:
 - `build`: shows compile-time build information.
 - `dependencies`: shows information about build-time dependencies.
 - `fields`: shows all fields of existing tables at a remote node.
+- `schemas` shows all schema definitions for which data is stored at the node.
 - `serves` shows all pipelines with the `serve` sink operator currently
   available from the `/serve` API endpoint.
 - `types`: shows all known types at a remote node.
