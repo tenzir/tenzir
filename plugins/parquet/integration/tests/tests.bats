@@ -12,31 +12,19 @@ setup() {
 }
 
 @test "batch sizes" {
-  if ! command -v python3; then
-    skip "python3 must be in PATH"
-  fi
-
-  venv_dir=$(mktemp -d)
-  python3 -m venv --system-site-packages "${venv_dir}"
-  . "${venv_dir}/bin/activate"
-  if ! python -c pyarrow; then
-    pip install pyarrow
-  fi
-
-  tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch 512 | write parquet" |
-    check python "${BATS_TENZIR_MISCDIR}/scripts/print-arrow-batch-size.py"
+  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch 512 | write parquet | read parquet | measure | drop timestamp"
+    
 }
 
-
 @test "invalid format" {
-  check ! tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz | read parquet"
+  check ! tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read parquet"
 }
 
 @test "Additional write options" {
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write parquet --compression-level 10 --compression-type brotli | read parquet | measure"
+  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write parquet --compression-level 10 --compression-type brotli | read parquet | measure | drop timestamp"
   check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | slice --begin 1150 --end 1160 | write parquet --compression-level 7 --compression-type gzip | read parquet"
   check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write parquet --compression-level 7 | read parquet | summarize count(.)"
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write parquet --compression-level -1 --compression-type zstd | read parquet | measure"
+  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write parquet --compression-level -1 --compression-type zstd | read parquet | measure | drop timestamp"
   check ! tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch 256 | write parquet --compression-level -1 --compression-type wrongname | read parquet"
 }
 

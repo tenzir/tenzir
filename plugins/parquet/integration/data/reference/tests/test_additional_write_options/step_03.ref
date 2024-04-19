@@ -1,5 +1,4 @@
 {
-  "timestamp": "2024-04-19T10:40:51.580453",
   "events": 8462,
   "schema": "zeek.conn",
   "schema_id": "77b29dac1e7618a4"

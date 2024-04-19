@@ -32,11 +32,11 @@ setup() {
 }
 
 @test "Additional write options" {
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/suricata/eve.json | where #schema == \"suricata.dns\" | write feather --compression-type uncompressed | read feather"
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write feather --compression-level 10 --compression-type zstd --min-space-savings .6 | read feather"
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write feather --compression-level -1 --compression-type lz4 --min-space-savings 1 | read feather"
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write feather --compression-level -1 --compression-type zstd --min-space-savings 0 | read feather"
-  check ! tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch 256 | write feather --compression-level -1 --compression-type zstd --min-space-savings 10 | read feather"
+  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch 256 | write feather --compression-level 10 --compression-type zstd | read feather | measure | drop timestamp"
+  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | slice --begin 1150 --end 1160 | batch 512 | write feather --compression-level 7 --compression-type lz4 --min-space-savings .6 | read feather"
+  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write feather --compression-level 7 | read feather | summarize count(.)"
+  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch 256 | write feather --compression-level -1 --compression-type zstd --min-space-savings 0 | read feather | measure | drop timestamp"
+  check ! tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch 256 | write feather --compression-level -1 --compression-type wrongname | read feather"
 }
 
 @test "Verify compression" {
