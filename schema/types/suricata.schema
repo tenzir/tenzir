@@ -10,6 +10,18 @@ type suricata.component.common = record {
   dest_port: port,
   proto: string,
   event_type: string,
+  app_proto: string,
+  app_proto_orig: string,
+  app_proto_tc: string,
+  app_proto_ts: string,
+  icmp_type: uint64,
+  icmp_code: uint64,
+  response_icmp_type: uint64,
+  response_icmp_code: uint64,
+  traffic: record {
+    id: list<string>,
+    label: list<string>,
+  },
   community_id: string #index=hash
 }
 
@@ -23,7 +35,17 @@ type suricata.component.flow = record {
   age: uint64,
   state: string,
   reason: string,
-  alerted: bool
+  alerted: bool,
+  wrong_thread: bool,
+  bypass: string,
+  bypassed: record {
+    pkts_toserver: uint64,
+    pkts_toclient: uint64,
+    bytes_toserver: uint64,
+    bytes_toclient: uint64
+  },
+  tcp: suricata.component.tcp,
+  emergency: bool
 }
 
 type suricata.component.app_proto = record {
@@ -39,6 +61,25 @@ type suricata.component.quic_extensions = record {
   name: string,
   type: uint64,
   values: list<string>,
+}
+
+type suricata.component.tcp = record {
+  ack: bool,
+  cwr: bool,
+  ecn: bool,
+  fin: bool,
+  psh: bool,
+  rst: bool,
+  state: string,
+  syn: bool,
+  tc_gap: bool,
+  tc_max_regions: uint64,
+  tcp_flags: string,
+  tcp_flags_tc: string,
+  tcp_flags_ts: string,
+  ts_gap: bool,
+  ts_max_regions: uint64,
+  urg: bool
 }
 
 type suricata.quic = suricata.component.common + record {
@@ -294,7 +335,6 @@ type suricata.fileinfo = suricata.component.common + record {
 
 type suricata.flow = suricata.component.common + record {
   flow: suricata.component.flow,
-  app_proto: string
 }
 
 type suricata.ikev2 = suricata.component.common + record {
