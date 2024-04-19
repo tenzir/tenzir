@@ -78,9 +78,7 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
   parquet_reader_properties.enable_buffered_stream();
   std::unique_ptr<::parquet::arrow::FileReader> out_buffer;
   auto arrow_reader_properties = ::parquet::ArrowReaderProperties();
-
-  // 2^16 is the largest batch size allowed in a table slice
-  arrow_reader_properties.set_batch_size(65536);
+  arrow_reader_properties.set_batch_size(defaults::import::table_slice_size);
   try {
     auto input_buffer = ::parquet::ParquetFileReader::Open(
       std::move(input_file), parquet_reader_properties);
@@ -90,7 +88,8 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
                                            arrow_reader_properties,
                                            &out_buffer);
     if (!arrow_file_reader_status.ok()) {
-      diagnostic::error("{}", arrow_file_reader_status.ToString())
+      diagnostic::error("{}",
+                        arrow_file_reader_status.ToStringWithoutContextLines())
         .emit(ctrl.diagnostics());
       co_return;
     }
@@ -103,7 +102,8 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
   auto record_batch_reader_status
     = out_buffer->GetRecordBatchReader(&rb_reader);
   if (!record_batch_reader_status.ok()) {
-    diagnostic::error("{}", record_batch_reader_status.ToString())
+    diagnostic::error("{}",
+                      record_batch_reader_status.ToStringWithoutContextLines())
       .note("failed create record batches from input data")
       .emit(ctrl.diagnostics());
     co_return;
@@ -111,7 +111,8 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
   for (arrow::Result<std::shared_ptr<arrow::RecordBatch>> maybe_batch :
        *rb_reader) {
     if (!maybe_batch.ok()) {
-      diagnostic::error("{}", maybe_batch.status().ToString())
+      diagnostic::error("{}",
+                        maybe_batch.status().ToStringWithoutContextLines())
         .note("failed read record batch")
         .emit(ctrl.diagnostics());
       co_return;
@@ -217,6 +218,7 @@ public:
           diagnostic::warning("ignoring compression level option")
             .note("snappy does not accept `compression level`")
             .primary(options.compression_level->source)
+            .primary(options.compression_type->source)
             .emit(ctrl.diagnostics());
         }
       } else {
@@ -237,8 +239,9 @@ public:
         *schema, arrow::default_memory_pool(), out_buffer,
         std::move(parquet_writer_props), std::move(arrow_writer_props));
       if (!file_result.ok()) {
-        return diagnostic::error("failed to read schema",
-                                 file_result.status().ToString())
+        return diagnostic::error(
+                 "failed to read schema",
+                 file_result.status().ToStringWithoutContextLines())
           .to_error();
       }
       auto writer = file_result.MoveValueUnsafe();
@@ -258,7 +261,8 @@ public:
       auto record_batch = to_record_batch(input);
       auto record_batch_status = writer_->WriteRecordBatch(*record_batch);
       if (!record_batch_status.ok()) {
-        diagnostic::error("{}", record_batch_status.ToString())
+        diagnostic::error("{}",
+                          record_batch_status.ToStringWithoutContextLines())
           .note("failed to write record batch")
           .emit(ctrl_.diagnostics());
         co_return;
@@ -269,7 +273,7 @@ public:
     auto finish() -> generator<chunk_ptr> override {
       auto close_status = writer_->Close();
       if (!close_status.ok()) {
-        diagnostic::error("{}", close_status.ToString())
+        diagnostic::error("{}", close_status.ToStringWithoutContextLines())
           .note("failed to write metadata and close")
           .emit(ctrl_.diagnostics());
         co_return;
@@ -293,6 +297,7 @@ public:
     std::shared_ptr<chunked_buffer_output_stream> out_buffer_;
     type input_schema_;
   };
+
   friend auto inspect(auto& f, parquet_printer& x) -> bool {
     return f.object(x).fields(f.field("options", x.options_));
   }
@@ -305,7 +310,7 @@ class plugin final : public virtual parser_plugin<parquet_parser>,
                      public virtual printer_plugin<parquet_printer> {
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
-    auto parser = argument_parser{"parquet", "https://docs.tenzir.com/next/"
+    auto parser = argument_parser{"parquet", "https://docs.tenzir.com/"
                                              "formats/parquet"};
     parser.parse(p);
     return std::make_unique<parquet_parser>();
@@ -313,7 +318,7 @@ class plugin final : public virtual parser_plugin<parquet_parser>,
 
   auto parse_printer(parser_interface& p) const
     -> std::unique_ptr<plugin_printer> override {
-    auto parser = argument_parser{"parquet", "https://docs.tenzir.com/next/"
+    auto parser = argument_parser{"parquet", "https://docs.tenzir.com/"
                                              "formats/parquet"};
     auto options = parquet_options{};
     parser.add("--compression-level", options.compression_level, "<level>");

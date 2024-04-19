@@ -1,8 +1,8 @@
 {"count(.)": 8462}
 warning: ignoring compression level option
- --> <input>:1:136
+ --> <input>:1:51
   |
-1 | from /Users/balavinaithirthan/tenzir/tenzir/integration/data/inputs/zeek/conn.log.gz read zeek-tsv | write feather --compression-level 7 | read feather | summarize count(.)
-  |                                                                                                                                        ~ 
+1 | read zeek-tsv | write feather --compression-level 7 | read feather | summarize count(.)
+  |                                                   ~ 
   |
   = note: has no effect without `--compression-type`
