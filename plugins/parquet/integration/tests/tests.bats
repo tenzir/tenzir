@@ -33,8 +33,9 @@ setup() {
 }
 
 @test "Additional write options" {
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write parquet --compression-level 10 --compression-type zstd | read parquet"
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write parquet --compression-level -1 --compression-type zstd | read parquet"
+  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write parquet --compression-level 10 --compression-type brotli | read parquet"
+  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write parquet --compression-level 7 --compression-type gzip | read parquet"
+  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write parquet --compression-level 7 | read parquet"
   check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write parquet --compression-level -1 --compression-type zstd | read parquet"
   check ! tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch 256 | write parquet --compression-level -1 --compression-type wrongname | read parquet"
 }
@@ -43,7 +44,7 @@ setup() {
   file1=$(mktemp)
   file2=$(mktemp)
   check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch | to ${file1} write parquet"
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch | to ${file2} write parquet --compression-level 20 --compression-type zstd"
+  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | batch | to ${file2} write parquet --compression-level 7 --compression-type brotli"
   filesize() {
     if [[ "$OSTYPE" == "darwin"* ]]; then
       stat -f %z "$@"

@@ -53,7 +53,7 @@ auto drain_bytes(generator<chunk_ptr> input) -> generator<chunk_ptr> {
     }
     byte_buffer.reserve(byte_buffer.size() + chunk->size());
     byte_buffer.insert(byte_buffer.end(), chunk->begin(), chunk->end());
-    break;
+    // break;
   }
   if (not result) {
     result = chunk::make(std::move(byte_buffer));
@@ -66,7 +66,8 @@ auto drain_bytes(generator<chunk_ptr> input) -> generator<chunk_ptr> {
 auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
   -> generator<table_slice> {
   auto parquet_chunk = chunk_ptr{};
-  for (auto&& chunk : drain_bytes(std::move(input))) {
+  auto chunks = drain_bytes(std::move(input));
+  for (auto&& chunk : chunks) {
     if (not chunk) {
       co_yield {};
       continue;
@@ -75,6 +76,7 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
     parquet_chunk = std::move(chunk);
   }
   auto input_file = as_arrow_file(std::move(parquet_chunk));
+
   // Construct a parquet reader and arrow reader properties
   auto parquet_reader_properties
     = ::parquet::ReaderProperties(arrow::default_memory_pool());
@@ -167,9 +169,8 @@ public:
 
   auto instantiate(type input_schema, operator_control_plane& ctrl) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
-    return parquet_printer_instance::make(
-      ctrl, std::move(input_schema),
-      options_); // why is options const here
+    return parquet_printer_instance::make(ctrl, std::move(input_schema),
+                                          options_);
   }
 
   auto allows_joining() const -> bool override {
@@ -181,36 +182,60 @@ public:
     static auto make(operator_control_plane& ctrl, type input_schema,
                      const parquet_options& options)
       -> caf::expected<std::unique_ptr<printer_instance>> {
-      // Create Arrow Writer which creates a Parquet Writer under the hood
-      auto arrow_writer_props_builder
-        = ::parquet::ArrowWriterProperties::Builder();
-      arrow_writer_props_builder.store_schema();
-      auto arrow_writer_props = arrow_writer_props_builder.build();
+      // modify Arrow and Parquet writer properties
+      auto arrow_writer_props
+        = ::parquet::ArrowWriterProperties::Builder().store_schema()->build();
       auto parquet_writer_props_builder
         = ::parquet::WriterProperties::Builder();
-      if (!options.compression_type) {
-        if (options.compression_level) {
-          diagnostic::warning("ignoring compression level option")
-            .note("has no effect without `--compression-type`")
-            .primary(options.compression_level->source)
-            .emit(ctrl.diagnostics());
-        }
-      } else {
+      if (options.compression_type) {
         auto result_compression_type = arrow::util::Codec::GetCompressionType(
           options.compression_type->inner);
         if (!result_compression_type.ok()) {
           return diagnostic::error("{}", result_compression_type.status()
                                            .ToStringWithoutContextLines())
             .note("failed to parse compression type")
-            .note("must be `snappy`, `gzip`, or `zstd`")
+            .note("must be `brotli`, `gzip`, `snappy`, or `zstd`")
             .primary(options.compression_type->source)
             .to_error();
         }
         parquet_writer_props_builder.compression(
           result_compression_type.MoveValueUnsafe());
-        parquet_writer_props_builder.compression_level(
-          options.compression_level->inner);
+        if (options.compression_type->inner == "brotli"
+            && (options.compression_level->inner < 1
+                || options.compression_level->inner > 11)) {
+          return diagnostic::error("")
+            .note("invalid compression level")
+            .note("must be a value between 1 and 11")
+            .primary(options.compression_level->source)
+            .to_error();
+        }
+        if (options.compression_type->inner == "gzip"
+            && (options.compression_level->inner < 1
+                || options.compression_level->inner > 9)) {
+          return diagnostic::error("")
+            .note("invalid compression level")
+            .note("must be a value between 1 and 9")
+            .primary(options.compression_level->source)
+            .to_error();
+        }
+        if (options.compression_type->inner != "snappy") {
+          parquet_writer_props_builder.compression_level(
+            options.compression_level->inner);
+        } else {
+          diagnostic::warning("ignoring compression level option")
+            .note("snappy does not accept `compression level`")
+            .primary(options.compression_level->source)
+            .emit(ctrl.diagnostics());
+        }
+      } else {
+        if (options.compression_level) {
+          diagnostic::warning("ignoring compression level option")
+            .note("has no effect without `--compression-type`")
+            .primary(options.compression_level->source)
+            .emit(ctrl.diagnostics());
+        }
       }
+
       parquet_writer_props_builder.version(
         ::parquet::ParquetVersion::PARQUET_2_6);
       auto parquet_writer_props = parquet_writer_props_builder.build();
