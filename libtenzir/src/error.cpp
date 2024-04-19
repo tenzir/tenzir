@@ -101,6 +101,11 @@ std::string render(caf::error err) {
       [&](const diagnostic& diag) {
         printer->emit(diag);
       },
+      [&](const std::vector<diagnostic>& diags) {
+        for (auto& diag : diags) {
+          printer->emit(diag);
+        }
+      },
       [&](const caf::message& msg) {
         printer->emit(diagnostic::error("{}", caf::deep_to_string(msg))
                         .note("unexpected diagnostic format")
