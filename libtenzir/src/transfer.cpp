@@ -141,8 +141,15 @@ auto transfer::prepare(chunk_ptr chunk) -> caf::error {
   }
   // Prepare request body.
   TENZIR_DEBUG("preparing transfer with {}-byte chunk", chunk->size());
+  // When we use a read function to get the input, we have two options to set
+  // the size: CURLOPT_INFILESIZE_LARGE or CURLOPT_POSTFIELDSIZE_LARGE. Since it
+  // depdens on the transfer type what libcurl will use (which we don't know in
+  // this context), we are going to set both here.
   auto chunk_size = detail::narrow_cast<long>(chunk->size());
   if (auto err = to_error(easy_.set_infilesize(chunk_size))) {
+    return err;
+  }
+  if (auto err = to_error(easy_.set_postfieldsize(chunk_size))) {
     return err;
   }
   auto on_read =
