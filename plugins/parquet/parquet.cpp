@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "parquet/contiguous_buffer_stream.hpp"
+#include "parquet/chunked_buffer_output_stream.hpp"
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/fwd.hpp>
@@ -53,7 +53,6 @@ auto drain_bytes(generator<chunk_ptr> input) -> generator<chunk_ptr> {
     }
     byte_buffer.reserve(byte_buffer.size() + chunk->size());
     byte_buffer.insert(byte_buffer.end(), chunk->begin(), chunk->end());
-    // break;
   }
   if (not result) {
     result = chunk::make(std::move(byte_buffer));
@@ -62,12 +61,10 @@ auto drain_bytes(generator<chunk_ptr> input) -> generator<chunk_ptr> {
   }
   co_yield std::move(result);
 }
-
 auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
   -> generator<table_slice> {
   auto parquet_chunk = chunk_ptr{};
-  auto chunks = drain_bytes(std::move(input));
-  for (auto&& chunk : chunks) {
+  for (auto&& chunk : drain_bytes(std::move(input))) {
     if (not chunk) {
       co_yield {};
       continue;
@@ -76,8 +73,6 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
     parquet_chunk = std::move(chunk);
   }
   auto input_file = as_arrow_file(std::move(parquet_chunk));
-
-  // Construct a parquet reader and arrow reader properties
   auto parquet_reader_properties
     = ::parquet::ReaderProperties(arrow::default_memory_pool());
   parquet_reader_properties.enable_buffered_stream();
@@ -86,8 +81,6 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
 
   // 2^16 is the largest batch size allowed in a table slice
   arrow_reader_properties.set_batch_size(65536);
-
-  // Construct an arrow reader and parquet reader
   try {
     auto input_buffer = ::parquet::ParquetFileReader::Open(
       std::move(input_file), parquet_reader_properties);
@@ -182,7 +175,6 @@ public:
     static auto make(operator_control_plane& ctrl, type input_schema,
                      const parquet_options& options)
       -> caf::expected<std::unique_ptr<printer_instance>> {
-      // modify Arrow and Parquet writer properties
       auto arrow_writer_props
         = ::parquet::ArrowWriterProperties::Builder().store_schema()->build();
       auto parquet_writer_props_builder
@@ -240,7 +232,7 @@ public:
         ::parquet::ParquetVersion::PARQUET_2_6);
       auto parquet_writer_props = parquet_writer_props_builder.build();
       const auto schema = input_schema.to_arrow_schema();
-      auto out_buffer = std::make_shared<contiguous_buffer_stream>();
+      auto out_buffer = std::make_shared<chunked_buffer_output_stream>();
       auto file_result = ::parquet::arrow::FileWriter::Open(
         *schema, arrow::default_memory_pool(), out_buffer,
         std::move(parquet_writer_props), std::move(arrow_writer_props));
@@ -257,7 +249,8 @@ public:
     }
 
     auto process(table_slice input) -> generator<chunk_ptr> override {
-      // Need to force at least one co_yield
+      // We need to force at least one co_yield, otherwise we will be stuck in
+      // an infinite loop
       if (input.rows() == 0) {
         co_yield {};
         co_return;
@@ -286,7 +279,7 @@ public:
 
     parquet_printer_instance(
       operator_control_plane& ctrl, type input_schema,
-      std::shared_ptr<tenzir::contiguous_buffer_stream> out_buffer,
+      std::shared_ptr<chunked_buffer_output_stream> out_buffer,
       std::unique_ptr<::parquet::arrow::FileWriter> writer)
       : ctrl_{ctrl},
         writer_{std::move(writer)},
@@ -297,7 +290,7 @@ public:
   private:
     operator_control_plane& ctrl_;
     std::unique_ptr<::parquet::arrow::FileWriter> writer_;
-    std::shared_ptr<contiguous_buffer_stream> out_buffer_;
+    std::shared_ptr<chunked_buffer_output_stream> out_buffer_;
     type input_schema_;
   };
   friend auto inspect(auto& f, parquet_printer& x) -> bool {
@@ -333,7 +326,6 @@ class plugin final : public virtual parser_plugin<parquet_parser>,
     return "parquet";
   }
 };
-
 } // namespace
 
 } // namespace tenzir::plugins::parquet

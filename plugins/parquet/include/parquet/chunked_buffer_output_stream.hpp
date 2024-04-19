@@ -12,19 +12,28 @@
 
 #include <arrow/io/api.h>
 
-namespace tenzir {
+namespace tenzir::plugins::parquet {
 
-class contiguous_buffer_stream final : public arrow::io::OutputStream {
+// An output stream that returns contents of the buffer on request,
+// but appears to be a contigous stream from the Tell() API
+class chunked_buffer_output_stream final : public arrow::io::OutputStream {
 public:
-  contiguous_buffer_stream() = default;
-  ~contiguous_buffer_stream() override = default;
+  chunked_buffer_output_stream() = default;
+  ~chunked_buffer_output_stream() override = default;
 
   auto Close() -> arrow::Status override;
   auto closed() const -> bool override;
+
+  // Return the position of the stream as though it is contiguous
   auto Tell() const -> arrow::Result<int64_t> override;
+
+  // Write the given data to the stream
   auto Write(const void* data, int64_t nbytes) -> arrow::Status override;
 
+  // Clear and return contents of buffer
   auto purge() -> chunk_ptr;
+
+  // Close and return contents of the buffer
   auto finish() -> chunk_ptr;
 
 private:
@@ -32,4 +41,4 @@ private:
   std::vector<std::byte> buffer_ = {};
   size_t offset_ = {};
 };
-} // namespace tenzir
+} // namespace tenzir::plugins::parquet

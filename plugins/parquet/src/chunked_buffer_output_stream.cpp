@@ -6,13 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "parquet/contiguous_buffer_stream.hpp"
+#include "parquet/chunked_buffer_output_stream.hpp"
 
 #include <tenzir/fwd.hpp>
 
-namespace tenzir {
+namespace tenzir::plugins::parquet {
 
-auto contiguous_buffer_stream::Close() -> arrow::Status {
+auto chunked_buffer_output_stream::Close() -> arrow::Status {
   if (is_open_) {
     is_open_ = false;
     buffer_.shrink_to_fit();
@@ -20,15 +20,15 @@ auto contiguous_buffer_stream::Close() -> arrow::Status {
   return arrow::Status::OK();
 }
 
-auto contiguous_buffer_stream::closed() const -> bool {
+auto chunked_buffer_output_stream::closed() const -> bool {
   return !is_open_;
 }
 
-auto contiguous_buffer_stream::Tell() const -> arrow::Result<int64_t> {
+auto chunked_buffer_output_stream::Tell() const -> arrow::Result<int64_t> {
   return buffer_.size() + offset_;
 }
 
-auto contiguous_buffer_stream::Write(const void* data, int64_t nbytes)
+auto chunked_buffer_output_stream::Write(const void* data, int64_t nbytes)
   -> arrow::Status {
   if (closed()) [[unlikely]] {
     return arrow::Status::IOError("OutputStream is closed");
@@ -42,17 +42,17 @@ auto contiguous_buffer_stream::Write(const void* data, int64_t nbytes)
   return arrow::Status::OK();
 }
 
-auto contiguous_buffer_stream::purge() -> chunk_ptr {
+auto chunked_buffer_output_stream::purge() -> chunk_ptr {
   auto result = chunk::copy(buffer_);
   offset_ += buffer_.size();
   buffer_.clear();
   return result;
 }
 
-auto contiguous_buffer_stream::finish() -> chunk_ptr {
+auto chunked_buffer_output_stream::finish() -> chunk_ptr {
   const auto closed = Close();
   TENZIR_ASSERT(closed.ok());
   return chunk::make(std::move(buffer_));
 }
 
-} // namespace tenzir
+} // namespace tenzir::plugins::parquet
