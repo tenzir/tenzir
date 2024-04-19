@@ -85,6 +85,16 @@ template <class T>
   return result.MoveValueUnsafe();
 }
 
+template <std::derived_from<arrow::ArrayBuilder> T>
+[[nodiscard]] auto finish(T& x) {
+  using Type = std::conditional_t<std::same_as<arrow::StringBuilder, T>,
+                                  arrow::StringType, typename T::TypeClass>;
+  auto result = std::shared_ptr<typename arrow::TypeTraits<Type>::ArrayType>{};
+  ensure(x.Finish(&result));
+  TENZIR_ASSERT(result);
+  return result;
+}
+
 auto data_to_series(const data& x, int64_t length) -> series {
   // TODO: This is overkill.
   auto b = series_builder{};
@@ -136,19 +146,20 @@ struct EvalBinOp<ast::binary_op::add, L, R> {
 template <>
 struct EvalBinOp<ast::binary_op::add, string_type, string_type> {
   static auto eval(const arrow::StringArray& l, const arrow::StringArray& r)
-    -> std::shared_ptr<arrow::Array> {
+    -> std::shared_ptr<arrow::StringArray> {
     auto b = arrow::StringBuilder{};
+    ensure(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
       if (l.IsNull(i) || r.IsNull(i)) {
-        (void)b.AppendNull();
+        b.UnsafeAppendNull();
         continue;
       }
       auto lv = l.GetView(i);
       auto rv = r.GetView(i);
-      (void)b.Append(lv);
-      (void)b.ExtendCurrent(rv);
+      ensure(b.Append(lv));
+      ensure(b.ExtendCurrent(rv));
     }
-    return b.Finish().ValueOrDie();
+    return finish(b);
   }
 };
 
@@ -170,9 +181,9 @@ template <numeric_type T>
 struct EvalBinOp<ast::binary_op::eq, T, T> {
   static auto
   eval(const type_to_arrow_array_t<T>& l, const type_to_arrow_array_t<T>& r)
-    -> std::shared_ptr<arrow::Array> {
+    -> std::shared_ptr<arrow::BooleanArray> {
     auto b = arrow::BooleanBuilder{};
-    (void)b.Reserve(l.length());
+    ensure(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
       auto ln = l.IsNull(i);
       auto rn = r.IsNull(i);
@@ -186,7 +197,7 @@ struct EvalBinOp<ast::binary_op::eq, T, T> {
         b.UnsafeAppend(lv == rv);
       }
     }
-    return b.Finish().ValueOrDie();
+    return finish(b);
   }
 };
 
@@ -194,9 +205,9 @@ template <numeric_type T>
 struct EvalBinOp<ast::binary_op::gt, T, T> {
   static auto
   eval(const type_to_arrow_array_t<T>& l, const type_to_arrow_array_t<T>& r)
-    -> std::shared_ptr<arrow::Array> {
+    -> std::shared_ptr<arrow::BooleanArray> {
     auto b = arrow::BooleanBuilder{};
-    (void)b.Reserve(l.length());
+    ensure(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
       auto ln = l.IsNull(i);
       auto rn = r.IsNull(i);
@@ -208,7 +219,7 @@ struct EvalBinOp<ast::binary_op::gt, T, T> {
         b.UnsafeAppend(lv > rv);
       }
     }
-    return b.Finish().ValueOrDie();
+    return finish(b);
   }
 };
 
@@ -253,10 +264,7 @@ struct EvalBinOp<ast::binary_op::and_, bool_type, bool_type> {
         b.UnsafeAppendNull();
       }
     }
-    auto result = std::shared_ptr<arrow::BooleanArray>{};
-    auto status = b.Finish(&result);
-    TENZIR_ASSERT(status.ok());
-    return result;
+    return finish(b);
   }
 };
 
@@ -264,7 +272,7 @@ template <ast::binary_op Op, concrete_type L>
   requires(Op == ast::binary_op::eq || Op == ast::binary_op::neq)
 struct EvalBinOp<Op, L, null_type> {
   static auto eval(const type_to_arrow_array_t<L>& l, const arrow::NullArray& r)
-    -> std::shared_ptr<arrow::Array> {
+    -> std::shared_ptr<arrow::BooleanArray> {
     constexpr auto invert = Op == ast::binary_op::neq;
     // TODO: This is bad.
     TENZIR_UNUSED(r);
@@ -275,7 +283,7 @@ struct EvalBinOp<Op, L, null_type> {
       auto value = (std::same_as<L, null_type> != invert) ? 0xFF : 0x00;
       std::memset(buffer->mutable_data(), value, buffer->size());
     } else {
-      TENZIR_ASSERT(buffer->size() == null_bitmap->size());
+      TENZIR_ASSERT(buffer->size() <= null_bitmap->size());
       auto buffer_ptr = buffer->mutable_data();
       auto null_ptr = null_bitmap->data();
       auto length = detail::narrow<size_t>(buffer->size());
@@ -293,7 +301,7 @@ template <ast::binary_op Op, concrete_type R>
            && not std::same_as<R, null_type>)
 struct EvalBinOp<Op, null_type, R> {
   static auto eval(const arrow::NullArray& l, const type_to_arrow_array_t<R>& r)
-    -> std::shared_ptr<arrow::Array> {
+    -> std::shared_ptr<arrow::BooleanArray> {
     return EvalBinOp<Op, R, null_type>::eval(r, l);
   }
 };
@@ -302,7 +310,7 @@ template <ast::binary_op Op>
   requires(Op == ast::binary_op::eq || Op == ast::binary_op::neq)
 struct EvalBinOp<Op, string_type, string_type> {
   static auto eval(const arrow::StringArray& l, const arrow::StringArray& r)
-    -> std::shared_ptr<arrow::Array> {
+    -> std::shared_ptr<arrow::BooleanArray> {
     // TODO: This is bad.
     constexpr auto invert = Op == ast::binary_op::neq;
     auto b = arrow::BooleanBuilder{};
@@ -310,15 +318,17 @@ struct EvalBinOp<Op, string_type, string_type> {
     for (auto i = int64_t{0}; i < l.length(); ++i) {
       auto ln = l.IsNull(i);
       auto rn = r.IsNull(i);
+      auto equal = bool{};
       if (ln != rn) {
-        b.UnsafeAppend(false != invert);
+        equal = false;
       } else if (ln && rn) {
-        b.UnsafeAppend(true != invert);
+        equal = true;
       } else {
-        b.UnsafeAppend((l.Value(i) == r.Value(i)) != invert);
+        equal = l.Value(i) == r.Value(i);
       }
+      b.UnsafeAppend(equal != invert);
     }
-    return ensure(b.Finish());
+    return finish(b);
   }
 };
 
@@ -328,7 +338,7 @@ struct EvalUnOp;
 template <>
 struct EvalUnOp<ast::unary_op::not_, bool_type> {
   static auto eval(const arrow::BooleanArray& x)
-    -> std::shared_ptr<arrow::Array> {
+    -> std::shared_ptr<arrow::BooleanArray> {
     // TODO
     auto input = x.values();
     auto output = ensure(arrow::AllocateBuffer(input->size()));
