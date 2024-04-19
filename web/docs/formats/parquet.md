@@ -39,18 +39,17 @@ recommend passing the `--mmap` option to `file` to give the parser full control
 over the reads, which leads to better performance and memory usage.
 :::
 
-:::note Limitation
-Tenzir currently assumes that all Parquet files and Arrow IPC streams use
-metadata recognized by Tenzir. We plan to lift this restriction in the future.
+:::warning Limitation
+Tenzir currently assumes that all Parquet files use metadata recognized by
+Tenzir. We plan to lift this restriction in the future.
 :::
 
 ### `--compression-type` (Printer)
 
 Specifies an optional compression type. Supported options are `zstd` for
-[Zstandard][zstd-docs]http://facebook.github.io/zstd/ compression, `brotli` for
-[brotli][brotli-docs]https://www.brotli.org compression, `gzip` for
-[gzip][gzip-docs]https://www.gzip.org compression, and `snappy` for
-[snappy][snappy-docs]https://google.github.io/snappy/ compression.
+[Zstandard][zstd-docs] compression, `brotli` for [brotli][brotli-docs]
+compression, `gzip` for [gzip][gzip-docs] compression, and `snappy` for
+[snappy][snappy-docs] compression.
 
 [zstd-docs]: http://facebook.github.io/zstd/
 [gzip-docs]: https://www.gzip.org
@@ -58,10 +57,10 @@ Specifies an optional compression type. Supported options are `zstd` for
 [snappy-docs]: https://google.github.io/snappy/
 
 :::info Why would I use this over the `compress` operator?
-The Parquet format offers more efficient compression for LZ4 and Zstd compared
-to the [`compress`](../operators/compress.md) operator. This is because it
-compresses the data column-by-column, leaving metadata that needs to be accessed
-frequently uncompressed.
+The Parquet format offers more efficient compression compared to the
+[`compress`](../operators/compress.md) operator. This is because it compresses
+the data column-by-column, leaving metadata that needs to be accessed frequently
+uncompressed.
 :::
 
 ### `--compression-level` (Printer)
