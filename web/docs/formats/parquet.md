@@ -40,18 +40,22 @@ over the reads, which leads to better performance and memory usage.
 :::
 
 :::note Limitation
-Tenzir currently assumes that all Feather files and Arrow IPC streams use
+Tenzir currently assumes that all Parquet files and Arrow IPC streams use
 metadata recognized by Tenzir. We plan to lift this restriction in the future.
 :::
 
 ### `--compression-type` (Printer)
 
 Specifies an optional compression type. Supported options are `zstd` for
-[Zstandard][zstd-docs]http://facebook.github.io/zstd/ compression and `lz4` for
-[LZ4 Frame][lz4-docs] compression.
+[Zstandard][zstd-docs]http://facebook.github.io/zstd/ compression, `brotli` for
+[brotli][brotli-docs]https://www.brotli.org compression, `gzip` for
+[gzip][gzip-docs]https://www.gzip.org compression, and `snappy` for
+[snappy][snappy-docs]https://google.github.io/snappy/ compression.
 
 [zstd-docs]: http://facebook.github.io/zstd/
-[lz4-docs]: https://android.googlesource.com/platform/external/lz4/+/HEAD/doc/lz4_Frame_format.md
+[gzip-docs]: https://www.gzip.org
+[brotli-docs]: https://www.brotli.org
+[snappy-docs]: https://google.github.io/snappy/
 
 :::info Why would I use this over the `compress` operator?
 The Parquet format offers more efficient compression for LZ4 and Zstd compared
