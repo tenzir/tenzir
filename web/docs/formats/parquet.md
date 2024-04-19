@@ -25,7 +25,6 @@ Printer:
 parquet [—compression-type=<type>] [—compression-level=<level>]
 ```
 
-
 ## Description
 
 The `parquet` format provides both a parser and a printer for Parquet files.
