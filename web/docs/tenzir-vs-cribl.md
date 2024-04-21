@@ -368,3 +368,27 @@ Tenzir has a [`deduplicate`](operators/deduplicate.md) operator.
   [`context`](operators/context.md) `update` operator. In other words, you can
   use all existing [connectors](connectors.md) and [formats](formats.md) to feed
   data into a context.
+
+## Packs vs. Packages
+
+#### Cribl
+
+- [Packs](https://docs.cribl.io/stream/packs/) bundle configurations and
+  workflows for easy deployment.
+- Packs can include routes, pipelines, functions, sample data, and knowledge
+  objects (e.g., lookups, parsers, schemas).
+
+#### Tenzir
+
+- The **library** is a set of **packages**.
+- A library corresponds to a GitHub repository.
+- A package can include pipelines and contexts.
+- The Community Edition has read-only access to the community library.
+- The Professional Edition and Enterprise Edition support managing custom
+  libraries.
+
+:::warning coming soon
+The Tenzir library is still under development and coming soon with one of the
+next releases. We're still including a comparison here to explain terminology
+already.
+:::
