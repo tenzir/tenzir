@@ -15,20 +15,24 @@ setup() {
 
 @test "saver" {
   # TODO: Write convenience function to get current tenzir config
-  # TODO: Why is this test not in the fluent-bit plugin?
   setup_node_with_default_config
+
+  # Our `http` connector is just a client, and not a server. Hence we're relying
+  # on Fluent Bit here because it provides us with a web server that we can test
+  # against.
   has_fluentbit=$(tenzir 'show plugins | where name == "fluent-bit"')
   teardown_node
-
   if [ -z $has_fluentbit ]; then
     skip "built without fluent-bit support"
   fi
 
+  # Setup the HTTP server to test against.
   listen=()
   check ! --bg listen \
     tenzir 'fluent-bit http port=8888 | yield message'
   wait_for_tcp 8888
 
+  # Test the `http` client connector.
   run tenzir 'version | put foo="bar" | to http://127.0.0.1:8888/'
 
   # We need to wait some until the background pipeline writes its data.
