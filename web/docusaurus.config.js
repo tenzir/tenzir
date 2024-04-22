@@ -309,6 +309,11 @@ async function createConfig() {
                   label: 'Privacy Statement',
                   to: '/privacy-statement',
                 },
+                {
+                  label: 'Tenzir vs. Cribl',
+                  // TODO: remove /next/ after the page is part of a release.
+                  href: '/next/tenzir-vs-cribl',
+                },
               ],
             },
           ],

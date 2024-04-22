@@ -207,8 +207,9 @@ Cribl Stream has the following pipeline
 
 - An **event** is a semi-structured record, similar to a JSON object but with
   additional data types.
-- Tenzir's [type system](TODO) is a superset of JSON, providing additional
-  first-class types, such as `ip`,  `subnet`, `time`, or `duration`.
+- Tenzir's [type system](data-model/type-system.md) is a superset of JSON,
+  providing additional first-class types, such as `ip`,  `subnet`, `time`, or
+  `duration`.
 - Events have a **schema** that includes the field names and types
 - Internally, Tenzir represents events as Apache Arrow *record batches*, which
   you can think of as data frames.
