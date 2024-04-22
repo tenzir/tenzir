@@ -180,27 +180,27 @@ events::events() {
   suricata_alert_log = inhale<format::json::reader>(
     artifacts::logs::suricata::alert, slice_size);
   REQUIRE_EQUAL(rows(suricata_alert_log), 1u);
-  REQUIRE_EQUAL(suricata_alert_log[0].columns(), 39u);
+  REQUIRE_EQUAL(suricata_alert_log[0].columns(), 72u);
   suricata_dns_log
     = inhale<format::json::reader>(artifacts::logs::suricata::dns, slice_size);
   REQUIRE_EQUAL(rows(suricata_dns_log), 1u);
-  REQUIRE_EQUAL(suricata_dns_log[0].columns(), 37u);
+  REQUIRE_EQUAL(suricata_dns_log[0].columns(), 47u);
   suricata_fileinfo_log = inhale<format::json::reader>(
     artifacts::logs::suricata::fileinfo, slice_size);
   REQUIRE_EQUAL(rows(suricata_fileinfo_log), 1u);
-  REQUIRE_EQUAL(suricata_fileinfo_log[0].columns(), 35u);
+  REQUIRE_EQUAL(suricata_fileinfo_log[0].columns(), 44u);
   suricata_flow_log
     = inhale<format::json::reader>(artifacts::logs::suricata::flow, slice_size);
   REQUIRE_EQUAL(rows(suricata_flow_log), 1u);
-  REQUIRE_EQUAL(suricata_flow_log[0].columns(), 23u);
+  REQUIRE_EQUAL(suricata_flow_log[0].columns(), 55u);
   suricata_http_log
     = inhale<format::json::reader>(artifacts::logs::suricata::http, slice_size);
   REQUIRE_EQUAL(rows(suricata_http_log), 1u);
-  REQUIRE_EQUAL(suricata_http_log[0].columns(), 24u);
+  REQUIRE_EQUAL(suricata_http_log[0].columns(), 34u);
   suricata_netflow_log = inhale<format::json::reader>(
     artifacts::logs::suricata::netflow, slice_size);
   REQUIRE_EQUAL(rows(suricata_netflow_log), 1u);
-  REQUIRE_EQUAL(suricata_netflow_log[0].columns(), 18u);
+  REQUIRE_EQUAL(suricata_netflow_log[0].columns(), 27u);
   suricata_stats_log = inhale<format::json::reader>(
     artifacts::logs::suricata::stats, slice_size);
   REQUIRE_EQUAL(rows(suricata_stats_log), 1u);
