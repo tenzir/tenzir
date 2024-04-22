@@ -1,0 +1,12 @@
+"POST / HTTP/1.1" 200 -
+
+Host: localhost:51384
+Accept-Encoding: deflate, gzip
+User-Agent: Test
+Accept: */*
+Content-Type: application/json
+Content-Length: 19
+
+{
+  "foo": "bar"
+}

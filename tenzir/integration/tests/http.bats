@@ -1,43 +1,54 @@
 : "${BATS_TEST_TIMEOUT:=10}"
 
-export TENZIR_PLUGINS="fluent-bit"
-
-wait_for_tcp() {
-  port=$1
-  timeout $BATS_TEST_TIMEOUT bash -c "until echo > /dev/tcp/127.0.0.1/$port; do sleep 0.2; done"
-}
-
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
   bats_load_library bats-tenzir
 }
 
-@test "saver" {
-  # TODO: Write convenience function to get current tenzir config
-  setup_node_with_default_config
-
-  # Our `http` connector is just a client, and not a server. Hence we're relying
-  # on Fluent Bit here because it provides us with a web server that we can test
-  # against.
-  has_fluentbit=$(tenzir 'show plugins | where name == "fluent-bit"')
-  teardown_node
-  if [ -z $has_fluentbit ]; then
-    skip "built without fluent-bit support"
+load() {
+  if ! command -v python; then
+    skip "python executable must be in PATH"
   fi
+  check --bg server python "${MISCDIR}/scripts/webserver.py" --port=$1
+  check tenzir "$2"
+  wait_all ${server[@]}
+}
 
-  # Setup the HTTP server to test against.
-  listen=()
-  check ! --bg listen \
-    tenzir 'fluent-bit http port=8888 | yield message'
-  wait_for_tcp 8888
+save() {
+  if ! command -v python; then
+    skip "python executable must be in PATH"
+  fi
+  check --bg server python "${MISCDIR}/scripts/webserver.py" --port=$1
+  tenzir "$2"
+  wait_all ${server[@]}
+}
 
-  # Test the `http` client connector.
-  run tenzir 'version | put foo="bar" | to http://127.0.0.1:8888/'
+@test "load HTTP POST" {
+  load 50380 'load http://localhost:50380 foo=42'
+}
 
-  # We need to wait some until the background pipeline writes its data.
-  sleep 5
-  # TODO: Generalize and move to bats-tenzir.
-  pkill -P $(pgrep -P "${listen[0]}") tenzir
-  wait_all "${listen[@]}"
+@test "load HTTP POST form" {
+  load 50381 'load http://localhost:50381 --form foo=42 bar:="baz"'
+}
+
+@test "save HTTP PUT" {
+  save 51380 'version | put foo="bar" | write json | save http PUT localhost:51380'
+}
+
+@test "save HTTP POST" {
+  save 51381 'version | put foo="bar" | to http://localhost:51381'
+  save 51382 'version | put foo="bar" | write json | save http POST localhost:51382'
+}
+
+@test "save HTTP POST delete header" {
+  save 51383 'version | put foo="bar" | to http://localhost:51383 Content-Type:'
+}
+
+@test "save HTTP POST overwrite header" {
+  save 51384 'version | put foo="bar" | to http://localhost:51384 User-Agent:Test'
+}
+
+@test "save HTTP POST add header" {
+  save 51385 'version | put foo="bar" | to http://localhost:51385 X-Test:foo'
 }
