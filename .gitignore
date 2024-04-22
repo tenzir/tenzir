@@ -34,4 +34,6 @@ venv/
 
 # VScode built artifacts
 /.vscode/
-out/build/Test Preset/.cmake/api/v1/query/client-vscode/
+
+#cmake artifacts
+.cmake/api/v1/query/client-vscode/
