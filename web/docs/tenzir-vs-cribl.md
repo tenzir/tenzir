@@ -12,24 +12,27 @@ we put together this side-by-side comparison of Cribl and Tenzir.
 
 #### Cribl
 
-Cribl has several products:
-
-- **Cribl Stream**: runs pipelines that process data in motion using a
-  [JavaScript-based](https://docs.cribl.io/stream/functions/) pipeline engine.
-- **Cribl Edge**: agent to collect data for forwarding to other Cribl products.
-- **Cribl Search**: cloud-based federated search over remote data sources.
-  Microsoft's [Kusto Query language
-  (KQL)](https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/) is
-  the pipeline language for running queries over data at rest.
-- **Cribl Lake**: a data lake running on top of public cloud providers
+- Cribl has several products:
+  - **Cribl Stream**: runs pipelines that process data in motion using a
+    [JavaScript-based](https://docs.cribl.io/stream/functions/) pipeline engine.
+  - **Cribl Edge**: agent to collect data for forwarding to other Cribl
+    products.
+  - **Cribl Search**: cloud-based federated search over remote data sources.
+    Microsoft's [Kusto Query language
+    (KQL)](https://learn.microsoft.com/en-us/azure/data-explorer/kusto/query/)
+    is the pipeline language for running queries over data at rest.
+  - **Cribl Lake**: a data lake running on top of public cloud providers
+- Cribl's product suite is closed source.
 
 #### Tenzir
 
-Tenzir has a single, unified product. The [Tenzir Query Language
-(TQL)](language.md) is a unified language to process historical and streaming
-data. You deploy on or more *nodes* in their infrastructure that connect to
-the *platform* so that you can manage them through
-[app.tenzir.com](https://app.tenzir.com).
+- Tenzir has a single, unified product. The [Tenzir Query Language
+  (TQL)](language.md) is a unified language to process historical and streaming
+  data. Users deploy *nodes* in that can be managed through the *platform* at
+  [app.tenzir.com](https://app.tenzir.com).
+- Tenzir is an open-core product, with an [open-source
+  project](https://github.com/tenzir/tenzir) and a [commercial
+  platform](https://tenzir.com/pricing) for enterprise needs.
 
 ## Architecture
 
