@@ -36,4 +36,4 @@ venv/
 /.vscode/
 
 #cmake artifacts
-.cmake/api/v1/query/client-vscode/
+.cmake/
