@@ -32,5 +32,8 @@ venv/
 # Python build artifacts
 /python/dist
 
-# vscode build artifacts
-.vscode/launch.json
+# VScode built artifacts
+/.vscode/
+
+#cmake artifacts
+.cmake/

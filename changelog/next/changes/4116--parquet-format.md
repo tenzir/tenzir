@@ -1,0 +1,1 @@
+The `parquet` format more efficiently reads and writes Parquet files. The format is streamable for `write parquet`.

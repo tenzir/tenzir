@@ -32,7 +32,7 @@ feather [—compression-type=<type>] [—compression-level=<level] [—min—spa
 The `feather` format provides both a parser and a printer for Feather files and
 Apache Arrow IPC streams.  
 
-:::note Limitation
+:::warning Limitation
 Tenzir currently assumes that all Feather files and Arrow IPC streams use
 metadata recognized by Tenzir. We plan to lift this restriction in the future.
 :::
@@ -40,17 +40,17 @@ metadata recognized by Tenzir. We plan to lift this restriction in the future.
 ### `--compression-type` (Printer)
 
 Specifies an optional compression type. Supported options are `zstd` for
-[Zstandard][zstd-docs]http://facebook.github.io/zstd/ compression and `lz4` for
-[LZ4 Frame][lz4-docs] compression.
+[Zstandard][zstd-docs] compression and `lz4` for [LZ4 Frame][lz4-docs]
+compression.
 
 [zstd-docs]: http://facebook.github.io/zstd/
 [lz4-docs]: https://android.googlesource.com/platform/external/lz4/+/HEAD/doc/lz4_Frame_format.md
 
 :::info Why would I use this over the `compress` operator?
-The Feather format offers more efficient compression for LZ4 and Zstd compared
-to the [`compress`](../operators/compress.md) operator. This is because it
-compresses the data column-by-column, leaving metadata that needs to be accessed
-frequently uncompressed.
+The Feather format offers more efficient compression compared to the
+[`compress`](../operators/compress.md) operator. This is because it compresses
+the data column-by-column, leaving metadata that needs to be accessed frequently
+uncompressed.
 :::
 
 ### `--compression-level` (Printer)
