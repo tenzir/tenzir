@@ -28,9 +28,4 @@ chunk_ptr release(flatbuffers::FlatBufferBuilder& builder) {
   return chunk::make(builder.Release());
 }
 
-flatbuffers::Verifier make_verifier(std::span<const std::byte> xs) {
-  auto data = reinterpret_cast<const uint8_t*>(xs.data());
-  return flatbuffers::Verifier{data, xs.size()};
-}
-
 } // namespace tenzir::fbs
