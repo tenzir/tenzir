@@ -32,11 +32,6 @@ namespace tenzir::fbs {
 /// @returns The buffer of *builder*.
 chunk_ptr release(flatbuffers::FlatBufferBuilder& builder);
 
-/// Creates a verifier for a byte buffer.
-/// @xs The buffer to create a verifier for.
-/// @param A verifier that is ready to use.
-flatbuffers::Verifier make_verifier(std::span<const std::byte> xs);
-
 // -- generic (un)packing ----------------------------------------------------
 
 /// Adds a byte vector to builder for a type that is convertible to a byte
