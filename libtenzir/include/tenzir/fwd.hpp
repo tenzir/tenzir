@@ -11,6 +11,7 @@
 #include "tenzir/config.hpp" // IWYU pragma: export
 #include "tenzir/tql/fwd.hpp"
 
+#include <arrow/util/config.h>
 #include <caf/config.hpp>
 #include <caf/fwd.hpp>
 #include <caf/type_id.hpp>
@@ -58,6 +59,20 @@ namespace io {
 class RandomAccessFile;
 
 } // namespace io
+
+// For backwards compatibility with versions before Arrow 16, we alias Uri to
+// the namespace it was moved to when it stabilized.
+#if ARROW_VERSION_MAJOR < 16
+
+namespace internal {
+class Uri;
+} // namespace internal
+
+namespace util {
+using ::arrow::internal::Uri;
+} // namespace util
+
+#endif
 
 } // namespace arrow
 

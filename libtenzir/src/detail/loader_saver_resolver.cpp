@@ -59,7 +59,7 @@ auto try_plugin_by_url(located<std::string_view> src)
   // Not using caf::uri for anything else but checking for URL validity
   // This is because it makes the interaction with located<...> very difficult
   // TODO: We don't want to allow just any URIs, only URLs
-  auto uri = arrow::internal::Uri{};
+  auto uri = arrow::util::Uri{};
   if (not uri.Parse(std::string{src.inner}).ok()) {
     return {};
   }

@@ -68,7 +68,7 @@ public:
     -> std::optional<generator<chunk_ptr>> override {
     return
       [](gcs_args args, operator_control_plane& ctrl) -> generator<chunk_ptr> {
-        auto uri = arrow::internal::Uri{};
+        auto uri = arrow::util::Uri{};
         const auto parse_result = uri.Parse(args.uri.inner);
         if (not parse_result.ok()) {
           diagnostic::error("failed to parse URI `{}`: {}", args.uri.inner,
@@ -146,7 +146,7 @@ public:
 
   auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
-    auto uri = arrow::internal::Uri{};
+    auto uri = arrow::util::Uri{};
     const auto parse_result = uri.Parse(args_.uri.inner);
     if (not parse_result.ok()) {
       diagnostic::error("failed to parse URI `{}`: {}", args_.uri.inner,

@@ -25,7 +25,7 @@ namespace tenzir {
 
 auto socket_endpoint::parse(std::string_view url)
   -> caf::expected<socket_endpoint> {
-  auto uri = arrow::internal::Uri{};
+  auto uri = arrow::util::Uri{};
   if (not uri.Parse(std::string{url}).ok()) {
     return ec::parse_error;
   }
