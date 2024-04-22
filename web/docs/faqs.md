@@ -57,8 +57,13 @@ app and node.
 
 ## Does Tenzir run on-premise?
 
-Our current version of the platform runs in the public cloud (AWS in Europe),
-but we are working on an on-premise version of the next generation platform.
+Yes, Tenzir can run on premise and support fully air-gapped environments. The
+[Sovereign Edition](https://tenzir.com/pricing) allows you to deploy the entire
+platform in a dockerized environment, such as Docker Compose.
+
+The [Professional Edition](https://tenzir.com/pricing) and [Enterprise
+Edition](https://tenzir.com/pricing) are backed by a Tenzir-hosted instance of
+the platform in the public cloud (AWS in Europe).
 
 ## Does Tenzir offer cloud-native nodes?
 
@@ -199,9 +204,12 @@ there exists an integration:
    Our [`fluent-bit`](operators/fluent-bit.md) operator makes it possible to use
    the entire ecosystem of Fluent Bit integrations.
 4. Call a command-line tool. It is always possible to integrate a command line
-   tool using the [`shell`](operators/shell.md), by hooking
+   tool using the [`shell`](operators/shell.md) operator, by hooking
    standard input and output of a forked child as a byte stream into a
    pipeline.
+5. Use Python. The [`python`](operators/python.md) operator allows you to
+   perform arbitrary event-to-event transformation using the full power of
+   Python.
 
 Please do not hesitate to reach out to us if you think something is missing, by
 [opening a GitHub
