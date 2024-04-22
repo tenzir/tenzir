@@ -10,6 +10,15 @@
   "dest_port": 6667,
   "proto": "TCP",
   "event_type": "alert",
+  "app_proto": null,
+  "app_proto_orig": null,
+  "app_proto_tc": null,
+  "app_proto_ts": null,
+  "icmp_type": null,
+  "icmp_code": null,
+  "response_icmp_type": null,
+  "response_icmp_code": null,
+  "traffic": null,
   "community_id": null,
   "alert": {
     "app_proto": null,
@@ -33,7 +42,12 @@
     "age": null,
     "state": null,
     "reason": null,
-    "alerted": null
+    "alerted": null,
+    "wrong_thread": null,
+    "bypass": null,
+    "bypassed": null,
+    "tcp": null,
+    "emergency": null
   },
   "payload": "UFJJVk1TRyAjemFyYXNhNDggOiBzbXNzLmV4ZSAoMzY4KQ0K",
   "payload_printable": "PRIVMSG #zarasa48 : smss.exe (368)\r\n",
@@ -55,6 +69,15 @@
   "dest_port": 53,
   "proto": "UDP",
   "event_type": "dns",
+  "app_proto": null,
+  "app_proto_orig": null,
+  "app_proto_tc": null,
+  "app_proto_ts": null,
+  "icmp_type": null,
+  "icmp_code": null,
+  "response_icmp_type": null,
+  "response_icmp_code": null,
+  "traffic": null,
   "community_id": null,
   "dns": {
     "version": null,
@@ -87,6 +110,15 @@
   "dest_port": 1046,
   "proto": "TCP",
   "event_type": "fileinfo",
+  "app_proto": "http",
+  "app_proto_orig": null,
+  "app_proto_tc": null,
+  "app_proto_ts": null,
+  "icmp_type": null,
+  "icmp_code": null,
+  "response_icmp_type": null,
+  "response_icmp_code": null,
+  "traffic": null,
   "community_id": null,
   "fileinfo": {
     "filename": "/",
@@ -113,8 +145,7 @@
     "status": 301,
     "redirect": "http://nmap.org/",
     "length": 301
-  },
-  "app_proto": "http"
+  }
 }
 {
   "timestamp": "2011-08-14T05:38:53.914038",
@@ -128,6 +159,15 @@
   "dest_port": 138,
   "proto": "UDP",
   "event_type": "flow",
+  "app_proto": "failed",
+  "app_proto_orig": null,
+  "app_proto_tc": null,
+  "app_proto_ts": null,
+  "icmp_type": null,
+  "icmp_code": null,
+  "response_icmp_type": null,
+  "response_icmp_code": null,
+  "traffic": null,
   "community_id": null,
   "flow": {
     "pkts_toserver": 2,
@@ -139,9 +179,13 @@
     "age": 0,
     "state": "new",
     "reason": "timeout",
-    "alerted": false
-  },
-  "app_proto": "failed"
+    "alerted": false,
+    "wrong_thread": null,
+    "bypass": null,
+    "bypassed": null,
+    "tcp": null,
+    "emergency": null
+  }
 }
 {
   "timestamp": "2011-08-12T13:00:36.378914",
@@ -155,6 +199,15 @@
   "dest_port": 80,
   "proto": "TCP",
   "event_type": "http",
+  "app_proto": null,
+  "app_proto_orig": null,
+  "app_proto_tc": null,
+  "app_proto_ts": null,
+  "icmp_type": null,
+  "icmp_code": null,
+  "response_icmp_type": null,
+  "response_icmp_code": null,
+  "traffic": null,
   "community_id": null,
   "http": {
     "hostname": "cr-tools.clients.google.com",
@@ -183,6 +236,15 @@
   "dest_port": 138,
   "proto": "UDP",
   "event_type": "netflow",
+  "app_proto": "failed",
+  "app_proto_orig": null,
+  "app_proto_tc": null,
+  "app_proto_ts": null,
+  "icmp_type": null,
+  "icmp_code": null,
+  "response_icmp_type": null,
+  "response_icmp_code": null,
+  "traffic": null,
   "community_id": null,
   "netflow": {
     "pkts": 2,
@@ -190,8 +252,7 @@
     "start": "2011-08-12T12:53:47.928539",
     "end": "2011-08-12T12:53:47.928552",
     "age": 0
-  },
-  "app_proto": "failed"
+  }
 }
 {
   "timestamp": "2019-05-02T13:56:53.843674",
@@ -2410,6 +2471,15 @@
   "dest_port": 443,
   "proto": "UDP",
   "event_type": "quic",
+  "app_proto": null,
+  "app_proto_orig": null,
+  "app_proto_tc": null,
+  "app_proto_ts": null,
+  "icmp_type": null,
+  "icmp_code": null,
+  "response_icmp_type": null,
+  "response_icmp_code": null,
+  "traffic": null,
   "community_id": null,
   "quic": {
     "version": "Q039",

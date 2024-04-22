@@ -80,6 +80,7 @@
   "dest_port": 1046,
   "proto": "TCP",
   "event_type": "fileinfo",
+  "app_proto": "http",
   "fileinfo": {
     "filename": "/",
     "magic": "HTML document, ASCII text",
@@ -103,8 +104,7 @@
     "status": 301,
     "redirect": "http://nmap.org/",
     "length": 301
-  },
-  "app_proto": "http"
+  }
 }
 {
   "timestamp": "2011-08-14T05:38:55.549713",
@@ -115,14 +115,14 @@
   "dest_port": 138,
   "proto": "UDP",
   "event_type": "netflow",
+  "app_proto": "failed",
   "netflow": {
     "pkts": 2,
     "bytes": 486,
     "start": "2011-08-12T12:53:47.928539",
     "end": "2011-08-12T12:53:47.928552",
     "age": 0
-  },
-  "app_proto": "failed"
+  }
 }
 {
   "timestamp": "2018-03-02T15:20:26.274662",
