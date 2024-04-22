@@ -140,9 +140,16 @@ public:
     if (not result) {
       return std::move(result.error());
     }
+    // FlatBuffers defaults to erroring out after 1M table entries in the
+    // verifier. This was chosen rather randomly and for historic reasons, they
+    // cannot change it. We use the much saner default of not erroring out for
+    // large tables here.
+    auto options = flatbuffers::Verifier::Options{};
+    options.max_tables = std::numeric_limits<flatbuffers::uoffset_t>::max();
     const auto* const data
       = reinterpret_cast<const uint8_t*>(result->chunk()->data());
-    auto verifier = flatbuffers::Verifier{data, result->chunk()->size()};
+    auto verifier
+      = flatbuffers::Verifier{data, result->chunk()->size(), options};
     if (not result->root()->Verify(verifier)) {
       return caf::make_error(ec::format_error,
                              fmt::format("failed to read {} because its "
