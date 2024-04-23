@@ -704,6 +704,8 @@ public:
 
   /// Information about a context update that gets propagated to live lookups.
   struct update_result {
+    // TODO The update info is no longer needed since context update became a
+    // sink operator.
     record update_info;
     // Function for emitting an updated expression. Used for retroactive lookups.
     make_query_type make_query = {};
@@ -743,7 +745,7 @@ public:
     = 0;
 
   /// Clears the context state, with optional parameters.
-  virtual auto reset(parameter_map parameters) -> caf::expected<record> = 0;
+  virtual auto reset() -> caf::expected<void> = 0;
 
   /// Create a snapshot of the initial expression.
   virtual auto snapshot(parameter_map parameters,

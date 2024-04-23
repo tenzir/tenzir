@@ -393,9 +393,9 @@ public:
       };
   }
 
-  auto reset(context::parameter_map) -> caf::expected<record> override {
+  auto reset() -> caf::expected<void> override {
     context_entries.clear();
-    return show();
+    return {};
   }
 
   auto save() const -> caf::expected<save_result> override {
