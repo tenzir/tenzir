@@ -116,11 +116,14 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
           .to_error();
     return caf::make_message(std::move(err));
   }
-  auto listen_addr = std::string{host} + ':' + std::to_string(*bound_port);
-  TENZIR_INFO("node is listening on {}", listen_addr);
+  auto listen_endpoint = fmt::format("{}:{}", host, *bound_port);
+  TENZIR_INFO("node is listening on {}", listen_endpoint);
   // Notify the service manager if it expects an update.
   if (auto error = systemd::notify_ready()) {
-    return caf::make_message(std::move(error));
+    auto err = diagnostic::error("failed to signal readiness to systemd")
+                 .note("{}", error)
+                 .to_error();
+    return caf::make_message(std::move(err));
   }
   // Run main loop.
   caf::error err;
@@ -128,7 +131,7 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
   self->monitor(node);
   // A single line of output to publish out address for scripts.
   if (caf::get_or(inv.options, "tenzir.start.print-endpoint", false)) {
-    fmt::print("{}\n", listen_addr);
+    fmt::print("{}\n", listen_endpoint);
   }
   auto commands = caf::get_or(inv.options, "tenzir.start.commands",
                               std::vector<std::string>{});
@@ -163,7 +166,7 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
                              policy::merge_lists::yes);
       // In case the listen port option was set to 0 we need to set the
       // port that was allocated by the operating system here.
-      caf::put(hook_invocation->options, "tenzir.endpoint", listen_addr);
+      caf::put(hook_invocation->options, "tenzir.endpoint", listen_endpoint);
       auto runner = self->spawn<caf::detached>(command_runner);
       command_runners.push_back(runner);
       self->send(runner, atom::run_v, *hook_invocation);
