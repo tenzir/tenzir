@@ -8,15 +8,6 @@ setup() {
   bats_load_library bats-tenzir
 }
 
-teardown() {
-  # Once one command in a test errors all other commands are skipped,
-  # and bats doesn't support test-specific teardown functions.
-  # So we need to do the teardown centrally.
-  if [ ! -z ${BATS_PYTHON_SERVER_PID} ]; then
-    kill -9 "$BATS_PYTHON_SERVER_PID"
-  fi
-}
-
 # bats test_tags=python
 @test "simple field access" {
   check tenzir -f /dev/stdin <<END
@@ -99,36 +90,16 @@ END
 
 # bats test_tags=python
 @test "python operator requirements statement" {
-  # Setup fake HTTP server that accepts any input.
-  conn="${BATS_TEST_TMPDIR}/conn"
-  data="${BATS_TEST_TMPDIR}/data"
-  mkdir -p conn data
-  coproc SRV { exec socat -d -d -lf "${conn}" -r /dev/stdout TCP-LISTEN:0,crlf,reuseaddr,fork SYSTEM:"echo HTTP/1.0 200; echo Content-Type\: text/plain;" >>"${data}"; }
-  export BATS_PYTHON_SERVER_PID=$SRV_PID
-  # While `sync` would be more elegant than a sleep loop, empirically it suffers from a
-  # race condition on debian-based systems.
-  while [ ! -s ${conn} ]; do
-    sleep 0.1
-  done
-  # socat writes a line like this into ${conn}:
-  # 2023/10/31 18:20:34 socat[469933] N listening on AF=2 0.0.0.0:42437
-  read -r HTTP_INFO <"${conn}"
-  port="${HTTP_INFO##*:}"
-
-  # Test
   check tenzir -f /dev/stdin <<END
     version
     | put a=1, b=2
-    | python --requirements 'requests' '
-        import requests
-        payload = {"a": self.a, "b": self.b}
-        # Override Accept-Encoding for this test since this varies between the
-        # versions of requests used in various CI environments.
-        requests.post("http://127.0.0.1:$port", headers={"Accept-Encoding": "gzip, deflate, br"}, data=payload)'
-    | discard
+    | python --requirements 'datetime' '
+        from datetime import datetime, timedelta
+        today = datetime.strptime("2024-04-23", "%Y-%m-%d")
+        week_later = today + timedelta(weeks=1)
+        self.a = today
+        self.b = week_later'
 END
-  check grep -v '\(Host:\|User-Agent:\)' "${data}"
-  truncate -s 0 "${data}"
 }
 
 # bats test_tags=python

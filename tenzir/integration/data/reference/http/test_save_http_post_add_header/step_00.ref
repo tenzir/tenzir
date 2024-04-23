@@ -1,0 +1,13 @@
+"POST / HTTP/1.1" 200 -
+
+Host: localhost:51385
+Accept-Encoding: deflate, gzip
+User-Agent: Tenzir/*.*.*
+X-Test: foo
+Accept: */*
+Content-Type: application/json
+Content-Length: 19
+
+{
+  "foo": "bar"
+}

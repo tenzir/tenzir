@@ -20,7 +20,7 @@ stdenvNoCC.mkDerivation {
   checkPhase =
     let
       py3 = pkgsBuildBuild.python3.withPackages (ps: [
-        ps.requests
+        ps.datetime
       ]);
       template = path: ''
         if [ -d "${path}/integration/tests" ]; then
