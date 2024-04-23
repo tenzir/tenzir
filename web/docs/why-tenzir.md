@@ -5,8 +5,8 @@ compares to other systems out there.
 
 ## What is Tenzir?
 
-Tenzir is a distributed platform for processing and storing security event data
-in a pipeline dataflow model, providing the following abstractions:
+Tenzir is a security data pipeline solution for security teams, providing the
+following abstractions:
 
 - Tenzir's **pipelines** consist of powerful operators that perform computations
   over [Arrow](https://arrow.apache.org) data frames. The [Tenzir Query Language
@@ -73,6 +73,12 @@ using open standards, such as Apache Arrow for data in motion and Apache Parquet
 for data at rest, preventing vendor lock-in and promote full control of your
 event data and security content.
 
+### Tenzir vs. Cribl
+
+[Cribl](https://cribl.io) is a data engine for IT and security. Due to popular
+demand, we created a dedicated page where we compare [Tenzir vs.
+Cribl](tenzir-vs-cribl.md).
+
 ### Tenzir vs. SIEMs
 
 Traditional SIEMs support basic search and a fixed set of analytical operations.
@@ -116,13 +122,18 @@ run it everywhere: containerized in the public cloud, in the data center in the
 private cloud, on bare-metal appliances deep in the network, or at the edge.
 :::
 
-### Tenzir vs. Data Warehouses
+### Tenzir vs. Databases
+
+Tenzir comes with a builtin storage engine at every node. You may wonder: should
+I use an existing database instead?
+
+#### Tenzir vs. Data Warehouses
 
 Data warehouses and
 [OLAP](https://en.wikipedia.org/wiki/Online_analytical_processing) engines
 seem like an appealing choice for immutable structured data. They offer
-sufficient ingest bandwidth, perform well on group-by and aggregation queries,
-come frequently with advanced operations like joins, and often scale out well.
+sufficient ingest bandwidth, perform well on aggregations, come frequently with
+advanced operations like joins, and often scale out well.
 
 However, as a cornerstone for security operations, they fall short in supporting
 the following relevant use cases where Tenzir has the edge:
@@ -147,7 +158,7 @@ inference, Tenzir significantly reduces the cost of data onboarding for data
 warehouses.
 :::
 
-### Tenzir vs. Relational DBs
+#### Tenzir vs. Relational DBs
 
 Unlike [OLAP](#tenzir-vs-data-warehouses) workloads,
 [OLTP](https://en.wikipedia.org/wiki/Online_transaction_processing) workloads
@@ -165,7 +176,7 @@ be a better fit. Tenzir's columnar data representation is ill-suited for
 row-level modifications, but shines for analytical workloads.
 :::
 
-### Tenzir vs. Document DBs
+#### Tenzir vs. Document DBs
 
 Document DBs, such as MongoDB, offer worry-free ingestion of unstructured
 data. They scale well horizontally and flexible querying.
@@ -206,7 +217,7 @@ with Apache Arrow and simultaneously performing schema inference, you get the
 best of both worlds.
 :::
 
-### Tenzir vs. Timeseries DBs
+#### Tenzir vs. Timeseries DBs
 
 Timeseries databases share a lot in common with [OLAP
 engines](#tenzir-vs-data-warehouses), but focus their data organization around
@@ -222,7 +233,7 @@ detections, or include needle-in-haystack searches, Tenzir might be a better
 fit.
 :::
 
-### Tenzir vs. Key-Value DBs
+#### Tenzir vs. Key-Value DBs
 
 A key-value store performs a key-based point or range lookups to retrieve one or
 more values. Security telemetry is high-dimensional data and there are many more
@@ -236,7 +247,7 @@ facilitate certain capabilities, e.g., when processing watch lists. (Tenzir
 offers a *matcher* plugin for this purpose.)
 :::
 
-### Tenzir vs. Graph DBs
+#### Tenzir vs. Graph DBs
 
 Graph databases are purpose-built for answering complex queries over networks of
 nodes and their relationships, such as finding shortest paths, measuring node
@@ -251,7 +262,7 @@ analytics by storing the raw telemetry and feeding it (via Arrow) into graph
 engines that support ad-hoc data frame analysis.
 :::
 
-### Tenzir vs. Vector DBs
+#### Tenzir vs. Vector DBs
 
 Vector databases operate on embeddings, which are high-dimensional floating
 point vectors. For generative AI applications, decision support systems, or
