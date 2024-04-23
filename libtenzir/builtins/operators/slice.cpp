@@ -39,16 +39,15 @@ public:
     co_yield {};
     auto offset = int64_t{0};
     for (auto&& slice : input) {
-      if (slice.rows() == 0) {
+      const auto rows = static_cast<int64_t>(slice.rows());
+      if (rows == 0) {
         co_yield {};
         continue;
       }
-      const auto clamped_begin = std::max(int64_t{0}, begin - offset);
-      const auto clamped_end
-        = std::min(static_cast<int64_t>(slice.rows()), end - offset);
-      auto result = subslice(slice, clamped_begin, clamped_end);
-      offset += slice.rows();
-      co_yield std::move(result);
+      const auto clamped_begin = std::clamp(begin - offset, int64_t{0}, rows);
+      const auto clamped_end = std::clamp(end - offset, int64_t{0}, rows);
+      offset += rows;
+      co_yield subslice(slice, clamped_begin, clamped_end);
       if (offset >= end) {
         break;
       }
@@ -64,16 +63,17 @@ public:
     auto offset = int64_t{0};
     auto buffer = std::vector<table_slice>{};
     for (auto&& slice : input) {
-      if (slice.rows() == 0) {
+      const auto rows = static_cast<int64_t>(slice.rows());
+      if (rows == 0) {
         co_yield {};
         continue;
       }
-      const auto clamped_begin = std::max(int64_t{0}, begin - offset);
+      const auto clamped_begin = std::clamp(begin - offset, int64_t{0}, rows);
       auto result = subslice(slice, clamped_begin, slice.rows());
       if (result.rows() > 0) {
         buffer.push_back(std::move(result));
       }
-      offset += slice.rows();
+      offset += rows;
     }
     end = offset + end - begin;
     if (end < 0) {
@@ -81,14 +81,14 @@ public:
     }
     offset = 0;
     for (auto&& slice : buffer) {
-      const auto clamped_end
-        = std::min(static_cast<int64_t>(slice.rows()), end - offset);
-      auto result = subslice(slice, 0, clamped_end);
+      const auto rows = static_cast<int64_t>(slice.rows());
+      const auto clamped_end = std::clamp(end - offset, int64_t{0}, rows);
+      auto result = subslice(slice, int64_t{0}, clamped_end);
       if (result.rows() == 0) {
         break;
       }
       co_yield std::move(result);
-      offset += slice.rows();
+      offset += rows;
     }
   }
 
@@ -101,14 +101,14 @@ public:
     auto offset = int64_t{0};
     auto buffer = std::vector<table_slice>{};
     for (auto&& slice : input) {
-      if (slice.rows() == 0) {
+      const auto rows = static_cast<int64_t>(slice.rows());
+      if (rows == 0) {
         co_yield {};
         continue;
       }
-      const auto clamped_end
-        = std::min(static_cast<int64_t>(slice.rows()), end - offset);
-      offset += slice.rows();
-      auto result = subslice(slice, 0, clamped_end);
+      const auto clamped_end = std::clamp(end - offset, int64_t{0}, rows);
+      offset += rows;
+      auto result = subslice(slice, int64_t{0}, clamped_end);
       buffer.push_back(std::move(result));
       if (result.rows() == 0) {
         break;
@@ -120,12 +120,13 @@ public:
     }
     offset = 0;
     for (auto&& slice : buffer) {
-      const auto clamped_begin = std::max(int64_t{0}, begin - offset);
-      offset += slice.rows();
+      const auto rows = static_cast<int64_t>(slice.rows());
+      const auto clamped_begin = std::clamp(begin - offset, int64_t{0}, rows);
+      offset += rows;
       if (clamped_begin >= static_cast<int64_t>(slice.rows())) {
         continue;
       }
-      auto result = subslice(slice, clamped_begin, slice.rows());
+      auto result = subslice(slice, clamped_begin, rows);
       if (result.rows() > 0) {
         co_yield std::move(result);
       }
@@ -144,22 +145,23 @@ public:
     auto offset = int64_t{0};
     auto buffer = std::vector<table_slice>{};
     for (auto&& slice : input) {
-      if (slice.rows() == 0) {
+      const auto rows = static_cast<int64_t>(slice.rows());
+      if (rows == 0) {
         co_yield {};
         continue;
       }
-      offset += slice.rows();
+      offset += rows;
       buffer.push_back(std::move(slice));
     }
     begin = offset + begin;
     end = offset + end;
     offset = 0;
     for (auto&& slice : buffer) {
-      const auto clamped_begin = std::max(int64_t{0}, begin - offset);
-      const auto clamped_end
-        = std::min(static_cast<int64_t>(slice.rows()), end - offset);
-      offset += slice.rows();
-      if (clamped_begin >= static_cast<int64_t>(slice.rows())) {
+      const auto rows = static_cast<int64_t>(slice.rows());
+      const auto clamped_begin = std::clamp(begin - offset, int64_t{0}, rows);
+      const auto clamped_end = std::clamp(end - offset, int64_t{0}, rows);
+      offset += rows;
+      if (clamped_begin >= rows) {
         continue;
       }
       auto result = subslice(slice, clamped_begin, clamped_end);
