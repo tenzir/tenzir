@@ -16,7 +16,7 @@ jobs:
     name: Build (${{ matrix.build.tag }})
     runs-on: ${{ matrix.build.runner }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         build:
           - runner: ubuntu-20.04
