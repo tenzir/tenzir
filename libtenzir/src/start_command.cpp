@@ -100,8 +100,16 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
     return mm.publish(node, node_endpoint.port->number(), host, reuse_address);
   };
   auto bound_port = publish();
-  if (!bound_port)
-    return caf::make_message(std::move(bound_port.error()));
+  if (!bound_port) {
+    auto err
+      = diagnostic::error("failed to bind to port {}",
+                          node_endpoint.port->number())
+          .note("{}", bound_port.error())
+          .hint("check for other running tenzir-node processes at port {}",
+                node_endpoint.port->number())
+          .to_error();
+    return caf::make_message(std::move(err));
+  }
   auto listen_addr = std::string{host} + ':' + std::to_string(*bound_port);
   TENZIR_INFO("node is listening on {}", listen_addr);
   // Notify the service manager if it expects an update.
