@@ -121,7 +121,7 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
   self->monitor(node);
   // A single line of output to publish out address for scripts.
   if (caf::get_or(inv.options, "tenzir.start.print-endpoint", false))
-    std::cout << listen_addr << std::endl;
+    fmt::print("{}\n", listen_addr);
   auto commands = caf::get_or(inv.options, "tenzir.start.commands",
                               std::vector<std::string>{});
   if (commands.empty()) {
