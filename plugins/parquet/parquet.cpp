@@ -9,6 +9,7 @@
 #include "parquet/chunked_buffer_output_stream.hpp"
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/drain_bytes.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/plugin.hpp>
 
@@ -22,45 +23,6 @@ namespace tenzir::plugins::parquet {
 
 namespace {
 
-auto drain_bytes(generator<chunk_ptr> input) -> generator<chunk_ptr> {
-  auto result = chunk_ptr{};
-  auto it = input.begin();
-  while (it != input.end()) {
-    auto chunk = std::move(*it);
-    ++it;
-    if (not chunk) {
-      co_yield {};
-      continue;
-    }
-    result = std::move(chunk);
-    break;
-  }
-  if (not result) {
-    co_return;
-  }
-  auto byte_buffer = std::vector<std::byte>{};
-  while (it != input.end()) {
-    auto chunk = std::move(*it);
-    ++it;
-    if (not chunk) {
-      co_yield {};
-      continue;
-    }
-    if (result) [[unlikely]] {
-      byte_buffer.reserve(result->size());
-      byte_buffer.insert(byte_buffer.end(), result->begin(), result->end());
-      result = {};
-    }
-    byte_buffer.reserve(byte_buffer.size() + chunk->size());
-    byte_buffer.insert(byte_buffer.end(), chunk->begin(), chunk->end());
-  }
-  if (not result) {
-    result = chunk::make(std::move(byte_buffer));
-  } else {
-    TENZIR_ASSERT(byte_buffer.empty());
-  }
-  co_yield std::move(result);
-}
 auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
   -> generator<table_slice> {
   auto parquet_chunk = chunk_ptr{};

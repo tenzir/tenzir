@@ -166,11 +166,11 @@ public:
     return {};
   }
 
-  auto reset(context::parameter_map) -> caf::expected<record> override {
+  auto reset() -> caf::expected<void> override {
     auto params = bloom_filter_.parameters();
     TENZIR_ASSERT(params.n && params.p);
     bloom_filter_ = dcso_bloom_filter{*params.n, *params.p};
-    return show();
+    return {};
   }
 
   auto save() const -> caf::expected<save_result> override {
