@@ -265,13 +265,13 @@ public:
       }
       codepipe.close();
       ::close(errpipe.pipe().native_sink());
-      TENZIR_WARN("Done with set up");
       co_yield {}; // signal successful startup
-      TENZIR_WARN("Hi");
       for (auto&& slice : input) {
         if (!child.running()) {
           auto python_error = drain_pipe(errpipe);
-          diagnostic::error("{}", python_error).emit(ctrl.diagnostics());
+          diagnostic::error("{}", python_error)
+            .note("python process exited with exit-code 1")
+            .emit(ctrl.diagnostics());
           co_return;
         }
         if (slice.rows() == 0) {
