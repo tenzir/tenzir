@@ -36,29 +36,39 @@ plugins, such as a plugin that connects the nodes to our platform.
 
 In theory *yes*, in practice *no*. Let us explain.
 
-A Tenzir deployment consists of *nodes* that you manage, and a *platform* that
-we manage. The *app* runs in your browser. All computation and storage takes
-place only at your nodes. The platform acts as rendezvous point that connects
-two TLS-encrypted channels, one from the node to the platform, and one from the
-browser to the platform:
+A Tenzir deployment consists of *nodes* that you manage, and a *platform*. The
+*app* runs in your browser to access the platform. All computation and storage
+takes place only at your nodes. The platform acts as rendezvous point that
+connects two TLS-encrypted channels, one from the node to the platform, and one
+from the browser to the platform:
 
 ![Platform Connections](platform-connections.excalidraw.svg)
 
-To date, we connect these two channels at the platform. This means we *could*
-interpose on data that travels from the node to the app, for example, when
-interacting with the Explorer. However, data privacy is of utmost importance to
-our users. We are mission-driven company with strong ethics. Our engineering
-follows state-of-the-art infrastructure-as-code practices and we are performing
-security audits to ensure that our code quality meets the highest standards.
+We connect these two channels at the platform. Therefore, whoever operates the
+platform *could* interpose on data that travels from the nodes to the app. In
+the [Professional Edition](https://tenzir.com/pricing) and [Enterprise
+Edition](https://tenzir.com/pricing), we run the platform. However, we emphasize
+that data privacy is of utmost importance to us and our customers. As a
+mission-driven company with strong ethics, our engineering follows
+state-of-the-art infrastructure-as-code practices and we are performing security
+audits to ensure that our code quality meets the highest standards.
 
 We have plans to make this a single, end-to-end encrypted channel, so that we
 no longer have the theoretical ability to interpose on the data transfer between
 app and node.
 
+If you have more stringent requirements, you can also run the platform yourself
+with the [Sovereign Edition](https://tenzir.com/pricing).
+
 ## Does Tenzir run on-premise?
 
-Our current version of the platform runs in the public cloud (AWS in Europe),
-but we are working on an on-premise version of the next generation platform.
+Yes, Tenzir can run on premise and support fully air-gapped environments. The
+[Sovereign Edition](https://tenzir.com/pricing) allows you to deploy the entire
+platform in a dockerized environment, such as Docker Compose.
+
+The [Professional Edition](https://tenzir.com/pricing) and [Enterprise
+Edition](https://tenzir.com/pricing) are backed by a Tenzir-hosted instance of
+the platform in the public cloud (AWS in Europe).
 
 ## Does Tenzir offer cloud-native nodes?
 
@@ -199,9 +209,12 @@ there exists an integration:
    Our [`fluent-bit`](operators/fluent-bit.md) operator makes it possible to use
    the entire ecosystem of Fluent Bit integrations.
 4. Call a command-line tool. It is always possible to integrate a command line
-   tool using the [`shell`](operators/shell.md), by hooking
+   tool using the [`shell`](operators/shell.md) operator, by hooking
    standard input and output of a forked child as a byte stream into a
    pipeline.
+5. Use Python. The [`python`](operators/python.md) operator allows you to
+   perform arbitrary event-to-event transformation using the full power of
+   Python.
 
 Please do not hesitate to reach out to us if you think something is missing, by
 [opening a GitHub

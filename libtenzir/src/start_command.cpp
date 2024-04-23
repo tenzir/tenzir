@@ -42,15 +42,16 @@ using command_runner_actor = typed_actor_fwd<
   // Handle a request.
   auto(atom::run, invocation)->caf::result<void>>::unwrap;
 
-command_runner_actor::behavior_type
-command_runner(command_runner_actor::pointer self) {
+auto command_runner(command_runner_actor::pointer self)
+  -> command_runner_actor::behavior_type {
   return {
     [self](atom::run, tenzir::invocation& invocation) -> caf::result<void> {
       auto [root, root_factory] = make_application("tenzir-ctl");
       auto result = run(invocation, self->home_system(), root_factory);
-      if (!result)
+      if (!result) {
         TENZIR_ERROR("failed to run start command {}: {}", invocation,
                      result.error());
+      }
       return {};
     },
   };
@@ -60,32 +61,37 @@ command_runner(command_runner_actor::pointer self) {
 
 using namespace std::chrono_literals;
 
-caf::message start_command(const invocation& inv, caf::actor_system& sys) {
+auto start_command(const invocation& inv, caf::actor_system& sys)
+  -> caf::message {
   TENZIR_TRACE_SCOPE("{} {}", TENZIR_ARG(inv.options),
                      TENZIR_ARG("args", inv.arguments.begin(),
                                 inv.arguments.end()));
   // Bail out early for bogus invocations.
-  if (caf::get_or(inv.options, "tenzir.node", false))
+  if (caf::get_or(inv.options, "tenzir.node", false)) {
     return caf::make_message(
       caf::make_error(ec::invalid_configuration,
                       "unable to run 'tenzir start' when spawning a "
                       "node locally instead of connecting to one; please "
                       "unset the option tenzir.node"));
+  }
   // Construct an endpoint.
   endpoint node_endpoint;
   auto str = get_or(inv.options, "tenzir.endpoint", defaults::endpoint.data());
-  if (!parsers::endpoint(str, node_endpoint))
+  if (!parsers::endpoint(str, node_endpoint)) {
     return caf::make_message(
       caf::make_error(ec::parse_error, "invalid endpoint", str));
+  }
   // Default to port 5158/tcp if none is set.
-  if (!node_endpoint.port)
+  if (!node_endpoint.port) {
     node_endpoint.port = port{defaults::endpoint_port, port_type::tcp};
+  }
   // Get a convenient and blocking way to interact with actors.
   caf::scoped_actor self{sys};
   // Spawn our node.
   auto node_opt = spawn_node(self, content(sys.config()));
-  if (!node_opt)
+  if (!node_opt) {
     return caf::make_message(std::move(node_opt.error()));
+  }
   auto const& node = node_opt->get();
   // Publish our node.
   auto const* host = node_endpoint.host.empty() ? defaults::endpoint_host.data()
@@ -100,26 +106,41 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
     return mm.publish(node, node_endpoint.port->number(), host, reuse_address);
   };
   auto bound_port = publish();
-  if (!bound_port)
-    return caf::make_message(std::move(bound_port.error()));
-  auto listen_addr = std::string{host} + ':' + std::to_string(*bound_port);
-  TENZIR_INFO("node is listening on {}", listen_addr);
+  if (!bound_port) {
+    auto err
+      = diagnostic::error("failed to bind to port {}",
+                          node_endpoint.port->number())
+          .note("{}", bound_port.error())
+          .hint("check for other running tenzir-node processes at port {}",
+                node_endpoint.port->number())
+          .to_error();
+    return caf::make_message(std::move(err));
+  }
+  auto listen_endpoint = fmt::format("{}:{}", host, *bound_port);
+  TENZIR_INFO("node is listening on {}", listen_endpoint);
   // Notify the service manager if it expects an update.
-  if (auto error = systemd::notify_ready())
-    return caf::make_message(std::move(error));
+  if (auto error = systemd::notify_ready()) {
+    auto err = diagnostic::error("failed to signal readiness to systemd")
+                 .note("{}", error)
+                 .to_error();
+    return caf::make_message(std::move(err));
+  }
   // Run main loop.
   caf::error err;
   auto stop = false;
   self->monitor(node);
   // A single line of output to publish out address for scripts.
-  if (caf::get_or(inv.options, "tenzir.start.print-endpoint", false))
-    std::cout << listen_addr << std::endl;
+  if (caf::get_or(inv.options, "tenzir.start.print-endpoint", false)) {
+    // We're not using fmt::print here because it doesn't flush the stream.
+    std::cout << listen_endpoint << std::endl;
+  }
   auto commands = caf::get_or(inv.options, "tenzir.start.commands",
                               std::vector<std::string>{});
   if (commands.empty()) {
     if (auto const* command
-        = caf::get_if<std::string>(&inv.options, "tenzir.start.commands"))
+        = caf::get_if<std::string>(&inv.options, "tenzir.start.commands")) {
       commands.push_back(*command);
+    }
   }
   std::vector<command_runner_actor> command_runners;
   if (!commands.empty()) {
@@ -134,17 +155,19 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
       auto tokenizer = std::stringstream{command};
       auto cli = std::vector<std::string>{};
       auto current = std::string{};
-      while (tokenizer >> std::quoted(current))
+      while (tokenizer >> std::quoted(current)) {
         cli.push_back(std::move(current));
+      }
       TENZIR_INFO("running post-start command {}", command);
       auto hook_invocation = parse(*root, cli.begin(), cli.end());
-      if (!hook_invocation)
+      if (!hook_invocation) {
         return caf::make_message(hook_invocation.error());
+      }
       detail::merge_settings(inv.options, hook_invocation->options,
                              policy::merge_lists::yes);
       // In case the listen port option was set to 0 we need to set the
       // port that was allocated by the operating system here.
-      caf::put(hook_invocation->options, "tenzir.endpoint", listen_addr);
+      caf::put(hook_invocation->options, "tenzir.endpoint", listen_endpoint);
       auto runner = self->spawn<caf::detached>(command_runner);
       command_runners.push_back(runner);
       self->send(runner, atom::run_v, *hook_invocation);
@@ -156,8 +179,9 @@ caf::message start_command(const invocation& inv, caf::actor_system& sys) {
         TENZIR_ASSERT(msg.source == node);
         TENZIR_DEBUG("{} received DOWN from node", *self);
         stop = true;
-        if (msg.reason != caf::exit_reason::user_shutdown)
+        if (msg.reason != caf::exit_reason::user_shutdown) {
           err = std::move(msg.reason);
+        }
       },
       [&](atom::signal, int signal) {
         TENZIR_DEBUG("{} got {}", *self, ::strsignal(signal));
