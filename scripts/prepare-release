@@ -98,14 +98,21 @@ fi
 
 # Copy the next changelog directory.
 if [ -d "${source_dir}/changelog/next" ]; then
+  for entry in "${source_dir}/changelog/next/"{bug-fixes,changes,features}/.gitkeep; do
+    rm "${entry}"
+  done
   for entry in "${source_dir}/changelog/next/"**/*.md; do
-    if [[ "$entry" != "${entry/--*.md/.md}" ]]; then
-      mv "$entry" "${entry/--*.md/.md}"
+    if [[ "${entry}" != "${entry/--*.md/.md}" ]]; then
+      mv "${entry}" "${entry/--*.md/.md}"
     fi
   done
   rsync -avzh "${source_dir}/changelog/next/" \
     "${source_dir}/changelog/${new_version}"
   rm -r "${source_dir}/changelog/next"
+  for entry in "${source_dir}/changelog/next/"{bug-fixes,changes,features}; do
+    mkdir -p "${entry}"
+    touch "${entry}/.gitkeep"
+  done
   things_done+="
 * Moved all changelog entries from \`/changelog/next\` to \`/changelog/${new_version}\`."
 fi
