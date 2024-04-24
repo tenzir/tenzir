@@ -36,11 +36,24 @@ struct mmdb_deleter final {
   auto operator()(MMDB_s* ptr) noexcept -> void {
     if (ptr) {
       MMDB_close(ptr);
+      delete ptr;
     }
   }
 };
 
 using mmdb_ptr = std::unique_ptr<MMDB_s, mmdb_deleter>;
+
+auto make_mmdb(const std::string& path) -> caf::expected<mmdb_ptr> {
+  auto ptr = new MMDB_s;
+  const auto status = MMDB_open(path.c_str(), MMDB_MODE_MMAP, ptr);
+  if (status != MMDB_SUCCESS) {
+    delete ptr;
+    return diagnostic::error("{}", MMDB_strerror(status))
+      .note("failed to open MaxMind database at `{}`", path)
+      .to_error();
+  }
+  return mmdb_ptr{ptr};
+};
 
 #if MMDB_UINT128_IS_BYTE_ARRAY
 auto cast_128_bit_unsigned_to_64_bit(uint8_t uint128[16]) -> uint64_t {
@@ -462,14 +475,11 @@ public:
   }
 
   auto reset() -> caf::expected<void> override {
-    mmdb_ = mmdb_ptr{new MMDB_s};
-    const auto status
-      = MMDB_open(db_path_.c_str(), MMDB_MODE_MMAP, mmdb_.get());
-    if (status != MMDB_SUCCESS) {
-      return diagnostic::error("{}", MMDB_strerror(status))
-        .note("failed to open MaxMind database at `{}`", db_path_)
-        .to_error();
+    auto mmdb = make_mmdb(db_path_);
+    if (not mmdb) {
+      return mmdb.error();
     }
+    mmdb_ = std::move(*mmdb);
     return {};
   }
 
@@ -548,14 +558,11 @@ class plugin : public virtual context_plugin {
         .usage("context create <name> geoip --db-path <path>")
         .to_error();
     }
-    auto mmdb = mmdb_ptr{new MMDB_s};
-    const auto status = MMDB_open(db_path.c_str(), MMDB_MODE_MMAP, mmdb.get());
-    if (status != MMDB_SUCCESS) {
-      return diagnostic::error("{}", MMDB_strerror(status))
-        .note("failed to open MaxMind database at `{}`", db_path)
-        .to_error();
+    auto mmdb = make_mmdb(db_path);
+    if (not mmdb) {
+      return mmdb.error();
     }
-    return std::make_unique<ctx>(std::move(db_path), std::move(mmdb));
+    return std::make_unique<ctx>(std::move(db_path), std::move(*mmdb));
   }
 };
 
