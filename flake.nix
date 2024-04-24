@@ -2,10 +2,9 @@
   description = "Tenzir as a standalone app or NixOS module";
 
   nixConfig = {
-    extra-substituters = ["https://tenzir.cachix.org" "https://vast.cachix.org"];
+    extra-substituters = ["https://tenzir.cachix.org"];
     extra-trusted-public-keys = [
       "tenzir.cachix.org-1:+MLwldLx9GLGLsi9mDr5RrVYyI64iVobWpntJaPM50E="
-      "vast.cachix.org-1:0L8rErLUuFAdspyGYYQK3Sgs9PYRMzkLEqS2GxfaQhA="
     ];
   };
 
@@ -81,14 +80,6 @@
           }
           // {
             default = self.packages.${system}.tenzir-static;
-            # Legacy aliases for backwards compatibility.
-            vast = self.packages.${system}.tenzir-de;
-            vast-static = self.packages.${system}.tenzir-de-static;
-            vast-ce = self.packages.${system}.tenzir;
-            vast-ce-static = self.packages.${system}.tenzir-static;
-            vast-ee = self.packages.${system}.tenzir-ee;
-            vast-ee-static = self.packages.${system}.tenzir-ee-static;
-            vast-integration-test-shell = self.packages.${system}.integration-test-shell;
           };
         apps.tenzir-de = flake-utils.lib.mkApp {drv = self.packages.${system}.tenzir-de;};
         apps.tenzir-de-static = flake-utils.lib.mkApp {drv = self.packages.${system}.tenzir-de-static;};
@@ -210,25 +201,13 @@
           '';
         };
         # Legacy aliases for backwards compatibility.
-        apps.vast = self.apps.${system}.tenzir-de;
-        apps.vast-static = self.apps.${system}.tenzir-de-static;
-        apps.vast-ce = self.apps.${system}.tenzir;
-        apps.vast-ce-static = self.apps.${system}.tenzir-static;
-        apps.vast-ee = self.apps.${system}.tenzir-ee;
-        apps.vast-ee-static = self.apps.${system}.tenzir-ee-static;
-        apps.stream-vast-image = self.apps.${system}.stream-tenzir-de-image;
-        apps.stream-vast-slim-image = self.apps.${system}.stream-tenzir-de-slim-image;
-        apps.stream-vast-ce-image = self.apps.${system}.stream-tenzir-image;
-        apps.stream-vast-ce-slim-image = self.apps.${system}.stream-tenzir-slim-image;
-        apps.stream-vast-ee-image = self.apps.${system}.stream-tenzir-ee-image;
-        apps.stream-vast-ee-slim-image = self.apps.${system}.stream-tenzir-ee-slim-image;
         devShell = import ./shell.nix {inherit pkgs;};
         formatter = pkgs.alejandra;
         hydraJobs =
           {packages = self.packages.${system};}
           // (
             let
-              vast-vm-tests =
+              tenzir-vm-tests =
                 nixpkgs.legacyPackages."${system}".callPackage ./nix/nixos-test.nix
                 {
                   # FIXME: the pkgs channel has an issue made the testing creashed
@@ -238,8 +217,8 @@
             in
               pkgs.lib.optionalAttrs pkgs.stdenv.isLinux {
                 inherit
-                  (vast-vm-tests)
-                  vast-vm-systemd
+                  (tenzir-vm-tests)
+                  tenzir-vm-systemd
                   ;
               }
           );
