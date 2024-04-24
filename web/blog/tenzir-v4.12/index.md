@@ -1,7 +1,7 @@
 ---
 title: Tenzir v4.12
-authors: [mavam, jachris]
-date: 2024-04-18
+authors: [jachris]
+date: 2024-04-24
 tags: [tcp, udp, publish, subscribe, deduplicate, unroll, syslog, every]
 comments: true
 ---
@@ -10,9 +10,9 @@ We are thrilled to announce Tenzir
 [v4.12](https://github.com/tenzir/tenzir/releases/tag/v4.12.0), a feature-packed
 release introducing numerous enhancements. Notable additions include list
 unrolling, event deduplication, and the deployment of advanced pipeline
-architectures with publish-subscribe. We've also incorporated a download button,
-extended support for UDP, and implemented many other refinements to improve
-your experience.
+architectures with publish-subscribe. We've also added a download button,
+extended support for UDP, and implemented many other refinements to improve your
+experience.
 
 ![Tenzir v4.12](tenzir-v4.12.excalidraw.svg)
 
@@ -105,7 +105,9 @@ you can set a publishing point within your data stream. It's as simple as `from
 tcp://0.0.0.0:8000 | publish input`. This defines a channel `input` that you can
 now subscribe to with `subscribe`.
 
-Let's consider a case where we aim to route all alerts into Splunk, and concurrently import all other non-alert events into Tenzir's storage for further analysis and monitoring:
+Let's consider a case where we aim to route all alerts into Splunk, and
+concurrently import all other non-alert events into Tenzir's storage for further
+analysis and monitoring:
 
 ``` title="1st subscriber"
 subscribe input
@@ -169,9 +171,12 @@ Just select one of the available formats and you're good to go!
   continuation of the previous message.
 - The [`tcp`](/next/connectors/tcp) loader now accepts multiple connections in
   parallel, e.g., when used as `from tcp://127.0.0.1:8000 read json`.
-- [Feather](/next/formats/feather) is now a native format. This comes in
-  handy for those of you working in the Apache Arrow ecosystem and seeking
-  seamless interoperability without loss of rich typing.
+- We've massively improved performance of our [Parquet](/next/formats/parquet)
+  and [Feather](/next/formats/feather) formats for large files. For writing,
+  they now both support streaming row groups and record batches, respectively,
+  and for reading Feather now supports streaming via the Arrow IPC format as
+  well. This comes in handy for those of you working in the Apache Arrow
+  ecosystem and seeking seamless interoperability without loss of rich typing.
 
 As usual, the complete list of bug fixes, adjustments, and enhancements
 delivered with this version can be found in our [changelog](/changelog#v4120).
