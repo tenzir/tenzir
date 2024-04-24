@@ -72,8 +72,6 @@
             tenzir-de-static = pkgs.pkgsStatic.tenzir-de;
             tenzir = pkgs.tenzir;
             tenzir-static = pkgs.pkgsStatic.tenzir;
-            tenzir-ee = pkgs.tenzir-ee;
-            tenzir-ee-static = pkgs.pkgsStatic.tenzir-ee;
             integration-test-shell = pkgs.mkShell {
               packages = pkgs.tenzir-integration-test-runner;
             };
@@ -87,11 +85,6 @@
         apps.tenzir-static = flake-utils.lib.mkApp {
           drv =
             self.packages.${system}.tenzir-static;
-        };
-        apps.tenzir-ee = flake-utils.lib.mkApp {drv = self.packages.${system}.tenzir-ee;};
-        apps.tenzir-ee-static = flake-utils.lib.mkApp {
-          drv =
-            self.packages.${system}.tenzir-ee-static;
         };
         apps.stream-tenzir-de-image = stream-image {
           entrypoint = "tenzir";
@@ -135,28 +128,6 @@
           entrypoint = "tenzir-node";
           name = "tenzir/tenzir-slim";
           pkg = self.packages.${system}.tenzir-static;
-          tag = "latest-slim";
-        };
-        apps.stream-tenzir-ee-image = stream-image {
-          entrypoint = "tenzir";
-          name = "tenzir/tenzir-ee";
-          pkg = self.packages.${system}.tenzir-ee;
-        };
-        apps.stream-tenzir-node-ee-image = stream-image {
-          entrypoint = "tenzir-node";
-          name = "tenzir/tenzir-ee";
-          pkg = self.packages.${system}.tenzir-ee;
-        };
-        apps.stream-tenzir-ee-slim-image = stream-image {
-          entrypoint = "tenzir";
-          name = "tenzir/tenzir-ee-slim";
-          pkg = self.packages.${system}.tenzir-ee-static;
-          tag = "latest-slim";
-        };
-        apps.stream-tenzir-node-ee-slim-image = stream-image {
-          entrypoint = "tenzir-node";
-          name = "tenzir/tenzir-ee-slim";
-          pkg = self.packages.${system}.tenzir-ee-static;
           tag = "latest-slim";
         };
         apps.default = self.apps.${system}.tenzir-static;

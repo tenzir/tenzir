@@ -386,22 +386,12 @@ in {
       };
     in
       pkg.withPlugins (ps: [
-        ps.context
-        ps.matcher
-        ps.pipeline-manager
-        ps.platform
-      ]);
-    tenzir-ee = let
-      pkg = final.unchecked.tenzir-de.override {
-        pname = "tenzir-ee";
-      };
-    in
-      pkg.withPlugins (ps: [
         ps.compaction
         ps.context
         ps.matcher
         ps.pipeline-manager
         ps.platform
+        ps.vast
       ]);
   };
   toChecked =
@@ -424,7 +414,6 @@ in {
       x // { unchecked = x; };
   tenzir-de = final.toChecked final.unchecked.tenzir-de;
   tenzir = final.toChecked final.unchecked.tenzir;
-  tenzir-ee = final.toChecked final.unchecked.tenzir-ee;
   tenzir-integration-test-runner = with prev.pkgsBuildBuild; [
     (bats.withLibraries (
       p: [

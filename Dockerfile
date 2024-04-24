@@ -236,6 +236,7 @@ RUN cmake -S contrib/tenzir-plugins/vast -B build-vast -G Ninja \
 
 FROM tenzir-de AS tenzir-ce
 
+COPY --from=compaction-plugin --chown=tenzir:tenzir /plugin/compaction /
 COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
 COPY --from=matcher-plugin --chown=tenzir:tenzir /plugin/matcher /
 COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline-manager /
@@ -265,18 +266,6 @@ COPY --from=tenzir-ce --chown=tenzir:tenzir \
        /var/log/tenzir
 ENV TENZIR_AUTOMATIC_REBUILD=0
 RUN /demo-node/setup.bash
-
-ENTRYPOINT ["tenzir-node"]
-
-# -- tenzir-ee -------------------------------------------------------------------
-
-FROM tenzir-ce AS tenzir-ee
-
-COPY --from=compaction-plugin --chown=tenzir:tenzir /plugin/compaction /
-
-# -- tenzir-node-ee ------------------------------------------------------------
-
-FROM tenzir-ee AS tenzir-node-ee
 
 ENTRYPOINT ["tenzir-node"]
 
