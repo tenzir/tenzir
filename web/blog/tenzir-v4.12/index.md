@@ -11,7 +11,7 @@ We are thrilled to announce Tenzir
 release introducing numerous enhancements. Notable additions include list
 unrolling, event deduplication, and the deployment of advanced pipeline
 architectures with publish-subscribe. We've also incorporated a download button,
-extended support for UDP, and implemented numerous other refinements to improve
+extended support for UDP, and implemented many other refinements to improve
 your experience.
 
 ![Tenzir v4.12](tenzir-v4.12.excalidraw.svg)
@@ -23,7 +23,7 @@ your experience.
 In today's data-driven world, many data sources deliver information in the form
 of lists/arrays. While seemingly simple, working with these lists can sometimes
 pose challenges, particularly when the data structure becomes intricate. Let's
-take the example of connection summaries in JSON format:
+take the example of a connection summary stream in JSON format:
 
 ```json
 {
@@ -33,7 +33,7 @@ take the example of connection summaries in JSON format:
     "203.0.113.2"
   ]
 }
-// after 1min
+// after 1min:
 {
   "src": "192.0.2.1",
   "dst": [
@@ -46,12 +46,12 @@ take the example of connection summaries in JSON format:
 
 To overcome the hurdles of JSON list manipulation, we introduce the new
 [`unroll`](/next/operators/unroll) operator, allowing the creation of an event
-for each item in the list. Let's unroll `dst` in our data:
+for each item in the list. Let's `unroll dst`:
 
 ```json
 {"src": "192.0.2.1", "dst": "192.0.2.143"}
 {"src": "192.0.2.1", "dst": "203.0.113.2"}
-// after 1min
+// after 1min:
 {"src": "192.0.2.1", "dst": "203.0.113.2"}
 {"src": "192.0.2.1", "dst": "172.16.76.150"}
 {"src": "192.0.2.1", "dst": "192.0.2.143"}
@@ -66,12 +66,12 @@ Do you see the duplicate host pairs? Let's remove them with the new
 ```json
 {"src": "192.0.2.1", "dst": "192.0.2.143"}
 {"src": "192.0.2.1", "dst": "203.0.113.2"}
-// after 1min
+// after 1min:
 {"src": "192.0.2.1", "dst": "172.16.76.150"}
 ```
 
 The `--timeout` option is useful for controlling expiration of entries. In this
-example, if the same tuple doesn't come up within a 24h interval, the
+example, if the same connection tuple doesn't come up within a 24h interval, the
 corresponding entry is removed from the operator's internal state.
 
 We delved deeper into the power of the `deduplicate` operator in a [previous
@@ -88,7 +88,7 @@ Using `every 1min summarize num=count(.) by src`, we get:
 
 ```json
 {"src": "192.0.2.1", "num": 2}
-// after 1min
+// after 1min:
 {"src": "192.0.2.1", "num": 1}
 ```
 
@@ -101,7 +101,7 @@ more efficient.
 Exciting are also the new [`publish`](/next/operators/publish) and
 [`subscribe`](/next/operators/publish) operators, which open up endless
 possibilities for creating arbitrary dataflow topologies. For instance,
-you can set a publishing point within your data stream, as simple as `from
+you can set a publishing point within your data stream. It's as simple as `from
 tcp://0.0.0.0:8000 | publish input`. This defines a channel `input` that you can
 now subscribe to with `subscribe`.
 
@@ -149,7 +149,7 @@ tenzir:
 
 On a related note: The operators `context create`, `context reset`,
 `context update`, and `context load` were changed to no longer return
-information about the associated context. Instead, they act as a sink now.
+information about the associated context. Instead, they now act as a sink.
 
 ## Download Button
 
@@ -158,18 +158,18 @@ Ever wanted to just save the output from Explorer to your computer? With the new
 
 ![Download Button](download-button.png)
 
-Just select an available form and you're good to go!
+Just select one of the available formats and you're good to go!
 
 ## Other Changes
 
-- There's a new [`udp`](/next/connectors/udp) connector for sending and receving
+- There's a new [`udp`](/next/connectors/udp) connector for sending and receiving
   UDP datagrams. Finally, you can now receive Syslog natively.
-- Speaking of Syslog: we've enhanced our parser to be *multi-line*: in case the
-  previous line isn't a valid Syslog message, we tack on the next line until the
-  message parses.
-- The [`tcp`](/next/connectors/tcp) loader now accepts multiple connections,
-  e.g., when used as `from tcp://127.0.0.1:8000 read json`.
-- [Feather](/next/formats/feather) is now a new native format. This comes in
+- Speaking of Syslog: we've enhanced our parser to be *multi-line*. In case the
+  next line isn't a valid Syslog message by itself, we interpret it as the
+  continuation of the previous message.
+- The [`tcp`](/next/connectors/tcp) loader now accepts multiple connections in
+  parallel, e.g., when used as `from tcp://127.0.0.1:8000 read json`.
+- [Feather](/next/formats/feather) is now a native format. This comes in
   handy for those of you working in the Apache Arrow ecosystem and seeking
   seamless interoperability without loss of rich typing.
 
