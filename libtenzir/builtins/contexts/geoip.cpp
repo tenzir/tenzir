@@ -558,6 +558,11 @@ class plugin : public virtual context_plugin {
         .usage("context create <name> geoip --db-path <path>")
         .to_error();
     }
+    if (db_path.empty()) {
+      return diagnostic::error("missing required db-path option")
+        .usage("context create <name> geoip --db-path <path>")
+        .to_error();
+    }
     auto mmdb = make_mmdb(db_path);
     if (not mmdb) {
       return mmdb.error();
