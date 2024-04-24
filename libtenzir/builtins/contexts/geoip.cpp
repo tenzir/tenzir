@@ -32,6 +32,29 @@ namespace {
 
 auto constexpr path_key = "db-path";
 
+struct mmdb_deleter final {
+  auto operator()(MMDB_s* ptr) noexcept -> void {
+    if (ptr) {
+      MMDB_close(ptr);
+      delete ptr;
+    }
+  }
+};
+
+using mmdb_ptr = std::unique_ptr<MMDB_s, mmdb_deleter>;
+
+auto make_mmdb(const std::string& path) -> caf::expected<mmdb_ptr> {
+  auto ptr = new MMDB_s;
+  const auto status = MMDB_open(path.c_str(), MMDB_MODE_MMAP, ptr);
+  if (status != MMDB_SUCCESS) {
+    delete ptr;
+    return diagnostic::error("{}", MMDB_strerror(status))
+      .note("failed to open MaxMind database at `{}`", path)
+      .to_error();
+  }
+  return mmdb_ptr{ptr};
+};
+
 #if MMDB_UINT128_IS_BYTE_ARRAY
 auto cast_128_bit_unsigned_to_64_bit(uint8_t uint128[16]) -> uint64_t {
   auto low = uint64_t{};
@@ -63,20 +86,13 @@ struct current_dump {
   int status = MMDB_SUCCESS;
   series_builder builder;
 };
-} // namespace
 
 class ctx final : public virtual context {
 public:
   ctx() noexcept = default;
 
-  explicit ctx(context::parameter_map parameters) noexcept {
-    reset(std::move(parameters));
-  }
-
-  ~ctx() override {
-    if (mmdb_) {
-      MMDB_close(&*mmdb_);
-    }
+  explicit ctx(std::string db_path, mmdb_ptr mmdb)
+    : db_path_{std::move(db_path)}, mmdb_{std::move(mmdb)} {
   }
 
   auto context_type() const -> std::string override {
@@ -307,7 +323,7 @@ public:
       const auto ip_string = is_ip
                                ? fmt::to_string(value)
                                : materialize(caf::get<std::string_view>(value));
-      auto result = MMDB_lookup_string(&*mmdb_, ip_string.data(),
+      auto result = MMDB_lookup_string(mmdb_.get(), ip_string.data(),
                                        &address_info_error, &status);
       if (address_info_error != MMDB_SUCCESS) {
         return caf::make_error(
@@ -372,7 +388,7 @@ public:
       case MMDB_RECORD_TYPE_SEARCH_NODE: {
         MMDB_search_node_s search_node{};
         current_dump.status
-          = MMDB_read_node(&*mmdb_, node_number, &search_node);
+          = MMDB_read_node(mmdb_.get(), node_number, &search_node);
         if (current_dump.status != MMDB_SUCCESS) {
           break;
         }
@@ -458,24 +474,13 @@ public:
     return {};
   }
 
-  auto reset(context::parameter_map parameters)
-    -> caf::expected<record> override {
-    if (parameters.contains(path_key) and parameters.at(path_key)) {
-      db_path_ = *parameters[path_key];
+  auto reset() -> caf::expected<void> override {
+    auto mmdb = make_mmdb(db_path_);
+    if (not mmdb) {
+      return mmdb.error();
     }
-    if (mmdb_) {
-      MMDB_close(&*mmdb_);
-    } else {
-      mmdb_ = MMDB_s{};
-    }
-    auto status = MMDB_open(db_path_.c_str(), MMDB_MODE_MMAP, &*mmdb_);
-    if (status != MMDB_SUCCESS) {
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("error opening IP database at path "
-                                         "'{}': {}",
-                                         db_path_, MMDB_strerror(status)));
-    }
-    return show();
+    mmdb_ = std::move(*mmdb);
+    return {};
   }
 
   auto snapshot(parameter_map, const std::vector<std::string>&) const
@@ -496,8 +501,7 @@ public:
 
 private:
   std::string db_path_;
-  record r_;
-  std::optional<MMDB_s> mmdb_;
+  mmdb_ptr mmdb_;
 };
 
 struct v1_loader : public context_loader {
@@ -521,9 +525,9 @@ struct v1_loader : public context_loader {
                              "context: invalid type or value for "
                              "DB path entry");
     }
-    context::parameter_map params;
-    params[path_key] = serialized_string->str();
-    return std::make_unique<ctx>(std::move(params));
+    const auto* plugin = plugins::find<context_plugin>("geoip");
+    TENZIR_ASSERT(plugin);
+    return plugin->make_context({{path_key, serialized_string->str()}});
   }
 };
 
@@ -539,9 +543,35 @@ class plugin : public virtual context_plugin {
 
   auto make_context(context::parameter_map parameters) const
     -> caf::expected<std::unique_ptr<context>> override {
-    return std::make_unique<ctx>(std::move(parameters));
+    auto db_path = std::string{};
+    for (const auto& [key, value] : parameters) {
+      if (key == path_key) {
+        if (not value) {
+          return diagnostic::error("missing value for option `{}`", key)
+            .usage("context create <name> geoip --db-path <path>")
+            .to_error();
+        }
+        db_path = *value;
+        continue;
+      }
+      return diagnostic::error("unsupported option `{}`", key)
+        .usage("context create <name> geoip --db-path <path>")
+        .to_error();
+    }
+    if (db_path.empty()) {
+      return diagnostic::error("missing required db-path option")
+        .usage("context create <name> geoip --db-path <path>")
+        .to_error();
+    }
+    auto mmdb = make_mmdb(db_path);
+    if (not mmdb) {
+      return mmdb.error();
+    }
+    return std::make_unique<ctx>(std::move(db_path), std::move(*mmdb));
   }
 };
+
+} // namespace
 
 } // namespace tenzir::plugins::geoip
 

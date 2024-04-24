@@ -478,6 +478,8 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
           // The spawn function can provide a better log message so we don't
           // print one here.
           continue;
+        self->system().registry().put(
+          fmt::format("tenzir.{}", component->component_name()), handle);
         if (auto err
             = register_component(self, caf::actor_cast<caf::actor>(handle),
                                  component->component_name()))

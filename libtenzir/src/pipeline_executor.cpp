@@ -62,9 +62,11 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
         finish_start();
       },
       [this](const caf::error& err) mutable {
-        abort_start(add_context(
-          err, "{} aborts start because an execution node failed to start",
-          *self));
+        if (err == caf::sec::broken_promise) {
+          abort_start(ec::silent);
+          return;
+        }
+        abort_start(err);
       });
 }
 
@@ -118,8 +120,9 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
             start_nodes_if_all_spawned();
           },
           [=, this](const caf::error& err) {
-            abort_start(add_context(err, "{} failed to spawn {} remotely",
-                                    *self, description));
+            abort_start(diagnostic::error(err)
+                          .note("failed to spawn {} remotely", description)
+                          .to_error());
           });
       input_type = *output_type;
     } else {
@@ -128,8 +131,9 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
         = spawn_exec_node(self, std::move(op), input_type, node, diagnostics,
                           metrics, op_index, has_terminal);
       if (not spawn_result) {
-        abort_start(add_context(spawn_result.error(),
-                                "{} failed to spawn execution node", *self));
+        abort_start(diagnostic::error(spawn_result.error())
+                      .note("failed to spawn {} locally", description)
+                      .to_error());
         return;
       }
       TENZIR_DEBUG("{} spawned {} locally", *self, description);
@@ -159,17 +163,18 @@ void pipeline_executor_state::abort_start(diagnostic reason) {
         self->quit(ec::diagnostic);
       },
       [this](const caf::error& error) {
-        start_rp.deliver(
-          add_context(error, "{} failed to deliver diagnostic", *self));
+        start_rp.deliver(diagnostic::error(error)
+                           .note("failed to deliver diagnostic")
+                           .to_error());
         self->quit(ec::diagnostic);
       });
 }
 
 void pipeline_executor_state::abort_start(caf::error reason) {
-  if (reason == ec::diagnostic) {
+  if (reason == ec::silent) {
     TENZIR_DEBUG("{} delivers silent start abort", *self);
-    start_rp.deliver(ec::diagnostic);
-    self->quit(ec::diagnostic);
+    start_rp.deliver(ec::silent);
+    self->quit(ec::silent);
     return;
   }
   abort_start(
@@ -192,7 +197,9 @@ auto pipeline_executor_state::start() -> caf::result<void> {
   auto output = pipe.infer_type<void>();
   if (not output) {
     TENZIR_DEBUG("{} failed type inference", *self);
-    abort_start(output.error());
+    abort_start(diagnostic::error(output.error())
+                  .note("failed type inference")
+                  .to_error());
     return start_rp;
   }
   if (not output->is<void>()) {
@@ -217,7 +224,9 @@ auto pipeline_executor_state::start() -> caf::result<void> {
                         [this, pipe = std::move(pipe)](
                           caf::expected<node_actor> result) mutable {
                           if (not result) {
-                            abort_start(std::move(result.error()));
+                            abort_start(diagnostic::error(result.error())
+                                          .note("failed to connect to node")
+                                          .to_error());
                             return;
                           }
                           node = *result;

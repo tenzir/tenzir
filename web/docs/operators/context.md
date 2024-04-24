@@ -2,7 +2,8 @@
 sidebar_custom_props:
   operator:
     source: true
-    transformation: true
+    transformation: false
+    sink: true
 ---
 
 # context
@@ -12,12 +13,12 @@ Manages a [context](../contexts.md).
 ## Synopsis
 
 ```
-context create <name> <context-type>
-context delete <name>
-context update <name> [<options>]
-context reset  <name>
-context save   <name>
-context load   <name>
+context create  <name> <type> [<args>]
+context delete  <name>
+context update  <name> [<args>]
+context reset   <name>
+context save    <name>
+context load    <name>
 context inspect <name>
 ```
 
@@ -25,17 +26,14 @@ context inspect <name>
 
 The `context` operator manages [context](../contexts.md) instances.
 
-- The `create` command creates a new context with a unique name. The pipeline
-  returns information about the new context.
+- The `create` command creates a new context with a unique name.
 
-- The `delete` command destroys a given context. The pipeline returns
-  information about the deleted context.
+- The `delete` command destroys a given context.
 
-- The `update` command adds new data to a given context. The pipeline returns
-  information about what the update performed.
+- The `update` command adds new data to a given context.
 
 - The `reset` command clears the state of a given context, as if it had just
-  been created. The pipeline returns information about the cleared context.
+  been created.
 
 - The `save` command outputs the state of the context, serialized into bytes.
   The result can be processed further in a pipeline,
@@ -43,8 +41,7 @@ The `context` operator manages [context](../contexts.md) instances.
   or to initialize another context with `context load`.
 
 - The `load` command takes in bytes, likely previously created with
-  `context save`, and initializes the context with that data. The pipeline
-  returns information about the populated context.
+  `context save`, and initializes the context with that data.
 
 - The `inspect` command dumps a specific context's user-provided data, usually
   the context's content.
@@ -53,13 +50,13 @@ The `context` operator manages [context](../contexts.md) instances.
 
 The name of the context to create, update, or delete.
 
-### `<context-type>`
+### `<type>`
 
 The context type for the new context.
 
 See the [list of available context types](../contexts.md).
 
-### `<options>`
+### `<args>`
 
 Context-specific options in the format `--key value` or `--flag`.
 
