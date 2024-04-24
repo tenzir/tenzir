@@ -96,7 +96,7 @@ In summary, these transformations provide powerful in-band capabilities leading
 to substantial data reduction, simplifying the analysis, and making data shaping
 more efficient.
 
-## Publish and subscribe
+## Publish and Subscribe
 
 Exciting are also the new [`publish`](/next/operators/publish) and
 [`subscribe`](/next/operators/publish) operators, which open up endless
@@ -146,6 +146,10 @@ tenzir:
         capacity: 1B
         fp-probability: 0.001
 ```
+
+On a related note: The operators `context create`, `context reset`,
+`context update`, and `context load` were changed to no longer return
+information about the associated context. Instead, they act as a sink now.
 
 ## Download Button
 
