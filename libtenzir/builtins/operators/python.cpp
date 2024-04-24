@@ -270,7 +270,7 @@ public:
         if (!child.running()) {
           auto python_error = drain_pipe(errpipe);
           diagnostic::error("{}", python_error)
-            .note("python process exited with exit-code 1")
+            .note("python process exited with error")
             .emit(ctrl.diagnostics());
           co_return;
         }
@@ -312,13 +312,17 @@ public:
         auto reader = arrow::ipc::RecordBatchStreamReader::Open(&file);
         if (!reader.status().ok()) {
           auto python_error = drain_pipe(errpipe);
-          diagnostic::error("{}", python_error).emit(ctrl.diagnostics());
+          diagnostic::error("{}", python_error)
+            .note("python process exited with error")
+            .emit(ctrl.diagnostics());
           co_return;
         }
         auto result_batch = (*reader)->ReadNext();
         if (!result_batch.status().ok()) {
           auto python_error = drain_pipe(errpipe);
-          diagnostic::error("{}", python_error).emit(ctrl.diagnostics());
+          diagnostic::error("{}", python_error)
+            .note("python process exited with error")
+            .emit(ctrl.diagnostics());
           co_return;
         }
         // The writer on the other side writes an invalid record batch as

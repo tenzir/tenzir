@@ -1,2 +1,2 @@
-error: Empty output not allowed
+error: invalid syntax (<string>, line 1)
  = note: python process exited with error
