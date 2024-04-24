@@ -20,6 +20,8 @@ The `unroll` operator transforms each input event into a multiple output events.
 For each item in the input list, one output event is created, where the list is
 replaced with its item. The surrounding data is kept as-is.
 
+![Unroll Example](unroll.excalidraw.svg)
+
 No output events are produced if the list is empty or if the field is `null`.
 
 ## Examples
