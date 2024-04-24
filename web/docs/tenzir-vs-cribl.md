@@ -49,7 +49,6 @@ we put together this side-by-side comparison of Cribl and Tenzir.
     node.
   - **Worker Group**: a collection of worker nodes with the same configuration.
   - **Mapping Ruleset**: maps nodes to worker groups.
-- The Free and Basic Editions only support Cribl Stream instances in the cloud.
 - The Enterprise Edition supports on-prem hosting instances of leader and
   workers.
 
