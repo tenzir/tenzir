@@ -173,7 +173,6 @@ public:
   }
 
   auto set_waiting(bool value) noexcept -> void override {
-    TENZIR_ASSERT(state_.waiting != value);
     state_.waiting = value;
     if (not state_.waiting) {
       state_.schedule_run(false);
