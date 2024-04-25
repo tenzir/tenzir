@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/logger.hpp"
+
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/error.hpp>
@@ -44,6 +46,13 @@ struct mmdb_deleter final {
 using mmdb_ptr = std::unique_ptr<MMDB_s, mmdb_deleter>;
 
 auto make_mmdb(const std::string& path) -> caf::expected<mmdb_ptr> {
+  TENZIR_WARN(path);
+  if (!std::filesystem::exists(path)) {
+    return diagnostic::error("")
+      .note("failed to find path `{}`", path)
+      .to_error();
+  }
+
   auto ptr = new MMDB_s;
   const auto status = MMDB_open(path.c_str(), MMDB_MODE_MMAP, ptr);
   if (status != MMDB_SUCCESS) {
@@ -302,6 +311,11 @@ public:
   /// Emits context information for every event in `slice` in order.
   auto apply(series array, bool replace) const
     -> caf::expected<std::vector<series>> override {
+    if (!mmdb_) {
+      return caf::make_error(ec::lookup_error,
+                             fmt::format("no GeoIP data currently exists for "
+                                         "this context "));
+    }
     auto status = 0;
     MMDB_entry_data_list_s* entry_data_list = nullptr;
     auto builder = series_builder{};
@@ -511,6 +525,9 @@ struct v1_loader : public context_loader {
 
   auto load(chunk_ptr serialized) const
     -> caf::expected<std::unique_ptr<context>> {
+    TENZIR_WARN("1");
+    TENZIR_WARN(serialized->size());
+
     const auto* serialized_data
       = fbs::context::geoip::GetGeoIPData(serialized->data());
     if (not serialized_data) {
@@ -531,9 +548,51 @@ struct v1_loader : public context_loader {
   }
 };
 
+struct v2_loader : public context_loader {
+  auto version() const -> int {
+    return 2;
+  }
+
+  auto load(chunk_ptr serialized) const
+    -> caf::expected<std::unique_ptr<context>> {
+    TENZIR_WARN(serialized->size());
+    std::string tempFileName = "/tmp/tempfile.mmdb";
+    // tempFileName += "/XXXXXX";
+    // auto create_file_result = mkstemp(tempFileName.data()); // Get temp name
+    // if (create_file_result == -1) {
+    //   return diagnostic::error("failed to create intermediate file `{}`",
+    //                            create_file_result)
+    //     .to_error();
+    // }
+    auto myfile = std::fstream(tempFileName, std::ios::out | std::ios::binary);
+    std::fstream aa;
+    myfile.write(reinterpret_cast<const char*>(serialized->data()),
+                 static_cast<std::streamsize>(serialized->size()));
+    myfile.close();
+
+    // auto file_ptr = std::tmpfile(); // figure out RAII
+    // auto bytes_written = std::fwrite(serialized->data(), sizeof(std::byte),
+    //                                  serialized->size(), &*file_ptr);
+    // if (bytes_written < serialized->size()) {
+    //   return diagnostic::error("failed to copy data over to intermediate file
+    //   "
+    //                            "`{}`",
+    //                            bytes_written)
+    //     .to_error();
+    // }
+    TENZIR_WARN("AH");
+    auto mmdb = make_mmdb(tempFileName);
+    if (not mmdb) {
+      return mmdb.error();
+    }
+    return std::make_unique<ctx>(std::move(tempFileName), std::move(*mmdb));
+  }
+};
+
 class plugin : public virtual context_plugin {
   auto initialize(const record&, const record&) -> caf::error override {
     register_loader(std::make_unique<v1_loader>());
+    register_loader(std::make_unique<v2_loader>());
     return caf::none;
   }
 
@@ -543,6 +602,7 @@ class plugin : public virtual context_plugin {
 
   auto make_context(context::parameter_map parameters) const
     -> caf::expected<std::unique_ptr<context>> override {
+    TENZIR_WARN("2");
     auto db_path = std::string{};
     for (const auto& [key, value] : parameters) {
       if (key == path_key) {
@@ -559,9 +619,14 @@ class plugin : public virtual context_plugin {
         .to_error();
     }
     if (db_path.empty()) {
-      return diagnostic::error("missing required db-path option")
-        .usage("context create <name> geoip --db-path <path>")
-        .to_error();
+      // return diagnostic::error("missing required db-path option")
+      //   .usage("context create <name> geoip --db-path <path>")
+      //   .to_error();
+      // std::string tempFileName = "/tmp/temp2file.mmdb";
+      // auto myfile
+      //   = std::fstream(tempFileName, std::ios::out | std::ios::binary);
+      // db_path = tempFileName;
+      return std::make_unique<ctx>(std::move(db_path), nullptr);
     }
     auto mmdb = make_mmdb(db_path);
     if (not mmdb) {
