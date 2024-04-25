@@ -171,6 +171,10 @@ struct parser_state {
   operator_control_plane& ctrl_;
   /// Maps schema names to indices for the `entries` member.
   detail::heterogeneous_string_hashmap<size_t> entry_map;
+  /// If `--precise` is set, we use this map instead of `entry_map`. Obviously,
+  /// this is not great, but a proper solution would require refactoring large
+  /// parts of this file due to bad extendability of the current design.
+  tsl::robin_map<type, size_t> precise_map;
   /// Stores the schema-specific builders and some additional metadata.
   std::vector<entry_data> entries;
   /// The index of the currently active or last used builder.
@@ -235,6 +239,7 @@ struct parser_state {
   }
 };
 
+/// Parses simdjson objects into the given `series_builder` handles.
 class doc_parser {
 public:
   doc_parser(std::string_view parsed_document, operator_control_plane& ctrl,
@@ -507,6 +512,125 @@ private:
   bool raw_;
 };
 
+/// Converts a simdjson object into `data` object.
+///
+/// This is used when `--precise` is specified.
+auto json_to_data(simdjson::ondemand::value value, bool raw) -> data;
+
+auto json_to_data(simdjson::ondemand::object object, bool raw) -> record {
+  // The API of `record` is not optimal for this.
+  auto result = std::vector<std::pair<std::string, data>>{};
+  for (auto maybe_field : object) {
+    if (maybe_field.error()) {
+      TENZIR_TODO();
+    }
+    auto& field = maybe_field.value_unsafe();
+    auto maybe_key = field.unescaped_key(false);
+    if (maybe_key.error()) {
+      TENZIR_TODO();
+    }
+    // TODO: Lifetime of `key`?
+    auto key = maybe_key.value_unsafe();
+    auto value = json_to_data(field.value(), raw);
+    // TODO: Reconsider, this is quadratic.
+    auto it = std::ranges::find(result, key, &record::value_type::first);
+    if (it != result.end()) {
+      it->second = std::move(value);
+    } else {
+      result.emplace_back(key, std::move(value));
+    }
+  }
+  return record::make_unsafe(std::move(result));
+}
+
+auto json_to_data(simdjson::ondemand::array array, bool raw) -> list {
+  auto result = list{};
+  for (auto item : array) {
+    if (item.error()) {
+      TENZIR_TODO();
+    }
+    result.push_back(json_to_data(item.value_unsafe(), raw));
+  }
+  return result;
+}
+
+auto json_to_data(simdjson::ondemand::number number, bool raw) -> data {
+  if (raw) {
+    return number.as_double();
+  }
+  switch (number.get_number_type()) {
+    case simdjson::arm64::number_type::floating_point_number:
+      return number.get_double();
+    case simdjson::arm64::number_type::signed_integer:
+      return number.get_int64();
+    case simdjson::arm64::number_type::unsigned_integer:
+      return number.get_uint64();
+    case simdjson::arm64::number_type::big_integer:
+      TENZIR_TODO();
+  }
+  TENZIR_UNREACHABLE();
+}
+
+auto json_to_data(std::string_view string, bool raw) -> data {
+  if (not raw) {
+    static constexpr auto parser
+      = parsers::time | parsers::duration | parsers::net | parsers::ip;
+    auto result = data{};
+    if (parser(string, result)) {
+      return result;
+    }
+  }
+  return std::string{string};
+}
+
+auto json_to_data(simdjson::ondemand::value value, bool raw) -> data {
+  auto type = value.type();
+  if (type.error()) {
+    TENZIR_TODO();
+  }
+  switch (type.value_unsafe()) {
+    case simdjson::arm64::ondemand::json_type::array: {
+      auto array = value.get_array();
+      if (array.error()) {
+        TENZIR_TODO();
+      }
+      return json_to_data(array.value_unsafe(), raw);
+    }
+    case simdjson::ondemand::json_type::object: {
+      auto object = value.get_object();
+      if (object.error()) {
+        TENZIR_TODO();
+      }
+      return json_to_data(object.value_unsafe(), raw);
+    }
+    case simdjson::arm64::ondemand::json_type::number: {
+      auto number = value.get_number();
+      if (number.error()) {
+        TENZIR_TODO();
+      }
+      return json_to_data(number.value_unsafe(), raw);
+    }
+    case simdjson::arm64::ondemand::json_type::string: {
+      auto string = value.get_string();
+      if (string.error()) {
+        TENZIR_TODO();
+      }
+      return json_to_data(string.value_unsafe(), raw);
+    }
+    case simdjson::arm64::ondemand::json_type::boolean: {
+      auto boolean = value.get_bool();
+      if (boolean.error()) {
+        TENZIR_TODO();
+      }
+      return boolean.value_unsafe();
+    }
+    case simdjson::arm64::ondemand::json_type::null: {
+      return caf::none;
+    }
+  }
+  TENZIR_UNREACHABLE();
+}
+
 auto get_schema_name(simdjson::ondemand::document_reference doc,
                      const selector& selector) -> caf::expected<std::string> {
   auto object = doc.get_value();
@@ -595,7 +719,7 @@ public:
   parser_base(operator_control_plane& ctrl, std::optional<selector> selector,
               std::optional<type> schema, std::vector<type> schemas,
               bool no_infer, bool preserve_order, bool raw,
-              bool arrays_of_objects)
+              bool arrays_of_objects, bool precise)
     : ctrl_{ctrl},
       selector_{std::move(selector)},
       schema_{std::move(schema)},
@@ -603,7 +727,8 @@ public:
       no_infer_{no_infer},
       preserve_order{preserve_order},
       raw_{raw},
-      arrays_of_objects_{arrays_of_objects} {
+      arrays_of_objects_{arrays_of_objects},
+      precise_{precise} {
   }
 
 protected:
@@ -705,6 +830,7 @@ protected:
   bool preserve_order = true;
   bool raw_ = false;
   bool arrays_of_objects_ = false;
+  bool precise_ = false;
   simdjson::ondemand::parser parser_;
   // TODO: change max table slice size to be fetched from options.
   int64_t max_table_slice_rows_ = defaults::import::table_slice_size;
@@ -728,40 +854,68 @@ public:
       co_return;
     }
     auto& doc = maybe_doc.value_unsafe();
-    auto [action, slices] = this->handle_selector(doc, json_line, state);
-    switch (action) {
-      case parser_action::parse:
-        break;
-      case parser_action::skip:
-        co_return;
-      case parser_action::yield:
-        TENZIR_ASSERT(slices);
+    if (precise_) {
+      auto event = json_to_data(val.value_unsafe(), raw_);
+      if (not caf::holds_alternative<record>(event)) {
+        // TODO: Can't handle this yet.
+        TENZIR_TODO();
+      }
+      auto ty = type::infer(event);
+      TENZIR_ASSERT(ty); // TODO
+      auto it = state.precise_map.find(*ty);
+      if (it == state.precise_map.end()) {
+        // TODO: We should eventually garbage collect this.
+        auto index = state.entries.size();
+        state.entries.emplace_back("tenzir.json", std::nullopt);
+        it = state.precise_map.emplace_hint(it, *ty, index);
+      }
+      if (auto slices = state.activate(it->second)) {
         for (auto& slice : *slices) {
           co_yield std::move(slice);
         }
-    }
-    auto& builder = state.get_active_entry().builder;
-    auto success
-      = doc_parser{json_line, this->ctrl_, lines_processed_, no_infer_, raw_}
-          .parse_object(val.value_unsafe(), builder.record());
-    // After parsing one JSON object it is expected for the result to be at
-    // the end. If it's otherwise then it means that a line contains more than
-    // one object in which case we don't add any data and emit a warning.
-    // It is also possible for a parsing failure to occurr in doc_parser. the
-    // is_alive() call ensures that the first object was parsed without
-    // errors. Calling at_end() when is_alive() returns false is unsafe and
-    // resulted in crashes.
-    if (success and not doc.at_end()) {
-      diagnostic::warning(
-        "encountered more than one JSON object in a single NDJSON line")
-        .note("skips remaining objects in line `{}`", json_line)
-        .emit(this->ctrl_.diagnostics());
-      success = false;
-    }
-    if (not success) {
-      // We already reported the issue.
-      builder.remove_last();
-      co_return;
+      }
+      state.get_active_entry().builder.data(event);
+      if (not doc.at_end()) {
+        diagnostic::warning(
+          "encountered more than one JSON object in a single NDJSON line")
+          .note("skips remaining objects in line `{}`", json_line)
+          .emit(this->ctrl_.diagnostics());
+      }
+    } else {
+      auto [action, slices] = this->handle_selector(doc, json_line, state);
+      switch (action) {
+        case parser_action::parse:
+          break;
+        case parser_action::skip:
+          co_return;
+        case parser_action::yield:
+          TENZIR_ASSERT(slices);
+          for (auto& slice : *slices) {
+            co_yield std::move(slice);
+          }
+      }
+      auto& builder = state.get_active_entry().builder;
+      auto success
+        = doc_parser{json_line, this->ctrl_, lines_processed_, no_infer_, raw_}
+            .parse_object(val.value_unsafe(), builder.record());
+      // After parsing one JSON object it is expected for the result to be at
+      // the end. If it's otherwise then it means that a line contains more than
+      // one object in which case we don't add any data and emit a warning.
+      // It is also possible for a parsing failure to occurr in doc_parser. the
+      // is_alive() call ensures that the first object was parsed without
+      // errors. Calling at_end() when is_alive() returns false is unsafe and
+      // resulted in crashes.
+      if (success and not doc.at_end()) {
+        diagnostic::warning(
+          "encountered more than one JSON object in a single NDJSON line")
+          .note("skips remaining objects in line `{}`", json_line)
+          .emit(this->ctrl_.diagnostics());
+        success = false;
+      }
+      if (not success) {
+        // We already reported the issue.
+        builder.remove_last();
+      }
     }
     if (auto slices = this->handle_max_rows(state)) {
       for (auto& slice : *slices) {
@@ -965,6 +1119,8 @@ auto parse_selector(std::string_view x, location source) -> selector {
   return selector{std::move(prefix), std::move(path)};
 }
 
+struct data_type {};
+
 struct parser_args {
   std::optional<struct selector> selector;
   std::optional<located<std::string>> schema;
@@ -975,6 +1131,7 @@ struct parser_args {
   bool preserve_order = true;
   bool raw = false;
   bool arrays_of_objects = false;
+  bool precise = false;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, parser_args& x) -> bool {
@@ -987,13 +1144,26 @@ struct parser_args {
               f.field("use_ndjson_mode", x.use_ndjson_mode),
               f.field("preserve_order", x.preserve_order),
               f.field("raw", x.raw),
-              f.field("arrays_of_objects", x.arrays_of_objects));
+              f.field("arrays_of_objects", x.arrays_of_objects),
+              f.field("precise", x.precise));
   }
 };
 
-void add_common_options_to_parser(argument_parser& parser, parser_args& args) {
+void add_no_infer_option(argument_parser& parser, parser_args& args) {
   // TODO: Rename this option.
   parser.add("--no-infer", args.no_infer);
+}
+
+void add_raw_option(argument_parser& parser, parser_args& args) {
+  parser.add("--raw", args.raw);
+}
+
+TENZIR_NO_INLINE auto get_builder(auto& map, auto key) -> decltype(auto) {
+  return map[std::move(key)];
+}
+
+TENZIR_NO_INLINE void add_to_builder(auto& map, auto key, auto value) {
+  get_builder(map, std::move(key)).data(value);
 }
 
 class json_parser final : public plugin_parser {
@@ -1057,6 +1227,12 @@ public:
         .emit(ctrl.diagnostics());
       return {};
     }
+    if (args_.precise and not(args_.use_ndjson_mode || args_.use_gelf_mode)) {
+      diagnostic::error(
+        "option `--precise` requires `--ndjson` or `--gelf` for now")
+        .emit(ctrl.diagnostics());
+      return {};
+    }
     if (args_.use_ndjson_mode) {
       return make_parser(split_at_crlf(std::move(input)), ctrl,
                          args_.unnest_separator, schema, args_.preserve_order,
@@ -1069,6 +1245,7 @@ public:
                            args_.preserve_order,
                            args_.raw,
                            args_.arrays_of_objects,
+                           args_.precise,
                          });
     }
     if (args_.use_gelf_mode) {
@@ -1083,6 +1260,7 @@ public:
                            args_.preserve_order,
                            args_.raw,
                            args_.arrays_of_objects,
+                           args_.precise,
                          });
     }
     return make_parser(std::move(input), ctrl, args_.unnest_separator, schema,
@@ -1096,6 +1274,7 @@ public:
                          args_.preserve_order,
                          args_.raw,
                          args_.arrays_of_objects,
+                         args_.precise,
                        });
   }
 
@@ -1216,10 +1395,10 @@ public:
     parser.add("--selector", selector, "<selector>");
     parser.add("--schema", args.schema, "<schema>");
     parser.add("--unnest-separator", args.unnest_separator, "<separator>");
-    add_common_options_to_parser(parser, args);
+    add_no_infer_option(parser, args);
     parser.add("--ndjson", args.use_ndjson_mode);
     parser.add("--gelf", args.use_gelf_mode);
-    parser.add("--raw", args.raw);
+    add_raw_option(parser, args);
     parser.add("--arrays-of-objects", args.arrays_of_objects);
     parser.parse(p);
     if (selector) {
@@ -1269,9 +1448,10 @@ public:
     auto parser = argument_parser{
       name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
     auto args = parser_args{};
-    add_common_options_to_parser(parser, args);
+    add_raw_option(parser, args);
     parser.parse(p);
     args.use_gelf_mode = true;
+    args.precise = true;
     return std::make_unique<json_parser>(std::move(args));
   }
 };
@@ -1289,7 +1469,7 @@ public:
     auto parser = argument_parser{
       name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
     auto args = parser_args{};
-    add_common_options_to_parser(parser, args);
+    add_no_infer_option(parser, args);
     parser.parse(p);
     args.use_ndjson_mode = true;
     args.selector = parse_selector(Selector.str(), location::unknown);
