@@ -102,5 +102,5 @@ tenzir:
       # - Omit the option, or set it to null or false to disable.
       # - Set the option to true to enable with the default delay of 1 minute.
       # - Set the option to a valid duration to enable with a custom delay.
-      retry-on-error: 1 minute
+      restart-on-error: 1 minute
 ```
