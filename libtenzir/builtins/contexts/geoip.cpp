@@ -24,6 +24,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <cstdio>
 #include <maxminddb.h>
 #include <memory>
 #include <string>
@@ -46,13 +47,11 @@ struct mmdb_deleter final {
 using mmdb_ptr = std::unique_ptr<MMDB_s, mmdb_deleter>;
 
 auto make_mmdb(const std::string& path) -> caf::expected<mmdb_ptr> {
-  TENZIR_WARN(path);
   if (!std::filesystem::exists(path)) {
     return diagnostic::error("")
       .note("failed to find path `{}`", path)
       .to_error();
   }
-
   auto ptr = new MMDB_s;
   const auto status = MMDB_open(path.c_str(), MMDB_MODE_MMAP, ptr);
   if (status != MMDB_SUCCESS) {
@@ -100,8 +99,8 @@ class ctx final : public virtual context {
 public:
   ctx() noexcept = default;
 
-  explicit ctx(std::string db_path, mmdb_ptr mmdb)
-    : db_path_{std::move(db_path)}, mmdb_{std::move(mmdb)} {
+  explicit ctx(std::string db_path, mmdb_ptr mmdb, int version)
+    : db_path_{std::move(db_path)}, mmdb_{std::move(mmdb)}, version_{version} {
   }
 
   auto context_type() const -> std::string override {
@@ -314,7 +313,7 @@ public:
     if (!mmdb_) {
       return caf::make_error(ec::lookup_error,
                              fmt::format("no GeoIP data currently exists for "
-                                         "this context "));
+                                         "this context"));
     }
     auto status = 0;
     MMDB_entry_data_list_s* entry_data_list = nullptr;
@@ -504,18 +503,14 @@ public:
   }
 
   auto save() const -> caf::expected<save_result> override {
-    auto builder = flatbuffers::FlatBufferBuilder{};
-    auto path = builder.CreateString(db_path_);
-    fbs::context::geoip::GeoIPDataBuilder geoip_builder(builder);
-    geoip_builder.add_url(path);
-    auto geoip_data = geoip_builder.Finish();
-    fbs::context::geoip::FinishGeoIPDataBuffer(builder, geoip_data);
-    return save_result{.data = tenzir::fbs::release(builder), .version = 1};
+    return save_result{.data = std::move(chunk::mmap(db_path_).value()),
+                       .version = version_};
   }
 
 private:
   std::string db_path_;
   mmdb_ptr mmdb_;
+  int version_;
 };
 
 struct v1_loader : public context_loader {
@@ -525,9 +520,6 @@ struct v1_loader : public context_loader {
 
   auto load(chunk_ptr serialized) const
     -> caf::expected<std::unique_ptr<context>> {
-    TENZIR_WARN("1");
-    TENZIR_WARN(serialized->size());
-
     const auto* serialized_data
       = fbs::context::geoip::GetGeoIPData(serialized->data());
     if (not serialized_data) {
@@ -555,37 +547,20 @@ struct v2_loader : public context_loader {
 
   auto load(chunk_ptr serialized) const
     -> caf::expected<std::unique_ptr<context>> {
-    TENZIR_WARN(serialized->size());
-    std::string tempFileName = "/tmp/tempfile.mmdb";
-    // tempFileName += "/XXXXXX";
-    // auto create_file_result = mkstemp(tempFileName.data()); // Get temp name
-    // if (create_file_result == -1) {
-    //   return diagnostic::error("failed to create intermediate file `{}`",
-    //                            create_file_result)
-    //     .to_error();
-    // }
-    auto myfile = std::fstream(tempFileName, std::ios::out | std::ios::binary);
-    std::fstream aa;
+    const auto current_time = std::time(nullptr);
+    std::string temp_file_name = std::filesystem::temp_directory_path().string()
+                                 + std::to_string(current_time);
+    auto myfile
+      = std::fstream(temp_file_name, std::ios::out | std::ios::binary);
     myfile.write(reinterpret_cast<const char*>(serialized->data()),
                  static_cast<std::streamsize>(serialized->size()));
     myfile.close();
-
-    // auto file_ptr = std::tmpfile(); // figure out RAII
-    // auto bytes_written = std::fwrite(serialized->data(), sizeof(std::byte),
-    //                                  serialized->size(), &*file_ptr);
-    // if (bytes_written < serialized->size()) {
-    //   return diagnostic::error("failed to copy data over to intermediate file
-    //   "
-    //                            "`{}`",
-    //                            bytes_written)
-    //     .to_error();
-    // }
-    TENZIR_WARN("AH");
-    auto mmdb = make_mmdb(tempFileName);
+    auto mmdb = make_mmdb(temp_file_name);
     if (not mmdb) {
       return mmdb.error();
     }
-    return std::make_unique<ctx>(std::move(tempFileName), std::move(*mmdb));
+    return std::make_unique<ctx>(std::move(temp_file_name), std::move(*mmdb),
+                                 version());
   }
 };
 
@@ -602,7 +577,6 @@ class plugin : public virtual context_plugin {
 
   auto make_context(context::parameter_map parameters) const
     -> caf::expected<std::unique_ptr<context>> override {
-    TENZIR_WARN("2");
     auto db_path = std::string{};
     for (const auto& [key, value] : parameters) {
       if (key == path_key) {
@@ -619,20 +593,13 @@ class plugin : public virtual context_plugin {
         .to_error();
     }
     if (db_path.empty()) {
-      // return diagnostic::error("missing required db-path option")
-      //   .usage("context create <name> geoip --db-path <path>")
-      //   .to_error();
-      // std::string tempFileName = "/tmp/temp2file.mmdb";
-      // auto myfile
-      //   = std::fstream(tempFileName, std::ios::out | std::ios::binary);
-      // db_path = tempFileName;
-      return std::make_unique<ctx>(std::move(db_path), nullptr);
+      return std::make_unique<ctx>(std::move(db_path), nullptr, 2);
     }
     auto mmdb = make_mmdb(db_path);
     if (not mmdb) {
       return mmdb.error();
     }
-    return std::make_unique<ctx>(std::move(db_path), std::move(*mmdb));
+    return std::make_unique<ctx>(std::move(db_path), std::move(*mmdb), 1);
   }
 };
 
