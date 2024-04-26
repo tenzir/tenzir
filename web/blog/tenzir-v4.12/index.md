@@ -7,7 +7,7 @@ comments: true
 ---
 
 We are thrilled to announce Tenzir
-[v4.12](https://github.com/tenzir/tenzir/releases/tag/v4.12.0), a feature-packed
+[v4.12](https://github.com/tenzir/tenzir/releases/tag/v4.12.1), a feature-packed
 release introducing numerous enhancements. Notable additions include list
 unrolling, event deduplication, and the deployment of advanced pipeline
 architectures with publish-subscribe. We've also added a download button,
