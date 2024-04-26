@@ -25,7 +25,7 @@ if (TARGET libzmq)
   set_target_properties(libzmq PROPERTIES INTERFACE_LINK_LIBRARIES "")
 endif ()
 
-if (TENZIR_ENABLE_STATIC_PLUGINS)
+if (TENZIR_ENABLE_STATIC_EXECUTABLE)
   set(cppzmq_target cppzmq-static)
 else ()
   set(cppzmq_target cppzmq)
