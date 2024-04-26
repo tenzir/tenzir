@@ -1,14 +1,17 @@
 openapi: 3.0.0
 info:
   title: Tenzir REST API
-  version: '"0.1"'
+  version: '"v0"'
   description: >-
     This API can be used to interact with a Tenzir Node in a RESTful manner.
 
 
     All API requests must be authenticated with a valid token, which must be
     supplied in the `X-Tenzir-Token` request header. The token can be generated
-    on the command-line using `tenzir-ctl web generate-token`.
+    on the command-line using `tenzir-ctl web generate-token
+
+
+    `.All endpoints are versioned, and must be prefixed with `/v0`.
 servers:
   - url: https://tenzir.example.com/api/v0
 security:
