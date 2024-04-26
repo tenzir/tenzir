@@ -577,7 +577,7 @@ caf::error configuration::parse(int argc, char** argv) {
         .add<std::vector<std::string>>("?tenzir", "schema-dirs", "")
         .add<std::vector<std::string>>("?tenzir", "plugin-dirs", "")
         .add<std::vector<std::string>>("?tenzir", "plugins", "")
-        .add<std::vector<std::string>>("?tenzir", "disabled-plugins", "");
+        .add<std::vector<std::string>>("?tenzir", "disable-plugins", "");
   auto [ec, it] = plugin_opts.parse(content, plugin_args);
   if (ec != caf::pec::success) {
     TENZIR_ASSERT(it != plugin_args.end());
