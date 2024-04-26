@@ -8,10 +8,10 @@ info:
 
     All API requests must be authenticated with a valid token, which must be
     supplied in the `X-Tenzir-Token` request header. The token can be generated
-    on the command-line using `tenzir-ctl web generate-token
+    on the command-line using `tenzir-ctl web generate-token`.
 
 
-    `.All endpoints are versioned, and must be prefixed with `/v0`.
+    All endpoints are versioned, and must be prefixed with `/v0`.
 servers:
   - url: https://tenzir.example.com/api/v0
 security:
