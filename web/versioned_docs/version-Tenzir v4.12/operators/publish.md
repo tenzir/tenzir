@@ -20,6 +20,9 @@ The `publish` operator publishes events at a node in a channel with the
 specified topic. Any number of subscribers using the [`subscribe`](subscribe.md)
 operator receive the events immediately.
 
+Note that the `publish` operator does not guarantee that events stay in their
+original order.
+
 ### `<topic>`
 
 An optional topic for publishing events under. The provided topic must be
