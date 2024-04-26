@@ -28,6 +28,7 @@
 #include <maxminddb.h>
 #include <memory>
 #include <string>
+#include <utility>
 
 namespace tenzir::plugins::geoip {
 
@@ -551,19 +552,35 @@ struct v1_loader : public context_loader {
 };
 
 struct v2_loader : public context_loader {
+  explicit v2_loader(record global_config)
+    : global_config_{std::move(global_config)} {
+  }
+
   auto version() const -> int {
     return 2;
   }
 
   auto load(chunk_ptr serialized) const
     -> caf::expected<std::unique_ptr<context>> {
+    const auto* cache_dir
+      = get_if<std::string>(&global_config_, "tenzir.cache-directory");
     const auto current_time = std::time(nullptr);
-    std::string temp_file_name = std::filesystem::temp_directory_path().string()
-                                 + std::to_string(current_time);
+    std::string temp_file_name = *cache_dir + std::to_string(current_time);
+    TENZIR_WARN(temp_file_name);
     auto myfile
       = std::fstream(temp_file_name, std::ios::out | std::ios::binary);
+    if (!myfile) {
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to open temp file on "
+                                         "data load"));
+    }
     myfile.write(reinterpret_cast<const char*>(serialized->data()),
                  static_cast<std::streamsize>(serialized->size()));
+    if (!myfile) {
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed write the temp file "
+                                         "on data load"));
+    }
     myfile.close();
     auto mmdb = make_mmdb(temp_file_name);
     if (not mmdb) {
@@ -571,12 +588,16 @@ struct v2_loader : public context_loader {
     }
     return std::make_unique<ctx>(std::move(temp_file_name), std::move(*mmdb));
   }
+
+private:
+  const record global_config_;
 };
 
 class plugin : public virtual context_plugin {
-  auto initialize(const record&, const record&) -> caf::error override {
+  auto initialize(const record&, const record& global_config)
+    -> caf::error override {
     register_loader(std::make_unique<v1_loader>());
-    register_loader(std::make_unique<v2_loader>());
+    register_loader(std::make_unique<v2_loader>(global_config));
     return caf::none;
   }
 
