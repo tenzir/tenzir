@@ -99,8 +99,8 @@ class ctx final : public virtual context {
 public:
   ctx() noexcept = default;
 
-  explicit ctx(std::string db_path, mmdb_ptr mmdb, int version)
-    : db_path_{std::move(db_path)}, mmdb_{std::move(mmdb)}, version_{version} {
+  explicit ctx(std::string db_path, mmdb_ptr mmdb)
+    : db_path_{std::move(db_path)}, mmdb_{std::move(mmdb)} {
   }
 
   auto context_type() const -> std::string override {
@@ -488,6 +488,11 @@ public:
   }
 
   auto reset() -> caf::expected<void> override {
+    if (!mmdb_) {
+      return caf::make_error(ec::lookup_error,
+                             fmt::format("no GeoIP data currently exists for "
+                                         "this context"));
+    }
     auto mmdb = make_mmdb(db_path_);
     if (not mmdb) {
       return mmdb.error();
@@ -503,14 +508,19 @@ public:
   }
 
   auto save() const -> caf::expected<save_result> override {
+    if (!mmdb_) {
+      return caf::make_error(ec::lookup_error,
+                             fmt::format("no GeoIP data currently exists for "
+                                         "this context"));
+    }
     return save_result{.data = std::move(chunk::mmap(db_path_).value()),
-                       .version = version_};
+                       .version = latest_version};
   }
 
 private:
   std::string db_path_;
   mmdb_ptr mmdb_;
-  int version_;
+  int latest_version = 2;
 };
 
 struct v1_loader : public context_loader {
@@ -559,8 +569,7 @@ struct v2_loader : public context_loader {
     if (not mmdb) {
       return mmdb.error();
     }
-    return std::make_unique<ctx>(std::move(temp_file_name), std::move(*mmdb),
-                                 version());
+    return std::make_unique<ctx>(std::move(temp_file_name), std::move(*mmdb));
   }
 };
 
@@ -593,13 +602,13 @@ class plugin : public virtual context_plugin {
         .to_error();
     }
     if (db_path.empty()) {
-      return std::make_unique<ctx>(std::move(db_path), nullptr, 2);
+      return std::make_unique<ctx>(std::move(db_path), nullptr);
     }
     auto mmdb = make_mmdb(db_path);
     if (not mmdb) {
       return mmdb.error();
     }
-    return std::make_unique<ctx>(std::move(db_path), std::move(*mmdb), 1);
+    return std::make_unique<ctx>(std::move(db_path), std::move(*mmdb));
   }
 };
 
