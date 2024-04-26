@@ -40,13 +40,14 @@ auto openapi_record() -> record {
       "manner.\n\n"
       "All API requests must be authenticated with a valid token, which must "
       "be supplied in the `X-Tenzir-Token` request header. The token can be "
-      "generated on the command-line using `tenzir-ctl web generate-token`.";
+      "generated on the command-line using `tenzir-ctl web generate-token\n\n`."
+      "All endpoints are versioned, and must be prefixed with `/v0`.";
   auto openapi = record{
     {"openapi", "3.0.0"},
     {"info",
      record{
        {"title", "Tenzir REST API"},
-       {"version", "\"0.1\""},
+       {"version", "\"v0\""},
        {"description", std::move(description)},
      }},
     {
