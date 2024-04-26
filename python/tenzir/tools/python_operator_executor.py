@@ -3,7 +3,7 @@
 import os
 import sys
 from collections import defaultdict
-from types import ModuleType
+from types import ModuleType, CodeType
 from typing import (
     Any,
     Dict,
@@ -318,14 +318,14 @@ class ResultsBuffer:
         return unflatten_batch(fields, arrays)
 
 
-def execute_user_code(batch: pa.RecordBatch, code: str) -> pa.RecordBatch:
+def execute_user_code(batch: pa.RecordBatch, compiled_code: CodeType) -> pa.RecordBatch:
     buffer = ResultsBuffer(batch)
     for i in range(batch.num_rows):
         # Create the magic `self` variable.
         self = buffer.start_row(i)
         env = {"self": self}
         # Run the user-provided code
-        exec(code, env)
+        exec(compiled_code, env)
         if len(self) == 0:
             raise Exception("Empty output not allowed")
         buffer.finish_row(self)
@@ -344,6 +344,7 @@ def main() -> int:
     codepipe = int(sys.argv[1])
     code = os.read(codepipe, 128 * 1024)
 
+
     # When the parent detects an error, it attempts to read the contents
     # of `errpipe` and aborts the pipeline with them as the error.
     errpipe = int(sys.argv[2])
@@ -354,6 +355,7 @@ def main() -> int:
     ostream = pa.output_stream(sys.stdout.buffer)
 
     try:
+        compiled_code = compile(code, '<string>', 'exec')
         while True:
             reader = pa.ipc.RecordBatchStreamReader(istream)
             batch_in = reader.read_next_batch()
@@ -364,7 +366,7 @@ def main() -> int:
                 reader.read_next_batch()
             except StopIteration:
                 pass
-            batch_out = execute_user_code(batch_in, code.decode())
+            batch_out = execute_user_code(batch_in, compiled_code)
             writer = pa.ipc.RecordBatchStreamWriter(ostream, batch_out.schema)
             writer.write_batch(batch_out)
             writer.close()

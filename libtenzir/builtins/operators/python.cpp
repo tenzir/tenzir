@@ -70,8 +70,9 @@ struct config {
 
 auto drain_pipe(bp::ipstream& pipe) -> std::string {
   auto result = std::string{};
-  if (pipe.peek() == bp::ipstream::traits_type::eof())
+  if (pipe.peek() == bp::ipstream::traits_type::eof()) {
     return result;
+  }
   auto line = std::string{};
   while (std::getline(pipe, line)) {
     if (not result.empty()) {
@@ -155,8 +156,9 @@ public:
         // verified. We truncate it to this length unconditionally for
         // consistency.
         constexpr auto semaphore_name_max_length = 30u;
-        if (sem_name.size() > semaphore_name_max_length)
+        if (sem_name.size() > semaphore_name_max_length) {
           sem_name.erase(semaphore_name_max_length);
+        }
         // The initial venv creation tends to take a very long time, and often
         // causes the pipline creation to take longer then what our FE tolerate
         // in terms of wait time. As a workaround we yield early, so that the
@@ -265,6 +267,13 @@ public:
       ::close(errpipe.pipe().native_sink());
       co_yield {}; // signal successful startup
       for (auto&& slice : input) {
+        if (!child.running()) {
+          auto python_error = drain_pipe(errpipe);
+          diagnostic::error("{}", python_error)
+            .note("python process exited with error")
+            .emit(ctrl.diagnostics());
+          co_return;
+        }
         if (slice.rows() == 0) {
           co_yield {};
           continue;
@@ -303,13 +312,17 @@ public:
         auto reader = arrow::ipc::RecordBatchStreamReader::Open(&file);
         if (!reader.status().ok()) {
           auto python_error = drain_pipe(errpipe);
-          diagnostic::error("{}", python_error).emit(ctrl.diagnostics());
+          diagnostic::error("{}", python_error)
+            .note("python process exited with error")
+            .emit(ctrl.diagnostics());
           co_return;
         }
         auto result_batch = (*reader)->ReadNext();
         if (!result_batch.status().ok()) {
           auto python_error = drain_pipe(errpipe);
-          diagnostic::error("{}", python_error).emit(ctrl.diagnostics());
+          diagnostic::error("{}", python_error)
+            .note("python process exited with error")
+            .emit(ctrl.diagnostics());
           co_return;
         }
         // The writer on the other side writes an invalid record batch as
@@ -383,18 +396,20 @@ public:
     -> caf::error override {
     auto create_virtualenv
       = try_get_or<bool>(plugin_config, "create-venvs", true);
-    if (!create_virtualenv)
+    if (!create_virtualenv) {
       return create_virtualenv.error();
-    if (!(*create_virtualenv))
+    }
+    if (!(*create_virtualenv)) {
       config.venv_base_dir = std::nullopt;
-    else if (const auto* cache_dir
-             = get_if<std::string>(&global_config, "tenzir.cache-directory"))
+    } else if (const auto* cache_dir = get_if<std::string>(
+                 &global_config, "tenzir.cache-directory")) {
       config.venv_base_dir
         = (std::filesystem::path{*cache_dir} / "python" / "venvs").string();
-    else
+    } else {
       config.venv_base_dir = (std::filesystem::temp_directory_path() / "tenzir"
                               / "python" / "venvs")
                                .string();
+    }
     auto implicit_requirements_default = std::string{
       detail::install_datadir() / "python"
       / fmt::format("tenzir-{}.{}.{}-py3-none-any.whl[operator]",
