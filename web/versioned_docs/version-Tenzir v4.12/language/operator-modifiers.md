@@ -19,6 +19,16 @@ every <interval> <operator> [<args...>]
 For example, `version` prints the version number exactly once, but `every 1s
 version` prints the version number once every second.
 
+## Unordered Execution
+
+The `unordered` modifier tells an operator that it may return results out of
+order. For example, `unordered read json` may be faster than `read json`, as it
+allows the JSON parser to read events out of order.
+
+By default, operators infer ordering requirements from the next operator. For
+example, in `read json | sort`, the `sort` operator already lets `read json`
+know that it may return results out of order.
+
 ## Location Overrides
 
 Pipelines run across multiple processes:

@@ -283,7 +283,11 @@ load(const std::vector<std::string>& bundled_plugins,
   while (true) {
     const auto has_unavailable_dependency = [&](const auto& plugin) {
       for (const auto& dependency : plugin.dependencies()) {
-        if (std::find(get_mutable().begin(), removed, dependency) == removed) {
+        const auto is_dependency = [&](const auto& plugin) {
+          return plugin and plugin == dependency;
+        };
+        if (std::find_if(get_mutable().begin(), removed, is_dependency)
+            == removed) {
           return true;
         }
       }
@@ -744,7 +748,7 @@ plugin_ptr::plugin_ptr(plugin_ptr&& other) noexcept = default;
 plugin_ptr& plugin_ptr::operator=(plugin_ptr&& rhs) noexcept = default;
 
 plugin_ptr::operator bool() const noexcept {
-  return static_cast<bool>(ctrl_->instance);
+  return ctrl_ and ctrl_->instance;
 }
 
 const plugin* plugin_ptr::operator->() const noexcept {

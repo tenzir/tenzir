@@ -244,3 +244,21 @@ END
 @test "python operator empty input" {
   check tenzir 'version | put x=42 | python ""'
 }
+
+# bats test_tags=python
+@test "python operator invalid syntax" {
+  check ! tenzir 'shell "sleep 3; exit 1" | read json | python "x="'
+  check ! tenzir 'version | put x=42 | python "@@"'
+}
+
+# bats test_tags=python
+@test "python operator invalid syntax in file" {
+  echo "self.original_c = !!" >${BATS_TEST_TMPDIR}/code.py
+  check ! tenzir -f /dev/stdin <<END
+  shell "sleep 3; exit 1"
+    | read json
+    | put a.b.c = 2
+    | unflatten
+    | python --file ${BATS_TEST_TMPDIR}/code.py
+END
+}

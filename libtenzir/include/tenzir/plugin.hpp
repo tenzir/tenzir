@@ -990,6 +990,22 @@ struct formatter<enum tenzir::plugin_ptr::type> {
   }
 };
 
+template <>
+struct formatter<tenzir::plugin_ptr> {
+  template <class ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <class FormatContext>
+  auto format(const tenzir::plugin_ptr& value, FormatContext& ctx) const {
+    if (value) {
+      return fmt::format_to(ctx.out(), "{} ({})", value->name(), value.type());
+    }
+    return fmt::format_to(ctx.out(), "<disabled> ({})", value.type());
+  }
+};
+
 } // namespace fmt
 
 // -- template function definitions -------------------------------------------
