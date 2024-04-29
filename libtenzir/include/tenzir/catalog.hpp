@@ -15,6 +15,7 @@
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/detail/inspection_common.hpp"
 #include "tenzir/expression.hpp"
+#include "tenzir/instrumentation.hpp"
 #include "tenzir/module.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/taxonomies.hpp"
@@ -144,6 +145,8 @@ public:
 
   /// An actor handle to the accountant.
   accountant_actor accountant = {};
+
+  mutable struct measurement merge_measurement = {};
 
   /// For each type, maps a partition ID to the synopses for that partition.
   // We mainly iterate over the whole map and return a sorted set, for which

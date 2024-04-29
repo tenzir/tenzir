@@ -599,6 +599,9 @@ void catalog_state::emit_metrics() const {
       num_events += synopsis->events;
     }
   }
+  TENZIR_VERBOSE("XTNZ catalog merge duration: {}, merges: {}",
+                 merge_measurement.duration, merge_measurement.events);
+  merge_measurement = measurement{};
   auto total_num_partitions = uint64_t{0};
   auto total_num_events = uint64_t{0};
   auto r = report{};
@@ -709,12 +712,20 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
     [self](atom::merge, uuid partition,
            partition_synopsis_ptr& synopsis) -> atom::ok {
       TENZIR_TRACE_SCOPE("{} {}", *self, TENZIR_ARG(partition));
+      auto t = timer::start(self->state.merge_measurement);
+      auto on_return = caf::detail::make_scope_guard([&] {
+        t.stop(1);
+      });
       self->state.merge(partition, std::move(synopsis));
       return atom::ok_v;
     },
     [self](
       atom::merge,
       std::vector<partition_synopsis_pair>& partition_synopses) -> atom::ok {
+      auto t = timer::start(self->state.merge_measurement);
+      auto on_return = caf::detail::make_scope_guard([&] {
+        t.stop(partition_synopses.size());
+      });
       for (auto& [uuid, partition_synopsis] : partition_synopses)
         self->state.merge(uuid, partition_synopsis);
       return atom::ok_v;
