@@ -136,8 +136,9 @@ struct accountant_state_impl {
       for (const auto& [key, _] : meta2)
         schema_fields.emplace_back(key, string_type{});
       auto schema = type{
-        fmt::format("tenzir.metrics.{}", key),
+        fmt::format("tenzir.metrics.legacy.{}", key),
         record_type{schema_fields},
+        {{"internal"}}
       };
       builder = std::make_shared<table_slice_builder>(schema);
       TENZIR_DEBUG("{} obtained a table slice builder", *self);
