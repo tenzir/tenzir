@@ -221,6 +221,7 @@ struct rebuilder_state {
     auto query_context
       = query_context::make_extract("rebuild", self, run->options.expression);
     query_context.id = uuid::random();
+    TENZIR_VERBOSE("XTNZ {} sends query to catalog", *self);
     self
       ->request(catalog, caf::infinite, atom::candidates_v,
                 std::move(query_context))
