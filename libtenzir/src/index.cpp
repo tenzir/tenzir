@@ -1185,6 +1185,9 @@ index(index_actor::stateful_pointer<index_state> self,
     TENZIR_ARG(active_partition_timeout), TENZIR_ARG(max_inmem_partitions),
     TENZIR_ARG(taste_partitions), TENZIR_ARG(max_concurrent_partition_lookups),
     TENZIR_ARG(catalog_dir), TENZIR_ARG(index_config));
+  if (self->getf(caf::scheduled_actor::is_detached_flag)) {
+    caf::detail::set_thread_name("tenzir.index");
+  }
   TENZIR_VERBOSE("{} initializes index in {} with a maximum partition "
                  "size of {} events and {} resident partitions",
                  *self, dir, partition_capacity, max_inmem_partitions);
