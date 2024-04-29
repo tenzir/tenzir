@@ -95,16 +95,12 @@ struct active_partition_info {
   /// The UUID of the partition.
   uuid id = {};
 
-  /// The spawn timestamp of the partition.
-  std::chrono::steady_clock::time_point spawn_time = {};
-
   template <class Inspector>
   friend auto inspect(Inspector& f, active_partition_info& x) {
     return f.object(x)
       .pretty_name("active_partition_info")
       .fields(f.field("actor", x.actor), f.field("stream-slot", x.stream_slot),
-              f.field("capacity", x.capacity), f.field("id", x.id),
-              f.field("spawn-time", x.spawn_time));
+              f.field("capacity", x.capacity), f.field("id", x.id));
   }
 };
 
