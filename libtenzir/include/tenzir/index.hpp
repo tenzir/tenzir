@@ -16,7 +16,7 @@
 #include "tenzir/detail/lru_cache.hpp"
 #include "tenzir/detail/stable_set.hpp"
 #include "tenzir/fbs/index.hpp"
-#include "tenzir/importer.hpp"
+#include "tenzir/instrumentation.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/query_context.hpp"
 #include "tenzir/query_cursor.hpp"

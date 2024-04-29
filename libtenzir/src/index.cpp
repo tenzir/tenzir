@@ -1210,6 +1210,12 @@ index(index_actor::stateful_pointer<index_state> self,
     self->quit(error);
     return index_actor::behavior_type::make_empty_behavior();
   }
+  using namespace std::chrono_literals;
+  detail::weak_run_delayed_loop(self, 10s, [self] {
+    record status;
+    detail::fill_status_map(status, self);
+    TENZIR_VERBOSE("XTNZ {} periodic status message: {}", *self, data{status});
+  });
   self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);
   self->state.catalog = std::move(catalog);
