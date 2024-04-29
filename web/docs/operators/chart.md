@@ -25,38 +25,44 @@ The operator does no rendering itself.
 
 ### `-x|--x-axis <fields>` (`line`, `area`, and `bar` charts only)
 
-Set the field used for the X-axis. Defaults to the first field in the schema.
+Set the field used for the X-axis.
 
 Values in this field must be strictly increasing
 (sorted in ascending order, without duplicates)
 when creating a `line` or `area` chart,
 or unique when creating a `bar` chart.
 
+ Defaults to the first field in the schema.
+
 ### `-y|--y-axis <fields>` (`line`, `area`, and `bar` charts only)
 
 Set the fields used for the Y-axis.
-Can either be a single field, or multiple fields delimited with commas
-(`field1,field2`).
+Can either be a single field, or a list of fields spelled with
+a list syntax (`[field1, field2]`).
+
 Defaults to every field but the first one.
 
 ### `position=<position>` (`line`, `area`, and `bar` charts only)
 
 Control how the values are grouped when rendered as a chart.
 Possible values are `grouped` and `stacked`.
+
 Defaults to `grouped`.
 
 ### `--name <field>` (`pie` chart only)
 
 Set the field used for the names of the segments.
-Defaults to the first field in the schema.
 
 Values in this field must be unique.
+
+Defaults to the first field in the schema.
 
 ### `--value <fields>` (`pie` chart only)
 
 Set the fields used for the value of a segment.
 Can either be a single field, or multiple fields delimited with commas
 (`field1,field2`).
+
 Defaults to every field but the first one.
 
 ## Examples
