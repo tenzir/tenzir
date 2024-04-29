@@ -1179,6 +1179,8 @@ index(index_actor::stateful_pointer<index_state> self,
       duration active_partition_timeout, size_t max_inmem_partitions,
       size_t taste_partitions, size_t max_concurrent_partition_lookups,
       const std::filesystem::path& catalog_dir, index_config index_config) {
+  if (self->getf(caf::local_actor::is_detached_flag))
+    caf::detail::set_thread_name("tenzir.index");
   TENZIR_TRACE_SCOPE(
     "index {} {} {} {} {} {} {} {} {} {}", TENZIR_ARG(self->id()),
     TENZIR_ARG(filesystem), TENZIR_ARG(dir), TENZIR_ARG(partition_capacity),
