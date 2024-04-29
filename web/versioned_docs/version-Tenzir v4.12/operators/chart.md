@@ -35,8 +35,8 @@ or unique when creating a `bar` chart.
 ### `-y|--y-axis <fields>` (`line`, `area`, and `bar` charts only)
 
 Set the fields used for the Y-axis.
-Can either be a single field, or a list of fields spelled with
-a list syntax (`[field1, field2]`).
+Can either be a single field, or multiple fields delimited with commas
+(`field1,field2`).
 Defaults to every field but the first one.
 
 ### `position=<position>` (`line`, `area`, and `bar` charts only)
