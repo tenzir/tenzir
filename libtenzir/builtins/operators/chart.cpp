@@ -115,19 +115,17 @@ struct configuration_item {
   /// (Required by the constructor of `type`, which takes
   /// `attribute_view`s, which contain `string_view`s).
   ///
-  /// If `count_fields() == 1`, returns `key`, otherwise returns
-  /// `format("{}{}", key, index)`.
+  /// Returns `key` for the first field, and `key<index>` for the remaining
+  /// fields, with the index starting at 1.
   auto get_attribute_key(const record_type& ty, size_t index) const
     -> std::string_view {
     const auto field_count = count_fields(ty);
-    if (field_count == 1) {
-      return key;
-    }
     if (index >= indexed_attribute_keys.size()) {
       indexed_attribute_keys.resize(field_count);
     }
     if (indexed_attribute_keys[index].empty()) {
-      indexed_attribute_keys[index] = fmt::format("{}{}", key, index);
+      indexed_attribute_keys[index]
+        = index == 0 ? key : fmt::format("{}{}", key, index);
     }
     return indexed_attribute_keys[index];
   }
