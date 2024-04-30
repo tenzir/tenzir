@@ -152,15 +152,15 @@ struct selector {
 
 #if USE_SIGNATURE
 
-TENZIR_NO_INLINE auto copy_name(auto&& name, auto out) {
-  return std::copy(name.begin(), name.end(), out);
-}
-
-/// TODO
+/// Given some `data`, this function computes a byte-sequence that uniquely
+/// identifies the type that would be returned by `type::infer`. It is much
+/// faster than using `type::infer`.
 ///
-/// Note: This does not use `data_view` because that allocates.
-template <std::output_iterator<std::byte> It>
-TENZIR_NO_INLINE auto data_signature(const data& x, It out) -> It {
+/// Note: This does not use `data_view` because that allocates. Also, we use
+/// `std::vector<std::byte>&` instead of a generic output iterator because
+/// output iterators have poor performance when appending ranges, which happens
+/// for field names here.
+void append_signature(const data& x, std::vector<std::byte>& out) {
   caf::visit(
     [&]<typename T>(const T& x) {
       if constexpr (caf::detail::is_one_of<T, pattern, enumeration, map>::value) {
@@ -169,7 +169,7 @@ TENZIR_NO_INLINE auto data_signature(const data& x, It out) -> It {
       } else {
         using Type = data_to_type_t<T>;
         // Write out the type index. For complex types, this marks the start.
-        *out++ = static_cast<std::byte>(Type::type_index);
+        out.push_back(static_cast<std::byte>(Type::type_index));
         if constexpr (basic_type<Type>) {
           // We are done, no need for recursion.
         } else {
@@ -178,35 +178,27 @@ TENZIR_NO_INLINE auto data_signature(const data& x, It out) -> It {
           if constexpr (std::same_as<T, record>) {
             for (auto& [name, value] : x) {
               // Start a new field with a special marker.
-              *out++ = std::byte{255};
+              out.push_back(std::byte{255});
               // The field name is part of the type signature.
               auto name_bytes = as_bytes(name);
-              out = copy_name(name_bytes, out);
+              out.insert(out.end(), name_bytes.begin(), name_bytes.end());
               // And then, of course, the type of the field.
-              out = data_signature(value, out);
+              append_signature(value, out);
             }
           } else if constexpr (std::same_as<T, list>) {
             for (auto& item : x) {
-              out = data_signature(item, out);
+              append_signature(item, out);
             }
           } else {
             static_assert(detail::always_false_v<T>, "unhandled type");
           }
           // We write out the type index once more to mark the end.
-          *out++ = static_cast<std::byte>(Type::type_index);
+          out.push_back(static_cast<std::byte>(Type::type_index));
         }
       }
     },
     x);
-  return out;
 }
-
-struct hash_type_sig {
-  template <class T>
-  auto operator()(T& x) const noexcept -> std::size_t {
-    return tenzir::hash(x);
-  }
-};
 #endif
 
 constexpr auto unknown_entry_name = std::string_view{};
@@ -242,7 +234,8 @@ struct parser_state {
   /// this is not great, but a proper solution would require refactoring large
   /// parts of this file due to bad extendability of the current design.
 #if USE_SIGNATURE
-  tsl::robin_map<std::vector<std::byte>, size_t, hash_type_sig> precise_map;
+  tsl::robin_map<std::vector<std::byte>, size_t, detail::hash_algorithm_proxy<>>
+    precise_map;
 #else
   tsl::robin_map<type, size_t> precise_map;
 #endif
@@ -933,7 +926,7 @@ public:
       }
 #if USE_SIGNATURE
       type_sig_.clear();
-      data_signature(event, std::back_inserter(type_sig_));
+      append_signature(event, type_sig_);
       auto it = state.precise_map.find(type_sig_);
 #else
       auto ty = type::infer(event);
