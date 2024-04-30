@@ -30,6 +30,9 @@ namespace tenzir::plugins::tcp_listen {
 
 namespace {
 
+using connection_actor = caf::typed_actor<auto(int)->caf::result<void>>;
+using connection_manager_actor = caf::typed_actor<auto(int)->caf::result<void>>;
+
 struct tcp_listen_args {
   std::string hostname = {};
   std::string port = {};
@@ -100,6 +103,8 @@ using bridge_actor = caf::typed_actor<
   auto(atom::get)->caf::result<table_slice>>;
 
 struct connection_state {
+  static constexpr auto name = "tcp-listen-connection";
+
   ~connection_state() noexcept {
     // We ignore errors on shutdown. Just trying to close as much as possible
     // here.
@@ -117,7 +122,7 @@ struct connection_state {
     }
   }
 
-  caf::event_based_actor* self;
+  connection_actor::pointer self = {};
   std::shared_ptr<boost::asio::io_context> io_context = {};
   std::optional<boost::asio::ip::tcp::socket> socket = {};
   std::optional<boost::asio::ssl::context> ssl_ctx = {};
@@ -131,11 +136,12 @@ struct connection_state {
   generator<table_slice>::iterator it = {};
 };
 
-auto make_connection(caf::stateful_actor<connection_state>* self,
+auto make_connection(connection_actor::stateful_pointer<connection_state> self,
                      std::shared_ptr<boost::asio::io_context> io_context,
                      boost::asio::ip::tcp::socket socket, bridge_actor bridge,
                      tcp_listen_args args,
-                     shared_diagnostic_handler diagnostics) -> caf::behavior {
+                     shared_diagnostic_handler diagnostics)
+  -> connection_actor::behavior_type {
   self->state.self = self;
   self->state.io_context = std::move(io_context);
   self->state.socket = std::move(socket);
@@ -143,6 +149,21 @@ auto make_connection(caf::stateful_actor<connection_state>* self,
   self->state.args = std::move(args);
   self->state.ctrl = std::make_unique<tcp_listen_control_plane>(
     std::move(diagnostics), args.has_terminal, args.no_location_overrides);
+  self->set_exception_handler(
+    [self](std::exception_ptr exception) -> caf::error {
+      try {
+        std::rethrow_exception(exception);
+      } catch (diagnostic diag) {
+        self->state.ctrl->diagnostics().emit(std::move(diag));
+        return {};
+      } catch (const std::exception& err) {
+        diagnostic::error("{}", err.what())
+          .note("unhandled exception in {}", *self)
+          .emit(self->state.ctrl->diagnostics());
+        return {};
+      }
+      return diagnostic::error("unhandled exception in {}", *self).to_error();
+    });
   if (self->state.args.tls) {
     self->state.ssl_ctx.emplace(boost::asio::ssl::context::tls_server);
     self->state.ssl_ctx->set_default_verify_paths();
@@ -154,13 +175,13 @@ auto make_connection(caf::stateful_actor<connection_state>* self,
     if (SSL_set1_host(tls_handle, self->state.args.hostname.c_str()) != 1) {
       diagnostic::error("failed to enable host name verification")
         .emit(self->state.ctrl->diagnostics());
-      return {};
+      return connection_actor::behavior_type::make_empty_behavior();
     }
     if (not SSL_set_tlsext_host_name(tls_handle,
                                      self->state.args.hostname.c_str())) {
       diagnostic::error("failed to set SNI")
         .emit(self->state.ctrl->diagnostics());
-      return {};
+      return connection_actor::behavior_type::make_empty_behavior();
     }
     if (self->state.args.tls_certfile) {
       self->state.ssl_ctx->use_certificate_chain_file(
@@ -180,7 +201,7 @@ auto make_connection(caf::stateful_actor<connection_state>* self,
       diagnostic::warning("{}", ec.message())
         .note("TLS handshake failed")
         .emit(self->state.ctrl->diagnostics());
-      return {};
+      return connection_actor::behavior_type::make_empty_behavior();
     }
   }
   auto input = [](connection_state& state) -> generator<chunk_ptr> {
@@ -208,7 +229,7 @@ auto make_connection(caf::stateful_actor<connection_state>* self,
     = self->state.args.op->instantiate(std::move(input), *self->state.ctrl);
   if (not gen) {
     diagnostic::error(gen.error()).emit(self->state.ctrl->diagnostics());
-    return {};
+    return connection_actor::behavior_type::make_empty_behavior();
   }
   auto* typed_gen = std::get_if<generator<table_slice>>(&*gen);
   TENZIR_ASSERT(typed_gen);
@@ -244,17 +265,19 @@ auto make_connection(caf::stateful_actor<connection_state>* self,
 }
 
 struct connection_manager_state {
-  caf::event_based_actor* self;
-  detail::weak_handle<bridge_actor> bridge;
-  tcp_listen_args args;
-  shared_diagnostic_handler diagnostics;
+  static constexpr auto name = "tcp-listen-connection-manager";
 
-  std::shared_ptr<boost::asio::io_context> io_context;
-  std::optional<boost::asio::ip::tcp::socket> socket;
-  std::optional<boost::asio::ip::tcp::endpoint> endpoint;
-  std::optional<boost::asio::ip::tcp::acceptor> acceptor;
+  connection_manager_actor::pointer self = {};
+  detail::weak_handle<bridge_actor> bridge = {};
+  tcp_listen_args args = {};
+  shared_diagnostic_handler diagnostics = {};
 
-  std::vector<caf::actor> connections;
+  std::shared_ptr<boost::asio::io_context> io_context = {};
+  std::optional<boost::asio::ip::tcp::socket> socket = {};
+  std::optional<boost::asio::ip::tcp::endpoint> endpoint = {};
+  std::optional<boost::asio::ip::tcp::acceptor> acceptor = {};
+
+  std::vector<connection_actor> connections = {};
 
   auto tcp_listen() {
     acceptor->async_accept([this](boost::system::error_code ec,
@@ -300,15 +323,28 @@ struct connection_manager_state {
   }
 };
 
-auto make_connection_manager(caf::stateful_actor<connection_manager_state>* self,
-                             bridge_actor bridge, tcp_listen_args args,
-                             shared_diagnostic_handler diagnostics)
-  -> caf::behavior {
+auto make_connection_manager(
+  connection_manager_actor::stateful_pointer<connection_manager_state> self,
+  bridge_actor bridge, tcp_listen_args args,
+  shared_diagnostic_handler diagnostics)
+  -> connection_manager_actor::behavior_type {
   self->state.self = self;
   self->state.io_context = std::make_shared<boost::asio::io_context>();
   self->state.bridge = std::move(bridge);
   self->state.args = std::move(args);
   self->state.diagnostics = std::move(diagnostics);
+  self->set_exception_handler(
+    [self](std::exception_ptr exception) -> caf::error {
+      try {
+        std::rethrow_exception(exception);
+      } catch (const std::exception& err) {
+        diagnostic::error("{}", err.what())
+          .note("unhandled exception in {}", *self)
+          .emit(self->state.diagnostics);
+        return {};
+      }
+      return diagnostic::error("unhandled exception in {}", *self).to_error();
+    });
   auto resolver = boost::asio::ip::tcp::resolver{*self->state.io_context};
   auto endpoints
     = resolver.resolve(self->state.args.hostname, self->state.args.port);
@@ -316,7 +352,7 @@ auto make_connection_manager(caf::stateful_actor<connection_manager_state>* self
     diagnostic::error("failed to resolve {}:{}", self->state.args.hostname,
                       self->state.args.port)
       .emit(self->state.diagnostics);
-    return {};
+    return connection_manager_actor::behavior_type::make_empty_behavior();
   }
   self->state.endpoint = endpoints.begin()->endpoint();
   self->state.acceptor = boost::asio::ip::tcp::acceptor(*self->state.io_context,
@@ -342,7 +378,7 @@ struct bridge_state {
   std::queue<table_slice> buffer;
   caf::typed_response_promise<table_slice> buffer_rp;
 
-  caf::actor connection_manager = {};
+  connection_manager_actor connection_manager = {};
 };
 
 auto make_bridge(bridge_actor::stateful_pointer<bridge_state> self,
@@ -470,19 +506,28 @@ public:
       args.port = std::string{split[1]};
     }
     auto op_name = p.accept_identifier();
-    if (not op_name) {
-      diagnostic::error("expected operator name")
-        .primary(p.current_span())
-        .throw_();
+    if (op_name) {
+      if (*op_name != "read") {
+        diagnostic::error("expected `read`").primary(p.current_span()).throw_();
+      }
+      const auto* read_plugin = plugins::find_operator(op_name->name);
+      if (not read_plugin) {
+        diagnostic::error("operator `{}` does not exist", op_name->name)
+          .primary(op_name->source)
+          .throw_();
+      }
+      args.op = read_plugin->parse_operator(p);
+    } else {
+      auto read_pipe = pipeline::internal_parse("read json");
+      if (not read_pipe) {
+        diagnostic::error("failed to parse default format `json`")
+          .primary(p.current_span())
+          .throw_();
+      }
+      auto ops = std::move(*read_pipe).unwrap();
+      TENZIR_ASSERT(ops.size() == 1);
+      args.op = std::move(ops[0]);
     }
-    TENZIR_ASSERT(*op_name == "read");
-    const auto* read_plugin = plugins::find_operator(op_name->name);
-    if (not read_plugin) {
-      diagnostic::error("operator `{}` does not exist", op_name->name)
-        .primary(op_name->source)
-        .throw_();
-    }
-    args.op = read_plugin->parse_operator(p);
     TENZIR_ASSERT(args.op);
     TENZIR_ASSERT(not dynamic_cast<pipeline*>(args.op.get()));
     if (const auto ok = args.op->check_type<chunk_ptr, table_slice>(); not ok) {
