@@ -16,6 +16,8 @@
 #include <tenzir/concept/parseable/string/quoted_string.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/detail/installdirs.hpp>
+#include <tenzir/detail/overload.hpp>
+#include <tenzir/detail/preserved_fds.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/generator.hpp>
 #include <tenzir/logger.hpp>
@@ -189,7 +191,10 @@ public:
           // the invocation in a script that drains the pipe continuously but
           // only forwards the first n bytes.
           if (bp::system(python_executable, "-m", "venv", venv,
-                         bp::std_err > std_err)) {
+                         bp::std_err > std_err,
+                         detail::preserved_fds{{STDERR_FILENO}},
+                         boost::process::limit_handles)
+              != 0) {
             auto venv_error = drain_pipe(std_err);
             // We need to delete the potentially broken venv here to make sure
             // that it doesn't stick around to break later runs of the python
@@ -230,7 +235,10 @@ public:
           std_err = bp::ipstream{};
           TENZIR_VERBOSE("installing python modules with: '{}'",
                          fmt::join(pip_invocation, "' '"));
-          if (bp::system(pip_invocation, env, bp::std_err > std_err)) {
+          if (bp::system(pip_invocation, env, bp::std_err > std_err,
+                         detail::preserved_fds{{STDERR_FILENO}},
+                         boost::process::limit_handles)
+              != 0) {
             auto pip_error = drain_pipe(std_err);
             diagnostic::error("{}", pip_error)
               .note("failed to install pip requirements")
@@ -247,15 +255,19 @@ public:
       // deadlock when trying to write to stderr. So we use a separate pipe
       // that's only used by the python executor and has well-defined semantics.
       bp::ipstream errpipe;
-      auto child
-        = bp::child{boost::process::filesystem::path{python_executable},
-                    "-c",
-                    PYTHON_SCAFFOLD,
-                    fmt::to_string(codepipe.pipe().native_source()),
-                    fmt::to_string(errpipe.pipe().native_sink()),
-                    env,
-                    bp::std_out > std_out,
-                    bp::std_in < std_in};
+      auto child = bp::child{
+        boost::process::filesystem::path{python_executable},
+        "-c",
+        PYTHON_SCAFFOLD,
+        fmt::to_string(codepipe.pipe().native_source()),
+        fmt::to_string(errpipe.pipe().native_sink()),
+        env,
+        bp::std_out > std_out,
+        bp::std_in < std_in,
+        detail::preserved_fds{{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO,
+                               codepipe.pipe().native_source(),
+                               errpipe.pipe().native_sink()}},
+        boost::process::limit_handles};
       if (code.empty()) {
         // The current implementation always expects a non-empty input.
         // Otherwise, it blocks forever on a `read` call.
