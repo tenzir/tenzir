@@ -16,6 +16,14 @@ in
           pkgs.shfmt
           pkgs.poetry
           pkgs.python3Packages.spdx-tools
+          (pkgs.python3.withPackages (ps: with ps; [
+            aiohttp
+            dynaconf
+            numpy
+            pandas
+            pyarrow
+            python-box
+          ]))
         ] ++ pkgs.tenzir-integration-test-deps
           ++ lib.optionals (!(pkgs.stdenv.hostPlatform.useLLVM or false)) [
           # Make clang available as alternative compiler when it isn't the default.
