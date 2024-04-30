@@ -746,6 +746,23 @@ auto exec_node(
     return exec_node_actor::behavior_type::make_empty_behavior();
   }
   self->state.weak_node = node;
+  self->set_exception_handler(
+    [self](std::exception_ptr exception) -> caf::error {
+      try {
+        std::rethrow_exception(exception);
+      } catch (diagnostic diag) {
+        self->state.ctrl->diagnostics().emit(std::move(diag));
+        return {};
+      } catch (const std::exception& err) {
+        diagnostic::error("{}", err.what())
+          .note("unhandled exception in {} {}", *self, self->state.op->name())
+          .emit(self->state.ctrl->diagnostics());
+        return {};
+      }
+      return diagnostic::error("unhandled exception in {} {}", *self,
+                               self->state.op->name())
+        .to_error();
+    });
   return {
     [self](atom::internal, atom::run) -> caf::result<void> {
       auto time_scheduled_guard
