@@ -239,6 +239,8 @@ struct exec_node_state {
   std::optional<struct demand> demand = {};
   bool issue_demand_inflight = {};
 
+  caf::typed_response_promise<void> start_rp = {};
+
   /// Exponential backoff for scheduling.
   static constexpr duration min_backoff = std::chrono::milliseconds{10};
   static constexpr duration max_backoff = std::chrono::milliseconds{1000};
@@ -268,6 +270,9 @@ struct exec_node_state {
     emit_metrics();
     if (demand and demand->rp.pending()) {
       demand->rp.deliver();
+    }
+    if (start_rp.pending()) {
+      start_rp.deliver(ec::silent);
     }
   }
 
@@ -391,29 +396,29 @@ struct exec_node_state {
       return {};
     }
     if constexpr (std::is_same_v<Output, std::monostate>) {
-      auto rp = self->make_response_promise<void>();
+      start_rp = self->make_response_promise<void>();
       self
         ->request(previous, caf::infinite, atom::start_v,
                   std::move(all_previous))
         .then(
-          [this, rp]() mutable {
+          [this]() {
             auto time_starting_guard
               = make_timer_guard(metrics.time_scheduled, metrics.time_starting);
             TENZIR_TRACE("{} {} schedules run after successful startup of all "
                          "operators",
                          *self, op->name());
             schedule_run(false);
-            rp.deliver();
+            start_rp.deliver();
           },
-          [this, rp](const caf::error& error) mutable {
+          [this](const caf::error& error) {
             auto time_starting_guard
               = make_timer_guard(metrics.time_scheduled, metrics.time_starting);
             TENZIR_DEBUG("{} {} forwards error during startup: {}", *self,
                          op->name(), error);
-            rp.deliver(
+            start_rp.deliver(
               add_context(error, "{} {} failed to start", *self, op->name()));
           });
-      return rp;
+      return start_rp;
     }
     if constexpr (not std::is_same_v<Input, std::monostate>) {
       TENZIR_DEBUG("{} {} delegates start to {}", *self, op->name(), previous);
