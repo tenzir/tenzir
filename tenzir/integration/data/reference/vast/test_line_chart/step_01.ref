@@ -1,1 +1,1 @@
-{"chart": "line", "position": "grouped", "x": "ts", "y": "orig_bytes"}
+{"chart": "line", "position": "grouped", "x": "ts", "x_axis_type": "linear", "y": "orig_bytes", "y_axis_type": "linear"}

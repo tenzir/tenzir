@@ -1,1 +1,1 @@
-{"chart": "bar", "position": "grouped", "x": "id.orig_h", "y": "count"}
+{"chart": "bar", "position": "grouped", "x": "id.orig_h", "x_axis_type": "linear", "y": "count", "y_axis_type": "linear"}

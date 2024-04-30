@@ -724,10 +724,14 @@ chart_definition chart_definitions[] = {
       {.attr = "x", .flag = "-x,--x-axis", .type = flag_type::field_name, .default_ = nth_field{0}, .allow_lists = false, .req = requirement::strictly_increasing,},
       {.attr = "y", .flag = "-y,--y-axis", .type = flag_type::field_name, .default_ = nth_field{1, nth_field::all_the_rest}, .allow_lists = true,},
       {.attr = "position", .flag = "--position", .type = flag_type::attribute_value, .default_ = attribute_value{"grouped"}, .allow_lists = false,},
+      {.attr = "x_axis_type", .flag = "--x-axis-type", .type = flag_type::attribute_value, .default_ = attribute_value{"linear"}, .allow_lists = false,},
+      {.attr = "y_axis_type", .flag = "--y-axis-type", .type = flag_type::attribute_value, .default_ = attribute_value{"linear"}, .allow_lists = false,},
     },
     .verifications = {
       disallow_mixmatch_between_explicit_and_implicit_arguments({"x", "y"}),
       require_attribute_value_one_of("position", {"grouped", "stacked"}),
+      require_attribute_value_one_of("x_axis_type", {"log", "linear"}),
+      require_attribute_value_one_of("y_axis_type", {"log", "linear"}),
     },
   },
   // `area` is equivalent to `line`.
@@ -738,10 +742,14 @@ chart_definition chart_definitions[] = {
       {.attr = "x", .flag = "-x,--x-axis", .type = flag_type::field_name, .default_ = nth_field{0}, .allow_lists = false, .req = requirement::strictly_increasing,},
       {.attr = "y", .flag = "-y,--y-axis", .type = flag_type::field_name, .default_ = nth_field{1, nth_field::all_the_rest}, .allow_lists = true,},
       {.attr = "position", .flag = "--position", .type = flag_type::attribute_value, .default_ = attribute_value{"grouped"}, .allow_lists = false,},
+      {.attr = "x_axis_type", .flag = "--x-axis-type", .type = flag_type::attribute_value, .default_ = attribute_value{"linear"}, .allow_lists = false,},
+      {.attr = "y_axis_type", .flag = "--y-axis-type", .type = flag_type::attribute_value, .default_ = attribute_value{"linear"}, .allow_lists = false,},
     },
     .verifications = {
       disallow_mixmatch_between_explicit_and_implicit_arguments({"x", "y"}),
       require_attribute_value_one_of("position", {"grouped", "stacked"}),
+      require_attribute_value_one_of("x_axis_type", {"log", "linear"}),
+      require_attribute_value_one_of("y_axis_type", {"log", "linear"}),
     },
   },
   // `bar` is equivalent to `line`, except the requirement on `x` is for the values to be unique.
@@ -752,10 +760,14 @@ chart_definition chart_definitions[] = {
       {.attr = "x", .flag = "-x,--x-axis", .type = flag_type::field_name, .default_ = nth_field{0}, .allow_lists = false, .req = requirement::unique,},
       {.attr = "y", .flag = "-y,--y-axis", .type = flag_type::field_name, .default_ = nth_field{1, nth_field::all_the_rest}, .allow_lists = true,},
       {.attr = "position", .flag = "--position", .type = flag_type::attribute_value, .default_ = attribute_value{"grouped"}, .allow_lists = false,},
+      {.attr = "x_axis_type", .flag = "--x-axis-type", .type = flag_type::attribute_value, .default_ = attribute_value{"linear"}, .allow_lists = false,},
+      {.attr = "y_axis_type", .flag = "--y-axis-type", .type = flag_type::attribute_value, .default_ = attribute_value{"linear"}, .allow_lists = false,},
     },
     .verifications = {
       disallow_mixmatch_between_explicit_and_implicit_arguments({"x", "y"}),
       require_attribute_value_one_of("position", {"grouped", "stacked"}),
+      require_attribute_value_one_of("x_axis_type", {"log", "linear"}),
+      require_attribute_value_one_of("y_axis_type", {"log", "linear"}),
     },
   },
   // `pie` chart is equivalent to `line` and `bar`, except
