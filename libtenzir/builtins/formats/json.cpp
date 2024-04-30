@@ -6,11 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/fwd.hpp"
-
-#include "tenzir/config.hpp"
-#include "tenzir/detail/type_traits.hpp"
-
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/cast.hpp>
@@ -925,9 +920,9 @@ public:
         TENZIR_TODO();
       }
 #if USE_SIGNATURE
-      type_sig_.clear();
-      append_signature(event, type_sig_);
-      auto it = state.precise_map.find(type_sig_);
+      signature_.clear();
+      append_signature(event, signature_);
+      auto it = state.precise_map.find(signature_);
 #else
       auto ty = type::infer(event);
       TENZIR_ASSERT(ty); // TODO
@@ -938,7 +933,7 @@ public:
         auto index = state.entries.size();
         state.entries.emplace_back("tenzir.json", std::nullopt);
 #if USE_SIGNATURE
-        it = state.precise_map.emplace_hint(it, type_sig_, index);
+        it = state.precise_map.emplace_hint(it, signature_, index);
 #else
         it = state.precise_map.emplace_hint(it, *ty, index);
 #endif
@@ -1004,7 +999,7 @@ public:
 
 private:
   std::size_t lines_processed_ = 0u;
-  std::vector<std::byte> type_sig_;
+  std::vector<std::byte> signature_;
 };
 
 class default_parser final : public parser_base {
@@ -1194,8 +1189,6 @@ auto parse_selector(std::string_view x, location source) -> selector {
   return selector{std::move(prefix), std::move(path)};
 }
 
-struct data_type {};
-
 struct parser_args {
   std::optional<struct selector> selector;
   std::optional<located<std::string>> schema;
@@ -1231,14 +1224,6 @@ void add_no_infer_option(argument_parser& parser, parser_args& args) {
 
 void add_raw_option(argument_parser& parser, parser_args& args) {
   parser.add("--raw", args.raw);
-}
-
-TENZIR_NO_INLINE auto get_builder(auto& map, auto key) -> decltype(auto) {
-  return map[std::move(key)];
-}
-
-TENZIR_NO_INLINE void add_to_builder(auto& map, auto key, auto value) {
-  get_builder(map, std::move(key)).data(value);
 }
 
 class json_parser final : public plugin_parser {
