@@ -12,11 +12,11 @@ Add metadata to a schema, necessary for rendering as a chart.
 
 ```
 chart line [-x|--x-axis <fields>] [-y|--y-axis <field>]
-           [--x-axis-type=<x-axis-type>]  [--y-axis-type=<y-axis-type>]
+           [--x-axis-type <x-axis-type>]  [--y-axis-type <y-axis-type>]
 chart area [-x|--x-axis <fields>] [-y|--y-axis <field>]
-           [--x-axis-type=<x-axis-type>]  [--y-axis-type=<y-axis-type>]
+           [--x-axis-type <x-axis-type>]  [--y-axis-type <y-axis-type>]
 chart bar  [-x|--x-axis <fields>] [-y|--y-axis <field>]
-           [--x-axis-type=<x-axis-type>]  [--y-axis-type=<y-axis-type>]
+           [--x-axis-type <x-axis-type>]  [--y-axis-type <y-axis-type>]
 chart pie  [--name <field>] [--value <fields>]
 ```
 
@@ -45,21 +45,21 @@ Sets the fields used for the Y-axis.
 
 Defaults to every field but the first one.
 
-### `--position=<position>` (`line`, `area`, and `bar` charts only)
+### `--position <position>` (`line`, `area`, and `bar` charts only)
 
 Controls how the values are grouped when rendered as a chart.
 Possible values are `grouped` and `stacked`.
 
 Defaults to `grouped`.
 
-### `--x-axis-type=<x-axis-type>` (`line`, `area`, and `bar` charts only)
+### `--x-axis-type <x-axis-type>` (`line`, `area`, and `bar` charts only)
 
 Sets the x-axis scale type.
 Possible values are `linear` and `log`.
 
 Defaults to `linear`.
 
-### `--y-axis-type=<y-axis-type>` (`line`, `area`, and `bar` charts only)
+### `--y-axis-type <y-axis-type>` (`line`, `area`, and `bar` charts only)
 
 Sets the y-axis scale type.
 Possible values are `linear` and `log`.
@@ -100,5 +100,5 @@ metrics
 | where source == true
 | summarize bytes=sum(output.approx_bytes) by timestamp resolution 1s
 | sort timestamp desc
-| chart line -x timestamp -y bytes --y-axis-type="log"
+| chart line -x timestamp -y bytes --y-axis-type "log"
 ```
