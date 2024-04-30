@@ -1,1 +1,0 @@
-../../../../demo-node/csvstat.sh

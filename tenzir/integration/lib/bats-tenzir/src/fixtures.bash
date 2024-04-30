@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 export_default_paths() {
-  BATS_TEST_DATADIR="$(realpath $(dirname ${BATS_TEST_DIRNAME}))"
+  BATS_TEST_DATADIR="$(realpath "$(dirname "${BATS_TEST_DIRNAME}")")"
   # Look for the first folder called `integration/` that is a parent
   # of the location of the test file.
   export BATS_TENZIR_DATADIR="${BATS_TEST_DATADIR%%/integration/*}/data"
@@ -27,7 +27,8 @@ export_default_node_config() {
 
 bats_tenzir_initialize() {
   # Normalize the environment unless `BATS_TENZIR_KEEP_ENVIRONMENT` is set.
-  if [[ ! -n ${BATS_TENZIR_KEEP_ENVIRONMENT} ]]; then
+  if [ -z "${BATS_TENZIR_KEEP_ENVIRONMENT}" ]; then
+    # shellcheck disable=SC2046
     unset $(printenv | grep -o '^TENZIR[^=]*' | paste -s -)
   fi
 
@@ -36,14 +37,13 @@ bats_tenzir_initialize() {
 }
 
 setup_node() {
-  local node_args=$1
   # Always enforce bare mode even when using custom config.
   export TENZIR_BARE_MODE=true
   # Print node config
   set | grep -Ee "^TENZIR" || true >&3
   # The inner exec is needed so that signals to $NODE_PID actually reach the
   # node.
-  exec {NODE_OUT}< <(exec tenzir-node --print-endpoint ${node_args})
+  exec {NODE_OUT}< <(exec tenzir-node --print-endpoint "${@}")
   NODE_PID=$!
   read -r -u "$NODE_OUT" TENZIR_ENDPOINT
   export TENZIR_ENDPOINT
@@ -51,10 +51,9 @@ setup_node() {
 
 setup_node_with_plugins() {
   local plugins=$1
-  local node_args=$2
   export_default_node_config
   export TENZIR_PLUGINS="$plugins"
-  setup_node ${node_args}
+  setup_node "${@:1}"
 }
 
 # Start a node with a configuration suitable for most integration tests.
