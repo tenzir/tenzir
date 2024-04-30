@@ -6,6 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/fwd.hpp"
+
+#include "tenzir/config.hpp"
+#include "tenzir/detail/type_traits.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/cast.hpp>
@@ -28,6 +33,7 @@
 #include <tenzir/tql/parser.hpp>
 
 #include <arrow/record_batch.h>
+#include <caf/detail/is_one_of.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <fmt/format.h>
 
@@ -142,6 +148,67 @@ struct selector {
   }
 };
 
+#define USE_SIGNATURE 1
+
+#if USE_SIGNATURE
+
+TENZIR_NO_INLINE auto copy_name(auto&& name, auto out) {
+  return std::copy(name.begin(), name.end(), out);
+}
+
+/// TODO
+///
+/// Note: This does not use `data_view` because that allocates.
+template <std::output_iterator<std::byte> It>
+TENZIR_NO_INLINE auto data_signature(const data& x, It out) -> It {
+  caf::visit(
+    [&]<typename T>(const T& x) {
+      if constexpr (caf::detail::is_one_of<T, pattern, enumeration, map>::value) {
+        // Such values are not produced by `json_to_data`.
+        TENZIR_UNREACHABLE();
+      } else {
+        using Type = data_to_type_t<T>;
+        // Write out the type index. For complex types, this marks the start.
+        *out++ = static_cast<std::byte>(Type::type_index);
+        if constexpr (basic_type<Type>) {
+          // We are done, no need for recursion.
+        } else {
+          // We have already written out the type index as a prefix and now do
+          // recursion with the inner types.
+          if constexpr (std::same_as<T, record>) {
+            for (auto& [name, value] : x) {
+              // Start a new field with a special marker.
+              *out++ = std::byte{255};
+              // The field name is part of the type signature.
+              auto name_bytes = as_bytes(name);
+              out = copy_name(name_bytes, out);
+              // And then, of course, the type of the field.
+              out = data_signature(value, out);
+            }
+          } else if constexpr (std::same_as<T, list>) {
+            for (auto& item : x) {
+              out = data_signature(item, out);
+            }
+          } else {
+            static_assert(detail::always_false_v<T>, "unhandled type");
+          }
+          // We write out the type index once more to mark the end.
+          *out++ = static_cast<std::byte>(Type::type_index);
+        }
+      }
+    },
+    x);
+  return out;
+}
+
+struct hash_type_sig {
+  template <class T>
+  auto operator()(T& x) const noexcept -> std::size_t {
+    return tenzir::hash(x);
+  }
+};
+#endif
+
 constexpr auto unknown_entry_name = std::string_view{};
 
 struct entry_data {
@@ -174,7 +241,11 @@ struct parser_state {
   /// If `--precise` is set, we use this map instead of `entry_map`. Obviously,
   /// this is not great, but a proper solution would require refactoring large
   /// parts of this file due to bad extendability of the current design.
+#if USE_SIGNATURE
+  tsl::robin_map<std::vector<std::byte>, size_t, hash_type_sig> precise_map;
+#else
   tsl::robin_map<type, size_t> precise_map;
+#endif
   /// Stores the schema-specific builders and some additional metadata.
   std::vector<entry_data> entries;
   /// The index of the currently active or last used builder.
@@ -860,14 +931,24 @@ public:
         // TODO: Can't handle this yet.
         TENZIR_TODO();
       }
+#if USE_SIGNATURE
+      type_sig_.clear();
+      data_signature(event, std::back_inserter(type_sig_));
+      auto it = state.precise_map.find(type_sig_);
+#else
       auto ty = type::infer(event);
       TENZIR_ASSERT(ty); // TODO
       auto it = state.precise_map.find(*ty);
+#endif
       if (it == state.precise_map.end()) {
         // TODO: We should eventually garbage collect this.
         auto index = state.entries.size();
         state.entries.emplace_back("tenzir.json", std::nullopt);
+#if USE_SIGNATURE
+        it = state.precise_map.emplace_hint(it, type_sig_, index);
+#else
         it = state.precise_map.emplace_hint(it, *ty, index);
+#endif
       }
       if (auto slices = state.activate(it->second)) {
         for (auto& slice : *slices) {
@@ -930,6 +1011,7 @@ public:
 
 private:
   std::size_t lines_processed_ = 0u;
+  std::vector<std::byte> type_sig_;
 };
 
 class default_parser final : public parser_base {
