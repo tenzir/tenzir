@@ -784,8 +784,12 @@ type::operator bool() const noexcept {
 bool operator==(const type& lhs, const type& rhs) noexcept {
   const auto lhs_bytes = as_bytes(lhs);
   const auto rhs_bytes = as_bytes(rhs);
-  return std::equal(lhs_bytes.begin(), lhs_bytes.end(), rhs_bytes.begin(),
-                    rhs_bytes.end());
+  // For some reason, using `std::equal` here leads to a severe performance
+  // degradation with both `.begin()` and `.data()`. Hence we use `std::memcmp`.
+  if (lhs_bytes.size() != rhs_bytes.size()) {
+    return false;
+  }
+  return std::memcmp(lhs_bytes.data(), rhs_bytes.data(), lhs_bytes.size()) == 0;
 }
 
 std::strong_ordering operator<=>(const type& lhs, const type& rhs) noexcept {
