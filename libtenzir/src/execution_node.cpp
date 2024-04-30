@@ -717,6 +717,10 @@ auto exec_node(
   receiver_actor<diagnostic> diagnostic_handler,
   receiver_actor<metric> metrics_handler, int index, bool has_terminal)
   -> exec_node_actor::behavior_type {
+  if (self->getf(caf::scheduled_actor::is_detached_flag)) {
+    const auto name = fmt::format("tenzir.exec-node.{}", op->name());
+    caf::detail::set_thread_name(name.c_str());
+  }
   self->state.self = self;
   self->state.op = std::move(op);
   auto time_starting_guard = make_timer_guard(

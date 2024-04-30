@@ -53,7 +53,7 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
       return err;
     TENZIR_VERBOSE("using customized indexing configuration {}", index_config);
   }
-  auto handle = self->spawn(
+  auto handle = self->spawn<caf::detached>(
     index, accountant, filesystem, catalog, indexdir,
     // TODO: Pass these options as a tenzir::data object instead.
     std::string{sd::store_backend},
