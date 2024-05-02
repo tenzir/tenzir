@@ -26,6 +26,7 @@
 #include <tenzir/series_builder.hpp>
 #include <tenzir/to_lines.hpp>
 #include <tenzir/tql/parser.hpp>
+#include <tenzir/try.hpp>
 
 #include <arrow/record_batch.h>
 #include <caf/detail/is_one_of.hpp>
@@ -35,8 +36,24 @@
 #include <chrono>
 #include <simdjson.h>
 
-namespace tenzir::plugins::json {
+// TODO
+template <class T>
+struct tenzir::tryable<simdjson::simdjson_result<T>> {
+  static auto is_success(const simdjson::simdjson_result<T>& x) -> bool {
+    return x.error() == simdjson::error_code::SUCCESS;
+  }
 
+  static auto get_success(simdjson::simdjson_result<T>&& x) -> T {
+    return std::move(x).value_unsafe();
+  }
+
+  static auto get_error(simdjson::simdjson_result<T>&& x)
+    -> simdjson::error_code {
+    return x.error();
+  }
+};
+
+namespace tenzir::plugins::json {
 namespace {
 
 inline auto split_at_crlf(generator<chunk_ptr> input)
@@ -574,23 +591,18 @@ private:
 /// Converts a simdjson object into `data` object.
 ///
 /// This is used when `--precise` is specified.
-auto json_to_data(simdjson::ondemand::value value, bool raw) -> data;
+auto json_to_data(simdjson::ondemand::value value, bool raw)
+  -> simdjson::simdjson_result<data>;
 
-auto json_to_data(simdjson::ondemand::object object, bool raw) -> record {
-  // The API of `record` is not optimal for this.
+auto json_to_data(simdjson::ondemand::object object, bool raw)
+  -> simdjson::simdjson_result<data> {
+  // The API of `record` is not optimal for this, hence we manually construct it.
   auto result = std::vector<std::pair<std::string, data>>{};
   for (auto maybe_field : object) {
-    if (maybe_field.error()) {
-      TENZIR_TODO();
-    }
-    auto& field = maybe_field.value_unsafe();
-    auto maybe_key = field.unescaped_key(false);
-    if (maybe_key.error()) {
-      TENZIR_TODO();
-    }
+    TRY(auto field, maybe_field);
     // TODO: Lifetime of `key`?
-    auto key = maybe_key.value_unsafe();
-    auto value = json_to_data(field.value(), raw);
+    TRY(auto key, field.unescaped_key(false));
+    TRY(auto value, json_to_data(field.value(), raw));
     // TODO: Reconsider, this is quadratic.
     auto it = std::ranges::find(result, key, &record::value_type::first);
     if (it != result.end()) {
@@ -599,38 +611,43 @@ auto json_to_data(simdjson::ondemand::object object, bool raw) -> record {
       result.emplace_back(key, std::move(value));
     }
   }
-  return record::make_unsafe(std::move(result));
+  return data{record::make_unsafe(std::move(result))};
 }
 
-auto json_to_data(simdjson::ondemand::array array, bool raw) -> list {
+auto json_to_data(simdjson::ondemand::array array, bool raw)
+  -> simdjson::simdjson_result<data> {
   auto result = list{};
-  for (auto item : array) {
-    if (item.error()) {
-      TENZIR_TODO();
-    }
-    result.push_back(json_to_data(item.value_unsafe(), raw));
+  for (auto maybe_item : array) {
+    TRY(auto item, maybe_item);
+    TRY(auto data, json_to_data(item, raw));
+    result.push_back(std::move(data));
   }
-  return result;
+  return data{std::move(result)};
 }
 
-auto json_to_data(simdjson::ondemand::number number, bool raw) -> data {
+auto json_to_data(simdjson::ondemand::number number, bool raw)
+  -> simdjson::simdjson_result<data> {
   if (raw) {
-    return number.as_double();
+    return data{number.as_double()};
   }
   switch (number.get_number_type()) {
-    case simdjson::arm64::number_type::floating_point_number:
-      return number.get_double();
-    case simdjson::arm64::number_type::signed_integer:
-      return number.get_int64();
-    case simdjson::arm64::number_type::unsigned_integer:
-      return number.get_uint64();
-    case simdjson::arm64::number_type::big_integer:
-      TENZIR_TODO();
+    case simdjson::ondemand::number_type::floating_point_number:
+      return data{number.get_double()};
+    case simdjson::ondemand::number_type::signed_integer:
+      return data{number.get_int64()};
+    case simdjson::ondemand::number_type::unsigned_integer:
+      return data{number.get_uint64()};
+    case simdjson::ondemand::number_type::big_integer:
+      // It looks like this is unreachable, because the `number` type already
+      // requires that the value is not a big integer, thus the `BIGINT_ERROR`
+      // is already raised before calling this function.
+      return simdjson::BIGINT_ERROR;
   }
   TENZIR_UNREACHABLE();
 }
 
-auto json_to_data(std::string_view string, bool raw) -> data {
+auto json_to_data(std::string_view string, bool raw)
+  -> simdjson::simdjson_result<data> {
   if (not raw) {
     static constexpr auto parser
       = parsers::time | parsers::duration | parsers::net | parsers::ip;
@@ -639,52 +656,35 @@ auto json_to_data(std::string_view string, bool raw) -> data {
       return result;
     }
   }
-  return std::string{string};
+  return data{std::string{string}};
 }
 
-auto json_to_data(simdjson::ondemand::value value, bool raw) -> data {
-  auto type = value.type();
-  if (type.error()) {
-    TENZIR_TODO();
-  }
-  switch (type.value_unsafe()) {
-    case simdjson::arm64::ondemand::json_type::array: {
-      auto array = value.get_array();
-      if (array.error()) {
-        TENZIR_TODO();
-      }
-      return json_to_data(array.value_unsafe(), raw);
+auto json_to_data(simdjson::ondemand::value value, bool raw)
+  -> simdjson::simdjson_result<data> {
+  TRY(auto type, value.type());
+  switch (type) {
+    case simdjson::ondemand::json_type::array: {
+      TRY(auto array, value.get_array());
+      return json_to_data(array, raw);
     }
     case simdjson::ondemand::json_type::object: {
-      auto object = value.get_object();
-      if (object.error()) {
-        TENZIR_TODO();
-      }
-      return json_to_data(object.value_unsafe(), raw);
+      TRY(auto object, value.get_object());
+      return json_to_data(object, raw);
     }
-    case simdjson::arm64::ondemand::json_type::number: {
-      auto number = value.get_number();
-      if (number.error()) {
-        TENZIR_TODO();
-      }
-      return json_to_data(number.value_unsafe(), raw);
+    case simdjson::ondemand::json_type::number: {
+      TRY(auto number, value.get_number());
+      return json_to_data(number, raw);
     }
-    case simdjson::arm64::ondemand::json_type::string: {
-      auto string = value.get_string();
-      if (string.error()) {
-        TENZIR_TODO();
-      }
-      return json_to_data(string.value_unsafe(), raw);
+    case simdjson::ondemand::json_type::string: {
+      TRY(auto string, value.get_string());
+      return json_to_data(string, raw);
     }
-    case simdjson::arm64::ondemand::json_type::boolean: {
-      auto boolean = value.get_bool();
-      if (boolean.error()) {
-        TENZIR_TODO();
-      }
-      return boolean.value_unsafe();
+    case simdjson::ondemand::json_type::boolean: {
+      TRY(auto boolean, value.get_bool());
+      return data{boolean};
     }
-    case simdjson::arm64::ondemand::json_type::null: {
-      return caf::none;
+    case simdjson::ondemand::json_type::null: {
+      return data{caf::none};
     }
   }
   TENZIR_UNREACHABLE();
@@ -914,10 +914,20 @@ public:
     }
     auto& doc = maybe_doc.value_unsafe();
     if (precise_) {
-      auto event = json_to_data(val.value_unsafe(), raw_);
+      auto maybe_event = json_to_data(val.value_unsafe(), raw_);
+      if (maybe_event.error()) {
+        // TODO: Extra info?
+        diagnostic::warning("{}", simdjson::error_message(maybe_event.error()))
+          .note("at line {}", lines_processed_)
+          .emit(ctrl_.diagnostics());
+        co_return;
+      }
+      auto event = std::move(maybe_event).value_unsafe();
       if (not caf::holds_alternative<record>(event)) {
-        // TODO: Can't handle this yet.
-        TENZIR_TODO();
+        diagnostic::warning("skipping non-record JSON value: {}", event)
+          .note("at line {}", lines_processed_)
+          .emit(ctrl_.diagnostics());
+        co_return;
       }
 #if USE_SIGNATURE
       signature_.clear();
@@ -1458,6 +1468,7 @@ public:
     add_no_infer_option(parser, args);
     parser.add("--ndjson", args.use_ndjson_mode);
     parser.add("--gelf", args.use_gelf_mode);
+    parser.add("--precise", args.precise);
     add_raw_option(parser, args);
     parser.add("--arrays-of-objects", args.arrays_of_objects);
     parser.parse(p);
