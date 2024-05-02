@@ -564,24 +564,24 @@ struct v2_loader : public context_loader {
     -> caf::expected<std::unique_ptr<context>> {
     const auto* cache_dir
       = get_if<std::string>(&global_config_, "tenzir.cache-directory");
+    std::filesystem::create_directories(*cache_dir);
     const auto current_time = std::time(nullptr);
     std::string temp_file_name = *cache_dir + std::to_string(current_time);
-    TENZIR_WARN(temp_file_name);
-    auto myfile
+    auto temp_file
       = std::fstream(temp_file_name, std::ios::out | std::ios::binary);
-    if (!myfile) {
+    if (!temp_file) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed to open temp file on "
                                          "data load"));
     }
-    myfile.write(reinterpret_cast<const char*>(serialized->data()),
-                 static_cast<std::streamsize>(serialized->size()));
-    if (!myfile) {
+    temp_file.write(reinterpret_cast<const char*>(serialized->data()),
+                    static_cast<std::streamsize>(serialized->size()));
+    if (!temp_file) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed write the temp file "
                                          "on data load"));
     }
-    myfile.close();
+    temp_file.close();
     auto mmdb = make_mmdb(temp_file_name);
     if (not mmdb) {
       return mmdb.error();
