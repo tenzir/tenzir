@@ -63,16 +63,17 @@ The minimum specified versions reflect those versions that we use in CI and
 manual testing. Older versions may still work in select cases.
 
 :::tip macOS
-On macOS, we recommend using the latest Clang from the Homebrew `llvm` package
-with the following settings:
+On macOS, we recommend using Clang from the Homebrew `llvm@17` package with the
+following settings:
 
 ```bash
-export PATH="$(brew --prefix llvm)/bin:${PATH}"
-export CC="$(brew --prefix llvm)/bin/clang"
-export CXX="$(brew --prefix llvm)/bin/clang++"
-export LDFLAGS="-Wl,-rpath,$(brew --prefix llvm) ${LDFLAGS}"
-export CPPFLAGS="-isystem $(brew --prefix llvm)/include ${CPPFLAGS}"
-export CXXFLAGS="-isystem $(brew --prefix llvm)/include/c++/v1 ${CXXFLAGS}"
+export LLVM_PREFIX="$(brew --prefix llvm@17)"
+export PATH="${LLVM_PREFIX}/bin:${PATH}"
+export CC="${LLVM_PREFIX}/bin/clang"
+export CXX="${LLVM_PREFIX}/bin/clang++"
+export LDFLAGS="-Wl,-rpath,${LLVM_PREFIX} ${LDFLAGS}"
+export CPPFLAGS="-isystem ${LLVM_PREFIX}/include ${CPPFLAGS}"
+export CXXFLAGS="-isystem ${LLVM_PREFIX}/include/c++/v1 ${CXXFLAGS}"
 ```
 
 Installing via CMake on macOS configures a [launchd](https://www.launchd.info)
