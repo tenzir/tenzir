@@ -239,6 +239,8 @@ struct exec_node_state {
   std::optional<struct demand> demand = {};
   bool issue_demand_inflight = {};
 
+  caf::typed_response_promise<void> start_rp = {};
+
   /// Exponential backoff for scheduling.
   static constexpr duration min_backoff = std::chrono::milliseconds{10};
   static constexpr duration max_backoff = std::chrono::milliseconds{1000};
@@ -268,6 +270,9 @@ struct exec_node_state {
     emit_metrics();
     if (demand and demand->rp.pending()) {
       demand->rp.deliver();
+    }
+    if (start_rp.pending()) {
+      start_rp.deliver(ec::silent);
     }
   }
 
@@ -391,29 +396,29 @@ struct exec_node_state {
       return {};
     }
     if constexpr (std::is_same_v<Output, std::monostate>) {
-      auto rp = self->make_response_promise<void>();
+      start_rp = self->make_response_promise<void>();
       self
         ->request(previous, caf::infinite, atom::start_v,
                   std::move(all_previous))
         .then(
-          [this, rp]() mutable {
+          [this]() {
             auto time_starting_guard
               = make_timer_guard(metrics.time_scheduled, metrics.time_starting);
             TENZIR_TRACE("{} {} schedules run after successful startup of all "
                          "operators",
                          *self, op->name());
             schedule_run(false);
-            rp.deliver();
+            start_rp.deliver();
           },
-          [this, rp](const caf::error& error) mutable {
+          [this](const caf::error& error) {
             auto time_starting_guard
               = make_timer_guard(metrics.time_scheduled, metrics.time_starting);
             TENZIR_DEBUG("{} {} forwards error during startup: {}", *self,
                          op->name(), error);
-            rp.deliver(
+            start_rp.deliver(
               add_context(error, "{} {} failed to start", *self, op->name()));
           });
-      return rp;
+      return start_rp;
     }
     if constexpr (not std::is_same_v<Input, std::monostate>) {
       TENZIR_DEBUG("{} {} delegates start to {}", *self, op->name(), previous);
@@ -717,6 +722,10 @@ auto exec_node(
   receiver_actor<diagnostic> diagnostic_handler,
   receiver_actor<metric> metrics_handler, int index, bool has_terminal)
   -> exec_node_actor::behavior_type {
+  if (self->getf(caf::scheduled_actor::is_detached_flag)) {
+    const auto name = fmt::format("tenzir.exec-node.{}", op->name());
+    caf::detail::set_thread_name(name.c_str());
+  }
   self->state.self = self;
   self->state.op = std::move(op);
   auto time_starting_guard = make_timer_guard(
@@ -742,6 +751,23 @@ auto exec_node(
     return exec_node_actor::behavior_type::make_empty_behavior();
   }
   self->state.weak_node = node;
+  self->set_exception_handler(
+    [self](std::exception_ptr exception) -> caf::error {
+      try {
+        std::rethrow_exception(exception);
+      } catch (diagnostic diag) {
+        self->state.ctrl->diagnostics().emit(std::move(diag));
+        return {};
+      } catch (const std::exception& err) {
+        diagnostic::error("{}", err.what())
+          .note("unhandled exception in {} {}", *self, self->state.op->name())
+          .emit(self->state.ctrl->diagnostics());
+        return {};
+      }
+      return diagnostic::error("unhandled exception in {} {}", *self,
+                               self->state.op->name())
+        .to_error();
+    });
   return {
     [self](atom::internal, atom::run) -> caf::result<void> {
       auto time_scheduled_guard

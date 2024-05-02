@@ -12,8 +12,11 @@ Add metadata to a schema, necessary for rendering as a chart.
 
 ```
 chart line [-x|--x-axis <fields>] [-y|--y-axis <field>]
+           [--x-axis-type <x-axis-type>]  [--y-axis-type <y-axis-type>]
 chart area [-x|--x-axis <fields>] [-y|--y-axis <field>]
+           [--x-axis-type <x-axis-type>]  [--y-axis-type <y-axis-type>]
 chart bar  [-x|--x-axis <fields>] [-y|--y-axis <field>]
+           [--x-axis-type <x-axis-type>]  [--y-axis-type <y-axis-type>]
 chart pie  [--name <field>] [--value <fields>]
 ```
 
@@ -23,40 +26,58 @@ The `chart` operator adds attributes to the schema of the input events,
 that are used to guide rendering of the data as a chart.
 The operator does no rendering itself.
 
+The `fields` option value is either the name of a single field, or a
+comma-separated list of multiple field names, e.g., `foo,bar,baz`.
+
 ### `-x|--x-axis <fields>` (`line`, `area`, and `bar` charts only)
 
-Set the field used for the X-axis. Defaults to the first field in the schema.
+Sets the field used for the X-axis.
 
-Values in this field must be strictly increasing
-(sorted in ascending order, without duplicates)
-when creating a `line` or `area` chart,
-or unique when creating a `bar` chart.
+Values in this field must be strictly increasing (sorted in ascending order,
+without duplicates) when creating a `line` or `area` chart, or unique when
+creating a `bar` chart.
+
+Defaults to the first field in the schema.
 
 ### `-y|--y-axis <fields>` (`line`, `area`, and `bar` charts only)
 
-Set the fields used for the Y-axis.
-Can either be a single field, or a list of fields spelled with
-a list syntax (`[field1, field2]`).
+Sets the fields used for the Y-axis.
+
 Defaults to every field but the first one.
 
-### `position=<position>` (`line`, `area`, and `bar` charts only)
+### `--position <position>` (`line`, `area`, and `bar` charts only)
 
-Control how the values are grouped when rendered as a chart.
+Controls how the values are grouped when rendered as a chart.
 Possible values are `grouped` and `stacked`.
+
 Defaults to `grouped`.
+
+### `--x-axis-type <x-axis-type>` (`line`, `area`, and `bar` charts only)
+
+Sets the x-axis scale type.
+Possible values are `linear` and `log`.
+
+Defaults to `linear`.
+
+### `--y-axis-type <y-axis-type>` (`line`, `area`, and `bar` charts only)
+
+Sets the y-axis scale type.
+Possible values are `linear` and `log`.
+
+Defaults to `linear`.
 
 ### `--name <field>` (`pie` chart only)
 
-Set the field used for the names of the segments.
-Defaults to the first field in the schema.
+Sets the field used for the names of the segments.
 
 Values in this field must be unique.
 
+Defaults to the first field in the schema.
+
 ### `--value <fields>` (`pie` chart only)
 
-Set the fields used for the value of a segment.
-Can either be a single field, or multiple fields delimited with commas
-(`field1,field2`).
+Sets the fields used for the value of a segment.
+
 Defaults to every field but the first one.
 
 ## Examples
@@ -67,7 +88,7 @@ Render most common `src_ip` values in `suricata.flow` events as a bar chart:
 export
 | where #schema == "suricata.flow"
 | top src_ip
-/* -x and -y are defaulted to `src_ip` and `count` */
+/* -x and -y default to `src_ip` and `count` */
 | chart bar
 ```
 
@@ -79,5 +100,5 @@ metrics
 | where source == true
 | summarize bytes=sum(output.approx_bytes) by timestamp resolution 1s
 | sort timestamp desc
-| chart line -x timestamp -y bytes
+| chart line -x timestamp -y bytes --y-axis-type "log"
 ```

@@ -723,7 +723,6 @@ index_state::create_active_partition(const type& schema) {
     = active_partitions.emplace(schema, active_partition_info{});
   TENZIR_ASSERT(inserted);
   TENZIR_ASSERT(active_partition != active_partitions.end());
-  active_partition->second.spawn_time = std::chrono::steady_clock::now();
   active_partition->second.actor
     = self->spawn(::tenzir::active_partition, schema, id, accountant,
                   filesystem, index_opts, synopsis_opts, store_actor_plugin,
@@ -739,6 +738,31 @@ index_state::create_active_partition(const type& schema) {
             TENZIR_WARN("{} failed to register type with catalog: {}", *self,
                         error);
           });
+  detail::weak_run_delayed(self, active_partition_timeout, [schema, id, this] {
+    const auto it = active_partitions.find(schema);
+    if (it == active_partitions.end() or it->second.id != id) {
+      // If the partition was already rotated then there's nothing to do for us.
+      return;
+    }
+    TENZIR_VERBOSE("{} flushes active partition {} with {}/{} {} events "
+                   "after {} timeout",
+                   *self, it->second.id,
+                   partition_capacity - it->second.capacity, partition_capacity,
+                   schema, data{active_partition_timeout});
+    decommission_active_partition(schema, [this, schema,
+                                           id](const caf::error& err) mutable {
+      if (err) {
+        TENZIR_WARN("{} failed to flush active partition {} ({}) after {} "
+                    "timeout: {}",
+                    *self, id, schema, data{active_partition_timeout}, err);
+      } else {
+        TENZIR_VERBOSE("{} successfully flushed active partition {} ({}) "
+                       "after {} timeout",
+                       *self, id, schema, data{active_partition_timeout});
+      }
+    });
+    flush_to_disk();
+  });
   TENZIR_DEBUG("{} created new partition {}", *self, id);
   return active_partition;
 }
@@ -1185,6 +1209,9 @@ index(index_actor::stateful_pointer<index_state> self,
     TENZIR_ARG(active_partition_timeout), TENZIR_ARG(max_inmem_partitions),
     TENZIR_ARG(taste_partitions), TENZIR_ARG(max_concurrent_partition_lookups),
     TENZIR_ARG(catalog_dir), TENZIR_ARG(index_config));
+  if (self->getf(caf::scheduled_actor::is_detached_flag)) {
+    caf::detail::set_thread_name("tenzir.index");
+  }
   TENZIR_VERBOSE("{} initializes index in {} with a maximum partition "
                  "size of {} events and {} resident partitions",
                  *self, dir, partition_capacity, max_inmem_partitions);
@@ -1369,39 +1396,10 @@ index(index_actor::stateful_pointer<index_state> self,
     self->state.monitored_queries.erase(it);
   });
   // Start metrics loop.
-  if (self->state.accountant)
+  if (self->state.accountant) {
     self->send(self->state.accountant, atom::announce_v, self->name());
-  if (self->state.accountant
-      || self->state.active_partition_timeout.count() > 0) {
     detail::weak_run_delayed_loop(self, defaults::telemetry_rate, [self] {
-      if (self->state.accountant)
-        self->state.send_report();
-      if (self->state.active_partition_timeout.count() > 0) {
-        auto decommissioned = std::vector<type>{};
-        for (const auto& [schema, active_partition] :
-             self->state.active_partitions) {
-          if (active_partition.spawn_time + self->state.active_partition_timeout
-              < std::chrono::steady_clock::now()) {
-            decommissioned.push_back(schema);
-          }
-        }
-        if (!decommissioned.empty()) {
-          for (const auto& schema : decommissioned) {
-            auto active_partition = self->state.active_partitions.find(schema);
-            TENZIR_ASSERT(active_partition
-                          != self->state.active_partitions.end());
-            TENZIR_VERBOSE("{} flushes active partition {} with {}/{} events "
-                           "after {} timeout",
-                           *self, schema,
-                           self->state.partition_capacity
-                             - active_partition->second.capacity,
-                           self->state.partition_capacity,
-                           data{self->state.active_partition_timeout});
-            self->state.decommission_active_partition(schema, {});
-          }
-          self->state.flush_to_disk();
-        }
-      }
+      self->state.send_report();
     });
   }
   return {

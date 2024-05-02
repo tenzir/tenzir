@@ -62,10 +62,6 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
         finish_start();
       },
       [this](const caf::error& err) mutable {
-        if (err == caf::sec::broken_promise) {
-          abort_start(ec::silent);
-          return;
-        }
         abort_start(err);
       });
 }
