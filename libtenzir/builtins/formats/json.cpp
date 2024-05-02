@@ -604,6 +604,16 @@ auto json_to_data(simdjson::ondemand::number number, bool raw)
   if (raw) {
     return data{number.as_double()};
   }
+  // TODO: Some parts of our CI do not have the big_integer type yet, this is a
+  // workaround.
+  constexpr static auto big_integer
+    = std::invoke([]<class T = simdjson::ondemand::number_type>() constexpr->T {
+        const auto big_integer = T{4};
+        if constexpr (requires { T::big_integer; }) {
+          static_assert(big_integer == T::big_integer);
+        }
+        return big_integer;
+      });
   switch (number.get_number_type()) {
     case simdjson::ondemand::number_type::floating_point_number:
       return data{number.get_double()};
@@ -611,11 +621,17 @@ auto json_to_data(simdjson::ondemand::number number, bool raw)
       return data{number.get_int64()};
     case simdjson::ondemand::number_type::unsigned_integer:
       return data{number.get_uint64()};
-    case simdjson::ondemand::number_type::big_integer:
-      // It looks like this is unreachable, because the `number` type already
-      // requires that the value is not a big integer, thus the `BIGINT_ERROR`
-      // is already raised before calling this function.
-      return simdjson::BIGINT_ERROR;
+    case big_integer:
+      // It looks like this is unreachable anyway because the `number` type
+      // already requires that the value is not a big integer, thus the
+      // `BIGINT_ERROR` is already raised before calling this function.
+      return std::invoke([]<class T = simdjson::error_code>()->T {
+        if constexpr (requires { T::BIGINT_ERROR; }) {
+          return T::BIGINT_ERROR;
+        } else {
+          TENZIR_UNREACHABLE();
+        }
+      });
   }
   TENZIR_UNREACHABLE();
 }
