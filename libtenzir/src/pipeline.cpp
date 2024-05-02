@@ -10,15 +10,12 @@
 
 #include "tenzir/collect.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/expression.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql/parser.hpp"
 
 #include <caf/detail/stringification_inspector.hpp>
 #include <caf/fwd.hpp>
-
-#include <optional>
 
 namespace tenzir {
 
@@ -114,9 +111,8 @@ auto pipeline::internal_parse(std::string_view repr)
 auto pipeline::internal_parse_as_operator(std::string_view repr)
   -> caf::expected<operator_ptr> {
   auto result = internal_parse(repr);
-  if (not result) {
+  if (not result)
     return std::move(result.error());
-  }
   return std::make_unique<pipeline>(std::move(*result));
 }
 
@@ -153,7 +149,6 @@ auto pipeline::optimize_if_closed() const -> pipeline {
     return *this;
   }
   auto [filter, pipe] = optimize_into_filter();
-
   if (filter != trivially_true_expression()) {
     // This could also be an assertion as it always points to an error in the
     // operator implementation, but we try to continue with the original
@@ -194,20 +189,12 @@ auto pipeline::optimize(expression const& filter, event_order order) const
   -> optimize_result {
   auto current_filter = filter;
   auto current_order = order;
-  auto current_selection = selection();
   // Collect the optimized pipeline in reversed order.
   auto result = std::vector<operator_ptr>{};
   for (auto it = operators_.rbegin(); it != operators_.rend(); ++it) {
     TENZIR_ASSERT(*it);
     auto const& op = **it;
-    TENZIR_WARN("operation: {}", op.name());
-
     auto opt = op.optimize(current_filter, current_order);
-
-    if (current_selection.fields.has_value()) {
-      auto opt = op.optimize(current_filter, current_order);
-    }
-
     if (opt.filter) {
       current_filter = std::move(*opt.filter);
     } else if (current_filter != trivially_true_expression()) {
@@ -220,20 +207,12 @@ auto pipeline::optimize(expression const& filter, event_order order) const
       result.push_back(std::move(ops[0]));
       current_filter = trivially_true_expression();
     }
-    if (opt.selection) {
-      current_selection.fields = opt.selection;
-    }
     if (opt.replacement) {
       result.push_back(std::move(opt.replacement));
     }
     current_order = opt.order;
   }
   std::reverse(result.begin(), result.end());
-  for (auto it = result.rbegin(); it != result.rend(); ++it) {
-    TENZIR_ASSERT(*it);
-    auto const& op = **it;
-    TENZIR_WARN("operation: {}", op.name());
-  }
   return optimize_result{current_filter, current_order,
                          std::make_unique<pipeline>(std::move(result))};
 }
@@ -351,11 +330,6 @@ auto operator_base::infer_type_impl(operator_type input) const
       }
     },
     *output);
-}
-
-auto operator_base::optimize(selection const& filter, event_order order) const
-  -> optimize_result {
-  return optimize_result{trivially_true_expression(), order, nullptr};
 }
 
 auto pipeline::is_closed() const -> bool {

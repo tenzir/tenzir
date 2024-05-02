@@ -25,7 +25,6 @@
 #include <caf/variant.hpp>
 
 #include <memory>
-#include <optional>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -138,13 +137,6 @@ auto inspect(Inspector& f, data_extractor& x) {
 using operand = caf::variant<meta_extractor, field_extractor, type_extractor,
                              data_extractor, data>;
 
-struct selection {
-  std::optional<std::vector<std::string>> fields = {};
-  selection() = default;
-  selection(std::optional<std::vector<std::string>> fields)
-    : fields{std::move(fields)} {
-  }
-};
 /// A predicate with two operands evaluated under a relational operator.
 struct predicate : detail::totally_ordered<predicate> {
   predicate() = default;
@@ -251,9 +243,8 @@ auto inspect(Inspector& f, negation& x) {
   return f.object(x).pretty_name("negation").fields(f.field("expr", x.expr()));
 }
 
-class optimization_filter {};
 /// A query expression.
-class expression : detail::totally_ordered<expression>, optimization_filter {
+class expression : detail::totally_ordered<expression> {
 public:
   using types = caf::detail::type_list<caf::none_t, conjunction, disjunction,
                                        negation, predicate>;
@@ -269,9 +260,8 @@ public:
   template <class T>
     requires(detail::contains_type_v<types, std::decay_t<T>>)
   expression(T&& x) : node_(std::forward<T>(x)) {
-    if constexpr (detail::is_any_v<std::decay_t<T>, conjunction, disjunction>) {
+    if constexpr (detail::is_any_v<std::decay_t<T>, conjunction, disjunction>)
       TENZIR_ASSERT(!caf::get<std::decay_t<T>>(node_).empty());
-    }
   }
 
   /// @cond PRIVATE
@@ -339,11 +329,10 @@ private:
       if constexpr (std::is_convertible_v<result_type, typename T::value_type>) {
         result.push_back(std::move(x));
       } else {
-        if (!x) {
+        if (!x)
           return x;
-        } else {
+        else
           result.push_back(std::move(*x));
-        }
       }
     }
     return result;

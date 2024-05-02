@@ -111,9 +111,6 @@ auto format_metric(const metric& metric) -> std::string {
 
 auto add_implicit_source_and_sink(pipeline pipe, exec_config const& config)
   -> caf::expected<pipeline> {
-      for (auto &&i: pipe.operators()) {
-    TENZIR_WARN("xxx {}", i->name());
-  }
   if (pipe.infer_type<void>()) {
     // Don't add implicit source.
   } else if (pipe.infer_type<chunk_ptr>()
@@ -177,9 +174,6 @@ auto add_implicit_source_and_sink(pipeline pipe, exec_config const& config)
                            fmt::format("expected pipeline to be closed after "
                                        "adding implicit source and sink"));
   }
-  for (auto &&i: pipe.operators()) {
-    TENZIR_WARN("raw {}", i->name());
-  }
   return pipe;
 }
 
@@ -204,15 +198,12 @@ auto exec_pipeline(std::string content,
     return {};
   }
   auto pipe = tql::to_pipeline(std::move(*parsed));
-  TENZIR_WARN("unoptimized: {:#?}", pipe);
   auto implicit_pipe = add_implicit_source_and_sink(std::move(pipe), cfg);
   if (not implicit_pipe) {
     return std::move(implicit_pipe.error());
   }
   pipe = std::move(*implicit_pipe);
-
   pipe = pipe.optimize_if_closed();
-  TENZIR_WARN("optimized: {:#?}", pipe);
   auto self = caf::scoped_actor{sys};
   auto result = caf::expected<void>{};
   auto metrics = std::vector<metric>{};

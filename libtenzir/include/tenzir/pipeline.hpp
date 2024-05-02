@@ -21,7 +21,6 @@
 #include <fmt/core.h>
 
 #include <memory>
-#include <optional>
 #include <type_traits>
 #include <variant>
 
@@ -318,20 +317,9 @@ public:
   /// which is implied by `sink <=> OPT | sink`. If `order = schema`, this
   /// resolves to `sink <=> interleave | pass | sink`, which follows from what
   /// we may assume about `sink`.
-  // virtual auto optimize(expression const& filter, event_order order) const
-  //   -> optimize_result
-  //   = 0;
-
-  // virtual auto optimize(optimizati const& filter, event_order order) const
-  //   -> optimize_result
-  //   = 0;
-
   virtual auto optimize(expression const& filter, event_order order) const
     -> optimize_result
     = 0;
-
-  virtual auto optimize(selection const& filter, event_order order) const
-    -> optimize_result;
 
   /// Returns the location of the operator.
   virtual auto location() const -> operator_location {
@@ -416,16 +404,12 @@ struct optimize_result {
   std::optional<expression> filter;
   event_order order;
   operator_ptr replacement;
-  std::optional<std::vector<std::string>> selection;
 
   optimize_result(std::optional<expression> filter, event_order order,
-                  operator_ptr replacement,
-                  std::optional<std::vector<std::string>> selection
-                  = std::nullopt)
+                  operator_ptr replacement)
     : filter{std::move(filter)},
       order{order},
-      replacement{std::move(replacement)},
-      selection{std::move(selection)} {
+      replacement{std::move(replacement)} {
   }
 
   /// Always valid if the transformation performed by the operator does not
