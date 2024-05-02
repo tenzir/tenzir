@@ -6,6 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/fwd.hpp"
+
+#include "tenzir/location.hpp"
+
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
@@ -28,7 +32,7 @@ namespace {
 /// The configuration of a select pipeline operator.
 struct configuration {
   /// The key suffixes of the fields to keep.
-  std::vector<std::string> fields = {};
+  std::optional<std::vector<std::string>> fields = {};
 
   /// Support type inspection for easy parsing with convertible.
   template <class Inspector>
@@ -58,7 +62,8 @@ public:
   auto initialize(const type& schema, operator_control_plane&) const
     -> caf::expected<state_type> override {
     auto indices = state_type{};
-    for (const auto& field : config_.fields) {
+    // TODO: IF CONFIG IS EMPTY
+    for (const auto& field : config_.fields.value()) {
       for (auto index : schema.resolve(field)) {
         indices.push_back(std::move(index));
       }
@@ -79,9 +84,23 @@ public:
 
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
-    (void)filter;
-    return optimize_result::order_invariant(*this, order);
+    return optimize_result{filter, order, nullptr, config_.fields};
   }
+
+  // todo: selection
+  // auto optimize(selection const& filter, event_order order) const
+  //   -> optimize_result override {
+  //   return optimize_result{trivially_true_expression(), order, nullptr,
+  //                          config_.fields};
+  // }
+
+  // friend auto inspect(auto& f, select_operator& x) -> bool {
+  //   if (auto dbg = as_debug_writer(f)) {
+  //     return dbg->fmt_value("({} @ {:?})", x.expr_.inner, x.expr_.source);
+  //   }
+  //   return f.apply(x.expr_, x.config_);
+
+  // }
 
   friend auto inspect(auto& f, select_operator& x) -> bool {
     return f.apply(x.config_);
@@ -104,6 +123,7 @@ public:
       parsers::optional_ws_or_comment, parsers::extractor,
       parsers::extractor_char, parsers::extractor_list;
     const auto* f = pipeline.begin();
+    std::string x(f);
     const auto* const l = pipeline.end();
     const auto p = required_ws_or_comment >> extractor_list
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
@@ -116,6 +136,15 @@ public:
                                                       pipeline)),
       };
     }
+    // auto expr = located<tenzir::expression>();
+    // auto field = data{x}; //how to use field extractor
+    // auto keep_field = data{true}; //better way here
+    // auto selection = predicate(field, relational_operator::equal,
+    // keep_field); auto expr = located<tenzir::expression>{selection,
+    // location::unknown}; // what is source
+
+    // TODO: parse by space
+    config.fields.value().push_back(x);
     return {
       std::string_view{f, l},
       std::make_unique<select_operator>(std::move(config)),

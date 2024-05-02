@@ -294,10 +294,13 @@ public:
   std::queue<std::shared_ptr<arrow::RecordBatch>> record_batch_buffer;
 };
 
-auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
+auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
+                   std::optional<std::vector<int>> fields)
   -> generator<table_slice> {
   auto byte_reader = make_byte_reader(std::move(input));
   auto listener = std::make_shared<callback_listener>();
+  auto read_options = arrow::ipc::IpcReadOptions::Defaults();
+  read_options.included_fields = std::move(*fields);
   auto stream_decoder = arrow::ipc::StreamDecoder(listener);
   auto truncated_bytes = size_t{0};
   auto decoded_once = false;
@@ -421,12 +424,20 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    return parse_feather(std::move(input), ctrl);
+    return parse_feather(std::move(input), ctrl, fields);
   }
 
   friend auto inspect(auto& f, feather_parser& x) -> bool {
     return f.object(x).fields();
   }
+
+  auto optimize(event_order order) -> std::unique_ptr<plugin_parser> override {
+    // parse feather
+    //
+  }
+
+private:
+  std::optional<std::vector<int>> fields;
 };
 
 class feather_printer final : public plugin_printer {
