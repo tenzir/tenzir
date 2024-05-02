@@ -14,8 +14,8 @@ Reads and writes JSON.
 Parser:
 
 ```
-json [--schema=<schema>] [--selector=<field[:prefix]>] [--unnest-separator=<string>]
-     [--no-infer] [--ndjson] [--raw]
+json [--schema <schema>] [--selector <field[:prefix]>] [--unnest-separator <string>]
+     [--no-infer] [--ndjson] [--precise] [--raw] [--arrays-of-objects]
 ```
 
 Printer:
@@ -105,6 +105,14 @@ parser malformed lines can be skipped.
 Popular examples of NDJSON include the Suricata Eve JSON and the Zeek Streaming
 JSON formats. Tenzir supports [`suricata`](suricata.md) and
 [`zeek-json`](zeek-json.md) parsers out of the box that utilize this mechanism.
+
+### `--precise` (Parser)
+
+Ensure that only fields that are actually present in the input are contained in
+the returned events. Without this option, the input consisting of `{"a": 1}` and
+`{"b": 2}` can be result in the events `{"a": 1, "b": null}` and
+`{"a": null, "b": 2}`. With it, the output is `{"a": 1}` and `{"b": 2}`. For
+some inputs and queries, this can be significantly more expensive.
 
 ### `--raw` (Parser)
 
