@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/detail/posix.hpp"
 #include "tenzir/logger.hpp"
 
 #include <tenzir/arrow_table_slice.hpp>
@@ -568,20 +569,27 @@ struct v2_loader : public context_loader {
     const auto current_time = std::time(nullptr);
     std::string temp_file_name = *cache_dir + std::to_string(current_time);
     auto temp_file
-      = std::fstream(temp_file_name, std::ios::out | std::ios::binary);
+      = std::fstream(temp_file_name, std::ios_base::in | std::ios_base::out);
     if (!temp_file) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed to open temp file on "
-                                         "data load"));
+                                         "data load: {}",
+                                         detail::describe_errno()));
     }
     temp_file.write(reinterpret_cast<const char*>(serialized->data()),
                     static_cast<std::streamsize>(serialized->size()));
     if (!temp_file) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed write the temp file "
-                                         "on data load"));
+                                         "on data load: {}",
+                                         detail::describe_errno()));
     }
     temp_file.close();
+    if (!temp_file) {
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed close the temp file: {}",
+                                         detail::describe_errno()));
+    }
     auto mmdb = make_mmdb(temp_file_name);
     if (not mmdb) {
       return mmdb.error();
