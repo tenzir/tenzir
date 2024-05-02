@@ -7,7 +7,7 @@ data.
 
 ```
 context create  <name> lookup-table
-context update  <name> --key <field> [--clear]
+context update  <name> --key <field>
 context delete  <name>
 context reset   <name>
 context save    <name>
@@ -24,7 +24,3 @@ The following options are currently supported for the `lookup-table` context:
 ### `--key <field>`
 
 The field in the input that holds the unique key for the lookup table.
-
-### `--clear`
-
-Erases all entries in the lookup table before updating.
