@@ -568,8 +568,7 @@ struct v2_loader : public context_loader {
     std::filesystem::create_directories(*cache_dir);
     const auto current_time = std::time(nullptr);
     std::string temp_file_name = *cache_dir + std::to_string(current_time);
-    auto temp_file
-      = std::fstream(temp_file_name, std::ios_base::in | std::ios_base::out);
+    auto temp_file = std::fstream(temp_file_name, std::ios_base::out);
     if (!temp_file) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed to open temp file on "
