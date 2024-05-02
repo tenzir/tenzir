@@ -25,8 +25,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/to_lines.hpp>
-#include <tenzir/tql/parser.hpp>
-#include <tenzir/try.hpp>
+#include <tenzir/try_simdjson.hpp>
 
 #include <arrow/record_batch.h>
 #include <caf/detail/is_one_of.hpp>
@@ -35,23 +34,6 @@
 
 #include <chrono>
 #include <simdjson.h>
-
-// TODO
-template <class T>
-struct tenzir::tryable<simdjson::simdjson_result<T>> {
-  static auto is_success(const simdjson::simdjson_result<T>& x) -> bool {
-    return x.error() == simdjson::error_code::SUCCESS;
-  }
-
-  static auto get_success(simdjson::simdjson_result<T>&& x) -> T {
-    return std::move(x).value_unsafe();
-  }
-
-  static auto get_error(simdjson::simdjson_result<T>&& x)
-    -> simdjson::error_code {
-    return x.error();
-  }
-};
 
 namespace tenzir::plugins::json {
 namespace {
@@ -600,7 +582,6 @@ auto json_to_data(simdjson::ondemand::object object, bool raw)
   auto result = std::vector<std::pair<std::string, data>>{};
   for (auto maybe_field : object) {
     TRY(auto field, maybe_field);
-    // TODO: Lifetime of `key`?
     TRY(auto key, field.unescaped_key(false));
     TRY(auto value, json_to_data(field.value(), raw));
     // TODO: Reconsider, this is quadratic.
