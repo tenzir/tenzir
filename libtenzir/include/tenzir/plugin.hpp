@@ -425,6 +425,12 @@ public:
     (void)order;
     return nullptr;
   }
+
+  virtual auto optimize(expression const& filter, event_order order)
+    -> std::unique_ptr<plugin_parser> {
+    (void)order;
+    return nullptr;
+  }
 };
 
 /// @see operator_parser_plugin
