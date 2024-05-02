@@ -142,13 +142,10 @@ struct selector {
   }
 };
 
-#define USE_SIGNATURE 1
-
-#if USE_SIGNATURE
-
 /// Given some `data`, this function computes a byte-sequence that uniquely
-/// identifies the type that would be returned by `type::infer`. It is much
-/// faster than using `type::infer`.
+/// identifies the type that would be returned by `type::infer`. However, it is
+/// much faster than using `type::infer`. We use this to identify the builder to
+/// use when `--precise` is given.
 ///
 /// Note: This does not use `data_view` because that allocates. Also, we use
 /// `std::vector<std::byte>&` instead of a generic output iterator because
@@ -193,7 +190,6 @@ void append_signature(const data& x, std::vector<std::byte>& out) {
     },
     x);
 }
-#endif
 
 constexpr auto unknown_entry_name = std::string_view{};
 
@@ -227,12 +223,8 @@ struct parser_state {
   /// If `--precise` is set, we use this map instead of `entry_map`. Obviously,
   /// this is not great, but a proper solution would require refactoring large
   /// parts of this file due to bad extendability of the current design.
-#if USE_SIGNATURE
   tsl::robin_map<std::vector<std::byte>, size_t, detail::hash_algorithm_proxy<>>
     precise_map;
-#else
-  tsl::robin_map<type, size_t> precise_map;
-#endif
   /// Stores the schema-specific builders and some additional metadata.
   std::vector<entry_data> entries;
   /// The index of the currently active or last used builder.
@@ -910,24 +902,14 @@ public:
           .emit(ctrl_.diagnostics());
         co_return;
       }
-#if USE_SIGNATURE
       signature_.clear();
       append_signature(event, signature_);
       auto it = state.precise_map.find(signature_);
-#else
-      auto ty = type::infer(event);
-      TENZIR_ASSERT(ty); // TODO
-      auto it = state.precise_map.find(*ty);
-#endif
       if (it == state.precise_map.end()) {
         // TODO: We should eventually garbage collect this.
         auto index = state.entries.size();
         state.entries.emplace_back("tenzir.json", std::nullopt);
-#if USE_SIGNATURE
         it = state.precise_map.emplace_hint(it, signature_, index);
-#else
-        it = state.precise_map.emplace_hint(it, *ty, index);
-#endif
       }
       if (auto slices = state.activate(it->second)) {
         for (auto& slice : *slices) {
