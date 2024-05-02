@@ -36,6 +36,7 @@
 #include <simdjson.h>
 
 namespace tenzir::plugins::json {
+
 namespace {
 
 inline auto split_at_crlf(generator<chunk_ptr> input)
