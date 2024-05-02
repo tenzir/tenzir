@@ -61,7 +61,7 @@ def upload_packages [
   }
   if $copy {
     if $git_tag != null {
-      let os = (uname -s)
+      let os = (uname | get kernel-name)
       if $os == "Linux" {
         cp ($debs | get 0) $"($name)-amd64-linux.deb"
         print $"::attaching ($name)-amd64-linux.deb to ($git_tag)"
@@ -84,7 +84,7 @@ def push_images [
   image_registries: list<string>
   container_tags # annotation breaks in nu 0.78 : list<string>
 ] {
-  let os = (uname -s)
+  let os = (uname | get kernel-name)
   if ($os != "Linux" or $image_registries == [] or $container_tags == []) {
     return
   }
