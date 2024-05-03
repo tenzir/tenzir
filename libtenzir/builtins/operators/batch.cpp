@@ -49,6 +49,9 @@ public:
           TENZIR_ASSERT(entry.num_buffered < limit_);
           co_yield concatenate(std::exchange(entry.events, {}));
           it = buffers.erase(it);
+          if (it == buffers.end()) {
+            break;
+          }
         }
       }
       if (slice.rows() == 0) {
