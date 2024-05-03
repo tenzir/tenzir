@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/detail/assert.hpp"
-
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/parseable/numeric/integral.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -47,33 +45,23 @@ public:
       // Check all current buffers to see if we have hit a timeout.
       for (auto it = buffers.begin(); it != buffers.end(); ++it) {
         auto& entry = it->second;
-        if (now - entry.last_yield > timeout_ and entry.num_buffered > 0) {
+        if (now - entry.last_yield > timeout_) {
           TENZIR_ASSERT(entry.num_buffered < limit_);
-          entry.last_yield = now;
           co_yield concatenate(std::exchange(entry.events, {}));
           it = buffers.erase(it);
-          entry.num_buffered = 0;
         }
       }
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
-      // In case its an ordered batch and the schema changed, we need to yield
-      // the current buffer.
+      // For ordered batching, on schema change, yield the current buffer
       if (order_ == event_order::ordered and not buffers.empty()
           and buffers.begin()->first != slice.schema()) {
         TENZIR_ASSERT(buffers.size() == 1);
         auto& entry = buffers.begin()->second;
-        while (not entry.events.empty()) {
-          auto [lhs, rhs] = split(entry.events, limit_);
-          auto result = concatenate(std::move(lhs));
-          entry.num_buffered -= result.rows();
-          entry.last_yield = now;
-          co_yield std::move(result);
-          entry.events = std::move(rhs);
-        }
-        TENZIR_ASSERT(entry.events.empty());
+        TENZIR_ASSERT(entry.num_buffered < limit_);
+        co_yield concatenate(std::move(entry.events));
         buffers.clear();
       }
       // Get the buffer for the current slice schema and append to it.
@@ -95,8 +83,14 @@ public:
       }
     }
     // When our input is done, yield the rest of all buffers.
+    // We sort the remaining buffers by yield time for consistent output.
+    std::vector<buffer_entry> remaining;
+    remaining.reserve(buffers.size());
     for (auto& [_, entry] : buffers) {
-      TENZIR_ASSERT(not entry.events.empty());
+      remaining.emplace_back(std::move(entry));
+    }
+    std::ranges::sort(remaining, {}, &buffer_entry::last_yield);
+    for (auto& entry : remaining) {
       co_yield concatenate(std::move(entry.events));
     }
   }

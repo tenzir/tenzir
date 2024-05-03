@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/diagnostics.hpp"
-
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -17,8 +15,6 @@
 #include <tenzir/pipeline.hpp>
 
 #include <arrow/type.h>
-
-#include <memory>
 
 namespace tenzir::plugins::import {
 
