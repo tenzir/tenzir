@@ -294,7 +294,8 @@ public:
   std::queue<std::shared_ptr<arrow::RecordBatch>> record_batch_buffer;
 };
 
-auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
+auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
+                   located<select_projection> selection)
   -> generator<table_slice> {
   auto byte_reader = make_byte_reader(std::move(input));
   auto listener = std::make_shared<callback_listener>();
@@ -413,7 +414,9 @@ public:
 class feather_parser final : public plugin_parser {
 public:
   feather_parser() = default;
-
+  feather_parser(located<select_projection> selection)
+    : selection_{std::move(selection)} {
+  }
   auto name() const -> std::string override {
     return "feather";
   }
@@ -421,12 +424,15 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    return parse_feather(std::move(input), ctrl);
+    return parse_feather(std::move(input), ctrl, selection_);
   }
 
   friend auto inspect(auto& f, feather_parser& x) -> bool {
-    return f.object(x).fields();
+    return f.object(x).fields(f.field("selection", x.selection_));
   }
+
+private:
+  located<select_projection> selection_{};
 };
 
 class feather_printer final : public plugin_printer {
