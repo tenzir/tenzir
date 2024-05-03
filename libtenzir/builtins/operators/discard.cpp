@@ -33,8 +33,8 @@ public:
     return true;
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     (void)filter, (void)order;
     return optimize_result{std::nullopt, event_order::unordered, copy()};
   }

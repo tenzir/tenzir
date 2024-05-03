@@ -69,8 +69,9 @@ public:
       }
       co_yield {};
     }
-    if (builder.rows() > 0)
+    if (builder.rows() > 0) {
       co_yield builder.finish();
+    }
   }
 
   auto operator()(generator<chunk_ptr> input) const -> generator<table_slice> {
@@ -109,16 +110,17 @@ public:
       }
       co_yield {};
     }
-    if (builder.rows() > 0)
+    if (builder.rows() > 0) {
       co_yield builder.finish();
+    }
   }
 
   auto name() const -> std::string override {
     return "measure";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     // Note: This can change the output of `measure`.
     (void)filter;
     return optimize_result::order_invariant(*this, order);

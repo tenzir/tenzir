@@ -59,8 +59,8 @@ public:
     return operator_location::remote;
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     (void)order;
     (void)filter;
     return do_not_optimize(*this);
@@ -111,12 +111,14 @@ public:
         return std::move(*op);
       }
       auto available = std::map<std::string, std::string>{};
-      for (const auto& aspect : collect(plugins::get<aspect_plugin>()))
+      for (const auto& aspect : collect(plugins::get<aspect_plugin>())) {
         available.emplace(aspect->aspect_name(), aspect->name());
+      }
       if (not available.contains(aspect->inner)) {
         auto aspects = std::vector<std::string>{};
-        for (const auto& [aspect_name, plugin_name] : available)
+        for (const auto& [aspect_name, plugin_name] : available) {
           aspects.push_back(aspect_name);
+        }
         diagnostic::error("aspect `{}` could not be found", aspect->inner)
           .primary(aspect->source)
           .hint("must be one of {}", fmt::join(aspects, ", "))

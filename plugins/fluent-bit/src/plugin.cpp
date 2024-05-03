@@ -170,8 +170,9 @@ public:
       = msgpack_unpack_next(&unpacked_,
                             reinterpret_cast<const char*>(bytes.data()),
                             bytes.size(), &offset);
-    if (result == MSGPACK_UNPACK_SUCCESS)
+    if (result == MSGPACK_UNPACK_SUCCESS) {
       return unpacked_.data;
+    }
     return std::nullopt;
   }
 
@@ -260,12 +261,14 @@ public:
     -> caf::expected<std::unique_ptr<engine>> {
     auto result
       = make_engine(plugin_config, args.poll_interval, args.service_properties);
-    if (not result)
+    if (not result) {
       return result;
-    if (not(*result)->input(args.plugin, args.args))
+    }
+    if (not(*result)->input(args.plugin, args.args)) {
       return caf::make_error(ec::unspecified,
                              fmt::format("failed to setup Fluent Bit {} input",
                                          args.plugin));
+    }
     auto callback = flb_lib_out_cb{
       .cb = handle_lib_output,
       .data = result->get(),
@@ -274,12 +277,14 @@ public:
     // - format: "msgpack" or "json"
     // - max_records: integer representing the maximum number of records to
     //   process per single flush call.
-    if (not(*result)->output("lib", {{"format", "msgpack"}}, &callback))
+    if (not(*result)->output("lib", {{"format", "msgpack"}}, &callback)) {
       return caf::make_error(ec::unspecified,
                              "failed to setup Fluent Bit lib output");
-    if (not(*result)->start())
+    }
+    if (not(*result)->start()) {
       return caf::make_error(ec::unspecified,
                              "failed to start Fluent Bit engine");
+    }
     return result;
   }
 
@@ -288,18 +293,22 @@ public:
     -> caf::expected<std::unique_ptr<engine>> {
     auto result
       = make_engine(plugin_config, args.poll_interval, args.service_properties);
-    if (not result)
+    if (not result) {
       return result;
-    if (not(*result)->input("lib"))
+    }
+    if (not(*result)->input("lib")) {
       return caf::make_error(ec::unspecified,
                              "failed to setup Fluent Bit lib input");
-    if (not(*result)->output(args.plugin, args.args))
+    }
+    if (not(*result)->output(args.plugin, args.args)) {
       return caf::make_error(ec::unspecified,
                              fmt::format("failed to setup Fluent Bit {} outut",
                                          args.plugin));
-    if (not(*result)->start())
+    }
+    if (not(*result)->start()) {
       return caf::make_error(ec::unspecified,
                              "failed to start Fluent Bit engine");
+    }
     return result;
   }
 
@@ -369,28 +378,32 @@ private:
                           const property_map& local_properties)
     -> caf::expected<std::unique_ptr<engine>> {
     auto* ctx = flb_create();
-    if (ctx == nullptr)
+    if (ctx == nullptr) {
       return caf::make_error(ec::unspecified,
                              "failed to create Fluent Bit context");
+    }
     // Start with a less noisy log level.
-    if (flb_service_set(ctx, "log_level", "error", nullptr) != 0)
+    if (flb_service_set(ctx, "log_level", "error", nullptr) != 0) {
       return caf::make_error(ec::unspecified,
                              "failed to adjust Fluent Bit log_level");
+    }
     for (const auto& [key, value] : global_properties) {
       auto str_value = to_string(value);
       TENZIR_DEBUG("setting global service option: {}={}", key, str_value);
-      if (flb_service_set(ctx, key.c_str(), str_value.c_str(), nullptr) != 0)
+      if (flb_service_set(ctx, key.c_str(), str_value.c_str(), nullptr) != 0) {
         return caf::make_error(ec::unspecified,
                                fmt::format("failed to set global service "
                                            "option: {}={}", //
                                            key, str_value));
+      }
     }
     for (const auto& [key, value] : local_properties) {
       TENZIR_DEBUG("setting local service option: {}={}", key, value);
-      if (flb_service_set(ctx, key.c_str(), value.c_str(), nullptr) != 0)
+      if (flb_service_set(ctx, key.c_str(), value.c_str(), nullptr) != 0) {
         return caf::make_error(
           ec::unspecified,
           fmt::format("failed to set local service option: {}={}", key, value));
+      }
     }
     return std::unique_ptr<engine>(new engine{ctx, poll_interval});
   }
@@ -519,17 +532,19 @@ auto add(auto& field, const msgpack_object& object, bool decode = false)
     },
     [&](std::span<msgpack_object> xs) {
       auto list = field.list();
-      for (const auto& x : xs)
+      for (const auto& x : xs) {
         add(list, x, decode);
+      }
     },
     [&](std::span<msgpack_object_kv> xs) {
       auto record = field.record();
       for (const auto& kvp : xs) {
-        if (kvp.key.type != MSGPACK_OBJECT_STR)
+        if (kvp.key.type != MSGPACK_OBJECT_STR) {
           diagnostic::warning("invalid Fluent Bit record")
             .note("failed to parse key")
             .note("got {}", kvp.key.type)
             .throw_();
+        }
         auto key = msgpack::to_str(kvp.key);
         auto field = record.field(key);
         // TODO: restrict this attempt to decode to the top-level field "log"
@@ -683,16 +698,18 @@ public:
           or last_finish + defaults::import::batch_timeout < now) {
         TENZIR_DEBUG("flushing table slice with {} rows", builder.length());
         last_finish = now;
-        for (auto& slice : builder.finish_as_table_slice(table_slice_name))
+        for (auto& slice : builder.finish_as_table_slice(table_slice_name)) {
           co_yield slice;
+        }
       } else {
         co_yield {};
       }
     }
     if (builder.length() > 0) {
       TENZIR_DEBUG("flushing last table slice with {} rows", builder.length());
-      for (auto& slice : builder.finish_as_table_slice(table_slice_name))
+      for (auto& slice : builder.finish_as_table_slice(table_slice_name)) {
         co_yield slice;
+      }
     }
   }
 
@@ -728,8 +745,9 @@ public:
         TENZIR_ASSERT(ok);
         // Wrap JSON object in the 2-element JSON array that Fluent Bit expects.
         auto message = fmt::format("[{}, {}]", flb_time_now(), event);
-        if (not(*engine)->push(message))
+        if (not(*engine)->push(message)) {
           TENZIR_ERROR("failed to push data into Fluent Bit engine");
+        }
         event.clear();
       }
       co_yield {};
@@ -748,8 +766,8 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     (void)order;
     (void)filter;
     return do_not_optimize(*this);
@@ -782,39 +800,46 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto args = operator_args{};
     auto arg = p.accept_shell_arg();
-    if (arg == std::nullopt)
+    if (arg == std::nullopt) {
       diagnostic::error("missing fluent-bit plugin").throw_();
+    }
     auto have_options = false;
     if (arg->inner == "-X" || arg->inner == "--set") {
       have_options = true;
       arg = p.accept_shell_arg();
-      if (arg == std::nullopt)
+      if (arg == std::nullopt) {
         diagnostic::error("-X|--set requires values").throw_();
+      }
       std::vector<std::pair<std::string, std::string>> kvps;
-      if (not parsers::kvp_list(arg->inner, kvps))
+      if (not parsers::kvp_list(arg->inner, kvps)) {
         diagnostic::error("invalid list of key=value pairs")
           .primary(arg->source)
           .throw_();
-      for (auto& [key, value] : kvps)
+      }
+      for (auto& [key, value] : kvps) {
         args.service_properties.emplace(std::move(key), std::move(value));
+      }
     }
     // Parse the remainder: <plugin> [<key=value>...]
     if (have_options) {
       arg = p.accept_shell_arg();
-      if (arg == std::nullopt)
+      if (arg == std::nullopt) {
         diagnostic::error("missing fluent-bit plugin").throw_();
+      }
     }
     args.plugin = std::move(arg->inner);
     while (true) {
       arg = p.accept_shell_arg();
-      if (arg == std::nullopt)
+      if (arg == std::nullopt) {
         break;
+      }
       // Try parsing as key-value pair
       auto kvp = detail::split(arg->inner, "=");
-      if (kvp.size() != 2)
+      if (kvp.size() != 2) {
         diagnostic::error("invalid key-value pair: {}", arg->inner)
           .hint("{} operator arguments have the form key=value", name())
           .throw_();
+      }
       args.args.emplace(kvp[0], kvp[1]);
     }
     return std::make_unique<fluent_bit_operator>(std::move(args), config_);

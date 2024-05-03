@@ -155,8 +155,9 @@ struct group_by_key_view : std::vector<data_view> {
   friend group_by_key materialize(const group_by_key_view& views) {
     auto result = group_by_key{};
     result.reserve(views.size());
-    for (const auto& view : views)
+    for (const auto& view : views) {
       result.push_back(materialize(view));
+    }
     return result;
   }
 };
@@ -166,15 +167,17 @@ struct group_by_key_view : std::vector<data_view> {
 struct group_by_key_hash {
   size_t operator()(const group_by_key& x) const noexcept {
     auto hasher = xxh64{};
-    for (const auto& value : x)
+    for (const auto& value : x) {
       hash_append(hasher, make_view(value));
+    }
     return hasher.finish();
   }
 
   size_t operator()(const group_by_key_view& x) const noexcept {
     auto hasher = xxh64{};
-    for (const auto& value : x)
+    for (const auto& value : x) {
       hash_append(hasher, value);
+    }
     return hasher.finish();
   }
 };
@@ -527,8 +530,9 @@ public:
     for (auto row = int64_t{1}; row < detail::narrow<int64_t>(slice.rows());
          ++row) {
       auto* bucket = find_or_create_bucket(row);
-      if (bucket == first_bucket)
+      if (bucket == first_bucket) {
         continue;
+      }
       update_bucket(*first_bucket, first_row, row - first_row);
       first_row = row;
       first_bucket = bucket;
@@ -788,8 +792,8 @@ public:
     return "summarize";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     // Note: The `unordered` relies on commutativity of the aggregation functions.
     (void)filter, (void)order;
     return optimize_result{std::nullopt, event_order::unordered, copy()};

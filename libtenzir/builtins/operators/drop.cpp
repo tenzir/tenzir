@@ -67,8 +67,9 @@ public:
                     [&](const auto& dropped_schema) {
                       return dropped_schema == schema.name();
                     });
-    if (drop_schema)
+    if (drop_schema) {
       return std::nullopt;
+    }
 
     // Apply the transformation.
     auto transform_fn
@@ -86,8 +87,9 @@ public:
     // transform_columns requires the transformations to be sorted, and that may
     // not necessarily be true if we have multiple fields configured, so we sort
     // again in that case.
-    if (config_.fields.size() > 1)
+    if (config_.fields.size() > 1) {
       std::sort(transformations.begin(), transformations.end());
+    }
     transformations.erase(std::unique(transformations.begin(),
                                       transformations.end()),
                           transformations.end());
@@ -107,8 +109,8 @@ public:
     return "drop";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     (void)filter;
     return optimize_result::order_invariant(*this, order);
   }

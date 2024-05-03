@@ -411,9 +411,9 @@ public:
     return "tcp-listen";
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
-    auto result = args_.op->optimize(filter, order);
+  auto optimize(const expression& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
+    auto result = args_.op->optimize(filter, order, select_projection());
     if (not result.replacement) {
       return result;
     }

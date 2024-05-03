@@ -27,10 +27,10 @@ public:
     TENZIR_ASSERT(not dynamic_cast<const unordered_operator*>(op_.get()));
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     (void)order;
-    return op_->optimize(filter, event_order::unordered);
+    return op_->optimize(filter, event_order::unordered, select_projection());
   }
 
   auto instantiate(operator_input input, operator_control_plane& ctrl) const

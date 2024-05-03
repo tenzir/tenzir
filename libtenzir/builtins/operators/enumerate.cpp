@@ -35,8 +35,9 @@ public:
   enumerate_operator() = default;
 
   explicit enumerate_operator(std::string field) : field_{std::move(field)} {
-    if (field_.empty())
+    if (field_.empty()) {
       field_ = default_field_name;
+    }
   }
 
   auto
@@ -100,8 +101,8 @@ public:
     return "enumerate";
   }
 
-  auto optimize(expression const& filter, event_order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     (void)filter;
     return optimize_result{std::nullopt, event_order::ordered, copy()};
   }

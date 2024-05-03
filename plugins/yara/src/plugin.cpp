@@ -123,8 +123,9 @@ public:
 
   /// Relinquishes a block of memory from the beginning.
   auto pop_front() -> bool {
-    if (blocks_.empty())
+    if (blocks_.empty()) {
       return false;
+    }
     blocks_.pop_front();
     --offset_;
     return true;
@@ -189,8 +190,9 @@ public:
   static auto load(const std::string& filename) -> caf::expected<rules> {
     auto result = rules{};
     auto status = yr_rules_load(filename.c_str(), &result.rules_);
-    if (auto err = to_error(status))
+    if (auto err = to_error(status)) {
       return err;
+    }
     return result;
   }
 
@@ -204,8 +206,9 @@ public:
   }
 
   ~rules() {
-    if (rules_)
+    if (rules_) {
       yr_rules_destroy(rules_);
+    }
   }
 
   rules(const rules&) = delete;
@@ -224,13 +227,15 @@ public:
     // Create scanner from rules.
     auto result = scanner{std::move(opts)};
     auto status = yr_scanner_create(rules.rules_, &result.scanner_);
-    if (status == ERROR_INSUFICIENT_MEMORY)
+    if (status == ERROR_INSUFICIENT_MEMORY) {
       return std::nullopt;
+    }
     TENZIR_ASSERT(status == ERROR_SUCCESS);
     // Set flags.
     auto flags = 0;
-    if (opts.fast_scan)
+    if (opts.fast_scan) {
       flags |= SCAN_FLAGS_FAST_MODE;
+    }
     yr_scanner_set_flags(result.scanner_, flags);
     // Set timeout.
     auto timeout = detail::narrow_cast<int>(opts.timeout.count());
@@ -248,8 +253,9 @@ public:
   }
 
   ~scanner() noexcept {
-    if (scanner_)
+    if (scanner_) {
       yr_scanner_destroy(scanner_);
+    }
   }
 
   scanner(const scanner&) = delete;
@@ -263,8 +269,9 @@ public:
     auto builder = series_builder{};
     yr_scanner_set_callback(scanner_, callback, &builder);
     auto status = yr_scanner_scan_mem(scanner_, buffer, buffer_size);
-    if (auto err = to_error(status))
+    if (auto err = to_error(status)) {
       return err;
+    }
     return builder.finish_as_table_slice("yara.match");
   }
 
@@ -274,8 +281,9 @@ public:
     auto builder = series_builder{};
     yr_scanner_set_callback(scanner_, callback, &builder);
     auto status = yr_scanner_scan_mem_blocks(scanner_, blocks.iterator());
-    if (auto err = to_error(status))
+    if (auto err = to_error(status)) {
       return err;
+    }
     return builder.finish_as_table_slice("yara.match");
   }
 
@@ -300,12 +308,13 @@ private:
       YR_META* meta = nullptr;
       yr_rule_metas_foreach(rule, meta) {
         auto identifier = std::string_view{meta->identifier};
-        if (meta->type == META_TYPE_INTEGER)
+        if (meta->type == META_TYPE_INTEGER) {
           meta_rec.field(identifier).data(int64_t{meta->integer});
-        else if (meta->type == META_TYPE_BOOLEAN)
+        } else if (meta->type == META_TYPE_BOOLEAN) {
           meta_rec.field(identifier).data(meta->integer != 0);
-        else
+        } else {
           meta_rec.field(identifier).data(std::string_view{meta->string});
+        }
       }
       // First we bring all strings to the attention of the user. This is
       // valuable rule context in case the rule is not immediately handly.
@@ -384,8 +393,9 @@ public:
   static auto make() -> std::optional<compiler> {
     auto result = compiler{};
     auto status = yr_compiler_create(&result.compiler_);
-    if (status == ERROR_INSUFICIENT_MEMORY)
+    if (status == ERROR_INSUFICIENT_MEMORY) {
       return std::nullopt;
+    }
     TENZIR_ASSERT(status == ERROR_SUCCESS);
     return result;
   }
@@ -400,8 +410,9 @@ public:
   }
 
   ~compiler() noexcept {
-    if (compiler_)
+    if (compiler_) {
       yr_compiler_destroy(compiler_);
+    }
   }
 
   compiler(const compiler&) = delete;
@@ -414,24 +425,27 @@ public:
     if (std::filesystem::is_directory(path)) {
       for (const std::filesystem::directory_entry& entry :
            std::filesystem::recursive_directory_iterator(path)) {
-        if (auto err = add(entry.path()))
+        if (auto err = add(entry.path())) {
           return err;
+        }
       }
     } else {
       auto* file = std::fopen(path.string().c_str(), "r");
-      if (not file)
+      if (not file) {
         return caf::make_error(ec::filesystem_error,
                                fmt::format("failed to open file: {}", path));
+      }
       auto name_space = nullptr;
       auto num_errors = yr_compiler_add_file(compiler_, file, name_space,
                                              path.string().c_str());
       auto result = std::fclose(file);
       (void)result;
-      if (num_errors > 0)
+      if (num_errors > 0) {
         return caf::make_error(
           ec::unspecified, fmt::format("got {} error(s) while compiling YARA "
                                        "rule: {}",
                                        num_errors, path));
+      }
     }
     return {};
   }
@@ -443,11 +457,12 @@ public:
     auto name_space = nullptr;
     auto num_errors
       = yr_compiler_add_string(compiler_, str.c_str(), name_space);
-    if (num_errors > 0)
+    if (num_errors > 0) {
       return caf::make_error(ec::unspecified,
                              fmt::format("got {} error(s) while compiling YARA "
                                          "rule: '{}'",
                                          num_errors, str));
+    }
     return {};
   }
 
@@ -457,9 +472,10 @@ public:
   auto compile() -> caf::expected<rules> {
     YR_RULES* yr_rules = nullptr;
     auto status = yr_compiler_get_rules(compiler_, &yr_rules);
-    if (status == ERROR_INSUFFICIENT_MEMORY)
+    if (status == ERROR_INSUFFICIENT_MEMORY) {
       return caf::make_error(ec::unspecified,
                              "insufficent memory to compile rules");
+    }
     TENZIR_ASSERT(status == ERROR_SUCCESS);
     auto result = rules{};
     result.rules_ = yr_rules;
@@ -527,8 +543,9 @@ public:
           continue;
         }
         if (auto slices = scanner->scan(as_bytes(chunk))) {
-          for (auto&& slice : *slices)
+          for (auto&& slice : *slices) {
             co_yield slice;
+          }
         } else {
           diagnostic::warning("failed to scan block with YARA rules")
             .hint("{}", slices.error())
@@ -559,8 +576,9 @@ public:
       }
       auto bytes = buffer.empty() ? as_bytes(first) : as_bytes(buffer);
       if (auto slices = scanner->scan(bytes)) {
-        for (auto&& slice : *slices)
+        for (auto&& slice : *slices) {
           co_yield slice;
+        }
       } else {
         diagnostic::error("failed to scan blocks with YARA rules")
           .hint("{}", slices.error())
@@ -573,8 +591,8 @@ public:
     return "yara";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     (void)filter;
     (void)order;
     return do_not_optimize(*this);
@@ -594,8 +612,9 @@ private:
 class plugin final : public virtual operator_plugin<yara_operator> {
 public:
   plugin() {
-    if (yr_initialize() != ERROR_SUCCESS)
+    if (yr_initialize() != ERROR_SUCCESS) {
       die("failed to initialize yara");
+    }
   }
 
   ~plugin() final {
@@ -610,22 +629,25 @@ public:
     auto args = operator_args{};
     while (auto arg = p.accept_shell_arg()) {
       if (arg) {
-        if (arg->inner == "-C" || arg->inner == "--compiled-rules")
+        if (arg->inner == "-C" || arg->inner == "--compiled-rules") {
           args.compiled_rules = true;
-        else if (arg->inner == "-f" || arg->inner == "--fast-scan")
+        } else if (arg->inner == "-f" || arg->inner == "--fast-scan") {
           args.fast_scan = true;
-        else if (arg->inner == "-B" || arg->inner == "--blockwise")
+        } else if (arg->inner == "-B" || arg->inner == "--blockwise") {
           args.blockwise = true;
-        else
+        } else {
           args.rules.push_back(std::move(arg->inner));
+        }
       }
     }
-    if (args.rules.empty())
+    if (args.rules.empty()) {
       diagnostic::error("no rules provided").throw_();
-    if (args.compiled_rules && args.rules.size() != 1)
+    }
+    if (args.compiled_rules && args.rules.size() != 1) {
       diagnostic::error("can't accept multiple rules in compiled form")
         .hint("provide exactly one rule argument")
         .throw_();
+    }
     return std::make_unique<yara_operator>(std::move(args));
   }
 };

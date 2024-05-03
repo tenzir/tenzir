@@ -133,18 +133,21 @@ auto parse(const proto::VQLResponse& response)
     // should synthesize a schema from that and provide that as hint to
     // the series builder.
     auto json = from_json(response.response());
-    if (not json)
+    if (not json) {
       return caf::make_error(ec::parse_error,
                              "Velociraptor response not in JSON format");
+    }
     const auto* objects = caf::get_if<list>(&*json);
-    if (objects == nullptr)
+    if (objects == nullptr) {
       return caf::make_error(ec::parse_error,
                              "expected JSON array in Velociraptor response");
+    }
     for (const auto& object : *objects) {
       const auto* rec = caf::get_if<record>(&object);
-      if (rec == nullptr)
+      if (rec == nullptr) {
         return caf::make_error(ec::parse_error,
                                "expected objects in Velociraptor response");
+      }
       auto row = builder.record();
       row.field("timestamp").data(timestamp);
       row.field("query_id").data(response.query_id());
@@ -154,8 +157,9 @@ auto parse(const proto::VQLResponse& response)
       });
       row.field("part").data(response.part());
       auto resp = row.field("response").record();
-      for (const auto& [field, value] : *rec)
+      for (const auto& [field, value] : *rec) {
         resp.field(field).data(make_view(value));
+      }
     }
     return builder.finish_as_table_slice("velociraptor.response");
   }
@@ -269,8 +273,9 @@ public:
           if (ok) {
             if (output_tag == input_tag) {
               if (auto slices = parse(response)) {
-                for (const auto& slice : *slices)
+                for (const auto& slice : *slices) {
                   co_yield slice;
+                }
               } else {
                 diagnostic::warning(
                   "failed to parse Velociraptor gRPC response")
@@ -303,10 +308,11 @@ public:
     }
     auto status = grpc::Status{};
     reader->Finish(&status, nullptr);
-    if (not status.ok())
+    if (not status.ok()) {
       diagnostic::warning("failed to finish Velociraptor gRPC stream")
         .note("{}", status.error_message())
         .emit(ctrl.diagnostics());
+    }
   }
 
   auto name() const -> std::string override {
@@ -321,8 +327,8 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     (void)order;
     (void)filter;
     return do_not_optimize(*this);
@@ -370,11 +376,12 @@ public:
     parser.add("-w,--max-wait", max_wait, "<duration>");
     parser.add("--profile", profile, "<profile>");
     parser.parse(p);
-    if (max_wait && max_wait->inner < 1s)
+    if (max_wait && max_wait->inner < 1s) {
       diagnostic::error("--max-wait too low")
         .primary(max_wait->source)
         .hint("value must be great than 1s")
         .throw_();
+    }
     if (query) {
       args.requests.push_back(request{
         .name = request_name ? std::move(request_name->inner)

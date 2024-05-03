@@ -701,18 +701,20 @@ struct serve_handler_state {
     auto seen_schemas = std::unordered_set<type>{};
     bool first = true;
     for (const auto& slice : results) {
-      if (slice.rows() == 0)
+      if (slice.rows() == 0) {
         continue;
+      }
       seen_schemas.insert(slice.schema());
       auto resolved_slice = resolve_enumerations(slice);
       auto type = caf::get<record_type>(resolved_slice.schema());
       auto array
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
       for (const auto& row : values(type, *array)) {
-        if (first)
+        if (first) {
           out_iter = fmt::format_to(out_iter, "{{");
-        else
+        } else {
           out_iter = fmt::format_to(out_iter, "}},{{");
+        }
         first = false;
         out_iter = fmt::format_to(out_iter, R"("schema_id":"{}","data":)",
                                   slice.schema().make_fingerprint());
@@ -728,10 +730,11 @@ struct serve_handler_state {
     }
     out_iter = fmt::format_to(out_iter, R"(}}],"schemas":[)");
     for (bool first = true; const auto& schema : seen_schemas) {
-      if (first)
+      if (first) {
         out_iter = fmt::format_to(out_iter, "{{");
-      else
+      } else {
         out_iter = fmt::format_to(out_iter, "}},{{");
+      }
       first = false;
       out_iter = fmt::format_to(out_iter, R"("schema_id":"{}","definition":)",
                                 schema.make_fingerprint());
@@ -904,8 +907,8 @@ public:
     return "serve";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     (void)filter, (void)order;
     return do_not_optimize(*this);
   }
@@ -988,8 +991,9 @@ public:
   }
 
   auto openapi_endpoints(api_version version) const -> record override {
-    if (version != api_version::v0)
+    if (version != api_version::v0) {
       return tenzir::record{};
+    }
     auto result = from_yaml(SPEC_V0);
     TENZIR_ASSERT(result);
     TENZIR_ASSERT(caf::holds_alternative<record>(*result));

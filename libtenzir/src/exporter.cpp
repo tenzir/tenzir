@@ -43,8 +43,9 @@ namespace {
 
 void shutdown_stream(
   caf::stream_source_ptr<caf::broadcast_downstream_manager<table_slice>> stream) {
-  if (!stream)
+  if (!stream) {
     return;
+  }
   TENZIR_DEBUG("exporter: shutting down stream");
   stream->shutdown();
   stream->out().fan_out_flush();
@@ -239,8 +240,8 @@ public:
     TENZIR_DEBUG("{} source is done", *exporter_);
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     (void)filter, (void)order;
     return do_not_optimize(*this);
   }
@@ -270,8 +271,8 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     (void)filter, (void)order;
     return do_not_optimize(*this);
   }
@@ -370,8 +371,9 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
     [self](atom::run) {
       TENZIR_VERBOSE("{} executes query: {}", *self, self->state.query_context);
       self->state.start = std::chrono::system_clock::now();
-      if (!has_historical_option(self->state.options))
+      if (!has_historical_option(self->state.options)) {
         return;
+      }
       self
         ->request(self->state.index, caf::infinite, atom::evaluate_v,
                   self->state.query_context)
@@ -421,9 +423,10 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
                  handle_batch(self, std::move(slice));
                },
                [=](caf::unit_t&, const caf::error& err) {
-                 if (err)
+                 if (err) {
                    TENZIR_ERROR("{} got error during streaming: {}", *self,
                                 err);
+                 }
                  shutdown_stream(self->state.result_stream);
                })
         .inbound_slot();
@@ -440,8 +443,9 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
           // TODO: Is this what we want?
           pipeline_names.emplace_back(self->state.pipeline_str);
           exp["pipelines"] = std::move(pipeline_names);
-          if (v >= status_verbosity::debug)
+          if (v >= status_verbosity::debug) {
             detail::fill_status_map(exp, self);
+          }
         }
         auto xs = list{};
         xs.emplace_back(std::move(exp));
@@ -475,8 +479,9 @@ auto exporter(exporter_actor::stateful_pointer<exporter_state> self,
                      self->state.query_status.expected,
                      tenzir::to_string(runtime));
         TENZIR_TRACEPOINT(query_done, self->state.id.as_u64().first);
-        if (!self->state.result_stream)
+        if (!self->state.result_stream) {
           self->send_exit(self->state.sink, caf::exit_reason::user_shutdown);
+        }
       }
     },
   };

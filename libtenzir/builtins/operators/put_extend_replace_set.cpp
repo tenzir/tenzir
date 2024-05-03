@@ -151,8 +151,9 @@ public:
 
   auto operator()(const table_slice& slice, operator_control_plane& ctrl) const
     -> table_slice {
-    if (slice.rows() == 0)
+    if (slice.rows() == 0) {
       return {};
+    }
     const auto& layout = caf::get<record_type>(slice.schema());
     auto transformations1 = std::vector<indexed_transformation>{};
     auto transformations2 = std::vector<indexed_transformation>{};
@@ -279,8 +280,8 @@ public:
     return result;
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     (void)filter;
     return optimize_result::order_invariant(*this, order);
   }

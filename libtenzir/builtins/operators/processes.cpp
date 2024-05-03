@@ -36,8 +36,8 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     (void)order;
     (void)filter;
     return do_not_optimize(*this);

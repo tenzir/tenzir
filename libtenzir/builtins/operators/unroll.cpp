@@ -190,8 +190,8 @@ public:
     return "unroll";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     (void)filter;
     return optimize_result::order_invariant(*this, order);
   }

@@ -42,8 +42,9 @@ struct frame {
       case frame_type::ethernet: {
         // Need at least 2 MAC addresses and the 2-byte EtherType.
         constexpr size_t ethernet_header_size = 6 + 6 + 2;
-        if (bytes.size() < ethernet_header_size)
+        if (bytes.size() < ethernet_header_size) {
           return std::nullopt;
+        }
         auto dst = mac{bytes.subspan<0, 6>()};
         auto src = mac{bytes.subspan<6, 6>()};
         auto result = frame{dst, src};
@@ -55,8 +56,9 @@ struct frame {
             break;
           case ether_type::ieee_802_1aq: {
             size_t min_frame_size = 6 + 6 + 4 + 2;
-            if (bytes.size() < min_frame_size)
+            if (bytes.size() < min_frame_size) {
               return std::nullopt;
+            }
             result.outer_vid = to_uint16(bytes.subspan<14, 2>());
             *result.outer_vid &= 0x0FFF; // lower 12 bits only
             result.type = as_ether_type(bytes.subspan<16, 2>());
@@ -64,8 +66,9 @@ struct frame {
             // Keep going for QinQ frames (TPID = 0x8100).
             if (result.type == ether_type::ieee_802_1aq) {
               min_frame_size += 4;
-              if (bytes.size() < min_frame_size)
+              if (bytes.size() < min_frame_size) {
                 return std::nullopt;
+              }
               result.inner_vid = to_uint16(bytes.subspan<18, 2>());
               *result.inner_vid &= 0x0FFF; // lower 12 bits only
               result.type = as_ether_type(bytes.subspan<20, 2>());
@@ -75,8 +78,9 @@ struct frame {
           }
           case ether_type::ieee_802_1q_db: {
             constexpr size_t min_frame_size = 6 + 6 + 4 + 4 + 2;
-            if (bytes.size() < min_frame_size)
+            if (bytes.size() < min_frame_size) {
               return std::nullopt;
+            }
             result.outer_vid = to_uint16(bytes.subspan<14, 2>());
             *result.outer_vid &= 0x0FFF; // lower 12 bits only
             result.inner_vid = to_uint16(bytes.subspan<18, 2>());
@@ -113,11 +117,13 @@ struct packet {
         break;
       case ether_type::ipv4: {
         constexpr size_t ipv4_header_size = 20;
-        if (bytes.size() < ipv4_header_size)
+        if (bytes.size() < ipv4_header_size) {
           return std::nullopt;
+        }
         size_t header_length = (std::to_integer<uint8_t>(bytes[0]) & 0x0f) * 4;
-        if (bytes.size() < header_length)
+        if (bytes.size() < header_length) {
           return std::nullopt;
+        }
         result.src = ip::v4(bytes.subspan<12, 4>());
         result.dst = ip::v4(bytes.subspan<16, 4>());
         result.type = std::to_integer<uint8_t>(bytes[9]);
@@ -126,8 +132,9 @@ struct packet {
       }
       case ether_type::ipv6: {
         constexpr size_t ipv6_header_size = 40;
-        if (bytes.size() < ipv6_header_size)
+        if (bytes.size() < ipv6_header_size) {
           return std::nullopt;
+        }
         result.src = ip::v6(bytes.subspan<8, 16>());
         result.dst = ip::v6(bytes.subspan<24, 16>());
         result.type = std::to_integer<uint8_t>(bytes[6]);
@@ -154,21 +161,24 @@ struct segment {
         break;
       case IPPROTO_TCP: {
         constexpr size_t min_tcp_header_size = 20;
-        if (bytes.size() < min_tcp_header_size)
+        if (bytes.size() < min_tcp_header_size) {
           return std::nullopt;
+        }
         result.src = to_uint16(bytes.subspan<0, 2>());
         result.dst = to_uint16(bytes.subspan<2, 2>());
         result.type = port_type::tcp;
         size_t data_offset = (std::to_integer<uint8_t>(bytes[12]) >> 4) * 4;
-        if (bytes.size() < data_offset)
+        if (bytes.size() < data_offset) {
           return std::nullopt;
+        }
         result.payload = bytes.subspan(data_offset);
         return result;
       }
       case IPPROTO_UDP: {
         constexpr size_t udp_header_size = 8;
-        if (bytes.size() < udp_header_size)
+        if (bytes.size() < udp_header_size) {
           return std::nullopt;
+        }
         result.src = to_uint16(bytes.subspan<0, 2>());
         result.dst = to_uint16(bytes.subspan<2, 2>());
         result.type = port_type::udp;
@@ -177,8 +187,9 @@ struct segment {
       }
       case IPPROTO_ICMP: {
         constexpr size_t icmp_header_size = 8;
-        if (bytes.size() < icmp_header_size)
+        if (bytes.size() < icmp_header_size) {
           return std::nullopt;
+        }
         auto message_type = std::to_integer<uint8_t>(bytes[0]);
         auto message_code = std::to_integer<uint8_t>(bytes[1]);
         result.src = message_type;
@@ -216,8 +227,9 @@ auto parse(record_ref builder, std::span<const std::byte> bytes,
   if (frame->outer_vid) {
     auto vlan = builder.field("vlan").record();
     vlan.field("outer").data(static_cast<uint64_t>(*frame->outer_vid));
-    if (frame->inner_vid)
+    if (frame->inner_vid) {
       vlan.field("inner").data(static_cast<uint64_t>(*frame->inner_vid));
+    }
   }
   ether.field("type").data(static_cast<uint64_t>(frame->type));
   // Parse layer 3.
@@ -340,14 +352,16 @@ public:
       for (auto i = 0u; i < slice.rows(); ++i) {
         auto linktype = (*linktype_values)[i];
         auto data = (*data_values)[i];
-        if (!data)
+        if (!data) {
           continue;
+        }
         auto row = builder.record();
         auto raw_frame = std::span<const std::byte>{
           reinterpret_cast<const std::byte*>(data->data()), data->size()};
         auto inferred_type = static_cast<frame_type>(linktype ? *linktype : 0);
-        if (auto diag = parse(row, raw_frame, inferred_type))
+        if (auto diag = parse(row, raw_frame, inferred_type)) {
           ctrl.diagnostics().emit(std::move(*diag));
+        }
       }
       // Add back the untouched data column at the end before yielding.
       for (auto&& new_slice : builder.finish_as_table_slice("tenzir.packet")) {
@@ -369,8 +383,8 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     (void)filter;
     return optimize_result::order_invariant(*this, order);
   }

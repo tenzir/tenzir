@@ -22,6 +22,7 @@
 #include "tenzir/http_api.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/select_projection.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/type.hpp"
 
@@ -426,7 +427,8 @@ public:
     return nullptr;
   }
 
-  virtual auto optimize(expression const& filter, event_order order)
+  virtual auto optimize(expression const& filter, event_order order,
+                        select_projection fields)
     -> std::unique_ptr<plugin_parser> {
     (void)order;
     return nullptr;

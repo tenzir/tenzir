@@ -52,9 +52,9 @@ public:
     TENZIR_ASSERT(not dynamic_cast<const every_operator*>(op_.get()));
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
-    auto result = op_->optimize(filter, order);
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
+    auto result = op_->optimize(filter, order, select_projection());
     if (not result.replacement) {
       return result;
     }

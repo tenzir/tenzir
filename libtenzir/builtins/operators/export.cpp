@@ -54,8 +54,9 @@ caf::behavior make_bridge(caf::stateful_actor<bridge_state>* self,
   return {
     [self](table_slice slice) {
       auto filtered = filter(std::move(slice), self->state.expr);
-      if (not filtered)
+      if (not filtered) {
         return;
+      }
       if (self->state.rp.pending()) {
         self->state.rp.deliver(std::move(*filtered));
       } else if (self->state.num_buffered < (1 << 22)) {
@@ -228,11 +229,12 @@ public:
     return true;
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     (void)order;
-    if (live_)
+    if (live_) {
       return do_not_optimize(*this);
+    }
     auto clauses = std::vector<expression>{};
     if (expr_ != caf::none and expr_ != trivially_true_expression()) {
       clauses.push_back(expr_);

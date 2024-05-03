@@ -11,6 +11,7 @@
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/operator_control_plane.hpp"
+#include "tenzir/select_projection.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tag.hpp"
 
@@ -317,8 +318,8 @@ public:
   /// which is implied by `sink <=> OPT | sink`. If `order = schema`, this
   /// resolves to `sink <=> interleave | pass | sink`, which follows from what
   /// we may assume about `sink`.
-  virtual auto optimize(expression const& filter, event_order order) const
-    -> optimize_result
+  virtual auto optimize(expression const& filter, event_order order,
+                        select_projection fields) const -> optimize_result
     = 0;
 
   /// Returns the location of the operator.
@@ -404,12 +405,15 @@ struct optimize_result {
   std::optional<expression> filter;
   event_order order;
   operator_ptr replacement;
+  std::optional<select_projection> fields;
 
   optimize_result(std::optional<expression> filter, event_order order,
-                  operator_ptr replacement)
+                  operator_ptr replacement,
+                  std::optional<select_projection> fields = std::nullopt)
     : filter{std::move(filter)},
       order{order},
-      replacement{std::move(replacement)} {
+      replacement{std::move(replacement)},
+      fields{std::move(fields)} {
   }
 
   /// Always valid if the transformation performed by the operator does not
@@ -474,8 +478,8 @@ public:
   [[nodiscard]] auto optimize_into_filter(expression const& filter) const
     -> std::pair<expression, pipeline>;
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override;
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override;
 
   /// Returns whether this is a well-formed `void -> void` pipeline.
   auto is_closed() const -> bool;

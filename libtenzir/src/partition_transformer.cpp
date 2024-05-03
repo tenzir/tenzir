@@ -119,8 +119,8 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     (void)filter, (void)order;
     return do_not_optimize(*this);
   }
@@ -143,14 +143,15 @@ public:
   auto operator()(generator<table_slice> input) const
     -> generator<std::monostate> {
     for (auto&& slice : input) {
-      if (slice.rows() > 0)
+      if (slice.rows() > 0) {
         result_->push_back(std::move(slice));
+      }
       co_yield {};
     }
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     (void)filter, (void)order;
     return do_not_optimize(*this);
   }
@@ -173,9 +174,10 @@ partition_transformer_state::create_or_get_partition(const table_slice& slice) {
     x = std::prev(end);
     // Create a new partition if inserting the slice would overflow
     // the old one.
-    if (x->second.events + slice.rows() > partition_capacity)
+    if (x->second.events + slice.rows() > partition_capacity) {
       x = data.insert(
         std::make_pair(schema, active_partition_state::serialization_data{}));
+    }
   }
   return x->second;
 }
@@ -211,8 +213,9 @@ void partition_transformer_state::update_type_ids_and_indexers(
       it = typed_indexers.emplace(qf, std::move(idx)).first;
     }
     auto& idx = it->second;
-    if (idx != nullptr)
+    if (idx != nullptr) {
       slice.append_column_to_index(flat_index, *idx);
+    }
     ++flat_index;
   }
 }
@@ -254,8 +257,9 @@ void partition_transformer_state::fulfill(
   // no error during packing, so at least one of these chunks must be
   // nonnull.
   for (auto& [id, synopsis_chunk] : *stream_data.synopsis_chunks) {
-    if (!synopsis_chunk)
+    if (!synopsis_chunk) {
       continue;
+    }
     auto filename
       = fmt::format(TENZIR_FMT_RUNTIME(self->state.synopsis_path_template), id);
     auto synopsis_path = std::filesystem::path{filename};
@@ -344,8 +348,9 @@ auto partition_transformer(
     TENZIR_DEBUG("{} sees {} finished for a total of {}/{} stores", *self,
                  msg.source, self->state.stores_finished,
                  self->state.stores_launched);
-    if (self->state.stores_finished >= self->state.stores_launched)
+    if (self->state.stores_finished >= self->state.stores_launched) {
       quit_or_stall(self, partition_transformer_state::stores_are_finished{});
+    }
   });
   return {
     [self](tenzir::table_slice& slice) {
@@ -434,8 +439,9 @@ auto partition_transformer(
         },
         [](caf::unit_t&, const caf::error&) { /* nop */ });
       for (auto& [schema, partition_data] : self->state.data) {
-        if (partition_data.events == 0)
+        if (partition_data.events == 0) {
           continue;
+        }
         auto builder_and_header = store_actor_plugin->make_store_builder(
           self->state.accountant, self->state.fs, partition_data.id);
         if (!builder_and_header) {
@@ -486,11 +492,13 @@ auto partition_transformer(
              self->state.partition_buildup.at(data.id).indexers) {
           auto chunk = chunk_ptr{};
           // Note that `chunkify(nullptr)` return a chunk of size > 0.
-          if (idx)
+          if (idx) {
             chunk = chunkify(idx);
+          }
           // We defensively treat every empty chunk as non-existing.
-          if (chunk && chunk->size() == 0)
+          if (chunk && chunk->size() == 0) {
             chunk = nullptr;
+          }
           data.indexer_chunks.emplace_back(qf.name(), chunk);
         }
       }
@@ -516,8 +524,9 @@ auto partition_transformer(
           auto& indexers = indexers_it->second.indexers;
           auto fields = std::vector<struct record_type::field>{};
           fields.reserve(indexers.size());
-          for (const auto& [qf, _] : indexers)
+          for (const auto& [qf, _] : indexers) {
             fields.emplace_back(std::string{qf.name()}, qf.type());
+          }
           auto partition = pack_full(partition_data, record_type{fields});
           if (!partition) {
             stream_data.partition_chunks = partition.error();

@@ -247,14 +247,17 @@ public:
     for (const auto* ptr = iface.get(); ptr != nullptr; ptr = ptr->next) {
       auto okay = builder.add(std::string_view{ptr->name});
       TENZIR_ASSERT(okay);
-      if (ptr->description)
+      if (ptr->description) {
         okay = builder.add(std::string_view{ptr->description});
-      else
+      } else {
         okay = builder.add(caf::none);
+      }
       auto addrs = list{};
-      for (auto* addr = ptr->addresses; addr != nullptr; addr = addr->next)
-        if (auto x = to<ip>(detail::to_string(addr->addr)))
+      for (auto* addr = ptr->addresses; addr != nullptr; addr = addr->next) {
+        if (auto x = to<ip>(detail::to_string(addr->addr))) {
           addrs.emplace_back(*x);
+        }
+      }
       okay = builder.add(addrs);
       TENZIR_ASSERT(okay);
       auto is_set = [ptr](uint32_t x) {
@@ -291,8 +294,8 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     (void)order;
     (void)filter;
     return do_not_optimize(*this);

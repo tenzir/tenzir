@@ -58,8 +58,8 @@ public:
     return "unique";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     // TODO: We compare the *pruned* schemas above. Hence, returning
     // `event_order::schema` here might be slightly incorrect.
     (void)order;

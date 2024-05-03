@@ -216,8 +216,8 @@ public:
     return "sort";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter, event_order order,
+                select_projection fields) const -> optimize_result override {
     return optimize_result{filter, stable_ ? order : event_order::unordered,
                            copy()};
   }

@@ -111,8 +111,9 @@ auto pipeline::internal_parse(std::string_view repr)
 auto pipeline::internal_parse_as_operator(std::string_view repr)
   -> caf::expected<operator_ptr> {
   auto result = internal_parse(repr);
-  if (not result)
+  if (not result) {
     return std::move(result.error());
+  }
   return std::make_unique<pipeline>(std::move(*result));
 }
 
@@ -177,7 +178,7 @@ auto pipeline::optimize_into_filter() const -> std::pair<expression, pipeline> {
 
 auto pipeline::optimize_into_filter(const expression& filter) const
   -> std::pair<expression, pipeline> {
-  auto opt = optimize(filter, event_order::ordered);
+  auto opt = optimize(filter, event_order::ordered, select_projection());
   auto* pipe = dynamic_cast<pipeline*>(opt.replacement.get());
   // We know that `pipeline::optimize` yields a pipeline and a filter.
   TENZIR_ASSERT(pipe);
@@ -185,8 +186,8 @@ auto pipeline::optimize_into_filter(const expression& filter) const
   return {std::move(*opt.filter), std::move(*pipe)};
 }
 
-auto pipeline::optimize(expression const& filter, event_order order) const
-  -> optimize_result {
+auto pipeline::optimize(expression const& filter, event_order order,
+                        select_projection fields) const -> optimize_result {
   auto current_filter = filter;
   auto current_order = order;
   // Collect the optimized pipeline in reversed order.
@@ -194,7 +195,7 @@ auto pipeline::optimize(expression const& filter, event_order order) const
   for (auto it = operators_.rbegin(); it != operators_.rend(); ++it) {
     TENZIR_ASSERT(*it);
     auto const& op = **it;
-    auto opt = op.optimize(current_filter, current_order);
+    auto opt = op.optimize(current_filter, current_order, select_projection());
     if (opt.filter) {
       current_filter = std::move(*opt.filter);
     } else if (current_filter != trivially_true_expression()) {

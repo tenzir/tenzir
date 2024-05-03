@@ -367,8 +367,8 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& /*filter*/, event_order /*order*/) const
-    -> optimize_result override {
+  auto optimize(expression const& /*filter*/, event_order /*order*/,
+                select_projection) const -> optimize_result override {
     // Note: The `unordered` means that we do not necessarily return the first
     // `limit_` events.
     return optimize_result{std::nullopt, event_order::unordered, copy()};
