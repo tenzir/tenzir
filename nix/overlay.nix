@@ -22,7 +22,7 @@ in {
             ./google-cloud-cpp/0001-Use-pkg-config-to-find-CURL.patch
           ];
       });
-  aws-sdk-cpp-tenzir = final.aws-sdk-cpp.override {
+  aws-sdk-cpp-tenzir = overrideAttrsIf isDarwin (final.aws-sdk-cpp.override {
     apis = [
       # arrow-cpp apis; must be kept in sync with nixpkgs.
       "cognito-identity"
@@ -34,7 +34,17 @@ in {
       # Additional apis used by tenzir.
       "sqs"
     ];
-  };
+  }) (orig: {
+    doCheck = false;
+    cmakeFlags = orig.cmakeFlags ++ [
+      "-DENABLE_TESTING=OFF"
+    ];
+  });
+  glog = overrideAttrsIf (isDarwin && isStatic) prev.glog (orig: {
+    cmakeFlags = orig.cmakeFlags ++ [
+      "-DBUILD_TESTING=OFF"
+    ];
+  });
   arrow-cpp = let
     arrow-cpp' = prev.arrow-cpp.override {
       aws-sdk-cpp-arrow = final.aws-sdk-cpp-tenzir;
@@ -70,6 +80,7 @@ in {
         ];
       doCheck = false;
       doInstallCheck = false;
+      env.NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
     });
   zeromq =
     if !isStatic
@@ -94,6 +105,7 @@ in {
           ++ [
             ./grpc/drop-broken-cross-check.patch
           ];
+        env.NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
       });
   http-parser =
     if !isStatic
@@ -156,6 +168,7 @@ in {
       ++ lib.optionals stdenv.cc.isClang [
         "-DRDKAFKA_BUILD_TESTS=OFF"
       ];
+    env.NIX_LDFLAGS = lib.optionalString (isDarwin && isStatic) "-lc++abi";
   });
   mkStub = name:
     prev.writeShellScriptBin name ''
@@ -224,6 +237,36 @@ in {
         set +x
       '';
     });
+  asio = overrideAttrsIf (isDarwin && isStatic) prev.asio (orig: {
+    env.NIX_LDFLAGS = "-lc++abi";
+  });
+  catch2_3 = overrideAttrsIf (isDarwin && isStatic) prev.catch2_3 (orig: {
+    env.NIX_LDFLAGS = "-lc++abi";
+  });
+  flatbuffers = overrideAttrsIf (isDarwin && isStatic) prev.flatbuffers (orig: {
+    env.NIX_LDFLAGS = "-lc++abi";
+  });
+  fmt = overrideAttrsIf (isDarwin && isStatic) prev.fmt (orig: {
+    env.NIX_LDFLAGS = "-lc++abi";
+  });
+  libyaml = overrideAttrsIf (isDarwin && isStatic) prev.libyaml (orig: {
+    env.NIX_LDFLAGS = "-lc++abi";
+  });
+  lz4 = overrideAttrsIf (isDarwin && isStatic) prev.lz4 (orig: {
+    env.NIX_LDFLAGS = "-lc++abi";
+  });
+  protobuf = overrideAttrsIf (isDarwin && isStatic) prev.protobuf (orig: {
+    env.NIX_LDFLAGS = "-lc++abi";
+  });
+  rapidjson = overrideAttrsIf (isDarwin && isStatic) prev.rapidjson (orig: {
+    env.NIX_LDFLAGS = "-lc++abi";
+  });
+  spdlog = overrideAttrsIf (isDarwin && isStatic) prev.spdlog (orig: {
+    env.NIX_LDFLAGS = "-lc++abi";
+  });
+  thrift = overrideAttrsIf (isDarwin && isStatic) prev.thrift (orig: {
+    env.NIX_LDFLAGS = "-lc++abi";
+  });
   yara =
     if !isStatic
     then prev.yara

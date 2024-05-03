@@ -144,7 +144,10 @@
           jemalloc
         ];
 
-        env.POETRY_VIRTUALENVS_IN_PROJECT = 1;
+        env = {
+          POETRY_VIRTUALENVS_IN_PROJECT = 1;
+          NIX_LDFLAGS = lib.optionalString (stdenv.isDarwin && isStatic) "-lc++abi";
+        };
         cmakeFlags =
           [
             "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
