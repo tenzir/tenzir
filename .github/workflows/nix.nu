@@ -114,18 +114,20 @@ def attribute_name [
 }
 
 export def run [
-  cfg: record<
-    editions: list<record<
-      name: string
-      static: bool
-      upload-package-to-github: bool
-      package-stores: list<string>
-      image-registries: list<string>
-    >>
-    aliases: list<string>
-    container-tags: list<string>
-    git-tag: string
-  >
+  cfg: record
+  # The type checker became stricter between 0.89 and 0.92 and does not allow missing values any more.
+  #<
+  #  editions: list<record<
+  #    name: string
+  #    static: bool
+  #    upload-package-to-github: bool
+  #    package-stores: list<string>
+  #    image-registries: list<string>
+  #  >>
+  #  aliases: list<string>
+  #  container-tags: list<string>
+  #  git-tag: string
+  #>
 ] {
   # Run local effects by building all requested editions.
   if ($cfg.git-tag? != null) {
