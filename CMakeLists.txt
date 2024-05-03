@@ -676,6 +676,9 @@ else ()
   message(WARNING "Unsupported compiler: ${CMAKE_CXX_COMPILER_ID}")
 endif ()
 
+# Disable module scanning.
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+
 # -- schemas -------------------------------------------------------------------
 
 option(TENZIR_ENABLE_BUNDLED_SCHEMAS "Install bundled schemas with Tenzir" ON)
