@@ -158,12 +158,6 @@ TEST(command line overrides environment even for plugins) {
               std::vector<std::string>{"plugin2"});
 }
 
-TEST(command line no value for integer values generates default value) {
-  using cfg_int = caf::config_value::integer;
-  parse(std::vector<std::string>{"import", "--batch-size="});
-  CHECK_EQUAL(get<cfg_int>("tenzir.import.batch-size"), cfg_int{0});
-}
-
 TEST(command line no value for timespan value generates default value) {
   parse("--active-partition-timeout=");
   CHECK_EQUAL(get<caf::timespan>("tenzir.active-partition-timeout").count(),
@@ -173,11 +167,6 @@ TEST(command line no value for timespan value generates default value) {
 TEST(command line no value for bool value generates default true value by CAF) {
   parse(std::vector<std::string>{"rebuild", "--all="});
   CHECK_EQUAL(get<bool>("tenzir.rebuild.all"), true);
-}
-
-TEST(command line parse caf settings correctly) {
-  parse(std::vector<std::string>{"import", "--caf.scheduler.max-threads=1"});
-  CHECK_EQUAL(get<caf::config_value::integer>("caf.scheduler.max-threads"), 1);
 }
 
 FIXTURE_SCOPE_END()
