@@ -126,6 +126,16 @@ caf::error
 register_component(node_actor::stateful_pointer<node_state> self,
                    const caf::actor& component, std::string_view type,
                    std::string_view label = {}) {
+  static auto alive_components = std::make_shared<std::set<std::string>>();
+  auto [it, _] = alive_components->insert(std::string{type});
+  TENZIR_VERBOSE("component {} registered with id {}", *it, component->id());
+  component->attach_functor([entry = *it] {
+    auto num_erased = alive_components->erase(entry);
+    TENZIR_ASSERT(num_erased == 1);
+    TENZIR_VERBOSE("component {} deregistered; {} remaining: [{}])", entry,
+                   alive_components->size(),
+                   fmt::join(*alive_components, ", "));
+  });
   if (!self->state.registry.add(component, std::string{type},
                                 std::string{label})) {
     auto msg // separate variable for clang-format only
