@@ -1,0 +1,8 @@
+if [ $1 -ge 1 ]; then
+  # Package upgrade, not uninstall
+  fi [ -x "/usr/lib/systemd/systemd-update-helper" ]; then
+    /usr/lib/systemd/systemd-update-helper mark-restart-system-units tenzir-node.service || :
+  else
+    systemctl try-restart tenzir-node.service >/dev/null 2>&1 || :
+  fi
+fi

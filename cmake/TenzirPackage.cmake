@@ -81,6 +81,15 @@ set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
     "${CMAKE_CURRENT_SOURCE_DIR}/scripts/debian/prerm")
 set(CPACK_DEBIAN_PACKAGE_DEBUG ON)
 
+set(CPACK_RPM_PRE_INSTALL_SCRIPT_FILE
+  "${CMAKE_CURRENT_SOURCE_DIR}/scripts/rpm/preinstall")
+set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE
+  "${CMAKE_CURRENT_SOURCE_DIR}/scripts/rpm/postinstall")
+set(CPACK_RPM_PRE_UNINSTALL_SCRIPT_FILE
+  "${CMAKE_CURRENT_SOURCE_DIR}/scripts/rpm/preuninstall")
+set(CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE
+  "${CMAKE_CURRENT_SOURCE_DIR}/scripts/rpm/postuninstall")
+
 # For the static binary builds it doesn't make much sense to install development
 # utilities, so we never do so.
 if (TENZIR_ENABLE_STATIC_EXECUTABLE)
@@ -100,9 +109,10 @@ set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE)
 # ones we support, and the list of available Generators can change with future
 # releases of CMake.
 # https://cmake.org/cmake/help/latest/module/CPackComponent.html#variable:CPACK_%3CGENNAME%3E_COMPONENT_INSTALL
-set(CPACK_DEB_COMPONENT_INSTALL ON)
 set(CPACK_ARCHIVE_COMPONENT_INSTALL ON)
+set(CPACK_DEB_COMPONENT_INSTALL ON)
 set(CPACK_PRODUCTBUILD_COMPONENT_INSTALL ON)
+set(CPACK_RPM_COMPONENT_INSTALL ON)
 
 # Set up CPack as configured above. Note that the calls to cpack_add_component
 # must come _after_ the CPack include, while the variables must be set _before_
