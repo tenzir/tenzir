@@ -17,12 +17,6 @@ teardown() {
 
 # -- Tests ----------------------------------------
 
-# bats test_tags=export
-@test "Malformed Query" {
-  run ! tenzir-ctl export json 'yo that is not a query'
-  run ! tenzir-ctl and that is not a command
-}
-
 # bats test_tags=server,import,export,zeek
 @test "Server Zeek multiple imports" {
   import_zeek_conn
@@ -123,19 +117,6 @@ teardown() {
 }
 
 # bats test_tags=server,client,import,export,transforms
-@test "Export pipeline operator parsing only summarize" {
-  cat data/json/sysmon.json |
-    tenzir-ctl import -b -t sysmon.NetworkConnection json
-
-  check tenzir 'export
-      | summarize distinct(SourcePort) by SourceIp'
-  check tenzir 'export
-      | summarize any(Initiated) by SourceIp, SourcePort, DestinationPoint, UtcTime resolution 1 minute'
-  check tenzir 'export
-      | summarize usercount=count(User), initiated=all(Initiated) by ProcessId'
-}
-
-# bats test_tags=server,client,import,export,transforms
 @test "Export pipeline operator parsing after expression" {
   import_suricata_eve
 
@@ -224,17 +205,6 @@ teardown() {
 }
 
 # bats test_tags=import,export
-@test "Export shutdown behavior" {
-  import_suricata_eve
-
-  check tenzir 'export | sort timestamp'
-  check -c "tenzir-ctl export --max-events=2 json 'head 1' | jq -ers 'length'"
-  check -c "tenzir-ctl export json 'head 1' | jq -ers 'length'"
-  check -c "tenzir-ctl export --max-events=1 json 'head 0'"
-  check -c "tenzir-ctl export json 'head 0'"
-}
-
-# bats test_tags=import,export
 @test "Patterns" {
   import_suricata_eve
 
@@ -249,23 +219,6 @@ teardown() {
   check tenzir 'export | sort timestamp | select timestamp /*double beginning /* is valid */'
   check ! tenzir 'export | sort timestamp | select timestamp | /**/'
   check ! tenzir 'export | sort timestamp | select timestamp /*double ending*/ slash*/'
-}
-
-# bats test_tags=import,export,rebuild
-@test "Rebuild undersized partitions" {
-  if ! python -c "import pyarrow"; then
-    skip "pyarrow isn't installed"
-  fi
-
-  import_suricata_eve
-  import_suricata_eve
-
-  check tenzir 'show partitions | summarize count=count(.)'
-  check --sort -c "tenzir-ctl export arrow | python3 ${MISCDIR}/scripts/print-arrow-batch-size.py"
-  tenzir-ctl rebuild start --undersized
-  check tenzir 'show partitions | summarize count=count(.)'
-  check tenzir 'export | sort timestamp'
-  check --sort -c "tenzir-ctl export arrow | python3 ${MISCDIR}/scripts/print-arrow-batch-size.py"
 }
 
 # bats test_tags=server,import,export,cef
@@ -342,13 +295,4 @@ teardown() {
   check tenzir 'export | where device_product == "VPN-1 & FireWall-1" | summarize length=count(.)'
   check tenzir 'export | where device_product == "VPN-1 & FireWall-1" | where 192.168.101.100'
   check tenzir 'export | where device_product == "VPN-1 & FireWall-1" && 192.168.101.100'
-}
-
-#bats test_tags=import,export
-@test "Process Query For Field With Skip Attribute" {
-  cat ${INPUTSDIR}/zeek/zeek.json |
-    tenzir-ctl import -b --schema-file="${MISCDIR}/schema/zeek-with-skip.schema" zeek-json
-
-  check --sort tenzir 'export'
-  check --sort tenzir 'export | where username == "steve"'
 }

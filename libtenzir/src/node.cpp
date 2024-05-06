@@ -75,7 +75,10 @@ thread_local node_actor::stateful_pointer<node_state> this_node = nullptr;
 /// A list of components that are essential for importing and exporting data
 /// from the node.
 std::set<const char*> core_components = {
-  "accountant", "catalog", "filesystem", "importer", "index",
+  "catalog",
+  "filesystem",
+  "importer",
+  "index",
 };
 
 bool is_core_component(std::string_view type) {
@@ -97,8 +100,8 @@ bool is_singleton(std::string_view type) {
   // change the node to work with type IDs over actor names everywhere. This
   // refactoring will be much easier once the NODE itself is a typed actor, so
   // let's hold off until then.
-  const char* singletons[] = {"accountant", "disk-monitor", "filesystem",
-                              "importer",   "index",        "catalog"};
+  const char* singletons[]
+    = {"disk-monitor", "filesystem", "importer", "index", "catalog"};
   auto pred = [&](const char* x) {
     return x == type;
   };
@@ -123,6 +126,16 @@ caf::error
 register_component(node_actor::stateful_pointer<node_state> self,
                    const caf::actor& component, std::string_view type,
                    std::string_view label = {}) {
+  static auto alive_components = std::make_shared<std::set<std::string>>();
+  auto [it, _] = alive_components->insert(std::string{type});
+  TENZIR_VERBOSE("component {} registered with id {}", *it, component->id());
+  component->attach_functor([entry = *it] {
+    auto num_erased = alive_components->erase(entry);
+    TENZIR_ASSERT(num_erased == 1);
+    TENZIR_VERBOSE("component {} deregistered; {} remaining: [{}])", entry,
+                   alive_components->size(),
+                   fmt::join(*alive_components, ", "));
+  });
   if (!self->state.registry.add(component, std::string{type},
                                 std::string{label})) {
     auto msg // separate variable for clang-format only
@@ -138,12 +151,14 @@ register_component(node_actor::stateful_pointer<node_state> self,
 accountant_actor
 spawn_accountant(node_actor::stateful_pointer<node_state> self) {
   if (!caf::get_or(content(self->system().config()), "tenzir.enable-metrics",
-                   false))
+                   false)) {
     return {};
+  }
   // It doesn't make much sense to run the accountant for one-shot commands
   // with a local database using `--node`, so this prevents spawning it.
-  if (caf::get_or(content(self->system().config()), "tenzir.node", false))
+  if (caf::get_or(content(self->system().config()), "tenzir.node", false)) {
     return {};
+  }
   const auto metrics_opts = caf::get_or(content(self->system().config()),
                                         "tenzir.metrics", caf::settings{});
   auto cfg = to_accountant_config(metrics_opts);
@@ -152,7 +167,7 @@ spawn_accountant(node_actor::stateful_pointer<node_state> self) {
                  cfg.error());
     return {};
   }
-  auto accountant = self->spawn<caf::detached>(
+  auto accountant = self->spawn<caf::detached + caf::linked>(
     tenzir::accountant, std::move(*cfg), self->state.dir);
   auto err = register_component(self, caf::actor_cast<caf::actor>(accountant),
                                 "accountant");
@@ -162,18 +177,6 @@ spawn_accountant(node_actor::stateful_pointer<node_state> self) {
 }
 
 } // namespace
-
-caf::expected<caf::actor>
-spawn_accountant(node_actor::stateful_pointer<node_state> self,
-                 spawn_arguments& args) {
-  const auto& options = args.inv.options;
-  auto metrics_opts = caf::get_or(options, "tenzir.metrics", caf::settings{});
-  auto cfg = to_accountant_config(metrics_opts);
-  if (!cfg)
-    return cfg.error();
-  return caf::actor_cast<caf::actor>(
-    self->spawn(accountant, std::move(*cfg), self->state.dir));
-}
 
 caf::expected<caf::actor>
 spawn_component(node_actor::stateful_pointer<node_state> self,
@@ -204,7 +207,6 @@ node_state::component_factory_fun lift_component_factory() {
 
 auto make_component_factory() {
   auto result = node_state::named_component_factory{
-    {"spawn accountant", lift_component_factory<spawn_accountant>()},
     {"spawn disk-monitor", lift_component_factory<spawn_disk_monitor>()},
     {"spawn exporter", lift_component_factory<spawn_exporter>()},
     {"spawn importer", lift_component_factory<spawn_importer>()},
@@ -372,7 +374,10 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     // buffered data. The filesystem is needed by all others for the persisting
     // logic.
     auto shutdown_sequence = std::initializer_list<const char*>{
-      "importer", "index", "catalog", "accountant", "filesystem",
+      "importer",
+      "index",
+      "catalog",
+      "filesystem",
     };
     // Make sure that these remain in sync.
     TENZIR_ASSERT(std::set<const char*>{shutdown_sequence} == core_components);

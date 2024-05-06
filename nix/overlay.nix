@@ -400,7 +400,6 @@ in {
       pkg.withPlugins (ps: [
         ps.compaction
         ps.context
-        ps.matcher
         ps.pipeline-manager
         ps.platform
         ps.vast

@@ -71,7 +71,7 @@ of your own.
 The basic anatomy of a plugin class looks as follows:
 
 ```cpp
-class example_plugin final : public virtual analyzer_plugin,
+class example_plugin final : public virtual component_plugin,
                              public virtual command_plugin {
 public:
   /// Loading logic.
@@ -107,11 +107,11 @@ identify the plugin internally.
 
 Please consult the documentation specific to each plugin type above to figure
 out what virtual function need overriding. In the above example, we have a
-`command_plugin` and a `analyzer_plugin`. This requires implementing the
+`command_plugin` and a `component_plugin`. This requires implementing the
 following two interfaces:
 
 ```cpp
-analyzer_plugin_actor make_analyzer(
+component_plugin_actor make_component(
   node_actor::stateful_pointer<node_state> node) const override;
 
 std::pair<std::unique_ptr<command>, command::factory>
