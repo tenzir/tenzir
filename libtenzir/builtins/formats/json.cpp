@@ -830,8 +830,8 @@ public:
         auto arr = doc.value_unsafe().get_array();
         if (arr.error()) {
           state.abort_requested = true;
-          diagnostic::error("{}", error_message(err))
-            .note("expected an array of objects")
+          diagnostic::error("expected an array of objects")
+            .note("got: {}", view)
             .emit(this->ctrl_.diagnostics());
           co_return;
         }
