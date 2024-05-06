@@ -168,8 +168,9 @@ public:
         // call. At that point the delay is not problematic any more because
         // `/serve` takes care of it gracefully.
         co_yield {};
+        auto permissions = boost::interprocess::permissions{0666};
         auto sem = boost::interprocess::named_semaphore{
-          boost::interprocess::open_or_create, sem_name.c_str(), 1u};
+          boost::interprocess::open_or_create, sem_name.c_str(), 1u, permissions};
         const auto wait_ok = sem.timed_wait(std::chrono::system_clock::now()
                                             + std::chrono::seconds{60});
         if (not wait_ok) {
