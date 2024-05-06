@@ -83,9 +83,13 @@ auto unescape(std::string_view value) -> std::string {
   return result;
 }
 
-auto parse_delimiter(std::string_view field) -> caf::expected<char> {
+/// Parses a LEEF delimiter.
+auto parse_delimiter(std::string_view field) -> std::variant<char, diagnostic> {
   if (field.empty()) {
-    return caf::make_error(ec::parse_error, "got empty delimiter");
+    return diagnostic::warning("got empty delimiter")
+      .note("LEEF v2.0 requires a delimiter specification")
+      .hint("delimiter must be a single character or start with 'x' or '0x'")
+      .done();
   }
   if (field.starts_with("x") or field.starts_with("0x")) {
     // Spec: "The hex value can be represented by the prefix 0x or x, followed
@@ -96,15 +100,16 @@ auto parse_delimiter(std::string_view field) -> caf::expected<char> {
     auto hex = field.substr(i + 1);
     for (auto h : hex) {
       if (std::isxdigit(h) == 0) {
-        return caf::make_error(ec::parse_error,
-                               fmt::format("invalid hex delimiter: {}", field));
+        return diagnostic::warning("invalid hex delimiter: {}", field)
+          .hint("hex delimiters with 'x' or '0x' require subsequent hex chars")
+          .done();
       }
     }
     switch (hex.size()) {
       default:
-        return caf::make_error(ec::parse_error,
-                               fmt::format("wrong hex delimiter size: {}",
-                                           hex.size()));
+        return diagnostic::warning("wrong hex delimiter size: {}", hex.size())
+          .hint("need 1 or 2 hex chars")
+          .done();
       case 1:
         return detail::hex_to_byte('0', hex[0]);
       case 2:
@@ -112,13 +117,16 @@ auto parse_delimiter(std::string_view field) -> caf::expected<char> {
       // TODO: address this only once a user ever gets such a weird log.
       case 3:
       case 4:
-        return caf::make_error(ec::parse_error,
-                               "cannot handle 3/4 byte delimiters");
+        return diagnostic::warning("wrong number of hex delimiters: {}",
+                                   hex.size())
+          .note("cannot interpret 3 or 4 characters in a meaningful way")
+          .hint("need 1 or 2 hex chars")
+          .done();
     }
   } else if (field.size() > 1) {
-    return caf::make_error(ec::parse_error,
-                           fmt::format("expected single character, got '{}'",
-                                       field));
+    return diagnostic::warning("invalid non-hex delimiter")
+      .hint("expected a single character, but got {}", field.size())
+      .done();
   }
   return field[0];
 }
@@ -135,15 +143,16 @@ auto to_data(std::string_view str) -> data {
 
 /// Parses the LEEF attributes field as a sequence of key-value pairs.
 auto parse_attributes(char delimiter, std::string_view attributes)
-  -> caf::expected<record> {
-  const auto key = *(parsers::printable - '=');
+  -> std::variant<record, diagnostic> {
+  const auto key = +(parsers::printable - '=');
   const auto value = *(parsers::printable - delimiter);
   const auto kvp = key >> '=' >> value;
   const auto kvp_list = kvp % delimiter;
   auto kvps = std::vector<std::pair<std::string, std::string>>{};
   if (not kvp_list(attributes, kvps)) {
-    return caf::make_error(ec::parse_error, "failed to parse LEEF attributes "
-                                            "as key-value pairs");
+    return diagnostic::warning("failed to parse LEEF attributes")
+      .note("attributes: {}", attributes)
+      .done();
   }
   auto result = record{};
   result.reserve(kvps.size());
@@ -153,55 +162,71 @@ auto parse_attributes(char delimiter, std::string_view attributes)
   return result;
 }
 
-/// Converts a string view into a message.
-auto convert(std::string_view line, event& e) -> caf::error {
+/// Converts a string view into a LEEF event.
+auto to_event(std::string_view line) -> std::variant<event, diagnostic> {
+  auto result = event{};
   using namespace std::string_view_literals;
   // We first need to find out whether we are LEEF 1.0 or 2.0. The latter has
   // one additional top-level component.
   auto num_fields = 0u;
-  if (line.starts_with("LEEF:1.0")) {
+  if (not line.starts_with("LEEF:")) {
+    return diagnostic::warning("invalid LEEF event")
+      .hint("LEEF events start with LEEF:$VERSION|...")
+      .done();
+  }
+  auto pipe = line.find('|');
+  if (pipe == std::string_view::npos) {
+    return diagnostic::warning("invalid LEEF event")
+      .note("could not find a pipe (|) that separates LEEF metadata")
+      .done();
+  }
+  auto colon = line.find(':');
+  TENZIR_ASSERT(colon != std::string_view::npos);
+  result.leef_version = line.substr(colon + 1, pipe - colon - 1);
+  if (result.leef_version == "1.0") {
     num_fields = 5;
-    e.leef_version = "1.0";
-  } else if (line.starts_with("LEEF:2.0")) {
+  } else if (result.leef_version == "2.0") {
     num_fields = 6;
-    e.leef_version = "2.0";
   } else {
-    return caf::make_error(ec::parse_error, "unsupported LEEF version");
+    return diagnostic::warning("unsupported LEEF version: {}",
+                               result.leef_version)
+      .hint("only 1.0 and 2.0 are valid values")
+      .done();
   }
   auto fields = detail::split_escaped(line, "|", "\\", num_fields);
   if (fields.size() != num_fields + 1) {
-    return caf::make_error(ec::parse_error, //
-                           fmt::format("LEEF {}.0 requires {}+1 fields"
-                                       "for top-level fields, got {}",
-                                       e.leef_version, num_fields,
-                                       fields.size()));
+    return diagnostic::warning("LEEF {}.0 requires at least {} fields",
+                               result.leef_version, num_fields + 1)
+      .note("got {} fields", fields.size())
+      .done();
   }
   auto delimiter = '\t';
-  if (e.leef_version == "2.0") {
-    if (auto delim = parse_delimiter(fields[5])) {
-      delimiter = *delim;
+  if (result.leef_version == "2.0") {
+    auto delim = parse_delimiter(fields[5]);
+    if (const auto* c = std::get_if<char>(&delim)) {
+      TENZIR_DEBUG("parsed LEEF delimiter: {:#04x}", *c);
+      delimiter = *c;
     } else {
-      return delim.error();
+      return std::get<diagnostic>(delim);
     }
   }
-  e.vendor = std::move(fields[1]);
-  e.product_name = std::move(fields[2]);
-  e.product_version = std::move(fields[3]);
-  e.event_id = std::move(fields[4]);
-  if (auto kvps = parse_attributes(delimiter, fields[num_fields])) {
-    e.attributes = std::move(*kvps);
+  result.vendor = std::move(fields[1]);
+  result.product_name = std::move(fields[2]);
+  result.product_version = std::move(fields[3]);
+  result.event_id = std::move(fields[4]);
+  auto kvps = parse_attributes(delimiter, fields[num_fields]);
+  if (auto* xs = std::get_if<record>(&kvps)) {
+    result.attributes = std::move(*xs);
   } else {
-    return kvps.error();
+    return std::get<diagnostic>(kvps);
   }
-  return caf::none;
+  return result;
 }
 
-/// Parses a line of ASCII as LEEF message.
-/// @param e The LEEF message.
-/// @param builder The table slice builder to add the message to.
+/// Adds a LEEF event to a builder.
 void add(const event& e, builder_ref builder) {
   auto event = builder.record();
-  event.field("version", e.leef_version);
+  event.field("leef_version", e.leef_version);
   event.field("vendor", e.vendor);
   event.field("product_name", e.product_name);
   event.field("product_version", e.product_version);
@@ -220,14 +245,12 @@ auto impl(generator<std::optional<std::string_view>> lines,
       TENZIR_DEBUG("LEEF parser ignored empty line");
       continue;
     }
-    auto e = to<event>(*line);
-    if (!e) {
-      diagnostic::warning("failed to parse message: {}", e.error())
-        .note("line: `{}`", *line)
-        .emit(ctrl.diagnostics());
+    auto e = to_event(*line);
+    if (auto* diag = std::get_if<diagnostic>(&e)) {
+      ctrl.diagnostics().emit(std::move(*diag));
       continue;
     }
-    add(*e, builder);
+    add(std::get<event>(e), builder);
   }
   for (auto& slice : builder.finish_as_table_slice("leef.event")) {
     co_yield std::move(slice);
