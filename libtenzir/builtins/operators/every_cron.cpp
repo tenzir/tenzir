@@ -44,7 +44,7 @@ auto make_alarm_clock(alarm_clock_actor::pointer self)
 template <typename T>
 concept scheduler_concept
   = requires(const T t, time::clock::time_point now, parser_interface& p) {
-      { t.next_after(now) } -> std::same_as<time::clock::time_point>;
+      { t.next_after(now) } -> std::convertible_to<time::clock::time_point>;
       { T::parse(p) } -> std::same_as<T>;
       { T::name } -> std::convertible_to<std::string_view>;
     };
