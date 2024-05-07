@@ -257,7 +257,10 @@ public:
   make_operator(tql2::ast::entity self, std::vector<tql2::ast::expression> args,
                 tql2::context& ctx) const -> operator_ptr override {
     if (args.size() != 2) {
-      diagnostic::error("TODO").primary(self.get_location()).emit(ctx);
+      diagnostic::error("TODO")
+        .primary(self.get_location())
+        .usage("every <duration> { ... }")
+        .emit(ctx);
       return nullptr;
     }
     auto interval_data = tql2::const_eval(args[0], ctx);
@@ -275,6 +278,7 @@ public:
     if (not pipe_expr) {
       diagnostic::error("expected a pipeline expression")
         .primary(args[1].get_location())
+        .usage("every <duration> { ... }")
         .emit(ctx);
       return nullptr;
     }

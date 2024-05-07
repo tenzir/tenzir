@@ -25,7 +25,8 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/to_lines.hpp>
-#include <tenzir/try_simdjson.hpp>
+#include <tenzir/tql/parser.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/record_batch.h>
 #include <caf/detail/is_one_of.hpp>
@@ -1494,6 +1495,59 @@ public:
 using suricata_parser = selector_parser<"suricata", "event_type:suricata">;
 using zeek_parser = selector_parser<"zeek-json", "_path:zeek", ".">;
 
+namespace ast = tql2::ast;
+
+class read_json final : public crtp_operator<read_json> {
+public:
+  read_json() = default;
+
+  explicit read_json(parser_args args) : parser_{std::move(args)} {
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.read_json";
+  }
+
+  auto
+  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    auto gen = parser_.instantiate(std::move(input), ctrl);
+    if (not gen) {
+      co_return;
+    }
+    return std::move(*gen);
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, read_json& x) -> bool {
+    return f.apply(x.parser_);
+  }
+
+private:
+  json_parser parser_;
+};
+
+class read_json_plugin final
+  : public virtual operator_inspection_plugin<read_json>,
+    public virtual tql2::operator_factory_plugin {
+public:
+  auto make_operator(ast::entity self, std::vector<ast::expression> args,
+                     tql2::context& ctx) const -> operator_ptr override {
+    if (not args.empty()) {
+      diagnostic::error("operator does not expect any arguments")
+        .primary(self.get_location())
+        .emit(ctx);
+    }
+    auto parsed = parser_args{};
+    return std::make_unique<read_json>(std::move(parsed));
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::json
@@ -1502,3 +1556,4 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::gelf_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::suricata_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::zeek_parser)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_json_plugin)

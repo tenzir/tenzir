@@ -22,7 +22,7 @@ public:
   read_json() = default;
 
   auto name() const -> std::string override {
-    return "tql2.read_json";
+    return "tql2.read_json123";
   }
 
   auto operator()(generator<chunk_ptr> input) const -> generator<table_slice> {
@@ -78,6 +78,26 @@ public:
     // read json [--schema <schema>] [--selector <field[:prefix]>]
     //           [--unnest-separator <string>] [--no-infer] [--ndjson]
     //           [--precise] [--raw] [--arrays-of-objects]
+    //
+    // from "https://www.foo.bar"
+    // read_json foo=bar, bar=baz
+    //
+    //
+    //
+    // from "https://www.example.org"
+    // from "./foo.json"
+    //
+    // load "https://www.example.org"
+    // load_file "foo.json"
+    //
+    // read_json sep="\n"
+    //
+    // load foo
+    // read syslog
+    // content = content.parse_cef()
+    //
+    // to "s3://whatever"
+    // save_s3
     diagnostic::error("ok").primary(self.get_location()).emit(ctx);
     return std::make_unique<read_json>();
   }

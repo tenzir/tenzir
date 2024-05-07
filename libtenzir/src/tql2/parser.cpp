@@ -219,7 +219,7 @@ private:
           if (not peek(tk::lbrace)) {
             diagnostic::error("unexpected continuation of arguments")
               .primary(next_location())
-              .hint("try inserting a `,` before")
+              .hint("try inserting a `,` before if this is the next argument")
               .throw_();
           }
           args.emplace_back(parse_record_or_pipeline_expr());
