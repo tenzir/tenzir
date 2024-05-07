@@ -280,7 +280,7 @@ public:
     return f.field("interval", interval_);
   }
 
-  auto next_after(time::clock::time_point now) const noexcept {
+  auto next_after(chrono_time_point_concept auto now) const noexcept {
     return now + interval_;
   }
 
@@ -316,8 +316,9 @@ public:
 
   constexpr static std::string_view name = "cron";
 
-  auto next_after(time::clock::time_point now) const noexcept {
-    const auto tt = time::clock::to_time_t(now);
+  auto next_after(chrono_time_point_concept auto now) const noexcept {
+    const auto tt = time::clock::to_time_t(
+      std::chrono::time_point_cast<time::clock::duration>(now));
 
     return time::clock::from_time_t(detail::cron::cron_next(expr_, tt));
   }
