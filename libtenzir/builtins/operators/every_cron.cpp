@@ -43,7 +43,7 @@ auto make_alarm_clock(alarm_clock_actor::pointer self)
 
 template <typename T>
 concept scheduler_concept
-  = requires(T t, time::clock::time_point now, parser_interface& p) {
+  = requires(const T t, time::clock::time_point now, parser_interface& p) {
       { t.next_after(now) } -> std::same_as<time::clock::time_point>;
       { T::parse(p) } -> std::same_as<T>;
       { T::name } -> std::convertible_to<std::string_view>;
@@ -89,10 +89,10 @@ public:
   }
 
   template <class Input, class Output>
-  static auto run(operator_ptr op, Scheduler scheduler, operator_input input,
-                  operator_control_plane& ctrl) -> generator<Output> {
+  auto run(operator_input input,
+           operator_control_plane& ctrl) const -> generator<Output> {
     auto alarm_clock = ctrl.self().spawn(make_alarm_clock);
-    auto next_run = scheduler.next_after(time::clock::now());
+    auto next_run = scheduler_.next_after(time::clock::now());
     auto done = false;
     co_yield {};
     auto make_input = [&, input = std::move(input)]() mutable {
@@ -120,7 +120,7 @@ public:
       }
     }();
     while (true) {
-      auto gen = op->instantiate(make_input(), ctrl);
+      auto gen = op_->instantiate(make_input(), ctrl);
       if (not gen) {
         diagnostic::error(gen.error()).emit(ctrl.diagnostics());
         co_return;
@@ -136,10 +136,10 @@ public:
       const auto now = time::clock::now();
       const auto delta = next_run - now;
       if (delta < duration::zero()) {
-        next_run = scheduler.next_after(now);
+        next_run = scheduler_.next_after(now);
         continue;
       }
-      next_run = scheduler.next_after(next_run);
+      next_run = scheduler_.next_after(next_run);
 
       ctrl.self()
         .request(alarm_clock, caf::infinite, delta)
@@ -168,16 +168,13 @@ public:
         return std::move(output.error());
       }
       if (output->template is<table_slice>()) {
-        return run<input_type, table_slice>(op_->copy(), scheduler_,
-                                            std::move(input), ctrl);
+        return run<input_type, table_slice>(std::move(input), ctrl);
       }
       if (output->template is<chunk_ptr>()) {
-        return run<input_type, chunk_ptr>(op_->copy(), scheduler_,
-                                          std::move(input), ctrl);
+        return run<input_type, chunk_ptr>(std::move(input), ctrl);
       }
       TENZIR_ASSERT(output->template is<void>());
-      return run<input_type, std::monostate>(op_->copy(), scheduler_,
-                                             std::move(input), ctrl);
+      return run<input_type, std::monostate>(std::move(input), ctrl);
     };
     return std::visit(f, input);
   }
