@@ -39,6 +39,14 @@
 // https://www.ibm.com/docs/en/dsm?topic=overview-leef-event-components provides
 // more details into the spec.
 
+// TODO:
+// - Parse the devTime attribute (and devTimeFormat) and assign it to the event
+//   timestamp. An option for this behavior should exist.
+// - Use the *Label field suffix as field name, e.g., Foo="42"\tFooLabel="xxx"
+//   should be translated into xxx=42 by the parser. An option for this behavior
+//   should exist.
+// - Stretch: consider a timezone option in case devTimeFormat doesn't contain
+//   one.
 namespace tenzir::plugins::leef {
 
 namespace {
