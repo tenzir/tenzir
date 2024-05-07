@@ -35,7 +35,7 @@ public:
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     if constexpr (detail::action_traits<Action>::no_args_returns_non_void) {
-      if (!parser_(f, l, a))
+      if (!parser_(f, l, unused))
         return false;
       a = action_();
     } else if constexpr (detail::action_traits<Action>::no_args_returns_void) {

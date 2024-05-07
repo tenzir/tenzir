@@ -102,8 +102,9 @@ auto approx_bytes(const table_slice& events) -> uint64_t {
   //
   // We cannot feasibly warn for failure here as that would cause a lot of
   // noise.
-  return detail::narrow_cast<uint64_t>(
-    arrow::util::ReferencedBufferSize(*record_batch).ValueOr(0));
+  return 0;
+  // return detail::narrow_cast<uint64_t>(
+  //   arrow::util::ReferencedBufferSize(*record_batch).ValueOr(0));
 }
 
 auto approx_bytes(const chunk_ptr& bytes) -> uint64_t {

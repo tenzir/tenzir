@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/concept/parseable/tenzir/time.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/cast.hpp>
@@ -598,15 +599,43 @@ auto json_to_data(simdjson::ondemand::number number, bool raw)
   TENZIR_UNREACHABLE();
 }
 
-auto json_to_data(std::string_view string, bool raw)
-  -> simdjson::simdjson_result<data> {
+TENZIR_NO_INLINE auto json_to_data(std::string_view string, bool raw)
+    -> simdjson::simdjson_result<data> {
   if (not raw) {
-    static constexpr auto parser
-      = parsers::time | parsers::duration | parsers::net | parsers::ip;
-    auto result = data{};
-    if (parser(string, result)) {
-      return result;
+    {
+      auto result = subnet{};
+      auto f = string.data();
+      if (parsers::net(f, string.data() + string.size(), result)) {
+        return data{result};
+      }
     }
+    {
+      auto result = time{};
+      auto f = string.data();
+      if (parsers::ymdhms(f, string.data() + string.size(), result)) {
+        return data{result};
+      }
+    }
+    {
+      auto result = ip{};
+      auto f = string.data();
+      if (parsers::ip(f, string.data() + string.size(), result)) {
+        return data{result};
+      }
+    }
+    {
+      auto result = duration{};
+      auto f = string.data();
+      if (parsers::simple_duration(f, string.data() + string.size(), result)) {
+        return data{result};
+      }
+    }
+    // static constexpr auto parser =
+    //     parsers::ymdhms | parsers::simple_duration | parsers::net | parsers::ip;
+    // auto result = data{};
+    // if (parser(string, result)) {
+    //   return result;
+    // }
   }
   return data{std::string{string}};
 }

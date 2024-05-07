@@ -26,10 +26,16 @@ namespace tenzir {
 template <class Rep, class Period>
 struct duration_parser : parser_base<duration_parser<Rep, Period>> {
   using attribute = std::chrono::duration<Rep, Period>;
+  using double_duration = std::chrono::duration<double, Period>;
 
   template <class T>
   static attribute cast(T x) {
     return std::chrono::duration_cast<attribute>(x);
+  }
+
+  template <class T>
+  static double to_double(T x) {
+    return std::chrono::duration_cast<double_duration>(x).count();
   }
 
   template <class Iterator, class Attribute>
@@ -39,44 +45,44 @@ struct duration_parser : parser_base<duration_parser<Rep, Period>> {
     using namespace std::chrono;
     // clang-format off
     auto unit
-      = "nanoseconds"_p  ->* [] { return cast(nanoseconds(1)); }
-      | "nanosecond"_p   ->* [] { return cast(nanoseconds(1)); }
-      | "nsecs"_p        ->* [] { return cast(nanoseconds(1)); }
-      | "nsec"_p         ->* [] { return cast(nanoseconds(1)); }
-      | "ns"_p           ->* [] { return cast(nanoseconds(1)); }
-      | "microseconds"_p ->* [] { return cast(microseconds(1)); }
-      | "microsecond"_p  ->* [] { return cast(microseconds(1)); }
-      | "usecs"_p        ->* [] { return cast(microseconds(1)); }
-      | "usec"_p         ->* [] { return cast(microseconds(1)); }
-      | "us"_p           ->* [] { return cast(microseconds(1)); }
-      | "milliseconds"_p ->* [] { return cast(milliseconds(1)); }
-      | "millisecond"_p  ->* [] { return cast(milliseconds(1)); }
-      | "msecs"_p        ->* [] { return cast(milliseconds(1)); }
-      | "msec"_p         ->* [] { return cast(milliseconds(1)); }
-      | "ms"_p           ->* [] { return cast(milliseconds(1)); }
-      | "seconds"_p      ->* [] { return cast(seconds(1)); }
-      | "second"_p       ->* [] { return cast(seconds(1)); }
-      | "secs"_p         ->* [] { return cast(seconds(1)); }
-      | "sec"_p          ->* [] { return cast(seconds(1)); }
-      | "s"_p            ->* [] { return cast(seconds(1)); }
-      | "minutes"_p      ->* [] { return cast(minutes(1)); }
-      | "minute"_p       ->* [] { return cast(minutes(1)); }
-      | "mins"_p         ->* [] { return cast(minutes(1)); }
-      | "min"_p          ->* [] { return cast(minutes(1)); }
-      | "m"_p            ->* [] { return cast(minutes(1)); }
-      | "hours"_p        ->* [] { return cast(hours(1)); }
-      | "hour"_p         ->* [] { return cast(hours(1)); }
-      | "hrs"_p          ->* [] { return cast(hours(1)); }
-      | "h"_p            ->* [] { return cast(hours(1)); }
-      | "days"_p         ->* [] { return cast(hours(24)); }
-      | "day"_p          ->* [] { return cast(hours(24)); }
-      | "d"_p            ->* [] { return cast(hours(24)); }
-      | "weeks"_p        ->* [] { return cast(hours(24 * 7)); }
-      | "week"_p         ->* [] { return cast(hours(24 * 7)); }
-      | "w"_p            ->* [] { return cast(hours(24 * 7)); }
-      | "years"_p        ->* [] { return cast(hours(24 * 365)); }
-      | "year"_p         ->* [] { return cast(hours(24 * 365)); }
-      | "y"_p            ->* [] { return cast(hours(24 * 365)); }
+      = "nanoseconds"_p  ->* [] { return to_double(nanoseconds(1)); }
+      | "nanosecond"_p   ->* [] { return to_double(nanoseconds(1)); }
+      | "nsecs"_p        ->* [] { return to_double(nanoseconds(1)); }
+      | "nsec"_p         ->* [] { return to_double(nanoseconds(1)); }
+      | "ns"_p           ->* [] { return to_double(nanoseconds(1)); }
+      | "microseconds"_p ->* [] { return to_double(microseconds(1)); }
+      | "microsecond"_p  ->* [] { return to_double(microseconds(1)); }
+      | "usecs"_p        ->* [] { return to_double(microseconds(1)); }
+      | "usec"_p         ->* [] { return to_double(microseconds(1)); }
+      | "us"_p           ->* [] { return to_double(microseconds(1)); }
+      | "milliseconds"_p ->* [] { return to_double(milliseconds(1)); }
+      | "millisecond"_p  ->* [] { return to_double(milliseconds(1)); }
+      | "msecs"_p        ->* [] { return to_double(milliseconds(1)); }
+      | "msec"_p         ->* [] { return to_double(milliseconds(1)); }
+      | "ms"_p           ->* [] { return to_double(milliseconds(1)); }
+      | "seconds"_p      ->* [] { return to_double(seconds(1)); }
+      | "second"_p       ->* [] { return to_double(seconds(1)); }
+      | "secs"_p         ->* [] { return to_double(seconds(1)); }
+      | "sec"_p          ->* [] { return to_double(seconds(1)); }
+      | "s"_p            ->* [] { return to_double(seconds(1)); }
+      | "minutes"_p      ->* [] { return to_double(minutes(1)); }
+      | "minute"_p       ->* [] { return to_double(minutes(1)); }
+      | "mins"_p         ->* [] { return to_double(minutes(1)); }
+      | "min"_p          ->* [] { return to_double(minutes(1)); }
+      | "m"_p            ->* [] { return to_double(minutes(1)); }
+      | "hours"_p        ->* [] { return to_double(hours(1)); }
+      | "hour"_p         ->* [] { return to_double(hours(1)); }
+      | "hrs"_p          ->* [] { return to_double(hours(1)); }
+      | "h"_p            ->* [] { return to_double(hours(1)); }
+      | "days"_p         ->* [] { return to_double(hours(24)); }
+      | "day"_p          ->* [] { return to_double(hours(24)); }
+      | "d"_p            ->* [] { return to_double(hours(24)); }
+      | "weeks"_p        ->* [] { return to_double(hours(24 * 7)); }
+      | "week"_p         ->* [] { return to_double(hours(24 * 7)); }
+      | "w"_p            ->* [] { return to_double(hours(24 * 7)); }
+      | "years"_p        ->* [] { return to_double(hours(24 * 365)); }
+      | "year"_p         ->* [] { return to_double(hours(24 * 365)); }
+      | "y"_p            ->* [] { return to_double(hours(24 * 365)); }
       ;
     // clang-format on
     if constexpr (std::is_same_v<Attribute, unused_type>) {
@@ -84,10 +90,8 @@ struct duration_parser : parser_base<duration_parser<Rep, Period>> {
       return p(f, l, unused);
     } else {
       double scale;
-      auto multiply = [&](attribute dur) {
-        using double_duration = std::chrono::duration<double, Period>;
-        auto result = duration_cast<double_duration>(dur) * scale;
-        return cast(result);
+      auto multiply = [&](double count) {
+        return cast(double_duration(count * scale));
       };
       auto p = parsers::real >> ignore(*space) >> unit->*multiply;
       return p(f, l, scale, x);
@@ -121,10 +125,14 @@ namespace parsers {
 /// A parser template for any duration type from `std::chrono`.
 template <class Rep, class Period>
 auto const stl_duration = compound_duration_parser<Rep, Period>{};
+template <class Rep, class Period>
+auto const simple_stl_duration = duration_parser<Rep, Period>{};
 
 /// A parser for Tenzirs duration type.
 auto const duration
   = stl_duration<tenzir::duration::rep, tenzir::duration::period>;
+auto const simple_duration =
+    simple_stl_duration<tenzir::duration::rep, tenzir::duration::period>;
 
 } // namespace parsers
 
