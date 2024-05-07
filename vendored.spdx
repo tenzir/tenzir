@@ -242,3 +242,14 @@ LicenseInfoInFile: BSD-3-Clause
 LicenseComments: Includes code from https://github.com/protocolbuffers/protobuf
 
 Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-plugins-velociraptor-cmake-protobuf-generate-cmake
+
+FileName: ./libtenzir/include/tenzir/detail/croncpp.hpp
+SPDXID: SPDXRef-file-libtenzir-include-tenzir-croncpp-hpp
+FileChecksum: SHA1: ad4eefa47a40f96557e8b9ff8404c849f37a760f
+FileChecksum: SHA256: 6ade4ac5a116784dec22ba9c8036b255b690ca40223ea5fce2e54e8bf807d8ca
+FileCopyrightText: (c) Marius Bancila
+LicenseConcluded: MIT
+LicenseInfoInFile: MIT
+LicenseComments: https://github.com/mariusbancila/croncpp
+
+Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-include-tenzir-croncpp-hpp
