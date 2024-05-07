@@ -1,0 +1,6 @@
+error: bad cron expression: "cron expression must have six fields"
+ --> <input>:1:6
+  |
+1 | cron * * * * * * version
+  |      ^ 
+  |

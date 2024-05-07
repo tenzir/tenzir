@@ -8,6 +8,7 @@
 
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
+#include <tenzir/detail/croncpp.hpp>
 #include <tenzir/detail/string_literal.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/error.hpp>
@@ -19,7 +20,7 @@
 #include <arrow/type.h>
 #include <caf/typed_event_based_actor.hpp>
 
-namespace tenzir::plugins::every {
+namespace tenzir::plugins::every_cron {
 
 namespace {
 
@@ -40,16 +41,29 @@ auto make_alarm_clock(alarm_clock_actor::pointer self)
   };
 }
 
-class every_operator final : public operator_base {
-public:
-  every_operator() = default;
+template <typename T>
+concept scheduler_concept
+  = requires(T t, time::clock::time_point now, parser_interface& p) {
+      { t.next_after(now) } -> std::same_as<time::clock::time_point>;
+      { T::parse(p) } -> std::same_as<T>;
+      { T::name } -> std::convertible_to<std::string_view>;
+    };
 
-  every_operator(operator_ptr op, duration interval)
-    : op_{std::move(op)}, interval_{interval} {
-    if (auto* op = dynamic_cast<every_operator*>(op_.get())) {
+/// Base template for all kinds of scheduled execution operators, such as the
+/// 'every' and 'cron' The actual scheduling logic, CAF serialization and name
+/// are handled by the `Scheduler` template parameter
+template <scheduler_concept Scheduler>
+class scheduled_execution_operator final : public operator_base {
+public:
+  scheduled_execution_operator() = default;
+
+  scheduled_execution_operator(operator_ptr op, Scheduler scheduler)
+    : op_{std::move(op)}, scheduler_{std::move(scheduler)} {
+    if (auto* op = dynamic_cast<scheduled_execution_operator*>(op_.get())) {
       op_ = std::move(op->op_);
     }
-    TENZIR_ASSERT(not dynamic_cast<const every_operator*>(op_.get()));
+    TENZIR_ASSERT(
+      not dynamic_cast<const scheduled_execution_operator*>(op_.get()));
   }
 
   auto optimize(expression const& filter, event_order order) const
@@ -61,25 +75,24 @@ public:
     if (auto* pipe = dynamic_cast<pipeline*>(result.replacement.get())) {
       auto ops = std::move(*pipe).unwrap();
       for (auto& op : ops) {
-        op = std::make_unique<every_operator>(std::move(result.replacement),
-                                              interval_);
+        op = std::make_unique<scheduled_execution_operator>(
+          std::move(result.replacement), std::move(scheduler_));
         // Only the first operator can be a source and needs to be replaced.
         break;
       }
       result.replacement = std::make_unique<pipeline>(std::move(ops));
       return result;
     }
-    result.replacement = std::make_unique<every_operator>(
-      std::move(result.replacement), interval_);
+    result.replacement = std::make_unique<scheduled_execution_operator>(
+      std::move(result.replacement), std::move(scheduler_));
     return result;
   }
 
   template <class Input, class Output>
-  static auto run(operator_ptr op, duration interval, operator_input input,
+  static auto run(operator_ptr op, Scheduler scheduler, operator_input input,
                   operator_control_plane& ctrl) -> generator<Output> {
     auto alarm_clock = ctrl.self().spawn(make_alarm_clock);
-    auto now = time::clock::now();
-    auto next_run = now + interval;
+    auto next_run = scheduler.next_after(time::clock::now());
     auto done = false;
     co_yield {};
     auto make_input = [&, input = std::move(input)]() mutable {
@@ -120,19 +133,20 @@ public:
       if (done) {
         break;
       }
-      now = time::clock::now();
+      const auto now = time::clock::now();
       const auto delta = next_run - now;
       if (delta < duration::zero()) {
-        next_run = now + interval;
+        next_run = scheduler.next_after(now);
         continue;
       }
-      next_run += interval;
+      next_run = scheduler.next_after(next_run);
+
       ctrl.self()
         .request(alarm_clock, caf::infinite, delta)
         .await([]() { /*nop*/ },
                [&](const caf::error& err) {
                  diagnostic::error(err)
-                   .note("failed to wait for {} timeout", data{interval})
+                   .note("failed to wait for {} timeout", data{next_run - now})
                    .emit(ctrl.diagnostics());
                });
       co_yield {};
@@ -154,22 +168,23 @@ public:
         return std::move(output.error());
       }
       if (output->template is<table_slice>()) {
-        return run<input_type, table_slice>(op_->copy(), interval_,
+        return run<input_type, table_slice>(op_->copy(), scheduler_,
                                             std::move(input), ctrl);
       }
       if (output->template is<chunk_ptr>()) {
-        return run<input_type, chunk_ptr>(op_->copy(), interval_,
+        return run<input_type, chunk_ptr>(op_->copy(), scheduler_,
                                           std::move(input), ctrl);
       }
       TENZIR_ASSERT(output->template is<void>());
-      return run<input_type, std::monostate>(op_->copy(), interval_,
+      return run<input_type, std::monostate>(op_->copy(), scheduler_,
                                              std::move(input), ctrl);
     };
     return std::visit(f, input);
   }
 
   auto copy() const -> operator_ptr override {
-    return std::make_unique<every_operator>(op_->copy(), interval_);
+    return std::make_unique<scheduled_execution_operator>(op_->copy(),
+                                                          scheduler_);
   };
 
   auto location() const -> operator_location override {
@@ -194,20 +209,23 @@ public:
   }
 
   auto name() const -> std::string override {
-    return "every";
+    return std::string{scheduler_.name};
   }
 
-  friend auto inspect(auto& f, every_operator& x) -> bool {
-    return f.object(x).fields(f.field("op", x.op_),
-                              f.field("interval", x.interval_));
+  friend auto inspect(auto& f, scheduled_execution_operator& x) -> bool {
+    return f.object(x).fields(f.field("op", x.op_), x.scheduler_.field(f));
   }
 
 private:
   operator_ptr op_;
-  duration interval_;
+  Scheduler scheduler_;
 };
 
-class every_plugin final : public virtual operator_plugin<every_operator> {
+/// Base plugin template for scheduled execution operators
+/// The actual parsing is handled by the `Scheduler` type
+template <scheduler_concept Scheduler>
+class scheduled_execution_plugin
+  : public virtual operator_plugin<scheduled_execution_operator<Scheduler>> {
 public:
   auto signature() const -> operator_signature override {
     return {
@@ -218,6 +236,48 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
+    using operator_type = scheduled_execution_operator<Scheduler>;
+    auto scheduler = Scheduler::parse(p);
+
+    auto result = p.parse_operator();
+    if (not result.inner) {
+      diagnostic::error("failed to parse operator")
+        .primary(result.source)
+        .throw_();
+    }
+    if (auto* pipe = dynamic_cast<pipeline*>(result.inner.get())) {
+      auto ops = std::move(*pipe).unwrap();
+      for (auto& op : ops) {
+        op = std::make_unique<operator_type>(std::move(op),
+                                             std::move(scheduler));
+        // Only the first operator can be a source and needs to be replaced.
+        break;
+      }
+      return std::make_unique<pipeline>(std::move(ops));
+    }
+    return std::make_unique<operator_type>(std::move(result.inner),
+                                           std::move(scheduler));
+  }
+};
+
+/// scheduler for the 'every' operator
+class every_scheduler {
+public:
+  every_scheduler() = default;
+  explicit every_scheduler(const duration interval) : interval_{interval} {
+  }
+
+  constexpr static std::string_view name = "every";
+
+  auto field(auto& f) {
+    return f.field("interval", interval_);
+  }
+
+  auto next_after(time::clock::time_point now) const noexcept {
+    return now + interval_;
+  }
+
+  static auto parse(parser_interface& p) {
     auto interval_data = p.parse_data();
     const auto* interval = caf::get_if<duration>(&interval_data.inner);
     if (not interval) {
@@ -230,27 +290,77 @@ public:
         .primary(interval_data.source)
         .throw_();
     }
-    auto result = p.parse_operator();
-    if (not result.inner) {
-      diagnostic::error("failed to parse operator")
-        .primary(result.source)
+    return every_scheduler{*interval};
+  }
+
+private:
+  duration interval_;
+};
+using every_operator = scheduled_execution_operator<every_scheduler>;
+using every_plugin = scheduled_execution_plugin<every_scheduler>;
+
+/// scheduler for the 'cron' operator
+class cron_scheduler {
+public:
+  cron_scheduler() = default;
+  explicit cron_scheduler(detail::cron::cronexpr expr)
+    : expr_{std::move(expr)} {
+  }
+
+  constexpr static std::string_view name = "cron";
+
+  auto next_after(time::clock::time_point now) const noexcept {
+    const auto tt = time::clock::to_time_t(now);
+
+    return time::clock::from_time_t(detail::cron::cron_next(expr_, tt));
+  }
+
+  auto field(auto& f) {
+    const auto get = [this]() {
+      return detail::cron::to_cronstr(expr_);
+    };
+    const auto set = [this](std::string_view text) {
+      expr_ = detail::cron::make_cron(text);
+    };
+    return f.field("cronexpr", get, set);
+  }
+
+  static cron_scheduler parse(parser_interface& p) {
+    auto cronexpr_string = p.accept_shell_arg();
+    if (not cronexpr_string) {
+      diagnostic::error("expected cron expression")
+        .primary(p.current_span())
         .throw_();
     }
-    if (auto* pipe = dynamic_cast<pipeline*>(result.inner.get())) {
-      auto ops = std::move(*pipe).unwrap();
-      for (auto& op : ops) {
-        op = std::make_unique<every_operator>(std::move(op), *interval);
-        // Only the first operator can be a source and needs to be replaced.
-        break;
+    try {
+      return cron_scheduler{detail::cron::make_cron(cronexpr_string->inner)};
+    } catch (const detail::cron::bad_cronexpr& ex) {
+      // croncpp re-throws the message from the stoul failure
+      // which happens for most cases of invalid expressions
+      // libstdc++ and libc++ contain the string "stoul" in their what()
+      // we can check for this and provide a slightly better error message
+      if (std::string_view{ex.what()}.find("stoul") != std::string_view::npos) {
+        diagnostic::error(
+          "bad cron expression: invalid value for at least one field")
+          .primary(cronexpr_string->source)
+          .throw_();
+      } else {
+        diagnostic::error("bad cron expression: \"{}\"", ex.what())
+          .primary(cronexpr_string->source)
+          .throw_();
       }
-      return std::make_unique<pipeline>(std::move(ops));
     }
-    return std::make_unique<every_operator>(std::move(result.inner), *interval);
   }
+
+private:
+  detail::cron::cronexpr expr_;
 };
+using cron_operator = scheduled_execution_operator<cron_scheduler>;
+using cron_plugin = scheduled_execution_plugin<cron_scheduler>;
 
 } // namespace
 
-} // namespace tenzir::plugins::every
+} // namespace tenzir::plugins::every_cron
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::every::every_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::cron_plugin)
