@@ -42,9 +42,19 @@ auto make_alarm_clock(alarm_clock_actor::pointer self)
 }
 
 template <typename T>
+struct is_chrono_time_point : std::false_type {};
+
+template <typename Clock, typename Duration>
+struct is_chrono_time_point<std::chrono::time_point<Clock, Duration>>
+  : std::true_type {};
+
+template <typename T>
+concept chrono_time_point_concept = is_chrono_time_point<T>::value;
+
+template <typename T>
 concept scheduler_concept
   = requires(const T t, time::clock::time_point now, parser_interface& p) {
-      { t.next_after(now) } -> std::convertible_to<time::clock::time_point>;
+      { t.next_after(now) } -> chrono_time_point_concept;
       { T::parse(p) } -> std::same_as<T>;
       { T::name } -> std::convertible_to<std::string_view>;
     };
