@@ -20,7 +20,7 @@ namespace tenzir::tql2 {
 
 namespace {
 
-using namespace tenzir::tql2::ast;
+using namespace tenzir::ast;
 
 class entity_resolver : public visitor<entity_resolver> {
 public:
@@ -83,7 +83,7 @@ public:
       });
   }
 
-  void visit(invocation& x) {
+  void visit(ast::invocation& x) {
     auto prev = std::exchange(context_, context_t::op_name);
     visit(x.op);
     context_ = prev;

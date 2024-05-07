@@ -81,7 +81,7 @@ private:
 };
 
 class plugin final : public virtual operator_plugin<repeat_operator>,
-                     public virtual tql2::operator_factory_plugin {
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
@@ -97,18 +97,17 @@ public:
       repetitions.value_or(std::numeric_limits<uint64_t>::max()));
   }
 
-  auto
-  make_operator(tql2::ast::entity self, std::vector<tql2::ast::expression> args,
-                tql2::context& ctx) const -> operator_ptr override {
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
     using namespace tql2;
-    if (args.size() != 1) {
+    if (inv.args.size() != 1) {
       diagnostic::error("`repeat` expects exactly one argument, got {}",
-                        args.size())
-        .primary(self.get_location())
+                        inv.args.size())
+        .primary(inv.self.get_location())
         .emit(ctx);
       return nullptr;
     }
-    auto count = args[0].match(
+    auto count = inv.args[0].match(
       [](ast::literal& x) {
         return x.value.match(
           [](int64_t x) -> std::optional<int64_t> {
@@ -123,7 +122,7 @@ public:
       });
     if (not count) {
       diagnostic::error("expected integer")
-        .primary(args[0].get_location())
+        .primary(inv.args[0].get_location())
         .emit(ctx);
     }
     return std::make_unique<repeat_operator>(*count);

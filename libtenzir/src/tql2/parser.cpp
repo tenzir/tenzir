@@ -64,7 +64,7 @@ public:
   using tk = token_kind;
 
   static auto parse_file(std::span<token> tokens, std::string_view source,
-                         diagnostic_handler& diag) -> pipeline {
+                         diagnostic_handler& diag) -> ast::pipeline {
     try {
       auto self = parser{tokens, source, diag};
       auto pipe = self.parse_pipeline();
@@ -75,12 +75,12 @@ public:
     } catch (diagnostic& d) {
       // TODO
       diag.emit(d);
-      return pipeline{{}};
+      return ast::pipeline{{}};
     }
   }
 
 private:
-  auto parse_pipeline() -> pipeline {
+  auto parse_pipeline() -> ast::pipeline {
     auto scope = ignore_newlines(false);
     auto body = std::vector<statement>{};
     while (true) {
@@ -94,7 +94,7 @@ private:
         throw_token();
       }
     }
-    return pipeline{std::move(body)};
+    return ast::pipeline{std::move(body)};
   }
 
   auto parse_statement() -> statement {
@@ -134,7 +134,7 @@ private:
     expect(tk::lbrace);
     auto consequence = parse_pipeline();
     expect(tk::rbrace);
-    auto alternative = std::optional<pipeline>{};
+    auto alternative = std::optional<ast::pipeline>{};
     if (accept(tk::else_)) {
       expect(tk::lbrace);
       alternative = parse_pipeline();
@@ -174,7 +174,7 @@ private:
   }
 
   auto parse_match_stmt_arm() -> match_stmt::arm {
-    auto filter = std::vector<expression>{};
+    auto filter = std::vector<ast::expression>{};
     while (true) {
       filter.push_back(parse_expression());
       if (accept(tk::fat_arrow)) {
@@ -210,8 +210,8 @@ private:
       .throw_();
   }
 
-  auto parse_invocation(entity op) -> invocation {
-    auto args = std::vector<expression>{};
+  auto parse_invocation(entity op) -> ast::invocation {
+    auto args = std::vector<ast::expression>{};
     while (not at_statement_end()) {
       if (not args.empty()) {
         if (not accept(tk::comma)) {
@@ -239,13 +239,13 @@ private:
       }
       args.push_back(parse_expression());
     }
-    return invocation{
+    return ast::invocation{
       std::move(op),
       std::move(args),
     };
   }
 
-  auto parse_expression(int min_prec = 0) -> expression {
+  auto parse_expression(int min_prec = 0) -> ast::expression {
     auto expr = parse_unary_expression();
     while (true) {
       if (min_prec == 0) {
@@ -288,7 +288,7 @@ private:
     return expr;
   }
 
-  auto parse_unary_expression() -> expression {
+  auto parse_unary_expression() -> ast::expression {
     if (auto op = peek_unary_op()) {
       auto location = advance();
       auto expr = parse_expression(precedence(*op));
@@ -332,7 +332,7 @@ private:
     return expr;
   }
 
-  auto parse_primary_expression() -> expression {
+  auto parse_primary_expression() -> ast::expression {
     if (accept(tk::lpar)) {
       auto scope = ignore_newlines(true);
       auto result = parse_expression();
@@ -382,7 +382,7 @@ private:
     }
     if (peek(tk::lpar)) {
       // TODO: Consider refactoring this.
-      auto subject = std::optional<expression>{};
+      auto subject = std::optional<ast::expression>{};
       if (not ent) {
         if (sel.this_ and sel.path.empty()) {
           diagnostic::error("`this` cannot be called")
@@ -413,7 +413,7 @@ private:
 
   auto parse_selector() -> selector {
     auto this_ = accept(tk::this_);
-    auto path = std::vector<identifier>{};
+    auto path = std::vector<ast::identifier>{};
     while (true) {
       if (this_ || not path.empty()) {
         if (not accept(tk::dot)) {
@@ -430,7 +430,7 @@ private:
                     std::move(path)};
   }
 
-  auto parse_record_or_pipeline_expr() -> expression {
+  auto parse_record_or_pipeline_expr() -> ast::expression {
     auto begin = expect(tk::lbrace);
     auto scope = ignore_newlines(true);
     // TODO: Try to implement this better.
@@ -450,8 +450,8 @@ private:
     };
   }
 
-  auto parse_record(location begin) -> record {
-    auto content = std::vector<record::content_kind>{};
+  auto parse_record(location begin) -> ast::record {
+    auto content = std::vector<ast::record::content_kind>{};
     while (not peek(tk::rbrace)) {
       // TODO: Parse `{ foo: 42, ...bar }`.
       auto name = accept(tk::identifier);
@@ -462,7 +462,7 @@ private:
       }
       expect(tk::colon);
       auto expr = parse_expression();
-      content.emplace_back(record::field{
+      content.emplace_back(ast::record::field{
         name.as_identifier(),
         std::move(expr),
       });
@@ -471,7 +471,7 @@ private:
       }
     }
     auto end = expect(tk::rbrace);
-    return record{
+    return ast::record{
       begin,
       std::move(content),
       end.location,
@@ -503,6 +503,8 @@ private:
         result.push_back('"');
       } else if (x == 'n') {
         result.push_back('\n');
+      } else if (x == '0') {
+        result.push_back('\0');
       } else {
         diagnostic::error("found unknown escape sequence `{}`",
                           token.text.substr(it - f, 2))
@@ -575,13 +577,13 @@ private:
     return std::nullopt;
   }
 
-  auto parse_list() -> list {
+  auto parse_list() -> ast::list {
     auto begin = expect(tk::lbracket);
     auto scope = ignore_newlines(true);
-    auto items = std::vector<expression>{};
+    auto items = std::vector<ast::expression>{};
     while (true) {
       if (auto end = accept(tk::rbracket)) {
-        return list{
+        return ast::list{
           begin.location,
           std::move(items),
           end.location,
@@ -594,14 +596,14 @@ private:
     }
   }
 
-  auto parse_function_call(std::optional<expression> subject, entity fn)
+  auto parse_function_call(std::optional<ast::expression> subject, entity fn)
     -> function_call {
     expect(tk::lpar);
     auto scope = ignore_newlines(true);
-    auto args = std::vector<expression>{};
+    auto args = std::vector<ast::expression>{};
     while (true) {
       if (auto rpar = accept(tk::rpar)) {
-        return function_call{
+        return ast::function_call{
           std::move(subject),
           std::move(fn),
           std::move(args),
@@ -679,8 +681,8 @@ private:
       return text.data() != nullptr;
     }
 
-    auto as_identifier() const -> identifier {
-      return identifier{text, location};
+    auto as_identifier() const -> ast::identifier {
+      return ast::identifier{text, location};
     }
 
     auto as_string() const -> located<std::string> {

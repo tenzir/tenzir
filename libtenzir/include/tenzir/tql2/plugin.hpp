@@ -9,18 +9,26 @@
 #pragma once
 
 #include "tenzir/plugin.hpp"
+#include "tenzir/session.hpp"
 #include "tenzir/tql2/ast.hpp"
-#include "tenzir/tql2/context.hpp"
 
-namespace tenzir::tql2 {
+namespace tenzir {
 
 class operator_factory_plugin : public virtual plugin {
 public:
-  virtual auto
-  make_operator(ast::entity self, std::vector<ast::expression> args,
-                tql2::context& ctx) const -> operator_ptr
+  // Separate from `ast::expression` in case we want to add things.
+  struct invocation {
+    ast::entity self;
+    std::vector<ast::expression> args;
+  };
+
+  virtual auto make_operator(invocation inv, session ctx) const -> operator_ptr
     = 0;
 };
+
+} // namespace tenzir
+
+namespace tenzir::tql2 {
 
 template <class Operator>
 class operator_plugin : public virtual operator_factory_plugin,

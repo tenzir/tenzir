@@ -15,8 +15,8 @@
 #include "tenzir/hash/hash.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/series_builder.hpp"
+#include "tenzir/session.hpp"
 #include "tenzir/tql2/check_type.hpp"
-#include "tenzir/tql2/context.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/plugin.hpp"
@@ -32,8 +32,6 @@
 
 namespace tenzir::tql2 {
 namespace {
-
-using namespace ast;
 
 /// A diagnostic handler that remembers when it emits an error, and also
 /// does not emit the same diagnostic twice.
@@ -130,8 +128,8 @@ public:
     exprs.reserve(args.size());
     for (auto& arg : args) {
       arg.match(
-        [&](tql2::ast::unary_expr& un_expr) {
-          if (un_expr.op.inner == tql2::ast::unary_op::neg) {
+        [&](ast::unary_expr& un_expr) {
+          if (un_expr.op.inner == ast::unary_op::neg) {
             exprs.emplace_back(std::move(un_expr.expr), sort_direction::desc);
           } else {
             exprs.emplace_back(std::move(arg), sort_direction::asc);
@@ -398,12 +396,12 @@ struct eval_input {
 #endif
 } // namespace
 
-auto prepare_pipeline(pipeline&& pipe, context& ctx) -> tenzir::pipeline {
+auto prepare_pipeline(ast::pipeline&& pipe, session ctx) -> pipeline {
   auto ops = std::vector<operator_ptr>{};
   for (auto& stmt : pipe.body) {
     // let_stmt, if_stmt, match_stmt
     stmt.match(
-      [&](invocation& x) {
+      [&](ast::invocation& x) {
         if (not x.op.ref.resolved()) {
           // This was already reported. We don't know how the operator would
           // interpret its arguments, hence we make no attempt of reporting
@@ -411,18 +409,23 @@ auto prepare_pipeline(pipeline&& pipe, context& ctx) -> tenzir::pipeline {
           return;
         }
         // TODO: Where do we check that this succeeds?
-        auto def = std::get_if<const tql2::operator_factory_plugin*>(
+        auto def = std::get_if<const operator_factory_plugin*>(
           &ctx.reg().get(x.op.ref));
         TENZIR_ASSERT(def);
         TENZIR_ASSERT(*def);
-        auto op = (*def)->make_operator(x.op, std::move(x.args), ctx);
+        auto op = (*def)->make_operator(
+          operator_factory_plugin::invocation{
+            std::move(x.op),
+            std::move(x.args),
+          },
+          ctx);
         if (op) {
           ops.push_back(std::move(op));
         } else {
           // We assume we emitted an error.
         }
       },
-      [&](assignment& x) {
+      [&](ast::assignment& x) {
         check_assignment(x, ctx);
       // TODO: Cannot do this right now (release typeid problem).
 #if 0
@@ -432,16 +435,20 @@ auto prepare_pipeline(pipeline&& pipe, context& ctx) -> tenzir::pipeline {
 #else
         auto plugin = plugins::find<operator_factory_plugin>("tql2.set");
         TENZIR_ASSERT(plugin);
-        auto args = std::vector<expression>{};
+        auto args = std::vector<ast::expression>{};
         args.emplace_back(std::move(x));
         auto op = plugin->make_operator(
-          entity{{identifier{std::string{"set"}, location::unknown}}},
-          std::move(args), ctx);
+          operator_factory_plugin::invocation{
+            ast::entity{
+              {ast::identifier{std::string{"set"}, location::unknown}}},
+            std::move(args),
+          },
+          ctx);
         TENZIR_ASSERT(op);
         ops.push_back(std::move(op));
 #endif
       },
-      [&](if_stmt& x) {
+      [&](ast::if_stmt& x) {
         // auto ty = check_type(x.condition, ctx);
         // if (ty && *ty != type{bool_type{}}) {
         //   diagnostic::error("condition type must be `bool`, but is `{}`", *ty)
@@ -452,21 +459,24 @@ auto prepare_pipeline(pipeline&& pipe, context& ctx) -> tenzir::pipeline {
         auto args = std::vector<ast::expression>{};
         args.reserve(3);
         args.push_back(std::move(x.condition));
-        args.emplace_back(pipeline_expr{location::unknown, std::move(x.then),
-                                        location::unknown});
+        args.emplace_back(ast::pipeline_expr{
+          location::unknown, std::move(x.then), location::unknown});
         if (x.else_) {
-          args.emplace_back(pipeline_expr{
+          args.emplace_back(ast::pipeline_expr{
             location::unknown, std::move(*x.else_), location::unknown});
         }
         auto plugin = plugins::find<operator_factory_plugin>("tql2.if");
         TENZIR_ASSERT(plugin);
         auto op = plugin->make_operator(
-          entity{{identifier{std::string{"if"}, location::unknown}}},
-          std::move(args), ctx);
+          operator_factory_plugin::invocation{
+            ast::entity{{ast::identifier{std::string{"if"}, location::unknown}}},
+            std::move(args),
+          },
+          ctx);
         TENZIR_ASSERT(op);
         ops.push_back(std::move(op));
       },
-      [&](match_stmt& x) {
+      [&](ast::match_stmt& x) {
         diagnostic::error("`match` not yet implemented, try using `if` instead")
           .primary(x.get_location())
           .emit(ctx.dh());
@@ -538,7 +548,7 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   // not want the mere *existence* to be dependant on which plugins are loaded.
   // Instead, we should always register all operators and then emit an helpful
   // error if the corresponding plugin is not loaded.
-  for (auto op : plugins::get<tql2::operator_factory_plugin>()) {
+  for (auto op : plugins::get<operator_factory_plugin>()) {
     auto name = op->name();
     // TODO
     if (name.starts_with("tql2.")) {
@@ -562,7 +572,7 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
     return not diag_wrapper->error();
   }
   // TODO
-  auto ctx = context{reg, *diag_wrapper};
+  auto ctx = session{reg, *diag_wrapper};
   auto pipe = prepare_pipeline(std::move(parsed), ctx);
   // TENZIR_WARN("{:#?}", use_default_formatter(pipe));
   if (diag_wrapper->error()) {

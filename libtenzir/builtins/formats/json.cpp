@@ -6,7 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/data.hpp"
+
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/argument_parser2.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/cast.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
@@ -1495,8 +1498,6 @@ public:
 using suricata_parser = selector_parser<"suricata", "event_type:suricata">;
 using zeek_parser = selector_parser<"zeek-json", "_path:zeek", ".">;
 
-namespace ast = tql2::ast;
-
 class read_json final : public crtp_operator<read_json> {
 public:
   read_json() = default;
@@ -1511,11 +1512,14 @@ public:
   auto
   operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
+    // TODO: Rewrite after `crtp_operator` does detection without instantiate.
     auto gen = parser_.instantiate(std::move(input), ctrl);
     if (not gen) {
       co_return;
     }
-    return std::move(*gen);
+    for (auto&& slice : *gen) {
+      co_yield std::move(slice);
+    }
   }
 
   auto optimize(expression const& filter, event_order order) const
@@ -1534,17 +1538,50 @@ private:
 
 class read_json_plugin final
   : public virtual operator_inspection_plugin<read_json>,
-    public virtual tql2::operator_factory_plugin {
+    public virtual operator_factory_plugin {
 public:
-  auto make_operator(ast::entity self, std::vector<ast::expression> args,
-                     tql2::context& ctx) const -> operator_ptr override {
-    if (not args.empty()) {
-      diagnostic::error("operator does not expect any arguments")
-        .primary(self.get_location())
-        .emit(ctx);
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
+    auto args = parser_args{};
+    auto schema = std::optional<ast::expression>{};
+    auto sep = std::optional<located<std::string>>{};
+    auto parser = argument_parser2{"sep=<string>, schema=<string>"};
+    parser.add("sep", sep);
+    parser.add("schema", schema);
+    parser.parse(inv, ctx);
+    // TODO: Might want to react to parsing failure.
+    if (sep) {
+      auto& str = sep->inner;
+      if (str == "\n") {
+        args.use_ndjson_mode = true;
+      } else if (str.size() == 1 && str[0] == '\0') {
+        args.use_gelf_mode = true;
+      } else {
+        diagnostic::error("unknown separator {:?}", str)
+          .primary(sep->source)
+          .hint(R"(expected "\n" or "\0")")
+          .emit(ctx);
+      }
     }
-    auto parsed = parser_args{};
-    return std::make_unique<read_json>(std::move(parsed));
+    if (schema) {
+      // TODO: `schema` can use things from the JSON document, we cannot
+      // evaluate this here. We would like some kind of partial evaluation.
+      // Or we stick with `selector=...`.
+      auto result = tql2::const_eval(*schema, ctx);
+      if (not result) {
+        // TODO.
+        return nullptr;
+      }
+      auto string = caf::get_if<std::string>(&*result);
+      if (not string) {
+        diagnostic::error("expected a string, got {}", *result)
+          .primary(schema->get_location())
+          .emit(ctx);
+        return nullptr;
+      }
+      args.schema = located{std::move(*string), schema->get_location()};
+    }
+    return std::make_unique<read_json>(std::move(args));
   }
 };
 

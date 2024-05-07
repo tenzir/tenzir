@@ -8,8 +8,8 @@
 
 #pragma once
 
+#include "tenzir/session.hpp"
 #include "tenzir/tql2/ast.hpp"
-#include "tenzir/tql2/context.hpp"
 #include "tenzir/type.hpp"
 
 namespace tenzir::tql2 {
@@ -17,9 +17,9 @@ namespace tenzir::tql2 {
 // TODO: This might not be what we want.
 
 /// Error will be emitted if ill-typed.
-auto check_type(const ast::expression& expr, context& ctx)
+auto check_type(const ast::expression& expr, session ctx)
   -> std::optional<type>;
 
-void check_assignment(const ast::assignment& x, context& ctx);
+void check_assignment(const ast::assignment& x, session ctx);
 
 } // namespace tenzir::tql2

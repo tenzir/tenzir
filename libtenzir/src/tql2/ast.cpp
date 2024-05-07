@@ -8,7 +8,10 @@
 
 #include "tenzir/tql2/ast.hpp"
 
-namespace tenzir::tql2::ast {
+#include <caf/binary_deserializer.hpp>
+#include <caf/binary_serializer.hpp>
+
+namespace tenzir::ast {
 
 auto expression::get_location() const -> location {
   return match([](const auto& x) {
@@ -16,4 +19,17 @@ auto expression::get_location() const -> location {
   });
 }
 
-} // namespace tenzir::tql2::ast
+auto expression::copy() const -> expression {
+  // TODO: Consider making this just copyable.
+  auto buffer = caf::byte_buffer{};
+  auto serializer = caf::binary_serializer{nullptr, buffer};
+  auto success = inspect(serializer, const_cast<expression&>(*this));
+  TENZIR_ASSERT(success);
+  auto deserializer = caf::binary_deserializer{nullptr, buffer};
+  auto result = expression{};
+  success = inspect(deserializer, result);
+  TENZIR_ASSERT(success);
+  return result;
+}
+
+} // namespace tenzir::ast

@@ -158,17 +158,17 @@ private:
 
 class plugin final : public virtual tql2::operator_plugin<if_operator> {
 public:
-  auto make_operator(ast::entity self, std::vector<ast::expression> args,
-                     tql2::context& ctx) const -> operator_ptr override {
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
     // TODO: Very hacky!
-    TENZIR_ASSERT(args.size() == 2 || args.size() == 3);
-    auto condition = std::move(args[0]);
+    TENZIR_ASSERT(inv.args.size() == 2 || inv.args.size() == 3);
+    auto condition = std::move(inv.args[0]);
     auto then = prepare_pipeline(
-      std::get<ast::pipeline_expr>(std::move(*args[1].kind)).inner, ctx);
+      std::get<ast::pipeline_expr>(std::move(*inv.args[1].kind)).inner, ctx);
     auto else_ = std::optional<pipeline>{};
-    if (args.size() == 3) {
+    if (inv.args.size() == 3) {
       else_ = prepare_pipeline(
-        std::get<ast::pipeline_expr>(std::move(*args[2].kind)).inner, ctx);
+        std::get<ast::pipeline_expr>(std::move(*inv.args[2].kind)).inner, ctx);
     }
     return std::make_unique<if_operator>(std::move(condition), std::move(then),
                                          std::move(else_));

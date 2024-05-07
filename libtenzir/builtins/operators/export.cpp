@@ -262,7 +262,7 @@ private:
 };
 
 class plugin final : public virtual operator_plugin<export_operator>,
-                     public virtual tql2::operator_factory_plugin {
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.source = true};
@@ -292,16 +292,15 @@ public:
       live);
   }
 
-  auto
-  make_operator(tql2::ast::entity self, std::vector<tql2::ast::expression> args,
-                tql2::context& ctx) const -> operator_ptr override {
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
     // auto usage = "export live=<bool>, internal=<bool>";
     auto usage = "export live=false, internal=false";
     auto docs = "https://docs.tenzir.com/operators/export";
     auto live = false;
     auto internal = false;
-    for (auto& arg : args) {
-      auto assignment = std::get_if<tql2::ast::assignment>(arg.kind.get());
+    for (auto& arg : inv.args) {
+      auto assignment = std::get_if<ast::assignment>(arg.kind.get());
       if (not assignment) {
         diagnostic::error("unexpected positional argument")
           .primary(arg.get_location())

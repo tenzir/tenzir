@@ -17,5 +17,5 @@ namespace tenzir::tql2 {
 auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
           const exec_config& cfg, caf::actor_system& sys) -> bool;
 
-auto prepare_pipeline(ast::pipeline&& pipe, context& ctx) -> tenzir::pipeline;
+auto prepare_pipeline(ast::pipeline&& pipe, session ctx) -> tenzir::pipeline;
 }

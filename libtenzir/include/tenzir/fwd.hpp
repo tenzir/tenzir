@@ -405,16 +405,14 @@ using writer_ptr = std::unique_ptr<writer>;
 
 } // namespace format
 
+class session;
+namespace ast {
+struct expression;
+}
+
 namespace tql2 {
 
-class context;
 class registry;
-
-namespace ast {
-
-struct expression;
-
-} // namespace ast
 
 } // namespace tql2
 

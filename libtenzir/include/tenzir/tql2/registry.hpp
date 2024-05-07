@@ -18,6 +18,7 @@ namespace tenzir::tql2 {
 using entity_def
   = variant<const function_plugin*, const operator_factory_plugin*>;
 
+/// Should this be *effectively* global?
 class registry {
 public:
   // TODO: The interface of this class is drastically simplified for now. It

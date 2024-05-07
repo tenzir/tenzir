@@ -18,13 +18,12 @@ using namespace tql2;
 
 class plugin final : public tql2::operator_plugin<set_operator> {
 public:
-  auto make_operator(ast::entity self, std::vector<ast::expression> args,
-                     tql2::context& ctx) const -> operator_ptr override {
-    (void)self;
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
     auto usage = "set <path>=<expr>...";
     auto docs = "https://docs.tenzir.com/operators/set";
     auto assignments = std::vector<ast::assignment>{};
-    for (auto& arg : args) {
+    for (auto& arg : inv.args) {
       arg.match(
         [&](ast::assignment& x) {
           check_assignment(x, ctx);

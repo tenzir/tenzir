@@ -98,7 +98,7 @@ public:
 };
 
 class plugin final : public virtual operator_plugin<import_operator>,
-                     public virtual tql2::operator_factory_plugin {
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.sink = true};
@@ -120,11 +120,10 @@ public:
     return std::make_unique<pipeline>(std::move(*pipe));
   }
 
-  auto
-  make_operator(tql2::ast::entity self, std::vector<tql2::ast::expression> args,
-                tql2::context& ctx) const -> operator_ptr override {
-    if (not args.empty()) {
-      diagnostic::error("TODO").primary(self.get_location()).emit(ctx);
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
+    if (not inv.args.empty()) {
+      diagnostic::error("TODO").primary(inv.self.get_location()).emit(ctx);
     }
     return std::make_unique<import_operator>();
   }

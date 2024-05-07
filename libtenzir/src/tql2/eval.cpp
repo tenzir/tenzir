@@ -12,8 +12,8 @@
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/series_builder.hpp"
+#include "tenzir/session.hpp"
 #include "tenzir/tql2/ast.hpp"
-#include "tenzir/tql2/context.hpp"
 #include "tenzir/try.hpp"
 
 #include <arrow/compute/api_scalar.h>
@@ -653,7 +653,7 @@ auto eval(const ast::expression& expr, const table_slice& input,
   return evaluator{&input, dh}.eval(expr);
 }
 
-auto const_eval(const ast::expression& expr, context& ctx)
+auto const_eval(const ast::expression& expr, session ctx)
   -> std::optional<data> {
   try {
     auto result = evaluator{nullptr, ctx.dh()}.eval(expr);

@@ -65,25 +65,25 @@ private:
 
 class plugin final : public tql2::operator_plugin<source_operator> {
 public:
-  auto make_operator(ast::entity self, std::vector<ast::expression> args,
-                     tql2::context& ctx) const -> operator_ptr override {
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
     auto usage = "source {...} | [...]";
     auto docs = "https://docs.tenzir.com/operators/source";
-    if (args.size() != 1) {
+    if (inv.args.size() != 1) {
       diagnostic::error("expected exactly one argument")
-        .primary(self.get_location())
+        .primary(inv.self.get_location())
         .usage(usage)
         .docs(docs)
         .emit(ctx);
     }
-    if (args.empty()) {
+    if (inv.args.empty()) {
       return nullptr;
     }
     // TODO: We want to const-eval instead.
     // TODO: And we want to const-eval when the operator is instantiated.
     // For example: `every 1s { source { ts: now() } }`
     auto events = std::vector<record>{};
-    args[0].match(
+    inv.args[0].match(
       [&](ast::list& x) {
         for (auto& y : x.items) {
           auto item = const_eval(y, ctx);
@@ -112,7 +112,7 @@ public:
       },
       [&](auto&) {
         diagnostic::error("expected a list")
-          .primary(args[0].get_location())
+          .primary(inv.args[0].get_location())
           .usage(usage)
           .docs(docs)
           .emit(ctx);

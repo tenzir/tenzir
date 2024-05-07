@@ -212,7 +212,7 @@ private:
 };
 
 class every_plugin final : public virtual operator_plugin<every_operator>,
-                           public virtual tql2::operator_factory_plugin {
+                           public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {
@@ -253,31 +253,30 @@ public:
     return std::make_unique<every_operator>(std::move(result.inner), *interval);
   }
 
-  auto
-  make_operator(tql2::ast::entity self, std::vector<tql2::ast::expression> args,
-                tql2::context& ctx) const -> operator_ptr override {
-    if (args.size() != 2) {
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
+    if (inv.args.size() != 2) {
       diagnostic::error("TODO")
-        .primary(self.get_location())
+        .primary(inv.self.get_location())
         .usage("every <duration> { ... }")
         .emit(ctx);
       return nullptr;
     }
-    auto interval_data = tql2::const_eval(args[0], ctx);
+    auto interval_data = tql2::const_eval(inv.args[0], ctx);
     if (not interval_data) {
       return nullptr;
     }
     auto interval = caf::get_if<duration>(&*interval_data);
     if (not interval) {
       diagnostic::error("expected a duration, got `{}`", *interval_data)
-        .primary(args[0].get_location())
+        .primary(inv.args[0].get_location())
         .emit(ctx);
       return nullptr;
     }
-    auto pipe_expr = std::get_if<tql2::ast::pipeline_expr>(&*args[1].kind);
+    auto pipe_expr = std::get_if<ast::pipeline_expr>(&*inv.args[1].kind);
     if (not pipe_expr) {
       diagnostic::error("expected a pipeline expression")
-        .primary(args[1].get_location())
+        .primary(inv.args[1].get_location())
         .usage("every <duration> { ... }")
         .emit(ctx);
       return nullptr;

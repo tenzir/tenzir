@@ -31,7 +31,7 @@ auto make_dependent(U&& x) -> U&& {
 
 } // namespace tenzir::detail
 
-namespace tenzir::tql2::ast {
+namespace tenzir::ast {
 
 struct assignment;
 struct binary_expr;
@@ -202,6 +202,8 @@ struct expression {
     return f.apply(*detail::make_dependent<Inspector>(x.kind));
   }
 
+  auto copy() const -> expression;
+
   template <class... Fs>
   auto match(Fs&&... fs) & -> decltype(auto);
   template <class... Fs>
@@ -308,7 +310,7 @@ struct entity {
   }
 
   std::vector<identifier> path;
-  entity_path ref;
+  tql2::entity_path ref;
 
   friend auto inspect(auto& f, entity& x) -> bool {
     return f.object(x).fields(f.field("path", x.path), f.field("ref", x.ref));
@@ -758,16 +760,14 @@ private:
   }
 };
 
-} // namespace tenzir::tql2::ast
+} // namespace tenzir::ast
 
 namespace tenzir {
 
 template <>
-inline constexpr auto enable_default_formatter<tenzir::tql2::ast::pipeline>
-  = true;
+inline constexpr auto enable_default_formatter<tenzir::ast::pipeline> = true;
 
 template <>
-inline constexpr auto enable_default_formatter<tenzir::tql2::ast::expression>
-  = true;
+inline constexpr auto enable_default_formatter<tenzir::ast::expression> = true;
 
 } // namespace tenzir

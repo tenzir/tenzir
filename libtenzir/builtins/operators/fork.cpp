@@ -94,15 +94,15 @@ private:
 
 class plugin final : public virtual tql2::operator_plugin<fork_operator> {
 public:
-  auto make_operator(ast::entity self, std::vector<ast::expression> args,
-                     tql2::context& ctx) const -> operator_ptr override {
-    if (args.size() != 1) {
-      diagnostic::error("TODO").primary(self.get_location()).emit(ctx);
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
+    if (inv.args.size() != 1) {
+      diagnostic::error("TODO").primary(inv.self.get_location()).emit(ctx);
       return nullptr;
     }
-    auto arg = std::get_if<ast::pipeline_expr>(&*args[0].kind);
+    auto arg = std::get_if<ast::pipeline_expr>(&*inv.args[0].kind);
     if (not arg) {
-      diagnostic::error("TODO").primary(args[0].get_location()).emit(ctx);
+      diagnostic::error("TODO").primary(inv.args[0].get_location()).emit(ctx);
       return nullptr;
     }
     auto pipe = prepare_pipeline(std::move(arg->inner), ctx);
@@ -112,7 +112,7 @@ public:
       if (op_loc != operator_location::anywhere) {
         if (loc != operator_location::anywhere && loc != op_loc) {
           diagnostic::error("TODO: could not decide location")
-            .primary(self.get_location())
+            .primary(inv.self.get_location())
             .emit(ctx);
           return nullptr;
         }

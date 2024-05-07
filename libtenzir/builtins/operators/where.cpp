@@ -246,12 +246,12 @@ private:
 
 class plugin2 final : public virtual tql2::operator_plugin<where_operator2> {
 public:
-  auto make_operator(ast::entity self, std::vector<ast::expression> args,
-                     tql2::context& ctx) const -> operator_ptr override {
-    if (args.size() != 1) {
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
+    if (inv.args.size() != 1) {
       diagnostic::error("expected exactly one argument")
-        .primary(self.get_location())
-        .emit(ctx.dh());
+        .primary(inv.self.get_location())
+        .emit(ctx);
       return nullptr;
     }
     // auto ty = type_checker{ctx}.visit(args[0]);
@@ -260,7 +260,7 @@ public:
     //     .primary(args[0].get_location())
     //     .emit(ctx.dh());
     // }
-    return std::make_unique<where_operator2>(std::move(args[0]));
+    return std::make_unique<where_operator2>(std::move(inv.args[0]));
   }
 };
 

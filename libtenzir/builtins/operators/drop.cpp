@@ -159,7 +159,7 @@ class drop_operator2 final : public crtp_operator<drop_operator2> {
 public:
   drop_operator2() = default;
 
-  explicit drop_operator2(std::vector<tql2::ast::selector> selectors)
+  explicit drop_operator2(std::vector<ast::selector> selectors)
     : selectors_{std::move(selectors)} {
   }
 
@@ -201,19 +201,17 @@ public:
   }
 
 private:
-  std::vector<tql2::ast::selector> selectors_;
+  std::vector<ast::selector> selectors_;
 };
 
 class plugin2 final : public virtual tql2::operator_plugin<drop_operator2> {
 public:
-  auto
-  make_operator(tql2::ast::entity self, std::vector<tql2::ast::expression> args,
-                tql2::context& ctx) const -> operator_ptr override {
-    TENZIR_UNUSED(self);
-    auto selectors = std::vector<tql2::ast::selector>{};
-    for (auto& arg : args) {
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
+    auto selectors = std::vector<ast::selector>{};
+    for (auto& arg : inv.args) {
       arg.match(
-        [&](tql2::ast::selector& x) {
+        [&](ast::selector& x) {
           selectors.push_back(std::move(x));
         },
         [&](auto& x) {

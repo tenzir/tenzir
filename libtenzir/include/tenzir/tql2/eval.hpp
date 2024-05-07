@@ -17,7 +17,7 @@ namespace tenzir::tql2 {
 auto eval(const ast::expression& expr, const table_slice& input,
           diagnostic_handler& dh) -> series;
 
-auto const_eval(const ast::expression& expr, context& ctx)
+auto const_eval(const ast::expression& expr, session ctx)
   -> std::optional<data>;
 
 struct resolve_error {

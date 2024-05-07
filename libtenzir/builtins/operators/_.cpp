@@ -13,7 +13,7 @@
 
 namespace tenzir::plugins::_ {
 
-namespace ast = tql2::ast;
+namespace ast = ast;
 
 namespace {
 
@@ -42,10 +42,10 @@ public:
 
 class read_json_plugin final
   : public virtual operator_inspection_plugin<read_json>,
-    public virtual tql2::operator_factory_plugin {
+    public virtual operator_factory_plugin {
 public:
-  auto make_operator(ast::entity self, std::vector<ast::expression> args,
-                     tql2::context& ctx) const -> operator_ptr override {
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
     // --schema
     // > schema="foo"
     // --selector="event_type:suricata"
@@ -98,7 +98,7 @@ public:
     //
     // to "s3://whatever"
     // save_s3
-    diagnostic::error("ok").primary(self.get_location()).emit(ctx);
+    diagnostic::error("ok").primary(inv.self.get_location()).emit(ctx);
     return std::make_unique<read_json>();
   }
 };

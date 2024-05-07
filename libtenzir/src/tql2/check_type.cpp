@@ -15,13 +15,13 @@ namespace tenzir::tql2 {
 
 namespace {
 
-using namespace tenzir::tql2::ast;
+using namespace ast;
 
 class type_checker {
 public:
   using result = std::optional<type>;
 
-  explicit type_checker(context& ctx) : ctx_{ctx} {
+  explicit type_checker(session ctx) : ctx_{ctx} {
   }
 
   auto visit(const literal& x) -> result {
@@ -41,7 +41,7 @@ public:
     return std::nullopt;
   }
 
-  auto visit(const expression& x) -> result {
+  auto visit(const ast::expression& x) -> result {
     return x.match([&](auto& y) {
       return visit(y);
     });
@@ -159,15 +159,15 @@ public:
     return std::nullopt;
   }
 
-  auto visit(const record& x) -> result {
+  auto visit(const ast::record& x) -> result {
     // TODO: Don't we want to propagate fields etc?
     // Or can we perhaps do this with const eval?
     for (auto& y : x.content) {
       y.match(
-        [&](const record::field& z) {
+        [&](const ast::record::field& z) {
           visit(z.expr);
         },
-        [&](const record::spread& z) {
+        [&](const ast::record::spread& z) {
           diagnostic::error("not implemented yet")
             .primary(z.expr.get_location())
             .emit(ctx_.dh());
@@ -176,7 +176,7 @@ public:
     return type{record_type{}};
   }
 
-  auto visit(const list& x) -> result {
+  auto visit(const ast::list& x) -> result {
     // TODO: Content type?
     for (auto& y : x.items) {
       visit(y);
@@ -204,17 +204,17 @@ public:
   }
 
 private:
-  context& ctx_;
+  session ctx_;
 };
 
 } // namespace
 
-auto check_type(const ast::expression& expr, context& ctx)
+auto check_type(const ast::expression& expr, session ctx)
   -> std::optional<type> {
   return type_checker{ctx}.visit(expr);
 }
 
-void check_assignment(const ast::assignment& x, context& ctx) {
+void check_assignment(const ast::assignment& x, session ctx) {
   auto ty = type_checker{ctx}.visit(x.right);
   if (x.left.this_ && x.left.path.empty()) {
     if (ty && *ty != type{record_type{}}) {
