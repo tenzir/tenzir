@@ -134,7 +134,7 @@ public:
         break;
       }
       const auto now = time::clock::now();
-      const auto delta = next_run - now;
+      const duration delta = next_run - now;
       if (delta < duration::zero()) {
         next_run = scheduler_.next_after(now);
         continue;
