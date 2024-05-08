@@ -42,19 +42,9 @@ auto make_alarm_clock(alarm_clock_actor::pointer self)
 }
 
 template <typename T>
-struct is_chrono_time_point : std::false_type {};
-
-template <typename Clock, typename Duration>
-struct is_chrono_time_point<std::chrono::time_point<Clock, Duration>>
-  : std::true_type {};
-
-template <typename T>
-concept chrono_time_point_concept = is_chrono_time_point<T>::value;
-
-template <typename T>
 concept scheduler_concept
   = requires(const T t, time::clock::time_point now, parser_interface& p) {
-      { t.next_after(now) } -> chrono_time_point_concept;
+      { t.next_after(now) } -> std::same_as<time::clock::time_point>;
       { T::parse(p) } -> std::same_as<T>;
       { T::name } -> std::convertible_to<std::string_view>;
     };
@@ -280,8 +270,9 @@ public:
     return f.field("interval", interval_);
   }
 
-  auto next_after(chrono_time_point_concept auto now) const noexcept {
-    return now + interval_;
+  auto next_after(time::clock::time_point now) const noexcept {
+    return std::chrono::time_point_cast<time::clock::time_point::duration>(
+      now + interval_);
   }
 
   static auto parse(parser_interface& p) {
@@ -316,9 +307,8 @@ public:
 
   constexpr static std::string_view name = "cron";
 
-  auto next_after(chrono_time_point_concept auto now) const noexcept {
-    const auto tt = time::clock::to_time_t(
-      std::chrono::time_point_cast<time::clock::duration>(now));
+  auto next_after(time::clock::time_point now) const noexcept {
+    const auto tt = time::clock::to_time_t(now);
 
     return time::clock::from_time_t(detail::cron::cron_next(expr_, tt));
   }
