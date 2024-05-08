@@ -264,17 +264,16 @@ public:
 
 class every_scheduler {
 public:
+  constexpr static std::string_view name = "every";
+  constexpr static bool immediate = true;
+
   every_scheduler() = default;
   explicit every_scheduler(duration interval) : interval_{interval} {
   }
 
-  constexpr static std::string_view name = "every";
-
   friend auto inspect(auto& f, every_scheduler& x) -> bool {
     return f.object(x).fields(f.field("interval", x.interval_));
   }
-
-  constexpr static bool immediate = true;
 
   auto
   next_after(time::clock::time_point now) const -> time::clock::time_point {
@@ -305,19 +304,17 @@ using every_plugin = scheduled_execution_plugin<every_scheduler>;
 
 class cron_scheduler {
 public:
+  constexpr static std::string_view name = "cron";
+  constexpr static bool immediate = false;
+
   cron_scheduler() = default;
   explicit cron_scheduler(detail::cron::cronexpr expr)
     : cronexpr_{std::move(expr)} {
   }
 
-  constexpr static std::string_view name = "cron";
-
-  constexpr static bool immediate = false;
-
   auto
   next_after(time::clock::time_point now) const -> time::clock::time_point {
     const auto tt = time::clock::to_time_t(now);
-
     return time::clock::from_time_t(detail::cron::cron_next(cronexpr_, tt));
   }
 
@@ -329,16 +326,6 @@ public:
       x.cronexpr_ = detail::cron::make_cron(text);
     };
     return f.object(x).fields(f.field("cronexpr", get, set));
-  }
-
-  auto field(auto& f) {
-    const auto get = [this]() {
-      return detail::cron::to_cronstr(cronexpr_);
-    };
-    const auto set = [this](std::string_view text) {
-      cronexpr_ = detail::cron::make_cron(text);
-    };
-    return f.field("cronexpr", get, set);
   }
 
   static cron_scheduler parse(parser_interface& p) {

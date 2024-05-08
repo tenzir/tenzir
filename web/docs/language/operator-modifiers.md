@@ -44,14 +44,16 @@ where the 6 fields are separated by a space.
 
 The field values can be as follows:
 
-| Field | Required | Value range* | Special characters | Alternative Literals |
-| --- |--- | ---  | --- | --- |
-| seconds | yes | 0-59 | `*` `,` `-` | |
-| minutes | yes | 0-59 | `*` `,` `-` | |
-| hours | yes | 0-23 | `*` `,` `-` | |
-| days of month | 1-31 | 1-31 | `*` `,` `-` `?` `L` `W` | |
-| months | yes | 1-12 | `*` `,` `-` | `JAN` ... `DEC` |
-| days of week | yes | 0-6 | `*` `,` `-` `?` `L` `#` | `SUN` ... `SAT` |
+| Field | Value range* | Special characters | Alternative Literals |
+| --- | ---  | --- | --- |
+| seconds |  0-59 | `*` `,` `-` | |
+| minutes |  0-59 | `*` `,` `-` | |
+| hours |  0-23 | `*` `,` `-` | |
+| days of | 1-31 | `*` `,` `-` `?` `L` `W` | |
+| months | 1-12 | `*` `,` `-` | `JAN` ... `DEC` |
+| days of week |  0-6 | `*` `,` `-` `?` `L` `#` | `SUN` ... `SAT` |
+
+The special characters have the following meaning:
 
 \* - As described on Wikipedia [Cron](https://en.wikipedia.org/wiki/Cron)
 
@@ -71,10 +73,10 @@ The special characters have the following meaning:
 #### Example:
 
 ```
-cron "* */10 * * * MON-FRI" from http://foo.com/bar
+cron "* */10 * * * MON-FRI" from https://example.org/api
 ```
 
-would pull an endpoint every 10 minutes on monday through friday.
+would pull an endpoint on every 10th minute, monday through friday.
 
 
 ## Unordered Execution
