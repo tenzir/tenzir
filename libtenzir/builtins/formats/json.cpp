@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/data.hpp"
-
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/argument_parser2.hpp>
 #include <tenzir/arrow_table_slice.hpp>
@@ -15,6 +13,7 @@
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/config_options.hpp>
+#include <tenzir/data.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/env.hpp>
@@ -30,6 +29,7 @@
 #include <tenzir/to_lines.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/try_simdjson.hpp>
 
 #include <arrow/record_batch.h>
 #include <caf/detail/is_one_of.hpp>
