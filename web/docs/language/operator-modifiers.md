@@ -9,7 +9,8 @@ Operator modifiers are keywords that may occur before an operator.
 ## Scheduled Executions
 
 ### `every`
-The special keyword `every` enables scheduled execution of an operator at a fixed interval.
+The special keyword `every` enables scheduled execution of an operator at a 
+fixed interval.
 
 Use the operator modifier like this:
 
@@ -23,7 +24,8 @@ For example, `version` prints the version number exactly once, but `every 1s
 version` prints the version number once every second.
 
 ### `cron`
-The special keyword `cron` enables scheduled execution of an operator according to a [cron expression](https://en.wikipedia.org/wiki/Cron).
+The special keyword `cron` enables scheduled execution of an operator according
+ to a [cron expression](https://en.wikipedia.org/wiki/Cron).
 
 Use the operator modifier like this:
 
@@ -42,14 +44,14 @@ where the 6 fields are separated by a space.
 
 The field values can be as follows:
 
-| Field | Required | Allowed value * | Allowed special characters | Alternative Literals |
+| Field | Required | Value range* | Special characters | Alternative Literals |
 | --- |--- | ---  | --- | --- |
 | seconds | yes | 0-59 | `*` `,` `-` | |
 | minutes | yes | 0-59 | `*` `,` `-` | |
 | hours | yes | 0-23 | `*` `,` `-` | |
 | days of month | 1-31 | 1-31 | `*` `,` `-` `?` `L` `W` | |
-| months | yes | 1-12 | `*` `,` `-` | `JAN` `FEB` `MAR` `APR` `MAY` `JUN` `JUL` `AUG` `SEP` `OCT` `NOV` `DEC` |
-| days of week | yes | 0-6 | `*` `,` `-` `?` `L` `#` | `SUN` `MON` `TUE` `WED` `THU` `FRI` `SAT` |
+| months | yes | 1-12 | `*` `,` `-` | `JAN` ... `DEC` |
+| days of week | yes | 0-6 | `*` `,` `-` `?` `L` `#` | `SUN` ... `SAT` |
 
 \* - As described on Wikipedia [Cron](https://en.wikipedia.org/wiki/Cron)
 

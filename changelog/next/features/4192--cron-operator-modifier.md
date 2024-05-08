@@ -1,2 +1,4 @@
-The `cron "<cron expression>"` operator modifier executes an operator on a schedule.
-For example, `cron "* */10 * * * MON-FRI" from https://example.org/api` queries an endpoint every 10 minutes on Monday through Friday.
+The `cron "<cron expression>"` operator modifier executes an operator 
+on a schedule. 
+For example, `cron "* */10 * * * MON-FRI" from https://example.org/api` 
+queries an endpoint every 10 minutes on Monday through Friday.
