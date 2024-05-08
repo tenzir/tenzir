@@ -480,6 +480,11 @@ EOF
   check tenzir "from ${INPUTSDIR}/xsv/sample.ssv read ssv | extend schema=#schema | write ssv"
   check tenzir "from ${INPUTSDIR}/xsv/sample.tsv read tsv | extend schema=#schema | write tsv"
   check tenzir "from ${INPUTSDIR}/xsv/nulls-and-escaping.csv read csv"
+  # Test that multiple batches only print the header once.
+  check tenzir "read json --ndjson --precise | select foo | write csv" <<EOF
+  {"foo": 1}
+  {"foo": 2, "bar": 3}
+EOF
 }
 
 @test "read xsv auto expand" {
@@ -679,5 +684,55 @@ EOF
   check tenzir 'read json | unflatten' <<EOF
 {"foo": {}}
 {"foo": null}
+EOF
+}
+
+@test "precise json" {
+  check tenzir 'read json --ndjson --precise' <<EOF
+{"foo": "0.042s"}
+{"foo": "0.043s", "bar": null}
+EOF
+}
+
+@test "precise json raw" {
+  check tenzir 'read json --ndjson --precise --raw' <<EOF
+{"foo": "0.042s"}
+{"foo": "0.043s", "bar": [{}]}
+EOF
+}
+
+@test "precise json overwrite field" {
+  check tenzir 'read json --ndjson --precise' <<EOF
+{"foo": "0.042s", "foo": 42}
+EOF
+}
+
+@test "precise json list type conflict" {
+  check tenzir 'read json --ndjson --precise' <<EOF
+{"foo": [42, "bar"]}
+EOF
+}
+
+@test "precise json big integer" {
+  check tenzir 'read json --ndjson --precise' <<EOF
+{"foo": 424242424242424242424242}
+EOF
+}
+
+@test "precise json incomplete input" {
+  check tenzir 'read json --ndjson --precise' <<EOF
+{"foo": 42
+EOF
+}
+
+@test "precise json broken input" {
+  check tenzir 'read json --ndjson --precise' <<EOF
+{"foo": 42,,,
+EOF
+}
+
+@test "precise json bad ndjson" {
+  check tenzir 'read json --ndjson --precise' <<EOF
+{"foo": 42}{"foo": 43}
 EOF
 }

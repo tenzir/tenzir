@@ -22,50 +22,33 @@ in {
             ./google-cloud-cpp/0001-Use-pkg-config-to-find-CURL.patch
           ];
       });
-  aws-c-cal =
-    if !isStatic
-    then prev.aws-c-cal
-    else
-      prev.aws-c-cal.overrideAttrs (orig: {
-        patches =
-          (orig.patches or [])
-          ++ [
-            (prev.fetchpatch {
-              url = "https://github.com/awslabs/aws-c-cal/commit/ee46efc3dd0cf300ff4ec89cc2d79f1b0fe1c8cb.patch";
-              sha256 = "sha256-bFc0Mqt0Ho3i3xGHiQitP35dQgPd9Wthkyb1TT/nRYs=";
-            })
-          ];
-      });
-  # The arrow package overrides aws-sdk-cpp in a let binding to specify
-  # the exact apis that are needed for arrow. We need to extend the list
-  # of APIs for our own purpose, so we "decorate" the override function.
-  aws-sdk-cpp-tenzir = let
-    self = final.aws-sdk-cpp.override {
-      apis = [
-        # arrow-cpp apis; must be kept in sync with nixpkgs.
-        "cognito-identity"
-        "config"
-        "identity-management"
-        "s3"
-        "sts"
-        "transfer"
-        # Additional apis used by tenzir.
-        "sqs"
-      ];
-    };
-  in
-    (self // {override = _: self;});
+  aws-sdk-cpp-tenzir = overrideAttrsIf isDarwin (final.aws-sdk-cpp.override {
+    apis = [
+      # arrow-cpp apis; must be kept in sync with nixpkgs.
+      "cognito-identity"
+      "config"
+      "identity-management"
+      "s3"
+      "sts"
+      "transfer"
+      # Additional apis used by tenzir.
+      "sqs"
+    ];
+  }) (orig: {
+    doCheck = false;
+    cmakeFlags = orig.cmakeFlags ++ [
+      "-DENABLE_TESTING=OFF"
+    ];
+  });
+  glog = overrideAttrsIf (isDarwin && isStatic) prev.glog (orig: {
+    cmakeFlags = orig.cmakeFlags ++ [
+      "-DBUILD_TESTING=OFF"
+    ];
+  });
   arrow-cpp = let
-    arrow-cpp' = (prev.arrow-cpp.overrideAttrs (orig: {
-      buildInputs = orig.buildInputs ++ [final.bzip2];
-      cmakeFlags =
-        orig.cmakeFlags
-        ++ [
-          "-DARROW_WITH_BZ2=ON"
-        ];
-      })).override {
-        aws-sdk-cpp = final.aws-sdk-cpp-tenzir;
-      };
+    arrow-cpp' = prev.arrow-cpp.override {
+      aws-sdk-cpp-arrow = final.aws-sdk-cpp-tenzir;
+    };
   in
     overrideAttrsIf isStatic
     (
@@ -88,19 +71,16 @@ in {
             exec ${lib.getBin prev.buildPackages.darwin.cctools}/bin/${stdenv.cc.targetPrefix}libtool $@
           '')
         ];
-      patches =
-        (orig.patches or [])
-        ++ [
-          ./fix-protobuf-dep.patch
-        ];
       buildInputs = orig.buildInputs ++ [final.sqlite];
       cmakeFlags =
         orig.cmakeFlags
         ++ [
           "-DARROW_BUILD_TESTS=OFF"
+          "-DGLOG_SOURCE=SYSTEM"
         ];
       doCheck = false;
       doInstallCheck = false;
+      env.NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
     });
   zeromq =
     if !isStatic
@@ -125,6 +105,7 @@ in {
           ++ [
             ./grpc/drop-broken-cross-check.patch
           ];
+        env.NIX_LDFLAGS = lib.optionalString stdenv.isDarwin "-lc++abi";
       });
   http-parser =
     if !isStatic
@@ -187,6 +168,7 @@ in {
       ++ lib.optionals stdenv.cc.isClang [
         "-DRDKAFKA_BUILD_TESTS=OFF"
       ];
+    env.NIX_LDFLAGS = lib.optionalString (isDarwin && isStatic) "-lc++abi";
   });
   mkStub = name:
     prev.writeShellScriptBin name ''
@@ -255,6 +237,36 @@ in {
         set +x
       '';
     });
+  asio = overrideAttrsIf (isDarwin && isStatic) prev.asio (orig: {
+    env.NIX_LDFLAGS = "-lc++abi";
+  });
+  catch2_3 = overrideAttrsIf (isDarwin && isStatic) prev.catch2_3 (orig: {
+    env.NIX_LDFLAGS = "-lc++abi";
+  });
+  flatbuffers = overrideAttrsIf (isDarwin && isStatic) prev.flatbuffers (orig: {
+    env.NIX_LDFLAGS = "-lc++abi";
+  });
+  fmt = overrideAttrsIf (isDarwin && isStatic) prev.fmt (orig: {
+    env.NIX_LDFLAGS = "-lc++abi";
+  });
+  libyaml = overrideAttrsIf (isDarwin && isStatic) prev.libyaml (orig: {
+    env.NIX_LDFLAGS = "-lc++abi";
+  });
+  lz4 = overrideAttrsIf (isDarwin && isStatic) prev.lz4 (orig: {
+    env.NIX_LDFLAGS = "-lc++abi";
+  });
+  protobuf = overrideAttrsIf (isDarwin && isStatic) prev.protobuf (orig: {
+    env.NIX_LDFLAGS = "-lc++abi";
+  });
+  rapidjson = overrideAttrsIf (isDarwin && isStatic) prev.rapidjson (orig: {
+    env.NIX_LDFLAGS = "-lc++abi";
+  });
+  spdlog = overrideAttrsIf (isDarwin && isStatic) prev.spdlog (orig: {
+    env.NIX_LDFLAGS = "-lc++abi";
+  });
+  thrift = overrideAttrsIf (isDarwin && isStatic) prev.thrift (orig: {
+    env.NIX_LDFLAGS = "-lc++abi";
+  });
   yara =
     if !isStatic
     then prev.yara
@@ -388,7 +400,6 @@ in {
       pkg.withPlugins (ps: [
         ps.compaction
         ps.context
-        ps.matcher
         ps.pipeline-manager
         ps.platform
         ps.vast

@@ -83,8 +83,7 @@ public:
   }
 
   friend auto inspect(auto& f, import_operator& x) -> bool {
-    (void)f, (void)x;
-    return true;
+    return f.object(x).fields();
   }
 
   auto location() const -> operator_location override {
@@ -103,10 +102,19 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"import", "https://docs.tenzir.com/"
-                                            "operators/import"};
+    auto parser = argument_parser{
+      "import",
+      "https://docs.tenzir.com/operators/import",
+    };
     parser.parse(p);
-    return std::make_unique<import_operator>();
+    auto pipe = pipeline::internal_parse("batch --timeout 1s");
+    if (not pipe) {
+      diagnostic::error(pipe.error())
+        .note("failed to parse `batch` operator")
+        .throw_();
+    }
+    pipe->append(std::make_unique<import_operator>());
+    return std::make_unique<pipeline>(std::move(*pipe));
   }
 };
 

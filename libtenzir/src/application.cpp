@@ -14,10 +14,8 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/process.hpp"
 #include "tenzir/error.hpp"
-#include "tenzir/import_command.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/start_command.hpp"
-#include "tenzir/writer_command.hpp"
 
 #include <fmt/color.h>
 
@@ -113,58 +111,6 @@ void add_root_opts(command& cmd) {
                             "triggered (default: 2h)");
 }
 
-auto make_export_command() {
-  auto export_ = std::make_unique<command>(
-    "export",
-    "exports query results to STDOUT or file, expects a subcommand to select "
-    "the format",
-    opts("?tenzir.export")
-      .add<bool>("continuous,c", "marks a query as continuous")
-      .add<bool>("unified,u", "marks a query as unified")
-      .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
-      .add<bool>("low-priority", "respond to other queries first")
-      .add<std::string>("timeout", "timeout to stop the export after")
-      // We don't expose the `preserve-ids` option to the user because it
-      // doesnt' affect the formatted output.
-      //.add<bool>("preserve-ids", "don't substitute taxonomy identifiers")
-      .add<int64_t>("max-events,n", "maximum number of results")
-      .add<std::string>("read,r", "path for reading the query")
-      .add<std::string>("write,w", "path to write events to")
-      .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to"));
-  export_->add_subcommand("zeek", "exports query results in Zeek format",
-                          opts("?tenzir.export.zeek")
-                            .add<bool>("disable-timestamp-tags",
-                                       "whether the output should contain "
-                                       "#open/#close tags"));
-  export_->add_subcommand("csv", "exports query results in CSV format",
-                          opts("?tenzir.export.csv"));
-  export_->add_subcommand("ascii", "exports query results in ASCII format",
-                          opts("?tenzir.export.ascii"));
-  export_->add_subcommand(
-    "json", "exports query results in JSON format",
-    opts("?tenzir.export.json")
-      .add<bool>("flatten", "flatten nested objects into "
-                            "the top-level")
-      .add<bool>("numeric-durations", "render durations as numbers as opposed "
-                                      "to human-readable strings with up to "
-                                      "two decimal places")
-      .add<bool>("omit-nulls", "omit null fields in JSON objects")
-      .add<bool>("omit-empty-records", "omit empty records in JSON objects")
-      .add<bool>("omit-empty-lists", "omit empty lists in JSON objects")
-      .add<bool>("omit-empty-maps", "omit empty maps in JSON objects")
-      .add<bool>("omit-empty", "omit all empty values and nulls in JSON "
-                               "objects"));
-  export_->add_subcommand("null",
-                          "exports query without printing them (debug option)",
-                          opts("?tenzir.export.null"));
-  export_->add_subcommand("arrow",
-                          "exports query results in Arrow format with separate "
-                          "IPC streams for each schema, all concatenated "
-                          "together",
-                          opts("?tenzir.export.arrow"));
-  return export_;
-}
-
 auto make_start_command() {
   return std::make_unique<command>(
     "start", "starts a node",
@@ -183,86 +129,15 @@ auto make_start_command() {
                                              "before re-checking size"));
 }
 
-auto make_command_factory() {
-  // When updating this list, remember to update its counterpart in node.cpp as
-  // well iff necessary
-  // clang-format off
-  auto result = command::factory{
-    {"export ascii", make_writer_command("ascii")},
-    {"export csv", make_writer_command("csv")},
-    {"export json", make_writer_command("json")},
-    {"export null", make_writer_command("null")},
-    {"export arrow", make_writer_command("arrow")},
-    {"export zeek", make_writer_command("zeek")},
-    {"import csv", import_command},
-    {"import json", import_command},
-    {"import suricata", import_command},
-    {"import syslog", import_command},
-    {"import test", import_command},
-    {"import zeek", import_command},
-    {"import zeek-json", import_command},
-    {"import arrow", import_command},
-  };
-  // clang-format on
-  return result;
-} // namespace
-
 auto make_root_command(std::string_view name) {
   using namespace std::string_literals;
   auto ob = opts("?tenzir");
   auto root = std::make_unique<command>(name, "", std::move(ob));
   add_root_opts(*root);
-  root->add_subcommand(make_export_command());
-  root->add_subcommand(make_import_command());
   return root;
 }
 
 } // namespace
-
-std::unique_ptr<command> make_import_command() {
-  auto import_ = std::make_unique<command>(
-    "import", "imports data from STDIN or file",
-    opts("?tenzir.import")
-      .add<std::string>("batch-encoding", "encoding type of table slices")
-      .add<int64_t>("batch-size", "upper bound for the size of a table slice")
-      .add<std::string>("batch-timeout", "timeout after which batched table "
-                                         "slices are forwarded (default: 1s)")
-      .add<bool>("blocking,b", "block until the IMPORTER forwarded all data")
-      .add<std::string>("listen,l", "the endpoint to listen on "
-                                    "([host]:port/type)")
-      .add<int64_t>("max-events,n", "the maximum number of events to import")
-      .add<std::string>("read,r", "path to input where to read events from")
-      .add<std::string>("read-timeout", "timeout for waiting for incoming data")
-      .add<std::string>("schema,S", "alternate schema as string")
-      .add<std::string>("schema-file,s", "path to alternate schema")
-      .add<std::string>("type,t", "filter event type based on prefix matching")
-      .add<bool>("uds,d", "treat -r as listening UNIX domain socket"));
-  import_->add_subcommand("zeek", "imports Zeek TSV logs from STDIN or file",
-                          opts("?tenzir.import.zeek"));
-  import_->add_subcommand("zeek-json",
-                          "imports Zeek JSON logs from STDIN or file",
-                          opts("?tenzir.import.zeek-json"));
-  import_->add_subcommand(
-    "csv", "imports CSV logs from STDIN or file",
-    opts("?tenzir.import.csv")
-      .add<std::string>("separator", "the single-character separator (default: "
-                                     "',')"));
-  import_->add_subcommand(
-    "json", "imports JSON with schema",
-    opts("?tenzir.import.json")
-      .add<std::string>("selector", "read the event type from the given field "
-                                    "(specify as '<field>[:<prefix>]')"));
-  import_->add_subcommand("suricata", "imports suricata EVE JSON",
-                          opts("?tenzir.import.suricata"));
-  import_->add_subcommand("syslog", "imports syslog messages",
-                          opts("?tenzir.import.syslog"));
-  import_->add_subcommand("arrow", "import from an Arrow IPC stream",
-                          opts("?tenzir.import.arrow"));
-  import_->add_subcommand(
-    "test", "imports random data for testing or benchmarking",
-    opts("?tenzir.import.test").add<int64_t>("seed", "the PRNG seed"));
-  return import_;
-}
 
 std::pair<std::unique_ptr<command>, command::factory>
 make_application(std::string_view path) {
@@ -365,7 +240,7 @@ make_application(std::string_view path) {
     fmt::print(stderr, "\n\n");
   }
   auto root = make_root_command(name);
-  auto root_factory = make_command_factory();
+  auto root_factory = command::factory{};
   // Add additional commands from plugins.
   for (const auto* plugin : plugins::get<command_plugin>()) {
     auto [cmd, cmd_factory] = plugin->make_command();

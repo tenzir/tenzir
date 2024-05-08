@@ -11,7 +11,7 @@ Reads Graylog Extended Log Format (GELF) events.
 ## Synopsis
 
 ```
-gelf
+gelf [--raw]
 ```
 
 ## Description

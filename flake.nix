@@ -9,7 +9,7 @@
   };
 
   inputs.isReleaseBuild.url = "github:boolean-option/false";
-  inputs.nixpkgs.url = "github:nixos/nixpkgs/1f5d74db169236ad4bed54028c8e147298c7cf9d";
+  inputs.nixpkgs.url = "github:nixos/nixpkgs/94035b482d181af0a0f8f77823a790b256b7c3cc";
   inputs.flake-compat.url = "github:edolstra/flake-compat";
   inputs.flake-compat.flake = false;
   inputs.flake-utils.url = "github:numtide/flake-utils";
@@ -131,22 +131,21 @@
           tag = "latest-slim";
         };
         apps.default = self.apps.${system}.tenzir-static;
-        # Run with `nix run .#sbom`, output is created in sbom/.
+        # Run with `nix run .#generate-sbom`, output is created in sbom/.
         apps.generate-sbom = let
           nix = nixpkgs.legacyPackages."${system}".nix;
           sbomnix = inputs.sbomnix.packages.${system}.sbomnix;
           # We use tenzir-de-static so we don't require proprietary plugins,
           # they don't influence the final result.
         in flake-utils.lib.mkApp { drv = pkgs.writeScriptBin "generate" ''
+            #!${pkgs.runtimeShell}
             TMP="$(mktemp -d)"
             echo "Writing intermediate files to $TMP"
-            echo "Generating nixpkgs based meta information"
-            ${nix}/bin/nix-env -qa --meta --json -f ${nixpkgs} '.*' > $TMP/meta.json
             staticDrv="$(${nix}/bin/nix path-info --derivation ${self}#tenzir-de-static)"
             echo "Converting vendored spdx info from KV to JSON"
             ${pkgs.python3Packages.spdx-tools}/bin/pyspdxtools -i vendored.spdx -o $TMP/vendored.spdx.json
             echo "Deriving SPDX from the Nix package"
-            ${sbomnix}/bin/sbomnix --meta=$TMP/meta.json --type=buildtime ''${staticDrv} \
+            ${sbomnix}/bin/sbomnix --buildtime ''${staticDrv} \
               --spdx=$TMP/nix.spdx.json \
               --csv=/dev/null \
               --cdx=/dev/null

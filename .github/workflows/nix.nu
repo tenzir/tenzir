@@ -61,7 +61,7 @@ def upload_packages [
   }
   if $copy {
     if $git_tag != null {
-      let os = (uname -s)
+      let os = (uname | get kernel-name)
       if $os == "Linux" {
         cp ($debs | get 0) $"($name)-amd64-linux.deb"
         print $"::attaching ($name)-amd64-linux.deb to ($git_tag)"
@@ -84,7 +84,7 @@ def push_images [
   image_registries: list<string>
   container_tags # annotation breaks in nu 0.78 : list<string>
 ] {
-  let os = (uname -s)
+  let os = (uname | get kernel-name)
   if ($os != "Linux" or $image_registries == [] or $container_tags == []) {
     return
   }
@@ -114,18 +114,20 @@ def attribute_name [
 }
 
 export def run [
-  cfg: record<
-    editions: list<record<
-      name: string
-      static: bool
-      upload-package-to-github: bool
-      package-stores: list<string>
-      image-registries: list<string>
-    >>
-    aliases: list<string>
-    container-tags: list<string>
-    git-tag: string
-  >
+  cfg: record
+  # The type checker became stricter between 0.89 and 0.92 and does not allow missing values any more.
+  #<
+  #  editions: list<record<
+  #    name: string
+  #    static: bool
+  #    upload-package-to-github: bool
+  #    package-stores: list<string>
+  #    image-registries: list<string>
+  #  >>
+  #  aliases: list<string>
+  #  container-tags: list<string>
+  #  git-tag: string
+  #>
 ] {
   # Run local effects by building all requested editions.
   if ($cfg.git-tag? != null) {

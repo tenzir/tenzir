@@ -177,7 +177,7 @@ private:
                             diagnostic_handler& diag) -> bool {
     auto& msg = row.parsed;
     if (not builder.add(msg.facility, msg.severity, msg.timestamp, msg.host,
-                        msg.app_name, msg.process_id, msg.content)) {
+                        msg.tag, msg.process_id, msg.content)) {
       row.emit_diag("RFC 3164", diag);
       return false;
     }
