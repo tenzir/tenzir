@@ -47,11 +47,12 @@ concept scheduler_concept
       { t.next_after(now) } -> std::same_as<time::clock::time_point>;
       { T::parse(p) } -> std::same_as<T>;
       { T::name } -> std::convertible_to<std::string_view>;
+      { T::immediate } -> std::same_as<const bool&>;
     };
 
-/// Base template for all kinds of scheduled execution operators, such as the
-/// 'every' and 'cron' The actual scheduling logic, CAF serialization and name
-/// are handled by the `Scheduler` template parameter
+/// This is the base template for all kinds of scheduled execution operators,
+/// such as the `every` and `cron` operators. The actual scheduling logic, CAF
+/// serialization and name are handled by the `Scheduler` template parameter
 template <scheduler_concept Scheduler>
 class scheduled_execution_operator final : public operator_base {
 public:
@@ -66,8 +67,8 @@ public:
       not dynamic_cast<const scheduled_execution_operator*>(op_.get()));
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter,
+                event_order order) const -> optimize_result override {
     auto result = op_->optimize(filter, order);
     if (not result.replacement) {
       return result;
@@ -76,7 +77,7 @@ public:
       auto ops = std::move(*pipe).unwrap();
       for (auto& op : ops) {
         op = std::make_unique<scheduled_execution_operator>(
-          std::move(result.replacement), std::move(scheduler_));
+          std::move(result.replacement), scheduler_);
         // Only the first operator can be a source and needs to be replaced.
         break;
       }
@@ -84,7 +85,7 @@ public:
       return result;
     }
     result.replacement = std::make_unique<scheduled_execution_operator>(
-      std::move(result.replacement), std::move(scheduler_));
+      std::move(result.replacement), scheduler_);
     return result;
   }
 
@@ -119,20 +120,24 @@ public:
           };
       }
     }();
+    bool generate_output = Scheduler::immediate;
     while (true) {
-      auto gen = op_->instantiate(make_input(), ctrl);
-      if (not gen) {
-        diagnostic::error(gen.error()).emit(ctrl.diagnostics());
-        co_return;
+      if (generate_output) {
+        auto gen = op_->instantiate(make_input(), ctrl);
+        if (not gen) {
+          diagnostic::error(gen.error()).emit(ctrl.diagnostics());
+          co_return;
+        }
+        auto typed_gen = std::get_if<generator<Output>>(&*gen);
+        TENZIR_ASSERT(typed_gen);
+        for (auto&& result : *typed_gen) {
+          co_yield std::move(result);
+        }
+        if (done) {
+          break;
+        }
       }
-      auto typed_gen = std::get_if<generator<Output>>(&*gen);
-      TENZIR_ASSERT(typed_gen);
-      for (auto&& result : *typed_gen) {
-        co_yield std::move(result);
-      }
-      if (done) {
-        break;
-      }
+      generate_output = true;
       const auto now = time::clock::now();
       const duration delta = next_run - now;
       if (delta < duration::zero()) {
@@ -140,13 +145,12 @@ public:
         continue;
       }
       next_run = scheduler_.next_after(next_run);
-
       ctrl.self()
         .request(alarm_clock, caf::infinite, delta)
         .await([]() { /*nop*/ },
                [&](const caf::error& err) {
                  diagnostic::error(err)
-                   .note("failed to wait for {} timeout", data{next_run - now})
+                   .note("failed to wait for {} timeout", data{delta})
                    .emit(ctrl.diagnostics());
                });
       co_yield {};
@@ -210,7 +214,8 @@ public:
   }
 
   friend auto inspect(auto& f, scheduled_execution_operator& x) -> bool {
-    return f.object(x).fields(f.field("op", x.op_), x.scheduler_.field(f));
+    return f.object(x).fields(f.field("op", x.op_),
+                              f.field("scheduler", x.scheduler_));
   }
 
 private:
@@ -218,8 +223,8 @@ private:
   Scheduler scheduler_;
 };
 
-/// Base plugin template for scheduled execution operators
-/// The actual parsing is handled by the `Scheduler` type
+/// This is the base plugin template for scheduled execution operators.
+/// The actual parsing is handled by the `Scheduler` type.
 template <scheduler_concept Scheduler>
 class scheduled_execution_plugin
   : public virtual operator_plugin<scheduled_execution_operator<Scheduler>> {
@@ -257,25 +262,27 @@ public:
   }
 };
 
-/// scheduler for the 'every' operator
 class every_scheduler {
 public:
   every_scheduler() = default;
-  explicit every_scheduler(const duration interval) : interval_{interval} {
+  explicit every_scheduler(duration interval) : interval_{interval} {
   }
 
   constexpr static std::string_view name = "every";
 
-  auto field(auto& f) {
-    return f.field("interval", interval_);
+  friend auto inspect(auto& f, every_scheduler& x) -> bool {
+    return f.object(x).fields(f.field("interval", x.interval_));
   }
 
-  auto next_after(time::clock::time_point now) const noexcept {
+  constexpr static bool immediate = true;
+
+  auto
+  next_after(time::clock::time_point now) const -> time::clock::time_point {
     return std::chrono::time_point_cast<time::clock::time_point::duration>(
       now + interval_);
   }
 
-  static auto parse(parser_interface& p) {
+  static auto parse(parser_interface& p) -> every_scheduler {
     auto interval_data = p.parse_data();
     const auto* interval = caf::get_if<duration>(&interval_data.inner);
     if (not interval) {
@@ -294,31 +301,42 @@ public:
 private:
   duration interval_;
 };
-using every_operator = scheduled_execution_operator<every_scheduler>;
 using every_plugin = scheduled_execution_plugin<every_scheduler>;
 
-/// scheduler for the 'cron' operator
 class cron_scheduler {
 public:
   cron_scheduler() = default;
   explicit cron_scheduler(detail::cron::cronexpr expr)
-    : expr_{std::move(expr)} {
+    : cronexpr_{std::move(expr)} {
   }
 
   constexpr static std::string_view name = "cron";
 
-  auto next_after(time::clock::time_point now) const noexcept {
+  constexpr static bool immediate = false;
+
+  auto
+  next_after(time::clock::time_point now) const -> time::clock::time_point {
     const auto tt = time::clock::to_time_t(now);
 
-    return time::clock::from_time_t(detail::cron::cron_next(expr_, tt));
+    return time::clock::from_time_t(detail::cron::cron_next(cronexpr_, tt));
+  }
+
+  friend auto inspect(auto& f, cron_scheduler& x) -> bool {
+    const auto get = [&x]() {
+      return detail::cron::to_cronstr(x.cronexpr_);
+    };
+    const auto set = [&x](std::string_view text) {
+      x.cronexpr_ = detail::cron::make_cron(text);
+    };
+    return f.object(x).fields(f.field("cronexpr", get, set));
   }
 
   auto field(auto& f) {
     const auto get = [this]() {
-      return detail::cron::to_cronstr(expr_);
+      return detail::cron::to_cronstr(cronexpr_);
     };
     const auto set = [this](std::string_view text) {
-      expr_ = detail::cron::make_cron(text);
+      cronexpr_ = detail::cron::make_cron(text);
     };
     return f.field("cronexpr", get, set);
   }
@@ -333,10 +351,12 @@ public:
     try {
       return cron_scheduler{detail::cron::make_cron(cronexpr_string->inner)};
     } catch (const detail::cron::bad_cronexpr& ex) {
-      // croncpp re-throws the message from the stoul failure
-      // which happens for most cases of invalid expressions
-      // libstdc++ and libc++ contain the string "stoul" in their what()
-      // we can check for this and provide a slightly better error message
+      // The croncpp library re-throws the exception message from the
+      // `std::stoul` call on failure. This happens for most cases of invalid
+      // expressions, i.e. ones that do not contain unsigned integers or allowed
+      // literals. libstdc++ and libc++ exception messages both contain the
+      // string "stoul" in their what() strings. We can check for this and
+      // provide a slightly better error message back to the user.
       if (std::string_view{ex.what()}.find("stoul") != std::string_view::npos) {
         diagnostic::error(
           "bad cron expression: invalid value for at least one field")
@@ -351,9 +371,8 @@ public:
   }
 
 private:
-  detail::cron::cronexpr expr_;
+  detail::cron::cronexpr cronexpr_;
 };
-using cron_operator = scheduled_execution_operator<cron_scheduler>;
 using cron_plugin = scheduled_execution_plugin<cron_scheduler>;
 
 } // namespace
