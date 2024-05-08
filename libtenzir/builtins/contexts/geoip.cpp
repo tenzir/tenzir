@@ -6,16 +6,17 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/detail/posix.hpp"
-#include "tenzir/logger.hpp"
+#include "tenzir/uuid.hpp"
 
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/data.hpp>
+#include <tenzir/detail/posix.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/fbs/geoip.hpp>
 #include <tenzir/fbs/utils.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/fwd.hpp>
+#include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/type.hpp>
@@ -38,7 +39,8 @@ namespace {
 auto constexpr path_key = "db-path";
 
 struct mmdb_deleter final {
-  auto operator()(MMDB_s* ptr) noexcept -> void {
+  auto operator()(MMDB_s* ptr) const noexcept -> void {
+    TENZIR_WARN("DELETING MMDB");
     if (ptr) {
       MMDB_close(ptr);
       delete ptr;
@@ -47,6 +49,7 @@ struct mmdb_deleter final {
 };
 
 using mmdb_ptr = std::unique_ptr<MMDB_s, mmdb_deleter>;
+using deleter_type = detail::unique_function<void() noexcept>;
 
 auto make_mmdb(const std::string& path) -> caf::expected<mmdb_ptr> {
   if (!std::filesystem::exists(path)) {
@@ -101,8 +104,8 @@ class ctx final : public virtual context {
 public:
   ctx() noexcept = default;
 
-  explicit ctx(std::string db_path, mmdb_ptr mmdb)
-    : db_path_{std::move(db_path)}, mmdb_{std::move(mmdb)} {
+  explicit ctx(mmdb_ptr mmdb, chunk_ptr mapped_mmdb_)
+    : mapped_mmdb_{std::move(mapped_mmdb_)}, mmdb_{std::move(mmdb)} {
   }
 
   auto context_type() const -> std::string override {
@@ -390,7 +393,7 @@ public:
 
   /// Inspects the context.
   auto show() const -> record override {
-    return record{{path_key, db_path_}};
+    return {};
   }
 
   auto dump_recurse(uint64_t node_number, uint8_t type, MMDB_entry_s* entry,
@@ -490,16 +493,6 @@ public:
   }
 
   auto reset() -> caf::expected<void> override {
-    if (!mmdb_) {
-      return caf::make_error(ec::lookup_error,
-                             fmt::format("no GeoIP data currently exists for "
-                                         "this context"));
-    }
-    auto mmdb = make_mmdb(db_path_);
-    if (not mmdb) {
-      return mmdb.error();
-    }
-    mmdb_ = std::move(*mmdb);
     return {};
   }
 
@@ -510,17 +503,16 @@ public:
   }
 
   auto save() const -> caf::expected<save_result> override {
-    if (!mmdb_) {
+    if (!mapped_mmdb_) {
       return caf::make_error(ec::lookup_error,
                              fmt::format("no GeoIP data currently exists for "
                                          "this context"));
     }
-    return save_result{.data = std::move(chunk::mmap(db_path_).value()),
-                       .version = latest_version};
+    return save_result{.data = mapped_mmdb_, .version = latest_version};
   }
 
 private:
-  std::string db_path_;
+  chunk_ptr mapped_mmdb_;
   mmdb_ptr mmdb_;
   int latest_version = 2;
 };
@@ -563,11 +555,15 @@ struct v2_loader : public context_loader {
 
   auto load(chunk_ptr serialized) const
     -> caf::expected<std::unique_ptr<context>> {
+    std::string dir_identifier("/plugins/geoip/");
     const auto* cache_dir
       = get_if<std::string>(&global_config_, "tenzir.cache-directory");
-    std::filesystem::create_directories(*cache_dir);
-    const auto current_time = std::time(nullptr);
-    std::string temp_file_name = *cache_dir + std::to_string(current_time);
+    TENZIR_ASSERT(cache_dir);
+    dir_identifier = *cache_dir + dir_identifier;
+    TENZIR_WARN(dir_identifier);
+    std::filesystem::create_directory(dir_identifier);
+    std::string temp_file_name = *cache_dir + fmt::to_string(uuid::random());
+    TENZIR_WARN(temp_file_name);
     auto temp_file = std::fstream(temp_file_name, std::ios_base::out);
     if (!temp_file) {
       return caf::make_error(ec::filesystem_error,
@@ -577,23 +573,31 @@ struct v2_loader : public context_loader {
     }
     temp_file.write(reinterpret_cast<const char*>(serialized->data()),
                     static_cast<std::streamsize>(serialized->size()));
+    temp_file.flush();
     if (!temp_file) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed write the temp file "
                                          "on data load: {}",
                                          detail::describe_errno()));
     }
+    auto mmdb = make_mmdb(temp_file_name);
+    if (not mmdb) {
+      return mmdb.error();
+    }
+    auto mapped_mmdb = chunk::mmap(temp_file_name);
+    if (!mapped_mmdb) {
+      return diagnostic::error("unable to retrieve file contents into memory")
+        .to_error();
+    }
+
     temp_file.close();
     if (!temp_file) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed close the temp file: {}",
                                          detail::describe_errno()));
     }
-    auto mmdb = make_mmdb(temp_file_name);
-    if (not mmdb) {
-      return mmdb.error();
-    }
-    return std::make_unique<ctx>(std::move(temp_file_name), std::move(*mmdb));
+    return std::make_unique<ctx>(std::move(*mmdb),
+                                 std::move(mapped_mmdb.value()));
   }
 
 private:
@@ -630,13 +634,19 @@ class plugin : public virtual context_plugin {
         .to_error();
     }
     if (db_path.empty()) {
-      return std::make_unique<ctx>(std::move(db_path), nullptr);
+      return std::make_unique<ctx>(nullptr, nullptr);
     }
     auto mmdb = make_mmdb(db_path);
+    auto mapped_mmdb = chunk::mmap(db_path);
+    if (!mapped_mmdb) {
+      return diagnostic::error("unable to retrieve file contents into memory")
+        .to_error();
+    }
     if (not mmdb) {
       return mmdb.error();
     }
-    return std::make_unique<ctx>(std::move(db_path), std::move(*mmdb));
+    return std::make_unique<ctx>(std::move(*mmdb),
+                                 std::move(mapped_mmdb.value()));
   }
 };
 
