@@ -54,12 +54,12 @@ auto set_operator::operator()(generator<table_slice> input,
             },
         };
       } else {
-        // TODO: Handle the more general case.
+        // TODO: Handle the nested case.
         TENZIR_ASSERT(assignment.left.path.size() == 1);
-        TENZIR_ASSERT(slice.columns() > 0);
+        auto num_fields = caf::get<record_type>(slice.schema()).num_fields();
+        TENZIR_ASSERT(num_fields > 0);
         transformation = indexed_transformation{
-          .index
-          = offset{caf::get<record_type>(slice.schema()).num_fields() - 1},
+          .index = offset{num_fields - 1},
           .fun =
             [&](struct record_type::field field,
                 std::shared_ptr<arrow::Array> array) {
@@ -72,13 +72,13 @@ auto set_operator::operator()(generator<table_slice> input,
             },
         };
       }
-      // TODO
+      // TODO: We can't use `transform_columns` if we assign to `this` (which
+      // has an empty offset).
       if (transformation.index.empty()) {
         auto record = caf::get_if<arrow::StructArray>(&*right.array);
         if (right.type.name().empty()) {
           right.type = type{"tenzir.set", right.type};
         }
-        // TODO
         TENZIR_ASSERT(record);
         auto fields = record->Flatten().ValueOrDie();
         result
@@ -89,7 +89,6 @@ auto set_operator::operator()(generator<table_slice> input,
       } else {
         result = transform_columns(result, {transformation});
       }
-      // TODO!!
     }
     co_yield result;
   }

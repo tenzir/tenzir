@@ -1543,13 +1543,17 @@ public:
   auto make_operator(invocation inv, session ctx) const
     -> operator_ptr override {
     auto args = parser_args{};
-    auto schema = std::optional<ast::expression>{};
     auto sep = std::optional<located<std::string>>{};
-    auto parser = argument_parser2{"sep=<string>, schema=<string>"};
+    auto parser
+      = argument_parser2{"https://docs.tenizr.com/operators/read_json"};
     parser.add("sep", sep);
-    parser.add("schema", schema);
-    parser.parse(inv, ctx);
+    // TODO: We could allow a non-constant expression for `schema` and then
+    // evaluate it with (perhaps in some limited fashion) against the current
+    // JSON document.
+    parser.add("schema", args.schema);
+    parser.add("precise", args.precise);
     // TODO: Might want to react to parsing failure.
+    parser.parse(inv, ctx);
     if (sep) {
       auto& str = sep->inner;
       if (str == "\n") {
@@ -1562,24 +1566,6 @@ public:
           .hint(R"(expected "\n" or "\0")")
           .emit(ctx);
       }
-    }
-    if (schema) {
-      // TODO: `schema` can use things from the JSON document, we cannot
-      // evaluate this here. We would like some kind of partial evaluation.
-      // Or we stick with `selector=...`.
-      auto result = tql2::const_eval(*schema, ctx);
-      if (not result) {
-        // TODO.
-        return nullptr;
-      }
-      auto string = caf::get_if<std::string>(&*result);
-      if (not string) {
-        diagnostic::error("expected a string, got {}", *result)
-          .primary(schema->get_location())
-          .emit(ctx);
-        return nullptr;
-      }
-      args.schema = located{std::move(*string), schema->get_location()};
     }
     return std::make_unique<read_json>(std::move(args));
   }

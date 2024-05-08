@@ -6,6 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/argument_parser2.hpp"
+#include "tenzir/pipeline.hpp"
+#include "tenzir/tql2/plugin.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -536,6 +540,58 @@ private:
     tenzir::defaults::import::read_timeout};
 };
 
+class load_file_operator final : public crtp_operator<load_file_operator> {
+public:
+  load_file_operator() = default;
+
+  explicit load_file_operator(loader_args args) : args_{std::move(args)} {
+  }
+
+  auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    auto loader = file_loader{args_};
+    auto instance = loader.instantiate(ctrl);
+    if (not instance) {
+      co_return;
+    }
+    for (auto&& chunk : *instance) {
+      co_yield std::move(chunk);
+    }
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.load_file";
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, load_file_operator& x) -> bool {
+    return f.apply(x.args_);
+  }
+
+private:
+  loader_args args_;
+};
+
+class load_file_plugin final
+  : public tql2::operator_plugin<load_file_operator> {
+public:
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
+    auto args = loader_args{};
+    argument_parser2{"https://docs.tenzir.com/operators/load_file"}
+      .add(args.path, "<path>")
+      .add("follow", args.follow)
+      .add("mmap", args.mmap)
+      // .add("timeout", args.timeout)
+      .parse(inv, ctx);
+    return std::make_unique<load_file_operator>(std::move(args));
+  }
+};
+
 } // namespace
 } // namespace tenzir::plugins::file
 
@@ -588,5 +644,6 @@ public:
 } // namespace tenzir::plugins::stdout_
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::file::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::file::load_file_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::stdin_::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::stdout_::plugin)
