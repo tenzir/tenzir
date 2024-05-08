@@ -38,7 +38,7 @@ namespace {
 auto constexpr path_key = "db-path";
 
 struct mmdb_deleter final {
-  auto operator()(MMDB_s* ptr) const noexcept -> void {
+  auto operator()(MMDB_s* ptr) noexcept -> void {
     if (ptr) {
       MMDB_close(ptr);
       delete ptr;
@@ -562,7 +562,8 @@ struct v2_loader : public context_loader {
     if (ec.value() != 0) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed to make a tmp directory on "
-                                         "data load:"));
+                                         "data load: {}",
+                                         ec.value()));
     }
     std::string temp_file_name
       = dir_identifier + fmt::to_string(uuid::random());
@@ -587,11 +588,6 @@ struct v2_loader : public context_loader {
       return mmdb.error();
     }
     auto mapped_mmdb = chunk::mmap(temp_file_name);
-    if (!mapped_mmdb) {
-      return diagnostic::error("unable to retrieve file contents into memory")
-        .to_error();
-    }
-
     temp_file.close();
     if (!temp_file) {
       return caf::make_error(ec::filesystem_error,
