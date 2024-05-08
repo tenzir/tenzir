@@ -159,46 +159,6 @@ public:
     = 0;
 };
 
-// -- analyzer plugin ----------------------------------------------------------
-
-/// A base class for plugins that hook into the input stream.
-/// @relates component_plugin
-class analyzer_plugin : public virtual component_plugin {
-public:
-  /// Gets or spawns the ANALYZER actor spawned by the plugin.
-  /// @param node A pointer to the NODE actor handle. This argument is optional
-  /// for retrieving an already spawned ANALYZER.
-  /// @returns The actor handle to the analyzer, or `nullptr` if the actor was
-  /// spawned but shut down already.
-  analyzer_plugin_actor
-  analyzer(node_actor::stateful_pointer<node_state> node = nullptr) const;
-
-  /// Implicitly fulfill the requirements of a COMPONENT PLUGIN actor via the
-  /// ANALYZER PLUGIN actor.
-  component_plugin_actor
-  make_component(node_actor::stateful_pointer<node_state> node) const final;
-
-protected:
-  /// Creates an actor that hooks into the input table slice stream.
-  /// @param node A stateful pointer to the NODE actor.
-  /// @returns The actor handle to the analyzer.
-  /// @note It is guaranteed that this function is not called while the ANALYZER
-  /// is still running.
-  /// @note This function runs in the actor context of the NODE actor and can
-  /// safely access the NODE's state.
-  virtual analyzer_plugin_actor
-  make_analyzer(node_actor::stateful_pointer<node_state> node) const
-    = 0;
-
-private:
-  /// A weak handle to the spawned actor handle.
-  mutable detail::weak_handle<analyzer_plugin_actor> weak_handle_ = {};
-
-  /// Indicates that the ANALYZER was spawned at least once. This flag is used
-  /// to ensure that `make_analyzer` is called at most once per plugin.
-  mutable bool spawned_once_ = false;
-};
-
 // -- command plugin -----------------------------------------------------------
 
 /// A base class for plugins that add commands.

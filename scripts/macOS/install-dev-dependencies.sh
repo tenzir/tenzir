@@ -20,7 +20,7 @@ brew install --overwrite \
     libpcap \
     librdkafka \
     libunwind-headers \
-    llvm \
+    llvm@17 \
     ninja \
     nmap \
     openssl \

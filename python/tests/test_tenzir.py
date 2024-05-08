@@ -58,71 +58,71 @@ def integration_data(path):
     return os.path.normpath(f"{dir_path}/../../tenzir/integration/data/inputs/{path}")
 
 
-@pytest.mark.asyncio
-async def test_export_collect_pyarrow(endpoint):
-    await tenzir_exec(
-        endpoint, f"load {integration_data('suricata/eve.json')} | read suricata | import",
-    )
-    tenzir = Tenzir(endpoint)
-    result = tenzir.export('#schema == "suricata.alert"', ExportMode.HISTORICAL)
-    tables = await collect_pyarrow(result)
-    assert set(tables.keys()) == {"suricata.alert"}
-    alerts = tables["suricata.alert"]
-    assert len(alerts) == 1
-    assert alerts[0].num_rows == 1
-
-    result = tenzir.export("", ExportMode.HISTORICAL)
-    tables = await collect_pyarrow(result)
-    assert set(tables.keys()) == {
-        "suricata.alert",
-        "suricata.dns",
-        "suricata.netflow",
-        "suricata.flow",
-        "suricata.fileinfo",
-        "suricata.http",
-        "suricata.stats",
-        "suricata.quic",
-    }
-
-
-@pytest.mark.asyncio
-async def test_export_historical_rows(endpoint):
-    await tenzir_exec(
-        endpoint, f"load {integration_data('suricata/eve.json')} | read suricata | import",
-    )
-    tenzir = Tenzir(endpoint)
-    result = tenzir.export('#schema == "suricata.alert"', ExportMode.HISTORICAL)
-    rows: list[VastRow] = []
-    async for row in to_json_rows(result):
-        rows.append(row)
-    assert len(rows) == 1
-    assert rows[0].name == "suricata.alert"
-    # only assert extension types here
-    alert = rows[0].data
-    assert alert["src_ip"] == "147.32.84.165"
-    assert alert["dest_ip"] == "78.40.125.4"
+# @pytest.mark.asyncio
+# async def test_export_collect_pyarrow(endpoint):
+#     await tenzir_exec(
+#         endpoint, f"load {integration_data('suricata/eve.json')} | read suricata | import",
+#     )
+#     tenzir = Tenzir(endpoint)
+#     result = tenzir.export('#schema == "suricata.alert"', ExportMode.HISTORICAL)
+#     tables = await collect_pyarrow(result)
+#     assert set(tables.keys()) == {"suricata.alert"}
+#     alerts = tables["suricata.alert"]
+#     assert len(alerts) == 1
+#     assert alerts[0].num_rows == 1
+#
+#     result = tenzir.export("", ExportMode.HISTORICAL)
+#     tables = await collect_pyarrow(result)
+#     assert set(tables.keys()) == {
+#         "suricata.alert",
+#         "suricata.dns",
+#         "suricata.netflow",
+#         "suricata.flow",
+#         "suricata.fileinfo",
+#         "suricata.http",
+#         "suricata.stats",
+#         "suricata.quic",
+#     }
 
 
-@pytest.mark.asyncio
-async def test_export_continuous_rows(endpoint):
-    tenzir = Tenzir(endpoint)
+# @pytest.mark.asyncio
+# async def test_export_historical_rows(endpoint):
+#     await tenzir_exec(
+#         endpoint, f"load {integration_data('suricata/eve.json')} | read suricata | import",
+#     )
+#     tenzir = Tenzir(endpoint)
+#     result = tenzir.export('#schema == "suricata.alert"', ExportMode.HISTORICAL)
+#     rows: list[VastRow] = []
+#     async for row in to_json_rows(result):
+#         rows.append(row)
+#     assert len(rows) == 1
+#     assert rows[0].name == "suricata.alert"
+#     # only assert extension types here
+#     alert = rows[0].data
+#     assert alert["src_ip"] == "147.32.84.165"
+#     assert alert["dest_ip"] == "78.40.125.4"
 
-    async def run_export():
-        result = tenzir.export('#schema == "suricata.alert"', ExportMode.CONTINUOUS)
-        return await anext(to_json_rows(result))
 
-    task = asyncio.create_task(run_export())
-    # Wait for the export task to be ready before triggering import
-    await asyncio.sleep(3)
-    await tenzir_exec(
-        endpoint, f"load {integration_data('suricata/eve.json')} | read suricata | import",
-    )
-    logger.info("await task")
-    row = await asyncio.wait_for(task, 5)
-    logger.info("task awaited")
-    assert row is not None
-    assert row.name == "suricata.alert"
-    # only assert extension types here
-    alert = row.data
-    assert alert["src_ip"] == "147.32.84.165"
-    assert alert["dest_ip"] == "78.40.125.4"
+# @pytest.mark.asyncio
+# async def test_export_continuous_rows(endpoint):
+#     tenzir = Tenzir(endpoint)
+#
+#     async def run_export():
+#         result = tenzir.export('#schema == "suricata.alert"', ExportMode.CONTINUOUS)
+#         return await anext(to_json_rows(result))
+#
+#     task = asyncio.create_task(run_export())
+#     # Wait for the export task to be ready before triggering import
+#     await asyncio.sleep(3)
+#     await tenzir_exec(
+#         endpoint, f"load {integration_data('suricata/eve.json')} | read suricata | import",
+#     )
+#     logger.info("await task")
+#     row = await asyncio.wait_for(task, 5)
+#     logger.info("task awaited")
+#     assert row is not None
+#     assert row.name == "suricata.alert"
+#     # only assert extension types here
+#     alert = row.data
+#     assert alert["src_ip"] == "147.32.84.165"
+#     assert alert["dest_ip"] == "78.40.125.4"

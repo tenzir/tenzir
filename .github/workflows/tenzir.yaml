@@ -665,7 +665,7 @@ jobs:
       - if: ${{ matrix.tenzir.name == 'macOS' }}
         name: Setup Homebrew Clang
         run: |
-          llvm_root="$(brew --prefix llvm)"
+          llvm_root="$(brew --prefix llvm@17)"
           echo "${llvm_root}/bin" >> $GITHUB_PATH
           echo "LDFLAGS=-Wl,-rpath,${llvm_root}" >> $GITHUB_ENV
           echo "CPPFLAGS=-isystem ${llvm_root}/include" >> $GITHUB_ENV
@@ -806,9 +806,6 @@ jobs:
           - name: NIC
             target: nic
             path: plugins/nic
-          - name: Matcher
-            target: matcher
-            path: contrib/tenzir-plugins/matcher
           - name: Parquet
             target: parquet
             path: plugins/parquet

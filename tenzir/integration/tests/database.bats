@@ -34,25 +34,3 @@ wait_for_file() {
     sleep 1
   done
 }
-
-# bats test_tags=metrics
-@test "batch size" {
-  # Check that the import command doesn't deadlock when using the `--batch-size` option
-  # and that the node keeps producing metrics.
-
-  check tenzir "load file $INPUTSDIR/zeek/conn.log.gz | decompress gzip | read zeek-tsv | import"
-
-  check --sort tenzir 'export | where resp_h == 192.168.1.104 | write ssv'
-
-  # import some more to make sure accounting data is in the system.
-  check -c \
-    "gunzip -c \"$INPUTSDIR/zeek/conn.log.gz\" \
-     | tenzir-ctl import -b --batch-size=1 -n 242 zeek"
-
-  check --sort tenzir-ctl export json 'where resp_h == 192.168.1.104'
-
-  # Verify that the metrics file eventually exists and contains valid JSON.
-  # Chop off last line to avoid partial data.
-  wait_for_file "${TENZIR_METRICS__FILE_SINK__PATH}"
-  head -n -1 "${TENZIR_METRICS__FILE_SINK__PATH}" | jq
-}

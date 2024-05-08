@@ -68,13 +68,20 @@ Create a [lookup table](../contexts/lookup-table.md) context called `feodo`:
 context create feodo lookup-table
 ```
 
-Replace all previous data in the context `feodo` with data from the [Feodo
-Tracker IP Block List](https://feodotracker.abuse.ch), using the `ip_address`
+Update the context `feodo` with data from the [Feodo Tracker IP Block
+List](https://feodotracker.abuse.ch), using the `ip_address`
 field as the lookup table key:
 
 ```
-from https://feodotracker.abuse.ch/downloads/ipblocklist.json read json --arrays-of-objects
-| context update feodo --clear --key=ip_address
+from https://feodotracker.abuse.ch/downloads/ipblocklist.json read json
+--arrays-of-objects
+| context update feodo --key=ip_address
+```
+
+Clear all previous data in the context `feodo`:
+
+```
+context reset feodo
 ```
 
 Delete the context named `feodo`:
