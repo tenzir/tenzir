@@ -556,14 +556,13 @@ struct v2_loader : public context_loader {
     const auto* cache_dir
       = get_if<std::string>(&global_config_, "tenzir.cache-directory");
     TENZIR_ASSERT(cache_dir);
-    auto dir_identifier = *cache_dir + "/plugins/geoip/";
-    auto directory_success
-      = std::filesystem::create_directories(dir_identifier);
-    if (!directory_success) {
+    auto dir_identifier = *cache_dir + "/plugins/geoip=";
+    std::error_code ec{};
+    std::filesystem::create_directories(dir_identifier, ec);
+    if (ec.value() != 0) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed to make a tmp directory on "
-                                         "data load: {}",
-                                         detail::describe_errno()));
+                                         "data load:"));
     }
     std::string temp_file_name
       = dir_identifier + fmt::to_string(uuid::random());
