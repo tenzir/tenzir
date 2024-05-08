@@ -52,8 +52,8 @@ struct maybe_null_parser : parser_base<maybe_null_parser<Parser>> {
   auto parse(Iterator& f, const Iterator& l, Attribute& x) const {
     using namespace parser_literals;
     // clang-format off
-       auto p = ('-'_p >> &(' '_p))  ->*[] { return attribute{}; }
-             | parser_ ->*[](value_type in) { return attribute{in}; };
+       auto p = ('-'_p >> &(' '_p)) ->*[] { return attribute{}; }
+              | parser_ ->*[](value_type in) { return attribute{in}; };
     // clang-format on
     return p(f, l, x);
   }
@@ -86,7 +86,7 @@ struct header_parser : parser_base<header_parser> {
   using attribute = header;
 
   template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
     using parsers::printable, parsers::rep;
     auto is_prival = [](uint16_t in) {
       return in <= 191;
@@ -166,7 +166,7 @@ struct parameters_parser : parser_base<parameters_parser> {
   using attribute = parameters;
 
   template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
     auto param = parameter_parser{}->*[&](parameter in) {
       if constexpr (!std::is_same_v<Attribute, unused_type>) {
         x.emplace(std::move(in.key), data{std::move(in.value)});
@@ -217,7 +217,7 @@ struct structured_data_parser : parser_base<structured_data_parser> {
   using attribute = structured_data;
 
   template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
     using namespace parsers;
     auto sd
       = structured_data_element_parser{}->*[&](structured_data_element in) {
@@ -238,7 +238,7 @@ using message_content = std::string;
 struct message_content_parser : parser_base<message_content_parser> {
   using attribute = message_content;
   template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
     using namespace parser_literals;
     auto bom = "\xEF\xBB\xBF"_p;
     auto p = (bom >> +parsers::any) | +parsers::any | parsers::eoi;
@@ -259,7 +259,7 @@ struct message_parser : parser_base<message_parser> {
   using attribute = message;
 
   template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
     using namespace parsers;
     auto p = header_parser{} >> ' ' >> structured_data_parser{}
              >> -(' ' >> message_content_parser{});
@@ -277,7 +277,7 @@ struct legacy_message {
   std::optional<uint16_t> severity;
   std::string timestamp;
   std::string host;
-  std::optional<std::string> app_name;
+  std::optional<std::string> tag;
   std::optional<std::string> process_id;
   std::string content;
 };
@@ -289,7 +289,7 @@ struct legacy_message_timestamp_parser
   using attribute = std::string;
 
   template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
     const auto word = +(parsers::printable - parsers::space);
     const auto ws = +parsers::space;
     const auto is_month = [](const std::string& mon) {
@@ -348,7 +348,7 @@ struct legacy_message_parser : parser_base<legacy_message_parser> {
   using attribute = legacy_message;
 
   template <typename Iterator, typename Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+  auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
     using namespace parser_literals;
     const auto word = +(parsers::printable - parsers::space);
     const auto ws = +parsers::space;
@@ -380,51 +380,56 @@ struct legacy_message_parser : parser_base<legacy_message_parser> {
     // user-friendly results.
     //
     // In the RFC, TAG is up to 32 alnum characters, and CONTENT is the rest.
-    // So, in a message like "FOO[123]: bar", TAG is "FOO", and CONTENT is
+    // So, in a message like "foo[123]: bar", TAG is "foo", and CONTENT is
     // "[123]: bar". Because the TAG is terminated by the first non-alnum
-    // character, in a message like "FOO: bar", the RFC-behavior is even more
-    // odd: TAG is "FOO", and CONTENT is ": bar".
+    // character, in a message like "foo: bar", the RFC-behavior is even more
+    // odd: TAG is "foo", and CONTENT is ": bar".
     //
-    // Instead, we try to detect an app name ("FOO"), and process id ("123"),
-    // and include the content without any of these, and any preceding
-    // whitespace. Additionally, we include the MESSAGE in its entirety, for the
-    // case that there's really no app name and pid.
-    const auto message_parser = *parsers::printable;
+    // Instead, we try to detect a tag ("foo"), and process id ("123"), and
+    // include the content without any of these, and any preceding whitespace.
+    // Additionally, we include the MESSAGE in its entirety, for the case that
+    // there's really no app name and pid.
     const auto p = ~(priority_parser >> ignore(*parsers::space)) // priority
                    >> timestamp_parser >> wsignore               // timestamp
-                   >> host_parser >> wsignore                    // host
-                   >> message_parser;                            // message
-    std::string message;
+                   >> host_parser >> wsignore;                   // host
+    std::string_view message;
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       if (not p(f, l, unused)) {
         return false;
       }
     } else {
-      if (not p(f, l, x.timestamp, x.host, message)) {
+      if (not p(f, l, x.timestamp, x.host)) {
         return false;
       }
+      message = std::string_view{f, l};
     }
-    // Parse MESSAGE into its constituent parts,
-    // app_name, process_id, content
-    if constexpr (!std::is_same_v<Attribute, unused_type>) {
-      const auto app_name_parser = +parsers::alnum;
-      const auto process_id_parser
-        = (ignore('['_p) >> +parsers::alnum >> ignore(']'_p));
-      const auto tag_parser = -app_name_parser >> -process_id_parser
-                              >> ignore(':'_p) >> ignore(*parsers::space);
-      auto msg_f = message.begin();
-      const auto msg_l = message.end();
-      std::tuple<std::optional<std::string>, std::optional<std::string>> attr{};
-      if (tag_parser(msg_f, msg_l, attr)) {
-        std::tie(x.app_name, x.process_id) = std::move(attr);
+    // Parse MESSAGE into its constituent parts: TAG, PROCESS_ID, and CONTENT.
+    if constexpr (not std::is_same_v<Attribute, unused_type>) {
+      // Even though alnum characters are the only one that the RFC specifies,
+      // the reality is more diverse, e.g.,
+      // Microsoft-Windows-Security-Mitigations[4340] is a thing.
+      const auto tag_id_parser
+        = +(parsers::alnum | parsers::ch<'-'> | parsers::ch<'_'>);
+      const auto process_id_parser = '[' >> +parsers::alnum >> ']';
+      // To assess whether a TAG is present, we want at least one whitespace
+      // character after the ":". Otherwise we may end up in a situation where
+      // we eagerly grab characters from CONTENT when it has a prefix of alnum
+      // characters followed by a colon, e.g., as in the CEF and LEEF formats.
+      const auto tag_parser = -tag_id_parser >> -process_id_parser >> ':'
+                              >> (wsignore | parsers::eoi);
+      auto begin = message.begin();
+      const auto end = message.end();
+      if (not tag_parser(begin, end, x.tag, x.process_id)) {
+        x.tag = std::nullopt;
+        x.process_id = std::nullopt;
       }
-      x.content.assign(msg_f, msg_l);
+      x.content.assign(begin, end);
     }
     return true;
   }
 };
 
-inline type make_syslog_type() {
+inline auto make_syslog_type() -> type {
   return type{
     "syslog.rfc5424",
     record_type{{
@@ -434,6 +439,8 @@ inline type make_syslog_type() {
       {"timestamp", time_type{}},
       {"hostname", string_type{}},
       {"app_name", string_type{}},
+      // TODO: we may consider being stricter here for the PID so that we can
+      // use number type instead of a string.
       {"process_id", string_type{}},
       {"message_id", string_type{}},
       {"structured_data", record_type{}},
@@ -442,17 +449,25 @@ inline type make_syslog_type() {
   };
 }
 
-inline type make_legacy_syslog_type() {
-  return type{"syslog.rfc3164", record_type{{{"facility", uint64_type{}},
-                                             {"severity", uint64_type{}},
-                                             {"timestamp", string_type{}},
-                                             {"hostname", string_type{}},
-                                             {"app_name", string_type{}},
-                                             {"process_id", string_type{}},
-                                             {"content", string_type{}}}}};
+inline auto make_legacy_syslog_type() -> type {
+  return type{
+    "syslog.rfc3164",
+    record_type{{
+      {"facility", uint64_type{}},
+      {"severity", uint64_type{}},
+      {"timestamp", string_type{}},
+      {"hostname", string_type{}},
+      // This is called TAG in the RFC. We purpusefully streamline the field
+      // names with the RFC524 parser.
+      {"app_name", string_type{}},
+      // TODO: consider making an integer; see note above.
+      {"process_id", string_type{}},
+      {"content", string_type{}},
+    }},
+  };
 }
 
-inline type make_unknown_type() {
+inline auto make_unknown_type() -> type {
   return type{
     "syslog.unknown",
     record_type{{{"syslog_message", string_type{}}}},
@@ -472,22 +487,22 @@ public:
 
   reader(const reader& other) = delete;
   reader(reader&& other) = default;
-  reader& operator=(const reader& other) = delete;
-  reader& operator=(reader&& other) = default;
+  auto operator=(const reader& other) -> reader& = delete;
+  auto operator=(reader&& other) -> reader& = default;
 
   void reset(std::unique_ptr<std::istream> in) override;
 
   ~reader() override = default;
 
-  caf::error module(tenzir::module mod) override;
+  auto module(tenzir::module mod) -> caf::error override;
 
-  tenzir::module module() const override;
+  auto module() const -> tenzir::module override;
 
-  const char* name() const override;
+  auto name() const -> const char* override;
 
 protected:
-  caf::error
-  read_impl(size_t max_events, size_t max_slice_size, consumer& f) override;
+  auto read_impl(size_t max_events, size_t max_slice_size, consumer& f)
+    -> caf::error override;
 
 private:
   std::unique_ptr<std::istream> input_;
