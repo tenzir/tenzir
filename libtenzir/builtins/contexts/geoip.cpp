@@ -553,13 +553,20 @@ struct v2_loader : public context_loader {
 
   auto load(chunk_ptr serialized) const
     -> caf::expected<std::unique_ptr<context>> {
-    std::string dir_identifier("/plugins/geoip/");
     const auto* cache_dir
       = get_if<std::string>(&global_config_, "tenzir.cache-directory");
     TENZIR_ASSERT(cache_dir);
-    dir_identifier = *cache_dir + dir_identifier;
-    std::filesystem::create_directory(dir_identifier);
-    std::string temp_file_name = *cache_dir + fmt::to_string(uuid::random());
+    auto dir_identifier = *cache_dir + "/plugins/geoip/";
+    auto directory_success
+      = std::filesystem::create_directories(dir_identifier);
+    if (!directory_success) {
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to make a tmp directory on "
+                                         "data load: {}",
+                                         detail::describe_errno()));
+    }
+    std::string temp_file_name
+      = dir_identifier + fmt::to_string(uuid::random());
     auto temp_file = std::fstream(temp_file_name, std::ios_base::out);
     if (!temp_file) {
       return caf::make_error(ec::filesystem_error,
