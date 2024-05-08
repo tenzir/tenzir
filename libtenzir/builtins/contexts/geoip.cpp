@@ -39,7 +39,6 @@ auto constexpr path_key = "db-path";
 
 struct mmdb_deleter final {
   auto operator()(MMDB_s* ptr) const noexcept -> void {
-    TENZIR_WARN("DELETING MMDB");
     if (ptr) {
       MMDB_close(ptr);
       delete ptr;
@@ -559,10 +558,8 @@ struct v2_loader : public context_loader {
       = get_if<std::string>(&global_config_, "tenzir.cache-directory");
     TENZIR_ASSERT(cache_dir);
     dir_identifier = *cache_dir + dir_identifier;
-    TENZIR_WARN(dir_identifier);
     std::filesystem::create_directory(dir_identifier);
     std::string temp_file_name = *cache_dir + fmt::to_string(uuid::random());
-    TENZIR_WARN(temp_file_name);
     auto temp_file = std::fstream(temp_file_name, std::ios_base::out);
     if (!temp_file) {
       return caf::make_error(ec::filesystem_error,
