@@ -126,12 +126,22 @@ caf::error
 register_component(node_actor::stateful_pointer<node_state> self,
                    const caf::actor& component, std::string_view type,
                    std::string_view label = {}) {
+  auto tag = [&] {
+    if (label.empty() or type == label) {
+      return std::string{type};
+    }
+    return fmt::format("{}/{}", type, label);
+  }();
   static auto alive_components = std::make_shared<std::set<std::string>>();
-  auto [it, _] = alive_components->insert(std::string{type});
+  const auto [it, inserted] = alive_components->insert(std::move(tag));
+  TENZIR_ASSERT(inserted,
+                fmt::format("failed to register component {}", *it).c_str());
   TENZIR_VERBOSE("component {} registered with id {}", *it, component->id());
   component->attach_functor([entry = *it] {
     auto num_erased = alive_components->erase(entry);
-    TENZIR_ASSERT(num_erased == 1);
+    TENZIR_ASSERT(
+      num_erased == 1,
+      fmt::format("failed to deregister component {}", entry).c_str());
     TENZIR_VERBOSE("component {} deregistered; {} remaining: [{}])", entry,
                    alive_components->size(),
                    fmt::join(*alive_components, ", "));
