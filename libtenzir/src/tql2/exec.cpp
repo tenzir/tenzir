@@ -16,6 +16,7 @@
 #include "tenzir/pipeline.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/session.hpp"
+#include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/check_type.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/parser.hpp"
@@ -480,6 +481,11 @@ auto prepare_pipeline(ast::pipeline&& pipe, session ctx) -> pipeline {
         diagnostic::error("`match` not yet implemented, try using `if` instead")
           .primary(x.get_location())
           .emit(ctx.dh());
+      },
+      [&](ast::let_stmt& x) {
+        diagnostic::error("`let` statements are not implemented yet")
+          .primary(x.get_location())
+          .emit(ctx);
       },
       [&](auto& x) {
         diagnostic::error("statement not implemented yet")

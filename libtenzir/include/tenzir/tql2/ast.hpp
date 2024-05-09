@@ -731,6 +731,16 @@ public:
     go(x.left);
   }
 
+  void enter(let_stmt& x) {
+    go(x.name);
+    go(x.expr);
+  }
+
+  void enter(ast::identifier& x) {
+    // TODO
+    TENZIR_UNUSED(x);
+  }
+
   template <class T>
   void enter(T&) {
     TENZIR_WARN("missed {}", typeid(T).name());
