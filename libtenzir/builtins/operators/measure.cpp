@@ -120,7 +120,9 @@ public:
   }
 
   auto optimize(expression const& filter, event_order order,
-                select_projection fields) const -> optimize_result override {
+                columnar_selection selection) const
+    -> optimize_result override {
+    (void)selection;
     // Note: This can change the output of `measure`.
     (void)filter;
     return optimize_result::order_invariant(*this, order);

@@ -106,7 +106,9 @@ public:
   }
 
   auto optimize(expression const& filter, event_order order,
-                select_projection fields) const -> optimize_result override {
+                columnar_selection selection) const
+    -> optimize_result override {
+    (void)selection;
     if (filter == trivially_true_expression()) {
       return optimize_result{expr_.inner, order, nullptr};
     }

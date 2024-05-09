@@ -368,7 +368,9 @@ public:
   }
 
   auto optimize(expression const& /*filter*/, event_order /*order*/,
-                select_projection) const -> optimize_result override {
+                columnar_selection selection) const
+    -> optimize_result override {
+    (void)selection;
     // Note: The `unordered` means that we do not necessarily return the first
     // `limit_` events.
     return optimize_result{std::nullopt, event_order::unordered, copy()};

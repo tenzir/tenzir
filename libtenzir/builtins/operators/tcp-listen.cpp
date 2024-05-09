@@ -412,8 +412,10 @@ public:
   }
 
   auto optimize(const expression& filter, event_order order,
-                select_projection fields) const -> optimize_result override {
-    auto result = args_.op->optimize(filter, order, select_projection());
+                columnar_selection selection) const
+    -> optimize_result override {
+    (void)selection;
+    auto result = args_.op->optimize(filter, order, selection);
     if (not result.replacement) {
       return result;
     }

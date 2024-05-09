@@ -17,6 +17,7 @@
 #include <tenzir/fwd.hpp>
 #include <tenzir/generator.hpp>
 #include <tenzir/make_byte_reader.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/store.hpp>
 #include <tenzir/table_slice.hpp>
@@ -31,7 +32,9 @@
 #include <arrow/util/key_value_metadata.h>
 #include <caf/expected.hpp>
 
+#include <memory>
 #include <queue>
+#include <vector>
 
 namespace tenzir::plugins::feather {
 
@@ -285,23 +288,79 @@ class callback_listener : public arrow::ipc::Listener {
 public:
   callback_listener() = default;
 
-  arrow::Status OnRecordBatchDecoded(
-    std::shared_ptr<arrow::RecordBatch> record_batch) override {
+  auto OnRecordBatchDecoded(std::shared_ptr<arrow::RecordBatch> record_batch)
+    -> arrow::Status override {
     record_batch_buffer.push(std::move(record_batch));
     return arrow::Status::OK();
   }
 
+  auto OnSchemaDecoded(std::shared_ptr<arrow::Schema> schema)
+    -> arrow::Status override {
+    decoded_schema = std::move(schema);
+    return arrow::Status::OK();
+  }
+
+  std::shared_ptr<arrow::Schema> decoded_schema;
   std::queue<std::shared_ptr<arrow::RecordBatch>> record_batch_buffer;
 };
 
 auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
-                   located<select_projection> selection)
+                   const located<columnar_selection>& selection)
   -> generator<table_slice> {
-  auto byte_reader = make_byte_reader(std::move(input));
+  auto byte_reader
+    = make_byte_reader(std::move(input)); // think of a better way to go this
+  auto schema_listener = std::make_shared<callback_listener>();
+  auto schema_stream_decoder = arrow::ipc::StreamDecoder(schema_listener);
+  type schema;
+  auto buffered_schema_data = std::vector<std::shared_ptr<arrow::Buffer>>{};
+  while (true) {
+    auto required_size
+      = detail::narrow_cast<size_t>(schema_stream_decoder.next_required_size());
+    auto payload = byte_reader(required_size);
+    if (!payload) {
+      co_yield {};
+      continue;
+    }
+    auto arrow_buffer = as_arrow_buffer(std::move(payload));
+    buffered_schema_data.push_back(arrow_buffer);
+    auto decode_result = schema_stream_decoder.Consume(std::move(arrow_buffer));
+    if (!decode_result.ok()) {
+      diagnostic::error("{}", decode_result.ToStringWithoutContextLines())
+        .note("failed to decode the byte stream into a record batch")
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    if (schema_listener->decoded_schema) {
+      schema = type::from_arrow(*schema_listener->decoded_schema);
+      break;
+    }
+  }
+  auto read_options = arrow::ipc::IpcReadOptions::Defaults();
+  // if (selection.inner.fields_of_interest) {
+  //   auto indices = std::vector<int>{};
+  //   for (const auto& field : *selection.inner.fields_of_interest) {
+  //     for (const auto& index : schema.resolve(field)) {
+  //       indices.push_back(static_cast<int>(index[0]));
+  //     }
+  //   }
+  //   std::sort(indices.begin(), indices.end());
+  //   indices.erase(std::unique(indices.begin(), indices.end()),
+  //   indices.end()); read_options.included_fields = std::move(indices);
+  // }
   auto listener = std::make_shared<callback_listener>();
-  auto stream_decoder = arrow::ipc::StreamDecoder(listener);
+  auto stream_decoder = arrow::ipc::StreamDecoder(listener, read_options);
   auto truncated_bytes = size_t{0};
   auto decoded_once = false;
+
+  for (auto&& buffer : buffered_schema_data) {
+    auto decode_result = stream_decoder.Consume(buffer);
+    if (!decode_result.ok()) {
+      diagnostic::error("{}", decode_result.ToStringWithoutContextLines())
+        .note("failed to decode the byte stream into a record batch")
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+  }
   while (true) {
     auto required_size
       = detail::narrow_cast<size_t>(stream_decoder.next_required_size());
@@ -414,7 +473,7 @@ public:
 class feather_parser final : public plugin_parser {
 public:
   feather_parser() = default;
-  feather_parser(located<select_projection> selection)
+  feather_parser(located<columnar_selection> selection)
     : selection_{std::move(selection)} {
   }
   auto name() const -> std::string override {
@@ -431,8 +490,18 @@ public:
     return f.object(x).fields(f.field("selection", x.selection_));
   }
 
+  auto optimize(expression const& filter, event_order order,
+                columnar_selection selection)
+    -> std::unique_ptr<plugin_parser> override {
+    (void)filter;
+    (void)order;
+    return std::make_unique<feather_parser>(
+      located(selection, location::unknown));
+    // WHAT IS THE LOCATION?
+  }
+
 private:
-  located<select_projection> selection_{};
+  located<columnar_selection> selection_{};
 };
 
 class feather_printer final : public plugin_printer {

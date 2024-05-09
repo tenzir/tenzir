@@ -41,7 +41,9 @@ public:
   }
 
   auto optimize(expression const& filter, event_order order,
-                select_projection fields) const -> optimize_result override {
+                columnar_selection selection) const
+    -> optimize_result override {
+    (void)selection;
     (void)filter, (void)order;
     return do_not_optimize(*this);
   }
@@ -83,13 +85,17 @@ public:
   }
 
   auto optimize(expression const& filter, event_order order,
-                select_projection fields) const -> optimize_result override {
+                columnar_selection selection) const
+    -> optimize_result override {
     (void)filter;
-    if (order == event_order::ordered) {
-      return do_not_optimize(*this);
-    }
+    // if (order == event_order::ordered) {
+    //   return do_not_optimize(*this);
+    // }
     // TODO: We could also propagate `where #schema == "..."` to the parser.
-    auto parser_opt = parser_->optimize(order);
+    auto parser_opt = selection.fields_of_interest
+                        ? parser_->optimize(filter, order, selection)
+                        : parser_->optimize(order);
+
     if (not parser_opt) {
       return do_not_optimize(*this);
     }

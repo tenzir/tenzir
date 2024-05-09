@@ -197,7 +197,9 @@ public:
   }
 
   auto optimize(const expression& filter, event_order order,
-                select_projection fields) const -> optimize_result override {
+                columnar_selection selection) const
+    -> optimize_result override {
+    (void)selection;
     if (not begin_ and not end_) {
       // If there's neither a begin nor an end, then this operator is a no-op.
       // We optimize it away here.

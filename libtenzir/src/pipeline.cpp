@@ -8,9 +8,8 @@
 
 #include "tenzir/pipeline.hpp"
 
-#include "tenzir/collect.hpp"
+#include "tenzir/columnar_selection.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql/parser.hpp"
 
@@ -178,7 +177,7 @@ auto pipeline::optimize_into_filter() const -> std::pair<expression, pipeline> {
 
 auto pipeline::optimize_into_filter(const expression& filter) const
   -> std::pair<expression, pipeline> {
-  auto opt = optimize(filter, event_order::ordered, select_projection());
+  auto opt = optimize(filter, event_order::ordered, columnar_selection());
   auto* pipe = dynamic_cast<pipeline*>(opt.replacement.get());
   // We know that `pipeline::optimize` yields a pipeline and a filter.
   TENZIR_ASSERT(pipe);
@@ -187,15 +186,17 @@ auto pipeline::optimize_into_filter(const expression& filter) const
 }
 
 auto pipeline::optimize(expression const& filter, event_order order,
-                        select_projection fields) const -> optimize_result {
+                        columnar_selection selection) const -> optimize_result {
   auto current_filter = filter;
   auto current_order = order;
+  auto current_fields = selection;
   // Collect the optimized pipeline in reversed order.
   auto result = std::vector<operator_ptr>{};
   for (auto it = operators_.rbegin(); it != operators_.rend(); ++it) {
     TENZIR_ASSERT(*it);
     auto const& op = **it;
-    auto opt = op.optimize(current_filter, current_order, select_projection());
+    TENZIR_WARN("OPERATOR: {}", op.name());
+    auto opt = op.optimize(current_filter, current_order, current_fields);
     if (opt.filter) {
       current_filter = std::move(*opt.filter);
     } else if (current_filter != trivially_true_expression()) {
@@ -207,6 +208,9 @@ auto pipeline::optimize(expression const& filter, event_order order,
       TENZIR_ASSERT(ops.size() == 1);
       result.push_back(std::move(ops[0]));
       current_filter = trivially_true_expression();
+    }
+    if (opt.selection) {
+      current_fields = std::move(*opt.selection);
     }
     if (opt.replacement) {
       result.push_back(std::move(opt.replacement));

@@ -217,7 +217,9 @@ public:
   }
 
   auto optimize(expression const& filter, event_order order,
-                select_projection fields) const -> optimize_result override {
+                columnar_selection selection) const
+    -> optimize_result override {
+    (void)selection;
     return optimize_result{filter, stable_ ? order : event_order::unordered,
                            copy()};
   }

@@ -28,9 +28,11 @@ public:
   }
 
   auto optimize(const expression& filter, event_order order,
-                select_projection fields) const -> optimize_result override {
+                columnar_selection selection) const
+    -> optimize_result override {
+    (void)selection;
     (void)order;
-    return op_->optimize(filter, event_order::unordered, select_projection());
+    return op_->optimize(filter, event_order::unordered, columnar_selection());
   }
 
   auto instantiate(operator_input input, operator_control_plane& ctrl) const

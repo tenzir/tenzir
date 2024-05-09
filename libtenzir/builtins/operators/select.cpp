@@ -78,9 +78,12 @@ public:
   }
 
   auto optimize(expression const& filter, event_order order,
-                select_projection fields) const -> optimize_result override {
+                columnar_selection selection) const
+    -> optimize_result override {
+    (void)selection;
     (void)filter;
-    return optimize_result::order_invariant(*this, order);
+    return optimize_result{filter, order, nullptr, selection};
+    // return optimize_result::order_invariant(*this, order);
   }
 
   friend auto inspect(auto& f, select_operator& x) -> bool {
@@ -104,6 +107,7 @@ public:
       parsers::optional_ws_or_comment, parsers::extractor,
       parsers::extractor_char, parsers::extractor_list;
     const auto* f = pipeline.begin();
+    // std::string x(f); //TODO: WHERE IS THIS PROVIDED
     const auto* const l = pipeline.end();
     const auto p = required_ws_or_comment >> extractor_list
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
@@ -116,6 +120,7 @@ public:
                                                       pipeline)),
       };
     }
+    // config.fields.push_back(x);
     return {
       std::string_view{f, l},
       std::make_unique<select_operator>(std::move(config)),
