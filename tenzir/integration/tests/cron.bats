@@ -15,8 +15,6 @@ teardown() {
   teardown_node
 }
 
-
-
 @test "cron modifier" {
   check tenzir "cron '* * * * * *' version | head"
   check tenzir "cron '* * * * * *' version | cron '*/5 * * * * *' tail 1 | head 1"
@@ -34,4 +32,3 @@ teardown() {
   check ! tenzir "cron 'E * * * * *' version"
   check ! tenzir "cron version"
 }
-

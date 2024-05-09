@@ -9,7 +9,7 @@ Operator modifiers are keywords that may occur before an operator.
 ## Scheduled Executions
 
 ### `every`
-The special keyword `every` enables scheduled execution of an operator at a 
+The special keyword `every` enables scheduled execution of an operator at a
 fixed interval.
 
 Use the operator modifier like this:
@@ -35,12 +35,11 @@ cron "<cron expression>" <operator> [<args...>]
 
 **Note that the `<cron expression>` must be enclosed in quotes.**
 
-
 A `<cron expression>`  has the form
 ```
 <seconds> <minutes> <hours> <days of month> <months> <days of week>
 ```
-where the 6 fields are separated by a space. 
+where the 6 fields are separated by a space.
 
 The field values can be as follows:
 
@@ -77,7 +76,6 @@ cron "* */10 * * * MON-FRI" from https://example.org/api
 ```
 
 would pull an endpoint on every 10th minute, monday through friday.
-
 
 ## Unordered Execution
 
