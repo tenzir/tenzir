@@ -1,0 +1,7 @@
+error: the file `./this-file-does-not-exist.json` does not exist
+ --> <input>:1:25
+  |
+1 | cron '* * * * * *' from ./this-file-does-not-exist.json
+  |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |
+error: could not instantiate loader
