@@ -26,6 +26,7 @@ using field_by_level = std::vector<std::string>;
 class columnar_selection {
 public:
   std::optional<std::vector<field_by_level>> fields_of_interest = std::nullopt;
+  std::optional<int> current_level = 0;
   columnar_selection() = default;
 
   columnar_selection(

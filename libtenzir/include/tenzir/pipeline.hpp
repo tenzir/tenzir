@@ -15,6 +15,8 @@
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tag.hpp"
 
+#include <tenzir/fwd.hpp>
+
 #include <caf/binary_serializer.hpp>
 #include <caf/detail/stringification_inspector.hpp>
 #include <caf/fwd.hpp>
@@ -405,16 +407,31 @@ struct optimize_result {
   std::optional<expression> filter;
   event_order order;
   operator_ptr replacement;
+  std::vector<operator_ptr> replacements{};
   std::optional<columnar_selection> selection;
+  bool multiple_replacements;
 
   optimize_result(std::optional<expression> filter, event_order order,
                   operator_ptr replacement,
-                  std::optional<columnar_selection> selection = std::nullopt)
+                  std::optional<columnar_selection> selection = std::nullopt,
+                  bool multiple_replacements = false)
     : filter{std::move(filter)},
       order{order},
       replacement{std::move(replacement)},
-      selection{std::move(selection)} {
+      selection{std::move(selection)},
+      multiple_replacements{multiple_replacements} {
   }
+
+  // optimize_result(std::optional<expression> filter, event_order order,
+  //                 std::vector<operator_ptr> replacement,
+  //                 std::optional<columnar_selection> selection = std::nullopt,
+  //                 bool multiple_replacements = false)
+  //   : filter{std::move(filter)},
+  //     order{order},
+  //     replacement{std::move(replacement)},
+  //     selection{std::move(selection)},
+  //     multiple_replacements{multiple_replacements} {
+  // }
 
   /// Always valid if the transformation performed by the operator does not
   /// change based on the order in which the input events arrive in.

@@ -10,6 +10,7 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/collect.hpp>
+#include <tenzir/columnar_selection.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/narrow.hpp>
@@ -305,21 +306,44 @@ public:
 };
 
 auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
-                   const located<columnar_selection>& selection)
+                   const located<columnar_selection> selection)
   -> generator<table_slice> {
-  auto byte_reader
-    = make_byte_reader(std::move(input)); // think of a better way to go this
+  (void)selection;
+  auto byte_reader = make_byte_reader(std::move(input));
   auto schema_listener = std::make_shared<callback_listener>();
-  auto schema_stream_decoder = arrow::ipc::StreamDecoder(schema_listener);
+  auto read_options = arrow::ipc::IpcReadOptions::Defaults();
+  read_options.max_recursion_depth = 10;
+  auto schema_stream_decoder
+    = arrow::ipc::StreamDecoder(schema_listener, read_options);
   type schema;
   auto buffered_schema_data = std::vector<std::shared_ptr<arrow::Buffer>>{};
+  auto truncated_bytes = size_t{0};
+  auto decoded_once = false;
+
   while (true) {
+    // TODO: CHECK FOR TENZIR METADATA?
     auto required_size
       = detail::narrow_cast<size_t>(schema_stream_decoder.next_required_size());
     auto payload = byte_reader(required_size);
     if (!payload) {
       co_yield {};
       continue;
+    }
+    truncated_bytes += payload->size();
+    if (payload->size() < required_size) {
+      if (truncated_bytes != 0 and payload->size() != 0) {
+        // Ideally this always would be just a warning, but the stream decoder
+        // happily continues to consume invalid bytes. E.g., trying to read a
+        // JSON file with this parser will just swallow all bytes, emitting this
+        // one error at the very end. Not a single time does consuming a buffer
+        // actually fail. We should probably look into limiting the memory usage
+        // here, as the stream decoder will keep consumed-but-not-yet-converted
+        // buffers in memory.
+        diagnostic::warning("truncated {} trailing bytes", truncated_bytes)
+          .severity(decoded_once ? severity::warning : severity::error)
+          .emit(ctrl.diagnostics());
+      }
+      co_return;
     }
     auto arrow_buffer = as_arrow_buffer(std::move(payload));
     buffered_schema_data.push_back(arrow_buffer);
@@ -331,26 +355,25 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
       co_return;
     }
     if (schema_listener->decoded_schema) {
+      truncated_bytes = 0;
+      decoded_once = false;
       schema = type::from_arrow(*schema_listener->decoded_schema);
       break;
     }
   }
-  auto read_options = arrow::ipc::IpcReadOptions::Defaults();
-  // if (selection.inner.fields_of_interest) {
-  //   auto indices = std::vector<int>{};
-  //   for (const auto& field : *selection.inner.fields_of_interest) {
-  //     for (const auto& index : schema.resolve(field)) {
-  //       indices.push_back(static_cast<int>(index[0]));
-  //     }
-  //   }
-  //   std::sort(indices.begin(), indices.end());
-  //   indices.erase(std::unique(indices.begin(), indices.end()),
-  //   indices.end()); read_options.included_fields = std::move(indices);
-  // }
+  if (selection.inner.fields_of_interest) {
+    auto indices = std::vector<int>{};
+    for (const auto& field : (*selection.inner.fields_of_interest)[0]) {
+      for (const auto& index : schema.resolve(field)) {
+        indices.push_back(static_cast<int>(index[0]));
+      }
+    }
+    std::sort(indices.begin(), indices.end());
+    indices.erase(std::unique(indices.begin(), indices.end()), indices.end());
+    read_options.included_fields = std::move(indices);
+  }
   auto listener = std::make_shared<callback_listener>();
   auto stream_decoder = arrow::ipc::StreamDecoder(listener, read_options);
-  auto truncated_bytes = size_t{0};
-  auto decoded_once = false;
 
   for (auto&& buffer : buffered_schema_data) {
     auto decode_result = stream_decoder.Consume(buffer);

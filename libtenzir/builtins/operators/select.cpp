@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/columnar_selection.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -19,6 +20,7 @@
 #include <caf/expected.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <utility>
 
 namespace tenzir::plugins::select {
@@ -80,10 +82,32 @@ public:
   auto optimize(expression const& filter, event_order order,
                 columnar_selection selection) const
     -> optimize_result override {
-    (void)selection;
+    if (config_.fields.empty()) {
+      return optimize_result::order_invariant(*this, order); // tenzir assert
+    }
+    if (selection.fields_of_interest) {
+      // TODO: this is an error, there is already a selection in place. THERE
+      // SHOULD ONLY BE ONE SELECTION?
+    }
+    // if start or ends with a . that is an error
+    std::vector<std::vector<std::string>> configured_selection;
+    for (const auto& field : config_.fields) {
+      size_t pos = 0;
+      size_t size = 1;
+      while (pos < field.length()) {
+        auto dot_pos = field.find('.', pos + 1);
+        std::string substring = field.substr(pos, dot_pos);
+        if (configured_selection.size() < size) {
+          configured_selection.emplace_back();
+        }
+        configured_selection[size - 1].push_back(substring);
+        pos += dot_pos;
+        size += 1;
+      }
+    }
     (void)filter;
-    return optimize_result{filter, order, nullptr, selection};
-    // return optimize_result::order_invariant(*this, order);
+    return optimize_result{filter, order, nullptr,
+                           columnar_selection(configured_selection)};
   }
 
   friend auto inspect(auto& f, select_operator& x) -> bool {
@@ -107,7 +131,6 @@ public:
       parsers::optional_ws_or_comment, parsers::extractor,
       parsers::extractor_char, parsers::extractor_list;
     const auto* f = pipeline.begin();
-    // std::string x(f); //TODO: WHERE IS THIS PROVIDED
     const auto* const l = pipeline.end();
     const auto p = required_ws_or_comment >> extractor_list
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
@@ -120,7 +143,6 @@ public:
                                                       pipeline)),
       };
     }
-    // config.fields.push_back(x);
     return {
       std::string_view{f, l},
       std::make_unique<select_operator>(std::move(config)),

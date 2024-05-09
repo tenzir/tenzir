@@ -189,14 +189,14 @@ auto pipeline::optimize(expression const& filter, event_order order,
                         columnar_selection selection) const -> optimize_result {
   auto current_filter = filter;
   auto current_order = order;
-  auto current_fields = selection;
+  auto current_selection = selection;
   // Collect the optimized pipeline in reversed order.
   auto result = std::vector<operator_ptr>{};
   for (auto it = operators_.rbegin(); it != operators_.rend(); ++it) {
     TENZIR_ASSERT(*it);
     auto const& op = **it;
     TENZIR_WARN("OPERATOR: {}", op.name());
-    auto opt = op.optimize(current_filter, current_order, current_fields);
+    auto opt = op.optimize(current_filter, current_order, current_selection);
     if (opt.filter) {
       current_filter = std::move(*opt.filter);
     } else if (current_filter != trivially_true_expression()) {
@@ -210,7 +210,7 @@ auto pipeline::optimize(expression const& filter, event_order order,
       current_filter = trivially_true_expression();
     }
     if (opt.selection) {
-      current_fields = std::move(*opt.selection);
+      current_selection = std::move(*opt.selection);
     }
     if (opt.replacement) {
       result.push_back(std::move(opt.replacement));

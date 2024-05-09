@@ -99,6 +99,10 @@ public:
     if (not parser_opt) {
       return do_not_optimize(*this);
     }
+    bool multiple_replacements = false;
+    if (parser_opt) {
+      multiple_replacements = true;
+    }
     return optimize_result{
       std::nullopt,
       event_order::ordered,
