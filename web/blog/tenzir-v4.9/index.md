@@ -2,7 +2,7 @@
 title: Tenzir v4.9
 authors: [dominiklohmann]
 date: 2024-02-21
-tags: [context, bloom-filter, chart, dashboard]
+tags: [release, context, bloom-filter, chart, dashboard]
 comments: true
 ---
 
