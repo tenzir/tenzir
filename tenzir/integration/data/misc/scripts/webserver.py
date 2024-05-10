@@ -35,8 +35,11 @@ class Handler(BaseHTTPRequestHandler):
         # Ensure determinism.
         headers = Message()
         for key, value in self.headers.items():
-            if key == "User-Agent" and value.startswith("Tenzir/"):
-                value = value[: value.find("/") + 1] + "*.*.*"
+            if key == "User-Agent":
+                if value.startswith("Tenzir/"):
+                    value = "Tenzir/*.*.*"
+            elif key == "Accept-Encoding":
+                value = "*"
             headers[key] = value
         result = f"\n{headers}{content.decode('utf-8')}"
         if REFLECT:
