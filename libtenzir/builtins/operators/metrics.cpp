@@ -28,11 +28,17 @@ public:
     auto parser = argument_parser{"metrics", "https://docs.tenzir.com/"
                                              "operators/metrics"};
     bool live = false;
+    bool retro = false;
     parser.add("--live", live);
+    parser.add("--retro", retro);
     parser.parse(p);
-    const auto definition = fmt::format("export --internal{} | where #schema "
-                                        "== /tenzir\\.metrics\\..+/",
-                                        live ? " --live" : "");
+    if (not live) {
+      retro = true;
+    }
+    const auto definition
+      = fmt::format("export --internal{}{} | where #schema "
+                    "== /tenzir\\.metrics\\..+/",
+                    live ? " --live" : "", retro ? " --retro" : "");
     auto result = pipeline::internal_parse_as_operator(definition);
     if (not result) {
       diagnostic::error("failed to transform `metrics` operator into `{}`",

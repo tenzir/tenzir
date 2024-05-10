@@ -54,8 +54,9 @@ caf::behavior make_bridge(caf::stateful_actor<bridge_state>* self,
   return {
     [self](table_slice slice) {
       auto filtered = filter(std::move(slice), self->state.expr);
-      if (not filtered)
+      if (not filtered) {
         return;
+      }
       if (self->state.rp.pending()) {
         self->state.rp.deliver(std::move(*filtered));
       } else if (self->state.num_buffered < (1 << 22)) {
@@ -84,19 +85,35 @@ caf::behavior make_bridge(caf::stateful_actor<bridge_state>* self,
   };
 };
 
+struct export_mode {
+  bool live = true;
+  bool retro = false;
+
+  export_mode() = default;
+  export_mode(bool live_, bool retro_) : live{live_}, retro{retro_} {
+    TENZIR_ASSERT(live | retro);
+  }
+
+  friend auto inspect(auto& f, export_mode& x) -> bool {
+    return f.object(x).fields(f.field("live", x.live),
+                              f.field("retro", x.retro));
+  }
+};
+
 class export_operator final : public crtp_operator<export_operator> {
 public:
   export_operator() = default;
 
-  explicit export_operator(expression expr, bool live)
-    : expr_{std::move(expr)}, live_{live} {
+  explicit export_operator(expression expr, export_mode mode)
+    : expr_{std::move(expr)}, mode_{mode} {
   }
 
-  auto run_live(operator_control_plane& ctrl) const -> generator<table_slice> {
+  auto
+  run_live(operator_control_plane& ctrl,
+           caf::scoped_actor& blocking_self) const -> generator<table_slice> {
     // TODO: Some of the the requests this operator makes are blocking, so we
     // have to create a scoped actor here; once the operator API uses async we
     // can offer a better mechanism here.
-    auto blocking_self = caf::scoped_actor(ctrl.self().system());
     auto components
       = get_node_components<importer_actor>(blocking_self, ctrl.node());
     if (!components) {
@@ -123,88 +140,89 @@ public:
     }
   }
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    if (live_) {
-      for (auto x : run_live(ctrl)) {
-        co_yield x;
-      }
-      co_return;
-    }
+  auto
+  operator()(operator_control_plane& ctrl) const -> generator<table_slice> {
     // TODO: Some of the the requests this operator makes are blocking, so we
     // have to create a scoped actor here; once the operator API uses async we
     // can offer a better mechanism here.
     auto blocking_self = caf::scoped_actor(ctrl.self().system());
-    auto components
-      = get_node_components<catalog_actor, accountant_actor, filesystem_actor>(
-        blocking_self, ctrl.node());
-    if (!components) {
-      diagnostic::error(components.error())
-        .note("failed to get importer")
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-    co_yield {};
-    auto [catalog, accountant, fs] = std::move(*components);
-    auto current_slice = std::optional<table_slice>{};
-    auto query_context
-      = tenzir::query_context::make_extract("export", blocking_self, expr_);
-    query_context.id = uuid::random();
-    TENZIR_DEBUG("export operator starts catalog lookup with id {} and "
-                 "expression {}",
-                 query_context.id, expr_);
-    auto current_result = catalog_lookup_result{};
-    ctrl.self()
-      .request(catalog, caf::infinite, atom::candidates_v, query_context)
-      .await(
-        [&current_result](catalog_lookup_result result) {
-          current_result = std::move(result);
-        },
-        [&ctrl](const caf::error& err) {
-          diagnostic::error(err)
-            .note("failed to perform catalog lookup")
-            .emit(ctrl.diagnostics());
-        });
-    co_yield {};
-    for (const auto& [type, info] : current_result.candidate_infos) {
-      auto bound_expr = tailor(info.exp, type);
-      if (not bound_expr) {
-        // failing to bind is not an error.
-        continue;
+    if (mode_.retro) {
+      auto components
+        = get_node_components<catalog_actor, accountant_actor, filesystem_actor>(
+          blocking_self, ctrl.node());
+      if (!components) {
+        diagnostic::error(components.error())
+          .note("failed to get importer")
+          .emit(ctrl.diagnostics());
+        co_return;
       }
-      query_context.expr = std::move(*bound_expr);
-      for (const auto& partition_info : info.partition_infos) {
-        const auto& uuid = partition_info.uuid;
-        auto partition = blocking_self->spawn(
-          passive_partition, uuid, accountant, fs,
-          std::filesystem::path{"index"} / fmt::format("{:l}", uuid));
-        auto recieving_slices = true;
-        auto current_error = caf::error{};
-        blocking_self->send(partition, atom::query_v, query_context);
-        while (recieving_slices) {
-          blocking_self->receive(
-            [&current_slice](table_slice slice) {
-              current_slice = std::move(slice);
-            },
-            [&recieving_slices](uint64_t) {
-              recieving_slices = false;
-            },
-            [&recieving_slices, &current_error](caf::error e) {
-              recieving_slices = false;
-              current_error = std::move(e);
-            });
-          if (current_error) {
-            diagnostic::warning(current_error).emit(ctrl.diagnostics());
-            co_yield {};
-            continue;
-          }
-          if (current_slice) {
-            co_yield *current_slice;
-            current_slice.reset();
-          } else {
-            co_yield {};
+      co_yield {};
+      auto [catalog, accountant, fs] = std::move(*components);
+      auto current_slice = std::optional<table_slice>{};
+      auto query_context
+        = tenzir::query_context::make_extract("export", blocking_self, expr_);
+      query_context.id = uuid::random();
+      TENZIR_DEBUG("export operator starts catalog lookup with id {} and "
+                   "expression {}",
+                   query_context.id, expr_);
+      auto current_result = catalog_lookup_result{};
+      ctrl.self()
+        .request(catalog, caf::infinite, atom::candidates_v, query_context)
+        .await(
+          [&current_result](catalog_lookup_result result) {
+            current_result = std::move(result);
+          },
+          [&ctrl](const caf::error& err) {
+            diagnostic::error(err)
+              .note("failed to perform catalog lookup")
+              .emit(ctrl.diagnostics());
+          });
+      co_yield {};
+      for (const auto& [type, info] : current_result.candidate_infos) {
+        auto bound_expr = tailor(info.exp, type);
+        if (not bound_expr) {
+          // failing to bind is not an error.
+          continue;
+        }
+        query_context.expr = std::move(*bound_expr);
+        for (const auto& partition_info : info.partition_infos) {
+          const auto& uuid = partition_info.uuid;
+          auto partition = blocking_self->spawn(
+            passive_partition, uuid, accountant, fs,
+            std::filesystem::path{"index"} / fmt::format("{:l}", uuid));
+          auto receiving_slices = true;
+          auto current_error = caf::error{};
+          blocking_self->send(partition, atom::query_v, query_context);
+          while (receiving_slices) {
+            blocking_self->receive(
+              [&current_slice](table_slice slice) {
+                current_slice = std::move(slice);
+              },
+              [&receiving_slices](uint64_t) {
+                receiving_slices = false;
+              },
+              [&receiving_slices, &current_error](caf::error e) {
+                receiving_slices = false;
+                current_error = std::move(e);
+              });
+            if (current_error) {
+              diagnostic::warning(current_error).emit(ctrl.diagnostics());
+              co_yield {};
+              continue;
+            }
+            if (current_slice) {
+              co_yield *current_slice;
+              current_slice.reset();
+            } else {
+              co_yield {};
+            }
           }
         }
+      }
+    }
+    if (mode_.live) {
+      for (auto x : run_live(ctrl, blocking_self)) {
+        co_yield x;
       }
     }
   }
@@ -214,10 +232,10 @@ public:
   }
 
   auto detached() const -> bool override {
-    if (live_) {
-      return false;
+    if (mode_.retro) {
+      return true;
     }
-    return true;
+    return false;
   }
 
   auto location() const -> operator_location override {
@@ -228,11 +246,12 @@ public:
     return true;
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter,
+                event_order order) const -> optimize_result override {
     (void)order;
-    if (live_)
+    if (mode_.live) {
       return do_not_optimize(*this);
+    }
     auto clauses = std::vector<expression>{};
     if (expr_ != caf::none and expr_ != trivially_true_expression()) {
       clauses.push_back(expr_);
@@ -244,17 +263,17 @@ public:
                                 : expression{conjunction{std::move(clauses)}};
     return optimize_result{trivially_true_expression(), event_order::ordered,
                            std::make_unique<export_operator>(std::move(expr),
-                                                             live_)};
+                                                             mode_)};
   }
 
   friend auto inspect(auto& f, export_operator& x) -> bool {
     return f.object(x).fields(f.field("expression", x.expr_),
-                              f.field("live", x.live_));
+                              f.field("mode", x.mode_));
   }
 
 private:
   expression expr_;
-  bool live_;
+  export_mode mode_;
 };
 
 class plugin final : public virtual operator_plugin<export_operator> {
@@ -267,15 +286,21 @@ public:
     auto parser = argument_parser{"export", "https://docs.tenzir.com/"
                                             "operators/export"};
     bool live = false;
+    bool retro = false;
     auto internal = false;
     auto low_priority = false;
     parser.add("--live", live);
+    parser.add("--retro", retro);
     parser.add("--low-priority", low_priority);
     parser.add("--internal", internal);
     parser.parse(p);
     // The --low-priority option is currently a no-op, and will be brought back
     // alongside the database plugin.
     (void)low_priority;
+    if (not live) {
+      retro = true;
+    }
+    export_mode mode{live, retro};
     return std::make_unique<export_operator>(
       expression{
         predicate{
@@ -284,7 +309,7 @@ public:
           data{internal},
         },
       },
-      live);
+      mode);
   }
 };
 
