@@ -121,7 +121,7 @@ For example, the following pipeline does an API request every Sunday at 04:05 in
 the morning:
 
 ```
-cron "5 4 * * SUN" from https://example.com/api
+cron "0 5 4 * * SUN" from https://example.com/api
 ```
 
 ## Performance Improvements for Imports
