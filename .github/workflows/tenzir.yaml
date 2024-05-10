@@ -90,12 +90,12 @@ jobs:
       - name: Inject Slug Variables
         uses: rlespinasse/github-slug-action@v4
       - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
+        uses: googleapis/auth@v2
         with:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
       - name: Configure GCloud Credentials
-        uses: google-github-actions/setup-gcloud@v2
+        uses: googleapis/setup-gcloud@v2
       - name: Configure
         id: configure
         run: |
@@ -757,13 +757,13 @@ jobs:
           if-no-files-found: error
       - name: Authenticate to Google Cloud
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        uses: google-github-actions/auth@v2
+        uses: googleapis/auth@v2
         with:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
       - name: Configure GCloud Credentials
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
-        uses: google-github-actions/setup-gcloud@v2
+        uses: googleapis/setup-gcloud@v2
       - name: Upload Artifact to GCS
         if: ${{ github.event_name == 'push' || github.event_name == 'release' }}
         run: |
@@ -897,13 +897,13 @@ jobs:
           name: "${{ env.PACKAGE_NAME }}.tar.gz"
       - name: Authenticate to Google Cloud
         if: ${{ needs.configure.outputs.run-tenzir == 'false' }}
-        uses: google-github-actions/auth@v2
+        uses: googleapis/auth@v2
         with:
           workload_identity_provider: ${{ env.GCP_WORKLOAD_IDP }}
           service_account: ${{ env.GCP_SERVICE_ACCOUNT }}
       - name: Configure GCloud Credentials
         if: ${{ needs.configure.outputs.run-tenzir == 'false' }}
-        uses: google-github-actions/setup-gcloud@v2
+        uses: googleapis/setup-gcloud@v2
       - name: Download Tenzir
         if: ${{ needs.configure.outputs.run-tenzir == 'false' }}
         run: |
