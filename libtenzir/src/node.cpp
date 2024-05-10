@@ -126,26 +126,6 @@ caf::error
 register_component(node_actor::stateful_pointer<node_state> self,
                    const caf::actor& component, std::string_view type,
                    std::string_view label = {}) {
-  auto tag = [&] {
-    if (label.empty() or type == label) {
-      return std::string{type};
-    }
-    return fmt::format("{}/{}", type, label);
-  }();
-  static auto alive_components = std::make_shared<std::set<std::string>>();
-  const auto [it, inserted] = alive_components->insert(std::move(tag));
-  TENZIR_ASSERT(inserted,
-                fmt::format("failed to register component {}", *it).c_str());
-  TENZIR_VERBOSE("component {} registered with id {}", *it, component->id());
-  component->attach_functor([entry = *it] {
-    auto num_erased = alive_components->erase(entry);
-    TENZIR_ASSERT(
-      num_erased == 1,
-      fmt::format("failed to deregister component {}", entry).c_str());
-    TENZIR_VERBOSE("component {} deregistered; {} remaining: [{}])", entry,
-                   alive_components->size(),
-                   fmt::join(*alive_components, ", "));
-  });
   if (!self->state.registry.add(component, std::string{type},
                                 std::string{label})) {
     auto msg // separate variable for clang-format only
@@ -153,6 +133,19 @@ register_component(node_actor::stateful_pointer<node_state> self,
                     label.empty() ? type : label);
     return caf::make_error(ec::unspecified, std::move(msg));
   }
+  auto tag = [&] {
+    if (label.empty() or type == label) {
+      return std::string{type};
+    }
+    return fmt::format("{}/{}", type, label);
+  }();
+  const auto [it, inserted] = self->state.alive_components.insert(
+    std::pair{component->address(), std::move(tag)});
+  TENZIR_ASSERT(
+    inserted,
+    fmt::format("failed to register component {}", it->second).c_str());
+  TENZIR_VERBOSE("component {} registered with id {}", it->second,
+                 component->id());
   self->monitor(component);
   return caf::none;
 }
@@ -342,6 +335,18 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     if (self->state.monitored_exec_nodes.erase(msg.source) > 0) {
       return;
     }
+    auto it = std::ranges::find_if(self->state.alive_components,
+                                   [&](const auto& alive_component) {
+                                     return alive_component.first == msg.source;
+                                   });
+    if (it != self->state.alive_components.end()) {
+      TENZIR_VERBOSE("component {} deregistered; {} remaining: [{}])",
+                     it->second, self->state.alive_components.size(),
+                     fmt::join(self->state.alive_components
+                                 | std::ranges::views::values,
+                               ", "));
+      self->state.alive_components.erase(it);
+    }
     if (!self->state.tearing_down) {
       auto actor = caf::actor_cast<caf::actor>(msg.source);
       auto component = self->state.registry.remove(actor);
@@ -401,7 +406,6 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     }
     std::vector<caf::actor> aux_components;
     for (const auto& [_, comp] : registry.components()) {
-      self->demonitor(comp.actor);
       // Ignore remote actors.
       if (comp.actor->node() != self->node())
         continue;
@@ -412,16 +416,12 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     auto core_shutdown_sequence
       = [=, core_shutdown_handles = std::move(core_shutdown_handles),
          filesystem_handle = std::move(filesystem_handle)]() mutable {
-          for (const auto& comp : core_shutdown_handles) {
-            self->demonitor(comp);
-          }
           shutdown<policy::sequential>(self, std::move(core_shutdown_handles),
                                        msg.reason);
           // We deliberately do not send an exit message to the filesystem
           // actor, as that would mean that actors not tracked by the component
           // registry which hold a strong handle to the filesystem actor cannot
           // use it for persistence on shutdown.
-          self->demonitor(filesystem_handle);
           filesystem_handle = {};
         };
     terminate<policy::parallel>(self, std::move(aux_components))
