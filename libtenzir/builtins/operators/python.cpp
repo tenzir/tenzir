@@ -134,7 +134,8 @@ public:
       // Automatically create a virtualenv with all requirements preinstalled,
       // unless disabled by node config.
       if (config_.venv_base_dir) {
-        auto venv_id = hash(config_.implicit_requirements, requirements_);
+        auto venv_id
+          = hash(config_.implicit_requirements, requirements_, getuid());
         auto venv_path = std::filesystem::path{config_.venv_base_dir.value()}
                          / fmt::format("{:x}", venv_id);
         auto venv = venv_path.string();
@@ -150,7 +151,7 @@ public:
         // Boost sometimes prepends a directory separator depending on which
         // underlying implementation is used for the semaphore. Thankfully it
         // is smart enough to check if one is already present. We prevent this
-        // hidden modification by starting the seamphore name with a slash.
+        // hidden modification by starting the semaphore name with a slash.
         // This ensures that the truncation logic below is correct.
         auto sem_name = fmt::format("/tnz-python-{:x}", venv_id);
         // The semaphore name is restricted to a maximum length of 31 characters
@@ -162,7 +163,7 @@ public:
           sem_name.erase(semaphore_name_max_length);
         }
         // The initial venv creation tends to take a very long time, and often
-        // causes the pipline creation to take longer then what our FE tolerate
+        // causes the pipeline creation to take longer then what our FE tolerate
         // in terms of wait time. As a workaround we yield early, so that the
         // pipeline appears as created and do the actual venv setup on first
         // call. At that point the delay is not problematic any more because
@@ -170,7 +171,8 @@ public:
         co_yield {};
         auto permissions = boost::interprocess::permissions{0666};
         auto sem = boost::interprocess::named_semaphore{
-          boost::interprocess::open_or_create, sem_name.c_str(), 1u, permissions};
+          boost::interprocess::open_or_create, sem_name.c_str(), 1u,
+          permissions};
         const auto wait_ok = sem.timed_wait(std::chrono::system_clock::now()
                                             + std::chrono::seconds{60});
         if (not wait_ok) {
