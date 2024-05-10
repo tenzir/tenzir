@@ -1,6 +1,6 @@
 * The `export` operators now features a `--retro`
 flag. This flag will make the operators export past events, even when `--live`
-is set: 
+is set:
   * Specifying *both* `--retro --live` will first export all past events and
   then go into live mode.
   * Specifying *only* `--live`  behaves like it did previously. It only exports
