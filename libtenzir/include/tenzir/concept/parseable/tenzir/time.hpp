@@ -37,48 +37,58 @@ struct duration_parser : parser_base<duration_parser<Rep, Period>> {
     using namespace parsers;
     using namespace parser_literals;
     using namespace std::chrono;
-    // clang-format off
-    auto unit
-      = "nanoseconds"_p  ->* [] { return cast(nanoseconds(1)); }
-      | "nanosecond"_p   ->* [] { return cast(nanoseconds(1)); }
-      | "nsecs"_p        ->* [] { return cast(nanoseconds(1)); }
-      | "nsec"_p         ->* [] { return cast(nanoseconds(1)); }
-      | "ns"_p           ->* [] { return cast(nanoseconds(1)); }
-      | "microseconds"_p ->* [] { return cast(microseconds(1)); }
-      | "microsecond"_p  ->* [] { return cast(microseconds(1)); }
-      | "usecs"_p        ->* [] { return cast(microseconds(1)); }
-      | "usec"_p         ->* [] { return cast(microseconds(1)); }
-      | "us"_p           ->* [] { return cast(microseconds(1)); }
-      | "milliseconds"_p ->* [] { return cast(milliseconds(1)); }
-      | "millisecond"_p  ->* [] { return cast(milliseconds(1)); }
-      | "msecs"_p        ->* [] { return cast(milliseconds(1)); }
-      | "msec"_p         ->* [] { return cast(milliseconds(1)); }
-      | "ms"_p           ->* [] { return cast(milliseconds(1)); }
-      | "seconds"_p      ->* [] { return cast(seconds(1)); }
-      | "second"_p       ->* [] { return cast(seconds(1)); }
-      | "secs"_p         ->* [] { return cast(seconds(1)); }
-      | "sec"_p          ->* [] { return cast(seconds(1)); }
-      | "s"_p            ->* [] { return cast(seconds(1)); }
-      | "minutes"_p      ->* [] { return cast(minutes(1)); }
-      | "minute"_p       ->* [] { return cast(minutes(1)); }
-      | "mins"_p         ->* [] { return cast(minutes(1)); }
-      | "min"_p          ->* [] { return cast(minutes(1)); }
-      | "m"_p            ->* [] { return cast(minutes(1)); }
-      | "hours"_p        ->* [] { return cast(hours(1)); }
-      | "hour"_p         ->* [] { return cast(hours(1)); }
-      | "hrs"_p          ->* [] { return cast(hours(1)); }
-      | "h"_p            ->* [] { return cast(hours(1)); }
-      | "days"_p         ->* [] { return cast(hours(24)); }
-      | "day"_p          ->* [] { return cast(hours(24)); }
-      | "d"_p            ->* [] { return cast(hours(24)); }
-      | "weeks"_p        ->* [] { return cast(hours(24 * 7)); }
-      | "week"_p         ->* [] { return cast(hours(24 * 7)); }
-      | "w"_p            ->* [] { return cast(hours(24 * 7)); }
-      | "years"_p        ->* [] { return cast(hours(24 * 365)); }
-      | "year"_p         ->* [] { return cast(hours(24 * 365)); }
-      | "y"_p            ->* [] { return cast(hours(24 * 365)); }
-      ;
-    // clang-format on
+    using unit_map_type = std::unordered_map<std::string_view, attribute>;
+    static const auto unit_map = unit_map_type{
+      {"nanoseconds", cast(nanoseconds(1))},
+      {"nanosecond", cast(nanoseconds(1))},
+      {"nsecs", cast(nanoseconds(1))},
+      {"nsec", cast(nanoseconds(1))},
+      {"ns", cast(nanoseconds(1))},
+      {"microseconds", cast(microseconds(1))},
+      {"microsecond", cast(microseconds(1))},
+      {"usecs", cast(microseconds(1))},
+      {"usec", cast(microseconds(1))},
+      {"us", cast(microseconds(1))},
+      {"milliseconds", cast(milliseconds(1))},
+      {"millisecond", cast(milliseconds(1))},
+      {"msecs", cast(milliseconds(1))},
+      {"msec", cast(milliseconds(1))},
+      {"ms", cast(milliseconds(1))},
+      {"seconds", cast(seconds(1))},
+      {"second", cast(seconds(1))},
+      {"secs", cast(seconds(1))},
+      {"sec", cast(seconds(1))},
+      {"s", cast(seconds(1))},
+      {"minutes", cast(minutes(1))},
+      {"minute", cast(minutes(1))},
+      {"mins", cast(minutes(1))},
+      {"min", cast(minutes(1))},
+      {"m", cast(minutes(1))},
+      {"hours", cast(hours(1))},
+      {"hour", cast(hours(1))},
+      {"hrs", cast(hours(1))},
+      {"h", cast(hours(1))},
+      {"days", cast(hours(24))},
+      {"day", cast(hours(24))},
+      {"d", cast(hours(24))},
+      {"weeks", cast(hours(24 * 7))},
+      {"week", cast(hours(24 * 7))},
+      {"w", cast(hours(24 * 7))},
+      {"years", cast(hours(24 * 365))},
+      {"year", cast(hours(24 * 365))},
+      {"y", cast(hours(24 * 365))},
+    };
+    static const auto unit
+      = (+parsers::alpha)
+          .then([&](std::string str) -> unit_map_type::const_iterator {
+            return unit_map.find(str);
+          })
+          .with([&](unit_map_type::const_iterator it) -> bool {
+            return it != unit_map.end();
+          })
+          .then([](unit_map_type::const_iterator it) -> attribute {
+            return it->second;
+          });
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       auto p = ignore(parsers::real) >> ignore(*space) >> unit;
       return p(f, l, unused);
