@@ -93,7 +93,7 @@ jobs:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Use Magic Nix Cache
         if: runner.environment == 'github-hosted'
-        uses: DeterminateSystems/magic-nix-cache-action@v4
+        uses: DeterminateSystems/magic-nix-cache-action@v6
         with:
           # disables telemetry
           diagnostic-endpoint: ""
