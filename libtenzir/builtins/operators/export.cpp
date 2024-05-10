@@ -91,7 +91,7 @@ struct export_mode {
 
   export_mode() = default;
   export_mode(bool live_, bool retro_) : live{live_}, retro{retro_} {
-    TENZIR_ASSERT(live | retro);
+    TENZIR_ASSERT(live || retro);
   }
 
   friend auto inspect(auto& f, export_mode& x) -> bool {
@@ -109,8 +109,8 @@ public:
   }
 
   auto
-  run_live(operator_control_plane& ctrl,
-           caf::scoped_actor& blocking_self) const -> generator<table_slice> {
+  run_live(operator_control_plane& ctrl, caf::scoped_actor& blocking_self) const
+    -> generator<table_slice> {
     // TODO: Some of the the requests this operator makes are blocking, so we
     // have to create a scoped actor here; once the operator API uses async we
     // can offer a better mechanism here.
@@ -125,23 +125,26 @@ public:
     co_yield {};
     auto [importer] = std::move(*components);
     auto bridge = ctrl.self().spawn<caf::linked>(make_bridge, importer, expr_);
-    auto next = table_slice{};
     while (true) {
+      auto result = table_slice{};
+      ctrl.set_waiting(true);
       ctrl.self()
         .request(bridge, caf::infinite, atom::get_v)
-        .await(
-          [&next](table_slice& response) {
-            next = std::move(response);
+        .then(
+          [&](table_slice& response) {
+            ctrl.set_waiting(false);
+            result = std::move(response);
           },
-          [&ctrl](caf::error e) {
-            diagnostic::error(e).emit(ctrl.diagnostics());
+          [&](const caf::error& err) {
+            diagnostic::error(err).emit(ctrl.diagnostics());
           });
-      co_yield std::move(next);
+      co_yield {};
+      co_yield std::move(result);
     }
   }
 
-  auto
-  operator()(operator_control_plane& ctrl) const -> generator<table_slice> {
+  auto operator()(operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     // TODO: Some of the the requests this operator makes are blocking, so we
     // have to create a scoped actor here; once the operator API uses async we
     // can offer a better mechanism here.
@@ -246,8 +249,8 @@ public:
     return true;
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     (void)order;
     if (mode_.live) {
       return do_not_optimize(*this);
