@@ -2,7 +2,7 @@
 title: Tenzir v4.12
 authors: [jachris]
 date: 2024-04-24
-tags: [tcp, udp, publish, subscribe, deduplicate, unroll, syslog, every]
+tags: [release, tcp, udp, publish, subscribe, deduplicate, unroll, syslog, every]
 comments: true
 ---
 

@@ -47,7 +47,7 @@ pairs map to record fields. Here is an example of the parsed events from above:
 
 ```json
 {
-  "version": "1.0",
+  "leef_version": "1.0",
   "vendor": "Microsoft",
   "product_name": "MSExchange",
   "product_version": "2016",
@@ -58,7 +58,7 @@ pairs map to record fields. Here is an example of the parsed events from above:
   }
 }
 {
-  "version": "2.0",
+  "leef_version": "2.0",
   "vendor": "Lancope",
   "product_name": "StealthWatch",
   "product_version": "1.0",
