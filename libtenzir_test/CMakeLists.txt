@@ -2,19 +2,11 @@ if (NOT TENZIR_ENABLE_UNIT_TESTS)
   return()
 endif ()
 
-add_library(
-  libtenzir_test STATIC src/actor_system.cpp src/events.cpp src/node.cpp
-                      src/symbols.cpp src/table_slices.cpp)
+add_library(libtenzir_test STATIC src/actor_system.cpp src/symbols.cpp)
 TenzirTargetEnableTooling(libtenzir_test)
-target_compile_definitions(
-  libtenzir_test
-  PUBLIC
-    $<BUILD_INTERFACE:TENZIR_TEST_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/\">
-    $<INSTALL_INTERFACE:TENZIR_TEST_PATH=\"\${_IMPORT_PREFIX}/${CMAKE_INSTALL_DATADIR}/tenzir/test/\">
-)
 target_include_directories(
   libtenzir_test PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-                      $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+                        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_include_directories(libtenzir_test
                            PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tenzir/test)
 target_link_libraries(
@@ -48,8 +40,4 @@ install(
 install(
   DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tenzir"
   DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-  COMPONENT Development)
-install(
-  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/artifacts"
-  DESTINATION "${CMAKE_INSTALL_DATADIR}/tenzir/test"
   COMPONENT Development)

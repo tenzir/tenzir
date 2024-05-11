@@ -55,7 +55,6 @@
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
-#include <tenzir/format/json.hpp>
 #include <tenzir/node.hpp>
 #include <tenzir/node_control.hpp>
 #include <tenzir/pipeline.hpp>

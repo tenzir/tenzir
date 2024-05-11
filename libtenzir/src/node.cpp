@@ -28,14 +28,6 @@
 #include "tenzir/detail/process.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/execution_node.hpp"
-#include "tenzir/format/csv.hpp"
-#include "tenzir/format/json.hpp"
-#include "tenzir/format/json/default_selector.hpp"
-#include "tenzir/format/json/suricata_selector.hpp"
-#include "tenzir/format/json/zeek_selector.hpp"
-#include "tenzir/format/syslog.hpp"
-#include "tenzir/format/test.hpp"
-#include "tenzir/format/zeek.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/node.hpp"
 #include "tenzir/plugin.hpp"
@@ -44,7 +36,6 @@
 #include "tenzir/spawn_arguments.hpp"
 #include "tenzir/spawn_catalog.hpp"
 #include "tenzir/spawn_disk_monitor.hpp"
-#include "tenzir/spawn_exporter.hpp"
 #include "tenzir/spawn_importer.hpp"
 #include "tenzir/spawn_index.hpp"
 #include "tenzir/spawn_node.hpp"
@@ -211,7 +202,6 @@ node_state::component_factory_fun lift_component_factory() {
 auto make_component_factory() {
   auto result = node_state::named_component_factory{
     {"spawn disk-monitor", lift_component_factory<spawn_disk_monitor>()},
-    {"spawn exporter", lift_component_factory<spawn_exporter>()},
     {"spawn importer", lift_component_factory<spawn_importer>()},
     {"spawn catalog", lift_component_factory<spawn_catalog>()},
     {"spawn index", lift_component_factory<spawn_index>()},
@@ -225,7 +215,6 @@ auto make_command_factory() {
   auto result = command::factory{
     {"spawn accountant", node_state::spawn_command},
     {"spawn disk-monitor", node_state::spawn_command},
-    {"spawn exporter", node_state::spawn_command},
     {"spawn importer", node_state::spawn_command},
     {"spawn catalog", node_state::spawn_command},
     {"spawn index", node_state::spawn_command},

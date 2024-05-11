@@ -6,18 +6,17 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/detail/assert.hpp"
-#include "tenzir/detail/strip_leading_indentation.hpp"
-#include "tenzir/format/arrow.hpp"
-
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/parseable/string/quoted_string.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
+#include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/installdirs.hpp>
 #include <tenzir/detail/overload.hpp>
+#include <tenzir/detail/posix.hpp>
 #include <tenzir/detail/preserved_fds.hpp>
+#include <tenzir/detail/strip_leading_indentation.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/generator.hpp>
 #include <tenzir/logger.hpp>
@@ -44,6 +43,55 @@ namespace bp = boost::process;
 
 namespace tenzir::plugins::python {
 namespace {
+
+/// Arrow InputStream API implementation over a file descriptor.
+class arrow_fd_wrapper : public ::arrow::io::InputStream {
+public:
+  explicit arrow_fd_wrapper(int fd) : fd_{fd} {
+  }
+
+  auto Close() -> ::arrow::Status override {
+    int result = ::close(fd_);
+    fd_ = -1;
+    if (result != 0) {
+      return ::arrow::Status::IOError("close(2): ", detail::describe_errno());
+    }
+    return ::arrow::Status::OK();
+  }
+
+  auto closed() const -> bool override {
+    return fd_ == -1;
+  }
+
+  auto Tell() const -> ::arrow::Result<int64_t> override {
+    return pos_;
+  }
+
+  auto Read(int64_t nbytes, void* out) -> ::arrow::Result<int64_t> override {
+    auto bytes_read = detail::read(fd_, out, nbytes);
+    if (!bytes_read) {
+      return ::arrow::Status::IOError(fmt::to_string(bytes_read.error()));
+    }
+    auto sbytes = detail::narrow_cast<int64_t>(*bytes_read);
+    pos_ += sbytes;
+    return sbytes;
+  }
+
+  auto Read(int64_t nbytes)
+    -> ::arrow::Result<std::shared_ptr<::arrow::Buffer>> override {
+    ARROW_ASSIGN_OR_RAISE(auto buffer,
+                          ::arrow::AllocateResizableBuffer(nbytes));
+    ARROW_ASSIGN_OR_RAISE(int64_t bytes_read,
+                          Read(nbytes, buffer->mutable_data()));
+    ARROW_RETURN_NOT_OK(buffer->Resize(bytes_read, false));
+    buffer->ZeroPadding();
+    return buffer;
+  }
+
+private:
+  int fd_ = -1;
+  int64_t pos_ = 0;
+};
 
 auto PYTHON_SCAFFOLD = R"_(
 from tenzir.tools.python_operator_executor import main
@@ -321,7 +369,7 @@ public:
         }
         std_in.write(reinterpret_cast<const char*>((*result)->data()),
                      detail::narrow<int>((*result)->size()));
-        auto file = format::arrow::arrow_fd_wrapper{std_out.native_source()};
+        auto file = arrow_fd_wrapper{std_out.native_source()};
         auto reader = arrow::ipc::RecordBatchStreamReader::Open(&file);
         if (!reader.status().ok()) {
           auto python_error = drain_pipe(errpipe);

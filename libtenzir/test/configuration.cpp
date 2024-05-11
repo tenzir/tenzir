@@ -11,9 +11,10 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/application.hpp"
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/env.hpp"
 #include "tenzir/detail/settings.hpp"
-#include "tenzir/test/fixtures/actor_system_and_events.hpp"
+#include "tenzir/logger.hpp"
 #include "tenzir/test/test.hpp"
 
 #include <vector>

@@ -17,8 +17,6 @@
 #include <tenzir/detail/make_io_stream.hpp>
 #include <tenzir/detail/string.hpp>
 #include <tenzir/error.hpp>
-#include <tenzir/format/multi_schema_reader.hpp>
-#include <tenzir/format/reader.hpp>
 #include <tenzir/module.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
