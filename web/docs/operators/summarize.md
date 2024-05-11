@@ -11,7 +11,10 @@ Groups events and applies aggregate functions on each group.
 ## Synopsis
 
 ```
-summarize <[field=]aggregation>... [by <extractor>... [resolution <duration>]]
+summarize <[field=]aggregation>... 
+          [by <extractor>... [resolution <duration>]]
+          [timeout <duration>]
+          [update-timeout <duration>]
 ```
 
 ## Description
@@ -56,12 +59,27 @@ groups. If `by` is omitted, all events are assigned to the same group.
 ### `resolution <duration>`
 
 The `resolution` option specifies an optional duration value that specifies the
-tolerance when comparing time values in the `group-by` section. For example,
-`01:48` is rounded down to `01:00` when a 1-hour `resolution` is used.
+tolerance when comparing time values in the `by` section. For example, `01:48`
+is rounded down to `01:00` when a 1-hour `resolution` is used.
 
 NB: we introduced the `resolution` option as a stop-gap measure to compensate for
 the lack of a rounding function. The ability to apply functions in the grouping
 expression will replace this option in the future.
+
+### `timeout <duration>`
+
+The `timeout` option specifies how long an aggregation may take, measured per
+group in the `by` section from when the group is created, or if no group exists
+from the time when first event arrived at the operator.
+
+If values occur again after the timeout, a new group with an independent
+aggregation will be created.
+
+### `update-timeout <duration>`
+
+The `update-timeout` functions just like the `timeout` option, but instead of
+measuring from the first event of a group the timeout refreshes whenever an
+element is added to a group.
 
 ## Examples
 
