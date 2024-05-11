@@ -10,7 +10,6 @@
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/detail/loader_saver_resolver.hpp>
-#include <tenzir/element_type.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>

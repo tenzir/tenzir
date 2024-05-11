@@ -13,8 +13,6 @@
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/signal_handlers.hpp"
 #include "tenzir/factory.hpp"
-#include "tenzir/format/reader_factory.hpp" // IWYU pragma: keep
-#include "tenzir/format/writer_factory.hpp" // IWYU pragma: keep
 #include "tenzir/logger.hpp"
 #include "tenzir/module.hpp"
 #include "tenzir/modules.hpp"
@@ -55,9 +53,6 @@ int main(int argc, char** argv) {
     fmt::print(stderr, "{}\n", loaded_plugin_paths.error());
     return EXIT_FAILURE;
   }
-  // Initialize factories.
-  factory<format::reader>::initialize();
-  factory<format::writer>::initialize();
   // Application setup.
   auto [root, root_factory] = make_application(argv[0]);
   if (!root)
