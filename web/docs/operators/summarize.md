@@ -42,8 +42,14 @@ The following aggregation functions are available:
   values to be booleans.
 - `all`: Computes the conjunction (AND) of all grouped values. Requires the
   values to be booleans.
+- `mean`: Computes the mean of all grouped values.
+- `approximate_median`: Computes the apprximate median of all grouped values
+  with a T-Digest algorithm.
+- `stddev`: Computes the standard deviation of all grouped values.
+- `variance`: Computes the variance of all grouped values.
 - `distinct`: Creates a sorted list of all unique grouped values that are not
   null.
+- `collect`: Creates a list of all grouped values that are not null.
 - `sample`: Takes the first of all grouped values that is not null.
 - `count`: Counts all grouped values that are not null.
 - `count_distinct`: Counts all distinct grouped values that are not null.
