@@ -350,8 +350,12 @@ public:
     if (ret.library_error == AMQP_STATUS_TIMEOUT)
       return chunk_ptr{};
     // Now we're leaving the happy path.
-    TENZIR_DEBUG("reply type is {}, library error {} ({})", ret.reply_type,
-                 ret.library_error, amqp_error_string2(ret.library_error));
+    TENZIR_DEBUG(
+      "reply type is {}, library error {} ({})",
+      static_cast<std::underlying_type_t<amqp_response_type_enum>>(
+        ret.reply_type),
+      static_cast<std::underlying_type_t<amqp_status_enum>>(ret.library_error),
+      amqp_error_string2(ret.library_error));
     if (ret.reply_type == AMQP_RESPONSE_LIBRARY_EXCEPTION) {
       if (ret.library_error != AMQP_STATUS_UNEXPECTED_STATE) {
         // Likely unrecoverable error, let the retry logic handle this
