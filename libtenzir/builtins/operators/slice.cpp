@@ -195,7 +195,7 @@ public:
 
   auto optimize(const expression& filter, event_order order) const
     -> optimize_result override {
-    if (not begin_ and not end_) {
+    if (begin_.value_or(0) == 0 and not end_) {
       // If there's neither a begin nor an end, then this operator is a no-op.
       // We optimize it away here.
       return optimize_result{filter, order, nullptr};
