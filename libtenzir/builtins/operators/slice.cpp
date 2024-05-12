@@ -221,13 +221,46 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto parser = argument_parser{"slice", "https://docs.tenzir.com/"
-                                           "operators/slice"};
     auto begin = std::optional<int64_t>{};
     auto end = std::optional<int64_t>{};
-    parser.add("--begin", begin, "<begin>");
-    parser.add("--end", end, "<end>");
-    parser.parse(p);
+    const auto parse_int = [&]() -> std::optional<int64_t> {
+      if (p.at_end()) {
+        diagnostic::error("expected an integer")
+          .primary(p.current_span())
+          .hint("syntax: slice [<begin>]:[<end>]")
+          .docs("https://docs.tenzir.com/operators/slice")
+          .throw_();
+      }
+      auto data = p.parse_data();
+      if (const auto* i64 = caf::get_if<int64_t>(&data.inner)) {
+        return *i64;
+      }
+      if (const auto* u64 = caf::get_if<uint64_t>(&data.inner)) {
+        return *u64 > std::numeric_limits<int64_t>::max()
+                 ? std::numeric_limits<int64_t>::max()
+                 : static_cast<int64_t>(*u64);
+      }
+      diagnostic::error("expected an integer")
+        .primary(data.source)
+        .hint("syntax: slice [<begin>]:[<end>]")
+        .docs("https://docs.tenzir.com/operators/slice")
+        .throw_();
+    };
+    if (p.accept_char(':')) {
+      end = parse_int();
+    } else {
+      begin = parse_int();
+      if (not p.accept_char(':')) {
+        diagnostic::error("expected `:`")
+          .primary(p.current_span())
+          .hint("syntax: slice [<begin>]:[<end>]")
+          .docs("https://docs.tenzir.com/operators/slice")
+          .throw_();
+      }
+      if (not p.at_end()) {
+        end = parse_int();
+      }
+    }
     return std::make_unique<slice_operator>(begin, end);
   }
 };

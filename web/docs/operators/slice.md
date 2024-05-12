@@ -11,7 +11,9 @@ Keep a range events within the half-closed interval `[begin, end)`.
 ## Synopsis
 
 ```
-slice [--begin <begin>] [--end <end>]
+slice <begin>:<end>
+slice <begin>:
+slice        :<end>
 ```
 
 ## Description
@@ -34,29 +36,29 @@ negative number to count from the end.
 Get the second 100 events:
 
 ```
-slice --begin 100 --end 200
+slice 100:200
 ```
 
 Get the last five events:
 
 ```
-slice --begin -5
+slice -5:
 ```
 
 Skip the last ten events:
 
 ```
-slice --end -10
+slice :-10
 ```
 
 Return the last 50 events, except for the last 2:
 
 ```
-slice --begin -50 --end -2
+slice -50:-2
 ```
 
 Skip the first and the last event:
 
 ```
-slice --begin 1 --end -1
+slice 1:-1
 ```
