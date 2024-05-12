@@ -62,6 +62,7 @@ public:
     co_yield {};
     auto offset = int64_t{0};
     auto buffer = std::vector<table_slice>{};
+    auto num_buffered = int64_t{0};
     for (auto&& slice : input) {
       const auto rows = static_cast<int64_t>(slice.rows());
       if (rows == 0) {
@@ -69,27 +70,23 @@ public:
         continue;
       }
       const auto clamped_begin = std::clamp(begin - offset, int64_t{0}, rows);
-      auto result = subslice(slice, clamped_begin, slice.rows());
-      if (result.rows() > 0) {
-        buffer.push_back(std::move(result));
-      }
       offset += rows;
-    }
-    end = offset + end - begin;
-    if (end < 0) {
-      co_return;
-    }
-    offset = 0;
-    for (auto&& slice : buffer) {
-      const auto rows = static_cast<int64_t>(slice.rows());
-      const auto clamped_end = std::clamp(end - offset, int64_t{0}, rows);
-      auto result = subslice(slice, int64_t{0}, clamped_end);
+      auto result = subslice(slice, clamped_begin, rows);
       if (result.rows() == 0) {
-        break;
+        continue;
       }
-      co_yield std::move(result);
-      offset += rows;
+      num_buffered += static_cast<int64_t>(result.rows());
+      buffer.push_back(std::move(result));
+      if (num_buffered > -end) {
+        auto [lhs, rhs] = split(std::move(buffer), num_buffered + end);
+        buffer = std::move(rhs);
+        for (auto&& slice : std::move(lhs)) {
+          num_buffered -= static_cast<int64_t>(slice.rows());
+          co_yield std::move(slice);
+        }
+      }
     }
+    TENZIR_ASSERT(num_buffered == -end);
   }
 
   static auto negative_begin_positive_end(generator<table_slice> input,
