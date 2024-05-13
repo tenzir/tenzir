@@ -774,9 +774,10 @@ void index_state::decommission_active_partition(
   const auto id = active_partition->second.id;
   const auto actor = std::exchange(active_partition->second.actor, {});
   const auto type = active_partition->first;
+  auto stream_slot = active_partition->second.stream_slot;
   // Send buffered batches and remove active partition from the stream.
   stage->out().fan_out_flush();
-  stage->out().close(active_partition->second.stream_slot);
+  stage->out().close(stream_slot);
   stage->out().force_emit_batches();
   // Move the active partition to the list of unpersisted partitions.
   TENZIR_ASSERT_EXPENSIVE(!unpersisted.contains(id));
@@ -817,6 +818,7 @@ void index_state::decommission_active_partition(
                 self->send(listener, atom::update_v,
                            partition_synopsis_pair{id, ps});
               unpersisted.erase(id);
+              self->erase_stream_manager(stream_slot);
               persisted_partitions.emplace(id);
               self->send_exit(actor, caf::exit_reason::normal);
               if (completion)
@@ -829,6 +831,7 @@ void index_state::decommission_active_partition(
                            "queries: {}",
                            *self, schema, id, err);
               unpersisted.erase(id);
+              self->erase_stream_manager(stream_slot);
               self->send_exit(actor, err);
               if (completion)
                 completion(err);
@@ -840,6 +843,7 @@ void index_state::decommission_active_partition(
                      "memory to preserve process integrity: {}",
                      *self, schema, id, err);
         unpersisted.erase(id);
+        self->erase_stream_manager(stream_slot);
         self->send_exit(actor, err);
         if (completion)
           completion(err);
