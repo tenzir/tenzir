@@ -176,7 +176,7 @@ setup() {
 }
 # bats test_tags=pipelines
 @test "Empty Record in Pipeline" {
-  check tenzir "from ${INPUTSDIR}/json/empty-record.json read json| write json"
+  check tenzir "from ${INPUTSDIR}/json/empty-record.json read json | write json"
   check tenzir "from ${INPUTSDIR}/json/empty-record.json read json | write csv"
   check tenzir "from ${INPUTSDIR}/json/empty-record.json read json | write xsv \" \" ; NULL"
 }

@@ -292,16 +292,20 @@ arrow_table_slice<FlatBuffer>::record_batch() const noexcept {
 
 // -- utility functions -------------------------------------------------------
 
-std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
-  type schema, const std::shared_ptr<arrow::StructArray>& struct_array,
-  const std::vector<indexed_transformation>& transformations) noexcept {
+std::pair<type, std::shared_ptr<arrow::StructArray>>
+transform_columns(type schema,
+                  const std::shared_ptr<arrow::StructArray>& struct_array,
+                  const std::vector<indexed_transformation>& transformations) {
+  if (struct_array->num_fields() == 0) {
+    return {schema, struct_array};
+  }
   TENZIR_ASSERT_EXPENSIVE(std::is_sorted(transformations.begin(),
                                          transformations.end()),
                           "transformations must be sorted by index");
   TENZIR_ASSERT_EXPENSIVE(
     transformations.end()
       == std::adjacent_find(transformations.begin(), transformations.end(),
-                            [](const auto& lhs, const auto& rhs) noexcept {
+                            [](const auto& lhs, const auto& rhs) {
                               const auto [lhs_mismatch, rhs_mismatch]
                                 = std::mismatch(lhs.index.begin(),
                                                 lhs.index.end(),
@@ -318,9 +322,8 @@ std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
     std::vector<struct record_type::field> fields;
     arrow::ArrayVector arrays;
   };
-  const auto impl
-    = [](const auto& impl, unpacked_layer layer, offset index, auto& current,
-         const auto sentinel) noexcept -> unpacked_layer {
+  const auto impl = [](const auto& impl, unpacked_layer layer, offset index,
+                       auto& current, const auto sentinel) -> unpacked_layer {
     TENZIR_ASSERT(!index.empty());
     auto result = unpacked_layer{};
     // Iterate over the current layer. For every entry in the current layer, we
@@ -332,7 +335,7 @@ std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
     // 3. Leave the elements untouched.
     for (; index.back() < layer.fields.size(); ++index.back()) {
       const auto [is_prefix_match, is_exact_match]
-        = [&]() noexcept -> std::pair<bool, bool> {
+        = [&]() -> std::pair<bool, bool> {
         if (current == sentinel)
           return {false, false};
         const auto [index_mismatch, current_index_mismatch]
@@ -441,11 +444,14 @@ std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
   };
 }
 
-table_slice transform_columns(
-  const table_slice& slice,
-  const std::vector<indexed_transformation>& transformations) noexcept {
+table_slice
+transform_columns(const table_slice& slice,
+                  const std::vector<indexed_transformation>& transformations) {
   if (slice.rows() == 0) {
     return {};
+  }
+  if (caf::get<record_type>(slice.schema()).num_leaves() == 0) {
+    return slice;
   }
   auto input_batch = to_record_batch(slice);
   auto input_struct_array = input_batch->ToStructArray().ValueOrDie();
@@ -464,7 +470,7 @@ table_slice transform_columns(
 
 std::pair<type, std::shared_ptr<arrow::RecordBatch>>
 select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
-               const std::vector<offset>& indices) noexcept {
+               const std::vector<offset>& indices) {
   TENZIR_ASSERT_EXPENSIVE(batch->schema()->Equals(schema.to_arrow_schema()),
                           "Tenzir schema and Arrow schema must match");
   TENZIR_ASSERT_EXPENSIVE(std::is_sorted(indices.begin(), indices.end()),
@@ -473,7 +479,7 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
   TENZIR_ASSERT_EXPENSIVE(
     indices.end()
       == std::adjacent_find(indices.begin(), indices.end(),
-                            [](const auto& lhs, const auto& rhs) noexcept {
+                            [](const auto& lhs, const auto& rhs) {
                               const auto [lhs_mismatch, rhs_mismatch]
                                 = std::mismatch(lhs.begin(), lhs.end(),
                                                 rhs.begin(), rhs.end());
@@ -487,9 +493,8 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
     std::vector<struct record_type::field> fields;
     arrow::ArrayVector arrays;
   };
-  const auto impl
-    = [](const auto& impl, unpacked_layer layer, offset index, auto& current,
-         const auto sentinel) noexcept -> unpacked_layer {
+  const auto impl = [](const auto& impl, unpacked_layer layer, offset index,
+                       auto& current, const auto sentinel) -> unpacked_layer {
     TENZIR_ASSERT(!index.empty());
     auto result = unpacked_layer{};
     // Iterate over the current layer, backwards. For every entry in the current
@@ -499,7 +504,7 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
     //    selected index.
     for (; index.back() < layer.fields.size(); ++index.back()) {
       const auto [is_prefix_match, is_exact_match]
-        = [&]() noexcept -> std::pair<bool, bool> {
+        = [&]() -> std::pair<bool, bool> {
         if (current == sentinel)
           return {false, false};
         const auto [index_mismatch, current_index_mismatch] = std::mismatch(
@@ -575,8 +580,8 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
   };
 }
 
-table_slice select_columns(const table_slice& slice,
-                           const std::vector<offset>& indices) noexcept {
+table_slice
+select_columns(const table_slice& slice, const std::vector<offset>& indices) {
   auto [schema, batch]
     = select_columns(slice.schema(), to_record_batch(slice), indices);
   if (!schema)
