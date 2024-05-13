@@ -368,17 +368,18 @@ struct indexed_transformation {
 /// @pre Transformations must be sorted by index.
 /// @pre Transformation indices must not be a subset of the following
 /// transformation's index.
-std::pair<type, std::shared_ptr<arrow::StructArray>> transform_columns(
-  type schema, const std::shared_ptr<arrow::StructArray>& struct_array,
-  const std::vector<indexed_transformation>& transformations) noexcept;
+std::pair<type, std::shared_ptr<arrow::StructArray>>
+transform_columns(type schema,
+                  const std::shared_ptr<arrow::StructArray>& struct_array,
+                  const std::vector<indexed_transformation>& transformations);
 
 /// Applies a list of transformations to a table slice.
 /// @pre Transformations must be sorted by index.
 /// @pre Transformation indices must not be a subset of the following
 /// transformation's index.
-table_slice transform_columns(
-  const table_slice& slice,
-  const std::vector<indexed_transformation>& transformations) noexcept;
+table_slice
+transform_columns(const table_slice& slice,
+                  const std::vector<indexed_transformation>& transformations);
 
 /// Remove all unspecified columns from both a Tenzir schema and an Arrow record
 /// batch.
@@ -387,13 +388,13 @@ table_slice transform_columns(
 /// @pre Indices must not be a subset of the following index.
 std::pair<type, std::shared_ptr<arrow::RecordBatch>>
 select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
-               const std::vector<offset>& indices) noexcept;
+               const std::vector<offset>& indices);
 
 /// Remove all unspecified columns from a table slice.
 /// @pre Indices must be sorted.
 /// @pre Indices must not be a subset of the following index.
-table_slice select_columns(const table_slice& slice,
-                           const std::vector<offset>& indices) noexcept;
+table_slice
+select_columns(const table_slice& slice, const std::vector<offset>& indices);
 
 /// Create a new `arrow::StructArray`.
 ///
