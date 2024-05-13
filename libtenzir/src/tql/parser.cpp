@@ -300,6 +300,10 @@ public:
     return accept(c);
   }
 
+  auto peek_char(char c) -> std::optional<location> override {
+    return peek(c);
+  }
+
   auto at_end() -> bool override {
     return rollback([&] {
       return !!accept_statement_end();

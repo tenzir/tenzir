@@ -58,6 +58,11 @@ public:
     return next_.accept_char(c);
   }
 
+  auto peek_char(char c) -> std::optional<location> override {
+    TENZIR_ASSERT(not token_);
+    return next_.peek_char(c);
+  }
+
   auto parse_operator() -> located<operator_ptr> override {
     TENZIR_ASSERT(not token_);
     return next_.parse_operator();

@@ -34,6 +34,8 @@ public:
 
   virtual auto accept_char(char c) -> std::optional<location> = 0;
 
+  virtual auto peek_char(char c) -> std::optional<location> = 0;
+
   virtual auto parse_operator() -> located<operator_ptr> = 0;
 
   virtual auto parse_expression() -> tql::expression = 0;
@@ -89,6 +91,13 @@ public:
       return {};
     }
     return p_.accept_char(c);
+  }
+
+  auto peek_char(char c) -> std::optional<location> override {
+    if (at_end()) {
+      return {};
+    }
+    return p_.peek_char(c);
   }
 
   auto parse_expression() -> tql::expression override {
