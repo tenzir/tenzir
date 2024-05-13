@@ -32,4 +32,15 @@ auto expression::copy() const -> expression {
   return result;
 }
 
+expression::expression(expression const& other) {
+  *this = other.copy();
+}
+
+auto expression::operator=(expression const& other) -> expression& {
+  if (this != &other) {
+    *this = other.copy();
+  }
+  return *this;
+}
+
 } // namespace tenzir::ast

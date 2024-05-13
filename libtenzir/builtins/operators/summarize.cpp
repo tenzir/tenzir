@@ -18,9 +18,13 @@
 #include <tenzir/hash/hash_append.hpp>
 #include <tenzir/operator_control_plane.hpp>
 #include <tenzir/parser_interface.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice_builder.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
+#include <tenzir/tql2/registry.hpp>
 #include <tenzir/type.hpp>
 
 #include <arrow/compute/api_scalar.h>
@@ -31,6 +35,7 @@
 
 #include <algorithm>
 #include <utility>
+#include <variant>
 
 namespace tenzir::plugins::summarize {
 
@@ -885,8 +890,137 @@ public:
   }
 };
 
+struct aggregate_t {
+  ast::selector dest;
+  ast::function_call call;
+
+  friend auto inspect(auto& f, aggregate_t& x) -> bool {
+    return f.object(x).fields(f.field("dest", x.dest), f.field("call", x.call));
+  }
+};
+
+struct config {
+  std::vector<aggregate_t> aggregates;
+  std::vector<ast::selector> groups;
+
+  friend auto inspect(auto& f, config& x) -> bool {
+    return f.object(x).fields(f.field("aggregates", x.aggregates),
+                              f.field("groups", x.groups));
+  }
+};
+
+class summarize_operator2 final : public crtp_operator<summarize_operator2> {
+public:
+  summarize_operator2() = default;
+
+  explicit summarize_operator2(config cfg) : cfg_{std::move(cfg)} {
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.summarize";
+  }
+
+  auto
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    auto groups = tsl::robin_map<group_by_key, int, group_by_key_hash,
+                                 group_by_key_equal>{};
+    for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      auto group_values = std::vector<series>{};
+      for (auto& group : cfg_.groups) {
+        // TODO: `group` is getting copied here.
+        group_values.push_back(tql2::eval(group, slice, ctrl.diagnostics()));
+      }
+
+      // TODO: Find group or create a new one.
+      for (auto& aggregate : cfg_.aggregates) {
+        // At the moment, we check this before constructing the operator.
+        TENZIR_ASSERT(aggregate.call.args.size() == 1);
+        // TODO: Feed result to aggregation instance.
+        (void)tql2::eval(aggregate.call.args[0], slice, ctrl.diagnostics());
+      }
+    }
+    // TODO: Yield results.
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, summarize_operator2& x) -> bool {
+    return f.apply(x.cfg_);
+  }
+
+private:
+  config cfg_;
+};
+
+class plugin2 final : public tql2::operator_plugin<summarize_operator2> {
+public:
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
+    // summarize foo, bar, baz=count(foo)
+    auto cfg = config{};
+    for (auto& arg : inv.args) {
+      arg.match(
+        [&](ast::assignment& arg) {
+          auto call = std::get_if<ast::function_call>(&*arg.right.kind);
+          if (not call) {
+            diagnostic::error("expected an aggregation function call after `=`")
+              .primary(arg.right.get_location())
+              .emit(ctx);
+            return;
+          }
+          auto& ref = call->fn.ref;
+          if (not ref.resolved()) {
+            // Already reported.
+            return;
+          }
+          // TODO: Improve this and try to forward function handle directly.
+          auto fn = dynamic_cast<const tql2::aggregation_function_plugin*>(
+            std::get<const tql2::function_plugin*>(ctx.reg().get(ref)));
+          // TODO: Check if aggregation function.
+          if (not fn) {
+            diagnostic::error("function does not support aggregations")
+              .primary(call->fn.get_location())
+              .emit(ctx);
+            return;
+          }
+          if (call->args.size() != 1) {
+            // TODO: We eventually want to support more arguments.
+            // TODO: What about `count()`?
+            diagnostic::error("function expected exactly one argument")
+              .primary(call->get_location())
+              .emit(ctx);
+            return;
+          }
+          cfg.aggregates.emplace_back(std::move(arg.left), std::move(*call));
+        },
+        [&](ast::selector& arg) {
+          cfg.groups.push_back(std::move(arg));
+        },
+        [&](auto&) {
+          auto diag = diagnostic::error("expected selector or assignment with "
+                                        "aggregation function")
+                        .primary(arg.get_location());
+          if (std::holds_alternative<ast::function_call>(*arg.kind)) {
+            diag = std::move(diag).hint("try adding `some_name=` before it");
+          }
+          std::move(diag).emit(ctx);
+        });
+    }
+    return std::make_unique<summarize_operator2>(std::move(cfg));
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::summarize
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::summarize::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::summarize::plugin2)

@@ -181,9 +181,9 @@ struct expression {
   }
 
   ~expression();
-  expression(const expression&) = delete;
+  expression(const expression&);
   expression(expression&&) noexcept;
-  auto operator=(const expression&) -> expression& = delete;
+  auto operator=(const expression&) -> expression&;
   auto operator=(expression&&) noexcept -> expression&;
 
   std::unique_ptr<expression_kind> kind;

@@ -42,4 +42,15 @@ public:
     = 0;
 };
 
+class aggregation_instance {
+public:
+  virtual ~aggregation_instance() = default;
+};
+
+class aggregation_function_plugin : public virtual function_plugin {
+public:
+  virtual auto make_aggregation() const -> std::unique_ptr<aggregation_instance>
+    = 0;
+};
+
 } // namespace tenzir::tql2

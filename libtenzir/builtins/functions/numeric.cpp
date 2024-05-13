@@ -213,6 +213,28 @@ public:
   }
 };
 
+class sum_instance final : public aggregation_instance {
+public:
+};
+
+class sum final : public tql2::aggregation_function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.sum";
+  }
+
+  auto eval(const ast::function_call& self, size_t length,
+            std::vector<series> args, diagnostic_handler& dh) const
+    -> series override {
+    TENZIR_TODO();
+  }
+
+  auto make_aggregation() const
+    -> std::unique_ptr<aggregation_instance> override {
+    return std::make_unique<sum_instance>();
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::numeric
@@ -220,3 +242,4 @@ public:
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::round)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::sqrt)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::random)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::sum)
