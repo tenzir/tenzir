@@ -28,6 +28,7 @@
 #include <tenzir/tql/basic.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <arrow/compute/api.h>
 #include <arrow/type.h>
 #include <caf/expected.hpp>
 
@@ -189,7 +190,8 @@ public:
       auto length = array->length();
       auto current_value = array->Value(0);
       auto current_begin = int64_t{0};
-      // Add `false` at index `length` to flush.
+      // Add `false` at index `length` to flush.r
+      auto& x = *to_record_batch(slice)->ToStructArray().ValueOrDie()->data();
       for (auto i = int64_t{1}; i < length + 1; ++i) {
         auto next = i != length && array->Value(i);
         if (current_value == next) {

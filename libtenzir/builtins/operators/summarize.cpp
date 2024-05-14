@@ -891,7 +891,7 @@ public:
 };
 
 struct aggregate_t {
-  ast::selector dest;
+  std::optional<ast::selector> dest;
   ast::function_call call;
 
   friend auto inspect(auto& f, aggregate_t& x) -> bool {
@@ -966,17 +966,9 @@ public:
     -> operator_ptr override {
     // summarize foo, bar, baz=count(foo)
     auto cfg = config{};
-    for (auto& arg : inv.args) {
-      arg.match(
-        [&](ast::assignment& arg) {
-          auto call = std::get_if<ast::function_call>(&*arg.right.kind);
-          if (not call) {
-            diagnostic::error("expected an aggregation function call after `=`")
-              .primary(arg.right.get_location())
-              .emit(ctx);
-            return;
-          }
-          auto& ref = call->fn.ref;
+    auto add_aggregate
+      = [&](std::optional<ast::selector> dest, ast::function_call call) {
+          auto& ref = call.fn.ref;
           if (not ref.resolved()) {
             // Already reported.
             return;
@@ -987,19 +979,34 @@ public:
           // TODO: Check if aggregation function.
           if (not fn) {
             diagnostic::error("function does not support aggregations")
-              .primary(call->fn.get_location())
+              .primary(call.fn.get_location())
               .emit(ctx);
             return;
           }
-          if (call->args.size() != 1) {
+          if (call.args.size() != 1) {
             // TODO: We eventually want to support more arguments.
             // TODO: What about `count()`?
             diagnostic::error("function expected exactly one argument")
-              .primary(call->get_location())
+              .primary(call.get_location())
               .emit(ctx);
             return;
           }
-          cfg.aggregates.emplace_back(std::move(arg.left), std::move(*call));
+          cfg.aggregates.emplace_back(std::move(dest), std::move(call));
+        };
+    for (auto& arg : inv.args) {
+      arg.match(
+        [&](ast::assignment& arg) {
+          auto call = std::get_if<ast::function_call>(&*arg.right.kind);
+          if (not call) {
+            diagnostic::error("expected an aggregation function call after `=`")
+              .primary(arg.right.get_location())
+              .emit(ctx);
+            return;
+          }
+          add_aggregate(std::move(arg.left), std::move(*call));
+        },
+        [&](ast::function_call& arg) {
+          add_aggregate(std::nullopt, std::move(arg));
         },
         [&](ast::selector& arg) {
           cfg.groups.push_back(std::move(arg));
