@@ -17,7 +17,7 @@ setup() {
 
 @test "Additional write options" {
   check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write parquet --compression-level 10 --compression-type brotli | read parquet | measure | drop timestamp"
-  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | slice --begin 1150 --end 1160 | write parquet --compression-level 7 --compression-type gzip | read parquet"
+  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | slice 1150:1160 | write parquet --compression-level 7 --compression-type gzip | read parquet"
   check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write parquet --compression-type snappy | read parquet | summarize count(.)"
   check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | write parquet --compression-level -1 --compression-type zstd | read parquet | measure | drop timestamp"
   gunzip -c "${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz" |

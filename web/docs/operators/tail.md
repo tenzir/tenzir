@@ -6,7 +6,7 @@ sidebar_custom_props:
 
 # tail
 
-Limits the input to the last *N* events.
+Limits the input to the last _N_ events.
 
 ## Synopsis
 
@@ -17,9 +17,9 @@ tail [<limit>]
 ## Description
 
 The semantics of the `tail` operator are the same of the equivalent Unix tool:
-consume all input and only display the last *N* events.
+consume all input and only display the last _N_ events.
 
-`tail <limit>` is a shorthand notation for [`slice --begin -<limit>`](slice.md).
+`tail <limit>` is a shorthand notation for [`slice -<limit>:`](slice.md).
 
 ### `<limit>`
 

@@ -31,7 +31,7 @@ public:
     parser.add(count, "<limit>");
     parser.parse(p);
     auto result = pipeline::internal_parse_as_operator(
-      fmt::format("slice --begin -{}", count.value_or(10)));
+      fmt::format("slice -{}:", count.value_or(10)));
     if (not result) {
       diagnostic::error("failed to transform `tail` into `slice` operator: {}",
                         result.error())

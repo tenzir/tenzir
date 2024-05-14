@@ -6,7 +6,7 @@ sidebar_custom_props:
 
 # head
 
-Limits the input to the first *N* events.
+Limits the input to the first _N_ events.
 
 ## Synopsis
 
@@ -20,7 +20,7 @@ The semantics of the `head` operator are the same of the equivalent Unix tool:
 process a fixed number of events from the input. The operator terminates
 after it has reached its limit.
 
-`head <limit>` is a shorthand notation for [`slice --end <limit>`](slice.md).
+`head <limit>` is a shorthand notation for [`slice :<limit>`](slice.md).
 
 ### `<limit>`
 
