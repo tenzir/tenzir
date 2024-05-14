@@ -88,6 +88,11 @@ public:
     return next_.parse_data();
   }
 
+  auto parse_int() -> located<int64_t> override {
+    TENZIR_ASSERT(not token_);
+    return next_.parse_int();
+  }
+
   auto at_end() -> bool override {
     return not token_ && next_.at_end();
   }

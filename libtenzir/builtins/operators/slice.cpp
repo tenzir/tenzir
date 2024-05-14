@@ -368,20 +368,8 @@ public:
       if (p.at_end() or p.peek_char(':')) {
         return {};
       }
-      auto data = p.parse_data();
-      if (const auto* i64 = caf::get_if<int64_t>(&data.inner)) {
-        return *i64;
-      }
-      if (const auto* u64 = caf::get_if<uint64_t>(&data.inner)) {
-        return *u64 > std::numeric_limits<int64_t>::max()
-                 ? std::numeric_limits<int64_t>::max()
-                 : static_cast<int64_t>(*u64);
-      }
-      diagnostic::error("expected an integer")
-        .primary(data.source)
-        .hint("syntax: slice [<begin>]:[<end>]:[<stride>]")
-        .docs("https://docs.tenzir.com/operators/slice")
-        .throw_();
+      auto data = p.parse_int();
+      return data.inner;
     };
     begin = parse_int(false);
     end = parse_int(true);
