@@ -300,7 +300,7 @@ public:
     if (auto result = accept_with_span(parsers::i64)) {
       return {std::move(result->first), result->second};
     }
-    throw_at_current("could not parse data");
+    throw_at_current("could not parse integer");
   }
 
   auto accept_char(char c) -> std::optional<location> override {
