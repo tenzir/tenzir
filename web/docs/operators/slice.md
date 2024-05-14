@@ -67,7 +67,7 @@ Skip the first and the last event:
 slice 1:-1
 ```
 
-Return every second event from the tenth:
+Return every second event starting from the tenth:
 
 ```
 slice 10::2

@@ -6,7 +6,7 @@ sidebar_custom_props:
 
 # reverse
 
-Reverse the event order.
+Reverses the event order.
 
 ## Synopsis
 
