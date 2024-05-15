@@ -32,7 +32,7 @@ Every [release](https://github.com/tenzir/tenzir/releases) of Tenzir includes an
 |✓|[CMake](https://cmake.org)|>= 3.19|Cross-platform tool for building, testing and packaging software.|
 |✓|[CAF](https://github.com/actor-framework/actor-framework)|>= 0.18.7|Implementation of the actor model in C++. (Bundled as submodule.)|
 |✓|[OpenSSL](https://www.openssl.org)||Utilities for secure networking and cryptography.|
-|✓|[FlatBuffers](https://google.github.io/flatbuffers/)|>= 1.12.0|Memory-efficient cross-platform serialization library.|
+|✓|[FlatBuffers](https://google.github.io/flatbuffers/)|>= 2.0.8|Memory-efficient cross-platform serialization library.|
 |✓|[Boost](https://www.boost.org)|>= 1.81.0|Required as a general utility library.|
 |✓|[Apache Arrow](https://arrow.apache.org)|>= 13.0.0|Required for in-memory data representation. Must be built with Compute, Filesystem, S3, Zstd and Parquet enabled. For the `gcs` plugin, GCS needs to be enabled. |
 |✓|[re2](https://github.com/google/re2)||Required for regular expressione evaluation.|
@@ -49,10 +49,10 @@ Every [release](https://github.com/tenzir/tenzir/releases) of Tenzir includes an
 ||[http-parser](https://github.com/nodejs/http-parser)||Required for building the `web` plugin.|
 ||[cppzmq](https://github.com/zeromq/cppzmq)||Required for building the `zmq` plugin.|
 ||[pfs](https://github.com/dtrugman/pfs)||Required for the `processes` and `sockets` operators on Linux.|
-||[Protocol Buffers](https://protobuf.dev)||>= 1.4.1|Required for building the `velociraptor` plugin.|
-||[gRPC](https://grpci.io)||>= 1.51|Required for building the `velociraptor` plugin.|
+||[Protocol Buffers](https://protobuf.dev)|>= 1.4.1|Required for building the `velociraptor` plugin.|
+||[gRPC](https://grpci.io)|>= 1.51|Required for building the `velociraptor` plugin.|
 ||[rabbitmq-c](https://github.com/alanxz/rabbitmq-c)||Required for building the `rabbitmq` plugin.|
-||[yara](https://yara.readthedocs.io/)||>= 4.4.0|Required for building the `yara` plugin.|
+||[yara](https://yara.readthedocs.io/)|>= 4.4.0|Required for building the `yara` plugin.|
 ||[poetry](https://python-poetry.org)||Required for building the Python bindings.|
 ||[Doxygen](http://www.doxygen.org)||Required to build documentation for libtenzir.|
 ||[Pandoc](https://github.com/jgm/pandoc)||Required to build the manpage for Tenzir.|
