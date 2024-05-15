@@ -20,6 +20,7 @@ context reset   <name>
 context save    <name>
 context load    <name>
 context inspect <name>
+context rename  <old-name> <new-name> [--force]
 ```
 
 ## Description
@@ -45,6 +46,9 @@ The `context` operator manages [context](../contexts.md) instances.
 
 - The `inspect` command dumps a specific context's user-provided data, usually
   the context's content.
+
+- The `rename` operator renames a context. The `--force` parameter will allow
+  the operator to overwrite an already existing context.
 
 ### `<name>`
 
@@ -94,4 +98,17 @@ Inspect all data provided to `feodo`:
 
 ```
 context inspect feodo
+```
+
+Rename a context `feodo` to `feodo_old`:
+
+```
+context rename feodo feodo_old
+```
+
+Rename a context `test` to `feodo`, potentially overwriting an existing
+context `feodo`:
+
+```
+context rename test feodo --force
 ```
