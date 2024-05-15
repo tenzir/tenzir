@@ -602,9 +602,10 @@ caf::error index_state::load_from_disk() {
       synopses->emplace(partition_uuid, std::move(ps));
       return caf::none;
     }();
-    if (error)
-      TENZIR_ERROR("{} failed to load partition {}: {}", *self, partition_uuid,
-                   error);
+    if (error) {
+      TENZIR_VERBOSE("{} failed to load partition {}: {}", *self,
+                     partition_uuid, error);
+    }
   }
   //  Recommend the user to run 'tenzir-ctl rebuild' if any partition syopses
   //  are outdated. We need to nudge them a bit so we can drop support for older
