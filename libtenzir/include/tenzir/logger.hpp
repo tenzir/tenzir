@@ -38,6 +38,83 @@
 #  define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_OFF
 #endif
 
+using argument_map = detail::stack_vector<std::pair<const char*, tenzir::data>, stack_element_count>;
+
+static std::atomic_int runtime_log_level = 0;
+
+std::vector<log_sink> sinks;
+
+void emit(const char* msg, argument_map& data) {
+    for (auto& sink : sinks)
+        sink.handle_log_msg(msg, data);
+}
+
+struct structured_log_msg {
+    ~structured_log_msg() {
+        TENZIR_WARN("{} {}", msg_, as_flat_string())
+        // emit(msg_, data_);
+    }
+
+    structured_log_msg(log_level, const char* msg) {
+        msg_ = msg;
+    }
+
+    template<typename T>
+    auto arg(std::string_view msg, T&& data) -> structured_log_msg& {
+        data_.emplace_back({std::move(msg), std::move(data)})
+        return *this;
+    }
+
+private:
+    void as_flat_string() {
+      auto s = fmt::format("{}", fmt::join(data_ | std::views::transform([](const auto& p) {
+        return fmt::format("{}={}", p.first, p.second);
+      }), " "));
+    }
+
+    static constexpr size_t stack_element_count = 10;
+
+    const char* msg_;
+    argument_map data_;
+};
+
+struct log_sink {
+  virtual void handle(structured_log_msg const& msg) = 0; 
+};
+
+struct console_log_sink : public log_sink {
+  void handle(structured_log_msg const& msg) override {
+    TENZIR_WARN("{} {}", msg_, as_flat_string())
+  }
+};
+
+
+#define TENZIR_STRUCTURED_WARN(msg) \
+    if(TENZIR_LOG_LEVEL >= TENZIR_LOG_LEVEL_WARNING)
+        structured_log_msg(log_level::warn, msg)
+
+
+// # Old log message:
+// TENZIR_DEBUG("{} got {} new hits for predicate at position {}", *self,
+//                rank(result), position);
+
+// # New log message
+TENZIR_WARN("evaluator: new hits for predicate")
+    .arg("actor_id", self->id())
+    .arg("num", rank(result))
+    .arg("position", position);
+
+// -> Terminal log:
+//   evaluator: new hits for predicate actor_id=23 num=100 position=2
+// -> log operator
+//   record{
+//     ts: time
+//     msg: "evaluator: new hits for predicate"
+//     args: '{"actor_id": "23", "num": "100", "position": "2"}'
+//   }
+// -> cloudwatch sink
+//   (...fully structured log format...)
+
 // Important: keep that below the log level mapping
 #include "tenzir/detail/logger.hpp"
 #include "tenzir/detail/logger_formatters.hpp"
