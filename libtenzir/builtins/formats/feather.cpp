@@ -33,6 +33,7 @@
 #include <arrow/util/key_value_metadata.h>
 #include <caf/expected.hpp>
 
+#include <cstddef>
 #include <memory>
 #include <queue>
 #include <vector>
@@ -312,13 +313,13 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
   auto byte_reader = make_byte_reader(std::move(input));
   auto schema_listener = std::make_shared<callback_listener>();
   auto read_options = arrow::ipc::IpcReadOptions::Defaults();
-  read_options.max_recursion_depth = 10;
   auto schema_stream_decoder
     = arrow::ipc::StreamDecoder(schema_listener, read_options);
   type schema;
   auto buffered_schema_data = std::vector<std::shared_ptr<arrow::Buffer>>{};
   auto truncated_bytes = size_t{0};
   auto decoded_once = false;
+  auto nested = false;
 
   while (true) {
     // TODO: CHECK FOR TENZIR METADATA?
@@ -361,16 +362,34 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
       break;
     }
   }
+  auto indices = std::vector<tenzir::offset>{};
   if (selection.inner.fields_of_interest) {
-    auto indices = std::vector<int>{};
-    for (const auto& field : (*selection.inner.fields_of_interest)[0]) {
-      for (const auto& index : schema.resolve(field)) {
-        indices.push_back(static_cast<int>(index[0]));
+    for (const auto& field : *selection.inner.fields_of_interest) {
+      for (auto index : schema.resolve(field)) {
+        if (index.size() > 1) {
+          nested = true;
+        }
+        read_options.included_fields.push_back(
+          static_cast<int>(index[0])); // add the top level schema field
+        indices.push_back(std::move(index));
       }
     }
+
+    // remove duplicates
     std::sort(indices.begin(), indices.end());
     indices.erase(std::unique(indices.begin(), indices.end()), indices.end());
-    read_options.included_fields = std::move(indices);
+
+    std::sort(read_options.included_fields.begin(),
+              read_options.included_fields.end());
+    read_options.included_fields.erase(
+      std::unique(read_options.included_fields.begin(),
+                  read_options.included_fields.end()),
+      read_options.included_fields.end());
+
+    // set it to 0...
+    for (size_t i = 0; i < indices.size(); i++) {
+      indices[i][0] = i;
+    }
   }
   auto listener = std::make_shared<callback_listener>();
   auto stream_decoder = arrow::ipc::StreamDecoder(listener, read_options);
@@ -438,7 +457,11 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
           .emit(ctrl.diagnostics());
         co_return;
       }
-      co_yield table_slice(batch);
+      if (nested) {
+        co_yield select_columns(table_slice(batch), indices);
+      } else {
+        co_yield table_slice(batch);
+      }
     }
   }
 }
@@ -458,8 +481,8 @@ auto print_feather(
       .emit(ctrl.diagnostics());
     co_return;
   }
-  // We must finish the clear the buffer because the provided APIs do not offer
-  // a scrape and rewrite on the allocated same memory.
+  // We must finish the clear the buffer because the provided APIs do not
+  // offer a scrape and rewrite on the allocated same memory.
   auto finished_buffer_result = sink->Finish();
   if (!finished_buffer_result.ok()) {
     diagnostic::error(
