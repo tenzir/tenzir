@@ -16,4 +16,5 @@ setup() {
 @test "Parse LEEF over syslog" {
   check tenzir "from ${INPUTSDIR}/syslog/leef-over-syslog.log read syslog"
   check tenzir "from ${INPUTSDIR}/syslog/leef-over-syslog.log read syslog | parse content leef"
+  check tenzir "from ${INPUTSDIR}/syslog/zscaler-nss.log read syslog | parse content leef"
 }
