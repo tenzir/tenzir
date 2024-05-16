@@ -215,6 +215,50 @@ public:
 
 class sum_instance final : public aggregation_instance {
 public:
+  void add(series values) override {
+    // TODO: values.type
+    auto f = detail::overload{
+      [&](const arrow::Int64Array& array) {
+        // Double => Double
+        // UInt64 => Int64
+        // Int64 => Int64
+        TENZIR_TODO();
+      },
+      [&](const arrow::UInt64Array& array) {
+        // Double => Double
+        // UInt64 => UInt64Array
+        // Int64 => Int64
+        TENZIR_TODO();
+      },
+      [&](const arrow::DoubleArray& array) {
+        // * => Double
+        auto sum = sum_.match([](auto sum) {
+          return static_cast<double>(sum);
+        });
+        for (auto row = int64_t{0}; row < array.length(); ++row) {
+          if (array.IsNull(row)) {
+            // TODO: What do we do here?
+          } else {
+            sum += array.Value(row);
+          }
+        }
+        sum_ = sum;
+      },
+      [&](auto&) {
+        // TODO: error? warning?
+      },
+    };
+    caf::visit(f, *values.array);
+  }
+
+  auto finish() -> data override {
+    return sum_.match([](auto sum) {
+      return data{sum};
+    });
+  }
+
+private:
+  variant<int64_t, uint64_t, double> sum_ = uint64_t{0};
 };
 
 class sum final : public tql2::aggregation_function_plugin {

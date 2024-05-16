@@ -45,6 +45,10 @@ public:
 class aggregation_instance {
 public:
   virtual ~aggregation_instance() = default;
+
+  virtual void add(series values) = 0;
+
+  virtual auto finish() -> data = 0;
 };
 
 class aggregation_function_plugin : public virtual function_plugin {

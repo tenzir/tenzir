@@ -78,6 +78,12 @@ struct series {
     }
   }
 
+  [[nodiscard]] auto slice(int64_t begin, int64_t end) const -> series {
+    auto sliced = array->SliceSafe(begin, end - begin);
+    TENZIR_ASSERT(sliced.ok());
+    return {type, sliced.MoveValueUnsafe()};
+  }
+
   tenzir::type type;
   std::shared_ptr<arrow::Array> array;
 };

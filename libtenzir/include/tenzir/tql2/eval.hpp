@@ -22,11 +22,11 @@ auto const_eval(const ast::expression& expr, session ctx)
 
 struct resolve_error {
   struct field_not_found {};
-  struct not_a_record {
+  struct field_of_non_record {
     type type;
   };
 
-  using reason_t = variant<field_not_found, not_a_record>;
+  using reason_t = variant<field_not_found, field_of_non_record>;
 
   resolve_error(ast::identifier ident, reason_t reason)
     : ident{std::move(ident)}, reason{std::move(reason)} {

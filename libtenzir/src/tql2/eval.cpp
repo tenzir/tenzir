@@ -48,10 +48,8 @@ auto resolve(const ast::selector& sel, type ty)
   while (sel_index < sel.path.size()) {
     auto rty = caf::get_if<record_type>(&ty);
     if (not rty) {
-      // TODO
-      TENZIR_ASSERT(sel_index > 0);
-      return resolve_error{sel.path[sel_index - 1],
-                           resolve_error::not_a_record{ty}};
+      return resolve_error{sel.path[sel_index],
+                           resolve_error::field_of_non_record{ty}};
     }
     auto found = false;
     auto field_index = size_t{0};
@@ -471,8 +469,9 @@ public:
       },
       [&](resolve_error& err) -> series {
         err.reason.match(
-          [&](resolve_error::not_a_record& reason) {
-            diagnostic::warning("expected record, found {}", reason.type.kind())
+          [&](resolve_error::field_of_non_record& reason) {
+            diagnostic::warning("type `{}` does not have a field `{}`",
+                                reason.type.kind(), err.ident.name)
               .primary(err.ident.location)
               .emit(dh_);
           },
@@ -486,6 +485,7 @@ public:
   }
 
   auto eval(const ast::function_call& x) -> series {
+    // TODO: This is very hacky.
     TENZIR_ASSERT(x.fn.ref.resolved());
     auto segments = x.fn.ref.segments();
     TENZIR_ASSERT(segments.size() == 1);

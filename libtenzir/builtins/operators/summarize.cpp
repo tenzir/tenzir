@@ -909,6 +909,97 @@ struct config {
   }
 };
 
+template <class Value>
+using group_map
+  = tsl::robin_map<group_by_key, Value, group_by_key_hash, group_by_key_equal>;
+
+struct bucket2 {
+  std::vector<std::unique_ptr<tql2::aggregation_instance>> aggregations{};
+};
+
+class implementation2 {
+public:
+  explicit implementation2(const config& cfg, diagnostic_handler& dh)
+    : cfg_{cfg}, dh_{dh} {
+  }
+
+  void add(const table_slice& slice) {
+    auto group_values = std::vector<series>{};
+    for (auto& group : cfg_.groups) {
+      // TODO: `group` is getting copied here.
+      group_values.push_back(tql2::eval(group, slice, dh_));
+    }
+    auto aggregate_args = std::vector<series>{};
+    for (auto& aggregate : cfg_.aggregates) {
+      // At the moment, we check this before constructing the operator.
+      TENZIR_ASSERT(aggregate.call.args.size() == 1);
+      // TODO: Feed result to aggregation instance.
+      aggregate_args.push_back(tql2::eval(aggregate.call.args[0], slice, dh_));
+    }
+    auto key = group_by_key_view{};
+    key.resize(cfg_.groups.size());
+    auto update_group = [&](bucket2& group, int64_t begin, int64_t end) {
+      for (auto&& [aggr, arg] : zip_equal(group.aggregations, aggregate_args)) {
+        aggr->add(arg.slice(begin, end));
+      }
+    };
+    auto find_or_create_group = [&](int64_t row) -> bucket2* {
+      for (auto&& [key_value, group] : zip_equal(key, group_values)) {
+        key_value = value_at(group.type, *group.array, row);
+      }
+      auto it = groups_.find(key);
+      if (it == groups_.end()) {
+        auto bucket = std::make_unique<bucket2>();
+        for (auto& aggr : cfg_.aggregates) {
+          // TODO: Very hacky.
+          auto fn = plugins::find<tql2::aggregation_function_plugin>(
+            "tql2." + aggr.call.fn.path[0].name);
+          TENZIR_ASSERT(fn);
+          bucket->aggregations.push_back(fn->make_aggregation());
+        }
+        it = groups_.emplace_hint(it, materialize(key), std::move(bucket));
+      }
+      return &*it->second;
+    };
+    auto total_rows = detail::narrow<int64_t>(slice.rows());
+    auto current_group = find_or_create_group(0);
+    auto current_begin = int64_t{0};
+    for (auto row = int64_t{1}; row < total_rows; ++row) {
+      auto group = find_or_create_group(row);
+      if (current_group != group) {
+        update_group(*current_group, current_begin, row);
+        current_group = group;
+        current_begin = row;
+      }
+    }
+    update_group(*current_group, current_begin, total_rows);
+  }
+
+  auto finish() -> std::vector<table_slice> {
+    // TODO: Group by schema again.
+    auto b = series_builder{};
+    for (auto& [key, group] : groups_) {
+      auto r = b.record();
+      auto idx = 0;
+      for (auto&& [x, y] : zip_equal(cfg_.aggregates, group->aggregations)) {
+        r.field(fmt::format("{}", ++idx)).data(y->finish());
+        // x.dest;
+        // y->finish();
+      }
+      for (auto&& [selector, value] : zip_equal(cfg_.groups, key)) {
+        // TODO: we need the type here, right?
+        r.field(fmt::format("{}", ++idx)).data(value);
+      }
+    }
+    return b.finish_as_table_slice();
+  }
+
+private:
+  const config& cfg_;
+  diagnostic_handler& dh_;
+  group_map<std::unique_ptr<bucket2>> groups_;
+};
+
 class summarize_operator2 final : public crtp_operator<summarize_operator2> {
 public:
   summarize_operator2() = default;
@@ -923,28 +1014,17 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    auto groups = tsl::robin_map<group_by_key, int, group_by_key_hash,
-                                 group_by_key_equal>{};
+    auto impl = implementation2{cfg_, ctrl.diagnostics()};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
-      auto group_values = std::vector<series>{};
-      for (auto& group : cfg_.groups) {
-        // TODO: `group` is getting copied here.
-        group_values.push_back(tql2::eval(group, slice, ctrl.diagnostics()));
-      }
-
-      // TODO: Find group or create a new one.
-      for (auto& aggregate : cfg_.aggregates) {
-        // At the moment, we check this before constructing the operator.
-        TENZIR_ASSERT(aggregate.call.args.size() == 1);
-        // TODO: Feed result to aggregation instance.
-        (void)tql2::eval(aggregate.call.args[0], slice, ctrl.diagnostics());
-      }
+      impl.add(slice);
     }
-    // TODO: Yield results.
+    for (auto slice : impl.finish()) {
+      co_yield std::move(slice);
+    }
   }
 
   auto optimize(expression const& filter, event_order order) const
@@ -980,6 +1060,8 @@ public:
           if (not fn) {
             diagnostic::error("function does not support aggregations")
               .primary(call.fn.get_location())
+              .hint(
+                "assign before `summarize` if you want to group by this value")
               .emit(ctx);
             return;
           }
@@ -995,6 +1077,12 @@ public:
         };
     for (auto& arg : inv.args) {
       arg.match(
+        [&](ast::selector& arg) {
+          cfg.groups.push_back(std::move(arg));
+        },
+        [&](ast::function_call& arg) {
+          add_aggregate(std::nullopt, std::move(arg));
+        },
         [&](ast::assignment& arg) {
           auto call = std::get_if<ast::function_call>(&*arg.right.kind);
           if (not call) {
@@ -1005,20 +1093,11 @@ public:
           }
           add_aggregate(std::move(arg.left), std::move(*call));
         },
-        [&](ast::function_call& arg) {
-          add_aggregate(std::nullopt, std::move(arg));
-        },
-        [&](ast::selector& arg) {
-          cfg.groups.push_back(std::move(arg));
-        },
         [&](auto&) {
-          auto diag = diagnostic::error("expected selector or assignment with "
-                                        "aggregation function")
-                        .primary(arg.get_location());
-          if (std::holds_alternative<ast::function_call>(*arg.kind)) {
-            diag = std::move(diag).hint("try adding `some_name=` before it");
-          }
-          std::move(diag).emit(ctx);
+          diagnostic::error(
+            "expected selector, assignment or aggregation function call")
+            .primary(arg.get_location())
+            .emit(ctx);
         });
     }
     return std::make_unique<summarize_operator2>(std::move(cfg));
