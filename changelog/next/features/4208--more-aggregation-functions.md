@@ -1,7 +1,7 @@
 The new `mean` aggregation function computes the mean of grouped numeric values.
 
 The new `approximate_median` aggregation function computes an approximate median
-of grouped numeric values using a T-Digest algorithm.
+of grouped numeric values using the t-digest algorithm.
 
 The new `stddev` and `variance` aggregation functions compute the standard
 deviation and variance of grouped numeric values, respectively.
