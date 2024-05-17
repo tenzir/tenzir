@@ -263,7 +263,7 @@ struct legacy_message {
   std::optional<uint16_t> facility;
   std::optional<uint16_t> severity;
   std::string timestamp;
-  std::string host;
+  std::optional<std::string> host;
   std::optional<std::string> tag;
   std::optional<std::string> process_id;
   std::string content;
@@ -337,7 +337,7 @@ struct legacy_message_parser : parser_base<legacy_message_parser> {
   template <typename Iterator, typename Attribute>
   auto parse(Iterator& f, const Iterator& l, Attribute& x) const -> bool {
     using namespace parser_literals;
-    const auto word = +(parsers::printable - parsers::space);
+    const auto word = +(parsers::printable - (parsers::space | ':'));
     const auto ws = +parsers::space;
     const auto wsignore = ignore(ws);
     const auto is_prival = [](uint16_t in) {
@@ -359,7 +359,8 @@ struct legacy_message_parser : parser_base<legacy_message_parser> {
                                   | (parsers::time->*([](tenzir::time t) {
                                       return tenzir::to_string(t);
                                     }));
-    // HOST is just whitespace-delimited characters (for now, at least)
+    // HOST is just whitespace-delimited characters without colon, because the
+    // colon comes typically after the TAG.
     const auto host_parser = word;
     // Then, comes the MESSAGE itself.
     //
@@ -376,9 +377,9 @@ struct legacy_message_parser : parser_base<legacy_message_parser> {
     // include the content without any of these, and any preceding whitespace.
     // Additionally, we include the MESSAGE in its entirety, for the case that
     // there's really no app name and pid.
-    const auto p = ~(priority_parser >> ignore(*parsers::space)) // priority
-                   >> timestamp_parser >> wsignore               // timestamp
-                   >> host_parser >> wsignore;                   // host
+    const auto p = ~(priority_parser >> ignore(*parsers::space))
+                   >> timestamp_parser >> wsignore
+                   >> -(host_parser >> wsignore);
     std::string_view message;
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       if (not p(f, l, unused)) {
