@@ -34,6 +34,8 @@ public:
 
   virtual auto accept_char(char c) -> std::optional<location> = 0;
 
+  virtual auto peek_char(char c) -> std::optional<location> = 0;
+
   virtual auto parse_operator() -> located<operator_ptr> = 0;
 
   virtual auto parse_expression() -> tql::expression = 0;
@@ -43,6 +45,8 @@ public:
   virtual auto parse_extractor() -> tql::extractor = 0;
 
   virtual auto parse_data() -> located<data> = 0;
+
+  virtual auto parse_int() -> located<int64_t> = 0;
 
   virtual auto at_end() -> bool = 0;
 
@@ -91,6 +95,13 @@ public:
     return p_.accept_char(c);
   }
 
+  auto peek_char(char c) -> std::optional<location> override {
+    if (at_end()) {
+      return {};
+    }
+    return p_.peek_char(c);
+  }
+
   auto parse_expression() -> tql::expression override {
     if (at_end()) {
       diagnostic::error("expected expression").primary(current_span()).throw_();
@@ -128,6 +139,13 @@ public:
       diagnostic::error("expected data").primary(current_span()).throw_();
     }
     return p_.parse_data();
+  }
+
+  auto parse_int() -> located<int64_t> override {
+    if (at_end()) {
+      diagnostic::error("expected int64").primary(current_span()).throw_();
+    }
+    return p_.parse_int();
   }
 
   auto at_end() -> bool override {

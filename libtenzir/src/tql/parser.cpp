@@ -296,8 +296,19 @@ public:
     throw_at_current("could not parse data");
   }
 
+  auto parse_int() -> located<int64_t> override {
+    if (auto result = accept_with_span(parsers::i64)) {
+      return {std::move(result->first), result->second};
+    }
+    throw_at_current("could not parse integer");
+  }
+
   auto accept_char(char c) -> std::optional<location> override {
     return accept(c);
+  }
+
+  auto peek_char(char c) -> std::optional<location> override {
+    return peek(c);
   }
 
   auto at_end() -> bool override {

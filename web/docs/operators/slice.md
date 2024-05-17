@@ -11,9 +11,7 @@ Keep a range events within the half-closed interval `[begin, end)`.
 ## Synopsis
 
 ```
-slice <begin>:<end>
-slice <begin>:
-slice        :<end>
+slice [<begin>]:[<end>][:<stride>]
 ```
 
 ## Description
@@ -30,6 +28,12 @@ negative number to count from the end.
 
 An signed integer denoting the end (exclusive) of the range to keep. Use a
 negative number to count from the end.
+
+### `<stride>`
+
+An signed integer denoting the number of elements to advance before the next
+element. Use a negative number to count from the end, effectively reversing the
+stream.
 
 ## Examples
 
@@ -61,4 +65,16 @@ Skip the first and the last event:
 
 ```
 slice 1:-1
+```
+
+Return every second event starting from the tenth:
+
+```
+slice 10::2
+```
+
+Return all but the last five events in reverse order:
+
+```
+slice :-5:-1
 ```
