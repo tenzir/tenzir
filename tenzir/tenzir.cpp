@@ -92,6 +92,16 @@ int main(int argc, char** argv) {
   // Print the plugins that were loaded, and errors that occured during loading.
   for (const auto& file : *loaded_plugin_paths)
     TENZIR_VERBOSE("loaded plugin: {}", file);
+  // Wipe the cache directory on node restart.
+  if (is_server) {
+    auto ec = std::filesystem::error_code{};
+    const auto* cache_dir = get_if<std::string>(
+                 &cfg.content, "tenzir.cache-directory");
+    if (cache_dir)
+      std::filesystem::remove_all(std::filesytem::path{cache_dir}, ec);
+    if (ec)
+      TENZIR_WARN("failed to clear cache directory on startup: {}", ec);
+  }
   // Make sure to deinitialize all plugins at the end.
   auto plugin_guard = caf::detail::make_scope_guard([]() noexcept {
     // Ideally, we would not have this deinitialize function at all and could
