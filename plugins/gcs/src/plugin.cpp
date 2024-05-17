@@ -83,7 +83,7 @@ public:
         // be changed to a Result, sometime in the future.
         auto fs = arrow::fs::GcsFileSystem::Make(opts);
         auto file_info
-          = fs->GetFileInfo(fmt::format("{}/{}", uri.host(), uri.path()));
+          = fs->GetFileInfo(fmt::format("{}{}", uri.host(), uri.path()));
         if (not file_info.ok()) {
           diagnostic::error("failed to get file info for URI "
                             "`{}`: {}",
@@ -160,7 +160,7 @@ public:
     // changed to a Result, sometime in the future.
     auto fs = arrow::fs::GcsFileSystem::Make(opts);
     auto file_info
-      = fs->GetFileInfo(fmt::format("{}/{}", uri.host(), uri.path()));
+      = fs->GetFileInfo(fmt::format("{}{}", uri.host(), uri.path()));
     if (not file_info.ok()) {
       diagnostic::error("failed to get file info from URI `{}`: {}",
                         args_.uri.inner, file_info.status().ToString())
