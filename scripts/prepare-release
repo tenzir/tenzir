@@ -76,7 +76,7 @@ if [[ true ]]; then
   # ^1: https://docusaurus.io/docs/versioning#deleting-an-existing-version
   #
   # This bit removes the already tagged version:
-  new_version_name="Tenzir ${new_version_major_minor}"
+  new_version_name="${new_version_major_minor}"
   jq "map(select(. | startswith(\"${new_version_name%-*}\") | not))" < versions.json > versions.json.tmp
   mv -f versions.json.tmp versions.json
   things_done+="
