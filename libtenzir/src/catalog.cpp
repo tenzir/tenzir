@@ -9,25 +9,18 @@
 #include "tenzir/catalog.hpp"
 
 #include "tenzir/actors.hpp"
-#include "tenzir/as_bytes.hpp"
-#include "tenzir/concept/convertible/data.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/fill_status_map.hpp"
-#include "tenzir/detail/legacy_deserialize.hpp"
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/detail/set_operations.hpp"
-#include "tenzir/detail/stable_set.hpp"
 #include "tenzir/detail/tracepoint.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/expression.hpp"
-#include "tenzir/fbs/type_registry.hpp"
-#include "tenzir/flatbuffer.hpp"
 #include "tenzir/instrumentation.hpp"
 #include "tenzir/io/read.hpp"
 #include "tenzir/io/save.hpp"
-#include "tenzir/legacy_type.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/partition_synopsis.hpp"
@@ -38,14 +31,25 @@
 #include "tenzir/status.hpp"
 #include "tenzir/synopsis.hpp"
 #include "tenzir/taxonomies.hpp"
+#include "tenzir/time_synopsis.hpp"
 
 #include <caf/binary_serializer.hpp>
 #include <caf/detail/set_thread_name.hpp>
 #include <caf/expected.hpp>
 
-#include <type_traits>
-
 namespace tenzir {
+
+auto catalog_lookup_result::size() const noexcept -> size_t {
+  return std::accumulate(candidate_infos.begin(), candidate_infos.end(),
+                         size_t{0}, [](auto i, const auto& cat_result) {
+                           return std::move(i)
+                                  + cat_result.second.partition_infos.size();
+                         });
+}
+
+auto catalog_lookup_result::empty() const noexcept -> bool {
+  return candidate_infos.empty();
+}
 
 void catalog_state::create_from(
   std::unordered_map<uuid, partition_synopsis_ptr>&& ps) {
@@ -76,8 +80,8 @@ void catalog_state::merge(const uuid& partition, partition_synopsis_ptr ps) {
 
 void catalog_state::erase(const uuid& partition) {
   for (auto& [type, uuid_synopsis_map] : synopses_per_type) {
-    auto erased = uuid_synopsis_map.erase(partition);
-    if (erased) {
+    const auto num_erased = uuid_synopsis_map.erase(partition);
+    if (num_erased > 0) {
       if (uuid_synopsis_map.empty()) {
         synopses_per_type.erase(type);
       }
@@ -86,8 +90,8 @@ void catalog_state::erase(const uuid& partition) {
   }
 }
 
-caf::expected<catalog_lookup_result>
-catalog_state::lookup(expression expr) const {
+auto catalog_state::lookup(expression expr) const
+  -> caf::expected<catalog_lookup_result> {
   auto start = stopwatch::now();
   auto total_candidates = catalog_lookup_result{};
   auto num_candidate_partitions = size_t{0};
@@ -138,8 +142,9 @@ catalog_state::lookup(expression expr) const {
   return total_candidates;
 }
 
-catalog_lookup_result::candidate_info
-catalog_state::lookup_impl(const expression& expr, const type& schema) const {
+auto catalog_state::lookup_impl(const expression& expr,
+                                const type& schema) const
+  -> catalog_lookup_result::candidate_info {
   TENZIR_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
   auto synopsis_map_per_type_it = synopses_per_type.find(schema);
   TENZIR_ASSERT(synopsis_map_per_type_it != synopses_per_type.end());
@@ -412,7 +417,7 @@ catalog_state::lookup_impl(const expression& expr, const type& schema) const {
   return result;
 }
 
-size_t catalog_state::memusage() const {
+auto catalog_state::memusage() const -> size_t {
   size_t result = 0;
   for (const auto& [type, id_synopsis_map] : synopses_per_type)
     for (const auto& [id, synopsis] : id_synopsis_map) {
@@ -437,151 +442,6 @@ void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
   //   for (auto suffix : detail::all_suffixes(full_name, "."))
   //     unprunable_fields.insert(suffix);
   // }
-}
-
-std::filesystem::path catalog_state::type_registry_filename() const {
-  return type_registry_dir / fmt::format("type-registry.reg", name);
-}
-
-caf::error catalog_state::save_type_registry_to_disk() const {
-  auto builder = flatbuffers::FlatBufferBuilder{};
-  auto entry_offsets
-    = std::vector<flatbuffers::Offset<fbs::type_registry::Entry>>{};
-  for (const auto& [key, types] : type_data) {
-    const auto key_offset = builder.CreateString(key);
-    auto type_offsets = std::vector<flatbuffers::Offset<fbs::TypeBuffer>>{};
-    type_offsets.reserve(types.size());
-    for (const auto& type : types) {
-      const auto type_bytes = as_bytes(type);
-      const auto type_offset = fbs::CreateTypeBuffer(
-        builder, builder.CreateVector(
-                   reinterpret_cast<const uint8_t*>(type_bytes.data()),
-                   type_bytes.size()));
-      type_offsets.push_back(type_offset);
-    }
-    const auto types_offset = builder.CreateVector(type_offsets);
-    const auto entry_offset
-      = fbs::type_registry::CreateEntry(builder, key_offset, types_offset);
-    entry_offsets.push_back(entry_offset);
-  }
-  const auto entries_offset = builder.CreateVector(entry_offsets);
-  const auto type_registry_v0_offset
-    = fbs::type_registry::Createv0(builder, entries_offset);
-  const auto type_registry_offset = fbs::CreateTypeRegistry(
-    builder, fbs::type_registry::TypeRegistry::type_registry_v0,
-    type_registry_v0_offset.Union());
-  fbs::FinishTypeRegistryBuffer(builder, type_registry_offset);
-  auto buffer = builder.Release();
-  return io::save(type_registry_filename(), as_bytes(buffer));
-}
-
-caf::error catalog_state::load_type_registry_from_disk() {
-  // Nothing to load is not an error.
-  std::error_code err{};
-  const auto dir_exists = std::filesystem::exists(type_registry_dir, err);
-  if (err)
-    return caf::make_error(ec::filesystem_error,
-                           fmt::format("failed to find directory {}: {}",
-                                       type_registry_dir, err.message()));
-  if (!dir_exists) {
-    TENZIR_DEBUG("{} found no directory {} to load from", *self,
-                 type_registry_dir);
-    return caf::none;
-  }
-  // Support the legacy CAF-serialized state, and delete it afterwards.
-  {
-    const auto fname = type_registry_dir / name;
-    const auto file_exists = std::filesystem::exists(fname, err);
-    if (err)
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("failed while trying to find file "
-                                         "{}: "
-                                         "{}",
-                                         fname, err.message()));
-    if (file_exists) {
-      auto buffer = io::read(fname);
-      if (!buffer)
-        return buffer.error();
-      std::map<std::string, detail::stable_set<legacy_type>> intermediate = {};
-      if (!detail::legacy_deserialize(*buffer, intermediate))
-        return caf::make_error(ec::parse_error, "failed to load legacy "
-                                                "type-registry state");
-      for (const auto& [k, vs] : intermediate) {
-        auto entry = type_set{};
-        for (const auto& v : vs)
-          entry.emplace(type::from_legacy_type(v));
-        type_data.emplace(k, entry);
-      }
-      TENZIR_DEBUG("{} loaded state from disk", *self);
-      // We save the new state already now before removing the old state just
-      // to be save against crashes.
-      if (auto err = save_type_registry_to_disk())
-        return err;
-      if (!std::filesystem::remove(fname, err) || err)
-        TENZIR_DEBUG("failed to delete legacy type-registry state");
-      return caf::none;
-    }
-  }
-  // Support the new FlatBuffers state.
-  {
-    const auto fname = type_registry_filename();
-    const auto file_exists = std::filesystem::exists(fname, err);
-    if (err)
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("failed while trying to find file "
-                                         "{}: "
-                                         "{}",
-                                         fname, err.message()));
-    if (file_exists) {
-      auto buffer = io::read(fname);
-      if (!buffer)
-        return buffer.error();
-      auto maybe_flatbuffer
-        = flatbuffer<fbs::TypeRegistry, fbs::TypeRegistryIdentifier>::make(
-          chunk::make(std::move(*buffer)));
-      if (!maybe_flatbuffer)
-        return maybe_flatbuffer.error();
-      const auto flatbuffer = std::move(*maybe_flatbuffer);
-      for (const auto& entry :
-           *flatbuffer->type_as_type_registry_v0()->entries()) {
-        auto types = type_set{};
-        for (const auto& value : *entry->values())
-          types.emplace(
-            type{flatbuffer.chunk()->slice(as_bytes(*value->buffer()))});
-        type_data.emplace(entry->key()->string_view(), std::move(types));
-      }
-      TENZIR_DEBUG("{} loaded state from disk", *self);
-    }
-  }
-  return caf::none;
-}
-
-void catalog_state::insert(tenzir::type schema) {
-  auto& old_schemas = type_data[std::string{schema.name()}];
-  // Insert into the existing bucket.
-  auto [hint, success] = old_schemas.insert(std::move(schema));
-  if (success) {
-    // Check whether the new schema is compatible with the latest, i.e.,
-    // whether the new schema is a superset of it.
-    if (old_schemas.begin() != hint) {
-      if (!is_subset(*old_schemas.begin(), *hint))
-        TENZIR_VERBOSE("{} detected an incompatible schema change for {}",
-                       *self, hint->name());
-      else
-        TENZIR_VERBOSE("{} detected a schema change for {}", *self,
-                       hint->name());
-    }
-    TENZIR_DEBUG("{} registered {}", *self, hint->name());
-  }
-  // Move the newly inserted schema to the front.
-  std::rotate(old_schemas.begin(), hint, std::next(hint));
-}
-
-type_set catalog_state::types() const {
-  auto result = type_set{};
-  for (const auto& x : configuration_module)
-    result.insert(x);
-  return result;
 }
 
 void catalog_state::emit_metrics() const {
@@ -643,34 +503,12 @@ void catalog_state::emit_metrics() const {
   self->send(accountant, atom::metrics_v, std::move(r));
 }
 
-catalog_actor::behavior_type
-catalog(catalog_actor::stateful_pointer<catalog_state> self,
-        accountant_actor accountant,
-        const std::filesystem::path& type_reg_dir) {
+auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
+             accountant_actor accountant) -> catalog_actor::behavior_type {
   if (self->getf(caf::local_actor::is_detached_flag))
     caf::detail::set_thread_name("tenzir.catalog");
   self->state.self = self;
-  self->state.type_registry_dir = type_reg_dir;
-  // Register the exit handler.
-  self->set_exit_handler([self](const caf::exit_msg& msg) {
-    TENZIR_DEBUG("{} got EXIT from {}", *self, msg.source);
-    if (auto err = self->state.save_type_registry_to_disk())
-      TENZIR_ERROR("{} failed to persist state to disk: {}", *self, err);
-    self->quit(msg.reason);
-  });
-  // Load existing state from disk if possible.
-  if (auto err = self->state.load_type_registry_from_disk()) {
-    self->quit(std::move(err));
-    return catalog_actor::behavior_type::make_empty_behavior();
-  }
   self->state.taxonomies.concepts = modules::concepts();
-  //  Load loaded schema types from the singleton.
-  //  TODO: Move to the load handler and re-parse the files.
-  TENZIR_DIAGNOSTIC_PUSH
-  TENZIR_DIAGNOSTIC_IGNORE_DEPRECATED
-  if (const auto* module = modules::global_module())
-    self->state.configuration_module = *module;
-  TENZIR_DIAGNOSTIC_POP
   if (accountant) {
     self->state.accountant = std::move(accountant);
     self->send(self->state.accountant, atom::announce_v, self->name());
@@ -729,12 +567,6 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
         }
       }
       return result;
-    },
-    [self](atom::get, atom::type) {
-      TENZIR_TRACE_SCOPE("{} retrieves a list of all known types", *self);
-      // TODO: We can generate this list out of partition_synopses
-      // when we drop partition version 0 support.
-      return self->state.types();
     },
     [self](atom::erase, uuid partition) {
       self->state.erase(partition);
@@ -863,10 +695,6 @@ catalog(catalog_actor::stateful_pointer<catalog_state> self,
       if (v >= status_verbosity::debug)
         detail::fill_status_map(result, self);
       return result;
-    },
-    [self](atom::put, tenzir::type schema) {
-      TENZIR_TRACE_SCOPE("");
-      self->state.insert(std::move(schema));
     },
     [self](atom::get, atom::taxonomies) {
       TENZIR_TRACE_SCOPE("");
