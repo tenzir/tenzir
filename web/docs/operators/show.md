@@ -43,7 +43,6 @@ look at what's going on:
 - `schemas` shows all schema definitions for which data is stored at the node.
 - `serves` shows all pipelines with the `serve` sink operator currently
   available from the `/serve` API endpoint.
-- `types`: shows all known types at a remote node.
 
 When no aspect is specified, all are shown.
 

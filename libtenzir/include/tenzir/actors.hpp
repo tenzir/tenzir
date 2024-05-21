@@ -211,10 +211,6 @@ using catalog_actor = typed_actor_fwd<
   // Return the candidate partitions per type for a query.
   auto(atom::candidates, tenzir::query_context)
     ->caf::result<catalog_lookup_result>,
-  // Retrieves all known types.
-  auto(atom::get, atom::type)->caf::result<type_set>,
-  // Registers a given schema.
-  auto(atom::put, tenzir::type)->caf::result<void>,
   // Retrieves the known taxonomies.
   auto(atom::get, atom::taxonomies)->caf::result<taxonomies>,
   // Retrieves information about a partition with a given UUID.

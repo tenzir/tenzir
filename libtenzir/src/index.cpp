@@ -733,12 +733,6 @@ index_state::create_active_partition(const type& schema) {
   stage->out().set_filter(active_partition->second.stream_slot, schema);
   active_partition->second.capacity = partition_capacity;
   active_partition->second.id = id;
-  self->request(catalog, caf::infinite, atom::put_v, schema)
-    .then([]() {},
-          [this](const caf::error& error) {
-            TENZIR_WARN("{} failed to register type with catalog: {}", *self,
-                        error);
-          });
   detail::weak_run_delayed(self, active_partition_timeout, [schema, id, this] {
     const auto it = active_partitions.find(schema);
     if (it == active_partitions.end() or it->second.id != id) {
@@ -1572,10 +1566,6 @@ index(index_actor::stateful_pointer<index_state> self,
            tenzir::expression& expr) -> caf::result<catalog_lookup_result> {
       auto query_context = query_context::make_extract("index", self, expr);
       query_context.id = tenzir::uuid::random();
-      auto type_set = tenzir::type_set{};
-      for (const auto& [type, _] : self->state.active_partitions) {
-        type_set.insert(type);
-      }
       return self->delegate(self->state.catalog, atom::candidates_v,
                             std::move(query_context));
     },
