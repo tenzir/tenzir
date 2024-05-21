@@ -46,7 +46,8 @@ class aggregation_instance {
 public:
   virtual ~aggregation_instance() = default;
 
-  virtual void add(series values) = 0;
+  /// Can return error string (TODO: Not the best).
+  [[nodiscard]] virtual auto add(series values) -> std::string = 0;
 
   virtual auto finish() -> data = 0;
 };

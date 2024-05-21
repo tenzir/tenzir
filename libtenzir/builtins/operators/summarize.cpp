@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/tql2/ast.hpp"
+
 #include <tenzir/aggregation_function.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/concept/convertible/data.hpp>
@@ -31,9 +33,11 @@
 #include <arrow/record_batch.h>
 #include <arrow/type.h>
 #include <caf/expected.hpp>
+#include <caf/sum_type.hpp>
 #include <tsl/robin_map.h>
 
 #include <algorithm>
+#include <ranges>
 #include <utility>
 #include <variant>
 
@@ -899,13 +903,30 @@ struct aggregate_t {
   }
 };
 
+struct group_t {
+  std::optional<ast::selector> dest;
+  ast::selector expr;
+
+  friend auto inspect(auto& f, group_t& x) -> bool {
+    return f.object(x).fields(f.field("dest", x.dest), f.field("expr", x.expr));
+  }
+};
+
 struct config {
   std::vector<aggregate_t> aggregates;
-  std::vector<ast::selector> groups;
+  std::vector<group_t> groups;
+
+  /// Because we allow mixing aggregates and groups and want to emit them in the
+  /// same order, we need to store some additional information, unless we use
+  /// something like `vector<variant<aggregate_t, ast::selector>>` instead. But
+  /// that makes it more tricky to `zip`. If the index is positive, it
+  /// corresponds to `aggregates`, otherwise `groups[-index - 1]`.
+  std::vector<int64_t> indices;
 
   friend auto inspect(auto& f, config& x) -> bool {
     return f.object(x).fields(f.field("aggregates", x.aggregates),
-                              f.field("groups", x.groups));
+                              f.field("groups", x.groups),
+                              f.field("indices", x.indices));
   }
 };
 
@@ -927,7 +948,7 @@ public:
     auto group_values = std::vector<series>{};
     for (auto& group : cfg_.groups) {
       // TODO: `group` is getting copied here.
-      group_values.push_back(tql2::eval(group, slice, dh_));
+      group_values.push_back(tql2::eval(group.expr, slice, dh_));
     }
     auto aggregate_args = std::vector<series>{};
     for (auto& aggregate : cfg_.aggregates) {
@@ -939,8 +960,14 @@ public:
     auto key = group_by_key_view{};
     key.resize(cfg_.groups.size());
     auto update_group = [&](bucket2& group, int64_t begin, int64_t end) {
-      for (auto&& [aggr, arg] : zip_equal(group.aggregations, aggregate_args)) {
-        aggr->add(arg.slice(begin, end));
+      for (auto&& [aggr, arg, cfg_aggr] :
+           zip_equal(group.aggregations, aggregate_args, cfg_.aggregates)) {
+        auto error = aggr->add(arg.slice(begin, end));
+        if (not error.empty()) {
+          diagnostic::warning("{}", error)
+            .primary(cfg_aggr.call.args[0].get_location())
+            .emit(dh_);
+        }
       }
     };
     auto find_or_create_group = [&](int64_t row) -> bucket2* {
@@ -976,20 +1003,54 @@ public:
   }
 
   auto finish() -> std::vector<table_slice> {
+    auto emplace = [](record& root, const ast::selector& sel, data value) {
+      auto current = &root;
+      for (auto& segment : sel.path) {
+        auto& val = (*current)[segment.name];
+        if (&segment == &sel.path.back()) {
+          val = std::move(value);
+        } else {
+          current = caf::get_if<record>(&val);
+          if (not current) {
+            val = record{};
+            current = &caf::get<record>(val);
+          }
+        }
+      }
+    };
     // TODO: Group by schema again.
     auto b = series_builder{};
     for (auto& [key, group] : groups_) {
-      auto r = b.record();
-      auto idx = 0;
-      for (auto&& [x, y] : zip_equal(cfg_.aggregates, group->aggregations)) {
-        r.field(fmt::format("{}", ++idx)).data(y->finish());
-        // x.dest;
-        // y->finish();
+      auto result = record{};
+      for (auto index : cfg_.indices) {
+        if (index >= 0) {
+          auto& dest = cfg_.aggregates[index].dest;
+          auto value = group->aggregations[index]->finish();
+          if (dest) {
+            emplace(result, *dest, value);
+          } else {
+            auto& call = cfg_.aggregates[index].call;
+            // TODO
+            auto suffix = call.args[0].match(
+              [](ast::selector& x) -> std::string_view {
+                // TODO
+                return x.path[0].name;
+              },
+              [](auto&) -> std::string_view {
+                return "TODO";
+              });
+            result.emplace(fmt::format("_{}_{}", call.fn.path[0].name, suffix),
+                           value);
+          }
+        } else {
+          index = -index - 1;
+          auto& group = cfg_.groups[index];
+          auto& dest = group.dest ? *group.dest : group.expr;
+          auto& value = key[index];
+          emplace(result, dest, value);
+        }
       }
-      for (auto&& [selector, value] : zip_equal(cfg_.groups, key)) {
-        // TODO: we need the type here, right?
-        r.field(fmt::format("{}", ++idx)).data(value);
-      }
+      b.data(result);
     }
     return b.finish_as_table_slice();
   }
@@ -1060,8 +1121,7 @@ public:
           if (not fn) {
             diagnostic::error("function does not support aggregations")
               .primary(call.fn.get_location())
-              .hint(
-                "assign before `summarize` if you want to group by this value")
+              .hint("add assignment before `summarize` to group by the result")
               .emit(ctx);
             return;
           }
@@ -1073,25 +1133,38 @@ public:
               .emit(ctx);
             return;
           }
+          auto index = detail::narrow<int64_t>(cfg.aggregates.size());
+          cfg.indices.push_back(index);
           cfg.aggregates.emplace_back(std::move(dest), std::move(call));
+        };
+    auto add_group
+      = [&](std::optional<ast::selector> dest, ast::selector expr) {
+          auto index = -detail::narrow<int64_t>(cfg.groups.size()) - 1;
+          cfg.indices.push_back(index);
+          cfg.groups.emplace_back(std::move(dest), std::move(expr));
         };
     for (auto& arg : inv.args) {
       arg.match(
         [&](ast::selector& arg) {
-          cfg.groups.push_back(std::move(arg));
+          add_group(std::nullopt, std::move(arg));
         },
         [&](ast::function_call& arg) {
           add_aggregate(std::nullopt, std::move(arg));
         },
         [&](ast::assignment& arg) {
-          auto call = std::get_if<ast::function_call>(&*arg.right.kind);
-          if (not call) {
-            diagnostic::error("expected an aggregation function call after `=`")
-              .primary(arg.right.get_location())
-              .emit(ctx);
-            return;
-          }
-          add_aggregate(std::move(arg.left), std::move(*call));
+          arg.right.match(
+            [&](ast::selector& right) {
+              add_group(std::move(arg.left), std::move(right));
+            },
+            [&](ast::function_call& right) {
+              add_aggregate(std::move(arg.left), std::move(right));
+            },
+            [&](auto&) {
+              diagnostic::error(
+                "expected selector or aggregation function call")
+                .primary(arg.right.get_location())
+                .emit(ctx);
+            });
         },
         [&](auto&) {
           diagnostic::error(

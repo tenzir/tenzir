@@ -215,8 +215,9 @@ public:
 
 class sum_instance final : public aggregation_instance {
 public:
-  void add(series values) override {
+  auto add(series values) -> std::string override {
     // TODO: values.type
+    auto error = std::string{};
     auto f = detail::overload{
       [&](const arrow::Int64Array& array) {
         // Double => Double
@@ -245,10 +246,12 @@ public:
         sum_ = sum;
       },
       [&](auto&) {
-        // TODO: error? warning?
+        error = fmt::format("expected integer or double, but got {}",
+                            values.type.kind());
       },
     };
     caf::visit(f, *values.array);
+    return error;
   }
 
   auto finish() -> data override {
@@ -270,7 +273,13 @@ public:
   auto eval(const ast::function_call& self, size_t length,
             std::vector<series> args, diagnostic_handler& dh) const
     -> series override {
-    TENZIR_TODO();
+    diagnostic::error("this is currently only an aggregation function")
+      .primary(self.get_location())
+      .emit(dh);
+    // TODO
+    auto b = arrow::NullBuilder{};
+    b.AppendNulls(length);
+    return {null_type{}, b.Finish().ValueOrDie()};
   }
 
   auto make_aggregation() const
