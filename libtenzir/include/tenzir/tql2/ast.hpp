@@ -11,6 +11,7 @@
 #include "tenzir/data.hpp"
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/enum.hpp"
+#include "tenzir/expression.hpp"
 #include "tenzir/ip.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/tql2/entity_id.hpp"
@@ -162,8 +163,22 @@ struct literal {
   }
 };
 
+struct meta {
+  auto get_location() const -> location {
+    return location;
+  }
+
+  friend auto inspect(auto& f, meta& x) -> bool {
+    return f.object(x).fields(f.field("kind", x.kind),
+                              f.field("location", x.location));
+  }
+
+  enum meta_extractor::kind kind;
+  location location;
+};
+
 using expression_kinds
-  = caf::detail::type_list<record, list, selector, pipeline_expr, literal,
+  = caf::detail::type_list<record, list, selector, meta, pipeline_expr, literal,
                            field_access, index_expr, binary_expr, unary_expr,
                            function_call, underscore, unpack, assignment,
                            dollar_var>;
@@ -738,6 +753,10 @@ public:
 
   void enter(ast::identifier& x) {
     // TODO
+    TENZIR_UNUSED(x);
+  }
+
+  void enter(ast::meta& x) {
     TENZIR_UNUSED(x);
   }
 

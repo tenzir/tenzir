@@ -195,11 +195,16 @@ public:
     return std::nullopt;
   }
 
+  auto visit(const meta& x) -> result {
+    // TODO
+    TENZIR_UNUSED(x);
+    return std::nullopt;
+  }
+
   template <class T>
   auto visit(const T& x) -> result {
-    diagnostic::error("unimplemented type check for {}", typeid(T).name())
-      .primary(x.get_location())
-      .emit(ctx_);
+    TENZIR_UNUSED(x);
+    TENZIR_WARN("unimplemented type check for {}", typeid(T).name());
     return std::nullopt;
   }
 

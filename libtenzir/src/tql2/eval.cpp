@@ -11,6 +11,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/expression.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -365,6 +366,10 @@ public:
   //   return value_to_series(val, length());
   // }
 
+  auto to_series(const data& x) -> series {
+    return data_to_series(x, length_);
+  }
+
   auto eval(const ast::expression& x) -> series {
     return x.match([&](auto& y) {
       return eval(y);
@@ -372,11 +377,11 @@ public:
   }
 
   auto eval(const ast::literal& x) -> series {
-    return data_to_series(x.as_data(), length_);
+    return to_series(x.as_data());
   }
 
   auto null() -> series {
-    return data_to_series(caf::none, length_);
+    return to_series(caf::none);
   }
 
   auto eval(const ast::record& x) -> series {
@@ -454,15 +459,19 @@ public:
     return b.finish_assert_one_array();
   }
 
-  auto eval(const ast::selector& x) -> series {
+  // TODO: This is pretty bad.
+  auto input_or_throw(location location) -> const table_slice& {
     if (not input_) {
       diagnostic::error("expected a constant expression")
-        .primary(x.get_location())
+        .primary(location)
         .emit(dh_);
-      // TODO: This is pretty bad.
       throw std::monostate{};
     }
-    auto result = resolve(x, *input_);
+    return *input_;
+  }
+
+  auto eval(const ast::selector& x) -> series {
+    auto result = resolve(x, input_or_throw(x.get_location()));
     return result.match(
       [](series& x) -> series {
         return std::move(x);
@@ -626,6 +635,22 @@ public:
       .primary(x.get_location())
       .emit(dh_);
     return null();
+  }
+
+  auto eval(const ast::meta& x) -> series {
+    // TODO: This is quite inefficient.
+    auto& input = input_or_throw(x.get_location());
+    switch (x.kind) {
+      case meta_extractor::schema:
+        return to_series(std::string{input.schema().name()});
+      case meta_extractor::schema_id:
+        return to_series(input.schema().make_fingerprint());
+      case meta_extractor::import_time:
+        return to_series(input.import_time());
+      case meta_extractor::internal:
+        return to_series(input.schema().attribute("internal").has_value());
+    }
+    TENZIR_UNREACHABLE();
   }
 
   auto eval(const auto& x) -> series {

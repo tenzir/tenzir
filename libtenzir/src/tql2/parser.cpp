@@ -11,6 +11,7 @@
 #include "tenzir/concept/parseable/tenzir/ip.hpp"
 #include "tenzir/concept/parseable/tenzir/time.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/expression.hpp"
 
 #include <arrow/util/utf8.h>
 
@@ -353,6 +354,26 @@ private:
     }
     if (peek(tk::lbracket)) {
       return parse_list();
+    }
+    // TODO: Drop one of the syntax possibilities.
+    if (peek(tk::meta) || peek(tk::at)) {
+      auto begin = location{};
+      if (auto meta = accept(tk::meta)) {
+        begin = meta.location;
+        expect(tk::dot);
+      } else {
+        begin = expect(tk::at).location;
+      }
+      auto ident = expect(tk::identifier).as_identifier();
+      auto kind = static_cast<enum meta_extractor::kind>(0);
+      if (ident.name == "tag") {
+        kind = meta_extractor::schema;
+      } else {
+        diagnostic::error("unknown metadata name `{}`", ident.name)
+          .primary(ident.location)
+          .throw_();
+      }
+      return ast::meta{kind, begin.combine(ident.location)};
     }
     // TODO: Accept entity as function name.
     if (not selector_start()) {
