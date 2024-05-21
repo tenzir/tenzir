@@ -598,6 +598,7 @@ struct v2_loader : public context_loader {
                              fmt::format("failed close the temp file: {}",
                                          detail::describe_errno()));
     }
+    std::filesystem::remove(temp_file_name);
     return std::make_unique<ctx>(std::move(*mmdb),
                                  std::move(mapped_mmdb.value()));
   }
