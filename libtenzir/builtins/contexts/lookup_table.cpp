@@ -286,13 +286,17 @@ public:
       row.field("key", key.to_original_data());
       row.field("value", value);
       if (entry_builder.length() >= context::dump_batch_size_limit) {
-        co_yield entry_builder.finish_assert_one_slice(
-          fmt::format("tenzir.{}.info", context_type()));
+        for (auto&& slice : entry_builder.finish_as_table_slice(
+               fmt::format("tenzir.{}.info", context_type()))) {
+          co_yield std::move(slice);
+        }
       }
     }
     // Dump all remaining entries that did not reach the size limit.
-    co_yield entry_builder.finish_assert_one_slice(
-      fmt::format("tenzir.{}.info", context_type()));
+    for (auto&& slice : entry_builder.finish_as_table_slice(
+           fmt::format("tenzir.{}.info", context_type()))) {
+      co_yield std::move(slice);
+    }
   }
 
   /// Updates the context.
