@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/detail/assert.hpp"
 #include <tenzir/collect.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
@@ -13,6 +14,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/type.hpp>
+#include <tenzir/logger.hpp>
 
 #include <caf/typed_event_based_actor.hpp>
 
@@ -21,19 +23,18 @@
 
 namespace tenzir::plugins::log_collector {
 
-
-struct buffer_log_sink : public log_sink {
-    void handle(structured_log_msg const& msg) override {
-        messages_.push_back()
+struct buffered_sink : public logger::sink {
+    void handle( const logger::structured_message& msg) override {
+        messages_.push_back( msg );
     }
 
 private:
-  std::vector<structured_log_msg> messages_;
+  std::vector<logger::structured_message> messages_;
 };
 
-struct log_collector_sink : public log_sink {
-    void handle(structured_log_msg const& msg) override {
-
+struct collector_sink : public logger::sink {
+    void handle(const logger::structured_message& msg) override {
+      TENZIR_TODO();
     }
 
 private:
@@ -74,7 +75,7 @@ struct log_collector_state {
   std::vector<instance> instances = {};
 
   auto setup() -> caf::expected<void> {
-    exchange_log_sink("log-collector-plugin", log_collector_sink{});
+    exchange_log_sink("log-collector-plugin", collector_sink{});
   }
 
   auto setup(const metrics_plugin& plugin) -> caf::expected<void> {
@@ -137,12 +138,12 @@ public:
   }
 
   virtual auto
-  initialize(const record& plugin_config, const record& global_config)
-    -> caf::error {
-    enabled_ = get_or(record, "log.enable-self-storage");
+  initialize(const record& plugin_config, const record& global_config) 
+    -> caf::error override {
+    enabled_ = get_or(global_config, "log.enable-self-storage");
     // insert temporary buffer until the actor system is up
     if (enabled_)
-      add_log_sink("log-collector-plugin", buffered_log_sink{});
+      add_log_sink("log-collector-plugin", buffered_sink{});
     return {};
   }
 

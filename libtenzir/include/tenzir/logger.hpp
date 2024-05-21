@@ -9,10 +9,23 @@
 #pragma once
 
 #include "tenzir/config.hpp"
+#include "tenzir/data.hpp"
 #include "tenzir/detail/discard.hpp"
+#include "tenzir/detail/enum.hpp"
+#include "tenzir/detail/stack_vector.hpp"
+#include "tenzir/detail/string_literal.hpp"
 #include "tenzir/error.hpp"
 
+#include <caf/actor.hpp>
+#include <caf/fwd.hpp>
+
+#include <concepts>
+#include <cstddef>
+#include <iostream>
+#include <source_location>
+#include <sstream>
 #include <string>
+#include <thread>
 #include <utility>
 
 // TENZIR_INFO -> spdlog::info
@@ -38,71 +51,131 @@
 #  define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_OFF
 #endif
 
-using argument_map = detail::stack_vector<std::pair<const char*, tenzir::data>, stack_element_count>;
+namespace tenzir::logger {
+constexpr static size_t stack_field_count = 10;
+using argument_field_type = std::pair<std::string_view, ::tenzir::data>;
+using argument_map_type
+  = detail::stack_vector<argument_field_type,
+                         stack_field_count * sizeof(argument_field_type)>;
 
 static std::atomic_int runtime_log_level = 0;
 
-std::vector<log_sink> sinks;
+TENZIR_ENUM(level, debug, verbose, info, warning, error, critical);
 
-void emit(const char* msg, argument_map& data) {
-    for (auto& sink : sinks)
-        sink.handle_log_msg(msg, data);
-}
+struct structured_message {
+  friend void emit(const structured_message&);
 
-struct structured_log_msg {
-    ~structured_log_msg() {
-        TENZIR_WARN("{} {}", msg_, as_flat_string())
-        // emit(msg_, data_);
-    }
+  ~structured_message() {
+    emit(*this);
+  }
 
-    structured_log_msg(log_level, const char* msg) {
-        msg_ = msg;
-    }
+  structured_message() = default;
 
-    template<typename T>
-    auto arg(std::string_view msg, T&& data) -> structured_log_msg& {
-        data_.emplace_back({std::move(msg), std::move(data)})
-        return *this;
-    }
+  template <size_t N>
+  structured_message(level lvl, detail::string_literal<N> message,
+                     std::source_location sloc, std::thread::id tid,
+                     caf::actor_id aid)
+    : level_{lvl}, message_{message}, location_{sloc}, tid_{tid}, aid_{aid} {
+  }
 
-private:
-    void as_flat_string() {
-      auto s = fmt::format("{}", fmt::join(data_ | std::views::transform([](const auto& p) {
-        return fmt::format("{}={}", p.first, p.second);
-      }), " "));
-    }
+  template <size_t N, typename T>
+    requires std::convertible_to<T, tenzir::data>
+  auto
+  field(detail::string_literal<N> field_name, T&& data) -> structured_message& {
+    data_.emplace_back(field_name, std::forward<T>(data));
+    return *this;
+  }
 
-    static constexpr size_t stack_element_count = 10;
-
-    const char* msg_;
-    argument_map data_;
+  level level_;
+  std::string_view message_;
+  std::source_location location_;
+  std::thread::id tid_;
+  caf::actor_id aid_;
+  argument_map_type data_;
 };
+} // namespace tenzir::logger
 
-struct log_sink {
-  virtual void handle(structured_log_msg const& msg) = 0; 
-};
+template <>
+struct fmt::formatter<std::thread::id> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
 
-struct console_log_sink : public log_sink {
-  void handle(structured_log_msg const& msg) override {
-    TENZIR_WARN("{} {}", msg_, as_flat_string())
+  template <typename FormatContext>
+  auto format(const std::thread::id& loc, FormatContext& ctx) const {
+    std::ostringstream oss;
+    oss << loc;
+
+    return fmt::format_to(ctx.out(), "{}", std::move(oss).str());
   }
 };
 
+template <>
+struct fmt::formatter<std::source_location> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
 
-#define TENZIR_STRUCTURED_WARN(msg) \
-    if(TENZIR_LOG_LEVEL >= TENZIR_LOG_LEVEL_WARNING)
-        structured_log_msg(log_level::warn, msg)
+  template <typename FormatContext>
+  auto format(const std::source_location& loc, FormatContext& ctx) const {
+    return fmt::format_to(ctx.out(), "{}:{}:{}", loc.file_name(),
+                          loc.function_name(), loc.line());
+  }
+};
 
+template <>
+struct fmt::formatter<tenzir::logger::structured_message> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const tenzir::logger::structured_message& msg,
+              FormatContext& ctx) const {
+    auto out = ctx.out();
+    out = fmt::format_to(out, "{{ {} : {} }}", "level", msg.level_);
+    out = fmt::format_to(out, "{{ {} : {} }}", "message", msg.message_);
+    out = fmt::format_to(out, "{{ {} : {} }}", "location", msg.location_);
+    out = fmt::format_to(out, "{{ {} : {} }}", "thread_id", msg.tid_);
+    out = fmt::format_to(out, "{{ {} : {} }}", "actor_id", msg.aid_);
+
+    for (const auto& f : msg.data_) {
+      out = fmt::format_to(out, "{{ {} : {} }} ", f.first, f.second);
+    }
+
+    return out;
+  }
+};
+
+namespace tenzir::logger {
+struct sink {
+  std::atomic<level> level_;
+  virtual void handle(structured_message const& msg) = 0;
+};
+
+extern std::vector<sink*> sinks;
+} // namespace tenzir::logger
+
+#define TENZIR_STRUCTURED_WARN(msg)                                            \
+  if (TENZIR_LOG_LEVEL >= TENZIR_LOG_LEVEL_WARNING)                            \
+    tenzir::logger::structured_message {                                       \
+      tenzir::logger::level::warn, msg, std::source_location::current(),       \
+        std::this_thread::get_id(), caf::actor_id {                            \
+      }                                                                        \
+    }
 
 // # Old log message:
 // TENZIR_DEBUG("{} got {} new hits for predicate at position {}", *self,
 //                rank(result), position);
 
 // # New log message
-TENZIR_WARN("evaluator: new hits for predicate")
-    .arg("actor_id", self->id())
-    .arg("num", rank(result))
-    .arg("position", position);
+// TENZIR_WARN("evaluator: new hits for predicate")
+//     .field("actor_id", self->id())
+//     .field("num", rank(result))
+//     .field("position", position);
 
 // -> Terminal log:
 //   evaluator: new hits for predicate actor_id=23 num=100 position=2

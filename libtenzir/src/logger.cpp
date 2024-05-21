@@ -302,3 +302,38 @@ std::shared_ptr<spdlog::logger>& logger() {
 
 } // namespace detail
 } // namespace tenzir
+
+namespace tenzir::logger
+{
+  struct console_sink : public sink {
+    void handle(structured_message const& msg) override {
+      auto msg_text = fmt::format("{}", msg);
+      switch (msg.level_) {
+        using enum level;
+        case debug:
+        case verbose:
+          std::clog << msg_text << '\n';
+          return;
+        case info:
+        case warning:
+          std::cout << msg_text << '\n';
+          return;
+        case error:
+        case critical:
+          std::cerr << msg_text << '\n';
+          return;
+      }
+    }
+  };
+
+  console_sink sink_console;
+  std::vector<sink*> sinks{ &sink_console };
+
+  void emit( const structured_message& msg )
+  {
+    for ( auto* sink : sinks )
+    {
+      sink->handle(msg);
+    }
+  }
+}
