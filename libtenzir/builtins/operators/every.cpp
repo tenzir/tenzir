@@ -55,7 +55,6 @@ public:
   auto optimize(expression const& filter, event_order order,
                 columnar_selection selection) const
     -> optimize_result override {
-    (void)selection;
     auto result = op_->optimize(filter, order, selection);
     if (not result.replacement) {
       return result;
