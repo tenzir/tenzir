@@ -13,25 +13,37 @@
 #include <caf/none.hpp>
 #include <caf/variant.hpp>
 
+#include <optional>
 #include <string>
 #include <vector>
 
 namespace tenzir {
 
-using field_by_level = std::vector<std::string>;
-
-// Each entry in fields of interest represents the fields to be selected for
-// that level of the schema e.g. select x.y.z a.b.c should become <<x, a>, <y,
-// b>, <z, c>>
 class columnar_selection {
 public:
-  std::optional<std::vector<field_by_level>> fields_of_interest = std::nullopt;
-  std::optional<int> current_level = 0;
+  std::optional<std::vector<std::string>> fields_of_interest = std::nullopt;
+  bool do_not_optimize_selection = false;
   columnar_selection() = default;
-
-  columnar_selection(
-    std::optional<std::vector<field_by_level>> fields_of_interest)
+  columnar_selection(bool do_not_optimize_selection)
+    : do_not_optimize_selection{do_not_optimize_selection} {
+  }
+  columnar_selection(std::optional<std::vector<std::string>> fields_of_interest)
     : fields_of_interest{std::move(fields_of_interest)} {
+  }
+  columnar_selection(std::optional<std::vector<std::string>> fields_of_interest,
+                     bool do_not_optimize_selection)
+    : fields_of_interest{std::move(fields_of_interest)},
+      do_not_optimize_selection{do_not_optimize_selection} {
+  }
+
+  static auto no_columnar_selection() -> columnar_selection {
+    return {std::nullopt, true};
+  }
+
+  static auto
+  block_columnar_selection(std::vector<std::string> fields_of_interest)
+    -> columnar_selection {
+    return {fields_of_interest, true};
   }
 };
 

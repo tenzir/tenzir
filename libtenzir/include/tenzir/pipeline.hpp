@@ -24,6 +24,7 @@
 #include <fmt/core.h>
 
 #include <memory>
+#include <optional>
 #include <type_traits>
 #include <variant>
 
@@ -407,37 +408,23 @@ struct optimize_result {
   std::optional<expression> filter;
   event_order order;
   operator_ptr replacement;
-  std::vector<operator_ptr> replacements{};
   std::optional<columnar_selection> selection;
-  bool multiple_replacements;
 
   optimize_result(std::optional<expression> filter, event_order order,
                   operator_ptr replacement,
-                  std::optional<columnar_selection> selection = std::nullopt,
-                  bool multiple_replacements = false)
+                  std::optional<columnar_selection> selection)
     : filter{std::move(filter)},
       order{order},
       replacement{std::move(replacement)},
-      selection{std::move(selection)},
-      multiple_replacements{multiple_replacements} {
+      selection{std::move(selection)} {
   }
-
-  // optimize_result(std::optional<expression> filter, event_order order,
-  //                 std::vector<operator_ptr> replacement,
-  //                 std::optional<columnar_selection> selection = std::nullopt,
-  //                 bool multiple_replacements = false)
-  //   : filter{std::move(filter)},
-  //     order{order},
-  //     replacement{std::move(replacement)},
-  //     selection{std::move(selection)},
-  //     multiple_replacements{multiple_replacements} {
-  // }
 
   /// Always valid if the transformation performed by the operator does not
   /// change based on the order in which the input events arrive in.
-  static auto order_invariant(const operator_base& op, event_order order)
-    -> optimize_result {
-    return optimize_result{std::nullopt, order, op.copy()};
+  static auto order_invariant(const operator_base& op, event_order order,
+                              columnar_selection selection) -> optimize_result {
+    return optimize_result{std::nullopt, order, op.copy(),
+                           selection}; // this can go back to null opt
   }
 };
 
