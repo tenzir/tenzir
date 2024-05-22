@@ -100,11 +100,10 @@ public:
             order); // choose optimization not dependent on selection
 
     if (not parser_opt) {
-      // should return blocking one
-      auto unoptimized = do_not_optimize(*this);
-      selection.do_not_optimize_selection = true;
-      unoptimized.selection = selection;
-      return unoptimized;
+      return do_not_optimize(*this);
+    }
+    if (selection.fields_of_interest) {
+      selection.selection_finished = true;
     }
     return optimize_result{
       std::nullopt, event_order::ordered,

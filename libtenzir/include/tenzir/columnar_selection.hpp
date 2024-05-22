@@ -23,6 +23,7 @@ class columnar_selection {
 public:
   std::optional<std::vector<std::string>> fields_of_interest = std::nullopt;
   bool do_not_optimize_selection = false;
+  bool selection_finished = false;
   columnar_selection() = default;
   columnar_selection(bool do_not_optimize_selection)
     : do_not_optimize_selection{do_not_optimize_selection} {
