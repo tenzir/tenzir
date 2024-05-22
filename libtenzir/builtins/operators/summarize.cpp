@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/tql2/ast.hpp"
+
 #include <tenzir/aggregation_function.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/concept/convertible/data.hpp>
@@ -18,19 +20,26 @@
 #include <tenzir/hash/hash_append.hpp>
 #include <tenzir/operator_control_plane.hpp>
 #include <tenzir/parser_interface.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice_builder.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
+#include <tenzir/tql2/registry.hpp>
 #include <tenzir/type.hpp>
 
 #include <arrow/compute/api_scalar.h>
 #include <arrow/record_batch.h>
 #include <arrow/type.h>
 #include <caf/expected.hpp>
+#include <caf/sum_type.hpp>
 #include <tsl/robin_map.h>
 
 #include <algorithm>
+#include <ranges>
 #include <utility>
+#include <variant>
 
 namespace tenzir::plugins::summarize {
 
@@ -956,8 +965,294 @@ public:
   }
 };
 
+struct aggregate_t {
+  std::optional<ast::selector> dest;
+  ast::function_call call;
+
+  friend auto inspect(auto& f, aggregate_t& x) -> bool {
+    return f.object(x).fields(f.field("dest", x.dest), f.field("call", x.call));
+  }
+};
+
+struct group_t {
+  std::optional<ast::selector> dest;
+  ast::selector expr;
+
+  friend auto inspect(auto& f, group_t& x) -> bool {
+    return f.object(x).fields(f.field("dest", x.dest), f.field("expr", x.expr));
+  }
+};
+
+struct config {
+  std::vector<aggregate_t> aggregates;
+  std::vector<group_t> groups;
+
+  /// Because we allow mixing aggregates and groups and want to emit them in the
+  /// same order, we need to store some additional information, unless we use
+  /// something like `vector<variant<aggregate_t, ast::selector>>` instead. But
+  /// that makes it more tricky to `zip`. If the index is positive, it
+  /// corresponds to `aggregates`, otherwise `groups[-index - 1]`.
+  std::vector<int64_t> indices;
+
+  friend auto inspect(auto& f, config& x) -> bool {
+    return f.object(x).fields(f.field("aggregates", x.aggregates),
+                              f.field("groups", x.groups),
+                              f.field("indices", x.indices));
+  }
+};
+
+template <class Value>
+using group_map
+  = tsl::robin_map<group_by_key, Value, group_by_key_hash, group_by_key_equal>;
+
+struct bucket2 {
+  std::vector<std::unique_ptr<tql2::aggregation_instance>> aggregations{};
+};
+
+class implementation2 {
+public:
+  explicit implementation2(const config& cfg, diagnostic_handler& dh)
+    : cfg_{cfg}, dh_{dh} {
+  }
+
+  void add(const table_slice& slice) {
+    auto group_values = std::vector<series>{};
+    for (auto& group : cfg_.groups) {
+      // TODO: `group` is getting copied here.
+      group_values.push_back(tql2::eval(group.expr, slice, dh_));
+    }
+    auto aggregate_args = std::vector<series>{};
+    for (auto& aggregate : cfg_.aggregates) {
+      // At the moment, we check this before constructing the operator.
+      TENZIR_ASSERT(aggregate.call.args.size() == 1);
+      // TODO: Feed result to aggregation instance.
+      aggregate_args.push_back(tql2::eval(aggregate.call.args[0], slice, dh_));
+    }
+    auto key = group_by_key_view{};
+    key.resize(cfg_.groups.size());
+    auto update_group = [&](bucket2& group, int64_t begin, int64_t end) {
+      for (auto&& [aggr, arg, cfg_aggr] :
+           zip_equal(group.aggregations, aggregate_args, cfg_.aggregates)) {
+        auto error = aggr->add(arg.slice(begin, end));
+        if (not error.empty()) {
+          diagnostic::warning("{}", error)
+            .primary(cfg_aggr.call.args[0].get_location())
+            .emit(dh_);
+        }
+      }
+    };
+    auto find_or_create_group = [&](int64_t row) -> bucket2* {
+      for (auto&& [key_value, group] : zip_equal(key, group_values)) {
+        key_value = value_at(group.type, *group.array, row);
+      }
+      auto it = groups_.find(key);
+      if (it == groups_.end()) {
+        auto bucket = std::make_unique<bucket2>();
+        for (auto& aggr : cfg_.aggregates) {
+          // TODO: Very hacky.
+          auto fn = plugins::find<tql2::aggregation_function_plugin>(
+            "tql2." + aggr.call.fn.path[0].name);
+          TENZIR_ASSERT(fn);
+          bucket->aggregations.push_back(fn->make_aggregation());
+        }
+        it = groups_.emplace_hint(it, materialize(key), std::move(bucket));
+      }
+      return &*it->second;
+    };
+    auto total_rows = detail::narrow<int64_t>(slice.rows());
+    auto current_group = find_or_create_group(0);
+    auto current_begin = int64_t{0};
+    for (auto row = int64_t{1}; row < total_rows; ++row) {
+      auto group = find_or_create_group(row);
+      if (current_group != group) {
+        update_group(*current_group, current_begin, row);
+        current_group = group;
+        current_begin = row;
+      }
+    }
+    update_group(*current_group, current_begin, total_rows);
+  }
+
+  auto finish() -> std::vector<table_slice> {
+    auto emplace = [](record& root, const ast::selector& sel, data value) {
+      auto current = &root;
+      for (auto& segment : sel.path) {
+        auto& val = (*current)[segment.name];
+        if (&segment == &sel.path.back()) {
+          val = std::move(value);
+        } else {
+          current = caf::get_if<record>(&val);
+          if (not current) {
+            val = record{};
+            current = &caf::get<record>(val);
+          }
+        }
+      }
+    };
+    // TODO: Group by schema again.
+    auto b = series_builder{};
+    for (auto& [key, group] : groups_) {
+      auto result = record{};
+      for (auto index : cfg_.indices) {
+        if (index >= 0) {
+          auto& dest = cfg_.aggregates[index].dest;
+          auto value = group->aggregations[index]->finish();
+          if (dest) {
+            emplace(result, *dest, value);
+          } else {
+            auto& call = cfg_.aggregates[index].call;
+            // TODO: Decide and properly implement this.
+            auto arg = call.args[0].match(
+              [](ast::selector& x) -> std::string_view {
+                if (x.path.empty()) {
+                  return "this";
+                }
+                return x.path[0].name;
+              },
+              [](auto&) -> std::string_view {
+                return "TODO";
+              });
+            result.emplace(fmt::format("{}({})", call.fn.path[0].name, arg),
+                           value);
+          }
+        } else {
+          index = -index - 1;
+          auto& group = cfg_.groups[index];
+          auto& dest = group.dest ? *group.dest : group.expr;
+          auto& value = key[index];
+          emplace(result, dest, value);
+        }
+      }
+      b.data(result);
+    }
+    return b.finish_as_table_slice();
+  }
+
+private:
+  const config& cfg_;
+  diagnostic_handler& dh_;
+  group_map<std::unique_ptr<bucket2>> groups_;
+};
+
+class summarize_operator2 final : public crtp_operator<summarize_operator2> {
+public:
+  summarize_operator2() = default;
+
+  explicit summarize_operator2(config cfg) : cfg_{std::move(cfg)} {
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.summarize";
+  }
+
+  auto
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    auto impl = implementation2{cfg_, ctrl.diagnostics()};
+    for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      impl.add(slice);
+    }
+    for (auto slice : impl.finish()) {
+      co_yield std::move(slice);
+    }
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, summarize_operator2& x) -> bool {
+    return f.apply(x.cfg_);
+  }
+
+private:
+  config cfg_;
+};
+
+class plugin2 final : public tql2::operator_plugin<summarize_operator2> {
+public:
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
+    // summarize foo, bar, baz=count(foo)
+    auto cfg = config{};
+    auto add_aggregate
+      = [&](std::optional<ast::selector> dest, ast::function_call call) {
+          auto& ref = call.fn.ref;
+          if (not ref.resolved()) {
+            // Already reported.
+            return;
+          }
+          // TODO: Improve this and try to forward function handle directly.
+          auto fn = dynamic_cast<const tql2::aggregation_function_plugin*>(
+            std::get<const tql2::function_plugin*>(ctx.reg().get(ref)));
+          // TODO: Check if aggregation function.
+          if (not fn) {
+            diagnostic::error("function does not support aggregations")
+              .primary(call.fn.get_location())
+              .hint("add assignment before `summarize` to group by the result")
+              .emit(ctx);
+            return;
+          }
+          if (call.args.size() != 1) {
+            // TODO: We eventually want to support more arguments.
+            // TODO: What about `count()`?
+            diagnostic::error("function expected exactly one argument")
+              .primary(call.get_location())
+              .emit(ctx);
+            return;
+          }
+          auto index = detail::narrow<int64_t>(cfg.aggregates.size());
+          cfg.indices.push_back(index);
+          cfg.aggregates.emplace_back(std::move(dest), std::move(call));
+        };
+    auto add_group
+      = [&](std::optional<ast::selector> dest, ast::selector expr) {
+          auto index = -detail::narrow<int64_t>(cfg.groups.size()) - 1;
+          cfg.indices.push_back(index);
+          cfg.groups.emplace_back(std::move(dest), std::move(expr));
+        };
+    for (auto& arg : inv.args) {
+      arg.match(
+        [&](ast::selector& arg) {
+          add_group(std::nullopt, std::move(arg));
+        },
+        [&](ast::function_call& arg) {
+          add_aggregate(std::nullopt, std::move(arg));
+        },
+        [&](ast::assignment& arg) {
+          arg.right.match(
+            [&](ast::selector& right) {
+              add_group(std::move(arg.left), std::move(right));
+            },
+            [&](ast::function_call& right) {
+              add_aggregate(std::move(arg.left), std::move(right));
+            },
+            [&](auto&) {
+              diagnostic::error(
+                "expected selector or aggregation function call")
+                .primary(arg.right.get_location())
+                .emit(ctx);
+            });
+        },
+        [&](auto&) {
+          diagnostic::error(
+            "expected selector, assignment or aggregation function call")
+            .primary(arg.get_location())
+            .emit(ctx);
+        });
+    }
+    return std::make_unique<summarize_operator2>(std::move(cfg));
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::summarize
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::summarize::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::summarize::plugin2)

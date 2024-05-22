@@ -8,13 +8,9 @@
 
 #include "tenzir/tql2/entity_id.hpp"
 
+#include "tenzir/tql2/registry.hpp"
+
 namespace tenzir::tql2 {
 
-auto entity_id::debug_inspect(debug_writer& dbg) const -> bool {
-  if (not resolved()) {
-    return dbg.fmt_value("<unresolved>");
-  }
-  return dbg.apply(id);
-}
 
 } // namespace tenzir::tql2

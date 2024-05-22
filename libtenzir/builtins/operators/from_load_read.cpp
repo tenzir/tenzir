@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/tql2/plugin.hpp"
+
 #include <tenzir/detail/loader_saver_resolver.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/plugin.hpp>
@@ -291,9 +293,23 @@ public:
   }
 };
 
+class load_plugin2 final : virtual public operator_factory_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.load";
+  }
+
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
+    diagnostic::error("TODO").emit(ctx);
+    return nullptr;
+  }
+};
+
 } // namespace
 } // namespace tenzir::plugins::from
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::from_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::load_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::read_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::load_plugin2)

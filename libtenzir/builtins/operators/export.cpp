@@ -6,8 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/eval.hpp"
+#include "tenzir/tql2/plugin.hpp"
+
 #include <tenzir/actors.hpp>
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/argument_parser2.hpp>
 #include <tenzir/atoms.hpp>
 #include <tenzir/catalog.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
@@ -257,7 +262,8 @@ private:
   bool live_;
 };
 
-class plugin final : public virtual operator_plugin<export_operator> {
+class plugin final : public virtual operator_plugin<export_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.source = true};
@@ -276,6 +282,28 @@ public:
     // The --low-priority option is currently a no-op, and will be brought back
     // alongside the database plugin.
     (void)low_priority;
+    return std::make_unique<export_operator>(
+      expression{
+        predicate{
+          meta_extractor{meta_extractor::internal},
+          relational_operator::equal,
+          data{internal},
+        },
+      },
+      live);
+  }
+
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
+    // auto usage = "export live=<bool>, internal=<bool>";
+    // auto usage = "export live=false, internal=false";
+    // auto docs = "https://docs.tenzir.com/operators/export";
+    auto live = false;
+    auto internal = false;
+    auto parser = argument_parser2{};
+    parser.add("live", live);
+    parser.add("internal", internal);
+    parser.parse(inv, ctx);
     return std::make_unique<export_operator>(
       expression{
         predicate{

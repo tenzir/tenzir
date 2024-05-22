@@ -6,6 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/tql2/eval.hpp"
+#include "tenzir/tql2/exec.hpp"
+
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/detail/croncpp.hpp>
@@ -16,6 +19,7 @@
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
 #include <caf/typed_event_based_actor.hpp>
@@ -300,6 +304,7 @@ public:
 private:
   duration interval_;
 };
+
 using every_plugin = scheduled_execution_plugin<every_scheduler>;
 
 class cron_scheduler {
@@ -361,6 +366,45 @@ private:
   detail::cron::cronexpr cronexpr_;
 };
 using cron_plugin = scheduled_execution_plugin<cron_scheduler>;
+
+class every_plugin2 final : public virtual operator_factory_plugin {
+public:
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
+    if (inv.args.size() != 2) {
+      diagnostic::error("TODO")
+        .primary(inv.self.get_location())
+        .usage("every <duration> { ... }")
+        .emit(ctx);
+      return nullptr;
+    }
+    auto interval_data = tql2::const_eval(inv.args[0], ctx);
+    if (not interval_data) {
+      return nullptr;
+    }
+    auto interval = caf::get_if<duration>(&*interval_data);
+    if (not interval) {
+      diagnostic::error("expected a duration, got `{}`", *interval_data)
+        .primary(inv.args[0].get_location())
+        .emit(ctx);
+      return nullptr;
+    }
+    auto pipe_expr = std::get_if<ast::pipeline_expr>(&*inv.args[1].kind);
+    if (not pipe_expr) {
+      diagnostic::error("expected a pipeline expression")
+        .primary(inv.args[1].get_location())
+        .usage("every <duration> { ... }")
+        .emit(ctx);
+      return nullptr;
+    }
+    auto pipe = tql2::prepare_pipeline(std::move(pipe_expr->inner), ctx);
+    // TODO: Fix `every`?
+    auto ops = std::move(pipe).unwrap();
+    TENZIR_ASSERT(ops.size() == 1);
+    return std::make_unique<scheduled_execution_operator<every_scheduler>>(
+      std::move(ops[0]), every_scheduler{*interval});
+  }
+};
 
 } // namespace
 

@@ -6,6 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/table_slice_builder.hpp"
+#include "tenzir/tql2/plugin.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -53,6 +56,28 @@ public:
       }
       co_yield std::move(batch);
     }
+    // TODO: Generalize this optimization.
+    if constexpr (std::same_as<Batch, table_slice>) {
+      if (cache.size() == 1) {
+        auto& batch = static_cast<table_slice&>(cache[0]);
+        auto schema = batch.schema();
+        auto builder = schema.make_arrow_builder(arrow::default_memory_pool());
+        auto array = to_record_batch(batch)->ToStructArray().ValueOrDie();
+        for (auto i = uint64_t{1}; i < repetitions_; ++i) {
+          auto status
+            = append_array_slice(*builder, schema, *array, 0, array->length());
+          TENZIR_ASSERT(status.ok());
+        }
+        auto output = builder->Finish().ValueOrDie();
+        auto* cast = dynamic_cast<arrow::StructArray*>(output.get());
+        TENZIR_ASSERT(cast);
+        auto arrow_schema = schema.to_arrow_schema();
+        auto output_rb = arrow::RecordBatch::Make(
+          std::move(arrow_schema), cast->length(), cast->fields());
+        co_yield table_slice{output_rb, std::move(schema)};
+        co_return;
+      }
+    }
     for (auto i = uint64_t{1}; i < repetitions_; ++i) {
       co_yield {};
       for (const auto& batch : cache) {
@@ -78,7 +103,8 @@ private:
   uint64_t repetitions_;
 };
 
-class plugin final : public virtual operator_plugin<repeat_operator> {
+class plugin final : public virtual operator_plugin<repeat_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
@@ -92,6 +118,37 @@ public:
     parser.parse(p);
     return std::make_unique<repeat_operator>(
       repetitions.value_or(std::numeric_limits<uint64_t>::max()));
+  }
+
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
+    using namespace tql2;
+    if (inv.args.size() != 1) {
+      diagnostic::error("`repeat` expects exactly one argument, got {}",
+                        inv.args.size())
+        .primary(inv.self.get_location())
+        .emit(ctx);
+      return nullptr;
+    }
+    auto count = inv.args[0].match(
+      [](ast::literal& x) {
+        return x.value.match(
+          [](int64_t x) -> std::optional<int64_t> {
+            return x;
+          },
+          [](auto&) -> std::optional<int64_t> {
+            return std::nullopt;
+          });
+      },
+      [](auto&) -> std::optional<int64_t> {
+        return std::nullopt;
+      });
+    if (not count) {
+      diagnostic::error("expected integer")
+        .primary(inv.args[0].get_location())
+        .emit(ctx);
+    }
+    return std::make_unique<repeat_operator>(*count);
   }
 };
 

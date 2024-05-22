@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/argument_parser2.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -14,6 +16,7 @@
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice_builder.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
 
@@ -134,7 +137,8 @@ private:
   bool cumulative_ = {};
 };
 
-class plugin final : public virtual operator_plugin<measure_operator> {
+class plugin final : public virtual operator_plugin<measure_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
@@ -150,6 +154,13 @@ public:
     parser.parse(p);
     return std::make_unique<measure_operator>(batch_size_, real_time,
                                               cumulative);
+  }
+
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
+    argument_parser2{"https://docs.tenzir.com/operators/measure"}.parse(inv,
+                                                                        ctx);
+    return std::make_unique<measure_operator>(batch_size_, true, false);
   }
 
 private:

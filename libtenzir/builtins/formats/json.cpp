@@ -7,11 +7,13 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/argument_parser2.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/cast.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/config_options.hpp>
+#include <tenzir/data.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/env.hpp>
@@ -25,6 +27,8 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/to_lines.hpp>
+#include <tenzir/tql/parser.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/try_simdjson.hpp>
 
 #include <arrow/record_batch.h>
@@ -1494,6 +1498,140 @@ public:
 using suricata_parser = selector_parser<"suricata", "event_type:suricata">;
 using zeek_parser = selector_parser<"zeek-json", "_path:zeek", ".">;
 
+class read_json final : public crtp_operator<read_json> {
+public:
+  read_json() = default;
+
+  explicit read_json(parser_args args) : parser_{std::move(args)} {
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.read_json";
+  }
+
+  auto
+  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    // TODO: Rewrite after `crtp_operator` does detection without instantiate.
+    auto gen = parser_.instantiate(std::move(input), ctrl);
+    if (not gen) {
+      co_return;
+    }
+    for (auto&& slice : *gen) {
+      co_yield std::move(slice);
+    }
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, read_json& x) -> bool {
+    return f.apply(x.parser_);
+  }
+
+private:
+  json_parser parser_;
+};
+
+class write_json final : public crtp_operator<write_json> {
+public:
+  write_json() = default;
+
+  explicit write_json(printer_args args) : printer_{std::move(args)} {
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.write_json";
+  }
+
+  auto operator()(generator<table_slice> input,
+                  operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    auto printer = printer_.instantiate(type{}, ctrl);
+    // TODO
+    TENZIR_ASSERT(printer);
+    TENZIR_ASSERT(*printer);
+    for (auto&& slice : input) {
+      auto yielded = false;
+      for (auto&& chunk : (*printer)->process(slice)) {
+        co_yield std::move(chunk);
+        yielded = true;
+      }
+      if (not yielded) {
+        co_yield {};
+      }
+    }
+    for (auto&& chunk : (*printer)->finish()) {
+      co_yield std::move(chunk);
+    }
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, write_json& x) -> bool {
+    return f.apply(x.printer_);
+  }
+
+private:
+  json_printer printer_;
+};
+
+class read_json_plugin final
+  : public virtual operator_inspection_plugin<read_json>,
+    public virtual operator_factory_plugin {
+public:
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
+    auto args = parser_args{};
+    auto sep = std::optional<located<std::string>>{};
+    argument_parser2{"https://docs.tenzir.com/operators/read_json"}
+      .add("sep", sep)
+      // TODO: We could allow a non-constant expression for `schema` and then
+      // evaluate it with (perhaps in some limited fashion) against the current
+      // JSON document.
+      .add("schema", args.schema)
+      .add("precise", args.precise)
+      .add("raw", args.raw)
+      // TODO: Might want to react to parsing failure.
+      .parse(inv, ctx);
+    if (sep) {
+      auto& str = sep->inner;
+      if (str == "\n") {
+        args.use_ndjson_mode = true;
+      } else if (str.size() == 1 && str[0] == '\0') {
+        args.use_gelf_mode = true;
+      } else {
+        diagnostic::error("unknown separator {:?}", str)
+          .primary(sep->source)
+          .hint(R"(expected "\n" or "\0")")
+          .emit(ctx);
+      }
+    }
+    return std::make_unique<read_json>(std::move(args));
+  }
+};
+
+class write_json_plugin final
+  : public virtual operator_inspection_plugin<write_json>,
+    public virtual operator_factory_plugin {
+public:
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
+    // TODO
+    auto args = printer_args{};
+    argument_parser2{"https://docs.tenzir.com/operators/write_json"}
+      .add("ndjson", args.compact_output)
+      .parse(inv, ctx);
+    return std::make_unique<write_json>(std::move(args));
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::json
@@ -1502,3 +1640,5 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::gelf_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::suricata_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::zeek_parser)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_json_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin)

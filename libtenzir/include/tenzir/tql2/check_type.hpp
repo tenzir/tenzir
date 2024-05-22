@@ -8,14 +8,18 @@
 
 #pragma once
 
-#include "tenzir/diagnostics.hpp"
-#include "tenzir/exec_pipeline.hpp"
+#include "tenzir/session.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/type.hpp"
 
 namespace tenzir::tql2 {
 
-auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
-          const exec_config& cfg, caf::actor_system& sys) -> bool;
+// TODO: This might not be what we want.
 
-auto prepare_pipeline(ast::pipeline&& pipe, session ctx) -> tenzir::pipeline;
-}
+/// Error will be emitted if ill-typed.
+auto check_type(const ast::expression& expr, session ctx)
+  -> std::optional<type>;
+
+void check_assignment(const ast::assignment& x, session ctx);
+
+} // namespace tenzir::tql2

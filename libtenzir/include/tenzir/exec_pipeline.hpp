@@ -29,4 +29,8 @@ auto exec_pipeline(std::string content,
                    const exec_config& cfg, caf::actor_system& sys)
   -> caf::expected<void>;
 
+auto exec_pipeline(pipeline pipe, std::unique_ptr<diagnostic_handler> diag,
+                   const exec_config& cfg, caf::actor_system& sys)
+  -> caf::expected<void>;
+
 } // namespace tenzir

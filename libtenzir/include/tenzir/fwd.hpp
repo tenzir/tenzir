@@ -404,6 +404,17 @@ using writer_ptr = std::unique_ptr<writer>;
 
 } // namespace format
 
+class session;
+namespace ast {
+struct expression;
+}
+
+namespace tql2 {
+
+class registry;
+
+} // namespace tql2
+
 } // namespace tenzir
 
 // -- type announcements -------------------------------------------------------

@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
+// SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #pragma once
@@ -29,24 +29,24 @@
 /// `std::string_view`).
 #define TENZIR_ENUM(name, ...)                                                 \
   enum class name { __VA_ARGS__ };                                             \
-  inline auto to_string(name x) -> std::string_view {                          \
+  [[maybe_unused]] inline auto to_string(name x) -> std::string_view {         \
     switch (x) {                                                               \
       using enum name;                                                         \
       TENZIR_PP_FOR(TENZIR_ENUM_CASE, __VA_ARGS__)                             \
     }                                                                          \
     TENZIR_UNREACHABLE();                                                      \
   }                                                                            \
-  inline auto adl_from_string(tenzir::tag<name>, std::string_view str)         \
-    -> std::optional<name> {                                                   \
+  [[maybe_unused]] inline auto adl_from_string(                                \
+    tenzir::tag<name>, std::string_view str) -> std::optional<name> {          \
     using enum name;                                                           \
     TENZIR_PP_FOR(TENZIR_ENUM_CHECK, __VA_ARGS__);                             \
     return std::nullopt;                                                       \
   }                                                                            \
-  auto inspect(auto& f, name& x) -> bool {                                     \
+  [[maybe_unused]] auto inspect(auto& f, name& x) -> bool {                    \
     return tenzir::detail::inspect_enum_str(                                   \
       f, x, {TENZIR_PP_FOR(TENZIR_ENUM_STR, __VA_ARGS__)});                    \
   }                                                                            \
-  void adl_tenzir_macro_enum(name)
+  [[maybe_unused]] void adl_tenzir_macro_enum(name)
 
 namespace tenzir {
 

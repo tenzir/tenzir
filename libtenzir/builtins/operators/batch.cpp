@@ -6,6 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/argument_parser2.hpp"
+#include "tenzir/defaults.hpp"
+#include "tenzir/tql2/plugin.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/parseable/numeric/integral.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -121,7 +125,8 @@ private:
   event_order order_ = event_order::ordered;
 };
 
-class plugin final : public virtual operator_plugin<batch_operator> {
+class plugin final : public virtual operator_plugin<batch_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
@@ -149,6 +154,14 @@ public:
     return std::make_unique<batch_operator>(
       limit ? limit->inner : defaults::import::table_slice_size,
       timeout ? timeout->inner : duration::max(), event_order::ordered);
+  }
+
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
+    argument_parser2{"https://docs.tenzir.com/operators/batch"}.parse(inv, ctx);
+    return std::make_unique<batch_operator>(defaults::import::table_slice_size,
+                                            duration::max(),
+                                            event_order::ordered);
   }
 };
 

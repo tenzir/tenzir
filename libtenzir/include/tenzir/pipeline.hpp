@@ -392,6 +392,7 @@ auto serialize_op(serializer f, const operator_base& x) -> bool;
 } // namespace detail
 
 template <class Inspector>
+  requires(not Inspector::is_loading)
 auto inspect(Inspector& f, const operator_base& x) -> bool {
   static_assert(std::constructible_from<serializer, Inspector&>);
   return detail::serialize_op(f, x);

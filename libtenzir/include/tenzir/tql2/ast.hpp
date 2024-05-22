@@ -8,11 +8,17 @@
 
 #pragma once
 
+#include "tenzir/data.hpp"
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/enum.hpp"
+#include "tenzir/expression.hpp"
 #include "tenzir/ip.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/tql2/entity_id.hpp"
+
+#include <caf/detail/is_one_of.hpp>
+
+#include <type_traits>
 
 namespace tenzir::detail {
 
@@ -26,7 +32,7 @@ auto make_dependent(U&& x) -> U&& {
 
 } // namespace tenzir::detail
 
-namespace tenzir::tql2::ast {
+namespace tenzir::ast {
 
 struct assignment;
 struct binary_expr;
@@ -53,6 +59,8 @@ struct underscore;
 struct unpack;
 
 struct identifier {
+  identifier() = default;
+
   identifier(std::string name, location location)
     : name{std::move(name)}, location{location} {
   }
@@ -75,6 +83,8 @@ struct identifier {
 };
 
 struct selector {
+  selector() = default;
+
   selector(std::optional<location> this_, std::vector<identifier> path)
     : this_{this_}, path{std::move(path)} {
   }
@@ -124,6 +134,8 @@ struct literal {
   using kind = variant<null, bool, int64_t, uint64_t, double, std::string, blob,
                        duration, caf::timestamp, ip>;
 
+  literal() = default;
+
   literal(kind value, location source)
     : value{std::move(value)}, source{source} {
   }
@@ -136,27 +148,58 @@ struct literal {
                               f.field("source", x.source));
   }
 
+  auto as_data() const -> data {
+    return value.match(
+      [](const auto& x) -> data {
+        return x;
+      },
+      [](const null&) -> data {
+        return caf::none;
+      });
+  }
+
   auto get_location() const -> location {
     return source;
   }
 };
 
-using expression_kind
-  = variant<record, list, selector, pipeline_expr, literal, field_access,
-            index_expr, binary_expr, unary_expr, function_call, underscore,
-            unpack, assignment, dollar_var>;
+struct meta {
+  auto get_location() const -> location {
+    return source;
+  }
+
+  friend auto inspect(auto& f, meta& x) -> bool {
+    return f.object(x).fields(f.field("kind", x.kind),
+                              f.field("source", x.source));
+  }
+
+  enum meta_extractor::kind kind;
+  location source;
+};
+
+using expression_kinds
+  = caf::detail::type_list<record, list, selector, meta, pipeline_expr, literal,
+                           field_access, index_expr, binary_expr, unary_expr,
+                           function_call, underscore, unpack, assignment,
+                           dollar_var>;
+
+using expression_kind = caf::detail::tl_apply_t<expression_kinds, variant>;
 
 struct expression {
+  expression() = default;
+
   template <class T>
+    requires(
+      caf::detail::tl_contains<expression_kinds, std::remove_cvref_t<T>>::value)
   explicit(false) expression(T&& x)
     : kind{std::make_unique<expression_kind>(std::forward<T>(x))} {
   }
 
   ~expression();
-  expression(const expression&) = delete;
-  expression(expression&&);
-  auto operator=(const expression&) -> expression& = delete;
-  auto operator=(expression&&) -> expression&;
+  expression(const expression&);
+  expression(expression&&) noexcept;
+  auto operator=(const expression&) -> expression&;
+  auto operator=(expression&&) noexcept -> expression&;
 
   std::unique_ptr<expression_kind> kind;
 
@@ -165,6 +208,10 @@ struct expression {
     if constexpr (Inspector::is_loading) {
       x.kind = std::make_unique<expression_kind>();
     } else {
+      if (auto dbg = as_debug_writer(f);
+          dbg && not detail::make_dependent<Inspector>(x.kind)) {
+        return dbg->fmt_value("<invalid>");
+      }
       TENZIR_ASSERT(x.kind);
     }
     return f.apply(*detail::make_dependent<Inspector>(x.kind));
@@ -183,6 +230,8 @@ struct expression {
 };
 
 struct unpack {
+  unpack() = default;
+
   unpack(expression expr, location brackets)
     : expr{std::move(expr)}, brackets{brackets} {
   }
@@ -204,6 +253,8 @@ TENZIR_ENUM(binary_op, add, sub, mul, div, eq, neq, gt, ge, lt, le, and_, or_,
             in);
 
 struct binary_expr {
+  binary_expr() = default;
+
   binary_expr(expression left, located<binary_op> op, expression right)
     : left{std::move(left)}, op{op}, right{std::move(right)} {
   }
@@ -225,6 +276,8 @@ struct binary_expr {
 TENZIR_ENUM(unary_op, pos, neg, not_);
 
 struct unary_expr {
+  unary_expr() = default;
+
   unary_expr(located<unary_op> op, expression expr)
     : op{op}, expr{std::move(expr)} {
   }
@@ -242,6 +295,8 @@ struct unary_expr {
 };
 
 struct assignment {
+  assignment() = default;
+
   assignment(selector left, location equals, expression right)
     : left{std::move(left)}, equals{equals}, right{std::move(right)} {
   }
@@ -262,14 +317,16 @@ struct assignment {
 };
 
 struct entity {
+  entity() = default;
+
   explicit entity(std::vector<identifier> path) : path{std::move(path)} {
   }
 
   std::vector<identifier> path;
-  entity_id id;
+  tql2::entity_path ref;
 
   friend auto inspect(auto& f, entity& x) -> bool {
-    return f.object(x).fields(f.field("path", x.path), f.field("id", x.id));
+    return f.object(x).fields(f.field("path", x.path), f.field("ref", x.ref));
   }
 
   auto get_location() const -> location {
@@ -281,14 +338,20 @@ struct entity {
 };
 
 struct function_call {
+  function_call() = default;
+
   function_call(std::optional<expression> subject, entity fn,
-                std::vector<expression> args)
-    : subject{std::move(subject)}, fn{std::move(fn)}, args(std::move(args)) {
+                std::vector<expression> args, location rpar)
+    : subject{std::move(subject)},
+      fn{std::move(fn)},
+      args(std::move(args)),
+      rpar{rpar} {
   }
 
   std::optional<expression> subject;
   entity fn;
   std::vector<expression> args;
+  location rpar;
 
   friend auto inspect(auto& f, function_call& x) -> bool {
     return f.object(x).fields(f.field("subject", x.subject),
@@ -296,12 +359,19 @@ struct function_call {
   }
 
   auto get_location() const -> location {
-    // TODO
-    return fn.get_location();
+    auto left = location{};
+    if (subject) {
+      left = subject->get_location();
+    } else {
+      left = fn.get_location();
+    }
+    return left.combine(rpar);
   }
 };
 
 struct field_access {
+  field_access() = default;
+
   field_access(expression left, location dot, identifier name)
     : left{std::move(left)}, dot{dot}, name{std::move(name)} {
   }
@@ -321,6 +391,8 @@ struct field_access {
 };
 
 struct index_expr {
+  index_expr() = default;
+
   index_expr(expression expr, location lbracket, expression index,
              location rbracket)
     : expr{std::move(expr)},
@@ -347,6 +419,8 @@ struct index_expr {
 };
 
 struct list {
+  list() = default;
+
   list(location begin, std::vector<expression> items, location end)
     : begin{begin}, items(std::move(items)), end{end} {
   }
@@ -375,6 +449,8 @@ struct record {
   };
 
   struct field {
+    field() = default;
+
     field(identifier name, expression expr)
       : name{std::move(name)}, expr{std::move(expr)} {
     }
@@ -389,6 +465,8 @@ struct record {
   };
 
   using content_kind = variant<field, spread>;
+
+  record() = default;
 
   record(location begin, std::vector<content_kind> content, location end)
     : begin{begin}, content{std::move(content)}, end{end} {
@@ -410,6 +488,8 @@ struct record {
 };
 
 struct invocation {
+  invocation() = default;
+
   invocation(entity op, std::vector<expression> args)
     : op{std::move(op)}, args(std::move(args)) {
   }
@@ -426,11 +506,12 @@ using statement
   = variant<invocation, assignment, let_stmt, if_stmt, match_stmt>;
 
 struct pipeline {
+  pipeline() = default;
   explicit pipeline(std::vector<statement> body);
   ~pipeline();
-  pipeline(const pipeline&) = delete;
+  pipeline(const pipeline&) = default;
   pipeline(pipeline&&) noexcept;
-  auto operator=(const pipeline&) -> pipeline& = delete;
+  auto operator=(const pipeline&) -> pipeline& = default;
   auto operator=(pipeline&&) noexcept -> pipeline&;
 
   std::vector<statement> body;
@@ -442,6 +523,8 @@ struct pipeline {
 };
 
 struct let_stmt {
+  let_stmt() = default;
+
   let_stmt(location let, identifier name, expression expr)
     : let{let}, name{std::move(name)}, expr{std::move(expr)} {
   }
@@ -454,9 +537,15 @@ struct let_stmt {
     return f.object(x).fields(f.field("let", x.let), f.field("name", x.name),
                               f.field("expr", x.expr));
   }
+
+  auto get_location() const -> location {
+    return let.combine(expr.get_location());
+  }
 };
 
 struct if_stmt {
+  if_stmt() = default;
+
   if_stmt(expression condition, pipeline then, std::optional<pipeline> else_)
     : condition{std::move(condition)},
       then{std::move(then)},
@@ -472,6 +561,11 @@ struct if_stmt {
                               f.field("then", x.then),
                               f.field("else", x.else_));
   }
+
+  auto get_location() const -> location {
+    // TODO
+    return condition.get_location();
+  }
 };
 
 struct match_stmt {
@@ -485,19 +579,32 @@ struct match_stmt {
     }
   };
 
-  match_stmt(expression expr, std::vector<arm> arms)
-    : expr{std::move(expr)}, arms{std::move(arms)} {
+  match_stmt() = default;
+
+  match_stmt(location begin, expression expr, std::vector<arm> arms,
+             location end)
+    : begin{begin}, expr{std::move(expr)}, arms{std::move(arms)}, end{end} {
   }
 
+  location begin;
   expression expr;
   std::vector<arm> arms;
+  location end;
 
   friend auto inspect(auto& f, match_stmt& x) -> bool {
-    return f.object(x).fields(f.field("expr", x.expr), f.field("arms", x.arms));
+    return f.object(x).fields(f.field("begin", x.begin),
+                              f.field("expr", x.expr), f.field("arms", x.arms),
+                              f.field("end", x.end));
+  }
+
+  auto get_location() const -> location {
+    return begin.combine(end);
   }
 };
 
 struct pipeline_expr {
+  pipeline_expr() = default;
+
   pipeline_expr(location begin, pipeline inner, location end)
     : begin{begin}, inner{std::move(inner)}, end{end} {
   }
@@ -517,8 +624,9 @@ struct pipeline_expr {
 };
 
 inline expression::~expression() = default;
-inline expression::expression(expression&&) = default;
-inline auto expression::operator=(expression&&) -> expression& = default;
+inline expression::expression(expression&&) noexcept = default;
+inline auto expression::operator=(expression&&) noexcept
+  -> expression& = default;
 
 template <class... Fs>
 auto expression::match(Fs&&... fs) & -> decltype(auto) {
@@ -550,16 +658,151 @@ inline pipeline::~pipeline() = default;
 inline pipeline::pipeline(pipeline&&) noexcept = default;
 inline auto pipeline::operator=(pipeline&&) noexcept -> pipeline& = default;
 
-} // namespace tenzir::tql2::ast
+template <class Self>
+class visitor {
+public:
+  void enter(pipeline& x) {
+    go(x.body);
+  }
+
+  void enter(statement& x) {
+    match(x);
+  }
+
+  void enter(assignment& x) {
+    go(x.left);
+    go(x.right);
+  }
+
+  void enter(invocation& x) {
+    go(x.op);
+    go(x.args);
+  }
+
+  void enter(if_stmt& x) {
+    go(x.condition);
+    go(x.then);
+    if (x.else_) {
+      go(*x.else_);
+    }
+  }
+
+  void enter(entity& x) {
+    (void)x;
+  }
+
+  void enter(expression& x) {
+    match(x);
+  }
+
+  void enter(selector& x) {
+    (void)x;
+  }
+
+  void enter(binary_expr& x) {
+    go(x.left);
+    go(x.right);
+  }
+
+  void enter(unary_expr& x) {
+    go(x.expr);
+  }
+
+  void enter(literal& x) {
+    (void)x;
+  }
+
+  void enter(function_call& x) {
+    if (x.subject) {
+      go(x.subject);
+    }
+    go(x.fn);
+    go(x.args);
+  }
+
+  void enter(pipeline_expr& x) {
+    go(x.inner);
+  }
+
+  void enter(record& x) {
+    for (auto& y : x.content) {
+      y.match(
+        [&](record::field& z) {
+          go(z.expr);
+        },
+        [&](record::spread& z) {
+          go(z.expr);
+        });
+    }
+  }
+
+  void enter(list& x) {
+    go(x.items);
+  }
+
+  void enter(field_access& x) {
+    go(x.left);
+  }
+
+  void enter(let_stmt& x) {
+    go(x.name);
+    go(x.expr);
+  }
+
+  void enter(ast::identifier& x) {
+    // TODO
+    TENZIR_UNUSED(x);
+  }
+
+  void enter(ast::meta& x) {
+    TENZIR_UNUSED(x);
+  }
+
+  void enter(ast::match_stmt& x) {
+    go(x.expr);
+    for (auto& arm : x.arms) {
+      go(arm.filter);
+      go(arm.pipe);
+    }
+  }
+
+  template <class T>
+  void enter(T&) {
+    TENZIR_WARN("missed {}", typeid(T).name());
+  }
+
+private:
+  template <class T>
+  void match(T& x) {
+    x.match([&](auto& y) {
+      self().visit(y);
+    });
+  }
+
+  template <class T>
+  void go(T& x) {
+    if constexpr (std::ranges::range<T>) {
+      for (auto& y : x) {
+        self().visit(y);
+      }
+    } else {
+      self().visit(x);
+    }
+  }
+
+  auto self() -> Self {
+    return static_cast<Self&>(*this);
+  }
+};
+
+} // namespace tenzir::ast
 
 namespace tenzir {
 
 template <>
-inline constexpr auto enable_default_formatter<tenzir::tql2::ast::pipeline>
-  = true;
+inline constexpr auto enable_default_formatter<tenzir::ast::pipeline> = true;
 
 template <>
-inline constexpr auto enable_default_formatter<tenzir::tql2::ast::expression>
-  = true;
+inline constexpr auto enable_default_formatter<tenzir::ast::expression> = true;
 
 } // namespace tenzir

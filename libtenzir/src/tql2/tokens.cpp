@@ -48,7 +48,7 @@ auto tokenize(std::string_view content) -> std::vector<token> {
 #define X(x, y) ignore(lit{x}) ->* [] { return token_kind::y; }
     | X("=>", fat_arrow)
     | X("==", equal_equal)
-    | X("!=", equal_equal)
+    | X("!=", bang_equal)
     | X(">=", greater_equal)
     | X("<=", less_equal)
     | X(">", greater)
@@ -80,6 +80,7 @@ auto tokenize(std::string_view content) -> std::vector<token> {
     | X("in", in)
     | X("let", let)
     | X("match", match)
+    | X("meta", meta)
     | X("not", not_)
     | X("null", null)
     | X("or", or_)
@@ -87,7 +88,7 @@ auto tokenize(std::string_view content) -> std::vector<token> {
     | X("true", true_)
 #undef X
     | ignore((
-        lit{"self"} | "is" | "as" | "use" | "type" | "return" | "def" | "function"
+        lit{"self"} | "is" | "as" | "use" /*| "type"*/ | "return" | "def" | "function"
         | "fn" | "pipeline" | "meta" | "super" | "for" | "while" | "mod" | "module"
       ) >> !continue_ident) ->* [] { return token_kind::reserved_keyword; }
     | ignore('$' >> identifier)
@@ -158,6 +159,7 @@ auto describe(token_kind k) -> std::string_view {
     X(line_comment, "`// ...`");
     X(lpar, "`(`");
     X(match, "`match`");
+    X(meta, "`meta`");
     X(minus, "`-`");
     X(newline, "newline");
     X(not_, "`not`");

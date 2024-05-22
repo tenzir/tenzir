@@ -11,6 +11,7 @@
 #include "tenzir/concept/parseable/tenzir/ip.hpp"
 #include "tenzir/concept/parseable/tenzir/time.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/expression.hpp"
 
 #include <arrow/util/utf8.h>
 
@@ -64,7 +65,7 @@ public:
   using tk = token_kind;
 
   static auto parse_file(std::span<token> tokens, std::string_view source,
-                         diagnostic_handler& diag) -> pipeline {
+                         diagnostic_handler& diag) -> ast::pipeline {
     try {
       auto self = parser{tokens, source, diag};
       auto pipe = self.parse_pipeline();
@@ -75,12 +76,12 @@ public:
     } catch (diagnostic& d) {
       // TODO
       diag.emit(d);
-      return pipeline{{}};
+      return ast::pipeline{{}};
     }
   }
 
 private:
-  auto parse_pipeline() -> pipeline {
+  auto parse_pipeline() -> ast::pipeline {
     auto scope = ignore_newlines(false);
     auto body = std::vector<statement>{};
     while (true) {
@@ -94,7 +95,7 @@ private:
         throw_token();
       }
     }
-    return pipeline{std::move(body)};
+    return ast::pipeline{std::move(body)};
   }
 
   auto parse_statement() -> statement {
@@ -134,7 +135,7 @@ private:
     expect(tk::lbrace);
     auto consequence = parse_pipeline();
     expect(tk::rbrace);
-    auto alternative = std::optional<pipeline>{};
+    auto alternative = std::optional<ast::pipeline>{};
     if (accept(tk::else_)) {
       expect(tk::lbrace);
       alternative = parse_pipeline();
@@ -153,7 +154,7 @@ private:
     //    match foo {
     //      "ok", 42 => { ... }
     //    }
-    expect(tk::match);
+    auto begin = expect(tk::match);
     auto expr = parse_expression();
     auto arms = std::vector<match_stmt::arm>{};
     expect(tk::lbrace);
@@ -164,15 +165,17 @@ private:
       // TODO: require comma or newline?
       (void)accept(tk::comma);
     }
-    expect(tk::rbrace);
+    auto end = expect(tk::rbrace);
     return match_stmt{
+      begin.location,
       std::move(expr),
       std::move(arms),
+      end.location,
     };
   }
 
   auto parse_match_stmt_arm() -> match_stmt::arm {
-    auto filter = std::vector<expression>{};
+    auto filter = std::vector<ast::expression>{};
     while (true) {
       filter.push_back(parse_expression());
       if (accept(tk::fat_arrow)) {
@@ -203,13 +206,14 @@ private:
     if (not left.this_ and left.path.size() == 1) {
       return parse_invocation(entity{std::move(left.path)});
     }
-    diagnostic::error("expected operator name or `=` afterwards")
-      .primary(left.get_location())
+    diagnostic::error("{}", left.this_ ? "expected `=`"
+                                       : "expected operator argument or `=`")
+      .primary(next_location())
       .throw_();
   }
 
-  auto parse_invocation(entity op) -> invocation {
-    auto args = std::vector<expression>{};
+  auto parse_invocation(entity op) -> ast::invocation {
+    auto args = std::vector<ast::expression>{};
     while (not at_statement_end()) {
       if (not args.empty()) {
         if (not accept(tk::comma)) {
@@ -217,7 +221,7 @@ private:
           if (not peek(tk::lbrace)) {
             diagnostic::error("unexpected continuation of arguments")
               .primary(next_location())
-              .hint("try inserting a `,` before")
+              .hint("try inserting a `,` before if this is the next argument")
               .throw_();
           }
           args.emplace_back(parse_record_or_pipeline_expr());
@@ -237,13 +241,13 @@ private:
       }
       args.push_back(parse_expression());
     }
-    return invocation{
+    return ast::invocation{
       std::move(op),
       std::move(args),
     };
   }
 
-  auto parse_expression(int min_prec = 0) -> expression {
+  auto parse_expression(int min_prec = 0) -> ast::expression {
     auto expr = parse_unary_expression();
     while (true) {
       if (min_prec == 0) {
@@ -286,7 +290,7 @@ private:
     return expr;
   }
 
-  auto parse_unary_expression() -> expression {
+  auto parse_unary_expression() -> ast::expression {
     if (auto op = peek_unary_op()) {
       auto location = advance();
       auto expr = parse_expression(precedence(*op));
@@ -330,7 +334,7 @@ private:
     return expr;
   }
 
-  auto parse_primary_expression() -> expression {
+  auto parse_primary_expression() -> ast::expression {
     if (accept(tk::lpar)) {
       auto scope = ignore_newlines(true);
       auto result = parse_expression();
@@ -351,6 +355,26 @@ private:
     }
     if (peek(tk::lbracket)) {
       return parse_list();
+    }
+    // TODO: Drop one of the syntax possibilities.
+    if (peek(tk::meta) || peek(tk::at)) {
+      auto begin = location{};
+      if (auto meta = accept(tk::meta)) {
+        begin = meta.location;
+        expect(tk::dot);
+      } else {
+        begin = expect(tk::at).location;
+      }
+      auto ident = expect(tk::identifier).as_identifier();
+      auto kind = static_cast<enum meta_extractor::kind>(0);
+      if (ident.name == "tag") {
+        kind = meta_extractor::schema;
+      } else {
+        diagnostic::error("unknown metadata name `{}`", ident.name)
+          .primary(ident.location)
+          .throw_();
+      }
+      return ast::meta{kind, begin.combine(ident.location)};
     }
     // TODO: Accept entity as function name.
     if (not selector_start()) {
@@ -380,7 +404,7 @@ private:
     }
     if (peek(tk::lpar)) {
       // TODO: Consider refactoring this.
-      auto subject = std::optional<expression>{};
+      auto subject = std::optional<ast::expression>{};
       if (not ent) {
         if (sel.this_ and sel.path.empty()) {
           diagnostic::error("`this` cannot be called")
@@ -411,7 +435,7 @@ private:
 
   auto parse_selector() -> selector {
     auto this_ = accept(tk::this_);
-    auto path = std::vector<identifier>{};
+    auto path = std::vector<ast::identifier>{};
     while (true) {
       if (this_ || not path.empty()) {
         if (not accept(tk::dot)) {
@@ -428,7 +452,7 @@ private:
                     std::move(path)};
   }
 
-  auto parse_record_or_pipeline_expr() -> expression {
+  auto parse_record_or_pipeline_expr() -> ast::expression {
     auto begin = expect(tk::lbrace);
     auto scope = ignore_newlines(true);
     // TODO: Try to implement this better.
@@ -448,8 +472,8 @@ private:
     };
   }
 
-  auto parse_record(location begin) -> record {
-    auto content = std::vector<record::content_kind>{};
+  auto parse_record(location begin) -> ast::record {
+    auto content = std::vector<ast::record::content_kind>{};
     while (not peek(tk::rbrace)) {
       // TODO: Parse `{ foo: 42, ...bar }`.
       auto name = accept(tk::identifier);
@@ -460,7 +484,7 @@ private:
       }
       expect(tk::colon);
       auto expr = parse_expression();
-      content.emplace_back(record::field{
+      content.emplace_back(ast::record::field{
         name.as_identifier(),
         std::move(expr),
       });
@@ -469,7 +493,7 @@ private:
       }
     }
     auto end = expect(tk::rbrace);
-    return record{
+    return ast::record{
       begin,
       std::move(content),
       end.location,
@@ -501,6 +525,8 @@ private:
         result.push_back('"');
       } else if (x == 'n') {
         result.push_back('\n');
+      } else if (x == '0') {
+        result.push_back('\0');
       } else {
         diagnostic::error("found unknown escape sequence `{}`",
                           token.text.substr(it - f, 2))
@@ -573,13 +599,13 @@ private:
     return std::nullopt;
   }
 
-  auto parse_list() -> list {
+  auto parse_list() -> ast::list {
     auto begin = expect(tk::lbracket);
     auto scope = ignore_newlines(true);
-    auto items = std::vector<expression>{};
+    auto items = std::vector<ast::expression>{};
     while (true) {
       if (auto end = accept(tk::rbracket)) {
-        return list{
+        return ast::list{
           begin.location,
           std::move(items),
           end.location,
@@ -592,12 +618,20 @@ private:
     }
   }
 
-  auto parse_function_call(std::optional<expression> subject, entity fn)
+  auto parse_function_call(std::optional<ast::expression> subject, entity fn)
     -> function_call {
     expect(tk::lpar);
     auto scope = ignore_newlines(true);
-    auto args = std::vector<expression>{};
-    while (not accept(tk::rpar)) {
+    auto args = std::vector<ast::expression>{};
+    while (true) {
+      if (auto rpar = accept(tk::rpar)) {
+        return ast::function_call{
+          std::move(subject),
+          std::move(fn),
+          std::move(args),
+          rpar.location,
+        };
+      }
       if (auto comma = accept(tk::comma)) {
         if (args.empty()) {
           diagnostic::error("unexpected comma before any arguments")
@@ -612,11 +646,6 @@ private:
         expect(tk::comma);
       }
     }
-    return function_call{
-      std::move(subject),
-      std::move(fn),
-      std::move(args),
-    };
   }
 
   auto peek_unary_op() -> std::optional<unary_op> {
@@ -674,8 +703,8 @@ private:
       return text.data() != nullptr;
     }
 
-    auto as_identifier() const -> identifier {
-      return identifier{text, location};
+    auto as_identifier() const -> ast::identifier {
+      return ast::identifier{text, location};
     }
 
     auto as_string() const -> located<std::string> {

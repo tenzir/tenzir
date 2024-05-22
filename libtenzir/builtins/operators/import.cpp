@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/tql2/plugin.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -95,7 +97,8 @@ public:
   }
 };
 
-class plugin final : public virtual operator_plugin<import_operator> {
+class plugin final : public virtual operator_plugin<import_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.sink = true};
@@ -115,6 +118,14 @@ public:
     }
     pipe->append(std::make_unique<import_operator>());
     return std::make_unique<pipeline>(std::move(*pipe));
+  }
+
+  auto make_operator(invocation inv, session ctx) const
+    -> operator_ptr override {
+    if (not inv.args.empty()) {
+      diagnostic::error("TODO").primary(inv.self.get_location()).emit(ctx);
+    }
+    return std::make_unique<import_operator>();
   }
 };
 
