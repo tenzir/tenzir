@@ -22,6 +22,7 @@ def upload_packages [
   git_tag = null
 ] {
   let pkg_dir = (nix --accept-flake-config --print-build-logs build $".#($name)^package" ...($env.extra_options | split row " ") --no-link --print-out-paths)
+  let rpms = (glob $"($pkg_dir)/*.rpm")
   let debs = (glob $"($pkg_dir)/*.deb")
   let pkgs = (glob $"($pkg_dir)/*.pkg")
   let tgzs = (glob $"($pkg_dir)/*.tar.gz")
@@ -43,13 +44,17 @@ def upload_packages [
           }
         }
       }
+      do $run "rpm" $rpms
       do $run "debian" $debs
       do $run "macOS" $pkgs
       do $run "tarball" $tgzs
     }
   }
   print $"::notice copying artifacts to /packages/{debian,tarball}"
-  mkdir ./packages/debian ./packages/tarball ./packages/macOS
+  mkdir ./packages/rpm ./packages/debian ./packages/tarball ./packages/macOS
+  for rpm in $rpms {
+    cp -v $rpm ./packages/rpm
+  }
   for deb in $debs {
     cp -v $deb ./packages/debian
   }
@@ -61,8 +66,11 @@ def upload_packages [
   }
   if $copy {
     if $git_tag != null {
-      let os = (uname -s)
+      let os = (uname | get kernel-name)
       if $os == "Linux" {
+        cp ($rpms | get 0) $"($name)-amd64-linux.rpm"
+        print $"::attaching ($name)-amd64-linux.rpm to ($git_tag)"
+        gh release upload $git_tag $"($name)-amd64-linux.rpm" --clobber
         cp ($debs | get 0) $"($name)-amd64-linux.deb"
         print $"::attaching ($name)-amd64-linux.deb to ($git_tag)"
         gh release upload $git_tag $"($name)-amd64-linux.deb" --clobber
@@ -84,7 +92,7 @@ def push_images [
   image_registries: list<string>
   container_tags # annotation breaks in nu 0.78 : list<string>
 ] {
-  let os = (uname -s)
+  let os = (uname | get kernel-name)
   if ($os != "Linux" or $image_registries == [] or $container_tags == []) {
     return
   }
@@ -114,18 +122,20 @@ def attribute_name [
 }
 
 export def run [
-  cfg: record<
-    editions: list<record<
-      name: string
-      static: bool
-      upload-package-to-github: bool
-      package-stores: list<string>
-      image-registries: list<string>
-    >>
-    aliases: list<string>
-    container-tags: list<string>
-    git-tag: string
-  >
+  cfg: record
+  # The type checker became stricter between 0.89 and 0.92 and does not allow missing values any more.
+  #<
+  #  editions: list<record<
+  #    name: string
+  #    static: bool
+  #    upload-package-to-github: bool
+  #    package-stores: list<string>
+  #    image-registries: list<string>
+  #  >>
+  #  aliases: list<string>
+  #  container-tags: list<string>
+  #  git-tag: string
+  #>
 ] {
   # Run local effects by building all requested editions.
   if ($cfg.git-tag? != null) {

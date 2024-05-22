@@ -176,7 +176,7 @@ setup() {
 }
 # bats test_tags=pipelines
 @test "Empty Record in Pipeline" {
-  check tenzir "from ${INPUTSDIR}/json/empty-record.json read json| write json"
+  check tenzir "from ${INPUTSDIR}/json/empty-record.json read json | write json"
   check tenzir "from ${INPUTSDIR}/json/empty-record.json read json | write csv"
   check tenzir "from ${INPUTSDIR}/json/empty-record.json read json | write xsv \" \" ; NULL"
 }
@@ -480,6 +480,11 @@ EOF
   check tenzir "from ${INPUTSDIR}/xsv/sample.ssv read ssv | extend schema=#schema | write ssv"
   check tenzir "from ${INPUTSDIR}/xsv/sample.tsv read tsv | extend schema=#schema | write tsv"
   check tenzir "from ${INPUTSDIR}/xsv/nulls-and-escaping.csv read csv"
+  # Test that multiple batches only print the header once.
+  check tenzir "read json --ndjson --precise | select foo | write csv" <<EOF
+  {"foo": 1}
+  {"foo": 2, "bar": 3}
+EOF
 }
 
 @test "read xsv auto expand" {
@@ -492,16 +497,20 @@ EOF
 
 # bats test_tags=pipelines, xsv
 @test "Slice" {
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin 1"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin -1"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --end 1"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --end -1"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin 1 --end 1"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin 1 --end 2"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin 1 --end -1"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin -1 --end 1"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin -1 --end -1"
-  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice --begin -2 --end -1"
+  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice 1:"
+  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice -1:"
+  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice :1"
+  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice :-1"
+  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice 1:1"
+  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice 1:2"
+  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice 1:-1"
+  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice -1:1"
+  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice -1:-1"
+  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice -2:-1"
+  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice 1::-2"
+  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice :-1:-5"
+  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice -10:-5:2"
+  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 100 | enumerate | slice ::-1"
 }
 
 # bats test_tags=pipelines
@@ -679,5 +688,55 @@ EOF
   check tenzir 'read json | unflatten' <<EOF
 {"foo": {}}
 {"foo": null}
+EOF
+}
+
+@test "precise json" {
+  check tenzir 'read json --ndjson --precise' <<EOF
+{"foo": "0.042s"}
+{"foo": "0.043s", "bar": null}
+EOF
+}
+
+@test "precise json raw" {
+  check tenzir 'read json --ndjson --precise --raw' <<EOF
+{"foo": "0.042s"}
+{"foo": "0.043s", "bar": [{}]}
+EOF
+}
+
+@test "precise json overwrite field" {
+  check tenzir 'read json --ndjson --precise' <<EOF
+{"foo": "0.042s", "foo": 42}
+EOF
+}
+
+@test "precise json list type conflict" {
+  check tenzir 'read json --ndjson --precise' <<EOF
+{"foo": [42, "bar"]}
+EOF
+}
+
+@test "precise json big integer" {
+  check tenzir 'read json --ndjson --precise' <<EOF
+{"foo": 424242424242424242424242}
+EOF
+}
+
+@test "precise json incomplete input" {
+  check tenzir 'read json --ndjson --precise' <<EOF
+{"foo": 42
+EOF
+}
+
+@test "precise json broken input" {
+  check tenzir 'read json --ndjson --precise' <<EOF
+{"foo": 42,,,
+EOF
+}
+
+@test "precise json bad ndjson" {
+  check tenzir 'read json --ndjson --precise' <<EOF
+{"foo": 42}{"foo": 43}
 EOF
 }

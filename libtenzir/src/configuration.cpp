@@ -514,7 +514,7 @@ caf::error configuration::parse(int argc, char** argv) {
       if (ec)
         return caf::make_error(ec::filesystem_error,
                                "failed to determine temp_directory_path");
-      value = tmp / "tenzir" / "cache";
+      value = tmp / "tenzir" / "cache" / fmt::format("{:}", getuid());
     }
   }
   // From here on, we go into CAF land with the goal to put the configuration

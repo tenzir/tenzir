@@ -69,7 +69,10 @@ platform=
 os=$(uname -s)
 if [ "${os}" = "Linux" ]
 then
-    if [ -f "/etc/debian_version" ]
+    if [ -n "$(rpm -qa)" ] 2>/dev/null
+    then
+        platform=RPM
+    elif [ -f "/etc/debian_version" ]
     then
         platform=Debian
     elif [ -f "/etc/NIXOS" ]
@@ -121,7 +124,10 @@ else
   # Select appropriate package.
   action "Identifying package"
   package_url_base="https://storage.googleapis.com/tenzir-dist-public/packages/main"
-  if [ "${platform}" = "Debian" ]
+  if [ "${platform}" = "RPM" ]
+  then
+    package_url="${package_url_base}/debian/tenzir-static-latest.rpm"
+  elif [ "${platform}" = "Debian" ]
   then
     package_url="${package_url_base}/debian/tenzir-static-latest.deb"
   elif [ "${platform}" = "Linux" ]
@@ -203,7 +209,20 @@ fi
 
 # Trigger installation.
 action "Installing package into ${prefix}"
-if [ "${platform}" = "Debian" ]
+if [ "${platform}" = "RPM" ]
+then
+  cmd1="$sudo yum -y localinstall \"${tmpdir}/${package}\""
+  cmd2="$sudo systemctl status tenzir-node || [ ! -d /run/systemd/system ]"
+  echo "This script is about to run the following commands:"
+  echo
+  echo "  - ${cmd1}"
+  echo "  - ${cmd2}"
+  confirm
+  action "Installing via yum"
+  eval "${cmd1}"
+  action "Checking node status"
+  eval "${cmd2}"
+elif [ "${platform}" = "Debian" ]
 then
   # adduser is required by the Debian package installation.
   if ! check adduser

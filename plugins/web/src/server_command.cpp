@@ -19,7 +19,6 @@
 #include <tenzir/concept/parseable/tenzir/expression.hpp>
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/detail/flat_map.hpp>
-#include <tenzir/format/json.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/node.hpp>
 #include <tenzir/node_control.hpp>

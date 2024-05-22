@@ -1,0 +1,14 @@
+mkdir -p /usr/lib/sysusers.d
+echo 'u tenzir - "Tenzir Node" /var/lib/tenzir /sbin/nologin' > /usr/lib/sysusers.d/tenzir.conf
+
+# Generated from the above tenzir.conf.
+getent group 'tenzir' >/dev/null || groupadd -r 'tenzir' || :
+getent passwd 'tenzir' >/dev/null || \
+    useradd -r -g 'tenzir' -d '/var/lib/tenzir' -s '/usr/sbin/nologin' -c 'Tenzir Node' 'tenzir' || :
+
+# Added manually
+mkdir -p /var/lib/tenzir
+chown tenzir:tenzir /var/lib/tenzir
+
+mkdir -p /var/log/tenzir
+chown tenzir:tenzir /var/log/tenzir

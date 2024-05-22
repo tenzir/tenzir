@@ -15,17 +15,13 @@
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/detail/inspection_common.hpp"
 #include "tenzir/expression.hpp"
-#include "tenzir/module.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/taxonomies.hpp"
-#include "tenzir/time_synopsis.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
-#include <map>
-#include <string>
 #include <vector>
 
 namespace tenzir {
@@ -37,7 +33,7 @@ struct catalog_lookup_result {
     std::vector<partition_info> partition_infos;
 
     template <class Inspector>
-    friend auto inspect(Inspector& f, candidate_info& x) {
+    friend auto inspect(Inspector& f, candidate_info& x) -> bool {
       return f.object(x)
         .pretty_name("tenzir.system.catalog_result.candidate_info")
         .fields(f.field("expression", x.exp),
@@ -54,25 +50,17 @@ struct catalog_lookup_result {
 
   std::unordered_map<type, candidate_info> candidate_infos;
 
-  [[nodiscard]] bool empty() const noexcept {
-    return candidate_infos.empty();
-  }
+  auto empty() const noexcept -> bool;
 
-  [[nodiscard]] size_t size() const noexcept {
-    return std::accumulate(candidate_infos.begin(), candidate_infos.end(),
-                           size_t{0}, [](auto i, const auto& cat_result) {
-                             return std::move(i)
-                                    + cat_result.second.partition_infos.size();
-                           });
-  }
+  auto size() const noexcept -> size_t;
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, enum kind& x) {
+  friend auto inspect(Inspector& f, enum kind& x) -> bool {
     return detail::inspect_enum(f, x);
   }
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, catalog_lookup_result& x) {
+  friend auto inspect(Inspector& f, catalog_lookup_result& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.system.catalog_lookup_result")
       .fields(f.field("kind", x.kind),
@@ -106,33 +94,17 @@ public:
   /// Retrieves the list of candidate partition IDs for a given expression.
   /// @param expr The expression to lookup.
   /// @returns A lookup result of candidate partitions categorized by type.
-  [[nodiscard]] caf::expected<catalog_lookup_result>
-  lookup(expression expr) const;
+  auto lookup(expression expr) const -> caf::expected<catalog_lookup_result>;
 
-  [[nodiscard]] catalog_lookup_result::candidate_info
-  lookup_impl(const expression& expr, const type& schema) const;
+  auto lookup_impl(const expression& expr, const type& schema) const
+    -> catalog_lookup_result::candidate_info;
 
   /// @returns A best-effort estimate of the amount of memory used for this
   /// catalog (in bytes).
-  [[nodiscard]] size_t memusage() const;
+  auto memusage() const -> size_t;
 
   /// Update the list of fields that should not be touched by the pruner.
   void update_unprunable_fields(const partition_synopsis& ps);
-
-  /// Create the path that the catalog's type registry is persisted at on disk.
-  [[nodiscard]] std::filesystem::path type_registry_filename() const;
-
-  /// Save the type-registry to disk.
-  [[nodiscard]] caf::error save_type_registry_to_disk() const;
-
-  /// Load the type-registry from disk.
-  caf::error load_type_registry_from_disk();
-
-  /// Store a new schema in the registry.
-  void insert(tenzir::type schema);
-
-  /// Get a list of known types from the registry.
-  [[nodiscard]] type_set types() const;
 
   /// Sends metrics to the accountant.
   void emit_metrics() const;
@@ -156,10 +128,7 @@ public:
   /// The set of fields that should not be touched by the pruner.
   detail::heterogeneous_string_hashset unprunable_fields;
 
-  std::map<std::string, type_set> type_data = {};
-  tenzir::module configuration_module = {};
   tenzir::taxonomies taxonomies = {};
-  std::filesystem::path type_registry_dir = {};
 };
 
 /// The CATALOG is the first index actor that queries hit. The result
@@ -167,9 +136,7 @@ public:
 /// data. The CATALOG may return false positives but never false negatives.
 /// @param self The actor handle.
 /// @param accountant An actor handle to the accountant.
-/// @param type_reg_dir the folder for the type registry.
-catalog_actor::behavior_type
-catalog(catalog_actor::stateful_pointer<catalog_state> self,
-        accountant_actor accountant, const std::filesystem::path& type_reg_dir);
+auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
+             accountant_actor accountant) -> catalog_actor::behavior_type;
 
 } // namespace tenzir

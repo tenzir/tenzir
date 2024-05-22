@@ -95,10 +95,7 @@ teardown() {
 @test "Node suricata alert" {
   import_suricata_eve 'where #schema != "suricata.stats" and event_type != "flow"'
 
-  export TENZIR_EXPORT__ZEEK__DISABLE_TIMESTAMP_TAGS=true
-
   check tenzir "export | where src_ip == 147.32.84.165 | sort timestamp"
-  check --sort tenzir-ctl export csv "where #schema == /suricata.*/"
   check tenzir "export | where #schema == /suricata.alert/ | sort timestamp | write zeek-tsv --disable-timestamp-tags"
   check tenzir "export | sort timestamp | write json --omit-nulls --omit-empty-objects"
 }
@@ -111,52 +108,12 @@ teardown() {
   check tenzir 'export | where #schema == "suricata.dns" | sort timestamp'
 }
 
-#bats test_tags=node,import,export,argus,csv
-@test "Node argus csv" {
-  gunzip -c ${INPUTSDIR}/csv/argus-M57-10k-pkts.csv.gz |
-    tenzir-ctl import -b -t argus.record csv
-
-  check tenzir "export | where State != \"CON\" and Dur > 4900ms | sort StartTime"
-  check tenzir "export | where Cause == \"Status\" and Dur > 1s | sort StartTime"
-}
-
-#bats test_tags=node,import,export,argus,ssv,csv
-@test "Node argus ssv" {
-  cat ${INPUTSDIR}/csv/argus-additional-fields.ssv |
-    tenzir-ctl import -b -t argus.record csv '--separator=" "'
-
-  check tenzir "export | sort StartTime | write csv"
-}
-
-#bats test_tags=node,import,export,argus,tsv,csv
-@test "node argus tsv" {
-  cat ${INPUTSDIR}/csv/argus-reordered.tsv |
-    tenzir-ctl import -b -t argus.record csv '--separator="\t"'
-
-  check tenzir "export | sort StartTime | write csv"
-}
-
 #bats test_tags=import,export,zeek
 @test "multi addr query" {
   import_zeek_conn
 
   query=$(<${QUERYDIR}/multi_addr.txt)
   check tenzir "export | ${query}"
-}
-
-#bats test_tags=export,arrow
-@test "arrow export" {
-  if ! python -c "import pyarrow"; then
-    skip "pyarrow isn't installed"
-  fi
-
-  import_zeek_conn
-
-  check -c "tenzir-ctl export -n 10 arrow 'where #schema == \"zeek.conn\"' | python ${MISCDIR}/scripts/print-arrow.py"
-
-  import_suricata_eve
-
-  check -c "tenzir-ctl export arrow 'where #schema == \"suricata.http\"' | python ${MISCDIR}/scripts/print-arrow.py"
 }
 
 #bats test_tags=syslog,import
@@ -227,20 +184,6 @@ teardown() {
   import_suricata_eve
 
   tenzir "export | where zeek.conn.id.orig_h == 192.168.1.104 | summarize count=count(.)"
-}
-
-# bats test_tags=import,export,csv
-@test "Optional Partition Indexes" {
-  # Checks if the import and export works as usual when we ignore creation
-  # of partition indexes for all field names
-
-  TENZIR_INDEX__RULES__TARGETS="[argus.record.StartTime, argus.record.Flgs, argus.record.Proto, argus.record.SrcAddr,                  argus.record.Sport, argus.record.Dir, argus.record.DstAddr, argus.record.Dport, argus.record.TotPkts,                  argus.record.TotBytes, argus.record.State, argus.record.Dur, argus.record.UnknownField, argus.record.Cause]"
-  TENZIR_INDEX__RULES__PARTITION_INDEX=false
-
-  cat ${INPUTSDIR}/csv/argus-additional-fields.ssv |
-    tenzir-ctl import -b -t argus.record csv '--separator=" "'
-
-  check tenzir "export | write csv"
 }
 
 # bats test_tags=import,export,pipelines,chart,bar-chart

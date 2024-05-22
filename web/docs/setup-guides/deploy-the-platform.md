@@ -121,14 +121,16 @@ files:
 
 ```text {0} title="❯ tree"
 .
-├── .env
-├── config
-│   └── seaweed.tenzir-entrypoint.sh
-└── docker-compose.yaml
+├── localdev
+│   ├── docker-compose.yaml
+│   └── env.example
+└── onprem-integrated
+    ├── docker-compose.yaml
+    └── env.example
 ```
 
-From this directory, run `docker compose up` to start the platform in the
-foreground, or `docker compose up --detach` to run it in the background:
+From one of these directories, run `docker compose up` to start the platform in
+the foreground, or `docker compose up --detach` to run it in the background:
 
 ```text {0} title="❯ docker compose up"
 [+] Running 5/5
@@ -154,6 +156,14 @@ websocket-gateway-1  | {"host": "0.0.0.0", "port": 5000, "common_env": {"base_pa
 ```
 
 It takes up to a minute for all services to be fully available.
+
+## Update the Platform
+
+Pull the latest images to update the platform:
+
+```bash
+docker compose pull
+```
 
 ## Manage the Platform
 

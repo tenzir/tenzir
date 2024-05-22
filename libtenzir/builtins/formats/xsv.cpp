@@ -453,8 +453,9 @@ public:
   instantiate([[maybe_unused]] type input_schema, operator_control_plane&) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
     auto metadata = chunk_metadata{.content_type = content_type()};
-    return printer_instance::make([meta = std::move(metadata), args = args_](
-                                    table_slice slice) -> generator<chunk_ptr> {
+    return printer_instance::make([meta = std::move(metadata), args = args_,
+                                   first = true](table_slice slice) mutable
+                                  -> generator<chunk_ptr> {
       if (slice.rows() == 0) {
         co_yield {};
         co_return;
@@ -468,7 +469,6 @@ public:
       auto input_type = caf::get<record_type>(input_schema);
       auto array
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
-      auto first = true;
       for (const auto& row : values(input_type, *array)) {
         TENZIR_ASSERT(row);
         if (first && not args.no_header) {

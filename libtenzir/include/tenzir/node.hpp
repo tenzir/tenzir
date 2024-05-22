@@ -77,6 +77,9 @@ struct node_state {
   /// The component registry.
   component_registry registry = {};
 
+  /// Components that are still alive for lifetime-tracking.
+  std::set<std::pair<caf::actor_addr, std::string>> alive_components = {};
+
   /// Counters for multi-instance components.
   std::unordered_map<std::string, uint64_t> label_counters = {};
 

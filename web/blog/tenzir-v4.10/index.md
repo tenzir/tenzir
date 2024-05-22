@@ -2,7 +2,7 @@
 title: Tenzir v4.10
 authors: [dominiklohmann]
 date: 2024-03-11
-tags: [pipelines-as-code, contexts, arm64]
+tags: [release, pipelines-as-code, contexts, arm64]
 comments: true
 ---
 

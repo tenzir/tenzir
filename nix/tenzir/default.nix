@@ -36,6 +36,7 @@
     libmaxminddb,
     re2,
     dpkg,
+    rpm,
     restinio,
     pfs,
     extraPlugins ? [],
@@ -90,6 +91,7 @@
         src = tenzir-source;
 
         postUnpack = ''
+          ${pkgsBuildHost.file}/bin/file /bin/sh
           mkdir -p source/extra-plugins
           for plug in ${lib.concatStringsSep " " extraPlugins}; do
             cp -R $plug source/extra-plugins/$(basename $plug)
@@ -106,6 +108,8 @@
           protobuf
           poetry
           makeBinaryWrapper
+        ] ++ lib.optionals stdenv.isLinux [
+          rpm
         ] ++ lib.optionals stdenv.isDarwin [
           lld
         ];
@@ -144,7 +148,10 @@
           jemalloc
         ];
 
-        env.POETRY_VIRTUALENVS_IN_PROJECT = 1;
+        env = {
+          POETRY_VIRTUALENVS_IN_PROJECT = 1;
+          NIX_LDFLAGS = lib.optionalString (stdenv.isDarwin && isStatic) "-lc++abi";
+        };
         cmakeFlags =
           [
             "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
@@ -164,7 +171,7 @@
           ] ++ lib.optionals isStatic [
             "-DBUILD_SHARED_LIBS:BOOL=OFF"
             #"-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
-            "-DCPACK_GENERATOR=${if stdenv.isDarwin then "productbuild" else "TGZ;DEB"}"
+            "-DCPACK_GENERATOR=${if stdenv.isDarwin then "productbuild" else "TGZ;DEB;RPM"}"
             "-DTENZIR_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
             "-DTENZIR_PACKAGE_FILE_NAME_SUFFIX=static"
             "-DTENZIR_ENABLE_BACKTRACE=${lib.boolToString (!stdenv.isDarwin)}"
@@ -284,6 +291,18 @@
 
         installPhase = ''
           runHook preInstall
+        '' + lib.optionalString stdenv.isLinux ''
+          # Needed for the RPM package.
+          mkdir -p .var/lib
+          export HOME=$(mktemp -d)
+          cat << EOF > $HOME/.rpmmacros
+          %_var                 $PWD/.var
+          %_buildshell          $SHELL
+          %_topdir              $PWD/rpmbuild
+          %__strip              true
+          EOF
+          rpmdb --rebuilddb
+        '' + ''
           # TODO: Check if we need this and comment if yes.
           PATH=$PATH:/usr/bin
           cmake --install . --component Runtime

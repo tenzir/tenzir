@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/builtin_rest_endpoints.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/version.hpp>
 

@@ -128,6 +128,11 @@ struct configuration {
   /// Resolution for time-columns in the group-by columns.
   std::optional<duration> time_resolution = {};
 
+  /// Maximum lifetime of a bucket, counted from its creation and last update,
+  /// respectively.
+  std::optional<duration> created_timeout = {};
+  std::optional<duration> update_timeout = {};
+
   /// Configuration for aggregation columns.
   std::vector<aggregation> aggregations = {};
 
@@ -135,6 +140,8 @@ struct configuration {
     return f.object(x).fields(f.field("group_by_extractors",
                                       x.group_by_extractors),
                               f.field("time_resolution", x.time_resolution),
+                              f.field("created_timeout", x.created_timeout),
+                              f.field("update_timeout", x.update_timeout),
                               f.field("aggregations", x.aggregations));
   }
 };
@@ -505,6 +512,7 @@ public:
     // This lambda is called for consecutive rows that belong to the same group
     // and updates its aggregation functions.
     auto update_bucket = [&](bucket& bucket, int64_t offset, int64_t length) {
+      bucket.updated_at = std::chrono::steady_clock::now();
       for (auto [aggr, input] :
            zip_equal(bucket.aggregations, aggregation_arrays)) {
         if (!input) {
@@ -521,9 +529,9 @@ public:
         aggr.get_active()->add(*(*input)->Slice(offset, length));
       }
     };
-    // Step 3: Iterate over all rows of the batch, and determine a slidin window
-    // of rows beloging to the same batch that is as large as possible, then
-    // update the corresponding bucket.
+    // Step 3: Iterate over all rows of the batch, and determine a sliding
+    // window of rows belonging to the same batch that is as large as possible,
+    // then update the corresponding bucket.
     auto first_row = int64_t{0};
     auto* first_bucket = find_or_create_bucket(first_row);
     TENZIR_ASSERT(slice.rows() > 0);
@@ -539,6 +547,42 @@ public:
     }
     update_bucket(*first_bucket, first_row,
                   detail::narrow<int64_t>(slice.rows()) - first_row);
+  }
+
+  auto check_timeouts(const configuration& config)
+    -> generator<caf::expected<table_slice>> {
+    if (not config.created_timeout and not config.update_timeout) {
+      co_return;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    auto copy = implementation{};
+    if (config.created_timeout) {
+      const auto threshold = now - *config.created_timeout;
+      for (const auto& [key, bucket] : buckets) {
+        if (bucket->created_at < threshold) {
+          copy.buckets.try_emplace(key, bucket);
+        }
+      }
+    }
+    if (config.update_timeout) {
+      TENZIR_ASSERT(config.update_timeout);
+      const auto threshold = now - *config.update_timeout;
+      for (const auto& [key, bucket] : buckets) {
+        if (bucket->updated_at < threshold) {
+          copy.buckets.try_emplace(key, bucket);
+        }
+      }
+    }
+    if (copy.buckets.empty()) {
+      co_return;
+    }
+    for (const auto& [key, _] : copy.buckets) {
+      const auto num_erased = buckets.erase(key);
+      TENZIR_ASSERT(num_erased == 1);
+    }
+    for (auto&& result : std::move(copy).finish(config)) {
+      co_yield std::move(result);
+    }
   }
 
   /// Returns the summarization results after the input is done.
@@ -744,6 +788,12 @@ private:
     /// schemas where the input column is missing, which means that we don't
     /// know which type to use until we get schema where the column exists.
     std::vector<aggregation> aggregations;
+
+    /// The time when this bucket was created and last updated, respectively.
+    std::chrono::steady_clock::time_point created_at
+      = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point updated_at
+      = std::chrono::steady_clock::now();
   };
 
   /// We cache the offsets and types of the resolved columns for each schema.
@@ -774,13 +824,20 @@ public:
     auto impl = implementation{};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
+        for (auto&& result : impl.check_timeouts(config_)) {
+          if (not result) {
+            diagnostic::error(result.error()).emit(ctrl.diagnostics());
+            co_return;
+          }
+          co_yield std::move(*result);
+        }
         co_yield {};
         continue;
       }
       impl.add(slice, config_, ctrl.diagnostics());
     }
     for (auto&& result : std::move(impl).finish(config_)) {
-      if (!result) {
+      if (not result) {
         diagnostic::error(result.error()).emit(ctrl.diagnostics());
         co_return;
       }
@@ -790,6 +847,13 @@ public:
 
   auto name() const -> std::string override {
     return "summarize";
+  }
+
+  auto input_independent() const -> bool override {
+    if (config_.created_timeout or config_.update_timeout) {
+      return true;
+    }
+    return false;
   }
 
   auto optimize(expression const& filter, event_order order,
@@ -830,10 +894,15 @@ public:
                         >> extractor_list)
                    >> -(required_ws_or_comment >> "resolution"
                         >> required_ws_or_comment >> duration)
+                   >> -(required_ws_or_comment >> "timeout"
+                        >> required_ws_or_comment >> duration)
+                   >> -(required_ws_or_comment >> "update-timeout"
+                        >> required_ws_or_comment >> duration)
                    >> optional_ws_or_comment >> end_of_pipeline_operator;
     std::tuple<std::vector<std::tuple<caf::optional<std::string>, std::string,
                                       std::string>>,
-               std::vector<std::string>, std::optional<tenzir::duration>>
+               std::vector<std::string>, std::optional<tenzir::duration>,
+               std::optional<tenzir::duration>, std::optional<tenzir::duration>>
       parsed_aggregations{};
     if (!p(f, l, parsed_aggregations)) {
       return {
@@ -878,6 +947,8 @@ public:
     }
     config.group_by_extractors = std::move(std::get<1>(parsed_aggregations));
     config.time_resolution = std::move(std::get<2>(parsed_aggregations));
+    config.created_timeout = std::move(std::get<3>(parsed_aggregations));
+    config.update_timeout = std::move(std::get<4>(parsed_aggregations));
     if (config.time_resolution and config.group_by_extractors.empty()) {
       return {
         std::string_view{f, l},

@@ -32,7 +32,7 @@ RestrictSUIDSGID=yes
 LimitNOFILE=65535
 
 # system access
-ExecPaths=@CMAKE_INSTALL_FULL_LIBEXECDIR@/tenzir-df-percent.sh
+ExecPaths=@CMAKE_INSTALL_FULL_BINDIR@ @CMAKE_INSTALL_FULL_LIBEXECDIR@
 ProtectSystem=strict
 ReadWritePaths=/tmp
 PrivateTmp=no

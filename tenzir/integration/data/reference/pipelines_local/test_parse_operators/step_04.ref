@@ -8,6 +8,7 @@ pipeline [
     use_ndjson_mode: false,
     preserve_order: true,
     raw: false,
-    arrays_of_objects: false
+    arrays_of_objects: false,
+    precise: false
   }
 ] @ 0..20

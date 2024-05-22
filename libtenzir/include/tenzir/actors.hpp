@@ -211,10 +211,6 @@ using catalog_actor = typed_actor_fwd<
   // Return the candidate partitions per type for a query.
   auto(atom::candidates, tenzir::query_context)
     ->caf::result<catalog_lookup_result>,
-  // Retrieves all known types.
-  auto(atom::get, atom::type)->caf::result<type_set>,
-  // Registers a given schema.
-  auto(atom::put, tenzir::type)->caf::result<void>,
   // Retrieves the known taxonomies.
   auto(atom::get, atom::taxonomies)->caf::result<taxonomies>,
   // Retrieves information about a partition with a given UUID.
@@ -366,13 +362,6 @@ using component_plugin_actor = typed_actor_fwd<>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
-/// The interface of an ANALYZER PLUGIN actor.
-using analyzer_plugin_actor = typed_actor_fwd<>
-  // Conform to the protocol of the STREAM SINK actor for table slices.
-  ::extend_with<stream_sink_actor<table_slice>>
-  // Conform to the protocol of the COMPONENT PLUGIN actor.
-  ::extend_with<component_plugin_actor>::unwrap;
-
 /// The interface of a SOURCE actor.
 using source_actor = typed_actor_fwd<
   // Retrieve the currently used module of the SOURCE.
@@ -483,7 +472,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::accountant_actor))
   TENZIR_ADD_TYPE_ID((tenzir::active_indexer_actor))
   TENZIR_ADD_TYPE_ID((tenzir::active_partition_actor))
-  TENZIR_ADD_TYPE_ID((tenzir::analyzer_plugin_actor))
   TENZIR_ADD_TYPE_ID((tenzir::catalog_actor))
   TENZIR_ADD_TYPE_ID((tenzir::default_active_store_actor))
   TENZIR_ADD_TYPE_ID((tenzir::default_passive_store_actor))

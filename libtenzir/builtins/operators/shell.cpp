@@ -11,6 +11,7 @@
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/parseable/string/quoted_string.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
+#include <tenzir/detail/preserved_fds.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/pipeline.hpp>
@@ -58,6 +59,8 @@ public:
             bp::std_out > result.stdout_,
             bp::std_in < bp::close,
             bp::on_exit(exit_handler),
+            detail::preserved_fds{{STDOUT_FILENO, STDERR_FILENO}},
+            boost::process::limit_handles,
           };
           break;
         case stdin_mode::inherit:
@@ -67,6 +70,8 @@ public:
             result.command_,
             bp::std_out > result.stdout_,
             bp::on_exit(exit_handler),
+            detail::preserved_fds{{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO}},
+            boost::process::limit_handles,
           };
           break;
         case stdin_mode::pipe:
@@ -77,6 +82,8 @@ public:
             bp::std_out > result.stdout_,
             bp::std_in < result.stdin_,
             bp::on_exit(exit_handler),
+            detail::preserved_fds{{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO}},
+            boost::process::limit_handles,
           };
           break;
       }

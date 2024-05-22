@@ -20,5 +20,5 @@ fi
 
 libpath_relative_to_binary="$(realpath "$(dirname "$(command -v tenzir)")")/../share/tenzir/integration/lib"
 libpath_relative_to_pwd="${BATS_TEST_DIRNAME%%/integration/*}/integration/lib"
-export BATS_LIB_PATH=${BATS_LIB_PATH:+${BATS_LIB_PATH}:}${libpath_relative_to_binary}:${libpath_relative_to_pwd}
+export BATS_LIB_PATH=${libpath_relative_to_binary}:${libpath_relative_to_pwd}${BATS_LIB_PATH:+:${BATS_LIB_PATH}}
 echo ${BATS_LIB_PATH}

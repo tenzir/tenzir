@@ -286,35 +286,23 @@ public:
       row.field("key", key.to_original_data());
       row.field("value", value);
       if (entry_builder.length() >= context::dump_batch_size_limit) {
-        co_yield entry_builder.finish_assert_one_slice(
-          fmt::format("tenzir.{}.info", context_type()));
+        for (auto&& slice : entry_builder.finish_as_table_slice(
+               fmt::format("tenzir.{}.info", context_type()))) {
+          co_yield std::move(slice);
+        }
       }
     }
     // Dump all remaining entries that did not reach the size limit.
-    co_yield entry_builder.finish_assert_one_slice(
-      fmt::format("tenzir.{}.info", context_type()));
+    for (auto&& slice : entry_builder.finish_as_table_slice(
+           fmt::format("tenzir.{}.info", context_type()))) {
+      co_yield std::move(slice);
+    }
   }
 
   /// Updates the context.
   auto update(table_slice slice, context::parameter_map parameters)
     -> caf::expected<update_result> override {
     // context does stuff on its own with slice & parameters
-    if (parameters.contains("clear")) {
-      auto clear = parameters["clear"];
-      if (not clear or (clear and clear->empty())) {
-        context_entries.clear();
-      } else if (clear) {
-        auto clear_v = false;
-        if (not parsers::boolean(*clear, clear_v)) {
-          return caf::make_error(ec::invalid_argument,
-                                 "value for 'clear' key needs to be a valid "
-                                 "boolean <true/false>");
-        }
-        if (clear_v) {
-          context_entries.clear();
-        }
-      }
-    }
     TENZIR_ASSERT(slice.rows() != 0);
     if (not parameters.contains("key")) {
       return caf::make_error(ec::invalid_argument, "missing 'key' parameter");

@@ -602,9 +602,10 @@ caf::error index_state::load_from_disk() {
       synopses->emplace(partition_uuid, std::move(ps));
       return caf::none;
     }();
-    if (error)
-      TENZIR_ERROR("{} failed to load partition {}: {}", *self, partition_uuid,
-                   error);
+    if (error) {
+      TENZIR_VERBOSE("{} failed to load partition {}: {}", *self,
+                     partition_uuid, error);
+    }
   }
   //  Recommend the user to run 'tenzir-ctl rebuild' if any partition syopses
   //  are outdated. We need to nudge them a bit so we can drop support for older
@@ -723,7 +724,6 @@ index_state::create_active_partition(const type& schema) {
     = active_partitions.emplace(schema, active_partition_info{});
   TENZIR_ASSERT(inserted);
   TENZIR_ASSERT(active_partition != active_partitions.end());
-  active_partition->second.spawn_time = std::chrono::steady_clock::now();
   active_partition->second.actor
     = self->spawn(::tenzir::active_partition, schema, id, accountant,
                   filesystem, index_opts, synopsis_opts, store_actor_plugin,
@@ -733,12 +733,31 @@ index_state::create_active_partition(const type& schema) {
   stage->out().set_filter(active_partition->second.stream_slot, schema);
   active_partition->second.capacity = partition_capacity;
   active_partition->second.id = id;
-  self->request(catalog, caf::infinite, atom::put_v, schema)
-    .then([]() {},
-          [this](const caf::error& error) {
-            TENZIR_WARN("{} failed to register type with catalog: {}", *self,
-                        error);
-          });
+  detail::weak_run_delayed(self, active_partition_timeout, [schema, id, this] {
+    const auto it = active_partitions.find(schema);
+    if (it == active_partitions.end() or it->second.id != id) {
+      // If the partition was already rotated then there's nothing to do for us.
+      return;
+    }
+    TENZIR_VERBOSE("{} flushes active partition {} with {}/{} {} events "
+                   "after {} timeout",
+                   *self, it->second.id,
+                   partition_capacity - it->second.capacity, partition_capacity,
+                   schema, data{active_partition_timeout});
+    decommission_active_partition(schema, [this, schema,
+                                           id](const caf::error& err) mutable {
+      if (err) {
+        TENZIR_WARN("{} failed to flush active partition {} ({}) after {} "
+                    "timeout: {}",
+                    *self, id, schema, data{active_partition_timeout}, err);
+      } else {
+        TENZIR_VERBOSE("{} successfully flushed active partition {} ({}) "
+                       "after {} timeout",
+                       *self, id, schema, data{active_partition_timeout});
+      }
+    });
+    flush_to_disk();
+  });
   TENZIR_DEBUG("{} created new partition {}", *self, id);
   return active_partition;
 }
@@ -750,9 +769,10 @@ void index_state::decommission_active_partition(
   const auto id = active_partition->second.id;
   const auto actor = std::exchange(active_partition->second.actor, {});
   const auto type = active_partition->first;
+  auto stream_slot = active_partition->second.stream_slot;
   // Send buffered batches and remove active partition from the stream.
   stage->out().fan_out_flush();
-  stage->out().close(active_partition->second.stream_slot);
+  stage->out().close(stream_slot);
   stage->out().force_emit_batches();
   // Move the active partition to the list of unpersisted partitions.
   TENZIR_ASSERT_EXPENSIVE(!unpersisted.contains(id));
@@ -793,6 +813,7 @@ void index_state::decommission_active_partition(
                 self->send(listener, atom::update_v,
                            partition_synopsis_pair{id, ps});
               unpersisted.erase(id);
+              self->erase_stream_manager(stream_slot);
               persisted_partitions.emplace(id);
               self->send_exit(actor, caf::exit_reason::normal);
               if (completion)
@@ -805,6 +826,7 @@ void index_state::decommission_active_partition(
                            "queries: {}",
                            *self, schema, id, err);
               unpersisted.erase(id);
+              self->erase_stream_manager(stream_slot);
               self->send_exit(actor, err);
               if (completion)
                 completion(err);
@@ -816,6 +838,7 @@ void index_state::decommission_active_partition(
                      "memory to preserve process integrity: {}",
                      *self, schema, id, err);
         unpersisted.erase(id);
+        self->erase_stream_manager(stream_slot);
         self->send_exit(actor, err);
         if (completion)
           completion(err);
@@ -1185,6 +1208,9 @@ index(index_actor::stateful_pointer<index_state> self,
     TENZIR_ARG(active_partition_timeout), TENZIR_ARG(max_inmem_partitions),
     TENZIR_ARG(taste_partitions), TENZIR_ARG(max_concurrent_partition_lookups),
     TENZIR_ARG(catalog_dir), TENZIR_ARG(index_config));
+  if (self->getf(caf::scheduled_actor::is_detached_flag)) {
+    caf::detail::set_thread_name("tenzir.index");
+  }
   TENZIR_VERBOSE("{} initializes index in {} with a maximum partition "
                  "size of {} events and {} resident partitions",
                  *self, dir, partition_capacity, max_inmem_partitions);
@@ -1369,39 +1395,10 @@ index(index_actor::stateful_pointer<index_state> self,
     self->state.monitored_queries.erase(it);
   });
   // Start metrics loop.
-  if (self->state.accountant)
+  if (self->state.accountant) {
     self->send(self->state.accountant, atom::announce_v, self->name());
-  if (self->state.accountant
-      || self->state.active_partition_timeout.count() > 0) {
     detail::weak_run_delayed_loop(self, defaults::telemetry_rate, [self] {
-      if (self->state.accountant)
-        self->state.send_report();
-      if (self->state.active_partition_timeout.count() > 0) {
-        auto decommissioned = std::vector<type>{};
-        for (const auto& [schema, active_partition] :
-             self->state.active_partitions) {
-          if (active_partition.spawn_time + self->state.active_partition_timeout
-              < std::chrono::steady_clock::now()) {
-            decommissioned.push_back(schema);
-          }
-        }
-        if (!decommissioned.empty()) {
-          for (const auto& schema : decommissioned) {
-            auto active_partition = self->state.active_partitions.find(schema);
-            TENZIR_ASSERT(active_partition
-                          != self->state.active_partitions.end());
-            TENZIR_VERBOSE("{} flushes active partition {} with {}/{} events "
-                           "after {} timeout",
-                           *self, schema,
-                           self->state.partition_capacity
-                             - active_partition->second.capacity,
-                           self->state.partition_capacity,
-                           data{self->state.active_partition_timeout});
-            self->state.decommission_active_partition(schema, {});
-          }
-          self->state.flush_to_disk();
-        }
-      }
+      self->state.send_report();
     });
   }
   return {
@@ -1569,10 +1566,6 @@ index(index_actor::stateful_pointer<index_state> self,
            tenzir::expression& expr) -> caf::result<catalog_lookup_result> {
       auto query_context = query_context::make_extract("index", self, expr);
       query_context.id = tenzir::uuid::random();
-      auto type_set = tenzir::type_set{};
-      for (const auto& [type, _] : self->state.active_partitions) {
-        type_set.insert(type);
-      }
       return self->delegate(self->state.catalog, atom::candidates_v,
                             std::move(query_context));
     },

@@ -10,12 +10,10 @@
 
 #include "tenzir/fwd.hpp"
 
-#include "tenzir/detail/stable_map.hpp"
-#include "tenzir/type_set.hpp"
+#include "tenzir/type.hpp"
 
 #include <fmt/format.h>
 
-#include <memory>
 #include <string>
 #include <vector>
 

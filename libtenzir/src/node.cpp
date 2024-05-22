@@ -28,14 +28,6 @@
 #include "tenzir/detail/process.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/execution_node.hpp"
-#include "tenzir/format/csv.hpp"
-#include "tenzir/format/json.hpp"
-#include "tenzir/format/json/default_selector.hpp"
-#include "tenzir/format/json/suricata_selector.hpp"
-#include "tenzir/format/json/zeek_selector.hpp"
-#include "tenzir/format/syslog.hpp"
-#include "tenzir/format/test.hpp"
-#include "tenzir/format/zeek.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/node.hpp"
 #include "tenzir/plugin.hpp"
@@ -44,7 +36,6 @@
 #include "tenzir/spawn_arguments.hpp"
 #include "tenzir/spawn_catalog.hpp"
 #include "tenzir/spawn_disk_monitor.hpp"
-#include "tenzir/spawn_exporter.hpp"
 #include "tenzir/spawn_importer.hpp"
 #include "tenzir/spawn_index.hpp"
 #include "tenzir/spawn_node.hpp"
@@ -75,7 +66,10 @@ thread_local node_actor::stateful_pointer<node_state> this_node = nullptr;
 /// A list of components that are essential for importing and exporting data
 /// from the node.
 std::set<const char*> core_components = {
-  "accountant", "catalog", "filesystem", "importer", "index",
+  "catalog",
+  "filesystem",
+  "importer",
+  "index",
 };
 
 bool is_core_component(std::string_view type) {
@@ -97,8 +91,8 @@ bool is_singleton(std::string_view type) {
   // change the node to work with type IDs over actor names everywhere. This
   // refactoring will be much easier once the NODE itself is a typed actor, so
   // let's hold off until then.
-  const char* singletons[] = {"accountant", "disk-monitor", "filesystem",
-                              "importer",   "index",        "catalog"};
+  const char* singletons[]
+    = {"disk-monitor", "filesystem", "importer", "index", "catalog"};
   auto pred = [&](const char* x) {
     return x == type;
   };
@@ -130,6 +124,19 @@ register_component(node_actor::stateful_pointer<node_state> self,
                     label.empty() ? type : label);
     return caf::make_error(ec::unspecified, std::move(msg));
   }
+  auto tag = [&] {
+    if (label.empty() or type == label) {
+      return std::string{type};
+    }
+    return fmt::format("{}/{}", type, label);
+  }();
+  const auto [it, inserted] = self->state.alive_components.insert(
+    std::pair{component->address(), std::move(tag)});
+  TENZIR_ASSERT(
+    inserted,
+    fmt::format("failed to register component {}", it->second).c_str());
+  TENZIR_VERBOSE("component {} registered with id {}", it->second,
+                 component->id());
   self->monitor(component);
   return caf::none;
 }
@@ -138,12 +145,14 @@ register_component(node_actor::stateful_pointer<node_state> self,
 accountant_actor
 spawn_accountant(node_actor::stateful_pointer<node_state> self) {
   if (!caf::get_or(content(self->system().config()), "tenzir.enable-metrics",
-                   false))
+                   false)) {
     return {};
+  }
   // It doesn't make much sense to run the accountant for one-shot commands
   // with a local database using `--node`, so this prevents spawning it.
-  if (caf::get_or(content(self->system().config()), "tenzir.node", false))
+  if (caf::get_or(content(self->system().config()), "tenzir.node", false)) {
     return {};
+  }
   const auto metrics_opts = caf::get_or(content(self->system().config()),
                                         "tenzir.metrics", caf::settings{});
   auto cfg = to_accountant_config(metrics_opts);
@@ -152,7 +161,7 @@ spawn_accountant(node_actor::stateful_pointer<node_state> self) {
                  cfg.error());
     return {};
   }
-  auto accountant = self->spawn<caf::detached>(
+  auto accountant = self->spawn<caf::detached + caf::linked>(
     tenzir::accountant, std::move(*cfg), self->state.dir);
   auto err = register_component(self, caf::actor_cast<caf::actor>(accountant),
                                 "accountant");
@@ -162,18 +171,6 @@ spawn_accountant(node_actor::stateful_pointer<node_state> self) {
 }
 
 } // namespace
-
-caf::expected<caf::actor>
-spawn_accountant(node_actor::stateful_pointer<node_state> self,
-                 spawn_arguments& args) {
-  const auto& options = args.inv.options;
-  auto metrics_opts = caf::get_or(options, "tenzir.metrics", caf::settings{});
-  auto cfg = to_accountant_config(metrics_opts);
-  if (!cfg)
-    return cfg.error();
-  return caf::actor_cast<caf::actor>(
-    self->spawn(accountant, std::move(*cfg), self->state.dir));
-}
 
 caf::expected<caf::actor>
 spawn_component(node_actor::stateful_pointer<node_state> self,
@@ -204,9 +201,7 @@ node_state::component_factory_fun lift_component_factory() {
 
 auto make_component_factory() {
   auto result = node_state::named_component_factory{
-    {"spawn accountant", lift_component_factory<spawn_accountant>()},
     {"spawn disk-monitor", lift_component_factory<spawn_disk_monitor>()},
-    {"spawn exporter", lift_component_factory<spawn_exporter>()},
     {"spawn importer", lift_component_factory<spawn_importer>()},
     {"spawn catalog", lift_component_factory<spawn_catalog>()},
     {"spawn index", lift_component_factory<spawn_index>()},
@@ -220,7 +215,6 @@ auto make_command_factory() {
   auto result = command::factory{
     {"spawn accountant", node_state::spawn_command},
     {"spawn disk-monitor", node_state::spawn_command},
-    {"spawn exporter", node_state::spawn_command},
     {"spawn importer", node_state::spawn_command},
     {"spawn catalog", node_state::spawn_command},
     {"spawn index", node_state::spawn_command},
@@ -330,6 +324,18 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     if (self->state.monitored_exec_nodes.erase(msg.source) > 0) {
       return;
     }
+    auto it = std::ranges::find_if(self->state.alive_components,
+                                   [&](const auto& alive_component) {
+                                     return alive_component.first == msg.source;
+                                   });
+    if (it != self->state.alive_components.end()) {
+      TENZIR_VERBOSE("component {} deregistered; {} remaining: [{}])",
+                     it->second, self->state.alive_components.size(),
+                     fmt::join(self->state.alive_components
+                                 | std::ranges::views::values,
+                               ", "));
+      self->state.alive_components.erase(it);
+    }
     if (!self->state.tearing_down) {
       auto actor = caf::actor_cast<caf::actor>(msg.source);
       auto component = self->state.registry.remove(actor);
@@ -372,7 +378,10 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     // buffered data. The filesystem is needed by all others for the persisting
     // logic.
     auto shutdown_sequence = std::initializer_list<const char*>{
-      "importer", "index", "catalog", "accountant", "filesystem",
+      "importer",
+      "index",
+      "catalog",
+      "filesystem",
     };
     // Make sure that these remain in sync.
     TENZIR_ASSERT(std::set<const char*>{shutdown_sequence} == core_components);
@@ -386,7 +395,6 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     }
     std::vector<caf::actor> aux_components;
     for (const auto& [_, comp] : registry.components()) {
-      self->demonitor(comp.actor);
       // Ignore remote actors.
       if (comp.actor->node() != self->node())
         continue;
@@ -397,16 +405,12 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     auto core_shutdown_sequence
       = [=, core_shutdown_handles = std::move(core_shutdown_handles),
          filesystem_handle = std::move(filesystem_handle)]() mutable {
-          for (const auto& comp : core_shutdown_handles) {
-            self->demonitor(comp);
-          }
           shutdown<policy::sequential>(self, std::move(core_shutdown_handles),
                                        msg.reason);
           // We deliberately do not send an exit message to the filesystem
           // actor, as that would mean that actors not tracked by the component
           // registry which hold a strong handle to the filesystem actor cannot
           // use it for persistence on shutdown.
-          self->demonitor(filesystem_handle);
           filesystem_handle = {};
         };
     terminate<policy::parallel>(self, std::move(aux_components))

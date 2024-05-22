@@ -60,7 +60,7 @@ struct metrics_collector_state {
     for (const auto* plugin : plugins::get<metrics_plugin>()) {
       auto ok = setup(*plugin);
       if (not ok) {
-        return std::move(ok.error());
+        return ok.error();
       }
     }
     TENZIR_ASSERT(not instances.empty());

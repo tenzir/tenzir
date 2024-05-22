@@ -8,23 +8,28 @@
 
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/data.hpp>
+#include <tenzir/detail/posix.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/fbs/geoip.hpp>
 #include <tenzir/fbs/utils.hpp>
 #include <tenzir/flatbuffer.hpp>
 #include <tenzir/fwd.hpp>
+#include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/type.hpp>
+#include <tenzir/uuid.hpp>
 #include <tenzir/view.hpp>
 
 #include <fmt/format.h>
 
 #include <chrono>
 #include <cstdint>
+#include <cstdio>
 #include <maxminddb.h>
 #include <memory>
 #include <string>
+#include <utility>
 
 namespace tenzir::plugins::geoip {
 
@@ -42,8 +47,14 @@ struct mmdb_deleter final {
 };
 
 using mmdb_ptr = std::unique_ptr<MMDB_s, mmdb_deleter>;
+using deleter_type = detail::unique_function<void() noexcept>;
 
 auto make_mmdb(const std::string& path) -> caf::expected<mmdb_ptr> {
+  if (!std::filesystem::exists(path)) {
+    return diagnostic::error("")
+      .note("failed to find path `{}`", path)
+      .to_error();
+  }
   auto ptr = new MMDB_s;
   const auto status = MMDB_open(path.c_str(), MMDB_MODE_MMAP, ptr);
   if (status != MMDB_SUCCESS) {
@@ -91,8 +102,8 @@ class ctx final : public virtual context {
 public:
   ctx() noexcept = default;
 
-  explicit ctx(std::string db_path, mmdb_ptr mmdb)
-    : db_path_{std::move(db_path)}, mmdb_{std::move(mmdb)} {
+  explicit ctx(mmdb_ptr mmdb, chunk_ptr mapped_mmdb_)
+    : mapped_mmdb_{std::move(mapped_mmdb_)}, mmdb_{std::move(mmdb)} {
   }
 
   auto context_type() const -> std::string override {
@@ -302,6 +313,11 @@ public:
   /// Emits context information for every event in `slice` in order.
   auto apply(series array, bool replace) const
     -> caf::expected<std::vector<series>> override {
+    if (!mmdb_) {
+      return caf::make_error(ec::lookup_error,
+                             fmt::format("no GeoIP data currently exists for "
+                                         "this context"));
+    }
     auto status = 0;
     MMDB_entry_data_list_s* entry_data_list = nullptr;
     auto builder = series_builder{};
@@ -375,7 +391,7 @@ public:
 
   /// Inspects the context.
   auto show() const -> record override {
-    return record{{path_key, db_path_}};
+    return {};
   }
 
   auto dump_recurse(uint64_t node_number, uint8_t type, MMDB_entry_s* entry,
@@ -434,8 +450,10 @@ public:
         for (auto& x : output) {
           current_dump.builder.data(x);
           if (current_dump.builder.length() >= context::dump_batch_size_limit) {
-            co_yield current_dump.builder.finish_assert_one_slice(
-              fmt::format("tenzir.{}.info", context_type()));
+            for (auto&& slice : current_dump.builder.finish_as_table_slice(
+                   fmt::format("tenzir.{}.info", context_type()))) {
+              co_yield std::move(slice);
+            }
           }
         }
         break;
@@ -455,8 +473,10 @@ public:
       co_yield slice;
     }
     // Dump all remaining entries that did not reach the size limit.
-    co_yield current_dump.builder.finish_assert_one_slice(
-      fmt::format("tenzir.{}.info", context_type()));
+    for (auto&& slice : current_dump.builder.finish_as_table_slice(
+           fmt::format("tenzir.{}.info", context_type()))) {
+      co_yield std::move(slice);
+    }
     if (current_dump.status != MMDB_SUCCESS) {
       TENZIR_ERROR("dump of GeoIP context ended prematurely: {}",
                    MMDB_strerror(current_dump.status));
@@ -475,11 +495,6 @@ public:
   }
 
   auto reset() -> caf::expected<void> override {
-    auto mmdb = make_mmdb(db_path_);
-    if (not mmdb) {
-      return mmdb.error();
-    }
-    mmdb_ = std::move(*mmdb);
     return {};
   }
 
@@ -490,18 +505,18 @@ public:
   }
 
   auto save() const -> caf::expected<save_result> override {
-    auto builder = flatbuffers::FlatBufferBuilder{};
-    auto path = builder.CreateString(db_path_);
-    fbs::context::geoip::GeoIPDataBuilder geoip_builder(builder);
-    geoip_builder.add_url(path);
-    auto geoip_data = geoip_builder.Finish();
-    fbs::context::geoip::FinishGeoIPDataBuffer(builder, geoip_data);
-    return save_result{.data = tenzir::fbs::release(builder), .version = 1};
+    if (!mapped_mmdb_) {
+      return caf::make_error(ec::lookup_error,
+                             fmt::format("no GeoIP data currently exists for "
+                                         "this context"));
+    }
+    return save_result{.data = mapped_mmdb_, .version = latest_version};
   }
 
 private:
-  std::string db_path_;
+  chunk_ptr mapped_mmdb_;
   mmdb_ptr mmdb_;
+  int latest_version = 2;
 };
 
 struct v1_loader : public context_loader {
@@ -531,9 +546,71 @@ struct v1_loader : public context_loader {
   }
 };
 
+struct v2_loader : public context_loader {
+  explicit v2_loader(record global_config)
+    : global_config_{std::move(global_config)} {
+  }
+
+  auto version() const -> int {
+    return 2;
+  }
+
+  auto load(chunk_ptr serialized) const
+    -> caf::expected<std::unique_ptr<context>> {
+    const auto* cache_dir
+      = get_if<std::string>(&global_config_, "tenzir.cache-directory");
+    TENZIR_ASSERT(cache_dir);
+    auto dir_identifier = *cache_dir + "/plugins/geoip=";
+    std::error_code ec{};
+    std::filesystem::create_directories(dir_identifier, ec);
+    if (ec.value() != 0) {
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to make a tmp directory on "
+                                         "data load: {}",
+                                         ec.value()));
+    }
+    std::string temp_file_name
+      = dir_identifier + fmt::to_string(uuid::random());
+    auto temp_file = std::fstream(temp_file_name, std::ios_base::out);
+    if (!temp_file) {
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to open temp file on "
+                                         "data load: {}",
+                                         detail::describe_errno()));
+    }
+    temp_file.write(reinterpret_cast<const char*>(serialized->data()),
+                    static_cast<std::streamsize>(serialized->size()));
+    temp_file.flush();
+    if (!temp_file) {
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed write the temp file "
+                                         "on data load: {}",
+                                         detail::describe_errno()));
+    }
+    auto mmdb = make_mmdb(temp_file_name);
+    if (not mmdb) {
+      return mmdb.error();
+    }
+    auto mapped_mmdb = chunk::mmap(temp_file_name);
+    temp_file.close();
+    if (!temp_file) {
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed close the temp file: {}",
+                                         detail::describe_errno()));
+    }
+    return std::make_unique<ctx>(std::move(*mmdb),
+                                 std::move(mapped_mmdb.value()));
+  }
+
+private:
+  const record global_config_;
+};
+
 class plugin : public virtual context_plugin {
-  auto initialize(const record&, const record&) -> caf::error override {
+  auto initialize(const record&, const record& global_config)
+    -> caf::error override {
     register_loader(std::make_unique<v1_loader>());
+    register_loader(std::make_unique<v2_loader>(global_config));
     return caf::none;
   }
 
@@ -559,15 +636,19 @@ class plugin : public virtual context_plugin {
         .to_error();
     }
     if (db_path.empty()) {
-      return diagnostic::error("missing required db-path option")
-        .usage("context create <name> geoip --db-path <path>")
-        .to_error();
+      return std::make_unique<ctx>(nullptr, nullptr);
     }
     auto mmdb = make_mmdb(db_path);
+    auto mapped_mmdb = chunk::mmap(db_path);
+    if (!mapped_mmdb) {
+      return diagnostic::error("unable to retrieve file contents into memory")
+        .to_error();
+    }
     if (not mmdb) {
       return mmdb.error();
     }
-    return std::make_unique<ctx>(std::move(db_path), std::move(*mmdb));
+    return std::make_unique<ctx>(std::move(*mmdb),
+                                 std::move(mapped_mmdb.value()));
   }
 };
 

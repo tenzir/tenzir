@@ -6,16 +6,17 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/detail/assert.hpp"
-#include "tenzir/detail/strip_leading_indentation.hpp"
-#include "tenzir/format/arrow.hpp"
-
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/as_bytes.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/concept/parseable/string/quoted_string.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
+#include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/installdirs.hpp>
+#include <tenzir/detail/overload.hpp>
+#include <tenzir/detail/posix.hpp>
+#include <tenzir/detail/preserved_fds.hpp>
+#include <tenzir/detail/strip_leading_indentation.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/generator.hpp>
 #include <tenzir/logger.hpp>
@@ -42,6 +43,55 @@ namespace bp = boost::process;
 
 namespace tenzir::plugins::python {
 namespace {
+
+/// Arrow InputStream API implementation over a file descriptor.
+class arrow_fd_wrapper : public ::arrow::io::InputStream {
+public:
+  explicit arrow_fd_wrapper(int fd) : fd_{fd} {
+  }
+
+  auto Close() -> ::arrow::Status override {
+    int result = ::close(fd_);
+    fd_ = -1;
+    if (result != 0) {
+      return ::arrow::Status::IOError("close(2): ", detail::describe_errno());
+    }
+    return ::arrow::Status::OK();
+  }
+
+  auto closed() const -> bool override {
+    return fd_ == -1;
+  }
+
+  auto Tell() const -> ::arrow::Result<int64_t> override {
+    return pos_;
+  }
+
+  auto Read(int64_t nbytes, void* out) -> ::arrow::Result<int64_t> override {
+    auto bytes_read = detail::read(fd_, out, nbytes);
+    if (!bytes_read) {
+      return ::arrow::Status::IOError(fmt::to_string(bytes_read.error()));
+    }
+    auto sbytes = detail::narrow_cast<int64_t>(*bytes_read);
+    pos_ += sbytes;
+    return sbytes;
+  }
+
+  auto Read(int64_t nbytes)
+    -> ::arrow::Result<std::shared_ptr<::arrow::Buffer>> override {
+    ARROW_ASSIGN_OR_RAISE(auto buffer,
+                          ::arrow::AllocateResizableBuffer(nbytes));
+    ARROW_ASSIGN_OR_RAISE(int64_t bytes_read,
+                          Read(nbytes, buffer->mutable_data()));
+    ARROW_RETURN_NOT_OK(buffer->Resize(bytes_read, false));
+    buffer->ZeroPadding();
+    return buffer;
+  }
+
+private:
+  int fd_ = -1;
+  int64_t pos_ = 0;
+};
 
 auto PYTHON_SCAFFOLD = R"_(
 from tenzir.tools.python_operator_executor import main
@@ -132,7 +182,8 @@ public:
       // Automatically create a virtualenv with all requirements preinstalled,
       // unless disabled by node config.
       if (config_.venv_base_dir) {
-        auto venv_id = hash(config_.implicit_requirements, requirements_);
+        auto venv_id
+          = hash(config_.implicit_requirements, requirements_, getuid());
         auto venv_path = std::filesystem::path{config_.venv_base_dir.value()}
                          / fmt::format("{:x}", venv_id);
         auto venv = venv_path.string();
@@ -148,7 +199,7 @@ public:
         // Boost sometimes prepends a directory separator depending on which
         // underlying implementation is used for the semaphore. Thankfully it
         // is smart enough to check if one is already present. We prevent this
-        // hidden modification by starting the seamphore name with a slash.
+        // hidden modification by starting the semaphore name with a slash.
         // This ensures that the truncation logic below is correct.
         auto sem_name = fmt::format("/tnz-python-{:x}", venv_id);
         // The semaphore name is restricted to a maximum length of 31 characters
@@ -160,7 +211,7 @@ public:
           sem_name.erase(semaphore_name_max_length);
         }
         // The initial venv creation tends to take a very long time, and often
-        // causes the pipline creation to take longer then what our FE tolerate
+        // causes the pipeline creation to take longer then what our FE tolerate
         // in terms of wait time. As a workaround we yield early, so that the
         // pipeline appears as created and do the actual venv setup on first
         // call. At that point the delay is not problematic any more because
@@ -189,7 +240,10 @@ public:
           // the invocation in a script that drains the pipe continuously but
           // only forwards the first n bytes.
           if (bp::system(python_executable, "-m", "venv", venv,
-                         bp::std_err > std_err)) {
+                         bp::std_err > std_err,
+                         detail::preserved_fds{{STDERR_FILENO}},
+                         boost::process::limit_handles)
+              != 0) {
             auto venv_error = drain_pipe(std_err);
             // We need to delete the potentially broken venv here to make sure
             // that it doesn't stick around to break later runs of the python
@@ -230,7 +284,10 @@ public:
           std_err = bp::ipstream{};
           TENZIR_VERBOSE("installing python modules with: '{}'",
                          fmt::join(pip_invocation, "' '"));
-          if (bp::system(pip_invocation, env, bp::std_err > std_err)) {
+          if (bp::system(pip_invocation, env, bp::std_err > std_err,
+                         detail::preserved_fds{{STDERR_FILENO}},
+                         boost::process::limit_handles)
+              != 0) {
             auto pip_error = drain_pipe(std_err);
             diagnostic::error("{}", pip_error)
               .note("failed to install pip requirements")
@@ -247,15 +304,19 @@ public:
       // deadlock when trying to write to stderr. So we use a separate pipe
       // that's only used by the python executor and has well-defined semantics.
       bp::ipstream errpipe;
-      auto child
-        = bp::child{boost::process::filesystem::path{python_executable},
-                    "-c",
-                    PYTHON_SCAFFOLD,
-                    fmt::to_string(codepipe.pipe().native_source()),
-                    fmt::to_string(errpipe.pipe().native_sink()),
-                    env,
-                    bp::std_out > std_out,
-                    bp::std_in < std_in};
+      auto child = bp::child{
+        boost::process::filesystem::path{python_executable},
+        "-c",
+        PYTHON_SCAFFOLD,
+        fmt::to_string(codepipe.pipe().native_source()),
+        fmt::to_string(errpipe.pipe().native_sink()),
+        env,
+        bp::std_out > std_out,
+        bp::std_in < std_in,
+        detail::preserved_fds{{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO,
+                               codepipe.pipe().native_source(),
+                               errpipe.pipe().native_sink()}},
+        boost::process::limit_handles};
       if (code.empty()) {
         // The current implementation always expects a non-empty input.
         // Otherwise, it blocks forever on a `read` call.
@@ -308,7 +369,7 @@ public:
         }
         std_in.write(reinterpret_cast<const char*>((*result)->data()),
                      detail::narrow<int>((*result)->size()));
-        auto file = format::arrow::arrow_fd_wrapper{std_out.native_source()};
+        auto file = arrow_fd_wrapper{std_out.native_source()};
         auto reader = arrow::ipc::RecordBatchStreamReader::Open(&file);
         if (!reader.status().ok()) {
           auto python_error = drain_pipe(errpipe);

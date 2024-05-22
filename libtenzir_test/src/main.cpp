@@ -7,11 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/configuration.hpp"
-#include "tenzir/data.hpp"
 #include "tenzir/detail/env.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/plugin.hpp"
-#include "tenzir/test/data.hpp"
 #include "tenzir/test/test.hpp"
 
 #include <caf/message_builder.hpp>
@@ -20,52 +18,6 @@
 #include <iostream>
 #include <set>
 #include <string>
-
-namespace artifacts::logs::zeek {
-
-const char* conn = TENZIR_TEST_PATH "artifacts/logs/zeek/conn.log";
-const char* dns = TENZIR_TEST_PATH "artifacts/logs/zeek/dns.log";
-const char* ftp = TENZIR_TEST_PATH "artifacts/logs/zeek/ftp.log";
-const char* http = TENZIR_TEST_PATH "artifacts/logs/zeek/http.log";
-const char* small_conn = TENZIR_TEST_PATH "artifacts/logs/zeek/small_conn.log";
-const char* smtp = TENZIR_TEST_PATH "artifacts/logs/zeek/smtp.log";
-const char* ssl = TENZIR_TEST_PATH "artifacts/logs/zeek/ssl.log";
-
-} // namespace artifacts::logs::zeek
-
-namespace artifacts::logs::suricata {
-
-const char* alert = TENZIR_TEST_PATH "artifacts/logs/suricata/alert.json";
-const char* dns = TENZIR_TEST_PATH "artifacts/logs/suricata/dns.json";
-const char* fileinfo = TENZIR_TEST_PATH "artifacts/logs/suricata/fileinfo.json";
-const char* flow = TENZIR_TEST_PATH "artifacts/logs/suricata/flow.json";
-const char* http = TENZIR_TEST_PATH "artifacts/logs/suricata/http.json";
-const char* netflow = TENZIR_TEST_PATH "artifacts/logs/suricata/netflow.json";
-const char* stats = TENZIR_TEST_PATH "artifacts/logs/suricata//stats.json";
-
-} // namespace artifacts::logs::suricata
-
-namespace artifacts::logs::syslog {
-
-const char* syslog_msgs
-  = TENZIR_TEST_PATH "artifacts/logs/syslog/syslog-test.txt";
-
-} // namespace artifacts::logs::syslog
-
-namespace artifacts::schemas {
-
-const char* base = TENZIR_TEST_PATH "artifacts/schemas/base.schema";
-const char* suricata = TENZIR_TEST_PATH "artifacts/schemas/suricata.schema";
-
-} // namespace artifacts::schemas
-
-namespace artifacts::traces {
-
-const char* nmap_vsn = TENZIR_TEST_PATH "artifacts/traces/nmap_vsn.pcap";
-const char* workshop_2011_browse
-  = TENZIR_TEST_PATH "artifacts/traces/workshop_2011_browse.pcap";
-
-} // namespace artifacts::traces
 
 namespace caf::test {
 

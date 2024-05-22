@@ -2,7 +2,7 @@
 title: Tenzir v4.11
 authors: [dominiklohmann]
 date: 2024-03-22
-tags: [contexts, every, set, email, sqs]
+tags: [release, contexts, every, set, email, sqs]
 comments: true
 ---
 

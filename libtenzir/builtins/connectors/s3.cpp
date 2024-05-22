@@ -102,7 +102,7 @@ public:
           co_return;
         }
         auto file_info = fs.ValueUnsafe()->GetFileInfo(
-          fmt::format("{}/{}", uri.host(), uri.path()));
+          fmt::format("{}{}", uri.host(), uri.path()));
         if (not file_info.ok()) {
           diagnostic::error("failed to get file info for URI "
                             "`{}`: {}",
@@ -183,7 +183,7 @@ public:
                                          fs.status().ToString()));
     }
     auto file_info = fs.ValueUnsafe()->GetFileInfo(
-      fmt::format("{}/{}", uri.host(), uri.path()));
+      fmt::format("{}{}", uri.host(), uri.path()));
     if (not file_info.ok()) {
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed to get file info from path "

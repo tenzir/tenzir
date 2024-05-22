@@ -10,7 +10,6 @@
 
 #include "tenzir/catalog.hpp"
 #include "tenzir/node.hpp"
-#include "tenzir/query_context.hpp"
 #include "tenzir/spawn_arguments.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
@@ -20,9 +19,9 @@ namespace tenzir {
 caf::expected<caf::actor>
 spawn_catalog(node_actor::stateful_pointer<node_state> self,
               spawn_arguments& args) {
+  (void)args;
   auto [accountant] = self->state.registry.find<accountant_actor>();
-  auto handle
-    = self->spawn<caf::detached>(catalog, accountant, args.dir / args.label);
+  auto handle = self->spawn<caf::detached>(catalog, accountant);
   TENZIR_VERBOSE("{} spawned the catalog", *self);
   return caf::actor_cast<caf::actor>(handle);
 }

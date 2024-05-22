@@ -1,0 +1,2 @@
+warning: BIGINT_ERROR: Big integer value that cannot be represented using 64 bits
+ = note: at line 1

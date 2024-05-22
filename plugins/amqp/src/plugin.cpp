@@ -350,8 +350,19 @@ public:
     if (ret.library_error == AMQP_STATUS_TIMEOUT)
       return chunk_ptr{};
     // Now we're leaving the happy path.
-    if (ret.reply_type == AMQP_RESPONSE_LIBRARY_EXCEPTION
-        && ret.library_error == AMQP_STATUS_UNEXPECTED_STATE) {
+    TENZIR_DEBUG(
+      "reply type is {}, library error {} ({})",
+      static_cast<std::underlying_type_t<amqp_response_type_enum>>(
+        ret.reply_type),
+      static_cast<std::underlying_type_t<amqp_status_enum>>(ret.library_error),
+      amqp_error_string2(ret.library_error));
+    if (ret.reply_type == AMQP_RESPONSE_LIBRARY_EXCEPTION) {
+      if (ret.library_error != AMQP_STATUS_UNEXPECTED_STATE) {
+        // Likely unrecoverable error, let the retry logic handle this
+        return caf::make_error(ec::unspecified,
+                               fmt::format("amqp: {}",
+                               amqp_error_string2(ret.library_error)));
+      }
       TENZIR_DEBUG("waiting for frame");
       auto frame = amqp_frame_t{};
       auto status = amqp_simple_wait_frame(conn_, &frame);

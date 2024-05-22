@@ -306,6 +306,10 @@ async function createConfig() {
                   href: 'https://tenzir.com',
                 },
                 {
+                  label: 'Newsletter',
+                  to: '/newsletter',
+                },
+                {
                   label: 'Privacy Statement',
                   to: '/privacy-statement',
                 },

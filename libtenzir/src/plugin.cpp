@@ -409,37 +409,6 @@ std::string component_plugin::component_name() const {
   return this->name();
 }
 
-// -- analyzer plugin ---------------------------------------------------------
-
-analyzer_plugin_actor
-analyzer_plugin::analyzer(node_actor::stateful_pointer<node_state> node) const {
-  if (auto handle = weak_handle_.lock()) {
-    return handle;
-  }
-  if (spawned_once_ || !node) {
-    return {};
-  }
-  auto handle = make_analyzer(node);
-  auto [importer] = node->state.registry.find<importer_actor>();
-  TENZIR_ASSERT(importer);
-  node
-    ->request(importer, caf::infinite,
-              static_cast<stream_sink_actor<table_slice>>(handle))
-    .then([]() {},
-          [&](const caf::error& error) {
-            TENZIR_ERROR("failed to connect analyzer {} to the importer: {}",
-                         name(), error);
-          });
-  weak_handle_ = handle;
-  spawned_once_ = true;
-  return handle;
-}
-
-component_plugin_actor analyzer_plugin::make_component(
-  node_actor::stateful_pointer<node_state> node) const {
-  return analyzer(node);
-}
-
 // -- loader plugin -----------------------------------------------------------
 
 auto loader_parser_plugin::supported_uri_schemes() const

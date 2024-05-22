@@ -262,7 +262,6 @@ struct spawn_arguments;
 struct status;
 struct taxonomies;
 struct type_extractor;
-struct type_set;
 struct series;
 
 enum class api_version : uint8_t;
@@ -457,7 +456,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::taxonomies))
   TENZIR_ADD_TYPE_ID((tenzir::type))
   TENZIR_ADD_TYPE_ID((tenzir::type_extractor))
-  TENZIR_ADD_TYPE_ID((tenzir::type_set))
   TENZIR_ADD_TYPE_ID((tenzir::series))
   TENZIR_ADD_TYPE_ID((tenzir::uuid))
   TENZIR_ADD_TYPE_ID((tenzir::wah_bitmap))

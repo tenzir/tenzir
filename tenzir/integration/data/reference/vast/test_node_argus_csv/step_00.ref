@@ -1,2 +1,0 @@
-{"StartTime": "2009-11-18T12:36:50.004862", "Flgs": " e        ", "Proto": "tcp", "SrcAddr": "192.168.1.104", "Sport": 1257, "Dir": "   ->", "DstAddr": "212.96.161.238", "Dport": 80, "TotPkts": 6, "TotBytes": 726, "State": "RST", "Dur": "4.94s", "Cause": "Start"}
-{"StartTime": "2009-11-18T17:21:09.318540", "Flgs": " e        ", "Proto": "udp", "SrcAddr": "fe80::2c23:b96c:78d:e116", "Sport": 58544, "Dir": "   ->", "DstAddr": "ff02::c", "Dport": 3702, "TotPkts": 7, "TotBytes": 7399, "State": "INT", "Dur": "4.91s", "Cause": "Start"}

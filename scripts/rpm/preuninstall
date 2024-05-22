@@ -1,0 +1,10 @@
+if [ $1 -eq 0 ]; then
+  # Package removal, not upgrade
+  if [ -x "/usr/lib/systemd/systemd-update-helper" ]; then
+    /usr/lib/systemd/systemd-update-helper remove-system-units tenzir-node.service || :
+  else
+    systemctl --no-reload disable tenzir-node.service > /dev/null 2>&1 || :
+    systemctl stop tenzir-node.service > /dev/null 2>&1 || :
+  fi
+  [ -L /etc/systemd/system/tenzir-node.service ] && rm /etc/systemd/system/tenzir-node.service || :
+fi
