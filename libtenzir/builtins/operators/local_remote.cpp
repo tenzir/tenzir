@@ -37,7 +37,7 @@ public:
                 columnar_selection selection) const
     -> optimize_result override {
     (void)selection;
-    auto result = op_->optimize(filter, order, columnar_selection());
+    auto result = op_->optimize(filter, order, selection);
     if (not result.replacement) {
       return result;
     }

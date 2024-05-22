@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/columnar_selection.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
@@ -108,13 +110,15 @@ public:
   auto optimize(expression const& filter, event_order order,
                 columnar_selection selection) const
     -> optimize_result override {
-    (void)selection;
+    if (selection.fields_of_interest) {
+      selection.do_not_optimize_selection = true;
+    }
     if (filter == trivially_true_expression()) {
-      return optimize_result{expr_.inner, order, nullptr};
+      return optimize_result{expr_.inner, order, nullptr, selection};
     }
     auto combined = normalize_and_validate(conjunction{expr_.inner, filter});
     TENZIR_ASSERT(combined);
-    return optimize_result{std::move(*combined), order, nullptr};
+    return optimize_result{std::move(*combined), order, nullptr, selection};
   }
 
   friend auto inspect(auto& f, where_operator& x) -> bool {

@@ -151,6 +151,7 @@ public:
     -> optimize_result override {
     (void)selection;
     (void)filter, (void)order;
+
     return do_not_optimize(*this);
   }
 
@@ -355,7 +356,8 @@ public:
     -> optimize_result override {
     (void)selection;
     (void)filter, (void)order;
-    return optimize_result{std::nullopt, event_order::schema, copy()};
+    return optimize_result{std::nullopt, event_order::schema, copy(),
+                           selection};
   }
 
   friend auto inspect(auto& f, write_and_save_operator& x) -> bool {

@@ -81,7 +81,8 @@ public:
     -> optimize_result override {
     (void)selection;
     (void)filter, (void)order;
-    return optimize_result{std::nullopt, event_order::unordered, copy()};
+    return optimize_result{std::nullopt, event_order::unordered, copy(),
+                           selection};
   }
 
   friend auto inspect(auto& f, import_operator& x) -> bool {

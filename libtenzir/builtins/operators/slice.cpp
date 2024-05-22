@@ -203,9 +203,10 @@ public:
     if (not begin_ and not end_) {
       // If there's neither a begin nor an end, then this operator is a no-op.
       // We optimize it away here.
-      return optimize_result{filter, order, nullptr};
+      return optimize_result{filter, order, nullptr, selection};
     }
-    return optimize_result{std::nullopt, event_order::ordered, copy()};
+    return optimize_result{std::nullopt, event_order::ordered, copy(),
+                           selection};
   }
 
   friend auto inspect(auto& f, slice_operator& x) -> bool {

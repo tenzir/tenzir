@@ -188,9 +188,8 @@ public:
   auto optimize(expression const& filter, event_order order,
                 columnar_selection selection) const
     -> optimize_result override {
-    (void)selection;
     (void)order;
-    return optimize_result{filter, event_order::schema, copy()};
+    return optimize_result{filter, event_order::schema, copy(), selection};
   }
 
   friend auto inspect(auto& f, deduplicate_operator& x) -> bool {

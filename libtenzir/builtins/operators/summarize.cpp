@@ -798,7 +798,8 @@ public:
     (void)selection;
     // Note: The `unordered` relies on commutativity of the aggregation functions.
     (void)filter, (void)order;
-    return optimize_result{std::nullopt, event_order::unordered, copy()};
+    return optimize_result{std::nullopt, event_order::unordered, copy(),
+                           selection};
   }
 
   friend auto inspect(auto& f, summarize_operator& x) -> bool {

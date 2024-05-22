@@ -232,7 +232,7 @@ public:
   auto optimize(expression const& filter, event_order order,
                 columnar_selection selection) const
     -> optimize_result override {
-    (void)selection;
+    selection.do_not_optimize_selection = true;
     (void)order;
     if (live_) {
       return do_not_optimize(*this);
@@ -246,9 +246,9 @@ public:
     }
     auto expr = clauses.empty() ? trivially_true_expression()
                                 : expression{conjunction{std::move(clauses)}};
-    return optimize_result{trivially_true_expression(), event_order::ordered,
-                           std::make_unique<export_operator>(std::move(expr),
-                                                             live_)};
+    return optimize_result{
+      trivially_true_expression(), event_order::ordered,
+      std::make_unique<export_operator>(std::move(expr), live_), selection};
   }
 
   friend auto inspect(auto& f, export_operator& x) -> bool {

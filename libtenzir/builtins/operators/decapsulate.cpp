@@ -386,9 +386,9 @@ public:
   auto optimize(expression const& filter, event_order order,
                 columnar_selection selection) const
     -> optimize_result override {
-    (void)selection;
+    selection.do_not_optimize_selection = true;
     (void)filter;
-    return optimize_result::order_invariant(*this, order);
+    return optimize_result::order_invariant(*this, order, selection);
   }
 
   auto name() const -> std::string override {

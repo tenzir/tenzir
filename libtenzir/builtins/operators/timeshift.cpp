@@ -111,7 +111,7 @@ public:
     (void)selection;
     if (speed_ == 1.0 and not start_) {
       // If this operator is a no-op we can just remove it during optimization.
-      return optimize_result{filter, order, nullptr};
+      return optimize_result{filter, order, nullptr, selection};
     }
     return do_not_optimize(*this);
   }

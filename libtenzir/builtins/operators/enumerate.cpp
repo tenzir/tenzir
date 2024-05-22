@@ -107,7 +107,8 @@ public:
     (void)order;
     (void)selection;
     (void)filter;
-    return optimize_result{std::nullopt, event_order::ordered, copy()};
+    return optimize_result{std::nullopt, event_order::ordered, copy(),
+                           selection};
   }
 
 private:

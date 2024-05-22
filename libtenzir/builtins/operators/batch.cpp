@@ -76,10 +76,12 @@ public:
   auto optimize(expression const& filter, event_order order,
                 columnar_selection selection) const
     -> optimize_result override {
-    (void)selection;
+    if (selection.fields_of_interest) {
+      selection.do_not_optimize_selection = true;
+    }
     // TODO: This operator can massively benefit from an unordered
     // implementation, where it can keep multiple buffers per schema.
-    return optimize_result{filter, order, copy()};
+    return optimize_result{filter, order, copy(), selection};
   }
 
   auto name() const -> std::string override {

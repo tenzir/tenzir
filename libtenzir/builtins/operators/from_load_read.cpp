@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/pipeline.hpp"
+
 #include <tenzir/detail/loader_saver_resolver.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/plugin.hpp>
@@ -43,8 +45,7 @@ public:
   auto optimize(expression const& filter, event_order order,
                 columnar_selection selection) const
     -> optimize_result override {
-    (void)selection;
-    (void)filter, (void)order;
+    (void)filter, (void)order, void(selection);
     return do_not_optimize(*this);
   }
 
@@ -92,22 +93,22 @@ public:
     //   return do_not_optimize(*this);
     // }
     // TODO: We could also propagate `where #schema == "..."` to the parser.
-    auto parser_opt = selection.fields_of_interest
-                        ? parser_->optimize(filter, order, selection)
-                        : parser_->optimize(order);
+    auto parser_opt
+      = selection.fields_of_interest
+          ? parser_->optimize(filter, order, selection)
+          : parser_->optimize(
+            order); // choose optimization not dependent on selection
 
     if (not parser_opt) {
-      return do_not_optimize(*this);
-    }
-    bool multiple_replacements = false;
-    if (parser_opt) {
-      multiple_replacements = true;
+      // should return blocking one
+      auto unoptimized = do_not_optimize(*this);
+      selection.do_not_optimize_selection = true;
+      unoptimized.selection = selection;
+      return unoptimized;
     }
     return optimize_result{
-      std::nullopt,
-      event_order::ordered,
-      std::make_unique<read_operator>(std::move(parser_opt)),
-    };
+      std::nullopt, event_order::ordered,
+      std::make_unique<read_operator>(std::move(parser_opt)), selection};
   }
 
   friend auto inspect(auto& f, read_operator& x) -> bool {

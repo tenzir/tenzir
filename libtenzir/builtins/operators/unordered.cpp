@@ -32,7 +32,7 @@ public:
     -> optimize_result override {
     (void)selection;
     (void)order;
-    return op_->optimize(filter, event_order::unordered, columnar_selection());
+    return op_->optimize(filter, event_order::unordered, selection);
   }
 
   auto instantiate(operator_input input, operator_control_plane& ctrl) const

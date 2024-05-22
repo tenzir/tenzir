@@ -49,7 +49,7 @@ public:
     -> optimize_result override {
     (void)selection;
     (void)filter;
-    return optimize_result::order_invariant(*this, order);
+    return optimize_result::order_invariant(*this, order, selection);
   }
 
   friend auto inspect(auto& f, unflatten_operator& x) -> bool {

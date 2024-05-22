@@ -65,7 +65,7 @@ public:
     // TODO: We compare the *pruned* schemas above. Hence, returning
     // `event_order::schema` here might be slightly incorrect.
     (void)order;
-    return optimize_result{filter, event_order::schema, copy()};
+    return optimize_result{filter, event_order::schema, copy(), selection};
   }
 
   friend auto inspect(auto&, unique_operator&) -> bool {

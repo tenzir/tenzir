@@ -29,7 +29,7 @@ public:
                 columnar_selection selection) const
     -> optimize_result override {
     (void)selection;
-    return optimize_result{filter, order, nullptr};
+    return optimize_result{filter, order, nullptr, selection};
   }
 
   friend auto inspect(auto& f, pass_operator& x) -> bool {

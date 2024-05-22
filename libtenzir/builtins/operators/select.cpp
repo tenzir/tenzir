@@ -82,32 +82,13 @@ public:
   auto optimize(expression const& filter, event_order order,
                 columnar_selection selection) const
     -> optimize_result override {
+    // are two sets of selection allowed?
+    TENZIR_ASSERT(!selection.fields_of_interest);
     if (config_.fields.empty()) {
-      return optimize_result::order_invariant(*this, order); // tenzir assert
+      return optimize_result::order_invariant(*this, order, selection);
     }
-    if (selection.fields_of_interest) {
-      // TODO: this is an error, there is already a selection in place. THERE
-      // SHOULD ONLY BE ONE SELECTION?
-    }
-    // if start or ends with a . that is an error
-    std::vector<std::vector<std::string>> configured_selection;
-    for (const auto& field : config_.fields) {
-      size_t pos = 0;
-      size_t size = 1;
-      while (pos < field.length()) {
-        auto dot_pos = field.find('.', pos + 1);
-        std::string substring = field.substr(pos, dot_pos);
-        if (configured_selection.size() < size) {
-          configured_selection.emplace_back();
-        }
-        configured_selection[size - 1].push_back(substring);
-        pos += dot_pos;
-        size += 1;
-      }
-    }
-    (void)filter;
     return optimize_result{filter, order, nullptr,
-                           columnar_selection(configured_selection)};
+                           columnar_selection(config_.fields)};
   }
 
   friend auto inspect(auto& f, select_operator& x) -> bool {
