@@ -244,10 +244,9 @@ auto pipeline::optimize(expression const& filter, event_order order,
           = columnar_selection::no_columnar_selection(); // reset back to no
                                                          // selection
       }
-    } else if (!current_selection.do_not_optimize_selection
-               && current_selection
-                    .fields_of_interest) { // do not optimize case, where seen
-                                           // fields of interest
+    } else if (current_selection
+                 .fields_of_interest) { // do not optimize case, where seen
+                                        // fields of interest
       // else, if do_not_optimize is called and no selection, keep prev
       // current_selection
       std::string fields_as_string;
