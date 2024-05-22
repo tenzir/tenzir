@@ -309,7 +309,6 @@ public:
 auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
                    const located<columnar_selection> selection)
   -> generator<table_slice> {
-  (void)selection;
   auto byte_reader = make_byte_reader(std::move(input));
   auto schema_listener = std::make_shared<callback_listener>();
   auto read_options = arrow::ipc::IpcReadOptions::Defaults();
@@ -320,9 +319,7 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
   auto truncated_bytes = size_t{0};
   auto decoded_once = false;
   auto nested = false;
-
   while (true) {
-    // TODO: CHECK FOR TENZIR METADATA?
     auto required_size
       = detail::narrow_cast<size_t>(schema_stream_decoder.next_required_size());
     auto payload = byte_reader(required_size);
@@ -363,34 +360,27 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
     }
   }
   auto indices = std::vector<tenzir::offset>{};
-  if (selection.inner.fields_of_interest) {
-    for (const auto& field : *selection.inner.fields_of_interest) {
-      for (auto index : schema.resolve(field)) {
-        if (index.size() > 1) {
-          nested = true;
-        }
-        read_options.included_fields.push_back(
-          static_cast<int>(index[0])); // add the top level schema field
-        indices.push_back(std::move(index));
+  for (const auto& field : *selection.inner.fields_of_interest) {
+    for (auto index : schema.resolve(field)) {
+      if (index.size() > 1) {
+        nested = true;
       }
-    }
-
-    // remove duplicates
-    std::sort(indices.begin(), indices.end());
-    indices.erase(std::unique(indices.begin(), indices.end()), indices.end());
-
-    std::sort(read_options.included_fields.begin(),
-              read_options.included_fields.end());
-    read_options.included_fields.erase(
-      std::unique(read_options.included_fields.begin(),
-                  read_options.included_fields.end()),
-      read_options.included_fields.end());
-
-    // set it to 0...
-    for (size_t i = 0; i < indices.size(); i++) {
-      indices[i][0] = i;
+      read_options.included_fields.push_back(static_cast<int>(index[0]));
+      indices.push_back(std::move(index));
     }
   }
+  std::sort(indices.begin(), indices.end());
+  indices.erase(std::unique(indices.begin(), indices.end()), indices.end());
+  std::sort(read_options.included_fields.begin(),
+            read_options.included_fields.end());
+  read_options.included_fields.erase(
+    std::unique(read_options.included_fields.begin(),
+                read_options.included_fields.end()),
+    read_options.included_fields.end());
+  for (size_t i = 0; i < indices.size(); i++) {
+    indices[i][0] = i;
+  }
+
   auto listener = std::make_shared<callback_listener>();
   auto stream_decoder = arrow::ipc::StreamDecoder(listener, read_options);
 
@@ -546,7 +536,6 @@ public:
     (void)order;
     return std::make_unique<feather_parser>(
       located(selection, location::unknown));
-    // WHAT IS THE LOCATION?
   }
 
 private:
