@@ -307,7 +307,7 @@ public:
 };
 
 auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
-                   const located<columnar_selection> selection)
+                   const located<std::optional<columnar_selection>> selection)
   -> generator<table_slice> {
   auto byte_reader = make_byte_reader(std::move(input));
   auto schema_listener = std::make_shared<callback_listener>();
@@ -360,25 +360,27 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
     }
   }
   auto indices = std::vector<tenzir::offset>{};
-  for (const auto& field : *selection.inner.fields_of_interest) {
-    for (auto index : schema.resolve(field)) {
-      if (index.size() > 1) {
-        nested = true;
+  if (selection.inner) {
+    for (const auto& field : *selection.inner->fields_of_interest) {
+      for (auto index : schema.resolve(field)) {
+        if (index.size() > 1) {
+          nested = true;
+        }
+        read_options.included_fields.push_back(static_cast<int>(index[0]));
+        indices.push_back(std::move(index));
       }
-      read_options.included_fields.push_back(static_cast<int>(index[0]));
-      indices.push_back(std::move(index));
     }
-  }
-  std::sort(indices.begin(), indices.end());
-  indices.erase(std::unique(indices.begin(), indices.end()), indices.end());
-  std::sort(read_options.included_fields.begin(),
-            read_options.included_fields.end());
-  read_options.included_fields.erase(
-    std::unique(read_options.included_fields.begin(),
-                read_options.included_fields.end()),
-    read_options.included_fields.end());
-  for (size_t i = 0; i < indices.size(); i++) {
-    indices[i][0] = i;
+    std::sort(indices.begin(), indices.end());
+    indices.erase(std::unique(indices.begin(), indices.end()), indices.end());
+    std::sort(read_options.included_fields.begin(),
+              read_options.included_fields.end());
+    read_options.included_fields.erase(
+      std::unique(read_options.included_fields.begin(),
+                  read_options.included_fields.end()),
+      read_options.included_fields.end());
+    for (size_t i = 0; i < indices.size(); i++) {
+      indices[i][0] = i;
+    }
   }
 
   auto listener = std::make_shared<callback_listener>();
@@ -539,7 +541,7 @@ public:
   }
 
 private:
-  located<columnar_selection> selection_{};
+  located<std::optional<columnar_selection>> selection_{};
 };
 
 class feather_printer final : public plugin_printer {
