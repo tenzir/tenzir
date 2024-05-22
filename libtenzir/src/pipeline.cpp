@@ -268,9 +268,6 @@ auto pipeline::optimize(expression const& filter, event_order order,
     current_order = opt.order;
   }
   std::reverse(result.begin(), result.end());
-  for (auto r = result.begin(); r < result.end(); r++) {
-    TENZIR_WARN("op: {}", r->get()->name());
-  }
   return optimize_result{current_filter, current_order,
                          std::make_unique<pipeline>(std::move(result)),
                          current_selection};
