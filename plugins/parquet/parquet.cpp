@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "parquet/chunked_buffer_output_stream.hpp"
+#include "tenzir/columnar_selection.hpp"
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/drain_bytes.hpp>
@@ -23,7 +24,25 @@ namespace tenzir::plugins::parquet {
 
 namespace {
 
-auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
+/// Create a vector containing the values from start up to stop
+template <typename T>
+std::vector<T> Iota(T start, T stop) {
+  if (start > stop) {
+    return {};
+  }
+  std::vector<T> result(static_cast<size_t>(stop - start));
+  std::iota(result.begin(), result.end(), start);
+  return result;
+}
+
+/// Create a vector containing the values from 0 up to length
+template <typename T>
+std::vector<T> Iota(T length) {
+  return Iota(static_cast<T>(0), length);
+}
+
+auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl,
+                   located<columnar_selection> selection)
   -> generator<table_slice> {
   auto parquet_chunk = chunk_ptr{};
   for (auto&& chunk : drain_bytes(std::move(input))) {
@@ -60,15 +79,74 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
       .emit(ctrl.diagnostics());
     co_return;
   }
-  std::shared_ptr<::arrow::RecordBatchReader> rb_reader;
-  auto record_batch_reader_status
-    = out_buffer->GetRecordBatchReader(&rb_reader);
-  if (!record_batch_reader_status.ok()) {
-    diagnostic::error("{}",
-                      record_batch_reader_status.ToStringWithoutContextLines())
-      .note("failed create record batches from input data")
+  std::shared_ptr<::arrow::Schema> schema;
+  auto included_cols = std::vector<int>{};
+  auto included_rows = std::vector<int>{};
+  auto schema_status = out_buffer->GetSchema(&schema);
+  auto tenzir_schema = type::from_arrow(*schema);
+  if (!schema_status.ok()) {
+    diagnostic::error("{}", schema_status.ToStringWithoutContextLines())
+      .note("failed read record batch")
       .emit(ctrl.diagnostics());
     co_return;
+  }
+  auto indices = std::vector<tenzir::offset>{};
+  if (selection.inner.fields_of_interest) {
+    for (const auto& field : *selection.inner.fields_of_interest) {
+      auto flattened_schema = flatten(tenzir_schema);
+      auto schema_as_vector = flattened_schema.to_arrow_schema()->field_names();
+      auto higher_order_fields = std::vector<std::string>{};
+      for (const auto& col : schema_as_vector) {
+        if (col.find(field) != std::string::npos) {
+          higher_order_fields.push_back(col);
+        }
+      }
+      for (const auto& higher_order_field : higher_order_fields) {
+        for (auto index : flattened_schema.resolve(higher_order_field)) {
+          included_cols.push_back(
+            static_cast<int>(index[0])); // add the top level schema field
+          indices.push_back(std::move(index));
+        }
+      }
+    }
+
+    // remove duplicates
+    std::sort(indices.begin(), indices.end());
+    indices.erase(std::unique(indices.begin(), indices.end()), indices.end());
+
+    std::sort(included_cols.begin(), included_cols.end());
+    included_cols.erase(std::unique(included_cols.begin(), included_cols.end()),
+                        included_cols.end());
+
+    for (int i = 0; i < out_buffer->num_row_groups(); i++) {
+      included_rows.push_back(i);
+    }
+    // set it to 0...
+    for (size_t i = 0; i < indices.size(); i++) {
+      indices[i][0] = i;
+    }
+  }
+  std::unique_ptr<::arrow::RecordBatchReader> rb_reader{};
+  if (selection.inner.fields_of_interest) {
+    auto record_batch_reader_status = out_buffer->GetRecordBatchReader(
+      included_rows, included_cols, &rb_reader);
+    if (!record_batch_reader_status.ok()) {
+      diagnostic::error(
+        "{}", record_batch_reader_status.ToStringWithoutContextLines())
+        .note("failed create record batches from input data")
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+  } else {
+    auto record_batch_reader_status
+      = out_buffer->GetRecordBatchReader(&rb_reader);
+    if (!record_batch_reader_status.ok()) {
+      diagnostic::error(
+        "{}", record_batch_reader_status.ToStringWithoutContextLines())
+        .note("failed create record batches from input data")
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
   }
   for (arrow::Result<std::shared_ptr<arrow::RecordBatch>> maybe_batch :
        *rb_reader) {
@@ -97,6 +175,9 @@ public:
 class parquet_parser final : public plugin_parser {
 public:
   parquet_parser() = default;
+  parquet_parser(located<columnar_selection> selection)
+    : selection_{std::move(selection)} {
+  }
 
   auto name() const -> std::string override {
     return "parquet";
@@ -105,12 +186,27 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    return parse_parquet(std::move(input), ctrl);
+    return parse_parquet(std::move(input), ctrl, selection_);
+  }
+  auto optimize(expression const& filter, event_order order,
+                columnar_selection selection)
+    -> std::unique_ptr<plugin_parser> override {
+    (void)filter;
+    (void)order;
+    if (selection.do_not_optimize_selection || !selection.fields_of_interest) {
+      std::make_unique<parquet_parser>();
+    }
+
+    return std::make_unique<parquet_parser>(
+      located(selection, location::unknown));
+    // WHAT IS THE LOCATION?
+  }
+  friend auto inspect(auto& f, parquet_parser& x) -> bool {
+    return f.object(x).fields(f.field("selection", x.selection_));
   }
 
-  friend auto inspect(auto& f, parquet_parser& x) -> bool {
-    return f.object(x).fields();
-  }
+private:
+  located<columnar_selection> selection_{};
 };
 
 class parquet_printer final : public plugin_printer {

@@ -539,6 +539,9 @@ public:
   auto optimize(expression const& filter, event_order order,
                 columnar_selection selection)
     -> std::unique_ptr<plugin_parser> override {
+    if (selection.do_not_optimize_selection || !selection.fields_of_interest) {
+      std::make_unique<feather_parser>();
+    }
     (void)filter;
     (void)order;
     return std::make_unique<feather_parser>(
