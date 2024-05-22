@@ -29,6 +29,7 @@ auto array_select(const table_slice& slice, const arrow::BooleanArray& array,
   auto current_begin = int64_t{0};
   // Add `false` at index `length` to flush.
   for (auto i = int64_t{1}; i < length + 1; ++i) {
+    // TODO: Null?
     auto next = i != length && array.Value(i) == target;
     if (current_value == next) {
       continue;
@@ -105,6 +106,7 @@ public:
         continue;
       }
       auto mask = eval(condition_, slice, ctrl.diagnostics());
+      TENZIR_WARN("mask = {}", mask.array->ToString());
       auto array = caf::get_if<arrow::BooleanArray>(&*mask.array);
       if (not array) {
         diagnostic::warning("condition must be `bool`, not `{}`",
@@ -121,13 +123,15 @@ public:
         ++then_gen.unsafe_current();
         co_yield *then_gen.unsafe_current();
       }
+      else_input = mask_slice(slice, *array, false);
       if (else_gen) {
-        else_input = mask_slice(slice, *array, false);
         while (else_gen->unsafe_current() != else_gen->end()
                && else_input->rows() > 0) {
           ++else_gen->unsafe_current();
           co_yield *else_gen->unsafe_current();
         }
+      } else {
+        co_yield std::move(*else_input);
       }
     }
     then_input.reset();

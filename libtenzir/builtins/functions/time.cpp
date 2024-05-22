@@ -26,11 +26,20 @@ public:
             std::vector<series> args, diagnostic_handler& dh) const
     -> series override {
     TENZIR_ASSERT(args.size() == 1);
-    auto arg = caf::get_if<arrow::StringArray>(&*args[0].array);
-    TENZIR_ASSERT(arg);
     auto b = arrow::TimestampBuilder{
       std::make_shared<arrow::TimestampType>(arrow::TimeUnit::NANO),
       arrow::default_memory_pool()};
+    auto arg = caf::get_if<arrow::StringArray>(&*args[0].array);
+    if (not arg) {
+      // TODO
+      diagnostic::warning("expected string argument, but got `{}`",
+                          args[0].type.kind())
+        .primary(self.args[0].get_location())
+        .emit(dh);
+      b.AppendNulls(length);
+      return series{null_type{}, b.Finish().ValueOrDie()};
+    }
+    TENZIR_ASSERT(arg);
     (void)b.Reserve(arg->length());
     for (auto i = 0; i < arg->length(); ++i) {
       if (arg->IsNull(i)) {

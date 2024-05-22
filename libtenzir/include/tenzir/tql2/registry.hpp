@@ -47,6 +47,30 @@ public:
     return *result;
   }
 
+  auto operator_names() const -> std::vector<std::string_view> {
+    // TODO: This cannot stay this way, but for now we use it in error messages.
+    auto result = std::vector<std::string_view>{};
+    for (auto& [name, def] : defs_) {
+      if (std::holds_alternative<const operator_factory_plugin*>(def)) {
+        result.push_back(name);
+      }
+    }
+    std::ranges::sort(result);
+    return result;
+  }
+
+  auto function_names() const -> std::vector<std::string_view> {
+    // TODO: This cannot stay this way, but for now we use it in error messages.
+    auto result = std::vector<std::string_view>{};
+    for (auto& [name, def] : defs_) {
+      if (std::holds_alternative<const function_plugin*>(def)) {
+        result.push_back(name);
+      }
+    }
+    std::ranges::sort(result);
+    return result;
+  }
+
 private:
   // TODO: Lifetime?
   detail::heterogeneous_string_hashmap<entity_def> defs_;

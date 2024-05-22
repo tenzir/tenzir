@@ -1552,6 +1552,7 @@ public:
     // JSON document.
     parser.add("schema", args.schema);
     parser.add("precise", args.precise);
+    parser.add("raw", args.raw);
     // TODO: Might want to react to parsing failure.
     parser.parse(inv, ctx);
     if (sep) {

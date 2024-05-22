@@ -8,6 +8,7 @@
 
 #include "tenzir/tql2/resolve.hpp"
 
+#include "tenzir/collect.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -55,8 +56,11 @@ public:
       }
     });
     if (not xyz) {
+      auto available = context_ == context_t::op_name ? reg_.operator_names()
+                                                      : reg_.function_names();
       diagnostic::error("{} `{}` not found", expected, name)
         .primary(x.get_location())
+        .hint("must be one of: {}", fmt::join(available, ", "))
         .emit(diag_);
       return;
     }
