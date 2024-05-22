@@ -353,7 +353,6 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
       co_return;
     }
     if (schema_listener->decoded_schema) {
-      truncated_bytes = 0;
       decoded_once = false;
       schema = type::from_arrow(*schema_listener->decoded_schema);
       break;
