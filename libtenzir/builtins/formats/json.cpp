@@ -39,6 +39,11 @@ namespace tenzir::plugins::json {
 
 namespace {
 
+/// This is the maximum size of a single object/event when *not* using the
+/// NDJSON mode. If this becomes problematic in the future, we can use a dynamic
+/// approach instead.
+constexpr auto max_object_size = size_t{10'000'000};
+
 inline auto split_at_crlf(generator<chunk_ptr> input)
   -> generator<std::optional<simdjson::padded_string_view>> {
   auto buffer = std::string{};
@@ -963,10 +968,9 @@ public:
     buffer_.append(
       {reinterpret_cast<const char*>(json_chunk.data()), json_chunk.size()});
     auto view = buffer_.view();
-    auto err = this->parser_
-                 .iterate_many(view.data(), view.length(),
-                               simdjson::ondemand::DEFAULT_BATCH_SIZE)
-                 .get(stream_);
+    auto err
+      = this->parser_.iterate_many(view.data(), view.length(), max_object_size)
+          .get(stream_);
     if (err) {
       // For the simdjson 3.1 it seems impossible to have an error
       // returned here so it is hard to understand if we can recover from
