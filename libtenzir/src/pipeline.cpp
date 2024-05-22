@@ -205,7 +205,6 @@ auto pipeline::optimize(expression const& filter, event_order order,
     TENZIR_ASSERT(*it);
     auto const& op = **it;
     auto opt = op.optimize(current_filter, current_order, current_selection);
-    TENZIR_WARN("Operator: {}", op.name());
     if (opt.filter) {
       current_filter = std::move(*opt.filter);
     } else if (current_filter != trivially_true_expression()) {
@@ -223,7 +222,11 @@ auto pipeline::optimize(expression const& filter, event_order order,
     // order_invarient: should it block optimization? I don't think so, should
     // pass up original
     if (opt.selection) {
-      current_selection = std::move(*opt.selection);
+      if (opt.selection->selection_finished) {
+        current_selection = columnar_selection::no_columnar_selection();
+      } else {
+        current_selection = std::move(*opt.selection);
+      }
       if (opt.selection->do_not_optimize_selection
           && opt.selection->fields_of_interest) { // is blocking
         std::string fields_as_string;
@@ -258,8 +261,7 @@ auto pipeline::optimize(expression const& filter, event_order order,
       auto ops = std::move(*pipe).unwrap();
       TENZIR_ASSERT(ops.size() == 1);
       result.push_back(std::move(ops[0]));
-      current_selection
-        = std::move(columnar_selection::no_columnar_selection) != nullptr;
+      current_selection = columnar_selection::no_columnar_selection();
     }
     if (opt.replacement) {
       result.push_back(std::move(opt.replacement));
@@ -267,6 +269,9 @@ auto pipeline::optimize(expression const& filter, event_order order,
     current_order = opt.order;
   }
   std::reverse(result.begin(), result.end());
+  for (auto r = result.begin(); r < result.end(); r++) {
+    TENZIR_WARN("op: {}", r->get()->name());
+  }
   return optimize_result{current_filter, current_order,
                          std::make_unique<pipeline>(std::move(result)),
                          current_selection};
