@@ -1,0 +1,6 @@
+if [ $1 -eq 1 ]; then
+  # Initial installation
+  systemctl link /opt/tenzir/lib/systemd/system/tenzir-node.service || :
+  systemctl enable tenzir-node.service >/dev/null 2>&1 || :
+  systemctl start tenzir-node.service >/dev/null 2>&1 || :
+fi

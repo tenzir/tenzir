@@ -125,6 +125,15 @@ jobs:
           name: tarball
           path: "./packages/tarball/*.tar.gz"
           if-no-files-found: error
+      - name: Upload RPM Package to Github
+        if: >-
+          runner.os == 'Linux' &&
+          steps.cfg.outputs.upload-to-github == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm
+          path: "./packages/rpm/*.rpm"
+          if-no-files-found: error
       - name: Upload Debian Package to Github
         if: >-
           runner.os == 'Linux' &&
@@ -143,21 +152,39 @@ jobs:
           name: macOS
           path: "./packages/macOS/*.pkg"
           if-no-files-found: error
-      - name: Test Installation
+      - name: Test Installation (Ubuntu)
         if: runner.os == 'Linux'
         run: |
           deb_file="$(basename ./packages/debian/tenzir*.deb)"
-          docker build tenzir/services/systemd/test -t installer-test
-          docker run -d --name installer-test \
+          docker build tenzir/services/systemd/test -t installer-test-ubuntu
+          docker run -d --name installer-test-ubuntu \
                  --privileged \
                  --volume=.:/src/tenzir:ro \
                  --volume="./packages/debian":/tmp/packages:ro \
                  --volume=/sys/fs/cgroup:/sys/fs/cgroup:rw \
                  --cgroupns=host \
-                 installer-test
+                 installer-test-ubuntu
           # TODO: Ideally we would have some way to block until systemd is fully
           # booted, but sleeping a bit works almost every time.
           sleep 5
-          docker exec -e TENZIR_PACKAGE_URL="file:///tmp/packages/${deb_file}" installer-test bash -c \
+          docker exec -e TENZIR_PACKAGE_URL="file:///tmp/packages/${deb_file}" installer-test-ubuntu bash -c \
                  "/src/tenzir/scripts/install.sh"
-          docker exec installer-test halt
+          docker exec installer-test-ubuntu halt
+      - name: Test Installation (Rocky Linux)
+        if: runner.os == 'Linux'
+        run: |
+          rpm_file="$(basename ./packages/rpm/tenzir*.rpm)"
+          docker build tenzir/services/systemd/test -t installer-test-rocky
+          docker run -d --name installer-test-rocky \
+                 --privileged \
+                 --volume=.:/src/tenzir:ro \
+                 --volume="./packages/rpm":/tmp/packages:ro \
+                 --volume=/sys/fs/cgroup:/sys/fs/cgroup:rw \
+                 --cgroupns=host \
+                 eniocarboni/docker-rockylinux-systemd:9
+          # TODO: Ideally we would have some way to block until systemd is fully
+          # booted, but sleeping a bit works almost every time.
+          sleep 5
+          docker exec -e TENZIR_PACKAGE_URL="file:///tmp/packages/${rpm_file}" installer-test-rocky bash -c \
+                 "/src/tenzir/scripts/install.sh"
+          docker exec installer-test-rocky halt
