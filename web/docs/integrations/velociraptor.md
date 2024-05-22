@@ -49,7 +49,7 @@ as a static binary that we refer to as `velociraptor-binary` here.)
 
 After you have created a TLS certificate, you can use the `velociraptor`
 operator to execute a [Velociraptor Query Language
-(VQL)](https://docs.velociraptor.app/docs/vql/) queries:
+(VQL)](https://docs.velociraptor.app/docs/vql/) query:
 
 ```
 velociraptor --query "select * from pslist()"
