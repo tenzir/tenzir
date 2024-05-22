@@ -16,6 +16,8 @@
 #include <caf/detail/stringification_inspector.hpp>
 #include <caf/fwd.hpp>
 
+#include <optional>
+
 namespace tenzir {
 
 class local_control_plane final : public operator_control_plane {
@@ -77,7 +79,13 @@ auto do_not_optimize(const operator_base& op) -> optimize_result {
   // assume `op == head` and `order == unordered`. We would have to show that
   // `head | where filter | sink <=> shuffle | head | where filter | sink`, but
   // this is clearly not the case.
-  return optimize_result{std::nullopt, event_order::ordered, op.copy()};
+  return optimize_result{std::nullopt, event_order::ordered, op.copy(),
+                         std::nullopt};
+}
+
+auto block_optimization(const operator_base& op) {
+  return optimize_result{std::nullopt, event_order::ordered, op.copy(),
+                         columnar_selection::no_columnar_selection()};
 }
 
 pipeline::pipeline(std::vector<operator_ptr> operators) {
@@ -177,7 +185,8 @@ auto pipeline::optimize_into_filter() const -> std::pair<expression, pipeline> {
 
 auto pipeline::optimize_into_filter(const expression& filter) const
   -> std::pair<expression, pipeline> {
-  auto opt = optimize(filter, event_order::ordered, columnar_selection());
+  auto opt = optimize(filter, event_order::ordered,
+                      columnar_selection::no_columnar_selection());
   auto* pipe = dynamic_cast<pipeline*>(opt.replacement.get());
   // We know that `pipeline::optimize` yields a pipeline and a filter.
   TENZIR_ASSERT(pipe);
@@ -195,8 +204,8 @@ auto pipeline::optimize(expression const& filter, event_order order,
   for (auto it = operators_.rbegin(); it != operators_.rend(); ++it) {
     TENZIR_ASSERT(*it);
     auto const& op = **it;
-    TENZIR_WARN("OPERATOR: {}", op.name());
     auto opt = op.optimize(current_filter, current_order, current_selection);
+    TENZIR_WARN("Operator: {}", op.name());
     if (opt.filter) {
       current_filter = std::move(*opt.filter);
     } else if (current_filter != trivially_true_expression()) {
@@ -209,8 +218,48 @@ auto pipeline::optimize(expression const& filter, event_order order,
       result.push_back(std::move(ops[0]));
       current_filter = trivially_true_expression();
     }
+    // do_not_optimize is the blocker
+    // should we have a seperate block optimization
+    // order_invarient: should it block optimization? I don't think so, should
+    // pass up original
     if (opt.selection) {
       current_selection = std::move(*opt.selection);
+      if (opt.selection->do_not_optimize_selection
+          && opt.selection->fields_of_interest) { // is blocking
+        std::string fields_as_string;
+        for (auto&& field : *current_selection.fields_of_interest) {
+          fields_as_string += field + ", ";
+        }
+        fields_as_string.erase(fields_as_string.end() - 2);
+        auto pipe
+          = tql::parse_internal(fmt::format("select {}", fields_as_string));
+        TENZIR_ASSERT(pipe);
+        auto ops = std::move(*pipe).unwrap();
+        TENZIR_ASSERT(ops.size() == 1);
+        result.push_back(std::move(ops[0]));
+        current_selection
+          = columnar_selection::no_columnar_selection(); // reset back to no
+                                                         // selection
+      }
+    } else if (!current_selection.do_not_optimize_selection
+               && current_selection
+                    .fields_of_interest) { // do not optimize case, where seen
+                                           // fields of interest
+      // else, if do_not_optimize is called and no selection, keep prev
+      // current_selection
+      std::string fields_as_string;
+      for (auto&& field : *current_selection.fields_of_interest) {
+        fields_as_string += field + ", ";
+      }
+      fields_as_string.erase(fields_as_string.end() - 2);
+      auto pipe
+        = tql::parse_internal(fmt::format("select {}", fields_as_string));
+      TENZIR_ASSERT(pipe);
+      auto ops = std::move(*pipe).unwrap();
+      TENZIR_ASSERT(ops.size() == 1);
+      result.push_back(std::move(ops[0]));
+      current_selection
+        = std::move(columnar_selection::no_columnar_selection) != nullptr;
     }
     if (opt.replacement) {
       result.push_back(std::move(opt.replacement));
@@ -219,7 +268,8 @@ auto pipeline::optimize(expression const& filter, event_order order,
   }
   std::reverse(result.begin(), result.end());
   return optimize_result{current_filter, current_order,
-                         std::make_unique<pipeline>(std::move(result))};
+                         std::make_unique<pipeline>(std::move(result)),
+                         current_selection};
 }
 
 auto pipeline::copy() const -> operator_ptr {
