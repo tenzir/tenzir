@@ -21,6 +21,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <optional>
 #include <utility>
 
 namespace tenzir::plugins::select {
@@ -98,7 +99,7 @@ public:
                             std::back_inserter(intersection) // Output iterator
       );
       if (intersection.empty()) {
-        intersection.emplace_back("");
+        return optimize_result{filter, order, copy(), std::nullopt};
       }
       return optimize_result{filter, order, nullptr,
                              select_optimization(intersection)};
