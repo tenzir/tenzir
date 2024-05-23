@@ -422,11 +422,10 @@ struct optimize_result {
 
   /// Always valid if the transformation performed by the operator does not
   /// change based on the order in which the input events arrive in.
-  static auto order_invariant(const operator_base& op, event_order order,
-                              select_optimization const& selection)
+  static auto order_invariant(const operator_base& op, event_order order)
     -> optimize_result {
     return optimize_result{std::nullopt, order, op.copy(),
-                           selection}; // this can go back to null opt
+                           std::nullopt}; // this can go back to null opt
   }
 };
 
