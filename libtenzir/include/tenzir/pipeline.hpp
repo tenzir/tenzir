@@ -322,6 +322,40 @@ public:
   /// resolves to `sink <=> interleave | pass | sink`, which follows from what
   /// we may assume about `sink`.
 
+  /// # Projection Pushdown
+  ///
+  /// The selection is a projection pushdown that is represented as a vector of
+  /// columns to select. This vector can be moved around a pipeline similarly to
+  /// an expression. The implementation must ensure that the selected columns
+  /// are preserved in the correct order throughout the pipeline processing
+  /// stages. For an otherwise unknown pipeline `sink`, the following
+  /// equivalences must hold:
+  ///
+  /// ~~~
+  /// this | select columns | sink
+  /// <=> select columns | this | sink
+  /// ~~~
+  ///
+  /// If the operator modifies the schema of the events, the selection must be
+  /// adjusted accordingly to ensure that the specified columns are correctly
+  /// mapped and preserved in the resulting schema. The implementation must
+  /// handle such operators by blocking the upward movement of the select
+  /// operator.
+  ///
+  /// # Example
+  ///
+  /// For an operator that filters and then selects columns, the optimized
+  /// output must ensure that the filter is applied before the selection to
+  /// maintain the correct semantics:
+  ///
+  /// ~~~
+  /// where expr | select columns | sink
+  /// != select columns | where expr | OPT | sink
+  /// ~~~
+  ///
+  /// This ensures that filtering and selection are treated as distinct
+  /// operations, and the correct behavior is preserved in the optimized
+  /// pipeline.
   virtual auto optimize(expression const& filter, event_order order,
                         select_optimization const& selection) const
     -> optimize_result
