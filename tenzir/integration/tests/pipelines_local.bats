@@ -244,6 +244,7 @@ setup() {
   check tenzir "from ${INPUTSDIR}/zeek/merge.log read zeek-tsv | select uid | sort uid desc | write json"
   check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head | select service | sort service | write json"
   check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head | select service | sort service nulls-first | write json"
+  check tenzir "from ${INPUTSDIR}/pcap/zeek/conn.log.gz read zeek-tsv | select id | sort id.orig_h, id.orig_p, id.resp_h, id.resp_p | head 100 | write lines"
 }
 
 # bats test_tags=pipelines
