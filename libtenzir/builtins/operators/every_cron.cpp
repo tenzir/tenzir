@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/columnar_selection.hpp"
+#include "tenzir/select_optimization.hpp"
 
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -70,7 +70,7 @@ public:
   }
 
   auto optimize(expression const& filter, event_order order,
-                columnar_selection selection) const
+                select_optimization const& selection) const
     -> optimize_result override {
     auto result = op_->optimize(filter, order, selection);
     if (not result.replacement) {

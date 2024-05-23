@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include "tenzir/columnar_selection.hpp"
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/operator_control_plane.hpp"
+#include "tenzir/select_optimization.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tag.hpp"
 
@@ -252,7 +252,7 @@ public:
   /// derived from `inspect()` and requires that it does not fail.
   virtual auto copy() const -> operator_ptr;
 
-  /// Optimizes the operator for a given filter and event order.
+  /// Optimizes the operator for a given filter, event order, and selection.
   ///
   /// It is always valid to return `do_not_optimize(*this)`, but this would act
   /// as an optimization barrier. In the following, we provide a semi-formal
@@ -322,7 +322,8 @@ public:
   /// resolves to `sink <=> interleave | pass | sink`, which follows from what
   /// we may assume about `sink`.
   virtual auto optimize(expression const& filter, event_order order,
-                        columnar_selection selection) const -> optimize_result
+                        select_optimization const& selection) const
+    -> optimize_result
     = 0;
 
   /// Returns the location of the operator.
@@ -408,11 +409,11 @@ struct optimize_result {
   std::optional<expression> filter;
   event_order order;
   operator_ptr replacement;
-  std::optional<columnar_selection> selection;
+  std::optional<select_optimization> selection;
 
   optimize_result(std::optional<expression> filter, event_order order,
                   operator_ptr replacement,
-                  std::optional<columnar_selection> selection)
+                  std::optional<select_optimization> selection)
     : filter{std::move(filter)},
       order{order},
       replacement{std::move(replacement)},
@@ -422,7 +423,8 @@ struct optimize_result {
   /// Always valid if the transformation performed by the operator does not
   /// change based on the order in which the input events arrive in.
   static auto order_invariant(const operator_base& op, event_order order,
-                              columnar_selection selection) -> optimize_result {
+                              select_optimization const& selection)
+    -> optimize_result {
     return optimize_result{std::nullopt, order, op.copy(),
                            selection}; // this can go back to null opt
   }
@@ -483,7 +485,8 @@ public:
     -> std::pair<expression, pipeline>;
 
   auto optimize(expression const& filter, event_order order,
-                columnar_selection fields) const -> optimize_result override;
+                select_optimization const& selection) const
+    -> optimize_result override;
 
   /// Returns whether this is a well-formed `void -> void` pipeline.
   auto is_closed() const -> bool;

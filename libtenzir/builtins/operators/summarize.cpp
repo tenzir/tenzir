@@ -857,7 +857,7 @@ public:
   }
 
   auto optimize(expression const& filter, event_order order,
-                columnar_selection selection) const
+                select_optimization const& selection) const
     -> optimize_result override {
     (void)selection;
     // Note: The `unordered` relies on commutativity of the aggregation functions.

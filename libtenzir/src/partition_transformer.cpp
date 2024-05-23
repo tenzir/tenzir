@@ -120,7 +120,7 @@ public:
   }
 
   auto optimize(expression const& filter, event_order order,
-                columnar_selection selection) const
+                select_optimization const& selection) const
     -> optimize_result override {
     (void)selection;
     (void)filter, (void)order;
@@ -153,7 +153,7 @@ public:
   }
 
   auto optimize(expression const& filter, event_order order,
-                columnar_selection selection) const
+                select_optimization const& selection) const
     -> optimize_result override {
     (void)selection;
     (void)filter, (void)order;

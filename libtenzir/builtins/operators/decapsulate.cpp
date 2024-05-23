@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/select_optimization.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/community_id.hpp>
@@ -384,11 +386,11 @@ public:
   }
 
   auto optimize(expression const& filter, event_order order,
-                columnar_selection selection) const
+                select_optimization const& selection) const
     -> optimize_result override {
-    selection.do_not_optimize_selection = true;
     (void)filter;
-    return optimize_result::order_invariant(*this, order, selection);
+    return optimize_result::order_invariant(
+      *this, order, select_optimization(selection.fields_of_interest, true));
   }
 
   auto name() const -> std::string override {

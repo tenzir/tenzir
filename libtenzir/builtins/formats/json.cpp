@@ -1189,7 +1189,11 @@ public:
     return "json";
   }
 
-  auto optimize(event_order order) -> std::unique_ptr<plugin_parser> override {
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection)
+    -> std::unique_ptr<plugin_parser> override {
+    (void)filter;
+    (void)selection;
     auto args = args_;
     args.preserve_order = order == event_order::ordered;
     return std::make_unique<json_parser>(std::move(args));

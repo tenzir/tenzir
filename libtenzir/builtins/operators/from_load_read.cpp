@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/pipeline.hpp"
+#include "tenzir/select_optimization.hpp"
 
 #include <tenzir/detail/loader_saver_resolver.hpp>
 #include <tenzir/diagnostics.hpp>
@@ -43,7 +44,7 @@ public:
   }
 
   auto optimize(expression const& filter, event_order order,
-                columnar_selection selection) const
+                select_optimization const& selection) const
     -> optimize_result override {
     (void)filter, (void)order, void(selection);
     return do_not_optimize(*this);
@@ -86,24 +87,19 @@ public:
   }
 
   auto optimize(expression const& filter, event_order order,
-                columnar_selection selection) const
+                select_optimization const& selection) const
     -> optimize_result override {
     (void)filter;
-    // if (order == event_order::ordered) {
-    //   return do_not_optimize(*this);
-    // }
-    // TODO: We could also propagate `where #schema == "..."` to the parser.
-    auto parser_opt
-      = selection.fields_of_interest
-          ? parser_->optimize(filter, order, selection)
-          : parser_->optimize(
-            order); // choose optimization not dependent on selection
-
-    if (not parser_opt) {
+    auto parser_opt = parser_->optimize(filter, order, selection);
+    if (!parser_opt) {
       return do_not_optimize(*this);
     }
-    if (selection.fields_of_interest) {
-      selection.selection_finished = true;
+    // We assume every read optimizer will use selection fields
+    if (!selection.fields_of_interest.empty()) {
+      return optimize_result{
+        std::nullopt, event_order::ordered,
+        std::make_unique<read_operator>(std::move(parser_opt)),
+        select_optimization::no_select_optimization()};
     }
     return optimize_result{
       std::nullopt, event_order::ordered,

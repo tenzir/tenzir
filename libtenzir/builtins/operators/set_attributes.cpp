@@ -58,7 +58,7 @@ public:
   }
 
   auto optimize(const expression& filter, event_order order,
-                columnar_selection selection) const
+                select_optimization const& selection) const
     -> optimize_result override {
     (void)filter;
     return optimize_result::order_invariant(*this, order, selection);

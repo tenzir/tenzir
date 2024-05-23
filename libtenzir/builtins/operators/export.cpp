@@ -230,9 +230,8 @@ public:
   }
 
   auto optimize(expression const& filter, event_order order,
-                columnar_selection selection) const
+                select_optimization const& selection) const
     -> optimize_result override {
-    selection.do_not_optimize_selection = true;
     (void)order;
     if (live_) {
       return do_not_optimize(*this);
@@ -248,7 +247,8 @@ public:
                                 : expression{conjunction{std::move(clauses)}};
     return optimize_result{
       trivially_true_expression(), event_order::ordered,
-      std::make_unique<export_operator>(std::move(expr), live_), selection};
+      std::make_unique<export_operator>(std::move(expr), live_),
+      select_optimization(selection.fields_of_interest, true)};
   }
 
   friend auto inspect(auto& f, export_operator& x) -> bool {

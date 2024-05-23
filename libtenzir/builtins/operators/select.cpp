@@ -7,13 +7,13 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_table_slice.hpp>
-#include <tenzir/columnar_selection.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/select_optimization.hpp>
 #include <tenzir/type.hpp>
 
 #include <arrow/type.h>
@@ -80,15 +80,28 @@ public:
   }
 
   auto optimize(expression const& filter, event_order order,
-                columnar_selection selection) const
+                select_optimization const& selection) const
     -> optimize_result override {
-    // are two sets of selection allowed?
-    TENZIR_ASSERT(!selection.fields_of_interest);
-    if (config_.fields.empty()) {
+    if (config_.fields.empty() && selection.fields_of_interest.empty()) {
       return optimize_result::order_invariant(*this, order, selection);
     }
+    if (!selection.fields_of_interest.empty()) {
+      auto config_fields = config_.fields;
+      auto selection_fields = selection.fields_of_interest;
+      std::sort(config_fields.begin(), config_fields.end());
+      std::sort(selection_fields.begin(), selection_fields.end());
+      std::vector<std::string> intersection;
+      std::set_intersection(config_fields.begin(),
+                            config_fields.end(), // First range
+                            selection_fields.begin(),
+                            selection_fields.end(),          // Second range
+                            std::back_inserter(intersection) // Output iterator
+      );
+      return optimize_result{filter, order, nullptr,
+                             select_optimization(intersection, false)};
+    }
     return optimize_result{filter, order, nullptr,
-                           columnar_selection(config_.fields)};
+                           select_optimization(config_.fields, false)};
   }
 
   friend auto inspect(auto& f, select_operator& x) -> bool {

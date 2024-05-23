@@ -7,7 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "parquet/chunked_buffer_output_stream.hpp"
-#include "tenzir/columnar_selection.hpp"
+#include "tenzir/select_optimization.hpp"
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/drain_bytes.hpp>
@@ -24,7 +24,7 @@ namespace tenzir::plugins::parquet {
 
 namespace {
 auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl,
-                   located<std::optional<columnar_selection>> selection)
+                   located<select_optimization> selection)
   -> generator<table_slice> {
   auto parquet_chunk = chunk_ptr{};
   for (auto&& chunk : drain_bytes(std::move(input))) {
@@ -72,8 +72,8 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl,
     co_return;
   }
   auto tenzir_schema = type::from_arrow(*schema);
-  if (selection.inner) {
-    for (const auto& field : *selection.inner->fields_of_interest) {
+  if (!selection.inner.fields_of_interest.empty()) {
+    for (const auto& field : selection.inner.fields_of_interest) {
       auto flattened_schema = flatten(tenzir_schema);
       auto schema_as_vector = flattened_schema.to_arrow_schema()->field_names();
       auto higher_order_fields = std::vector<std::string>{};
@@ -108,7 +108,7 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl,
   // }
   std::unique_ptr<::arrow::RecordBatchReader> rb_reader{};
   auto record_batch_reader_status = arrow::Status{};
-  if (selection.inner) {
+  if (!selection.inner.fields_of_interest.empty()) {
     auto record_batch_reader_status = out_buffer->GetRecordBatchReader(
       included_rows, included_cols, &rb_reader);
   } else {
@@ -149,7 +149,7 @@ public:
 class parquet_parser final : public plugin_parser {
 public:
   parquet_parser() = default;
-  parquet_parser(located<columnar_selection> selection)
+  parquet_parser(located<select_optimization> selection)
     : selection_{std::move(selection)} {
   }
 
@@ -163,12 +163,12 @@ public:
     return parse_parquet(std::move(input), ctrl, selection_);
   }
   auto optimize(expression const& filter, event_order order,
-                columnar_selection selection)
+                select_optimization const& selection)
     -> std::unique_ptr<plugin_parser> override {
     (void)filter;
     (void)order;
-    if (selection.do_not_optimize_selection || !selection.fields_of_interest) {
-      return std::make_unique<parquet_parser>();
+    if (selection.fields_of_interest.empty()) {
+      std::make_unique<parquet_parser>();
     }
     return std::make_unique<parquet_parser>(
       located(selection, location::unknown));
@@ -178,7 +178,7 @@ public:
   }
 
 private:
-  located<std::optional<columnar_selection>> selection_{};
+  located<select_optimization> selection_{};
 };
 
 class parquet_printer final : public plugin_printer {

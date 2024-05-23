@@ -11,7 +11,6 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/actors.hpp"
-#include "tenzir/columnar_selection.hpp"
 #include "tenzir/command.hpp"
 #include "tenzir/config_options.hpp"
 #include "tenzir/data.hpp"
@@ -23,6 +22,7 @@
 #include "tenzir/http_api.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
+#include "tenzir/select_optimization.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/type.hpp"
 
@@ -379,16 +379,11 @@ public:
                              operator_control_plane& ctrl) const
     -> std::vector<series>;
 
-  /// Implement ordering optimization for parsers. See
+  /// Implement ordering and selection optimization for parsers. See
   /// `operator_base::optimize(...)` for details. The default implementation
   /// does not optimize.
-  virtual auto optimize(event_order order) -> std::unique_ptr<plugin_parser> {
-    (void)order;
-    return nullptr;
-  }
-
   virtual auto optimize(expression const& filter, event_order order,
-                        columnar_selection selection)
+                        select_optimization const& selection)
     -> std::unique_ptr<plugin_parser> {
     (void)filter;
     (void)selection;
