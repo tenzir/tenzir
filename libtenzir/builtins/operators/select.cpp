@@ -13,15 +13,12 @@
 #include <tenzir/error.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/select_optimization.hpp>
 #include <tenzir/type.hpp>
 
 #include <arrow/type.h>
 #include <caf/expected.hpp>
 
 #include <algorithm>
-#include <cstddef>
-#include <optional>
 #include <utility>
 
 namespace tenzir::plugins::select {
@@ -92,12 +89,9 @@ public:
       std::sort(config_fields.begin(), config_fields.end());
       std::sort(selection_fields.begin(), selection_fields.end());
       std::vector<std::string> intersection;
-      std::set_intersection(config_fields.begin(),
-                            config_fields.end(), // First range
-                            selection_fields.begin(),
-                            selection_fields.end(),          // Second range
-                            std::back_inserter(intersection) // Output iterator
-      );
+      std::set_intersection(config_fields.begin(), config_fields.end(),
+                            selection_fields.begin(), selection_fields.end(),
+                            std::back_inserter(intersection));
       if (intersection.empty()) {
         return optimize_result{filter, order, copy(), std::nullopt};
       }

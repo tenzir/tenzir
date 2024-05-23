@@ -30,7 +30,6 @@ public:
   auto optimize(const expression& filter, event_order order,
                 select_optimization const& selection) const
     -> optimize_result override {
-    (void)selection;
     (void)order;
     return op_->optimize(filter, event_order::unordered, selection);
   }

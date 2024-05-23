@@ -36,7 +36,6 @@ public:
   auto optimize(expression const& filter, event_order order,
                 select_optimization const& selection) const
     -> optimize_result override {
-    (void)selection;
     auto result = op_->optimize(filter, order, selection);
     if (not result.replacement) {
       return result;

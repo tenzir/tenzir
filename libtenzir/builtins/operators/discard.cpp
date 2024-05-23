@@ -9,6 +9,8 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/plugin.hpp>
 
+#include <optional>
+
 namespace tenzir::plugins::discard {
 
 namespace {
@@ -36,10 +38,9 @@ public:
   auto optimize(expression const& filter, event_order order,
                 select_optimization const& selection) const
     -> optimize_result override {
-    (void)selection;
-    (void)filter, (void)order;
+    (void)filter, (void)order, (void)selection;
     return optimize_result{std::nullopt, event_order::unordered, copy(),
-                           selection};
+                           std::nullopt};
   }
 
   friend auto inspect(auto& f, discard_operator& x) -> bool {

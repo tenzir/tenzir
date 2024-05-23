@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "parquet/chunked_buffer_output_stream.hpp"
-#include "tenzir/select_optimization.hpp"
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/drain_bytes.hpp>
@@ -71,8 +70,7 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl,
       .emit(ctrl.diagnostics());
     co_return;
   }
-  if (!selection.inner.fields_of_interest.empty()
-      && selection.inner.fields_of_interest != std::vector<std::string>{""}) {
+  if (!selection.inner.fields_of_interest.empty()) {
     auto schema = type::from_arrow(*arrow_schema);
     const auto& layout = caf::get<record_type>(schema);
     for (const auto& field : selection.inner.fields_of_interest) {
@@ -102,8 +100,7 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl,
   }
   std::unique_ptr<::arrow::RecordBatchReader> rb_reader{};
   auto record_batch_reader_status = arrow::Status{};
-  if (!selection.inner.fields_of_interest.empty()
-      || selection.inner.fields_of_interest == std::vector<std::string>{""}) {
+  if (!selection.inner.fields_of_interest.empty()) {
     auto record_batch_reader_status = out_buffer->GetRecordBatchReader(
       included_rows, included_cols, &rb_reader);
   } else {
@@ -165,10 +162,6 @@ public:
     (void)order;
     if (selection.fields_of_interest.empty()) {
       std::make_unique<parquet_parser>();
-    }
-    if (selection.fields_of_interest == std::vector<std::string>{""}) {
-      return std::make_unique<parquet_parser>(
-        located(selection, location::unknown));
     }
     return std::make_unique<parquet_parser>(
       located(selection, location::unknown));

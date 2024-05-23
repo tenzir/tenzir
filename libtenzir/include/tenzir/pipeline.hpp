@@ -15,8 +15,6 @@
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tag.hpp"
 
-#include <tenzir/fwd.hpp>
-
 #include <caf/binary_serializer.hpp>
 #include <caf/detail/stringification_inspector.hpp>
 #include <caf/fwd.hpp>
@@ -24,7 +22,6 @@
 #include <fmt/core.h>
 
 #include <memory>
-#include <optional>
 #include <type_traits>
 #include <variant>
 
@@ -459,8 +456,7 @@ struct optimize_result {
   /// change based on the order in which the input events arrive in.
   static auto order_invariant(const operator_base& op, event_order order)
     -> optimize_result {
-    return optimize_result{std::nullopt, order, op.copy(),
-                           std::nullopt}; // this can go back to null opt
+    return optimize_result{std::nullopt, order, op.copy(), std::nullopt};
   }
 };
 

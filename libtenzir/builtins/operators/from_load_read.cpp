@@ -6,9 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/pipeline.hpp"
-#include "tenzir/select_optimization.hpp"
-
 #include <tenzir/detail/loader_saver_resolver.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/plugin.hpp>
@@ -94,7 +91,6 @@ public:
     if (!parser_opt) {
       return do_not_optimize(*this);
     }
-    // We assume every read optimizer will use selection fields
     if (parser_opt->selection_optimized) {
       return optimize_result{
         std::nullopt, event_order::ordered,

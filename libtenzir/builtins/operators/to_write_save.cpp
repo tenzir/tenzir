@@ -148,8 +148,7 @@ public:
   auto optimize(expression const& filter, event_order order,
                 select_optimization const& selection) const
     -> optimize_result override {
-    (void)selection;
-    (void)filter, (void)order;
+    (void)selection, (void)filter, (void)order;
 
     return do_not_optimize(*this);
   }
@@ -244,8 +243,7 @@ public:
   auto optimize(expression const& filter, event_order order,
                 select_optimization const& selection) const
     -> optimize_result override {
-    (void)selection;
-    (void)filter, (void)order;
+    (void)selection, (void)filter, (void)order;
     return do_not_optimize(*this);
   }
 

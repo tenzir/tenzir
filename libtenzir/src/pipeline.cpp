@@ -10,13 +10,10 @@
 
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/plugin.hpp"
-#include "tenzir/select_optimization.hpp"
 #include "tenzir/tql/parser.hpp"
 
 #include <caf/detail/stringification_inspector.hpp>
 #include <caf/fwd.hpp>
-
-#include <optional>
 
 namespace tenzir {
 

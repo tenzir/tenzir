@@ -17,9 +17,7 @@
 #include <tenzir/fwd.hpp>
 #include <tenzir/generator.hpp>
 #include <tenzir/make_byte_reader.hpp>
-#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/select_optimization.hpp>
 #include <tenzir/store.hpp>
 #include <tenzir/table_slice.hpp>
 
@@ -33,8 +31,6 @@
 #include <arrow/util/key_value_metadata.h>
 #include <caf/expected.hpp>
 
-#include <cstddef>
-#include <memory>
 #include <queue>
 #include <vector>
 
