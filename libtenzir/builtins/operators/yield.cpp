@@ -191,7 +191,7 @@ public:
     -> optimize_result override {
     (void)selection;
     (void)filter;
-    return optimize_result::order_invariant(*this, order, selection);
+    return optimize_result::order_invariant(*this, order);
   }
   friend auto inspect(auto& f, yield_operator& x) -> bool {
     return f.apply(x.path);

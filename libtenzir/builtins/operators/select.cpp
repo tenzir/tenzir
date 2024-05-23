@@ -83,7 +83,7 @@ public:
                 select_optimization const& selection) const
     -> optimize_result override {
     if (config_.fields.empty() && selection.fields_of_interest.empty()) {
-      return optimize_result::order_invariant(*this, order, selection);
+      return optimize_result::order_invariant(*this, order);
     }
     if (!selection.fields_of_interest.empty()) {
       auto config_fields = config_.fields;

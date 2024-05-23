@@ -389,8 +389,7 @@ public:
                 select_optimization const& selection) const
     -> optimize_result override {
     (void)filter;
-    return optimize_result::order_invariant(
-      *this, order, select_optimization(selection.fields_of_interest, true));
+    return optimize_result::order_invariant(*this, order);
   }
 
   auto name() const -> std::string override {

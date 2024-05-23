@@ -199,7 +199,7 @@ public:
                 select_optimization const& selection) const
     -> optimize_result override {
     (void)filter;
-    return optimize_result::order_invariant(*this, order, selection);
+    return optimize_result::order_invariant(*this, order);
   }
 
   friend auto inspect(auto& f, chart_operator& x) -> bool {
