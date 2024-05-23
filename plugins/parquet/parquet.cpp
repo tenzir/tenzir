@@ -151,6 +151,7 @@ public:
   parquet_parser() = default;
   parquet_parser(located<select_optimization> selection)
     : selection_{std::move(selection)} {
+    selection_optimized = true;
   }
 
   auto name() const -> std::string override {

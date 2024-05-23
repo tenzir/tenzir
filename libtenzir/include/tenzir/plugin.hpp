@@ -390,6 +390,9 @@ public:
     (void)order;
     return nullptr;
   }
+  bool selection_optimized = false;
+  bool expression_optimized = false;
+  bool order_optimized = false;
 };
 
 /// @see operator_parser_plugin

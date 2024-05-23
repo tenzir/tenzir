@@ -512,6 +512,7 @@ public:
   feather_parser() = default;
   feather_parser(located<select_optimization> selection)
     : selection_{std::move(selection)} {
+    selection_optimized = true;
   }
   auto name() const -> std::string override {
     return "feather";

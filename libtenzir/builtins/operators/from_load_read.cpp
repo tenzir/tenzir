@@ -95,7 +95,7 @@ public:
       return do_not_optimize(*this);
     }
     // We assume every read optimizer will use selection fields
-    if (!selection.fields_of_interest.empty()) {
+    if (parser_opt->selection_optimized) {
       return optimize_result{
         std::nullopt, event_order::ordered,
         std::make_unique<read_operator>(std::move(parser_opt)),
