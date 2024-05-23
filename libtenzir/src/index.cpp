@@ -804,7 +804,8 @@ void index_state::decommission_active_partition(
         // so we make a copy for the listeners.
         // TODO: We should skip this continuation if we're currently shutting
         // down.
-        self->request(catalog, caf::infinite, atom::merge_v, id, ps)
+        auto apsv = std::vector<partition_synopsis_pair>{{id, ps}};
+        self->request(catalog, caf::infinite, atom::merge_v, std::move(apsv))
           .then(
             [=, this](atom::ok) {
               TENZIR_VERBOSE("{} inserted partition {} {} to the catalog",

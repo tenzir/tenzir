@@ -62,7 +62,7 @@ struct catalog_lookup_result {
   template <class Inspector>
   friend auto inspect(Inspector& f, catalog_lookup_result& x) -> bool {
     return f.object(x)
-      .pretty_name("tenzir.system.catalog_lookup_result")
+      .pretty_name("tenzir.catalog_lookup_result")
       .fields(f.field("kind", x.kind),
               f.field("candidate-infos", x.candidate_infos));
   }
@@ -71,22 +71,18 @@ struct catalog_lookup_result {
 /// The state of the CATALOG actor.
 struct catalog_state {
 public:
-  // -- constructor ------------------------------------------------------------
-
   catalog_state() = default;
-
-  // -- concepts ---------------------------------------------------------------
 
   constexpr static auto name = "catalog";
 
-  // -- utility functions ------------------------------------------------------
-
-  /// Adds new synopses for a partition in bulk. Used when
-  /// re-building the catalog state at startup.
-  void create_from(std::unordered_map<uuid, partition_synopsis_ptr>&&);
+  /// Creates the catalog from a set of partition synopses.
+  auto initialize(
+    std::shared_ptr<std::unordered_map<uuid, partition_synopsis_ptr>> ps)
+    -> caf::result<atom::ok>;
 
   /// Add a new partition synopsis.
-  void merge(const uuid& partition, partition_synopsis_ptr);
+  auto merge(std::vector<partition_synopsis_pair> partitions)
+    -> caf::result<atom::ok>;
 
   /// Erase this partition from the catalog.
   void erase(const uuid& partition);

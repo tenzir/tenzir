@@ -11,7 +11,6 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/defaults.hpp"
-#include "tenzir/detail/fill_status_map.hpp"
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/detail/set_operations.hpp"
 #include "tenzir/detail/tracepoint.hpp"
@@ -51,12 +50,33 @@ auto catalog_lookup_result::empty() const noexcept -> bool {
   return candidate_infos.empty();
 }
 
-void catalog_state::create_from(
-  std::unordered_map<uuid, partition_synopsis_ptr>&& ps) {
-  std::unordered_map<tenzir::type,
-                     std::vector<std::pair<uuid, partition_synopsis_ptr>>>
-    flat_data_map;
-  for (auto&& [uuid, synopsis] : std::move(ps)) {
+auto catalog_state::initialize(
+  std::shared_ptr<std::unordered_map<uuid, partition_synopsis_ptr>> ps)
+  -> caf::result<atom::ok> {
+  auto unsupported_partitions = std::vector<uuid>{};
+  for (const auto& [uuid, synopsis] : *ps) {
+    auto supported = version::support_for_partition_version(synopsis->version);
+    if (supported.end_of_life) {
+      unsupported_partitions.push_back(uuid);
+    }
+  }
+  if (!unsupported_partitions.empty()) {
+    return caf::make_error(
+      ec::version_error,
+      fmt::format("{} cannot load unsupported partitions; please run "
+                  "'tenzir "
+                  "rebuild' with at least {} to rebuild the following "
+                  "partitions, or delete them from the database directory: "
+                  "{}",
+                  *self,
+                  version::support_for_partition_version(
+                    version::current_partition_version)
+                    .introduced,
+                  fmt::join(unsupported_partitions, ", ")));
+  }
+  auto flat_data_map = std::unordered_map<
+    tenzir::type, std::vector<std::pair<uuid, partition_synopsis_ptr>>>{};
+  for (auto& [uuid, synopsis] : *ps) {
     TENZIR_ASSERT(synopsis->get_reference_count() == 1ull);
     update_unprunable_fields(*synopsis);
     flat_data_map[synopsis->schema].emplace_back(uuid, std::move(synopsis));
@@ -71,11 +91,17 @@ void catalog_state::create_from(
       = decltype(synopses_per_type)::value_type::second_type::make_unsafe(
         std::move(flat_data));
   }
+  return atom::ok_v;
 }
 
-void catalog_state::merge(const uuid& partition, partition_synopsis_ptr ps) {
-  update_unprunable_fields(*ps);
-  synopses_per_type[ps->schema][partition] = std::move(ps);
+auto catalog_state::merge(std::vector<partition_synopsis_pair> partitions)
+  -> caf::result<atom::ok> {
+  for (auto& [id, synopsis] : partitions) {
+    update_unprunable_fields(*synopsis);
+    auto& entry = synopses_per_type[synopsis->schema][id];
+    entry = std::move(synopsis);
+  }
+  return atom::ok_v;
 }
 
 void catalog_state::erase(const uuid& partition) {
@@ -419,10 +445,11 @@ auto catalog_state::lookup_impl(const expression& expr,
 
 auto catalog_state::memusage() const -> size_t {
   size_t result = 0;
-  for (const auto& [type, id_synopsis_map] : synopses_per_type)
+  for (const auto& [type, id_synopsis_map] : synopses_per_type) {
     for (const auto& [id, synopsis] : id_synopsis_map) {
       result += synopsis->memusage();
     }
+  }
   return result;
 }
 
@@ -517,45 +544,14 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
     });
   }
   return {
-    [self](atom::merge,
-           std::shared_ptr<std::unordered_map<uuid, partition_synopsis_ptr>>& ps)
-      -> caf::result<atom::ok> {
-      auto unsupported_partitions = std::vector<uuid>{};
-      for (const auto& [uuid, synopsis] : *ps) {
-        auto supported
-          = version::support_for_partition_version(synopsis->version);
-        if (supported.end_of_life)
-          unsupported_partitions.push_back(uuid);
-      }
-      if (!unsupported_partitions.empty()) {
-        return caf::make_error(
-          ec::version_error,
-          fmt::format("{} cannot load unsupported partitions; please run "
-                      "'tenzir "
-                      "rebuild' with at least {} to rebuild the following "
-                      "partitions, or delete them from the database directory: "
-                      "{}",
-                      *self,
-                      version::support_for_partition_version(
-                        version::current_partition_version)
-                        .introduced,
-                      fmt::join(unsupported_partitions, ", ")));
-      }
-      self->state.create_from(std::move(*ps));
-      return atom::ok_v;
-    },
-    [self](atom::merge, uuid partition,
-           partition_synopsis_ptr& synopsis) -> atom::ok {
-      TENZIR_TRACE_SCOPE("{} {}", *self, TENZIR_ARG(partition));
-      self->state.merge(partition, std::move(synopsis));
-      return atom::ok_v;
-    },
     [self](
       atom::merge,
-      std::vector<partition_synopsis_pair>& partition_synopses) -> atom::ok {
-      for (auto& [uuid, partition_synopsis] : partition_synopses)
-        self->state.merge(uuid, partition_synopsis);
-      return atom::ok_v;
+      std::shared_ptr<std::unordered_map<uuid, partition_synopsis_ptr>>& ps) {
+      return self->state.initialize(std::move(ps));
+    },
+    [self](atom::merge,
+           std::vector<partition_synopsis_pair>& partition_synopses) {
+      return self->state.merge(std::move(partition_synopses));
     },
     [self](atom::get) -> std::vector<partition_synopsis_pair> {
       std::vector<partition_synopsis_pair> result;
@@ -573,12 +569,10 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
       return atom::ok_v;
     },
     [self](atom::replace, const std::vector<uuid>& old_uuids,
-           std::vector<partition_synopsis_pair>& new_synopses) -> atom::ok {
+           std::vector<partition_synopsis_pair>& new_synopses) {
       for (auto const& uuid : old_uuids)
         self->state.erase(uuid);
-      for (auto& [uuid, partition_synopsis] : new_synopses)
-        self->state.merge(uuid, std::move(partition_synopsis));
-      return atom::ok_v;
+      return self->state.merge(std::move(new_synopses));
     },
     [self](atom::candidates, const tenzir::query_context& query_context)
       -> caf::result<catalog_lookup_result> {
@@ -623,82 +617,8 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
         tenzir::ec::lookup_error,
         fmt::format("unable to find partition with uuid: {}", uuid));
     },
-    [self](atom::status, status_verbosity v, duration) {
-      record result;
-      result["memory-usage"] = uint64_t{self->state.memusage()};
-      auto num_events = uint64_t{};
-      auto num_partitions = uint64_t{};
-      struct schema_stats_entry {
-        uint64_t num_events = {};
-        uint64_t num_partitions = {};
-        time min_import_time = time::max();
-        time max_import_time = time::min();
-      };
-      auto schema_stats
-        = std::unordered_map<std::string_view, schema_stats_entry>{};
-      for (const auto& [schema, synopses] : self->state.synopses_per_type) {
-        num_partitions += synopses.size();
-        auto& schema_stats_entry = schema_stats[schema.name()];
-        schema_stats_entry.num_partitions += synopses.size();
-        for (const auto& [_, synopsis] : synopses) {
-          num_events += synopsis->events;
-          schema_stats_entry.num_events += synopsis->events;
-          schema_stats_entry.min_import_time = std::min(
-            schema_stats_entry.min_import_time, synopsis->min_import_time);
-          schema_stats_entry.max_import_time = std::max(
-            schema_stats_entry.max_import_time, synopsis->max_import_time);
-        }
-      }
-      auto schemas = record{};
-      schemas.reserve(schema_stats.size());
-      for (const auto& [name, stats] : schema_stats) {
-        auto entry = record{
-          {"num-events", stats.num_events},
-          {"num-partitions", stats.num_partitions},
-          {"import-time",
-           record{
-             {"min", stats.min_import_time},
-             {"max", stats.max_import_time},
-           }},
-        };
-        schemas.emplace(std::string{name}, std::move(entry));
-      }
-      result["num-events"] = num_events;
-      result["num-partitions"] = num_partitions;
-      result["schemas"] = std::move(schemas);
-      if (v >= status_verbosity::detailed) {
-        auto partitions = list{};
-        partitions.reserve(num_partitions);
-        for (const auto& [type, id_synopsis_map] :
-             self->state.synopses_per_type) {
-          for (const auto& [id, synopsis] : id_synopsis_map) {
-            TENZIR_ASSERT(synopsis);
-            auto partition = record{
-              {"id", fmt::to_string(id)},
-              {"schema", synopsis->schema
-                           ? data{std::string{synopsis->schema.name()}}
-                           : data{}},
-              {"num-events", synopsis->events},
-              {"import-time",
-               record{
-                 {"min", synopsis->min_import_time},
-                 {"max", synopsis->max_import_time},
-               }},
-            };
-            if (v >= status_verbosity::debug)
-              partition["version"] = synopsis->version;
-            partitions.emplace_back(std::move(partition));
-          }
-        }
-        result["partitions"] = std::move(partitions);
-      }
-      if (v >= status_verbosity::debug)
-        detail::fill_status_map(result, self);
-      return result;
-    },
-    [self](atom::get, atom::taxonomies) {
-      TENZIR_TRACE_SCOPE("");
-      return self->state.taxonomies;
+    [](atom::status, status_verbosity, duration) {
+      return record{};
     },
   };
 }
