@@ -13,6 +13,7 @@
 #include "tenzir/aliases.hpp"
 #include "tenzir/atoms.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/http_api.hpp"
 
 #include <caf/inspector_access.hpp>
 #include <caf/io/fwd.hpp>

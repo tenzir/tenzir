@@ -13,23 +13,10 @@
 #include "tenzir/accountant.hpp"
 #include "tenzir/accountant_config.hpp"
 #include "tenzir/atoms.hpp"
-#include "tenzir/concept/convertible/to.hpp"
-#include "tenzir/concept/parseable/tenzir/endpoint.hpp"
-#include "tenzir/concept/parseable/to.hpp"
-#include "tenzir/concept/printable/stream.hpp"
-#include "tenzir/concept/printable/tenzir/expression.hpp"
-#include "tenzir/concept/printable/tenzir/json.hpp"
-#include "tenzir/concept/printable/to_string.hpp"
-#include "tenzir/config.hpp"
-#include "tenzir/configuration.hpp"
 #include "tenzir/data.hpp"
-#include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/detail/process.hpp"
-#include "tenzir/detail/settings.hpp"
 #include "tenzir/execution_node.hpp"
 #include "tenzir/logger.hpp"
-#include "tenzir/node.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/posix_filesystem.hpp"
 #include "tenzir/shutdown.hpp"
@@ -38,21 +25,16 @@
 #include "tenzir/spawn_disk_monitor.hpp"
 #include "tenzir/spawn_importer.hpp"
 #include "tenzir/spawn_index.hpp"
-#include "tenzir/spawn_node.hpp"
-#include "tenzir/status.hpp"
-#include "tenzir/table_slice.hpp"
-#include "tenzir/taxonomies.hpp"
 #include "tenzir/terminate.hpp"
 #include "tenzir/version.hpp"
 
+#include <caf/actor_system_config.hpp>
 #include <caf/function_view.hpp>
 #include <caf/io/middleman.hpp>
 #include <caf/settings.hpp>
 
 #include <chrono>
-#include <csignal>
-#include <fstream>
-#include <sstream>
+#include <ranges>
 
 namespace tenzir {
 
