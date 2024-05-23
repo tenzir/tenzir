@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/select_optimization.hpp"
-
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/community_id.hpp>
@@ -389,6 +387,7 @@ public:
                 select_optimization const& selection) const
     -> optimize_result override {
     (void)filter;
+    (void)selection;
     return optimize_result::order_invariant(*this, order);
   }
 

@@ -83,11 +83,6 @@ auto do_not_optimize(const operator_base& op) -> optimize_result {
                          std::nullopt};
 }
 
-auto block_optimization(const operator_base& op) {
-  return optimize_result{std::nullopt, event_order::ordered, op.copy(),
-                         select_optimization::no_select_optimization()};
-}
-
 pipeline::pipeline(std::vector<operator_ptr> operators) {
   operators_.reserve(operators.size());
   for (auto&& op : operators) {

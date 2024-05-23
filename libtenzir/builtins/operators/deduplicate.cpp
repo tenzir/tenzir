@@ -189,7 +189,10 @@ public:
                 select_optimization const& selection) const
     -> optimize_result override {
     (void)order;
-    return optimize_result{filter, event_order::schema, copy(), selection};
+    // TODO: selection optimization is possible
+    return optimize_result{filter, event_order::schema, copy(),
+                           select_optimization(selection.fields_of_interest,
+                                               true)};
   }
 
   friend auto inspect(auto& f, deduplicate_operator& x) -> bool {

@@ -28,7 +28,6 @@ public:
   auto optimize(expression const& filter, event_order order,
                 select_optimization const& selection) const
     -> optimize_result override {
-    (void)selection;
     return optimize_result{filter, order, nullptr, selection};
   }
 

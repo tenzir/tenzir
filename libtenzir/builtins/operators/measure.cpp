@@ -125,8 +125,7 @@ public:
     (void)selection;
     // Note: This can change the output of `measure`.
     (void)filter;
-    return optimize_result::order_invariant(
-      *this, order, select_optimization(selection.fields_of_interest, true));
+    return optimize_result::order_invariant(*this, order);
   }
 
   friend auto inspect(auto& f, measure_operator& x) -> bool {

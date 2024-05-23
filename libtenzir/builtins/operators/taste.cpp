@@ -52,7 +52,8 @@ public:
     // `limit_` events.
     (void)filter, (void)order;
     return optimize_result{std::nullopt, event_order::unordered, copy(),
-                           selection};
+                           select_optimization(selection.fields_of_interest,
+                                               true)};
   }
 
   friend auto inspect(auto& f, taste_operator& x) -> bool {

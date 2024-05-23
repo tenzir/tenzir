@@ -353,10 +353,10 @@ public:
   auto optimize(expression const& filter, event_order order,
                 select_optimization const& selection) const
     -> optimize_result override {
-    (void)selection;
     (void)filter, (void)order;
     return optimize_result{std::nullopt, event_order::schema, copy(),
-                           selection};
+                           select_optimization(selection.fields_of_interest,
+                                               true)};
   }
 
   friend auto inspect(auto& f, write_and_save_operator& x) -> bool {

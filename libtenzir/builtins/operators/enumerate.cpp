@@ -105,10 +105,10 @@ public:
                 select_optimization const& selection) const
     -> optimize_result override {
     (void)order;
-    (void)selection;
     (void)filter;
     return optimize_result{std::nullopt, event_order::ordered, copy(),
-                           selection};
+                           select_optimization(selection.fields_of_interest,
+                                               true)};
   }
 
 private:

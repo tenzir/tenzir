@@ -435,7 +435,8 @@ public:
     // Note: The `unordered` means that we do not necessarily return the first
     // `limit_` events.
     return optimize_result{std::nullopt, event_order::unordered, copy(),
-                           selection};
+                           select_optimization(selection.fields_of_interest,
+                                               true)};
   }
 
   friend auto inspect(auto& f, python_operator& x) -> bool {

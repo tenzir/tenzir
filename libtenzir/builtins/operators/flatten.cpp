@@ -58,7 +58,7 @@ public:
     -> optimize_result override {
     (void)selection;
     (void)filter;
-    return optimize_result::order_invariant(*this, order, selection);
+    return optimize_result::order_invariant(*this, order);
   }
 
   friend auto inspect(auto& f, flatten_operator& x) -> bool {
