@@ -10,7 +10,6 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/chunk.hpp>
 #include <tenzir/collect.hpp>
-#include <tenzir/columnar_selection.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/narrow.hpp>
@@ -20,6 +19,7 @@
 #include <tenzir/make_byte_reader.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/select_optimization.hpp>
 #include <tenzir/store.hpp>
 #include <tenzir/table_slice.hpp>
 
@@ -307,7 +307,7 @@ public:
 };
 
 auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
-                   const located<std::optional<columnar_selection>> selection)
+                   const located<select_optimization> selection)
   -> generator<table_slice> {
   auto byte_reader = make_byte_reader(std::move(input));
   auto schema_listener = std::make_shared<callback_listener>();
@@ -359,8 +359,8 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
     }
   }
   auto indices = std::vector<tenzir::offset>{};
-  if (selection.inner) {
-    for (const auto& field : *selection.inner->fields_of_interest) {
+  if (selection.inner.fields_of_interest.empty()) {
+    for (const auto& field : selection.inner.fields_of_interest) {
       for (auto index : schema.resolve(field)) {
         if (index.size() > 1) {
           nested = true;
@@ -510,7 +510,7 @@ public:
 class feather_parser final : public plugin_parser {
 public:
   feather_parser() = default;
-  feather_parser(located<columnar_selection> selection)
+  feather_parser(located<select_optimization> selection)
     : selection_{std::move(selection)} {
   }
   auto name() const -> std::string override {
@@ -528,19 +528,19 @@ public:
   }
 
   auto optimize(expression const& filter, event_order order,
-                columnar_selection selection)
+                select_optimization const& selection)
     -> std::unique_ptr<plugin_parser> override {
-    if (selection.do_not_optimize_selection || !selection.fields_of_interest) {
-      std::make_unique<feather_parser>();
-    }
     (void)filter;
     (void)order;
+    if (selection.fields_of_interest.empty()) {
+      std::make_unique<feather_parser>();
+    }
     return std::make_unique<feather_parser>(
       located(selection, location::unknown));
   }
 
 private:
-  located<std::optional<columnar_selection>> selection_{};
+  located<select_optimization> selection_{};
 };
 
 class feather_printer final : public plugin_printer {

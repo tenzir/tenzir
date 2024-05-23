@@ -8,9 +8,9 @@
 
 #include "tenzir/pipeline.hpp"
 
-#include "tenzir/columnar_selection.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/select_optimization.hpp"
 #include "tenzir/tql/parser.hpp"
 
 #include <caf/detail/stringification_inspector.hpp>
@@ -85,7 +85,7 @@ auto do_not_optimize(const operator_base& op) -> optimize_result {
 
 auto block_optimization(const operator_base& op) {
   return optimize_result{std::nullopt, event_order::ordered, op.copy(),
-                         columnar_selection::no_columnar_selection()};
+                         select_optimization::no_select_optimization()};
 }
 
 pipeline::pipeline(std::vector<operator_ptr> operators) {
@@ -186,7 +186,7 @@ auto pipeline::optimize_into_filter() const -> std::pair<expression, pipeline> {
 auto pipeline::optimize_into_filter(const expression& filter) const
   -> std::pair<expression, pipeline> {
   auto opt = optimize(filter, event_order::ordered,
-                      columnar_selection::no_columnar_selection());
+                      select_optimization::no_select_optimization());
   auto* pipe = dynamic_cast<pipeline*>(opt.replacement.get());
   // We know that `pipeline::optimize` yields a pipeline and a filter.
   TENZIR_ASSERT(pipe);
@@ -195,7 +195,8 @@ auto pipeline::optimize_into_filter(const expression& filter) const
 }
 
 auto pipeline::optimize(expression const& filter, event_order order,
-                        columnar_selection selection) const -> optimize_result {
+                        select_optimization const& selection) const
+  -> optimize_result {
   auto current_filter = filter;
   auto current_order = order;
   auto current_selection = selection;
@@ -217,50 +218,27 @@ auto pipeline::optimize(expression const& filter, event_order order,
       result.push_back(std::move(ops[0]));
       current_filter = trivially_true_expression();
     }
-    // do_not_optimize is the blocker
-    // should we have a seperate block optimization
-    // order_invarient: should it block optimization? I don't think so, should
-    // pass up original
     if (opt.selection) {
-      if (opt.selection->selection_finished) {
-        current_selection = columnar_selection::no_columnar_selection();
-      } else {
-        current_selection = std::move(*opt.selection);
-      }
       if (opt.selection->do_not_optimize_selection
-          && opt.selection->fields_of_interest) { // is blocking
-        std::string fields_as_string;
-        for (auto&& field : *current_selection.fields_of_interest) {
-          fields_as_string += field + ", ";
-        }
-        fields_as_string.erase(fields_as_string.end() - 2);
-        auto pipe
-          = tql::parse_internal(fmt::format("select {}", fields_as_string));
+          && !opt.selection->fields_of_interest.empty()) { // is blocking
+        auto pipe = tql::parse_internal(fmt::format(
+          "select {}", fmt::join(current_selection.fields_of_interest, ", ")));
         TENZIR_ASSERT(pipe);
         auto ops = std::move(*pipe).unwrap();
         TENZIR_ASSERT(ops.size() == 1);
         result.push_back(std::move(ops[0]));
-        current_selection
-          = columnar_selection::no_columnar_selection(); // reset back to no
-                                                         // selection
+        current_selection = select_optimization::no_select_optimization();
+      } else {
+        current_selection = *opt.selection;
       }
-    } else if (current_selection
-                 .fields_of_interest) { // do not optimize case, where seen
-                                        // fields of interest
-      // else, if do_not_optimize is called and no selection, keep prev
-      // current_selection
-      std::string fields_as_string;
-      for (auto&& field : *current_selection.fields_of_interest) {
-        fields_as_string += field + ", ";
-      }
-      fields_as_string.erase(fields_as_string.end() - 2);
-      auto pipe
-        = tql::parse_internal(fmt::format("select {}", fields_as_string));
+    } else if (!current_selection.fields_of_interest.empty()) {
+      auto pipe = tql::parse_internal(fmt::format(
+        "select {}", fmt::join(current_selection.fields_of_interest, ", ")));
       TENZIR_ASSERT(pipe);
       auto ops = std::move(*pipe).unwrap();
       TENZIR_ASSERT(ops.size() == 1);
       result.push_back(std::move(ops[0]));
-      current_selection = columnar_selection::no_columnar_selection();
+      current_selection = select_optimization::no_select_optimization();
     }
     if (opt.replacement) {
       result.push_back(std::move(opt.replacement));
