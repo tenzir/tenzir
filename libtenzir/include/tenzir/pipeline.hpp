@@ -321,6 +321,7 @@ public:
   /// which is implied by `sink <=> OPT | sink`. If `order = schema`, this
   /// resolves to `sink <=> interleave | pass | sink`, which follows from what
   /// we may assume about `sink`.
+
   virtual auto optimize(expression const& filter, event_order order,
                         select_optimization const& selection) const
     -> optimize_result

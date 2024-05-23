@@ -97,11 +97,14 @@ public:
                             selection_fields.end(),          // Second range
                             std::back_inserter(intersection) // Output iterator
       );
+      if (intersection.empty()) {
+        intersection.emplace_back("");
+      }
       return optimize_result{filter, order, nullptr,
-                             select_optimization(intersection, false)};
+                             select_optimization(intersection)};
     }
     return optimize_result{filter, order, nullptr,
-                           select_optimization(config_.fields, false)};
+                           select_optimization(config_.fields)};
   }
 
   friend auto inspect(auto& f, select_operator& x) -> bool {

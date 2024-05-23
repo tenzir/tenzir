@@ -61,41 +61,38 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl,
       .emit(ctrl.diagnostics());
     co_return;
   }
-  std::shared_ptr<::arrow::Schema> schema;
+  std::shared_ptr<::arrow::Schema> arrow_schema;
   auto included_cols = std::vector<int>{};
   auto included_rows = std::vector<int>{};
-  auto schema_status = out_buffer->GetSchema(&schema);
+  auto schema_status = out_buffer->GetSchema(&arrow_schema);
   if (!schema_status.ok()) {
     diagnostic::error("{}", schema_status.ToStringWithoutContextLines())
       .note("failed read record batch")
       .emit(ctrl.diagnostics());
     co_return;
   }
-  auto tenzir_schema = type::from_arrow(*schema);
-  if (!selection.inner.fields_of_interest.empty()) {
+  if (!selection.inner.fields_of_interest.empty()
+      && selection.inner.fields_of_interest != std::vector<std::string>{""}) {
+    auto schema = type::from_arrow(*arrow_schema);
+    const auto& layout = caf::get<record_type>(schema);
     for (const auto& field : selection.inner.fields_of_interest) {
-      auto flattened_schema = flatten(tenzir_schema);
-      auto schema_as_vector = flattened_schema.to_arrow_schema()->field_names();
-      auto higher_order_fields = std::vector<std::string>{};
-      for (auto& col : schema_as_vector) {
-        auto res = std::mismatch(field.begin(), field.end(), col.begin());
-        if (res.first == field.end() && res.second == col.end()) {
-          higher_order_fields.push_back(col);
-        } else if (res.first == field.end() && '.' == *(res.second++)) {
-          higher_order_fields.push_back(col);
+      for (const auto& index : schema.resolve(field)) {
+        auto field_type = layout.field(index).type;
+        const auto* field_record_type = caf::get_if<record_type>(&field_type);
+        if (not field_record_type) {
+          included_cols.push_back(static_cast<int>(layout.flat_index(index)));
+          continue;
         }
-      }
-      for (const auto& higher_order_field : higher_order_fields) {
-        for (auto index : flattened_schema.resolve(higher_order_field)) {
+        for (const auto& leaf : field_record_type->leaves()) {
+          auto nested_index = index;
+          for (auto i : leaf.index) {
+            nested_index.push_back(i);
+          }
           included_cols.push_back(
-            static_cast<int>(index[0])); // add the top level schema field
+            static_cast<int>(layout.flat_index(nested_index)));
         }
       }
     }
-    std::sort(included_cols.begin(), included_cols.end());
-    included_cols.erase(std::unique(included_cols.begin(), included_cols.end()),
-                        included_cols.end());
-
     std::sort(included_cols.begin(), included_cols.end());
     included_cols.erase(std::unique(included_cols.begin(), included_cols.end()),
                         included_cols.end());
@@ -103,12 +100,10 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl,
       included_rows.push_back(i);
     }
   }
-  // for (int i = 0; i < included_cols.size(); i++) {
-  //   included_cols[i] = ;
-  // }
   std::unique_ptr<::arrow::RecordBatchReader> rb_reader{};
   auto record_batch_reader_status = arrow::Status{};
-  if (!selection.inner.fields_of_interest.empty()) {
+  if (!selection.inner.fields_of_interest.empty()
+      || selection.inner.fields_of_interest == std::vector<std::string>{""}) {
     auto record_batch_reader_status = out_buffer->GetRecordBatchReader(
       included_rows, included_cols, &rb_reader);
   } else {
@@ -170,6 +165,10 @@ public:
     (void)order;
     if (selection.fields_of_interest.empty()) {
       std::make_unique<parquet_parser>();
+    }
+    if (selection.fields_of_interest == std::vector<std::string>{""}) {
+      return std::make_unique<parquet_parser>(
+        located(selection, location::unknown));
     }
     return std::make_unique<parquet_parser>(
       located(selection, location::unknown));

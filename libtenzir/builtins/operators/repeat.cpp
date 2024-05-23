@@ -68,9 +68,8 @@ public:
   auto optimize(expression const& filter, event_order order,
                 select_optimization const& selection) const
     -> optimize_result override {
-    return optimize_result{filter, order, copy(),
-                           select_optimization(selection.fields_of_interest,
-                                               true)};
+    (void)selection, (void)filter;
+    return optimize_result{filter, order, copy(), std::nullopt};
   }
 
   friend auto inspect(auto& f, repeat_operator& x) -> bool {

@@ -214,18 +214,7 @@ auto pipeline::optimize(expression const& filter, event_order order,
       current_filter = trivially_true_expression();
     }
     if (opt.selection) {
-      if (opt.selection->do_not_optimize_selection
-          && !opt.selection->fields_of_interest.empty()) { // is blocking
-        auto pipe = tql::parse_internal(fmt::format(
-          "select {}", fmt::join(current_selection.fields_of_interest, ", ")));
-        TENZIR_ASSERT(pipe);
-        auto ops = std::move(*pipe).unwrap();
-        TENZIR_ASSERT(ops.size() == 1);
-        result.push_back(std::move(ops[0]));
-        current_selection = select_optimization::no_select_optimization();
-      } else {
-        current_selection = *opt.selection;
-      }
+      current_selection = *opt.selection;
     } else if (!current_selection.fields_of_interest.empty()) {
       auto pipe = tql::parse_internal(fmt::format(
         "select {}", fmt::join(current_selection.fields_of_interest, ", ")));

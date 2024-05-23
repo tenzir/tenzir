@@ -50,10 +50,9 @@ public:
     -> optimize_result override {
     // Note: The `unordered` means that we do not necessarily return the first
     // `limit_` events.
-    (void)filter, (void)order;
+    (void)filter, (void)order, void(selection);
     return optimize_result{std::nullopt, event_order::unordered, copy(),
-                           select_optimization(selection.fields_of_interest,
-                                               true)};
+                           std::nullopt};
   }
 
   friend auto inspect(auto& f, taste_operator& x) -> bool {

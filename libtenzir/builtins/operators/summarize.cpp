@@ -860,11 +860,10 @@ public:
                 select_optimization const& selection) const
     -> optimize_result override {
     // Note: The `unordered` relies on commutativity of the aggregation functions.
-    (void)filter, (void)order;
+    (void)filter, (void)order, (void)selection;
     // TODO: selection can be optimized
     return optimize_result{std::nullopt, event_order::unordered, copy(),
-                           select_optimization(selection.fields_of_interest,
-                                               true)};
+                           std::nullopt};
   }
 
   friend auto inspect(auto& f, summarize_operator& x) -> bool {

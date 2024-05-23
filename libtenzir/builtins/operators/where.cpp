@@ -29,6 +29,8 @@
 #include <arrow/type.h>
 #include <caf/expected.hpp>
 
+#include <optional>
+
 namespace tenzir::plugins::where {
 
 namespace {
@@ -110,18 +112,13 @@ public:
   auto optimize(expression const& filter, event_order order,
                 select_optimization const& selection) const
     -> optimize_result override {
-    select_optimization modifyable_select = selection;
-    if (!modifyable_select.fields_of_interest.empty()) {
-      modifyable_select
-        = select_optimization(selection.fields_of_interest, true);
-    }
+    (void)selection;
     if (filter == trivially_true_expression()) {
-      return optimize_result{expr_.inner, order, nullptr, modifyable_select};
+      return optimize_result{expr_.inner, order, nullptr, std::nullopt};
     }
     auto combined = normalize_and_validate(conjunction{expr_.inner, filter});
     TENZIR_ASSERT(combined);
-    return optimize_result{std::move(*combined), order, nullptr,
-                           modifyable_select};
+    return optimize_result{std::move(*combined), order, nullptr, std::nullopt};
   }
 
   friend auto inspect(auto& f, where_operator& x) -> bool {

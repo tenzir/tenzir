@@ -106,9 +106,9 @@ public:
     -> optimize_result override {
     (void)order;
     (void)filter;
+    (void)selection;
     return optimize_result{std::nullopt, event_order::ordered, copy(),
-                           select_optimization(selection.fields_of_interest,
-                                               true)};
+                           std::nullopt};
   }
 
 private:

@@ -103,7 +103,7 @@ public:
     }
     return optimize_result{
       std::nullopt, event_order::ordered,
-      std::make_unique<read_operator>(std::move(parser_opt)), selection};
+      std::make_unique<read_operator>(std::move(parser_opt)), std::nullopt};
   }
 
   friend auto inspect(auto& f, read_operator& x) -> bool {

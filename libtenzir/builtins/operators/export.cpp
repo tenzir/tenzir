@@ -233,6 +233,7 @@ public:
                 select_optimization const& selection) const
     -> optimize_result override {
     (void)order;
+    (void)selection;
     if (live_) {
       return do_not_optimize(*this);
     }
@@ -247,8 +248,7 @@ public:
                                 : expression{conjunction{std::move(clauses)}};
     return optimize_result{
       trivially_true_expression(), event_order::ordered,
-      std::make_unique<export_operator>(std::move(expr), live_),
-      select_optimization(selection.fields_of_interest, true)};
+      std::make_unique<export_operator>(std::move(expr), live_), std::nullopt};
   }
 
   friend auto inspect(auto& f, export_operator& x) -> bool {

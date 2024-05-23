@@ -22,22 +22,13 @@ namespace tenzir {
 class select_optimization {
 public:
   std::vector<std::string> fields_of_interest{};
-  bool do_not_optimize_selection = true;
   select_optimization() = default;
-  select_optimization(bool do_not_optimize_selection)
-    : do_not_optimize_selection{do_not_optimize_selection} {
-  }
-  select_optimization(std::vector<std::string> fields_of_interest)
+  explicit select_optimization(std::vector<std::string> fields_of_interest)
     : fields_of_interest{std::move(fields_of_interest)} {
-  }
-  select_optimization(std::vector<std::string> fields_of_interest,
-                      bool do_not_optimize_selection)
-    : fields_of_interest{std::move(fields_of_interest)},
-      do_not_optimize_selection{do_not_optimize_selection} {
   }
 
   static auto no_select_optimization() -> select_optimization {
-    return {std::vector<std::string>{}, true};
+    return select_optimization(std::vector<std::string>{});
   }
 };
 

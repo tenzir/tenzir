@@ -318,7 +318,7 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
   auto buffered_schema_data = std::vector<std::shared_ptr<arrow::Buffer>>{};
   auto truncated_bytes = size_t{0};
   auto decoded_once = false;
-  auto nested = false;
+  auto further_selection_needed = false;
   while (true) {
     auto required_size
       = detail::narrow_cast<size_t>(schema_stream_decoder.next_required_size());
@@ -359,11 +359,11 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
     }
   }
   auto indices = std::vector<tenzir::offset>{};
-  if (selection.inner.fields_of_interest.empty()) {
+  if (!selection.inner.fields_of_interest.empty()) {
     for (const auto& field : selection.inner.fields_of_interest) {
       for (auto index : schema.resolve(field)) {
         if (index.size() > 1) {
-          nested = true;
+          further_selection_needed = true;
         }
         read_options.included_fields.push_back(static_cast<int>(index[0]));
         indices.push_back(std::move(index));
@@ -381,10 +381,8 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
       indices[i][0] = i;
     }
   }
-
   auto listener = std::make_shared<callback_listener>();
   auto stream_decoder = arrow::ipc::StreamDecoder(listener, read_options);
-
   for (auto&& buffer : buffered_schema_data) {
     auto decode_result = stream_decoder.Consume(buffer);
     if (!decode_result.ok()) {
@@ -448,7 +446,7 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
           .emit(ctrl.diagnostics());
         co_return;
       }
-      if (nested) {
+      if (further_selection_needed) {
         co_yield select_columns(table_slice(batch), indices);
       } else {
         co_yield table_slice(batch);
