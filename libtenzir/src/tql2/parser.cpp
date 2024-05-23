@@ -12,6 +12,7 @@
 #include "tenzir/concept/parseable/tenzir/time.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/expression.hpp"
+#include "tenzir/tql2/ast.hpp"
 
 #include <arrow/util/utf8.h>
 
@@ -193,7 +194,8 @@ private:
   }
 
   auto parse_invocation_or_assignment() -> statement {
-    auto left = parse_selector();
+    // TODO: Proper entity parsing.
+    auto left = to_selector(parse_unary_expression());
     if (auto equal = accept(tk::equal)) {
       auto right = parse_expression();
       return assignment{
@@ -202,12 +204,15 @@ private:
         std::move(right),
       };
     }
-    // TODO: Proper entity parsing.
-    if (not left.this_ and left.path.size() == 1) {
-      return parse_invocation(entity{std::move(left.path)});
+    // TODO: Improve this.
+    auto simple_sel = std::get_if<simple_selector>(&left);
+    auto root = simple_sel
+                  ? std::get_if<ast::root_field>(&*simple_sel->inner().kind)
+                  : nullptr;
+    if (root) {
+      return parse_invocation(entity{{std::move(root->ident)}});
     }
-    diagnostic::error("{}", left.this_ ? "expected `=`"
-                                       : "expected operator argument or `=`")
+    diagnostic::error("{}", "expected `=` after selector")
       .primary(next_location())
       .throw_();
   }
@@ -247,22 +252,78 @@ private:
     };
   }
 
+  auto to_selector(ast::expression expr) -> selector {
+    auto location = expr.get_location();
+    auto result = selector::try_from(std::move(expr));
+    if (not result) {
+      // TODO: Improve error message, see below.
+      diagnostic::error("expected selector").primary(location).throw_();
+    }
+    return std::move(*result);
+    // return x.match(
+    //   [](this_& x) {
+    //     return selector{data_selector{x.source, {}}};
+    //   },
+    //   [](meta& x) {
+    //     return selector{x};
+    //   },
+    //   [&](field_access& x) {
+    //     auto sel = to_selector(x.left);
+    //     sel.match(
+    //       [&](meta&) {
+    //         diagnostic::error("cannot access field of meta")
+    //           .primary(x.dot.combine(x.name.location))
+    //           .throw_();
+    //       },
+    //       [&](data_selector& sel) {
+    //         sel.segments.push_back(x.name);
+    //       });
+    //     return sel;
+    //   },
+    //   [&](index_expr& x) {
+    //     auto lit = std::get_if<literal>(&*x.index.kind);
+    //     auto name = lit ? std::get_if<std::string>(&lit->value) : nullptr;
+    //     if (not name) {
+    //       diagnostic::error("selector only allow string literals at the
+    //       moment")
+    //         .primary(x.index.get_location())
+    //         .throw_();
+    //     }
+    //     auto sel = to_selector(x.expr);
+    //     sel.match(
+    //       [&](meta&) {
+    //         diagnostic::error("cannot index meta")
+    //           .primary(x.lbracket.combine(x.rbracket))
+    //           .throw_();
+    //       },
+    //       [&](data_selector& sel) {
+    //         sel.segments.emplace_back(*name, x.index.get_location());
+    //       });
+    //     return sel;
+    //   },
+    //   [](auto& x) -> selector {
+    //     diagnostic::error("expected selector, found TODO")
+    //       .primary(x.get_location())
+    //       .throw_();
+    //   });
+  }
+
   auto parse_expression(int min_prec = 0) -> ast::expression {
     auto expr = parse_unary_expression();
     while (true) {
       if (min_prec == 0) {
         if (auto equal = accept(tk::equal)) {
-          auto left = std::get_if<selector>(expr.kind.get());
-          if (not left) {
-            diagnostic::error("left of `=` must be selector")
-              .primary(expr.get_location())
-              .hint("equality comparison is done with `==`")
-              .throw_();
-          }
+          auto left = to_selector(expr);
+          // if (not left) {
+          //   diagnostic::error("left of `=` must be selector")
+          //     .primary(expr.get_location())
+          //     .hint("equality comparison is done with `==`")
+          //     .throw_();
+          // }
           // TODO: Check precedence.
           auto right = parse_expression();
           expr = assignment{
-            std::move(*left),
+            std::move(left),
             equal.location,
             std::move(right),
           };
@@ -345,7 +406,7 @@ private:
       return std::move(*lit);
     }
     if (auto token = accept(tk::underscore)) {
-      return underscore{};
+      return underscore{token.location};
     }
     if (auto token = accept(tk::dollar_ident)) {
       return dollar_var{token.as_identifier()};
@@ -376,81 +437,89 @@ private:
       }
       return ast::meta{kind, begin.combine(ident.location)};
     }
+    if (auto token = accept(tk::this_)) {
+      return ast::this_{token.location};
+    }
     // TODO: Accept entity as function name.
-    if (not selector_start()) {
+    auto ident = accept(tk::identifier);
+    if (not ident) {
       // TODO: This is maybe a bit hacky?
       diagnostic::error("expected expression, got {}", next_description())
         .primary(next_location(), "got {}", next_description())
         .throw_();
     }
-    // TODO: The code below is a mess and needs to be improved.
-    auto sel = parse_selector();
-    auto ent = std::optional<entity>{};
-    if (accept(tk::single_quote)) {
-      if (sel.this_ || sel.path.size() != 1) {
-        diagnostic::error("todo: unexpected stuff before entity")
-          .primary(sel.get_location())
-          .throw_();
-      }
-      auto path = std::move(sel.path);
-      while (true) {
-        auto ident = expect(tk::identifier);
-        path.push_back(ident.as_identifier());
-        if (not accept(tk::single_quote)) {
-          break;
-        }
-      }
-      ent = entity{std::move(path)};
-    }
     if (peek(tk::lpar)) {
-      // TODO: Consider refactoring this.
-      auto subject = std::optional<ast::expression>{};
-      if (not ent) {
-        if (sel.this_ and sel.path.empty()) {
-          diagnostic::error("`this` cannot be called")
-            .primary(*sel.this_)
-            .throw_();
-        }
-        TENZIR_ASSERT(not sel.path.empty());
-        ent = entity{{std::move(sel.path.back())}};
-        sel.path.pop_back();
-        if (sel.this_ || not sel.path.empty()) {
-          subject = std::move(sel);
-        }
-      }
-      TENZIR_ASSERT(ent);
-      return parse_function_call(std::move(subject), std::move(*ent));
+      parse_function_call({}, ast::entity{{ident.as_identifier()}});
     }
-    if (ent) {
-      diagnostic::error("todo: referenced entity that is not a function call")
-        .primary(ent->get_location())
-        .throw_();
-    }
-    return sel;
+    return ast::root_field{ident.as_identifier()};
+    // TODO: The code below is a mess and needs to be improved.
+    // auto sel = parse_selector();
+    // auto ent = std::optional<entity>{};
+    // if (accept(tk::single_quote)) {
+    //   if (sel.this_ || sel.path.size() != 1) {
+    //     diagnostic::error("todo: unexpected stuff before entity")
+    //       .primary(sel.get_location())
+    //       .throw_();
+    //   }
+    //   auto path = std::move(sel.path);
+    //   while (true) {
+    //     auto ident = expect(tk::identifier);
+    //     path.push_back(ident.as_identifier());
+    //     if (not accept(tk::single_quote)) {
+    //       break;
+    //     }
+    //   }
+    //   ent = entity{std::move(path)};
+    // }
+    // if (peek(tk::lpar)) {
+    //   // TODO: Consider refactoring this.
+    //   auto subject = std::optional<ast::expression>{};
+    //   if (not ent) {
+    //     if (sel.this_ and sel.path.empty()) {
+    //       diagnostic::error("`this` cannot be called")
+    //         .primary(*sel.this_)
+    //         .throw_();
+    //     }
+    //     TENZIR_ASSERT(not sel.path.empty());
+    //     ent = entity{{std::move(sel.path.back())}};
+    //     sel.path.pop_back();
+    //     if (sel.this_ || not sel.path.empty()) {
+    //       subject = std::move(sel);
+    //     }
+    //   }
+    //   TENZIR_ASSERT(ent);
+    //   return parse_function_call(std::move(subject), std::move(*ent));
+    // }
+    // if (ent) {
+    //   diagnostic::error("todo: referenced entity that is not a function call")
+    //     .primary(ent->get_location())
+    //     .throw_();
+    // }
+    // return sel;
   }
 
   auto selector_start() -> bool {
     return peek(tk::identifier) || peek(tk::this_);
   }
 
-  auto parse_selector() -> selector {
-    auto this_ = accept(tk::this_);
-    auto path = std::vector<ast::identifier>{};
-    while (true) {
-      if (this_ || not path.empty()) {
-        if (not accept(tk::dot)) {
-          break;
-        }
-      }
-      if (auto ident = accept(tk::identifier)) {
-        path.emplace_back(std::string{ident.text}, ident.location);
-      } else {
-        throw_token();
-      }
-    }
-    return selector{this_ ? this_.location : std::optional<location>{},
-                    std::move(path)};
-  }
+  // auto parse_selector() -> data_selector {
+  //   auto this_ = accept(tk::this_);
+  //   auto path = std::vector<ast::identifier>{};
+  //   while (true) {
+  //     if (this_ || not path.empty()) {
+  //       if (not accept(tk::dot)) {
+  //         break;
+  //       }
+  //     }
+  //     if (auto ident = accept(tk::identifier)) {
+  //       path.emplace_back(std::string{ident.text}, ident.location);
+  //     } else {
+  //       throw_token();
+  //     }
+  //   }
+  //   return data_selector{this_ ? this_.location : std::optional<location>{},
+  //                        std::move(path)};
+  // }
 
   auto parse_record_or_pipeline_expr() -> ast::expression {
     auto begin = expect(tk::lbrace);

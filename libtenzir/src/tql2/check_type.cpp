@@ -34,12 +34,12 @@ public:
       });
   }
 
-  auto visit(const selector& x) -> result {
-    if (x.this_ && x.path.empty()) {
-      return type{record_type{}};
-    }
-    return std::nullopt;
-  }
+  // auto visit(const path& x) -> result {
+  //   if (x.this_ && x.path.empty()) {
+  //     return type{record_type{}};
+  //   }
+  //   return std::nullopt;
+  // }
 
   auto visit(const ast::expression& x) -> result {
     return x.match([&](auto& y) {
@@ -221,13 +221,13 @@ auto check_type(const ast::expression& expr, session ctx)
 
 void check_assignment(const ast::assignment& x, session ctx) {
   auto ty = type_checker{ctx}.visit(x.right);
-  if (x.left.this_ && x.left.path.empty()) {
-    if (ty && *ty != type{record_type{}}) {
-      diagnostic::error("only records can be assigned to `this`")
-        .primary(x.right.get_location(), "this is `{}`", *ty)
-        .emit(ctx.dh());
-    }
-  }
+  // if (x.left.this_ && x.left.path.empty()) {
+  //   if (ty && *ty != type{record_type{}}) {
+  //     diagnostic::error("only records can be assigned to `this`")
+  //       .primary(x.right.get_location(), "this is `{}`", *ty)
+  //       .emit(ctx.dh());
+  //   }
+  // }
 }
 
 } // namespace tenzir::tql2

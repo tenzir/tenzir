@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/tql2/ast.hpp"
+
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
@@ -159,7 +161,7 @@ class drop_operator2 final : public crtp_operator<drop_operator2> {
 public:
   drop_operator2() = default;
 
-  explicit drop_operator2(std::vector<ast::selector> selectors)
+  explicit drop_operator2(std::vector<ast::simple_selector> selectors)
     : selectors_{std::move(selectors)} {
   }
 
@@ -201,24 +203,23 @@ public:
   }
 
 private:
-  std::vector<ast::selector> selectors_;
+  std::vector<ast::simple_selector> selectors_;
 };
 
 class plugin2 final : public virtual tql2::operator_plugin<drop_operator2> {
 public:
   auto make_operator(invocation inv, session ctx) const
     -> operator_ptr override {
-    auto selectors = std::vector<ast::selector>{};
+    auto selectors = std::vector<ast::simple_selector>{};
     for (auto& arg : inv.args) {
-      arg.match(
-        [&](ast::selector& x) {
-          selectors.push_back(std::move(x));
-        },
-        [&](auto& x) {
-          diagnostic::error("expected selector")
-            .primary(x.get_location())
-            .emit(ctx.dh());
-        });
+      auto selector = ast::simple_selector::try_from(arg);
+      if (selector) {
+        selectors.push_back(std::move(*selector));
+      } else {
+        diagnostic::error("expected selector")
+          .primary(arg.get_location())
+          .emit(ctx.dh());
+      }
     }
     return std::make_unique<drop_operator2>(std::move(selectors));
   }

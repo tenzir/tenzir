@@ -36,10 +36,10 @@ struct resolve_error {
   reason_t reason;
 };
 
-auto resolve(const ast::selector& sel, const table_slice& slice)
+auto resolve(const ast::simple_selector& sel, const table_slice& slice)
   -> variant<series, resolve_error>;
 
-auto resolve(const ast::selector& sel, type ty)
+auto resolve(const ast::simple_selector& sel, type ty)
   -> variant<offset, resolve_error>;
 
 } // namespace tenzir::tql2

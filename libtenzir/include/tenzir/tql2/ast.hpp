@@ -53,10 +53,14 @@ struct null;
 struct pipeline_expr;
 struct pipeline;
 struct record;
-struct selector;
+struct meta;
+struct data_selector;
+struct selector_root;
 struct unary_expr;
 struct underscore;
 struct unpack;
+
+class simple_selector;
 
 struct identifier {
   identifier() = default;
@@ -82,16 +86,34 @@ struct identifier {
   }
 };
 
-struct selector {
-  selector() = default;
-
-  selector(std::optional<location> this_, std::vector<identifier> path)
-    : this_{this_}, path{std::move(path)} {
+struct meta {
+  auto get_location() const -> location {
+    return source;
   }
+
+  friend auto inspect(auto& f, meta& x) -> bool {
+    return f.object(x).fields(f.field("kind", x.kind),
+                              f.field("source", x.source));
+  }
+
+  enum meta_extractor::kind kind;
+  location source;
+};
+
+// TODO: Delete.
+struct data_selector {
+  data_selector() = default;
+
+  data_selector(std::optional<location> this_, std::vector<identifier> segments)
+    : this_{this_}, segments{std::move(segments)} {
+  }
+
+  // TODO: This shows that we are probably not doing it right.
+  auto to_expression() const -> expression;
 
   // TODO
   std::optional<location> this_;
-  std::vector<identifier> path;
+  std::vector<identifier> segments;
 
   auto get_location() const -> location {
     auto result = tenzir::location{};
@@ -99,18 +121,18 @@ struct selector {
       result.begin = this_->begin;
       result.end = this_->end;
     } else {
-      TENZIR_ASSERT(not path.empty());
-      result.begin = path.front().location.begin;
+      TENZIR_ASSERT(not segments.empty());
+      result.begin = segments.front().location.begin;
     }
-    if (not path.empty()) {
-      result.end = path.back().location.end;
+    if (not segments.empty()) {
+      result.end = segments.back().location.end;
     }
     return result;
   }
 
-  friend auto inspect(auto& f, selector& x) -> bool {
+  friend auto inspect(auto& f, data_selector& x) -> bool {
     return f.object(x).fields(f.field("this", x.this_),
-                              f.field("path", x.path));
+                              f.field("segments", x.segments));
   }
 };
 
@@ -163,25 +185,39 @@ struct literal {
   }
 };
 
-struct meta {
+struct this_ {
+  location source;
+
   auto get_location() const -> location {
     return source;
   }
 
-  friend auto inspect(auto& f, meta& x) -> bool {
-    return f.object(x).fields(f.field("kind", x.kind),
-                              f.field("source", x.source));
+  friend auto inspect(auto& f, this_& x) -> bool {
+    return f.apply(x.source);
   }
-
-  enum meta_extractor::kind kind;
-  location source;
 };
 
+struct root_field {
+  identifier ident;
+
+  auto get_location() const -> location {
+    return ident.location;
+  }
+
+  friend auto inspect(auto& f, root_field& x) -> bool {
+    return f.apply(x.ident);
+  }
+};
+
+// selector = meta | data
+// data = this? ["foo"]
+//
+
 using expression_kinds
-  = caf::detail::type_list<record, list, selector, meta, pipeline_expr, literal,
-                           field_access, index_expr, binary_expr, unary_expr,
-                           function_call, underscore, unpack, assignment,
-                           dollar_var>;
+  = caf::detail::type_list<record, list, meta, this_, root_field, pipeline_expr,
+                           literal, field_access, index_expr, binary_expr,
+                           unary_expr, function_call, underscore, unpack,
+                           assignment, dollar_var>;
 
 using expression_kind = caf::detail::tl_apply_t<expression_kinds, variant>;
 
@@ -201,6 +237,7 @@ struct expression {
   auto operator=(const expression&) -> expression&;
   auto operator=(expression&&) noexcept -> expression&;
 
+  // TODO: This does not propagate const...
   std::unique_ptr<expression_kind> kind;
 
   template <class Inspector>
@@ -227,6 +264,71 @@ struct expression {
   auto match(Fs&&... fs) const&& -> decltype(auto);
 
   auto get_location() const -> location;
+};
+
+/// A "simple selector" has a path that contains only constant field names.
+///
+/// This can contain expressions like `foo`, `foo.bar` and `this.foo["bar"]`. It
+/// does not allow `foo[some_expr()]`, `foo[0]`, etc. These selectors will be
+/// added at a later point in time.
+class simple_selector {
+public:
+  simple_selector() = default;
+
+  static auto try_from(ast::expression expr) -> std::optional<simple_selector>;
+
+  auto get_location() const -> location {
+    return expr_.get_location();
+  }
+
+  auto has_this() const -> bool {
+    return has_this_;
+  }
+
+  auto path() const -> std::span<const identifier> {
+    return path_;
+  }
+
+  auto inner() const -> const ast::expression& {
+    return expr_;
+  };
+
+  auto unwrap() && -> ast::expression {
+    return std::move(expr_);
+  }
+
+private:
+  simple_selector(ast::expression expr, bool has_this,
+                  std::vector<identifier> path)
+    : expr_{std::move(expr)}, has_this_{has_this}, path_{std::move(path)} {
+  }
+
+  friend auto inspect(auto& f, simple_selector& x) -> bool {
+    return f.object(x).fields(f.field("expr", x.expr_),
+                              f.field("has_this", x.has_this_),
+                              f.field("path", x.path_));
+  }
+
+  ast::expression expr_;
+  bool has_this_{};
+  std::vector<identifier> path_;
+};
+
+/// A selector is something that can be assigned.
+///
+/// Note that this is not an actual `expression`. Instead, expressions can be
+/// converted to `selector` on-demand. Currently, this is limited to meta
+/// selectors (e.g., `meta.tag`) and simple selectors (see `simple_selector`).
+struct selector : variant<meta, simple_selector> {
+  using variant::variant;
+
+  static auto try_from(ast::expression expr) -> std::optional<selector>;
+
+  auto get_location() const -> location {
+    return match([](auto& x) {
+      return x.get_location();
+    });
+  }
 };
 
 struct unpack {
@@ -695,7 +797,7 @@ public:
     match(x);
   }
 
-  void enter(selector& x) {
+  void enter(data_selector& x) {
     (void)x;
   }
 

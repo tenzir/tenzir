@@ -34,29 +34,30 @@
 
 namespace tenzir::tql2 {
 
-auto resolve(const ast::selector& sel, const table_slice& slice)
+auto resolve(const ast::simple_selector& sel, const table_slice& slice)
   -> variant<series, resolve_error> {
   TRY(auto offset, resolve(sel, slice.schema()));
   auto [ty, array] = offset.get(slice);
   return series{ty, array};
 }
 
-auto resolve(const ast::selector& sel, type ty)
+auto resolve(const ast::simple_selector& sel, type ty)
   -> variant<offset, resolve_error> {
   // TODO: Write this properly.
   auto sel_index = size_t{0};
   auto result = offset{};
-  result.reserve(sel.path.size());
-  while (sel_index < sel.path.size()) {
+  auto&& path = sel.path();
+  result.reserve(path.size());
+  while (sel_index < path.size()) {
     auto rty = caf::get_if<record_type>(&ty);
     if (not rty) {
-      return resolve_error{sel.path[sel_index],
+      return resolve_error{path[sel_index],
                            resolve_error::field_of_non_record{ty}};
     }
     auto found = false;
     auto field_index = size_t{0};
     for (auto&& field : rty->fields()) {
-      if (field.name == sel.path[sel_index].name) {
+      if (field.name == path[sel_index].name) {
         ty = field.type;
         found = true;
         sel_index += 1;
@@ -65,8 +66,7 @@ auto resolve(const ast::selector& sel, type ty)
       ++field_index;
     }
     if (not found) {
-      return resolve_error{sel.path[sel_index],
-                           resolve_error::field_not_found{}};
+      return resolve_error{path[sel_index], resolve_error::field_not_found{}};
     }
     result.push_back(field_index);
   }
@@ -175,30 +175,31 @@ auto evaluator::eval(const ast::list& x) -> series {
   return b.finish_assert_one_array();
 }
 
-auto evaluator::eval(const ast::selector& x) -> series {
-  auto result = resolve(x, input_or_throw(x.get_location()));
-  return result.match(
-    [](series& x) -> series {
-      return std::move(x);
-    },
-    [&](resolve_error& err) -> series {
-      err.reason.match(
-        [&](resolve_error::field_of_non_record& reason) {
-          diagnostic::warning("type `{}` does not have a field `{}`",
-                              reason.type.kind(), err.ident.name)
-            .primary(err.ident.location)
-            .emit(dh_);
-        },
-        [&](resolve_error::field_not_found&) {
-          diagnostic::warning("field `{}` not found", err.ident.name)
-            .primary(err.ident.location)
-            .emit(dh_);
-        });
-      return null();
-    });
-}
+// auto evaluator::eval(const ast::data_selector& x) -> series {
+//   auto result = resolve(x, input_or_throw(x.get_location()));
+//   return result.match(
+//     [](series& x) -> series {
+//       return std::move(x);
+//     },
+//     [&](resolve_error& err) -> series {
+//       err.reason.match(
+//         [&](resolve_error::field_of_non_record& reason) {
+//           diagnostic::warning("type `{}` does not have a field `{}`",
+//                               reason.type.kind(), err.ident.name)
+//             .primary(err.ident.location)
+//             .emit(dh_);
+//         },
+//         [&](resolve_error::field_not_found&) {
+//           diagnostic::warning("field `{}` not found", err.ident.name)
+//             .primary(err.ident.location)
+//             .emit(dh_);
+//         });
+//       return null();
+//     });
+// }
 
 auto evaluator::eval(const ast::field_access& x) -> series {
+  // TODO: Unify with selector?
   auto l = eval(x.left);
   auto rec_ty = caf::get_if<record_type>(&l.type);
   if (not rec_ty) {

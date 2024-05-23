@@ -132,12 +132,13 @@ public:
                .primary(arg->get_location()));
         continue;
       }
-      if (assignment->left.path.size() != 1) {
+      auto sel = std::get_if<ast::simple_selector>(&assignment->left);
+      if (not sel || sel->has_this() || sel->path().size() != 1) {
         emit(diagnostic::error("invalid name")
                .primary(assignment->left.get_location()));
         continue;
       }
-      auto& name = assignment->left.path[0].name;
+      auto& name = sel->path()[0].name;
       auto it = std::ranges::find(named_, name, &named::name);
       if (it == named_.end()) {
         emit(diagnostic::error("named argument `{}` does not exist", name)

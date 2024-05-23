@@ -90,7 +90,7 @@ public:
 
   auto eval(const ast::list& x) -> series;
 
-  auto eval(const ast::selector& x) -> series;
+  // auto eval(const ast::path& x) -> series;
 
   auto eval(const ast::function_call& x) -> series;
 

@@ -966,7 +966,7 @@ public:
 };
 
 struct aggregate_t {
-  std::optional<ast::selector> dest;
+  std::optional<ast::simple_selector> dest;
   ast::function_call call;
 
   friend auto inspect(auto& f, aggregate_t& x) -> bool {
@@ -975,8 +975,8 @@ struct aggregate_t {
 };
 
 struct group_t {
-  std::optional<ast::selector> dest;
-  ast::selector expr;
+  std::optional<ast::simple_selector> dest;
+  ast::simple_selector expr;
 
   friend auto inspect(auto& f, group_t& x) -> bool {
     return f.object(x).fields(f.field("dest", x.dest), f.field("expr", x.expr));
@@ -1019,7 +1019,7 @@ public:
     auto group_values = std::vector<series>{};
     for (auto& group : cfg_.groups) {
       // TODO: `group` is getting copied here.
-      group_values.push_back(tql2::eval(group.expr, slice, dh_));
+      group_values.push_back(tql2::eval(group.expr.inner(), slice, dh_));
     }
     auto aggregate_args = std::vector<series>{};
     for (auto& aggregate : cfg_.aggregates) {
@@ -1074,21 +1074,22 @@ public:
   }
 
   auto finish() -> std::vector<table_slice> {
-    auto emplace = [](record& root, const ast::selector& sel, data value) {
-      auto current = &root;
-      for (auto& segment : sel.path) {
-        auto& val = (*current)[segment.name];
-        if (&segment == &sel.path.back()) {
-          val = std::move(value);
-        } else {
-          current = caf::get_if<record>(&val);
-          if (not current) {
-            val = record{};
-            current = &caf::get<record>(val);
+    auto emplace
+      = [](record& root, const ast::simple_selector& sel, data value) {
+          auto current = &root;
+          for (auto& segment : sel.path()) {
+            auto& val = (*current)[segment.name];
+            if (&segment == &sel.path().back()) {
+              val = std::move(value);
+            } else {
+              current = caf::get_if<record>(&val);
+              if (not current) {
+                val = record{};
+                current = &caf::get<record>(val);
+              }
+            }
           }
-        }
-      }
-    };
+        };
     // TODO: Group by schema again.
     auto b = series_builder{};
     for (auto& [key, group] : groups_) {
@@ -1103,11 +1104,11 @@ public:
             auto& call = cfg_.aggregates[index].call;
             // TODO: Decide and properly implement this.
             auto arg = call.args[0].match(
-              [](ast::selector& x) -> std::string_view {
-                if (x.path.empty()) {
-                  return "this";
-                }
-                return x.path[0].name;
+              [](ast::this_&) -> std::string_view {
+                return "this";
+              },
+              [](ast::root_field& x) -> std::string_view {
+                return x.ident.name;
               },
               [](auto&) -> std::string_view {
                 return "TODO";
@@ -1181,7 +1182,7 @@ public:
     // summarize foo, bar, baz=count(foo)
     auto cfg = config{};
     auto add_aggregate
-      = [&](std::optional<ast::selector> dest, ast::function_call call) {
+      = [&](std::optional<ast::simple_selector> dest, ast::function_call call) {
           auto& ref = call.fn.ref;
           if (not ref.resolved()) {
             // Already reported.
@@ -1210,40 +1211,55 @@ public:
           cfg.indices.push_back(index);
           cfg.aggregates.emplace_back(std::move(dest), std::move(call));
         };
-    auto add_group
-      = [&](std::optional<ast::selector> dest, ast::selector expr) {
-          auto index = -detail::narrow<int64_t>(cfg.groups.size()) - 1;
-          cfg.indices.push_back(index);
-          cfg.groups.emplace_back(std::move(dest), std::move(expr));
-        };
+    auto add_group = [&](std::optional<ast::simple_selector> dest,
+                         ast::simple_selector expr) {
+      auto index = -detail::narrow<int64_t>(cfg.groups.size()) - 1;
+      cfg.indices.push_back(index);
+      cfg.groups.emplace_back(std::move(dest), std::move(expr));
+    };
     for (auto& arg : inv.args) {
       arg.match(
-        [&](ast::selector& arg) {
-          add_group(std::nullopt, std::move(arg));
-        },
+        // [&](ast::path& arg) {
+        //   add_group(std::nullopt, std::move(arg));
+        // },
         [&](ast::function_call& arg) {
           add_aggregate(std::nullopt, std::move(arg));
         },
         [&](ast::assignment& arg) {
+          auto left = std::get_if<ast::simple_selector>(&arg.left);
+          if (not left) {
+            // TODO
+            diagnostic::error("expected data selector, not meta")
+              .primary(arg.left.get_location())
+              .emit(ctx);
+            return;
+          }
           arg.right.match(
-            [&](ast::selector& right) {
-              add_group(std::move(arg.left), std::move(right));
-            },
             [&](ast::function_call& right) {
-              add_aggregate(std::move(arg.left), std::move(right));
+              add_aggregate(std::move(*left), std::move(right));
             },
             [&](auto&) {
-              diagnostic::error(
-                "expected selector or aggregation function call")
-                .primary(arg.right.get_location())
-                .emit(ctx);
+              auto right = ast::simple_selector::try_from(arg.right);
+              if (right) {
+                add_group(std::move(*left), std::move(*right));
+              } else {
+                diagnostic::error(
+                  "expected selector or aggregation function call")
+                  .primary(arg.right.get_location())
+                  .emit(ctx);
+              }
             });
         },
         [&](auto&) {
-          diagnostic::error(
-            "expected selector, assignment or aggregation function call")
-            .primary(arg.get_location())
-            .emit(ctx);
+          auto selector = ast::simple_selector::try_from(arg);
+          if (selector) {
+            add_group(std::nullopt, std::move(*selector));
+          } else {
+            diagnostic::error(
+              "expected selector, assignment or aggregation function call")
+              .primary(arg.get_location())
+              .emit(ctx);
+          }
         });
     }
     return std::make_unique<summarize_operator2>(std::move(cfg));

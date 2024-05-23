@@ -16,6 +16,76 @@
 
 namespace tenzir::ast {
 
+auto data_selector::to_expression() const -> expression {
+  auto result = expression{};
+  auto i = size_t{0};
+  if (this_) {
+    result = expression{ast::this_{*this_}};
+  } else {
+    result = expression{ast::root_field{segments[0]}};
+    ++i;
+  }
+  for (; i < segments.size(); ++i) {
+    // TODO: This is bad.
+    result = ast::field_access{result, location::unknown, segments[i]};
+  }
+  return result;
+}
+
+auto simple_selector::try_from(ast::expression expr)
+  -> std::optional<simple_selector> {
+  // Path is collect in reversed order (outside-in).
+  auto has_this = false;
+  auto path = std::vector<identifier>{};
+  auto current = static_cast<ast::expression*>(&expr);
+  while (true) {
+    auto sub_result = current->match(
+      [&](ast::this_&) -> variant<ast::expression*, bool> {
+        has_this = true;
+        return true;
+      },
+      [&](ast::root_field& x) -> variant<ast::expression*, bool> {
+        path.push_back(x.ident);
+        return true;
+      },
+      [&](ast::field_access& e) -> variant<ast::expression*, bool> {
+        path.push_back(e.name);
+        return &e.left;
+      },
+      [&](ast::index_expr& e) -> variant<ast::expression*, bool> {
+        auto lit = std::get_if<literal>(&*e.index.kind);
+        if (not lit) {
+          return false;
+        }
+        if (auto name = std::get_if<std::string>(&lit->value)) {
+          path.emplace_back(*name, lit->source);
+          return &e.expr;
+        }
+        return false;
+      },
+      [](auto&) -> variant<ast::expression*, bool> {
+        return false;
+      });
+    if (auto success = std::get_if<bool>(&sub_result)) {
+      if (not *success) {
+        return {};
+      }
+      return simple_selector{std::move(expr), has_this, std::move(path)};
+    }
+    current = std::get<ast::expression*>(sub_result);
+  }
+}
+
+auto selector::try_from(ast::expression expr) -> std::optional<selector> {
+  return expr.match(
+    [](ast::meta& x) -> std::optional<selector> {
+      return selector{x};
+    },
+    [&](auto&) -> std::optional<selector> {
+      return simple_selector::try_from(std::move(expr));
+    });
+}
+
 auto expression::get_location() const -> location {
   return match([](const auto& x) {
     return x.get_location();
