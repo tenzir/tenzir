@@ -64,13 +64,13 @@ dpkg -i tenzir-static-amd64-linux.deb
 [tenzir-debian-package]: https://github.com/tenzir/tenzir/releases/latest/download/tenzir-static-amd64-linux.deb
 
 </TabItem>
-<TabItem value="rpm_based" label="RPM based (RedHat / OpenSUSE / ...)">
+<TabItem value="rpm_based" label="RPM-based (RedHat, OpenSUSE, Fedora)">
 
 Download the latest [RPM package][tenzir-rpm-package] and install it via
 `rpm`:
 
 ```bash
-yum -y localinstall tenzir-static-amd64-linux.rpm
+rpm -i tenzir-static-amd64-linux.rpm
 ```
 
 [tenzir-rpm-package]: https://github.com/tenzir/tenzir/releases/latest/download/tenzir-static-amd64-linux.rpm
