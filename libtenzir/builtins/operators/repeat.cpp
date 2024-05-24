@@ -56,28 +56,6 @@ public:
       }
       co_yield std::move(batch);
     }
-    // TODO: Generalize this optimization.
-    if constexpr (std::same_as<Batch, table_slice>) {
-      if (cache.size() == 1) {
-        auto& batch = static_cast<table_slice&>(cache[0]);
-        auto schema = batch.schema();
-        auto builder = schema.make_arrow_builder(arrow::default_memory_pool());
-        auto array = to_record_batch(batch)->ToStructArray().ValueOrDie();
-        for (auto i = uint64_t{1}; i < repetitions_; ++i) {
-          auto status
-            = append_array_slice(*builder, schema, *array, 0, array->length());
-          TENZIR_ASSERT(status.ok());
-        }
-        auto output = builder->Finish().ValueOrDie();
-        auto* cast = dynamic_cast<arrow::StructArray*>(output.get());
-        TENZIR_ASSERT(cast);
-        auto arrow_schema = schema.to_arrow_schema();
-        auto output_rb = arrow::RecordBatch::Make(
-          std::move(arrow_schema), cast->length(), cast->fields());
-        co_yield table_slice{output_rb, std::move(schema)};
-        co_return;
-      }
-    }
     for (auto i = uint64_t{1}; i < repetitions_; ++i) {
       co_yield {};
       for (const auto& batch : cache) {
