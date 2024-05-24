@@ -216,11 +216,15 @@ private:
 
 auto check_type(const ast::expression& expr, session ctx)
   -> std::optional<type> {
-  return type_checker{ctx}.visit(expr);
+  // TODO: Probably remove all of this.
+  TENZIR_UNUSED(expr, ctx);
+  return {};
+  // return type_checker{ctx}.visit(expr);
 }
 
 void check_assignment(const ast::assignment& x, session ctx) {
-  auto ty = type_checker{ctx}.visit(x.right);
+  TENZIR_UNUSED(x, ctx);
+  // auto ty = type_checker{ctx}.visit(x.right);
   // if (x.left.this_ && x.left.path.empty()) {
   //   if (ty && *ty != type{record_type{}}) {
   //     diagnostic::error("only records can be assigned to `this`")

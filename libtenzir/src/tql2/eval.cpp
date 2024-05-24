@@ -249,7 +249,7 @@ auto evaluator::eval(const ast::root_field& x) -> series {
   for (auto [i, field] : detail::enumerate<int>(rec_ty.fields())) {
     if (field.name == x.ident.name) {
       // TODO: Is this correct?
-      return series{field.type, to_record_batch(input)->column(0)};
+      return series{field.type, to_record_batch(input)->column(i)};
     }
   }
   diagnostic::warning("field `{}` not found", x.ident.name)

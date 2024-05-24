@@ -30,7 +30,12 @@ public:
       return series::null(int64_type{}, inv.length);
     }
     auto arg = caf::get_if<arrow::StringArray>(&*inv.args[0].array);
-    TENZIR_ASSERT(arg);
+    if (not arg) {
+      diagnostic::warning("expected string, got {}", inv.args[0].type.kind())
+        .primary(inv.self.args[0].get_location())
+        .emit(dh);
+      return series::null(int64_type{}, inv.length);
+    }
     auto b = arrow::Int64Builder{};
     for (auto i = int64_t{0}; i < arg->length(); ++i) {
       auto name = arg->GetView(i);
@@ -82,7 +87,12 @@ public:
       return series::null(int64_type{}, inv.length);
     }
     auto arg = caf::get_if<arrow::StringArray>(&*inv.args[0].array);
-    TENZIR_ASSERT(arg);
+    if (not arg) {
+      diagnostic::warning("expected string, got {}", inv.args[0].type.kind())
+        .primary(inv.self.args[0].get_location())
+        .emit(dh);
+      return series::null(int64_type{}, inv.length);
+    }
     auto b = arrow::Int64Builder{};
     for (auto i = int64_t{0}; i < arg->length(); ++i) {
       auto name = arg->GetView(i);

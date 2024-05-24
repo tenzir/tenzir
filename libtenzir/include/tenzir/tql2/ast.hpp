@@ -868,8 +868,21 @@ public:
     }
   }
 
+  void enter(ast::selector& x) {
+    match(x);
+  }
+
+  void enter(ast::simple_selector& x) {
+    // TODO
+    TENZIR_UNUSED(x);
+  }
+
   void enter(ast::root_field& x) {
     go(x.ident);
+  }
+
+  void enter(ast::this_& x) {
+    TENZIR_UNUSED(x);
   }
 
   template <class T>
