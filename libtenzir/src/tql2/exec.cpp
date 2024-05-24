@@ -570,13 +570,13 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
     }
     reg.add(name, fn);
   }
-  tql2::resolve_entities(parsed, reg, *diag_wrapper);
   if (cfg.dump_ast) {
     with_thread_local_registry(reg, [&] {
       fmt::print("{:#?}\n", parsed);
     });
     return not diag_wrapper->error();
   }
+  tql2::resolve_entities(parsed, reg, *diag_wrapper);
   // TODO
   auto ctx = session{reg, *diag_wrapper};
   auto pipe = prepare_pipeline(std::move(parsed), ctx);

@@ -448,10 +448,20 @@ private:
         .primary(next_location(), "got {}", next_description())
         .throw_();
     }
-    if (peek(tk::lpar)) {
-      return parse_function_call({}, ast::entity{{ident.as_identifier()}});
+    auto path = std::vector<ast::identifier>{};
+    path.push_back(ident.as_identifier());
+    while (accept(tk::single_quote)) {
+      path.push_back(expect(tk::identifier).as_identifier());
     }
-    return ast::root_field{ident.as_identifier()};
+    if (peek(tk::lpar)) {
+      return parse_function_call({}, ast::entity{std::move(path)});
+    }
+    if (path.size() != 1) {
+      diagnostic::error("expected function call")
+        .primary(next_location())
+        .throw_();
+    }
+    return ast::root_field{std::move(path[0])};
     // TODO: The code below is a mess and needs to be improved.
     // auto sel = parse_selector();
     // auto ent = std::optional<entity>{};
