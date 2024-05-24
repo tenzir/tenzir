@@ -164,6 +164,7 @@ echo "Using ${package}"
 # Download package.
 tmpdir="$(dirname "$(mktemp -u)")"
 action "Downloading ${package_url}"
+rm -f "${tmpdir}/${package}"
 # Wget does not support the file:// URL scheme.
 if check wget && beginswith "${package_url}" "https://"
 then
