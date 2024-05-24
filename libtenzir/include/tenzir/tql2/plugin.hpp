@@ -36,10 +36,18 @@ class operator_plugin : public virtual operator_factory_plugin,
 
 class function_plugin : public virtual plugin {
 public:
-  virtual auto eval(const ast::function_call& self, size_t length,
-                    std::vector<series> args, diagnostic_handler& dh) const
-    -> series
-    = 0;
+  struct invocation {
+    invocation(const ast::function_call& self, int64_t length,
+               std::vector<series> args)
+      : self{self}, length{length}, args{std::move(args)} {
+    }
+
+    const ast::function_call& self;
+    int64_t length;
+    std::vector<series> args;
+  };
+
+  virtual auto eval(invocation inv, diagnostic_handler& dh) const -> series = 0;
 };
 
 class aggregation_instance {

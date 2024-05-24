@@ -22,18 +22,12 @@ public:
     return "tql2.int";
   }
 
-  auto eval(const ast::function_call& self, size_t length,
-            std::vector<series> args, diagnostic_handler& dh) const
-    -> series override {
-    if (args.size() != 1) {
+  auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
+    if (inv.args.size() != 1) {
       diagnostic::error("`int` expects exactly one argument")
-        .primary(self.get_location())
+        .primary(inv.self.get_location())
         .emit(dh);
-    }
-    if (args.empty()) {
-      auto b = arrow::Int64Builder{};
-      (void)b.AppendNulls(detail::narrow<int64_t>(length));
-      return series{int64_type{}, b.Finish().ValueOrDie()};
+      return series::null(int64_type{}, inv.length);
     }
     auto f = detail::overload{
       [](const arrow::Int64Array& arg) {
@@ -43,7 +37,7 @@ public:
         auto report = false;
         auto b = arrow::Int64Builder{};
         (void)b.Reserve(arg.length());
-        for (auto row = int64_t{0}; row < detail::narrow<int64_t>(length);
+        for (auto row = int64_t{0}; row < detail::narrow<int64_t>(inv.length);
              ++row) {
           if (arg.IsNull(row)) {
             // TODO: Do we want to report this?
@@ -62,7 +56,7 @@ public:
           // TODO: It would be helpful to know what string, but then
           // deduplication doesn't work? Perhaps some unique identifier.
           diagnostic::warning("`int` failed to convert some string")
-            .primary(self.get_location())
+            .primary(inv.self.get_location())
             .emit(dh);
         }
         auto ret = std::shared_ptr<arrow::Int64Array>{};
@@ -73,18 +67,18 @@ public:
         TENZIR_UNUSED(arg);
         diagnostic::warning("`int` currently expects `int64` or `string`, got "
                             "`{}`",
-                            args[0].type.kind())
+                            inv.args[0].type.kind())
           // TODO: Wrong location.
-          .primary(self.get_location())
+          .primary(inv.self.get_location())
           .emit(dh);
         auto b = arrow::Int64Builder{};
-        (void)b.AppendNulls(detail::narrow<int64_t>(length));
+        (void)b.AppendNulls(detail::narrow<int64_t>(inv.length));
         auto ret = std::shared_ptr<arrow::Int64Array>{};
         (void)b.Finish(&ret);
         return ret;
       },
     };
-    return series{int64_type{}, caf::visit(f, *args[0].array)};
+    return series{int64_type{}, caf::visit(f, *inv.args[0].array)};
   }
 };
 

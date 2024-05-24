@@ -232,7 +232,8 @@ auto evaluator::eval(const ast::function_call& x) -> series {
   for (auto& arg : x.args) {
     args.push_back(eval(arg));
   }
-  auto ret = fn->eval(x, length_, std::move(args), dh_);
+  auto ret
+    = fn->eval(function_plugin::invocation{x, length_, std::move(args)}, dh_);
   TENZIR_ASSERT(ret.length() == length_);
   return ret;
 }

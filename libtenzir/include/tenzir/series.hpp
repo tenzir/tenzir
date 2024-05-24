@@ -37,6 +37,18 @@ struct series {
     return array ? array->length() : 0;
   }
 
+  static auto null(type ty, int64_t length) -> series {
+    // TODO
+    auto b = ty.make_arrow_builder(arrow::default_memory_pool());
+    (void)b->AppendNulls(length);
+    return {std::move(ty), b->Finish().ValueOrDie()};
+  }
+
+  template <concrete_type Type>
+  static auto null(Type ty, int64_t length) -> series {
+    return null(tenzir::type{std::move(ty)}, length);
+  }
+
   template <class Inspector>
   friend auto inspect(Inspector& f, series& x) -> bool {
     if constexpr (Inspector::is_loading) {

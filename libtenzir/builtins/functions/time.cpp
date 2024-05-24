@@ -22,25 +22,28 @@ public:
     return "tql2.time";
   }
 
-  auto eval(const ast::function_call& self, size_t length,
-            std::vector<series> args, diagnostic_handler& dh) const
-    -> series override {
-    TENZIR_ASSERT(args.size() == 1);
+  auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
+    if (inv.args.size() != 1) {
+      diagnostic::error("function expects exactly one argument")
+        .primary(inv.self.get_location())
+        .emit(dh);
+      return series::null(time_type{}, inv.length);
+    }
     if (auto time_array
-        = std::dynamic_pointer_cast<arrow::TimestampArray>(args[0].array)) {
+        = std::dynamic_pointer_cast<arrow::TimestampArray>(inv.args[0].array)) {
       return series{time_type{}, std::move(time_array)};
     }
     auto b = arrow::TimestampBuilder{
       std::make_shared<arrow::TimestampType>(arrow::TimeUnit::NANO),
       arrow::default_memory_pool()};
-    auto arg = caf::get_if<arrow::StringArray>(&*args[0].array);
+    auto arg = caf::get_if<arrow::StringArray>(&*inv.args[0].array);
     if (not arg) {
       // TODO
       diagnostic::warning("expected string argument, but got `{}`",
-                          args[0].type.kind())
-        .primary(self.args[0].get_location())
+                          inv.args[0].type.kind())
+        .primary(inv.self.args[0].get_location())
         .emit(dh);
-      b.AppendNulls(length);
+      (void)b.AppendNulls(inv.length);
       return series{null_type{}, b.Finish().ValueOrDie()};
     }
     TENZIR_ASSERT(arg);
@@ -68,11 +71,14 @@ public:
     return "tql2.seconds_since_epoch";
   }
 
-  auto eval(const ast::function_call& self, size_t length,
-            std::vector<series> args, diagnostic_handler& dh) const
-    -> series override {
-    TENZIR_ASSERT(args.size() == 1);
-    auto arg = caf::get_if<arrow::TimestampArray>(&*args[0].array);
+  auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
+    if (inv.args.size() != 1) {
+      diagnostic::error("function expects exactly one argument")
+        .primary(inv.self.get_location())
+        .emit(dh);
+      return series::null(double_type{}, inv.length);
+    }
+    auto arg = caf::get_if<arrow::TimestampArray>(&*inv.args[0].array);
     TENZIR_ASSERT(arg);
     auto& ty = caf::get<arrow::TimestampType>(*arg->type());
     TENZIR_ASSERT(ty.unit() == arrow::TimeUnit::NANO);
@@ -100,18 +106,16 @@ public:
     return "tql2.now";
   }
 
-  auto eval(const ast::function_call& self, size_t length,
-            std::vector<series> args, diagnostic_handler& dh) const
-    -> series override {
-    if (not args.empty()) {
+  auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
+    if (not inv.args.empty()) {
       // TODOs
       diagnostic::error("`now` does not expect any arguments")
-        .primary(self.args.front().get_location())
+        .primary(inv.self.args.front().get_location())
         .emit(dh);
     }
     auto result = time{time::clock::now()};
     auto b = series_builder{type{time_type{}}};
-    for (auto i = size_t{0}; i < length; ++i) {
+    for (auto i = int64_t{0}; i < inv.length; ++i) {
       b.data(result);
     }
     return b.finish_assert_one_array();

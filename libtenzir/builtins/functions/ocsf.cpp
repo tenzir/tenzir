@@ -22,11 +22,14 @@ public:
     return "tql2.ocsf_category_uid";
   }
 
-  auto eval(const ast::function_call& self, size_t length,
-            std::vector<series> args, diagnostic_handler& dh) const
-    -> series override {
-    TENZIR_ASSERT(args.size() == 1);
-    auto arg = caf::get_if<arrow::StringArray>(&*args[0].array);
+  auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
+    if (inv.args.size() != 1) {
+      diagnostic::error("function expects exactly one argument")
+        .primary(inv.self.get_location())
+        .emit(dh);
+      return series::null(int64_type{}, inv.length);
+    }
+    auto arg = caf::get_if<arrow::StringArray>(&*inv.args[0].array);
     TENZIR_ASSERT(arg);
     auto b = arrow::Int64Builder{};
     for (auto i = int64_t{0}; i < arg->length(); ++i) {
@@ -71,11 +74,14 @@ public:
     return "tql2.ocsf_class_uid";
   }
 
-  auto eval(const ast::function_call& self, size_t length,
-            std::vector<series> args, diagnostic_handler& dh) const
-    -> series override {
-    TENZIR_ASSERT(args.size() == 1);
-    auto arg = caf::get_if<arrow::StringArray>(&*args[0].array);
+  auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
+    if (inv.args.size() != 1) {
+      diagnostic::error("function expects exactly one argument")
+        .primary(inv.self.get_location())
+        .emit(dh);
+      return series::null(int64_type{}, inv.length);
+    }
+    auto arg = caf::get_if<arrow::StringArray>(&*inv.args[0].array);
     TENZIR_ASSERT(arg);
     auto b = arrow::Int64Builder{};
     for (auto i = int64_t{0}; i < arg->length(); ++i) {

@@ -24,17 +24,15 @@ public:
     return "tql2.round";
   }
 
-  auto eval(const ast::function_call& self, size_t length,
-            std::vector<series> args, diagnostic_handler& dh) const
-    -> series override {
-    if (args.size() != 1) {
+  auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
+    if (inv.args.size() != 1) {
       diagnostic::error("`round` expects exactly one argument")
-        .primary(self.get_location())
+        .primary(inv.self.get_location())
         .emit(dh);
     }
-    if (args.empty()) {
+    if (inv.args.empty()) {
       auto b = arrow::Int64Builder{};
-      (void)b.AppendNulls(detail::narrow<int64_t>(length));
+      (void)b.AppendNulls(detail::narrow<int64_t>(inv.length));
       return series{int64_type{}, b.Finish().ValueOrDie()};
     }
     auto f = detail::overload{
@@ -43,7 +41,7 @@ public:
       },
       [&](const arrow::DoubleArray& arg) {
         auto b = arrow::Int64Builder{};
-        for (auto row = int64_t{0}; row < detail::narrow<int64_t>(length);
+        for (auto row = int64_t{0}; row < detail::narrow<int64_t>(inv.length);
              ++row) {
           if (arg.IsNull(row)) {
             (void)b.AppendNull();
@@ -60,18 +58,18 @@ public:
       [&](const auto& arg) -> std::shared_ptr<arrow::Int64Array> {
         TENZIR_UNUSED(arg);
         diagnostic::warning("`round` expects `int64` or `double`, got `{}`",
-                            args[0].type.kind())
+                            inv.args[0].type.kind())
           // TODO: Wrong location.
-          .primary(self.get_location())
+          .primary(inv.self.get_location())
           .emit(dh);
         auto b = arrow::Int64Builder{};
-        (void)b.AppendNulls(detail::narrow<int64_t>(length));
+        (void)b.AppendNulls(detail::narrow<int64_t>(inv.length));
         auto ret = std::shared_ptr<arrow::Int64Array>{};
         (void)b.Finish(&ret);
         return ret;
       },
     };
-    return series{int64_type{}, caf::visit(f, *args[0].array)};
+    return series{int64_type{}, caf::visit(f, *inv.args[0].array)};
   }
 };
 
@@ -81,17 +79,15 @@ public:
     return "tql2.sqrt";
   }
 
-  auto eval(const ast::function_call& self, size_t length,
-            std::vector<series> args, diagnostic_handler& dh) const
-    -> series override {
-    if (args.size() != 1) {
+  auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
+    if (inv.args.size() != 1) {
       diagnostic::error("`sqrt` expects exactly one argument")
-        .primary(self.get_location())
+        .primary(inv.self.get_location())
         .emit(dh);
     }
-    if (args.empty()) {
+    if (inv.args.empty()) {
       auto b = arrow::DoubleBuilder{};
-      (void)b.AppendNulls(detail::narrow<int64_t>(length));
+      (void)b.AppendNulls(detail::narrow<int64_t>(inv.length));
       return series{double_type{}, b.Finish().ValueOrDie()};
     }
     auto compute = [&](const arrow::DoubleArray& x) {
@@ -172,18 +168,18 @@ public:
       [&](const auto& arg) {
         TENZIR_UNUSED(arg);
         diagnostic::warning("`sqrt` expects `double`, got `{}`",
-                            args[0].type.kind())
+                            inv.args[0].type.kind())
           // TODO: Wrong location.
-          .primary(self.get_location())
+          .primary(inv.self.get_location())
           .emit(dh);
         auto b = arrow::DoubleBuilder{};
-        (void)b.AppendNulls(detail::narrow<int64_t>(length));
+        (void)b.AppendNulls(detail::narrow<int64_t>(inv.length));
         auto ret = std::shared_ptr<arrow::DoubleArray>{};
         (void)b.Finish(&ret);
         return ret;
       },
     };
-    return series{double_type{}, caf::visit(f, *args[0].array)};
+    return series{double_type{}, caf::visit(f, *inv.args[0].array)};
   }
 };
 
@@ -193,20 +189,18 @@ public:
     return "tql2.random";
   }
 
-  auto eval(const ast::function_call& self, size_t length,
-            std::vector<series> args, diagnostic_handler& dh) const
-    -> series override {
-    if (not args.empty()) {
+  auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
+    if (not inv.args.empty()) {
       diagnostic::error("`random` expects no arguments")
-        .primary(self.get_location())
+        .primary(inv.self.get_location())
         .emit(dh);
     }
     auto b = arrow::DoubleBuilder{};
-    (void)b.Reserve(length);
+    (void)b.Reserve(inv.length);
     // TODO
     auto engine = std::default_random_engine{std::random_device{}()};
     auto dist = std::uniform_real_distribution<double>{0.0, 1.0};
-    for (auto i = size_t{0}; i < length; ++i) {
+    for (auto i = int64_t{0}; i < inv.length; ++i) {
       b.UnsafeAppend(dist(engine));
     }
     return {double_type{}, b.Finish().ValueOrDie()};
@@ -272,16 +266,14 @@ public:
     return "tql2.sum";
   }
 
-  auto eval(const ast::function_call& self, size_t length,
-            std::vector<series> args, diagnostic_handler& dh) const
-    -> series override {
-    TENZIR_UNUSED(args);
+  auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
+    TENZIR_UNUSED(inv);
     diagnostic::error("this is currently only an aggregation function")
-      .primary(self.get_location())
+      .primary(inv.self.get_location())
       .emit(dh);
     // TODO
     auto b = arrow::NullBuilder{};
-    b.AppendNulls(length);
+    (void)b.AppendNulls(inv.length);
     return {null_type{}, b.Finish().ValueOrDie()};
   }
 
@@ -312,15 +304,13 @@ public:
     return "tql2.count";
   }
 
-  auto eval(const ast::function_call& self, size_t length,
-            std::vector<series> args, diagnostic_handler& dh) const
-    -> series override {
+  auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
     diagnostic::error("this is currently only an aggregation function")
-      .primary(self.get_location())
+      .primary(inv.self.get_location())
       .emit(dh);
     // TODO
     auto b = arrow::NullBuilder{};
-    b.AppendNulls(length);
+    (void)b.AppendNulls(inv.length);
     return {null_type{}, b.Finish().ValueOrDie()};
   }
 

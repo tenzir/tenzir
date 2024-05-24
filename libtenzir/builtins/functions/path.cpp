@@ -20,17 +20,16 @@ public:
     return "tql2.file_name";
   }
 
-  auto eval(const ast::function_call& self, size_t length,
-            std::vector<series> args, diagnostic_handler& dh) const
-    -> series override {
-    if (args.size() != 1) {
+  auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
+    if (inv.args.size() != 1) {
       diagnostic::error("`file_name` expects exactly one argument")
-        .primary(self.get_location())
+        .primary(inv.self.get_location())
         .emit(dh);
+      return series::null(string_type{}, inv.length);
     }
     // TODO
-    TENZIR_ASSERT(not args.empty());
-    auto arg = caf::get_if<arrow::StringArray>(&*args[0].array);
+    TENZIR_ASSERT(not inv.args.empty());
+    auto arg = caf::get_if<arrow::StringArray>(&*inv.args[0].array);
     TENZIR_ASSERT(arg);
     auto b = arrow::StringBuilder{};
     for (auto row = int64_t{0}; row < arg->length(); ++row) {
@@ -59,17 +58,16 @@ public:
     return "tql2.parent_dir";
   }
 
-  auto eval(const ast::function_call& self, size_t length,
-            std::vector<series> args, diagnostic_handler& dh) const
-    -> series override {
-    if (args.size() != 1) {
+  auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
+    if (inv.args.size() != 1) {
       diagnostic::error("`file_name` expects exactly one argument")
-        .primary(self.get_location())
+        .primary(inv.self.get_location())
         .emit(dh);
+      return series::null(string_type{}, inv.length);
     }
     // TODO
-    TENZIR_ASSERT(not args.empty());
-    auto arg = caf::get_if<arrow::StringArray>(&*args[0].array);
+    TENZIR_ASSERT(not inv.args.empty());
+    auto arg = caf::get_if<arrow::StringArray>(&*inv.args[0].array);
     TENZIR_ASSERT(arg);
     auto b = arrow::StringBuilder{};
     for (auto row = int64_t{0}; row < arg->length(); ++row) {

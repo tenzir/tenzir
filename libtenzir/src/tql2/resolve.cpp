@@ -54,6 +54,7 @@ public:
         case context_t::none:
           TENZIR_UNREACHABLE();
       }
+      TENZIR_UNREACHABLE();
     });
     if (not xyz) {
       auto available = context_ == context_t::op_name ? reg_.operator_names()
