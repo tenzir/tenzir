@@ -225,12 +225,6 @@ then
   eval "${cmd2}"
 elif [ "${platform}" = "Debian" ]
 then
-  # adduser is required by the Debian package installation.
-  if ! check adduser
-  then
-    echo "Could not find ${bold}adduser${normal} in \$PATH."
-    exit 1
-  fi
   cmd1="$sudo apt-get --yes install \"${tmpdir}/${package}\""
   cmd2="$sudo systemctl status tenzir-node || [ ! -d /run/systemd/system ]"
   echo "This script is about to run the following commands:"
