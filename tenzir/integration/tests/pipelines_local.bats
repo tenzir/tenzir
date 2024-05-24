@@ -174,8 +174,10 @@ setup() {
   check tenzir 'version | repeat 10 | batch 3 | measure | select events'
   check tenzir 'version | repeat 10 | batch 15 | measure | select events'
 }
+
 # bats test_tags=pipelines
 @test "Empty Record in Pipeline" {
+  check tenzir "from ${INPUTSDIR}/json/empty-record.json read json | batch 256 | pass | select a | write json"
   check tenzir "from ${INPUTSDIR}/json/empty-record.json read json | write json"
   check tenzir "from ${INPUTSDIR}/json/empty-record.json read json | write csv"
   check tenzir "from ${INPUTSDIR}/json/empty-record.json read json | write xsv \" \" ; NULL"
