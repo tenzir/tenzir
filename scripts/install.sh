@@ -69,7 +69,7 @@ platform=
 os=$(uname -s)
 if [ "${os}" = "Linux" ]
 then
-    if [ -n "$(rpm -qa)" ] 2>/dev/null
+    if check rpm && [ -n "$(rpm -qa 2>/dev/null)" ]
     then
         platform=RPM
     elif [ -f "/etc/debian_version" ]
