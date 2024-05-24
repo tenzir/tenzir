@@ -369,8 +369,11 @@ using cron_plugin = scheduled_execution_plugin<cron_scheduler>;
 
 class every_plugin2 final : public virtual operator_factory_plugin {
 public:
-  auto make_operator(invocation inv, session ctx) const
-    -> operator_ptr override {
+  auto name() const -> std::string override {
+    return "tql2.every";
+  }
+
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
     if (inv.args.size() != 2) {
       diagnostic::error("TODO")
         .primary(inv.self.get_location())
@@ -412,3 +415,4 @@ public:
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::cron_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_plugin2)

@@ -57,8 +57,7 @@ public:
     return std::make_unique<discard_operator>();
   }
 
-  auto make_operator(invocation inv, session ctx) const
-    -> operator_ptr override {
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
     if (not inv.args.empty()) {
       diagnostic::error("TODO").primary(inv.self.get_location()).emit(ctx);
     }

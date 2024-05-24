@@ -581,8 +581,7 @@ private:
 class load_file_plugin final
   : public tql2::operator_plugin<load_file_operator> {
 public:
-  auto make_operator(invocation inv, session ctx) const
-    -> operator_ptr override {
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto args = loader_args{};
     argument_parser2{"https://docs.tenzir.com/operators/load_file"}
       .add(args.path, "<path>")
@@ -640,8 +639,7 @@ private:
 class save_file_plugin final
   : public tql2::operator_plugin<save_file_operator> {
 public:
-  auto make_operator(invocation inv, session ctx) const
-    -> operator_ptr override {
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto args = saver_args{};
     argument_parser2{"https://docs.tenzir.com/operators/save_file"}
       .add(args.path, "<path>")

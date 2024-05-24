@@ -1586,8 +1586,7 @@ class read_json_plugin final
   : public virtual operator_inspection_plugin<read_json>,
     public virtual operator_factory_plugin {
 public:
-  auto make_operator(invocation inv, session ctx) const
-    -> operator_ptr override {
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto args = parser_args{};
     auto sep = std::optional<located<std::string>>{};
     argument_parser2{"https://docs.tenzir.com/operators/read_json"}
@@ -1621,8 +1620,7 @@ class write_json_plugin final
   : public virtual operator_inspection_plugin<write_json>,
     public virtual operator_factory_plugin {
 public:
-  auto make_operator(invocation inv, session ctx) const
-    -> operator_ptr override {
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
     // TODO
     auto args = printer_args{};
     argument_parser2{"https://docs.tenzir.com/operators/write_json"}

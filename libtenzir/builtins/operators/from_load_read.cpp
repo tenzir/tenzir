@@ -299,9 +299,10 @@ public:
     return "tql2.load";
   }
 
-  auto make_operator(invocation inv, session ctx) const
-    -> operator_ptr override {
-    diagnostic::error("TODO").emit(ctx);
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
+    diagnostic::error("operator is not yet implemented")
+      .primary(inv.self.get_location())
+      .emit(ctx);
     return nullptr;
   }
 };

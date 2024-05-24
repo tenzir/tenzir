@@ -1185,8 +1185,7 @@ private:
 
 class plugin2 final : public tql2::operator_plugin<summarize_operator2> {
 public:
-  auto make_operator(invocation inv, session ctx) const
-    -> operator_ptr override {
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
     // summarize foo, bar, baz=count(foo)
     auto cfg = config{};
     auto add_aggregate

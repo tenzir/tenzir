@@ -22,8 +22,7 @@ public:
     std::vector<ast::expression> args;
   };
 
-  virtual auto make_operator(invocation inv, session ctx) const -> operator_ptr
-    = 0;
+  virtual auto make(invocation inv, session ctx) const -> operator_ptr = 0;
 };
 
 } // namespace tenzir

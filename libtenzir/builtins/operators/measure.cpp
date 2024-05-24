@@ -156,8 +156,7 @@ public:
                                               cumulative);
   }
 
-  auto make_operator(invocation inv, session ctx) const
-    -> operator_ptr override {
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
     argument_parser2{"https://docs.tenzir.com/operators/measure"}.parse(inv,
                                                                         ctx);
     return std::make_unique<measure_operator>(batch_size_, true, false);

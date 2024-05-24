@@ -414,7 +414,7 @@ auto prepare_pipeline(ast::pipeline&& pipe, session ctx) -> pipeline {
           &ctx.reg().get(x.op.ref));
         TENZIR_ASSERT(def);
         TENZIR_ASSERT(*def);
-        auto op = (*def)->make_operator(
+        auto op = (*def)->make(
           operator_factory_plugin::invocation{
             std::move(x.op),
             std::move(x.args),
@@ -438,7 +438,7 @@ auto prepare_pipeline(ast::pipeline&& pipe, session ctx) -> pipeline {
         TENZIR_ASSERT(plugin);
         auto args = std::vector<ast::expression>{};
         args.emplace_back(std::move(x));
-        auto op = plugin->make_operator(
+        auto op = plugin->make(
           operator_factory_plugin::invocation{
             ast::entity{
               {ast::identifier{std::string{"set"}, location::unknown}}},
@@ -468,7 +468,7 @@ auto prepare_pipeline(ast::pipeline&& pipe, session ctx) -> pipeline {
         }
         auto plugin = plugins::find<operator_factory_plugin>("tql2.if");
         TENZIR_ASSERT(plugin);
-        auto op = plugin->make_operator(
+        auto op = plugin->make(
           operator_factory_plugin::invocation{
             ast::entity{{ast::identifier{std::string{"if"}, location::unknown}}},
             std::move(args),

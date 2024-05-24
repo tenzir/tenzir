@@ -65,8 +65,7 @@ private:
 
 class plugin final : public tql2::operator_plugin<source_operator> {
 public:
-  auto make_operator(invocation inv, session ctx) const
-    -> operator_ptr override {
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto usage = "source {...} | [...]";
     auto docs = "https://docs.tenzir.com/operators/source";
     if (inv.args.size() != 1) {

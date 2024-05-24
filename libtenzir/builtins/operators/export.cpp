@@ -293,8 +293,7 @@ public:
       live);
   }
 
-  auto make_operator(invocation inv, session ctx) const
-    -> operator_ptr override {
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
     // auto usage = "export live=<bool>, internal=<bool>";
     // auto usage = "export live=false, internal=false";
     // auto docs = "https://docs.tenzir.com/operators/export";

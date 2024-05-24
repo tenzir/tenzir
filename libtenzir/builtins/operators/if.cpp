@@ -277,8 +277,7 @@ private:
 
 class plugin final : public virtual tql2::operator_plugin<if_operator> {
 public:
-  auto make_operator(invocation inv, session ctx) const
-    -> operator_ptr override {
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
     // TODO: Very hacky!
     TENZIR_ASSERT(inv.args.size() == 2 || inv.args.size() == 3);
     auto condition = std::move(inv.args[0]);

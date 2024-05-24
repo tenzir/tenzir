@@ -208,8 +208,7 @@ private:
 
 class plugin2 final : public virtual tql2::operator_plugin<drop_operator2> {
 public:
-  auto make_operator(invocation inv, session ctx) const
-    -> operator_ptr override {
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto selectors = std::vector<ast::simple_selector>{};
     for (auto& arg : inv.args) {
       auto selector = ast::simple_selector::try_from(arg);

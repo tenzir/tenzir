@@ -120,8 +120,7 @@ public:
       repetitions.value_or(std::numeric_limits<uint64_t>::max()));
   }
 
-  auto make_operator(invocation inv, session ctx) const
-    -> operator_ptr override {
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
     using namespace tql2;
     if (inv.args.size() != 1) {
       diagnostic::error("`repeat` expects exactly one argument, got {}",

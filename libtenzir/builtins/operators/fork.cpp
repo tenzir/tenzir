@@ -95,8 +95,7 @@ private:
 
 class plugin final : public virtual tql2::operator_plugin<fork_operator> {
 public:
-  auto make_operator(invocation inv, session ctx) const
-    -> operator_ptr override {
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
     if (inv.args.size() != 1) {
       diagnostic::error("TODO").primary(inv.self.get_location()).emit(ctx);
       return nullptr;

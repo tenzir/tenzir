@@ -44,8 +44,7 @@ public:
     return std::move(*result);
   }
 
-  auto make_operator(invocation inv, session ctx) const
-    -> operator_ptr override {
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
     // TODO: This is quite bad.
     if (inv.args.size() > 1) {
       diagnostic::error("TODO").primary(inv.self.get_location()).emit(ctx);

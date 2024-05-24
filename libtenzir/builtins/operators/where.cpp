@@ -191,7 +191,7 @@ public:
       auto current_value = array->Value(0);
       auto current_begin = int64_t{0};
       // Add `false` at index `length` to flush.r
-      auto& x = *to_record_batch(slice)->ToStructArray().ValueOrDie()->data();
+      // auto& x = *to_record_batch(slice)->ToStructArray().ValueOrDie()->data();
       for (auto i = int64_t{1}; i < length + 1; ++i) {
         auto next = i != length && array->Value(i);
         if (current_value == next) {
@@ -235,6 +235,7 @@ public:
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     // TODO
+    TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
 
@@ -248,8 +249,7 @@ private:
 
 class plugin2 final : public virtual tql2::operator_plugin<where_operator2> {
 public:
-  auto make_operator(invocation inv, session ctx) const
-    -> operator_ptr override {
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
     if (inv.args.size() != 1) {
       diagnostic::error("expected exactly one argument")
         .primary(inv.self.get_location())
