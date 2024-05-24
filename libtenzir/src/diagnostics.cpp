@@ -74,7 +74,8 @@ public:
 
   void emit(diagnostic diag) override {
     if (not std::exchange(first, false)) {
-      fmt::print("\n");
+      // TODO: Re-enable this shortly before merging.
+      // fmt::print("\n");
     }
     // TODO: Do not print color if not a console + provide option.
     // TODO: Do not print the same line multiple times. Merge annotations instead.
