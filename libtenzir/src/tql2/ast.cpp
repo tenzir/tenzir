@@ -70,6 +70,7 @@ auto simple_selector::try_from(ast::expression expr)
       if (not *success) {
         return {};
       }
+      std::ranges::reverse(path);
       return simple_selector{std::move(expr), has_this, std::move(path)};
     }
     current = std::get<ast::expression*>(sub_result);

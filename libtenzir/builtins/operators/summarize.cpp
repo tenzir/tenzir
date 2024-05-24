@@ -1076,6 +1076,13 @@ public:
   auto finish() -> std::vector<table_slice> {
     auto emplace
       = [](record& root, const ast::simple_selector& sel, data value) {
+          if (sel.path().empty()) {
+            // TODO
+            if (auto rec = caf::get_if<record>(&value)) {
+              root = std::move(*rec);
+            }
+            return;
+          }
           auto current = &root;
           for (auto& segment : sel.path()) {
             auto& val = (*current)[segment.name];
@@ -1164,6 +1171,7 @@ public:
 
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
 

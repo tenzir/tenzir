@@ -573,7 +573,7 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   tql2::resolve_entities(parsed, reg, *diag_wrapper);
   if (cfg.dump_ast) {
     with_thread_local_registry(reg, [&] {
-      fmt::println("{:#?}", parsed);
+      fmt::print("{:#?}\n", parsed);
     });
     return not diag_wrapper->error();
   }

@@ -23,7 +23,7 @@ auto const_eval(const ast::expression& expr, session ctx)
 struct resolve_error {
   struct field_not_found {};
   struct field_of_non_record {
-    type type;
+    tenzir::type type;
   };
 
   using reason_t = variant<field_not_found, field_of_non_record>;

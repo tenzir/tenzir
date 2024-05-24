@@ -223,12 +223,14 @@ public:
         // Double => Double
         // UInt64 => Int64
         // Int64 => Int64
+        TENZIR_UNUSED(array);
         TENZIR_TODO();
       },
       [&](const arrow::UInt64Array& array) {
         // Double => Double
         // UInt64 => UInt64Array
         // Int64 => Int64
+        TENZIR_UNUSED(array);
         TENZIR_TODO();
       },
       [&](const arrow::DoubleArray& array) {
@@ -273,6 +275,7 @@ public:
   auto eval(const ast::function_call& self, size_t length,
             std::vector<series> args, diagnostic_handler& dh) const
     -> series override {
+    TENZIR_UNUSED(args);
     diagnostic::error("this is currently only an aggregation function")
       .primary(self.get_location())
       .emit(dh);

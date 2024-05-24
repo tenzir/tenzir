@@ -111,7 +111,7 @@ public:
         events.push_back(caf::get<record>(*event));
       },
       [&](auto&) {
-        diagnostic::error("expected a list")
+        diagnostic::error("expected a record or a list of records")
           .primary(inv.args[0].get_location())
           .usage(usage)
           .docs(docs)

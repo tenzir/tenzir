@@ -449,7 +449,7 @@ private:
         .throw_();
     }
     if (peek(tk::lpar)) {
-      parse_function_call({}, ast::entity{{ident.as_identifier()}});
+      return parse_function_call({}, ast::entity{{ident.as_identifier()}});
     }
     return ast::root_field{ident.as_identifier()};
     // TODO: The code below is a mess and needs to be improved.
@@ -532,6 +532,8 @@ private:
     if (is_record) {
       return parse_record(begin.location);
     }
+    // TODO: If we encounter a `:` while parsing the following pipeline, we want
+    // to emit a more helpful message.
     auto pipe = parse_pipeline();
     auto end = expect(tk::rbrace);
     return pipeline_expr{

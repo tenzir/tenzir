@@ -237,4 +237,24 @@ auto evaluator::eval(const ast::function_call& x) -> series {
   return ret;
 }
 
+auto evaluator::eval(const ast::this_& x) -> series {
+  auto& input = input_or_throw(x.get_location());
+  return {input.schema(), to_record_batch(input)->ToStructArray().ValueOrDie()};
+}
+
+auto evaluator::eval(const ast::root_field& x) -> series {
+  auto& input = input_or_throw(x.get_location());
+  auto& rec_ty = caf::get<record_type>(input.schema());
+  for (auto [i, field] : detail::enumerate<int>(rec_ty.fields())) {
+    if (field.name == x.ident.name) {
+      // TODO: Is this correct?
+      return series{field.type, to_record_batch(input)->column(0)};
+    }
+  }
+  diagnostic::warning("field `{}` not found", x.ident.name)
+    .primary(x.ident.location)
+    .emit(dh_);
+  return null();
+}
+
 } // namespace tenzir::tql2

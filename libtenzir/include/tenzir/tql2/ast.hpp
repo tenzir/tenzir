@@ -868,6 +868,10 @@ public:
     }
   }
 
+  void enter(ast::root_field& x) {
+    go(x.ident);
+  }
+
   template <class T>
   void enter(T&) {
     TENZIR_WARN("missed {}", typeid(T).name());
