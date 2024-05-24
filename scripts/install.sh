@@ -210,7 +210,6 @@ fi
 
 # Trigger installation.
 action "Installing package into ${prefix}"
-insert_path="$sudo echo 'export PATH=\$PATH:/opt/tenzir/bin' > /etc/profile.d/tenzir.sh"
 if [ "${platform}" = "RPM" ]
 then
   cmd1="$sudo yum -y localinstall \"${tmpdir}/${package}\""
@@ -219,14 +218,11 @@ then
   echo
   echo "  - ${cmd1}"
   echo "  - ${cmd2}"
-  echo "  - ${insert_path}"
   confirm
   action "Installing via yum"
   eval "${cmd1}"
   action "Checking node status"
   eval "${cmd2}"
-  action "Adding /opt/tenzir/bin to the system path"
-  eval "${insert_path}"
 elif [ "${platform}" = "Debian" ]
 then
   cmd1="$sudo apt-get --yes install \"${tmpdir}/${package}\""
@@ -235,26 +231,24 @@ then
   echo
   echo "  - ${cmd1}"
   echo "  - ${cmd2}"
-  echo "  - ${insert_path}"
   confirm
   action "Installing via apt-get"
   eval "${cmd1}"
   action "Checking node status"
   eval "${cmd2}"
-  action "Adding /opt/tenzir/bin to the system path"
-  eval "${insert_path}"
 elif [ "${platform}" = "Linux" ]
 then
   cmd1="$sudo tar xzf \"${tmpdir}/${package}\" -C /"
+  cmd2="$sudo echo 'export PATH=\$PATH:/opt/tenzir/bin' > /etc/profile.d/tenzir.sh"
   echo "This script is about to run the following command:"
   echo
   echo "  - ${cmd1}"
-  echo "  - ${insert_path}"
+  echo "  - ${cmd2}"
   confirm
   action "Unpacking tarball"
   eval "${cmd1}"
   action "Adding /opt/tenzir/bin to the system path"
-  eval "${insert_path}"
+  eval "${cmd2}"
 elif [ "${platform}" = "macOS" ]
 then
   cmd1="$sudo installer -pkg \"${tmpdir}/${package}\" -target /"

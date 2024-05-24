@@ -5,4 +5,7 @@ if [ $1 -ge 1 ]; then
   else
     systemctl try-restart tenzir-node.service >/dev/null 2>&1 || :
   fi
+elif [ $1 -eq 0 ]; then
+  # uninstall
+  rm /etc/profile.d/tenzir.sh
 fi
