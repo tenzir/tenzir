@@ -498,6 +498,7 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
                               return lhs_mismatch == lhs.end();
                             }),
     "indices must not be a subset of the following index");
+  const auto num_rows = batch->num_rows();
   // The current unpacked layer of the transformation, i.e., the pieces required
   // to re-assemble the current layer of both the record type and the record
   // batch.
@@ -581,13 +582,9 @@ select_columns(type schema, const std::shared_ptr<arrow::RecordBatch>& batch,
   TENZIR_ASSERT(current == sentinel, "index out of bounds");
   // Re-assemble the record batch after the transformation.
   TENZIR_ASSERT(layer.fields.size() == layer.arrays.size());
-  if (layer.fields.empty()) {
-    return {};
-  }
   auto new_schema = type{record_type{layer.fields}};
   new_schema.assign_metadata(schema);
   auto arrow_schema = new_schema.to_arrow_schema();
-  const auto num_rows = layer.arrays[0]->length();
   return {
     std::move(new_schema),
     arrow::RecordBatch::Make(std::move(arrow_schema), num_rows,
