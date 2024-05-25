@@ -12,18 +12,13 @@
 
 #include "tenzir/aliases.hpp"
 #include "tenzir/chunk.hpp"
-#include "tenzir/concept/printable/tenzir/uuid.hpp"
-#include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/partition_common.hpp"
 #include "tenzir/detail/tracepoint.hpp"
 #include "tenzir/fbs/partition.hpp"
 #include "tenzir/fbs/utils.hpp"
-#include "tenzir/fbs/uuid.hpp"
-#include "tenzir/hash/xxhash.hpp"
 #include "tenzir/ids.hpp"
 #include "tenzir/indexer.hpp"
-#include "tenzir/ip_synopsis.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/report.hpp"
@@ -329,7 +324,7 @@ partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
   accountant_actor accountant, filesystem_actor filesystem,
   const std::filesystem::path& path) {
-  auto id_string = to_string(id);
+  auto id_string = fmt::to_string(id);
   self->state.self = self;
   self->state.path = path;
   self->state.accountant = std::move(accountant);

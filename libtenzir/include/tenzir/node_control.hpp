@@ -11,11 +11,8 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/atoms.hpp"
 #include "tenzir/command.hpp"
-#include "tenzir/defaults.hpp"
-#include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/tuple_map.hpp"
 #include "tenzir/error.hpp"
-#include "tenzir/logger.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/actor_system_config.hpp>
@@ -23,24 +20,22 @@
 #include <caf/scoped_actor.hpp>
 #include <caf/typed_actor.hpp>
 
-#include <array>
 #include <string>
-#include <string_view>
 
 namespace tenzir {
 
 /// Retrieves the node connection timeout as specified under the option
 /// `tenzir.connection-timeout` from the given settings.
-caf::timespan node_connection_timeout(const caf::settings& options);
+auto node_connection_timeout(const caf::settings& options) -> caf::timespan;
 
-caf::expected<caf::actor>
-spawn_at_node(caf::scoped_actor& self, const node_actor& node, invocation inv);
+auto spawn_at_node(caf::scoped_actor& self, const node_actor& node,
+                   invocation inv) -> caf::expected<caf::actor>;
 
 /// Look up components by their typed actor interfaces. Returns the first actor
 /// of each type passed as template parameter.
 template <class... Actors>
-caf::expected<std::tuple<Actors...>>
-get_node_components(caf::scoped_actor& self, const node_actor& node) {
+auto get_node_components(caf::scoped_actor& self, const node_actor& node)
+  -> caf::expected<std::tuple<Actors...>> {
   using result_t = std::tuple<Actors...>;
   auto result = caf::expected{result_t{}};
   auto normalize = [](caf::string_view in) {
