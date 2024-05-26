@@ -11,8 +11,8 @@
 #include <tenzir/concept/parseable/tenzir/expression.hpp>
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/data.hpp>
-#include <tenzir/detail/patricia.hpp>
 #include <tenzir/detail/range_map.hpp>
+#include <tenzir/detail/subnet_tree.hpp>
 #include <tenzir/expression.hpp>
 #include <tenzir/fbs/data.hpp>
 #include <tenzir/flatbuffer.hpp>
@@ -212,23 +212,7 @@ namespace tenzir::plugins::lookup_table {
 
 namespace {
 
-struct subnet_keymaker {
-  template <class U>
-  struct rebind {
-    using other = subnet_keymaker;
-  };
-
-  auto operator()(const view<ip>& addr) const -> detail::sk::patricia_key {
-    return {as_bytes(addr), 128};
-  }
-
-  auto operator()(const view<subnet>& sn) const -> detail::sk::patricia_key {
-    return {as_bytes(sn.network()), sn.length()};
-  }
-};
-
 using map_type = tsl::robin_map<key_data, data>;
-using subnet_map = detail::sk::patricia_map<subnet, data, subnet_keymaker>;
 
 class ctx final : public virtual context {
 public:
@@ -248,18 +232,18 @@ public:
     auto builder = series_builder{};
     auto subnet_lookup = [&](const auto& value) -> std::optional<view<data>> {
       auto match = detail::overload{
-        [&](const auto&) {
-          return subnet_entries.end();
+        [&](const auto&) -> const data* {
+          return nullptr;
         },
         [&](view<ip> addr) {
-          return subnet_entries.prefix_match(materialize(addr));
+          return subnet_entries.match(materialize(addr));
         },
         [&](view<subnet> sn) {
-          return subnet_entries.prefix_match(materialize(sn));
+          return subnet_entries.match(materialize(sn));
         },
       };
-      if (auto it = caf::visit(match, value); it != subnet_entries.end()) {
-        return make_view(it->second);
+      if (auto x = caf::visit(match, value)) {
+        return make_view(*x);
       }
       return std::nullopt;
     };
@@ -322,10 +306,10 @@ public:
 
   auto dump() -> generator<table_slice> override {
     auto entry_builder = series_builder{};
-    for (const auto& [key, value] : subnet_entries) {
+    for (const auto& [key, value] : subnet_entries.nodes()) {
       auto row = entry_builder.record();
       row.field("key", data{key});
-      row.field("value", value);
+      row.field("value", value ? *value : data{});
       if (entry_builder.length() >= context::dump_batch_size_limit) {
         co_yield entry_builder.finish_assert_one_slice(
           fmt::format("tenzir.{}.info", context_type()));
@@ -381,7 +365,7 @@ public:
       // Subnets never make it into the regular map of entries.
       if (caf::holds_alternative<subnet_type>(key_type)) {
         const auto& key = caf::get<subnet>(materialized_key);
-        subnet_entries[key] = materialize(*context_it);
+        subnet_entries.insert(key, materialize(*context_it));
       } else {
         context_entries.insert_or_assign(materialized_key,
                                          materialize(*context_it));
@@ -477,7 +461,7 @@ public:
 
 private:
   map_type context_entries;
-  subnet_map subnet_entries;
+  detail::subnet_tree subnet_entries;
 };
 
 // TODO: do we need a v2 loader now with the subnet optimization?
