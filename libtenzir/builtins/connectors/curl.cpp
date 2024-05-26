@@ -297,6 +297,12 @@ private:
           result.http_opts.chunked = true;
         } else if (arg->inner == "--multipart") {
           result.http_opts.multipart = true;
+          // TODO: factor these TLS options in the future, as they apply to many
+          // connectors, such as email.
+        } else if (arg->inner == "-P" || arg->inner == "--skip-peer-verification") {
+          result.transfer_opts.skip_peer_verification = true;
+        } else if (arg->inner == "-H" || arg->inner == "--skip-hostname-verification") {
+          result.transfer_opts.skip_hostname_verification = true;
         } else {
           args.push_back(std::move(*arg));
         }
