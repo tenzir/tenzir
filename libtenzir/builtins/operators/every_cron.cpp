@@ -6,9 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/tql2/eval.hpp"
-#include "tenzir/tql2/exec.hpp"
-
+#include <tenzir/argument_parser2.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/detail/croncpp.hpp>
@@ -374,38 +372,65 @@ public:
   }
 
   auto make(invocation inv, session ctx) const -> operator_ptr override {
-    if (inv.args.size() != 2) {
-      diagnostic::error("TODO")
-        .primary(inv.self.get_location())
-        .usage("every <duration> { ... }")
+    auto interval = located<duration>{};
+    auto pipe = pipeline{};
+    argument_parser2{"https://docs.tenzir.com/operators/every"}
+      .add(interval, "<duration>")
+      .add(pipe, "<pipeline>") // TODO: Improve meta.
+      .parse(inv, ctx);
+    if (interval.inner <= duration::zero()) {
+      diagnostic::error("expected a positive duration, got {}", interval.inner)
+        .primary(interval.source)
         .emit(ctx);
       return nullptr;
     }
-    auto interval_data = tql2::const_eval(inv.args[0], ctx);
-    if (not interval_data) {
-      return nullptr;
-    }
-    auto interval = caf::get_if<duration>(&*interval_data);
-    if (not interval) {
-      diagnostic::error("expected a duration, got `{}`", *interval_data)
-        .primary(inv.args[0].get_location())
-        .emit(ctx);
-      return nullptr;
-    }
-    auto pipe_expr = std::get_if<ast::pipeline_expr>(&*inv.args[1].kind);
-    if (not pipe_expr) {
-      diagnostic::error("expected a pipeline expression")
-        .primary(inv.args[1].get_location())
-        .usage("every <duration> { ... }")
-        .emit(ctx);
-      return nullptr;
-    }
-    auto pipe = tql2::prepare_pipeline(std::move(pipe_expr->inner), ctx);
-    // TODO: Fix `every`?
     auto ops = std::move(pipe).unwrap();
-    TENZIR_ASSERT(ops.size() == 1);
+    // TODO: How do we know whether `pipe` was set? This looks hacky.
+    if (ops.empty()) {
+      return nullptr;
+    }
+    if (ops.size() > 1) {
+      // TODO: Lift this limitation.
+      // TODO: Is this safe?
+      diagnostic::error("expected exactly one operator, found {}", ops.size())
+        .primary(inv.args[1].get_location())
+        .emit(ctx);
+      return nullptr;
+    }
     return std::make_unique<scheduled_execution_operator<every_scheduler>>(
-      std::move(ops[0]), every_scheduler{*interval});
+      std::move(ops[0]), every_scheduler{interval.inner});
+    // if (inv.args.size() != 2) {
+    //   diagnostic::error("TODO")
+    //     .primary(inv.self.get_location())
+    //     .usage("every <duration> { ... }")
+    //     .emit(ctx);
+    //   return nullptr;
+    // }
+    // auto interval_data = tql2::const_eval(inv.args[0], ctx);
+    // if (not interval_data) {
+    //   return nullptr;
+    // }
+    // auto interval = caf::get_if<duration>(&*interval_data);
+    // if (not interval) {
+    //   diagnostic::error("expected a duration, got `{}`", *interval_data)
+    //     .primary(inv.args[0].get_location())
+    //     .emit(ctx);
+    //   return nullptr;
+    // }
+    // auto pipe_expr = std::get_if<ast::pipeline_expr>(&*inv.args[1].kind);
+    // if (not pipe_expr) {
+    //   diagnostic::error("expected a pipeline expression")
+    //     .primary(inv.args[1].get_location())
+    //     .usage("every <duration> { ... }")
+    //     .emit(ctx);
+    //   return nullptr;
+    // }
+    // auto pipe = tql2::prepare_pipeline(std::move(pipe_expr->inner), ctx);
+    // // TODO: Fix `every`?
+    // auto ops = std::move(pipe).unwrap();
+    // TENZIR_ASSERT(ops.size() == 1);
+    // return std::make_unique<scheduled_execution_operator<every_scheduler>>(
+    //   std::move(ops[0]), every_scheduler{*interval});
   }
 };
 

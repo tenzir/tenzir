@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/argument_parser2.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/plugin.hpp"
@@ -96,18 +97,12 @@ private:
 class plugin final : public virtual tql2::operator_plugin<fork_operator> {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
-    if (inv.args.size() != 1) {
-      diagnostic::error("TODO").primary(inv.self.get_location()).emit(ctx);
-      return nullptr;
-    }
-    auto arg = std::get_if<ast::pipeline_expr>(&*inv.args[0].kind);
-    if (not arg) {
-      diagnostic::error("TODO").primary(inv.args[0].get_location()).emit(ctx);
-      return nullptr;
-    }
-    auto pipe = prepare_pipeline(std::move(arg->inner), ctx);
+    auto pipe = located<pipeline>{};
+    argument_parser2{"https://docs.tenzir.com/operators/fork"}
+      .add(pipe, "<pipeline>")
+      .parse(inv, ctx);
     auto loc = operator_location::anywhere;
-    for (auto& op : pipe.operators()) {
+    for (auto& op : pipe.inner.operators()) {
       auto op_loc = op->location();
       if (op_loc != operator_location::anywhere) {
         if (loc != operator_location::anywhere && loc != op_loc) {
@@ -119,8 +114,7 @@ public:
         loc = op_loc;
       }
     }
-    return std::make_unique<fork_operator>(
-      located{std::move(pipe), arg->get_location()}, loc);
+    return std::make_unique<fork_operator>(std::move(pipe), loc);
   }
 };
 

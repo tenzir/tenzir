@@ -215,6 +215,7 @@ public:
       if (selector) {
         selectors.push_back(std::move(*selector));
       } else {
+        // TODO: Improve error message.
         diagnostic::error("expected selector")
           .primary(arg.get_location())
           .emit(ctx.dh());

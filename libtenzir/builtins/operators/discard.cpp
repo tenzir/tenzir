@@ -6,10 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/tql2/plugin.hpp"
-
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/argument_parser2.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::discard {
 
@@ -58,9 +58,8 @@ public:
   }
 
   auto make(invocation inv, session ctx) const -> operator_ptr override {
-    if (not inv.args.empty()) {
-      diagnostic::error("TODO").primary(inv.self.get_location()).emit(ctx);
-    }
+    argument_parser2{"https://docs.tenzir.com/operators/discard"}.parse(inv,
+                                                                        ctx);
     return std::make_unique<discard_operator>();
   }
 };

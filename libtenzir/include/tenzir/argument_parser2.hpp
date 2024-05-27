@@ -12,6 +12,7 @@
 #include "tenzir/session.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
+#include "tenzir/tql2/exec.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 #include <caf/detail/is_one_of.hpp>
@@ -30,6 +31,33 @@ public:
   auto add(located<std::string>& x, std::string meta) -> argument_parser2& {
     positional_.emplace_back(
       [&x](located<std::string> y) {
+        x = std::move(y);
+      },
+      std::move(meta));
+    return *this;
+  }
+
+  auto add(located<duration>& x, std::string meta) -> argument_parser2& {
+    positional_.emplace_back(
+      [&x](located<duration> y) {
+        x = y;
+      },
+      std::move(meta));
+    return *this;
+  }
+
+  auto add(pipeline& x, std::string meta) -> argument_parser2& {
+    positional_.emplace_back(
+      [&x](located<pipeline> y) {
+        x = std::move(y.inner);
+      },
+      std::move(meta));
+    return *this;
+  }
+
+  auto add(located<pipeline>& x, std::string meta) -> argument_parser2& {
+    positional_.emplace_back(
+      [&x](located<pipeline> y) {
         x = std::move(y);
       },
       std::move(meta));
@@ -108,21 +136,49 @@ public:
                .primary(expr.get_location()));
         break;
       }
-      positional.set.match([&](setter<located<std::string>>& set) {
-        auto value = tql2::const_eval(expr, ctx);
-        if (not value) {
-          return;
-        }
-        auto string = caf::get_if<std::string>(&*value);
-        if (not string) {
-          emit(diagnostic::error("expected argument of type `string`, but got "
-                                 "`{}`",
-                                 kind(value))
-                 .primary(expr.get_location()));
-          return;
-        }
-        set(located{std::move(*string), expr.get_location()});
-      });
+      positional.set.match(
+        [&](setter<located<std::string>>& set) {
+          auto value = tql2::const_eval(expr, ctx);
+          if (not value) {
+            return;
+          }
+          auto cast = caf::get_if<std::string>(&*value);
+          if (not cast) {
+            emit(
+              diagnostic::error("expected argument of type `string`, but got "
+                                "`{}`",
+                                kind(value))
+                .primary(expr.get_location()));
+            return;
+          }
+          set(located{std::move(*cast), expr.get_location()});
+        },
+        [&](setter<located<duration>>& set) {
+          auto value = tql2::const_eval(expr, ctx);
+          if (not value) {
+            return;
+          }
+          auto cast = caf::get_if<duration>(&*value);
+          if (not cast) {
+            emit(
+              diagnostic::error("expected argument of type `duration`, but got "
+                                "`{}`",
+                                kind(value))
+                .primary(expr.get_location()));
+            return;
+          }
+          set(located{*cast, expr.get_location()});
+        },
+        [&](setter<located<pipeline>>& set) {
+          auto pipe_expr = std::get_if<ast::pipeline_expr>(&*expr.kind);
+          if (not pipe_expr) {
+            emit(diagnostic::error("expected a pipeline expression")
+                   .primary(expr.get_location()));
+            return;
+          }
+          auto pipe = tql2::prepare_pipeline(std::move(pipe_expr->inner), ctx);
+          set(located{std::move(pipe), expr.get_location()});
+        });
       ++arg;
     }
     for (; arg != inv.args.end(); ++arg) {
@@ -186,6 +242,10 @@ public:
   auto usage() const -> std::string {
     if (usage_cache_.empty()) {
       for (auto& positional : positional_) {
+        if (std::holds_alternative<setter<located<pipeline>>>(positional.set)) {
+          usage_cache_ += " { ... }";
+          continue;
+        }
         if (not usage_cache_.empty()) {
           usage_cache_ += ", ";
         }
@@ -219,7 +279,8 @@ private:
   using setter_variant = variant<setter<Ts>...>;
 
   struct positional {
-    setter_variant<located<std::string>> set;
+    setter_variant<located<std::string>, located<duration>, located<pipeline>>
+      set;
     std::string meta;
   };
 
