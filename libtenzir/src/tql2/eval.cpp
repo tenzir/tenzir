@@ -149,13 +149,13 @@ auto evaluator::eval(const ast::list& x) -> series {
   for (auto& item : x.items) {
     auto array = eval(item);
     if (not arrays.empty()) {
-      // TODO:
+      // TODO: Handle record extension & null type.
       TENZIR_ASSERT(array.type == arrays[0].type);
     }
     arrays.push_back(std::move(array));
   }
   // arrays = [<1, 3>, <2, 4>]
-  // TODO:
+  // TODO: Rewrite this, `series_builder` is probably not the right tool.
   if (arrays.empty()) {
     auto b = series_builder{type{list_type{null_type{}}}};
     for (auto i = int64_t{0}; i < length_; ++i) {

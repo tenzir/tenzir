@@ -374,12 +374,26 @@ private:
             name.as_identifier(),
           };
         }
-      } else if (auto lbracket = accept(tk::lbracket)) {
+        continue;
+      }
+      // TODO: We have to differentiate between an operator invocation `foo
+      // [0]` and an assignment `foo[0] = 42`. To make an early decision, we
+      // for now parse it as an operator if there is whitespace after `foo`.
+      // Alternatively, we could whether we can determine what this has to be
+      // from the surrounding context, but that seems a bit brittle.
+      if (not trivia_before_next() && peek(tk::lbracket)) {
+        auto lbracket = expect(tk::lbracket);
         if (auto rbracket = accept(tk::rbracket)) {
           expr = unpack{std::move(expr),
                         lbracket.location.combine(rbracket.location)};
         } else {
           auto index = parse_expression();
+          if (auto comma = accept(tk::comma)) {
+            diagnostic::error(
+              "found `,` in index expression, which is not a list")
+              .primary(comma.location)
+              .throw_();
+          }
           rbracket = expect(tk::rbracket);
           expr = index_expr{
             std::move(expr),
@@ -388,9 +402,9 @@ private:
             rbracket.location,
           };
         }
-      } else {
-        break;
+        continue;
       }
+      break;
     }
     return expr;
   }
@@ -934,6 +948,11 @@ private:
 
   auto eoi() const -> bool {
     return next_ == tokens_.size();
+  }
+
+  auto trivia_before_next() const -> bool {
+    // TODO: Is this what we want?
+    return next_ > last_ + 1;
   }
 
   auto next_location() -> location {
