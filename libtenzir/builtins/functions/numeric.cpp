@@ -8,6 +8,7 @@
 
 #include <tenzir/concept/parseable/tenzir/si.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <random>
@@ -267,14 +268,47 @@ public:
   }
 
   auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
-    TENZIR_UNUSED(inv);
-    diagnostic::error("this is currently only an aggregation function")
-      .primary(inv.self.get_location())
-      .emit(dh);
-    // TODO
-    auto b = arrow::NullBuilder{};
-    (void)b.AppendNulls(inv.length);
-    return {null_type{}, b.Finish().ValueOrDie()};
+    if (inv.args.size() != 1) {
+      diagnostic::error("function `sum` expects exactly one argument")
+        .primary(inv.self.get_location())
+        .emit(dh);
+      return series::null(null_type{}, inv.length);
+    }
+    auto& arg = inv.args[0];
+    auto list = dynamic_cast<arrow::ListArray*>(&*arg.array);
+    if (not list) {
+      diagnostic::warning("function `sum` expects a list")
+        .primary(inv.self.args[0].get_location())
+        .emit(dh);
+      return series::null(null_type{}, inv.length);
+    }
+    auto inner_type = caf::get<list_type>(arg.type).value_type();
+    auto b = series_builder{};
+    for (auto i = int64_t{0}; i < list->length(); ++i) {
+      if (list->IsNull(i)) {
+        b.null();
+        continue;
+      }
+      auto instance = sum_instance{};
+      auto err = instance.add(series{inner_type, list->value_slice(i)});
+      if (not err.empty()) {
+        diagnostic::warning("{}", err)
+          .primary(inv.self.fn.get_location())
+          .emit(dh);
+      }
+      b.data(instance.finish());
+    }
+    auto result = b.finish();
+    // TODO: Can this happen? If so, what do we want to do? Do we need to adjust
+    // the plugin interface?
+    if (result.size() != 1) {
+      diagnostic::warning("internal error in `sum`: unexpected array count: {}",
+                          result.size())
+        .primary(inv.self.fn.get_location())
+        .emit(dh);
+      return series::null(null_type{}, inv.length);
+    }
+    return std::move(result[0]);
   }
 
   auto make_aggregation() const
