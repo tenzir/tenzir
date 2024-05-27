@@ -15,7 +15,8 @@ Parser:
 
 ```
 json [--schema <schema>] [--selector <field[:prefix]>] [--unnest-separator <string>]
-     [--no-infer] [--ndjson] [--precise] [--raw] [--arrays-of-objects]
+     [--no-infer] [--ndjson] [--precise] [--raw]
+     [--arrays-of-objects]
 ```
 
 Printer:
@@ -23,6 +24,7 @@ Printer:
 ```
 json [-c|--compact-output] [-C|--color-output] [-M|--monochrome-output]
      [--omit-nulls] [--omit-empty-objects] [--omit-empty-lists] [--omit-empty]
+     [--arrays-of-objects]
 ```
 
 ## Description
@@ -50,7 +52,6 @@ For example, the [Suricata EVE JSON](suricata.md) format includes a field
 The `--selector` option is incompatible with the `--schema` option.
 
 ### `--no-infer` (Parser)
-
 The JSON parser automatically infers types in the input JSON.
 
 The flag `--no-infer` toggles this behavior, and requires the user to provide an
@@ -232,6 +233,39 @@ With `--omit-empty-lists`, this example becomes:
 ### `--omit-empty` (Printer)
 
 This options combines all other `--omit-*` options.
+
+### `--arrays-of-objects` (Printer)
+
+Prints one array of objects per batch of events arriving at the printer as
+opposed to printing one object per event.
+
+This is particularly useful when interfacing with REST APIs, which often require
+sets of events grouped into one JSON object.
+
+Use the [`batch`](../operators/batch.md) operator to explicitly control how many
+events get grouped together in the same array.
+
+Example:
+
+```
+{
+  "foo": 1
+}
+{
+  "foo": 2
+}
+```
+
+With `--arrays-of-objects`, this example becomes:
+
+```
+[{
+  "foo": 1
+},
+{
+  "foo": 2
+}]
+```
 
 ## Examples
 
