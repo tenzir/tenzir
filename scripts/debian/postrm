@@ -18,7 +18,7 @@ if [ "$1" = "purge" ] ; then
     deluser  --system tenzir || echo "Could not remove tenzir user."
 
     echo "Removing tenzir from \$PATH"
-    rm /etc/profile.d/tenzir.sh
+    rm -f /etc/profile.d/tenzir.sh
 fi
 
 # Automatically added by dh_installsystemd/13.3.4

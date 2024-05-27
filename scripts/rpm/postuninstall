@@ -7,5 +7,5 @@ if [ $1 -ge 1 ]; then
   fi
 elif [ $1 -eq 0 ]; then
   # uninstall
-  rm /etc/profile.d/tenzir.sh
+  rm -f /etc/profile.d/tenzir.sh
 fi
