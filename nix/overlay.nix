@@ -439,6 +439,7 @@ in {
     curl
     jq
     lsof
+    perl
     procps
     socat
     # toybox provides a portable `rev`, but it also comes with a `cp` that does
