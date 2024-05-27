@@ -434,19 +434,34 @@ private:
     // TODO: Drop one of the syntax possibilities.
     if (peek(tk::meta) || peek(tk::at)) {
       auto begin = location{};
+      auto is_at = false;
       if (auto meta = accept(tk::meta)) {
         begin = meta.location;
         expect(tk::dot);
       } else {
         begin = expect(tk::at).location;
+        is_at = true;
       }
       auto ident = expect(tk::identifier).as_identifier();
       auto kind = static_cast<enum meta_extractor::kind>(0);
       if (ident.name == "tag") {
         kind = meta_extractor::schema;
+      } else if (ident.name == "import_time") {
+        kind = meta_extractor::import_time;
+      } else if (ident.name == "internal") {
+        kind = meta_extractor::internal;
+      } else if (ident.name == "schema") {
+        diagnostic::error("use `{}tag` instead", is_at ? "@" : "meta.")
+          .primary(begin.combine(ident.location))
+          .throw_();
+      } else if (ident.name == "schema_id") {
+        diagnostic::error("use `type_id(this)` instead")
+          .primary(begin.combine(ident.location))
+          .throw_();
       } else {
         diagnostic::error("unknown metadata name `{}`", ident.name)
           .primary(ident.location)
+          .hint("must be one of `tag`, `import_time`, `internal`")
           .throw_();
       }
       return ast::meta{kind, begin.combine(ident.location)};

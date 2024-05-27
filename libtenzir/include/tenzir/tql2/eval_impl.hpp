@@ -117,8 +117,13 @@ public:
         return to_series(std::string{input.schema().name()});
       case meta_extractor::schema_id:
         return to_series(input.schema().make_fingerprint());
-      case meta_extractor::import_time:
-        return to_series(input.import_time());
+      case meta_extractor::import_time: {
+        auto result = input.import_time();
+        if (result == time{}) {
+          return series::null(time_type{}, length_);
+        }
+        return to_series(result);
+      }
       case meta_extractor::internal:
         return to_series(input.schema().attribute("internal").has_value());
     }
