@@ -1310,6 +1310,7 @@ struct printer_args {
   std::optional<location> omit_nulls;
   std::optional<location> omit_empty_objects;
   std::optional<location> omit_empty_lists;
+  std::optional<location> arrays_of_objects;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, printer_args& x) -> bool {
@@ -1321,7 +1322,8 @@ struct printer_args {
               f.field("omit_empty", x.omit_empty),
               f.field("omit_nulls", x.omit_nulls),
               f.field("omit_empty_objects", x.omit_empty_objects),
-              f.field("omit_empty_lists", x.omit_empty_lists));
+              f.field("omit_empty_lists", x.omit_empty_lists),
+              f.field("arrays_of_objects", x.arrays_of_objects));
   }
 };
 
@@ -1351,10 +1353,13 @@ public:
       = args_.omit_empty_objects.has_value() or args_.omit_empty.has_value();
     const auto omit_empty_lists
       = args_.omit_empty_lists.has_value() or args_.omit_empty.has_value();
-    auto meta = chunk_metadata{.content_type = compact ? "application/x-ndjson"
-                                                       : "application/json"};
+    const auto arrays_of_objects = args_.arrays_of_objects.has_value();
+    auto meta = chunk_metadata{.content_type = compact and not arrays_of_objects
+                                                 ? "application/x-ndjson"
+                                                 : "application/json"};
     return printer_instance::make(
       [compact, style, omit_nulls, omit_empty_objects, omit_empty_lists,
+       arrays_of_objects,
        meta = std::move(meta)](table_slice slice) -> generator<chunk_ptr> {
         if (slice.rows() == 0) {
           co_yield {};
@@ -1373,10 +1378,28 @@ public:
         auto buffer = std::vector<char>{};
         auto resolved_slice = resolve_enumerations(slice);
         auto out_iter = std::back_inserter(buffer);
-        for (const auto& row : resolved_slice.values()) {
-          const auto ok = printer.print(out_iter, row);
-          TENZIR_ASSERT(ok);
-          out_iter = fmt::format_to(out_iter, "\n");
+        auto rows = resolved_slice.values();
+        auto row = rows.begin();
+        if (not arrays_of_objects) {
+          for (; row != rows.end(); ++row) {
+            const auto ok = printer.print(out_iter, *row);
+            TENZIR_ASSERT(ok);
+            out_iter = fmt::format_to(out_iter, "\n");
+          }
+        } else {
+          out_iter = fmt::format_to(out_iter, "[");
+          if (row != rows.end()) {
+            const auto ok = printer.print(out_iter, *row);
+            TENZIR_ASSERT(ok);
+            ++row;
+          }
+          for (; row != rows.end(); ++row) {
+            *out_iter++ = ',';
+            *out_iter++ = compact ? ' ' : '\n';
+            const auto ok = printer.print(out_iter, *row);
+            TENZIR_ASSERT(ok);
+          }
+          out_iter = fmt::format_to(out_iter, "]\n");
         }
         auto chunk = chunk::make(std::move(buffer), meta);
         co_yield std::move(chunk);
@@ -1449,6 +1472,7 @@ public:
     parser.add("--omit-nulls", args.omit_nulls);
     parser.add("--omit-empty-objects", args.omit_empty_objects);
     parser.add("--omit-empty-lists", args.omit_empty_lists);
+    parser.add("--arrays-of-objects", args.arrays_of_objects);
     parser.parse(p);
     return std::make_unique<json_printer>(std::move(args));
   }
