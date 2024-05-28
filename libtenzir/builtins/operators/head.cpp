@@ -46,11 +46,10 @@ public:
   }
 
   auto make(invocation inv, session ctx) const -> operator_ptr override {
-    // TODO: This is quite bad.
     auto count = std::optional<uint64_t>{};
-    // argument_parser2{"https://docs.tenzir.com/operators/fork"}
-    //   .add(count, "<count>")
-    //   .parse(inv, ctx);
+    argument_parser2{"https://docs.tenzir.com/operators/fork"}
+      .add(count, "<count>")
+      .parse(inv, ctx);
     auto result = pipeline::internal_parse_as_operator(
       fmt::format("slice :{}", count.value_or(10)));
     if (not result) {

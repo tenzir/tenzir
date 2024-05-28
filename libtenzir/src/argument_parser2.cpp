@@ -8,6 +8,8 @@
 
 #include "tenzir/argument_parser2.hpp"
 
+#include "tenzir/detail/enumerate.hpp"
+
 namespace tenzir {
 
 namespace {
@@ -42,8 +44,11 @@ void argument_parser2::parse(const operator_factory_plugin::invocation& inv,
       x);
   };
   auto arg = inv.args.begin();
-  for (auto& positional : positional_) {
+  for (auto [idx, positional] : detail::enumerate(positional_)) {
     if (arg == inv.args.end()) {
+      if (first_optional_ && idx >= *first_optional_) {
+        break;
+      }
       emit(diagnostic::error("expected additional positional argument `{}`",
                              positional.meta)
              .primary(inv.self.get_location()));
@@ -51,6 +56,9 @@ void argument_parser2::parse(const operator_factory_plugin::invocation& inv,
     }
     auto& expr = *arg;
     if (std::holds_alternative<ast::assignment>(*expr.kind)) {
+      if (first_optional_ && idx >= *first_optional_) {
+        break;
+      }
       emit(diagnostic::error("expected positional argument `{}` first",
                              positional.meta)
              .primary(expr.get_location()));
@@ -64,10 +72,8 @@ void argument_parser2::parse(const operator_factory_plugin::invocation& inv,
         }
         auto cast = caf::get_if<T>(&*value);
         if (not cast) {
-          // TODO
-          emit(diagnostic::error("expected argument of type `string`, but got "
-                                 "`{}`",
-                                 kind(value))
+          emit(diagnostic::error("expected argument of type `{}`, but got `{}`",
+                                 type_kind::of<data_to_type_t<T>>, kind(value))
                  .primary(expr.get_location()));
           return;
         }
@@ -76,22 +82,6 @@ void argument_parser2::parse(const operator_factory_plugin::invocation& inv,
       [&](setter<ast::expression>& set) {
         set(expr);
       },
-      // [&](setter<located<duration>>& set) {
-      //   auto value = tql2::const_eval(expr, ctx);
-      //   if (not value) {
-      //     return;
-      //   }
-      //   auto cast = caf::get_if<duration>(&*value);
-      //   if (not cast) {
-      //     emit(
-      //       diagnostic::error("expected argument of type `duration`, but got "
-      //                         "`{}`",
-      //                         kind(value))
-      //         .primary(expr.get_location()));
-      //     return;
-      //   }
-      //   set(located{*cast, expr.get_location()});
-      // },
       [&](setter<located<pipeline>>& set) {
         auto pipe_expr = std::get_if<ast::pipeline_expr>(&*expr.kind);
         if (not pipe_expr) {
@@ -164,7 +154,7 @@ void argument_parser2::parse(const operator_factory_plugin::invocation& inv,
 
 auto argument_parser2::usage() const -> std::string {
   if (usage_cache_.empty()) {
-    for (auto& positional : positional_) {
+    for (auto [idx, positional] : detail::enumerate(positional_)) {
       if (std::holds_alternative<setter<located<pipeline>>>(positional.set)) {
         usage_cache_ += " { ... }";
         continue;
@@ -172,7 +162,11 @@ auto argument_parser2::usage() const -> std::string {
       if (not usage_cache_.empty()) {
         usage_cache_ += ", ";
       }
-      usage_cache_ += positional.meta;
+      if (first_optional_ && idx >= *first_optional_) {
+        usage_cache_ += fmt::format("[{}]", positional.meta);
+      } else {
+        usage_cache_ += positional.meta;
+      }
     }
     for (auto& [name, set] : named_) {
       if (not usage_cache_.empty()) {
@@ -196,18 +190,18 @@ auto argument_parser2::usage() const -> std::string {
 
 template <argument_parser_any_type T>
 auto argument_parser2::add(T& x, std::string meta) -> argument_parser2& {
+  TENZIR_ASSERT(not first_optional_, "encountered required positional after "
+                                     "optional positional argument");
   if constexpr (argument_parser_bare_type<T>) {
-    positional_.emplace_back(
-      [&](located<T> y) {
-        x = std::move(y.inner);
-      },
-      std::move(meta));
+    positional_.emplace_back(setter<located<T>>{[&](located<T> y) {
+                               x = std::move(y.inner);
+                             }},
+                             std::move(meta));
   } else {
-    positional_.emplace_back(
-      [&](T y) {
-        x = std::move(y);
-      },
-      std::move(meta));
+    positional_.emplace_back(setter<T>{[&](T y) {
+                               x = std::move(y);
+                             }},
+                             std::move(meta));
   }
   return *this;
 }
@@ -215,6 +209,20 @@ auto argument_parser2::add(T& x, std::string meta) -> argument_parser2& {
 template <argument_parser_any_type T>
 auto argument_parser2::add(std::optional<T>& x, std::string meta)
   -> argument_parser2& {
+  if (not first_optional_) {
+    first_optional_ = positional_.size();
+  }
+  if constexpr (argument_parser_bare_type<T>) {
+    positional_.emplace_back(setter<located<T>>{[&](located<T> y) {
+                               x = std::move(y.inner);
+                             }},
+                             std::move(meta));
+  } else {
+    positional_.emplace_back(setter<T>{[&](T y) {
+                               x = std::move(y);
+                             }},
+                             std::move(meta));
+  }
   return *this;
 }
 
@@ -226,8 +234,9 @@ struct instantiate_argument_parser_add {
 
   template <class... T>
   struct inner {
-    static constexpr auto value
-      = std::tuple{static_cast<func_type<T>>(&argument_parser2::add)...};
+    static constexpr auto value = std::tuple{
+      static_cast<func_type<T>>(&argument_parser2::add)...,
+      static_cast<func_type<std::optional<T>>>(&argument_parser2::add)...};
   };
 
   static constexpr auto value = detail::tl_apply_t<

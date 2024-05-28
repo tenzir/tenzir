@@ -24,8 +24,8 @@
 namespace tenzir {
 
 using argument_parser_types
-  = detail::type_list<located<std::string>, located<duration>,
-                      located<pipeline>, located<bool>, ast::expression>;
+  = detail::type_list<located<std::string>, located<duration>, located<pipeline>,
+                      located<bool>, located<uint64_t>, ast::expression>;
 
 template <class T>
 struct is_located : caf::detail::is_specialization<located, T> {};
@@ -120,6 +120,7 @@ private:
 
   mutable std::string usage_cache_;
   std::vector<positional> positional_;
+  std::optional<size_t> first_optional_;
   std::vector<named> named_;
   std::string docs_;
 };

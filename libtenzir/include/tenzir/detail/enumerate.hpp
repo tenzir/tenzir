@@ -43,7 +43,7 @@ public:
   template <class It>
   iterator(It) -> iterator<It>;
 
-  explicit enumerator(T&& x) : x_{std::move(x)} {
+  explicit enumerator(T&& x) : x_{std::forward<T>(x)} {
   }
 
   auto begin() {
@@ -66,9 +66,15 @@ private:
   T x_;
 };
 
+// TODO: Make sure these overloads are what we want.
 template <class Int = size_t, class T>
 auto enumerate(T&& x) -> enumerator<Int, T> {
   return enumerator<Int, T>(std::forward<T>(x));
+}
+
+template <class Int = size_t, class T>
+auto enumerate(T& x) -> enumerator<Int, T&> {
+  return enumerator<Int, T&>(x);
 }
 
 } // namespace tenzir::detail
