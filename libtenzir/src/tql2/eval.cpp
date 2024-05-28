@@ -146,26 +146,26 @@ auto evaluator::eval(const ast::list& x) -> series {
   // |^^^^|
   //       |^^^^|
   auto arrays = std::vector<series>{};
+  auto item_ty = type{null_type{}};
   for (auto& item : x.items) {
     auto array = eval(item);
-    if (not arrays.empty()) {
-      // TODO: Handle record extension & null type.
-      TENZIR_ASSERT(array.type == arrays[0].type);
+    // TODO: Rewrite this and handle record extension.
+    if (array.type.kind().is_not<null_type>() && item_ty != array.type) {
+      if (item_ty.kind().is<null_type>()) {
+        item_ty = array.type;
+      } else {
+        diagnostic::warning("TODO: type clash in list evaluation")
+          .primary(item.get_location())
+          .emit(dh_);
+        continue;
+      }
     }
     arrays.push_back(std::move(array));
   }
   // arrays = [<1, 3>, <2, 4>]
   // TODO: Rewrite this, `series_builder` is probably not the right tool.
-  if (arrays.empty()) {
-    auto b = series_builder{type{list_type{null_type{}}}};
-    for (auto i = int64_t{0}; i < length_; ++i) {
-      b.list();
-    }
-    return b.finish_assert_one_array();
-  }
-  TENZIR_ASSERT(not arrays.empty());
-  auto b = series_builder{type{list_type{arrays[0].type}}};
-  for (auto row = int64_t{0}; row < arrays[0].length(); ++row) {
+  auto b = series_builder{type{list_type{item_ty}}};
+  for (auto row = int64_t{0}; row < length_; ++row) {
     auto l = b.list();
     for (auto& array : arrays) {
       // TODO: This is not very good.
