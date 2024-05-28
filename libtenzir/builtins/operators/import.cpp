@@ -6,15 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/tql2/plugin.hpp"
-
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/argument_parser2.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/node_control.hpp>
 #include <tenzir/pipeline.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
 
@@ -121,9 +121,8 @@ public:
   }
 
   auto make(invocation inv, session ctx) const -> operator_ptr override {
-    if (not inv.args.empty()) {
-      diagnostic::error("TODO").primary(inv.self.get_location()).emit(ctx);
-    }
+    argument_parser2{"https://docs.tenzir.com/operators/import"}.parse(inv,
+                                                                       ctx);
     return std::make_unique<import_operator>();
   }
 };

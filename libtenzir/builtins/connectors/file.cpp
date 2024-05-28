@@ -583,12 +583,18 @@ class load_file_plugin final
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto args = loader_args{};
+    auto timeout = std::optional<located<duration>>{};
     argument_parser2{"https://docs.tenzir.com/operators/load_file"}
       .add(args.path, "<path>")
       .add("follow", args.follow)
       .add("mmap", args.mmap)
-      // .add("timeout", args.timeout)
+      .add("timeout", timeout)
       .parse(inv, ctx);
+    if (timeout) {
+      args.timeout = located{
+        std::chrono::duration_cast<std::chrono::milliseconds>(timeout->inner),
+        timeout->source};
+    }
     return std::make_unique<load_file_operator>(std::move(args));
   }
 };

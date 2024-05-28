@@ -55,6 +55,8 @@ public:
   explicit argument_parser2(std::string docs) : docs_{std::move(docs)} {
   }
 
+  // ------------------------------------------------------------------------
+
   template <argument_parser_any_type T>
   auto add(T& x, std::string meta) -> argument_parser2&;
 
@@ -63,39 +65,14 @@ public:
 
   // ------------------------------------------------------------------------
 
-  auto add(std::string name, std::optional<located<std::string>>& x)
-    -> argument_parser2& {
-    named_.emplace_back(std::move(name), [&x](located<std::string> y) {
-      x = std::move(y);
-    });
-    return *this;
-  }
+  template <argument_parser_any_type T>
+  auto add(std::string name, std::optional<T>& x) -> argument_parser2&;
 
-  auto add(std::string name, std::optional<ast::expression>& x)
-    -> argument_parser2& {
-    named_.emplace_back(std::move(name), [&x](ast::expression y) {
-      x = std::move(y);
-    });
-    return *this;
-  }
+  auto add(std::string name, std::optional<location>& x) -> argument_parser2&;
 
-  auto add(std::string name, std::optional<location>& x) -> argument_parser2& {
-    named_.emplace_back(std::move(name), [&x](located<bool> y) {
-      if (y.inner) {
-        x = y.source;
-      } else {
-        x = std::nullopt;
-      }
-    });
-    return *this;
-  }
+  auto add(std::string name, bool& x) -> argument_parser2&;
 
-  auto add(std::string name, bool& x) -> argument_parser2& {
-    named_.emplace_back(std::move(name), [&x](located<bool> y) {
-      x = y.inner;
-    });
-    return *this;
-  }
+  // ------------------------------------------------------------------------
 
   void parse(const operator_factory_plugin::invocation& inv, session ctx);
 
@@ -115,7 +92,7 @@ private:
 
   struct named {
     std::string name;
-    setter_variant<located<std::string>, ast::expression, located<bool>> set;
+    caf::detail::tl_apply_t<argument_parser_types, setter_variant> set;
   };
 
   mutable std::string usage_cache_;

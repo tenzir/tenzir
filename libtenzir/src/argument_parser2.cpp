@@ -21,6 +21,7 @@ concept data_type = detail::tl_contains_v<data::types, T>;
 
 void argument_parser2::parse(const operator_factory_plugin::invocation& inv,
                              session ctx) {
+  // TODO: Simplify and deduplicate everything in this function.
   auto emit = [&](diagnostic_builder d) {
     // TODO
     TENZIR_ASSERT(inv.self.path.size() == 1);
@@ -133,38 +134,33 @@ void argument_parser2::parse(const operator_factory_plugin::invocation& inv,
     }
     auto& expr = assignment->right;
     it->set.match(
-      [&](setter<located<std::string>>& set) {
+      [&]<data_type T>(setter<located<T>>& set) {
         auto value = tql2::const_eval(expr, ctx);
         if (not value) {
           return;
         }
-        auto string = caf::get_if<std::string>(&*value);
-        if (not string) {
-          emit(diagnostic::error("expected argument of type `string`, but "
-                                 "got `{}`",
-                                 kind(value))
+        auto cast = caf::get_if<T>(&*value);
+        if (not cast) {
+          // TODO: Attempt conversion.
+          emit(diagnostic::error("expected argument of type `{}`, but got `{}`",
+                                 type_kind::of<data_to_type_t<T>>, kind(value))
                  .primary(expr.get_location()));
           return;
         }
-        set(located{std::move(*string), expr.get_location()});
-      },
-      [&](setter<located<bool>>& set) {
-        auto value = tql2::const_eval(expr, ctx);
-        if (not value) {
-          return;
-        }
-        auto boolean = caf::get_if<bool>(&*value);
-        if (not boolean) {
-          emit(diagnostic::error("expected argument of type `bool`, but "
-                                 "got `{}`",
-                                 kind(value))
-                 .primary(expr.get_location()));
-          return;
-        }
-        set(located{boolean, expr.get_location()});
+        set(located{std::move(*cast), expr.get_location()});
       },
       [&](setter<ast::expression>& set) {
         set(expr);
+      },
+      [&](setter<located<pipeline>>& set) {
+        auto pipe_expr = std::get_if<ast::pipeline_expr>(&*expr.kind);
+        if (not pipe_expr) {
+          emit(diagnostic::error("expected a pipeline expression")
+                 .primary(expr.get_location()));
+          return;
+        }
+        auto pipe = tql2::prepare_pipeline(std::move(pipe_expr->inner), ctx);
+        set(located{std::move(pipe), expr.get_location()});
       });
   }
 }
@@ -190,16 +186,16 @@ auto argument_parser2::usage() const -> std::string {
         usage_cache_ += ", ";
       }
       auto meta = set.match(
-        [](const setter<located<bool>>&) {
-          return "bool";
+        []<data_type T>(const setter<located<T>>&) {
+          return fmt::format("<{}>", type_kind::of<data_to_type_t<T>>);
         },
-        [](const setter<ast::expression>&) {
-          return "expr";
+        [](const setter<ast::expression>&) -> std::string {
+          return "<expr>";
         },
-        [](const setter<located<std::string>>&) {
-          return "string";
+        [](const setter<located<pipeline>>&) -> std::string {
+          return "{ ... }";
         });
-      usage_cache_ += fmt::format("{}=<{}>", name, meta);
+      usage_cache_ += fmt::format("{}={}", name, meta);
     }
   }
   return usage_cache_;
@@ -210,12 +206,12 @@ auto argument_parser2::add(T& x, std::string meta) -> argument_parser2& {
   TENZIR_ASSERT(not first_optional_, "encountered required positional after "
                                      "optional positional argument");
   if constexpr (argument_parser_bare_type<T>) {
-    positional_.emplace_back(setter<located<T>>{[&](located<T> y) {
+    positional_.emplace_back(setter<located<T>>{[&x](located<T> y) {
                                x = std::move(y.inner);
                              }},
                              std::move(meta));
   } else {
-    positional_.emplace_back(setter<T>{[&](T y) {
+    positional_.emplace_back(setter<T>{[&x](T y) {
                                x = std::move(y);
                              }},
                              std::move(meta));
@@ -230,12 +226,12 @@ auto argument_parser2::add(std::optional<T>& x, std::string meta)
     first_optional_ = positional_.size();
   }
   if constexpr (argument_parser_bare_type<T>) {
-    positional_.emplace_back(setter<located<T>>{[&](located<T> y) {
+    positional_.emplace_back(setter<located<T>>{[&x](located<T> y) {
                                x = std::move(y.inner);
                              }},
                              std::move(meta));
   } else {
-    positional_.emplace_back(setter<T>{[&](T y) {
+    positional_.emplace_back(setter<T>{[&x](T y) {
                                x = std::move(y);
                              }},
                              std::move(meta));
@@ -243,17 +239,59 @@ auto argument_parser2::add(std::optional<T>& x, std::string meta)
   return *this;
 }
 
+template <argument_parser_any_type T>
+auto argument_parser2::add(std::string name, std::optional<T>& x)
+  -> argument_parser2& {
+  if constexpr (argument_parser_bare_type<T>) {
+    named_.emplace_back(std::move(name), setter<located<T>>{[&x](located<T> y) {
+                          x = std::move(y.inner);
+                        }});
+  } else {
+    named_.emplace_back(std::move(name), setter<T>{[&x](T y) {
+                          x = std::move(y);
+                        }});
+  }
+  return *this;
+}
+
+auto argument_parser2::add(std::string name, std::optional<location>& x)
+  -> argument_parser2& {
+  named_.emplace_back(std::move(name),
+                      setter<located<bool>>{[&x](located<bool> y) {
+                        if (y.inner) {
+                          x = y.source;
+                        } else {
+                          x = std::nullopt;
+                        }
+                      }});
+  return *this;
+}
+
+auto argument_parser2::add(std::string name, bool& x) -> argument_parser2& {
+  named_.emplace_back(std::move(name),
+                      setter<located<bool>>{[&x](located<bool> y) {
+                        x = y.inner;
+                      }});
+  return *this;
+}
+
 template <std::monostate>
 struct instantiate_argument_parser_add {
   template <class T>
-  using func_type
+  using positional
     = auto (argument_parser2::*)(T&, std::string) -> argument_parser2&;
+
+  template <class T>
+  using named
+    = auto (argument_parser2::*)(std::string, T&) -> argument_parser2&;
 
   template <class... T>
   struct inner {
     static constexpr auto value = std::tuple{
-      static_cast<func_type<T>>(&argument_parser2::add)...,
-      static_cast<func_type<std::optional<T>>>(&argument_parser2::add)...};
+      static_cast<positional<T>>(&argument_parser2::add)...,
+      static_cast<positional<std::optional<T>>>(&argument_parser2::add)...,
+      static_cast<named<std::optional<T>>>(&argument_parser2::add)...,
+    };
   };
 
   static constexpr auto value = detail::tl_apply_t<
