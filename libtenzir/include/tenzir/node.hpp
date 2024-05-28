@@ -9,11 +9,8 @@
 #pragma once
 
 #include "tenzir/actors.hpp"
-#include "tenzir/aliases.hpp"
 #include "tenzir/command.hpp"
 #include "tenzir/component_registry.hpp"
-#include "tenzir/error.hpp"
-#include "tenzir/plugin.hpp"
 #include "tenzir/spawn_arguments.hpp"
 
 #include <caf/actor.hpp>

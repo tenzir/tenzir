@@ -10,7 +10,6 @@
 
 #include "tenzir/command.hpp"
 #include "tenzir/config.hpp"
-#include "tenzir/configuration.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/process.hpp"
 #include "tenzir/error.hpp"

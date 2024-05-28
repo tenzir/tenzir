@@ -35,7 +35,12 @@ as a static binary that we refer to as `velociraptor-binary` here.)
    cp client.yaml /etc/tenzir/plugin/velociraptor.yaml
    ```
 
-3. Run the frontend with the server configuration:
+3. Create a user (e.g., an admin named `tenzir`):
+   ```bash
+   velociraptor-binary -v -c server.yaml user add --role administrator tenzir
+   ```
+
+4. Run the frontend with the server configuration:
    ```bash
    velociraptor-binary -c server.yaml frontend
    ```
@@ -43,7 +48,8 @@ as a static binary that we refer to as `velociraptor-binary` here.)
 ## Run raw VQL
 
 After you have created a TLS certificate, you can use the `velociraptor`
-operator to execute a [Velociraptor Query Language (VQL)][vql] queries:
+operator to execute a [Velociraptor Query Language
+(VQL)](https://docs.velociraptor.app/docs/vql/) query:
 
 ```
 velociraptor --query "select * from pslist()"

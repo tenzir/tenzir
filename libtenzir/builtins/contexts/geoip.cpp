@@ -23,9 +23,7 @@
 
 #include <fmt/format.h>
 
-#include <chrono>
 #include <cstdint>
-#include <cstdio>
 #include <maxminddb.h>
 #include <memory>
 #include <string>
@@ -41,6 +39,7 @@ struct mmdb_deleter final {
   auto operator()(MMDB_s* ptr) noexcept -> void {
     if (ptr) {
       MMDB_close(ptr);
+      // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
       delete ptr;
     }
   }
@@ -55,9 +54,11 @@ auto make_mmdb(const std::string& path) -> caf::expected<mmdb_ptr> {
       .note("failed to find path `{}`", path)
       .to_error();
   }
-  auto ptr = new MMDB_s;
+  // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
+  auto* ptr = new MMDB_s;
   const auto status = MMDB_open(path.c_str(), MMDB_MODE_MMAP, ptr);
   if (status != MMDB_SUCCESS) {
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
     delete ptr;
     return diagnostic::error("{}", MMDB_strerror(status))
       .note("failed to open MaxMind database at `{}`", path)
@@ -117,8 +118,8 @@ public:
       case MMDB_DATA_TYPE_MAP: {
         auto size = entry_data_list->entry_data.data_size;
         auto sub_r = record{};
-        for (entry_data_list = entry_data_list->next; size && entry_data_list;
-             size--) {
+        for (entry_data_list = entry_data_list->next;
+             size > 0 && entry_data_list; size--) {
           if (MMDB_DATA_TYPE_UTF8_STRING != entry_data_list->entry_data.type) {
             *status = MMDB_INVALID_DATA_ERROR;
             return entry_data_list;
@@ -140,8 +141,8 @@ public:
       case MMDB_DATA_TYPE_ARRAY: {
         auto sub_l = list{};
         auto size = entry_data_list->entry_data.data_size;
-        for (entry_data_list = entry_data_list->next; size && entry_data_list;
-             size--) {
+        for (entry_data_list = entry_data_list->next;
+             size > 0 && entry_data_list; size--) {
           entry_data_list
             = entry_data_list_to_list(entry_data_list, status, sub_l);
           if (*status != MMDB_SUCCESS) {
@@ -207,16 +208,16 @@ public:
     return entry_data_list;
   }
 
-  auto
-  entry_data_list_to_record(MMDB_entry_data_list_s* entry_data_list,
-                            int* status, record& r, std::string key = {}) const
+  auto entry_data_list_to_record(MMDB_entry_data_list_s* entry_data_list,
+                                 int* status, record& r,
+                                 const std::string& key = {}) const
     -> MMDB_entry_data_list_s* {
     switch (entry_data_list->entry_data.type) {
       case MMDB_DATA_TYPE_MAP: {
         auto size = entry_data_list->entry_data.data_size;
 
-        for (entry_data_list = entry_data_list->next; size && entry_data_list;
-             size--) {
+        for (entry_data_list = entry_data_list->next;
+             size > 0 && entry_data_list; size--) {
           if (MMDB_DATA_TYPE_UTF8_STRING != entry_data_list->entry_data.type) {
             *status = MMDB_INVALID_DATA_ERROR;
             return entry_data_list;
@@ -245,8 +246,8 @@ public:
         auto l = list{};
         auto size = entry_data_list->entry_data.data_size;
         auto sub_r = record{};
-        for (entry_data_list = entry_data_list->next; size && entry_data_list;
-             size--) {
+        for (entry_data_list = entry_data_list->next;
+             size > 0 && entry_data_list; size--) {
           entry_data_list = entry_data_list_to_list(entry_data_list, status, l);
           if (*status != MMDB_SUCCESS) {
             return entry_data_list;
@@ -395,23 +396,23 @@ public:
   }
 
   auto dump_recurse(uint64_t node_number, uint8_t type, MMDB_entry_s* entry,
-                    current_dump& current_dump) -> generator<table_slice> {
-    if (current_dump.visited.contains(node_number)) {
+                    current_dump* current_dump) -> generator<table_slice> {
+    if (current_dump->visited.contains(node_number)) {
       co_return;
     }
-    current_dump.visited.emplace(node_number);
+    current_dump->visited.emplace(node_number);
     switch (type) {
       case MMDB_RECORD_TYPE_SEARCH_NODE: {
         MMDB_search_node_s search_node{};
-        current_dump.status
+        current_dump->status
           = MMDB_read_node(mmdb_.get(), node_number, &search_node);
-        if (current_dump.status != MMDB_SUCCESS) {
+        if (current_dump->status != MMDB_SUCCESS) {
           break;
         }
         for (auto&& x :
              dump_recurse(search_node.left_record, search_node.left_record_type,
                           &search_node.left_record_entry, current_dump)) {
-          if (current_dump.status != MMDB_SUCCESS) {
+          if (current_dump->status != MMDB_SUCCESS) {
             break;
           }
           co_yield x;
@@ -419,7 +420,7 @@ public:
         for (auto&& x : dump_recurse(
                search_node.right_record, search_node.right_record_type,
                &search_node.right_record_entry, current_dump)) {
-          if (current_dump.status != MMDB_SUCCESS) {
+          if (current_dump->status != MMDB_SUCCESS) {
             break;
           }
           co_yield x;
@@ -433,8 +434,9 @@ public:
       case MMDB_RECORD_TYPE_DATA: {
         TENZIR_ASSERT(entry != nullptr);
         MMDB_entry_data_list_s* entry_data_list = nullptr;
-        current_dump.status = MMDB_get_entry_data_list(entry, &entry_data_list);
-        if (current_dump.status != MMDB_SUCCESS) {
+        current_dump->status
+          = MMDB_get_entry_data_list(entry, &entry_data_list);
+        if (current_dump->status != MMDB_SUCCESS) {
           break;
         }
         auto free_entry_data_list = caf::detail::make_scope_guard([&] {
@@ -443,14 +445,15 @@ public:
           }
         });
         auto output = list{};
-        entry_data_list_to_list(entry_data_list, &current_dump.status, output);
-        if (current_dump.status != MMDB_SUCCESS) {
+        entry_data_list_to_list(entry_data_list, &current_dump->status, output);
+        if (current_dump->status != MMDB_SUCCESS) {
           break;
         }
         for (auto& x : output) {
-          current_dump.builder.data(x);
-          if (current_dump.builder.length() >= context::dump_batch_size_limit) {
-            for (auto&& slice : current_dump.builder.finish_as_table_slice(
+          current_dump->builder.data(x);
+          if (current_dump->builder.length()
+              >= context::dump_batch_size_limit) {
+            for (auto&& slice : current_dump->builder.finish_as_table_slice(
                    fmt::format("tenzir.{}.info", context_type()))) {
               co_yield std::move(slice);
             }
@@ -459,7 +462,7 @@ public:
         break;
       }
       case MMDB_RECORD_TYPE_INVALID: {
-        current_dump.status = MMDB_INVALID_DATA_ERROR;
+        current_dump->status = MMDB_INVALID_DATA_ERROR;
         break;
       }
     }
@@ -468,8 +471,8 @@ public:
   auto dump() -> generator<table_slice> override {
     TENZIR_ASSERT(mmdb_);
     current_dump current_dump;
-    for (auto&& slice :
-         dump_recurse(0, MMDB_RECORD_TYPE_SEARCH_NODE, nullptr, current_dump)) {
+    for (auto&& slice : dump_recurse(0, MMDB_RECORD_TYPE_SEARCH_NODE, nullptr,
+                                     &current_dump)) {
       co_yield slice;
     }
     // Dump all remaining entries that did not reach the size limit.
@@ -598,6 +601,7 @@ struct v2_loader : public context_loader {
                              fmt::format("failed close the temp file: {}",
                                          detail::describe_errno()));
     }
+    std::filesystem::remove(temp_file_name);
     return std::make_unique<ctx>(std::move(*mmdb),
                                  std::move(mapped_mmdb.value()));
   }

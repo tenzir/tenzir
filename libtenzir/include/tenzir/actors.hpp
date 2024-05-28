@@ -13,6 +13,7 @@
 #include "tenzir/aliases.hpp"
 #include "tenzir/atoms.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/http_api.hpp"
 
 #include <caf/inspector_access.hpp>
 #include <caf/io/fwd.hpp>
@@ -197,9 +198,7 @@ using catalog_actor = typed_actor_fwd<
   auto(atom::merge,
        std::shared_ptr<std::unordered_map<uuid, partition_synopsis_ptr>>)
     ->caf::result<atom::ok>,
-  // Merge a single partition synopsis.
-  auto(atom::merge, uuid, partition_synopsis_ptr)->caf::result<atom::ok>,
-  // Merge a set of partition synopsis.
+  // Merge a set of partition synopses.
   auto(atom::merge, std::vector<partition_synopsis_pair>)->caf::result<atom::ok>,
   // Get *ALL* partition synopses stored in the catalog.
   auto(atom::get)->caf::result<std::vector<partition_synopsis_pair>>,
@@ -211,8 +210,6 @@ using catalog_actor = typed_actor_fwd<
   // Return the candidate partitions per type for a query.
   auto(atom::candidates, tenzir::query_context)
     ->caf::result<catalog_lookup_result>,
-  // Retrieves the known taxonomies.
-  auto(atom::get, atom::taxonomies)->caf::result<taxonomies>,
   // Retrieves information about a partition with a given UUID.
   auto(atom::get, uuid)->caf::result<partition_info>>
   // Conform to the procotol of the STATUS CLIENT actor.
