@@ -20,6 +20,11 @@ setup() {
 }
 
 @test "read stdin via fluent-bit" {
+  # In general we deem the fluent-bit stdin functionality as too unreliable.
+  # Please refrain if you came here with the intention to re-enable this test,
+  # we only keep it to document that the operator should not be tested this
+  # way.
+  skip "This test often fails to produce any output when run on GitHub Actions Runners"
   # fluent-bit has an internal race condition that can cause the loss of
   # events during startup. We have to accept this for now and avoid
   # test flakyness with a bit of trickery.
@@ -27,7 +32,7 @@ setup() {
     while :; do
       echo '{"foo": {"bar": 42}}'
       sleep 1
-    done |
+    done || exit 1 |
       tenzir 'fluent-bit stdin | drop timestamp | head 1' |
       grep -v 'kevent'
   )"
