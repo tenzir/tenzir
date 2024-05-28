@@ -1018,14 +1018,12 @@ public:
   void add(const table_slice& slice) {
     auto group_values = std::vector<series>{};
     for (auto& group : cfg_.groups) {
-      // TODO: `group` is getting copied here.
       group_values.push_back(tql2::eval(group.expr.inner(), slice, dh_));
     }
     auto aggregate_args = std::vector<series>{};
     for (auto& aggregate : cfg_.aggregates) {
       // At the moment, we check this before constructing the operator.
       TENZIR_ASSERT(aggregate.call.args.size() == 1);
-      // TODO: Feed result to aggregation instance.
       aggregate_args.push_back(tql2::eval(aggregate.call.args[0], slice, dh_));
     }
     auto key = group_by_key_view{};
@@ -1033,12 +1031,11 @@ public:
     auto update_group = [&](bucket2& group, int64_t begin, int64_t end) {
       for (auto&& [aggr, arg, cfg_aggr] :
            zip_equal(group.aggregations, aggregate_args, cfg_.aggregates)) {
-        auto error = aggr->add(arg.slice(begin, end));
-        if (not error.empty()) {
-          diagnostic::warning("{}", error)
-            .primary(cfg_aggr.call.args[0].get_location())
-            .emit(dh_);
-        }
+        aggr->add(
+          tql2::aggregation_instance::add_info{
+            cfg_aggr.call.fn, located{arg.slice(begin, end),
+                                      cfg_aggr.call.args[0].get_location()}},
+          dh_);
       }
     };
     auto find_or_create_group = [&](int64_t row) -> bucket2* {

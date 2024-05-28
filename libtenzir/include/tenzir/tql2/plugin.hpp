@@ -51,16 +51,27 @@ public:
 
 class aggregation_instance {
 public:
+  struct add_info {
+    add_info(const ast::entity& self, located<series> arg)
+      : self{self}, arg{std::move(arg)} {
+    }
+
+    const ast::entity& self;
+    located<series> arg;
+  };
+
   virtual ~aggregation_instance() = default;
 
   /// Can return error string (TODO: Not the best).
-  [[nodiscard]] virtual auto add(series values) -> std::string = 0;
+  virtual void add(add_info info, diagnostic_handler& dh) = 0;
 
   virtual auto finish() -> data = 0;
 };
 
 class aggregation_function_plugin : public virtual function_plugin {
 public:
+  auto eval(invocation inv, diagnostic_handler& dh) const -> series final;
+
   virtual auto make_aggregation() const -> std::unique_ptr<aggregation_instance>
     = 0;
 };
