@@ -154,9 +154,11 @@ auto evaluator::eval(const ast::list& x) -> series {
       if (item_ty.kind().is<null_type>()) {
         item_ty = array.type;
       } else {
-        diagnostic::warning("TODO: type clash in list evaluation")
+        diagnostic::warning("type clash in list, using `null` instead")
           .primary(item.get_location())
+          .note("expected `{}` but got `{}`", item_ty.kind(), array.type.kind())
           .emit(dh_);
+        arrays.push_back(series::null(null_type{}, length_));
         continue;
       }
     }
