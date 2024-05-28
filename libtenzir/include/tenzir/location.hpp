@@ -78,6 +78,8 @@ inline constexpr auto enable_default_formatter<location> = true;
 /// Provides a `T` together with a `location`.
 template <class T>
 struct located {
+  using value_type = T;
+
   T inner{};
   location source;
 
