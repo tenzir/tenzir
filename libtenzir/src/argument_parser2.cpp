@@ -201,7 +201,7 @@ auto argument_parser2::usage() const -> std::string {
   return usage_cache_;
 }
 
-template <argument_parser_any_type T>
+template <argument_parser_type T>
 auto argument_parser2::add(T& x, std::string meta) -> argument_parser2& {
   TENZIR_ASSERT(not first_optional_, "encountered required positional after "
                                      "optional positional argument");
@@ -219,7 +219,7 @@ auto argument_parser2::add(T& x, std::string meta) -> argument_parser2& {
   return *this;
 }
 
-template <argument_parser_any_type T>
+template <argument_parser_type T>
 auto argument_parser2::add(std::optional<T>& x, std::string meta)
   -> argument_parser2& {
   if (not first_optional_) {
@@ -239,7 +239,7 @@ auto argument_parser2::add(std::optional<T>& x, std::string meta)
   return *this;
 }
 
-template <argument_parser_any_type T>
+template <argument_parser_type T>
 auto argument_parser2::add(std::string name, std::optional<T>& x)
   -> argument_parser2& {
   if constexpr (argument_parser_bare_type<T>) {
@@ -294,9 +294,8 @@ struct instantiate_argument_parser_add {
     };
   };
 
-  static constexpr auto value = detail::tl_apply_t<
-    detail::tl_concat_t<argument_parser_types, argument_parser_bare_types>,
-    inner>::value;
+  static constexpr auto value
+    = detail::tl_apply_t<argument_parser_types, inner>::value;
 };
 
 template struct instantiate_argument_parser_add<std::monostate{}>;

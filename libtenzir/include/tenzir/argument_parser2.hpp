@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/detail/type_list.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -23,30 +24,41 @@
 
 namespace tenzir {
 
-using argument_parser_types
-  = detail::type_list<located<std::string>, located<duration>, located<pipeline>,
-                      located<bool>, located<uint64_t>, ast::expression>;
+// TODO: This is probably somewhere.
+template <class T>
+struct as_located {
+  using type = located<T>;
+};
+
+using argument_parser_data_types
+  = detail::tl_map_t<caf::detail::tl_filter_not_type_t<data::types, pattern>,
+                     as_located>;
+
+using argument_parser_full_types
+  = detail::tl_concat_t<argument_parser_data_types,
+                        detail::type_list<located<pipeline>, ast::expression>>;
 
 template <class T>
 struct is_located : caf::detail::is_specialization<located, T> {};
 
 using argument_parser_bare_types
-  = detail::tl_map_t<detail::tl_filter_t<argument_parser_types, is_located>,
+  = detail::tl_map_t<detail::tl_filter_t<argument_parser_full_types, is_located>,
                      caf::detail::value_type_of>;
 
-static_assert(detail::tl_contains<argument_parser_bare_types, pipeline>::value);
+using argument_parser_types
+  = detail::tl_concat_t<argument_parser_full_types, argument_parser_bare_types>;
 
 template <class T>
-concept argument_parser_type
-  = detail::tl_contains<argument_parser_types, T>::value;
+concept argument_parser_full_type
+  = detail::tl_contains<argument_parser_full_types, T>::value;
 
 template <class T>
 concept argument_parser_bare_type
   = detail::tl_contains<argument_parser_bare_types, T>::value;
 
 template <class T>
-concept argument_parser_any_type
-  = argument_parser_type<T> || argument_parser_bare_type<T>;
+concept argument_parser_type
+  = argument_parser_full_type<T> || argument_parser_bare_type<T>;
 
 class argument_parser2 {
 public:
@@ -57,15 +69,15 @@ public:
 
   // ------------------------------------------------------------------------
 
-  template <argument_parser_any_type T>
+  template <argument_parser_type T>
   auto add(T& x, std::string meta) -> argument_parser2&;
 
-  template <argument_parser_any_type T>
+  template <argument_parser_type T>
   auto add(std::optional<T>& x, std::string meta) -> argument_parser2&;
 
   // ------------------------------------------------------------------------
 
-  template <argument_parser_any_type T>
+  template <argument_parser_type T>
   auto add(std::string name, std::optional<T>& x) -> argument_parser2&;
 
   auto add(std::string name, std::optional<location>& x) -> argument_parser2&;
@@ -86,13 +98,13 @@ private:
   using setter_variant = variant<setter<Ts>...>;
 
   struct positional {
-    caf::detail::tl_apply_t<argument_parser_types, setter_variant> set;
+    caf::detail::tl_apply_t<argument_parser_full_types, setter_variant> set;
     std::string meta;
   };
 
   struct named {
     std::string name;
-    caf::detail::tl_apply_t<argument_parser_types, setter_variant> set;
+    caf::detail::tl_apply_t<argument_parser_full_types, setter_variant> set;
   };
 
   mutable std::string usage_cache_;
