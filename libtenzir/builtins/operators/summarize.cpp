@@ -1115,7 +1115,7 @@ public:
                 return x.ident.name;
               },
               [](auto&) -> std::string_view {
-                return "TODO";
+                return "...";
               });
             result.emplace(fmt::format("{}({})", call.fn.path[0].name, arg),
                            value);

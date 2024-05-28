@@ -11,6 +11,8 @@
 #include <tenzir/series_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <caf/detail/is_one_of.hpp>
+
 #include <random>
 
 namespace tenzir::plugins::numeric {
@@ -210,6 +212,8 @@ public:
 
 class sum_instance final : public aggregation_instance {
 public:
+  using sum_t = variant<int64_t, uint64_t, double>;
+
   void add(add_info info, diagnostic_handler& dh) override {
     // TODO: values.type
     auto f = detail::overload{
@@ -217,8 +221,31 @@ public:
         // Double => Double
         // UInt64 => Int64
         // Int64 => Int64
-        TENZIR_UNUSED(array);
-        TENZIR_TODO();
+        sum_ = sum_.match(
+          [&](double sum) -> sum_t {
+            for (auto row = int64_t{0}; row < array.length(); ++row) {
+              if (array.IsNull(row)) {
+                // TODO: What do we do here?
+              } else {
+                sum += static_cast<double>(array.Value(row));
+              }
+            }
+            return sum;
+          },
+          [&](auto previous) -> sum_t {
+            static_assert(caf::detail::is_one_of<decltype(previous), int64_t,
+                                                 uint64_t>::value);
+            // TODO: Check narrowing.
+            auto sum = static_cast<int64_t>(previous);
+            for (auto row = int64_t{0}; row < array.length(); ++row) {
+              if (array.IsNull(row)) {
+                // TODO: What do we do here?
+              } else {
+                sum += array.Value(row);
+              }
+            }
+            return sum;
+          });
       },
       [&](const arrow::UInt64Array& array) {
         // Double => Double
@@ -258,7 +285,7 @@ public:
   }
 
 private:
-  variant<int64_t, uint64_t, double> sum_ = uint64_t{0};
+  sum_t sum_ = uint64_t{0};
 };
 
 class sum final : public tql2::aggregation_function_plugin {
