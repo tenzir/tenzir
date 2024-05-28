@@ -68,7 +68,6 @@ auto tokenize(std::string_view content) -> std::vector<token> {
     | X("]", rbracket)
     | X(",", comma)
     | X(":", colon)
-    | X("_", underscore)
     | X("'", single_quote)
     | X("\n", newline)
 #undef X
@@ -93,6 +92,8 @@ auto tokenize(std::string_view content) -> std::vector<token> {
       ) >> !continue_ident) ->* [] { return token_kind::reserved_keyword; }
     | ignore('$' >> identifier)
       ->* [] { return token_kind::dollar_ident; }
+    | ignore('_' >> !continue_ident)
+      ->* [] { return token_kind::underscore; }
     | ignore(identifier)
       ->* [] { return token_kind::identifier; }
     | ignore(
