@@ -70,7 +70,24 @@ void argument_parser2::parse(const operator_factory_plugin::invocation& inv,
         if (not value) {
           return;
         }
+        // TODO: Make this more beautiful.
+        auto storage = T{};
         auto cast = caf::get_if<T>(&*value);
+        if constexpr (std::same_as<T, uint64_t>) {
+          if (not cast) {
+            auto other = caf::get_if<int64_t>(&*value);
+            if (other) {
+              if (*other < 0) {
+                emit(diagnostic::error("expected positive integer, got `{}`",
+                                       *other)
+                       .primary(expr.get_location()));
+                return;
+              }
+              storage = *other;
+              cast = &storage;
+            }
+          }
+        }
         if (not cast) {
           emit(diagnostic::error("expected argument of type `{}`, but got `{}`",
                                  type_kind::of<data_to_type_t<T>>, kind(value))
