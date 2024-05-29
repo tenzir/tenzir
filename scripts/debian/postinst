@@ -28,6 +28,8 @@ if [ "$1" = "configure" ] || [ "$1" = "abort-upgrade" ] || [ "$1" = "abort-decon
     # it known.
     /usr/bin/systemctl link /opt/tenzir/lib/systemd/system/tenzir-node.service
   fi
+  echo "Adding tenzir to \$PATH"
+  echo "export PATH=\$PATH:/opt/tenzir/bin" > /etc/profile.d/tenzir.sh
 fi
 
 # Automatically added by dh_installsystemd/13.3.4

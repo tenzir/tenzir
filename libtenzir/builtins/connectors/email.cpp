@@ -7,9 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
-#include <tenzir/curl.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/transfer.hpp>
 
 using namespace std::chrono_literals;
 
@@ -24,26 +24,15 @@ struct saver_args {
   std::string to;
   std::optional<std::string> from;
   std::optional<std::string> subject;
-  std::optional<std::string> username;
-  std::optional<std::string> password;
-  std::optional<std::string> authzid;
-  std::optional<std::string> authorization;
-  bool skip_peer_verification;
-  bool skip_hostname_verification;
+  transfer_options transfer_opts;
   bool mime;
-  bool verbose;
 
   friend auto inspect(auto& f, saver_args& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.plugins.email.saver_args")
       .fields(f.field("endpoint", x.endpoint), f.field("to", x.to),
               f.field("from", x.from), f.field("subject", x.subject),
-              f.field("username", x.username), f.field("password", x.password),
-              f.field("authzid", x.authzid),
-              f.field("authorization", x.authorization),
-              f.field("skip_peer_verification", x.skip_peer_verification),
-              f.field("skip_host_verification", x.skip_hostname_verification),
-              f.field("mime", x.mime), f.field("verbose", x.verbose));
+              f.field("mime", x.mime));
   }
 };
 
@@ -71,15 +60,11 @@ public:
 
   auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
-    auto easy = curl::easy{};
-    if (auto err = to_error(easy.set(CURLOPT_UPLOAD, 1))) {
+    auto tx = transfer{args_.transfer_opts};
+    if (auto err = to_error(tx.handle().set(CURLOPT_UPLOAD, 1))) {
       return err;
     }
-    if (args_.verbose) {
-      auto code = easy.set(CURLOPT_VERBOSE, 1);
-      TENZIR_ASSERT(code == curl::easy::code::ok);
-    }
-    auto code = easy.set(CURLOPT_URL, args_.endpoint);
+    auto code = tx.handle().set(CURLOPT_URL, args_.endpoint);
     if (code != curl::easy::code::ok) {
       auto err = to_error(code);
       diagnostic::error("failed to set SMTP server request")
@@ -88,56 +73,8 @@ public:
         .emit(ctrl.diagnostics());
       return err;
     }
-    if (args_.skip_peer_verification) {
-      code = easy.set(CURLOPT_SSL_VERIFYPEER, 0);
-      TENZIR_ASSERT(code == curl::easy::code::ok);
-    }
-    if (args_.skip_hostname_verification) {
-      code = easy.set(CURLOPT_SSL_VERIFYHOST, 0);
-      TENZIR_ASSERT(code == curl::easy::code::ok);
-    }
-    if (args_.username) {
-      code = easy.set(CURLOPT_USERNAME, *args_.username);
-      if (code != curl::easy::code::ok) {
-        auto err = to_error(code);
-        diagnostic::error("failed to set user name")
-          .note("{}", err)
-          .emit(ctrl.diagnostics());
-        return err;
-      }
-    }
-    if (args_.password) {
-      code = easy.set(CURLOPT_PASSWORD, *args_.password);
-      if (code != curl::easy::code::ok) {
-        auto err = to_error(code);
-        diagnostic::error("failed to set password")
-          .note("{}", err)
-          .emit(ctrl.diagnostics());
-        return err;
-      }
-    }
-    if (args_.authzid) {
-      code = easy.set(CURLOPT_SASL_AUTHZID, *args_.authzid);
-      if (code != curl::easy::code::ok) {
-        auto err = to_error(code);
-        diagnostic::error("failed to set authorization identity")
-          .note("{}", err)
-          .emit(ctrl.diagnostics());
-        return err;
-      }
-    }
-    if (args_.authorization) {
-      code = easy.set(CURLOPT_LOGIN_OPTIONS, *args_.authorization);
-      if (code != curl::easy::code::ok) {
-        auto err = to_error(code);
-        diagnostic::error("failed to set login authorization method")
-          .note("{}", err)
-          .emit(ctrl.diagnostics());
-        return err;
-      }
-    }
     if (args_.from) {
-      code = easy.set(CURLOPT_MAIL_FROM, *args_.from);
+      code = tx.handle().set(CURLOPT_MAIL_FROM, *args_.from);
       if (code != curl::easy::code::ok) {
         auto err = to_error(code);
         diagnostic::error("failed to set MAIL FROM")
@@ -153,7 +90,7 @@ public:
 #else
     auto allowfails = CURLOPT_MAIL_RCPT_ALLOWFAILS;
 #endif
-    code = easy.set(allowfails, 1);
+    code = tx.handle().set(allowfails, 1);
     if (code != curl::easy::code::ok) {
       auto err = to_error(code);
       diagnostic::error("failed to adjust recipient failure mode")
@@ -161,7 +98,7 @@ public:
         .emit(ctrl.diagnostics());
       return err;
     }
-    code = easy.add_mail_recipient(args_.to);
+    code = tx.handle().add_mail_recipient(args_.to);
     if (code != curl::easy::code::ok) {
       auto err = to_error(code);
       diagnostic::error("failed to set To header")
@@ -171,7 +108,7 @@ public:
       return err;
     }
     if (args_.mime) {
-      return [&ctrl, easy = std::make_shared<curl::easy>(std::move(easy)),
+      return [&ctrl, tx = std::make_shared<transfer>(std::move(tx)),
               args = args_](chunk_ptr chunk) mutable {
         if (not chunk || chunk->size() == 0) {
           return;
@@ -181,11 +118,11 @@ public:
         // manually.
         auto headers = make_headers(args);
         for (const auto& [name, value] : headers) {
-          auto code = easy->set_http_header(name, value);
+          auto code = tx->handle().set_http_header(name, value);
           TENZIR_ASSERT(code == curl::easy::code::ok);
         }
         // Create the MIME parts.
-        auto mime = curl::mime{*easy};
+        auto mime = curl::mime{tx->handle()};
         auto part = mime.add();
         auto code = part.data(as_bytes(chunk));
         TENZIR_ASSERT(code == curl::easy::code::ok);
@@ -193,10 +130,10 @@ public:
                            ? *chunk->metadata().content_type
                            : "text/plain");
         TENZIR_ASSERT(code == curl::easy::code::ok);
-        code = easy->set(std::move(mime));
+        code = tx->handle().set(std::move(mime));
         TENZIR_ASSERT(code == curl::easy::code::ok);
         // Send the message.
-        if (auto err = to_error(easy->perform())) {
+        if (auto err = tx->perform()) {
           diagnostic::error("failed to send message")
             .note("{}", err)
             .emit(ctrl.diagnostics());
@@ -204,7 +141,7 @@ public:
         }
       };
     }
-    return [&ctrl, easy = std::make_shared<curl::easy>(std::move(easy)),
+    return [&ctrl, tx = std::make_shared<transfer>(std::move(tx)),
             args = args_](chunk_ptr chunk) mutable {
       if (not chunk || chunk->size() == 0) {
         return;
@@ -219,14 +156,14 @@ public:
       auto mail = fmt::format("{}\r\n{}", fmt::join(headers, "\r\n"), body);
       TENZIR_DEBUG("sending {}-byte chunk as email to {}", chunk->size(),
                    args.to);
-      if (auto err = set(*easy, chunk::make(std::move(mail)))) {
+      if (auto err = set(tx->handle(), chunk::make(std::move(mail)))) {
         diagnostic::error("failed to assign message")
           .note("{}", err)
           .emit(ctrl.diagnostics());
         return;
       }
       // Send the message.
-      if (auto err = to_error(easy->perform())) {
+      if (auto err = tx->perform()) {
         diagnostic::error("failed to send message")
           .note("{}", err)
           .emit(ctrl.diagnostics());
@@ -265,15 +202,17 @@ public:
     parser.add("-e,--endpoint", args.endpoint, "<string>");
     parser.add("-f,--from", args.from, "<email>");
     parser.add("-s,--subject", args.subject, "<string>");
-    parser.add("-u,--username", args.username, "<string>");
-    parser.add("-p,--password", args.password, "<string>");
-    parser.add("-i,--authzid", args.authzid, "<string>");
-    parser.add("-a,--authorization", args.authorization, "<string>");
-    parser.add("-P,--skip-peer-verification", args.skip_peer_verification);
+    parser.add("-u,--username", args.transfer_opts.username, "<string>");
+    parser.add("-p,--password", args.transfer_opts.password, "<string>");
+    parser.add("-i,--authzid", args.transfer_opts.authzid, "<string>");
+    parser.add("-a,--authorization", args.transfer_opts.authorization,
+               "<string>");
+    parser.add("-P,--skip-peer-verification",
+               args.transfer_opts.skip_peer_verification);
     parser.add("-H,--skip-hostname-verification",
-               args.skip_hostname_verification);
+               args.transfer_opts.skip_hostname_verification);
     parser.add("-m,--mime", args.mime);
-    parser.add("-v,--verbose", args.verbose);
+    parser.add("-v,--verbose", args.transfer_opts.verbose);
     parser.add(args.to, "<email>");
     parser.parse(p);
     if (args.endpoint.empty()) {

@@ -28,9 +28,6 @@
 #include "tenzir/detail/fill_status_map.hpp"
 #include "tenzir/detail/narrow.hpp"
 #include "tenzir/detail/notifying_stream_manager.hpp"
-#include "tenzir/detail/shutdown_stream_stage.hpp"
-#include "tenzir/detail/spawn_container_source.hpp"
-#include "tenzir/detail/tracepoint.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/fbs/index.hpp"
@@ -804,7 +801,8 @@ void index_state::decommission_active_partition(
         // so we make a copy for the listeners.
         // TODO: We should skip this continuation if we're currently shutting
         // down.
-        self->request(catalog, caf::infinite, atom::merge_v, id, ps)
+        auto apsv = std::vector<partition_synopsis_pair>{{id, ps}};
+        self->request(catalog, caf::infinite, atom::merge_v, std::move(apsv))
           .then(
             [=, this](atom::ok) {
               TENZIR_VERBOSE("{} inserted partition {} {} to the catalog",

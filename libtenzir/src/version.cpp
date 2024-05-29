@@ -95,6 +95,8 @@ auto tenzir_features() -> std::vector<std::string> {
     "http_put_upload",
     // The node supports a customizable pipeline retry delay.
     "retry_delay",
+    // The pipeline manager supports editable definitions.
+    "editable_definitions",
   };
 }
 

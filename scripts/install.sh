@@ -69,7 +69,7 @@ platform=
 os=$(uname -s)
 if [ "${os}" = "Linux" ]
 then
-    if [ -n "$(rpm -qa)" ] 2>/dev/null
+    if check rpm && [ -n "$(rpm -qa 2>/dev/null)" ]
     then
         platform=RPM
     elif [ -f "/etc/debian_version" ]
@@ -164,6 +164,7 @@ echo "Using ${package}"
 # Download package.
 tmpdir="$(dirname "$(mktemp -u)")"
 action "Downloading ${package_url}"
+rm -f "${tmpdir}/${package}"
 # Wget does not support the file:// URL scheme.
 if check wget && beginswith "${package_url}" "https://"
 then
@@ -224,12 +225,6 @@ then
   eval "${cmd2}"
 elif [ "${platform}" = "Debian" ]
 then
-  # adduser is required by the Debian package installation.
-  if ! check adduser
-  then
-    echo "Could not find ${bold}adduser${normal} in \$PATH."
-    exit 1
-  fi
   cmd1="$sudo apt-get --yes install \"${tmpdir}/${package}\""
   cmd2="$sudo systemctl status tenzir-node || [ ! -d /run/systemd/system ]"
   echo "This script is about to run the following commands:"
@@ -244,12 +239,16 @@ then
 elif [ "${platform}" = "Linux" ]
 then
   cmd1="$sudo tar xzf \"${tmpdir}/${package}\" -C /"
+  cmd2="$sudo echo 'export PATH=\$PATH:/opt/tenzir/bin' > /etc/profile.d/tenzir.sh"
   echo "This script is about to run the following command:"
   echo
   echo "  - ${cmd1}"
+  echo "  - ${cmd2}"
   confirm
   action "Unpacking tarball"
   eval "${cmd1}"
+  action "Adding /opt/tenzir/bin to the system path"
+  eval "${cmd2}"
 elif [ "${platform}" = "macOS" ]
 then
   cmd1="$sudo installer -pkg \"${tmpdir}/${package}\" -target /"

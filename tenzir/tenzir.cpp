@@ -8,11 +8,9 @@
 
 #include "tenzir/application.hpp"
 #include "tenzir/concept/convertible/to.hpp"
-#include "tenzir/data.hpp"
 #include "tenzir/default_configuration.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/signal_handlers.hpp"
-#include "tenzir/factory.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/module.hpp"
 #include "tenzir/modules.hpp"
@@ -32,20 +30,25 @@
 #include <thread>
 #include <unordered_map>
 
-int main(int argc, char** argv) {
+auto main(int argc, char** argv) -> int {
   using namespace tenzir;
   // Set a signal handler for fatal conditions. Prints a backtrace if support
   // for that is enabled.
-  std::signal(SIGSEGV, fatal_handler);
-  std::signal(SIGABRT, fatal_handler);
+  if (SIG_ERR == std::signal(SIGSEGV, fatal_handler)) [[unlikely]] {
+    fmt::print(stderr, "failed to set signal handler for SIGSEGV\n");
+    return EXIT_FAILURE;
+  }
+  if (SIG_ERR == std::signal(SIGABRT, fatal_handler)) [[unlikely]] {
+    fmt::print(stderr, "failed to set signal handler for SIGABRT\n");
+    return EXIT_FAILURE;
+  }
   // Mask SIGINT and SIGTERM so we can handle those in a dedicated thread.
   auto sigset = termsigset();
   pthread_sigmask(SIG_BLOCK, &sigset, nullptr);
   // Set up our configuration, e.g., load of YAML config file(s).
   default_configuration cfg;
   if (auto err = cfg.parse(argc, argv)) {
-    std::cerr << "failed to parse configuration: " << to_string(err)
-              << std::endl;
+    fmt::print(stderr, "failed to parse configuration: {}\n", err);
     return EXIT_FAILURE;
   }
   auto loaded_plugin_paths = plugins::load({TENZIR_BUNDLED_PLUGINS}, cfg);
