@@ -371,6 +371,10 @@ Tenzir has a [`deduplicate`](operators/deduplicate.md) operator.
   [`context`](operators/context.md) `update` operator. In other words, you can
   use all existing [connectors](connectors.md) and [formats](formats.md) to feed
   data into a context.
+- When Tenzir lookup tables have CIDR subnets as key, you can perform an
+  enrichment with single IP addresses (using a longest-prefix match). This comes
+  in handy for [enriching with a network
+  inventory](user-guides/enrich-with-network-inventory/README.md).
 
 ## Packs vs. Packages
 
