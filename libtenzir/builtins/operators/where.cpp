@@ -6,10 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/operator_control_plane.hpp"
-#include "tenzir/tql2/eval.hpp"
-
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/argument_parser2.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
@@ -26,6 +24,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/tql/basic.hpp>
+#include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/compute/api.h>
@@ -250,19 +249,18 @@ private:
 class plugin2 final : public virtual tql2::operator_plugin<where_operator2> {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
-    if (inv.args.size() != 1) {
-      diagnostic::error("expected exactly one argument")
-        .primary(inv.self.get_location())
-        .emit(ctx);
-      return nullptr;
-    }
+    auto expr = ast::expression{};
+    argument_parser2{"https://docs.tenzir.com/operators/where"}
+      .add(expr, "<expr>")
+      .parse(inv, ctx);
     // auto ty = type_checker{ctx}.visit(args[0]);
     // if (ty && ty->kind().is_not<bool_type>()) {
     //   diagnostic::error("expected `bool`, got `{}`", *ty)
     //     .primary(args[0].get_location())
     //     .emit(ctx.dh());
     // }
-    return std::make_unique<where_operator2>(std::move(inv.args[0]));
+    // TODO: `expr` might be empty here.
+    return std::make_unique<where_operator2>(std::move(expr));
   }
 };
 

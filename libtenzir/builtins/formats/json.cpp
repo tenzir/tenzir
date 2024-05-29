@@ -1131,8 +1131,11 @@ auto make_parser(generator<GeneratorValue> json_chunk_generator,
 }
 
 auto parse_selector(std::string_view x, location source) -> selector {
+  if (x.empty()) {
+    diagnostic::error("selector must not be empty").primary(source).throw_();
+  }
   auto split = detail::split(x, ":");
-  TENZIR_ASSERT(!x.empty());
+  TENZIR_ASSERT(not split.empty());
   if (split.size() > 2 or split[0].empty()) {
     diagnostic::error("invalid selector `{}`: must contain at most "
                       "one `:` and field name must "
@@ -1616,17 +1619,36 @@ class read_json_plugin final
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto args = parser_args{};
+    auto selector = std::optional<located<std::string>>{};
     auto sep = std::optional<located<std::string>>{};
+    auto unnest_separator = std::optional<std::string>{};
     argument_parser2{"https://docs.tenzir.com/operators/read_json"}
       .add("sep", sep)
       // TODO: We could allow a non-constant expression for `schema` and then
       // evaluate it with (perhaps in some limited fashion) against the current
       // JSON document.
+      .add("selector", selector)
       .add("schema", args.schema)
       .add("precise", args.precise)
+      .add("no_extra_fields", args.no_infer)
+      // TODO: Decide whether to cover this `sep`.
+      .add("gelf", args.use_gelf_mode)
+      .add("ndjson", args.use_ndjson_mode)
+      .add("unnest_separator", unnest_separator)
       .add("raw", args.raw)
+      .add("arrays_of_objects", args.arrays_of_objects)
       // TODO: Might want to react to parsing failure.
       .parse(inv, ctx);
+    if (unnest_separator) {
+      args.unnest_separator = std::move(*unnest_separator);
+    }
+    if (selector) {
+      try {
+        args.selector = parse_selector(selector->inner, selector->source);
+      } catch (diagnostic d) {
+        ctx.dh().emit(std::move(d));
+      }
+    }
     if (sep) {
       auto& str = sep->inner;
       if (str == "\n") {
@@ -1649,12 +1671,14 @@ class write_json_plugin final
     public virtual operator_factory_plugin {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
-    // TODO
+    // TODO: More options, and consider `null_fields=false` as default.
     auto args = printer_args{};
     argument_parser2{"https://docs.tenzir.com/operators/write_json"}
+      // TODO: Perhaps "indent=0"?
       .add("ndjson", args.compact_output)
+      .add("color", args.color_output)
       .parse(inv, ctx);
-    return std::make_unique<write_json>(std::move(args));
+    return std::make_unique<write_json>(args);
   }
 };
 

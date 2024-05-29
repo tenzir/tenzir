@@ -6,16 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/table_slice_builder.hpp"
-#include "tenzir/tql2/plugin.hpp"
-
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/argument_parser2.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
 
@@ -99,33 +98,12 @@ public:
   }
 
   auto make(invocation inv, session ctx) const -> operator_ptr override {
-    using namespace tql2;
-    if (inv.args.size() != 1) {
-      diagnostic::error("`repeat` expects exactly one argument, got {}",
-                        inv.args.size())
-        .primary(inv.self.get_location())
-        .emit(ctx);
-      return nullptr;
-    }
-    auto count = inv.args[0].match(
-      [](ast::literal& x) {
-        return x.value.match(
-          [](int64_t x) -> std::optional<int64_t> {
-            return x;
-          },
-          [](auto&) -> std::optional<int64_t> {
-            return std::nullopt;
-          });
-      },
-      [](auto&) -> std::optional<int64_t> {
-        return std::nullopt;
-      });
-    if (not count) {
-      diagnostic::error("expected integer")
-        .primary(inv.args[0].get_location())
-        .emit(ctx);
-    }
-    return std::make_unique<repeat_operator>(*count);
+    auto count = std::optional<uint64_t>{};
+    argument_parser2{"https://docs.tenzir.com/operators/repeat"}
+      .add(count, "<count>")
+      .parse(inv, ctx);
+    return std::make_unique<repeat_operator>(
+      count.value_or(std::numeric_limits<uint64_t>::max()));
   }
 };
 

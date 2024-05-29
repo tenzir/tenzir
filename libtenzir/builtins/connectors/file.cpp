@@ -649,6 +649,9 @@ public:
     auto args = saver_args{};
     argument_parser2{"https://docs.tenzir.com/operators/save_file"}
       .add(args.path, "<path>")
+      .add("append", args.append)
+      .add("real_time", args.real_time)
+      .add("uds", args.uds)
       .parse(inv, ctx);
     return std::make_unique<save_file_operator>(std::move(args));
   }

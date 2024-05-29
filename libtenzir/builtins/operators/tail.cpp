@@ -45,25 +45,10 @@ public:
   }
 
   auto make(invocation inv, session ctx) const -> operator_ptr override {
-    // TODO: This is quite bad.
-    if (inv.args.size() > 1) {
-      diagnostic::error("TODO").primary(inv.self.get_location()).emit(ctx);
-      return nullptr;
-    }
     auto count = std::optional<uint64_t>{};
-    if (inv.args.size() == 1) {
-      auto count_data = tql2::const_eval(inv.args[0], ctx);
-      if (count_data) {
-        auto count_ptr = caf::get_if<int64_t>(&*count_data);
-        if (not count_ptr || *count_ptr < 0) {
-          diagnostic::error("expected a positive integer")
-            .primary(inv.args[0].get_location())
-            .emit(ctx);
-        } else {
-          count = *count_ptr;
-        }
-      }
-    }
+    argument_parser2{"https://docs.tenzir.com/operators/tail"}
+      .add(count, "<count>")
+      .parse(inv, ctx);
     auto result = pipeline::internal_parse_as_operator(
       fmt::format("slice -{}:", count.value_or(10)));
     if (not result) {

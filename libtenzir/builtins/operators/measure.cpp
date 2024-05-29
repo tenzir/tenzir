@@ -157,9 +157,14 @@ public:
   }
 
   auto make(invocation inv, session ctx) const -> operator_ptr override {
-    argument_parser2{"https://docs.tenzir.com/operators/measure"}.parse(inv,
-                                                                        ctx);
-    return std::make_unique<measure_operator>(batch_size_, true, false);
+    bool real_time = false;
+    bool cumulative = false;
+    argument_parser2{"https://docs.tenzir.com/operators/measure"}
+      .add("real_time", real_time)
+      .add("cumulative", cumulative)
+      .parse(inv, ctx);
+    return std::make_unique<measure_operator>(batch_size_, real_time,
+                                              cumulative);
   }
 
 private:
