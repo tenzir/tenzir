@@ -1139,57 +1139,6 @@ auto patricia_remove(patricia_tree_t* patricia, patricia_node_t* node) -> void {
   }
 }
 
-/* { from demo.c */
-
-auto make_and_lookup(patricia_tree_t* tree, char* string) -> patricia_node_t* {
-  prefix_t* prefix;
-  patricia_node_t* node;
-  prefix = ascii2prefix(AF_INET, string);
-  printf("make_and_lookup: %s/%d\n", prefix_toa(prefix), prefix->bitlen);
-  node = patricia_lookup(tree, prefix);
-  Deref_Prefix(prefix);
-  return (node);
-}
-
-auto try_search_exact(patricia_tree_t* tree, char* string) -> patricia_node_t* {
-  prefix_t* prefix;
-  patricia_node_t* node;
-  prefix = ascii2prefix(AF_INET, string);
-  printf("try_search_exact: %s/%d\n", prefix_toa(prefix), prefix->bitlen);
-  if ((node = patricia_search_exact(tree, prefix)) == nullptr) {
-    printf("try_search_exact: not found\n");
-  } else {
-    printf("try_search_exact: %s/%d found\n", prefix_toa(node->prefix),
-           node->prefix->bitlen);
-  }
-  Deref_Prefix(prefix);
-  return (node);
-}
-
-void lookup_then_remove(patricia_tree_t* tree, char* string) {
-  patricia_node_t* node;
-  if ((node = try_search_exact(tree, string))) {
-    patricia_remove(tree, node);
-  }
-}
-
-patricia_node_t* try_search_best(patricia_tree_t* tree, char* string) {
-  prefix_t* prefix;
-  patricia_node_t* node;
-  prefix = ascii2prefix(AF_INET, string);
-  printf("try_search_best: %s/%d\n", prefix_toa(prefix), prefix->bitlen);
-  if ((node = patricia_search_best(tree, prefix)) == nullptr) {
-    printf("try_search_best: not found\n");
-  } else {
-    printf("try_search_best: %s/%d found\n", prefix_toa(node->prefix),
-           node->prefix->bitlen);
-  }
-  Deref_Prefix(prefix);
-  return (node);
-}
-
-/* } */
-
 } // namespace
 
 namespace tenzir::detail {
