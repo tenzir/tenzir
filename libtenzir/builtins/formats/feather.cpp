@@ -31,6 +31,7 @@
 #include <arrow/util/key_value_metadata.h>
 #include <caf/expected.hpp>
 
+#include <optional>
 #include <queue>
 #include <vector>
 
@@ -506,7 +507,6 @@ public:
   feather_parser() = default;
   feather_parser(located<select_optimization> selection)
     : selection_{std::move(selection)} {
-    selection_optimized = true;
   }
   auto name() const -> std::string override {
     return "feather";
@@ -524,14 +524,15 @@ public:
 
   auto optimize(expression const& filter, event_order order,
                 select_optimization const& selection)
-    -> std::unique_ptr<plugin_parser> override {
+    -> optimize_parser_result override {
     (void)filter;
     (void)order;
     if (selection.fields_of_interest.empty()) {
-      std::make_unique<feather_parser>();
+      return {nullptr, false, false, false};
     }
-    return std::make_unique<feather_parser>(
-      located(selection, location::unknown));
+    return {
+      std::make_unique<feather_parser>(located(selection, location::unknown)),
+      true, false, false};
   }
 
 private:

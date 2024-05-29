@@ -357,6 +357,23 @@ class loader_plugin : public virtual loader_inspection_plugin<Loader>,
                       public virtual loader_parser_plugin {};
 
 // -- parser plugin -----------------------------------------------------------
+class plugin_parser;
+
+struct optimize_parser_result {
+  std::unique_ptr<plugin_parser> replacement;
+  bool selection_optimized;
+  bool filter_optimized;
+  bool order_optimized;
+
+  optimize_parser_result(std::unique_ptr<plugin_parser> replacement,
+                         bool selection_optimized, bool filter_optimized,
+                         bool order_optimized)
+    : replacement{std::move(replacement)},
+      selection_optimized{selection_optimized},
+      filter_optimized{filter_optimized},
+      order_optimized{order_optimized} {
+  }
+};
 
 class plugin_parser {
 public:
@@ -384,15 +401,12 @@ public:
   /// does not optimize.
   virtual auto optimize(expression const& filter, event_order order,
                         select_optimization const& selection)
-    -> std::unique_ptr<plugin_parser> {
+    -> optimize_parser_result {
     (void)filter;
     (void)selection;
     (void)order;
-    return nullptr;
+    return optimize_parser_result{nullptr, false, false, false};
   }
-  bool selection_optimized = false;
-  bool expression_optimized = false;
-  bool order_optimized = false;
 };
 
 /// @see operator_parser_plugin

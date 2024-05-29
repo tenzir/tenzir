@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/pipeline.hpp"
+
 #include <tenzir/detail/loader_saver_resolver.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/plugin.hpp>
@@ -88,18 +90,19 @@ public:
     -> optimize_result override {
     (void)filter;
     auto parser_opt = parser_->optimize(filter, order, selection);
-    if (!parser_opt) {
+    if (!parser_opt.replacement) {
       return do_not_optimize(*this);
     }
-    if (parser_opt->selection_optimized) {
+    if (parser_opt.selection_optimized) {
       return optimize_result{
         std::nullopt, event_order::ordered,
-        std::make_unique<read_operator>(std::move(parser_opt)),
+        std::make_unique<read_operator>(std::move(parser_opt.replacement)),
         select_optimization::no_select_optimization()};
     }
     return optimize_result{
       std::nullopt, event_order::ordered,
-      std::make_unique<read_operator>(std::move(parser_opt)), std::nullopt};
+      std::make_unique<read_operator>(std::move(parser_opt.replacement)),
+      std::nullopt};
   }
 
   friend auto inspect(auto& f, read_operator& x) -> bool {
