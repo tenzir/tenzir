@@ -74,7 +74,8 @@
                       dot: 134..135,
                       name: `ParentImage` @ 135..146
                     }
-                  ]
+                  ],
+                  rpar: 146..147
                 }
               },
               field {
@@ -98,7 +99,8 @@
                       dot: 192..193,
                       name: `ParentImage` @ 193..204
                     }
-                  ]
+                  ],
+                  rpar: 204..205
                 }
               },
               field {
@@ -138,7 +140,8 @@
                 dot: 276..277,
                 name: `ParentProcessId` @ 277..292
               }
-            ]
+            ],
+            rpar: 292..293
           }
         }
       ],
@@ -314,7 +317,8 @@
       },
       args: [
         root_field `category_name` @ 637..650
-      ]
+      ],
+      rpar: 650..651
     }
   },
   assignment {
@@ -350,7 +354,8 @@
       },
       args: [
         root_field `class_name` @ 711..721
-      ]
+      ],
+      rpar: 721..722
     }
   },
   assignment {
@@ -631,7 +636,8 @@
                       dot: 1375..1376,
                       name: `Image` @ 1376..1381
                     }
-                  ]
+                  ],
+                  rpar: 1381..1382
                 }
               },
               field {
@@ -655,7 +661,8 @@
                       dot: 1427..1428,
                       name: `Image` @ 1428..1433
                     }
-                  ]
+                  ],
+                  rpar: 1433..1434
                 }
               },
               field {
@@ -695,7 +702,8 @@
                 dot: 1505..1506,
                 name: `ProcessId` @ 1506..1515
               }
-            ]
+            ],
+            rpar: 1515..1516
           }
         }
       ],
@@ -827,7 +835,8 @@
                   dot: 1702..1703,
                   name: `original_time` @ 1703..1716
                 }
-              ]
+              ],
+              rpar: 1716..1717
             },
             fn: {
               path: [
@@ -837,7 +846,8 @@
             },
             args: [
               
-            ]
+            ],
+            rpar: 1728..1729
           },
           op: "mul" @ 1730..1731,
           right: literal {
@@ -845,7 +855,8 @@
             source: 1732..1736
           }
         }
-      ]
+      ],
+      rpar: 1736..1737
     }
   },
   assignment {

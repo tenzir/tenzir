@@ -17,7 +17,8 @@
       },
       args: [
         
-      ]
+      ],
+      rpar: 6..7
     }
   },
   assignment {
@@ -38,7 +39,8 @@
       },
       args: [
         root_field `c` @ 14..15
-      ]
+      ],
+      rpar: 15..16
     }
   },
   assignment {
@@ -69,7 +71,8 @@
           equals: 24..25,
           right: root_field `d` @ 25..26
         }
-      ]
+      ],
+      rpar: 26..27
     }
   },
   assignment {
@@ -101,7 +104,8 @@
           equals: 38..39,
           right: root_field `e` @ 39..40
         }
-      ]
+      ],
+      rpar: 40..41
     }
   },
   assignment {
@@ -145,7 +149,8 @@
           right: root_field `h` @ 58..59
         },
         root_field `i` @ 61..62
-      ]
+      ],
+      rpar: 63..64
     }
   },
   invocation {
@@ -166,7 +171,8 @@
         },
         args: [
           
-        ]
+        ],
+        rpar: 73..74
       }
     ]
   },
@@ -188,7 +194,8 @@
         },
         args: [
           root_field `c` @ 83..84
-        ]
+        ],
+        rpar: 84..85
       }
     ]
   },
@@ -220,7 +227,8 @@
             equals: 95..96,
             right: root_field `d` @ 96..97
           }
-        ]
+        ],
+        rpar: 97..98
       }
     ]
   },
@@ -253,7 +261,8 @@
             equals: 111..112,
             right: root_field `e` @ 112..113
           }
-        ]
+        ],
+        rpar: 113..114
       }
     ]
   },
@@ -298,7 +307,8 @@
             right: root_field `h` @ 133..134
           },
           root_field `i` @ 136..137
-        ]
+        ],
+        rpar: 138..139
       }
     ]
   }
