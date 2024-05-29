@@ -552,8 +552,10 @@ private:
 /// Converts a simdjson object into `data` object.
 ///
 /// This is used when `--precise` is specified.
-auto json_to_data(simdjson::ondemand::value value, bool raw)
-  -> simdjson::simdjson_result<data>;
+template <class T>
+  requires std::same_as<T, simdjson::ondemand::value>
+           || std::same_as<T, simdjson::ondemand::document>
+auto json_to_data(T& value, bool raw) -> simdjson::simdjson_result<data>;
 
 auto json_to_data(simdjson::ondemand::object object, bool raw)
   -> simdjson::simdjson_result<data> {
@@ -620,8 +622,10 @@ auto json_to_data(std::string_view string, bool raw)
   return data{std::string{string}};
 }
 
-auto json_to_data(simdjson::ondemand::value value, bool raw)
-  -> simdjson::simdjson_result<data> {
+template <class T>
+  requires std::same_as<T, simdjson::ondemand::value>
+           || std::same_as<T, simdjson::ondemand::document>
+auto json_to_data(T& value, bool raw) -> simdjson::simdjson_result<data> {
   TRY(auto type, value.type());
   switch (type) {
     case simdjson::ondemand::json_type::array: {
@@ -645,6 +649,7 @@ auto json_to_data(simdjson::ondemand::value value, bool raw)
       return data{boolean};
     }
     case simdjson::ondemand::json_type::null: {
+      TRY(value.is_null());
       return data{caf::none};
     }
   }
@@ -1666,6 +1671,63 @@ public:
   }
 };
 
+class parse_json_plugin final : public virtual tql2::function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.parse_json";
+  }
+
+  auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
+    // "[1, 2, 3]" => [1, 2, 3]
+    // "{yo: 42}" => {yo: 42}
+    // "{yo: 42} {yo: 43}" => error
+    //
+    // many=true (not so important)
+    // "{yo: 42}" => [{yo: 42}]
+    if (inv.args.size() != 1) {
+      diagnostic::error("expected exactly one argument")
+        .primary(inv.self.get_location())
+        .emit(dh);
+      return series::null(null_type{}, inv.length);
+    }
+    auto parser = simdjson::ondemand::parser{};
+    auto strings = caf::get_if<arrow::StringArray>(inv.args[0].array.get());
+    if (not strings) {
+      diagnostic::warning("expected string, got {}", inv.args[0].type.kind())
+        .primary(inv.self.args[0].get_location())
+        .emit(dh);
+      return series::null(null_type{}, inv.length);
+    }
+    auto b = series_builder{};
+    for (auto i = int64_t{0}; i < inv.length; ++i) {
+      if (strings->IsNull(i)) {
+        // TODO: What to do here?
+        b.null();
+        continue;
+      }
+      // todo: optimize
+      auto parse = [&]() -> simdjson::simdjson_result<data> {
+        auto str = std::string{strings->Value(i)};
+        TRY(auto doc, parser.iterate(str));
+        return json_to_data(doc, false);
+      };
+      auto result = parse();
+      if (result.error()) {
+        // TODO: This can be very noisy.
+        diagnostic::warning("could not parse json: {}",
+                            simdjson::error_message(result.error()))
+          .primary(inv.self.fn.get_location())
+          .emit(dh);
+        b.null();
+        continue;
+      }
+      b.data(result.value_unsafe());
+    }
+    // TODO: Cannot assert this here.
+    return b.finish_assert_one_array();
+  }
+};
+
 class write_json_plugin final
   : public virtual operator_inspection_plugin<write_json>,
     public virtual operator_factory_plugin {
@@ -1692,3 +1754,4 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::suricata_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::zeek_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_json_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::parse_json_plugin)

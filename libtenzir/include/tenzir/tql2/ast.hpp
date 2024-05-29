@@ -457,7 +457,8 @@ struct function_call {
 
   friend auto inspect(auto& f, function_call& x) -> bool {
     return f.object(x).fields(f.field("subject", x.subject),
-                              f.field("fn", x.fn), f.field("args", x.args));
+                              f.field("fn", x.fn), f.field("args", x.args),
+                              f.field("rpar", x.rpar));
   }
 
   auto get_location() const -> location {
