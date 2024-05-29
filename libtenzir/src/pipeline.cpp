@@ -198,6 +198,17 @@ auto pipeline::optimize(expression const& filter, event_order order,
     TENZIR_ASSERT(*it);
     auto const& op = **it;
     auto opt = op.optimize(current_filter, current_order, current_selection);
+    if (opt.selection) {
+      current_selection = *opt.selection;
+    } else if (!current_selection.fields_of_interest.empty()) {
+      auto pipe = tql::parse_internal(fmt::format(
+        "select {}", fmt::join(current_selection.fields_of_interest, ", ")));
+      TENZIR_ASSERT(pipe);
+      auto ops = std::move(*pipe).unwrap();
+      TENZIR_ASSERT(ops.size() == 1);
+      result.push_back(std::move(ops[0]));
+      current_selection = select_optimization::no_select_optimization();
+    }
     if (opt.filter) {
       current_filter = std::move(*opt.filter);
     } else if (current_filter != trivially_true_expression()) {
@@ -209,17 +220,6 @@ auto pipeline::optimize(expression const& filter, event_order order,
       TENZIR_ASSERT(ops.size() == 1);
       result.push_back(std::move(ops[0]));
       current_filter = trivially_true_expression();
-    }
-    if (opt.selection) {
-      current_selection = *opt.selection;
-    } else if (!current_selection.fields_of_interest.empty()) {
-      auto pipe = tql::parse_internal(fmt::format(
-        "select {}", fmt::join(current_selection.fields_of_interest, ", ")));
-      TENZIR_ASSERT(pipe);
-      auto ops = std::move(*pipe).unwrap();
-      TENZIR_ASSERT(ops.size() == 1);
-      result.push_back(std::move(ops[0]));
-      current_selection = select_optimization::no_select_optimization();
     }
     if (opt.replacement) {
       result.push_back(std::move(opt.replacement));
