@@ -19,6 +19,9 @@ public:
   /// Constructs an empty tree.
   subnet_tree();
 
+  subnet_tree(subnet_tree&& other) noexcept;
+  auto operator=(subnet_tree&& other) noexcept -> subnet_tree&;
+
   /// Destroys a tree.
   ~subnet_tree();
 

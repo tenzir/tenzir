@@ -1244,6 +1244,15 @@ struct subnet_tree::impl {
 subnet_tree::subnet_tree() : impl_{std::make_unique<impl>()} {
 }
 
+subnet_tree::subnet_tree(subnet_tree&& other) noexcept
+  : impl_{std::move(other.impl_)} {
+}
+
+auto subnet_tree::operator=(subnet_tree&& other) noexcept -> subnet_tree& {
+  impl_ = std::move(other.impl_);
+  return *this;
+}
+
 subnet_tree::~subnet_tree() {
   // Needs to be defined for pimpl.
 }
