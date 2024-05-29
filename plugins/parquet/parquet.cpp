@@ -101,11 +101,10 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl,
   std::unique_ptr<::arrow::RecordBatchReader> rb_reader{};
   auto record_batch_reader_status = arrow::Status{};
   if (!selection.inner.fields_of_interest.empty()) {
-    auto record_batch_reader_status = out_buffer->GetRecordBatchReader(
+    record_batch_reader_status = out_buffer->GetRecordBatchReader(
       included_rows, included_cols, &rb_reader);
   } else {
-    auto record_batch_reader_status
-      = out_buffer->GetRecordBatchReader(&rb_reader);
+    record_batch_reader_status = out_buffer->GetRecordBatchReader(&rb_reader);
   }
   if (!record_batch_reader_status.ok()) {
     diagnostic::error("{}",
