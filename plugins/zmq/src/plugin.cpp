@@ -404,6 +404,10 @@ public:
     return "json";
   }
 
+  auto internal() const -> bool override {
+    return args_.endpoint and args_.endpoint->inner.starts_with("inproc://");
+  }
+
   friend auto inspect(auto& f, zmq_loader& x) -> bool {
     return f.object(x)
       .pretty_name("zmq_loader")
@@ -454,6 +458,10 @@ public:
 
   auto default_printer() const -> std::string override {
     return "json";
+  }
+
+  auto internal() const -> bool override {
+    return args_.endpoint and args_.endpoint->inner.starts_with("inproc://");
   }
 
   auto is_joining() const -> bool override {

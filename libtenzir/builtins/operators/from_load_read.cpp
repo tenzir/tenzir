@@ -46,6 +46,10 @@ public:
     return do_not_optimize(*this);
   }
 
+  auto internal() const -> bool override {
+    return loader_->internal();
+  }
+
   friend auto inspect(auto& f, load_operator& x) -> bool {
     return plugin_inspect(f, x.loader_);
   }

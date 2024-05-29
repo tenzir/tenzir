@@ -333,6 +333,10 @@ public:
   virtual auto default_parser() const -> std::string {
     return "json";
   }
+
+  virtual auto internal() const -> bool {
+    return false;
+  }
 };
 
 /// @see operator_parser_plugin
@@ -496,6 +500,10 @@ public:
 
   virtual auto default_printer() const -> std::string {
     return "json";
+  }
+
+  virtual auto internal() const -> bool {
+    return false;
   }
 };
 
