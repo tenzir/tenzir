@@ -236,6 +236,10 @@ public:
     return "save";
   }
 
+  auto internal() const -> bool override {
+    return saver_->internal();
+  }
+
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     (void)filter, (void)order;
@@ -347,6 +351,10 @@ public:
     -> optimize_result override {
     (void)filter, (void)order;
     return optimize_result{std::nullopt, event_order::schema, copy()};
+  }
+
+  auto internal() const -> bool override {
+    return saver_->internal();
   }
 
   friend auto inspect(auto& f, write_and_save_operator& x) -> bool {
