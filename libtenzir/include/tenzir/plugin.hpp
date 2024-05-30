@@ -12,12 +12,10 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/command.hpp"
-#include "tenzir/config_options.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/pp.hpp"
-#include "tenzir/detail/weak_handle.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/http_api.hpp"
 #include "tenzir/operator_control_plane.hpp"
