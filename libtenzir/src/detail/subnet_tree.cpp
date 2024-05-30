@@ -849,11 +849,13 @@ auto subnet_tree::search(subnet key) const
   auto num_elements = 0;
   patricia_node_t** xs = nullptr;
   patricia_search_all(impl_->tree.get(), prefix, &xs, &num_elements);
+  auto guard = caf::detail::make_scope_guard([prefix, xs] {
+    Deref_Prefix(prefix);
+    free(xs);
+  });
   for (auto i = 0; i < num_elements; ++i) {
     co_yield make_subnet_data_pair(xs[i]);
   }
-  Deref_Prefix(prefix);
-  std::free(xs);
 }
 
 auto subnet_tree::nodes() const -> generator<std::pair<subnet, const data*>> {
@@ -891,6 +893,9 @@ auto subnet_tree::erase(subnet key) -> bool {
   Deref_Prefix(prefix);
   if (node == nullptr) {
     return false;
+  }
+  if (node->data != nullptr) {
+    delete reinterpret_cast<const data*>(node->data);
   }
   patricia_remove(impl_->tree.get(), node);
   return true;
