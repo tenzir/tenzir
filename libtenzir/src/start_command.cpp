@@ -13,7 +13,6 @@
 #include "tenzir/application.hpp"
 #include "tenzir/command.hpp"
 #include "tenzir/concept/parseable/tenzir/endpoint.hpp"
-#include "tenzir/config.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/endpoint.hpp"
@@ -116,8 +115,9 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
           .to_error();
     return caf::make_message(std::move(err));
   }
-  auto listen_endpoint = fmt::format("{}:{}", host, *bound_port);
-  TENZIR_INFO("node is listening on {}", listen_endpoint);
+  const auto listen_endpoint = fmt::format("{}:{}", host, *bound_port);
+  TENZIR_INFO("node listens for node-to-node connections on tcp://{}",
+              listen_endpoint);
   // Notify the service manager if it expects an update.
   if (auto error = systemd::notify_ready()) {
     auto err = diagnostic::error("failed to signal readiness to systemd")
