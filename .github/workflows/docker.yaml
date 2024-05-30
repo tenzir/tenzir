@@ -46,6 +46,15 @@ jobs:
           git submodule update --init --recursive libtenzir
           git submodule update --init --recursive plugins
           git submodule update --init --recursive tenzir
+      - name: Tailscale
+        if: false
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+          version: 1.66.4
+          args: --ssh
       - name: Configure
         id: cfg
         run: |
