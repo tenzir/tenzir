@@ -72,9 +72,15 @@ public:
     const auto chunked_key
       = arrow::ChunkedArray::Make(std::move(sort_keys_)).ValueOrDie();
     const auto indices
-      = arrow::compute::SortIndices(*chunked_key, sort_options_).ValueOrDie();
+      = arrow::compute::SortIndices(*chunked_key, sort_options_);
+    if (not indices.ok()) {
+      diagnostic::error("{}", indices.status().ToString())
+        .note("failed to sort `{}`", key_)
+        .throw_();
+    }
     auto result_buffer = std::vector<table_slice>{};
-    for (const auto& index : static_cast<const arrow::Int64Array&>(*indices)) {
+    for (const auto& index :
+         static_cast<const arrow::Int64Array&>(*indices.ValueUnsafe())) {
       TENZIR_ASSERT(index.has_value());
       const auto offset = std::prev(
         std::upper_bound(offset_table_.begin(), offset_table_.end(), *index));
