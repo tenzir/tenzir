@@ -243,21 +243,12 @@ ENTRYPOINT ["tenzir-node"]
 
 FROM tenzir-ce AS tenzir-demo
 
-USER root
-RUN apt-get update && \
-    apt-get -y --no-install-recommends install jq lsof && \
-    rm -rf /var/lib/apt/lists/*
-
-USER tenzir:tenzir
-COPY demo-node /demo-node
-COPY --from=tenzir-ce --chown=tenzir:tenzir \
-       /var/cache/tenzir \
-       /var/lib/tenzir/ \
-       /var/log/tenzir
-ENV TENZIR_AUTOMATIC_REBUILD=0
-RUN /demo-node/setup.bash
-
-ENTRYPOINT ["tenzir-node"]
+ENV TENZIR_PIPELINES__M57_SURICATA__NAME='M57 Suricata' \
+    TENZIR_PIPELINES__M57_SURICATA__DEFINITION='from https://storage.googleapis.com/tenzir-datasets/M57/suricata.json.zst read suricata --no-infer | where #schema != "suricata.stats" | import' \
+    TENZIR_PIPELINES__M57_SURICATA__LABELS='suricata' \
+    TENZIR_PIPELINES__M57_ZEEK__NAME='M57 Zeek' \
+    TENZIR_PIPELINES__M57_ZEEK__DEFINITION='from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read zeek-tsv | import' \
+    TENZIR_PIPELINES__M57_ZEEK__LABELS='zeek'
 
 # -- tenzir-node -----------------------------------------------------------------
 
