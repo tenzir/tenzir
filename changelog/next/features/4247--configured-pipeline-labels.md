@@ -1,1 +1,2 @@
-You can now add a list of labels to a configured pipeline.
+Pipelines configured as code in the `tenzir.yaml` configuration file may now
+contain labels.
