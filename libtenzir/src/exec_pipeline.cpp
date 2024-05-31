@@ -203,7 +203,6 @@ auto exec_pipeline(std::string content,
     return std::move(implicit_pipe.error());
   }
   pipe = std::move(*implicit_pipe);
-
   pipe = pipe.optimize_if_closed();
   auto self = caf::scoped_actor{sys};
   auto result = caf::expected<void>{};
