@@ -241,7 +241,7 @@ ENTRYPOINT ["tenzir-node"]
 
 # -- tenzir-demo --------------------------------------------------------------
 
-FROM tenzir-ce AS tenzir-demo
+FROM tenzir-node-ce AS tenzir-demo
 
 ENV TENZIR_PIPELINES__M57_SURICATA__NAME='M57 Suricata' \
     TENZIR_PIPELINES__M57_SURICATA__DEFINITION='from https://storage.googleapis.com/tenzir-datasets/M57/suricata.json.zst read suricata --no-infer | where #schema != "suricata.stats" | import' \
