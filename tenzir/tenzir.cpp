@@ -91,10 +91,10 @@ auto main(int argc, char** argv) -> int {
   if (!cfg.config_file_path.empty())
     cfg.config_files.emplace_back(std::move(cfg.config_file_path));
   for (const auto& file : loaded_config_files())
-    TENZIR_INFO("loaded configuration file: {}", file);
+    TENZIR_VERBOSE("loaded configuration file: {}", file);
   // Print the plugins that were loaded, and errors that occured during loading.
   for (const auto& file : *loaded_plugin_paths)
-    TENZIR_VERBOSE("loaded plugin: {}", file);
+    TENZIR_DEBUG("loaded plugin: {}", file);
   // Make sure to deinitialize all plugins at the end.
   auto plugin_guard = caf::detail::make_scope_guard([]() noexcept {
     // Ideally, we would not have this deinitialize function at all and could

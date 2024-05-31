@@ -72,9 +72,15 @@ public:
     const auto chunked_key
       = arrow::ChunkedArray::Make(std::move(sort_keys_)).ValueOrDie();
     const auto indices
-      = arrow::compute::SortIndices(*chunked_key, sort_options_).ValueOrDie();
+      = arrow::compute::SortIndices(*chunked_key, sort_options_);
+    if (not indices.ok()) {
+      diagnostic::error("{}", indices.status().ToString())
+        .note("failed to sort `{}`", key_)
+        .throw_();
+    }
     auto result_buffer = std::vector<table_slice>{};
-    for (const auto& index : static_cast<const arrow::Int64Array&>(*indices)) {
+    for (const auto& index :
+         static_cast<const arrow::Int64Array&>(*indices.ValueUnsafe())) {
       TENZIR_ASSERT(index.has_value());
       const auto offset = std::prev(
         std::upper_bound(offset_table_.begin(), offset_table_.end(), *index));
@@ -288,14 +294,13 @@ public:
                                           "sort key"),
       };
     }
-    if (sort_args.size() > 1) {
-      stable = true;
-    }
     auto result = std::make_unique<tenzir::pipeline>();
+    bool first = true;
     for (auto& [key, descending, nulls_first] :
          sort_args | std::ranges::views::reverse) {
-      result->append(std::make_unique<sort_operator>(std::move(key), stable,
-                                                     descending, nulls_first));
+      result->append(std::make_unique<sort_operator>(
+        std::move(key), first ? stable : true, descending, nulls_first));
+      first = false;
     }
     return {
       std::string_view{f, l},

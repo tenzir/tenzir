@@ -93,7 +93,7 @@ components:
       properties:
         id:
           type: string
-          description: (If the pipeline does not end with a predefined sink) The ID of the successfully created pipeline.
+          description: (If the pipeline does not end with a predefined sink) The id of the successfully created pipeline.
     LaunchParameters:
       allOf:
         - $ref: "#/components/schemas/CreateParameters"
@@ -180,7 +180,7 @@ components:
       properties:
         id:
           type: string
-          description: The pipeline ID.
+          description: The pipeline id.
         name:
           type: string
           description: The human-readable name of the pipeline.
@@ -212,6 +212,7 @@ components:
             - paused
             - failed
             - stopped
+            - completed
         error:
           type: string
           description: The error that the pipeline may have encountered during running.
@@ -293,7 +294,7 @@ paths:
                 properties:
                   id:
                     type: string
-                    description: The ID of the successfully created pipeline.
+                    description: The id of the successfully created pipeline.
         400:
           description: Invalid arguments or invalid pipeline.
           content:
@@ -490,6 +491,10 @@ paths:
                   type: string
                   example: 08446737-da9b-4787-8599-97d85c48c3bb
                   description: The id of the pipeline to be updated.
+                definition:
+                  type: string
+                  example: export | where baz | publish /foo
+                  description: The updated definition of the pipeline.
                 action:
                   type: string
                   enum:
