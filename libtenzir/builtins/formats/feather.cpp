@@ -528,11 +528,11 @@ public:
     (void)filter;
     (void)order;
     if (selection.fields_of_interest.empty()) {
-      return {nullptr, false, false, false};
+      return {nullptr, std::nullopt};
     }
     return {
       std::make_unique<feather_parser>(located(selection, location::unknown)),
-      true, false, false};
+      optimization_type::selection_optimized};
   }
 
 private:

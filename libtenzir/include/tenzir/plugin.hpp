@@ -359,19 +359,46 @@ class loader_plugin : public virtual loader_inspection_plugin<Loader>,
 // -- parser plugin -----------------------------------------------------------
 class plugin_parser;
 
+enum class optimization_type : std::uint8_t {
+  selection_optimized = 1 << 0,
+  filter_optimized = 1 << 1,
+  order_optimized = 1 << 2
+};
+
+inline auto operator|(optimization_type a, optimization_type b)
+  -> optimization_type {
+  return static_cast<optimization_type>(
+    static_cast<std::underlying_type_t<optimization_type>>(a)
+    | static_cast<std::underlying_type_t<optimization_type>>(b));
+}
+
+inline auto operator&(optimization_type a, optimization_type b) -> bool {
+  return static_cast<bool>(
+    static_cast<std::underlying_type_t<optimization_type>>(a)
+    & static_cast<std::underlying_type_t<optimization_type>>(b));
+}
+
 struct optimize_parser_result {
   std::unique_ptr<plugin_parser> replacement;
-  bool selection_optimized;
-  bool filter_optimized;
-  bool order_optimized;
+  bool selection_optimized{false};
+  bool filter_optimized{false};
+  bool order_optimized{false};
 
   optimize_parser_result(std::unique_ptr<plugin_parser> replacement,
-                         bool selection_optimized, bool filter_optimized,
-                         bool order_optimized)
-    : replacement{std::move(replacement)},
-      selection_optimized{selection_optimized},
-      filter_optimized{filter_optimized},
-      order_optimized{order_optimized} {
+                         std::optional<optimization_type> type)
+    : replacement{std::move(replacement)} {
+    if (!type) {
+      return;
+    }
+    if (*type & optimization_type::selection_optimized) {
+      selection_optimized = true;
+    }
+    if (*type & optimization_type::filter_optimized) {
+      filter_optimized = true;
+    }
+    if (*type & optimization_type::order_optimized) {
+      order_optimized = true;
+    }
   }
 };
 
@@ -405,7 +432,7 @@ public:
     (void)filter;
     (void)selection;
     (void)order;
-    return optimize_parser_result{nullptr, false, false, false};
+    return optimize_parser_result{nullptr, std::nullopt};
   }
 };
 

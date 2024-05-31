@@ -1200,8 +1200,8 @@ public:
     (void)selection;
     auto args = args_;
     args.preserve_order = order == event_order::ordered;
-    return {std::make_unique<json_parser>(std::move(args)), false, false,
-            false};
+    return {std::make_unique<json_parser>(std::move(args)),
+            optimization_type::order_optimized};
   }
 
   auto

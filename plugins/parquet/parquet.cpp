@@ -19,6 +19,8 @@
 #include <parquet/arrow/reader.h>
 #include <parquet/arrow/writer.h>
 
+#include <optional>
+
 namespace tenzir::plugins::parquet {
 
 namespace {
@@ -159,11 +161,11 @@ public:
     (void)filter;
     (void)order;
     if (selection.fields_of_interest.empty()) {
-      return {nullptr, false, false, false};
+      return {nullptr, std::nullopt};
     }
     return {
       std::make_unique<parquet_parser>(located(selection, location::unknown)),
-      true, false, false};
+      optimization_type::selection_optimized};
   }
   friend auto inspect(auto& f, parquet_parser& x) -> bool {
     return f.object(x).fields(f.field("selection", x.selection_));
