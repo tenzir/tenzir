@@ -369,8 +369,6 @@ public:
 
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
-    // TODO: We actually do not want to optimize unless `export` is to the left.
-    // The reason for that is different semantics and worse error messages.
     auto [legacy, remainder] = split_legacy_expression(expr_);
     auto remainder_op
       = is_true_literal(remainder)
