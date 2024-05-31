@@ -1,1 +1,1 @@
-A one batch delay in `export --live` has been fixed.
+export --live` no longer buffers the last batch of event that was imported, and instead immediately returns all imported events.

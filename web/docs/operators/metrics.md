@@ -24,6 +24,12 @@ events are collected every second.
 Work on all metrics events as they are generated in real-time instead of on
 metrics events persisted at a Tenzir node.
 
+### `--retro`
+
+Work on persisted diagnostic events (first), even when `--live` is given.
+
+See [`export` operator](export.md#--retro) for more details.
+
 ## Schemas
 
 Tenzir collects metrics with the following schemas.

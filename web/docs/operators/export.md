@@ -23,6 +23,17 @@ The `export` operator retrieves events from a Tenzir node.
 Work on all events that are imported with `import` operators in real-time
 instead of on events persisted at a Tenzir node.
 
+### `--retro`
+
+Export persistent events at a Tenzir node. Unless `--live` is given, this is
+implied.
+
+Combine `--retro` and `--live` to export past events and live events afterwards.
+
+:::warning Experimental
+There is a gap for live events that happen while past events are being exported.
+:::
+
 ### `--internal`
 
 Export internal events, such as metrics or diagnostics, instead. By default,
