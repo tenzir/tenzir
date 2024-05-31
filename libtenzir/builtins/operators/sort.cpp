@@ -294,14 +294,13 @@ public:
                                           "sort key"),
       };
     }
-    if (sort_args.size() > 1) {
-      stable = true;
-    }
     auto result = std::make_unique<tenzir::pipeline>();
+    bool first = true;
     for (auto& [key, descending, nulls_first] :
          sort_args | std::ranges::views::reverse) {
-      result->append(std::make_unique<sort_operator>(std::move(key), stable,
-                                                     descending, nulls_first));
+      result->append(std::make_unique<sort_operator>(
+        std::move(key), first ? stable : true, descending, nulls_first));
+      first = false;
     }
     return {
       std::string_view{f, l},
