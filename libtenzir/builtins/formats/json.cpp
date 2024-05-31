@@ -1690,7 +1690,9 @@ public:
         .emit(dh);
       return series::null(null_type{}, inv.length);
     }
-    auto parser = simdjson::ondemand::parser{};
+    if (inv.args[0].type.kind().is<null_type>()) {
+      return series::null(null_type{}, inv.length);
+    }
     auto strings = caf::get_if<arrow::StringArray>(inv.args[0].array.get());
     if (not strings) {
       diagnostic::warning("expected string, got {}", inv.args[0].type.kind())
@@ -1698,6 +1700,7 @@ public:
         .emit(dh);
       return series::null(null_type{}, inv.length);
     }
+    auto parser = simdjson::ondemand::parser{};
     auto b = series_builder{};
     for (auto i = int64_t{0}; i < inv.length; ++i) {
       if (strings->IsNull(i)) {
