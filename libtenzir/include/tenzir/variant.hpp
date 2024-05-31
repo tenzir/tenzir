@@ -19,6 +19,40 @@
 
 namespace tenzir {
 
+namespace detail {
+
+template <class Result, class Function>
+struct conversion_wrapper : Function {
+  using Function::operator();
+};
+
+template <class Result, class F>
+auto make_conversion_wrapper(F f) -> auto {
+  return [f = std::move(f)]<class... Args>(Args&&... args) -> Result {
+    static_assert(std::invocable<F, Args...>);
+    if constexpr (std::same_as<std::invoke_result_t<F, Args...>, void>) {
+      // TODO: We assume that the function is effectively `[[noreturn]]`.
+      TENZIR_UNREACHABLE();
+    } else {
+      return Result{std::invoke(f, std::forward<Args>(args)...)};
+    }
+  };
+}
+
+template <class Result, class Variant, class... Fs>
+auto match(Variant&& variant, Fs&&... fs) -> decltype(auto) {
+  if constexpr (std::same_as<Result, void>) {
+    return std::visit(detail::overload{std::forward<Fs>(fs)...},
+                      std::forward<Variant>(variant));
+  } else {
+    return std::visit(make_conversion_wrapper<Result>(
+                        detail::overload{std::forward<Fs>(fs)...}),
+                      std::forward<Variant>(variant));
+  }
+}
+
+} // namespace detail
+
 /// A variant type with a different `inspect()` implementation than
 /// `std::variant`.
 template <class... Ts>
@@ -129,26 +163,24 @@ public:
     }
   }
 
-  template <class... Fs>
+  template <class Result = void, class... Fs>
   auto match(Fs&&... fs) & -> decltype(auto) {
-    return std::visit(detail::overload{std::forward<Fs>(fs)...}, *this);
+    return detail::match<Result>(*this, std::forward<Fs>(fs)...);
   }
 
-  template <class... Fs>
+  template <class Result = void, class... Fs>
   auto match(Fs&&... fs) const& -> decltype(auto) {
-    return std::visit(detail::overload{std::forward<Fs>(fs)...}, *this);
+    return detail::match<Result>(*this, std::forward<Fs>(fs)...);
   }
 
-  template <class... Fs>
+  template <class Result = void, class... Fs>
   auto match(Fs&&... fs) && -> decltype(auto) {
-    return std::visit(detail::overload{std::forward<Fs>(fs)...},
-                      std::move(*this));
+    return detail::match<Result>(std::move(*this), std::forward<Fs>(fs)...);
   }
 
-  template <class... Fs>
+  template <class Result = void, class... Fs>
   auto match(Fs&&... fs) const&& -> decltype(auto) {
-    return std::visit(detail::overload{std::forward<Fs>(fs)...},
-                      std::move(*this));
+    return detail::match<Result>(std::move(*this), std::forward<Fs>(fs)...);
   }
 };
 

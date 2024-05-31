@@ -96,6 +96,7 @@ struct meta {
                               f.field("source", x.source));
   }
 
+  // TODO: Remove `schema_id` from this.
   enum meta_extractor::kind kind;
   location source;
 };
@@ -254,13 +255,13 @@ struct expression {
     return f.apply(*detail::make_dependent<Inspector>(x.kind));
   }
 
-  template <class... Fs>
+  template <class Result = void, class... Fs>
   auto match(Fs&&... fs) & -> decltype(auto);
-  template <class... Fs>
+  template <class Result = void, class... Fs>
   auto match(Fs&&... fs) && -> decltype(auto);
-  template <class... Fs>
+  template <class Result = void, class... Fs>
   auto match(Fs&&... fs) const& -> decltype(auto);
-  template <class... Fs>
+  template <class Result = void, class... Fs>
   auto match(Fs&&... fs) const&& -> decltype(auto);
 
   auto get_location() const -> location;
@@ -731,28 +732,28 @@ inline expression::expression(expression&&) noexcept = default;
 inline auto expression::operator=(expression&&) noexcept
   -> expression& = default;
 
-template <class... Fs>
+template <class Result, class... Fs>
 auto expression::match(Fs&&... fs) & -> decltype(auto) {
   TENZIR_ASSERT(kind);
-  return kind->match(std::forward<Fs>(fs)...);
+  return kind->match<Result>(std::forward<Fs>(fs)...);
 }
 
-template <class... Fs>
+template <class Result, class... Fs>
 auto expression::match(Fs&&... fs) && -> decltype(auto) {
   TENZIR_ASSERT(kind);
-  return kind->match(std::forward<Fs>(fs)...);
+  return kind->match<Result>(std::forward<Fs>(fs)...);
 }
 
-template <class... Fs>
+template <class Result, class... Fs>
 auto expression::match(Fs&&... fs) const& -> decltype(auto) {
   TENZIR_ASSERT(kind);
-  return kind->match(std::forward<Fs>(fs)...);
+  return kind->match<Result>(std::forward<Fs>(fs)...);
 }
 
-template <class... Fs>
+template <class Result, class... Fs>
 auto expression::match(Fs&&... fs) const&& -> decltype(auto) {
   TENZIR_ASSERT(kind);
-  return kind->match(std::forward<Fs>(fs)...);
+  return kind->match<Result>(std::forward<Fs>(fs)...);
 }
 
 inline pipeline::pipeline(std::vector<statement> body) : body{std::move(body)} {
