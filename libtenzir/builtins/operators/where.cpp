@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/select_optimization.hpp"
-
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
@@ -23,6 +21,7 @@
 #include <tenzir/modules.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/select_optimization.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/tql/basic.hpp>
 
