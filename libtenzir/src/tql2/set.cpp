@@ -101,7 +101,7 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
 }
 
 auto assign(const ast::simple_selector& left, series right,
-            const table_slice& input) -> table_slice {
+            const table_slice& input, diagnostic_handler& dh) -> table_slice {
   auto resolved = resolve(left, input.schema());
   auto off = std::get_if<offset>(&resolved);
   // TODO: Write this without transform columns.
@@ -139,11 +139,22 @@ auto assign(const ast::simple_selector& left, series right,
   // TODO: We can't use `transform_columns` if we assign to `this` (which
   // has an empty offset).
   if (transformation.index.empty()) {
-    auto record = caf::get_if<arrow::StructArray>(&*right.array);
     if (right.type.name().empty()) {
       right.type = type{"tenzir.set", right.type};
     }
-    TENZIR_ASSERT(record);
+    auto record = caf::get_if<arrow::StructArray>(&*right.array);
+    if (not record) {
+      diagnostic::warning("assignment to `this` requires `record`, but got "
+                          "`{}`",
+                          right.type.kind())
+        .primary(left.get_location())
+        .emit(dh);
+      auto ty = type{"tenzir.set", record_type{}};
+      return table_slice{
+        arrow::RecordBatch::Make(ty.to_arrow_schema(), right.length(),
+                                 std::vector<std::shared_ptr<arrow::Array>>{}),
+        ty};
+    }
     auto fields = record->Flatten().ValueOrDie();
     auto result
       = table_slice{arrow::RecordBatch::Make(right.type.to_arrow_schema(),
@@ -157,13 +168,13 @@ auto assign(const ast::simple_selector& left, series right,
 }
 
 auto assign(const ast::selector& left, series right, const table_slice& input,
-            diagnostic_handler& diag) -> table_slice {
+            diagnostic_handler& dh) -> table_slice {
   return left.match(
     [&](const ast::meta& left) {
-      return assign(left, std::move(right), input, diag);
+      return assign(left, std::move(right), input, dh);
     },
     [&](const ast::simple_selector& left) {
-      return assign(left, std::move(right), input);
+      return assign(left, std::move(right), input, dh);
     });
 }
 
