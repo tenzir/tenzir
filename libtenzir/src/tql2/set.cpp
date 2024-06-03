@@ -11,6 +11,8 @@
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/collect.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/enumerate.hpp"
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval.hpp"
@@ -75,7 +77,7 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
           .emit(diag);
         return input;
       }
-      // Have to potentially split, again.
+      // TODO: Have to potentially split, again.
       auto new_value = values->Value(0);
       auto old_value = input.schema().attribute("internal").has_value();
       if (new_value == old_value) {
@@ -100,71 +102,98 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
   TENZIR_UNREACHABLE();
 }
 
+auto consume_path(std::span<const ast::identifier> path, series value)
+  -> series {
+  if (path.empty()) {
+    return value;
+  }
+  value = consume_path(path.subspan(1), std::move(value));
+  return series{record_type{record_type::field_view{path[0].name, value.type}},
+                make_struct_array(value.length(), nullptr, {path[0].name},
+                                  {value.array})};
+}
+
+auto assign(std::span<const ast::identifier> left, series right, series input,
+            diagnostic_handler& dh) -> series {
+  TENZIR_ASSERT(right.length() == input.length());
+  if (left.empty()) {
+    return right;
+  }
+  if (input.type.kind().is<null_type>()) {
+    // We silently upgrade the null type to a record. We could also warn here,
+    // but then we should perhaps adjust the code below to check for `null`
+    // values assigning to a `record` type.
+    return consume_path(left, std::move(right));
+  }
+  auto rec_ty = caf::get_if<record_type>(&input.type);
+  if (not rec_ty) {
+    diagnostic::warning("implicit record for `{}` field overwrites `{}` value",
+                        left[0].name, input.type.kind())
+      .primary(left[0].location)
+      .hint("if this is intentional, drop the parent field before")
+      .emit(dh);
+    return consume_path(left, std::move(right));
+  }
+  auto& array = caf::get<arrow::StructArray>(*input.array);
+  auto new_ty_fields = collect(rec_ty->fields());
+  // We flatten the input fields here because the input `{foo: null}` of type
+  // `{foo: {bar: int64}` should become `{foo: {bar: null, qux: 42}}` for the
+  // assignment `foo.qux = 42`. This is consistent with the behavior for when
+  // `foo` is of type `null` or does not exist. Also, simply using `.fields()`
+  // here would not propagate the `null` values from the parent record.
+  auto new_field_arrays = array.Flatten().ValueOrDie();
+  auto index = std::optional<size_t>{};
+  for (auto [i, field] : detail::enumerate(new_ty_fields)) {
+    if (field.name == left[0].name) {
+      index = i;
+      break;
+    }
+  }
+  if (index) {
+    auto& field_ty = new_ty_fields[*index].type;
+    auto& field_array = new_field_arrays[*index];
+    auto new_field = assign(left.subspan(1), std::move(right),
+                            series{field_ty, field_array}, dh);
+    field_ty = std::move(new_field.type);
+    field_array = std::move(new_field.array);
+  } else {
+    auto inner = consume_path(left.subspan(1), std::move(right));
+    new_ty_fields.emplace_back(left[0].name, inner.type);
+    new_field_arrays.push_back(inner.array);
+  }
+  auto new_ty_field_names
+    = new_ty_fields | std::views::transform(&record_type::field_view::name);
+  auto new_array
+    = make_struct_array(array.length(), nullptr,
+                        std::vector<std::string>{new_ty_field_names.begin(),
+                                                 new_ty_field_names.end()},
+                        new_field_arrays);
+  auto new_type = type{record_type{new_ty_fields}};
+  // TODO: What to do with metadata on record?
+  // new_type.assign_metadata(input.type);
+  return series{std::move(new_type), std::move(new_array)};
+}
+
 auto assign(const ast::simple_selector& left, series right,
             const table_slice& input, diagnostic_handler& dh) -> table_slice {
-  auto resolved = resolve(left, input.schema());
-  auto off = std::get_if<offset>(&resolved);
-  // TODO: Write this without transform columns.
-  auto transformation = indexed_transformation{};
-  if (off) {
-    transformation = indexed_transformation{
-      .index = std::move(*off),
-      .fun =
-        [&](struct record_type::field field,
-            std::shared_ptr<arrow::Array> array) {
-          TENZIR_UNUSED(array);
-          field.type = std::move(right.type);
-          return indexed_transformation::result_type{
-            std::pair{std::move(field), std::move(right.array)}};
-        },
-    };
-  } else {
-    // TODO: Handle the nested case.
-    TENZIR_ASSERT(left.path().size() == 1);
-    auto num_fields = caf::get<record_type>(input.schema()).num_fields();
-    TENZIR_ASSERT(num_fields > 0);
-    transformation = indexed_transformation{
-      .index = offset{num_fields - 1},
-      .fun =
-        [&](struct record_type::field field,
-            std::shared_ptr<arrow::Array> array) {
-          auto result = indexed_transformation::result_type{};
-          result.emplace_back(std::move(field), std::move(array));
-          result.emplace_back(decltype(field){left.path()[0].name, right.type},
-                              std::move(right.array));
-          return result;
-        },
-    };
+  auto array = to_record_batch(input)->ToStructArray().ValueOrDie();
+  auto result = assign(left.path(), std::move(right), series{input}, dh);
+  auto rec_ty = caf::get_if<record_type>(&result.type);
+  if (not rec_ty) {
+    diagnostic::warning("assignment to `this` requires `record`, but got "
+                        "`{}`",
+                        right.type.kind())
+      .primary(left.get_location())
+      .emit(dh);
+    // TODO: Metadata?
+    result = {record_type{}, make_struct_array(result.length(), nullptr, {})};
   }
-  // TODO: We can't use `transform_columns` if we assign to `this` (which
-  // has an empty offset).
-  if (transformation.index.empty()) {
-    if (right.type.name().empty()) {
-      right.type = type{"tenzir.set", right.type};
-    }
-    auto record = caf::get_if<arrow::StructArray>(&*right.array);
-    if (not record) {
-      diagnostic::warning("assignment to `this` requires `record`, but got "
-                          "`{}`",
-                          right.type.kind())
-        .primary(left.get_location())
-        .emit(dh);
-      auto ty = type{"tenzir.set", record_type{}};
-      return table_slice{
-        arrow::RecordBatch::Make(ty.to_arrow_schema(), right.length(),
-                                 std::vector<std::shared_ptr<arrow::Array>>{}),
-        ty};
-    }
-    auto fields = record->Flatten().ValueOrDie();
-    auto result
-      = table_slice{arrow::RecordBatch::Make(right.type.to_arrow_schema(),
-                                             right.length(), fields),
-                    right.type};
-    TENZIR_ASSERT_EXPENSIVE(to_record_batch(result)->Validate().ok());
-    return result;
-  } else {
-    return transform_columns(input, {transformation});
-  }
+  // TODO: Metadata?
+  result.type = type{"tenzir.set", result.type};
+  return table_slice{arrow::RecordBatch::Make(
+                       result.type.to_arrow_schema(), result.length(),
+                       caf::get<arrow::StructArray>(*result.array).fields()),
+                     result.type};
 }
 
 auto assign(const ast::selector& left, series right, const table_slice& input,

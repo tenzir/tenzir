@@ -24,6 +24,12 @@ namespace tenzir {
 struct series {
   series() = default;
 
+  explicit series(const table_slice& slice)
+    : type{slice.schema()},
+      array{std::static_pointer_cast<arrow::StructArray>(
+        to_record_batch(slice)->ToStructArray().ValueOrDie())} {
+  }
+
   series(table_slice slice, offset idx) {
     std::tie(type, array) = idx.get(slice);
   }
