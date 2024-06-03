@@ -25,8 +25,7 @@ original order.
 
 ### `<topic>`
 
-An optional topic for publishing events under. The provided topic must be
-unique.
+An optional topic for publishing events under.
 
 Defaults to the empty string.
 
