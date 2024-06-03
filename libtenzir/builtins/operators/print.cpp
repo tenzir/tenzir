@@ -6,6 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/fwd.hpp"
+
+#include "tenzir/aliases.hpp"
 #include "tenzir/coder.hpp"
 #include "tenzir/query_context.hpp"
 #include "tenzir/series_builder.hpp"
@@ -19,10 +22,12 @@
 
 #include <arrow/api.h>
 #include <arrow/compute/api.h>
+#include <arrow/extension_type.h>
 
 #include <memory>
 #include <ranges>
 #include <simdjson.h>
+#include <string>
 
 namespace tenzir::plugins::print {
 
@@ -75,134 +80,70 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
+    //////
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
-      // auto original_batch = to_record_batch(slice);
-      auto index = slice.schema().resolve_key_or_concept_once(input_.inner);
-      if (not index) {
-        diagnostic::error("could not resolve `{}` for schema `{}`",
-                          input_.inner, slice.schema())
-          .primary(input_.source)
-          .emit(ctrl.diagnostics());
-        co_return;
-      }
-      auto indices = collect(slice.schema().resolve(input_.inner));
-      auto [ty, array] = index->get(slice);
-      ty = type{"dummy_head", ty};
-      auto record_batch_result = arrow::RecordBatch::FromStructArray(array);
-      if (not record_batch_result.ok()) {
-        diagnostic::error("could not create record batch for schema `{}`",
-                          slice.schema())
-          .primary(input_.source)
-          .emit(ctrl.diagnostics());
-        co_return;
-      }
-      auto record_batch = record_batch_result.MoveValueUnsafe();
-      auto updated_record_batch
-        = record_batch->ReplaceSchema(ty.to_arrow_schema());
-      if (not updated_record_batch.ok()) {
-        diagnostic::error("could not update schema of record batch `{}`",
-                          slice.schema())
-          .primary(input_.source)
-          .emit(ctrl.diagnostics());
-        co_return;
-      }
-      auto segmented_table_slice
-        = table_slice{updated_record_batch.MoveValueUnsafe(), ty};
-      auto printer_instance
-        = printer_->instantiate(segmented_table_slice.schema(), ctrl);
-      for (size_t i = 0; i < segmented_table_slice.rows(); i++) {
-        auto event = subslice(segmented_table_slice, i, i + 1);
+      for (size_t i = 0; i < slice.rows(); i++) {
+        auto event = subslice(slice, i, i + 1);
+        auto indices = collect(slice.schema().resolve(input_.inner));
+        // cut slice into smaller piece
+        auto target_index
+          = slice.schema().resolve_key_or_concept_once(input_.inner);
+        auto [ty, array] = target_index->get(slice);
+        TENZIR_WARN(array->ToString());
+        auto record_batch
+          = arrow::RecordBatch::FromStructArray(array).MoveValueUnsafe();
+        auto new_ty = type{"dummy_head", ty};
+        TENZIR_WARN(new_ty.name());
+        record_batch = record_batch->ReplaceSchema(new_ty.to_arrow_schema())
+                         .MoveValueUnsafe(); // issue: only works on records,
+                                             // not on raw data types
+        auto event_target = table_slice(record_batch);
+        auto printer_instance
+          = printer_->instantiate(event_target.schema(), ctrl);
         auto slice_as_string = std::string{};
-        for (auto&& chunk : printer_instance->get()->process(event)) {
+        for (auto&& chunk : printer_instance->get()->process(event_target)) {
           for (std::size_t i = 0; i < chunk->size(); ++i) {
             slice_as_string.push_back(static_cast<char>(chunk->data()[i]));
           }
         }
-        // auto buffer = make_shared<arrow::Buffer>(slice_as_string);
-        // // auto offsets =
-        // arrow::Buffer{reinterpret_cast<char*>(index->data()),
-        // //                              index->size()};
-        // auto offsets = make_shared<arrow::Buffer>(
-        //   std::string{index->begin(), index->end()});
 
-        // auto string_array
-        //   = arrow::StringArray(slice_as_string.length(), offsets, buffer);
-        arrow::StringBuilder builder{};
-        arrow::Status status = builder.Append(slice_as_string);
-        if (not status.ok()) {
-          diagnostic::error("dskjfposdfpsod `{}`", slice.schema())
-            .primary(input_.source)
-            .emit(ctrl.diagnostics());
-          co_return;
-        }
-        // Finalize the builder to create the StringArray
-        std::shared_ptr<arrow::Array> array;
-        status = builder.Finish(&array);
-        if (not status.ok()) {
-          diagnostic::error("dssdsdsccc `{}`", slice.schema())
-            .primary(input_.source)
-            .emit(ctrl.diagnostics());
-          co_return;
-        }
-
-        // auto utf8_validation = string_array.ValidateUTF8();
-        // // TODO: improve error message
-        // if (!utf8_validation.ok()) {
-        //   diagnostic::error("the provided format does not produce utf8
-        //   output")
-        //     .primary(input_.source)
-        //     .emit(ctrl.diagnostics());
-        //   co_return;
-        // }
+        ////////
         auto drop_fn = [&](struct record_type::field,
                            std::shared_ptr<arrow::Array>) noexcept
           -> std::vector<std::pair<struct record_type::field,
                                    std::shared_ptr<arrow::Array>>> {
           return {};
         };
-
-        auto add_string_fn = [&](struct record_type::field field,
-                                 std::shared_ptr<arrow::Array>) noexcept
+        auto to_string
+          = [slice_as_string](struct record_type::field field,
+                              std::shared_ptr<arrow::Array>) noexcept
           -> std::vector<std::pair<struct record_type::field,
                                    std::shared_ptr<arrow::Array>>> {
-          static const auto options
-            = arrow::compute::TrimOptions{" \t\n\v\f\r"};
-          auto trimmed_array
-            = arrow::compute::CallFunction("utf8_trim", {array}, &options);
-          if (not trimmed_array.ok()) {
-            diagnostic::error("{}", trimmed_array.status().ToString())
-              .primary(input_.source)
-              .throw_();
-          }
-          return {{field, trimmed_array.MoveValueUnsafe().make_array()}};
+          TENZIR_WARN(slice_as_string);
+          arrow::StringBuilder builder{arrow::default_memory_pool()};
+          auto x = builder.Append(slice_as_string);
+          std::shared_ptr<arrow::Array> str_array;
+          x = builder.Finish(&str_array);
+          field.type = type{string_type{}};
+          return {
+            {field, str_array},
+          };
         };
+
+        ///////
         auto transformations = std::vector<indexed_transformation>{};
-        int j = 0;
-        for (auto index : indices) {
-          // if (j == 0) {
-          //   transformations.push_back({std::move(index), add_string_fn});
-          //   j++;
-          // } else {
-          transformations.push_back({std::move(index), drop_fn});
-          //}
+        for (auto&& index : indices) {
+          if (index == target_index) {
+            transformations.push_back({std::move(index), to_string});
+          } else {
+            transformations.push_back({std::move(index), drop_fn});
+          }
         }
-        // // transform_columns requires the transformations to be sorted, and
-        // that
-        // // may not necessarily be true if we have multiple fields configured,
-        // so
-        // // we sort again in that case.
-        // if (config_.fields.size() > 1) {
-        //   std::sort(transformations.begin(), transformations.end());
-        // }
-        // transformations.erase(std::unique(transformations.begin(),
-        //                                   transformations.end()),
-        //                       transformations.end());
-        co_yield transform_columns(std::move(slice),
-                                   std::move(transformations));
+        co_yield transform_columns(event, transformations);
       }
     }
   }
