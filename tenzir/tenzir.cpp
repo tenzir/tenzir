@@ -237,5 +237,11 @@ auto main(int argc, char** argv) -> int {
     render_error(*root, run_error, std::cerr);
     return EXIT_FAILURE;
   }
+  while (sys.registry().running() > 1) {
+    TENZIR_VERBOSE("remaining actors: [{}], named: [{}]",
+                   fmt::join(sys.registry().running_ids(), ", "),
+                   fmt::join(sys.registry().named_actors(), ", "));
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+  }
   return EXIT_SUCCESS;
 }
