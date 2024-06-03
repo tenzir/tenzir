@@ -182,7 +182,7 @@ auto assign(const ast::simple_selector& left, series right,
   if (not rec_ty) {
     diagnostic::warning("assignment to `this` requires `record`, but got "
                         "`{}`",
-                        right.type.kind())
+                        result.type.kind())
       .primary(left.get_location())
       .emit(dh);
     // TODO: Metadata?
