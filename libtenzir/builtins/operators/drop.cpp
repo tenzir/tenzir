@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/tql2/ast.hpp"
-
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
@@ -169,7 +167,8 @@ public:
     return "tql2.drop";
   }
 
-  auto operator()(generator<table_slice> input) const
+  auto
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
@@ -179,13 +178,28 @@ public:
       auto transformations = std::vector<indexed_transformation>{};
       for (auto& sel : selectors_) {
         auto resolved = tql2::resolve(sel, slice.schema());
-        if (auto off = std::get_if<offset>(&resolved)) {
-          transformations.emplace_back(
-            std::move(*off),
-            [](struct record_type::field, std::shared_ptr<arrow::Array>) {
-              return indexed_transformation::result_type{};
-            });
-        }
+        std::move(resolved).match(
+          [&](offset off) {
+            transformations.emplace_back(
+              std::move(off),
+              [](struct record_type::field, std::shared_ptr<arrow::Array>) {
+                return indexed_transformation::result_type{};
+              });
+          },
+          [&](tql2::resolve_error err) {
+            err.reason.match(
+              [&](tql2::resolve_error::field_not_found&) {
+                diagnostic::warning("could not find field `{}`", err.ident.name)
+                  .primary(err.ident.location)
+                  .emit(ctrl.diagnostics());
+              },
+              [&](tql2::resolve_error::field_of_non_record& reason) {
+                diagnostic::warning("type `{}` has no field field `{}`",
+                                    reason.type.kind(), err.ident.name)
+                  .primary(err.ident.location)
+                  .emit(ctrl.diagnostics());
+              });
+          });
       }
       std::ranges::sort(transformations);
       co_yield transform_columns(slice, transformations);
@@ -216,7 +230,7 @@ public:
         selectors.push_back(std::move(*selector));
       } else {
         // TODO: Improve error message.
-        diagnostic::error("expected selector")
+        diagnostic::error("expected simple selector")
           .primary(arg.get_location())
           .emit(ctx.dh());
       }
