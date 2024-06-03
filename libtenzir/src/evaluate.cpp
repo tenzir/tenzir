@@ -55,6 +55,10 @@ struct cell_evaluator<relational_operator::equal> {
   static bool evaluate(std::string_view lhs, const pattern& rhs) noexcept {
     return rhs.match(lhs);
   }
+
+  static bool evaluate(view<ip> lhs, const subnet& rhs) noexcept {
+    return rhs.contains(lhs);
+  }
 };
 
 template <>
