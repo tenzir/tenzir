@@ -1195,13 +1195,14 @@ public:
 
   auto optimize(expression const& filter, event_order order,
                 select_optimization const& selection)
-    -> optimize_parser_result override {
+    -> std::optional<optimize_parser_result> override {
     (void)filter;
     (void)selection;
     auto args = args_;
     args.preserve_order = order == event_order::ordered;
-    return {std::make_unique<json_parser>(std::move(args)),
-            optimization_type::order_optimized};
+    return optimize_parser_result{
+      std::make_unique<json_parser>(std::move(args)), selection_optimized::no,
+      filter_optimized::no};
   }
 
   auto

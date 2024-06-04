@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/loader_saver_resolver.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/pipeline.hpp>
@@ -89,19 +90,40 @@ public:
     -> optimize_result override {
     (void)filter;
     auto parser_opt = parser_->optimize(filter, order, selection);
-    if (!parser_opt.replacement) {
+    if (not parser_opt) {
       return do_not_optimize(*this);
     }
-    if (parser_opt.selection_optimized) {
+    TENZIR_ASSERT(parser_opt->replacement);
+    if (parser_opt->selection_opt == selection_optimized::yes
+        && parser_opt->filter_opt == filter_optimized::no) {
       return optimize_result{
         std::nullopt, event_order::ordered,
-        std::make_unique<read_operator>(std::move(parser_opt.replacement)),
+        std::make_unique<read_operator>(std::move(parser_opt->replacement)),
         select_optimization::no_select_optimization()};
     }
-    return optimize_result{
-      std::nullopt, event_order::ordered,
-      std::make_unique<read_operator>(std::move(parser_opt.replacement)),
-      std::nullopt};
+    // else order optimized will never insert select
+    if (parser_opt->selection_opt == selection_optimized::no
+        && parser_opt->filter_opt == filter_optimized::no) {
+      auto pipe = pipeline();
+      pipe.append(
+        std::make_unique<read_operator>(std::move(parser_opt->replacement)));
+      if (!selection.fields.empty()) {
+        auto select_pipe = tql::parse_internal(
+          fmt::format("select {}", fmt::join(selection.fields, ", ")));
+        if (not select_pipe) {
+          diagnostic::error(select_pipe.error())
+            .note("failed to parse `batch` operator")
+            .throw_();
+        }
+        pipe.append(std::make_unique<pipeline>(std::move(*select_pipe)));
+      }
+      return optimize_result{std::nullopt, event_order::ordered,
+                             std::make_unique<pipeline>(std::move(pipe)),
+                             select_optimization::no_select_optimization()};
+    }
+    // TODO: As there are more combinations of filter and selections returned
+    // from optimize()
+    TENZIR_UNIMPLEMENTED();
   }
 
   friend auto inspect(auto& f, read_operator& x) -> bool {

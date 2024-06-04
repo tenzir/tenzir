@@ -329,11 +329,11 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
       if (truncated_bytes != 0 and payload->size() != 0) {
         // Ideally this always would be just a warning, but the stream decoder
         // happily continues to consume invalid bytes. E.g., trying to read a
-        // JSON file with this parser will just swallow all bytes, emitting this
-        // one error at the very end. Not a single time does consuming a buffer
-        // actually fail. We should probably look into limiting the memory usage
-        // here, as the stream decoder will keep consumed-but-not-yet-converted
-        // buffers in memory.
+        // JSON file with this parser will just swallow all bytes, emitting
+        // this one error at the very end. Not a single time does consuming a
+        // buffer actually fail. We should probably look into limiting the
+        // memory usage here, as the stream decoder will keep
+        // consumed-but-not-yet-converted buffers in memory.
         diagnostic::warning("truncated {} trailing bytes", truncated_bytes)
           .severity(decoded_once ? severity::warning : severity::error)
           .emit(ctrl.diagnostics());
@@ -356,8 +356,8 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
     }
   }
   auto indices = std::vector<tenzir::offset>{};
-  if (!selection.inner.fields_of_interest.empty()) {
-    for (const auto& field : selection.inner.fields_of_interest) {
+  if (!selection.inner.fields.empty()) {
+    for (const auto& field : selection.inner.fields) {
       for (auto index : schema.resolve(field)) {
         if (index.size() > 1) {
           further_selection_needed = true;
@@ -402,11 +402,11 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
       if (truncated_bytes != 0 and payload->size() != 0) {
         // Ideally this always would be just a warning, but the stream decoder
         // happily continues to consume invalid bytes. E.g., trying to read a
-        // JSON file with this parser will just swallow all bytes, emitting this
-        // one error at the very end. Not a single time does consuming a buffer
-        // actually fail. We should probably look into limiting the memory usage
-        // here, as the stream decoder will keep consumed-but-not-yet-converted
-        // buffers in memory.
+        // JSON file with this parser will just swallow all bytes, emitting
+        // this one error at the very end. Not a single time does consuming a
+        // buffer actually fail. We should probably look into limiting the
+        // memory usage here, as the stream decoder will keep
+        // consumed-but-not-yet-converted buffers in memory.
         diagnostic::warning("truncated {} trailing bytes", truncated_bytes)
           .severity(decoded_once ? severity::warning : severity::error)
           .emit(ctrl.diagnostics());
@@ -428,11 +428,11 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
       listener->record_batch_buffer.pop();
       auto validate_status = batch->Validate();
       TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
-      // We check whether the name metadatum from Tenzir's conversion to record
-      // batches is still present. If it is not, then we stop parsing because we
-      // cannot feasibly continue.
-      // TODO: Implement a best-effort conversion for record batches coming from
-      // other tools to Tenzir's supported subset and required metadata.
+      // We check whether the name metadatum from Tenzir's conversion to
+      // record batches is still present. If it is not, then we stop parsing
+      // because we cannot feasibly continue.
+      // TODO: Implement a best-effort conversion for record batches coming
+      // from other tools to Tenzir's supported subset and required metadata.
       const auto& metadata = batch->schema()->metadata();
       if (not metadata
           or std::find(metadata->keys().begin(), metadata->keys().end(),
@@ -524,15 +524,15 @@ public:
 
   auto optimize(expression const& filter, event_order order,
                 select_optimization const& selection)
-    -> optimize_parser_result override {
+    -> std::optional<optimize_parser_result> override {
     (void)filter;
     (void)order;
-    if (selection.fields_of_interest.empty()) {
-      return {nullptr, std::nullopt};
+    if (selection.fields.empty()) {
+      return std::nullopt;
     }
-    return {
+    return optimize_parser_result{
       std::make_unique<feather_parser>(located(selection, location::unknown)),
-      optimization_type::selection_optimized};
+      selection_optimized::yes};
   }
 
 private:

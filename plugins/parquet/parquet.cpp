@@ -72,10 +72,10 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl,
       .emit(ctrl.diagnostics());
     co_return;
   }
-  if (!selection.inner.fields_of_interest.empty()) {
+  if (!selection.inner.fields.empty()) {
     auto schema = type::from_arrow(*arrow_schema);
     const auto& layout = caf::get<record_type>(schema);
-    for (const auto& field : selection.inner.fields_of_interest) {
+    for (const auto& field : selection.inner.fields) {
       for (const auto& index : schema.resolve(field)) {
         auto field_type = layout.field(index).type;
         const auto* field_record_type = caf::get_if<record_type>(&field_type);
@@ -102,7 +102,7 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl,
   }
   std::unique_ptr<::arrow::RecordBatchReader> rb_reader{};
   auto record_batch_reader_status = arrow::Status{};
-  if (!selection.inner.fields_of_interest.empty()) {
+  if (!selection.inner.fields.empty()) {
     record_batch_reader_status = out_buffer->GetRecordBatchReader(
       included_rows, included_cols, &rb_reader);
   } else {
@@ -157,15 +157,15 @@ public:
   }
   auto optimize(expression const& filter, event_order order,
                 select_optimization const& selection)
-    -> optimize_parser_result override {
+    -> std::optional<optimize_parser_result> override {
     (void)filter;
     (void)order;
-    if (selection.fields_of_interest.empty()) {
-      return {nullptr, std::nullopt};
+    if (selection.fields.empty()) {
+      return std::nullopt;
     }
-    return {
+    return optimize_parser_result{
       std::make_unique<parquet_parser>(located(selection, location::unknown)),
-      optimization_type::selection_optimized};
+      selection_optimized::yes};
   }
   friend auto inspect(auto& f, parquet_parser& x) -> bool {
     return f.object(x).fields(f.field("selection", x.selection_));
