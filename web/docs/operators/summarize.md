@@ -46,8 +46,10 @@ The following aggregation functions are available:
 - `all`: Computes the conjunction (AND) of all grouped values. Requires the
   values to be booleans.
 - `mean`: Computes the mean of all grouped values.
-- `approximate_median`: Computes the apprximate median of all grouped values
-  with a T-Digest algorithm.
+- `median`: Computes the approximate median of all grouped values with a
+  t-digest algorithm.
+- `p99`, `p95`, `p90`, `p75`, `p50`: Computes the 99th, 95th, 90th, 75th, or
+  50th percentile of all grouped values with a t-digest algorithm.
 - `stddev`: Computes the standard deviation of all grouped values.
 - `variance`: Computes the variance of all grouped values.
 - `distinct`: Creates a sorted list of all unique grouped values that are not
