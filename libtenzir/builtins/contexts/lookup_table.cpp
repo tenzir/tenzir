@@ -345,6 +345,10 @@ public:
     -> caf::expected<update_result> override {
     // context does stuff on its own with slice & parameters
     TENZIR_ASSERT(slice.rows() != 0);
+    if (caf::get<record_type>(slice.schema()).num_fields() == 0) {
+      return caf::make_error(ec::invalid_argument,
+                             "context update cannot handle empty input events");
+    }
     auto erase = parameters.contains("erase");
     if (erase and parameters["erase"].has_value()) {
       return caf::make_error(ec::invalid_argument,
@@ -352,18 +356,26 @@ public:
                                          "value; found '{}'",
                                          *parameters["erase"]));
     }
-    if (not parameters.contains("key")) {
-      return caf::make_error(ec::invalid_argument, "missing 'key' parameter");
-    }
-    auto key_field = parameters["key"];
-    if (not key_field) {
-      return caf::make_error(ec::invalid_argument,
-                             "invalid 'key' parameter; 'key' must be a string");
-    }
-    auto key_column = slice.schema().resolve_key_or_concept_once(*key_field);
+    auto key_column = [&]() -> caf::expected<offset> {
+      if (not parameters.contains("key")) {
+        return offset{0};
+      }
+      auto key_field = parameters["key"];
+      if (not key_field) {
+        return caf::make_error(ec::invalid_argument, "invalid 'key' parameter; "
+                                                     "'key' must be a string");
+      }
+      auto key_column = slice.schema().resolve_key_or_concept_once(*key_field);
+      if (not key_column) {
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("key '{}' does not exist in schema "
+                                           "'{}'",
+                                           *key_field, slice.schema()));
+      }
+      return std::move(*key_column);
+    }();
     if (not key_column) {
-      // If there's no key column then we cannot do much.
-      return update_result{record{}};
+      return std::move(key_column.error());
     }
     auto [key_type, key_array] = key_column->get(slice);
     auto key_values = values(key_type, *key_array);
