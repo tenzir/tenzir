@@ -7,19 +7,22 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/aggregation_function.hpp>
+#include <tenzir/detail/string_literal.hpp>
 #include <tenzir/plugin.hpp>
 
 #include <arrow/util/tdigest.h>
 
-namespace tenzir::plugins::approximate_median {
+namespace tenzir::plugins::quantile {
 
 namespace {
 
 template <basic_type Type>
-class approximate_median_function final : public aggregation_function {
+class quantile_function final : public aggregation_function {
 public:
-  explicit approximate_median_function(type input_type) noexcept
-    : aggregation_function(std::move(input_type)), tdigest_{} {
+  explicit quantile_function(type input_type, double percentile) noexcept
+    : aggregation_function(std::move(input_type)),
+      percentile_{percentile},
+      tdigest_{} {
     // nop
   }
 
@@ -61,42 +64,50 @@ private:
     if (tdigest_.is_empty()) {
       return data{};
     }
-    return data{static_cast<type_to_data_t<Type>>(tdigest_.Quantile(0.5))};
+    auto quantile = tdigest_.Quantile(percentile_);
+    if (not std::is_same_v<Type, double_type>) {
+      quantile = std::round(quantile);
+    }
+    return data{static_cast<type_to_data_t<Type>>(quantile)};
   }
 
+  const double percentile_;
   arrow::internal::TDigest tdigest_;
 };
 
+template <detail::string_literal Name, uint8_t Percentile>
+  requires(Percentile > 0 and Percentile < 100)
 class plugin : public virtual aggregation_function_plugin {
   auto name() const -> std::string override {
-    return "approximate_median";
+    return std::string{Name.str()};
   };
 
   auto make_aggregation_function(const type& input_type) const
     -> caf::expected<std::unique_ptr<aggregation_function>> override {
+    const auto percentile = Percentile / 100.0;
     auto f = detail::overload{
       [&](const uint64_type&)
         -> caf::expected<std::unique_ptr<aggregation_function>> {
-        return std::make_unique<approximate_median_function<uint64_type>>(
-          input_type);
+        return std::make_unique<quantile_function<uint64_type>>(input_type,
+                                                                percentile);
       },
       [&](const int64_type&)
         -> caf::expected<std::unique_ptr<aggregation_function>> {
-        return std::make_unique<approximate_median_function<int64_type>>(
-          input_type);
+        return std::make_unique<quantile_function<int64_type>>(input_type,
+                                                               percentile);
       },
       [&](const double_type&)
         -> caf::expected<std::unique_ptr<aggregation_function>> {
-        return std::make_unique<approximate_median_function<double_type>>(
-          input_type);
+        return std::make_unique<quantile_function<double_type>>(input_type,
+                                                                percentile);
       },
       [](const concrete_type auto& type)
         -> caf::expected<std::unique_ptr<aggregation_function>> {
         return caf::make_error(ec::invalid_configuration,
-                               fmt::format("approximate_median aggregation "
+                               fmt::format("{} aggregation "
                                            "function does not "
                                            "support type {}",
-                                           type));
+                                           Name.str(), type));
       },
     };
     return caf::visit(f, input_type);
@@ -107,8 +118,20 @@ class plugin : public virtual aggregation_function_plugin {
   }
 };
 
+using median_plugin = plugin<"median", 50>;
+using p50_plugin = plugin<"p50", 50>;
+using p75_plugin = plugin<"p75", 75>;
+using p90_plugin = plugin<"p90", 90>;
+using p95_plugin = plugin<"p95", 95>;
+using p99_plugin = plugin<"p99", 99>;
+
 } // namespace
 
-} // namespace tenzir::plugins::approximate_median
+} // namespace tenzir::plugins::quantile
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::approximate_median::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::quantile::median_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::quantile::p50_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::quantile::p75_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::quantile::p90_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::quantile::p95_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::quantile::p99_plugin)
