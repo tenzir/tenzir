@@ -345,6 +345,13 @@ public:
     -> caf::expected<update_result> override {
     // context does stuff on its own with slice & parameters
     TENZIR_ASSERT(slice.rows() != 0);
+    auto erase = parameters.contains("erase");
+    if (erase and parameters["erase"].has_value()) {
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("'erase' option must not have a "
+                                         "value; found '{}'",
+                                         *parameters["erase"]));
+    }
     if (not parameters.contains("key")) {
       return caf::make_error(ec::invalid_argument, "missing 'key' parameter");
     }
@@ -359,10 +366,31 @@ public:
       return update_result{record{}};
     }
     auto [key_type, key_array] = key_column->get(slice);
-    auto context_array = std::static_pointer_cast<arrow::Array>(
-      to_record_batch(slice)->ToStructArray().ValueOrDie());
     auto key_values = values(key_type, *key_array);
     auto key_values_list = list{};
+    if (erase) {
+      // Subnets never make it into the regular map of entries.
+      if (caf::holds_alternative<subnet_type>(key_type)) {
+        for (const auto& key :
+             values(subnet_type{},
+                    caf::get<type_to_arrow_array_t<subnet_type>>(*key_array))) {
+          if (not key) {
+            continue;
+          }
+          subnet_entries.erase(*key);
+        }
+      } else {
+        for (const auto& key : values(key_type, *key_array)) {
+          context_entries.erase(materialize(key));
+        }
+      }
+      return update_result{
+        .update_info = show(),
+        .make_query = {},
+      };
+    }
+    auto context_array = std::static_pointer_cast<arrow::Array>(
+      to_record_batch(slice)->ToStructArray().ValueOrDie());
     auto context_values = values(slice.schema(), *context_array);
     auto key_it = key_values.begin();
     auto context_it = context_values.begin();
@@ -399,8 +427,10 @@ public:
       }
       return result;
     };
-    return update_result{.update_info = show(),
-                         .make_query = std::move(query_f)};
+    return update_result{
+      .update_info = show(),
+      .make_query = std::move(query_f),
+    };
   }
 
   auto make_query() -> make_query_type override {
