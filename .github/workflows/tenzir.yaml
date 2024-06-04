@@ -569,10 +569,7 @@ jobs:
               #   libfluent-bit.so to libtenzir.so directly. The alternative
               #   workaround of using LD_PRELOAD for the standalone plugin build
               #   does not work in the GitHub Actions Runner.
-              # - zmq: The VAST plugin requires it, so for it to pass CI it has
-              #   to be bundled already.
               - plugins/fluent-bit
-              - plugins/zmq
           - os: macos-14
             container: null
             name: macOS
@@ -845,6 +842,9 @@ jobs:
           - name: Yara
             target: yara
             path: plugins/yara
+          - name: ZMQ
+            target: zmq
+            path: plugins/zmq
     env:
       INSTALL_DIR: "${{ github.workspace }}/_install"
       BUILD_DIR: "${{ github.workspace }}/_build"
