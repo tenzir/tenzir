@@ -15,6 +15,8 @@
 #include <tenzir/tql/fwd.hpp>
 #include <tenzir/tql/parser.hpp>
 
+#include <optional>
+
 namespace tenzir::plugins::from {
 namespace {
 
@@ -104,22 +106,10 @@ public:
     // else order optimized will never insert select
     if (parser_opt->selection_opt == selection_optimized::no
         && parser_opt->filter_opt == filter_optimized::no) {
-      auto pipe = pipeline();
-      pipe.append(
-        std::make_unique<read_operator>(std::move(parser_opt->replacement)));
-      if (!selection.fields.empty()) {
-        auto select_pipe = tql::parse_internal(
-          fmt::format("select {}", fmt::join(selection.fields, ", ")));
-        if (not select_pipe) {
-          diagnostic::error(select_pipe.error())
-            .note("failed to parse `batch` operator")
-            .throw_();
-        }
-        pipe.append(std::make_unique<pipeline>(std::move(*select_pipe)));
-      }
-      return optimize_result{std::nullopt, event_order::ordered,
-                             std::make_unique<pipeline>(std::move(pipe)),
-                             select_optimization::no_select_optimization()};
+      return optimize_result{
+        std::nullopt, event_order::ordered,
+        std::make_unique<read_operator>(std::move(parser_opt->replacement)),
+        std::nullopt};
     }
     // TODO: As there are more combinations of filter and selections returned
     // from optimize()
