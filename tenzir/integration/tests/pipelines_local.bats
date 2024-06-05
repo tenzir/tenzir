@@ -470,6 +470,31 @@ EOF
   check tenzir 'show version | put line="55.3.244.1 GET /index.html 15824 0.043" | parse line grok "%{IP:client} %{WORD:method} %{URIPATHPARAM:request} %{NUMBER:bytes} %{NUMBER:duration}"'
 }
 
+# bats test_tags=pipelines
+@test "Print CEF in JSON" {
+  check tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | write json"
+  check tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | print extension json | select extension"
+  check ! tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | print extension.dvc json"
+}
+
+# bats test_tags=pipelines
+@test "Print CEF in CSV" {
+  check tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | print extension csv"
+  check tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | print extension csv --no-header | select extension"
+}
+
+# bats test_tags=pipelines
+@test "Print non UTF-8 string" {
+  check ! tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | print extension feather"
+}
+
+@test "Print nested JSON in CSV/JSON" {
+  check tenzir "from ${INPUTSDIR}/json/nested-object.json read json | print a csv | parse a csv"
+  check tenzir "from ${INPUTSDIR}/json/nested-object.json read json | print a.b csv"
+  check tenzir "from ${INPUTSDIR}/json/nested-object.json read json | print a.b json | parse a.b json"
+  check ! tenzir "from ${INPUTSDIR}/json/nested-object.json read json | print a.b.c json"
+}
+
 # bats test_tags=pipelines, csv
 @test "CSV with comments" {
   check tenzir "from ${INPUTSDIR}/csv/ipblocklist.csv read csv --allow-comments"
