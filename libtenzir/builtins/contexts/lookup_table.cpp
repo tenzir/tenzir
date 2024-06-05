@@ -345,24 +345,64 @@ public:
     -> caf::expected<update_result> override {
     // context does stuff on its own with slice & parameters
     TENZIR_ASSERT(slice.rows() != 0);
-    if (not parameters.contains("key")) {
-      return caf::make_error(ec::invalid_argument, "missing 'key' parameter");
-    }
-    auto key_field = parameters["key"];
-    if (not key_field) {
+    if (caf::get<record_type>(slice.schema()).num_fields() == 0) {
       return caf::make_error(ec::invalid_argument,
-                             "invalid 'key' parameter; 'key' must be a string");
+                             "context update cannot handle empty input events");
     }
-    auto key_column = slice.schema().resolve_key_or_concept_once(*key_field);
+    auto erase = parameters.contains("erase");
+    if (erase and parameters["erase"].has_value()) {
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("'erase' option must not have a "
+                                         "value; found '{}'",
+                                         *parameters["erase"]));
+    }
+    auto key_column = [&]() -> caf::expected<offset> {
+      if (not parameters.contains("key")) {
+        return offset{0};
+      }
+      auto key_field = parameters["key"];
+      if (not key_field) {
+        return caf::make_error(ec::invalid_argument, "invalid 'key' parameter; "
+                                                     "'key' must be a string");
+      }
+      auto key_column = slice.schema().resolve_key_or_concept_once(*key_field);
+      if (not key_column) {
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("key '{}' does not exist in schema "
+                                           "'{}'",
+                                           *key_field, slice.schema()));
+      }
+      return std::move(*key_column);
+    }();
     if (not key_column) {
-      // If there's no key column then we cannot do much.
-      return update_result{record{}};
+      return std::move(key_column.error());
     }
     auto [key_type, key_array] = key_column->get(slice);
-    auto context_array = std::static_pointer_cast<arrow::Array>(
-      to_record_batch(slice)->ToStructArray().ValueOrDie());
     auto key_values = values(key_type, *key_array);
     auto key_values_list = list{};
+    if (erase) {
+      // Subnets never make it into the regular map of entries.
+      if (caf::holds_alternative<subnet_type>(key_type)) {
+        for (const auto& key :
+             values(subnet_type{},
+                    caf::get<type_to_arrow_array_t<subnet_type>>(*key_array))) {
+          if (not key) {
+            continue;
+          }
+          subnet_entries.erase(*key);
+        }
+      } else {
+        for (const auto& key : values(key_type, *key_array)) {
+          context_entries.erase(materialize(key));
+        }
+      }
+      return update_result{
+        .update_info = show(),
+        .make_query = {},
+      };
+    }
+    auto context_array = std::static_pointer_cast<arrow::Array>(
+      to_record_batch(slice)->ToStructArray().ValueOrDie());
     auto context_values = values(slice.schema(), *context_array);
     auto key_it = key_values.begin();
     auto context_it = context_values.begin();
@@ -399,8 +439,10 @@ public:
       }
       return result;
     };
-    return update_result{.update_info = show(),
-                         .make_query = std::move(query_f)};
+    return update_result{
+      .update_info = show(),
+      .make_query = std::move(query_f),
+    };
   }
 
   auto make_query() -> make_query_type override {

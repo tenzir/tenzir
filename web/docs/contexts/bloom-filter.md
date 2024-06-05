@@ -6,7 +6,7 @@ A space-efficient data structure to represent large sets.
 
 ```
 context create  <name> bloom-filter --capacity <capacity> --fp-probability <probability>
-context update  <name> --key <field>
+context update  <name> [--key <field>]
 context delete  <name>
 context reset   <name>
 context save    <name>
@@ -62,3 +62,5 @@ The field in the input to be inserted into the Bloom filter.
 
 If an element exists already in the Bloom filter, the update operation is a
 no-op.
+
+Defaults to the first field of the input.
