@@ -532,7 +532,7 @@ public:
     }
     return optimize_parser_result{
       std::make_unique<feather_parser>(located(selection, location::unknown)),
-      selection_optimized::yes};
+      selection_optimized::yes, filter_optimized::no};
   }
 
 private:

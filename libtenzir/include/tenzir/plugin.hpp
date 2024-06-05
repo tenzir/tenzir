@@ -362,15 +362,14 @@ enum class selection_optimized : bool { yes, no };
 enum class filter_optimized : bool { yes, no };
 
 struct optimize_parser_result {
+  // replacement should never be null
   std::unique_ptr<plugin_parser> replacement;
   enum selection_optimized selection_opt;
   enum filter_optimized filter_opt;
 
   optimize_parser_result(std::unique_ptr<plugin_parser> replacement,
-                         enum selection_optimized selection_opt
-                         = selection_optimized::no,
-                         enum filter_optimized filter_opt
-                         = filter_optimized::no)
+                         enum selection_optimized selection_opt,
+                         enum filter_optimized filter_opt)
     : replacement{std::move(replacement)},
       selection_opt{selection_opt},
       filter_opt{filter_opt} {

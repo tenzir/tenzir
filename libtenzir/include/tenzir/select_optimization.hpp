@@ -8,18 +8,20 @@
 
 #pragma once
 
-#include <caf/default_sum_type_access.hpp>
-#include <caf/detail/type_list.hpp>
-#include <caf/none.hpp>
-#include <caf/variant.hpp>
-
 #include <string>
 #include <vector>
 
 namespace tenzir {
 
+/// select_optimization stores the fields of interest
+/// if fields are empty, there is no selection
+/// select_optimization(<"a", "b.c">) represents the same information as
+/// `select` a, b.c
+/// select_optimization is used in pipeline optimize() to push selection
+/// information through the pipeline
 class select_optimization {
 public:
+  // an empty fields vector represents no selection
   std::vector<std::string> fields{};
   select_optimization() = default;
   explicit select_optimization(std::vector<std::string> fields)

@@ -165,7 +165,7 @@ public:
     }
     return optimize_parser_result{
       std::make_unique<parquet_parser>(located(selection, location::unknown)),
-      selection_optimized::yes};
+      selection_optimized::yes, filter_optimized::no};
   }
   friend auto inspect(auto& f, parquet_parser& x) -> bool {
     return f.object(x).fields(f.field("selection", x.selection_));

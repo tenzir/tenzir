@@ -85,7 +85,6 @@ public:
     if (config_.fields.empty() && selection.fields.empty()) {
       return optimize_result::order_invariant(*this, order);
     }
-
     // TODO: Optimize multiple selection calls in the same pipeline
     if (!selection.fields.empty()) {
       return optimize_result{
@@ -93,8 +92,6 @@ public:
         std::make_unique<select_operator>(configuration{selection.fields}),
         select_optimization(config_.fields)};
     }
-    // TODO: consider that where and select can be pushed up in very specific
-    // circumstances
     return optimize_result{filter, order, nullptr,
                            select_optimization(config_.fields)};
   }

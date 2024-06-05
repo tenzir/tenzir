@@ -90,6 +90,7 @@ public:
   auto optimize(expression const& filter, event_order order,
                 select_optimization const& selection) const
     -> optimize_result override {
+    // TODO: We could also propagate `where #schema == "..."` to the parser.
     (void)filter;
     auto parser_opt = parser_->optimize(filter, order, selection);
     if (not parser_opt) {
@@ -103,7 +104,7 @@ public:
         std::make_unique<read_operator>(std::move(parser_opt->replacement)),
         select_optimization::no_select_optimization()};
     }
-    // else order optimized will never insert select
+    // otherwise, order optimized will never insert select/filter
     if (parser_opt->selection_opt == selection_optimized::no
         && parser_opt->filter_opt == filter_optimized::no) {
       return optimize_result{
@@ -111,8 +112,8 @@ public:
         std::make_unique<read_operator>(std::move(parser_opt->replacement)),
         std::nullopt};
     }
-    // TODO: As there are more combinations of filter and selections returned
-    // from optimize()
+    // TODO: There are more combinations of filter and selections returned from
+    // optimize()
     TENZIR_UNIMPLEMENTED();
   }
 
