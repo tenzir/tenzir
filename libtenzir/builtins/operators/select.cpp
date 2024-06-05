@@ -19,6 +19,7 @@
 #include <caf/expected.hpp>
 
 #include <algorithm>
+#include <optional>
 #include <utility>
 
 namespace tenzir::plugins::select {
@@ -80,24 +81,20 @@ public:
   auto optimize(expression const& filter, event_order order,
                 select_optimization const& selection) const
     -> optimize_result override {
-    if (config_.fields.empty() && selection.fields_of_interest.empty()) {
+    (void)filter;
+    if (config_.fields.empty() && selection.fields.empty()) {
       return optimize_result::order_invariant(*this, order);
     }
-    if (!selection.fields_of_interest.empty()) {
-      auto config_fields = config_.fields;
-      auto selection_fields = selection.fields_of_interest;
-      std::sort(config_fields.begin(), config_fields.end());
-      std::sort(selection_fields.begin(), selection_fields.end());
-      std::vector<std::string> intersection;
-      std::set_intersection(config_fields.begin(), config_fields.end(),
-                            selection_fields.begin(), selection_fields.end(),
-                            std::back_inserter(intersection));
-      if (intersection.empty()) {
-        return optimize_result{filter, order, copy(), std::nullopt};
-      }
-      return optimize_result{filter, order, nullptr,
-                             select_optimization(intersection)};
+
+    // TODO: Optimize multiple selection calls in the same pipeline
+    if (!selection.fields.empty()) {
+      return optimize_result{
+        filter, order,
+        std::make_unique<select_operator>(configuration{selection.fields}),
+        select_optimization(config_.fields)};
     }
+    // TODO: consider that where and select can be pushed up in very specific
+    // circumstances
     return optimize_result{filter, order, nullptr,
                            select_optimization(config_.fields)};
   }
