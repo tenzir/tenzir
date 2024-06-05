@@ -12,6 +12,7 @@
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/range_map.hpp>
+#include <tenzir/detail/subnet_tree.hpp>
 #include <tenzir/expression.hpp>
 #include <tenzir/fbs/data.hpp>
 #include <tenzir/flatbuffer.hpp>
@@ -32,8 +33,6 @@
 #include <caf/sum_type.hpp>
 #include <tsl/robin_map.h>
 
-#include <chrono>
-#include <concepts>
 #include <memory>
 #include <string>
 
@@ -102,7 +101,7 @@ public:
       data_(from_data(std::move(d))) {
   }
 
-  friend bool operator==(const key_data& a, const key_data& b) {
+  friend auto operator==(const key_data& a, const key_data& b) -> bool {
     return a.data_ == b.data_;
   }
 
@@ -217,8 +216,10 @@ class ctx final : public virtual context {
 public:
   ctx() noexcept = default;
 
-  explicit ctx(map_type context_entries) noexcept
-    : context_entries{std::move(context_entries)} {
+  explicit ctx(map_type context_entries,
+               detail::subnet_tree subnet_entries) noexcept
+    : context_entries{std::move(context_entries)},
+      subnet_entries{std::move(subnet_entries)} {
     // nop
   }
 
@@ -229,10 +230,29 @@ public:
   auto apply(series array, bool replace) const
     -> caf::expected<std::vector<series>> override {
     auto builder = series_builder{};
+    auto subnet_lookup = [&](const auto& value) -> std::optional<view<data>> {
+      auto match = detail::overload{
+        [&](const auto&) -> const data* {
+          return nullptr;
+        },
+        [&](view<ip> addr) {
+          return subnet_entries.match(materialize(addr));
+        },
+        [&](view<subnet> sn) {
+          return subnet_entries.match(materialize(sn));
+        },
+      };
+      if (auto x = caf::visit(match, value)) {
+        return make_view(*x);
+      }
+      return std::nullopt;
+    };
     for (const auto& value : array.values()) {
       if (auto it = context_entries.find(materialize(value));
           it != context_entries.end()) {
         builder.data(it->second);
+      } else if (auto x = subnet_lookup(value)) {
+        builder.data(*x);
       } else if (replace and not caf::holds_alternative<caf::none_t>(value)) {
         builder.data(value);
       } else {
@@ -260,6 +280,9 @@ public:
                                "heterogeneous keys");
       }
     }
+    for (const auto& [k, _] : subnet_entries.nodes()) {
+      keys.emplace_back(k);
+    }
     auto result = disjunction{};
     result.reserve(fields.size());
     for (const auto& field : fields) {
@@ -276,11 +299,29 @@ public:
 
   /// Inspects the context.
   auto show() const -> record override {
-    return record{{"num_entries", context_entries.size()}};
+    // There's no size() function for the PATRICIA trie, so we walk the tree
+    // nodes here once in O(n).
+    auto num_subnet_entries = size_t{0};
+    for (auto _ : subnet_entries.nodes()) {
+      ++num_subnet_entries;
+      (void)_;
+    }
+    return record{
+      {"num_entries", context_entries.size() + num_subnet_entries},
+    };
   }
 
   auto dump() -> generator<table_slice> override {
     auto entry_builder = series_builder{};
+    for (const auto& [key, value] : subnet_entries.nodes()) {
+      auto row = entry_builder.record();
+      row.field("key", data{key});
+      row.field("value", value ? *value : data{});
+      if (entry_builder.length() >= context::dump_batch_size_limit) {
+        co_yield entry_builder.finish_assert_one_slice(
+          fmt::format("tenzir.{}.info", context_type()));
+      }
+    }
     for (const auto& [key, value] : context_entries) {
       auto row = entry_builder.record();
       row.field("key", key.to_original_data());
@@ -304,32 +345,78 @@ public:
     -> caf::expected<update_result> override {
     // context does stuff on its own with slice & parameters
     TENZIR_ASSERT(slice.rows() != 0);
-    if (not parameters.contains("key")) {
-      return caf::make_error(ec::invalid_argument, "missing 'key' parameter");
-    }
-    auto key_field = parameters["key"];
-    if (not key_field) {
+    if (caf::get<record_type>(slice.schema()).num_fields() == 0) {
       return caf::make_error(ec::invalid_argument,
-                             "invalid 'key' parameter; 'key' must be a string");
+                             "context update cannot handle empty input events");
     }
-    auto key_column = slice.schema().resolve_key_or_concept_once(*key_field);
+    auto erase = parameters.contains("erase");
+    if (erase and parameters["erase"].has_value()) {
+      return caf::make_error(ec::invalid_argument,
+                             fmt::format("'erase' option must not have a "
+                                         "value; found '{}'",
+                                         *parameters["erase"]));
+    }
+    auto key_column = [&]() -> caf::expected<offset> {
+      if (not parameters.contains("key")) {
+        return offset{0};
+      }
+      auto key_field = parameters["key"];
+      if (not key_field) {
+        return caf::make_error(ec::invalid_argument, "invalid 'key' parameter; "
+                                                     "'key' must be a string");
+      }
+      auto key_column = slice.schema().resolve_key_or_concept_once(*key_field);
+      if (not key_column) {
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("key '{}' does not exist in schema "
+                                           "'{}'",
+                                           *key_field, slice.schema()));
+      }
+      return std::move(*key_column);
+    }();
     if (not key_column) {
-      // If there's no key column then we cannot do much.
-      return update_result{record{}};
+      return std::move(key_column.error());
     }
     auto [key_type, key_array] = key_column->get(slice);
-    auto context_array = std::static_pointer_cast<arrow::Array>(
-      to_record_batch(slice)->ToStructArray().ValueOrDie());
     auto key_values = values(key_type, *key_array);
     auto key_values_list = list{};
+    if (erase) {
+      // Subnets never make it into the regular map of entries.
+      if (caf::holds_alternative<subnet_type>(key_type)) {
+        for (const auto& key :
+             values(subnet_type{},
+                    caf::get<type_to_arrow_array_t<subnet_type>>(*key_array))) {
+          if (not key) {
+            continue;
+          }
+          subnet_entries.erase(*key);
+        }
+      } else {
+        for (const auto& key : values(key_type, *key_array)) {
+          context_entries.erase(materialize(key));
+        }
+      }
+      return update_result{
+        .update_info = show(),
+        .make_query = {},
+      };
+    }
+    auto context_array = std::static_pointer_cast<arrow::Array>(
+      to_record_batch(slice)->ToStructArray().ValueOrDie());
     auto context_values = values(slice.schema(), *context_array);
     auto key_it = key_values.begin();
     auto context_it = context_values.begin();
     while (key_it != key_values.end()) {
       TENZIR_ASSERT(context_it != context_values.end());
       auto materialized_key = materialize(*key_it);
-      context_entries.insert_or_assign(materialized_key,
-                                       materialize(*context_it));
+      // Subnets never make it into the regular map of entries.
+      if (caf::holds_alternative<subnet_type>(key_type)) {
+        const auto& key = caf::get<subnet>(materialized_key);
+        subnet_entries.insert(key, materialize(*context_it));
+      } else {
+        context_entries.insert_or_assign(materialized_key,
+                                         materialize(*context_it));
+      }
       key_values_list.emplace_back(materialized_key);
       ++key_it;
       ++context_it;
@@ -352,8 +439,10 @@ public:
       }
       return result;
     };
-    return update_result{.update_info = show(),
-                         .make_query = std::move(query_f)};
+    return update_result{
+      .update_info = show(),
+      .make_query = std::move(query_f),
+    };
   }
 
   auto make_query() -> make_query_type override {
@@ -383,6 +472,7 @@ public:
 
   auto reset() -> caf::expected<void> override {
     context_entries.clear();
+    subnet_entries.clear();
     return {};
   }
 
@@ -409,6 +499,23 @@ public:
       value_offsets.emplace_back(fbs::CreateData(
         builder, fbs::data::Data::record, record_offset.Union()));
     }
+    for (const auto& [key, value] : subnet_entries.nodes()) {
+      auto field_offsets
+        = std::vector<flatbuffers::Offset<fbs::data::RecordField>>{};
+      field_offsets.reserve(2);
+      const auto key_key_offset = builder.CreateSharedString("key");
+      const auto key_value_offset = pack(builder, data{key});
+      field_offsets.emplace_back(fbs::data::CreateRecordField(
+        builder, key_key_offset, key_value_offset));
+      const auto value_key_offset = builder.CreateSharedString("value");
+      const auto value_value_offset = pack(builder, *value);
+      field_offsets.emplace_back(fbs::data::CreateRecordField(
+        builder, value_key_offset, value_value_offset));
+      const auto record_offset
+        = fbs::data::CreateRecordDirect(builder, &field_offsets);
+      value_offsets.emplace_back(fbs::CreateData(
+        builder, fbs::data::Data::record, record_offset.Union()));
+    }
     const auto list_offset
       = fbs::data::CreateListDirect(builder, &value_offsets);
     const auto data_offset
@@ -419,15 +526,16 @@ public:
 
 private:
   map_type context_entries;
+  detail::subnet_tree subnet_entries;
 };
 
 struct v1_loader : public context_loader {
-  auto version() const -> int {
+  auto version() const -> int final {
     return 1;
   }
 
   auto load(chunk_ptr serialized) const
-    -> caf::expected<std::unique_ptr<context>> {
+    -> caf::expected<std::unique_ptr<context>> final {
     auto fb = flatbuffer<fbs::Data>::make(std::move(serialized));
     if (not fb) {
       return caf::make_error(ec::serialization_error,
@@ -436,6 +544,7 @@ struct v1_loader : public context_loader {
                                          fb.error()));
     }
     auto context_entries = map_type{};
+    auto subnet_entries = detail::subnet_tree{};
     const auto* list = fb.value()->data_as_list();
     if (not list) {
       return caf::make_error(ec::serialization_error,
@@ -483,10 +592,14 @@ struct v1_loader : public context_loader {
                                            "context: invalid value: {}",
                                            err));
       }
-      context_entries.emplace(std::move(key), std::move(value));
+      if (auto* sn = caf::get_if<subnet>(&key)) {
+        subnet_entries.insert(*sn, std::move(value));
+      } else {
+        context_entries.emplace(std::move(key), std::move(value));
+      }
     }
-
-    return std::make_unique<ctx>(std::move(context_entries));
+    return std::make_unique<ctx>(std::move(context_entries),
+                                 std::move(subnet_entries));
   }
 };
 

@@ -8,7 +8,6 @@
 
 #include "tenzir/plugin.hpp"
 
-#include "tenzir/argument_parser.hpp"
 #include "tenzir/arrow_table_slice.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/collect.hpp"
@@ -23,7 +22,6 @@
 #include "tenzir/die.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
-#include "tenzir/node.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/store.hpp"
 #include "tenzir/uuid.hpp"
@@ -35,8 +33,6 @@
 #include <algorithm>
 #include <dlfcn.h>
 #include <memory>
-#include <tuple>
-#include <unordered_set>
 
 namespace tenzir {
 
@@ -369,7 +365,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
         }
         if (const auto& opts_data = caf::get_if<record>(&*opts)) {
           merge(*opts_data, merged_config, policy::merge_lists::yes);
-          TENZIR_INFO("loaded plugin configuration file: {}", path);
+          TENZIR_VERBOSE("loaded plugin configuration file: {}", path);
           loaded_config_files_singleton.push_back(path);
         } else {
           return caf::make_error(ec::invalid_configuration,

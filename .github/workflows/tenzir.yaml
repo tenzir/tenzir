@@ -569,10 +569,7 @@ jobs:
               #   libfluent-bit.so to libtenzir.so directly. The alternative
               #   workaround of using LD_PRELOAD for the standalone plugin build
               #   does not work in the GitHub Actions Runner.
-              # - zmq: The VAST plugin requires it, so for it to pass CI it has
-              #   to be bundled already.
               - plugins/fluent-bit
-              - plugins/zmq
           - os: macos-14
             container: null
             name: macOS
@@ -620,9 +617,24 @@ jobs:
         name: Install extra dependencies
         run: |
           apt-get update
-          apt-get -y install git sudo
+          apt-get -y install curl git sudo
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Tailscale
+        if: false && runner.os == 'Linux'
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+          version: 1.66.4
+          args: --ssh
+          # 1. Kernel space networking needs CAP_NET_ADMIN but that is not
+          #    available in containerized GitHub Actions jobs.
+          # 2. Tailscale SSH doesn't work without an accessible statedir. This
+          #    is only needed inside of containerized jobs.
+          #    -> https://github.com/tailscale/tailscale/issues/11039
+          tailscaled-args: --tun=userspace-networking --state=$HOME/tailscaled.state --statedir=$HOME/var/lib/tailscale
       - name: Publish tenzir.spdx.json to GitHub Release
         if: ${{ github.event_name == 'release' && matrix.tenzir.name == 'Debian' }}
         uses: actions/upload-release-asset@v1
@@ -830,6 +842,9 @@ jobs:
           - name: Yara
             target: yara
             path: plugins/yara
+          - name: ZMQ
+            target: zmq
+            path: plugins/zmq
     env:
       INSTALL_DIR: "${{ github.workspace }}/_install"
       BUILD_DIR: "${{ github.workspace }}/_build"
@@ -851,6 +866,21 @@ jobs:
         run: |
           apt-get update
           apt-get -y install git curl jq sudo xz-utils
+      - name: Tailscale
+        if: false && matrix.plugin.name == 'Context'
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+          version: 1.66.4
+          args: --ssh
+          # 1. Kernel space networking needs CAP_NET_ADMIN but that is not
+          #    available in containerized GitHub Actions jobs.
+          # 2. Tailscale SSH doesn't work without an accessible statedir. This
+          #    is only needed inside of containerized jobs.
+          #    -> https://github.com/tailscale/tailscale/issues/11039
+          tailscaled-args: --tun=userspace-networking --state=$HOME/tailscaled.state --statedir=$HOME/var/lib/tailscale
       - name: Install Nix
         uses: cachix/install-nix-action@V27
         with:

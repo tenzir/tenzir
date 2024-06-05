@@ -97,6 +97,9 @@ auto tenzir_features() -> std::vector<std::string> {
     "retry_delay",
     // The pipeline manager supports editable definitions.
     "editable_definitions",
+    // The export, diagnostics, and metrics oeprators support combining live and
+    // retro exports.
+    "export_live_and_retro",
   };
 }
 
