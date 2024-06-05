@@ -20,10 +20,10 @@ namespace tenzir {
 
 class select_optimization {
 public:
-  std::vector<std::string> fields_of_interest{};
+  std::vector<std::string> fields{};
   select_optimization() = default;
-  explicit select_optimization(std::vector<std::string> fields_of_interest)
-    : fields_of_interest{std::move(fields_of_interest)} {
+  explicit select_optimization(std::vector<std::string> fields)
+    : fields{std::move(fields)} {
   }
 
   static auto no_select_optimization() -> select_optimization {
@@ -33,9 +33,7 @@ public:
 
 template <class Inspector>
 auto inspect(Inspector& f, select_optimization& x) {
-  return f.object(x)
-    .pretty_name("expression")
-    .fields(f.field("node", x.fields_of_interest));
+  return f.object(x).pretty_name("expression").fields(f.field("node", x.fields));
 }
 
 } // namespace tenzir
