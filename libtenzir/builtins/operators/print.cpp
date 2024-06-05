@@ -10,6 +10,8 @@
 
 #include "tenzir/aliases.hpp"
 #include "tenzir/coder.hpp"
+#include "tenzir/generator.hpp"
+#include "tenzir/offset.hpp"
 #include "tenzir/query_context.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/table_slice.hpp"
@@ -80,62 +82,88 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    //////
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
+      auto target_index
+        = slice.schema().resolve_key_or_concept_once(input_.inner);
+      if (not target_index) {
+        co_return diagnostic::error("could not resolve `{}` for schema `{}`",
+                                    input_.inner, slice.schema())
+          .primary(input_.source)
+          .emit(ctrl.diagnostics());
+      }
+      auto event_target = indexed_table_slice(slice, *target_index);
+      if (not event_target) {
+        diagnostic::error(event_target.error()).emit(ctrl.diagnostics());
+        co_return;
+      }
+      auto printer_instance
+        = printer_->instantiate(event_target->schema(), ctrl);
       for (size_t i = 0; i < slice.rows(); i++) {
-        auto event = subslice(slice, i, i + 1);
-        auto indices = collect(slice.schema().resolve(input_.inner));
-        // cut slice into smaller piece
-        auto target_index
-          = slice.schema().resolve_key_or_concept_once(input_.inner);
-        auto [ty, array] = target_index->get(slice);
-        TENZIR_WARN(array->ToString());
-        auto record_batch
-          = arrow::RecordBatch::FromStructArray(array).MoveValueUnsafe();
-        auto new_ty = type{"dummy_head", ty};
-        TENZIR_WARN(new_ty.name());
-        record_batch = record_batch->ReplaceSchema(new_ty.to_arrow_schema())
-                         .MoveValueUnsafe(); // issue: only works on records,
-                                             // not on raw data types
-        auto event_target = table_slice(record_batch);
-        auto printer_instance
-          = printer_->instantiate(event_target.schema(), ctrl);
-        auto slice_as_string = std::string{};
-        for (auto&& chunk : printer_instance->get()->process(event_target)) {
-          for (std::size_t i = 0; i < chunk->size(); ++i) {
-            slice_as_string.push_back(static_cast<char>(chunk->data()[i]));
+        auto sliced_event = subslice(slice, i, i + 1);
+        ///
+        auto event_arr_0
+          = to_record_batch(slice)->ToStructArray().MoveValueUnsafe();
+        auto event_as_rb_0
+          = arrow::RecordBatch::FromStructArray(event_arr_0).MoveValueUnsafe();
+        auto event_0 = table_slice(event_as_rb_0);
+        ///
+        event_target = indexed_table_slice(event_0, *target_index);
+        arrow::StringBuilder builder{arrow::default_memory_pool()};
+        for (auto&& chunk : printer_instance->get()->process(*event_target)) {
+          auto tmp_string = std::string(
+            reinterpret_cast<const char*>(chunk->data()), chunk->size());
+          tmp_string.erase(std::remove_if(tmp_string.begin(), tmp_string.end(),
+                                          [](unsigned char c) {
+                                            return std::isspace(c);
+                                          }),
+                           tmp_string.end());
+          auto builder_status = builder.Append(std::move(tmp_string));
+          if (not builder_status.ok()) {
+            co_return diagnostic::error("could not add contents as string for "
+                                        "schema {}",
+                                        event_target->schema())
+              .primary(input_.source)
+              .emit(ctrl.diagnostics());
           }
         }
-
-        ////////
-        auto drop_fn = [&](struct record_type::field,
-                           std::shared_ptr<arrow::Array>) noexcept
+        std::shared_ptr<arrow::StringArray> str_array;
+        auto finish_builder_status = builder.Finish(&str_array);
+        if (not finish_builder_status.ok()) {
+          co_return diagnostic::error("could not turn data into a string array "
+                                      "for "
+                                      "schema `{}`",
+                                      event_target->schema())
+            .primary(input_.source)
+            .emit(ctrl.diagnostics());
+        }
+        auto utf8_status = str_array->ValidateUTF8();
+        if (not utf8_status.ok()) {
+          co_return diagnostic::error("The {} data format does not write valid "
+                                      "UTF8 ",
+                                      printer_name_->inner)
+            .emit(ctrl.diagnostics());
+        }
+        auto drop_fn =
+          [](struct record_type::field, std::shared_ptr<arrow::Array>) noexcept
           -> std::vector<std::pair<struct record_type::field,
                                    std::shared_ptr<arrow::Array>>> {
           return {};
         };
-        auto to_string
-          = [slice_as_string](struct record_type::field field,
-                              std::shared_ptr<arrow::Array>) noexcept
+        auto to_string = [str_array](struct record_type::field field,
+                                     std::shared_ptr<arrow::Array>) noexcept
           -> std::vector<std::pair<struct record_type::field,
                                    std::shared_ptr<arrow::Array>>> {
-          TENZIR_WARN(slice_as_string);
-          arrow::StringBuilder builder{arrow::default_memory_pool()};
-          auto x = builder.Append(slice_as_string);
-          std::shared_ptr<arrow::Array> str_array;
-          x = builder.Finish(&str_array);
           field.type = type{string_type{}};
           return {
             {field, str_array},
           };
         };
-
-        ///////
         auto transformations = std::vector<indexed_transformation>{};
+        auto indices = collect(slice.schema().resolve(input_.inner));
         for (auto&& index : indices) {
           if (index == target_index) {
             transformations.push_back({std::move(index), to_string});
@@ -143,7 +171,8 @@ public:
             transformations.push_back({std::move(index), drop_fn});
           }
         }
-        co_yield transform_columns(event, transformations);
+
+        co_yield transform_columns(sliced_event, transformations);
       }
     }
   }
@@ -169,6 +198,35 @@ public:
   }
 
 private:
+  static auto
+  indexed_table_slice(const table_slice& slice, const offset& target_index)
+    -> caf::expected<table_slice> {
+    auto [arr_type, arr] = target_index.get(slice);
+    const auto* ty = caf::get_if<record_type>(&arr_type);
+    if (not ty) {
+      return diagnostic::error("invalid record type: {}",
+                               arr_type.to_arrow_type()->ToString())
+        .to_error();
+    }
+    auto record_batch_result = arrow::RecordBatch::FromStructArray(arr);
+    if (not record_batch_result.ok()) {
+      return diagnostic::error("could not convert table slice array into a "
+                               "record batch for schema `{}`",
+                               slice.schema())
+        .to_error();
+    }
+    auto target_batch = record_batch_result.MoveValueUnsafe();
+    record_batch_result = target_batch->ReplaceSchema(
+      type{"dummy_head", arr_type}.to_arrow_schema());
+    if (not record_batch_result.ok()) {
+      return diagnostic::error("could not replace schema {} with the a "
+                               "the head {} ",
+                               slice.schema(), type{"dummy_head", arr_type})
+        .to_error();
+    }
+    target_batch = record_batch_result.MoveValueUnsafe();
+    return table_slice(target_batch);
+  }
   located<std::string> input_;
   std::optional<located<std::string>> printer_name_;
   std::unique_ptr<plugin_printer> printer_;
