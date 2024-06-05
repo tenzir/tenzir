@@ -26,6 +26,7 @@
 #include <arrow/compute/api.h>
 #include <arrow/extension_type.h>
 
+#include <cstddef>
 #include <memory>
 #include <ranges>
 #include <simdjson.h>
@@ -114,14 +115,9 @@ public:
         event_target = indexed_table_slice(event_0, *target_index);
         arrow::StringBuilder builder{arrow::default_memory_pool()};
         for (auto&& chunk : printer_instance->get()->process(*event_target)) {
-          auto tmp_string = std::string(
-            reinterpret_cast<const char*>(chunk->data()), chunk->size());
-          tmp_string.erase(std::remove_if(tmp_string.begin(), tmp_string.end(),
-                                          [](unsigned char c) {
-                                            return std::isspace(c);
-                                          }),
-                           tmp_string.end());
-          auto builder_status = builder.Append(std::move(tmp_string));
+          auto builder_status
+            = builder.Append(reinterpret_cast<const char*>(chunk->data()),
+                             static_cast<size_t>(chunk->size()));
           if (not builder_status.ok()) {
             co_return diagnostic::error("could not add contents as string for "
                                         "schema {}",
