@@ -285,7 +285,7 @@ public:
           TENZIR_VERBOSE("installing python modules with: '{}'",
                          fmt::join(pip_invocation, "' '"));
           if (bp::system(pip_invocation, env, bp::std_err > std_err,
-                         detail::preserved_fds{{STDERR_FILENO}},
+                         detail::preserved_fds{{STDOUT_FILENO, STDERR_FILENO}},
                          boost::process::limit_handles)
               != 0) {
             auto pip_error = drain_pipe(std_err);
