@@ -1,1 +1,1 @@
-error: The feather data format does not write valid UTF8 
+error: printer feather does not print UTF8. Invalid: Invalid UTF8 sequence in input
