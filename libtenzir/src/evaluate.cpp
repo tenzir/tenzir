@@ -56,8 +56,16 @@ struct cell_evaluator<relational_operator::equal> {
     return rhs.match(lhs);
   }
 
+  static bool evaluate(view<pattern> lhs, const std::string& rhs) noexcept {
+    return evaluate(rhs, materialize(lhs));
+  }
+
   static bool evaluate(view<ip> lhs, const subnet& rhs) noexcept {
     return rhs.contains(lhs);
+  }
+
+  static bool evaluate(view<subnet> lhs, const ip& rhs) noexcept {
+    return evaluate(rhs, materialize(lhs));
   }
 };
 
