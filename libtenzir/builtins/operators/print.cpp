@@ -89,10 +89,10 @@ public:
       auto target_index
         = slice.schema().resolve_key_or_concept_once(input_.inner);
       if (not target_index) {
-        co_return diagnostic::error("could not resolve `{}` for schema `{}`",
-                                    input_.inner, slice.schema())
+        diagnostic::error("could not resolve `{}` for schema `{}`",
+                          input_.inner, slice.schema())
           .primary(input_.source)
-          .emit(ctrl.diagnostics());
+          .throw_();
       }
       auto transform = [&](struct record_type::field field,
                            std::shared_ptr<arrow::Array> array)
