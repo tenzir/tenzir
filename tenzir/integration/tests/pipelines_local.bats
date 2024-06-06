@@ -472,31 +472,31 @@ EOF
 
 # bats test_tags=pipelines
 @test "Print CEF in JSON" {
-  check tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | slice 1:3 | print extension json | select extension"
-  check ! tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | print extension.dvc json "
+  check tenzir "read cef | slice 1:3 | print extension json | select extension" <${INPUTSDIR}/cef/forcepoint.log
+  check ! tenzir "read cef | print extension.dvc json " <${INPUTSDIR}/cef/forcepoint.log
 }
 
 # bats test_tags=pipelines
 @test "Print CEF in CSV" {
-  check tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | slice 1:2 | print extension csv"
-  check tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | slice 1:2 | print extension csv --no-header | select extension"
+  check tenzir "read cef | slice 1:2 | print extension csv" <${INPUTSDIR}/cef/forcepoint.log
+  check tenzir "read cef | slice 1:2 | print extension csv --no-header | select extension" <${INPUTSDIR}/cef/forcepoint.log
 }
 
 # bats test_tags=pipelines
 @test "Print non UTF8 string" {
-  check ! tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | print extension feather"
+  check ! tenzir "read cef | print extension feather" <${INPUTSDIR}/cef/forcepoint.log
 }
 
 @test "Print nested JSON in CSV and JSON" {
-  check tenzir "from ${INPUTSDIR}/json/nested-object.json read json | print a csv | parse a csv"
-  check tenzir "from ${INPUTSDIR}/json/nested-object.json read json | print a.b csv"
-  check tenzir "from ${INPUTSDIR}/json/nested-object.json read json | print a.b json | parse a.b json"
-  check ! tenzir "from ${INPUTSDIR}/json/nested-object.json read json | print a.b.c json"
+  check tenzir "read json | print a csv | parse a csv" <${INPUTSDIR}/json/nested-object.json
+  check tenzir "read json | print a.b csv" <${INPUTSDIR}/json/nested-object.json
+  check tenzir "read json | print a.b json | parse a.b json" <${INPUTSDIR}/json/nested-object.json
+  check ! tenzir "read json | print a.b.c json" <${INPUTSDIR}/json/nested-object.json
 }
 
 @test "Print multiple events" {
-  check tenzir "from ${INPUTSDIR}/json/nested-object.json read json | repeat 4 | print a csv | parse a csv"
-  check ! tenzir "from ${INPUTSDIR}/json/nested-object.json read json | repeat 2 | print a.b.c json"
+  check tenzir "read json | repeat 4 | print a csv | parse a csv" <${INPUTSDIR}/json/nested-object.json
+  check ! tenzir "read json | repeat 2 | print a.b.c json" <${INPUTSDIR}/json/nested-object.json
 }
 
 # bats test_tags=pipelines, csv

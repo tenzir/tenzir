@@ -1,6 +1,6 @@
 error: field dvc is not of type record
- --> <input>:1:128
+ --> <input>:1:18
   |
-1 | from /Users/balavinaithirthan/tenzirCopies/tenzirNoPlugCopy/tenzir/integration/data/inputs/cef/forcepoint.log read cef | print extension.dvc json 
-  |                                                                                                                                ^^^^^^^^^^^^^ 
+1 | read cef | print extension.dvc json 
+  |                  ^^^^^^^^^^^^^ 
   |
