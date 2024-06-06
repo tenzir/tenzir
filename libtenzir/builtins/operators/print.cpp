@@ -22,6 +22,7 @@
 #include <arrow/api.h>
 #include <arrow/compute/api.h>
 #include <arrow/extension_type.h>
+#include <arrow/util/utf8.h>
 #include <caf/sum_type.hpp>
 
 #include <cstddef>
@@ -117,21 +118,31 @@ public:
                             std::back_inserter(chunks));
           std::ranges::copy(printer_instance->get()->finish(),
                             std::back_inserter(chunks));
+          std::erase_if(chunks, [](const chunk_ptr& chunk) {
+            return not chunk or chunk->size() == 0;
+          });
+          auto validate_and_add = [&](std::string_view str) {
+            if (not arrow::util::ValidateUTF8(str)) {
+              diagnostic::error("printer must be text-based")
+                .note("printed result is not valid UTF8")
+                .primary(printer_name_->source)
+                .throw_();
+            }
+            builder.data(str);
+          };
           if (chunks.empty()) {
             builder.data("");
           }
           if (chunks.size() == 1) {
             const auto* data = reinterpret_cast<const char*>(chunks[0]->data());
-            builder.data(std::string_view(data, data + chunks[0]->size()));
+            validate_and_add({data, data + chunks[0]->size()});
           } else {
-            auto data = std::vector<std::byte>{};
+            auto buffer = std::vector<char>{};
             for (auto&& chunk : chunks) {
-              data.insert(data.end(), chunk->begin(), chunk->end());
+              const auto* data = reinterpret_cast<const char*>(chunk->data());
+              buffer.insert(buffer.end(), data, data + chunk->size());
             }
-            const auto* data_as_char
-              = reinterpret_cast<const char*>(data.data());
-            builder.data(
-              std::string_view(data_as_char, data_as_char + data.size()));
+            validate_and_add({buffer.data(), buffer.data() + buffer.size()});
           }
         }
         auto series = builder.finish_assert_one_array();
