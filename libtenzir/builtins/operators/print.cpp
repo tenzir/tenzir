@@ -50,14 +50,14 @@ public:
       input_ = std::move(*input);
       auto printer_name = p.accept_shell_arg();
       if (not printer_name) {
-        diagnostic::error("expected parser name")
+        diagnostic::error("expected printer name")
           .primary(p.current_span())
           .throw_();
       }
       printer_name_ = std::move(*printer_name);
       printer = plugins::find<printer_parser_plugin>(printer_name_->inner);
       if (not printer) {
-        diagnostic::error("parser `{}` was not found", printer_name_->inner)
+        diagnostic::error("printer `{}` was not found", printer_name_->inner)
           .primary(printer_name_->source)
           .hint("must be one of: {}",
                 fmt::join(std::views::transform(
@@ -69,7 +69,7 @@ public:
     } catch (diagnostic& d) {
       std::move(d)
         .modify()
-        .usage("print <input> <parser> <args>...")
+        .usage("print <input> <printer> <args>...")
         .docs("https://docs.tenzir.com/operators/print")
         .throw_();
     }
@@ -95,7 +95,7 @@ public:
           .emit(ctrl.diagnostics());
       }
       auto transform = [&](struct record_type::field field,
-                           std::shared_ptr<arrow::Array> array) noexcept
+                           std::shared_ptr<arrow::Array> array)
         -> std::vector<
           std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
         if (not caf::holds_alternative<record_type>(field.type)) {
@@ -132,13 +132,22 @@ public:
             std::string_view(data_as_char, data_as_char + data.size()));
         }
         auto series = builder.finish_assert_one_array();
+        auto check_utf_8
+          = arrow::compute::CallFunction("utf8_is_printable", {series.array});
+        if (not check_utf_8.ok()) {
+          diagnostic::error("printer {} does not print UTF8. {}",
+                            printer_->name(), check_utf_8.status().ToString())
+            .throw_();
+        }
+
         return {{
           {field.name, series.type},
           series.array,
         }};
       };
-      auto transformations = std::vector<indexed_transformation>{};
-      transformations.push_back({std::move(*target_index), transform});
+      auto transformations = std::vector<indexed_transformation>{
+        {std::move(*target_index), transform},
+      };
       for (size_t i = 0; i < slice.rows(); i++) {
         auto row = subslice(slice, i, i + 1);
         co_yield transform_columns(row, transformations);
@@ -159,10 +168,10 @@ public:
   friend auto inspect(auto& f, print_operator& x) -> bool {
     // TODO: This could be easier, but `plugin_inspect` does not seem to play
     // well with the `.object()` DSL.
-    return f.begin_object(caf::invalid_type_id, "parse_operator")
+    return f.begin_object(caf::invalid_type_id, "print_operator")
            && f.begin_field("input") && f.apply(x.input_) && f.end_field()
-           && f.begin_field("parser_name") && f.apply(x.printer_name_)
-           && f.end_field() && f.begin_field("parser")
+           && f.begin_field("printer_name") && f.apply(x.printer_name_)
+           && f.end_field() && f.begin_field("printer")
            && plugin_inspect(f, x.printer_) && f.end_field() && f.end_object();
   }
 
