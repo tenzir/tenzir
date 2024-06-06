@@ -135,8 +135,8 @@ public:
         auto check_utf_8
           = arrow::compute::CallFunction("utf8_is_printable", {series.array});
         if (not check_utf_8.ok()) {
-          diagnostic::error("printer {} does not print UTF8. {}",
-                            printer_->name(), check_utf_8.status().ToString())
+          diagnostic::error("{}. {} does not print UTF8. ", printer_->name(),
+                            check_utf_8.status().ToString())
             .throw_();
         }
         return {{
