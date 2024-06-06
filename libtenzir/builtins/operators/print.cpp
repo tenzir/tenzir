@@ -187,7 +187,7 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    return std::make_unique<class print_operator>(p);
+    return std::make_unique<print_operator>(p);
   }
 };
 
