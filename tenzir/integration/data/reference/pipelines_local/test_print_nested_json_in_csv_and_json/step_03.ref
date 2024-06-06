@@ -1,0 +1,6 @@
+error: field c is not of type record
+ --> <input>:1:134
+  |
+1 | from /Users/balavinaithirthan/tenzirCopies/tenzirNoPlugCopy/tenzir/integration/data/inputs/json/nested-object.json read json | print a.b.c json
+  |                                                                                                                                      ^^^^^ 
+  |

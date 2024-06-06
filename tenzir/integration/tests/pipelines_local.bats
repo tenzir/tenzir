@@ -472,8 +472,8 @@ EOF
 
 # bats test_tags=pipelines
 @test "Print CEF in JSON" {
-  check tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | print extension json | select extension"
-  check ! tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | slice 1:3 | print extension.dvc json "
+  check tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | slice 1:3 | print extension json | select extension"
+  check ! tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | print extension.dvc json "
 }
 
 # bats test_tags=pipelines
@@ -483,11 +483,11 @@ EOF
 }
 
 # bats test_tags=pipelines
-@test "Print non UTF-8 string" {
+@test "Print non UTF8 string" {
   check ! tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | print extension feather"
 }
 
-@test "Print nested JSON in CSV/JSON" {
+@test "Print nested JSON in CSV and JSON" {
   check tenzir "from ${INPUTSDIR}/json/nested-object.json read json | print a csv | parse a csv"
   check tenzir "from ${INPUTSDIR}/json/nested-object.json read json | print a.b csv"
   check tenzir "from ${INPUTSDIR}/json/nested-object.json read json | print a.b json | parse a.b json"
@@ -496,7 +496,7 @@ EOF
 
 @test "Print multiple events" {
   check tenzir "from ${INPUTSDIR}/json/nested-object.json read json | repeat 4 | print a csv | parse a csv"
-  # check ! tenzir "from ${INPUTSDIR}/json/nested-object.json read json | repeat 2 | print a.b.c json"
+  check ! tenzir "from ${INPUTSDIR}/json/nested-object.json read json | repeat 2 | print a.b.c json"
 }
 
 # bats test_tags=pipelines, csv
