@@ -139,7 +139,6 @@ public:
                             printer_->name(), check_utf_8.status().ToString())
             .throw_();
         }
-
         return {{
           {field.name, series.type},
           series.array,
