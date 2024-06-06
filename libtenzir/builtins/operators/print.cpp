@@ -107,29 +107,32 @@ public:
         auto rb = arrow::RecordBatch::Make(
           field.type.to_arrow_schema(), array->length(),
           static_cast<const arrow::StructArray&>(*array).Flatten().ValueOrDie());
-        auto row = table_slice{rb, field.type};
+        auto slice = table_slice{rb, field.type};
         auto builder = series_builder();
-        auto printer_instance = printer_->instantiate(field.type, ctrl);
-        auto row_as_slice = to_record_batch(row);
-        auto chunks = std::vector<chunk_ptr>{};
-        std::ranges::copy(printer_instance->get()->process(row),
-                          std::back_inserter(chunks));
-        std::ranges::copy(printer_instance->get()->finish(),
-                          std::back_inserter(chunks));
-        if (chunks.empty()) {
-          return {};
-        }
-        if (chunks.size() == 1) {
-          const auto* data = reinterpret_cast<const char*>(chunks[0]->data());
-          builder.data(std::string_view(data, data + chunks[0]->size()));
-        } else {
-          auto data = std::vector<std::byte>{};
-          for (auto&& chunk : chunks) {
-            data.insert(data.end(), chunk->begin(), chunk->end());
+        for (size_t i = 0; i < slice.rows(); i++) {
+          auto row = subslice(slice, i, i + 1);
+          auto chunks = std::vector<chunk_ptr>{};
+          auto printer_instance = printer_->instantiate(field.type, ctrl);
+          std::ranges::copy(printer_instance->get()->process(row),
+                            std::back_inserter(chunks));
+          std::ranges::copy(printer_instance->get()->finish(),
+                            std::back_inserter(chunks));
+          if (chunks.empty()) {
+            builder.data("");
           }
-          const auto* data_as_char = reinterpret_cast<const char*>(data.data());
-          builder.data(
-            std::string_view(data_as_char, data_as_char + data.size()));
+          if (chunks.size() == 1) {
+            const auto* data = reinterpret_cast<const char*>(chunks[0]->data());
+            builder.data(std::string_view(data, data + chunks[0]->size()));
+          } else {
+            auto data = std::vector<std::byte>{};
+            for (auto&& chunk : chunks) {
+              data.insert(data.end(), chunk->begin(), chunk->end());
+            }
+            const auto* data_as_char
+              = reinterpret_cast<const char*>(data.data());
+            builder.data(
+              std::string_view(data_as_char, data_as_char + data.size()));
+          }
         }
         auto series = builder.finish_assert_one_array();
         auto check_utf_8
@@ -147,10 +150,7 @@ public:
       auto transformations = std::vector<indexed_transformation>{
         {std::move(*target_index), transform},
       };
-      for (size_t i = 0; i < slice.rows(); i++) {
-        auto row = subslice(slice, i, i + 1);
-        co_yield transform_columns(row, transformations);
-      }
+      co_yield transform_columns(slice, transformations);
     }
   }
 
