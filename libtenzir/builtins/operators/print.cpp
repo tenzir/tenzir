@@ -8,29 +8,27 @@
 
 #include "tenzir/fwd.hpp"
 
-#include "tenzir/aliases.hpp"
-#include "tenzir/coder.hpp"
+#include "tenzir/argument_parser.hpp"
+#include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/collect.hpp"
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/generator.hpp"
-#include "tenzir/offset.hpp"
-#include "tenzir/query_context.hpp"
+#include "tenzir/operator_control_plane.hpp"
+#include "tenzir/plugin.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/table_slice.hpp"
-
-#include <tenzir/argument_parser.hpp>
-#include <tenzir/arrow_table_slice.hpp>
-#include <tenzir/collect.hpp>
-#include <tenzir/operator_control_plane.hpp>
-#include <tenzir/plugin.hpp>
+#include "tenzir/type.hpp"
 
 #include <arrow/api.h>
 #include <arrow/compute/api.h>
 #include <arrow/extension_type.h>
+#include <caf/sum_type.hpp>
 
 #include <cstddef>
+#include <iterator>
 #include <memory>
 #include <ranges>
-#include <simdjson.h>
-#include <string>
+#include <string_view>
 
 namespace tenzir::plugins::print {
 
@@ -96,79 +94,54 @@ public:
           .primary(input_.source)
           .emit(ctrl.diagnostics());
       }
-      auto event_target = indexed_table_slice(slice, *target_index);
-      if (not event_target) {
-        diagnostic::error(event_target.error()).emit(ctrl.diagnostics());
-        co_return;
-      }
-      auto printer_instance
-        = printer_->instantiate(event_target->schema(), ctrl);
-      for (size_t i = 0; i < slice.rows(); i++) {
-        auto sliced_event = subslice(slice, i, i + 1);
-        ///
-        auto event_arr_0
-          = to_record_batch(slice)->ToStructArray().MoveValueUnsafe();
-        auto event_as_rb_0
-          = arrow::RecordBatch::FromStructArray(event_arr_0).MoveValueUnsafe();
-        auto event_0 = table_slice(event_as_rb_0);
-        ///
-        event_target = indexed_table_slice(event_0, *target_index);
-        arrow::StringBuilder builder{arrow::default_memory_pool()};
-        for (auto&& chunk : printer_instance->get()->process(*event_target)) {
-          auto builder_status
-            = builder.Append(reinterpret_cast<const char*>(chunk->data()),
-                             static_cast<size_t>(chunk->size()));
-          if (not builder_status.ok()) {
-            co_return diagnostic::error("could not add contents as string for "
-                                        "schema {}",
-                                        event_target->schema())
-              .primary(input_.source)
-              .emit(ctrl.diagnostics());
-          }
-        }
-        std::shared_ptr<arrow::StringArray> str_array;
-        auto finish_builder_status = builder.Finish(&str_array);
-        if (not finish_builder_status.ok()) {
-          co_return diagnostic::error("could not turn data into a string array "
-                                      "for "
-                                      "schema `{}`",
-                                      event_target->schema())
+      auto transform = [&](struct record_type::field field,
+                           std::shared_ptr<arrow::Array> array) noexcept
+        -> std::vector<
+          std::pair<struct record_type::field, std::shared_ptr<arrow::Array>>> {
+        if (not caf::holds_alternative<record_type>(field.type)) {
+          diagnostic::error("field {} is not of type record", field.name)
             .primary(input_.source)
-            .emit(ctrl.diagnostics());
+            .throw_();
         }
-        auto utf8_status = str_array->ValidateUTF8();
-        if (not utf8_status.ok()) {
-          co_return diagnostic::error("The {} data format does not write valid "
-                                      "UTF8 ",
-                                      printer_name_->inner)
-            .emit(ctrl.diagnostics());
-        }
-        auto drop_fn =
-          [](struct record_type::field, std::shared_ptr<arrow::Array>) noexcept
-          -> std::vector<std::pair<struct record_type::field,
-                                   std::shared_ptr<arrow::Array>>> {
+        field.type = type{"dummy_head", field.type};
+        auto rb = arrow::RecordBatch::Make(
+          field.type.to_arrow_schema(), array->length(),
+          static_cast<const arrow::StructArray&>(*array).Flatten().ValueOrDie());
+        auto row = table_slice{rb, field.type};
+        auto builder = series_builder();
+        auto printer_instance = printer_->instantiate(field.type, ctrl);
+        auto row_as_slice = to_record_batch(row);
+        auto chunks = std::vector<chunk_ptr>{};
+        std::ranges::copy(printer_instance->get()->process(row),
+                          std::back_inserter(chunks));
+        std::ranges::copy(printer_instance->get()->finish(),
+                          std::back_inserter(chunks));
+        if (chunks.empty()) {
           return {};
-        };
-        auto to_string = [str_array](struct record_type::field field,
-                                     std::shared_ptr<arrow::Array>) noexcept
-          -> std::vector<std::pair<struct record_type::field,
-                                   std::shared_ptr<arrow::Array>>> {
-          field.type = type{string_type{}};
-          return {
-            {field, str_array},
-          };
-        };
-        auto transformations = std::vector<indexed_transformation>{};
-        auto indices = collect(slice.schema().resolve(input_.inner));
-        for (auto&& index : indices) {
-          if (index == target_index) {
-            transformations.push_back({std::move(index), to_string});
-          } else {
-            transformations.push_back({std::move(index), drop_fn});
-          }
         }
-
-        co_yield transform_columns(sliced_event, transformations);
+        if (chunks.size() == 1) {
+          const auto* data = reinterpret_cast<const char*>(chunks[0]->data());
+          builder.data(std::string_view(data, data + chunks[0]->size()));
+        } else {
+          auto data = std::vector<std::byte>{};
+          for (auto&& chunk : chunks) {
+            data.insert(data.end(), chunk->begin(), chunk->end());
+          }
+          const auto* data_as_char = reinterpret_cast<const char*>(data.data());
+          builder.data(
+            std::string_view(data_as_char, data_as_char + data.size()));
+        }
+        auto series = builder.finish_assert_one_array();
+        return {{
+          {field.name, series.type},
+          series.array,
+        }};
+      };
+      auto transformations = std::vector<indexed_transformation>{};
+      transformations.push_back({std::move(*target_index), transform});
+      for (size_t i = 0; i < slice.rows(); i++) {
+        auto row = subslice(slice, i, i + 1);
+        co_yield transform_columns(row, transformations);
       }
     }
   }
@@ -194,35 +167,6 @@ public:
   }
 
 private:
-  static auto
-  indexed_table_slice(const table_slice& slice, const offset& target_index)
-    -> caf::expected<table_slice> {
-    auto [arr_type, arr] = target_index.get(slice);
-    const auto* ty = caf::get_if<record_type>(&arr_type);
-    if (not ty) {
-      return diagnostic::error("invalid record type: {}",
-                               arr_type.to_arrow_type()->ToString())
-        .to_error();
-    }
-    auto record_batch_result = arrow::RecordBatch::FromStructArray(arr);
-    if (not record_batch_result.ok()) {
-      return diagnostic::error("could not convert table slice array into a "
-                               "record batch for schema `{}`",
-                               slice.schema())
-        .to_error();
-    }
-    auto target_batch = record_batch_result.MoveValueUnsafe();
-    record_batch_result = target_batch->ReplaceSchema(
-      type{"dummy_head", arr_type}.to_arrow_schema());
-    if (not record_batch_result.ok()) {
-      return diagnostic::error("could not replace schema {} with the a "
-                               "the head {} ",
-                               slice.schema(), type{"dummy_head", arr_type})
-        .to_error();
-    }
-    target_batch = record_batch_result.MoveValueUnsafe();
-    return table_slice(target_batch);
-  }
   located<std::string> input_;
   std::optional<located<std::string>> printer_name_;
   std::unique_ptr<plugin_printer> printer_;
