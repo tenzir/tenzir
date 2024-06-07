@@ -455,7 +455,9 @@ public:
   /// single saver.
   virtual auto allows_joining() const -> bool = 0;
 
-  virtual auto prints_text_format() const -> bool = 0;
+  /// Returns whether it is safe to assume that the printer returns text that is
+  /// encoded as UTF8.
+  virtual auto prints_utf8() const -> bool = 0;
 };
 
 /// @see operator_parser_plugin

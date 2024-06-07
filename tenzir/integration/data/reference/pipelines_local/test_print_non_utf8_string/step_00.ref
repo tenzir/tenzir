@@ -1,7 +1,8 @@
-error: printer must be text-based
+error: print operator does not support binary formats
  --> <input>:1:28
   |
 1 | read cef | print extension feather
   |                            ^^^^^^^ 
   |
-  = note: printed result is not valid UTF8
+  = usage: print <input> <printer> <args>...
+  = docs: https://docs.tenzir.com/operators/print

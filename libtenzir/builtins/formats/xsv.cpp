@@ -489,7 +489,7 @@ public:
     return args_.no_header;
   };
 
-  auto prints_text_format() const -> bool override {
+  auto prints_utf8() const -> bool override {
     return true;
   }
 

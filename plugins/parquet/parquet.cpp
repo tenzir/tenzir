@@ -133,8 +133,8 @@ public:
     return false;
   }
 
-  auto prints_text_format() const -> bool override {
-    return true;
+  auto prints_utf8() const -> bool override {
+    return false;
   }
 
   class parquet_printer_instance : public printer_instance {

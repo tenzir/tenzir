@@ -123,7 +123,7 @@ public:
     return true;
   };
 
-  auto prints_text_format() const -> bool override {
+  auto prints_utf8() const -> bool override {
     return false;
   }
 

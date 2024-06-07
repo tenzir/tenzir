@@ -133,7 +133,7 @@ public:
     return inner_->allows_joining();
   }
 
-  auto prints_text_format() const -> bool override {
+  auto prints_utf8() const -> bool override {
     return true;
   }
 

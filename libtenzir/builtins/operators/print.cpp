@@ -67,6 +67,14 @@ public:
                           ", "))
           .throw_();
       }
+      TENZIR_ASSERT(printer);
+      printer_ = printer->parse_printer(p);
+      TENZIR_ASSERT(printer_);
+      if (not printer_->prints_utf8()) {
+        diagnostic::error("print operator does not support binary formats")
+          .primary(printer_name_->source)
+          .throw_();
+      }
     } catch (diagnostic& d) {
       std::move(d)
         .modify()
@@ -74,9 +82,6 @@ public:
         .docs("https://docs.tenzir.com/operators/print")
         .throw_();
     }
-    TENZIR_ASSERT(printer);
-    printer_ = printer->parse_printer(p);
-    TENZIR_ASSERT(printer_);
   }
 
   auto
@@ -104,31 +109,40 @@ public:
             .primary(input_.source)
             .throw_();
         }
-        field.type = type{"dummy_head", field.type};
+        field.type = type{
+          fmt::format("{}.{}", slice.schema().name(),
+                      caf::get<record_type>(slice.schema()).key(*target_index)),
+          field.type,
+        };
         auto rb = arrow::RecordBatch::Make(
           field.type.to_arrow_schema(), array->length(),
           static_cast<const arrow::StructArray&>(*array).Flatten().ValueOrDie());
         auto slice = table_slice{rb, field.type};
-        auto builder = series_builder();
+        auto builder = series_builder{type{string_type{}}};
         for (size_t i = 0; i < slice.rows(); i++) {
           auto row = subslice(slice, i, i + 1);
           auto chunks = std::vector<chunk_ptr>{};
-          auto printer_instance = printer_->instantiate(field.type, ctrl);
-          std::ranges::copy(printer_instance->get()->process(row),
-                            std::back_inserter(chunks));
-          std::ranges::copy(printer_instance->get()->finish(),
-                            std::back_inserter(chunks));
-          std::erase_if(chunks, [](const chunk_ptr& chunk) {
-            return not chunk or chunk->size() == 0;
-          });
+          try {
+            auto printer_instance = printer_->instantiate(field.type, ctrl);
+            std::ranges::copy(printer_instance->get()->process(row),
+                              std::back_inserter(chunks));
+            std::ranges::copy(printer_instance->get()->finish(),
+                              std::back_inserter(chunks));
+            std::erase_if(chunks, [](const chunk_ptr& chunk) {
+              return not chunk or chunk->size() == 0;
+            });
+          } catch (diagnostic diag) {
+            std::move(diag)
+              .modify()
+              .severity(severity::warning)
+              .emit(ctrl.diagnostics());
+            builder.null();
+            continue;
+          } catch (...) {
+            std::rethrow_exception(std::current_exception());
+          }
           auto validate_and_add = [&](std::string_view str) {
-            if (not printer_->prints_text_format()
-                || not arrow::util::ValidateUTF8(str)) {
-              diagnostic::error("printer must be text-based")
-                .note("printed result is not valid UTF8")
-                .primary(printer_name_->source)
-                .throw_();
-            }
+            TENZIR_ASSERT_EXPENSIVE(arrow::util::ValidateUTF8(str));
             builder.data(str);
           };
           if (chunks.empty()) {
