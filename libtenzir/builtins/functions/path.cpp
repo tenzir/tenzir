@@ -21,23 +21,19 @@ public:
   }
 
   auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
-    if (inv.args.size() != 1) {
-      diagnostic::error("`file_name` expects exactly one argument")
-        .primary(inv.self.get_location())
-        .emit(dh);
+    auto arg = basic_series<string_type>{};
+    auto success
+      = function_argument_parser{"file_name"}.add(arg, "<path>").parse(inv, dh);
+    if (not success) {
       return series::null(string_type{}, inv.length);
     }
-    // TODO
-    TENZIR_ASSERT(not inv.args.empty());
-    auto arg = caf::get_if<arrow::StringArray>(&*inv.args[0].array);
-    TENZIR_ASSERT(arg);
     auto b = arrow::StringBuilder{};
-    for (auto row = int64_t{0}; row < arg->length(); ++row) {
-      if (arg->IsNull(row)) {
+    for (auto row = int64_t{0}; row < arg.array->length(); ++row) {
+      if (arg.array->IsNull(row)) {
         (void)b.AppendNull();
         continue;
       }
-      auto path = arg->GetView(row);
+      auto path = arg.array->GetView(row);
       // TODO: We don't know whether this is a windows/posix path.
       // TODO: Also, btw, string might not be a good type for paths.
       auto pos = path.find_last_of("/\\");
@@ -59,23 +55,19 @@ public:
   }
 
   auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
-    if (inv.args.size() != 1) {
-      diagnostic::error("`file_name` expects exactly one argument")
-        .primary(inv.self.get_location())
-        .emit(dh);
+    auto arg = basic_series<string_type>{};
+    auto success
+      = function_argument_parser{"parent_dir"}.add(arg, "<path>").parse(inv, dh);
+    if (not success) {
       return series::null(string_type{}, inv.length);
     }
-    // TODO
-    TENZIR_ASSERT(not inv.args.empty());
-    auto arg = caf::get_if<arrow::StringArray>(&*inv.args[0].array);
-    TENZIR_ASSERT(arg);
     auto b = arrow::StringBuilder{};
-    for (auto row = int64_t{0}; row < arg->length(); ++row) {
-      if (arg->IsNull(row)) {
+    for (auto row = int64_t{0}; row < arg.array->length(); ++row) {
+      if (arg.array->IsNull(row)) {
         (void)b.AppendNull();
         continue;
       }
-      auto path = arg->GetView(row);
+      auto path = arg.array->GetView(row);
       // TODO: We don't know whether this is a windows/posix path.
       // TODO: Also, btw, string might not be a good type for paths.
       auto pos = path.find_last_of("/\\");

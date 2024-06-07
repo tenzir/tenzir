@@ -230,9 +230,16 @@ auto evaluator::eval(const ast::function_call& x) -> series {
   TENZIR_ASSERT(segments.size() == 1);
   auto fn = plugins::find<function_plugin>("tql2." + segments[0]);
   TENZIR_ASSERT(fn);
-  auto args = std::vector<series>{};
+  auto args = std::vector<function_plugin::argument>{};
   for (auto& arg : x.args) {
-    args.push_back(eval(arg));
+    if (auto assignment = std::get_if<ast::assignment>(&*arg.kind)) {
+      args.emplace_back(function_plugin::named_argument{
+        assignment->left,
+        located{eval(assignment->right), assignment->right.get_location()}});
+    } else {
+      args.emplace_back(
+        function_plugin::positional_argument{eval(arg), arg.get_location()});
+    }
   }
   auto ret
     = fn->eval(function_plugin::invocation{x, length_, std::move(args)}, dh_);

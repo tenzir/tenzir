@@ -23,45 +23,39 @@ public:
   }
 
   auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
-    if (inv.args.size() != 1) {
-      diagnostic::error("function expects exactly one argument")
-        .primary(inv.self.get_location())
-        .emit(dh);
+    auto arg = variant<basic_series<time_type>, basic_series<string_type>>{};
+    auto success
+      = function_argument_parser{"time"}.add(arg, "<string>").parse(inv, dh);
+    if (not success) {
       return series::null(time_type{}, inv.length);
     }
-    if (auto time_array
-        = std::dynamic_pointer_cast<arrow::TimestampArray>(inv.args[0].array)) {
-      return series{time_type{}, std::move(time_array)};
-    }
-    auto b = arrow::TimestampBuilder{
-      std::make_shared<arrow::TimestampType>(arrow::TimeUnit::NANO),
-      arrow::default_memory_pool()};
-    auto arg = caf::get_if<arrow::StringArray>(&*inv.args[0].array);
-    if (not arg) {
-      // TODO
-      diagnostic::warning("expected string argument, but got `{}`",
-                          inv.args[0].type.kind())
-        .primary(inv.self.args[0].get_location())
-        .emit(dh);
-      (void)b.AppendNulls(inv.length);
-      return series{null_type{}, b.Finish().ValueOrDie()};
-    }
-    TENZIR_ASSERT(arg);
-    (void)b.Reserve(arg->length());
-    for (auto i = 0; i < arg->length(); ++i) {
-      if (arg->IsNull(i)) {
-        (void)b.UnsafeAppendNull();
-        continue;
-      }
-      auto result = tenzir::time{};
-      if (parsers::time(arg->GetView(i), result)) {
-        b.UnsafeAppend(result.time_since_epoch().count());
-      } else {
-        // TODO: ?
-        b.UnsafeAppendNull();
-      }
-    }
-    return series{time_type{}, b.Finish().ValueOrDie()};
+    auto result = arg.match(
+      [](basic_series<time_type>& arg) {
+        return std::move(arg.array);
+      },
+      [](basic_series<string_type>& arg) {
+        auto b = arrow::TimestampBuilder{
+          std::make_shared<arrow::TimestampType>(arrow::TimeUnit::NANO),
+          arrow::default_memory_pool()};
+        (void)b.Reserve(arg.array->length());
+        for (auto i = 0; i < arg.array->length(); ++i) {
+          if (arg.array->IsNull(i)) {
+            (void)b.UnsafeAppendNull();
+            continue;
+          }
+          auto result = tenzir::time{};
+          if (parsers::time(arg.array->GetView(i), result)) {
+            b.UnsafeAppend(result.time_since_epoch().count());
+          } else {
+            // TODO: ?
+            b.UnsafeAppendNull();
+          }
+        }
+        auto result = std::shared_ptr<arrow::TimestampArray>{};
+        (void)b.Finish(&result);
+        return result;
+      });
+    return series{time_type{}, std::move(result)};
   }
 };
 
@@ -72,26 +66,25 @@ public:
   }
 
   auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
-    if (inv.args.size() != 1) {
-      diagnostic::error("function expects exactly one argument")
-        .primary(inv.self.get_location())
-        .emit(dh);
+    auto arg = basic_series<time_type>{};
+    auto success = function_argument_parser{"seconds_since_epoch"}
+                     .add(arg, "<time>")
+                     .parse(inv, dh);
+    if (not success) {
       return series::null(double_type{}, inv.length);
     }
-    auto arg = caf::get_if<arrow::TimestampArray>(&*inv.args[0].array);
-    TENZIR_ASSERT(arg);
-    auto& ty = caf::get<arrow::TimestampType>(*arg->type());
+    auto& ty = caf::get<arrow::TimestampType>(*arg.array->type());
     TENZIR_ASSERT(ty.unit() == arrow::TimeUnit::NANO);
     TENZIR_ASSERT(ty.timezone().empty());
     auto factor = 1000 * 1000 * 1000;
     auto b = arrow::DoubleBuilder{};
-    (void)b.Reserve(arg->length());
-    for (auto i = 0; i < arg->length(); ++i) {
-      if (arg->IsNull(i)) {
+    (void)b.Reserve(arg.array->length());
+    for (auto i = 0; i < arg.array->length(); ++i) {
+      if (arg.array->IsNull(i)) {
         (void)b.UnsafeAppendNull();
         continue;
       }
-      auto val = arg->Value(i);
+      auto val = arg.array->Value(i);
       auto pre = static_cast<double>(val / factor);
       auto post = static_cast<double>(val % factor) / factor;
       (void)b.UnsafeAppend(pre + post);
@@ -107,11 +100,9 @@ public:
   }
 
   auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
-    if (not inv.args.empty()) {
-      // TODOs
-      diagnostic::error("`now` does not expect any arguments")
-        .primary(inv.self.args.front().get_location())
-        .emit(dh);
+    auto success = function_argument_parser{"now"}.parse(inv, dh);
+    if (not success) {
+      return series::null(time_type{}, inv.length);
     }
     auto result = time{time::clock::now()};
     auto b = series_builder{type{time_type{}}};

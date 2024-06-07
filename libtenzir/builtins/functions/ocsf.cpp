@@ -23,22 +23,16 @@ public:
   }
 
   auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
-    if (inv.args.size() != 1) {
-      diagnostic::error("function expects exactly one argument")
-        .primary(inv.self.get_location())
-        .emit(dh);
-      return series::null(int64_type{}, inv.length);
-    }
-    auto arg = caf::get_if<arrow::StringArray>(&*inv.args[0].array);
-    if (not arg) {
-      diagnostic::warning("expected string, got {}", inv.args[0].type.kind())
-        .primary(inv.self.args[0].get_location())
-        .emit(dh);
+    auto arg = basic_series<string_type>{};
+    auto success = function_argument_parser{"ocsf_category_uid"}
+                     .add(arg, "<string>")
+                     .parse(inv, dh);
+    if (not success) {
       return series::null(int64_type{}, inv.length);
     }
     auto b = arrow::Int64Builder{};
-    for (auto i = int64_t{0}; i < arg->length(); ++i) {
-      auto name = arg->GetView(i);
+    for (auto i = int64_t{0}; i < arg.array->length(); ++i) {
+      auto name = arg.array->GetView(i);
       // Uncategorized [0]
       // System Activity [1]
       // Findings [2]
@@ -80,22 +74,16 @@ public:
   }
 
   auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
-    if (inv.args.size() != 1) {
-      diagnostic::error("function expects exactly one argument")
-        .primary(inv.self.get_location())
-        .emit(dh);
-      return series::null(int64_type{}, inv.length);
-    }
-    auto arg = caf::get_if<arrow::StringArray>(&*inv.args[0].array);
-    if (not arg) {
-      diagnostic::warning("expected string, got {}", inv.args[0].type.kind())
-        .primary(inv.self.args[0].get_location())
-        .emit(dh);
+    auto arg = basic_series<string_type>{};
+    auto success = function_argument_parser{"ocsf_class_uid"}
+                     .add(arg, "<string>")
+                     .parse(inv, dh);
+    if (not success) {
       return series::null(int64_type{}, inv.length);
     }
     auto b = arrow::Int64Builder{};
-    for (auto i = int64_t{0}; i < arg->length(); ++i) {
-      auto name = arg->GetView(i);
+    for (auto i = int64_t{0}; i < arg.array->length(); ++i) {
+      auto name = arg.array->GetView(i);
       // TODO: Auto-generate a table for this!
       auto id = std::invoke([&] {
         if (name == "Process Activity") {

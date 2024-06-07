@@ -1684,33 +1684,24 @@ public:
     //
     // many=true (not so important)
     // "{yo: 42}" => [{yo: 42}]
-    if (inv.args.size() != 1) {
-      diagnostic::error("expected exactly one argument")
-        .primary(inv.self.get_location())
-        .emit(dh);
-      return series::null(null_type{}, inv.length);
-    }
-    if (inv.args[0].type.kind().is<null_type>()) {
-      return series::null(null_type{}, inv.length);
-    }
-    auto strings = caf::get_if<arrow::StringArray>(inv.args[0].array.get());
-    if (not strings) {
-      diagnostic::warning("expected string, got {}", inv.args[0].type.kind())
-        .primary(inv.self.args[0].get_location())
-        .emit(dh);
+    auto arg = basic_series<string_type>{};
+    auto success = function_argument_parser{"parse_json"}
+                     .add(arg, "<string>")
+                     .parse(inv, dh);
+    if (not success) {
       return series::null(null_type{}, inv.length);
     }
     auto parser = simdjson::ondemand::parser{};
     auto b = series_builder{};
     for (auto i = int64_t{0}; i < inv.length; ++i) {
-      if (strings->IsNull(i)) {
+      if (arg.array->IsNull(i)) {
         // TODO: What to do here?
         b.null();
         continue;
       }
       // todo: optimize
       auto parse = [&]() -> simdjson::simdjson_result<data> {
-        auto str = std::string{strings->Value(i)};
+        auto str = std::string{arg.array->Value(i)};
         TRY(auto doc, parser.iterate(str));
         return json_to_data(doc, false);
       };

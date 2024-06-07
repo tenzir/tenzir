@@ -20,13 +20,13 @@ public:
   }
 
   auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
-    if (inv.args.size() != 1) {
-      diagnostic::error("`type_id` expects exactly one argument")
-        .primary(inv.self.get_location())
-        .emit(dh);
+    auto arg = series{};
+    auto success
+      = function_argument_parser{"type_id"}.add(arg, "<value>").parse(inv, dh);
+    if (not success) {
       return series::null(string_type{}, inv.length);
     }
-    auto type_id = inv.args[0].type.make_fingerprint();
+    auto type_id = arg.type.make_fingerprint();
     auto b = arrow::StringBuilder{};
     // TODO
     (void)b.Reserve(inv.length);

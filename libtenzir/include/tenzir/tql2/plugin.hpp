@@ -11,6 +11,7 @@
 #include "tenzir/plugin.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/type.hpp"
 
 namespace tenzir {
 
@@ -35,15 +36,26 @@ class operator_plugin : public virtual operator_factory_plugin,
 
 class function_plugin : public virtual plugin {
 public:
+  struct named_argument {
+    ast::selector selector;
+    located<series> series;
+  };
+
+  struct positional_argument : located<series> {
+    using located::located;
+  };
+
+  using argument = variant<positional_argument, named_argument>;
+
   struct invocation {
     invocation(const ast::function_call& self, int64_t length,
-               std::vector<series> args)
+               std::vector<argument> args)
       : self{self}, length{length}, args{std::move(args)} {
     }
 
     const ast::function_call& self;
     int64_t length;
-    std::vector<series> args;
+    std::vector<argument> args;
   };
 
   virtual auto eval(invocation inv, diagnostic_handler& dh) const -> series = 0;
@@ -62,7 +74,6 @@ public:
 
   virtual ~aggregation_instance() = default;
 
-  /// Can return error string (TODO: Not the best).
   virtual void add(add_info info, diagnostic_handler& dh) = 0;
 
   virtual auto finish() -> data = 0;
@@ -77,3 +88,84 @@ public:
 };
 
 } // namespace tenzir::tql2
+
+namespace tenzir {
+
+class function_argument_parser {
+public:
+  explicit function_argument_parser(std::string name)
+    : docs_{fmt::format("https://docs.tenzir.com/functions/{}", name)} {
+  }
+
+  template <type_or_concrete_type... Types>
+  auto add(variant<basic_series<Types>...>& x, std::string meta)
+    -> function_argument_parser& {
+    auto set = [&x, this](located<series> y, diagnostic_handler& dh) {
+      auto try_set = [&]<concrete_type Type>(tag<Type>) {
+        if (auto cast = try_cast<Type>(y.inner)) {
+          x = std::move(*cast);
+          return true;
+        }
+        return false;
+      };
+      auto success = (try_set(tag_v<Types>) || ...);
+      if (not success) {
+        auto expected = std::invoke([] {
+          auto expected = std::string{};
+          auto count = size_t{0};
+          (std::invoke(
+             [&]<class Type>(tag<Type>) {
+               if (count == 0) {
+                 expected += fmt::format("{}", type_kind::of<Type>);
+               } else if (count < sizeof...(Types) - 1) {
+                 expected += fmt::format(", {}", type_kind::of<Type>);
+               } else {
+                 expected += fmt::format(" or {}", type_kind::of<Type>);
+               }
+               count += 1;
+             },
+             tag_v<Types>),
+           ...);
+          return expected;
+        });
+        diagnostic::warning("expected {}, but got {}", expected,
+                            y.inner.type.kind())
+          .primary(y.source)
+          .docs(docs_)
+          .emit(dh);
+        return false;
+      }
+      return true;
+    };
+    positional_.emplace_back(set, std::move(meta));
+    return *this;
+  }
+
+  template <type_or_concrete_type Type>
+  auto add(basic_series<Type>& x, std::string meta)
+    -> function_argument_parser&;
+
+  template <type_or_concrete_type Type>
+  auto add(located<basic_series<Type>>& x, std::string meta)
+    -> function_argument_parser&;
+
+  [[nodiscard]] auto
+  parse(tql2::function_plugin::invocation& inv, diagnostic_handler& dh) -> bool;
+
+private:
+  template <type_or_concrete_type Type>
+  static auto try_cast(series x) -> std::optional<basic_series<Type>>;
+
+  struct positional {
+    std::function<auto(located<series>, diagnostic_handler& dh)->bool> set;
+    std::string meta;
+  };
+
+  std::string docs_;
+  std::vector<positional> positional_;
+
+  template <std::monostate>
+  struct instantiate;
+};
+
+} // namespace tenzir

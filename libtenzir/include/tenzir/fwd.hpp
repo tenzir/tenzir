@@ -262,7 +262,9 @@ struct spawn_arguments;
 struct status;
 struct taxonomies;
 struct type_extractor;
-struct series;
+template <class Type>
+struct basic_series;
+using series = basic_series<type>;
 
 enum class api_version : uint8_t;
 enum class arithmetic_operator : uint8_t;

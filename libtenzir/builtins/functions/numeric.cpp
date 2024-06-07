@@ -28,15 +28,11 @@ public:
   }
 
   auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
-    if (inv.args.size() != 1) {
-      diagnostic::error("`round` expects exactly one argument")
-        .primary(inv.self.get_location())
-        .emit(dh);
-    }
-    if (inv.args.empty()) {
-      auto b = arrow::Int64Builder{};
-      (void)b.AppendNulls(detail::narrow<int64_t>(inv.length));
-      return series{int64_type{}, b.Finish().ValueOrDie()};
+    auto arg = located<series>{};
+    auto success
+      = function_argument_parser{"round"}.add(arg, "<number>").parse(inv, dh);
+    if (not success) {
+      return series::null(int64_type{}, inv.length);
     }
     auto f = detail::overload{
       [](const arrow::Int64Array& arg) {
@@ -58,10 +54,9 @@ public:
         (void)b.Finish(&ret);
         return ret;
       },
-      [&](const auto& arg) -> std::shared_ptr<arrow::Int64Array> {
-        TENZIR_UNUSED(arg);
+      [&](const auto&) -> std::shared_ptr<arrow::Int64Array> {
         diagnostic::warning("`round` expects `int64` or `double`, got `{}`",
-                            inv.args[0].type.kind())
+                            arg.inner.type.kind())
           // TODO: Wrong location.
           .primary(inv.self.get_location())
           .emit(dh);
@@ -72,7 +67,7 @@ public:
         return ret;
       },
     };
-    return series{int64_type{}, caf::visit(f, *inv.args[0].array)};
+    return series{int64_type{}, caf::visit(f, *arg.inner.array)};
   }
 };
 
@@ -83,15 +78,11 @@ public:
   }
 
   auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
-    if (inv.args.size() != 1) {
-      diagnostic::error("`sqrt` expects exactly one argument")
-        .primary(inv.self.get_location())
-        .emit(dh);
-    }
-    if (inv.args.empty()) {
-      auto b = arrow::DoubleBuilder{};
-      (void)b.AppendNulls(detail::narrow<int64_t>(inv.length));
-      return series{double_type{}, b.Finish().ValueOrDie()};
+    auto arg = variant<basic_series<double_type>, basic_series<int64_type>>{};
+    auto success
+      = function_argument_parser{"sqrt"}.add(arg, "value").parse(inv, dh);
+    if (not success) {
+      return series::null(double_type{}, inv.length);
     }
     auto compute = [&](const arrow::DoubleArray& x) {
       auto b = arrow::DoubleBuilder{};
@@ -149,15 +140,15 @@ public:
       (void)b.Finish(&result);
       return result;
     };
-    auto f = detail::overload{
-      [&](const arrow::DoubleArray& x) {
-        return compute(x);
+    auto result = arg.match(
+      [&](basic_series<double_type>& x) {
+        return compute(*x.array);
       },
-      [&](const arrow::Int64Array& x) {
+      [&](basic_series<int64_type>& x) {
         // TODO: Conversation should be automatic (if not part of the kernel).
         auto b = arrow::DoubleBuilder{};
         (void)b.Reserve(x.length());
-        for (auto y : x) {
+        for (auto y : *x.array) {
           if (y) {
             b.UnsafeAppend(static_cast<double>(*y));
           } else {
@@ -167,22 +158,8 @@ public:
         auto conv = std::shared_ptr<arrow::DoubleArray>{};
         (void)b.Finish(&conv);
         return compute(*conv);
-      },
-      [&](const auto& arg) {
-        TENZIR_UNUSED(arg);
-        diagnostic::warning("`sqrt` expects `double`, got `{}`",
-                            inv.args[0].type.kind())
-          // TODO: Wrong location.
-          .primary(inv.self.get_location())
-          .emit(dh);
-        auto b = arrow::DoubleBuilder{};
-        (void)b.AppendNulls(detail::narrow<int64_t>(inv.length));
-        auto ret = std::shared_ptr<arrow::DoubleArray>{};
-        (void)b.Finish(&ret);
-        return ret;
-      },
-    };
-    return series{double_type{}, caf::visit(f, *inv.args[0].array)};
+      });
+    return series{double_type{}, std::move(result)};
   }
 };
 
@@ -193,6 +170,10 @@ public:
   }
 
   auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
+    auto success = function_argument_parser{"random"}.parse(inv, dh);
+    if (not success) {
+      return series::null(double_type{}, inv.length);
+    }
     if (not inv.args.empty()) {
       diagnostic::error("`random` expects no arguments")
         .primary(inv.self.get_location())

@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/diagnostics.hpp"
+
 #include <tenzir/concept/parseable/tenzir/si.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -23,10 +25,11 @@ public:
   }
 
   auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
-    if (inv.args.size() != 1) {
-      diagnostic::error("`int` expects exactly one argument")
-        .primary(inv.self.get_location())
-        .emit(dh);
+    auto docs = "https://docs.tenzir.com/functions/int";
+    auto arg = located<series>{};
+    auto success
+      = function_argument_parser{docs}.add(arg, "<array>").parse(inv, dh);
+    if (not success) {
       return series::null(int64_type{}, inv.length);
     }
     auto f = detail::overload{
@@ -40,7 +43,7 @@ public:
         for (auto row = int64_t{0}; row < detail::narrow<int64_t>(inv.length);
              ++row) {
           if (arg.IsNull(row)) {
-            // TODO: Do we want to report this?
+            // TODO: Do we want to report this? Probably not.
             (void)b.UnsafeAppendNull();
           } else {
             auto result = int64_t{};
@@ -63,13 +66,11 @@ public:
         (void)b.Finish(&ret);
         return ret;
       },
-      [&](const auto& arg) -> std::shared_ptr<arrow::Int64Array> {
-        TENZIR_UNUSED(arg);
+      [&](const auto&) -> std::shared_ptr<arrow::Int64Array> {
         diagnostic::warning("`int` currently expects `int64` or `string`, got "
                             "`{}`",
-                            inv.args[0].type.kind())
-          // TODO: Wrong location.
-          .primary(inv.self.get_location())
+                            arg.inner.type.kind())
+          .primary(arg.source)
           .emit(dh);
         auto b = arrow::Int64Builder{};
         (void)b.AppendNulls(detail::narrow<int64_t>(inv.length));
@@ -78,7 +79,7 @@ public:
         return ret;
       },
     };
-    return series{int64_type{}, caf::visit(f, *inv.args[0].array)};
+    return series{int64_type{}, caf::visit(f, *arg.inner.array)};
   }
 };
 
