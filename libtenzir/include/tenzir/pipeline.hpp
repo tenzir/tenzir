@@ -257,102 +257,41 @@ public:
   /// must uphold if this function returns something else.
   ///
   /// # Implementation requirements
-  ///
-  /// We say that two pipelines are equivalent if they have the same observable
-  /// behavior. For open pipelines, this has to hold for all possible sources
-  /// (including infinite ones) and sinks. We write `A <=> B` if two pipelines
-  /// `A` and `B` are equivalent.
-  ///
   /// In the following, we assume that the operator is `events -> events`. The
   /// other case is discussed afterwards. Furthermore, we define the following
   /// `events -> events` operators:
   /// - `shuffle` randomizes the order of all events, no matter the schema.
   /// - `interleave` randomizes the order, preserving the order inside schemas.
   ///
-  /// Depending on the function parameter `order`, the implementation of this
-  /// function may assume the following equivalences for an otherwise unknown
-  /// pipeline `sink`.
-  /// ~~~
-  /// if order == ordered:
-  ///   sink <=> sink (trivial)
-  /// elif unordered:
-  ///   sink <=> shuffle | sink
-  /// elif order == schema:
-  ///   sink <=> interleave | sink
-  /// ~~~
-  ///
   /// For the value `opt` returned by this function, we define an imaginary
-  /// operator `OPT`, where `opt.replacement == nullptr` would be `pass`:
-  /// ~~~
+  /// operator `OPT`, where `opt.replacement == nullptr` would be `pass.
+  ///
+  // For every pipeline `sink` and result `opt` from the call to
+  /// `this->optimize(filter, order, selection)`, we define
+  /// if order == ordered:
+  ///   SINK = sink
+  /// elif unordered:
+  ///   SINK = shuffle | sink
+  /// elif order == schema:
+  ///   SINK = interleave | sink
   /// if opt.order == ordered:
   ///   OPT = opt.replacement
   /// elif opt.order == schema:
   ///   OPT = interleave | opt.replacement
   /// elif opt.order == unordered:
   ///   OPT = shuffle | opt.replacement
-  /// ~~~
   ///
-  /// The implementation must promise that the following equivalences hold:
-  /// ~~~
-  /// if opt.filter:
-  ///   this | where filter | sink
-  ///   <=> where opt.filter | OPT | sink
-  /// else:
-  ///   this | where filter | sink
-  ///   <=> OPT | where filter | sink
-  /// ~~~
-  ///
-  /// Now, let us assume that operator is not `events -> events`. If the output
-  /// type is not events, then the implementation may assume that it receives
-  /// `trivially_true_expression()` and `event_order::ordered`. If we define
-  /// `where true` to be `pass`, this can be seen as a corollary of the above,
-  /// as the pipeline would otherwise be ill-typed. Similarly, if the input type
-  /// is not events, we must return `event_order::ordered` and either
-  /// `std::nullopt` or `trivially_true_expression()`.
-  ///
-  /// # Example
-  ///
-  /// The `where expr` operator returns `opt.filter = expr && filter`,
-  /// `opt.order = order` and `opt.replacement == nullptr`. Thus we want to show
-  /// `where expr | where filter | sink <=> where expr && filter | OPT | sink`,
-  /// which is implied by `sink <=> OPT | sink`. If `order = schema`, this
-  /// resolves to `sink <=> interleave | pass | sink`, which follows from what
-  /// we may assume about `sink`.
-
-  /// # Projection Pushdown
-  ///
-  /// The selection is a projection pushdown that is represented as a vector of
-  /// columns to select. This vector can be moved around a pipeline similarly to
-  /// an expression. The implementation must ensure that the selected columns
-  /// are preserved in the correct order throughout the pipeline processing
-  /// stages. For an otherwise unknown pipeline `sink`, the following
-  /// equivalences must hold:
-  ///
-  /// ~~~
-  /// this | select columns | sink
-  /// <=> select columns | this | sink
-  /// ~~~
-  ///
-  /// If the operator modifies the schema of the events, the selection must be
-  /// adjusted accordingly to ensure that the specified columns are correctly
-  /// mapped and preserved in the resulting schema. The implementation must
-  /// handle such operators by blocking the upward movement of the select
-  /// operator.
-  ///
-  /// # Example
-  ///
-  /// For an operator that filters and then selects columns, the optimized
-  /// output must ensure that the filter is applied before the selection to
-  /// maintain the correct semantics:
-  ///
-  /// ~~~
-  /// where expr | select columns | sink
-  /// != select columns | where expr | OPT | sink
-  /// ~~~
-  ///
-  /// This ensures that filtering and selection are treated as distinct
-  /// operations, and the correct behavior is preserved in the optimized
-  /// pipeline.
+  /// The implementation of
+  /// `optimize` must then guarantee that the pipeline
+  /// `this | where filter | select selection | SINK` is equivalent to:
+  /// if opt.filter and opt.selection:
+  ///   where opt.filter | select opt.selection | OPT | SINK
+  /// if opt.filter and not opt.selection:
+  ///   where opt.filter | OPT | select selection | SINK
+  /// if not opt.filter and opt.selection:
+  ///   select opt.selection | OPT | where filter | SINK
+  /// if not opt.filter and not opt.selection:
+  ///   OPT | where filter | select selection | SINK
   virtual auto optimize(expression const& filter, event_order order,
                         select_optimization const& selection) const
     -> optimize_result
