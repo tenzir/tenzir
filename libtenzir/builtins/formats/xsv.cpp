@@ -453,41 +453,45 @@ public:
   instantiate([[maybe_unused]] type input_schema, operator_control_plane&) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
     auto metadata = chunk_metadata{.content_type = content_type()};
-    return printer_instance::make([meta = std::move(metadata), args = args_,
-                                   first = true](table_slice slice) mutable
-                                  -> generator<chunk_ptr> {
-      if (slice.rows() == 0) {
-        co_yield {};
-        co_return;
-      }
-      auto printer
-        = xsv_printer_impl{args.field_sep, args.list_sep, args.null_value};
-      auto buffer = std::vector<char>{};
-      auto out_iter = std::back_inserter(buffer);
-      auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
-      auto input_schema = resolved_slice.schema();
-      auto input_type = caf::get<record_type>(input_schema);
-      auto array
-        = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
-      for (const auto& row : values(input_type, *array)) {
-        TENZIR_ASSERT(row);
-        if (first && not args.no_header) {
-          printer.print_header(out_iter, *row);
-          first = false;
+    return printer_instance::make(
+      [meta = std::move(metadata), args = args_,
+       first = true](table_slice slice) mutable -> generator<chunk_ptr> {
+        if (slice.rows() == 0) {
+          co_yield {};
+          co_return;
+        }
+        auto printer
+          = xsv_printer_impl{args.field_sep, args.list_sep, args.null_value};
+        auto buffer = std::vector<char>{};
+        auto out_iter = std::back_inserter(buffer);
+        auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
+        auto input_schema = resolved_slice.schema();
+        auto input_type = caf::get<record_type>(input_schema);
+        auto array
+          = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+        for (const auto& row : values(input_type, *array)) {
+          TENZIR_ASSERT(row);
+          if (first && not args.no_header) {
+            printer.print_header(out_iter, *row);
+            first = false;
+            out_iter = fmt::format_to(out_iter, "\n");
+          }
+          const auto ok = printer.print_values(out_iter, *row);
+          TENZIR_ASSERT(ok);
           out_iter = fmt::format_to(out_iter, "\n");
         }
-        const auto ok = printer.print_values(out_iter, *row);
-        TENZIR_ASSERT(ok);
-        out_iter = fmt::format_to(out_iter, "\n");
-      }
-      auto chunk = chunk::make(std::move(buffer), meta);
-      co_yield std::move(chunk);
-    });
+        auto chunk = chunk::make(std::move(buffer), meta);
+        co_yield std::move(chunk);
+      });
   }
 
   auto allows_joining() const -> bool override {
     return args_.no_header;
   };
+
+  auto prints_utf8() const -> bool override {
+    return true;
+  }
 
   friend auto inspect(auto& f, xsv_printer& x) -> bool {
     return f.apply(x.args_);

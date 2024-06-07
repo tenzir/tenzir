@@ -133,6 +133,10 @@ public:
     return false;
   }
 
+  auto prints_utf8() const -> bool override {
+    return false;
+  }
+
   class parquet_printer_instance : public printer_instance {
   public:
     static auto make(operator_control_plane& ctrl, type input_schema,

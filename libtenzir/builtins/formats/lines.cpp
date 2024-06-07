@@ -133,6 +133,10 @@ public:
     return inner_->allows_joining();
   }
 
+  auto prints_utf8() const -> bool override {
+    return true;
+  }
+
   friend auto inspect(auto& f, lines_printer& x) -> bool {
     return f.begin_object(caf::invalid_type_id, "lines_printer")
            && plugin_inspect(f, x.inner_) && f.end_object();

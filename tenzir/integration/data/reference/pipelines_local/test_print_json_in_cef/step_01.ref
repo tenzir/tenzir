@@ -1,0 +1,6 @@
+error: field dvc is not of type record
+ --> <input>:1:18
+  |
+1 | read cef | print extension.dvc json 
+  |                  ^^^^^^^^^^^^^ 
+  |
