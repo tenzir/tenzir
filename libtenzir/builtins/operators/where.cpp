@@ -111,13 +111,12 @@ public:
   auto optimize(expression const& filter, event_order order,
                 select_optimization const& selection) const
     -> optimize_result override {
-    (void)selection;
     if (filter == trivially_true_expression()) {
-      return optimize_result{expr_.inner, order, nullptr, std::nullopt};
+      return optimize_result{expr_.inner, order, nullptr, selection};
     }
     auto combined = normalize_and_validate(conjunction{expr_.inner, filter});
     TENZIR_ASSERT(combined);
-    return optimize_result{std::move(*combined), order, nullptr, std::nullopt};
+    return optimize_result{std::move(*combined), order, nullptr, selection};
   }
 
   friend auto inspect(auto& f, where_operator& x) -> bool {

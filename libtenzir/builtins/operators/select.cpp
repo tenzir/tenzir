@@ -88,11 +88,11 @@ public:
     // TODO: Optimize multiple selection calls in the same pipeline
     if (!selection.fields.empty()) {
       return optimize_result{
-        filter, order,
+        std::nullopt, order,
         std::make_unique<select_operator>(configuration{selection.fields}),
         select_optimization(config_.fields)};
     }
-    return optimize_result{filter, order, nullptr,
+    return optimize_result{std::nullopt, order, nullptr,
                            select_optimization(config_.fields)};
   }
 
