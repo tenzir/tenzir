@@ -8,9 +8,8 @@
 
 #include "tenzir/pipeline.hpp"
 
-#include "tenzir/collect.hpp"
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql/parser.hpp"
 
@@ -78,7 +77,8 @@ auto do_not_optimize(const operator_base& op) -> optimize_result {
   // assume `op == head` and `order == unordered`. We would have to show that
   // `head | where filter | sink <=> shuffle | head | where filter | sink`, but
   // this is clearly not the case.
-  return optimize_result{std::nullopt, event_order::ordered, op.copy()};
+  return optimize_result{std::nullopt, event_order::ordered, op.copy(),
+                         std::nullopt};
 }
 
 pipeline::pipeline(std::vector<operator_ptr> operators) {
@@ -111,8 +111,9 @@ auto pipeline::internal_parse(std::string_view repr)
 auto pipeline::internal_parse_as_operator(std::string_view repr)
   -> caf::expected<operator_ptr> {
   auto result = internal_parse(repr);
-  if (not result)
+  if (not result) {
     return std::move(result.error());
+  }
   return std::make_unique<pipeline>(std::move(*result));
 }
 
@@ -177,7 +178,8 @@ auto pipeline::optimize_into_filter() const -> std::pair<expression, pipeline> {
 
 auto pipeline::optimize_into_filter(const expression& filter) const
   -> std::pair<expression, pipeline> {
-  auto opt = optimize(filter, event_order::ordered);
+  auto opt = optimize(filter, event_order::ordered,
+                      select_optimization::no_select_optimization());
   auto* pipe = dynamic_cast<pipeline*>(opt.replacement.get());
   // We know that `pipeline::optimize` yields a pipeline and a filter.
   TENZIR_ASSERT(pipe);
@@ -185,16 +187,29 @@ auto pipeline::optimize_into_filter(const expression& filter) const
   return {std::move(*opt.filter), std::move(*pipe)};
 }
 
-auto pipeline::optimize(expression const& filter, event_order order) const
+auto pipeline::optimize(expression const& filter, event_order order,
+                        select_optimization const& selection) const
   -> optimize_result {
   auto current_filter = filter;
   auto current_order = order;
+  auto current_selection = selection;
   // Collect the optimized pipeline in reversed order.
   auto result = std::vector<operator_ptr>{};
   for (auto it = operators_.rbegin(); it != operators_.rend(); ++it) {
     TENZIR_ASSERT(*it);
     auto const& op = **it;
-    auto opt = op.optimize(current_filter, current_order);
+    auto opt = op.optimize(current_filter, current_order, current_selection);
+    if (opt.selection) {
+      current_selection = *opt.selection;
+    } else if (!current_selection.fields.empty()) {
+      auto pipe = tql::parse_internal(
+        fmt::format("select {}", fmt::join(current_selection.fields, ", ")));
+      TENZIR_ASSERT(pipe);
+      auto ops = std::move(*pipe).unwrap();
+      TENZIR_ASSERT(ops.size() == 1);
+      result.push_back(std::move(ops[0]));
+      current_selection = select_optimization::no_select_optimization();
+    }
     if (opt.filter) {
       current_filter = std::move(*opt.filter);
     } else if (current_filter != trivially_true_expression()) {
@@ -214,7 +229,8 @@ auto pipeline::optimize(expression const& filter, event_order order) const
   }
   std::reverse(result.begin(), result.end());
   return optimize_result{current_filter, current_order,
-                         std::make_unique<pipeline>(std::move(result))};
+                         std::make_unique<pipeline>(std::move(result)),
+                         current_selection};
 }
 
 auto pipeline::copy() const -> operator_ptr {

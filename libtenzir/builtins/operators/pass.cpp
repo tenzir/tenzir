@@ -25,9 +25,10 @@ public:
     return "pass";
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection) const
     -> optimize_result override {
-    return optimize_result{filter, order, nullptr};
+    return optimize_result{filter, order, nullptr, selection};
   }
 
   friend auto inspect(auto& f, pass_operator& x) -> bool {

@@ -11,6 +11,7 @@
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/operator_control_plane.hpp"
+#include "tenzir/select_optimization.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tag.hpp"
 
@@ -248,7 +249,7 @@ public:
   /// derived from `inspect()` and requires that it does not fail.
   virtual auto copy() const -> operator_ptr;
 
-  /// Optimizes the operator for a given filter and event order.
+  /// Optimizes the operator for a given filter, event order, and selection.
   ///
   /// It is always valid to return `do_not_optimize(*this)`, but this would act
   /// as an optimization barrier. In the following, we provide a semi-formal
@@ -256,68 +257,43 @@ public:
   /// must uphold if this function returns something else.
   ///
   /// # Implementation requirements
-  ///
-  /// We say that two pipelines are equivalent if they have the same observable
-  /// behavior. For open pipelines, this has to hold for all possible sources
-  /// (including infinite ones) and sinks. We write `A <=> B` if two pipelines
-  /// `A` and `B` are equivalent.
-  ///
   /// In the following, we assume that the operator is `events -> events`. The
   /// other case is discussed afterwards. Furthermore, we define the following
   /// `events -> events` operators:
   /// - `shuffle` randomizes the order of all events, no matter the schema.
   /// - `interleave` randomizes the order, preserving the order inside schemas.
   ///
-  /// Depending on the function parameter `order`, the implementation of this
-  /// function may assume the following equivalences for an otherwise unknown
-  /// pipeline `sink`.
-  /// ~~~
-  /// if order == ordered:
-  ///   sink <=> sink (trivial)
-  /// elif unordered:
-  ///   sink <=> shuffle | sink
-  /// elif order == schema:
-  ///   sink <=> interleave | sink
-  /// ~~~
-  ///
   /// For the value `opt` returned by this function, we define an imaginary
-  /// operator `OPT`, where `opt.replacement == nullptr` would be `pass`:
-  /// ~~~
+  /// operator `OPT`, where `opt.replacement == nullptr` would be `pass.
+  ///
+  // For every pipeline `sink` and result `opt` from the call to
+  /// `this->optimize(filter, order, selection)`, we define
+  /// if order == ordered:
+  ///   SINK = sink
+  /// elif unordered:
+  ///   SINK = shuffle | sink
+  /// elif order == schema:
+  ///   SINK = interleave | sink
   /// if opt.order == ordered:
   ///   OPT = opt.replacement
   /// elif opt.order == schema:
   ///   OPT = interleave | opt.replacement
   /// elif opt.order == unordered:
   ///   OPT = shuffle | opt.replacement
-  /// ~~~
   ///
-  /// The implementation must promise that the following equivalences hold:
-  /// ~~~
-  /// if opt.filter:
-  ///   this | where filter | sink
-  ///   <=> where opt.filter | OPT | sink
-  /// else:
-  ///   this | where filter | sink
-  ///   <=> OPT | where filter | sink
-  /// ~~~
-  ///
-  /// Now, let us assume that operator is not `events -> events`. If the output
-  /// type is not events, then the implementation may assume that it receives
-  /// `trivially_true_expression()` and `event_order::ordered`. If we define
-  /// `where true` to be `pass`, this can be seen as a corollary of the above,
-  /// as the pipeline would otherwise be ill-typed. Similarly, if the input type
-  /// is not events, we must return `event_order::ordered` and either
-  /// `std::nullopt` or `trivially_true_expression()`.
-  ///
-  /// # Example
-  ///
-  /// The `where expr` operator returns `opt.filter = expr && filter`,
-  /// `opt.order = order` and `opt.replacement == nullptr`. Thus we want to show
-  /// `where expr | where filter | sink <=> where expr && filter | OPT | sink`,
-  /// which is implied by `sink <=> OPT | sink`. If `order = schema`, this
-  /// resolves to `sink <=> interleave | pass | sink`, which follows from what
-  /// we may assume about `sink`.
-  virtual auto optimize(expression const& filter, event_order order) const
+  /// The implementation of
+  /// `optimize` must then guarantee that the pipeline
+  /// `this | where filter | select selection | SINK` is equivalent to:
+  /// if opt.filter and opt.selection:
+  ///   where opt.filter | select opt.selection | OPT | SINK
+  /// if opt.filter and not opt.selection:
+  ///   where opt.filter | OPT | select selection | SINK
+  /// if not opt.filter and opt.selection:
+  ///   select opt.selection | OPT | where filter | SINK
+  /// if not opt.filter and not opt.selection:
+  ///   OPT | where filter | select selection | SINK
+  virtual auto optimize(expression const& filter, event_order order,
+                        select_optimization const& selection) const
     -> optimize_result
     = 0;
 
@@ -404,19 +380,22 @@ struct optimize_result {
   std::optional<expression> filter;
   event_order order;
   operator_ptr replacement;
+  std::optional<select_optimization> selection;
 
   optimize_result(std::optional<expression> filter, event_order order,
-                  operator_ptr replacement)
+                  operator_ptr replacement,
+                  std::optional<select_optimization> selection)
     : filter{std::move(filter)},
       order{order},
-      replacement{std::move(replacement)} {
+      replacement{std::move(replacement)},
+      selection{std::move(selection)} {
   }
 
   /// Always valid if the transformation performed by the operator does not
   /// change based on the order in which the input events arrive in.
   static auto order_invariant(const operator_base& op, event_order order)
     -> optimize_result {
-    return optimize_result{std::nullopt, order, op.copy()};
+    return optimize_result{std::nullopt, order, op.copy(), std::nullopt};
   }
 };
 
@@ -474,7 +453,8 @@ public:
   [[nodiscard]] auto optimize_into_filter(expression const& filter) const
     -> std::pair<expression, pipeline>;
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection) const
     -> optimize_result override;
 
   /// Returns whether this is a well-formed `void -> void` pipeline.

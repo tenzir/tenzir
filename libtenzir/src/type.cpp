@@ -229,8 +229,9 @@ type enrich_type_with_arrow_metadata(class type type,
                                      const arrow::KeyValueMetadata& metadata) {
   auto deserialize_attributes = [](std::string_view serialized) noexcept
     -> std::vector<std::pair<std::string, std::string>> {
-    if (serialized.empty())
+    if (serialized.empty()) {
       return {};
+    }
     auto json = simdjson::padded_string{serialized};
     auto parser = simdjson::dom::parser{};
     auto doc = parser.parse(json);
@@ -256,14 +257,16 @@ type enrich_type_with_arrow_metadata(class type type,
   for (const auto& [key, value] :
        detail::zip(metadata.keys(), metadata.values())) {
     if (uint32_t index{}; name_parser(key, index)) {
-      if (index >= names_and_attributes.size())
+      if (index >= names_and_attributes.size()) {
         names_and_attributes.resize(index + 1);
+      }
       names_and_attributes[index].first = value;
       continue;
     }
     if (uint32_t index{}; attribute_parser(key, index)) {
-      if (index >= names_and_attributes.size())
+      if (index >= names_and_attributes.size()) {
         names_and_attributes.resize(index + 1);
+      }
       names_and_attributes[index].second = deserialize_attributes(value);
       continue;
     }
@@ -273,8 +276,9 @@ type enrich_type_with_arrow_metadata(class type type,
        it != names_and_attributes.rend(); ++it) {
     auto attributes = std::vector<type::attribute_view>{};
     attributes.reserve(it->second.size());
-    for (const auto& [key, value] : it->second)
+    for (const auto& [key, value] : it->second) {
       attributes.push_back({key, value});
+    }
     type = {it->first, type, std::move(attributes)};
   }
   return type;
@@ -288,15 +292,17 @@ std::shared_ptr<arrow::KeyValueMetadata> make_arrow_metadata(const type& type) {
     auto inserter = std::back_inserter(result);
     fmt::format_to(inserter, "{{ ");
     for (auto add_comma = false; const auto* attribute : attributes) {
-      if (std::exchange(add_comma, true))
+      if (std::exchange(add_comma, true)) {
         fmt::format_to(inserter, ", ");
-      if (attribute->value())
+      }
+      if (attribute->value()) {
         fmt::format_to(inserter, R"("{}": "{}")",
                        attribute->key()->string_view(),
                        attribute->value()->string_view());
-      else
+      } else {
         fmt::format_to(inserter, R"("{}": "")",
                        attribute->key()->string_view());
+      }
     }
     fmt::format_to(inserter, " }}");
     return result;
@@ -433,15 +439,17 @@ type::type(std::string_view name, const type& nested,
                     [&](const auto& attribute) noexcept {
                       return attribute.key
                              == stripped_attribute->key()->string_view();
-                    }))
+                    })) {
                 continue;
-              if (stripped_attribute->value())
+              }
+              if (stripped_attribute->value()) {
                 attributes.push_back(
                   {stripped_attribute->key()->string_view(),
                    stripped_attribute->value()->string_view()});
-              else
+              } else {
                 attributes.push_back(
                   {stripped_attribute->key()->string_view()});
+              }
             }
           }
           nested_bytes = as_bytes(*enriched_type->type());
@@ -473,8 +481,9 @@ type::type(std::string_view name, const type& nested,
     const auto attributes_offset = [&]() noexcept
       -> flatbuffers::Offset<
         flatbuffers::Vector<flatbuffers::Offset<fbs::type::detail::Attribute>>> {
-      if (attributes.empty())
+      if (attributes.empty()) {
         return 0;
+      }
       auto attributes_offsets
         = std::vector<flatbuffers::Offset<fbs::type::detail::Attribute>>{};
       attributes_offsets.reserve(attributes.size());
@@ -490,8 +499,9 @@ type::type(std::string_view name, const type& nested,
                    const attribute_view& rhs) noexcept {
                   return lhs.key < rhs.key;
                 });
-      for (const auto& attribute : attributes)
+      for (const auto& attribute : attributes) {
         add_attribute(attribute);
+      }
       return builder.CreateVectorOfSortedTables(&attributes_offsets);
     }();
     const auto enriched_type_offset = fbs::type::detail::CreateEnrichedType(
@@ -520,21 +530,24 @@ std::optional<type> type::infer(const data& value) noexcept {
     // First, find first non-null element for the purposes of comparison
     type first_inferred{};
     auto it = list.begin();
-    for (; it != list.end(); ++it)
-      if (auto inferred = infer(*it); !inferred)
+    for (; it != list.end(); ++it) {
+      if (auto inferred = infer(*it); !inferred) {
         return std::nullopt;
-      else if (*inferred) {
+      } else if (*inferred) {
         first_inferred = std::move(*inferred);
         ++it;
         break;
       }
+    }
     // Then, compare the remaining elements to find if they are either null,
     // or the same as the first non-null element
-    for (; it != list.end(); ++it)
-      if (auto inferred = infer(*it); !inferred)
+    for (; it != list.end(); ++it) {
+      if (auto inferred = infer(*it); !inferred) {
         return std::nullopt;
-      else if (*inferred && *inferred != first_inferred)
+      } else if (*inferred && *inferred != first_inferred) {
         return std::nullopt;
+      }
+    }
     return first_inferred;
   };
 
@@ -580,29 +593,34 @@ std::optional<type> type::infer(const data& value) noexcept {
       return std::nullopt;
     },
     [&](const list& list) noexcept -> std::optional<type> {
-      if (auto elem_type = infer_list_element_type(list); !elem_type)
+      if (auto elem_type = infer_list_element_type(list); !elem_type) {
         return std::nullopt;
-      else
+      } else {
         return type{list_type{*elem_type}};
+      }
     },
     [&](const map& map) noexcept -> std::optional<type> {
       auto key_type = infer_list_element_type(map | std::views::keys);
       auto value_type = infer_list_element_type(map | std::views::values);
-      if (!key_type || !value_type)
+      if (!key_type || !value_type) {
         return std::nullopt;
+      }
       return type{map_type{*key_type, *value_type}};
     },
     [](const record& record) noexcept -> std::optional<type> {
       // Record types cannot be inferred from empty records.
-      if (record.empty())
+      if (record.empty()) {
         return std::nullopt;
+      }
       auto fields = std::vector<record_type::field_view>{};
       fields.reserve(record.size());
-      for (const auto& field : record)
-        if (auto inferred = infer(field.second); !inferred)
+      for (const auto& field : record) {
+        if (auto inferred = infer(field.second); !inferred) {
           return std::nullopt;
-        else
+        } else {
           fields.push_back({field.first, *inferred});
+        }
+      }
       return type{record_type{fields}};
     },
   };
@@ -613,10 +631,11 @@ type type::from_legacy_type(const legacy_type& other) noexcept {
   auto attributes = std::vector<attribute_view>{};
   attributes.reserve(other.attributes().size());
   for (const auto& attribute : other.attributes()) {
-    if (attribute.value)
+    if (attribute.value) {
       attributes.push_back({attribute.key, *attribute.value});
-    else
+    } else {
       attributes.push_back({attribute.key});
+    }
   }
   auto f = detail::overload{
     [&](const legacy_none_type&) noexcept {
@@ -658,8 +677,9 @@ type type::from_legacy_type(const legacy_type& other) noexcept {
     [&](const legacy_enumeration_type& enumeration) noexcept {
       auto fields = std::vector<struct enumeration_type::field>{};
       fields.reserve(enumeration.fields.size());
-      for (const auto& field : enumeration.fields)
+      for (const auto& field : enumeration.fields) {
         fields.push_back({field});
+      }
       return type{other.name(), enumeration_type{fields},
                   std::move(attributes)};
     },
@@ -680,8 +700,9 @@ type type::from_legacy_type(const legacy_type& other) noexcept {
     [&](const legacy_record_type& record) noexcept {
       auto fields = std::vector<struct record_type::field_view>{};
       fields.reserve(record.fields.size());
-      for (const auto& field : record.fields)
+      for (const auto& field : record.fields) {
         fields.push_back({field.name, from_legacy_type(field.type)});
+      }
       return type{other.name(), record_type{fields}, std::move(attributes)};
     },
   };
@@ -743,25 +764,28 @@ legacy_type type::to_legacy_type() const noexcept {
     },
     [&](const record_type& record) noexcept -> legacy_type {
       auto result = legacy_record_type{};
-      for (const auto& field : record.fields())
+      for (const auto& field : record.fields()) {
         result.fields.push_back({
           std::string{field.name},
           field.type.to_legacy_type(),
         });
+      }
       return result;
     },
   };
   auto result = caf::visit(f, *this);
-  if (!name().empty())
+  if (!name().empty()) {
     result = legacy_alias_type{std::move(result)}.name(std::string{name()});
+  }
   for (const auto& attribute : attributes()) {
-    if (attribute.value.empty())
+    if (attribute.value.empty()) {
       result.update_attributes({{std::string{attribute.key}}});
-    else
+    } else {
       result.update_attributes({{
         std::string{attribute.key},
         std::string{attribute.value},
       }});
+    }
   }
   return result;
 }
@@ -795,13 +819,16 @@ std::strong_ordering operator<=>(const type& lhs, const type& rhs) noexcept {
   // once that is implemented for all compilers we need to support. This does
   // the same thing essentially, just a lot less generic.
   if (lhs_bytes.data() == rhs_bytes.data()
-      && lhs_bytes.size() == rhs_bytes.size())
+      && lhs_bytes.size() == rhs_bytes.size()) {
     return std::strong_ordering::equal;
+  }
   while (!lhs_bytes.empty() && !rhs_bytes.empty()) {
-    if (lhs_bytes[0] < rhs_bytes[0])
+    if (lhs_bytes[0] < rhs_bytes[0]) {
       return std::strong_ordering::less;
-    if (lhs_bytes[0] > rhs_bytes[0])
+    }
+    if (lhs_bytes[0] > rhs_bytes[0]) {
       return std::strong_ordering::greater;
+    }
     lhs_bytes = lhs_bytes.subspan(1);
     rhs_bytes = rhs_bytes.subspan(1);
   }
@@ -842,14 +869,16 @@ data type::to_definition(bool expand) const noexcept {
     = [&](data type_definition) noexcept -> data {
     auto attributes_definition = record::vector_type{};
     for (const auto& [key, value] : attributes(recurse::no)) {
-      if (value.empty())
+      if (value.empty()) {
         attributes_definition.emplace_back(std::string{key}, caf::none);
-      else
+      } else {
         attributes_definition.emplace_back(std::string{key},
                                            std::string{value});
+      }
     }
-    if (!expand && attributes_definition.empty())
+    if (!expand && attributes_definition.empty()) {
       return type_definition;
+    }
     return record{
       {"type", std::move(type_definition)},
       {"attributes", record::make_unsafe(std::move(attributes_definition))},
@@ -860,8 +889,9 @@ data type::to_definition(bool expand) const noexcept {
     auto definition
       = attributes_enriched_definition(alias.to_definition(expand));
     const auto name = this->name();
-    if (!expand && name.empty())
+    if (!expand && name.empty()) {
       return definition;
+    }
     return record{
       {std::string{name}, std::move(definition)},
     };
@@ -878,8 +908,9 @@ data type::to_definition(bool expand) const noexcept {
     },
     [](const enumeration_type& self) noexcept -> data {
       auto definition = list{};
-      for (const auto& field : self.fields())
+      for (const auto& field : self.fields()) {
         definition.push_back(std::string{field.name});
+      }
       return record{
         {"enum", std::move(definition)},
       };
@@ -901,9 +932,10 @@ data type::to_definition(bool expand) const noexcept {
     [&](const record_type& self) noexcept -> data {
       auto definition = list{};
       definition.reserve(self.num_fields());
-      for (const auto& [name, type] : self.fields())
+      for (const auto& [name, type] : self.fields()) {
         definition.push_back(
           record{{std::string{name}, type.to_definition(expand)}});
+      }
       return record{
         {"record", std::move(definition)},
       };
@@ -1019,8 +1051,9 @@ type type::from_arrow(const arrow::DataType& other) noexcept {
 type type::from_arrow(const arrow::Field& field) noexcept {
   TENZIR_ASSERT(field.type());
   auto result = from_arrow(*field.type());
-  if (const auto& metadata = field.metadata())
+  if (const auto& metadata = field.metadata()) {
     result = enrich_type_with_arrow_metadata(std::move(result), *metadata);
+  }
   return result;
 }
 
@@ -1032,8 +1065,9 @@ type type::from_arrow(const arrow::Schema& schema) noexcept {
     fields.emplace_back(field->name(), from_arrow(*field));
   }
   auto result = type{record_type{fields}};
-  if (const auto& metadata = schema.metadata())
+  if (const auto& metadata = schema.metadata()) {
     result = enrich_type_with_arrow_metadata(std::move(result), *metadata);
+  }
   return result;
 }
 
@@ -1103,8 +1137,9 @@ auto inspect(caf::detail::stringification_inspector& f, type& x) {
 
 void type::assign_metadata(const type& other) noexcept {
   const auto name = other.name();
-  if (name.empty() && !other.has_attributes())
+  if (name.empty() && !other.has_attributes()) {
     return;
+  }
   const auto nested_bytes = as_bytes(table_);
   const auto reserved_size = [&]() noexcept {
     // The total length is made up from the following terms:
@@ -1127,8 +1162,9 @@ void type::assign_metadata(const type& other) noexcept {
   const auto attributes_offset = [&]() noexcept
     -> flatbuffers::Offset<
       flatbuffers::Vector<flatbuffers::Offset<fbs::type::detail::Attribute>>> {
-    if (!other.has_attributes())
+    if (!other.has_attributes()) {
       return 0;
+    }
     auto attributes_offsets
       = std::vector<flatbuffers::Offset<fbs::type::detail::Attribute>>{};
     for (const auto& attribute : other.attributes()) {
@@ -1199,8 +1235,9 @@ std::string_view type::name() const& noexcept {
         return std::string_view{};
       case fbs::type::Type::enriched_type: {
         const auto* enriched_type = root->type_as_enriched_type();
-        if (const auto* name = enriched_type->name())
+        if (const auto* name = enriched_type->name()) {
           return name->string_view();
+        }
         root = enriched_type->type_nested_root();
         TENZIR_ASSERT(root);
         break;
@@ -1234,8 +1271,9 @@ generator<std::string_view> type::names() const& noexcept {
         co_return;
       case fbs::type::Type::enriched_type: {
         const auto* enriched_type = root->type_as_enriched_type();
-        if (const auto* name = enriched_type->name())
+        if (const auto* name = enriched_type->name()) {
           co_yield name->string_view();
+        }
         root = enriched_type->type_nested_root();
         TENZIR_ASSERT(root);
         break;
@@ -1272,8 +1310,9 @@ type::attribute(const char* key) const& noexcept {
         const auto* enriched_type = root->type_as_enriched_type();
         if (const auto* attributes = enriched_type->attributes()) {
           if (const auto* attribute = attributes->LookupByKey(key)) {
-            if (const auto* value = attribute->value())
+            if (const auto* value = attribute->value()) {
               return value->string_view();
+            }
             return std::string_view{};
           }
         }
@@ -1311,8 +1350,9 @@ bool type::has_attributes() const noexcept {
       case fbs::type::Type::enriched_type: {
         const auto* enriched_type = root->type_as_enriched_type();
         if (const auto* attributes = enriched_type->attributes()) {
-          if (attributes->begin() != attributes->end())
+          if (attributes->begin() != attributes->end()) {
             return true;
+          }
         }
         root = enriched_type->type_nested_root();
         TENZIR_ASSERT(root);
@@ -1351,15 +1391,17 @@ type::attributes(type::recurse recurse) const& noexcept {
         if (const auto* attributes = enriched_type->attributes()) {
           for (const auto& attribute : *attributes) {
             if (attribute->value() != nullptr
-                && attribute->value()->begin() != attribute->value()->end())
+                && attribute->value()->begin() != attribute->value()->end()) {
               co_yield {attribute->key()->string_view(),
                         attribute->value()->string_view()};
-            else
+            } else {
               co_yield {attribute->key()->string_view(), std::string_view{}};
+            }
           }
         }
-        if (recurse == type::recurse::no)
+        if (recurse == type::recurse::no) {
           co_return;
+        }
         root = enriched_type->type_nested_root();
         TENZIR_ASSERT(root);
         break;
@@ -1393,8 +1435,9 @@ generator<type> type::aliases() const noexcept {
         co_return;
       case fbs::type::Type::enriched_type: {
         const auto* enriched_type = root->type_as_enriched_type();
-        if (enriched_type->name())
+        if (enriched_type->name()) {
           co_yield type{table_->slice(as_bytes(*enriched_type->type()))};
+        }
         root = enriched_type->type_nested_root();
         TENZIR_ASSERT(root);
         break;
@@ -1450,11 +1493,14 @@ bool congruent(const type& x, const type& y) noexcept {
     [](const enumeration_type& x, const enumeration_type& y) noexcept {
       const auto xf = x.fields();
       const auto yf = y.fields();
-      if (xf.size() != yf.size())
+      if (xf.size() != yf.size()) {
         return false;
-      for (size_t i = 0; i < xf.size(); ++i)
-        if (xf[i].key != yf[i].key)
+      }
+      for (size_t i = 0; i < xf.size(); ++i) {
+        if (xf[i].key != yf[i].key) {
           return false;
+        }
+      }
       return true;
     },
     [](const list_type& x, const list_type& y) noexcept {
@@ -1465,11 +1511,14 @@ bool congruent(const type& x, const type& y) noexcept {
              && congruent(x.value_type(), y.value_type());
     },
     [](const record_type& x, const record_type& y) noexcept {
-      if (x.num_fields() != y.num_fields())
+      if (x.num_fields() != y.num_fields()) {
         return false;
-      for (size_t i = 0; i < x.num_fields(); ++i)
-        if (!congruent(x.field(i).type, y.field(i).type))
+      }
+      for (size_t i = 0; i < x.num_fields(); ++i) {
+        if (!congruent(x.field(i).type, y.field(i).type)) {
           return false;
+        }
+      }
       return true;
     },
     []<complex_type T>(const T&, const T&) noexcept {
@@ -1529,20 +1578,25 @@ bool congruent(const type& x, const data& y) noexcept {
       return true;
     },
     [](const record_type& x, const list& y) noexcept {
-      if (x.num_fields() != y.size())
+      if (x.num_fields() != y.size()) {
         return false;
-      for (size_t i = 0; i < x.num_fields(); ++i)
-        if (!congruent(x.field(i).type, y[i]))
+      }
+      for (size_t i = 0; i < x.num_fields(); ++i) {
+        if (!congruent(x.field(i).type, y[i])) {
           return false;
+        }
+      }
       return true;
     },
     [](const record_type& x, const record& y) noexcept {
-      if (x.num_fields() != y.size())
+      if (x.num_fields() != y.size()) {
         return false;
+      }
       for (const auto& field : x.fields()) {
         if (auto it = y.find(field.name); it != y.end()) {
-          if (!congruent(field.type, it->second))
+          if (!congruent(field.type, it->second)) {
             return false;
+          }
         } else {
           return false;
         }
@@ -1589,22 +1643,24 @@ bool compatible(const type& lhs, relational_operator op,
       return congruent(lhs, rhs) or numeric(lhs, rhs);
     case relational_operator::in:
     case relational_operator::not_in:
-      if (caf::holds_alternative<string_type>(lhs))
+      if (caf::holds_alternative<string_type>(lhs)) {
         return caf::holds_alternative<std::string>(rhs) || is_container(rhs);
-      else if (caf::holds_alternative<ip_type>(lhs)
-               || caf::holds_alternative<subnet_type>(lhs))
+      } else if (caf::holds_alternative<ip_type>(lhs)
+                 || caf::holds_alternative<subnet_type>(lhs)) {
         return caf::holds_alternative<subnet>(rhs) || is_container(rhs);
-      else
+      } else {
         return is_container(rhs);
+      }
     case relational_operator::ni:
     case relational_operator::not_ni:
-      if (caf::holds_alternative<std::string>(rhs))
+      if (caf::holds_alternative<std::string>(rhs)) {
         return caf::holds_alternative<string_type>(lhs) || is_container(lhs);
-      else if (caf::holds_alternative<ip>(rhs)
-               || caf::holds_alternative<subnet>(rhs))
+      } else if (caf::holds_alternative<ip>(rhs)
+                 || caf::holds_alternative<subnet>(rhs)) {
         return caf::holds_alternative<subnet_type>(lhs) || is_container(lhs);
-      else
+      } else {
         return is_container(lhs);
+      }
   }
   __builtin_unreachable();
 }
@@ -1619,22 +1675,25 @@ bool is_subset(const type& x, const type& y) noexcept {
   const auto* super = caf::get_if<record_type>(&y);
   // If either of the types is not a record type, check if they are
   // congruent instead.
-  if (!sub || !super)
+  if (!sub || !super) {
     return congruent(x, y);
+  }
   // Check whether all fields of the subset exist in the superset.
   for (const auto& sub_field : sub->fields()) {
     bool exists_in_superset = false;
     for (const auto& super_field : super->fields()) {
       if (sub_field.name == super_field.name) {
         // Perform the check recursively to support nested record types.
-        if (!is_subset(sub_field.type, super_field.type))
+        if (!is_subset(sub_field.type, super_field.type)) {
           return false;
+        }
         exists_in_superset = true;
       }
     }
     // Not all fields of the subset exist in the superset; exit early.
-    if (!exists_in_superset)
+    if (!exists_in_superset) {
       return false;
+    }
   }
   return true;
 }
@@ -1651,8 +1710,9 @@ bool type_check(const type& x, const data& y) noexcept {
       return !t.field(u).empty();
     },
     [&](const list_type& t, const list& u) {
-      if (u.empty())
+      if (u.empty()) {
         return true;
+      }
       const auto vt = t.value_type();
       auto it = u.begin();
       const auto check = [&](const auto& d) noexcept {
@@ -1669,8 +1729,9 @@ bool type_check(const type& x, const data& y) noexcept {
       return false;
     },
     [&](const map_type& t, const map& u) {
-      if (u.empty())
+      if (u.empty()) {
         return true;
+      }
       const auto kt = t.key_type();
       const auto vt = t.value_type();
       auto it = u.begin();
@@ -1688,13 +1749,15 @@ bool type_check(const type& x, const data& y) noexcept {
       return false;
     },
     [&](const record_type& t, const record& u) {
-      if (u.size() != t.num_fields())
+      if (u.size() != t.num_fields()) {
         return false;
+      }
       for (size_t i = 0; i < u.size(); ++i) {
         const auto field = t.field(i);
         const auto& [k, v] = as_vector(u)[i];
-        if (field.name != k || type_check(field.type, v))
+        if (field.name != k || type_check(field.type, v)) {
           return false;
+        }
       }
       return true;
     },
@@ -1715,13 +1778,15 @@ bool type_check(const type& x, const data& y) noexcept {
 
 caf::error
 replace_if_congruent(std::initializer_list<type*> xs, const module& with) {
-  for (auto* x : xs)
+  for (auto* x : xs) {
     if (const auto* t = with.find(x->name())) {
-      if (!congruent(*x, *t))
+      if (!congruent(*x, *t)) {
         return caf::make_error(ec::type_clash,
                                fmt::format("incongruent type {}", x->name()));
+      }
       *x = *t;
     }
+  }
   return caf::none;
 }
 
@@ -2071,8 +2136,9 @@ ip_type::make_arrow_builder(arrow::MemoryPool* pool) noexcept {
 }
 
 void ip_type::arrow_type::register_extension() noexcept {
-  if (arrow::GetExtensionType(name))
+  if (arrow::GetExtensionType(name)) {
     return;
+  }
   auto status = arrow::RegisterExtensionType(std::make_shared<arrow_type>());
   TENZIR_ASSERT(status.ok());
   // We also register the IP type as vast.address for backwards compatibility.
@@ -2099,8 +2165,9 @@ std::shared_ptr<arrow::DataType> ip_type::builder_type::type() const {
 arrow::Status
 ip_type::builder_type::FinishInternal(std::shared_ptr<arrow::ArrayData>* out) {
   if (auto status = arrow::FixedSizeBinaryBuilder::FinishInternal(out);
-      !status.ok())
+      !status.ok()) {
     return status;
+  }
   auto result = caf::get<arrow_type>(*type()).MakeArray(*out);
   *out = result->data();
   return arrow::Status::OK();
@@ -2129,10 +2196,12 @@ ip_type::arrow_type::MakeArray(std::shared_ptr<arrow::ArrayData> data) const {
 arrow::Result<std::shared_ptr<arrow::DataType>>
 ip_type::arrow_type::Deserialize(std::shared_ptr<arrow::DataType> storage_type,
                                  const std::string& serialized) const {
-  if (serialized != name && serialized != "vast.address")
+  if (serialized != name && serialized != "vast.address") {
     return arrow::Status::Invalid("type identifier does not match");
-  if (!storage_type->Equals(storage_type_))
+  }
+  if (!storage_type->Equals(storage_type_)) {
     return arrow::Status::Invalid("storage type does not match");
+  }
   return std::make_shared<arrow_type>();
 }
 
@@ -2200,8 +2269,9 @@ arrow::UInt8Builder& subnet_type::builder_type::length_builder() noexcept {
 }
 
 void subnet_type::arrow_type::register_extension() noexcept {
-  if (arrow::GetExtensionType(name))
+  if (arrow::GetExtensionType(name)) {
     return;
+  }
   auto status = arrow::RegisterExtensionType(std::make_shared<arrow_type>());
   TENZIR_ASSERT(status.ok());
   // We also register the subnet type as vast.subnet for backwards
@@ -2242,10 +2312,12 @@ arrow::Result<std::shared_ptr<arrow::DataType>>
 subnet_type::arrow_type::Deserialize(
   std::shared_ptr<arrow::DataType> storage_type,
   const std::string& serialized) const {
-  if (serialized != name && serialized != "vast.subnet")
+  if (serialized != name && serialized != "vast.subnet") {
     return arrow::Status::Invalid("type identifier does not match");
-  if (!storage_type->Equals(storage_type_))
+  }
+  if (!storage_type->Equals(storage_type_)) {
     return arrow::Status::Invalid("storage type does not match");
+  }
   return std::make_shared<arrow_type>();
 }
 
@@ -2335,8 +2407,9 @@ enumeration_type::make_arrow_builder(arrow::MemoryPool* pool) const noexcept {
 std::string_view enumeration_type::field(uint32_t key) const& noexcept {
   const auto* fields = table().type_as_enumeration_type()->fields();
   TENZIR_ASSERT(fields);
-  if (const auto* field = fields->LookupByKey(key))
+  if (const auto* field = fields->LookupByKey(key)) {
     return field->name()->string_view();
+  }
   return std::string_view{};
 }
 
@@ -2346,8 +2419,9 @@ enumeration_type::fields() const& noexcept {
   TENZIR_ASSERT(fields);
   auto result = std::vector<field_view>{};
   result.reserve(fields->size());
-  for (const auto& field : *fields)
+  for (const auto& field : *fields) {
     result.push_back({field->name()->string_view(), field->key()});
+  }
   return result;
 }
 
@@ -2355,15 +2429,18 @@ std::optional<uint32_t>
 enumeration_type::resolve(std::string_view key) const noexcept {
   const auto* fields = table().type_as_enumeration_type()->fields();
   TENZIR_ASSERT(fields);
-  for (const auto& field : *fields)
-    if (field->name()->string_view() == key)
+  for (const auto& field : *fields) {
+    if (field->name()->string_view() == key) {
       return field->key();
+    }
+  }
   return std::nullopt;
 }
 
 void enumeration_type::arrow_type::register_extension() noexcept {
-  if (arrow::GetExtensionType(name))
+  if (arrow::GetExtensionType(name)) {
     return;
+  }
   auto status = arrow::RegisterExtensionType(
     std::make_shared<arrow_type>(enumeration_type{{"stub"}}));
   TENZIR_ASSERT(status.ok());
@@ -2465,8 +2542,9 @@ arrow::Result<std::shared_ptr<arrow::DataType>>
 enumeration_type::arrow_type::Deserialize(
   std::shared_ptr<arrow::DataType> storage_type,
   const std::string& serialized) const {
-  if (!storage_type->Equals(storage_type_))
+  if (!storage_type->Equals(storage_type_)) {
     return arrow::Status::Invalid("storage type does not match");
+  }
   // Parse the JSON-serialized enumeration_type content.
   const auto json = simdjson::padded_string{serialized};
   auto parser = simdjson::dom::parser{};
@@ -2475,8 +2553,9 @@ enumeration_type::arrow_type::Deserialize(
   // copy of the field name.
   auto fields = std::vector<struct enumeration_type::field>{};
   for (const auto& [key, value] : doc.get_object()) {
-    if (!value.is<uint64_t>())
+    if (!value.is<uint64_t>()) {
       return arrow::Status::SerializationError(value, " is not an uint64_t");
+    }
     fields.push_back({
       std::string{key},
       detail::narrow_cast<uint32_t>(value.get_uint64()),
@@ -2490,10 +2569,11 @@ std::string enumeration_type::arrow_type::Serialize() const {
   auto inserter = std::back_inserter(result);
   fmt::format_to(inserter, "{{ ");
   for (auto first = true; const auto& f : tenzir_type_.fields()) {
-    if (first)
+    if (first) {
       first = false;
-    else
+    } else {
       fmt::format_to(inserter, ", ");
+    }
     fmt::format_to(inserter, "\"{}\": {}", f.name, f.key);
   }
   fmt::format_to(inserter, " }}");
@@ -2708,8 +2788,9 @@ record record_type::construct() const noexcept {
   // We should consider getting rid of vector_map::make_unsafe in the future.
   auto result = record::vector_type{};
   result.reserve(num_fields());
-  for (const auto& field : fields())
+  for (const auto& field : fields()) {
     result.emplace_back(field.name, field.type.construct());
+  }
   return record::make_unsafe(std::move(result));
 }
 
@@ -2717,16 +2798,18 @@ std::shared_ptr<record_type::arrow_type>
 record_type::to_arrow_type() const noexcept {
   auto arrow_fields = arrow::FieldVector{};
   arrow_fields.reserve(num_fields());
-  for (const auto& [name, type] : fields())
+  for (const auto& [name, type] : fields()) {
     arrow_fields.push_back(type.to_arrow_field(name));
+  }
   return std::static_pointer_cast<arrow_type>(arrow::struct_(arrow_fields));
 }
 
 std::shared_ptr<typename arrow::TypeTraits<record_type::arrow_type>::BuilderType>
 record_type::make_arrow_builder(arrow::MemoryPool* pool) const noexcept {
   auto field_builders = std::vector<std::shared_ptr<arrow::ArrayBuilder>>{};
-  for (auto&& field : fields())
+  for (auto&& field : fields()) {
     field_builders.push_back(field.type.make_arrow_builder(pool));
+  }
   return std::make_shared<typename arrow::TypeTraits<arrow_type>::BuilderType>(
     to_arrow_type(), pool, std::move(field_builders));
 }
@@ -2759,8 +2842,9 @@ generator<record_type::leaf_view> record_type::leaves() const noexcept {
     if (index.back() >= fields->size()) {
       history.pop_back();
       index.pop_back();
-      if (!index.empty())
+      if (!index.empty()) {
         ++index.back();
+      }
       continue;
     }
     const auto* field = record->fields()->Get(index.back());
@@ -2829,8 +2913,9 @@ size_t record_type::num_leaves() const noexcept {
     if (index.back() >= fields->size()) {
       history.pop_back();
       index.pop_back();
-      if (!index.empty())
+      if (!index.empty()) {
         ++index.back();
+      }
       continue;
     }
     const auto* field = record->fields()->Get(index.back());
@@ -2886,8 +2971,9 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
     if (index.back() >= fields->size()) {
       history.pop_back();
       index.pop_back();
-      if (!index.empty())
+      if (!index.empty()) {
         ++index.back();
+      }
       continue;
     }
     const auto* field = record->fields()->Get(index.back());
@@ -2911,8 +2997,9 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
       case fbs::type::Type::enumeration_type:
       case fbs::type::Type::list_type:
       case fbs::type::Type::map_type: {
-        if (current_flat_index == flat_index)
+        if (current_flat_index == flat_index) {
           return index;
+        }
         ++current_flat_index;
         ++index.back();
         break;
@@ -2932,6 +3019,7 @@ offset record_type::resolve_flat_index(size_t flat_index) const noexcept {
 
 generator<offset> record_type::resolve_key_or_concept(
   std::string_view key, std::string_view schema_name) const noexcept {
+  table().type_as_record_type();
   auto index = offset{0};
   auto history = std::vector{std::pair{
     table().type_as_record_type(),
@@ -2947,8 +3035,9 @@ generator<offset> record_type::resolve_key_or_concept(
     if (index.back() >= fields->size() || remaining_key.empty()) {
       history.pop_back();
       index.pop_back();
-      if (!index.empty())
+      if (!index.empty()) {
         ++index.back();
+      }
       continue;
     }
     const auto* field = record->fields()->Get(index.back());
@@ -3050,8 +3139,9 @@ record_type::resolve_key(std::string_view key) const noexcept {
 generator<offset>
 record_type::resolve_key_suffix(std::string_view key,
                                 std::string_view prefix) const noexcept {
-  if (key.empty())
+  if (key.empty()) {
     co_return;
+  }
   auto index = offset{0};
   auto history = std::vector{
     std::pair{
@@ -3064,11 +3154,13 @@ record_type::resolve_key_suffix(std::string_view key,
     const auto [prefix_mismatch, key_mismatch]
       = std::mismatch(prefix_begin, prefix.end(), key.begin(), key.end());
     if (prefix_mismatch == prefix.end() && key_mismatch != key.end()
-        && *key_mismatch == '.')
+        && *key_mismatch == '.') {
       history[0].second.push_back(key.substr(1 + key_mismatch - key.begin()));
+    }
     prefix_begin = std::find(prefix_begin, prefix.end(), '.');
-    if (prefix_begin == prefix.end())
+    if (prefix_begin == prefix.end()) {
       break;
+    }
     ++prefix_begin;
   }
   while (!index.empty()) {
@@ -3082,8 +3174,9 @@ record_type::resolve_key_suffix(std::string_view key,
     if (index.back() >= fields->size()) {
       history.pop_back();
       index.pop_back();
-      if (!index.empty())
+      if (!index.empty()) {
         ++index.back();
+      }
       continue;
     }
     const auto* field = record->fields()->Get(index.back());
@@ -3156,13 +3249,16 @@ record_type::resolve_key_suffix(std::string_view key,
 
 generator<offset> record_type::resolve_type_extractor(
   std::string_view type_extractor) const noexcept {
-  if (type_extractor.empty())
+  if (type_extractor.empty()) {
     co_return;
-  if (not type_extractor.starts_with(':'))
+  }
+  if (not type_extractor.starts_with(':')) {
     co_return;
+  }
   type_extractor = type_extractor.substr(1);
-  if (type_extractor.empty())
+  if (type_extractor.empty()) {
     co_return;
+  }
   auto index = offset{0};
   auto history = std::vector{
     table().type_as_record_type(),
@@ -3178,8 +3274,9 @@ generator<offset> record_type::resolve_type_extractor(
     if (index.back() >= fields->size()) {
       history.pop_back();
       index.pop_back();
-      if (!index.empty())
+      if (!index.empty()) {
         ++index.back();
+      }
       continue;
     }
     const auto* field = record->fields()->Get(index.back());
@@ -3351,8 +3448,9 @@ size_t record_type::flat_index(const offset& index) const noexcept {
       case fbs::type::Type::enumeration_type:
       case fbs::type::Type::list_type:
       case fbs::type::Type::map_type: {
-        if (index == current_index)
+        if (index == current_index) {
           return flat_index;
+        }
         ++current_index.back();
         ++flat_index;
         break;
@@ -3443,8 +3541,9 @@ std::optional<record_type> record_type::transform(
     for (; index.back() < layer.size(); ++index.back()) {
       const auto [is_prefix_match, is_exact_match]
         = [&]() noexcept -> std::pair<bool, bool> {
-        if (current == sentinel)
+        if (current == sentinel) {
           return {false, false};
+        }
         const auto [index_mismatch, current_index_mismatch]
           = std::mismatch(index.begin(), index.end(), current->index.begin(),
                           current->index.end());
@@ -3460,16 +3559,18 @@ std::optional<record_type> record_type::transform(
                                                    layer[index.back()].name,
                                                    layer[index.back()].type,
                                                  });
-        for (auto&& field : std::move(new_fields))
+        for (auto&& field : std::move(new_fields)) {
           result.push_back(std::move(field));
+        }
         ++current;
       } else if (is_prefix_match) {
         auto nested_layer = unpacked_layer{};
         nested_layer.reserve(
           caf::get<record_type>(layer[index.back()].type).num_fields());
         for (auto&& [name, type] :
-             caf::get<record_type>(layer[index.back()].type).fields())
+             caf::get<record_type>(layer[index.back()].type).fields()) {
           nested_layer.push_back({std::string{name}, type});
+        }
         auto nested_index = index;
         nested_index.push_back(0);
         nested_layer = impl(impl, std::move(nested_layer),
@@ -3485,20 +3586,23 @@ std::optional<record_type> record_type::transform(
     }
     return result;
   };
-  if (transformations.empty())
+  if (transformations.empty()) {
     return *this;
+  }
   auto current = transformations.begin();
   const auto sentinel = transformations.end();
   auto layer = unpacked_layer{};
   layer.reserve(num_fields());
-  for (auto&& [name, type] : fields())
+  for (auto&& [name, type] : fields()) {
     layer.push_back({std::string{name}, type});
+  }
   // Run the possibly recursive implementation.
   layer = impl(impl, std::move(layer), {0}, current, sentinel);
   TENZIR_ASSERT(current == sentinel, "index out of bounds");
   // Re-assemble the record type after the transformation.
-  if (layer.empty())
+  if (layer.empty()) {
     return {};
+  }
   return record_type{layer};
 }
 
@@ -3510,27 +3614,30 @@ merge(const record_type& lhs, const record_type& rhs,
     return detail::overload{
       [&](const record_type& lhs,
           const record_type& rhs) noexcept -> caf::expected<type> {
-        if (auto result = merge(lhs, rhs, merge_conflict))
+        if (auto result = merge(lhs, rhs, merge_conflict)) {
           return type{*result};
-        else
+        } else {
           return result.error();
+        }
       },
       [&]<concrete_type T, concrete_type U>(
         const T& lhs, const U& rhs) noexcept -> caf::expected<type> {
         switch (merge_conflict) {
           case record_type::merge_conflict::fail: {
             if (congruent(type{lhs}, type{rhs})) {
-              if (lfield.type.name() != rfield.type.name())
+              if (lfield.type.name() != rfield.type.name()) {
                 return caf::make_error(
                   ec::logic_error,
                   fmt::format("conflicting alias types {} and {} for "
                               "field {}; failed to merge {} and {}",
                               lfield.type.name(), rfield.type.name(),
                               rfield.name, lhs, rhs));
+              }
               auto to_vector = [](generator<type::attribute_view>&& rng) {
                 auto result = std::vector<type::attribute_view>{};
-                for (auto&& elem : std::move(rng))
+                for (auto&& elem : std::move(rng)) {
                   result.push_back(std::move(elem));
+                }
                 return result;
               };
               auto lhs_attributes = to_vector(lfield.type.attributes());
@@ -3541,12 +3648,13 @@ merge(const record_type& lhs, const record_type& rhs,
                   return rfield.type.attribute(lhs_attribute.key.data())
                          != lhs_attribute.value;
                 });
-              if (conflicting_attribute)
+              if (conflicting_attribute) {
                 return caf::make_error(ec::logic_error,
                                        fmt::format("conflicting attributes for "
                                                    "field {}; failed to "
                                                    "merge {} and {}",
                                                    rfield.name, lhs, rhs));
+              }
               lhs_attributes.reserve(lhs_attributes.size()
                                      + rhs_attributes.size());
               lhs_attributes.insert(lhs_attributes.end(),
@@ -3598,8 +3706,9 @@ merge(const record_type& lhs, const record_type& rhs,
     }
   }
   auto result = lhs.transform(std::move(transformations));
-  if (err)
+  if (err) {
     return err;
+  }
   TENZIR_ASSERT(result);
   result = result->transform({{
     {result->num_fields() - 1},
@@ -3611,11 +3720,12 @@ merge(const record_type& lhs, const record_type& rhs,
 
 record_type flatten(const record_type& type) noexcept {
   auto fields = std::vector<struct record_type::field>{};
-  for (const auto& [field, offset] : type.leaves())
+  for (const auto& [field, offset] : type.leaves()) {
     fields.push_back({
       type.key(offset),
       field.type,
     });
+  }
   return record_type{fields};
 }
 
@@ -3705,8 +3815,9 @@ int sum_type_access<arrow::DataType>::index_from_type(
                   .c_str());
   if (result == extension_id) {
     for (const auto& [id, index] : extension_table) {
-      if (id == static_cast<const arrow::ExtensionType&>(x).extension_name())
+      if (id == static_cast<const arrow::ExtensionType&>(x).extension_name()) {
         return index;
+      }
     }
     tenzir::die("unexpected Arrow extension type");
   }

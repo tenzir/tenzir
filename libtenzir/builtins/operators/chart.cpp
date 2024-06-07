@@ -195,9 +195,11 @@ public:
     return "chart";
   }
 
-  auto optimize(const expression& filter, event_order order) const
+  auto optimize(const expression& filter, event_order order,
+                select_optimization const& selection) const
     -> optimize_result override {
     (void)filter;
+    (void)selection;
     return optimize_result::order_invariant(*this, order);
   }
 

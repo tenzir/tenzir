@@ -21,11 +21,14 @@
 #include <tenzir/modules.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/select_optimization.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/tql/basic.hpp>
 
 #include <arrow/type.h>
 #include <caf/expected.hpp>
+
+#include <optional>
 
 namespace tenzir::plugins::where {
 
@@ -105,14 +108,15 @@ public:
     return "where";
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection) const
     -> optimize_result override {
     if (filter == trivially_true_expression()) {
-      return optimize_result{expr_.inner, order, nullptr};
+      return optimize_result{expr_.inner, order, nullptr, selection};
     }
     auto combined = normalize_and_validate(conjunction{expr_.inner, filter});
     TENZIR_ASSERT(combined);
-    return optimize_result{std::move(*combined), order, nullptr};
+    return optimize_result{std::move(*combined), order, nullptr, selection};
   }
 
   friend auto inspect(auto& f, where_operator& x) -> bool {

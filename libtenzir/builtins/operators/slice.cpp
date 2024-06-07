@@ -306,7 +306,8 @@ public:
     return "slice";
   }
 
-  auto optimize(const expression& filter, event_order order) const
+  auto optimize(const expression& filter, event_order order,
+                select_optimization const& selection) const
     -> optimize_result override {
     const auto nop_slice = begin_.value_or(0) == 0 and not end_;
     const auto reverse = stride_.value_or(1) == -1;
@@ -315,17 +316,10 @@ public:
     if (nop_slice and nop_stride) {
       // If there's neither a begin nor an end, then this operator is a no-op.
       // We optimize it away here.
-      return optimize_result{
-        filter,
-        order,
-        nullptr,
-      };
+      return optimize_result{filter, order, nullptr, selection};
     }
-    return optimize_result{
-      std::nullopt,
-      event_order::ordered,
-      copy(),
-    };
+    return optimize_result{std::nullopt, event_order::ordered, copy(),
+                           selection};
   }
 
   friend auto inspect(auto& f, slice_operator& x) -> bool {

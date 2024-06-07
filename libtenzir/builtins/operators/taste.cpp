@@ -45,12 +45,14 @@ public:
     return "taste";
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection) const
     -> optimize_result override {
     // Note: The `unordered` means that we do not necessarily return the first
     // `limit_` events.
-    (void)filter, (void)order;
-    return optimize_result{std::nullopt, event_order::unordered, copy()};
+    (void)filter, (void)order, void(selection);
+    return optimize_result{std::nullopt, event_order::unordered, copy(),
+                           std::nullopt};
   }
 
   friend auto inspect(auto& f, taste_operator& x) -> bool {

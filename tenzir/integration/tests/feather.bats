@@ -72,3 +72,15 @@ setup() {
   tenzir "from ${file}.1M read feather | summarize count(.)" |
     check perl -pe 's/truncated \d+/truncated X/g'
 }
+
+@test "select optimization" {
+  file=$(mktemp)
+  check tenzir "from ${BATS_TENZIR_DATADIR}/inputs/zeek/conn.log.gz read zeek-tsv | to ${file} write feather"
+  check tenzir "from ${file} read feather | slice 1000:1010 | select id | write json"
+  check tenzir "from ${file} read feather | slice 1000:1010 | select id.orig_h | write json"
+  check tenzir "from ${file} read feather | slice 1000:1010 | select id | select service | write json"
+  check tenzir "from ${file} read feather | slice 1000:1010 | select duration, missed_bytes, resp_bytes"
+  check tenzir "from ${file} read feather | slice 1000:1010 | select duration"
+  check tenzir "from ${file} read feather | pass | select duration | slice 1000:1010"
+  check tenzir "from ${file} read feather | batch 256 | select duration | slice 1000:1010"
+}

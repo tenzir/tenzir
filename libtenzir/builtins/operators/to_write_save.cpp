@@ -52,12 +52,13 @@ throw_saver_not_found(located<std::string_view> x, bool use_uri_schemes) {
       available.push_back(p->name());
     }
   }
-  if (use_uri_schemes)
+  if (use_uri_schemes) {
     diagnostic::error("saver for `{}` scheme could not be found", x.inner)
       .primary(x.source)
       .hint("must be one of {}", fmt::join(available, ", "))
       .docs("https://docs.tenzir.com/connectors")
       .throw_();
+  }
   diagnostic::error("saver `{}` could not be found", x.inner)
     .primary(x.source)
     .hint("must be one of {}", fmt::join(available, ", "))
@@ -132,10 +133,11 @@ public:
           co_return;
         }
       }
-      if (state)
+      if (state) {
         for (auto&& chunk : state->first->finish()) {
           co_yield std::move(chunk);
         }
+      }
     }
   }
 
@@ -143,9 +145,11 @@ public:
     return "write";
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection) const
     -> optimize_result override {
-    (void)filter, (void)order;
+    (void)selection, (void)filter, (void)order;
+
     return do_not_optimize(*this);
   }
 
@@ -240,9 +244,10 @@ public:
     return saver_->internal();
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection) const
     -> optimize_result override {
-    (void)filter, (void)order;
+    (void)selection, (void)filter, (void)order;
     return do_not_optimize(*this);
   }
 
@@ -347,10 +352,12 @@ public:
     return "internal-write-save";
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection) const
     -> optimize_result override {
-    (void)filter, (void)order;
-    return optimize_result{std::nullopt, event_order::schema, copy()};
+    (void)filter, (void)order, void(selection);
+    return optimize_result{std::nullopt, event_order::schema, copy(),
+                           std::nullopt};
   }
 
   auto internal() const -> bool override {
@@ -432,8 +439,9 @@ public:
     }
     auto ops = std::vector<operator_ptr>{};
     ops.push_back(std::make_unique<write_operator>(std::move(printer)));
-    if (compress)
+    if (compress) {
       ops.push_back(std::move(compress));
+    }
     ops.push_back(std::make_unique<save_operator>(std::move(saver)));
     return std::make_unique<pipeline>(std::move(ops));
   }

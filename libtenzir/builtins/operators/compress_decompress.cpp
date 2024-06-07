@@ -237,8 +237,10 @@ public:
     return "compress";
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection) const
     -> optimize_result override {
+    (void)selection;
     (void)filter;
     (void)order;
     return do_not_optimize(*this);
@@ -340,8 +342,10 @@ public:
     return "decompress";
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection) const
     -> optimize_result override {
+    (void)selection;
     (void)filter;
     (void)order;
     return do_not_optimize(*this);

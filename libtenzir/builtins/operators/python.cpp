@@ -428,11 +428,14 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& /*filter*/, event_order /*order*/) const
+  auto optimize(expression const& /*filter*/, event_order /*order*/,
+                select_optimization const& selection) const
     -> optimize_result override {
+    (void)selection;
     // Note: The `unordered` means that we do not necessarily return the first
     // `limit_` events.
-    return optimize_result{std::nullopt, event_order::unordered, copy()};
+    return optimize_result{std::nullopt, event_order::unordered, copy(),
+                           std::nullopt};
   }
 
   friend auto inspect(auto& f, python_operator& x) -> bool {

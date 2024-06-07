@@ -105,11 +105,12 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection) const
     -> optimize_result override {
     if (speed_ == 1.0 and not start_) {
       // If this operator is a no-op we can just remove it during optimization.
-      return optimize_result{filter, order, nullptr};
+      return optimize_result{filter, order, nullptr, selection};
     }
     return do_not_optimize(*this);
   }

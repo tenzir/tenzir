@@ -67,9 +67,10 @@ public:
       not dynamic_cast<const scheduled_execution_operator*>(op_.get()));
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
-    auto result = op_->optimize(filter, order);
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection) const
+    -> optimize_result override {
+    auto result = op_->optimize(filter, order, selection);
     if (not result.replacement) {
       return result;
     }
@@ -90,8 +91,8 @@ public:
   }
 
   template <class Input, class Output>
-  auto run(operator_input input,
-           operator_control_plane& ctrl) const -> generator<Output> {
+  auto run(operator_input input, operator_control_plane& ctrl) const
+    -> generator<Output> {
     auto alarm_clock = ctrl.self().spawn(make_alarm_clock);
     auto next_run = scheduler_.next_after(time::clock::now());
     auto done = false;
@@ -275,8 +276,8 @@ public:
     return f.object(x).fields(f.field("interval", x.interval_));
   }
 
-  auto
-  next_after(time::clock::time_point now) const -> time::clock::time_point {
+  auto next_after(time::clock::time_point now) const
+    -> time::clock::time_point {
     return std::chrono::time_point_cast<time::clock::time_point::duration>(
       now + interval_);
   }
@@ -312,8 +313,8 @@ public:
     : cronexpr_{std::move(expr)} {
   }
 
-  auto
-  next_after(time::clock::time_point now) const -> time::clock::time_point {
+  auto next_after(time::clock::time_point now) const
+    -> time::clock::time_point {
     const auto tt = time::clock::to_time_t(now);
     return time::clock::from_time_t(detail::cron::cron_next(cronexpr_, tt));
   }

@@ -76,10 +76,12 @@ public:
     return "import";
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection) const
     -> optimize_result override {
-    (void)filter, (void)order;
-    return optimize_result{std::nullopt, event_order::unordered, copy()};
+    (void)selection, (void)filter, (void)order;
+    return optimize_result{std::nullopt, event_order::unordered, copy(),
+                           std::nullopt};
   }
 
   friend auto inspect(auto& f, import_operator& x) -> bool {

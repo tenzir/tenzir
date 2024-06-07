@@ -1,0 +1,2 @@
+`select` will return empty events when the selection has 
+no available fields to select.

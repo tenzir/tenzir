@@ -98,10 +98,12 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection) const
     -> optimize_result override {
     return optimize_result{
-      filter, order, std::make_unique<batch_operator>(limit_, timeout_, order)};
+      filter, order, std::make_unique<batch_operator>(limit_, timeout_, order),
+      selection};
   }
 
   auto name() const -> std::string override {

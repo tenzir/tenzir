@@ -19,11 +19,13 @@
 #include <parquet/arrow/reader.h>
 #include <parquet/arrow/writer.h>
 
+#include <optional>
+
 namespace tenzir::plugins::parquet {
 
 namespace {
-
-auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
+auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl,
+                   located<select_optimization> selection)
   -> generator<table_slice> {
   auto parquet_chunk = chunk_ptr{};
   for (auto&& chunk : drain_bytes(std::move(input))) {
@@ -60,9 +62,52 @@ auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
       .emit(ctrl.diagnostics());
     co_return;
   }
-  std::shared_ptr<::arrow::RecordBatchReader> rb_reader;
-  auto record_batch_reader_status
-    = out_buffer->GetRecordBatchReader(&rb_reader);
+  std::shared_ptr<::arrow::Schema> arrow_schema;
+  auto included_cols = std::vector<int>{};
+  auto included_rows = std::vector<int>{};
+  auto schema_status = out_buffer->GetSchema(&arrow_schema);
+  if (!schema_status.ok()) {
+    diagnostic::error("{}", schema_status.ToStringWithoutContextLines())
+      .note("failed read record batch")
+      .emit(ctrl.diagnostics());
+    co_return;
+  }
+  if (!selection.inner.fields.empty()) {
+    auto schema = type::from_arrow(*arrow_schema);
+    const auto& layout = caf::get<record_type>(schema);
+    for (const auto& field : selection.inner.fields) {
+      for (const auto& index : schema.resolve(field)) {
+        auto field_type = layout.field(index).type;
+        const auto* field_record_type = caf::get_if<record_type>(&field_type);
+        if (not field_record_type) {
+          included_cols.push_back(static_cast<int>(layout.flat_index(index)));
+          continue;
+        }
+        for (const auto& leaf : field_record_type->leaves()) {
+          auto nested_index = index;
+          for (auto i : leaf.index) {
+            nested_index.push_back(i);
+          }
+          included_cols.push_back(
+            static_cast<int>(layout.flat_index(nested_index)));
+        }
+      }
+    }
+    std::sort(included_cols.begin(), included_cols.end());
+    included_cols.erase(std::unique(included_cols.begin(), included_cols.end()),
+                        included_cols.end());
+    for (int i = 0; i < out_buffer->num_row_groups(); i++) {
+      included_rows.push_back(i);
+    }
+  }
+  std::unique_ptr<::arrow::RecordBatchReader> rb_reader{};
+  auto record_batch_reader_status = arrow::Status{};
+  if (!selection.inner.fields.empty()) {
+    record_batch_reader_status = out_buffer->GetRecordBatchReader(
+      included_rows, included_cols, &rb_reader);
+  } else {
+    record_batch_reader_status = out_buffer->GetRecordBatchReader(&rb_reader);
+  }
   if (!record_batch_reader_status.ok()) {
     diagnostic::error("{}",
                       record_batch_reader_status.ToStringWithoutContextLines())
@@ -97,6 +142,9 @@ public:
 class parquet_parser final : public plugin_parser {
 public:
   parquet_parser() = default;
+  parquet_parser(located<select_optimization> selection)
+    : selection_{std::move(selection)} {
+  }
 
   auto name() const -> std::string override {
     return "parquet";
@@ -105,12 +153,26 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    return parse_parquet(std::move(input), ctrl);
+    return parse_parquet(std::move(input), ctrl, selection_);
+  }
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection)
+    -> std::optional<optimize_parser_result> override {
+    (void)filter;
+    (void)order;
+    if (selection.fields.empty()) {
+      return std::nullopt;
+    }
+    return optimize_parser_result{
+      std::make_unique<parquet_parser>(located(selection, location::unknown)),
+      selection_optimized::yes, filter_optimized::no};
+  }
+  friend auto inspect(auto& f, parquet_parser& x) -> bool {
+    return f.object(x).fields(f.field("selection", x.selection_));
   }
 
-  friend auto inspect(auto& f, parquet_parser& x) -> bool {
-    return f.object(x).fields();
-  }
+private:
+  located<select_optimization> selection_{};
 };
 
 class parquet_printer final : public plugin_printer {

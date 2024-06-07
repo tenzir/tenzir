@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/select_optimization.hpp"
+
 #include <tenzir/actors.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/atoms.hpp>
@@ -30,6 +32,8 @@
 #include <caf/timespan.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include <memory>
+#include <optional>
 #include <queue>
 
 namespace tenzir::plugins::export_ {
@@ -249,9 +253,11 @@ public:
     return true;
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection) const
     -> optimize_result override {
     (void)order;
+    (void)selection;
     if (mode_.live) {
       return do_not_optimize(*this);
     }
@@ -264,9 +270,9 @@ public:
     }
     auto expr = clauses.empty() ? trivially_true_expression()
                                 : expression{conjunction{std::move(clauses)}};
-    return optimize_result{trivially_true_expression(), event_order::ordered,
-                           std::make_unique<export_operator>(std::move(expr),
-                                                             mode_)};
+    return optimize_result{
+      trivially_true_expression(), event_order::ordered,
+      std::make_unique<export_operator>(std::move(expr), mode_), std::nullopt};
   }
 
   friend auto inspect(auto& f, export_operator& x) -> bool {

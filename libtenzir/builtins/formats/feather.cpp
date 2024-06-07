@@ -31,7 +31,9 @@
 #include <arrow/util/key_value_metadata.h>
 #include <caf/expected.hpp>
 
+#include <optional>
 #include <queue>
+#include <vector>
 
 namespace tenzir::plugins::feather {
 
@@ -285,22 +287,108 @@ class callback_listener : public arrow::ipc::Listener {
 public:
   callback_listener() = default;
 
-  arrow::Status OnRecordBatchDecoded(
-    std::shared_ptr<arrow::RecordBatch> record_batch) override {
+  auto OnRecordBatchDecoded(std::shared_ptr<arrow::RecordBatch> record_batch)
+    -> arrow::Status override {
     record_batch_buffer.push(std::move(record_batch));
     return arrow::Status::OK();
   }
 
+  auto OnSchemaDecoded(std::shared_ptr<arrow::Schema> schema)
+    -> arrow::Status override {
+    decoded_schema = std::move(schema);
+    return arrow::Status::OK();
+  }
+
+  std::shared_ptr<arrow::Schema> decoded_schema;
   std::queue<std::shared_ptr<arrow::RecordBatch>> record_batch_buffer;
 };
 
-auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
+auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl,
+                   const located<select_optimization> selection)
   -> generator<table_slice> {
   auto byte_reader = make_byte_reader(std::move(input));
-  auto listener = std::make_shared<callback_listener>();
-  auto stream_decoder = arrow::ipc::StreamDecoder(listener);
+  auto schema_listener = std::make_shared<callback_listener>();
+  auto read_options = arrow::ipc::IpcReadOptions::Defaults();
+  auto schema_stream_decoder
+    = arrow::ipc::StreamDecoder(schema_listener, read_options);
+  type schema;
+  auto buffered_schema_data = std::vector<std::shared_ptr<arrow::Buffer>>{};
   auto truncated_bytes = size_t{0};
   auto decoded_once = false;
+  auto further_selection_needed = false;
+  while (true) {
+    auto required_size
+      = detail::narrow_cast<size_t>(schema_stream_decoder.next_required_size());
+    auto payload = byte_reader(required_size);
+    if (!payload) {
+      co_yield {};
+      continue;
+    }
+    truncated_bytes += payload->size();
+    if (payload->size() < required_size) {
+      if (truncated_bytes != 0 and payload->size() != 0) {
+        // Ideally this always would be just a warning, but the stream decoder
+        // happily continues to consume invalid bytes. E.g., trying to read a
+        // JSON file with this parser will just swallow all bytes, emitting
+        // this one error at the very end. Not a single time does consuming a
+        // buffer actually fail. We should probably look into limiting the
+        // memory usage here, as the stream decoder will keep
+        // consumed-but-not-yet-converted buffers in memory.
+        diagnostic::warning("truncated {} trailing bytes", truncated_bytes)
+          .severity(decoded_once ? severity::warning : severity::error)
+          .emit(ctrl.diagnostics());
+      }
+      co_return;
+    }
+    auto arrow_buffer = as_arrow_buffer(std::move(payload));
+    buffered_schema_data.push_back(arrow_buffer);
+    auto decode_result = schema_stream_decoder.Consume(std::move(arrow_buffer));
+    if (!decode_result.ok()) {
+      diagnostic::error("{}", decode_result.ToStringWithoutContextLines())
+        .note("failed to decode the byte stream into a record batch")
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+    if (schema_listener->decoded_schema) {
+      decoded_once = false;
+      schema = type::from_arrow(*schema_listener->decoded_schema);
+      break;
+    }
+  }
+  auto indices = std::vector<tenzir::offset>{};
+  if (!selection.inner.fields.empty()) {
+    for (const auto& field : selection.inner.fields) {
+      for (auto index : schema.resolve(field)) {
+        if (index.size() > 1) {
+          further_selection_needed = true;
+        }
+        read_options.included_fields.push_back(static_cast<int>(index[0]));
+        indices.push_back(std::move(index));
+      }
+    }
+    std::sort(indices.begin(), indices.end());
+    indices.erase(std::unique(indices.begin(), indices.end()), indices.end());
+    std::sort(read_options.included_fields.begin(),
+              read_options.included_fields.end());
+    read_options.included_fields.erase(
+      std::unique(read_options.included_fields.begin(),
+                  read_options.included_fields.end()),
+      read_options.included_fields.end());
+    for (size_t i = 0; i < indices.size(); i++) {
+      indices[i][0] = i;
+    }
+  }
+  auto listener = std::make_shared<callback_listener>();
+  auto stream_decoder = arrow::ipc::StreamDecoder(listener, read_options);
+  for (auto&& buffer : buffered_schema_data) {
+    auto decode_result = stream_decoder.Consume(buffer);
+    if (!decode_result.ok()) {
+      diagnostic::error("{}", decode_result.ToStringWithoutContextLines())
+        .note("failed to decode the byte stream into a record batch")
+        .emit(ctrl.diagnostics());
+      co_return;
+    }
+  }
   while (true) {
     auto required_size
       = detail::narrow_cast<size_t>(stream_decoder.next_required_size());
@@ -314,11 +402,11 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
       if (truncated_bytes != 0 and payload->size() != 0) {
         // Ideally this always would be just a warning, but the stream decoder
         // happily continues to consume invalid bytes. E.g., trying to read a
-        // JSON file with this parser will just swallow all bytes, emitting this
-        // one error at the very end. Not a single time does consuming a buffer
-        // actually fail. We should probably look into limiting the memory usage
-        // here, as the stream decoder will keep consumed-but-not-yet-converted
-        // buffers in memory.
+        // JSON file with this parser will just swallow all bytes, emitting
+        // this one error at the very end. Not a single time does consuming a
+        // buffer actually fail. We should probably look into limiting the
+        // memory usage here, as the stream decoder will keep
+        // consumed-but-not-yet-converted buffers in memory.
         diagnostic::warning("truncated {} trailing bytes", truncated_bytes)
           .severity(decoded_once ? severity::warning : severity::error)
           .emit(ctrl.diagnostics());
@@ -340,11 +428,11 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
       listener->record_batch_buffer.pop();
       auto validate_status = batch->Validate();
       TENZIR_ASSERT(validate_status.ok(), validate_status.ToString().c_str());
-      // We check whether the name metadatum from Tenzir's conversion to record
-      // batches is still present. If it is not, then we stop parsing because we
-      // cannot feasibly continue.
-      // TODO: Implement a best-effort conversion for record batches coming from
-      // other tools to Tenzir's supported subset and required metadata.
+      // We check whether the name metadatum from Tenzir's conversion to
+      // record batches is still present. If it is not, then we stop parsing
+      // because we cannot feasibly continue.
+      // TODO: Implement a best-effort conversion for record batches coming
+      // from other tools to Tenzir's supported subset and required metadata.
       const auto& metadata = batch->schema()->metadata();
       if (not metadata
           or std::find(metadata->keys().begin(), metadata->keys().end(),
@@ -355,7 +443,11 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
           .emit(ctrl.diagnostics());
         co_return;
       }
-      co_yield table_slice(batch);
+      if (further_selection_needed) {
+        co_yield select_columns(table_slice(batch), indices);
+      } else {
+        co_yield table_slice(batch);
+      }
     }
   }
 }
@@ -375,8 +467,8 @@ auto print_feather(
       .emit(ctrl.diagnostics());
     co_return;
   }
-  // We must finish the clear the buffer because the provided APIs do not offer
-  // a scrape and rewrite on the allocated same memory.
+  // We must finish the clear the buffer because the provided APIs do not
+  // offer a scrape and rewrite on the allocated same memory.
   auto finished_buffer_result = sink->Finish();
   if (!finished_buffer_result.ok()) {
     diagnostic::error(
@@ -413,7 +505,9 @@ public:
 class feather_parser final : public plugin_parser {
 public:
   feather_parser() = default;
-
+  feather_parser(located<select_optimization> selection)
+    : selection_{std::move(selection)} {
+  }
   auto name() const -> std::string override {
     return "feather";
   }
@@ -421,12 +515,28 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    return parse_feather(std::move(input), ctrl);
+    return parse_feather(std::move(input), ctrl, selection_);
   }
 
   friend auto inspect(auto& f, feather_parser& x) -> bool {
-    return f.object(x).fields();
+    return f.object(x).fields(f.field("selection", x.selection_));
   }
+
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection)
+    -> std::optional<optimize_parser_result> override {
+    (void)filter;
+    (void)order;
+    if (selection.fields.empty()) {
+      return std::nullopt;
+    }
+    return optimize_parser_result{
+      std::make_unique<feather_parser>(located(selection, location::unknown)),
+      selection_optimized::yes, filter_optimized::no};
+  }
+
+private:
+  located<select_optimization> selection_{};
 };
 
 class feather_printer final : public plugin_printer {

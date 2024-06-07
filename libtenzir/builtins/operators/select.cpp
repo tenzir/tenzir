@@ -19,6 +19,7 @@
 #include <caf/expected.hpp>
 
 #include <algorithm>
+#include <optional>
 #include <utility>
 
 namespace tenzir::plugins::select {
@@ -77,10 +78,22 @@ public:
     return "select";
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection) const
     -> optimize_result override {
     (void)filter;
-    return optimize_result::order_invariant(*this, order);
+    if (config_.fields.empty() && selection.fields.empty()) {
+      return optimize_result::order_invariant(*this, order);
+    }
+    // TODO: Optimize multiple selection calls in the same pipeline
+    if (!selection.fields.empty()) {
+      return optimize_result{
+        std::nullopt, order,
+        std::make_unique<select_operator>(configuration{selection.fields}),
+        select_optimization(config_.fields)};
+    }
+    return optimize_result{std::nullopt, order, nullptr,
+                           select_optimization(config_.fields)};
   }
 
   friend auto inspect(auto& f, select_operator& x) -> bool {

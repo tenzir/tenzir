@@ -224,10 +224,12 @@ public:
     return "sort";
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection) const
     -> optimize_result override {
+    (void)selection;
     return optimize_result{filter, stable_ ? order : event_order::unordered,
-                           copy()};
+                           copy(), selection};
   }
 
   friend auto inspect(auto& f, sort_operator& x) -> bool {

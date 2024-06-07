@@ -185,10 +185,13 @@ public:
     return "deduplicate";
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection) const
     -> optimize_result override {
     (void)order;
-    return optimize_result{filter, event_order::schema, copy()};
+    (void)selection;
+    // TODO: selection optimization is possible
+    return optimize_result{filter, event_order::schema, copy(), std::nullopt};
   }
 
   friend auto inspect(auto& f, deduplicate_operator& x) -> bool {

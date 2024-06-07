@@ -6,12 +6,16 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/loader_saver_resolver.hpp>
 #include <tenzir/diagnostics.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/prepend_token.hpp>
 #include <tenzir/tql/fwd.hpp>
 #include <tenzir/tql/parser.hpp>
+
+#include <optional>
 
 namespace tenzir::plugins::from {
 namespace {
@@ -40,9 +44,10 @@ public:
     return "load";
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection) const
     -> optimize_result override {
-    (void)filter, (void)order;
+    (void)filter, (void)order, void(selection);
     return do_not_optimize(*this);
   }
 
@@ -86,22 +91,34 @@ public:
     return "read";
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection) const
     -> optimize_result override {
-    (void)filter;
-    if (order == event_order::ordered) {
-      return do_not_optimize(*this);
-    }
     // TODO: We could also propagate `where #schema == "..."` to the parser.
-    auto parser_opt = parser_->optimize(order);
+    (void)filter;
+    auto parser_opt = parser_->optimize(filter, order, selection);
     if (not parser_opt) {
       return do_not_optimize(*this);
     }
-    return optimize_result{
-      std::nullopt,
-      event_order::ordered,
-      std::make_unique<read_operator>(std::move(parser_opt)),
-    };
+    TENZIR_ASSERT(parser_opt->replacement);
+    if (parser_opt->selection_opt == selection_optimized::yes
+        && parser_opt->filter_opt == filter_optimized::no) {
+      return optimize_result{
+        std::nullopt, event_order::ordered,
+        std::make_unique<read_operator>(std::move(parser_opt->replacement)),
+        select_optimization::no_select_optimization()};
+    }
+    // otherwise, order optimized will never insert select/filter
+    if (parser_opt->selection_opt == selection_optimized::no
+        && parser_opt->filter_opt == filter_optimized::no) {
+      return optimize_result{
+        std::nullopt, event_order::ordered,
+        std::make_unique<read_operator>(std::move(parser_opt->replacement)),
+        std::nullopt};
+    }
+    // TODO: There are more combinations of filter and selections returned from
+    // optimize()
+    TENZIR_UNIMPLEMENTED();
   }
 
   friend auto inspect(auto& f, read_operator& x) -> bool {

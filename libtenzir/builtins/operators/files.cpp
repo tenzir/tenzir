@@ -201,8 +201,10 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(expression const& filter, event_order order,
+                select_optimization const& selection) const
     -> optimize_result override {
+    (void)selection;
     (void)order;
     (void)filter;
     return do_not_optimize(*this);
