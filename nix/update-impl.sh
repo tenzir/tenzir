@@ -24,6 +24,7 @@ update-source-github() {
   _rev="$(get-submodule-rev "${_submodule}")"
   if [[ "${_version}" == "" ]]; then
     git -C "${toplevel}" submodule update --init "${_submodule}"
+    git -C "${_path}" fetch --tags
     _version="$(git -C "${_path}" describe --tag)"
   fi
 
