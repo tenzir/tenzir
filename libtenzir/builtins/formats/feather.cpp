@@ -514,6 +514,10 @@ public:
     return false;
   };
 
+  auto prints_text_format() const -> bool override {
+    return false;
+  }
+
   friend auto inspect(auto& f, feather_printer& x) -> bool {
     return f.object(x).fields(f.field("options", x.options_));
   }

@@ -454,6 +454,8 @@ public:
   /// Returns whether the printer allows for joining output streams into a
   /// single saver.
   virtual auto allows_joining() const -> bool = 0;
+
+  virtual auto prints_text_format() const -> bool = 0;
 };
 
 /// @see operator_parser_plugin

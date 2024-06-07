@@ -1410,6 +1410,10 @@ public:
     return true;
   };
 
+  auto prints_text_format() const -> bool override {
+    return true;
+  }
+
   friend auto inspect(auto& f, json_printer& x) -> bool {
     return f.apply(x.args_);
   }

@@ -250,6 +250,10 @@ public:
     return true;
   };
 
+  auto prints_text_format() const -> bool override {
+    return true;
+  }
+
   friend auto inspect(auto& f, yaml_printer& x) -> bool {
     return f.object(x).fields();
     return true;

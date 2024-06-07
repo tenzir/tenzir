@@ -122,7 +122,8 @@ public:
             return not chunk or chunk->size() == 0;
           });
           auto validate_and_add = [&](std::string_view str) {
-            if (not arrow::util::ValidateUTF8(str)) {
+            if (not printer_->prints_text_format()
+                || not arrow::util::ValidateUTF8(str)) {
               diagnostic::error("printer must be text-based")
                 .note("printed result is not valid UTF8")
                 .primary(printer_name_->source)
@@ -146,13 +147,6 @@ public:
           }
         }
         auto series = builder.finish_assert_one_array();
-        auto check_utf_8
-          = arrow::compute::CallFunction("utf8_is_printable", {series.array});
-        if (not check_utf_8.ok()) {
-          diagnostic::error("{}. {} does not print UTF8. ", printer_->name(),
-                            check_utf_8.status().ToString())
-            .throw_();
-        }
         return {{
           {field.name, series.type},
           series.array,
