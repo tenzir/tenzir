@@ -471,13 +471,13 @@ EOF
 }
 
 # bats test_tags=pipelines
-@test "Print CEF in JSON" {
+@test "Print JSON in CEF" {
   check tenzir "read cef | slice 1:3 | print extension json | select extension" <${INPUTSDIR}/cef/forcepoint.log
   check ! tenzir "read cef | print extension.dvc json " <${INPUTSDIR}/cef/forcepoint.log
 }
 
 # bats test_tags=pipelines
-@test "Print CEF in CSV" {
+@test "Print CSV in CEF" {
   check tenzir "read cef | slice 1:2 | print extension csv" <${INPUTSDIR}/cef/forcepoint.log
   check tenzir "read cef | slice 1:2 | print extension csv --no-header | select extension" <${INPUTSDIR}/cef/forcepoint.log
 }
@@ -487,7 +487,7 @@ EOF
   check ! tenzir "read cef | print extension feather" <${INPUTSDIR}/cef/forcepoint.log
 }
 
-@test "Print nested JSON in CSV and JSON" {
+@test "Print nested JSON and CSV in JSON " {
   check tenzir "read json | print a csv | parse a csv" <${INPUTSDIR}/json/nested-object.json
   check tenzir "read json | print a.b csv" <${INPUTSDIR}/json/nested-object.json
   check tenzir "read json | print a.b json | parse a.b json" <${INPUTSDIR}/json/nested-object.json
