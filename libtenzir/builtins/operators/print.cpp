@@ -138,17 +138,18 @@ public:
               .emit(ctrl.diagnostics());
             builder.null();
             continue;
-          } catch (...) {
-            std::rethrow_exception(std::current_exception());
           }
           auto validate_and_add = [&](std::string_view str) {
             TENZIR_ASSERT_EXPENSIVE(arrow::util::ValidateUTF8(str));
+            TENZIR_ASSERT(not str.empty());
+            if (str.back() == '\n') {
+              str.remove_suffix(1);
+            }
             builder.data(str);
           };
           if (chunks.empty()) {
             builder.data("");
-          }
-          if (chunks.size() == 1) {
+          } else if (chunks.size() == 1) {
             const auto* data = reinterpret_cast<const char*>(chunks[0]->data());
             validate_and_add({data, data + chunks[0]->size()});
           } else {
