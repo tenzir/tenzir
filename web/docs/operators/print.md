@@ -16,8 +16,8 @@ print <input> <printer> <args>...
 
 ## Description
 
-The `print` operator prints a given `<input>` field of type `record` using `<printer>` 
-and replaces this field with the result. 
+The `print` operator prints a given `<input>` field of type `record` using `<printer>`
+and replaces this field with the result.
 
 ### `<input>`
 
@@ -25,13 +25,13 @@ Specifies the field of interest. The field must be a record type.
 
 ### `<printer>` `<args>`
 
-Specifies the printer format and the corresponding arguments specific to each printer. 
-`<printer>` can be one of the following` text-based printers in [formats](../formats.md): 
+Specifies the printer format and the corresponding arguments specific to each printer.
+`<printer>` can be one of the following` text-based printers in [formats](../formats.md):
 json, lines, xsv, yaml, zeek-tsv.
 
 ## Examples
 
-Print [JSON](../formats/json.md) from the `flow` field stored in `suricata.json`, 
+Print [JSON](../formats/json.md) from the `flow` field stored in `suricata.json`,
 returning the result from CSV printer as the new `flow` field.
 
 ```
