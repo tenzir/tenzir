@@ -16,9 +16,17 @@ parse <input> <parser> <args>...
 
 ## Description
 
-The `parse` operator parses a given `<input>` field of type `string` using
-`<parser>` and replaces this field with the result. `<parser>` can be one of the
-parsers in [formats](../formats.md).
+The `parse` operator parses a given `<input>` field using `<parser>` 
+and replaces this field with the result. 
+
+### `<input>`
+
+Specifies the field of interest. The field must be of type `string`.
+
+### `<parser>` `<args>`
+
+Specifies the parser format and the corresponding arguments specific to each 
+parser. `<parser>` can be one of the parsers in [formats](../formats.md).
 
 ## Examples
 
