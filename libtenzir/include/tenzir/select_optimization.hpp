@@ -19,23 +19,17 @@ namespace tenzir {
 /// `select` a, b.c
 /// select_optimization is used in pipeline optimize() to push selection
 /// information through the pipeline
-class select_optimization {
-public:
+struct select_optimization {
   // an empty fields vector represents no selection
   std::vector<std::string> fields{};
-  select_optimization() = default;
-  explicit select_optimization(std::vector<std::string> fields)
-    : fields{std::move(fields)} {
-  }
 
   static auto no_select_optimization() -> select_optimization {
     return select_optimization(std::vector<std::string>{});
   }
-};
 
-template <class Inspector>
-auto inspect(Inspector& f, select_optimization& x) {
-  return f.object(x).pretty_name("expression").fields(f.field("node", x.fields));
-}
+  friend auto inspect(auto& f, select_optimization& x) -> bool {
+    return f.object(x).fields(f.field("fields", x.fields));
+  }
+};
 
 } // namespace tenzir
