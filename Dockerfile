@@ -178,6 +178,15 @@ FROM development AS plugins-source
 WORKDIR /tmp/tenzir
 COPY contrib/tenzir-plugins ./contrib/tenzir-plugins
 
+FROM plugins-source AS azure-log-analytics-plugin
+
+RUN cmake -S contrib/tenzir-plugins/build-azure-log-analytics -B build-azure-log-analytics -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-azure-log-analytics --parallel && \
+      cmake --build build-azure-log-analytics --target integration && \
+      DESTDIR=/plugin/build-azure-log-analytics cmake --install build-azure-log-analytics --strip --component Runtime && \
+      rm -rf build-build-azure-log-analytics
+
 FROM plugins-source AS compaction-plugin
 
 RUN cmake -S contrib/tenzir-plugins/compaction -B build-compaction -G Ninja \
@@ -227,6 +236,7 @@ RUN cmake -S contrib/tenzir-plugins/vast -B build-vast -G Ninja \
 
 FROM tenzir-de AS tenzir-ce
 
+COPY --from=azure-log-analytics-plugin --chown=tenzir:tenzir /plugin/azure-log-analytics /
 COPY --from=compaction-plugin --chown=tenzir:tenzir /plugin/compaction /
 COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
 COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline-manager /
