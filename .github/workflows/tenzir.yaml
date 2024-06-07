@@ -806,6 +806,9 @@ jobs:
           - name: AMQP
             target: amqp
             path: plugins/amqp
+          - name: Azure Log Analytics
+            target: azure-log-analytics
+            path: contrib/tenzir-plugins/azure-log-analytics
           - name: Compaction
             target: compaction
             path: contrib/tenzir-plugins/compaction

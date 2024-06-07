@@ -21,8 +21,6 @@ namespace tenzir {
 /// Options for a cURL-based transfer.
 /// @relates transfer
 struct transfer_options {
-  transfer_options() = default;
-
   bool verbose = false;
   std::string default_protocol{};
   std::chrono::milliseconds poll_timeout{100};
@@ -37,7 +35,7 @@ struct transfer_options {
     return f.object(x)
       .pretty_name("tenzir.transfer_options")
       .fields(f.field("verbose", x.verbose),
-          f.field("default_protocol", x.default_protocol),
+              f.field("default_protocol", x.default_protocol),
               f.field("poll_timeout", x.poll_timeout),
               f.field("username", x.username), f.field("password", x.password),
               f.field("authzid", x.authzid),
