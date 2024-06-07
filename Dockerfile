@@ -180,11 +180,11 @@ COPY contrib/tenzir-plugins ./contrib/tenzir-plugins
 
 FROM plugins-source AS azure-log-analytics-plugin
 
-RUN cmake -S contrib/tenzir-plugins/build-azure-log-analytics -B build-azure-log-analytics -G Ninja \
+RUN cmake -S contrib/tenzir-plugins/azure-log-analytics -B build-azure-log-analytics -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
       cmake --build build-azure-log-analytics --parallel && \
       cmake --build build-azure-log-analytics --target integration && \
-      DESTDIR=/plugin/build-azure-log-analytics cmake --install build-azure-log-analytics --strip --component Runtime && \
+      DESTDIR=/plugin/azure-log-analytics cmake --install build-azure-log-analytics --strip --component Runtime && \
       rm -rf build-build-azure-log-analytics
 
 FROM plugins-source AS compaction-plugin
