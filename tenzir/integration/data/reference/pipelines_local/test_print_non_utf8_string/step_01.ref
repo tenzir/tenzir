@@ -1,7 +1,7 @@
 error: printer must be text-based
  --> <input>:1:28
   |
-1 | read cef | print extension feather
-  |                            ^^^^^^^ 
+1 | read cef | print extension bitz
+  |                            ^^^^ 
   |
   = note: printed result is not valid UTF8

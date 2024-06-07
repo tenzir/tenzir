@@ -485,13 +485,15 @@ EOF
 # bats test_tags=pipelines
 @test "Print non UTF8 string" {
   check ! tenzir "read cef | print extension feather" <${INPUTSDIR}/cef/forcepoint.log
+  check ! tenzir "read cef | print extension bitz" <${INPUTSDIR}/cef/forcepoint.log
 }
 
-@test "Print nested JSON and CSV in JSON " {
+@test "Print nested data" {
   check tenzir "read json | print a csv | parse a csv" <${INPUTSDIR}/json/nested-object.json
   check tenzir "read json | print a.b csv" <${INPUTSDIR}/json/nested-object.json
-  check tenzir "read json | print a.b json | parse a.b json" <${INPUTSDIR}/json/nested-object.json
+  check tenzir "read json | print a.b zeek-tsv | parse a.b zeek-tsv" <${INPUTSDIR}/json/nested-object.json
   check ! tenzir "read json | print a.b.c json" <${INPUTSDIR}/json/nested-object.json
+  check tenzir "read json | print a.b csv | print a yaml" <${INPUTSDIR}/json/nested-object.json
 }
 
 @test "Print multiple events" {
