@@ -7,57 +7,67 @@ sidebar_custom_props:
 
 # azure-log-analytics
 
-Sends events via the [Microsoft Azure Logs Ingestion
-API](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview).
+Sends events via the [Microsoft Azure Logs Ingestion API][api].
+
+[api]: https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview
 
 ## Synopsis
 
 ```
 azure-log-analytics --tenant-id <tenant-id> --client-id <client-id>
---client-secret <client-secret> --dce <data-collection-endpoint> --dcr
-<data-collection-rule-id> --table <table-name> [--batch-size <batch-size>]
+                    --client-secret <client-secret>
+                    --dce <data-collection-endpoint>
+                    --dcr <data-collection-rule-id>
+                    --table <table-name>
+                    [--batch-size <batch-size>]
 ```
 
 ## Description
 
 The `azure-log-analytics` operator makes it possible to upload events to
-[supported
-tables](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview#supported-tables)
-or to [custom tables](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/create-custom-table?tabs=azure-portal-1%2Cazure-portal-2%2Cazure-portal-3#create-a-custom-table)
-in Microsoft Azure.
+[supported tables][supported] or to [custom tables][custom] in Microsoft Azure.
+
+[supported]: https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview#supported-tables
+[custom]: https://learn.microsoft.com/en-us/azure/azure-monitor/logs/create-custom-table?tabs=azure-portal-1%2Cazure-portal-2%2Cazure-portal-3#create-a-custom-table
 
 The operator handles access token retrievals by itself and updates that token
 automatically, if needed.
 
-### `<tenant-id>`
+### `--tenant-id <tenant-id>`
 
 The Microsoft Directory (tenant) ID, written as
 `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`.
 
-### `<client-id>`
+### `--client-id <client-id>`
 
 The Microsoft Application (client) ID, written as
 `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`.
 
-### `<client-secret>`
+### `--client-secret <client-secret>`
 
 The client secret.
 
-### `<data-collection-endpoint>`
+### `--dce <data-collection-endpoint>`
 
 The data collection endpoint URL.
 
-### `<data-collection-rule-id>`
+### `--dcr <data-collection-rule-id>`
 
 The data collection rule ID, written as `dcr-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`.
 
-### `<table-name>`
+### `--table <table-name>`
 
 The table to upload events to.
 
-### `<batch-size>`
+### `--batch-size <batch-size>`
 
-The batch size for each upload request. Defaults to 8192.
+The event batch size for each upload request. The Azure Logs Ingestion API
+[takes at most 500MB per minute][limit], making sensible batching of events a
+necessity.
+
+Defaults to 8192.
+
+[limit]: https://learn.microsoft.com/en-us/azure/azure-monitor/logs/tutorial-logs-ingestion-code?tabs=net#script-returns-error-code-429
 
 ## Examples
 
