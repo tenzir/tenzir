@@ -1,6 +1,0 @@
-error: field c is not of type record
- --> <input>:1:19
-  |
-1 | read json | print a.b.c json
-  |                   ^^^^^ 
-  |
