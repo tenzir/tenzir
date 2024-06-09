@@ -123,6 +123,10 @@ public:
     return true;
   };
 
+  auto prints_utf8() const -> bool override {
+    return false;
+  }
+
   friend auto inspect(auto& f, bitz_printer& x) -> bool {
     return f.object(x).fields();
   }

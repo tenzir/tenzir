@@ -321,6 +321,7 @@ auto diagnostic::error(fmt::format_string<Ts...> str, Ts&&... xs)
 }
 
 inline auto diagnostic::error(caf::error err) -> diagnostic_builder {
+  TENZIR_ASSERT(err);
   return builder(severity::error, std::move(err));
 }
 

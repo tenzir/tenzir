@@ -62,6 +62,10 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
         finish_start();
       },
       [this](const caf::error& err) mutable {
+        if (not err) {
+          finish_start();
+          return;
+        }
         abort_start(err);
       });
 }
@@ -167,6 +171,7 @@ void pipeline_executor_state::abort_start(diagnostic reason) {
 }
 
 void pipeline_executor_state::abort_start(caf::error reason) {
+  TENZIR_ASSERT(reason);
   if (reason == ec::silent) {
     TENZIR_DEBUG("{} delivers silent start abort", *self);
     start_rp.deliver(ec::silent);

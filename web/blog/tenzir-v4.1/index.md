@@ -58,15 +58,13 @@ work both on files and on directories of rules. Rule directories may be updated
 while the operator is running, so that adding a new rule to an already deployed
 pipeline is as simple as dropping a Sigma rule into the configured directory.
 
-Consider the `sigma` operator as one concrete instance of [security content
-execution][unified-detection] that we enable live and retrospectively. For
-example, you can perform historical matching via `export | sigma` and streaming
-execution over a Kafka source via `from kafka --topic events | sigma`. Now that
-we have the capability in place, we are working on a unified interface to live
-and retro matching.
+Consider the `sigma` operator as one concrete instance of security content
+execution that we enable live and retrospectively. For example, you can perform
+historical matching via `export | sigma` and streaming execution over a Kafka
+source via `from kafka --topic events | sigma`. Now that we have the capability
+in place, we are working on a unified interface to live and retro matching.
 
 [sigma-github]: https://github.com/SigmaHQ/sigma
-[unified-detection]: https://docs.tenzir.com/use-cases/unified-detection
 
 ## Show Operator
 

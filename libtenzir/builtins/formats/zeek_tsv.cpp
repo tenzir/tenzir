@@ -152,30 +152,31 @@ struct zeek_parser<list_type> {
 auto parse_type(std::string_view zeek_type) -> caf::expected<type> {
   type t;
   if (zeek_type == "enum" or zeek_type == "string" or zeek_type == "file"
-      or zeek_type == "pattern")
+      or zeek_type == "pattern") {
     t = type{string_type{}};
-  else if (zeek_type == "bool")
+  } else if (zeek_type == "bool") {
     t = type{bool_type{}};
-  else if (zeek_type == "int")
+  } else if (zeek_type == "int") {
     t = type{int64_type{}};
-  else if (zeek_type == "count")
+  } else if (zeek_type == "count") {
     t = type{uint64_type{}};
-  else if (zeek_type == "double")
+  } else if (zeek_type == "double") {
     t = type{double_type{}};
-  else if (zeek_type == "time")
+  } else if (zeek_type == "time") {
     t = type{time_type{}};
-  else if (zeek_type == "interval")
+  } else if (zeek_type == "interval") {
     t = type{duration_type{}};
-  else if (zeek_type == "addr")
+  } else if (zeek_type == "addr") {
     t = type{ip_type{}};
-  else if (zeek_type == "subnet")
+  } else if (zeek_type == "subnet") {
     t = type{subnet_type{}};
-  else if (zeek_type == "port")
+  } else if (zeek_type == "port") {
     // FIXME: once we ship with builtin type aliases, we should reference the
     // port alias type here. Until then, we create the alias manually.
     // See also:
     // - src/format/pcap.cpp
     t = type{"port", uint64_type{}};
+  }
   if (!t
       && (zeek_type.starts_with("vector") or zeek_type.starts_with("set")
           or zeek_type.starts_with("table"))) {
@@ -184,19 +185,22 @@ auto parse_type(std::string_view zeek_type) -> caf::expected<type> {
     // If this will ever change, we'll have to enhance this simple parser.
     auto open = zeek_type.find('[');
     auto close = zeek_type.rfind(']');
-    if (open == std::string::npos or close == std::string::npos)
+    if (open == std::string::npos or close == std::string::npos) {
       return caf::make_error(ec::format_error, "missing container brackets:",
                              std::string{zeek_type});
+    }
     auto elem = parse_type(zeek_type.substr(open + 1, close - open - 1));
-    if (!elem)
+    if (!elem) {
       return elem.error();
+    }
     // Zeek sometimes logs sets as tables, e.g., represents set[string] as
     // table[string]. In Tenzir, they are all lists.
     t = type{list_type{*elem}};
   }
-  if (!t)
+  if (!t) {
     return caf::make_error(ec::format_error,
                            "failed to parse type: ", std::string{zeek_type});
+  }
   return t;
 }
 
@@ -313,15 +317,18 @@ struct zeek_printer {
                               "#unset_field{0}{3}\n"
                               "#path{0}{4}",
                               sep, set_sep, empty_field, unset_field, t.name());
-    if (not disable_timestamp_tags)
+    if (not disable_timestamp_tags) {
       header.append(fmt::format("\n#open{}{}", sep, generate_timestamp()));
+    }
     header.append("\n#fields");
     auto r = caf::get<record_type>(t);
-    for (const auto& [_, offset] : r.leaves())
+    for (const auto& [_, offset] : r.leaves()) {
       header.append(fmt::format("{}{}", sep, to_string(r.key(offset))));
+    }
     header.append("\n#types");
-    for (const auto& [field, _] : r.leaves())
+    for (const auto& [field, _] : r.leaves()) {
       header.append(fmt::format("{}{}", sep, to_zeek_string(field.type)));
+    }
     out = std::copy(header.begin(), header.end(), out);
     return true;
   }
@@ -382,7 +389,7 @@ struct zeek_printer {
                         out);
         return true;
       }
-      for (auto c : x)
+      for (auto c : x) {
         if (std::iscntrl(c) or c == printer.sep or c == printer.set_sep) {
           auto hex = detail::byte_to_hex(c);
           *out++ = '\\';
@@ -392,6 +399,7 @@ struct zeek_printer {
         } else {
           *out++ = c;
         }
+      }
       return true;
     }
 
@@ -844,6 +852,10 @@ public:
   }
 
   auto allows_joining() const -> bool override {
+    return true;
+  }
+
+  auto prints_utf8() const -> bool override {
     return true;
   }
 

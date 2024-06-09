@@ -184,7 +184,7 @@ auto transfer::prepare(chunk_ptr chunk) -> caf::error {
 
 auto transfer::perform() -> caf::error {
   auto code = easy_.perform();
-  if (code == curl::easy::code::ok) {
+  if (code != curl::easy::code::ok) {
     return to_error(code);
   }
   return {};

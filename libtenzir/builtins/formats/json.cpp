@@ -1422,6 +1422,10 @@ public:
     return true;
   };
 
+  auto prints_utf8() const -> bool override {
+    return true;
+  }
+
   friend auto inspect(auto& f, json_printer& x) -> bool {
     return f.apply(x.args_);
   }

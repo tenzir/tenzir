@@ -398,6 +398,7 @@ in {
       };
     in
       pkg.withPlugins (ps: [
+        ps.azure-log-analytics
         ps.compaction
         ps.context
         ps.pipeline-manager
