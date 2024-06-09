@@ -46,7 +46,7 @@ public:
 
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto count = std::optional<uint64_t>{};
-    argument_parser2{"https://docs.tenzir.com/operators/tail"}
+    argument_parser2::op("https://docs.tenzir.com/operators/tail")
       .add(count, "<count>")
       .parse(inv, ctx);
     auto result = pipeline::internal_parse_as_operator(

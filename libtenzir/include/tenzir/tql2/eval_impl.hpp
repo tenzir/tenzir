@@ -103,6 +103,7 @@ public:
   auto eval(const ast::field_access& x) -> series;
 
   auto eval(const ast::assignment& x) -> series {
+    // TODO: What shall happen if we hit this in const eval mode?
     diagnostic::warning("unexpected assignment")
       .primary(x.get_location())
       .emit(dh_);

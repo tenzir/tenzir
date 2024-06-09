@@ -6,13 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#pragma once
+#include "tenzir/session.hpp"
 
-#include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/registry.hpp"
 
-namespace tenzir::tql2 {
+namespace tenzir {
 
-void resolve_entities(ast::pipeline& pipe, session ctx);
+auto session::reg() -> const tql2::registry& {
+  // TODO: The registry should be attached to a session instead.
+  return tql2::global_registry();
+}
 
-} // namespace tenzir::tql2
+} // namespace tenzir

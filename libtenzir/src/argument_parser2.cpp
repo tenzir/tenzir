@@ -21,11 +21,23 @@ concept data_type = detail::tl_contains_v<data::types, T>;
 
 void argument_parser2::parse(const operator_factory_plugin::invocation& inv,
                              session ctx) {
+  TENZIR_ASSERT(function_ == false);
+  return parse(inv.self, inv.args, ctx);
+}
+
+void argument_parser2::parse(const ast::function_call& call, session ctx) {
+  TENZIR_ASSERT(function_ == true);
+  return parse(call.fn, call.args, ctx);
+}
+
+void argument_parser2::parse(const ast::entity& self,
+                             std::span<ast::expression const> args,
+                             session ctx) {
   // TODO: Simplify and deduplicate everything in this function.
   auto emit = [&](diagnostic_builder d) {
     // TODO
-    TENZIR_ASSERT(inv.self.path.size() == 1);
-    auto name = inv.self.path[0].name;
+    TENZIR_ASSERT(self.path.size() == 1);
+    auto name = self.path[0].name;
     d = std::move(d).usage(fmt::format("{} {}", name, usage()));
     if (not docs_.empty()) {
       d = std::move(d).docs(docs_);
@@ -44,15 +56,15 @@ void argument_parser2::parse(const operator_factory_plugin::invocation& inv,
       },
       x);
   };
-  auto arg = inv.args.begin();
+  auto arg = args.begin();
   for (auto [idx, positional] : detail::enumerate(positional_)) {
-    if (arg == inv.args.end()) {
+    if (arg == args.end()) {
       if (first_optional_ && idx >= *first_optional_) {
         break;
       }
       emit(diagnostic::error("expected additional positional argument `{}`",
                              positional.meta)
-             .primary(inv.self.get_location()));
+             .primary(self.get_location()));
       break;
     }
     auto& expr = *arg;
@@ -112,7 +124,7 @@ void argument_parser2::parse(const operator_factory_plugin::invocation& inv,
       });
     ++arg;
   }
-  for (; arg != inv.args.end(); ++arg) {
+  for (; arg != args.end(); ++arg) {
     auto assignment = std::get_if<ast::assignment>(&*arg->kind);
     if (not assignment) {
       emit(diagnostic::error("did not expect more positional arguments")

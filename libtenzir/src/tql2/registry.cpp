@@ -8,6 +8,8 @@
 
 #include "tenzir/tql2/registry.hpp"
 
+#include "tenzir/plugin.hpp"
+
 namespace tenzir::tql2 {
 
 thread_local const registry* g_thread_local_registry = nullptr;
@@ -18,6 +20,30 @@ auto thread_local_registry() -> const registry* {
 
 void set_thread_local_registry(const registry* reg) {
   g_thread_local_registry = reg;
+}
+
+auto global_registry() -> const registry& {
+  static auto reg = std::invoke([] {
+    auto reg = registry{};
+    for (auto op : plugins::get<operator_factory_plugin>()) {
+      auto name = op->name();
+      // TODO
+      if (name.starts_with("tql2.")) {
+        name = name.substr(5);
+      }
+      reg.add(name, op);
+    }
+    for (auto fn : plugins::get<tql2::function_plugin>()) {
+      auto name = fn->name();
+      // TODO
+      if (name.starts_with("tql2.")) {
+        name = name.substr(5);
+      }
+      reg.add(name, fn);
+    }
+    return reg;
+  });
+  return reg;
 }
 
 } // namespace tenzir::tql2

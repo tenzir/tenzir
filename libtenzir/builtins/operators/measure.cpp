@@ -159,7 +159,7 @@ public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     bool real_time = false;
     bool cumulative = false;
-    argument_parser2{"https://docs.tenzir.com/operators/measure"}
+    argument_parser2::op("measure")
       .add("real_time", real_time)
       .add("cumulative", cumulative)
       .parse(inv, ctx);

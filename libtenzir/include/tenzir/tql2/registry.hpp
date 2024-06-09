@@ -11,6 +11,8 @@
 #include "tenzir/detail/heterogeneous_string_hash.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
+#include <caf/detail/scope_guard.hpp>
+
 namespace tenzir::tql2 {
 
 // TODO: Change `entity_def` and everything related to it.
@@ -21,14 +23,6 @@ using entity_def
 /// Should this be *effectively* global?
 class registry {
 public:
-  // TODO: The interface of this class is drastically simplified for now. It
-  // must be changed eventually to properly enable modules and use an interned
-  // representation of `entity_path`.
-  void add(std::string name, entity_def def) {
-    auto inserted = defs_.emplace(std::move(name), def).second;
-    TENZIR_ASSERT(inserted);
-  }
-
   auto try_get(const entity_path& path) const -> const entity_def* {
     if (path.segments().size() != 1) {
       // TODO: We pretend here that only single-name paths exist.
@@ -71,21 +65,37 @@ public:
     return result;
   }
 
+  // TODO: The interface of this class is drastically simplified for now. It
+  // must be changed eventually to properly enable modules and use an interned
+  // representation of `entity_path`.
+  void add(std::string name, entity_def def) {
+    auto inserted = defs_.emplace(std::move(name), def).second;
+    TENZIR_ASSERT(inserted);
+  }
+
 private:
   // TODO: Lifetime?
+  // TODO: This should not be either-or, right?
   detail::heterogeneous_string_hashmap<entity_def> defs_;
 };
+
+// TODO: This should be attached to the `session` object. However, because we
+// are still in the process of upgrading everything, we cannot consistently pass
+// this around.
+auto global_registry() -> const registry&;
 
 auto thread_local_registry() -> const registry*;
 
 void set_thread_local_registry(const registry* reg);
 
 template <class F>
-auto with_thread_local_registry(const registry& reg, F&& f) {
+auto with_thread_local_registry(const registry& reg, F&& f) -> decltype(auto) {
   auto prev = thread_local_registry();
   set_thread_local_registry(&reg);
-  std::forward<F>(f)();
-  set_thread_local_registry(prev);
+  auto guard = caf::detail::scope_guard{[&] {
+    set_thread_local_registry(prev);
+  }};
+  return std::invoke(std::forward<F>(f));
 }
 
 } // namespace tenzir::tql2

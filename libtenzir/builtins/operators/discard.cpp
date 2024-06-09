@@ -58,8 +58,7 @@ public:
   }
 
   auto make(invocation inv, session ctx) const -> operator_ptr override {
-    argument_parser2{"https://docs.tenzir.com/operators/discard"}.parse(inv,
-                                                                        ctx);
+    argument_parser2::op("discard").parse(inv, ctx);
     return std::make_unique<discard_operator>();
   }
 };

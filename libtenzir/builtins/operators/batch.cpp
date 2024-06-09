@@ -156,7 +156,7 @@ public:
   }
 
   auto make(invocation inv, session ctx) const -> operator_ptr override {
-    argument_parser2{"https://docs.tenzir.com/operators/batch"}.parse(inv, ctx);
+    argument_parser2::op("batch").parse(inv, ctx);
     return std::make_unique<batch_operator>(defaults::import::table_slice_size,
                                             duration::max(),
                                             event_order::ordered);

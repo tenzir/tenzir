@@ -1006,36 +1006,25 @@ using group_map
   = tsl::robin_map<group_by_key, Value, group_by_key_hash, group_by_key_equal>;
 
 struct bucket2 {
-  std::vector<std::unique_ptr<tql2::aggregation_instance>> aggregations{};
+  std::vector<std::unique_ptr<aggregation_instance>> aggregations{};
 };
 
 class implementation2 {
 public:
-  explicit implementation2(const config& cfg, diagnostic_handler& dh)
-    : cfg_{cfg}, dh_{dh} {
+  explicit implementation2(const config& cfg, session ctx)
+    : cfg_{cfg}, ctx_{ctx} {
   }
 
   void add(const table_slice& slice) {
     auto group_values = std::vector<series>{};
     for (auto& group : cfg_.groups) {
-      group_values.push_back(tql2::eval(group.expr.inner(), slice, dh_));
-    }
-    auto aggregate_args = std::vector<series>{};
-    for (auto& aggregate : cfg_.aggregates) {
-      // At the moment, we check this before constructing the operator.
-      TENZIR_ASSERT(aggregate.call.args.size() == 1);
-      aggregate_args.push_back(tql2::eval(aggregate.call.args[0], slice, dh_));
+      group_values.push_back(tql2::eval(group.expr.inner(), slice, ctx_));
     }
     auto key = group_by_key_view{};
     key.resize(cfg_.groups.size());
     auto update_group = [&](bucket2& group, int64_t begin, int64_t end) {
-      for (auto&& [aggr, arg, cfg_aggr] :
-           zip_equal(group.aggregations, aggregate_args, cfg_.aggregates)) {
-        aggr->add(
-          tql2::aggregation_instance::add_info{
-            cfg_aggr.call.fn, located{arg.slice(begin, end),
-                                      cfg_aggr.call.args[0].get_location()}},
-          dh_);
+      for (auto&& aggr : group.aggregations) {
+        aggr->update(subslice(slice, begin, end), ctx_);
       }
     };
     auto find_or_create_group = [&](int64_t row) -> bucket2* {
@@ -1047,10 +1036,10 @@ public:
         auto bucket = std::make_unique<bucket2>();
         for (auto& aggr : cfg_.aggregates) {
           // TODO: Very hacky.
-          auto fn = plugins::find<tql2::aggregation_function_plugin>(
+          auto fn = plugins::find<aggregation_plugin>(
             "tql2." + aggr.call.fn.path[0].name);
           TENZIR_ASSERT(fn);
-          bucket->aggregations.push_back(fn->make_aggregation());
+          bucket->aggregations.push_back(fn->make_aggregation(aggr.call, ctx_));
         }
         it = groups_.emplace_hint(it, materialize(key), std::move(bucket));
       }
@@ -1107,16 +1096,21 @@ public:
           } else {
             auto& call = cfg_.aggregates[index].call;
             // TODO: Decide and properly implement this.
-            auto arg = call.args[0].match(
-              [](ast::this_&) -> std::string_view {
-                return "this";
-              },
-              [](ast::root_field& x) -> std::string_view {
-                return x.ident.name;
-              },
-              [](auto&) -> std::string_view {
-                return "...";
-              });
+            auto arg = "";
+            if (call.args.size() == 1) {
+              call.args[0].match(
+                [](ast::this_&) -> std::string_view {
+                  return "this";
+                },
+                [](ast::root_field& x) -> std::string_view {
+                  return x.ident.name;
+                },
+                [](auto&) -> std::string_view {
+                  return "...";
+                });
+            } else if (call.args.size() > 1) {
+              arg = "...";
+            }
             result.emplace(fmt::format("{}({})", call.fn.path[0].name, arg),
                            value);
           }
@@ -1135,7 +1129,7 @@ public:
 
 private:
   const config& cfg_;
-  diagnostic_handler& dh_;
+  session ctx_;
   group_map<std::unique_ptr<bucket2>> groups_;
 };
 
@@ -1153,7 +1147,7 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    auto impl = implementation2{cfg_, ctrl.diagnostics()};
+    auto impl = implementation2{cfg_, session{ctrl.diagnostics()}};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
@@ -1183,7 +1177,6 @@ private:
 class plugin2 final : public tql2::operator_plugin<summarize_operator2> {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
-    // summarize foo, bar, baz=count(foo)
     auto cfg = config{};
     auto add_aggregate
       = [&](std::optional<ast::simple_selector> dest, ast::function_call call) {
@@ -1193,24 +1186,19 @@ public:
             return;
           }
           // TODO: Improve this and try to forward function handle directly.
-          auto fn = dynamic_cast<const tql2::aggregation_function_plugin*>(
+          auto fn = dynamic_cast<const aggregation_plugin*>(
             std::get<const tql2::function_plugin*>(ctx.reg().get(ref)));
           // TODO: Check if aggregation function.
           if (not fn) {
             diagnostic::error("function does not support aggregations")
               .primary(call.fn.get_location())
-              .hint("add assignment before `summarize` to group by the result")
+              .hint("if you want to group by the result, assign it before")
               .emit(ctx);
             return;
           }
-          if (call.args.size() != 1) {
-            // TODO: We eventually want to support more arguments.
-            // TODO: What about `count()`?
-            diagnostic::error("function expected exactly one argument")
-              .primary(call.get_location())
-              .emit(ctx);
-            return;
-          }
+          // We test the arguments by making and discarding it. This is a bit
+          // hacky and should be improved in the future.
+          (void)fn->make_aggregation(call, ctx);
           auto index = detail::narrow<int64_t>(cfg.aggregates.size());
           cfg.indices.push_back(index);
           cfg.aggregates.emplace_back(std::move(dest), std::move(call));
@@ -1223,9 +1211,6 @@ public:
     };
     for (auto& arg : inv.args) {
       arg.match(
-        // [&](ast::path& arg) {
-        //   add_group(std::nullopt, std::move(arg));
-        // },
         [&](ast::function_call& arg) {
           add_aggregate(std::nullopt, std::move(arg));
         },

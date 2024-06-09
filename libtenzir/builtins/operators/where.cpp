@@ -396,9 +396,7 @@ class plugin2 final : public virtual tql2::operator_plugin<where_operator2> {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto expr = ast::expression{};
-    argument_parser2{"https://docs.tenzir.com/operators/where"}
-      .add(expr, "<expr>")
-      .parse(inv, ctx);
+    argument_parser2::op("where").add(expr, "<expr>").parse(inv, ctx);
     // auto ty = type_checker{ctx}.visit(args[0]);
     // if (ty && ty->kind().is_not<bool_type>()) {
     //   diagnostic::error("expected `bool`, got `{}`", *ty)

@@ -584,7 +584,7 @@ public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto args = loader_args{};
     auto timeout = std::optional<located<duration>>{};
-    argument_parser2{"https://docs.tenzir.com/operators/load_file"}
+    argument_parser2::op("load_file")
       .add(args.path, "<path>")
       .add("follow", args.follow)
       .add("mmap", args.mmap)
@@ -647,7 +647,7 @@ class save_file_plugin final
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto args = saver_args{};
-    argument_parser2{"https://docs.tenzir.com/operators/save_file"}
+    argument_parser2::op("save_file")
       .add(args.path, "<path>")
       .add("append", args.append)
       .add("real_time", args.real_time)

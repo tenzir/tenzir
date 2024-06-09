@@ -25,8 +25,7 @@ using namespace tenzir::ast;
 
 class entity_resolver : public visitor<entity_resolver> {
 public:
-  entity_resolver(const registry& reg, diagnostic_handler& diag)
-    : reg_{reg}, diag_{diag} {
+  entity_resolver(session ctx) : reg_{ctx.reg()}, diag_{ctx.dh()} {
     // Add every top-level package to `scope_` with its name.
     // TODO: Add everything from `std::prelude` to `scope_`.
   }
@@ -124,9 +123,8 @@ private:
 
 } // namespace
 
-void resolve_entities(ast::pipeline& pipe, registry& reg,
-                      diagnostic_handler& diag) {
-  entity_resolver{reg, diag}.visit(pipe);
+void resolve_entities(ast::pipeline& pipe, session ctx) {
+  entity_resolver{ctx}.visit(pipe);
 }
 
 } // namespace tenzir::tql2

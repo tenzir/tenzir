@@ -427,9 +427,8 @@ auto prepare_pipeline(ast::pipeline&& pipe, session ctx) -> pipeline {
         }
       },
       [&](ast::assignment& x) {
-        check_assignment(x, ctx);
-      // TODO: Cannot do this right now (release typeid problem).
 #if 0
+        // TODO: Cannot do this right now (release typeid problem).
         auto assignments = std::vector<assignment>();
         assignments.push_back(std::move(x));
         ops.push_back(std::make_unique<set_operator>(std::move(assignments)));
@@ -549,36 +548,21 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   if (diag_wrapper->error()) {
     return false;
   }
-  auto reg = registry{};
+  // TODO: Error message below might be inaccurate.
   // TODO: While we want to be able to operator definitions in plugins, we do
   // not want the mere *existence* to be dependant on which plugins are loaded.
   // Instead, we should always register all operators and then emit an helpful
   // error if the corresponding plugin is not loaded.
-  for (auto op : plugins::get<operator_factory_plugin>()) {
-    auto name = op->name();
-    // TODO
-    if (name.starts_with("tql2.")) {
-      name = name.substr(5);
-    }
-    reg.add(name, op);
-  }
-  for (auto fn : plugins::get<tql2::function_plugin>()) {
-    auto name = fn->name();
-    // TODO
-    if (name.starts_with("tql2.")) {
-      name = name.substr(5);
-    }
-    reg.add(name, fn);
-  }
   if (cfg.dump_ast) {
-    with_thread_local_registry(reg, [&] {
+    // TODO
+    with_thread_local_registry(global_registry(), [&] {
       fmt::print("{:#?}\n", parsed);
     });
     return not diag_wrapper->error();
   }
-  tql2::resolve_entities(parsed, reg, *diag_wrapper);
   // TODO
-  auto ctx = session{reg, *diag_wrapper};
+  auto ctx = session{*diag_wrapper};
+  tql2::resolve_entities(parsed, ctx);
   auto pipe = prepare_pipeline(std::move(parsed), ctx);
   // TENZIR_WARN("{:#?}", use_default_formatter(pipe));
   if (diag_wrapper->error()) {

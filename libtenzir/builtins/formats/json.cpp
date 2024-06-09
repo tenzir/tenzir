@@ -1627,7 +1627,7 @@ public:
     auto selector = std::optional<located<std::string>>{};
     auto sep = std::optional<located<std::string>>{};
     auto unnest_separator = std::optional<std::string>{};
-    argument_parser2{"https://docs.tenzir.com/operators/read_json"}
+    argument_parser2::op("read_json")
       .add("sep", sep)
       // TODO: We could allow a non-constant expression for `schema` and then
       // evaluate it with (perhaps in some limited fashion) against the current
@@ -1729,7 +1729,7 @@ public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     // TODO: More options, and consider `null_fields=false` as default.
     auto args = printer_args{};
-    argument_parser2{"https://docs.tenzir.com/operators/write_json"}
+    argument_parser2::op("write_json")
       // TODO: Perhaps "indent=0"?
       .add("ndjson", args.compact_output)
       .add("color", args.color_output)

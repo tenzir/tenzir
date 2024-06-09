@@ -328,11 +328,11 @@ public:
     auto live = false;
     auto retro = false;
     auto internal = false;
-    auto parser = argument_parser2{};
-    parser.add("live", live);
-    parser.add("retro", retro);
-    parser.add("internal", internal);
-    parser.parse(inv, ctx);
+    argument_parser2::op("export")
+      .add("live", live)
+      .add("retro", retro)
+      .add("internal", internal)
+      .parse(inv, ctx);
     if (not live) {
       // TODO: export live=false, retro=false
       retro = true;

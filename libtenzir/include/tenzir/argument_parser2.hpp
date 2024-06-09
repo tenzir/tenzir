@@ -62,9 +62,14 @@ concept argument_parser_type
 
 class argument_parser2 {
 public:
-  argument_parser2() = default;
+  static auto op(std::string name) -> argument_parser2 {
+    return argument_parser2{
+      false, fmt::format("https://docs.tenzir.com/operators/{}", name)};
+  }
 
-  explicit argument_parser2(std::string docs) : docs_{std::move(docs)} {
+  static auto fn(std::string name) -> argument_parser2 {
+    return argument_parser2{
+      true, fmt::format("https://docs.tenzir.com/functions/{}", name)};
   }
 
   // ------------------------------------------------------------------------
@@ -87,10 +92,17 @@ public:
   // ------------------------------------------------------------------------
 
   void parse(const operator_factory_plugin::invocation& inv, session ctx);
+  void parse(const ast::function_call& call, session ctx);
+  void parse(const ast::entity& self, std::span<ast::expression const> args,
+             session ctx);
 
   auto usage() const -> std::string;
 
 private:
+  argument_parser2(bool function, std::string docs)
+    : function_{function}, docs_{std::move(docs)} {
+  }
+
   template <class T>
   using setter = std::function<void(T)>;
 
@@ -108,6 +120,7 @@ private:
   };
 
   mutable std::string usage_cache_;
+  bool function_;
   std::vector<positional> positional_;
   std::optional<size_t> first_optional_;
   std::vector<named> named_;

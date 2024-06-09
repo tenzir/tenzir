@@ -374,7 +374,7 @@ public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto interval = located<duration>{};
     auto pipe = pipeline{};
-    argument_parser2{"https://docs.tenzir.com/operators/every"}
+    argument_parser2::op("every")
       .add(interval, "<duration>")
       .add(pipe, "<pipeline>") // TODO: Improve meta.
       .parse(inv, ctx);

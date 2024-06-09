@@ -9,7 +9,6 @@
 #pragma once
 
 #include "tenzir/plugin.hpp"
-#include "tenzir/session.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
 
@@ -17,7 +16,7 @@ namespace tenzir {
 
 class operator_factory_plugin : public virtual plugin {
 public:
-  // Separate from `ast::expression` in case we want to add things.
+  // Separate from `ast::invocation` in case we want to add things.
   struct invocation {
     ast::entity self;
     std::vector<ast::expression> args;
@@ -59,32 +58,6 @@ public:
   };
 
   virtual auto eval(invocation inv, diagnostic_handler& dh) const -> series = 0;
-};
-
-class aggregation_instance {
-public:
-  struct add_info {
-    add_info(const ast::entity& self, located<series> arg)
-      : self{self}, arg{std::move(arg)} {
-    }
-
-    const ast::entity& self;
-    located<series> arg;
-  };
-
-  virtual ~aggregation_instance() = default;
-
-  virtual void add(add_info info, diagnostic_handler& dh) = 0;
-
-  virtual auto finish() -> data = 0;
-};
-
-class aggregation_function_plugin : public virtual function_plugin {
-public:
-  auto eval(invocation inv, diagnostic_handler& dh) const -> series final;
-
-  virtual auto make_aggregation() const -> std::unique_ptr<aggregation_instance>
-    = 0;
 };
 
 } // namespace tenzir::tql2
@@ -168,4 +141,31 @@ private:
   struct instantiate;
 };
 
+class function_use {
+public:
+  virtual auto eval(const table_slice& input, diagnostic_handler& dh) const
+    -> series
+    = 0;
+};
+
+class aggregation_instance {
+public:
+  virtual ~aggregation_instance() = default;
+
+  virtual void update(const table_slice& input, session ctx) = 0;
+
+  virtual auto finish() -> data = 0;
+};
+
+class aggregation_plugin : public virtual tql2::function_plugin {
+public:
+  auto eval(invocation inv, diagnostic_handler& dh) const -> series override;
+
+  virtual auto make_aggregation(ast::function_call call, session ctx) const
+    -> std::unique_ptr<aggregation_instance>
+    = 0;
+};
+
 } // namespace tenzir
+
+#include "tenzir/session.hpp"

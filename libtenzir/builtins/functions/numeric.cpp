@@ -6,11 +6,15 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/argument_parser2.hpp"
+
 #include <tenzir/concept/parseable/tenzir/si.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <arrow/util/tdigest.h>
 #include <caf/detail/is_one_of.hpp>
 
 #include <random>
@@ -193,10 +197,14 @@ public:
 
 class sum_instance final : public aggregation_instance {
 public:
+  explicit sum_instance(ast::expression expr) : expr_{std::move(expr)} {
+  }
+
   using sum_t = variant<int64_t, uint64_t, double>;
 
-  void add(add_info info, diagnostic_handler& dh) override {
+  void update(const table_slice& input, session ctx) override {
     // TODO: values.type
+    auto arg = eval(expr_, input, ctx);
     auto f = detail::overload{
       [&](const arrow::Int64Array& array) {
         // Double => Double
@@ -249,14 +257,17 @@ public:
         }
         sum_ = sum;
       },
+      [&](const arrow::NullArray&) {
+        // do nothing
+      },
       [&](auto&) {
         diagnostic::warning("expected integer or double, but got {}",
-                            info.arg.inner.type.kind())
-          .primary(info.arg.source)
-          .emit(dh);
+                            arg.type.kind())
+          .primary(expr_.get_location())
+          .emit(ctx);
       },
     };
-    caf::visit(f, *info.arg.inner.array);
+    caf::visit(f, *arg.array);
   }
 
   auto finish() -> data override {
@@ -266,27 +277,37 @@ public:
   }
 
 private:
+  ast::expression expr_;
   sum_t sum_ = uint64_t{0};
 };
 
-class sum final : public tql2::aggregation_function_plugin {
+class sum final : public aggregation_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.sum";
   }
 
-  auto make_aggregation() const
+  auto make_aggregation(ast::function_call call, session ctx) const
     -> std::unique_ptr<aggregation_instance> override {
-    return std::make_unique<sum_instance>();
+    if (call.args.size() != 1) {
+      diagnostic::error("expected exactly one argument, got {}",
+                        call.args.size())
+        .primary(call.get_location())
+        .emit(ctx);
+      return nullptr;
+    }
+    return std::make_unique<sum_instance>(std::move(call.args[0]));
   }
 };
 
 class count_instance final : public aggregation_instance {
 public:
-  void add(add_info info, diagnostic_handler& dh) override {
-    TENZIR_UNUSED(dh);
-    count_
-      += info.arg.inner.array->length() - info.arg.inner.array->null_count();
+  explicit count_instance(ast::expression expr) : expr_{std::move(expr)} {
+  }
+
+  void update(const table_slice& input, session ctx) override {
+    auto arg = eval(expr_, input, ctx);
+    count_ += arg.array->length() - arg.array->null_count();
   }
 
   auto finish() -> data override {
@@ -294,18 +315,108 @@ public:
   }
 
 private:
+  ast::expression expr_;
   int64_t count_ = 0;
 };
 
-class count final : public tql2::aggregation_function_plugin {
+class count final : public aggregation_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.count";
   }
 
-  auto make_aggregation() const
+  auto make_aggregation(ast::function_call call, session ctx) const
     -> std::unique_ptr<aggregation_instance> override {
-    return std::make_unique<count_instance>();
+    auto arg = ast::expression{};
+    argument_parser2::fn("count").add(arg, "<expr>").parse(call, ctx);
+    return std::make_unique<count_instance>(std::move(arg));
+  }
+};
+
+namespace {
+
+template <class... Ts>
+concept one_of = caf::detail::is_one_of<Ts...>::value;
+
+} // namespace
+
+class quantile_instance final : public aggregation_instance {
+public:
+  quantile_instance(ast::expression expr, double quantile)
+    : expr_{std::move(expr)}, quantile_{quantile} {
+  }
+
+  void update(const table_slice& input, session ctx) override {
+    auto arg = eval(expr_, input, ctx);
+    auto f = detail::overload{
+      [&]<one_of<double_type, int64_type, uint64_type> Type>(const Type& ty) {
+        auto& array = caf::get<type_to_arrow_array_t<Type>>(*arg.array);
+        for (auto value : values(ty, array)) {
+          if (value) {
+            digest_.NanAdd(*value);
+          }
+        }
+      },
+      [&](const null_type&) {
+        // Silently ignore nulls, like we do above.
+      },
+      [&](const auto&) {
+        diagnostic::warning("expected number, got `{}`", arg.type.kind())
+          .primary(expr_.get_location())
+          .emit(ctx);
+      },
+    };
+    caf::visit(f, arg.type);
+  }
+
+  auto finish() -> data override {
+    return digest_.Quantile(quantile_);
+  }
+
+private:
+  ast::expression expr_;
+  double quantile_;
+  arrow::internal::TDigest digest_;
+};
+
+class quantile final : public aggregation_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.quantile";
+  }
+
+  auto make_aggregation(ast::function_call x, session ctx) const
+    -> std::unique_ptr<aggregation_instance> override {
+    // TODO: Improve.
+    if (x.args.size() != 2) {
+      diagnostic::error("expected exactly two arguments, got {}", x.args.size())
+        .primary(x.get_location())
+        .usage("quantile(<expr>, <quantile>)")
+        .docs("https://docs.tenzir.com/functions/quantile")
+        .emit(ctx);
+      return nullptr;
+    }
+    auto& expr = x.args[0];
+    auto& quantile_expr = x.args[1];
+    auto quantile_opt = tql2::const_eval(quantile_expr, ctx);
+    if (not quantile_opt) {
+      return nullptr;
+    }
+    // TODO: Type conversion? Probably not necessary here, but maybe elsewhere.
+    auto quantile = caf::get_if<double>(&*quantile_opt);
+    if (not quantile) {
+      diagnostic::error("expected double, got TODO")
+        .primary(quantile_expr.get_location())
+        .emit(ctx);
+      return nullptr;
+    }
+    if (*quantile < 0.0 || *quantile > 1.0) {
+      diagnostic::error("expected quantile to be in [0.0, 1.0]")
+        .primary(quantile_expr.get_location())
+        .emit(ctx);
+      return nullptr;
+    }
+    return std::make_unique<quantile_instance>(std::move(expr), *quantile);
   }
 };
 
@@ -318,3 +429,4 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::sqrt)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::random)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::sum)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::count)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::quantile)

@@ -88,10 +88,10 @@ auto eval(const ast::expression& expr, const table_slice& input,
   return evaluator{&input, dh}.eval(expr);
 }
 
-auto const_eval(const ast::expression& expr, session ctx)
+auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
   -> std::optional<data> {
   try {
-    auto result = evaluator{nullptr, ctx.dh()}.eval(expr);
+    auto result = evaluator{nullptr, dh}.eval(expr);
     TENZIR_ASSERT(result.length() == 1);
     return materialize(value_at(result.type, *result.array, 0));
   } catch (std::monostate) {

@@ -8,19 +8,17 @@
 
 #pragma once
 
-#include "tenzir/fwd.hpp"
+#include "tenzir/tql2/registry.hpp"
 
 namespace tenzir {
 
 /// This is meant to be used as a value type.
 class session {
 public:
-  session(tql2::registry& reg, diagnostic_handler& dh) : reg_{reg}, dh_{dh} {
+  explicit session(diagnostic_handler& dh) : dh_{dh} {
   }
 
-  auto reg() -> tql2::registry& {
-    return reg_;
-  }
+  auto reg() -> const tql2::registry&;
 
   auto dh() -> diagnostic_handler& {
     return dh_;
@@ -31,7 +29,6 @@ public:
   }
 
 private:
-  tql2::registry& reg_;
   diagnostic_handler& dh_;
 };
 

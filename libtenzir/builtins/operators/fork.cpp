@@ -98,9 +98,7 @@ class plugin final : public virtual tql2::operator_plugin<fork_operator> {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto pipe = located<pipeline>{};
-    argument_parser2{"https://docs.tenzir.com/operators/fork"}
-      .add(pipe, "<pipeline>")
-      .parse(inv, ctx);
+    argument_parser2::op("fork").add(pipe, "<pipeline>").parse(inv, ctx);
     auto loc = operator_location::anywhere;
     for (auto& op : pipe.inner.operators()) {
       auto op_loc = op->location();

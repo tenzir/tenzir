@@ -411,8 +411,11 @@ namespace ast {
 struct expression;
 }
 
+class operator_factory_plugin;
+
 namespace tql2 {
 
+class function_plugin;
 class registry;
 
 } // namespace tql2
