@@ -24,6 +24,11 @@ template <class Type>
 struct basic_series {
   basic_series() = default;
 
+  template <concrete_type Other>
+  explicit(false) basic_series(basic_series<Other> other)
+    : type{other.type}, array{other.array} {
+  }
+
   explicit basic_series(const table_slice& slice)
     requires(std::same_as<Type, type>)
     : type{slice.schema()},

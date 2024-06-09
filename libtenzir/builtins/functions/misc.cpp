@@ -37,8 +37,28 @@ public:
   }
 };
 
+class secret final : public tql2::function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.secret";
+  }
+
+  auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
+    // TODO: Or enforce constant?
+    auto name = basic_series<string_type>{};
+    auto success
+      = function_argument_parser{"secret"}.add(name, "<name>").parse(inv, dh);
+    if (not success) {
+      return series::null(string_type{}, inv.length);
+    }
+    // TODO: Actually resolve the secret.
+    return name;
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::misc
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::type_id)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::secret)
