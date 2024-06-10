@@ -12,8 +12,6 @@ namespace tenzir::plugins::path {
 
 namespace {
 
-using namespace tql2;
-
 class file_name final : public function_plugin {
 public:
   auto name() const -> std::string override {

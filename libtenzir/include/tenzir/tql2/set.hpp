@@ -12,7 +12,7 @@
 #include "tenzir/pipeline.hpp"
 #include "tenzir/tql2/ast.hpp"
 
-namespace tenzir::tql2 {
+namespace tenzir {
 
 class set_operator final : public crtp_operator<set_operator> {
 public:
@@ -48,4 +48,4 @@ private:
   std::vector<ast::assignment> assignments_;
 };
 
-} // namespace tenzir::tql2
+} // namespace tenzir

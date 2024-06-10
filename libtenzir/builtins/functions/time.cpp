@@ -14,8 +14,6 @@ namespace tenzir::plugins::time_ {
 
 namespace {
 
-using namespace tql2;
-
 class time_ final : public function_plugin {
 public:
   auto name() const -> std::string override {

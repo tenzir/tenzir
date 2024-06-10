@@ -23,8 +23,6 @@ namespace tenzir::plugins::numeric {
 
 namespace {
 
-using namespace tql2;
-
 class round final : public function_plugin {
 public:
   auto name() const -> std::string override {
@@ -398,7 +396,7 @@ public:
     }
     auto& expr = x.args[0];
     auto& quantile_expr = x.args[1];
-    auto quantile_opt = tql2::const_eval(quantile_expr, ctx);
+    auto quantile_opt = const_eval(quantile_expr, ctx);
     if (not quantile_opt) {
       return nullptr;
     }

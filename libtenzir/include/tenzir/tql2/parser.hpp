@@ -12,9 +12,9 @@
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/tokens.hpp"
 
-namespace tenzir::tql2 {
+namespace tenzir {
 
 auto parse(std::span<token> tokens, std::string_view source,
            diagnostic_handler& diag) -> ast::pipeline;
 
-} // namespace tenzir::tql2
+} // namespace tenzir

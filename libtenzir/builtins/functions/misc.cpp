@@ -13,7 +13,7 @@ namespace tenzir::plugins::misc {
 
 namespace {
 
-class type_id final : public tql2::function_plugin {
+class type_id final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.type_id";
@@ -33,11 +33,11 @@ public:
     for (auto i = int64_t{0}; i < inv.length; ++i) {
       (void)b.Append(type_id);
     }
-    return {string_type{}, tql2::finish(b)};
+    return {string_type{}, finish(b)};
   }
 };
 
-class secret final : public tql2::function_plugin {
+class secret final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.secret";

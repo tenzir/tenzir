@@ -13,7 +13,7 @@
 
 #include <caf/detail/scope_guard.hpp>
 
-namespace tenzir::tql2 {
+namespace tenzir {
 
 // TODO: Change `entity_def` and everything related to it.
 
@@ -98,4 +98,4 @@ auto with_thread_local_registry(const registry& reg, F&& f) -> decltype(auto) {
   return std::invoke(std::forward<F>(f));
 }
 
-} // namespace tenzir::tql2
+} // namespace tenzir

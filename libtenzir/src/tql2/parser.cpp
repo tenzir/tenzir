@@ -18,7 +18,7 @@
 
 #include <ranges>
 
-namespace tenzir::tql2 {
+namespace tenzir {
 
 namespace {
 
@@ -1036,4 +1036,4 @@ auto parse(std::span<token> tokens, std::string_view source,
   return parser::parse_file(tokens, source, diag);
 }
 
-} // namespace tenzir::tql2
+} // namespace tenzir

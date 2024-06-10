@@ -177,7 +177,7 @@ public:
       }
       auto transformations = std::vector<indexed_transformation>{};
       for (auto& sel : selectors_) {
-        auto resolved = tql2::resolve(sel, slice.schema());
+        auto resolved = resolve(sel, slice.schema());
         std::move(resolved).match(
           [&](offset off) {
             transformations.emplace_back(
@@ -186,14 +186,14 @@ public:
                 return indexed_transformation::result_type{};
               });
           },
-          [&](tql2::resolve_error err) {
+          [&](resolve_error err) {
             err.reason.match(
-              [&](tql2::resolve_error::field_not_found&) {
+              [&](resolve_error::field_not_found&) {
                 diagnostic::warning("could not find field `{}`", err.ident.name)
                   .primary(err.ident.location)
                   .emit(ctrl.diagnostics());
               },
-              [&](tql2::resolve_error::field_of_non_record& reason) {
+              [&](resolve_error::field_of_non_record& reason) {
                 diagnostic::warning("type `{}` has no field field `{}`",
                                     reason.type.kind(), err.ident.name)
                   .primary(err.ident.location)
@@ -220,7 +220,7 @@ private:
   std::vector<ast::simple_selector> selectors_;
 };
 
-class plugin2 final : public virtual tql2::operator_plugin<drop_operator2> {
+class plugin2 final : public virtual operator_plugin2<drop_operator2> {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto selectors = std::vector<ast::simple_selector>{};

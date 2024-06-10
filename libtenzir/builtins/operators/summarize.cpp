@@ -1018,7 +1018,7 @@ public:
   void add(const table_slice& slice) {
     auto group_values = std::vector<series>{};
     for (auto& group : cfg_.groups) {
-      group_values.push_back(tql2::eval(group.expr.inner(), slice, ctx_));
+      group_values.push_back(eval(group.expr.inner(), slice, ctx_));
     }
     auto key = group_by_key_view{};
     key.resize(cfg_.groups.size());
@@ -1174,7 +1174,7 @@ private:
   config cfg_;
 };
 
-class plugin2 final : public tql2::operator_plugin<summarize_operator2> {
+class plugin2 final : public operator_plugin2<summarize_operator2> {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto cfg = config{};
@@ -1187,7 +1187,7 @@ public:
           }
           // TODO: Improve this and try to forward function handle directly.
           auto fn = dynamic_cast<const aggregation_plugin*>(
-            std::get<const tql2::function_plugin*>(ctx.reg().get(ref)));
+            std::get<const function_plugin*>(ctx.reg().get(ref)));
           // TODO: Check if aggregation function.
           if (not fn) {
             diagnostic::error("function does not support aggregations")

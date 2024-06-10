@@ -20,8 +20,6 @@ namespace tenzir::plugins::if_ {
 
 namespace {
 
-using namespace tql2;
-
 auto array_select(const table_slice& slice, const arrow::BooleanArray& array,
                   bool target) -> generator<table_slice> {
   TENZIR_ASSERT(slice.rows() == detail::narrow<uint64_t>(array.length()));
@@ -275,7 +273,7 @@ private:
   operator_location location_;
 };
 
-class plugin final : public virtual tql2::operator_plugin<if_operator> {
+class plugin final : public virtual operator_plugin2<if_operator> {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     // TODO: Very hacky!

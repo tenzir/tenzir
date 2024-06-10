@@ -10,9 +10,8 @@
 
 #include "tenzir/data.hpp"
 #include "tenzir/tql2/ast.hpp"
-#include "tenzir/tql2/registry.hpp"
 
-namespace tenzir::tql2 {
+namespace tenzir {
 
 auto eval(const ast::expression& expr, const table_slice& input,
           diagnostic_handler& dh) -> series;
@@ -42,4 +41,4 @@ auto resolve(const ast::simple_selector& sel, const table_slice& slice)
 auto resolve(const ast::simple_selector& sel, type ty)
   -> variant<offset, resolve_error>;
 
-} // namespace tenzir::tql2
+} // namespace tenzir

@@ -25,6 +25,7 @@ struct basic_series {
   basic_series() = default;
 
   template <concrete_type Other>
+    requires(std::same_as<Type, type>)
   explicit(false) basic_series(basic_series<Other> other)
     : type{other.type}, array{other.array} {
   }

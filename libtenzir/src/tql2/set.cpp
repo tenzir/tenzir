@@ -24,7 +24,7 @@
 
 #include <type_traits>
 
-namespace tenzir::tql2 {
+namespace tenzir {
 
 namespace {
 
@@ -231,4 +231,4 @@ auto set_operator::operator()(generator<table_slice> input,
   }
 }
 
-} // namespace tenzir::tql2
+} // namespace tenzir

@@ -12,7 +12,7 @@
 
 #include <span>
 
-namespace tenzir::tql2 {
+namespace tenzir {
 
 class entity_path {
 public:
@@ -45,4 +45,4 @@ private:
   std::vector<std::string> segments_;
 };
 
-} // namespace tenzir::tql2
+} // namespace tenzir

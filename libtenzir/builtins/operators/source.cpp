@@ -14,8 +14,6 @@ namespace tenzir::plugins::source {
 
 namespace {
 
-using namespace tql2;
-
 class source_operator final : public crtp_operator<source_operator> {
 public:
   source_operator() = default;
@@ -63,7 +61,7 @@ private:
   std::vector<record> events_;
 };
 
-class plugin final : public tql2::operator_plugin<source_operator> {
+class plugin final : public operator_plugin2<source_operator> {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto usage = "source {...} | [...]";

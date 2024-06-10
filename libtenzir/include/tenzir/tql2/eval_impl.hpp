@@ -8,17 +8,15 @@
 
 #pragma once
 
-#include "tenzir/detail/enumerate.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
-#include "tenzir/tql2/plugin.hpp"
 
 #include <arrow/api.h>
 
-namespace tenzir::tql2 {
+namespace tenzir {
 
 inline void ensure(const arrow::Status& status) {
   TENZIR_ASSERT(status.ok(), status.ToString());
@@ -148,4 +146,5 @@ private:
   int64_t length_;
   diagnostic_handler& dh_;
 };
-} // namespace tenzir::tql2
+
+} // namespace tenzir

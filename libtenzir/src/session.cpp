@@ -12,9 +12,9 @@
 
 namespace tenzir {
 
-auto session::reg() -> const tql2::registry& {
+auto session::reg() -> const registry& {
   // TODO: The registry should be attached to a session instead.
-  return tql2::global_registry();
+  return global_registry();
 }
 
 } // namespace tenzir

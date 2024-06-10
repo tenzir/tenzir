@@ -10,7 +10,7 @@
 
 #include "tenzir/plugin.hpp"
 
-namespace tenzir::tql2 {
+namespace tenzir {
 
 thread_local const registry* g_thread_local_registry = nullptr;
 
@@ -33,7 +33,7 @@ auto global_registry() -> const registry& {
       }
       reg.add(name, op);
     }
-    for (auto fn : plugins::get<tql2::function_plugin>()) {
+    for (auto fn : plugins::get<function_plugin>()) {
       auto name = fn->name();
       // TODO
       if (name.starts_with("tql2.")) {
@@ -46,4 +46,4 @@ auto global_registry() -> const registry& {
   return reg;
 }
 
-} // namespace tenzir::tql2
+} // namespace tenzir

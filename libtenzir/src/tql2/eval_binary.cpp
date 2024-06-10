@@ -16,7 +16,7 @@
 
 // TODO: This file takes very long to compile. Consider splitting it up even more.
 
-namespace tenzir::tql2 {
+namespace tenzir {
 
 namespace {
 
@@ -306,4 +306,4 @@ auto evaluator::eval(const ast::binary_expr& x) -> series {
   TENZIR_UNREACHABLE();
 }
 
-} // namespace tenzir::tql2
+} // namespace tenzir

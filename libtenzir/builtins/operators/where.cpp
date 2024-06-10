@@ -290,8 +290,6 @@ public:
   }
 };
 
-using namespace tql2;
-
 class where_operator2 final : public crtp_operator<where_operator2> {
 public:
   where_operator2() = default;
@@ -392,7 +390,7 @@ private:
   ast::expression expr_;
 };
 
-class plugin2 final : public virtual tql2::operator_plugin<where_operator2> {
+class plugin2 final : public virtual operator_plugin2<where_operator2> {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto expr = ast::expression{};

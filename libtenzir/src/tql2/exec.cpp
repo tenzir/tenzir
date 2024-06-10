@@ -31,7 +31,7 @@
 #include <arrow/util/utf8.h>
 #include <tsl/robin_set.h>
 
-namespace tenzir::tql2 {
+namespace tenzir {
 namespace {
 
 /// A diagnostic handler that remembers when it emits an error, and also
@@ -495,11 +495,11 @@ auto prepare_pipeline(ast::pipeline&& pipe, session ctx) -> pipeline {
   return tenzir::pipeline{std::move(ops)};
 }
 
-auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
-          const exec_config& cfg, caf::actor_system& sys) -> bool {
+auto exec2(std::string content, std::unique_ptr<diagnostic_handler> diag,
+           const exec_config& cfg, caf::actor_system& sys) -> bool {
   (void)sys;
   auto content_view = std::string_view{content};
-  auto tokens = tql2::tokenize(content);
+  auto tokens = tokenize(content);
   auto diag_wrapper
     = std::make_unique<diagnostic_handler_wrapper>(std::move(diag));
   // TODO: Refactor this.
@@ -526,12 +526,12 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
       fmt::print("{:>15} {:?}\n", token.kind,
                  content_view.substr(last, token.end - last));
       last = token.end;
-      has_error |= token.kind == tql2::token_kind::error;
+      has_error |= token.kind == token_kind::error;
     }
     return not has_error;
   }
   for (auto& token : tokens) {
-    if (token.kind == tql2::token_kind::error) {
+    if (token.kind == token_kind::error) {
       auto begin = size_t{0};
       if (&token != tokens.data()) {
         begin = (&token - 1)->end;
@@ -544,36 +544,28 @@ auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
   if (diag_wrapper->error()) {
     return false;
   }
-  auto parsed = tql2::parse(tokens, content, *diag_wrapper);
+  auto parsed = parse(tokens, content, *diag_wrapper);
   if (diag_wrapper->error()) {
     return false;
   }
-  // TODO: Error message below might be inaccurate.
+  // TODO: Todo below might be inaccurate.
   // TODO: While we want to be able to operator definitions in plugins, we do
   // not want the mere *existence* to be dependant on which plugins are loaded.
   // Instead, we should always register all operators and then emit an helpful
   // error if the corresponding plugin is not loaded.
   if (cfg.dump_ast) {
-    // TODO
-    with_thread_local_registry(global_registry(), [&] {
-      fmt::print("{:#?}\n", parsed);
-    });
+    // TODO: Registry?
+    fmt::print("{:#?}\n", parsed);
     return not diag_wrapper->error();
   }
-  // TODO
   auto ctx = session{*diag_wrapper};
-  tql2::resolve_entities(parsed, ctx);
+  resolve_entities(parsed, ctx);
   auto pipe = prepare_pipeline(std::move(parsed), ctx);
-  // TENZIR_WARN("{:#?}", use_default_formatter(pipe));
   if (diag_wrapper->error()) {
     return false;
   }
   exec_pipeline(std::move(pipe), std::move(diag_wrapper), cfg, sys);
-  // diagnostic::warning(
-  //   "pipeline is syntactically valid, but execution is not yet
-  //   implemented") .hint("use `--dump-ast` to show AST")
-  //   .emit(diag_wrapper);
   return true;
 }
 
-} // namespace tenzir::tql2
+} // namespace tenzir

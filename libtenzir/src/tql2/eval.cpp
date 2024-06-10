@@ -11,11 +11,10 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/expression.hpp"
 #include "tenzir/series_builder.hpp"
-#include "tenzir/session.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval_impl.hpp"
+#include "tenzir/tql2/plugin.hpp"
 #include "tenzir/try.hpp"
 
 #include <arrow/compute/api_scalar.h>
@@ -32,7 +31,7 @@
 ///   be runtime".
 /// - Integrate type checker?
 
-namespace tenzir::tql2 {
+namespace tenzir {
 
 auto resolve(const ast::simple_selector& sel, const table_slice& slice)
   -> variant<series, resolve_error> {
@@ -267,4 +266,4 @@ auto evaluator::eval(const ast::root_field& x) -> series {
   return null();
 }
 
-} // namespace tenzir::tql2
+} // namespace tenzir

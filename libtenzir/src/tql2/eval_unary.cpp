@@ -8,7 +8,7 @@
 
 #include "tenzir/tql2/eval_impl.hpp"
 
-namespace tenzir::tql2 {
+namespace tenzir {
 
 namespace {
 
@@ -73,4 +73,4 @@ auto evaluator::eval(const ast::unary_expr& x) -> series {
   TENZIR_UNREACHABLE();
 }
 
-} // namespace tenzir::tql2
+} // namespace tenzir

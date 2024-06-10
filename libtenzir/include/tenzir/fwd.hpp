@@ -406,19 +406,14 @@ using writer_ptr = std::unique_ptr<writer>;
 
 } // namespace format
 
-class session;
 namespace ast {
 struct expression;
-}
-
-class operator_factory_plugin;
-
-namespace tql2 {
+} // namespace ast
 
 class function_plugin;
+class operator_factory_plugin;
 class registry;
-
-} // namespace tql2
+class session;
 
 } // namespace tenzir
 

@@ -14,8 +14,6 @@ namespace tenzir::plugins::ocsf {
 
 namespace {
 
-using namespace tql2;
-
 class category_uid final : public function_plugin {
 public:
   auto name() const -> std::string override {

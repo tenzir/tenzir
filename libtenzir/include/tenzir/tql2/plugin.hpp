@@ -25,19 +25,15 @@ public:
   virtual auto make(invocation inv, session ctx) const -> operator_ptr = 0;
 };
 
-} // namespace tenzir
-
-namespace tenzir::tql2 {
-
 template <class Operator>
-class operator_plugin : public virtual operator_factory_plugin,
-                        public virtual operator_inspection_plugin<Operator> {};
+class operator_plugin2 : public virtual operator_factory_plugin,
+                         public virtual operator_inspection_plugin<Operator> {};
 
 class function_plugin : public virtual plugin {
 public:
   struct named_argument {
     ast::selector selector;
-    located<series> series;
+    located<tenzir::series> series;
   };
 
   struct positional_argument : located<series> {
@@ -59,10 +55,6 @@ public:
 
   virtual auto eval(invocation inv, diagnostic_handler& dh) const -> series = 0;
 };
-
-} // namespace tenzir::tql2
-
-namespace tenzir {
 
 class function_argument_parser {
 public:
@@ -123,7 +115,7 @@ public:
     -> function_argument_parser&;
 
   [[nodiscard]] auto
-  parse(tql2::function_plugin::invocation& inv, diagnostic_handler& dh) -> bool;
+  parse(function_plugin::invocation& inv, diagnostic_handler& dh) -> bool;
 
 private:
   template <type_or_concrete_type Type>
@@ -157,7 +149,7 @@ public:
   virtual auto finish() -> data = 0;
 };
 
-class aggregation_plugin : public virtual tql2::function_plugin {
+class aggregation_plugin : public virtual function_plugin {
 public:
   auto eval(invocation inv, diagnostic_handler& dh) const -> series override;
 

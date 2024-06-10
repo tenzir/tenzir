@@ -19,8 +19,6 @@ namespace tenzir::plugins::fork {
 
 namespace {
 
-using namespace tql2;
-
 class fork_operator final : public crtp_operator<fork_operator> {
 public:
   fork_operator() = default;
@@ -94,7 +92,7 @@ private:
   operator_location location_;
 };
 
-class plugin final : public virtual tql2::operator_plugin<fork_operator> {
+class plugin final : public virtual operator_plugin2<fork_operator> {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto pipe = located<pipeline>{};

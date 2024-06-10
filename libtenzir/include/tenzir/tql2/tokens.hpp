@@ -12,7 +12,7 @@
 
 #include <string_view>
 
-namespace tenzir::tql2 {
+namespace tenzir {
 
 TENZIR_ENUM(
   ///
@@ -49,4 +49,4 @@ struct token {
 
 auto tokenize(std::string_view content) -> std::vector<token>;
 
-} // namespace tenzir::tql2
+} // namespace tenzir

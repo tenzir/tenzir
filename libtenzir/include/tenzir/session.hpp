@@ -18,7 +18,7 @@ public:
   explicit session(diagnostic_handler& dh) : dh_{dh} {
   }
 
-  auto reg() -> const tql2::registry&;
+  auto reg() -> const registry&;
 
   auto dh() -> diagnostic_handler& {
     return dh_;

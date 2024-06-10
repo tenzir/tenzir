@@ -12,7 +12,7 @@
 
 #include <arrow/util/utf8.h>
 
-namespace tenzir::tql2 {
+namespace tenzir {
 
 auto tokenize(std::string_view content) -> std::vector<token> {
   auto result = std::vector<token>{};
@@ -186,4 +186,4 @@ auto describe(token_kind k) -> std::string_view {
   TENZIR_UNREACHABLE();
 }
 
-} // namespace tenzir::tql2
+} // namespace tenzir

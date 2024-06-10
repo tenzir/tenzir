@@ -1675,7 +1675,7 @@ public:
   }
 };
 
-class parse_json_plugin final : public virtual tql2::function_plugin {
+class parse_json_plugin final : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.parse_json";

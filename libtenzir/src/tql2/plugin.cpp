@@ -75,14 +75,14 @@ namespace tenzir::tql2 {
 
 namespace tenzir {
 
-auto function_argument_parser::parse(tql2::function_plugin::invocation& inv,
+auto function_argument_parser::parse(function_plugin::invocation& inv,
                                      diagnostic_handler& dh) -> bool {
   // TODO: This is called once per batch at the moment. Perhaps something more
   // like the operator API is better.
   auto it = positional_.begin();
   for (auto& arg : inv.args) {
     auto success = arg.match(
-      [&](tql2::function_plugin::positional_argument& arg) {
+      [&](function_plugin::positional_argument& arg) {
         if (it == positional_.end()) {
           diagnostic::error("unexpected positional argument")
             .primary(arg.source)
@@ -93,7 +93,7 @@ auto function_argument_parser::parse(tql2::function_plugin::invocation& inv,
         ++it;
         return success;
       },
-      [&](tql2::function_plugin::named_argument& arg) {
+      [&](function_plugin::named_argument& arg) {
         diagnostic::error("unexpected named argument")
           .primary(arg.selector.get_location())
           .emit(dh);

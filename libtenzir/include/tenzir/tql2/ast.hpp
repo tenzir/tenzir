@@ -14,7 +14,7 @@
 #include "tenzir/expression.hpp"
 #include "tenzir/ip.hpp"
 #include "tenzir/location.hpp"
-#include "tenzir/tql2/entity_id.hpp"
+#include "tenzir/tql2/entity_path.hpp"
 
 #include <caf/detail/is_one_of.hpp>
 
@@ -426,7 +426,7 @@ struct entity {
   }
 
   std::vector<identifier> path;
-  tql2::entity_path ref;
+  entity_path ref;
 
   friend auto inspect(auto& f, entity& x) -> bool {
     return f.object(x).fields(f.field("path", x.path), f.field("ref", x.ref));

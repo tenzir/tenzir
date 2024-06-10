@@ -14,9 +14,7 @@ namespace tenzir::plugins::set_select {
 
 namespace {
 
-using namespace tql2;
-
-class set final : public tql2::operator_plugin<set_operator> {
+class set final : public operator_plugin2<set_operator> {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto usage = "set <path>=<expr>...";
@@ -25,7 +23,6 @@ public:
     for (auto& arg : inv.args) {
       arg.match(
         [&](ast::assignment& x) {
-          check_assignment(x, ctx);
           assignments.push_back(std::move(x));
         },
         [&](auto&) {

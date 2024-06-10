@@ -256,7 +256,7 @@ auto exec_pipeline(std::string content,
                    const exec_config& cfg, caf::actor_system& sys)
   -> caf::expected<void> {
   if (cfg.tql2) {
-    auto success = tql2::exec(std::move(content), std::move(diag), cfg, sys);
+    auto success = exec2(std::move(content), std::move(diag), cfg, sys);
     return success ? ec::no_error : ec::silent;
   }
   auto parsed = tql::parse(std::move(content), *diag);

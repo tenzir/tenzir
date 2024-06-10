@@ -16,8 +16,6 @@ namespace tenzir::plugins::int_ {
 
 namespace {
 
-using namespace tql2;
-
 class int_ final : public function_plugin {
 public:
   auto name() const -> std::string override {

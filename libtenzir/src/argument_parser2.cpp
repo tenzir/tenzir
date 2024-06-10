@@ -79,7 +79,7 @@ void argument_parser2::parse(const ast::entity& self,
     }
     positional.set.match(
       [&]<data_type T>(setter<located<T>>& set) {
-        auto value = tql2::const_eval(expr, ctx);
+        auto value = const_eval(expr, ctx);
         if (not value) {
           return;
         }
@@ -119,7 +119,7 @@ void argument_parser2::parse(const ast::entity& self,
                  .primary(expr.get_location()));
           return;
         }
-        auto pipe = tql2::prepare_pipeline(std::move(pipe_expr->inner), ctx);
+        auto pipe = prepare_pipeline(std::move(pipe_expr->inner), ctx);
         set(located{std::move(pipe), expr.get_location()});
       });
     ++arg;
@@ -147,7 +147,7 @@ void argument_parser2::parse(const ast::entity& self,
     auto& expr = assignment->right;
     it->set.match(
       [&]<data_type T>(setter<located<T>>& set) {
-        auto value = tql2::const_eval(expr, ctx);
+        auto value = const_eval(expr, ctx);
         if (not value) {
           return;
         }
@@ -171,7 +171,7 @@ void argument_parser2::parse(const ast::entity& self,
                  .primary(expr.get_location()));
           return;
         }
-        auto pipe = tql2::prepare_pipeline(std::move(pipe_expr->inner), ctx);
+        auto pipe = prepare_pipeline(std::move(pipe_expr->inner), ctx);
         set(located{std::move(pipe), expr.get_location()});
       });
   }

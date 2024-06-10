@@ -8,11 +8,11 @@
 
 #pragma once
 
+#include "tenzir/session.hpp"
 #include "tenzir/tql2/ast.hpp"
-#include "tenzir/tql2/registry.hpp"
 
-namespace tenzir::tql2 {
+namespace tenzir {
 
 void resolve_entities(ast::pipeline& pipe, session ctx);
 
-} // namespace tenzir::tql2
+} // namespace tenzir

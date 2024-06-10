@@ -17,11 +17,11 @@
 
 #include <tsl/robin_map.h>
 
-namespace tenzir::tql2 {
+namespace tenzir {
 
 namespace {
 
-using namespace tenzir::ast;
+using namespace ast;
 
 class entity_resolver : public visitor<entity_resolver> {
 public:
@@ -127,4 +127,4 @@ void resolve_entities(ast::pipeline& pipe, session ctx) {
   entity_resolver{ctx}.visit(pipe);
 }
 
-} // namespace tenzir::tql2
+} // namespace tenzir

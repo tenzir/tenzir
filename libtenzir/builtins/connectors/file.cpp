@@ -578,8 +578,7 @@ private:
   loader_args args_;
 };
 
-class load_file_plugin final
-  : public tql2::operator_plugin<load_file_operator> {
+class load_file_plugin final : public operator_plugin2<load_file_operator> {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto args = loader_args{};
@@ -642,8 +641,7 @@ private:
   saver_args args_;
 };
 
-class save_file_plugin final
-  : public tql2::operator_plugin<save_file_operator> {
+class save_file_plugin final : public operator_plugin2<save_file_operator> {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto args = saver_args{};
