@@ -260,6 +260,14 @@ ENV TENZIR_PIPELINES__M57_SURICATA__NAME='M57 Suricata' \
     TENZIR_PIPELINES__M57_ZEEK__DEFINITION='from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read zeek-tsv | import' \
     TENZIR_PIPELINES__M57_ZEEK__LABELS='zeek'
 
+# -- tenzir-minidemo -------------------------------------------------------------
+
+FROM tenzir-node-ce AS tenzir-minidemo
+
+ENV TENZIR_PIPELINES__M57_SURICATA__NAME='M57 Suricata' \
+    TENZIR_PIPELINES__M57_SURICATA__DEFINITION='from https://storage.googleapis.com/tenzir-datasets/M57/suricata.json.zst read suricata --no-infer | where #schema != "suricata.stats" | head 10 | import' \
+    TENZIR_PIPELINES__M57_SURICATA__LABELS='suricata'
+
 # -- tenzir-node -----------------------------------------------------------------
 
 FROM tenzir-node-ce AS tenzir-node
