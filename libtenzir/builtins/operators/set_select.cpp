@@ -37,7 +37,7 @@ public:
   }
 };
 
-class select final : public operator_factory_plugin {
+class select final : public virtual operator_factory_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.select";

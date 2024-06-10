@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/tql2/arrow_utils.hpp>
 #include <tenzir/tql2/eval_impl.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -29,9 +30,9 @@ public:
     auto type_id = arg.type.make_fingerprint();
     auto b = arrow::StringBuilder{};
     // TODO
-    (void)b.Reserve(inv.length);
+    check(b.Reserve(inv.length));
     for (auto i = int64_t{0}; i < inv.length; ++i) {
-      (void)b.Append(type_id);
+      check(b.Append(type_id));
     }
     return {string_type{}, finish(b)};
   }

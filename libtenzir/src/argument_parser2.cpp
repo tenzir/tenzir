@@ -9,6 +9,8 @@
 #include "tenzir/argument_parser2.hpp"
 
 #include "tenzir/detail/enumerate.hpp"
+#include "tenzir/tql2/eval.hpp"
+#include "tenzir/tql2/exec.hpp"
 
 namespace tenzir {
 

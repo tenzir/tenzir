@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/tql2/arrow_utils.hpp"
 #include "tenzir/tql2/eval_impl.hpp"
 
 namespace tenzir {
@@ -21,7 +22,7 @@ struct EvalUnOp<ast::unary_op::not_, bool_type> {
     -> std::shared_ptr<arrow::BooleanArray> {
     // TODO
     auto input = x.values();
-    auto output = ensure(arrow::AllocateBuffer(input->size()));
+    auto output = check(arrow::AllocateBuffer(input->size()));
     auto input_ptr = input->data();
     auto output_ptr = output->mutable_data();
     auto length = detail::narrow<size_t>(input->size());

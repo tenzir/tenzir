@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/tql2/arrow_utils.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::path {
@@ -26,9 +27,10 @@ public:
       return series::null(string_type{}, inv.length);
     }
     auto b = arrow::StringBuilder{};
-    for (auto row = int64_t{0}; row < arg.array->length(); ++row) {
+    check(b.Reserve(inv.length));
+    for (auto row = int64_t{0}; row < inv.length; ++row) {
       if (arg.array->IsNull(row)) {
-        (void)b.AppendNull();
+        check(b.AppendNull());
         continue;
       }
       auto path = arg.array->GetView(row);
@@ -37,12 +39,12 @@ public:
       auto pos = path.find_last_of("/\\");
       // TODO: Trailing sep.
       if (pos == std::string::npos) {
-        (void)b.Append(path);
+        check(b.Append(path));
       } else {
-        (void)b.Append(path.substr(pos + 1));
+        check(b.Append(path.substr(pos + 1)));
       }
     }
-    return series{string_type{}, b.Finish().ValueOrDie()};
+    return series{string_type{}, finish(b)};
   }
 };
 
@@ -60,9 +62,9 @@ public:
       return series::null(string_type{}, inv.length);
     }
     auto b = arrow::StringBuilder{};
-    for (auto row = int64_t{0}; row < arg.array->length(); ++row) {
+    for (auto row = int64_t{0}; row < inv.length; ++row) {
       if (arg.array->IsNull(row)) {
-        (void)b.AppendNull();
+        check(b.AppendNull());
         continue;
       }
       auto path = arg.array->GetView(row);
@@ -72,12 +74,12 @@ public:
       // TODO: Trailing sep.
       if (pos == std::string::npos) {
         // TODO: Or what?
-        (void)b.Append(path);
+        check(b.Append(path));
       } else {
-        (void)b.Append(path.substr(0, pos));
+        check(b.Append(path.substr(0, pos)));
       }
     }
-    return series{string_type{}, b.Finish().ValueOrDie()};
+    return series{string_type{}, finish(b)};
   }
 };
 

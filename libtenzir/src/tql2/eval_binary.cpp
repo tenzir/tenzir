@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/series.hpp"
+#include "tenzir/tql2/arrow_utils.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval_impl.hpp"
 
@@ -58,7 +59,7 @@ struct EvalBinOp<ast::binary_op::add, string_type, string_type> {
   static auto eval(const arrow::StringArray& l, const arrow::StringArray& r)
     -> std::shared_ptr<arrow::StringArray> {
     auto b = arrow::StringBuilder{};
-    ensure(b.Reserve(l.length()));
+    check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
       if (l.IsNull(i) || r.IsNull(i)) {
         b.UnsafeAppendNull();
@@ -66,8 +67,8 @@ struct EvalBinOp<ast::binary_op::add, string_type, string_type> {
       }
       auto lv = l.GetView(i);
       auto rv = r.GetView(i);
-      ensure(b.Append(lv));
-      ensure(b.ExtendCurrent(rv));
+      check(b.Append(lv));
+      check(b.ExtendCurrent(rv));
     }
     return finish(b);
   }
@@ -93,7 +94,7 @@ struct EvalBinOp<ast::binary_op::eq, T, T> {
   eval(const type_to_arrow_array_t<T>& l, const type_to_arrow_array_t<T>& r)
     -> std::shared_ptr<arrow::BooleanArray> {
     auto b = arrow::BooleanBuilder{};
-    ensure(b.Reserve(l.length()));
+    check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
       auto ln = l.IsNull(i);
       auto rn = r.IsNull(i);
@@ -117,7 +118,7 @@ struct EvalBinOp<ast::binary_op::gt, T, T> {
   eval(const type_to_arrow_array_t<T>& l, const type_to_arrow_array_t<T>& r)
     -> std::shared_ptr<arrow::BooleanArray> {
     auto b = arrow::BooleanBuilder{};
-    ensure(b.Reserve(l.length()));
+    check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
       auto ln = l.IsNull(i);
       auto rn = r.IsNull(i);
@@ -142,7 +143,7 @@ struct EvalBinOp<ast::binary_op::and_, bool_type, bool_type> {
     auto has_null = l.null_bitmap() || r.null_bitmap();
     auto has_offset = l.offset() != 0 || r.offset() != 0;
     if (not has_null && not has_offset) {
-      auto buffer = ensure(arrow::AllocateBitmap(l.length()));
+      auto buffer = check(arrow::AllocateBitmap(l.length()));
       auto size = (l.length() + 7) / 8;
       TENZIR_ASSERT(l.values()->size() >= size);
       TENZIR_ASSERT(r.values()->size() >= size);
@@ -156,7 +157,7 @@ struct EvalBinOp<ast::binary_op::and_, bool_type, bool_type> {
                                                    std::move(buffer));
     }
     auto b = arrow::BooleanBuilder{};
-    ensure(b.Reserve(l.length()));
+    check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
       auto lv = l.Value(i);
       auto rv = r.Value(i);
@@ -186,7 +187,7 @@ struct EvalBinOp<Op, L, null_type> {
     constexpr auto invert = Op == ast::binary_op::neq;
     // TODO: This is bad.
     TENZIR_UNUSED(r);
-    auto buffer = ensure(arrow::AllocateBitmap(l.length()));
+    auto buffer = check(arrow::AllocateBitmap(l.length()));
     auto& null_bitmap = l.null_bitmap();
     if (not null_bitmap) {
       // All non-null, except if `null_type`.
@@ -224,7 +225,7 @@ struct EvalBinOp<Op, string_type, string_type> {
     // TODO: This is bad.
     constexpr auto invert = Op == ast::binary_op::neq;
     auto b = arrow::BooleanBuilder{};
-    ensure(b.Reserve(l.length()));
+    check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
       auto ln = l.IsNull(i);
       auto rn = r.IsNull(i);

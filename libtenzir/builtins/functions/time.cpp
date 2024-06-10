@@ -8,6 +8,7 @@
 
 #include <tenzir/concept/parseable/tenzir/time.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/tql2/arrow_utils.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::time_ {
@@ -31,27 +32,25 @@ public:
       [](basic_series<time_type>& arg) {
         return std::move(arg.array);
       },
-      [](basic_series<string_type>& arg) {
+      [&](basic_series<string_type>& arg) {
         auto b = arrow::TimestampBuilder{
           std::make_shared<arrow::TimestampType>(arrow::TimeUnit::NANO),
           arrow::default_memory_pool()};
-        (void)b.Reserve(arg.array->length());
+        check(b.Reserve(inv.length));
         for (auto i = 0; i < arg.array->length(); ++i) {
           if (arg.array->IsNull(i)) {
-            (void)b.UnsafeAppendNull();
+            check(b.AppendNull());
             continue;
           }
           auto result = tenzir::time{};
           if (parsers::time(arg.array->GetView(i), result)) {
-            b.UnsafeAppend(result.time_since_epoch().count());
+            check(b.Append(result.time_since_epoch().count()));
           } else {
             // TODO: ?
-            b.UnsafeAppendNull();
+            check(b.AppendNull());
           }
         }
-        auto result = std::shared_ptr<arrow::TimestampArray>{};
-        (void)b.Finish(&result);
-        return result;
+        return finish(b);
       });
     return series{time_type{}, std::move(result)};
   }
@@ -76,18 +75,18 @@ public:
     TENZIR_ASSERT(ty.timezone().empty());
     auto factor = 1000 * 1000 * 1000;
     auto b = arrow::DoubleBuilder{};
-    (void)b.Reserve(arg.array->length());
-    for (auto i = 0; i < arg.array->length(); ++i) {
+    check(b.Reserve(inv.length));
+    for (auto i = 0; i < inv.length; ++i) {
       if (arg.array->IsNull(i)) {
-        (void)b.UnsafeAppendNull();
+        check(b.AppendNull());
         continue;
       }
       auto val = arg.array->Value(i);
       auto pre = static_cast<double>(val / factor);
       auto post = static_cast<double>(val % factor) / factor;
-      (void)b.UnsafeAppend(pre + post);
+      check(b.Append(pre + post));
     }
-    return series{double_type{}, b.Finish().ValueOrDie()};
+    return series{double_type{}, finish(b)};
   }
 };
 

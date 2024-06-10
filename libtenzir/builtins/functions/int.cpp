@@ -6,10 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/diagnostics.hpp"
-
 #include <tenzir/concept/parseable/tenzir/si.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/diagnostics.hpp>
+#include <tenzir/tql2/arrow_utils.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::int_ {
@@ -37,18 +37,17 @@ public:
       [&](const arrow::StringArray& arg) {
         auto report = false;
         auto b = arrow::Int64Builder{};
-        (void)b.Reserve(arg.length());
-        for (auto row = int64_t{0}; row < detail::narrow<int64_t>(inv.length);
-             ++row) {
+        check(b.Reserve(inv.length));
+        for (auto row = int64_t{0}; row < inv.length; ++row) {
           if (arg.IsNull(row)) {
             // TODO: Do we want to report this? Probably not.
-            (void)b.UnsafeAppendNull();
+            check(b.AppendNull());
           } else {
             auto result = int64_t{};
             if (parsers::integer(arg.GetView(row), result)) {
-              (void)b.UnsafeAppend(result);
+              check(b.Append(result));
             } else {
-              (void)b.UnsafeAppendNull();
+              check(b.AppendNull());
               report = true;
             }
           }
@@ -60,9 +59,7 @@ public:
             .primary(inv.self.get_location())
             .emit(dh);
         }
-        auto ret = std::shared_ptr<arrow::Int64Array>{};
-        (void)b.Finish(&ret);
-        return ret;
+        return finish(b);
       },
       [&](const auto&) -> std::shared_ptr<arrow::Int64Array> {
         diagnostic::warning("`int` currently expects `int64` or `string`, got "
@@ -71,10 +68,8 @@ public:
           .primary(arg.source)
           .emit(dh);
         auto b = arrow::Int64Builder{};
-        (void)b.AppendNulls(detail::narrow<int64_t>(inv.length));
-        auto ret = std::shared_ptr<arrow::Int64Array>{};
-        (void)b.Finish(&ret);
-        return ret;
+        check(b.AppendNulls(detail::narrow<int64_t>(inv.length)));
+        return finish(b);
       },
     };
     return series{int64_type{}, caf::visit(f, *arg.inner.array)};

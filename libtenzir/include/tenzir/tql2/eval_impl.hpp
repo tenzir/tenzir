@@ -18,26 +18,6 @@
 
 namespace tenzir {
 
-inline void ensure(const arrow::Status& status) {
-  TENZIR_ASSERT(status.ok(), status.ToString());
-}
-
-template <class T>
-[[nodiscard]] auto ensure(arrow::Result<T> result) -> T {
-  ensure(result.status());
-  return result.MoveValueUnsafe();
-}
-
-template <std::derived_from<arrow::ArrayBuilder> T>
-[[nodiscard]] auto finish(T& x) {
-  using Type = std::conditional_t<std::same_as<arrow::StringBuilder, T>,
-                                  arrow::StringType, typename T::TypeClass>;
-  auto result = std::shared_ptr<typename arrow::TypeTraits<Type>::ArrayType>{};
-  ensure(x.Finish(&result));
-  TENZIR_ASSERT(result);
-  return result;
-}
-
 inline auto data_to_series(const data& x, int64_t length) -> series {
   // TODO: This is overkill.
   auto b = series_builder{};

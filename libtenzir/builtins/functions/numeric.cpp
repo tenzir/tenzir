@@ -6,11 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/argument_parser2.hpp"
-
+#include <tenzir/argument_parser2.hpp>
 #include <tenzir/concept/parseable/tenzir/si.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/tql2/arrow_utils.hpp>
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -42,19 +42,17 @@ public:
       },
       [&](const arrow::DoubleArray& arg) {
         auto b = arrow::Int64Builder{};
-        for (auto row = int64_t{0}; row < detail::narrow<int64_t>(inv.length);
-             ++row) {
+        check(b.Reserve(inv.length));
+        for (auto row = int64_t{0}; row < inv.length; ++row) {
           if (arg.IsNull(row)) {
-            (void)b.AppendNull();
+            check(b.AppendNull());
           } else {
             // TODO: NaN, inf, ...
             auto result = std::llround(arg.Value(row));
-            (void)b.Append(result);
+            check(b.Append(result));
           }
         }
-        auto ret = std::shared_ptr<arrow::Int64Array>{};
-        (void)b.Finish(&ret);
-        return ret;
+        return finish(b);
       },
       [&](const auto&) -> std::shared_ptr<arrow::Int64Array> {
         diagnostic::warning("`round` expects `int64` or `double`, got `{}`",
@@ -63,10 +61,8 @@ public:
           .primary(inv.self.get_location())
           .emit(dh);
         auto b = arrow::Int64Builder{};
-        (void)b.AppendNulls(detail::narrow<int64_t>(inv.length));
-        auto ret = std::shared_ptr<arrow::Int64Array>{};
-        (void)b.Finish(&ret);
-        return ret;
+        check(b.AppendNulls(detail::narrow<int64_t>(inv.length)));
+        return finish(b);
       },
     };
     return series{int64_type{}, caf::visit(f, *arg.inner.array)};
@@ -88,7 +84,7 @@ public:
     }
     auto compute = [&](const arrow::DoubleArray& x) {
       auto b = arrow::DoubleBuilder{};
-      (void)b.Reserve(x.length());
+      check(b.Reserve(inv.length));
 #if 0
       // TODO: This is probably UB.
       auto alloc = arrow::AllocateBuffer(x.length() * sizeof(double));
@@ -126,21 +122,19 @@ public:
       for (auto y : x) {
         if (not y) {
           // TODO: Warning?
-          b.UnsafeAppendNull();
+          check(b.AppendNull());
           continue;
         }
         auto z = *y;
         if (z < 0.0) {
           // TODO: Warning?
-          b.UnsafeAppendNull();
+          check(b.AppendNull());
           continue;
         }
-        b.UnsafeAppend(std::sqrt(z));
+        check(b.Append(std::sqrt(z)));
       }
 #endif
-      auto result = std::shared_ptr<arrow::DoubleArray>{};
-      (void)b.Finish(&result);
-      return result;
+      return finish(b);
     };
     auto result = arg.match(
       [&](basic_series<double_type>& x) {
@@ -149,17 +143,15 @@ public:
       [&](basic_series<int64_type>& x) {
         // TODO: Conversation should be automatic (if not part of the kernel).
         auto b = arrow::DoubleBuilder{};
-        (void)b.Reserve(x.length());
+        check(b.Reserve(x.length()));
         for (auto y : *x.array) {
           if (y) {
-            b.UnsafeAppend(static_cast<double>(*y));
+            check(b.Append(static_cast<double>(*y)));
           } else {
-            b.UnsafeAppendNull();
+            check(b.AppendNull());
           }
         }
-        auto conv = std::shared_ptr<arrow::DoubleArray>{};
-        (void)b.Finish(&conv);
-        return compute(*conv);
+        return compute(*finish(b));
       });
     return series{double_type{}, std::move(result)};
   }
@@ -182,14 +174,13 @@ public:
         .emit(dh);
     }
     auto b = arrow::DoubleBuilder{};
-    (void)b.Reserve(inv.length);
-    // TODO
+    check(b.Reserve(inv.length));
     auto engine = std::default_random_engine{std::random_device{}()};
     auto dist = std::uniform_real_distribution<double>{0.0, 1.0};
     for (auto i = int64_t{0}; i < inv.length; ++i) {
-      b.UnsafeAppend(dist(engine));
+      check(b.Append(dist(engine)));
     }
-    return {double_type{}, b.Finish().ValueOrDie()};
+    return {double_type{}, finish(b)};
   }
 };
 

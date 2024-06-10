@@ -1622,9 +1622,7 @@ private:
   json_printer printer_;
 };
 
-class read_json_plugin final
-  : public virtual operator_inspection_plugin<read_json>,
-    public virtual operator_factory_plugin {
+class read_json_plugin final : public virtual operator_plugin2<read_json> {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto args = parser_args{};
@@ -1726,9 +1724,7 @@ public:
   }
 };
 
-class write_json_plugin final
-  : public virtual operator_inspection_plugin<write_json>,
-    public virtual operator_factory_plugin {
+class write_json_plugin final : public virtual operator_plugin2<write_json> {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     // TODO: More options, and consider `null_fields=false` as default.

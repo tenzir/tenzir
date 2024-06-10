@@ -8,6 +8,7 @@
 
 #include <tenzir/concept/parseable/tenzir/si.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/tql2/arrow_utils.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::ocsf {
@@ -29,7 +30,8 @@ public:
       return series::null(int64_type{}, inv.length);
     }
     auto b = arrow::Int64Builder{};
-    for (auto i = int64_t{0}; i < arg.array->length(); ++i) {
+    check(b.Reserve(inv.length));
+    for (auto i = int64_t{0}; i < inv.length; ++i) {
       auto name = arg.array->GetView(i);
       // Uncategorized [0]
       // System Activity [1]
@@ -59,9 +61,9 @@ public:
         }
         return 0;
       });
-      (void)b.Append(id);
+      check(b.Append(id));
     }
-    return series{int64_type{}, b.Finish().ValueOrDie()};
+    return series{int64_type{}, finish(b)};
   }
 };
 
@@ -80,7 +82,8 @@ public:
       return series::null(int64_type{}, inv.length);
     }
     auto b = arrow::Int64Builder{};
-    for (auto i = int64_t{0}; i < arg.array->length(); ++i) {
+    check(b.Reserve(inv.length));
+    for (auto i = int64_t{0}; i < inv.length; ++i) {
       auto name = arg.array->GetView(i);
       // TODO: Auto-generate a table for this!
       auto id = std::invoke([&] {
@@ -89,9 +92,9 @@ public:
         }
         return 0;
       });
-      (void)b.Append(id);
+      check(b.Append(id));
     }
-    return series{int64_type{}, b.Finish().ValueOrDie()};
+    return series{int64_type{}, finish(b)};
   }
 };
 
