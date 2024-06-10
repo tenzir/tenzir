@@ -126,7 +126,7 @@ else
   package_url_base="https://storage.googleapis.com/tenzir-dist-public/packages/main"
   if [ "${platform}" = "RPM" ]
   then
-    package_url="${package_url_base}/debian/tenzir-static-latest.rpm"
+    package_url="${package_url_base}/rpm/tenzir-static-latest.rpm"
   elif [ "${platform}" = "Debian" ]
   then
     package_url="${package_url_base}/debian/tenzir-static-latest.deb"
