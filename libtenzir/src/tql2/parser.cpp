@@ -195,7 +195,20 @@ private:
 
   auto parse_invocation_or_assignment() -> statement {
     // TODO: Proper entity parsing.
-    auto left = to_selector(parse_unary_expression());
+    auto unary_expr = parse_unary_expression();
+    if (auto call = std::get_if<ast::function_call>(&*unary_expr.kind)) {
+      // TODO: We patch a top-level function call to be an operator invocation
+      // instead. This could be done differently by slightly rewriting the
+      // parser. Because this is not (yet) reflected in the AST, the optional
+      // parenthesis are not reflected.
+      if (not at_statement_end()) {
+        diagnostic::error("expected end of statement")
+          .primary(next_location())
+          .throw_();
+      }
+      return ast::invocation{std::move(call->fn), std::move(call->args)};
+    }
+    auto left = to_selector(std::move(unary_expr));
     if (auto equal = accept(tk::equal)) {
       auto right = parse_expression();
       return assignment{
