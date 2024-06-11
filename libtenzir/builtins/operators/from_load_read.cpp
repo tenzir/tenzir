@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 #include <tenzir/detail/loader_saver_resolver.hpp>
@@ -297,6 +298,33 @@ public:
   }
 };
 
+class from_plugin2 final : public virtual operator_factory_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.from";
+  }
+
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
+    if (inv.args.empty()) {
+      diagnostic::error("expected positional argument `<path/url>`")
+        .primary(inv.self)
+        .emit(ctx);
+      return nullptr;
+    }
+    auto path_opt = const_eval(inv.args[0], ctx);
+    if (not path_opt) {
+      return nullptr;
+    }
+    auto path = caf::get_if<std::string>(&*path_opt);
+    if (not path) {
+      diagnostic::error("expected string").primary(inv.args[0]).emit(ctx);
+      return nullptr;
+    }
+    diagnostic::error("got: {}", *path).primary(inv.self).emit(ctx);
+    return nullptr;
+  }
+};
+
 class load_plugin2 final : virtual public operator_factory_plugin {
 public:
   auto name() const -> std::string override {
@@ -305,7 +333,7 @@ public:
 
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     diagnostic::error("operator is not yet implemented")
-      .primary(inv.self.get_location())
+      .primary(inv.self)
       .emit(ctx);
     return nullptr;
   }
@@ -317,4 +345,5 @@ public:
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::from_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::load_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::read_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::from_plugin2)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::load_plugin2)

@@ -85,7 +85,7 @@ auto function_argument_parser::parse(function_plugin::invocation& inv,
       [&](function_plugin::positional_argument& arg) {
         if (it == positional_.end()) {
           diagnostic::error("unexpected positional argument")
-            .primary(arg.source)
+            .primary(arg)
             .emit(dh);
           return false;
         }
@@ -95,7 +95,7 @@ auto function_argument_parser::parse(function_plugin::invocation& inv,
       },
       [&](function_plugin::named_argument& arg) {
         diagnostic::error("unexpected named argument")
-          .primary(arg.selector.get_location())
+          .primary(arg.selector)
           .emit(dh);
         return false;
       });
@@ -105,9 +105,7 @@ auto function_argument_parser::parse(function_plugin::invocation& inv,
   }
   if (it != positional_.end()) {
     // TODO: Better location?
-    diagnostic::error("missing positional argument")
-      .primary(inv.self.get_location())
-      .emit(dh);
+    diagnostic::error("missing positional argument").primary(inv.self).emit(dh);
     return false;
   }
   return true;
@@ -153,7 +151,7 @@ auto function_argument_parser::add(basic_series<Type>& x, std::string meta)
         }
         diagnostic::warning("expected {} but got {}", type_kind::of<Type>,
                             y.inner.type.kind())
-          .primary(y.source)
+          .primary(y)
           .emit(dh);
         return false;
       }
@@ -178,7 +176,7 @@ auto function_argument_parser::add(located<basic_series<Type>>& x,
         }
         diagnostic::warning("expected {} but got {}", type_kind::of<Type>,
                             y.inner.type.kind())
-          .primary(y.source)
+          .primary(y)
           .emit(dh);
         return false;
       }
@@ -220,7 +218,7 @@ auto aggregation_plugin::eval(invocation inv, diagnostic_handler& dh) const
   -> series {
   // TODO: Consider making this pure-virtual or provide a default implementation.
   diagnostic::error("this function can only be used as an aggregation function")
-    .primary(inv.self.fn.get_location())
+    .primary(inv.self.fn)
     .emit(dh);
   return series::null(null_type{}, inv.length);
 }

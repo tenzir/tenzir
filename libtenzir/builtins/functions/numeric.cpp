@@ -58,7 +58,7 @@ public:
         diagnostic::warning("`round` expects `int64` or `double`, got `{}`",
                             arg.inner.type.kind())
           // TODO: Wrong location.
-          .primary(inv.self.get_location())
+          .primary(inv.self)
           .emit(dh);
         auto b = arrow::Int64Builder{};
         check(b.AppendNulls(detail::narrow<int64_t>(inv.length)));
@@ -170,7 +170,7 @@ public:
     }
     if (not inv.args.empty()) {
       diagnostic::error("`random` expects no arguments")
-        .primary(inv.self.get_location())
+        .primary(inv.self)
         .emit(dh);
     }
     auto b = arrow::DoubleBuilder{};
@@ -252,7 +252,7 @@ public:
       [&](auto&) {
         diagnostic::warning("expected integer or double, but got {}",
                             arg.type.kind())
-          .primary(expr_.get_location())
+          .primary(expr_)
           .emit(ctx);
       },
     };
@@ -281,7 +281,7 @@ public:
     if (call.args.size() != 1) {
       diagnostic::error("expected exactly one argument, got {}",
                         call.args.size())
-        .primary(call.get_location())
+        .primary(call)
         .emit(ctx);
       return nullptr;
     }
@@ -356,7 +356,7 @@ public:
       },
       [&](const auto&) {
         diagnostic::warning("expected number, got `{}`", arg.type.kind())
-          .primary(expr_.get_location())
+          .primary(expr_)
           .emit(ctx);
       },
     };
@@ -384,7 +384,7 @@ public:
     // TODO: Improve.
     if (x.args.size() != 2) {
       diagnostic::error("expected exactly two arguments, got {}", x.args.size())
-        .primary(x.get_location())
+        .primary(x)
         .usage("quantile(<expr>, <quantile>)")
         .docs("https://docs.tenzir.com/functions/quantile")
         .emit(ctx);
@@ -400,13 +400,13 @@ public:
     auto quantile = caf::get_if<double>(&*quantile_opt);
     if (not quantile) {
       diagnostic::error("expected double, got TODO")
-        .primary(quantile_expr.get_location())
+        .primary(quantile_expr)
         .emit(ctx);
       return nullptr;
     }
     if (*quantile < 0.0 || *quantile > 1.0) {
       diagnostic::error("expected quantile to be in [0.0, 1.0]")
-        .primary(quantile_expr.get_location())
+        .primary(quantile_expr)
         .emit(ctx);
       return nullptr;
     }

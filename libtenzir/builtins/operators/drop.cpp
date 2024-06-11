@@ -190,13 +190,13 @@ public:
             err.reason.match(
               [&](resolve_error::field_not_found&) {
                 diagnostic::warning("could not find field `{}`", err.ident.name)
-                  .primary(err.ident.location)
+                  .primary(err.ident)
                   .emit(ctrl.diagnostics());
               },
               [&](resolve_error::field_of_non_record& reason) {
                 diagnostic::warning("type `{}` has no field field `{}`",
                                     reason.type.kind(), err.ident.name)
-                  .primary(err.ident.location)
+                  .primary(err.ident)
                   .emit(ctrl.diagnostics());
               });
           });
@@ -231,7 +231,7 @@ public:
       } else {
         // TODO: Improve error message.
         diagnostic::error("expected simple selector")
-          .primary(arg.get_location())
+          .primary(arg)
           .emit(ctx.dh());
       }
     }

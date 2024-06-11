@@ -380,7 +380,7 @@ public:
       .parse(inv, ctx);
     if (interval.inner <= duration::zero()) {
       diagnostic::error("expected a positive duration, got {}", interval.inner)
-        .primary(interval.source)
+        .primary(interval)
         .emit(ctx);
       return nullptr;
     }
@@ -393,7 +393,7 @@ public:
       // TODO: Lift this limitation.
       // TODO: Is this safe?
       diagnostic::error("expected exactly one operator, found {}", ops.size())
-        .primary(inv.args[1].get_location())
+        .primary(inv.args[1])
         .emit(ctx);
       return nullptr;
     }

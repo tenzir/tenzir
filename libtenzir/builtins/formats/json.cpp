@@ -1712,7 +1712,7 @@ public:
         // TODO: This can be very noisy.
         diagnostic::warning("could not parse json: {}",
                             simdjson::error_message(result.error()))
-          .primary(inv.self.fn.get_location())
+          .primary(inv.self.fn)
           .emit(dh);
         b.null();
         continue;

@@ -478,17 +478,17 @@ auto prepare_pipeline(ast::pipeline&& pipe, session ctx) -> pipeline {
       },
       [&](ast::match_stmt& x) {
         diagnostic::error("`match` not yet implemented, try using `if` instead")
-          .primary(x.get_location())
+          .primary(x)
           .emit(ctx.dh());
       },
       [&](ast::let_stmt& x) {
         diagnostic::error("`let` statements are not implemented yet")
-          .primary(x.get_location())
+          .primary(x)
           .emit(ctx);
       },
       [&](auto& x) {
         diagnostic::error("statement not implemented yet")
-          .primary(x.get_location())
+          .primary(x)
           .emit(ctx.dh());
       });
   }

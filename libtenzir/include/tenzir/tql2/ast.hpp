@@ -73,8 +73,9 @@ struct identifier {
     : identifier{std::string(name), location} {
   }
 
-  std::string name;
-  tenzir::location location;
+  auto get_location() const -> location {
+    return location;
+  }
 
   friend auto inspect(auto& f, identifier& x) -> bool {
     if (auto dbg = as_debug_writer(f)) {
@@ -84,6 +85,9 @@ struct identifier {
     return f.object(x).fields(f.field("symbol", x.name),
                               f.field("location", x.location));
   }
+
+  std::string name;
+  tenzir::location location;
 };
 
 struct meta {

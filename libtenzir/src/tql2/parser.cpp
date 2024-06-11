@@ -117,7 +117,7 @@ private:
     if (silent_peek(tk::identifier)) {
       auto ident = expect(tk::identifier);
       diagnostic::error("identifier after `let` must start with `$`")
-        .primary(ident.location, "try `${}` instead", ident.text)
+        .primary(ident, "try `${}` instead", ident.text)
         .throw_();
     }
     auto name = expect(tk::dollar_ident);
@@ -404,7 +404,7 @@ private:
           if (auto comma = accept(tk::comma)) {
             diagnostic::error(
               "found `,` in index expression, which is not a list")
-              .primary(comma.location)
+              .primary(comma)
               .throw_();
           }
           rbracket = expect(tk::rbracket);
@@ -465,19 +465,19 @@ private:
         kind = meta_extractor::internal;
       } else if (ident.name == "schema") {
         diagnostic::error("use `{}tag` instead", is_at ? "@" : "meta.")
-          .primary(begin.combine(ident.location))
+          .primary(begin.combine(ident))
           .throw_();
       } else if (ident.name == "schema_id") {
         diagnostic::error("use `type_id(this)` instead")
-          .primary(begin.combine(ident.location))
+          .primary(begin.combine(ident))
           .throw_();
       } else {
         diagnostic::error("unknown metadata name `{}`", ident.name)
-          .primary(ident.location)
+          .primary(ident)
           .hint("must be one of `tag`, `import_time`, `internal`")
           .throw_();
       }
-      return ast::meta{kind, begin.combine(ident.location)};
+      return ast::meta{kind, begin.combine(ident)};
     }
     if (auto token = accept(tk::this_)) {
       return ast::this_{token.location};
@@ -660,7 +660,7 @@ private:
     if (not arrow::util::ValidateUTF8(result)) {
       // TODO: Would be nice to report the actual error location.
       diagnostic::error("string contains invalid utf-8")
-        .primary(token.location)
+        .primary(token)
         .hint("consider using a blob instead: b{}", token.text)
         .throw_();
     }
@@ -683,7 +683,7 @@ private:
       return literal{result, token.location};
     }
     diagnostic::error("could not parse scalar")
-      .primary(token.location)
+      .primary(token)
       .note("scalar parsing still is very rudimentary")
       .throw_();
   }
@@ -700,9 +700,7 @@ private:
       if (auto result = time{}; parsers::ymdhms(token.text, result)) {
         return literal{result, token.location};
       }
-      diagnostic::error("could not parse datetime")
-        .primary(token.location)
-        .throw_();
+      diagnostic::error("could not parse datetime").primary(token).throw_();
     }
     if (auto token = accept(tk::true_)) {
       return literal{true, token.location};
@@ -758,10 +756,10 @@ private:
       if (auto comma = accept(tk::comma)) {
         if (args.empty()) {
           diagnostic::error("unexpected comma before any arguments")
-            .primary(comma.location)
+            .primary(comma)
             .throw_();
         } else {
-          diagnostic::error("duplicate comma").primary(comma.location).throw_();
+          diagnostic::error("duplicate comma").primary(comma).throw_();
         }
       }
       args.push_back(parse_expression());
@@ -832,6 +830,10 @@ private:
 
     auto as_string() const -> located<std::string> {
       return {text, location};
+    }
+
+    auto get_location() const -> tenzir::location {
+      return location;
     }
   };
 

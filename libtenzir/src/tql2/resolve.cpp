@@ -35,7 +35,7 @@ public:
     TENZIR_ASSERT(context_ != context_t::none);
     if (x.path.size() > 1) {
       diagnostic::error("module `{}` not found", x.path[0].name)
-        .primary(x.path[0].location)
+        .primary(x.path[0])
         .emit(diag_);
       return;
     }
@@ -59,7 +59,7 @@ public:
       auto available = context_ == context_t::op_name ? reg_.operator_names()
                                                       : reg_.function_names();
       diagnostic::error("{} `{}` not found", expected, name)
-        .primary(x.get_location())
+        .primary(x)
         .hint("must be one of: {}", fmt::join(available, ", "))
         .emit(diag_);
       return;
@@ -70,7 +70,7 @@ public:
         // TODO: Methods?
         if (context_ != context_t::fn_name) {
           diagnostic::error("expected {}, got function", expected)
-            .primary(x.get_location())
+            .primary(x)
             .emit(diag_);
           return;
         }
@@ -79,7 +79,7 @@ public:
       [&](const operator_factory_plugin*) {
         if (context_ != context_t::op_name) {
           diagnostic::error("expected {}, got operator", expected)
-            .primary(x.get_location())
+            .primary(x)
             .emit(diag_);
           return;
         }

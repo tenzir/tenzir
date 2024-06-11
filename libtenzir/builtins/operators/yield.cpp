@@ -54,7 +54,7 @@ public:
       auto last = current;
       if (not field(current, end, unused)) {
         diagnostic::error("expected field name")
-          .primary({to_offset(current), to_offset(current, 1)})
+          .primary(tenzir::location{to_offset(current), to_offset(current, 1)})
           .throw_();
       }
       return projection{std::string{last, current},
@@ -73,12 +73,13 @@ public:
                                                        to_offset(current)});
         } else {
           diagnostic::error("expected `]`")
-            .primary({to_offset(current), to_offset(current, 1)})
+            .primary(
+              tenzir::location{to_offset(current), to_offset(current, 1)})
             .throw_();
         }
       } else {
         diagnostic::error("expected `.<field>` or `[]`")
-          .primary({to_offset(current), to_offset(current, 1)})
+          .primary(tenzir::location{to_offset(current), to_offset(current, 1)})
           .throw_();
       }
     }

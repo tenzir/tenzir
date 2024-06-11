@@ -66,7 +66,7 @@ void argument_parser2::parse(const ast::entity& self,
       }
       emit(diagnostic::error("expected additional positional argument `{}`",
                              positional.meta)
-             .primary(self.get_location()));
+             .primary(self));
       break;
     }
     auto& expr = *arg;
@@ -76,7 +76,7 @@ void argument_parser2::parse(const ast::entity& self,
       }
       emit(diagnostic::error("expected positional argument `{}` first",
                              positional.meta)
-             .primary(expr.get_location()));
+             .primary(expr));
       break;
     }
     positional.set.match(
@@ -95,7 +95,7 @@ void argument_parser2::parse(const ast::entity& self,
               if (*other < 0) {
                 emit(diagnostic::error("expected positive integer, got `{}`",
                                        *other)
-                       .primary(expr.get_location()));
+                       .primary(expr));
                 return;
               }
               storage = *other;
@@ -106,7 +106,7 @@ void argument_parser2::parse(const ast::entity& self,
         if (not cast) {
           emit(diagnostic::error("expected argument of type `{}`, but got `{}`",
                                  type_kind::of<data_to_type_t<T>>, kind(value))
-                 .primary(expr.get_location()));
+                 .primary(expr));
           return;
         }
         set(located{std::move(*cast), expr.get_location()});
@@ -117,8 +117,8 @@ void argument_parser2::parse(const ast::entity& self,
       [&](setter<located<pipeline>>& set) {
         auto pipe_expr = std::get_if<ast::pipeline_expr>(&*expr.kind);
         if (not pipe_expr) {
-          emit(diagnostic::error("expected a pipeline expression")
-                 .primary(expr.get_location()));
+          emit(
+            diagnostic::error("expected a pipeline expression").primary(expr));
           return;
         }
         auto pipe = prepare_pipeline(std::move(pipe_expr->inner), ctx);
@@ -130,20 +130,19 @@ void argument_parser2::parse(const ast::entity& self,
     auto assignment = std::get_if<ast::assignment>(&*arg->kind);
     if (not assignment) {
       emit(diagnostic::error("did not expect more positional arguments")
-             .primary(arg->get_location()));
+             .primary(*arg));
       continue;
     }
     auto sel = std::get_if<ast::simple_selector>(&assignment->left);
     if (not sel || sel->has_this() || sel->path().size() != 1) {
-      emit(diagnostic::error("invalid name")
-             .primary(assignment->left.get_location()));
+      emit(diagnostic::error("invalid name").primary(assignment->left));
       continue;
     }
     auto& name = sel->path()[0].name;
     auto it = std::ranges::find(named_, name, &named::name);
     if (it == named_.end()) {
       emit(diagnostic::error("named argument `{}` does not exist", name)
-             .primary(assignment->left.get_location()));
+             .primary(assignment->left));
       continue;
     }
     auto& expr = assignment->right;
@@ -158,7 +157,7 @@ void argument_parser2::parse(const ast::entity& self,
           // TODO: Attempt conversion.
           emit(diagnostic::error("expected argument of type `{}`, but got `{}`",
                                  type_kind::of<data_to_type_t<T>>, kind(value))
-                 .primary(expr.get_location()));
+                 .primary(expr));
           return;
         }
         set(located{std::move(*cast), expr.get_location()});
@@ -169,8 +168,8 @@ void argument_parser2::parse(const ast::entity& self,
       [&](setter<located<pipeline>>& set) {
         auto pipe_expr = std::get_if<ast::pipeline_expr>(&*expr.kind);
         if (not pipe_expr) {
-          emit(diagnostic::error("expected a pipeline expression")
-                 .primary(expr.get_location()));
+          emit(
+            diagnostic::error("expected a pipeline expression").primary(expr));
           return;
         }
         auto pipe = prepare_pipeline(std::move(pipe_expr->inner), ctx);

@@ -183,7 +183,7 @@ public:
   // -- annotations -----------------------------------------------------------
 
   auto
-  primary(location source, std::string text = "") && -> diagnostic_builder {
+  primary(as_location source, std::string text = "") && -> diagnostic_builder {
     result_.annotations.push_back(
       diagnostic_annotation{true, std::move(text), source});
     return std::move(*this);
@@ -191,14 +191,14 @@ public:
 
   template <class... Ts>
     requires(sizeof...(Ts) > 0)
-  auto primary(location source, fmt::format_string<Ts...> str,
+  auto primary(as_location source, fmt::format_string<Ts...> str,
                Ts&&... xs) && -> diagnostic_builder {
     return std::move(*this).primary(
       source, fmt::format(std::move(str), std::forward<Ts>(xs)...));
   }
 
-  auto
-  secondary(location source, std::string text = "") && -> diagnostic_builder {
+  auto secondary(as_location source, std::string text
+                                     = "") && -> diagnostic_builder {
     result_.annotations.push_back(
       diagnostic_annotation{false, std::move(text), source});
     return std::move(*this);
@@ -206,7 +206,7 @@ public:
 
   template <class... Ts>
     requires(sizeof...(Ts) > 0)
-  auto secondary(location source, fmt::format_string<Ts...> str,
+  auto secondary(as_location source, fmt::format_string<Ts...> str,
                  Ts&&... xs) && -> diagnostic_builder {
     return std::move(*this).secondary(
       source, fmt::format(std::move(str), std::forward<Ts>(xs)...));

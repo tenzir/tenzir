@@ -267,7 +267,7 @@ auto evaluator::eval(const ast::binary_expr& x) -> series {
           diagnostic::warning("binary operator `{}` not implemented for `{}` "
                               "and `{}`",
                               x.op.inner, l.type.kind(), r.type.kind())
-            .primary(x.get_location())
+            .primary(x)
             .emit(dh_);
           return null();
         }

@@ -108,7 +108,7 @@ auto evaluator::eval(const ast::record& x) -> series {
         auto [_, inserted] = fields.emplace(field.name.name, std::move(val));
         if (not inserted) {
           diagnostic::warning("todo: overwrite existing?")
-            .primary(field.name.location)
+            .primary(field.name)
             .emit(dh_);
         }
       },
@@ -154,7 +154,7 @@ auto evaluator::eval(const ast::list& x) -> series {
         item_ty = array.type;
       } else {
         diagnostic::warning("type clash in list, using `null` instead")
-          .primary(item.get_location())
+          .primary(item)
           .note("expected `{}` but got `{}`", item_ty.kind(), array.type.kind())
           .emit(dh_);
         arrays.push_back(series::null(null_type{}, length_));
@@ -205,7 +205,7 @@ auto evaluator::eval(const ast::field_access& x) -> series {
   auto rec_ty = caf::get_if<record_type>(&l.type);
   if (not rec_ty) {
     diagnostic::warning("cannot access field of non-record type")
-      .primary(x.dot.combine(x.name.location))
+      .primary(x.dot.combine(x.name))
       .secondary(x.left.get_location(), "type `{}`", l.type.kind())
       .emit(dh_);
     return null();
@@ -217,7 +217,7 @@ auto evaluator::eval(const ast::field_access& x) -> series {
     }
   }
   diagnostic::warning("record does not have this field")
-    .primary(x.name.location)
+    .primary(x.name)
     .emit(dh_);
   return null();
 }
@@ -261,7 +261,7 @@ auto evaluator::eval(const ast::root_field& x) -> series {
     }
   }
   diagnostic::warning("field `{}` not found", x.ident.name)
-    .primary(x.ident.location)
+    .primary(x.ident)
     .emit(dh_);
   return null();
 }

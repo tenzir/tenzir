@@ -68,7 +68,7 @@ public:
     auto docs = "https://docs.tenzir.com/operators/source";
     if (inv.args.size() != 1) {
       diagnostic::error("expected exactly one argument")
-        .primary(inv.self.get_location())
+        .primary(inv.self)
         .usage(usage)
         .docs(docs)
         .emit(ctx);
@@ -90,7 +90,7 @@ public:
           auto rec = caf::get_if<record>(&*item);
           if (not rec) {
             diagnostic::error("expected a record")
-              .primary(y.get_location())
+              .primary(y)
               .usage(usage)
               .docs(docs)
               .emit(ctx);
@@ -109,7 +109,7 @@ public:
       },
       [&](auto&) {
         diagnostic::error("expected a record or a list of records")
-          .primary(inv.args[0].get_location())
+          .primary(inv.args[0])
           .usage(usage)
           .docs(docs)
           .emit(ctx);

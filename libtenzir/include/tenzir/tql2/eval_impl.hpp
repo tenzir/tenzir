@@ -40,7 +40,7 @@ public:
   }
 
   // TODO: This is pretty bad.
-  auto input_or_throw(location location) -> const table_slice& {
+  auto input_or_throw(as_location location) -> const table_slice& {
     if (not input_) {
       diagnostic::error("expected a constant expression")
         .primary(location)
@@ -82,15 +82,13 @@ public:
 
   auto eval(const ast::assignment& x) -> series {
     // TODO: What shall happen if we hit this in const eval mode?
-    diagnostic::warning("unexpected assignment")
-      .primary(x.get_location())
-      .emit(dh_);
+    diagnostic::warning("unexpected assignment").primary(x).emit(dh_);
     return null();
   }
 
   auto eval(const ast::meta& x) -> series {
     // TODO: This is quite inefficient.
-    auto& input = input_or_throw(x.get_location());
+    auto& input = input_or_throw(x);
     switch (x.kind) {
       case meta_extractor::schema:
         return to_series(std::string{input.schema().name()});
@@ -116,7 +114,7 @@ public:
   auto not_implemented(const auto& x) -> series {
     diagnostic::warning("eval not implemented yet for: {:?}",
                         use_default_formatter(x))
-      .primary(x.get_location())
+      .primary(x)
       .emit(dh_);
     return null();
   }

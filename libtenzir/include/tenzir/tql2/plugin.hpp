@@ -95,7 +95,7 @@ public:
         });
         diagnostic::warning("expected {}, but got {}", expected,
                             y.inner.type.kind())
-          .primary(y.source)
+          .primary(y)
           .docs(docs_)
           .emit(dh);
         return false;

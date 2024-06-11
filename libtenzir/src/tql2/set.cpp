@@ -37,7 +37,7 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
       if (not values) {
         // TODO: Inaccurate location.
         diagnostic::warning("expected string but got {}", right.type.kind())
-          .primary(left.get_location())
+          .primary(left)
           .emit(diag);
         return input;
       }
@@ -57,7 +57,7 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
       if (not values) {
         // TODO: Inaccurate location.
         diagnostic::warning("expected time but got {}", right.type.kind())
-          .primary(left.get_location())
+          .primary(left)
           .emit(diag);
         return input;
       }
@@ -73,7 +73,7 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
       if (not values) {
         // TODO: Inaccurate location.
         diagnostic::warning("expected bool but got {}", right.type.kind())
-          .primary(left.get_location())
+          .primary(left)
           .emit(diag);
         return input;
       }
@@ -129,7 +129,7 @@ auto assign(std::span<const ast::identifier> left, series right, series input,
   if (not rec_ty) {
     diagnostic::warning("implicit record for `{}` field overwrites `{}` value",
                         left[0].name, input.type.kind())
-      .primary(left[0].location)
+      .primary(left[0])
       .hint("if this is intentional, drop the parent field before")
       .emit(dh);
     return consume_path(left, std::move(right));
@@ -183,7 +183,7 @@ auto assign(const ast::simple_selector& left, series right,
     diagnostic::warning("assignment to `this` requires `record`, but got "
                         "`{}`",
                         result.type.kind())
-      .primary(left.get_location())
+      .primary(left)
       .emit(dh);
     // TODO: Metadata?
     result = {record_type{}, make_struct_array(result.length(), nullptr, {})};

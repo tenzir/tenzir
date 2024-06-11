@@ -43,9 +43,7 @@ public:
     }
     auto fork = std::get_if<generator<std::monostate>>(&*instance);
     if (not fork) {
-      diagnostic::error("expected sink")
-        .primary(pipe_.source)
-        .emit(ctrl.diagnostics());
+      diagnostic::error("expected sink").primary(pipe_).emit(ctrl.diagnostics());
       co_return;
     }
     auto it = fork->unsafe_current();
@@ -103,7 +101,7 @@ public:
       if (op_loc != operator_location::anywhere) {
         if (loc != operator_location::anywhere && loc != op_loc) {
           diagnostic::error("TODO: could not decide location")
-            .primary(inv.self.get_location())
+            .primary(inv.self)
             .emit(ctx);
           return nullptr;
         }

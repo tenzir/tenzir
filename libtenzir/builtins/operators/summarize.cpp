@@ -1200,7 +1200,7 @@ public:
           // TODO: Check if aggregation function.
           if (not fn) {
             diagnostic::error("function does not support aggregations")
-              .primary(call.fn.get_location())
+              .primary(call.fn)
               .hint("if you want to group by the result, assign it before")
               .emit(ctx);
             return;
@@ -1228,7 +1228,7 @@ public:
           if (not left) {
             // TODO
             diagnostic::error("expected data selector, not meta")
-              .primary(arg.left.get_location())
+              .primary(arg.left)
               .emit(ctx);
             return;
           }
@@ -1243,7 +1243,7 @@ public:
               } else {
                 diagnostic::error(
                   "expected selector or aggregation function call")
-                  .primary(arg.right.get_location())
+                  .primary(arg.right)
                   .emit(ctx);
               }
             });
@@ -1255,7 +1255,7 @@ public:
           } else {
             diagnostic::error(
               "expected selector, assignment or aggregation function call")
-              .primary(arg.get_location())
+              .primary(arg)
               .emit(ctx);
           }
         });

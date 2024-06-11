@@ -195,7 +195,7 @@ public:
       if (not else_gen_ptr) {
         // TODO: Wrong location. Also, we want to lift this limitation.
         diagnostic::error("expected `else` branch to yield events")
-          .primary(condition_.get_location())
+          .primary(condition_)
           .note("this limitation will be removed eventually")
           .emit(ctrl.diagnostics());
         co_return;
@@ -215,7 +215,7 @@ public:
       if (not array) {
         diagnostic::warning("condition must be `bool`, not `{}`",
                             mask.type.kind())
-          .primary(condition_.get_location())
+          .primary(condition_)
           .emit(ctrl.diagnostics());
         co_yield {};
         continue;
@@ -295,7 +295,7 @@ public:
       } else if (op_location != operator_location::anywhere
                  && location != op_location) {
         diagnostic::error("operator location conflict between local and remote")
-          .primary(inv.self.get_location())
+          .primary(inv.self)
           .emit(ctx);
       }
     }
@@ -308,7 +308,7 @@ public:
                    && location != op_location) {
           diagnostic::error(
             "operator location conflict between local and remote")
-            .primary(inv.self.get_location())
+            .primary(inv.self)
             .emit(ctx);
         }
       }
