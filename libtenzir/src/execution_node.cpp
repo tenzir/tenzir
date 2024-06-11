@@ -750,18 +750,16 @@ auto exec_node(
       try {
         std::rethrow_exception(exception);
       } catch (diagnostic diag) {
-        self->send(self->state.ctrl->diagnostic_handler->handle, diag);
-        self->quit(std::move(diag).to_error());
-        return {};
+        return std::move(diag).to_error();
       } catch (const std::exception& err) {
-        diagnostic::error("{}", err.what())
+        return diagnostic::error("{}", err.what())
           .note("unhandled exception in {} {}", *self, self->state.op->name())
-          .emit(self->state.ctrl->diagnostics());
-        return {};
+          .to_error();
+      } catch (...) {
+        return diagnostic::error("unhandled exception in {} {}", *self,
+                                 self->state.op->name())
+          .to_error();
       }
-      return diagnostic::error("unhandled exception in {} {}", *self,
-                               self->state.op->name())
-        .to_error();
     });
   return {
     [self](atom::internal, atom::run) -> caf::result<void> {

@@ -11,7 +11,6 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/atoms.hpp"
 #include "tenzir/connect_to_node.hpp"
-#include "tenzir/detail/narrow.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/execution_node.hpp"
@@ -29,8 +28,6 @@
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
 
-#include <iterator>
-
 namespace tenzir {
 
 void pipeline_executor_state::start_nodes_if_all_spawned() {
@@ -44,7 +41,7 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
   }
   self->link_to(exec_nodes.back());
   self->set_exit_handler([this](caf::exit_msg& msg) {
-    TENZIR_DEBUG("{} received exit from all execution nodes: {}", *self,
+    TENZIR_DEBUG("{} received exit from last execution node: {}", *self,
                  msg.reason);
     self->quit(std::move(msg.reason));
   });
@@ -63,6 +60,7 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
       },
       [this](const caf::error& err) mutable {
         if (not err) {
+          // TODO: Is this even reachable?
           finish_start();
           return;
         }
@@ -154,20 +152,9 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
 
 void pipeline_executor_state::abort_start(diagnostic reason) {
   TENZIR_DEBUG("{} sends diagnostic due to start abort: {:?}", *self, reason);
-  self->request(diagnostics, caf::infinite, std::move(reason))
-    .then(
-      [this]() {
-        // We already delivered the error as a diagnostic.
-        TENZIR_DEBUG("{} delivered diagnostic and shuts down silently", *self);
-        start_rp.deliver(ec::diagnostic);
-        self->quit(ec::diagnostic);
-      },
-      [this](const caf::error& error) {
-        start_rp.deliver(diagnostic::error(error)
-                           .note("failed to deliver diagnostic")
-                           .to_error());
-        self->quit(ec::diagnostic);
-      });
+  auto err = caf::make_error(ec::diagnostic, std::move(reason));
+  start_rp.deliver(std::move(err));
+  self->quit(ec::silent);
 }
 
 void pipeline_executor_state::abort_start(caf::error reason) {
