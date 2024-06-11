@@ -291,11 +291,16 @@ public:
 
 class count_instance final : public aggregation_instance {
 public:
-  explicit count_instance(ast::expression expr) : expr_{std::move(expr)} {
+  explicit count_instance(std::optional<ast::expression> expr)
+    : expr_{std::move(expr)} {
   }
 
   void update(const table_slice& input, session ctx) override {
-    auto arg = eval(expr_, input, ctx);
+    if (not expr_) {
+      count_ += detail::narrow<int64_t>(input.rows());
+      return;
+    }
+    auto arg = eval(*expr_, input, ctx);
     count_ += arg.array->length() - arg.array->null_count();
   }
 
@@ -304,7 +309,7 @@ public:
   }
 
 private:
-  ast::expression expr_;
+  std::optional<ast::expression> expr_;
   int64_t count_ = 0;
 };
 
@@ -316,7 +321,7 @@ public:
 
   auto make_aggregation(ast::function_call call, session ctx) const
     -> std::unique_ptr<aggregation_instance> override {
-    auto arg = ast::expression{};
+    auto arg = std::optional<ast::expression>{};
     argument_parser2::fn("count").add(arg, "<expr>").parse(call, ctx);
     return std::make_unique<count_instance>(std::move(arg));
   }

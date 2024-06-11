@@ -1096,21 +1096,30 @@ public:
           } else {
             auto& call = cfg_.aggregates[index].call;
             // TODO: Decide and properly implement this.
-            auto arg = "";
-            if (call.args.size() == 1) {
-              call.args[0].match(
-                [](ast::this_&) -> std::string_view {
-                  return "this";
-                },
-                [](ast::root_field& x) -> std::string_view {
-                  return x.ident.name;
-                },
-                [](auto&) -> std::string_view {
-                  return "...";
-                });
-            } else if (call.args.size() > 1) {
-              arg = "...";
-            }
+            auto arg = std::invoke([&]() -> std::string {
+              if (call.args.empty()) {
+                return "";
+              }
+              if (call.args.size() > 1) {
+                return "...";
+              }
+              auto sel = ast::simple_selector::try_from(call.args[0]);
+              if (not sel) {
+                return "...";
+              }
+              auto arg = std::string{};
+              if (sel->has_this()) {
+                arg = "this";
+              }
+              for (auto& segment : sel->path()) {
+                // TODO: This is wrong.
+                if (not arg.empty()) {
+                  arg += '.';
+                }
+                arg += segment.name;
+              }
+              return arg;
+            });
             result.emplace(fmt::format("{}({})", call.fn.path[0].name, arg),
                            value);
           }
