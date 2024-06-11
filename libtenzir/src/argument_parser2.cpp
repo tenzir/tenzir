@@ -40,7 +40,13 @@ void argument_parser2::parse(const ast::entity& self,
     // TODO
     TENZIR_ASSERT(self.path.size() == 1);
     auto name = self.path[0].name;
-    d = std::move(d).usage(fmt::format("{} {}", name, usage()));
+    auto invocation = usage();
+    if (function_) {
+      invocation = fmt::format("({})", invocation);
+    } else {
+      invocation = fmt::format(" {}", invocation);
+    }
+    d = std::move(d).usage(fmt::format("{}{}", name, invocation));
     if (not docs_.empty()) {
       d = std::move(d).docs(docs_);
     }
@@ -189,7 +195,7 @@ auto argument_parser2::usage() const -> std::string {
         usage_cache_ += ", ";
       }
       if (first_optional_ && idx >= *first_optional_) {
-        usage_cache_ += fmt::format("[{}]", positional.meta);
+        usage_cache_ += fmt::format("{}?", positional.meta);
       } else {
         usage_cache_ += positional.meta;
       }
