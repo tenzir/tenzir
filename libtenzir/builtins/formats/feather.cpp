@@ -527,7 +527,11 @@ public:
     -> std::optional<optimize_parser_result> override {
     (void)filter;
     (void)order;
-    if (selection.fields.empty()) {
+    // otherwise, where | select would be optimized as select | where
+    if (selection.fields.empty()
+        || (filter != trivially_true_expression()
+            && !selection.fields.empty())) {
+      TENZIR_WARN("HI");
       return std::nullopt;
     }
     return optimize_parser_result{

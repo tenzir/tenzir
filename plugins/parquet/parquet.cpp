@@ -160,7 +160,10 @@ public:
     -> std::optional<optimize_parser_result> override {
     (void)filter;
     (void)order;
-    if (selection.fields.empty()) {
+    // TODO: allow row-wise reading optimization for where expression
+    if (selection.fields.empty()
+        || (filter != trivially_true_expression()
+            && !selection.fields.empty())) {
       return std::nullopt;
     }
     return optimize_parser_result{
