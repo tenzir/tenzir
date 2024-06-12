@@ -49,7 +49,7 @@ auto exec_command_impl(std::string content, diagnostic_handler& dh,
   if (result) {
     return true;
   }
-  if (result != ec::silent) {
+  if (result != ec::silent && result != caf::exit_reason::user_shutdown) {
     dh.emit(diagnostic::error(result.error()).done());
   }
   return false;
