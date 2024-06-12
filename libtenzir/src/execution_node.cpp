@@ -308,7 +308,7 @@ struct exec_node_state {
         TENZIR_DEBUG("{} {} got exit message from the next execution node or "
                      "its executor with address {}: {}",
                      *self, op->name(), msg.source, msg.reason);
-        self->quit(msg.reason);
+        on_error(msg.reason);
       });
     } else {
       // The previous exec-node must be set when the operator is not a source.
@@ -336,14 +336,14 @@ struct exec_node_state {
           TENZIR_DEBUG("{} {} got exit message from the next execution node or "
                        "its executor with address {}: {}",
                        *self, op->name(), msg.source, msg.reason);
-          self->quit(msg.reason);
+          on_error(msg.reason);
           return;
         }
         TENZIR_DEBUG("{} {} got exit message from previous execution node with "
                      "address {}: {}",
                      *self, op->name(), msg.source, msg.reason);
         if (msg.reason and msg.reason != caf::exit_reason::unreachable) {
-          self->quit(msg.reason);
+          on_error(msg.reason);
           return;
         }
         previous = nullptr;
@@ -709,6 +709,15 @@ struct exec_node_state {
     schedule_run(false);
     return {};
   }
+
+  void on_error(caf::error error) {
+    if (start_rp.pending()) {
+      start_rp.deliver(std::move(error));
+      self->quit(ec::silent);
+      return;
+    }
+    self->quit(std::move(error));
+  }
 };
 
 template <class Input, class Output>
@@ -741,7 +750,7 @@ auto exec_node(
     self, std::move(diagnostic_handler), has_terminal);
   // The node actor must be set when the operator is not a source.
   if (self->state.op->location() == operator_location::remote and not node) {
-    self->quit(caf::make_error(
+    self->state.on_error(caf::make_error(
       ec::logic_error,
       fmt::format("{} runs a remote operator and must have a node", *self)));
     return exec_node_actor::behavior_type::make_empty_behavior();
