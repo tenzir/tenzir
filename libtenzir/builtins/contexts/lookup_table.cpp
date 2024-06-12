@@ -8,6 +8,7 @@
 
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/concept/parseable/numeric/bool.hpp>
+#include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/parseable/tenzir/expression.hpp>
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/data.hpp>
@@ -31,10 +32,13 @@
 #include <arrow/type.h>
 #include <caf/error.hpp>
 #include <caf/sum_type.hpp>
+#include <sys/_types/_u_int8_t.h>
 #include <tsl/robin_map.h>
 
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
 
 namespace tenzir::plugins::lookup_table {
 
@@ -191,6 +195,13 @@ private:
   data data_{caf::none};
 };
 
+// TODO; encapsulate some enum so can distinguish between
+struct value_data {
+  data data;
+  std::optional<time> update_timeout;
+  std::optional<time> create_timeout;
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::lookup_table
@@ -210,12 +221,10 @@ namespace tenzir::plugins::lookup_table {
 
 namespace {
 
-using map_type = tsl::robin_map<key_data, data>;
-
+using map_type = tsl::robin_map<key_data, value_data>;
 class ctx final : public virtual context {
 public:
   ctx() noexcept = default;
-
   explicit ctx(map_type context_entries,
                detail::subnet_tree subnet_entries) noexcept
     : context_entries{std::move(context_entries)},
@@ -227,7 +236,7 @@ public:
     return "lookup-table";
   }
 
-  auto apply(series array, bool replace) const
+  auto apply(series array, bool replace)
     -> caf::expected<std::vector<series>> override {
     auto builder = series_builder{};
     auto subnet_lookup = [&](const auto& value) -> std::optional<view<data>> {
@@ -247,14 +256,36 @@ public:
       }
       return std::nullopt;
     };
-    for (const auto& value : array.values()) {
+    auto now = time::clock::now();
+    for (auto value : array.values()) {
       if (auto it = context_entries.find(materialize(value));
           it != context_entries.end()) {
-        builder.data(it->second);
+        if ((it->second.create_timeout && it->second.create_timeout < now)
+            || (it->second.update_timeout && it->second.update_timeout < now)) {
+          continue;
+        }
+        if (it->second.update_timeout) {
+          *it.value().update_timeout = now + update_time_;
+        }
+        builder.data(it->second.data);
+        if (it->second.create_timeout) {
+          builder.data(*to<data>(*it->second.create_timeout));
+        } else {
+          builder.data(*to<data>(false));
+        }
+        if (it->second.update_timeout) {
+          builder.data(*to<data>(*it->second.update_timeout));
+        } else {
+          builder.data(*to<data>(false));
+        }
       } else if (auto x = subnet_lookup(value)) {
         builder.data(*x);
+        builder.data(*to<data>(false));
+        builder.data(*to<data>(false));
       } else if (replace and not caf::holds_alternative<caf::none_t>(value)) {
         builder.data(value);
+        builder.data(*to<data>(false));
+        builder.data(*to<data>(false));
       } else {
         builder.null();
       }
@@ -262,12 +293,18 @@ public:
     return builder.finish();
   }
 
+  // TODO: maybe have to skip fields
   auto snapshot(parameter_map, const std::vector<std::string>& fields) const
     -> caf::expected<expression> override {
     auto keys = list{};
     keys.reserve(context_entries.size());
+    auto now = time::clock::now();
     auto first_index = std::optional<size_t>{};
-    for (const auto& [k, _] : context_entries) {
+    for (const auto& [k, v] : context_entries) {
+      if ((v.create_timeout && v.create_timeout < now)
+          || (v.update_timeout && v.update_timeout < now)) {
+        continue;
+      }
       k.populate_snapshot_data(keys);
       auto current_index = k.original_type_index();
       if (not first_index) [[unlikely]] {
@@ -297,22 +334,37 @@ public:
     return result;
   }
 
+  // TODO: skip incorrect times on count
   /// Inspects the context.
   auto show() const -> record override {
     // There's no size() function for the PATRICIA trie, so we walk the tree
     // nodes here once in O(n).
     auto num_subnet_entries = size_t{0};
+    auto num_context_entries = size_t{0};
+    auto now = time::clock::now();
+    TENZIR_WARN("now time {}", now);
     for (auto _ : subnet_entries.nodes()) {
       ++num_subnet_entries;
       (void)_;
+      // skip over past time
     }
+    for (const auto& entry : context_entries) {
+      if ((entry.second.update_timeout && entry.second.update_timeout < now)
+          || (entry.second.create_timeout
+              && entry.second.create_timeout < now)) {
+        continue;
+      }
+      ++num_context_entries;
+    }
+    TENZIR_WARN("num_entries {}", num_context_entries + num_subnet_entries);
     return record{
-      {"num_entries", context_entries.size() + num_subnet_entries},
+      {"num_entries", num_context_entries + num_subnet_entries},
     };
   }
 
   auto dump() -> generator<table_slice> override {
     auto entry_builder = series_builder{};
+    auto now = time::clock::now();
     for (const auto& [key, value] : subnet_entries.nodes()) {
       auto row = entry_builder.record();
       row.field("key", data{key});
@@ -323,9 +375,14 @@ public:
       }
     }
     for (const auto& [key, value] : context_entries) {
+      if ((value.update_timeout && value.update_timeout < now)
+          || (value.create_timeout && value.create_timeout < now)) {
+        continue;
+      }
       auto row = entry_builder.record();
       row.field("key", key.to_original_data());
-      row.field("value", value);
+      row.field("value",
+                value.data); // should we also get timeout info in dump?
       if (entry_builder.length() >= context::dump_batch_size_limit) {
         for (auto&& slice : entry_builder.finish_as_table_slice(
                fmt::format("tenzir.{}.info", context_type()))) {
@@ -339,7 +396,7 @@ public:
       co_yield std::move(slice);
     }
   }
-
+  // TODO: simplify update logic: create struct at beg
   /// Updates the context.
   auto update(table_slice slice, context::parameter_map parameters)
     -> caf::expected<update_result> override {
@@ -348,6 +405,39 @@ public:
     if (caf::get<record_type>(slice.schema()).num_fields() == 0) {
       return caf::make_error(ec::invalid_argument,
                              "context update cannot handle empty input events");
+    }
+    const auto now = time::clock::now();
+    auto context_value = value_data{};
+    if (parameters.contains("create-timeout")) {
+      auto create_timeout_str = parameters["create-timeout"];
+      if (not create_timeout_str) {
+        return caf::make_error(ec::invalid_argument,
+                               "'create-timeout' option must have a value");
+      }
+      auto create_timeout = to<duration>(*create_timeout_str);
+      if (not create_timeout) {
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("'create-timeout' option must be a "
+                                           "valid duration: {}",
+                                           create_timeout.error()));
+      }
+      context_value.create_timeout = now + *create_timeout;
+    }
+    if (parameters.contains("update-timeout")) {
+      auto update_timeout_str = parameters["update-timeout"];
+      if (not update_timeout_str) {
+        return caf::make_error(ec::invalid_argument,
+                               "'update-timeout' option must have a value");
+      }
+      auto update_timeout = to<duration>(*update_timeout_str);
+      if (not update_timeout) {
+        return caf::make_error(ec::invalid_argument,
+                               fmt::format("'update-timeout' option must be a "
+                                           "valid duration: {}",
+                                           update_timeout.error()));
+      }
+      context_value.update_timeout = now + *update_timeout;
+      update_time_ = *update_timeout;
     }
     auto erase = parameters.contains("erase");
     if (erase and parameters["erase"].has_value()) {
@@ -378,6 +468,7 @@ public:
       return std::move(key_column.error());
     }
     auto [key_type, key_array] = key_column->get(slice);
+    TENZIR_WARN("key_array: {}", key_array->ToString());
     auto key_values = values(key_type, *key_array);
     auto key_values_list = list{};
     if (erase) {
@@ -407,21 +498,26 @@ public:
     auto key_it = key_values.begin();
     auto context_it = context_values.begin();
     while (key_it != key_values.end()) {
+      value_data value_val = context_value;
       TENZIR_ASSERT(context_it != context_values.end());
+      value_val.data = materialize(*context_it);
       auto materialized_key = materialize(*key_it);
       // Subnets never make it into the regular map of entries.
       if (caf::holds_alternative<subnet_type>(key_type)) {
         const auto& key = caf::get<subnet>(materialized_key);
         subnet_entries.insert(key, materialize(*context_it));
       } else {
-        context_entries.insert_or_assign(materialized_key,
-                                         materialize(*context_it));
+        TENZIR_WARN("Trying to update with cr time {} and up time {}",
+                    caf::timestamp_to_string(*value_val.create_timeout),
+                    caf::timestamp_to_string(*value_val.update_timeout));
+        context_entries.insert_or_assign(materialized_key, value_val);
       }
       key_values_list.emplace_back(materialized_key);
       ++key_it;
       ++context_it;
     }
     TENZIR_ASSERT(context_it == context_values.end());
+
     auto query_f
       = [key_values_list = std::move(key_values_list)](
           parameter_map,
@@ -445,10 +541,18 @@ public:
     };
   }
 
+  // TODO:: only query ones with correct time out
   auto make_query() -> make_query_type override {
     auto key_values_list = list{};
-    key_values_list.reserve(context_entries.size());
+    key_values_list.reserve(
+      context_entries.size()); // TODO: have another variable here?
+    auto now = time::clock::now();
     for (const auto& entry : context_entries) {
+      if ((entry.second.update_timeout && entry.second.update_timeout < now)
+          || (entry.second.create_timeout
+              && entry.second.create_timeout < now)) {
+        continue;
+      }
       entry.first.populate_snapshot_data(key_values_list);
     }
     return
@@ -481,19 +585,54 @@ public:
     //   [{key: key, value: value}, ...]
     auto builder = flatbuffers::FlatBufferBuilder{};
     auto value_offsets = std::vector<flatbuffers::Offset<fbs::Data>>{};
-    value_offsets.reserve(context_entries.size());
+    value_offsets.reserve(context_entries.size()); // TODO: store as variable
+    auto now = time::clock::now();
     for (const auto& [key, value] : context_entries) {
+      if ((value.update_timeout && value.update_timeout < now)
+          || (value.create_timeout && value.create_timeout < now)) {
+        continue;
+      }
       auto field_offsets
         = std::vector<flatbuffers::Offset<fbs::data::RecordField>>{};
-      field_offsets.reserve(2);
+      u_int8_t to_reserve = 2;
+      if (value.create_timeout) {
+        to_reserve += 1;
+      }
+      if (value.update_timeout) {
+        to_reserve += 1;
+      }
+      field_offsets.reserve(to_reserve);
       const auto key_key_offset = builder.CreateSharedString("key");
       const auto key_value_offset = pack(builder, key.to_original_data());
       field_offsets.emplace_back(fbs::data::CreateRecordField(
         builder, key_key_offset, key_value_offset));
-      const auto value_key_offset = builder.CreateSharedString("value");
-      const auto value_value_offset = pack(builder, value);
+      auto value_key_offset = builder.CreateSharedString("data");
+      auto value_value_offset = pack(builder, value.data);
       field_offsets.emplace_back(fbs::data::CreateRecordField(
         builder, value_key_offset, value_value_offset));
+      value_key_offset = builder.CreateSharedString("create-timeout");
+      if (value.create_timeout) {
+        value_value_offset
+          = pack(builder, *to<data>(*value.create_timeout)); // better way??
+        field_offsets.emplace_back(fbs::data::CreateRecordField(
+          builder, value_key_offset, value_value_offset));
+      } else {
+        value_value_offset = pack(builder, *to<data>(false)); // better way??
+        field_offsets.emplace_back(fbs::data::CreateRecordField(
+          builder, value_key_offset, value_value_offset));
+      }
+      value_key_offset = builder.CreateSharedString("update-timeout");
+      if (value.update_timeout) {
+        value_value_offset
+          = pack(builder, *to<data>(*value.update_timeout)); // better way??
+        field_offsets.emplace_back(fbs::data::CreateRecordField(
+          builder, value_key_offset, value_value_offset));
+      } else {
+        value_value_offset
+          = pack(builder, *to<data>(false)); // better way?? // CAF:NONE?
+        field_offsets.emplace_back(fbs::data::CreateRecordField(
+          builder, value_key_offset, value_value_offset));
+      }
       const auto record_offset
         = fbs::data::CreateRecordDirect(builder, &field_offsets);
       value_offsets.emplace_back(fbs::CreateData(
@@ -527,6 +666,7 @@ public:
 private:
   map_type context_entries;
   detail::subnet_tree subnet_entries;
+  duration update_time_;
 };
 
 struct v1_loader : public context_loader {
@@ -558,6 +698,7 @@ struct v1_loader : public context_loader {
                              "context: missing or invalid values for "
                              "context entry in serialized entry list");
     }
+    auto now = time::clock::now();
     for (const auto* list_value : *list->values()) {
       const auto* record = list_value->data_as_record();
       if (not record) {
@@ -567,7 +708,7 @@ struct v1_loader : public context_loader {
                                "context entry in serialized entry list, "
                                "entry must be a record");
       }
-      if (not record->fields() or record->fields()->size() != 2) {
+      if (not record->fields() or record->fields()->size() != 4) {
         return caf::make_error(ec::serialization_error,
                                "failed to deserialize lookup table "
                                "context: invalid or missing value for "
@@ -575,8 +716,10 @@ struct v1_loader : public context_loader {
                                "entry must be a record {key, value}");
       }
       data key;
-      data value;
+      data subnet_value;
+      value_data context_value{};
       auto err = unpack(*record->fields()->Get(0)->data(), key);
+      // TODO: improve error handling
       if (err) {
         return caf::make_error(ec::serialization_error,
                                fmt::format("failed to deserialize lookup "
@@ -584,7 +727,6 @@ struct v1_loader : public context_loader {
                                            "context: invalid key: {}",
                                            err));
       }
-      err = unpack(*record->fields()->Get(1)->data(), value);
       if (err) {
         return caf::make_error(ec::serialization_error,
                                fmt::format("failed to deserialize lookup "
@@ -592,10 +734,42 @@ struct v1_loader : public context_loader {
                                            "context: invalid value: {}",
                                            err));
       }
+      // how to make is easier to not mix up create/update timeout
       if (auto* sn = caf::get_if<subnet>(&key)) {
-        subnet_entries.insert(*sn, std::move(value));
+        err = unpack(*record->fields()->Get(1)->data(), subnet_value);
+        subnet_entries.insert(*sn, std::move(subnet_value));
       } else {
-        context_entries.emplace(std::move(key), std::move(value));
+        err = unpack(*record->fields()->Get(1)->data(), context_value.data);
+        if (record->fields()->Get(2)->data()->data_type()
+            != fbs::data::Data::boolean) {
+          context_value.create_timeout = std::nullopt;
+        } else {
+          err = unpack(*record->fields()->Get(2)->data(),
+                       *to<data>(*context_value.create_timeout));
+          if (context_value.create_timeout < now) {
+            continue;
+          }
+        }
+        if (record->fields()->Get(3)->data()->data_type()
+            != fbs::data::Data::boolean) {
+          context_value.update_timeout = std::nullopt;
+        } else {
+          err = unpack(*record->fields()->Get(3)->data(),
+                       *to<data>(*context_value.update_timeout));
+          if (context_value.update_timeout < now) {
+            continue;
+          }
+        }
+        if (err) {
+          return caf::make_error(ec::serialization_error,
+                                 fmt::format("failed to deserialize lookup "
+                                             "table "
+                                             "context: invalid value: {}",
+                                             err));
+        }
+        TENZIR_WARN("Emplacing on load, upt: {}, creT: {}",
+                    context_value.update_timeout, context_value.create_timeout);
+        context_entries.emplace(std::move(key), std::move(context_value));
       }
     }
     return std::make_unique<ctx>(std::move(context_entries),
