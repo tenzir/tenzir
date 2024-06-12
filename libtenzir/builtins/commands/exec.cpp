@@ -104,7 +104,7 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   }
   if (cfg.dump_diagnostics) {
     auto diag = collecting_diagnostic_handler{};
-    auto result = exec_command_impl(std::move(content), diag, cfg, sys);
+    auto result = exec_command_impl(content, diag, cfg, sys);
     dump_diagnostics_to_stdout(std::move(diag).collect(), filename,
                                std::move(content));
     return result;

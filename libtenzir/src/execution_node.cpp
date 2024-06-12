@@ -409,8 +409,7 @@ struct exec_node_state {
               = make_timer_guard(metrics.time_scheduled, metrics.time_starting);
             TENZIR_DEBUG("{} {} forwards error during startup: {}", *self,
                          op->name(), error);
-            start_rp.deliver(
-              add_context(error, "{} {} failed to start", *self, op->name()));
+            start_rp.deliver(error);
           });
       return start_rp;
     }

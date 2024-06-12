@@ -165,8 +165,7 @@ void pipeline_executor_state::abort_start(caf::error reason) {
     self->quit(ec::silent);
     return;
   }
-  abort_start(
-    diagnostic::error(reason).note("pipeline failed to start").done());
+  abort_start(diagnostic::error(std::move(reason)).done());
 }
 
 void pipeline_executor_state::finish_start() {
