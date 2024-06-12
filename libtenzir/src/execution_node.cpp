@@ -266,6 +266,9 @@ struct exec_node_state {
       demand->rp.deliver();
     }
     if (start_rp.pending()) {
+      // TODO: This should probably never happen, as it means that we do not
+      // deliver a diagnostic.
+      TENZIR_WARN("reached pending `start_rp` in exec node destructor");
       start_rp.deliver(ec::silent);
     }
   }
@@ -746,19 +749,26 @@ auto exec_node(
   self->state.weak_node = node;
   self->set_exception_handler(
     [self](std::exception_ptr exception) -> caf::error {
-      try {
-        std::rethrow_exception(exception);
-      } catch (diagnostic diag) {
-        return std::move(diag).to_error();
-      } catch (const std::exception& err) {
-        return diagnostic::error("{}", err.what())
-          .note("unhandled exception in {} {}", *self, self->state.op->name())
-          .to_error();
-      } catch (...) {
-        return diagnostic::error("unhandled exception in {} {}", *self,
-                                 self->state.op->name())
-          .to_error();
+      auto error = std::invoke([&] {
+        try {
+          std::rethrow_exception(exception);
+        } catch (diagnostic diag) {
+          return std::move(diag).to_error();
+        } catch (const std::exception& err) {
+          return diagnostic::error("{}", err.what())
+            .note("unhandled exception in {} {}", *self, self->state.op->name())
+            .to_error();
+        } catch (...) {
+          return diagnostic::error("unhandled exception in {} {}", *self,
+                                   self->state.op->name())
+            .to_error();
+        }
+      });
+      if (self->state.start_rp.pending()) {
+        self->state.start_rp.deliver(std::move(error));
+        return ec::silent;
       }
+      return error;
     });
   return {
     [self](atom::internal, atom::run) -> caf::result<void> {
