@@ -226,7 +226,7 @@ auto exec_pipeline(std::string content,
         if (msg.reason) {
           result = msg.reason;
         }
-        self->quit(msg.reason);
+        self->quit();
       });
       self->state.executor = self->spawn<caf::monitored>(
         pipeline_executor, std::move(pipe),
