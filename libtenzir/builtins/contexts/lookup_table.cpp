@@ -318,7 +318,10 @@ public:
                                "heterogeneous keys");
       }
     }
-    for (const auto& [k, _] : subnet_entries.nodes()) {
+    for (const auto& [k, v] : subnet_entries.nodes()) {
+      if (v->is_expired(now)) {
+        continue;
+      }
       keys.emplace_back(k);
     }
     auto result = disjunction{};
@@ -364,6 +367,9 @@ public:
     auto entry_builder = series_builder{};
     const auto now = time::clock::now();
     for (const auto& [key, value] : subnet_entries.nodes()) {
+      if (value->is_expired(now)) {
+        continue;
+      }
       TENZIR_ASSERT(value);
       auto row = entry_builder.record();
       row.field("key", data{key});
