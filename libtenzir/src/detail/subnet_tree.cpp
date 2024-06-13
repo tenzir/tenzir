@@ -773,6 +773,9 @@ auto make_subnet(const prefix_t* prefix) -> subnet {
 
 auto make_subnet_data_pair(patricia_node_t* node)
   -> std::pair<subnet, std::any*> {
+  if (not node) {
+    return {{}, nullptr};
+  }
   return {make_subnet(node->prefix), reinterpret_cast<std::any*>(node->data)};
 }
 
@@ -837,32 +840,35 @@ auto type_erased_subnet_tree::lookup(subnet key) -> std::any* {
   return node ? reinterpret_cast<std::any*>(node->data) : nullptr;
 }
 
-auto type_erased_subnet_tree::match(ip key) const -> const std::any* {
+auto type_erased_subnet_tree::match(ip key) const
+  -> std::pair<subnet, const std::any*> {
   return match(subnet{key, 128});
 }
 
-auto type_erased_subnet_tree::match(ip key) -> std::any* {
+auto type_erased_subnet_tree::match(ip key) -> std::pair<subnet, std::any*> {
   return match(subnet{key, 128});
 }
 
-auto type_erased_subnet_tree::match(subnet key) const -> const std::any* {
+auto type_erased_subnet_tree::match(subnet key) const
+  -> std::pair<subnet, const std::any*> {
   auto* prefix = make_prefix(key);
   if (prefix == nullptr) {
-    return nullptr;
+    return make_subnet_data_pair(nullptr);
   }
   auto* node = patricia_search_best(impl_->tree.get(), prefix);
   Deref_Prefix(prefix);
-  return node ? reinterpret_cast<const std::any*>(node->data) : nullptr;
+  return make_subnet_data_pair(node);
 }
 
-auto type_erased_subnet_tree::match(subnet key) -> std::any* {
+auto type_erased_subnet_tree::match(subnet key)
+  -> std::pair<subnet, std::any*> {
   auto* prefix = make_prefix(key);
   if (prefix == nullptr) {
-    return nullptr;
+    return make_subnet_data_pair(nullptr);
   }
   auto* node = patricia_search_best(impl_->tree.get(), prefix);
   Deref_Prefix(prefix);
-  return node ? reinterpret_cast<std::any*>(node->data) : nullptr;
+  return make_subnet_data_pair(node);
 }
 
 auto type_erased_subnet_tree::search(ip key) const

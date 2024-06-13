@@ -251,15 +251,15 @@ public:
     return "lookup-table";
   }
 
-  auto subnet_lookup(const auto& value) -> value_data* {
+  auto subnet_lookup(const auto& value) -> std::pair<subnet, value_data*> {
     auto match = detail::overload{
-      [&](const auto&) -> value_data* {
-        return nullptr;
+      [&](const auto&) -> std::pair<subnet, value_data*> {
+        return {{}, nullptr};
       },
-      [&](view<ip> addr) -> value_data* {
+      [&](view<ip> addr) {
         return subnet_entries.match(materialize(addr));
       },
-      [&](view<subnet> sn) -> value_data* {
+      [&](view<subnet> sn) {
         return subnet_entries.match(materialize(sn));
       },
     };
@@ -274,6 +274,7 @@ public:
       if (auto it = context_entries.find(materialize(value));
           it != context_entries.end()) {
         if (it->second.is_expired(now)) {
+          context_entries.erase(it);
           goto retry; // NOLINT(cppcoreguidelines-avoid-goto)
         }
         it.value().update(now);
@@ -283,12 +284,13 @@ public:
       // We need to retry the lookup if we had an expired hit, as a matched IP
       // address that was expired may very well be part of another subnet.
     retry:
-      if (auto* x = subnet_lookup(value)) {
-        if (x->is_expired(now)) {
+      if (auto [subnet, entry] = subnet_lookup(value); entry) {
+        if (entry->is_expired(now)) {
+          subnet_entries.erase(subnet);
           goto retry; // NOLINT(cppcoreguidelines-avoid-goto)
         }
-        x->update(now);
-        builder.data(x->raw_data);
+        entry->update(now);
+        builder.data(entry->raw_data);
         continue;
       }
       if (replace and not caf::holds_alternative<caf::none_t>(value)) {

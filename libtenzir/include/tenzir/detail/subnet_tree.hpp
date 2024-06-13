@@ -29,10 +29,10 @@ public:
   ~type_erased_subnet_tree() noexcept;
   auto lookup(subnet key) const -> const std::any*;
   auto lookup(subnet key) -> std::any*;
-  auto match(ip key) const -> const std::any*;
-  auto match(ip key) -> std::any*;
-  auto match(subnet key) const -> const std::any*;
-  auto match(subnet key) -> std::any*;
+  auto match(ip key) const -> std::pair<subnet, const std::any*>;
+  auto match(ip key) -> std::pair<subnet, std::any*>;
+  auto match(subnet key) const -> std::pair<subnet, const std::any*>;
+  auto match(subnet key) -> std::pair<subnet, std::any*>;
   auto search(ip key) const -> generator<std::pair<subnet, const std::any*>>;
   auto search(ip key) -> generator<std::pair<subnet, std::any*>>;
   auto search(subnet key) const
@@ -75,24 +75,28 @@ public:
 
   /// Looks for the longest-prefix match of a subnet in which the given IP
   /// address occurs.
-  auto match(ip key) const -> const T* {
-    return std::any_cast<T>(impl_.match(key));
+  auto match(ip key) const -> std::pair<subnet, const T*> {
+    auto [subnet, value] = impl_.match(key);
+    return {subnet, std::any_cast<T>(value)};
   }
 
   /// Looks for the longest-prefix match of a subnet in which the given IP
   /// address occurs.
-  auto match(ip key) -> T* {
-    return std::any_cast<T>(impl_.match(key));
+  auto match(ip key) -> std::pair<subnet, T*> {
+    auto [subnet, value] = impl_.match(key);
+    return {subnet, std::any_cast<T>(value)};
   }
 
   /// Looks for the longest-prefix match of a subnet.
-  auto match(subnet key) const -> const T* {
-    return std::any_cast<T>(impl_.match(key));
+  auto match(subnet key) const -> std::pair<subnet, const T*> {
+    auto [subnet, value] = impl_.match(key);
+    return {subnet, std::any_cast<T>(value)};
   }
 
   /// Looks for the longest-prefix match of a subnet.
-  auto match(subnet key) -> T* {
-    return std::any_cast<T>(impl_.match(key));
+  auto match(subnet key) -> std::pair<subnet, T*> {
+    auto [subnet, value] = impl_.match(key);
+    return {subnet, std::any_cast<T>(value)};
   }
 
   /// Performs a prefix-search for a given IP address, returning all subnets
