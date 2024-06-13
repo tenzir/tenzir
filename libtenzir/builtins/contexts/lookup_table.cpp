@@ -196,9 +196,8 @@ private:
   data data_{caf::none};
 };
 
-// TODO; encapsulate some enum so can distinguish between
 struct value_data {
-  data data;
+  data raw_data;
   std::optional<time> update_timeout;
   std::optional<time> create_timeout;
   std::optional<duration> update_duration;
@@ -371,7 +370,7 @@ public:
       auto row = entry_builder.record();
       row.field("key", key.to_original_data());
       row.field("value",
-                value.data); // should we also get timeout info in dump?
+                value.raw_data); // should we also get timeout info in dump?
       if (entry_builder.length() >= context::dump_batch_size_limit) {
         for (auto&& slice : entry_builder.finish_as_table_slice(
                fmt::format("tenzir.{}.info", context_type()))) {
@@ -489,7 +488,7 @@ public:
     while (key_it != key_values.end()) {
       value_data value_val = context_value;
       TENZIR_ASSERT(context_it != context_values.end());
-      value_val.data = materialize(*context_it);
+      value_val.raw_data = materialize(*context_it);
       auto materialized_key = materialize(*key_it);
       // Subnets never make it into the regular map of entries.
       if (caf::holds_alternative<subnet_type>(key_type)) {
@@ -589,7 +588,7 @@ public:
       field_offsets.emplace_back(fbs::data::CreateRecordField(
         builder, key_key_offset, key_value_offset));
       auto value_key_offset = builder.CreateSharedString("value");
-      auto value_value_offset = pack(builder, value.data);
+      auto value_value_offset = pack(builder, value.raw_data);
       field_offsets.emplace_back(fbs::data::CreateRecordField(
         builder, value_key_offset, value_value_offset));
       if (value.create_timeout) {
@@ -718,7 +717,7 @@ struct v1_loader : public context_loader {
       } else {
         for (const auto* field : *record->fields()) {
           if (GetString(field->name()) == "value") {
-            err = unpack(*field->data(), context_value.data);
+            err = unpack(*field->data(), context_value.raw_data);
           }
           if (GetString(field->name()) == "create-timeout") {
             err = unpack(*field->data(),
