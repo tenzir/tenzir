@@ -53,12 +53,12 @@ auto simple_selector::try_from(ast::expression expr)
         return &e.left;
       },
       [&](ast::index_expr& e) -> variant<ast::expression*, bool> {
-        auto lit = std::get_if<literal>(&*e.index.kind);
-        if (not lit) {
+        auto constant = std::get_if<ast::constant>(&*e.index.kind);
+        if (not constant) {
           return false;
         }
-        if (auto name = std::get_if<std::string>(&lit->value)) {
-          path.emplace_back(*name, lit->source);
+        if (auto name = std::get_if<std::string>(&constant->value)) {
+          path.emplace_back(*name, constant->source);
           return &e.expr;
         }
         return false;

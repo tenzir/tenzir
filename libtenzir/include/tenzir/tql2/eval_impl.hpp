@@ -60,7 +60,7 @@ public:
     });
   }
 
-  auto eval(const ast::literal& x) -> series {
+  auto eval(const ast::constant& x) -> series {
     return to_series(x.as_data());
   }
 

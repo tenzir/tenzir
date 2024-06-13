@@ -429,8 +429,8 @@ private:
       expect(tk::rpar);
       return result;
     }
-    if (auto lit = accept_literal()) {
-      return std::move(*lit);
+    if (auto constant = accept_constant()) {
+      return std::move(*constant);
     }
     if (auto token = accept(tk::underscore)) {
       return underscore{token.location};
@@ -623,7 +623,7 @@ private:
     };
   }
 
-  auto parse_string() -> literal {
+  auto parse_string() -> constant {
     auto token = expect(tk::string);
     // TODO: Implement this properly.
     auto result = std::string{};
@@ -664,23 +664,23 @@ private:
         .hint("consider using a blob instead: b{}", token.text)
         .throw_();
     }
-    return literal{std::move(result), token.location};
+    return constant{std::move(result), token.location};
   }
 
-  auto parse_scalar() -> literal {
+  auto parse_scalar() -> constant {
     auto token = accept(tk::scalar);
     // TODO: Make this better, do not use existing parsers.
     if (auto result = int64_t{}; parsers::i64(token.text, result)) {
-      return literal{result, token.location};
+      return constant{result, token.location};
     }
     if (auto result = uint64_t{}; parsers::u64(token.text, result)) {
-      return literal{result, token.location};
+      return constant{result, token.location};
     }
     if (auto result = double{}; parsers::real(token.text, result)) {
-      return literal{result, token.location};
+      return constant{result, token.location};
     }
     if (auto result = duration{}; parsers::duration(token.text, result)) {
-      return literal{result, token.location};
+      return constant{result, token.location};
     }
     diagnostic::error("could not parse scalar")
       .primary(token)
@@ -688,7 +688,7 @@ private:
       .throw_();
   }
 
-  auto accept_literal() -> std::optional<literal> {
+  auto accept_constant() -> std::optional<constant> {
     if (peek(tk::string)) {
       return parse_string();
     }
@@ -698,23 +698,23 @@ private:
     if (auto token = accept(tk::datetime)) {
       // TODO: Make this better.
       if (auto result = time{}; parsers::ymdhms(token.text, result)) {
-        return literal{result, token.location};
+        return constant{result, token.location};
       }
       diagnostic::error("could not parse datetime").primary(token).throw_();
     }
     if (auto token = accept(tk::true_)) {
-      return literal{true, token.location};
+      return constant{true, token.location};
     }
     if (auto token = accept(tk::false_)) {
-      return literal{false, token.location};
+      return constant{false, token.location};
     }
     if (auto token = accept(tk::null)) {
-      return literal{null{}, token.location};
+      return constant{caf::none, token.location};
     }
     if (auto token = accept(tk::ip)) {
       // TODO
       if (auto result = ip{}; parsers::ip(token.text, result)) {
-        return literal{result, token.location};
+        return constant{result, token.location};
       }
     }
     return std::nullopt;

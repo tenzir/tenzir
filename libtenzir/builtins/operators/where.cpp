@@ -153,7 +153,7 @@ auto to_field_extractor(const ast::expression& x)
 auto to_operand(const ast::expression& x) -> std::optional<operand> {
   // meta_extractor, field_extractor, data
   return x.match<std::optional<operand>>(
-    [](const ast::literal& x) {
+    [](const ast::constant& x) {
       return x.as_data();
     },
     [](const ast::meta& x) {
@@ -175,7 +175,7 @@ auto to_operand(const ast::expression& x) -> std::optional<operand> {
 }
 
 auto is_true_literal(const ast::expression& y) -> bool {
-  if (auto lit = std::get_if<ast::literal>(&*y.kind)) {
+  if (auto lit = std::get_if<ast::constant>(&*y.kind)) {
     return lit->as_data() == true;
   }
   return false;
@@ -225,7 +225,7 @@ auto split_legacy_expression(const ast::expression& x)
         }
         return std::pair{
           expression{predicate{std::move(*left), *rel_op, std::move(*right)}},
-          ast::expression{ast::literal{true, location::unknown}}};
+          ast::expression{ast::constant{true, location::unknown}}};
       }
       if (y.op.inner == ast::binary_op::and_) {
         auto [lo, ln] = split_legacy_expression(y.left);

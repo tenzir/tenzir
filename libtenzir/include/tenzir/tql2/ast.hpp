@@ -17,6 +17,7 @@
 #include "tenzir/tql2/entity_path.hpp"
 
 #include <caf/detail/is_one_of.hpp>
+#include <caf/detail/type_list.hpp>
 
 #include <type_traits>
 
@@ -47,7 +48,7 @@ struct index_expr;
 struct invocation;
 struct let_stmt;
 struct list;
-struct literal;
+struct constant;
 struct match_stmt;
 struct null;
 struct pipeline_expr;
@@ -155,34 +156,30 @@ struct dollar_var : identifier {
 
 struct null {};
 
-struct literal {
+struct constant {
   // TODO: Consider moving the location into the variant inhabitants.
   // TODO: Consider representing integers differently.
-  using kind = variant<null, bool, int64_t, uint64_t, double, std::string, blob,
-                       duration, caf::timestamp, ip>;
+  using kind = caf::detail::tl_apply_t<
+    caf::detail::tl_filter_not_type_t<data::types, pattern>, variant>;
 
-  literal() = default;
+  constant() = default;
 
-  literal(kind value, location source)
+  constant(kind value, location source)
     : value{std::move(value)}, source{source} {
   }
 
   kind value;
   location source;
 
-  friend auto inspect(auto& f, literal& x) -> bool {
+  friend auto inspect(auto& f, constant& x) -> bool {
     return f.object(x).fields(f.field("value", x.value),
                               f.field("source", x.source));
   }
 
   auto as_data() const -> data {
-    return value.match(
-      [](const auto& x) -> data {
-        return x;
-      },
-      [](const null&) -> data {
-        return caf::none;
-      });
+    return value.match([](const auto& x) -> data {
+      return x;
+    });
   }
 
   auto get_location() const -> location {
@@ -220,7 +217,7 @@ struct root_field {
 
 using expression_kinds
   = caf::detail::type_list<record, list, meta, this_, root_field, pipeline_expr,
-                           literal, field_access, index_expr, binary_expr,
+                           constant, field_access, index_expr, binary_expr,
                            unary_expr, function_call, underscore, unpack,
                            assignment, dollar_var>;
 
@@ -768,7 +765,7 @@ inline auto pipeline::operator=(pipeline&&) noexcept -> pipeline& = default;
 
 template <class Self>
 class visitor {
-public:
+protected:
   void enter(pipeline& x) {
     go(x.body);
   }
@@ -816,7 +813,7 @@ public:
     go(x.expr);
   }
 
-  void enter(literal& x) {
+  void enter(constant& x) {
     (void)x;
   }
 
@@ -889,6 +886,10 @@ public:
 
   void enter(ast::this_& x) {
     TENZIR_UNUSED(x);
+  }
+
+  void enter(ast::dollar_var& x) {
+    go(static_cast<ast::identifier&>(x));
   }
 
   template <class T>

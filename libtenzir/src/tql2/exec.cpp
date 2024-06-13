@@ -495,6 +495,70 @@ auto prepare_pipeline(ast::pipeline&& pipe, session ctx) -> pipeline {
   return tenzir::pipeline{std::move(ops)};
 }
 
+// TODO: This does not properly handle sub-pipelines.
+class let_resolver : public ast::visitor<let_resolver> {
+public:
+  explicit let_resolver(session ctx) : ctx_{ctx} {
+  }
+
+  void visit(ast::pipeline& x) {
+    // TODO: Extraction + patch is probably a common pattern.
+    for (auto it = x.body.begin(); it != x.body.end(); ++it) {
+      auto let = std::get_if<ast::let_stmt>(&*it);
+      if (not let) {
+        enter(*it);
+        continue;
+      }
+      auto value = const_eval(let->expr, ctx_);
+      if (not value) {
+        map_[let->name.name] = std::nullopt;
+      }
+      auto f = detail::overload{
+        [](auto x) -> ast::constant::kind {
+          return x;
+        },
+        [](pattern&) -> ast::constant::kind {
+          // TODO
+          TENZIR_UNREACHABLE();
+        },
+      };
+      map_[let->name.name] = caf::visit(f, std::move(*value));
+      it = x.body.erase(it);
+    }
+  }
+
+  void visit(ast::expression& x) {
+    auto dollar_var = std::get_if<ast::dollar_var>(&*x.kind);
+    if (not dollar_var) {
+      enter(x);
+      return;
+    }
+    auto it = map_.find(dollar_var->name);
+    if (it == map_.end()) {
+      diagnostic::error("unresolved variable").primary(x).emit(ctx_);
+      return;
+    }
+    if (not it->second) {
+      // Variable exists but there was an error during evaluation.
+      return;
+    }
+    x = ast::constant{*it->second, x.get_location()};
+  }
+
+  template <class T>
+  void visit(T& x) {
+    enter(x);
+  }
+
+private:
+  std::unordered_map<std::string, std::optional<ast::constant::kind>> map_;
+  session ctx_;
+};
+
+void resolve_let_statements(ast::pipeline& pipe, session ctx) {
+  let_resolver{ctx}.visit(pipe);
+}
+
 auto exec2(std::string content, std::unique_ptr<diagnostic_handler> diag,
            const exec_config& cfg, caf::actor_system& sys) -> bool {
   (void)sys;
@@ -560,6 +624,14 @@ auto exec2(std::string content, std::unique_ptr<diagnostic_handler> diag,
   }
   auto ctx = session{*diag_wrapper};
   resolve_entities(parsed, ctx);
+  // TODO: Can we proceed with unresolved entities?
+  if (diag_wrapper->error()) {
+    return false;
+  }
+  resolve_let_statements(parsed, ctx);
+  if (diag_wrapper->error()) {
+    return false;
+  }
   auto pipe = prepare_pipeline(std::move(parsed), ctx);
   if (diag_wrapper->error()) {
     return false;

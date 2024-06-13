@@ -24,15 +24,11 @@ public:
   explicit type_checker(session ctx) : ctx_{ctx} {
   }
 
-  auto visit(const literal& x) -> result {
-    return x.value.match(
-      []<class T>(const T&) -> type {
-        return type{data_to_type_t<T>{}};
-      },
-      [](const null&) -> type {
-        return type{null_type{}};
-      });
-  }
+  // auto visit(const constant& x) -> result {
+  //   return x.value.match([]<class T>(const T&) -> type {
+  //     return type{data_to_type_t<T>{}};
+  //   });
+  // }
 
   // auto visit(const path& x) -> result {
   //   if (x.this_ && x.path.empty()) {
