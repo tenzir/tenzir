@@ -75,14 +75,14 @@ namespace tenzir::tql2 {
 
 namespace tenzir {
 
-auto function_argument_parser::parse(function_plugin::invocation& inv,
+auto function_argument_parser::parse(function_plugin0::invocation& inv,
                                      diagnostic_handler& dh) -> bool {
   // TODO: This is called once per batch at the moment. Perhaps something more
   // like the operator API is better.
   auto it = positional_.begin();
   for (auto& arg : inv.args) {
     auto success = arg.match(
-      [&](function_plugin::positional_argument& arg) {
+      [&](function_plugin0::positional_argument& arg) {
         if (it == positional_.end()) {
           diagnostic::error("unexpected positional argument")
             .primary(arg)
@@ -93,7 +93,7 @@ auto function_argument_parser::parse(function_plugin::invocation& inv,
         ++it;
         return success;
       },
-      [&](function_plugin::named_argument& arg) {
+      [&](function_plugin0::named_argument& arg) {
         diagnostic::error("unexpected named argument")
           .primary(arg.selector)
           .emit(dh);
@@ -214,13 +214,32 @@ struct function_argument_parser::instantiate {
 
 template struct function_argument_parser::instantiate<std::monostate{}>;
 
-auto aggregation_plugin::eval(invocation inv, diagnostic_handler& dh) const
-  -> series {
+auto aggregation_plugin::make_function(invocation inv, session ctx) const
+  -> std::unique_ptr<function_use> {
   // TODO: Consider making this pure-virtual or provide a default implementation.
   diagnostic::error("this function can only be used as an aggregation function")
-    .primary(inv.self.fn)
-    .emit(dh);
-  return series::null(null_type{}, inv.length);
+    .primary(inv.call.fn)
+    .emit(ctx);
+  return nullptr;
+}
+
+auto function_use::make(
+  std::function<auto(evaluator eval, session ctx)->series> f)
+  -> std::unique_ptr<function_use> {
+  class result final : public function_use {
+  public:
+    explicit result(std::function<auto(evaluator eval, session ctx)->series> f)
+      : f_{std::move(f)} {
+    }
+
+    auto run(evaluator eval, session ctx) const -> series override {
+      return f_(std::move(eval), ctx);
+    }
+
+  private:
+    std::function<auto(evaluator eval, session ctx)->series> f_;
+  };
+  return std::make_unique<result>(std::move(f));
 }
 
 } // namespace tenzir

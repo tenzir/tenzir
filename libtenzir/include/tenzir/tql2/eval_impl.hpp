@@ -119,6 +119,10 @@ public:
     return null();
   }
 
+  auto length() const -> int64_t {
+    return length_;
+  }
+
 private:
   const table_slice* input_;
   int64_t length_;

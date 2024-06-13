@@ -13,7 +13,7 @@ namespace tenzir::plugins::path {
 
 namespace {
 
-class file_name final : public function_plugin {
+class file_name final : public function_plugin0 {
 public:
   auto name() const -> std::string override {
     return "tql2.file_name";
@@ -48,7 +48,7 @@ public:
   }
 };
 
-class parent_dir final : public function_plugin {
+class parent_dir final : public function_plugin0 {
 public:
   auto name() const -> std::string override {
     return "tql2.parent_dir";

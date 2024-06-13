@@ -14,7 +14,7 @@ namespace tenzir::plugins::misc {
 
 namespace {
 
-class type_id final : public function_plugin {
+class type_id final : public function_plugin0 {
 public:
   auto name() const -> std::string override {
     return "tql2.type_id";
@@ -38,7 +38,7 @@ public:
   }
 };
 
-class secret final : public function_plugin {
+class secret final : public function_plugin0 {
 public:
   auto name() const -> std::string override {
     return "tql2.secret";

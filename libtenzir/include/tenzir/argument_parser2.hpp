@@ -91,6 +91,7 @@ public:
 
   void parse(const operator_factory_plugin::invocation& inv, session ctx);
   void parse(const ast::function_call& call, session ctx);
+  void parse(const function_plugin::invocation& inv, session ctx);
   void parse(const ast::entity& self, std::span<ast::expression const> args,
              session ctx);
 

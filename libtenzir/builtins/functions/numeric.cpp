@@ -23,27 +23,57 @@ namespace tenzir::plugins::numeric {
 
 namespace {
 
-class round final : public function_plugin {
+// TODO: Move this.
+template <class... Ts>
+concept one_of = caf::detail::is_one_of<Ts...>::value;
+
+class round_use final : public function_use {
 public:
-  auto name() const -> std::string override {
-    return "tql2.round";
+  round_use(ast::expression value, std::optional<ast::expression> spec)
+    : value_{std::move(value)}, spec_{std::move(spec)} {
   }
 
-  auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
-    auto arg = located<series>{};
-    auto success
-      = function_argument_parser{"round"}.add(arg, "<number>").parse(inv, dh);
-    if (not success) {
-      return series::null(int64_type{}, inv.length);
+  auto run(evaluator eval, session ctx) const -> series override {
+    auto value = located{eval(value_), value_.get_location()};
+    if (not spec_) {
+      // round(<number>)
+      return round_without_spec(std::move(value), ctx);
     }
+    // round(<duration>, <duration>)
+    // round(x, 1h) -> round to multiples of 1h
+    // round(<time>, <duration>)
+    // round(x, 1h) -> round so that time is multiples of 1h (for UTC timezone?)
+    auto spec = located{eval(*spec_), spec_->get_location()};
+    return round_with_spec(std::move(value), std::move(spec), ctx);
+  }
+
+private:
+  static auto round_with_spec(located<series> value, located<series> spec,
+                              session ctx) -> series {
+    diagnostic::warning("round(_, _) is not implemented yet")
+      .primary(spec)
+      .emit(ctx);
+    return series::null(value.inner.type, value.inner.length());
+  }
+
+  static auto round_without_spec(located<series> value, session ctx) -> series {
+    auto length = value.inner.length();
+    auto null = [&] {
+      auto b = arrow::Int64Builder{};
+      check(b.AppendNulls(length));
+      return finish(b);
+    };
     auto f = detail::overload{
+      [&](const arrow::NullArray&) {
+        return null();
+      },
       [](const arrow::Int64Array& arg) {
         return std::make_shared<arrow::Int64Array>(arg.data());
       },
       [&](const arrow::DoubleArray& arg) {
         auto b = arrow::Int64Builder{};
-        check(b.Reserve(inv.length));
-        for (auto row = int64_t{0}; row < inv.length; ++row) {
+        check(b.Reserve(length));
+        for (auto row = int64_t{0}; row < length; ++row) {
           if (arg.IsNull(row)) {
             check(b.AppendNull());
           } else {
@@ -54,22 +84,48 @@ public:
         }
         return finish(b);
       },
-      [&](const auto&) -> std::shared_ptr<arrow::Int64Array> {
-        diagnostic::warning("`round` expects `int64` or `double`, got `{}`",
-                            arg.inner.type.kind())
+      [&]<one_of<arrow::DurationArray, arrow::TimestampArray> T>(const T&) {
+        diagnostic::warning("`round` with duration requires second argument")
+          .primary(value)
+          .hint("for example `round(x, 1h)`")
+          .emit(ctx);
+        return null();
+      },
+      [&](const auto&) {
+        diagnostic::warning("`round` expected `int64` or `double`, got `{}`",
+                            value.inner.type.kind())
           // TODO: Wrong location.
-          .primary(inv.self)
-          .emit(dh);
-        auto b = arrow::Int64Builder{};
-        check(b.AppendNulls(detail::narrow<int64_t>(inv.length)));
-        return finish(b);
+          .primary(value)
+          .emit(ctx);
+        return null();
       },
     };
-    return series{int64_type{}, caf::visit(f, *arg.inner.array)};
+    return series{int64_type{}, caf::visit(f, *value.inner.array)};
+  }
+
+  ast::expression value_;
+  std::optional<ast::expression> spec_;
+};
+
+class round final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.round";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> std::unique_ptr<function_use> override {
+    auto value = ast::expression{};
+    auto spec = std::optional<ast::expression>{};
+    argument_parser2::fn("round")
+      .add(value, "<value>")
+      .add(spec, "<spec>")
+      .parse(inv, ctx);
+    return std::make_unique<round_use>(std::move(value), std::move(spec));
   }
 };
 
-class sqrt final : public function_plugin {
+class sqrt final : public function_plugin0 {
 public:
   auto name() const -> std::string override {
     return "tql2.sqrt";
@@ -163,25 +219,41 @@ public:
     return "tql2.random";
   }
 
-  auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
-    auto success = function_argument_parser{"random"}.parse(inv, dh);
-    if (not success) {
-      return series::null(double_type{}, inv.length);
-    }
-    if (not inv.args.empty()) {
-      diagnostic::error("`random` expects no arguments")
-        .primary(inv.self)
-        .emit(dh);
-    }
-    auto b = arrow::DoubleBuilder{};
-    check(b.Reserve(inv.length));
-    auto engine = std::default_random_engine{std::random_device{}()};
-    auto dist = std::uniform_real_distribution<double>{0.0, 1.0};
-    for (auto i = int64_t{0}; i < inv.length; ++i) {
-      check(b.Append(dist(engine)));
-    }
-    return {double_type{}, finish(b)};
+  auto make_function(invocation inv, session ctx) const
+    -> std::unique_ptr<function_use> override {
+    argument_parser2::fn("random").parse(inv, ctx);
+    return function_use::make([](evaluator eval, session ctx) -> series {
+      TENZIR_UNUSED(ctx);
+      auto b = arrow::DoubleBuilder{};
+      check(b.Reserve(eval.length()));
+      auto engine = std::default_random_engine{std::random_device{}()};
+      auto dist = std::uniform_real_distribution<double>{0.0, 1.0};
+      for (auto i = int64_t{0}; i < eval.length(); ++i) {
+        check(b.Append(dist(engine)));
+      }
+      return {double_type{}, finish(b)};
+    });
   }
+
+  // auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
+  //   auto success = function_argument_parser{"random"}.parse(inv, dh);
+  //   if (not success) {
+  //     return series::null(double_type{}, inv.length);
+  //   }
+  //   if (not inv.args.empty()) {
+  //     diagnostic::error("`random` expects no arguments")
+  //       .primary(inv.self)
+  //       .emit(dh);
+  //   }
+  //   auto b = arrow::DoubleBuilder{};
+  //   check(b.Reserve(inv.length));
+  //   auto engine = std::default_random_engine{std::random_device{}()};
+  //   auto dist = std::uniform_real_distribution<double>{0.0, 1.0};
+  //   for (auto i = int64_t{0}; i < inv.length; ++i) {
+  //     check(b.Append(dist(engine)));
+  //   }
+  //   return {double_type{}, finish(b)};
+  // }
 };
 
 class sum_instance final : public aggregation_instance {
@@ -276,16 +348,16 @@ public:
     return "tql2.sum";
   }
 
-  auto make_aggregation(ast::function_call call, session ctx) const
+  auto make_aggregation(invocation inv, session ctx) const
     -> std::unique_ptr<aggregation_instance> override {
-    if (call.args.size() != 1) {
+    if (inv.call.args.size() != 1) {
       diagnostic::error("expected exactly one argument, got {}",
-                        call.args.size())
-        .primary(call)
+                        inv.call.args.size())
+        .primary(inv.call)
         .emit(ctx);
       return nullptr;
     }
-    return std::make_unique<sum_instance>(std::move(call.args[0]));
+    return std::make_unique<sum_instance>(inv.call.args[0]);
   }
 };
 
@@ -319,20 +391,13 @@ public:
     return "tql2.count";
   }
 
-  auto make_aggregation(ast::function_call call, session ctx) const
+  auto make_aggregation(invocation inv, session ctx) const
     -> std::unique_ptr<aggregation_instance> override {
     auto arg = std::optional<ast::expression>{};
-    argument_parser2::fn("count").add(arg, "<expr>").parse(call, ctx);
+    argument_parser2::fn("count").add(arg, "<expr>").parse(inv, ctx);
     return std::make_unique<count_instance>(std::move(arg));
   }
 };
-
-namespace {
-
-template <class... Ts>
-concept one_of = caf::detail::is_one_of<Ts...>::value;
-
-} // namespace
 
 class quantile_instance final : public aggregation_instance {
 public:
@@ -379,19 +444,20 @@ public:
     return "tql2.quantile";
   }
 
-  auto make_aggregation(ast::function_call x, session ctx) const
+  auto make_aggregation(invocation inv, session ctx) const
     -> std::unique_ptr<aggregation_instance> override {
     // TODO: Improve.
-    if (x.args.size() != 2) {
-      diagnostic::error("expected exactly two arguments, got {}", x.args.size())
-        .primary(x)
+    if (inv.call.args.size() != 2) {
+      diagnostic::error("expected exactly two arguments, got {}",
+                        inv.call.args.size())
+        .primary(inv.call)
         .usage("quantile(<expr>, <quantile>)")
         .docs("https://docs.tenzir.com/functions/quantile")
         .emit(ctx);
       return nullptr;
     }
-    auto& expr = x.args[0];
-    auto& quantile_expr = x.args[1];
+    auto& expr = inv.call.args[0];
+    auto& quantile_expr = inv.call.args[1];
     auto quantile_opt = const_eval(quantile_expr, ctx);
     if (not quantile_opt) {
       return nullptr;
@@ -410,7 +476,7 @@ public:
         .emit(ctx);
       return nullptr;
     }
-    return std::make_unique<quantile_instance>(std::move(expr), *quantile);
+    return std::make_unique<quantile_instance>(expr, *quantile);
   }
 };
 

@@ -1039,7 +1039,8 @@ public:
           auto fn = plugins::find<aggregation_plugin>(
             "tql2." + aggr.call.fn.path[0].name);
           TENZIR_ASSERT(fn);
-          bucket->aggregations.push_back(fn->make_aggregation(aggr.call, ctx_));
+          bucket->aggregations.push_back(fn->make_aggregation(
+            aggregation_plugin::invocation{aggr.call}, ctx_));
         }
         it = groups_.emplace_hint(it, materialize(key), std::move(bucket));
       }
@@ -1207,7 +1208,7 @@ public:
           }
           // We test the arguments by making and discarding it. This is a bit
           // hacky and should be improved in the future.
-          (void)fn->make_aggregation(call, ctx);
+          (void)fn->make_aggregation(aggregation_plugin::invocation{call}, ctx);
           auto index = detail::narrow<int64_t>(cfg.aggregates.size());
           cfg.indices.push_back(index);
           cfg.aggregates.emplace_back(std::move(dest), std::move(call));

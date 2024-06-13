@@ -27,6 +27,12 @@ void argument_parser2::parse(const operator_factory_plugin::invocation& inv,
   return parse(inv.self, inv.args, ctx);
 }
 
+void argument_parser2::parse(const function_plugin::invocation& inv,
+                             session ctx) {
+  TENZIR_ASSERT(function_ == true);
+  return parse(inv.call.fn, inv.call.args, ctx);
+}
+
 void argument_parser2::parse(const ast::function_call& call, session ctx) {
   TENZIR_ASSERT(function_ == true);
   return parse(call.fn, call.args, ctx);

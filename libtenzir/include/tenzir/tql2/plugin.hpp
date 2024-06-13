@@ -29,7 +29,7 @@ template <class Operator>
 class operator_plugin2 : public virtual operator_factory_plugin,
                          public virtual operator_inspection_plugin<Operator> {};
 
-class function_plugin : public virtual plugin {
+class function_plugin0 : public virtual plugin {
 public:
   struct named_argument {
     ast::selector selector;
@@ -115,7 +115,7 @@ public:
     -> function_argument_parser&;
 
   [[nodiscard]] auto
-  parse(function_plugin::invocation& inv, diagnostic_handler& dh) -> bool;
+  parse(function_plugin0::invocation& inv, diagnostic_handler& dh) -> bool;
 
 private:
   template <type_or_concrete_type Type>
@@ -135,8 +135,37 @@ private:
 
 class function_use {
 public:
-  virtual auto eval(const table_slice& input, diagnostic_handler& dh) const
-    -> series
+  virtual ~function_use() = default;
+
+  // TODO: Improve this.
+  class evaluator {
+  public:
+    evaluator(void* self) : self_{self} {};
+
+    auto operator()(const ast::expression& expr) const -> series;
+
+    auto length() const -> int64_t;
+
+  private:
+    void* self_;
+  };
+
+  virtual auto run(evaluator eval, session ctx) const -> series = 0;
+
+  static auto make(std::function<auto(evaluator eval, session ctx)->series> f)
+    -> std::unique_ptr<function_use>;
+};
+
+class function_plugin : public virtual plugin {
+public:
+  using evaluator = function_use::evaluator;
+
+  struct invocation {
+    const ast::function_call& call;
+  };
+
+  virtual auto make_function(invocation inv, session ctx) const
+    -> std::unique_ptr<function_use>
     = 0;
 };
 
@@ -151,9 +180,10 @@ public:
 
 class aggregation_plugin : public virtual function_plugin {
 public:
-  auto eval(invocation inv, diagnostic_handler& dh) const -> series override;
+  auto make_function(invocation inv, session ctx) const
+    -> std::unique_ptr<function_use> override;
 
-  virtual auto make_aggregation(ast::function_call call, session ctx) const
+  virtual auto make_aggregation(invocation inv, session ctx) const
     -> std::unique_ptr<aggregation_instance>
     = 0;
 };

@@ -15,7 +15,7 @@ namespace tenzir::plugins::time_ {
 
 namespace {
 
-class time_ final : public function_plugin {
+class time_ final : public function_plugin0 {
 public:
   auto name() const -> std::string override {
     return "tql2.time";
@@ -56,7 +56,7 @@ public:
   }
 };
 
-class seconds_since_epoch final : public function_plugin {
+class seconds_since_epoch final : public function_plugin0 {
 public:
   auto name() const -> std::string override {
     return "tql2.seconds_since_epoch";
@@ -90,7 +90,7 @@ public:
   }
 };
 
-class now final : public function_plugin {
+class now final : public function_plugin0 {
 public:
   auto name() const -> std::string override {
     return "tql2.now";

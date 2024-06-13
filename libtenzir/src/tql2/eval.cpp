@@ -72,6 +72,15 @@ auto resolve(const ast::simple_selector& sel, type ty)
   return result;
 }
 
+auto function_use::evaluator::length() const -> int64_t {
+  return static_cast<tenzir::evaluator*>(self_)->length();
+}
+
+auto function_use::evaluator::operator()(const ast::expression& expr) const
+  -> series {
+  return static_cast<tenzir::evaluator*>(self_)->eval(expr);
+}
+
 namespace {
 
 // TODO: not good.
@@ -229,21 +238,13 @@ auto evaluator::eval(const ast::function_call& x) -> series {
   TENZIR_ASSERT(segments.size() == 1);
   auto fn = plugins::find<function_plugin>("tql2." + segments[0]);
   TENZIR_ASSERT(fn);
-  auto args = std::vector<function_plugin::argument>{};
-  for (auto& arg : x.args) {
-    if (auto assignment = std::get_if<ast::assignment>(&*arg.kind)) {
-      args.emplace_back(function_plugin::named_argument{
-        assignment->left,
-        located{eval(assignment->right), assignment->right.get_location()}});
-    } else {
-      args.emplace_back(
-        function_plugin::positional_argument{eval(arg), arg.get_location()});
-    }
+  auto func = fn->make_function(function_plugin::invocation{x}, session{dh_});
+  if (not func) {
+    return series::null(null_type{}, length_);
   }
-  auto ret
-    = fn->eval(function_plugin::invocation{x, length_, std::move(args)}, dh_);
-  TENZIR_ASSERT(ret.length() == length_);
-  return ret;
+  auto result = func->run(function_use::evaluator{this}, session{dh_});
+  TENZIR_ASSERT(result.length() == length_);
+  return result;
 }
 
 auto evaluator::eval(const ast::this_& x) -> series {

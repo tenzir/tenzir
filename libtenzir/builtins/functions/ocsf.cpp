@@ -15,7 +15,7 @@ namespace tenzir::plugins::ocsf {
 
 namespace {
 
-class category_uid final : public function_plugin {
+class category_uid final : public function_plugin0 {
 public:
   auto name() const -> std::string override {
     return "tql2.ocsf_category_uid";
@@ -67,7 +67,7 @@ public:
   }
 };
 
-class class_uid final : public function_plugin {
+class class_uid final : public function_plugin0 {
 public:
   auto name() const -> std::string override {
     return "tql2.ocsf_class_uid";
