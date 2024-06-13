@@ -34,7 +34,6 @@
 #include <arrow/type.h>
 #include <caf/error.hpp>
 #include <caf/sum_type.hpp>
-#include <sys/_types/_u_int8_t.h>
 #include <tsl/robin_map.h>
 
 #include <memory>
@@ -686,7 +685,7 @@ struct v1_loader : public context_loader {
                                "context entry in serialized entry list, "
                                "entry must be a record");
       }
-      if (not record->fields() or record->fields()->size() != 4) {
+      if (not record->fields()) {
         return caf::make_error(ec::serialization_error,
                                "failed to deserialize lookup table "
                                "context: invalid or missing value for "
