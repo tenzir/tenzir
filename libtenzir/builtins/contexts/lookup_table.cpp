@@ -6,14 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2023 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/detail/assert.hpp"
-
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/concept/parseable/numeric/bool.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/parseable/tenzir/expression.hpp>
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/data.hpp>
+#include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/range_map.hpp>
 #include <tenzir/detail/subnet_tree.hpp>
 #include <tenzir/expression.hpp>
@@ -275,23 +274,28 @@ public:
       if (auto it = context_entries.find(materialize(value));
           it != context_entries.end()) {
         if (it->second.is_expired(now)) {
-          builder.null();
-          continue;
+          goto retry; // NOLINT(cppcoreguidelines-avoid-goto)
         }
         it.value().update(now);
         builder.data(it->second.raw_data);
-      } else if (auto* x = subnet_lookup(value)) {
+        continue;
+      }
+      // We need to retry the lookup if we had an expired hit, as a matched IP
+      // address that was expired may very well be part of another subnet.
+    retry:
+      if (auto* x = subnet_lookup(value)) {
         if (x->is_expired(now)) {
-          builder.null();
-          continue;
+          goto retry; // NOLINT(cppcoreguidelines-avoid-goto)
         }
         x->update(now);
         builder.data(x->raw_data);
-      } else if (replace and not caf::holds_alternative<caf::none_t>(value)) {
-        builder.data(value);
-      } else {
-        builder.null();
+        continue;
       }
+      if (replace and not caf::holds_alternative<caf::none_t>(value)) {
+        builder.data(value);
+        continue;
+      }
+      builder.null();
     }
     return builder.finish();
   }
