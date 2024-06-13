@@ -7,7 +7,7 @@ data.
 
 ```
 context create  <name> lookup-table
-context update  <name> [--key <field>] [--erase]
+context update  <name> [--key <field>] [--create-timeout <time>] [--update-timeout <time>] [--erase]
 context delete  <name>
 context reset   <name>
 context save    <name>
@@ -41,6 +41,18 @@ The following options are currently supported for the `lookup-table` context:
 The field in the input that holds the unique key for the lookup table.
 
 Defaults to the first field of the input.
+
+### ``--create-timeout <time>`
+
+The lifetime of events added in the context update.
+
+Defaults to no timeout.
+
+### `--update-timeout <time>`
+
+An event lifetime that resets on every access.
+
+Defaults to no timeout.
 
 ### `--erase`
 
