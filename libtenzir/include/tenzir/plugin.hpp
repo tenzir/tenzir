@@ -699,7 +699,7 @@ public:
   /// @param array The values to look up in the context.
   /// @param replace If true, return the input values for missing fields rather
   /// than nulls.
-  virtual auto apply(series array, bool replace) const
+  virtual auto apply(series array, bool replace)
     -> caf::expected<std::vector<series>>
     = 0;
 

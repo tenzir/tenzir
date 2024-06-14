@@ -55,7 +55,7 @@ public:
   }
 
   /// Emits context information for every event in `slice` in order.
-  auto apply(series array, bool replace) const
+  auto apply(series array, bool replace)
     -> caf::expected<std::vector<series>> override {
     (void)replace;
     auto builder = series_builder{};

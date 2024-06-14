@@ -32,22 +32,22 @@ TEST(prefix matching) {
   CHECK(xs.lookup(sn_0_25));
   CHECK(xs.lookup(sn_1_24));
   CHECK(xs.lookup(sn_0_23));
-  CHECK(xs.match(*to<ip>("192.168.0.1")));
-  CHECK(xs.match(*to<ip>("192.168.1.255")));
+  CHECK(xs.match(*to<ip>("192.168.0.1")).second);
+  CHECK(xs.match(*to<ip>("192.168.1.255")).second);
   {
-    const auto* ptr = xs.match(*to<subnet>("192.168.0.128/25"));
-    REQUIRE(ptr);
-    CHECK_EQUAL(*ptr, data{0u});
+    const auto ptr = xs.match(*to<subnet>("192.168.0.128/25"));
+    REQUIRE(ptr.second);
+    CHECK_EQUAL(*ptr.second, data{0u});
   }
   {
-    const auto* ptr = xs.match(*to<subnet>("192.168.0.0/25"));
-    REQUIRE(ptr);
-    CHECK_EQUAL(*ptr, data{1u});
+    const auto ptr = xs.match(*to<subnet>("192.168.0.0/25"));
+    REQUIRE(ptr.second);
+    CHECK_EQUAL(*ptr.second, data{1u});
   }
   // Check for true negatives.
   CHECK(not xs.lookup(*to<subnet>("192.168.0.0/22")));
-  CHECK(not xs.match(*to<ip>("192.168.2.0")));
-  CHECK(not xs.match(*to<ip>("10.0.0.1")));
+  CHECK(not xs.match(*to<ip>("192.168.2.0")).second);
+  CHECK(not xs.match(*to<ip>("10.0.0.1")).second);
   // Prefix match of IP addresses.
   auto subnets = std::set<subnet>{};
   for (auto [sn, _] : xs.search(*to<ip>("192.168.0.1")))

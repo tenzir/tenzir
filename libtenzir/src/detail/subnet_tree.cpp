@@ -771,16 +771,19 @@ auto make_subnet(const prefix_t* prefix) -> subnet {
   return subnet{ip::v6(bytes), narrow_cast<uint8_t>(prefix->bitlen)};
 }
 
-auto make_subnet_data_pair(const patricia_node_t* node)
-  -> std::pair<subnet, const data*> {
-  return {make_subnet(node->prefix), reinterpret_cast<const data*>(node->data)};
+auto make_subnet_data_pair(patricia_node_t* node)
+  -> std::pair<subnet, std::any*> {
+  if (not node) {
+    return {{}, nullptr};
+  }
+  return {make_subnet(node->prefix), reinterpret_cast<std::any*>(node->data)};
 }
 
 } // namespace
 
-struct subnet_tree::impl {
+struct type_erased_subnet_tree::impl {
   static auto delete_data(void* ptr) -> void {
-    delete reinterpret_cast<data*>(ptr);
+    delete reinterpret_cast<std::any*>(ptr);
   }
 
   struct patricia_tree_deleter {
@@ -791,60 +794,95 @@ struct subnet_tree::impl {
     }
   };
 
-  impl() {
+  impl() noexcept {
     tree.reset(New_Patricia(128));
   }
 
   std::unique_ptr<patricia_tree_t, patricia_tree_deleter> tree;
 };
 
-subnet_tree::subnet_tree() : impl_{std::make_unique<impl>()} {
+type_erased_subnet_tree::type_erased_subnet_tree() noexcept
+  : impl_{std::make_unique<impl>()} {
 }
 
-subnet_tree::subnet_tree(subnet_tree&& other) noexcept
+type_erased_subnet_tree::type_erased_subnet_tree(
+  type_erased_subnet_tree&& other) noexcept
   : impl_{std::move(other.impl_)} {
 }
 
-auto subnet_tree::operator=(subnet_tree&& other) noexcept -> subnet_tree& {
+auto type_erased_subnet_tree::operator=(type_erased_subnet_tree&& other) noexcept
+  -> type_erased_subnet_tree& {
   impl_ = std::move(other.impl_);
   return *this;
 }
 
-subnet_tree::~subnet_tree() {
+type_erased_subnet_tree::~type_erased_subnet_tree() noexcept {
   // Needs to be defined for pimpl.
 }
 
-auto subnet_tree::lookup(subnet key) const -> const data* {
+auto type_erased_subnet_tree::lookup(subnet key) const -> const std::any* {
   auto* prefix = make_prefix(key);
   if (prefix == nullptr) {
     return nullptr;
   }
   auto* node = patricia_search_exact(impl_->tree.get(), prefix);
   Deref_Prefix(prefix);
-  return node ? reinterpret_cast<const data*>(node->data) : nullptr;
+  return node ? reinterpret_cast<const std::any*>(node->data) : nullptr;
 }
 
-auto subnet_tree::match(ip key) const -> const data* {
-  return match(subnet{key, 128});
-}
-
-auto subnet_tree::match(subnet key) const -> const data* {
+auto type_erased_subnet_tree::lookup(subnet key) -> std::any* {
   auto* prefix = make_prefix(key);
   if (prefix == nullptr) {
     return nullptr;
   }
-  auto* node = patricia_search_best(impl_->tree.get(), prefix);
+  auto* node = patricia_search_exact(impl_->tree.get(), prefix);
   Deref_Prefix(prefix);
-  return node ? reinterpret_cast<const data*>(node->data) : nullptr;
+  return node ? reinterpret_cast<std::any*>(node->data) : nullptr;
 }
 
-auto subnet_tree::search(ip key) const
-  -> generator<std::pair<subnet, const data*>> {
+auto type_erased_subnet_tree::match(ip key) const
+  -> std::pair<subnet, const std::any*> {
+  return match(subnet{key, 128});
+}
+
+auto type_erased_subnet_tree::match(ip key) -> std::pair<subnet, std::any*> {
+  return match(subnet{key, 128});
+}
+
+auto type_erased_subnet_tree::match(subnet key) const
+  -> std::pair<subnet, const std::any*> {
+  auto* prefix = make_prefix(key);
+  if (prefix == nullptr) {
+    return make_subnet_data_pair(nullptr);
+  }
+  auto* node = patricia_search_best(impl_->tree.get(), prefix);
+  Deref_Prefix(prefix);
+  return make_subnet_data_pair(node);
+}
+
+auto type_erased_subnet_tree::match(subnet key)
+  -> std::pair<subnet, std::any*> {
+  auto* prefix = make_prefix(key);
+  if (prefix == nullptr) {
+    return make_subnet_data_pair(nullptr);
+  }
+  auto* node = patricia_search_best(impl_->tree.get(), prefix);
+  Deref_Prefix(prefix);
+  return make_subnet_data_pair(node);
+}
+
+auto type_erased_subnet_tree::search(ip key) const
+  -> generator<std::pair<subnet, const std::any*>> {
   return search(subnet{key, 128});
 }
 
-auto subnet_tree::search(subnet key) const
-  -> generator<std::pair<subnet, const data*>> {
+auto type_erased_subnet_tree::search(ip key)
+  -> generator<std::pair<subnet, std::any*>> {
+  return search(subnet{key, 128});
+}
+
+auto type_erased_subnet_tree::search(subnet key) const
+  -> generator<std::pair<subnet, const std::any*>> {
   auto* prefix = make_prefix(key);
   auto num_elements = 0;
   patricia_node_t** xs = nullptr;
@@ -858,7 +896,23 @@ auto subnet_tree::search(subnet key) const
   }
 }
 
-auto subnet_tree::nodes() const -> generator<std::pair<subnet, const data*>> {
+auto type_erased_subnet_tree::search(subnet key)
+  -> generator<std::pair<subnet, std::any*>> {
+  auto* prefix = make_prefix(key);
+  auto num_elements = 0;
+  patricia_node_t** xs = nullptr;
+  patricia_search_all(impl_->tree.get(), prefix, &xs, &num_elements);
+  auto guard = caf::detail::make_scope_guard([prefix, xs] {
+    Deref_Prefix(prefix);
+    free(xs);
+  });
+  for (auto i = 0; i < num_elements; ++i) {
+    co_yield make_subnet_data_pair(xs[i]);
+  }
+}
+
+auto type_erased_subnet_tree::nodes() const
+  -> generator<std::pair<subnet, const std::any*>> {
   patricia_node_t* node;
   PATRICIA_WALK(impl_->tree->head, node) {
     co_yield make_subnet_data_pair(node);
@@ -866,7 +920,16 @@ auto subnet_tree::nodes() const -> generator<std::pair<subnet, const data*>> {
   PATRICIA_WALK_END;
 }
 
-auto subnet_tree::insert(subnet key, data value) -> bool {
+auto type_erased_subnet_tree::nodes()
+  -> generator<std::pair<subnet, std::any*>> {
+  patricia_node_t* node;
+  PATRICIA_WALK(impl_->tree->head, node) {
+    co_yield make_subnet_data_pair(node);
+  }
+  PATRICIA_WALK_END;
+}
+
+auto type_erased_subnet_tree::insert(subnet key, std::any value) -> bool {
   auto* prefix = make_prefix(key);
   if (prefix == nullptr) {
     return false;
@@ -878,15 +941,15 @@ auto subnet_tree::insert(subnet key, data value) -> bool {
   }
   auto result = true;
   if (node->data != nullptr) {
-    delete reinterpret_cast<const data*>(node->data);
+    delete reinterpret_cast<const std::any*>(node->data);
     result = false;
   }
   // Deleted in Clear_Patricia() or Destroy_Patricia().
-  node->data = new data{std::move(value)};
+  node->data = new std::any{std::move(value)};
   return result;
 }
 
-auto subnet_tree::erase(subnet key) -> bool {
+auto type_erased_subnet_tree::erase(subnet key) -> bool {
   auto* prefix = make_prefix(key);
   TENZIR_ASSERT(prefix != nullptr);
   auto* node = patricia_search_exact(impl_->tree.get(), prefix);
@@ -895,14 +958,14 @@ auto subnet_tree::erase(subnet key) -> bool {
     return false;
   }
   if (node->data != nullptr) {
-    delete reinterpret_cast<const data*>(node->data);
+    delete reinterpret_cast<const std::any*>(node->data);
   }
   patricia_remove(impl_->tree.get(), node);
   return true;
 }
 
-auto subnet_tree::clear() -> void {
-  Clear_Patricia(impl_->tree.get(), subnet_tree::impl::delete_data);
+auto type_erased_subnet_tree::clear() -> void {
+  Clear_Patricia(impl_->tree.get(), type_erased_subnet_tree::impl::delete_data);
 }
 
 } // namespace tenzir::detail
