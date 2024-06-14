@@ -47,6 +47,7 @@ Contains detailed information about the diagnostic.
 |`severity`|`string`|The diagnostic severity.|
 |`notes`|`list<record>`|The diagnostic notes. Can be empty.|
 |`annotations`|`list<record>`|The diagnostic annotations. Can be empty.|
+|`rendered`|`string`|The rendered diagnostic, as printed on the command-line.|
 
 The record `notes` has the following schema:
 

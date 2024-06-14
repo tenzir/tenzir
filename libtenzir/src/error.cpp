@@ -11,6 +11,7 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
 
+#include <caf/deep_to_string.hpp>
 #include <caf/exit_reason.hpp>
 #include <caf/message_handler.hpp>
 #include <caf/pec.hpp>
@@ -94,22 +95,20 @@ std::string render(caf::error err) {
   auto category = err.category();
   if (category == caf::type_id_v<tenzir::ec>
       && static_cast<tenzir::ec>(err.code()) == ec::diagnostic) {
-    auto printer
-      = make_diagnostic_printer(std::nullopt, color_diagnostics::yes, oss);
+    // TODO: We previously used `make_diagnostic_printer`, but I don't remember
+    // why. Since this shows up bad in logs, I changed it.
     auto ctx = err.context();
     caf::message_handler{
       [&](const diagnostic& diag) {
-        printer->emit(diag);
+        oss << fmt::format("{:?}", diag);
       },
       [&](const std::vector<diagnostic>& diags) {
         for (auto& diag : diags) {
-          printer->emit(diag);
+          oss << fmt::format("{:?}", diag);
         }
       },
       [&](const caf::message& msg) {
-        printer->emit(diagnostic::error("{}", caf::deep_to_string(msg))
-                        .note("unexpected diagnostic format")
-                        .done());
+        oss << "unexpected diagnostic format: " << caf::deep_to_string(msg);
       },
     }(ctx);
     return std::move(oss).str();

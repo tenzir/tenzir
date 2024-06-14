@@ -210,7 +210,7 @@ auto exec_pipeline(pipeline pipe, std::unique_ptr<diagnostic_handler> diag,
         if (msg.reason) {
           result = msg.reason;
         }
-        self->quit(msg.reason);
+        self->quit();
       });
       self->state.executor = self->spawn<caf::monitored>(
         pipeline_executor, std::move(pipe),

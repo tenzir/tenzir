@@ -266,6 +266,9 @@ struct exec_node_state {
       demand->rp.deliver();
     }
     if (start_rp.pending()) {
+      // TODO: This should probably never happen, as it means that we do not
+      // deliver a diagnostic.
+      TENZIR_WARN("reached pending `start_rp` in exec node destructor");
       start_rp.deliver(ec::silent);
     }
   }
@@ -305,7 +308,7 @@ struct exec_node_state {
         TENZIR_DEBUG("{} {} got exit message from the next execution node or "
                      "its executor with address {}: {}",
                      *self, op->name(), msg.source, msg.reason);
-        self->quit(msg.reason);
+        on_error(msg.reason);
       });
     } else {
       // The previous exec-node must be set when the operator is not a source.
@@ -333,14 +336,14 @@ struct exec_node_state {
           TENZIR_DEBUG("{} {} got exit message from the next execution node or "
                        "its executor with address {}: {}",
                        *self, op->name(), msg.source, msg.reason);
-          self->quit(msg.reason);
+          on_error(msg.reason);
           return;
         }
         TENZIR_DEBUG("{} {} got exit message from previous execution node with "
                      "address {}: {}",
                      *self, op->name(), msg.source, msg.reason);
         if (msg.reason and msg.reason != caf::exit_reason::unreachable) {
-          self->quit(msg.reason);
+          on_error(msg.reason);
           return;
         }
         previous = nullptr;
@@ -409,8 +412,7 @@ struct exec_node_state {
               = make_timer_guard(metrics.time_scheduled, metrics.time_starting);
             TENZIR_DEBUG("{} {} forwards error during startup: {}", *self,
                          op->name(), error);
-            start_rp.deliver(
-              add_context(error, "{} {} failed to start", *self, op->name()));
+            start_rp.deliver(error);
           });
       return start_rp;
     }
@@ -707,6 +709,15 @@ struct exec_node_state {
     schedule_run(false);
     return {};
   }
+
+  void on_error(caf::error error) {
+    if (start_rp.pending()) {
+      start_rp.deliver(std::move(error));
+      self->quit(ec::silent);
+      return;
+    }
+    self->quit(std::move(error));
+  }
 };
 
 template <class Input, class Output>
@@ -739,7 +750,7 @@ auto exec_node(
     self, std::move(diagnostic_handler), has_terminal);
   // The node actor must be set when the operator is not a source.
   if (self->state.op->location() == operator_location::remote and not node) {
-    self->quit(caf::make_error(
+    self->state.on_error(caf::make_error(
       ec::logic_error,
       fmt::format("{} runs a remote operator and must have a node", *self)));
     return exec_node_actor::behavior_type::make_empty_behavior();
@@ -747,21 +758,26 @@ auto exec_node(
   self->state.weak_node = node;
   self->set_exception_handler(
     [self](std::exception_ptr exception) -> caf::error {
-      try {
-        std::rethrow_exception(exception);
-      } catch (diagnostic diag) {
-        self->send(self->state.ctrl->diagnostic_handler->handle, diag);
-        self->quit(std::move(diag).to_error());
-        return {};
-      } catch (const std::exception& err) {
-        diagnostic::error("{}", err.what())
-          .note("unhandled exception in {} {}", *self, self->state.op->name())
-          .emit(self->state.ctrl->diagnostics());
-        return {};
+      auto error = std::invoke([&] {
+        try {
+          std::rethrow_exception(exception);
+        } catch (diagnostic diag) {
+          return std::move(diag).to_error();
+        } catch (const std::exception& err) {
+          return diagnostic::error("{}", err.what())
+            .note("unhandled exception in {} {}", *self, self->state.op->name())
+            .to_error();
+        } catch (...) {
+          return diagnostic::error("unhandled exception in {} {}", *self,
+                                   self->state.op->name())
+            .to_error();
+        }
+      });
+      if (self->state.start_rp.pending()) {
+        self->state.start_rp.deliver(std::move(error));
+        return ec::silent;
       }
-      return diagnostic::error("unhandled exception in {} {}", *self,
-                               self->state.op->name())
-        .to_error();
+      return error;
     });
   return {
     [self](atom::internal, atom::run) -> caf::result<void> {

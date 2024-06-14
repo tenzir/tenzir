@@ -405,6 +405,10 @@ public:
             // already warned and can ignore it.
             continue;
           }
+          if (not other->type) {
+            // We can skip `null_type` as that is compatible with every other.
+            continue;
+          }
           if (existing.is_dead()) {
             continue;
           }
@@ -479,7 +483,7 @@ public:
       auto new_bucket = std::make_shared<bucket>();
       new_bucket->group_by_types.reserve(bound.group_by_columns.size());
       for (auto&& column : bound.group_by_columns) {
-        if (column) {
+        if (column and column->type) {
           new_bucket->group_by_types.push_back(
             group_type::make_active(column->type));
         } else {

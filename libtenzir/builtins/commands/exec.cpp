@@ -42,14 +42,20 @@ private:
   diagnostic_handler& inner_;
 };
 
-auto exec_command(const invocation& inv, caf::actor_system& sys)
-  -> caf::expected<void> {
-  const auto& args = inv.arguments;
-  if (args.size() != 1) {
-    return caf::make_error(
-      ec::invalid_argument,
-      fmt::format("expected exactly one argument, but got {}", args.size()));
+auto exec_command_impl(std::string content, diagnostic_handler& dh,
+                       const exec_config& cfg, caf::actor_system& sys) -> bool {
+  auto result = exec_pipeline(
+    std::move(content), std::make_unique<diagnostic_handler_ref>(dh), cfg, sys);
+  if (result) {
+    return true;
   }
+  if (result != ec::silent && result != caf::exit_reason::user_shutdown) {
+    dh.emit(diagnostic::error(result.error()).done());
+  }
+  return false;
+}
+
+auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   auto cfg = exec_config{};
   cfg.dump_tokens = caf::get_or(inv.options, "tenzir.exec.dump-tokens", false);
   cfg.dump_ast = caf::get_or(inv.options, "tenzir.exec.dump-ast", false);
@@ -71,12 +77,25 @@ auto exec_command(const invocation& inv, caf::actor_system& sys)
   cfg.tql2 = caf::get_or(inv.options, "tenzir.exec.tql2", cfg.tql2);
   auto filename = std::string{};
   auto content = std::string{};
+  const auto& args = inv.arguments;
+  auto color = (isatty(STDERR_FILENO) == 1
+                && detail::getenv("NO_COLOR").value_or("").empty())
+                 ? color_diagnostics::yes
+                 : color_diagnostics::no;
+  auto printer = make_diagnostic_printer(std::nullopt, color, std::cerr);
+  if (args.size() != 1) {
+    printer->emit(diagnostic::error("expected exactly one argument, but got {}",
+                                    args.size())
+                    .done());
+    return false;
+  }
   if (as_file) {
     filename = args[0];
     auto result = detail::load_contents(filename);
-    if (!result) {
+    if (not result) {
       // TODO: Better error message.
-      return result.error();
+      printer->emit(diagnostic::error(result.error()).done());
+      return false;
     }
     content = std::move(*result);
   } else {
@@ -85,18 +104,14 @@ auto exec_command(const invocation& inv, caf::actor_system& sys)
   }
   if (cfg.dump_diagnostics) {
     auto diag = collecting_diagnostic_handler{};
-    auto result = exec_pipeline(
-      content, std::make_unique<diagnostic_handler_ref>(diag), cfg, sys);
+    auto result = exec_command_impl(content, diag, cfg, sys);
     dump_diagnostics_to_stdout(std::move(diag).collect(), filename,
                                std::move(content));
     return result;
   }
-  auto color = isatty(STDERR_FILENO) == 1
-               && detail::getenv("NO_COLOR").value_or("").empty();
-  auto printer = make_diagnostic_printer(
-    location_origin{filename, content},
-    color ? color_diagnostics::yes : color_diagnostics::no, std::cerr);
-  return exec_pipeline(std::move(content), std::move(printer), cfg, sys);
+  printer = make_diagnostic_printer(location_origin{filename, content}, color,
+                                    std::cerr);
+  return exec_command_impl(std::move(content), *printer, cfg, sys);
 }
 
 class plugin final : public virtual command_plugin {
@@ -138,18 +153,8 @@ public:
     auto factory = command::factory{
       {"exec",
        [=](const invocation& inv, caf::actor_system& sys) -> caf::message {
-         auto result = exec_command(inv, sys);
-         if (not result) {
-           if (result != ec::diagnostic and result != ec::silent) {
-             auto diag = make_diagnostic_printer(
-               std::nullopt, color_diagnostics::yes, std::cerr);
-             diag->emit(diagnostic::error(result.error())
-                          .note("pipeline execution failed")
-                          .done());
-           }
-           return caf::make_message(ec::silent);
-         }
-         return {};
+         auto success = exec_command(inv, sys);
+         return caf::make_message(success ? ec::no_error : ec::silent);
        }},
     };
     return {std::move(exec), std::move(factory)};
