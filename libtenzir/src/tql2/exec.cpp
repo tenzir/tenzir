@@ -503,26 +503,28 @@ public:
 
   void visit(ast::pipeline& x) {
     // TODO: Extraction + patch is probably a common pattern.
-    for (auto it = x.body.begin(); it != x.body.end(); ++it) {
+    for (auto it = x.body.begin(); it != x.body.end();) {
       auto let = std::get_if<ast::let_stmt>(&*it);
       if (not let) {
-        enter(*it);
+        visit(*it);
+        ++it;
         continue;
       }
       auto value = const_eval(let->expr, ctx_);
-      if (not value) {
+      if (value) {
+        auto f = detail::overload{
+          [](auto x) -> ast::constant::kind {
+            return x;
+          },
+          [](pattern&) -> ast::constant::kind {
+            // TODO
+            TENZIR_UNREACHABLE();
+          },
+        };
+        map_[let->name.name] = caf::visit(f, std::move(*value));
+      } else {
         map_[let->name.name] = std::nullopt;
       }
-      auto f = detail::overload{
-        [](auto x) -> ast::constant::kind {
-          return x;
-        },
-        [](pattern&) -> ast::constant::kind {
-          // TODO
-          TENZIR_UNREACHABLE();
-        },
-      };
-      map_[let->name.name] = caf::visit(f, std::move(*value));
       it = x.body.erase(it);
     }
   }

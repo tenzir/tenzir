@@ -29,6 +29,7 @@ public:
     argument_parser2::fn("type_id").add(expr, "<value>").parse(inv, ctx);
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
+        TENZIR_UNUSED(ctx);
         auto value = eval(expr);
         auto type_id = value.type.make_fingerprint();
         auto b = arrow::StringBuilder{};
@@ -54,6 +55,7 @@ public:
     argument_parser2::fn("secret").add(expr, "<string>").parse(inv, ctx);
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
+        TENZIR_UNUSED(ctx);
         auto value = eval(expr);
         auto b = arrow::StringBuilder{};
         check(b.Reserve(value.length()));
