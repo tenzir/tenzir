@@ -8,7 +8,7 @@
       ]
     },
     equals: 14..15,
-    right: literal {
+    right: constant {
       value: string "Launch",
       source: 16..24
     }
@@ -22,7 +22,7 @@
       ]
     },
     equals: 37..38,
-    right: literal {
+    right: constant {
       value: int64 1,
       source: 39..40
     }
@@ -105,14 +105,14 @@
               },
               field {
                 name: `type` @ 211..217,
-                expr: literal {
+                expr: constant {
                   value: string "Unknown",
                   source: 219..228
                 }
               },
               field {
                 name: `type_id` @ 234..241,
-                expr: literal {
+                expr: constant {
                   value: int64 0,
                   source: 243..244
                 }
@@ -195,14 +195,14 @@
       content: [
         field {
           name: `account_type` @ 378..390,
-          expr: literal {
+          expr: constant {
             value: string "Windows Account",
             source: 392..409
           }
         },
         field {
           name: `account_type_id` @ 413..428,
-          expr: literal {
+          expr: constant {
             value: int64 2,
             source: 430..431
           }
@@ -293,7 +293,7 @@
       ]
     },
     equals: 584..585,
-    right: literal {
+    right: constant {
       value: string "System Activity",
       source: 586..603
     }
@@ -330,7 +330,7 @@
       ]
     },
     equals: 663..664,
-    right: literal {
+    right: constant {
       value: string "Process Activity",
       source: 665..683
     }
@@ -385,21 +385,21 @@
             content: [
               field {
                 name: `name` @ 777..781,
-                expr: literal {
+                expr: constant {
                   value: string "Windows",
                   source: 783..792
                 }
               },
               field {
                 name: `type` @ 798..804,
-                expr: literal {
+                expr: constant {
                   value: string "Windows",
                   source: 806..815
                 }
               },
               field {
                 name: `type_id` @ 821..828,
-                expr: literal {
+                expr: constant {
                   value: int64 100,
                   source: 830..833
                 }
@@ -410,14 +410,14 @@
         },
         field {
           name: `type` @ 842..848,
-          expr: literal {
+          expr: constant {
             value: string "Unknown",
             source: 850..859
           }
         },
         field {
           name: `type_id` @ 863..870,
-          expr: literal {
+          expr: constant {
             value: int64 0,
             source: 872..873
           }
@@ -450,7 +450,7 @@
       ]
     },
     equals: 908..909,
-    right: literal {
+    right: constant {
       value: string "A new process has been created.",
       source: 910..943
     }
@@ -491,7 +491,7 @@
                   content: [
                     field {
                       name: `name` @ 1032..1036,
-                      expr: literal {
+                      expr: constant {
                         value: string "Security",
                         source: 1038..1048
                       }
@@ -502,14 +502,14 @@
               },
               field {
                 name: `name` @ 1061..1065,
-                expr: literal {
+                expr: constant {
                   value: string "Microsoft Windows",
                   source: 1067..1086
                 }
               },
               field {
                 name: `vendor_name` @ 1092..1103,
-                expr: literal {
+                expr: constant {
                   value: string "Microsoft",
                   source: 1105..1116
                 }
@@ -523,7 +523,7 @@
           expr: list {
             begin: 1135..1136,
             items: [
-              literal {
+              constant {
                 value: string "host",
                 source: 1136..1142
               }
@@ -541,7 +541,7 @@
         },
         field {
           name: `version` @ 1169..1176,
-          expr: literal {
+          expr: constant {
             value: string "1.1.0",
             source: 1178..1185
           }
@@ -667,14 +667,14 @@
               },
               field {
                 name: `type` @ 1440..1446,
-                expr: literal {
+                expr: constant {
                   value: string "Unknown",
                   source: 1448..1457
                 }
               },
               field {
                 name: `type_id` @ 1463..1470,
-                expr: literal {
+                expr: constant {
                   value: int64 0,
                   source: 1472..1473
                 }
@@ -756,7 +756,7 @@
       ]
     },
     equals: 1609..1610,
-    right: literal {
+    right: constant {
       value: string "Informational",
       source: 1611..1626
     }
@@ -770,7 +770,7 @@
       ]
     },
     equals: 1639..1640,
-    right: literal {
+    right: constant {
       value: int64 1,
       source: 1641..1642
     }
@@ -784,7 +784,7 @@
       ]
     },
     equals: 1650..1651,
-    right: literal {
+    right: constant {
       value: string "Success",
       source: 1652..1661
     }
@@ -798,7 +798,7 @@
       ]
     },
     equals: 1672..1673,
-    right: literal {
+    right: constant {
       value: int64 1,
       source: 1674..1675
     }
@@ -850,7 +850,7 @@
             rpar: 1728..1729
           },
           op: "mul" @ 1730..1731,
-          right: literal {
+          right: constant {
             value: int64 1000,
             source: 1732..1736
           }
@@ -868,7 +868,7 @@
       ]
     },
     equals: 1748..1749,
-    right: literal {
+    right: constant {
       value: string "Process Activity: Launch",
       source: 1750..1776
     }
@@ -882,7 +882,7 @@
       ]
     },
     equals: 1786..1787,
-    right: literal {
+    right: constant {
       value: int64 100701,
       source: 1788..1794
     }

@@ -14,7 +14,7 @@
     condition: binary_expr {
       left: root_field `b` @ 5..6,
       op: "eq" @ 7..9,
-      right: literal {
+      right: constant {
         value: int64 42,
         source: 10..12
       }
@@ -99,7 +99,7 @@
     arms: [
       {
         filter: [
-          literal {
+          constant {
             value: string "foo",
             source: 72..77
           }
@@ -127,7 +127,7 @@
     arms: [
       {
         filter: [
-          literal {
+          constant {
             value: string "foo",
             source: 103..108
           }
@@ -148,7 +148,7 @@
       },
       {
         filter: [
-          literal {
+          constant {
             value: int64 42,
             source: 128..130
           }

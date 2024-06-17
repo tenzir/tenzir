@@ -19,7 +19,7 @@
       ]
     },
     equals: 11..12,
-    right: literal {
+    right: constant {
       value: int64 42,
       source: 13..15
     }
@@ -41,7 +41,7 @@
           ]
         },
         equals: 24..25,
-        right: literal {
+        right: constant {
           value: int64 43,
           source: 26..28
         }
