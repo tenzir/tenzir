@@ -358,7 +358,6 @@ struct rebuilder_state {
       });
     run->remaining_partitions.erase(first_removed,
                                     run->remaining_partitions.end());
-    auto is_oversized = current_run_events > max_partition_size;
     run->statistics.num_rebuilding += current_run_partitions.size();
     // If we have just a single partition then we shouldn't rebuild if our
     // intent was to merge undersized partitions, unless the partition is
@@ -399,8 +398,8 @@ struct rebuilder_state {
       ->request(index, caf::infinite, atom::apply_v, std::move(*rebatch),
                 std::move(current_run_partitions), keep_original_partition::no)
       .then(
-        [this, rp, current_run_events, num_partitions,
-         is_oversized](std::vector<partition_info>& result) mutable {
+        [this, rp, current_run_events,
+         num_partitions](std::vector<partition_info>& result) mutable {
           if (result.empty()) {
             TENZIR_DEBUG("{} skipped {} partitions as they are already being "
                          "transformed by another actor",
@@ -415,8 +414,6 @@ struct rebuilder_state {
           }
           TENZIR_DEBUG("{} rebuilt {} into {} partitions", *self,
                        num_partitions, result.size());
-          // Determines whether we moved partitions back.
-          bool needs_second_stage = false;
           // If the number of events in the resulting partitions does not
           // match the number of events in the partitions that went in we ran
           // into a conflict with other partition transformations on an
@@ -435,27 +432,8 @@ struct rebuilder_state {
           // Adjust the counters, update the indicator, and move back
           // undersized transformed partitions to the list of remainig
           // partitions as desired.
-          TENZIR_ASSERT(!result.empty());
           run->statistics.num_completed += num_partitions;
           run->statistics.num_results += result.size();
-          if (is_oversized) {
-            TENZIR_ASSERT(result.size() > 1);
-            if (result.back().events <= detail::narrow_cast<size_t>(
-                  detail::narrow_cast<double>(max_partition_size)
-                  * undersized_threshold)) {
-              needs_second_stage = true;
-              run->remaining_partitions.push_back(std::move(result.back()));
-              run->statistics.num_completed -= 1;
-              run->statistics.num_results -= 1;
-              run->statistics.num_total += 1;
-            }
-          }
-          if (needs_second_stage)
-            std::sort(run->remaining_partitions.begin(),
-                      run->remaining_partitions.end(),
-                      [](const partition_info& lhs, const partition_info& rhs) {
-                        return lhs.max_import_time > rhs.max_import_time;
-                      });
           run->statistics.num_rebuilding -= num_partitions;
           // Pick up new work until we run out of remainig partitions.
           emit_telemetry();
