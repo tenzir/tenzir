@@ -24,7 +24,7 @@ teardown() {
 
   check tenzir 'export | where resp_h == 192.168.1.104 | extend schema=#schema | sort schema | sort --stable ts'
   check tenzir 'export | where zeek.conn.id.resp_h == 192.168.1.104 | extend schema=#schema | sort schema | sort --stable ts'
-  check tenzir 'export | where :timestamp >= 1970-01-01 && #schema != "tenzir.metrics" | summarize count=count(.)'
+  check tenzir 'export | where :time >= 1970-01-01 && #schema != "tenzir.metrics" | summarize count=count(.)'
   check tenzir 'export | where #schema == "zeek.conn" | summarize count=count(.)'
 }
 

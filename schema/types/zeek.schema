@@ -1,12 +1,12 @@
 type zeek.conn_id = record {
   orig_h: ip,
-  orig_p: port,
+  orig_p: uint64,
   resp_h: ip,
-  resp_p: port,
+  resp_p: uint64,
 }
 
 type zeek.capture_loss = record {
-  ts: timestamp,
+  ts: time,
   ts_delta: duration,
   peer: string,
   gaps: uint64,
@@ -16,7 +16,7 @@ type zeek.capture_loss = record {
 }
 
 type zeek.conn = record {
-  ts: timestamp,
+  ts: time,
   uid: string #index=hash,
   id: zeek.conn_id,
   proto: string,
@@ -39,7 +39,7 @@ type zeek.conn = record {
 }
 
 type zeek.dce_rpc = record {
-  ts: timestamp,
+  ts: time,
   uid: string #index=hash,
   id: zeek.conn_id,
   rtt: duration,
@@ -50,7 +50,7 @@ type zeek.dce_rpc = record {
 }
 
 type zeek.dhcp = record {
-  ts: timestamp,
+  ts: time,
   uids: list<string>,
   client_addr: ip,
   server_addr: ip,
@@ -79,7 +79,7 @@ type zeek.dnp3 = record {
 }
 
 type zeek.dns = record {
-  ts: timestamp,
+  ts: time,
   uid: string #index=hash,
   id: zeek.conn_id,
   proto: string,
@@ -104,7 +104,7 @@ type zeek.dns = record {
 }
 
 type zeek.dpd = record {
-  ts: timestamp,
+  ts: time,
   uid: string #index=hash,
   id: zeek.conn_id,
   proto: string,
@@ -114,7 +114,7 @@ type zeek.dpd = record {
 }
 
 type zeek.files = record {
-  ts: timestamp,
+  ts: time,
   fuid: string,
   tx_hosts: list<ip>,
   rx_hosts: list<ip>,
@@ -143,7 +143,7 @@ type zeek.files = record {
 }
 
 type zeek.ftp = record {
-  ts: timestamp,
+  ts: time,
   uid: string #index=hash,
   id: zeek.conn_id,
   user: string,
@@ -158,14 +158,14 @@ type zeek.ftp = record {
     passive: bool,
     orig_h: ip,
     resp_h: ip,
-    resp_p: port,
+    resp_p: uint64,
   },
   fuid: string,
   _write_ts: time,
 }
 
 type zeek.http = record {
-  ts: timestamp,
+  ts: time,
   uid: string #index=hash,
   id: zeek.conn_id,
   trans_depth: uint64,
@@ -209,7 +209,7 @@ type zeek.intel = record {
 }
 
 type zeek.irc = record {
-  ts: timestamp,
+  ts: time,
   uid: string #index=hash,
   id: zeek.conn_id,
   nick: string,
@@ -230,7 +230,7 @@ type zeek.loaded_scripts = record {
 }
 
 type zeek.notice = record {
-  ts: timestamp,
+  ts: time,
   uid: string #index=hash,
   id: zeek.conn_id,
   fuid: string,
@@ -242,7 +242,7 @@ type zeek.notice = record {
   sub: string,
   src: ip,
   dst: ip,
-  p: port,
+  p: uint64,
   n: uint64,
   peer_descr: string,
   actions: list<string>,
@@ -259,7 +259,7 @@ type zeek.notice = record {
 }
 
 type zeek.ntlm = record {
-  ts: timestamp,
+  ts: time,
   uid: string #index=hash,
   id: zeek.conn_id,
   username: string,
@@ -274,7 +274,7 @@ type zeek.ntlm = record {
 }
 
 type zeek.packet_filter = record {
-  ts: timestamp,
+  ts: time,
   node: string,
   filter: string,
   init: bool,
@@ -283,7 +283,7 @@ type zeek.packet_filter = record {
 }
 
 type zeek.pe = record {
-  ts: timestamp,
+  ts: time,
   id: string,
   machine: string,
   compile_ts: time,
@@ -304,7 +304,7 @@ type zeek.pe = record {
 }
 
 type zeek.radius = record {
-  ts: timestamp,
+  ts: time,
   uid: string #index=hash,
   id: zeek.conn_id,
   username: string,
@@ -313,7 +313,7 @@ type zeek.radius = record {
 }
 
 type zeek.rdp = record {
-  ts: timestamp,
+  ts: time,
   uid: string #index=hash,
   id: zeek.conn_id,
   cookie: string,
@@ -335,7 +335,7 @@ type zeek.rdp = record {
 }
 
 type zeek.reporter = record {
-  ts: timestamp,
+  ts: time,
   level: string,
   message: string,
   location: string,
@@ -343,7 +343,7 @@ type zeek.reporter = record {
 }
 
 type zeek.sip = record {
-  ts: timestamp,
+  ts: time,
   uid: string #index=hash,
   id: zeek.conn_id,
   trans_depth: uint64,
@@ -395,7 +395,7 @@ type zeek.smb_mapping = record {
 }
 
 type zeek.smtp = record {
-  ts: timestamp,
+  ts: time,
   uid: string #index=hash,
   id: zeek.conn_id,
   trans_depth: uint64,
@@ -423,7 +423,7 @@ type zeek.smtp = record {
 }
 
 type zeek.snmp = record {
-  ts: timestamp,
+  ts: time,
   uid: string #index=hash,
   id: zeek.conn_id,
   duration: duration,
@@ -455,7 +455,7 @@ type zeek.software = record {
 }
 
 type zeek.ssh = record {
-  ts: timestamp,
+  ts: time,
   uid: string #index=hash,
   id: zeek.conn_id,
   version: uint64,
@@ -474,7 +474,7 @@ type zeek.ssh = record {
 }
 
 type zeek.ssl = record {
-  ts: timestamp,
+  ts: time,
   uid: string #index=hash,
   id: zeek.conn_id,
   version: string,
@@ -497,7 +497,7 @@ type zeek.ssl = record {
 }
 
 type zeek.stats = record {
-  ts: timestamp,
+  ts: time,
   peer: string,
   mem: uint64,
   pkts_proc: uint64,
@@ -536,7 +536,7 @@ type zeek.tunnel = record {
 }
 
 type zeek.weird = record {
-  ts: timestamp,
+  ts: time,
   uid: string #index=hash,
   id: zeek.conn_id,
   name: string,
@@ -547,7 +547,7 @@ type zeek.weird = record {
 }
 
 type zeek.x509 = record {
-  ts: timestamp,
+  ts: time,
   id: string,
   certificate: record {
     version: uint64,

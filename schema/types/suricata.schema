@@ -1,13 +1,13 @@
 type suricata.component.common = record {
-  timestamp: timestamp,
+  timestamp: time,
   flow_id: uint64 #index=hash,
   pcap_cnt: uint64,
   vlan: list<uint64>,
   in_iface: string,
   src_ip: ip,
-  src_port: port,
+  src_port: uint64,
   dest_ip: ip,
-  dest_port: port,
+  dest_port: uint64,
   proto: string,
   event_type: string,
   app_proto: string,
@@ -109,11 +109,11 @@ type suricata.alert = suricata.component.common + record {
     severity: uint64,
     source: record {
       ip: ip,
-      port: port
+      port: uint64
     },
     target: record {
       ip: ip,
-      port: port
+      port: uint64
     }
   },
   flow: suricata.component.flow,
@@ -273,7 +273,7 @@ type suricata.ftp = suricata.component.common + record{
     command_data: string  #index=hash,
     reply: list<string>,
     completion_code: list<string>,
-    dynamic_port: port,
+    dynamic_port: uint64,
     mode: string,
     reply_received: string
   }
@@ -290,7 +290,7 @@ type suricata.http = suricata.component.common + record {
   http: record {
     hostname: string,
     url: string,
-    http_port: port,
+    http_port: uint64,
     http_user_agent: string,
     http_content_type: string,
     http_method: string,
@@ -320,7 +320,7 @@ type suricata.fileinfo = suricata.component.common + record {
   http: record {
     hostname: string,
     url: string,
-    http_port: port,
+    http_port: uint64,
     http_user_agent: string,
     http_content_type: string,
     http_method: string,
@@ -782,5 +782,5 @@ type suricata.tls = suricata.component.common + record {
 }
 
 type suricata.stats = record {
-  timestamp: timestamp
+  timestamp: time
 }
