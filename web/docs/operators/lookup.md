@@ -14,10 +14,12 @@ and translates context updates into historical queries.
 ```
 lookup <context>          [--field <field...>] [--separate]
                           [--live] [--retro] [--snapshot]
-                          [--yield <field>] [<context-options>]
+                          [--yield <field>] [--parallel <level>]
+                          [<context-options>]
 lookup <output>=<context> [--field <field...>] [--separate]
                           [--live] [--retro] [--snapshot]
-                          [--yield <field>] [<context-options>]
+                          [--yield <field>] [--parallel <level>]
+                          [<context-options>]
 ```
 
 ## Description
@@ -87,6 +89,14 @@ By default, snapshotting is disabled. Not all contexts support this operation.
 
 Provide a field into the context object to use as the context instead. If the
 key does not exist within the context, a `null` value is used instead.
+
+### `--parallel <level>`
+
+The number of partitions to open in parallel for retrospective lookups. This
+number directly correlates with memory usage and performance of the `lookup`
+operator.
+
+Defaults to 3.
 
 ### `<context-options>`
 
