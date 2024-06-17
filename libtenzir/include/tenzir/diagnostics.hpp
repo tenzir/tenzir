@@ -362,6 +362,19 @@ private:
   std::vector<diagnostic> result;
 };
 
+class diagnostic_handler_ref final : public diagnostic_handler {
+public:
+  explicit diagnostic_handler_ref(diagnostic_handler& inner) : inner_{inner} {
+  }
+
+  void emit(diagnostic d) override {
+    inner_.emit(std::move(d));
+  }
+
+private:
+  diagnostic_handler& inner_;
+};
+
 enum class color_diagnostics { no, yes };
 
 struct location_origin {

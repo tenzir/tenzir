@@ -320,8 +320,21 @@ public:
       diagnostic::error("expected string").primary(inv.args[0]).emit(ctx);
       return nullptr;
     }
-    diagnostic::error("got: {}", *path).primary(inv.self).emit(ctx);
-    return nullptr;
+    // TODO: This is just for demo purposes!
+    if (not path->ends_with(".json")) {
+      diagnostic::error("`from` currently requires `.json` files")
+        .primary(inv.args[0])
+        .emit(ctx);
+      return nullptr;
+    }
+    // TODO: Obviously not great.
+    auto result = pipeline::internal_parse_as_operator(
+      fmt::format("from \"{}\" read json", *path));
+    if (not result) {
+      diagnostic::error(result.error()).primary(inv.self).emit(ctx);
+      return nullptr;
+    }
+    return std::move(*result);
   }
 };
 

@@ -29,19 +29,6 @@ void dump_diagnostics_to_stdout(std::span<const diagnostic> diagnostics,
   }
 }
 
-class diagnostic_handler_ref final : public diagnostic_handler {
-public:
-  explicit diagnostic_handler_ref(diagnostic_handler& inner) : inner_{inner} {
-  }
-
-  void emit(diagnostic d) override {
-    inner_.emit(std::move(d));
-  }
-
-private:
-  diagnostic_handler& inner_;
-};
-
 auto exec_command_impl(std::string content, diagnostic_handler& dh,
                        const exec_config& cfg, caf::actor_system& sys) -> bool {
   auto result = exec_pipeline(
@@ -82,6 +69,8 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
                 && detail::getenv("NO_COLOR").value_or("").empty())
                  ? color_diagnostics::yes
                  : color_diagnostics::no;
+  // TODO: Remove this.
+  color = color_diagnostics::yes;
   auto printer = make_diagnostic_printer(std::nullopt, color, std::cerr);
   if (args.size() != 1) {
     printer->emit(diagnostic::error("expected exactly one argument, but got {}",

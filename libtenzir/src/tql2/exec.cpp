@@ -636,7 +636,15 @@ auto exec2(std::string content, std::unique_ptr<diagnostic_handler> diag,
   if (diag_wrapper->error()) {
     return false;
   }
-  exec_pipeline(std::move(pipe), std::move(diag_wrapper), cfg, sys);
+  // TODO: Reduce diagnostic handler wrapping.
+  auto result
+    = exec_pipeline(std::move(pipe),
+                    std::make_unique<diagnostic_handler_ref>(*diag_wrapper),
+                    cfg, sys);
+  if (not result) {
+    diagnostic::error(result.error()).emit(*diag_wrapper);
+    return false;
+  }
   return true;
 }
 

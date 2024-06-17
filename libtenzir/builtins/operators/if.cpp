@@ -200,6 +200,7 @@ public:
           .emit(ctrl.diagnostics());
         co_return;
       }
+      else_gen = std::move(*else_gen_ptr);
     } else {
       else_gen = make_input(else_input);
     }

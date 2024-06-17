@@ -1673,54 +1673,69 @@ public:
   }
 };
 
-class parse_json_plugin final : public virtual function_plugin0 {
+class parse_json_plugin final : public virtual function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.parse_json";
   }
 
-  auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
+  auto make_function(invocation inv, session ctx) const
+    -> std::unique_ptr<function_use> override {
     // "[1, 2, 3]" => [1, 2, 3]
     // "{yo: 42}" => {yo: 42}
     // "{yo: 42} {yo: 43}" => error
     //
     // many=true (not so important)
     // "{yo: 42}" => [{yo: 42}]
-    auto arg = basic_series<string_type>{};
-    auto success = function_argument_parser{"parse_json"}
-                     .add(arg, "<string>")
-                     .parse(inv, dh);
-    if (not success) {
-      return series::null(null_type{}, inv.length);
-    }
-    auto parser = simdjson::ondemand::parser{};
-    auto b = series_builder{};
-    for (auto i = int64_t{0}; i < inv.length; ++i) {
-      if (arg.array->IsNull(i)) {
-        // TODO: What to do here?
-        b.null();
-        continue;
-      }
-      // todo: optimize
-      auto parse = [&]() -> simdjson::simdjson_result<data> {
-        auto str = std::string{arg.array->Value(i)};
-        TRY(auto doc, parser.iterate(str));
-        return json_to_data(doc, false);
-      };
-      auto result = parse();
-      if (result.error()) {
-        // TODO: This can be very noisy.
-        diagnostic::warning("could not parse json: {}",
-                            simdjson::error_message(result.error()))
-          .primary(inv.self.fn)
-          .emit(dh);
-        b.null();
-        continue;
-      }
-      b.data(result.value_unsafe());
-    }
-    // TODO: Cannot assert this here.
-    return b.finish_assert_one_array();
+    auto expr = ast::expression{};
+    argument_parser2::fn("parse_json").add(expr, "<string>").parse(inv, ctx);
+    return function_use::make(
+      [expr = std::move(expr)](evaluator eval, session ctx) -> series {
+        auto arg = eval(expr);
+        auto f = detail::overload{
+          [&](const arrow::NullArray&) {
+            return arg;
+          },
+          [&](const arrow::StringArray& arg) {
+            auto parser = simdjson::ondemand::parser{};
+            auto b = series_builder{};
+            for (auto i = int64_t{0}; i < arg.length(); ++i) {
+              if (arg.IsNull(i)) {
+                // TODO: What to do here?
+                b.null();
+                continue;
+              }
+              // todo: optimize
+              auto parse = [&]() -> simdjson::simdjson_result<data> {
+                auto str = std::string{arg.Value(i)};
+                TRY(auto doc, parser.iterate(str));
+                return json_to_data(doc, false);
+              };
+              auto result = parse();
+              if (result.error()) {
+                // TODO: This can be very noisy.
+                diagnostic::warning("could not parse json: {}",
+                                    simdjson::error_message(result.error()))
+                  .primary(expr)
+                  .emit(ctx);
+                b.null();
+                continue;
+              }
+              b.data(result.value_unsafe());
+            }
+            // TODO: Cannot assert this here.
+            return b.finish_assert_one_array();
+          },
+          [&](const auto&) {
+            diagnostic::warning("`parse_json` expected `string`, got `{}`",
+                                arg.type.kind())
+              .primary(expr)
+              .emit(ctx);
+            return series::null(null_type{}, arg.length());
+          },
+        };
+        return caf::visit(f, *arg.array);
+      });
   }
 };
 

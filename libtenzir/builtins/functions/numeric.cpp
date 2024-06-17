@@ -125,22 +125,22 @@ public:
   }
 };
 
-class sqrt final : public function_plugin0 {
+class sqrt final : public function_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.sqrt";
   }
 
-  auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
-    auto arg = variant<basic_series<double_type>, basic_series<int64_type>>{};
-    auto success
-      = function_argument_parser{"sqrt"}.add(arg, "value").parse(inv, dh);
-    if (not success) {
-      return series::null(double_type{}, inv.length);
-    }
-    auto compute = [&](const arrow::DoubleArray& x) {
-      auto b = arrow::DoubleBuilder{};
-      check(b.Reserve(inv.length));
+  auto make_function(invocation inv, session ctx) const
+    -> std::unique_ptr<function_use> override {
+    auto expr = ast::expression{};
+    argument_parser2::fn("sqrt").add(expr, "<number>").parse(inv, ctx);
+    return function_use::make(
+      [expr = std::move(expr)](evaluator eval, session ctx) -> series {
+        auto value = eval(expr);
+        auto compute = [&](const arrow::DoubleArray& x) {
+          auto b = arrow::DoubleBuilder{};
+          check(b.Reserve(x.length()));
 #if 0
       // TODO: This is probably UB.
       auto alloc = arrow::AllocateBuffer(x.length() * sizeof(double));
@@ -174,42 +174,54 @@ public:
       return std::make_shared<arrow::DoubleArray>(x.length(), std::move(buffer),
                                                   std::move(null_buffer));
 #else
-      // TODO
-      for (auto y : x) {
-        if (not y) {
-          // TODO: Warning?
-          check(b.AppendNull());
-          continue;
-        }
-        auto z = *y;
-        if (z < 0.0) {
-          // TODO: Warning?
-          check(b.AppendNull());
-          continue;
-        }
-        check(b.Append(std::sqrt(z)));
-      }
-#endif
-      return finish(b);
-    };
-    auto result = arg.match(
-      [&](basic_series<double_type>& x) {
-        return compute(*x.array);
-      },
-      [&](basic_series<int64_type>& x) {
-        // TODO: Conversation should be automatic (if not part of the kernel).
-        auto b = arrow::DoubleBuilder{};
-        check(b.Reserve(x.length()));
-        for (auto y : *x.array) {
-          if (y) {
-            check(b.Append(static_cast<double>(*y)));
-          } else {
-            check(b.AppendNull());
+          // TODO
+          for (auto y : x) {
+            if (not y) {
+              // TODO: Warning?
+              check(b.AppendNull());
+              continue;
+            }
+            auto z = *y;
+            if (z < 0.0) {
+              // TODO: Warning?
+              check(b.AppendNull());
+              continue;
+            }
+            check(b.Append(std::sqrt(z)));
           }
-        }
-        return compute(*finish(b));
+#endif
+          return finish(b);
+        };
+        auto f = detail::overload{
+          [&](const arrow::DoubleArray& value) {
+            return compute(value);
+          },
+          [&](const arrow::Int64Array& value) {
+            // TODO: Conversation should be automatic (if not
+            // part of the kernel).
+            auto b = arrow::DoubleBuilder{};
+            check(b.Reserve(value.length()));
+            for (auto y : value) {
+              if (y) {
+                check(b.Append(static_cast<double>(*y)));
+              } else {
+                check(b.AppendNull());
+              }
+            }
+            return compute(*finish(b));
+          },
+          [&](const auto&) {
+            diagnostic::warning("expected `number`, got `{}`",
+                                value.type.kind())
+              .primary(expr)
+              .emit(ctx);
+            auto b = arrow::DoubleBuilder{};
+            check(b.AppendNulls(value.length()));
+            return finish(b);
+          },
+        };
+        return {double_type{}, caf::visit(f, *value.array)};
       });
-    return series{double_type{}, std::move(result)};
   }
 };
 

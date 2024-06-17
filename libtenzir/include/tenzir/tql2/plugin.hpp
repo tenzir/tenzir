@@ -190,4 +190,6 @@ public:
 
 } // namespace tenzir
 
+// TODO: Change this.
+#include "tenzir/argument_parser2.hpp"
 #include "tenzir/session.hpp"
