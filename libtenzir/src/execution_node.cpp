@@ -650,7 +650,7 @@ struct exec_node_state {
     // We can continue execution under the following circumstances:
     // 1. The operator's generator is not yet completed.
     // 2. The operator did not signal that we're supposed to wait.
-    // 3. The operator has one of the three following reasons to do work:
+    // 3. The operator has one of the four following reasons to do work:
     //   a. The upstream operator has completed.
     //   b. The operator has downstream demand and can produce output
     //      independently from receiving input.
