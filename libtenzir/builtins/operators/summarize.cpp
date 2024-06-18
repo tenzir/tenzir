@@ -251,13 +251,7 @@ struct binding {
       auto resolved
         = std::invoke([&]() -> std::optional<std::pair<offset, type>> {
             if (aggr.input == ".") {
-              // We already checked for `count` earlier. Note that we are using
-              // the "wrong type" here. The `.` extractor should have type
-              // `schema`, but we later on will use a `int64` array as we cannot
-              // resolve to the outermost record yet. Furthermore, this implies
-              // that `count(.)` works across multiple schemas.
-              TENZIR_ASSERT(aggr.function->name() == "count");
-              return {{{}, type{int64_type{}}}};
+              return {{{}, schema}};
             } else if (auto offset
                        = schema.resolve_key_or_concept_once(aggr.input)) {
               auto type = rt.field(*offset).type;
@@ -323,20 +317,7 @@ struct binding {
     result.reserve(aggregation_columns.size());
     for (const auto& column : aggregation_columns) {
       if (column) {
-        if (column->offset.empty()) {
-          // This can currently only happen for `count(.)`. We cannot resolve an
-          // empty offset to an `arrow::Array`. Instead, we create a fake
-          // `int64` array with the right length. We want to remove this hack as
-          // part of the expression revamp.
-          auto builder = arrow::Int64Builder{};
-          auto status = builder.AppendEmptyValues(batch.num_rows());
-          TENZIR_ASSERT(status.ok());
-          auto array = builder.Finish();
-          TENZIR_ASSERT(array.ok());
-          result.emplace_back(array.MoveValueUnsafe());
-        } else {
-          result.emplace_back(column->offset.get(batch));
-        }
+        result.emplace_back(column->offset.get(batch));
       } else {
         result.emplace_back(std::nullopt);
       }
@@ -913,17 +894,6 @@ public:
     auto config = configuration{};
     for (const auto& [output, function_name, argument] :
          std::get<0>(parsed_aggregations)) {
-      if (argument == ".") {
-        if (function_name != "count") {
-          return {
-            std::string_view{f, l},
-            caf::make_error(ec::syntax_error,
-                            fmt::format("the `.` extractor is currently not "
-                                        "supported for `{}`",
-                                        function_name)),
-          };
-        }
-      }
       auto const* function
         = plugins::find<aggregation_function_plugin>(function_name);
       if (!function) {

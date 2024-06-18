@@ -57,6 +57,11 @@ auto offset::get(const arrow::RecordBatch& batch) const noexcept
 
 auto offset::get(const arrow::StructArray& struct_array) const noexcept
   -> std::shared_ptr<arrow::Array> {
+  if (empty()) {
+    // This is the cheapest way to go back from the struct array to a shared
+    // pointer of a struct array.
+    return struct_array.View(struct_array.type()).ValueOrDie();
+  }
   auto impl
     = [](auto&& impl, std::span<const offset::value_type> index,
          const arrow::StructArray& array) -> std::shared_ptr<arrow::Array> {
