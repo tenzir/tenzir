@@ -495,7 +495,7 @@ auto prepare_pipeline(ast::pipeline&& pipe, session ctx) -> pipeline {
   return tenzir::pipeline{std::move(ops)};
 }
 
-// TODO: This does not properly handle sub-pipelines.
+// TODO: This is a naive implementation and does not do scoping properly.
 class let_resolver : public ast::visitor<let_resolver> {
 public:
   explicit let_resolver(session ctx) : ctx_{ctx} {

@@ -25,9 +25,7 @@ using namespace ast;
 
 class entity_resolver : public visitor<entity_resolver> {
 public:
-  entity_resolver(session ctx) : reg_{ctx.reg()}, diag_{ctx.dh()} {
-    // Add every top-level package to `scope_` with its name.
-    // TODO: Add everything from `std::prelude` to `scope_`.
+  explicit entity_resolver(session ctx) : reg_{ctx.reg()}, diag_{ctx.dh()} {
   }
 
   void visit(entity& x) {

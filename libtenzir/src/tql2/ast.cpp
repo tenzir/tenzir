@@ -16,22 +16,6 @@
 
 namespace tenzir::ast {
 
-auto data_selector::to_expression() const -> expression {
-  auto result = expression{};
-  auto i = size_t{0};
-  if (this_) {
-    result = expression{ast::this_{*this_}};
-  } else {
-    result = expression{ast::root_field{segments[0]}};
-    ++i;
-  }
-  for (; i < segments.size(); ++i) {
-    // TODO: This is bad.
-    result = ast::field_access{result, location::unknown, segments[i]};
-  }
-  return result;
-}
-
 auto simple_selector::try_from(ast::expression expr)
   -> std::optional<simple_selector> {
   // Path is collect in reversed order (outside-in).

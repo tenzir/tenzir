@@ -55,7 +55,6 @@ struct pipeline_expr;
 struct pipeline;
 struct record;
 struct meta;
-struct data_selector;
 struct selector_root;
 struct unary_expr;
 struct underscore;
@@ -104,42 +103,6 @@ struct meta {
   // TODO: Remove `schema_id` from this.
   enum meta_extractor::kind kind;
   location source;
-};
-
-// TODO: Delete.
-struct data_selector {
-  data_selector() = default;
-
-  data_selector(std::optional<location> this_, std::vector<identifier> segments)
-    : this_{this_}, segments{std::move(segments)} {
-  }
-
-  // TODO: This shows that we are probably not doing it right.
-  auto to_expression() const -> expression;
-
-  // TODO
-  std::optional<location> this_;
-  std::vector<identifier> segments;
-
-  auto get_location() const -> location {
-    auto result = tenzir::location{};
-    if (this_) {
-      result.begin = this_->begin;
-      result.end = this_->end;
-    } else {
-      TENZIR_ASSERT(not segments.empty());
-      result.begin = segments.front().location.begin;
-    }
-    if (not segments.empty()) {
-      result.end = segments.back().location.end;
-    }
-    return result;
-  }
-
-  friend auto inspect(auto& f, data_selector& x) -> bool {
-    return f.object(x).fields(f.field("this", x.this_),
-                              f.field("segments", x.segments));
-  }
 };
 
 struct underscore : location {
@@ -763,6 +726,20 @@ inline pipeline::~pipeline() = default;
 inline pipeline::pipeline(pipeline&&) noexcept = default;
 inline auto pipeline::operator=(pipeline&&) noexcept -> pipeline& = default;
 
+/// AST node visitor with mutable access.
+///
+/// To use this, define a class like this:
+/// ```
+/// class my_visitor : public visitor<my_visitor> {
+/// public:
+///   template<class T>
+///   void visit(T& x) {
+///     enter(x);
+///   }
+/// }
+/// ```
+/// Then override specific `visit` functions. You can remove the template
+/// catch-all if you want to ensure that your matching is exhaustive.
 template <class Self>
 class visitor {
 protected:
@@ -787,21 +764,15 @@ protected:
   void enter(if_stmt& x) {
     go(x.condition);
     go(x.then);
-    if (x.else_) {
-      go(*x.else_);
-    }
+    go(x.else_);
   }
 
   void enter(entity& x) {
-    (void)x;
+    go(x.path);
   }
 
   void enter(expression& x) {
     match(x);
-  }
-
-  void enter(data_selector& x) {
-    (void)x;
   }
 
   void enter(binary_expr& x) {
@@ -814,13 +785,11 @@ protected:
   }
 
   void enter(constant& x) {
-    (void)x;
+    TENZIR_UNUSED(x);
   }
 
   void enter(function_call& x) {
-    if (x.subject) {
-      go(x.subject);
-    }
+    go(x.subject);
     go(x.fn);
     go(x.args);
   }
@@ -830,15 +799,20 @@ protected:
   }
 
   void enter(record& x) {
-    for (auto& y : x.content) {
-      y.match(
-        [&](record::field& z) {
-          go(z.expr);
-        },
-        [&](record::spread& z) {
-          go(z.expr);
-        });
-    }
+    go(x.content);
+  }
+
+  void enter(record::content_kind& x) {
+    match(x);
+  }
+
+  void enter(record::field& x) {
+    go(x.name);
+    go(x.expr);
+  }
+
+  void enter(record::spread& x) {
+    go(x.expr);
   }
 
   void enter(list& x) {
@@ -855,7 +829,6 @@ protected:
   }
 
   void enter(ast::identifier& x) {
-    // TODO
     TENZIR_UNUSED(x);
   }
 
@@ -865,10 +838,12 @@ protected:
 
   void enter(ast::match_stmt& x) {
     go(x.expr);
-    for (auto& arm : x.arms) {
-      go(arm.filter);
-      go(arm.pipe);
-    }
+    go(x.arms);
+  }
+
+  void enter(ast::match_stmt::arm& x) {
+    go(x.filter);
+    go(x.pipe);
   }
 
   void enter(ast::selector& x) {
@@ -876,7 +851,7 @@ protected:
   }
 
   void enter(ast::simple_selector& x) {
-    // TODO
+    // TODO: What should we do here?
     TENZIR_UNUSED(x);
   }
 
@@ -892,9 +867,17 @@ protected:
     go(static_cast<ast::identifier&>(x));
   }
 
-  template <class T>
-  void enter(T&) {
-    TENZIR_WARN("missed {}", typeid(T).name());
+  void enter(ast::unpack& x) {
+    go(x.expr);
+  }
+
+  void enter(ast::index_expr& x) {
+    go(x.expr);
+    go(x.index);
+  }
+
+  void enter(ast::underscore& x) {
+    TENZIR_UNUSED(x);
   }
 
 private:
@@ -913,6 +896,13 @@ private:
       }
     } else {
       self().visit(x);
+    }
+  }
+
+  template <class T>
+  void go(std::optional<T>& x) {
+    if (x) {
+      go(*x);
     }
   }
 
