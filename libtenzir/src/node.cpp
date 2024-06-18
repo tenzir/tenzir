@@ -330,7 +330,7 @@ auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
               name)
         .throw_();
     }
-    self->state.ordered_components.push_back(handle);
+    self->state.ordered_components.push_back(name);
   }
 }
 
@@ -417,6 +417,12 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     // Core components are terminated in a second stage, we remove them from the
     // registry upfront and deal with them later.
     std::vector<caf::actor> core_shutdown_handles;
+    for (const auto& name :
+         self->state.ordered_components | std::ranges::views::reverse) {
+      if (auto comp = registry.remove(name)) {
+        core_shutdown_handles.push_back(comp->actor);
+      }
+    }
     caf::actor filesystem_handle;
     // The components listed here need to be terminated in sequential order.
     // The importer needs to shut down first because it might still have
