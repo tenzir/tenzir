@@ -656,18 +656,18 @@ struct exec_node_state {
     //      independently from receiving input.
     //   c. The operator has input it can consume.
     //   d. The operator is a command, i.e., has both a source and a sink.
+    const auto has_demand
+      = demand.has_value() or std::is_same_v<Output, std::monostate>;
     const auto should_continue
       = instance->it != instance->gen.end()                         // (1)
         and not waiting                                             // (2)
         and (not previous                                           // (3a)
-             or (demand.has_value() and op->input_independent())    // (3b)
+             or (has_demand and op->input_independent())            // (3b)
              or not inbound_buffer.empty()                          // (3c)
              or detail::are_same_v<std::monostate, Input, Output>); // (3d)
     if (should_continue) {
       schedule_run(false);
-    } else if (not waiting
-               and (demand.has_value()
-                    or std::is_same_v<Output, std::monostate>)) {
+    } else if (not waiting and has_demand) {
       // If we shouldn't continue, but there is an upstream demand, then we may
       // be in a situation where the operator has internally buffered events and
       // needs to be polled until some operator-internal timeout expires before
