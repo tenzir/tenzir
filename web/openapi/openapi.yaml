@@ -228,10 +228,14 @@ components:
           $ref: "#/components/schemas/PipelineAutostart"
         autodelete:
           $ref: "#/components/schemas/PipelineAutodelete"
-        ttl_expires_in_ns:
-          type: integer
-          description: If a TTL exists for this pipeline, the remaining TTL in nanoseconds.
-          example: 23400569058
+        ttl:
+          type: string
+          description: If a TTL exists for this pipeline, the TTL as a duration string.
+          example: 2.0m
+        remaining_ttl:
+          type: string
+          description: If a TTL exists for this pipeline, the remaining TTL as a duration string.
+          example: 10.0s
     PipelineLabel:
       type: object
       properties:
