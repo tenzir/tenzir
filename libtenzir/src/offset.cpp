@@ -57,6 +57,13 @@ auto offset::get(const arrow::RecordBatch& batch) const noexcept
 
 auto offset::get(const arrow::StructArray& struct_array) const noexcept
   -> std::shared_ptr<arrow::Array> {
+  if (empty()) {
+    // If the offset is empty, we are already at the desired level, and can just
+    // wrap the struct array back into a shared pointer.
+    auto result = struct_array.View(struct_array.type());
+    TENZIR_ASSERT(result.ok(), result.status().ToString().c_str());
+    return result.MoveValueUnsafe();
+  }
   auto impl
     = [](auto&& impl, std::span<const offset::value_type> index,
          const arrow::StructArray& array) -> std::shared_ptr<arrow::Array> {
