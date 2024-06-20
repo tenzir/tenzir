@@ -574,6 +574,9 @@ auto serve_manager(
            .timeout = timeout,
          }});
     },
+    [](atom::config, const record&, const record&) -> caf::result<void> {
+      return {};
+    },
     [self](atom::status, status_verbosity verbosity,
            duration) -> caf::result<record> {
       return self->state.status(verbosity);

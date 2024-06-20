@@ -557,6 +557,9 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
     self->quit(msg.reason);
   });
   return {
+    [](atom::config, const record&, const record&) -> caf::result<void> {
+      return {};
+    },
     [self](atom::status, status_verbosity verbosity, duration) {
       return self->state.status(verbosity);
     },

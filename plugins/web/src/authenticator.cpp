@@ -195,6 +195,9 @@ authenticator(authenticator_actor::stateful_pointer<authenticator_state> self,
     [self](atom::validate, const token_t& token) -> bool {
       return self->state.authenticate(token);
     },
+    [](atom::config, const record&, const record&) -> caf::result<void> {
+      return {};
+    },
     [](atom::status, status_verbosity, duration) -> tenzir::record {
       return record{};
     },
