@@ -237,7 +237,7 @@ private:
         if (not accept(tk::comma)) {
           // Allow `{ ... }` without comma as final argument.
           if (not peek(tk::lbrace)) {
-            diagnostic::error("unexpected continuation of arguments")
+            diagnostic::error("unexpected continuation of argument")
               .primary(next_location())
               .hint("try inserting a `,` before if this is the next argument")
               .throw_();
@@ -456,15 +456,15 @@ private:
         is_at = true;
       }
       auto ident = expect(tk::identifier).as_identifier();
-      auto kind = static_cast<enum meta_extractor::kind>(0);
-      if (ident.name == "tag") {
-        kind = meta_extractor::schema;
+      auto kind = ast::meta_kind{};
+      if (ident.name == "name") {
+        kind = ast::meta::name;
       } else if (ident.name == "import_time") {
-        kind = meta_extractor::import_time;
+        kind = ast::meta::import_time;
       } else if (ident.name == "internal") {
-        kind = meta_extractor::internal;
+        kind = ast::meta::internal;
       } else if (ident.name == "schema") {
-        diagnostic::error("use `{}tag` instead", is_at ? "@" : "meta.")
+        diagnostic::error("use `{}name` instead", is_at ? "@" : "meta.")
           .primary(begin.combine(ident))
           .throw_();
       } else if (ident.name == "schema_id") {
@@ -474,7 +474,7 @@ private:
       } else {
         diagnostic::error("unknown metadata name `{}`", ident.name)
           .primary(ident)
-          .hint("must be one of `tag`, `import_time`, `internal`")
+          .hint("must be one of `name`, `import_time`, `internal`")
           .throw_();
       }
       return ast::meta{kind, begin.combine(ident)};

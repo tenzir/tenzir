@@ -55,7 +55,7 @@ auto evaluator::eval(const ast::unary_expr& x) -> series {
           diagnostic::warning("unary operator `{}` not implemented for `{}`",
                               x.op.inner, v.type.kind())
             .primary(x)
-            .emit(dh_);
+            .emit(ctx_);
           return null();
         }
       },

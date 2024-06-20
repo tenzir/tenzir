@@ -53,7 +53,7 @@ public:
     std::vector<argument> args;
   };
 
-  virtual auto eval(invocation inv, diagnostic_handler& dh) const -> series = 0;
+  virtual auto eval(invocation inv, session ctx) const -> series = 0;
 };
 
 class function_argument_parser {

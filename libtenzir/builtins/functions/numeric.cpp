@@ -142,37 +142,37 @@ public:
           auto b = arrow::DoubleBuilder{};
           check(b.Reserve(x.length()));
 #if 0
-      // TODO: This is probably UB.
-      auto alloc = arrow::AllocateBuffer(x.length() * sizeof(double));
-      TENZIR_ASSERT(alloc.ok());
-      auto buffer = std::move(*alloc);
-      TENZIR_ASSERT(buffer);
-      auto target = new (buffer->mutable_data()) double[x.length()];
-      auto begin = x.raw_values();
-      auto end = begin + x.length();
-      auto null_alloc = arrow::AllocateBuffer((x.length() + 7) / 8);
-      TENZIR_ASSERT(null_alloc.ok());
-      auto null_buffer = std::move(*null_alloc);
-      TENZIR_ASSERT(null_buffer);
-      auto null_target = null_buffer->mutable_data();
-      if (auto nulls = x.null_bitmap()) {
-        std::memcpy(null_target, nulls->data(), nulls->size());
-      } else {
-        std::memset(null_target, 0xFF, (x.length() + 7) / 8);
-      }
-      while (begin != end) {
-        auto val = *begin;
-        if (val < 0.0) [[unlikely]] {
-          auto mask = 0xFF ^ (0x01 << ((begin - end) % 8));
-          null_target[(begin - end) / 8] &= mask;
-          // TODO: Emit warning/error?
-        }
-        *target = std::sqrt(*begin);
-        ++begin;
-        ++target;
-      }
-      return std::make_shared<arrow::DoubleArray>(x.length(), std::move(buffer),
-                                                  std::move(null_buffer));
+          // TODO: This is probably UB.
+          auto alloc = arrow::AllocateBuffer(x.length() * sizeof(double));
+          TENZIR_ASSERT(alloc.ok());
+          auto buffer = std::move(*alloc);
+          TENZIR_ASSERT(buffer);
+          auto target = new (buffer->mutable_data()) double[x.length()];
+          auto begin = x.raw_values();
+          auto end = begin + x.length();
+          auto null_alloc = arrow::AllocateBuffer((x.length() + 7) / 8);
+          TENZIR_ASSERT(null_alloc.ok());
+          auto null_buffer = std::move(*null_alloc);
+          TENZIR_ASSERT(null_buffer);
+          auto null_target = null_buffer->mutable_data();
+          if (auto nulls = x.null_bitmap()) {
+            std::memcpy(null_target, nulls->data(), nulls->size());
+          } else {
+            std::memset(null_target, 0xFF, (x.length() + 7) / 8);
+          }
+          while (begin != end) {
+            auto val = *begin;
+            if (val < 0.0) [[unlikely]] {
+              auto mask = 0xFF ^ (0x01 << ((begin - end) % 8));
+              null_target[(begin - end) / 8] &= mask;
+              // TODO: Emit warning/error?
+            }
+            *target = std::sqrt(*begin);
+            ++begin;
+            ++target;
+          }
+          return std::make_shared<arrow::DoubleArray>(
+            x.length(), std::move(buffer), std::move(null_buffer));
 #else
           // TODO
           for (auto y : x) {
@@ -210,10 +210,15 @@ public:
             }
             return compute(*finish(b));
           },
+          [&](const arrow::NullArray& value) {
+            return series::null(double_type{}, value.length()).array;
+          },
           [&](const auto&) {
+            // TODO: Think about what we want and generalize this.
             diagnostic::warning("expected `number`, got `{}`",
                                 value.type.kind())
               .primary(expr)
+              .docs("https://docs.tenzir.com/functions/sqrt")
               .emit(ctx);
             auto b = arrow::DoubleBuilder{};
             check(b.AppendNulls(value.length()));
@@ -268,6 +273,8 @@ public:
   // }
 };
 
+// TODO: This also needs to work with durations, so the default return value
+// should be `null` instead.
 class sum_instance final : public aggregation_instance {
 public:
   explicit sum_instance(ast::expression expr) : expr_{std::move(expr)} {
@@ -413,8 +420,9 @@ public:
 
 class quantile_instance final : public aggregation_instance {
 public:
-  quantile_instance(ast::expression expr, double quantile)
-    : expr_{std::move(expr)}, quantile_{quantile} {
+  quantile_instance(ast::expression expr, double quantile, uint32_t delta,
+                    uint32_t buffer_size)
+    : expr_{std::move(expr)}, quantile_{quantile}, digest_{delta, buffer_size} {
   }
 
   void update(const table_slice& input, session ctx) override {
@@ -459,36 +467,58 @@ public:
   auto make_aggregation(invocation inv, session ctx) const
     -> std::unique_ptr<aggregation_instance> override {
     // TODO: Improve.
-    if (inv.call.args.size() != 2) {
-      diagnostic::error("expected exactly two arguments, got {}",
-                        inv.call.args.size())
-        .primary(inv.call)
-        .usage("quantile(<expr>, <quantile>)")
-        .docs("https://docs.tenzir.com/functions/quantile")
-        .emit(ctx);
-      return nullptr;
-    }
-    auto& expr = inv.call.args[0];
-    auto& quantile_expr = inv.call.args[1];
-    auto quantile_opt = const_eval(quantile_expr, ctx);
-    if (not quantile_opt) {
-      return nullptr;
-    }
+    auto expr = ast::expression{};
+    // TODO: Reconsider whether we want a default here. Maybe positional?
+    auto quantile_opt = std::optional<located<double>>{};
+    auto delta_opt = std::optional<located<int64_t>>{};
+    auto buffer_size_opt = std::optional<located<int64_t>>{};
+    argument_parser2::fn("quantile")
+      .add(expr, "expr")
+      .add("q", quantile_opt)
+      // TODO: This is a test for hidden parameters.
+      .add("_delta", delta_opt)
+      .add("_buffer_size", buffer_size_opt)
+      .parse(inv, ctx);
     // TODO: Type conversion? Probably not necessary here, but maybe elsewhere.
-    auto quantile = caf::get_if<double>(&*quantile_opt);
-    if (not quantile) {
-      diagnostic::error("expected double, got TODO")
-        .primary(quantile_expr)
-        .emit(ctx);
-      return nullptr;
+    // TODO: This is too much manual labor.
+    auto quantile = 0.5;
+    if (quantile_opt) {
+      if (quantile_opt->inner < 0.0 || quantile_opt->inner > 1.0) {
+        diagnostic::error("expected quantile to be in [0.0, 1.0]")
+          .primary(*quantile_opt)
+          .emit(ctx);
+      }
+      quantile = quantile_opt->inner;
     }
-    if (*quantile < 0.0 || *quantile > 1.0) {
-      diagnostic::error("expected quantile to be in [0.0, 1.0]")
-        .primary(quantile_expr)
-        .emit(ctx);
-      return nullptr;
+    // TODO: We put this function somewhere. Find it.
+    auto try_narrow = [](int64_t x) -> std::optional<uint32_t> {
+      if (0 <= x && x <= std::numeric_limits<uint32_t>::max()) {
+        return static_cast<uint32_t>(x);
+      }
+      return std::nullopt;
+    };
+    auto delta = uint32_t{100};
+    if (delta_opt) {
+      if (auto narrowed = try_narrow(delta_opt->inner)) {
+        delta = *narrowed;
+      } else {
+        diagnostic::error("expected delta to fit in a uint32")
+          .primary(*delta_opt)
+          .emit(ctx);
+      }
     }
-    return std::make_unique<quantile_instance>(expr, *quantile);
+    auto buffer_size = uint32_t{500};
+    if (buffer_size_opt) {
+      if (auto narrowed = try_narrow(buffer_size_opt->inner)) {
+        buffer_size = *narrowed;
+      } else {
+        diagnostic::error("expected buffer size to fit in a uint32")
+          .primary(*buffer_size_opt)
+          .emit(ctx);
+      }
+    }
+    return std::make_unique<quantile_instance>(expr, quantile, delta,
+                                               buffer_size);
   }
 };
 

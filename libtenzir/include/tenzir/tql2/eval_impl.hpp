@@ -11,6 +11,7 @@
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/series_builder.hpp"
+#include "tenzir/session.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tql2/ast.hpp"
 
@@ -29,10 +30,10 @@ inline auto data_to_series(const data& x, int64_t length) -> series {
 
 class evaluator {
 public:
-  explicit evaluator(const table_slice* input, diagnostic_handler& dh)
+  explicit evaluator(const table_slice* input, session ctx)
     : input_{input},
       length_{input ? detail::narrow<int64_t>(input->rows()) : 1},
-      dh_{dh} {
+      ctx_{ctx} {
   }
 
   auto to_series(const data& x) -> series {
@@ -44,7 +45,7 @@ public:
     if (not input_) {
       diagnostic::error("expected a constant expression")
         .primary(location)
-        .emit(dh_);
+        .emit(ctx_);
       throw std::monostate{};
     }
     return *input_;
@@ -60,9 +61,7 @@ public:
     });
   }
 
-  auto eval(const ast::constant& x) -> series {
-    return to_series(x.as_data());
-  }
+  auto eval(const ast::constant& x) -> series;
 
   auto eval(const ast::record& x) -> series;
 
@@ -80,34 +79,12 @@ public:
 
   auto eval(const ast::field_access& x) -> series;
 
-  auto eval(const ast::assignment& x) -> series {
-    // TODO: What shall happen if we hit this in const eval mode?
-    diagnostic::warning("unexpected assignment").primary(x).emit(dh_);
-    return null();
-  }
+  auto eval(const ast::assignment& x) -> series;
 
-  auto eval(const ast::meta& x) -> series {
-    // TODO: This is quite inefficient.
-    auto& input = input_or_throw(x);
-    switch (x.kind) {
-      case meta_extractor::schema:
-        return to_series(std::string{input.schema().name()});
-      case meta_extractor::schema_id:
-        return to_series(input.schema().make_fingerprint());
-      case meta_extractor::import_time: {
-        auto result = input.import_time();
-        if (result == time{}) {
-          return series::null(time_type{}, length_);
-        }
-        return to_series(result);
-      }
-      case meta_extractor::internal:
-        return to_series(input.schema().attribute("internal").has_value());
-    }
-    TENZIR_UNREACHABLE();
-  }
+  auto eval(const ast::meta& x) -> series;
 
-  auto eval(const auto& x) -> series {
+  template <class T>
+  auto eval(const T& x) -> series {
     return not_implemented(x);
   }
 
@@ -115,7 +92,7 @@ public:
     diagnostic::warning("eval not implemented yet for: {:?}",
                         use_default_formatter(x))
       .primary(x)
-      .emit(dh_);
+      .emit(ctx_);
     return null();
   }
 
@@ -126,7 +103,7 @@ public:
 private:
   const table_slice* input_;
   int64_t length_;
-  diagnostic_handler& dh_;
+  session ctx_;
 };
 
 } // namespace tenzir

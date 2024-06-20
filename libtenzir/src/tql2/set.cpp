@@ -31,7 +31,7 @@ namespace {
 auto assign(const ast::meta& left, series right, const table_slice& input,
             diagnostic_handler& diag) -> table_slice {
   switch (left.kind) {
-    case meta_extractor::schema: {
+    case ast::meta::name: {
       // TODO: Name.
       auto values = dynamic_cast<arrow::StringArray*>(right.array.get());
       if (not values) {
@@ -48,11 +48,7 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
                          type{new_name, input.schema(),
                               collect(input.schema().attributes())}};
     }
-    case meta_extractor::schema_id:
-      // TODO: This is actually not assignable. Should this even be a selector
-      // then? Maybe make it a function.
-      TENZIR_TODO();
-    case meta_extractor::import_time: {
+    case ast::meta::import_time: {
       auto values = dynamic_cast<arrow::TimestampArray*>(right.array.get());
       if (not values) {
         // TODO: Inaccurate location.
@@ -68,7 +64,7 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
       copy.import_time(new_time);
       return copy;
     }
-    case meta_extractor::internal: {
+    case ast::meta::internal: {
       auto values = dynamic_cast<arrow::BooleanArray*>(right.array.get());
       if (not values) {
         // TODO: Inaccurate location.

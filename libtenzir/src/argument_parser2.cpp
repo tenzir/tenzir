@@ -207,6 +207,10 @@ auto argument_parser2::usage() const -> std::string {
       }
     }
     for (auto& [name, set] : named_) {
+      if (name.starts_with("_")) {
+        // This denotes an internal/unstable option.
+        continue;
+      }
       if (not usage_cache_.empty()) {
         usage_cache_ += ", ";
       }

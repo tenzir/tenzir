@@ -15,63 +15,29 @@
 
 namespace tenzir {
 
-// TODO: Change `entity_def` and everything related to it.
-
+// TODO: Change `entity_def` and everything related to it. We do not necessarily
+// want this to be plugins.
 using entity_def
   = variant<const function_plugin*, const operator_factory_plugin*>;
 
-/// Should this be *effectively* global?
+// TODO: Should this be *effectively* global?
+// TODO: The interface of this class is drastically simplified for now. It
+// must be changed eventually to properly enable modules and use an interned
+// representation of `entity_path`.
 class registry {
 public:
-  auto try_get(const entity_path& path) const -> const entity_def* {
-    if (path.segments().size() != 1) {
-      // TODO: We pretend here that only single-name paths exist.
-      return nullptr;
-    }
-    auto it = defs_.find(path.segments()[0]);
-    if (it == defs_.end()) {
-      return nullptr;
-    }
-    return &it->second;
-  }
+  auto try_get(const entity_path& path) const -> const entity_def*;
 
-  auto get(const entity_path& path) const -> const entity_def& {
-    auto result = try_get(path);
-    TENZIR_ASSERT(result);
-    return *result;
-  }
+  auto get(const ast::function_call& call) const -> const function_plugin&;
 
-  auto operator_names() const -> std::vector<std::string_view> {
-    // TODO: This cannot stay this way, but for now we use it in error messages.
-    auto result = std::vector<std::string_view>{};
-    for (auto& [name, def] : defs_) {
-      if (std::holds_alternative<const operator_factory_plugin*>(def)) {
-        result.push_back(name);
-      }
-    }
-    std::ranges::sort(result);
-    return result;
-  }
+  auto get(const entity_path& path) const -> const entity_def&;
 
-  auto function_names() const -> std::vector<std::string_view> {
-    // TODO: This cannot stay this way, but for now we use it in error messages.
-    auto result = std::vector<std::string_view>{};
-    for (auto& [name, def] : defs_) {
-      if (std::holds_alternative<const function_plugin*>(def)) {
-        result.push_back(name);
-      }
-    }
-    std::ranges::sort(result);
-    return result;
-  }
+  // TODO: This cannot stay this way, but for now we use it in error messages.
+  auto operator_names() const -> std::vector<std::string_view>;
+  auto function_names() const -> std::vector<std::string_view>;
 
-  // TODO: The interface of this class is drastically simplified for now. It
-  // must be changed eventually to properly enable modules and use an interned
-  // representation of `entity_path`.
-  void add(std::string name, entity_def def) {
-    auto inserted = defs_.emplace(std::move(name), def).second;
-    TENZIR_ASSERT(inserted);
-  }
+  // TODO: Change signature.
+  void add(std::string name, entity_def def);
 
 private:
   // TODO: Lifetime?

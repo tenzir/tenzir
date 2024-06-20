@@ -46,4 +46,60 @@ auto global_registry() -> const registry& {
   return reg;
 }
 
+auto registry::get(const ast::function_call& call) const
+  -> const function_plugin& {
+  TENZIR_ASSERT(call.fn.ref.resolved());
+  auto def = try_get(call.fn.ref);
+  TENZIR_ASSERT(def);
+  auto fn = std::get_if<const function_plugin*>(def);
+  TENZIR_ASSERT(fn);
+  TENZIR_ASSERT(*fn);
+  return **fn;
+}
+
+auto registry::try_get(const entity_path& path) const -> const entity_def* {
+  if (path.segments().size() != 1) {
+    // TODO: We pretend here that only single-name paths exist.
+    return nullptr;
+  }
+  auto it = defs_.find(path.segments()[0]);
+  if (it == defs_.end()) {
+    return nullptr;
+  }
+  return &it->second;
+}
+
+auto registry::get(const entity_path& path) const -> const entity_def& {
+  auto result = try_get(path);
+  TENZIR_ASSERT(result);
+  return *result;
+}
+
+auto registry::operator_names() const -> std::vector<std::string_view> {
+  // TODO: This cannot stay this way, but for now we use it in error messages.
+  auto result = std::vector<std::string_view>{};
+  for (auto& [name, def] : defs_) {
+    if (std::holds_alternative<const operator_factory_plugin*>(def)) {
+      result.push_back(name);
+    }
+  }
+  std::ranges::sort(result);
+  return result;
+}
+
+auto registry::function_names() const -> std::vector<std::string_view> {
+  auto result = std::vector<std::string_view>{};
+  for (auto& [name, def] : defs_) {
+    if (std::holds_alternative<const function_plugin*>(def)) {
+      result.push_back(name);
+    }
+  }
+  std::ranges::sort(result);
+  return result;
+}
+
+void registry::add(std::string name, entity_def def) {
+  auto inserted = defs_.emplace(std::move(name), def).second;
+  TENZIR_ASSERT(inserted);
+}
 } // namespace tenzir

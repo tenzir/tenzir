@@ -8,7 +8,6 @@
 
 #include "tenzir/tql2/resolve.hpp"
 
-#include "tenzir/collect.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -21,14 +20,12 @@ namespace tenzir {
 
 namespace {
 
-using namespace ast;
-
-class entity_resolver : public visitor<entity_resolver> {
+class entity_resolver : public ast::visitor<entity_resolver> {
 public:
   explicit entity_resolver(session ctx) : reg_{ctx.reg()}, diag_{ctx.dh()} {
   }
 
-  void visit(entity& x) {
+  void visit(ast::entity& x) {
     TENZIR_ASSERT(not x.path.empty());
     TENZIR_ASSERT(context_ != context_t::none);
     if (x.path.size() > 1) {
@@ -94,7 +91,7 @@ public:
     }
   }
 
-  void visit(function_call& x) {
+  void visit(ast::function_call& x) {
     if (x.subject) {
       visit(*x.subject);
     }

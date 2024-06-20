@@ -1039,9 +1039,9 @@ public:
       if (it == groups_.end()) {
         auto bucket = std::make_unique<bucket2>();
         for (auto& aggr : cfg_.aggregates) {
-          // TODO: Very hacky.
-          auto fn = plugins::find<aggregation_plugin>(
-            "tql2." + aggr.call.fn.path[0].name);
+          // We already checked this cast before.
+          auto fn = dynamic_cast<const aggregation_plugin*>(
+            &ctx_.reg().get(aggr.call));
           TENZIR_ASSERT(fn);
           bucket->aggregations.push_back(fn->make_aggregation(
             aggregation_plugin::invocation{aggr.call}, ctx_));
@@ -1194,19 +1194,19 @@ public:
     auto cfg = config{};
     auto add_aggregate
       = [&](std::optional<ast::simple_selector> dest, ast::function_call call) {
-          auto& ref = call.fn.ref;
-          if (not ref.resolved()) {
+          if (not call.fn.ref.resolved()) {
             // Already reported.
             return;
           }
           // TODO: Improve this and try to forward function handle directly.
-          auto fn = dynamic_cast<const aggregation_plugin*>(
-            std::get<const function_plugin*>(ctx.reg().get(ref)));
+          auto fn
+            = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(call));
           // TODO: Check if aggregation function.
           if (not fn) {
             diagnostic::error("function does not support aggregations")
               .primary(call.fn)
-              .hint("if you want to group by the result, assign it before")
+              .hint("if you want to group by this, use assignment before")
+              .docs("https://docs.tenzir.com/operators/summarize")
               .emit(ctx);
             return;
           }

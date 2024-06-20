@@ -156,8 +156,16 @@ auto to_operand(const ast::expression& x) -> std::optional<operand> {
     [](const ast::constant& x) {
       return x.as_data();
     },
-    [](const ast::meta& x) {
-      return meta_extractor{x.kind};
+    [](const ast::meta& x) -> meta_extractor {
+      switch (x.kind) {
+        case ast::meta::name:
+          return meta_extractor::schema;
+        case ast::meta_kind::import_time:
+          return meta_extractor::import_time;
+        case ast::meta_kind::internal:
+          return meta_extractor::internal;
+      }
+      TENZIR_UNREACHABLE();
     },
     [](const ast::function_call& x) -> std::optional<operand> {
       // TODO: Make this better.
@@ -175,8 +183,8 @@ auto to_operand(const ast::expression& x) -> std::optional<operand> {
 }
 
 auto is_true_literal(const ast::expression& y) -> bool {
-  if (auto lit = std::get_if<ast::constant>(&*y.kind)) {
-    return lit->as_data() == true;
+  if (auto constant = std::get_if<ast::constant>(&*y.kind)) {
+    return constant->as_data() == true;
   }
   return false;
 }

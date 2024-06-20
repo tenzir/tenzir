@@ -8,9 +8,7 @@
 
 #include "tenzir/tql2/plugin.hpp"
 
-#include "tenzir/series_builder.hpp"
-#include "tenzir/tql2/ast.hpp"
-#include "tenzir/tql2/eval.hpp"
+#include "tenzir/tql2/eval_impl.hpp"
 
 namespace tenzir::tql2 {
 
@@ -213,6 +211,15 @@ struct function_argument_parser::instantiate {
 };
 
 template struct function_argument_parser::instantiate<std::monostate{}>;
+
+auto function_use::evaluator::length() const -> int64_t {
+  return static_cast<tenzir::evaluator*>(self_)->length();
+}
+
+auto function_use::evaluator::operator()(const ast::expression& expr) const
+  -> series {
+  return static_cast<tenzir::evaluator*>(self_)->eval(expr);
+}
 
 auto aggregation_plugin::make_function(invocation inv, session ctx) const
   -> std::unique_ptr<function_use> {

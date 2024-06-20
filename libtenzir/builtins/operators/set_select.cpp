@@ -53,7 +53,7 @@ public:
       if (auto assignment = std::get_if<ast::assignment>(&*arg.kind)) {
         auto selector = std::get_if<ast::simple_selector>(&assignment->left);
         if (not selector) {
-          diagnostic::error("expected simple selector")
+          diagnostic::error("expected selector")
             .primary(assignment->left)
             .emit(ctx);
           continue;
@@ -62,7 +62,7 @@ public:
       } else {
         auto selector = ast::simple_selector::try_from(arg);
         if (not selector) {
-          diagnostic::error("expected simple selector").primary(arg).emit(ctx);
+          diagnostic::error("expected selector").primary(arg).emit(ctx);
           continue;
         }
         // TODO: This is a hack.

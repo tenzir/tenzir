@@ -90,7 +90,11 @@ struct identifier {
   tenzir::location location;
 };
 
+TENZIR_ENUM(meta_kind, name, import_time, internal);
+
 struct meta {
+  using enum meta_kind;
+
   auto get_location() const -> location {
     return source;
   }
@@ -101,7 +105,7 @@ struct meta {
   }
 
   // TODO: Remove `schema_id` from this.
-  enum meta_extractor::kind kind;
+  meta_kind kind;
   location source;
 };
 

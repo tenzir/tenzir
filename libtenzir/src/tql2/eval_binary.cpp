@@ -6,7 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/fwd.hpp"
+
 #include "tenzir/series.hpp"
+#include "tenzir/table_slice_builder.hpp"
 #include "tenzir/tql2/arrow_utils.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval_impl.hpp"
@@ -51,6 +54,24 @@ struct EvalBinOp<ast::binary_op::add, L, R> {
     auto res = arrow::compute::Add(l, r, opts).ValueOrDie();
     TENZIR_ASSERT(res.is_array());
     return res.make_array();
+  }
+};
+
+template <>
+struct EvalBinOp<ast::binary_op::add, duration_type, duration_type> {
+  static auto eval(const arrow::DurationArray& l, const arrow::DurationArray& r)
+    -> std::shared_ptr<arrow::Array> {
+    auto b = duration_type::make_arrow_builder(arrow::default_memory_pool());
+    for (auto i = int64_t{0}; i < l.length(); ++i) {
+      if (l.IsNull(i) || r.IsNull(i)) {
+        check(b->AppendNull());
+        continue;
+      }
+      check(append_builder(duration_type{}, *b,
+                           value_at(duration_type{}, l, i)
+                             + value_at(duration_type{}, r, i)));
+    }
+    return finish(*b);
   }
 };
 
@@ -247,8 +268,7 @@ struct EvalBinOp<Op, string_type, string_type> {
 
 auto evaluator::eval(const ast::binary_expr& x) -> series {
   auto eval_op
-    = [&]<ast::binary_op Op>(std::integral_constant<ast::binary_op, Op>,
-                             const series& l, const series& r) -> series {
+    = [&]<ast::binary_op Op>(const series& l, const series& r) -> series {
     TENZIR_ASSERT(x.op.inner == Op);
     TENZIR_ASSERT(l.length() == r.length());
     return caf::visit(
@@ -268,7 +288,7 @@ auto evaluator::eval(const ast::binary_expr& x) -> series {
                               "and `{}`",
                               x.op.inner, l.type.kind(), r.type.kind())
             .primary(x)
-            .emit(dh_);
+            .emit(ctx_);
           return null();
         }
       },
@@ -278,8 +298,7 @@ auto evaluator::eval(const ast::binary_expr& x) -> series {
   switch (x.op.inner) {
 #define X(op)                                                                  \
   case op:                                                                     \
-    return eval_op(std::integral_constant<ast::binary_op, op>{}, eval(x.left), \
-                   eval(x.right))
+    return eval_op.operator()<op>(eval(x.left), eval(x.right))
     X(add);
     X(sub);
     X(mul);
@@ -299,7 +318,7 @@ auto evaluator::eval(const ast::binary_expr& x) -> series {
       // 2) Evaluate right, but discard diagnostics if false.
       // TODO
       auto r = eval(x.right);
-      return eval_op(std::integral_constant<ast::binary_op, and_>{}, l, r);
+      return eval_op.operator()<and_>(l, r);
     }
     case or_:
       TENZIR_TODO();
