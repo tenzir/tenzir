@@ -355,7 +355,9 @@ using rest_handler_actor = typed_actor_fwd<
     ->caf::result<rest_response>>::unwrap;
 
 /// The interface of a COMPONENT PLUGIN actor.
-using component_plugin_actor = typed_actor_fwd<>
+using component_plugin_actor = typed_actor_fwd<
+  // Update the configuration.
+  auto(atom::config, tenzir::record, tenzir::record)->caf::result<void>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
