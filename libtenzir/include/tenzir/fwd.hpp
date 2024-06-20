@@ -242,6 +242,7 @@ struct model;
 struct negation;
 struct node_state;
 struct offset;
+struct package;
 struct partition_info;
 struct partition_synopsis_pair;
 struct partition_synopsis;
@@ -436,6 +437,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::null_bitmap))
   TENZIR_ADD_TYPE_ID((tenzir::operator_box))
   TENZIR_ADD_TYPE_ID((tenzir::operator_type))
+  TENZIR_ADD_TYPE_ID((tenzir::package))
   TENZIR_ADD_TYPE_ID((tenzir::partition_info))
   TENZIR_ADD_TYPE_ID((tenzir::partition_synopsis_pair))
   TENZIR_ADD_TYPE_ID((tenzir::partition_synopsis_ptr))
@@ -466,6 +468,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   // TODO: Make list, record, and map concrete typs to we don't need to do
   // these kinda things. See tenzir/aliases.hpp for their definitions.
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::data>))
+  TENZIR_ADD_TYPE_ID((std::vector<tenzir::package>))
   TENZIR_ADD_TYPE_ID((tenzir::detail::stable_map<std::string, tenzir::data>))
   TENZIR_ADD_TYPE_ID((tenzir::detail::stable_map<tenzir::data, tenzir::data>))
 
