@@ -112,6 +112,7 @@ register_component(node_actor::stateful_pointer<node_state> self,
     }
     return fmt::format("{}/{}", type, label);
   }();
+  self->state.component_names.emplace(component->address(), tag);
   const auto [it, inserted] = self->state.alive_components.insert(
     std::pair{component->address(), std::move(tag)});
   TENZIR_ASSERT(
@@ -396,7 +397,21 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
   });
   // Terminate deterministically on shutdown.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    TENZIR_DEBUG("{} got EXIT from {}", *self, msg.source);
+    const auto source_name = [&]() -> std::string {
+      const auto component = self->state.component_names.find(msg.source);
+      if (component == self->state.component_names.end()) {
+        return "an unknown component";
+      }
+      return fmt::format("the {} component", component->second);
+    }();
+    TENZIR_DEBUG("{} got EXIT from {}: {}", *self, source_name, msg.reason);
+    const auto node_shutdown_reason
+      = msg.reason == caf::exit_reason::user_shutdown
+          ? msg.reason
+          : diagnostic::error(msg.reason)
+              .note("node terminates after receiving error from {}",
+                    source_name)
+              .to_error();
     self->state.tearing_down = true;
     for (auto&& exec_node :
          std::exchange(self->state.monitored_exec_nodes, {})) {
@@ -458,7 +473,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       = [=, core_shutdown_handles = std::move(core_shutdown_handles),
          filesystem_handle = std::move(filesystem_handle)]() mutable {
           shutdown<policy::sequential>(self, std::move(core_shutdown_handles),
-                                       msg.reason);
+                                       node_shutdown_reason);
           // We deliberately do not send an exit message to the filesystem
           // actor, as that would mean that actors not tracked by the component
           // registry which hold a strong handle to the filesystem actor cannot
