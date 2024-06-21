@@ -4,7 +4,7 @@
     "annotated git tag without the leading 'v'.",
     "This value gets updated automatically by `scripts/prepare-release`."
   ],
-  "tenzir-version": "4.16.0",
+  "tenzir-version": "4.17.0",
   "tenzir-partition-version_COMMENT": [
     "The partition version. This number must be bumped alongside the release",
     "version for releases that contain major format changes to the on-disk",
