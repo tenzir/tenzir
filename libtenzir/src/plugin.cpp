@@ -405,10 +405,6 @@ std::string component_plugin::component_name() const {
   return this->name();
 }
 
-auto component_plugin::wanted_components() const -> std::vector<std::string> {
-  return {};
-}
-
 // -- loader plugin -----------------------------------------------------------
 
 auto loader_parser_plugin::supported_uri_schemes() const
