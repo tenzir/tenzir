@@ -7,7 +7,7 @@ comments: true
 ---
 
 The new [Tenzir v4.17][github-release] brings an integration with Azure Log
-Analytics and adds support mechanisms for expiring entries in lookup tables.
+Analytics and adds support for expiring entries in lookup tables.
 
 ![Tenzir v4.17](tenzir-v4.17.excalidraw.svg)
 
