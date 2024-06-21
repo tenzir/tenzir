@@ -147,11 +147,6 @@ public:
   /// Defaults to the plugin name.
   virtual std::string component_name() const;
 
-  /// Components that should be created before the current one so initialization
-  /// can succeed.
-  /// Defaults to empty list.
-  virtual auto wanted_components() const -> std::vector<std::string>;
-
   /// Creates an actor as a component in the NODE.
   /// @param node A stateful pointer to the NODE actor.
   /// @returns The actor handle to the NODE component.
