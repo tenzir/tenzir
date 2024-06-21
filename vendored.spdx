@@ -253,3 +253,15 @@ LicenseInfoInFile: MIT
 LicenseComments: https://github.com/mariusbancila/croncpp
 
 Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-include-tenzir-croncpp-hpp
+
+
+FileName: ./libtenzir/include/tenzir/detail/checked_math.hpp
+SPDXID: SPDXRef-file-libtenzir-include-tenzir-checked_math-hpp
+FileChecksum: SHA1: ad4eefa47a40f96557e8b9ff8404c849f37a760f
+FileChecksum: SHA256: 6ade4ac5a116784dec22ba9c8036b255b690ca40223ea5fce2e54e8bf807d8ca
+FileCopyrightText: (c) Moritz Beutel 
+LicenseConcluded: Boost Software License - Version 1.0
+LicenseInfoInFile: Boost Software License - Version 1.0
+LicenseComments: https://github.com/mbeutel/slowmath
+
+Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-include-tenzir-checked_math-hpp

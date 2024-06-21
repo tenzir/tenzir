@@ -8,6 +8,7 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/detail/checked_math.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/table_slice_builder.hpp"
 #include "tenzir/tql2/arrow_utils.hpp"
@@ -26,50 +27,278 @@ namespace {
 
 template <class T>
 concept numeric_type
-  = std::same_as<T, int64_type> || std::same_as<T, uint64_type>
-    || std::same_as<T, double_type>;
+  = concrete_type<T> and basic_type<T>
+    and (std::same_as<T, int64_type> || std::same_as<T, uint64_type>
+         || std::same_as<T, double_type>);
 
-template <ast::binary_op Op, concrete_type L, concrete_type R>
-struct EvalBinOp;
+template <class T>
+concept integral_type
+  = numeric_type<T>
+    and (std::same_as<T, int64_type> || std::same_as<T, uint64_type>);
 
-template <numeric_type L, numeric_type R>
-struct EvalBinOp<ast::binary_op::add, L, R> {
-  // double + (u)int -> double
-  // uint + int -> int? uint?
+consteval auto is_arithmetic(ast::binary_op op) -> bool {
+  switch (op) {
+    using enum ast::binary_op;
+    case add:
+    case sub:
+    case mul:
+    case div:
+      return true;
+    default:
+      return false;
+  }
+}
+
+consteval auto is_equality_related(ast::binary_op op) -> bool {
+  switch (op) {
+    using enum ast::binary_op;
+    case eq:
+    case neq:
+    case ge:
+    case le:
+      return true;
+    default:
+      return false;
+  }
+}
+
+consteval auto is_relational(ast::binary_op op) -> bool {
+  switch (op) {
+    using enum ast::binary_op;
+    case eq:
+    case neq:
+    case gt:
+    case lt:
+    case ge:
+    case le:
+      return true;
+    default:
+      return false;
+  }
+}
+
+template <ast::binary_op Op, class L, class R>
+struct Binary_Op_Kernel;
+
+template <ast::binary_op Op, integral_type L, integral_type R>
+  requires(is_arithmetic(Op))
+struct Binary_Op_Kernel<Op, L, R> {
+  using L_data = type_to_data_t<L>;
+  using R_data = type_to_data_t<R>;
+  using arithmetic_result_type = std::common_type_t<L_data, R_data>;
+  using result_type = data_to_type_t<arithmetic_result_type>;
 
   static auto
-  eval(const type_to_arrow_array_t<L>& l, const type_to_arrow_array_t<R>& r)
-    -> std::shared_ptr<arrow::Array> {
-    // if constexpr (std::same_as<L, double_type>
-    //               || std::same_as<R, double_type>) {
-    //   // double
-    // } else {
-    //   // if both uint -> uint
-    //   // otherwise int?
-    // }
-    // TODO: Do we actually want to use this?
-    // For example, range error leads to no result at all.
-    auto opts = arrow::compute::ArithmeticOptions{};
-    opts.check_overflow = true;
-    auto res = arrow::compute::Add(l, r, opts).ValueOrDie();
-    TENZIR_ASSERT(res.is_array());
-    return res.make_array();
+  evaluate(L_data l,
+           R_data r) -> std::variant<arithmetic_result_type, const char*> {
+    using enum ast::binary_op;
+    if constexpr (Op == add) {
+      return checked_math::add(l, r);
+    } else if constexpr (Op == sub) {
+      return checked_math::subtract(l, r);
+    } else if constexpr (Op == mul) {
+      return checked_math::multiply(l, r);
+    } else {
+      static_assert(detail::always_false_v<L>,
+                    "division is handled by its own specialization");
+    }
+    return {};
+  }
+};
+
+// if any of the operands is double, the result is a double
+template <ast::binary_op Op, numeric_type L, numeric_type R>
+  requires(is_arithmetic(Op)
+           and (std::same_as<double_type, L> or std::same_as<double_type, R>))
+struct Binary_Op_Kernel<Op, L, R> {
+  using result_type = double_type;
+  using arithmetic_result_type = double;
+
+  static auto evaluate(type_to_data_t<L> l, type_to_data_t<R> r)
+    -> std::variant<arithmetic_result_type, const char*> {
+    using enum ast::binary_op;
+    if constexpr (Op == add) {
+      return static_cast<double>(l) + static_cast<double>(r);
+    }
+    if constexpr (Op == sub) {
+      return static_cast<double>(l) - static_cast<double>(r);
+    }
+    if constexpr (Op == mul) {
+      return static_cast<double>(l) * static_cast<double>(r);
+    }
+    TENZIR_UNREACHABLE();
+    return arithmetic_result_type{};
   }
 };
 
 template <>
-struct EvalBinOp<ast::binary_op::add, duration_type, duration_type> {
-  static auto eval(const arrow::DurationArray& l, const arrow::DurationArray& r)
-    -> std::shared_ptr<arrow::Array> {
-    auto b = duration_type::make_arrow_builder(arrow::default_memory_pool());
+struct Binary_Op_Kernel<ast::binary_op::sub, int64_type, uint64_type> {
+  using result_type = int64_type;
+  using arithmetic_result_type = int64_t;
+
+  static auto
+  evaluate(int64_t l,
+           uint64_t r) -> std::variant<arithmetic_result_type, const char*> {
+    // r > int_max
+    if (r > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
+      return "subtraction overflow";
+    }
+    // l < 0 and |l| + r > int_max -> l - r < int_min
+    if (l < 0
+        and static_cast<uint64_t>(abs(l)) + r
+              > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())
+                  + 1) {
+      return "subtraction underflow";
+    }
+    return l - static_cast<int64_t>(r);
+  }
+};
+
+// division always yields doubles
+template <numeric_type L, numeric_type R>
+struct Binary_Op_Kernel<ast::binary_op::div, L, R> {
+  using result_type = double_type;
+  using arithmetic_result_type = double;
+
+  static auto evaluate(type_to_data_t<L> l, type_to_data_t<R> r)
+    -> std::variant<arithmetic_result_type, const char*> {
+    if (r == decltype(r){}) {
+      return "division by zero";
+    }
+    return static_cast<double>(l) / static_cast<double>(r);
+  }
+};
+
+template <>
+struct Binary_Op_Kernel<ast::binary_op::sub, time_type, duration_type> {
+  using result_type = time_type;
+  using arithmetic_result_type = time;
+
+  static auto
+  evaluate(time l,
+           duration r) -> std::variant<arithmetic_result_type, const char*> {
+    return l - r;
+  }
+};
+
+template <>
+struct Binary_Op_Kernel<ast::binary_op::sub, time_type, time_type> {
+  using result_type = duration_type;
+  using arithmetic_result_type = duration;
+
+  static auto
+  evaluate(time l,
+           time r) -> std::variant<arithmetic_result_type, const char*> {
+    return l - r;
+  }
+};
+
+template <ast::binary_op Op, basic_type L, basic_type R>
+  requires(is_relational(Op) and not(integral_type<L> and integral_type<R>)
+           and requires(type_to_data_t<L> l, type_to_data_t<R> r) { l <=> r; })
+struct Binary_Op_Kernel<Op, L, R> {
+  using result_type = bool_type;
+  using arithmetic_result_type = bool;
+
+  static auto evaluate(view<type_to_data_t<L>> l, view<type_to_data_t<R>> r)
+    -> std::variant<arithmetic_result_type, const char*> {
+    using enum ast::binary_op;
+
+    if constexpr (std::same_as<L, string_type>
+                  and std::same_as<R, string_type>) {
+      fmt::print("{} {} {}\n", l, Op, r);
+    }
+    if constexpr (Op == eq) {
+      return l == r;
+    } else if constexpr (Op == neq) {
+      return l != r;
+    } else if constexpr (Op == gt) {
+      return l > r;
+    } else if constexpr (Op == lt) {
+      return l < r;
+    } else if constexpr (Op == ge) {
+      return l >= r;
+    } else if constexpr (Op == le) {
+      return l <= r;
+    } else {
+      static_assert(detail::always_false_v<L>,
+                    "unexpected operator in relational kernel");
+    }
+  }
+};
+
+template <ast::binary_op Op, integral_type L, integral_type R>
+  requires(is_relational(Op))
+struct Binary_Op_Kernel<Op, L, R> {
+  using result_type = bool_type;
+  using arithmetic_result_type = bool;
+
+  static auto evaluate(type_to_data_t<L> l, type_to_data_t<R> r)
+    -> std::variant<arithmetic_result_type, const char*> {
+    using enum ast::binary_op;
+    if constexpr (Op == eq) {
+      return std::cmp_equal(l, r);
+    } else if constexpr (Op == neq) {
+      return std::cmp_not_equal(l, r);
+    } else if constexpr (Op == gt) {
+      return std::cmp_greater(l, r);
+    } else if constexpr (Op == lt) {
+      return std::cmp_less(l, r);
+    } else if constexpr (Op == ge) {
+      return std::cmp_greater_equal(l, r);
+    } else if constexpr (Op == le) {
+      return std::cmp_less_equal(l, r);
+    } else {
+      static_assert(detail::always_false_v<L>,
+                    "unexpected operator in relational kernel");
+    }
+  }
+};
+
+template <ast::binary_op Op, concrete_type L, concrete_type R>
+struct EvalBinOp;
+
+// specialization for cases where a kernel is implemented
+template <ast::binary_op Op, concrete_type L, concrete_type R>
+  requires caf::detail::is_complete<Binary_Op_Kernel<Op, L, R>>
+struct EvalBinOp<Op, L, R> {
+  static auto
+  eval(const type_to_arrow_array_t<L>& l, const type_to_arrow_array_t<R>& r,
+       auto&& warning_emitter) -> std::shared_ptr<arrow::Array> {
+    using impl = Binary_Op_Kernel<Op, L, R>;
+
+    auto b
+      = impl::result_type::make_arrow_builder(arrow::default_memory_pool());
+    detail::stack_vector<const char*, 2 * sizeof(const char*)> warnings;
     for (auto i = int64_t{0}; i < l.length(); ++i) {
-      if (l.IsNull(i) || r.IsNull(i)) {
+      const auto l_is_null = l.IsNull(i);
+      const auto r_is_null = r.IsNull(i);
+      if (l_is_null or r_is_null) {
+        if (is_equality_related(Op) and l_is_null and r_is_null) {
+          check(b->Append(true));
+          continue;
+        }
         check(b->AppendNull());
         continue;
       }
-      check(append_builder(duration_type{}, *b,
-                           value_at(duration_type{}, l, i)
-                             + value_at(duration_type{}, r, i)));
+
+      const auto lv = value_at(L{}, l, i);
+      const auto rv = value_at(R{}, r, i);
+
+      auto res = impl::evaluate(lv, rv);
+
+      if (auto r = std::get_if<typename impl::arithmetic_result_type>(&res)) {
+        check(append_builder(typename impl::result_type{}, *b, *r));
+      } else {
+        check(b->AppendNull());
+        auto e = std::get<const char*>(res);
+        if (std::ranges::find(warnings, e) == std::ranges::end(warnings)) {
+          warnings.push_back(e);
+        }
+      }
+    }
+    for (const auto& w : warnings) {
+      warning_emitter(w);
     }
     return finish(*b);
   }
@@ -77,8 +306,8 @@ struct EvalBinOp<ast::binary_op::add, duration_type, duration_type> {
 
 template <>
 struct EvalBinOp<ast::binary_op::add, string_type, string_type> {
-  static auto eval(const arrow::StringArray& l, const arrow::StringArray& r)
-    -> std::shared_ptr<arrow::StringArray> {
+  static auto eval(const arrow::StringArray& l, const arrow::StringArray& r,
+                   auto&&) -> std::shared_ptr<arrow::StringArray> {
     auto b = arrow::StringBuilder{};
     check(b.Reserve(l.length()));
     for (auto i = int64_t{0}; i < l.length(); ++i) {
@@ -95,71 +324,11 @@ struct EvalBinOp<ast::binary_op::add, string_type, string_type> {
   }
 };
 
-template <numeric_type L, numeric_type R>
-struct EvalBinOp<ast::binary_op::mul, L, R> {
-  static auto
-  eval(const type_to_arrow_array_t<L>& l, const type_to_arrow_array_t<R>& r)
-    -> std::shared_ptr<arrow::Array> {
-    auto opts = arrow::compute::ArithmeticOptions{};
-    opts.check_overflow = true;
-    auto res = arrow::compute::Multiply(l, r, opts).ValueOrDie();
-    TENZIR_ASSERT(res.is_array());
-    return res.make_array();
-  }
-};
-
-// TODO: Generalize.
-template <numeric_type T>
-struct EvalBinOp<ast::binary_op::eq, T, T> {
-  static auto
-  eval(const type_to_arrow_array_t<T>& l, const type_to_arrow_array_t<T>& r)
-    -> std::shared_ptr<arrow::BooleanArray> {
-    auto b = arrow::BooleanBuilder{};
-    check(b.Reserve(l.length()));
-    for (auto i = int64_t{0}; i < l.length(); ++i) {
-      auto ln = l.IsNull(i);
-      auto rn = r.IsNull(i);
-      if (ln && rn) {
-        b.UnsafeAppend(true);
-      } else if (ln != rn) {
-        b.UnsafeAppend(false);
-      } else {
-        auto lv = l.Value(i);
-        auto rv = r.Value(i);
-        b.UnsafeAppend(lv == rv);
-      }
-    }
-    return finish(b);
-  }
-};
-
-template <numeric_type T>
-struct EvalBinOp<ast::binary_op::gt, T, T> {
-  static auto
-  eval(const type_to_arrow_array_t<T>& l, const type_to_arrow_array_t<T>& r)
-    -> std::shared_ptr<arrow::BooleanArray> {
-    auto b = arrow::BooleanBuilder{};
-    check(b.Reserve(l.length()));
-    for (auto i = int64_t{0}; i < l.length(); ++i) {
-      auto ln = l.IsNull(i);
-      auto rn = r.IsNull(i);
-      if (ln || rn) {
-        b.UnsafeAppendNull();
-      } else {
-        auto lv = l.Value(i);
-        auto rv = r.Value(i);
-        b.UnsafeAppend(lv > rv);
-      }
-    }
-    return finish(b);
-  }
-};
-
 // TODO: We probably don't want this.
 template <>
 struct EvalBinOp<ast::binary_op::and_, bool_type, bool_type> {
-  static auto eval(const arrow::BooleanArray& l, const arrow::BooleanArray& r)
-    -> std::shared_ptr<arrow::BooleanArray> {
+  static auto eval(const arrow::BooleanArray& l, const arrow::BooleanArray& r,
+                   auto&&) -> std::shared_ptr<arrow::BooleanArray> {
     // TODO: Bad.
     auto has_null = l.null_bitmap() || r.null_bitmap();
     auto has_offset = l.offset() != 0 || r.offset() != 0;
@@ -203,8 +372,8 @@ struct EvalBinOp<ast::binary_op::and_, bool_type, bool_type> {
 template <ast::binary_op Op, concrete_type L>
   requires(Op == ast::binary_op::eq || Op == ast::binary_op::neq)
 struct EvalBinOp<Op, L, null_type> {
-  static auto eval(const type_to_arrow_array_t<L>& l, const arrow::NullArray& r)
-    -> std::shared_ptr<arrow::BooleanArray> {
+  static auto eval(const type_to_arrow_array_t<L>& l, const arrow::NullArray& r,
+                   auto&&) -> std::shared_ptr<arrow::BooleanArray> {
     constexpr auto invert = Op == ast::binary_op::neq;
     // TODO: This is bad.
     TENZIR_UNUSED(r);
@@ -232,17 +401,18 @@ template <ast::binary_op Op, concrete_type R>
   requires((Op == ast::binary_op::eq || Op == ast::binary_op::neq)
            && not std::same_as<R, null_type>)
 struct EvalBinOp<Op, null_type, R> {
-  static auto eval(const arrow::NullArray& l, const type_to_arrow_array_t<R>& r)
-    -> std::shared_ptr<arrow::BooleanArray> {
-    return EvalBinOp<Op, R, null_type>::eval(r, l);
+  static auto
+  eval(const arrow::NullArray& l, const type_to_arrow_array_t<R>& r,
+       auto&& warning_emitter) -> std::shared_ptr<arrow::BooleanArray> {
+    return EvalBinOp<Op, R, null_type>::eval(r, l, warning_emitter);
   }
 };
 
 template <ast::binary_op Op>
   requires(Op == ast::binary_op::eq || Op == ast::binary_op::neq)
 struct EvalBinOp<Op, string_type, string_type> {
-  static auto eval(const arrow::StringArray& l, const arrow::StringArray& r)
-    -> std::shared_ptr<arrow::BooleanArray> {
+  static auto eval(const arrow::StringArray& l, const arrow::StringArray& r,
+                   auto&&) -> std::shared_ptr<arrow::BooleanArray> {
     // TODO: This is bad.
     constexpr auto invert = Op == ast::binary_op::neq;
     auto b = arrow::BooleanBuilder{};
@@ -278,7 +448,9 @@ auto evaluator::eval(const ast::binary_expr& x) -> series {
           using RA = type_to_arrow_array_t<R>;
           auto& la = caf::get<LA>(*l.array);
           auto& ra = caf::get<RA>(*r.array);
-          auto oa = EvalBinOp<Op, L, R>::eval(la, ra);
+          auto oa = EvalBinOp<Op, L, R>::eval(la, ra, [&](const char* w) {
+            diagnostic::warning("{}", w).primary(x).emit(ctx_);
+          });
           auto ot = type::from_arrow(*oa->type());
           return series{std::move(ot), std::move(oa)};
         } else {

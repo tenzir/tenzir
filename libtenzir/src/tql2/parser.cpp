@@ -739,8 +739,8 @@ private:
     }
   }
 
-  auto parse_function_call(std::optional<ast::expression> subject, entity fn)
-    -> function_call {
+  auto parse_function_call(std::optional<ast::expression> subject,
+                           entity fn) -> function_call {
     expect(tk::lpar);
     auto scope = ignore_newlines(true);
     auto args = std::vector<ast::expression>{};
@@ -791,7 +791,7 @@ private:
     X(slash, div);
     X(greater, gt);
     X(greater_equal, ge);
-    X(less, le);
+    X(less, lt);
     X(less_equal, le);
     X(equal_equal, eq);
     X(bang_equal, neq);
