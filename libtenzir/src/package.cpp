@@ -7,6 +7,8 @@
 
 #include "tenzir/package.hpp"
 
+#include <tenzir/type.hpp>
+
 #include <caf/typed_event_based_actor.hpp>
 
 namespace tenzir {
@@ -31,6 +33,7 @@ namespace tenzir {
     const auto* x = caf::get_if<view<record>>(&value);                         \
     if (not x) {                                                               \
       return diagnostic::error(#name " must be a record")                      \
+        .note("got {}", value)                                                 \
         .note("invalid package definition")                                    \
         .to_error();                                                           \
     }                                                                          \
@@ -98,6 +101,36 @@ namespace tenzir {
         .to_error();                                                           \
     }                                                                          \
     result.name = *parsed;                                                     \
+    continue;                                                                  \
+  }
+
+#define TRY_ASSIGN_LIST_TO_RESULT(name, inner_type)                            \
+  if (key == #name) {                                                          \
+    const auto* item_list = caf::get_if<view<list>>(&value);                   \
+    if (not item_list) {                                                       \
+      return diagnostic::error(#name " must be a list")                        \
+        .note("got a {} instead", type::infer(materialize(value)))             \
+        .to_error();                                                           \
+    }                                                                          \
+    size_t pos = 0;                                                            \
+    for (auto item_view : *item_list) {                                        \
+      const auto* item_record = caf::get_if<view<record>>(&item_view);         \
+      if (not item_record) {                                                   \
+        return diagnostic::error("list item must be a record")                 \
+          .note("while trying to parse item {} of list " #name, pos)           \
+          .note("got a {} instead", type::infer(materialize(item_view)))       \
+          .to_error();                                                         \
+      }                                                                        \
+      auto item = inner_type::parse(*item_record);                             \
+      if (not item) {                                                          \
+        return diagnostic::error(item.error())                                 \
+          .note("invalid package definition")                                  \
+          .to_error();                                                         \
+      }                                                                        \
+      result.name.push_back(*item);                                            \
+      ++pos;                                                                   \
+    }                                                                          \
+    continue;                                                                  \
   }
 
 auto package_input::parse(const view<record>& data)
@@ -109,6 +142,7 @@ auto package_input::parse(const view<record>& data)
     TRY_ASSIGN_STRING_TO_RESULT(type)
     TRY_ASSIGN_STRING_TO_RESULT2(default, default_);
     return diagnostic::error("unknown key '{}'", key)
+      .note("while trying to parse 'input'")
       .note("invalid package source definition")
       .to_error();
   }
@@ -125,6 +159,7 @@ auto package_source::parse(const view<record>& data)
     TRY_ASSIGN_STRING_TO_RESULT(directory)
     TRY_ASSIGN_STRING_TO_RESULT(revision)
     return diagnostic::error("unknown key '{}'", key)
+      .note("while trying to parse 'source' entry")
       .note("invalid package source definition")
       .to_error();
   }
@@ -139,7 +174,6 @@ auto package_deployment::parse(const view<record>& data)
   auto result = package_deployment{};
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRUCTURE_TO_RESULT(source, package_source);
-    // result.inputs[key] = "fasdf";
     TRY_ASSIGN_STRINGMAP_TO_RESULT(inputs);
   }
   return result;
@@ -152,9 +186,18 @@ auto package_pipeline::parse(const view<record>& data)
     TRY_ASSIGN_STRING_TO_RESULT(name)
     TRY_ASSIGN_STRING_TO_RESULT(description)
     TRY_ASSIGN_STRING_TO_RESULT(definition)
-    if (key == "labels") {
+    if (key == "disabled") {
+      const auto* disabled = caf::get_if<view<bool>>(&value);
+      if (not disabled) {
+        return diagnostic::error("'disabled' must be a bool")
+          .note("invalid package definition")
+          .to_error();
+      }
+      result.disabled = *disabled;
+      continue;
     }
     return diagnostic::error("unknown key '{}'", key)
+      .note("while trying to parse 'pipeline' entry")
       .note("invalid package source definition")
       .to_error();
   }
@@ -176,6 +219,7 @@ auto package_context::parse(const view<record>& data)
 
 auto package_snippet::parse(const view<record>& data)
   -> caf::expected<package_snippet> {
+  TENZIR_INFO("parsing data {}", data);
   auto result = package_snippet{};
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRING_TO_RESULT(name);
@@ -192,13 +236,15 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
     TRY_ASSIGN_STRING_TO_RESULT(id);
     TRY_ASSIGN_STRING_TO_RESULT(name);
     TRY_ASSIGN_STRING_TO_RESULT(author);
+    TRY_ASSIGN_STRING_TO_RESULT(description);
     TRY_ASSIGN_MAP_TO_RESULT(inputs, package_input);
     TRY_ASSIGN_MAP_TO_RESULT(pipelines, package_pipeline);
     TRY_ASSIGN_MAP_TO_RESULT(contexts, package_context);
-    TRY_ASSIGN_MAP_TO_RESULT(snippets, package_snippet);
     TRY_ASSIGN_STRUCTURE_TO_RESULT(deployment, package_deployment);
+    TRY_ASSIGN_LIST_TO_RESULT(snippets, package_snippet);
     // Reject unknown keys in the package definition.
     return diagnostic::error("unknown key '{}'", key)
+      .note("while trying to parse 'package' entry")
       .note("invalid package definition")
       .to_error();
   }

@@ -177,8 +177,7 @@ public:
 class package_pipeline_subscriber_plugin : public virtual plugin {
 public:
   virtual void
-  update_pipelines(std::string package_id,
-                   detail::flat_map<std::string, package_pipeline> pipelines,
+  update_pipelines(std::string package_id, package::pipelines_field pipelines,
                    caf::event_based_actor* self,
                    std::function<void(caf::error)> callback) const
     = 0;

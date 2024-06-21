@@ -35,32 +35,6 @@ struct package_source final {
   }
 };
 
-struct package_autostart {
-  bool created = false;
-  bool completed = false;
-  bool failed = false;
-
-  friend auto inspect(auto& f, package_autostart& x) -> bool {
-    return f.object(x)
-      .pretty_name("package_autostart")
-      .fields(f.field("created", x.created), f.field("failed", x.failed),
-              f.field("completed", x.completed));
-  }
-};
-
-struct package_autodelete {
-  bool completed = false;
-  bool failed = false;
-  bool stopped = false;
-
-  friend auto inspect(auto& f, package_autodelete& x) -> bool {
-    return f.object(x)
-      .pretty_name("package_autodelete")
-      .fields(f.field("failed", x.failed), f.field("stopped", x.stopped),
-              f.field("completed", x.completed));
-  }
-};
-
 // TODO: Reconsider naming
 struct package_deployment final {
   package_source source = {};
@@ -77,10 +51,10 @@ struct package_deployment final {
 };
 
 struct package_input final {
-  std::string name; // required
-  std::string description;
-  std::string type; // required
-  std::string default_;
+  std::string name = {}; // required
+  std::string description = {};
+  std::string type = {}; // required
+  std::string default_ = {};
 
   static auto parse(const view<record>& data) -> caf::expected<package_input>;
 
@@ -93,26 +67,26 @@ struct package_input final {
 };
 
 struct package_pipeline final {
-  struct label {
-    std::string text;
-    std::string color;
+  // struct label {
+  //   std::string text = {};
+  //   std::string color = {};
 
-    friend auto inspect(auto& f, label& x) -> bool {
-      return f.object(x).pretty_name("label").fields(f.field("text", x.text),
-                                                     f.field("color", x.color));
-    }
-  };
+  //   friend auto inspect(auto& f, label& x) -> bool {
+  //     return f.object(x).pretty_name("label").fields(f.field("text", x.text),
+  //                                                    f.field("color",
+  //                                                    x.color));
+  //   }
+  // };
+  // std::vector<label> labels = {};
 
-  std::string name;
-  std::string description;
-  std::string definition; // required
-  std::vector<label> labels;
-  bool disabled;
-  // FIXME: add these fields
-  // duration ttl = caf::infinite;
-  package_autostart autostart_params = {};
-  package_autodelete autodelete_params = {};
-  std::optional<duration> retry_delay = {};
+  std::string name = {};
+  std::string description = {};
+  std::string definition = {}; // required
+  // TODO: Consider renaming to `disabled_by_default`.
+  bool disabled = false;
+  // TODO: Consider adding `do_not_start` and `unstoppable` fields
+  // to disable autostart
+  std::optional<duration> retry_on_error = {};
 
   static auto
   parse(const view<record>& data) -> caf::expected<package_pipeline>;
@@ -121,14 +95,16 @@ struct package_pipeline final {
     return f.object(x)
       .pretty_name("package_pipeline")
       .fields(f.field("name", x.name), f.field("description", x.description),
-              f.field("definition", x.definition), f.field("labels", x.labels),
-              f.field("disabled", x.disabled));
+              f.field("definition", x.definition),
+              // f.field("labels", x.labels),
+              f.field("disabled", x.disabled),
+              f.field("retry_on_error", x.retry_on_error));
   }
 };
 
 struct package_context final {
-  std::string type;
-  std::string description;
+  std::string type = {};
+  std::string description = {};
   detail::flat_map<std::string, std::string> arguments;
 
   static auto parse(const view<record>& data) -> caf::expected<package_context>;
@@ -142,9 +118,9 @@ struct package_context final {
 };
 
 struct package_snippet final {
-  std::string name;
-  std::string description;
-  std::string definition; // required
+  std::string name = {};
+  std::string description = {};
+  std::string definition = {}; // required
 
   static auto parse(const view<record>& data) -> caf::expected<package_snippet>;
 
@@ -160,10 +136,17 @@ struct package final {
   std::string id = {};   // required
   std::string name = {}; // required
   std::string author = {};
-  detail::flat_map<std::string, package_input> inputs;
-  detail::flat_map<std::string, package_pipeline> pipelines;
-  detail::flat_map<std::string, package_context> contexts;
-  detail::flat_map<std::string, package_snippet> snippets;
+  std::string description = {};
+
+  using inputs_field = detail::flat_map<std::string, package_input>;
+  using pipelines_field = detail::flat_map<std::string, package_pipeline>;
+  using contexts_field = detail::flat_map<std::string, package_context>;
+  using snippets_field = std::vector<package_snippet>;
+
+  inputs_field inputs;
+  pipelines_field pipelines;
+  contexts_field contexts;
+  snippets_field snippets;
 
   package_deployment deployment = {};
 
