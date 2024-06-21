@@ -67,18 +67,6 @@ struct package_input final {
 };
 
 struct package_pipeline final {
-  // struct label {
-  //   std::string text = {};
-  //   std::string color = {};
-
-  //   friend auto inspect(auto& f, label& x) -> bool {
-  //     return f.object(x).pretty_name("label").fields(f.field("text", x.text),
-  //                                                    f.field("color",
-  //                                                    x.color));
-  //   }
-  // };
-  // std::vector<label> labels = {};
-
   std::string name = {};
   std::string description = {};
   std::string definition = {}; // required
@@ -132,21 +120,35 @@ struct package_snippet final {
   }
 };
 
+struct package_inputs_map
+  : public detail::flat_map<std::string, package_input> {
+  using super = detail::flat_map<std::string, package_input>;
+  using super::super;
+};
+
+struct package_pipelines_map
+  : public detail::flat_map<std::string, package_pipeline> {
+  using super = detail::flat_map<std::string, package_pipeline>;
+  using super::super;
+};
+
+struct package_contexts_map : detail::flat_map<std::string, package_context> {
+  using super = detail::flat_map<std::string, package_context>;
+  using super::super;
+};
+
+using package_snippets_list = std::vector<package_snippet>;
+
 struct package final {
   std::string id = {};   // required
   std::string name = {}; // required
   std::string author = {};
   std::string description = {};
 
-  using inputs_field = detail::flat_map<std::string, package_input>;
-  using pipelines_field = detail::flat_map<std::string, package_pipeline>;
-  using contexts_field = detail::flat_map<std::string, package_context>;
-  using snippets_field = std::vector<package_snippet>;
-
-  inputs_field inputs;
-  pipelines_field pipelines;
-  contexts_field contexts;
-  snippets_field snippets;
+  package_inputs_map inputs;
+  package_pipelines_map pipelines;
+  package_contexts_map contexts;
+  package_snippets_list snippets;
 
   package_deployment deployment = {};
 

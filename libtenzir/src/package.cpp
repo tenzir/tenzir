@@ -219,7 +219,6 @@ auto package_context::parse(const view<record>& data)
 
 auto package_snippet::parse(const view<record>& data)
   -> caf::expected<package_snippet> {
-  TENZIR_INFO("parsing data {}", data);
   auto result = package_snippet{};
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRING_TO_RESULT(name);

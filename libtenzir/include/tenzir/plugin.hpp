@@ -156,40 +156,6 @@ public:
   virtual component_plugin_actor
   make_component(node_actor::stateful_pointer<node_state> node) const
     = 0;
-
-  // Option (1): Hard-coded pipeline_manager and context_manager logic in
-  //             the packages plugin, no changes here.
-  // --
-
-  // Option (2): Generic live config updates, every component decides what
-  //             it can handle, packages plugin has logic to know that the
-  //             "pipeline-manager" plugin updates need to be handles before
-  //             the "context-manager".
-  // virtual std::vector<std::string> live_config_updates() const;
-};
-
-// Option (3): Generic package-config updates, the packages plugin has logic
-//             to know that all context subscriber plugins need to be updated
-//             before all pipeline subscriber plugins.
-
-// -- package plugin -----------------------------------------------------------
-
-class package_pipeline_subscriber_plugin : public virtual plugin {
-public:
-  virtual void
-  update_pipelines(std::string package_id, package::pipelines_field pipelines,
-                   caf::event_based_actor* self,
-                   std::function<void(caf::error)> callback) const
-    = 0;
-};
-
-class package_context_subscriber_plugin : public virtual plugin {
-public:
-  virtual void update_contexts(std::optional<std::string> package_id,
-                               std::vector<package_context> contexts,
-                               caf::event_based_actor* self,
-                               std::function<void(caf::error)> callback) const
-    = 0;
 };
 
 // -- command plugin -----------------------------------------------------------

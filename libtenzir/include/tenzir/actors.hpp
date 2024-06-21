@@ -447,6 +447,10 @@ using pipeline_executor_actor = typed_actor_fwd<
   // Resume the pipeline execution. No-op if it was not paused.
   auto(atom::resume)->caf::result<void>>::unwrap;
 
+using package_pipelines_subscriber_actor
+  = typed_actor_fwd<auto(atom::package_add, std::string, package_pipelines_map)
+                      ->caf::result<void>>::unwrap;
+
 using terminator_actor = typed_actor_fwd<
   // Shut down the given actors.
   auto(atom::shutdown, std::vector<caf::actor>)->caf::result<atom::done>>::unwrap;
