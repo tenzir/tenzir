@@ -11,7 +11,7 @@ Analytics and adds support for expiring entries in lookup tables.
 
 ![Tenzir v4.17](tenzir-v4.17.excalidraw.svg)
 
-[github-release]: https://github.com/tenzir/tenzir/releases/tag/v4.17.0
+[github-release]: https://github.com/tenzir/tenzir/releases/tag/v4.17.1
 
 <!-- truncate -->
 
