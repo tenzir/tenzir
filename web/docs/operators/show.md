@@ -30,7 +30,6 @@ Available aspects:
 - `contexts`: shows all available contexts.
 - `formats`: shows all available [formats](../formats.md).
 - `operators`: shows all available [operators](../operators.md).
-- `partitions`: shows all table partitions of a remote node.
 - `pipelines`: shows all managed pipelines of a remote node.
 - `plugins`: shows all loaded plugins.
 
@@ -61,11 +60,10 @@ Show all transformations:
 show operators | where transformation == true
 ```
 
-Show all fields and partitions at a node:
+Show all fields at a node:
 
 ```
 show fields
-show partitions
 ```
 
 Show all aspects of a node:

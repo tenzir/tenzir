@@ -564,6 +564,29 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
       }
       return result;
     },
+    [self](atom::get, const expression& filter)
+      -> caf::result<std::vector<partition_synopsis_pair>> {
+      auto result = std::vector<partition_synopsis_pair>{};
+      const auto candidates = self->state.lookup(filter);
+      if (not candidates) {
+        return candidates.error();
+      }
+      for (const auto& [schema, candidate] : candidates->candidate_infos) {
+        const auto& partition_synopses
+          = self->state.synopses_per_type.find(schema);
+        TENZIR_ASSERT(partition_synopses
+                      != self->state.synopses_per_type.end());
+        for (const auto& partition : candidate.partition_infos) {
+          const auto& synopsis
+            = partition_synopses->second.find(partition.uuid);
+          if (synopsis == partition_synopses->second.end()) {
+            continue;
+          }
+          result.push_back({synopsis->first, synopsis->second});
+        }
+      }
+      return result;
+    },
     [self](atom::erase, uuid partition) {
       self->state.erase(partition);
       return atom::ok_v;

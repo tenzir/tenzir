@@ -200,8 +200,14 @@ using catalog_actor = typed_actor_fwd<
     ->caf::result<atom::ok>,
   // Merge a set of partition synopses.
   auto(atom::merge, std::vector<partition_synopsis_pair>)->caf::result<atom::ok>,
-  // Get *ALL* partition synopses stored in the catalog.
+  // Get *ALL* partition synopses stored in the catalog, optionally filtered
+  // with an expression to filter the candidate set.
+  // Note that this returns a pointer into the catalog's internal data
+  // structures, which is inherently unsafe to transfer between processes. The
+  // data pointed to must not be mutated. Functionality that depends on this
+  // should instead be moved inside of the catalog itself.
   auto(atom::get)->caf::result<std::vector<partition_synopsis_pair>>,
+  auto(atom::get, expression)->caf::result<std::vector<partition_synopsis_pair>>,
   // Erase a single partition synopsis.
   auto(atom::erase, uuid)->caf::result<atom::ok>,
   // Atomatically replace a set of partititon synopses with another.
