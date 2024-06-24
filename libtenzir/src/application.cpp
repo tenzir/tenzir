@@ -260,7 +260,8 @@ void render_error(const command& root, const caf::error& err,
   if (!err || err == ec::silent)
     // The user most likely killed the process via CTRL+C, print nothing.
     return;
-  os << render(err) << '\n';
+  const auto pretty_diagnostics = true;
+  os << render(err, pretty_diagnostics) << '\n';
   if (err.category() == caf::type_id_v<tenzir::ec>) {
     auto x = static_cast<tenzir::ec>(err.code());
     switch (x) {
