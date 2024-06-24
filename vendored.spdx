@@ -160,8 +160,8 @@ SPDXID: SPDXRef-file-libtenzir-include-tenzir-absorb-line-hpp
 FileChecksum: SHA1: c4bbdb45b992feee40d9227911f4649ebd1eec2f
 FileChecksum: SHA256: 845dcd0d5bb72195d2591e3d73eb200f7361594a263272db079dbfb714842e4f
 FileCopyrightText: (c) 2017 user763305 et al.
-LicenseConcluded: CC-BY-SA-3.0 
-LicenseInfoInFile: CC-BY-SA-3.0 
+LicenseConcluded: CC-BY-SA-3.0
+LicenseInfoInFile: CC-BY-SA-3.0
 LicenseComments: See https://stackoverflow.com/a/6089413/92560
 
 Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-include-tenzir-absorb-line-hpp
@@ -182,8 +182,8 @@ SPDXID: SPDXRef-file-scripts-clang-format-diff-py
 FileChecksum: SHA1: 3657ca7f17cbabe06a6d7b2c5c20e9c0ad70eb0e
 FileChecksum: SHA256: e38a916123daaaab8abe57765be6239900d47f67b3fb49b669e7d316d6dda528
 FileCopyrightText: (c) 2003-2017 University of Illinois at Urbana-Champaign
-LicenseConcluded: Apache-2.0 WITH LLVM-exception 
-LicenseInfoInFile: Apache-2.0 WITH LLVM-exception 
+LicenseConcluded: Apache-2.0 WITH LLVM-exception
+LicenseInfoInFile: Apache-2.0 WITH LLVM-exception
 LicenseComments: Taken from LLVM.
 
 Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-scripts-clang-format-diff-py
@@ -254,14 +254,13 @@ LicenseComments: https://github.com/mariusbancila/croncpp
 
 Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-include-tenzir-croncpp-hpp
 
-
 FileName: ./libtenzir/include/tenzir/detail/checked_math.hpp
 SPDXID: SPDXRef-file-libtenzir-include-tenzir-checked_math-hpp
-FileChecksum: SHA1: ad4eefa47a40f96557e8b9ff8404c849f37a760f
-FileChecksum: SHA256: 6ade4ac5a116784dec22ba9c8036b255b690ca40223ea5fce2e54e8bf807d8ca
-FileCopyrightText: (c) Moritz Beutel 
-LicenseConcluded: Boost Software License - Version 1.0
-LicenseInfoInFile: Boost Software License - Version 1.0
+FileChecksum: SHA1: TODO
+FileChecksum: SHA256: TODO
+FileCopyrightText: Copyright 2018, 2020 Moritz Beutel
+LicenseConcluded: TODO
+LicenseInfoInFile: TODO
 LicenseComments: https://github.com/mbeutel/slowmath
 
 Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-include-tenzir-checked_math-hpp

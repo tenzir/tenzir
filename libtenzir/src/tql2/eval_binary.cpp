@@ -8,6 +8,7 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/checked_math.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/table_slice_builder.hpp"
@@ -49,17 +50,27 @@ consteval auto is_arithmetic(ast::binary_op op) -> bool {
   }
 }
 
-consteval auto is_equality_related(ast::binary_op op) -> bool {
+constexpr auto result_if_both_null(ast::binary_op op) -> std::optional<bool> {
+  using enum ast::binary_op;
   switch (op) {
-    using enum ast::binary_op;
     case eq:
-    case neq:
     case ge:
     case le:
       return true;
-    default:
+    case neq:
       return false;
+    case add:
+    case sub:
+    case mul:
+    case div:
+    case gt:
+    case lt:
+    case and_:
+    case or_:
+    case in:
+      return std::nullopt;
   }
+  TENZIR_UNREACHABLE();
 }
 
 consteval auto is_relational(ast::binary_op op) -> bool {
@@ -78,19 +89,15 @@ consteval auto is_relational(ast::binary_op op) -> bool {
 }
 
 template <ast::binary_op Op, class L, class R>
-struct Binary_Op_Kernel;
+struct BinOpKernel;
 
 template <ast::binary_op Op, integral_type L, integral_type R>
   requires(is_arithmetic(Op))
-struct Binary_Op_Kernel<Op, L, R> {
-  using L_data = type_to_data_t<L>;
-  using R_data = type_to_data_t<R>;
-  using arithmetic_result_type = std::common_type_t<L_data, R_data>;
-  using result_type = data_to_type_t<arithmetic_result_type>;
+struct BinOpKernel<Op, L, R> {
+  using result = std::common_type_t<type_to_data_t<L>, type_to_data_t<R>>;
 
-  static auto
-  evaluate(L_data l,
-           R_data r) -> std::variant<arithmetic_result_type, const char*> {
+  static auto evaluate(type_to_data_t<L> l, type_to_data_t<R> r)
+    -> std::variant<result, const char*> {
     using enum ast::binary_op;
     if constexpr (Op == add) {
       return checked_math::add(l, r);
@@ -110,12 +117,11 @@ struct Binary_Op_Kernel<Op, L, R> {
 template <ast::binary_op Op, numeric_type L, numeric_type R>
   requires(is_arithmetic(Op)
            and (std::same_as<double_type, L> or std::same_as<double_type, R>))
-struct Binary_Op_Kernel<Op, L, R> {
-  using result_type = double_type;
-  using arithmetic_result_type = double;
+struct BinOpKernel<Op, L, R> {
+  using result = double;
 
   static auto evaluate(type_to_data_t<L> l, type_to_data_t<R> r)
-    -> std::variant<arithmetic_result_type, const char*> {
+    -> std::variant<result, const char*> {
     using enum ast::binary_op;
     if constexpr (Op == add) {
       return static_cast<double>(l) + static_cast<double>(r);
@@ -127,18 +133,15 @@ struct Binary_Op_Kernel<Op, L, R> {
       return static_cast<double>(l) * static_cast<double>(r);
     }
     TENZIR_UNREACHABLE();
-    return arithmetic_result_type{};
   }
 };
 
 template <>
-struct Binary_Op_Kernel<ast::binary_op::sub, int64_type, uint64_type> {
-  using result_type = int64_type;
-  using arithmetic_result_type = int64_t;
+struct BinOpKernel<ast::binary_op::sub, int64_type, uint64_type> {
+  using result = int64_t;
 
-  static auto
-  evaluate(int64_t l,
-           uint64_t r) -> std::variant<arithmetic_result_type, const char*> {
+  static auto evaluate(int64_t l, uint64_t r)
+    -> std::variant<result, const char*> {
     // r > int_max
     if (r > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
       return "subtraction overflow";
@@ -156,12 +159,11 @@ struct Binary_Op_Kernel<ast::binary_op::sub, int64_type, uint64_type> {
 
 // division always yields doubles
 template <numeric_type L, numeric_type R>
-struct Binary_Op_Kernel<ast::binary_op::div, L, R> {
-  using result_type = double_type;
-  using arithmetic_result_type = double;
+struct BinOpKernel<ast::binary_op::div, L, R> {
+  using result = double;
 
   static auto evaluate(type_to_data_t<L> l, type_to_data_t<R> r)
-    -> std::variant<arithmetic_result_type, const char*> {
+    -> std::variant<result, const char*> {
     if (r == decltype(r){}) {
       return "division by zero";
     }
@@ -170,25 +172,20 @@ struct Binary_Op_Kernel<ast::binary_op::div, L, R> {
 };
 
 template <>
-struct Binary_Op_Kernel<ast::binary_op::sub, time_type, duration_type> {
-  using result_type = time_type;
-  using arithmetic_result_type = time;
+struct BinOpKernel<ast::binary_op::sub, time_type, duration_type> {
+  using result = time;
 
-  static auto
-  evaluate(time l,
-           duration r) -> std::variant<arithmetic_result_type, const char*> {
+  static auto evaluate(time l, duration r)
+    -> std::variant<result, const char*> {
     return l - r;
   }
 };
 
 template <>
-struct Binary_Op_Kernel<ast::binary_op::sub, time_type, time_type> {
-  using result_type = duration_type;
-  using arithmetic_result_type = duration;
+struct BinOpKernel<ast::binary_op::sub, time_type, time_type> {
+  using result = duration;
 
-  static auto
-  evaluate(time l,
-           time r) -> std::variant<arithmetic_result_type, const char*> {
+  static auto evaluate(time l, time r) -> std::variant<result, const char*> {
     return l - r;
   }
 };
@@ -196,12 +193,11 @@ struct Binary_Op_Kernel<ast::binary_op::sub, time_type, time_type> {
 template <ast::binary_op Op, basic_type L, basic_type R>
   requires(is_relational(Op) and not(integral_type<L> and integral_type<R>)
            and requires(type_to_data_t<L> l, type_to_data_t<R> r) { l <=> r; })
-struct Binary_Op_Kernel<Op, L, R> {
-  using result_type = bool_type;
-  using arithmetic_result_type = bool;
+struct BinOpKernel<Op, L, R> {
+  using result = bool;
 
   static auto evaluate(view<type_to_data_t<L>> l, view<type_to_data_t<R>> r)
-    -> std::variant<arithmetic_result_type, const char*> {
+    -> std::variant<result, const char*> {
     using enum ast::binary_op;
 
     if constexpr (std::same_as<L, string_type>
@@ -229,12 +225,11 @@ struct Binary_Op_Kernel<Op, L, R> {
 
 template <ast::binary_op Op, integral_type L, integral_type R>
   requires(is_relational(Op))
-struct Binary_Op_Kernel<Op, L, R> {
-  using result_type = bool_type;
-  using arithmetic_result_type = bool;
+struct BinOpKernel<Op, L, R> {
+  using result = bool;
 
   static auto evaluate(type_to_data_t<L> l, type_to_data_t<R> r)
-    -> std::variant<arithmetic_result_type, const char*> {
+    -> std::variant<result, const char*> {
     using enum ast::binary_op;
     if constexpr (Op == eq) {
       return std::cmp_equal(l, r);
@@ -260,35 +255,38 @@ struct EvalBinOp;
 
 // specialization for cases where a kernel is implemented
 template <ast::binary_op Op, concrete_type L, concrete_type R>
-  requires caf::detail::is_complete<Binary_Op_Kernel<Op, L, R>>
+  requires caf::detail::is_complete<BinOpKernel<Op, L, R>>
 struct EvalBinOp<Op, L, R> {
   static auto
   eval(const type_to_arrow_array_t<L>& l, const type_to_arrow_array_t<R>& r,
        auto&& warning_emitter) -> std::shared_ptr<arrow::Array> {
-    using impl = Binary_Op_Kernel<Op, L, R>;
-
-    auto b
-      = impl::result_type::make_arrow_builder(arrow::default_memory_pool());
-    detail::stack_vector<const char*, 2 * sizeof(const char*)> warnings;
+    using kernel = BinOpKernel<Op, L, R>;
+    using result = kernel::result;
+    using result_type = data_to_type_t<result>;
+    auto b = result_type::make_arrow_builder(arrow::default_memory_pool());
+    auto warnings
+      = detail::stack_vector<const char*, 2 * sizeof(const char*)>{};
     for (auto i = int64_t{0}; i < l.length(); ++i) {
-      const auto l_is_null = l.IsNull(i);
-      const auto r_is_null = r.IsNull(i);
-      if (l_is_null or r_is_null) {
-        if (is_equality_related(Op) and l_is_null and r_is_null) {
-          check(b->Append(true));
-          continue;
+      auto ln = l.IsNull(i);
+      auto rn = r.IsNull(i);
+      if (ln && rn) {
+        auto constexpr res = result_if_both_null(Op);
+        if constexpr (res) {
+          check(b->Append(*res));
+        } else {
+          check(b->AppendNull());
         }
+        continue;
+      }
+      if (ln || rn) {
         check(b->AppendNull());
         continue;
       }
-
-      const auto lv = value_at(L{}, l, i);
-      const auto rv = value_at(R{}, r, i);
-
-      auto res = impl::evaluate(lv, rv);
-
-      if (auto r = std::get_if<typename impl::arithmetic_result_type>(&res)) {
-        check(append_builder(typename impl::result_type{}, *b, *r));
+      auto lv = value_at(L{}, l, i);
+      auto rv = value_at(R{}, r, i);
+      auto res = kernel::evaluate(lv, rv);
+      if (auto r = std::get_if<result>(&res)) {
+        check(append_builder(result_type{}, *b, *r));
       } else {
         check(b->AppendNull());
         auto e = std::get<const char*>(res);
@@ -297,7 +295,7 @@ struct EvalBinOp<Op, L, R> {
         }
       }
     }
-    for (const auto& w : warnings) {
+    for (auto&& w : warnings) {
       warning_emitter(w);
     }
     return finish(*b);
