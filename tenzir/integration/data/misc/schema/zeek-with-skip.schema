@@ -3,15 +3,15 @@ type port = uint64
 
 type zeek.conn_id = record{
   orig_h: ip,
-  orig_p: port,
+  orig_p: uint64,
   resp_h: ip,
-  resp_p: port
+  resp_p: uint64
 }
 
 type zeek.radius = record{
   _path: string,
   _write_ts: time,
-  ts: timestamp,
+  ts: time,
   uid: string #index=hash,
   id: zeek.conn_id,
   username: string #skip,

@@ -7,7 +7,7 @@ type sysmon.ProcessCreation = record {
     // custom tag mapped to event. i.e ATT&CK technique ID
     RuleName: string,
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // Process Guid of the process that got spawned/created (child)
     ProcessGuid: string,
     // Process ID used by the os to identify the created process (child)
@@ -63,7 +63,7 @@ type sysmon.ProcessAccess = record {
     // custom tag mapped to event. i.e ATT&CK technique ID
     RuleName: string,
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // Process Guid of the source process that opened another process. It is derived from a truncated part of the machine GUID, the process start-time and the process token ID.
     SourceProcessGuid: string,
     // Process ID used by the os to identify the source process that opened another process. Derived partially from the EPROCESS kernel structure
@@ -92,7 +92,7 @@ type sysmon.FileCreate = record {
     // custom tag mapped to event. i.e ATT&CK technique ID
     RuleName: string,
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // Process Guid of the process that created the file
     ProcessGuid: string,
     // Process ID used by the os to identify the process that created the file (child)
@@ -102,7 +102,7 @@ type sysmon.FileCreate = record {
     // Name of the file
     TargetFilename: string,
     // File creation time
-    CreationUtcTime: timestamp,
+    CreationUtcTime: time,
 }
 
 // Registry key and value create and delete operations map to this event type,
@@ -114,7 +114,7 @@ type sysmon.RegistryEventObjectCreateAndDelete = record {
     // registry event. Either Create or Delete
     EventType: string,
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // Process Guid of the process that created or deleted a registry key
     ProcessGuid: string,
     // Process ID used by the os to identify the process that created or deleted a registry key
@@ -133,7 +133,7 @@ type sysmon.RegistryEventValueSet = record {
     // registry event. Registry values modifications
     EventType: string,
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // Process Guid of the process that modified a registry value
     ProcessGuid: string,
     // Process ID used by the os to identify the process that that modified a registry value
@@ -154,7 +154,7 @@ type sysmon.RegistryEventKeyAndValueRename = record {
     // registry event. Registry key and value renamed
     EventType: string,
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // Process Guid of the process that renamed a registry value and key
     ProcessGuid: string,
     // Process ID used by the os to identify the process that renamed a registry value and key
@@ -177,7 +177,7 @@ type sysmon.FileCreateStreamHash = record {
     // custom tag mapped to event. i.e ATT&CK technique ID
     RuleName: string,
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // Process Guid of the process that created the named file stream
     ProcessGuid: string,
     // Process ID used by the os to identify the process that created the named file stream
@@ -187,7 +187,7 @@ type sysmon.FileCreateStreamHash = record {
     // Name of the file
     TargetFilename: string,
     // File download time
-    CreationUtcTime: timestamp,
+    CreationUtcTime: time,
     // hash is a full hash of the file with the algorithms in the HashType field
     Hash: string,
 }
@@ -195,7 +195,7 @@ type sysmon.FileCreateStreamHash = record {
 // This event logs when the local sysmon configuration is updated.
 type sysmon.SysmonConfigStateChanged = record {
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // name of the sysmon config file being updated
     Configuration: string,
     // hash (SHA1) of the sysmon config file being updated
@@ -210,7 +210,7 @@ type sysmon.PipeCreated = record {
     // custom tag mapped to event. i.e ATT&CK technique ID
     RuleName: string,
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // Process Guid of the process that created the pipe
     ProcessGuid: string,
     // Process ID used by the os to identify the process that created the pipe
@@ -229,7 +229,7 @@ type sysmon.PipeConnected = record {
     // custom tag mapped to event. i.e ATT&CK technique ID
     RuleName: string,
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // Process Guid of the process that connected the pipe
     ProcessGuid: string,
     // Process ID used by the os to identify the process that connected the pipe
@@ -249,7 +249,7 @@ type sysmon.WmiEventFilter = record {
     // wmievent type
     EventType: string,
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // wmievent filter operation
     Operation: string,
     // user that created the wmi filter
@@ -272,7 +272,7 @@ type sysmon.ProcessChangedFileCreationTime = record {
     // custom tag mapped to event. i.e ATT&CK technique ID
     RuleName: string,
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // Process Guid of the process that changed the file creation time
     ProcessGuid: string,
     // Process ID used by the os to identify the process changing the file creation time
@@ -295,7 +295,7 @@ type sysmon.WmiEventConsumer = record {
     // wmievent type
     EventType: string,
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // wmievent filter operation
     Operation: string,
     // user that created the wmi  consumer
@@ -316,7 +316,7 @@ type sysmon.WmiEventConsumerToFilter = record {
     // wmievent type
     EventType: string,
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // wmievent filter operation
     Operation: string,
     // user that created the wmi filter
@@ -333,7 +333,7 @@ type sysmon.DNSQuery = record {
     // custom tag mapped to event. i.e ATT&CK technique ID
     RuleName: string,
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // Process Guid of the process that executed the DNS query
     ProcessGuid: string,
     // Process id of the process that executed the DNS query
@@ -353,7 +353,7 @@ type sysmon.FileDelete = record {
     // custom tag mapped to event. i.e ATT&CK technique ID
     RuleName: string,
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // Process Guid of the process that deleted the file
     ProcessGuid: string,
     // Process ID used by the os to identify the process that deleted the file
@@ -380,7 +380,7 @@ type sysmon.NetworkConnection = record {
     // custom tag mapped to event. i.e ATT&CK technique ID
     RuleName: string,
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // Process Guid of the process that made the network connection
     ProcessGuid: string,
     // Process ID used by the os to identify the process that made the network connection
@@ -400,7 +400,7 @@ type sysmon.NetworkConnection = record {
     // name of the host that made the network connection
     SourceHostname: string,
     // source port number
-    SourcePort: port,
+    SourcePort: uint64,
     // name of the source port being used (i.e. netbios-dgm)
     SourcePortName: string,
     // is the destination ip an Ipv6
@@ -410,7 +410,7 @@ type sysmon.NetworkConnection = record {
     // name of the host that received the network connection
     DestinationHostname: string,
     // destination port number
-    DestinationPort: port,
+    DestinationPort: uint64,
     // name of the destination port
     DestinationPortName: string,
 }
@@ -419,7 +419,7 @@ type sysmon.NetworkConnection = record {
 // (started or stopped).
 type sysmon.SysmonServiceStateChanged = record {
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // sysmon service state (i.e. stopped)
     State: string,
     // sysmon version
@@ -434,7 +434,7 @@ type sysmon.ProcessTerminated = record {
     // custom tag mapped to event. i.e ATT&CK technique ID
     RuleName: string,
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // Process Guid of the process that terminated
     ProcessGuid: string,
     // Process ID used by the os to identify the process that terminated
@@ -451,7 +451,7 @@ type sysmon.DriverLoaded = record {
     // custom tag mapped to event. i.e ATT&CK technique ID
     RuleName: string,
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // full path of the driver loaded
     ImageLoaded: string,
     // Hashes captured by sysmon driver
@@ -475,7 +475,7 @@ type sysmon.ImageLoaded = record {
     // custom tag mapped to event. i.e ATT&CK technique ID
     RuleName: string,
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // Process Guid of the process that loaded the image
     ProcessGuid: string,
     // Process ID used by the os to identify the process that loaded the image
@@ -515,7 +515,7 @@ type sysmon.CreateRemoteThread = record {
     // custom tag mapped to event. i.e ATT&CK technique ID
     RuleName: string,
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // Process Guid of the source process that created a thread in another process
     SourceProcessGuid: string,
     // Process ID used by the os to identify the source process that created a thread in another process
@@ -547,7 +547,7 @@ type sysmon.RawAccessRead = record {
     // custom tag mapped to event. i.e ATT&CK technique ID
     RuleName: string,
     // Time in UTC when event was created
-    UtcTime: timestamp,
+    UtcTime: time,
     // Process Guid of the process that conducted reading operations from the drive
     ProcessGuid: string,
     // Process ID used by the os to identify the process that conducted reading operations from the drive

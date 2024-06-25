@@ -257,9 +257,6 @@ public:
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
     (void)order;
-    if (mode_.live) {
-      return do_not_optimize(*this);
-    }
     auto clauses = std::vector<expression>{};
     if (expr_ != caf::none and expr_ != trivially_true_expression()) {
       clauses.push_back(expr_);

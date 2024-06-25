@@ -4,7 +4,7 @@
 #unset_field	NULLVAL
 #path	zeek.conn
 #fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	proto	service	duration	orig_bytes	resp_bytes	conn_state	local_orig	local_resp	missed_bytes	history	orig_pkts	orig_ip_bytes	resp_pkts	resp_ip_bytes	tunnel_parents	community_id	_write_ts
-#types	time	string	addr	port	addr	port	string	string	interval	count	count	string	bool	bool	count	string	count	count	count	count	vector[string]	string	time
+#types	time	string	addr	count	addr	count	string	string	interval	count	count	string	bool	bool	count	string	count	count	count	count	vector[string]	string	time
 2009-11-18T08:00:21.486539	Pii6cUUq1v4	192.168.1.102	68	192.168.1.1	67	udp	NULLVAL	163.82ms	301	300	SF	NULLVAL	NULLVAL	0	Dd	1	329	1	328	empty	NULLVAL	NULLVAL
 2009-11-18T08:08:00.237253	nkCxlvNN8pi	192.168.1.103	137	192.168.1.255	137	udp	dns	3.78s	350	0	S0	NULLVAL	NULLVAL	0	D	7	546	0	0	empty	NULLVAL	NULLVAL
 2009-11-18T08:08:13.816224	9VdICMMnxQ7	192.168.1.102	137	192.168.1.255	137	udp	dns	3.75s	350	0	S0	NULLVAL	NULLVAL	0	D	7	546	0	0	empty	NULLVAL	NULLVAL

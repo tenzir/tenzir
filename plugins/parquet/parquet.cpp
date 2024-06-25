@@ -195,7 +195,6 @@ public:
             .emit(ctrl.diagnostics());
         }
       }
-
       parquet_writer_props_builder.version(
         ::parquet::ParquetVersion::PARQUET_2_6);
       auto parquet_writer_props = parquet_writer_props_builder.build();
@@ -204,9 +203,9 @@ public:
       auto file_result = ::parquet::arrow::FileWriter::Open(
         *schema, arrow::default_memory_pool(), out_buffer,
         std::move(parquet_writer_props), std::move(arrow_writer_props));
-      if (!file_result.ok()) {
+      if (not file_result.ok()) {
         return diagnostic::error(
-                 "failed to read schema",
+                 "failed to create parquet writer: {}",
                  file_result.status().ToStringWithoutContextLines())
           .to_error();
       }

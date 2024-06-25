@@ -200,8 +200,14 @@ using catalog_actor = typed_actor_fwd<
     ->caf::result<atom::ok>,
   // Merge a set of partition synopses.
   auto(atom::merge, std::vector<partition_synopsis_pair>)->caf::result<atom::ok>,
-  // Get *ALL* partition synopses stored in the catalog.
+  // Get *ALL* partition synopses stored in the catalog, optionally filtered
+  // with an expression to filter the candidate set.
+  // Note that this returns a pointer into the catalog's internal data
+  // structures, which is inherently unsafe to transfer between processes. The
+  // data pointed to must not be mutated. Functionality that depends on this
+  // should instead be moved inside of the catalog itself.
   auto(atom::get)->caf::result<std::vector<partition_synopsis_pair>>,
+  auto(atom::get, expression)->caf::result<std::vector<partition_synopsis_pair>>,
   // Erase a single partition synopsis.
   auto(atom::erase, uuid)->caf::result<atom::ok>,
   // Atomatically replace a set of partititon synopses with another.
@@ -328,25 +334,6 @@ using active_partition_actor = typed_actor_fwd<
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the PARTITION actor.
   ::extend_with<partition_actor>::unwrap;
-
-/// The interface of the EXPORTER actor.
-using exporter_actor = typed_actor_fwd<
-  // Register the ACCOUNTANT actor.
-  auto(atom::set, accountant_actor)->caf::result<void>,
-  // Register the SINK actor.
-  auto(atom::sink, caf::actor)->caf::result<void>,
-  // Execute previously registered query.
-  auto(atom::run)->caf::result<void>,
-  // Execute previously registered query.
-  auto(atom::done)->caf::result<void>,
-  // Register a STATISTICS SUBSCRIBER actor.
-  auto(atom::statistics, caf::actor)->caf::result<void>>
-  // Receive a table slice that belongs to a query.
-  ::extend_with<receiver_actor<table_slice>>
-  // Conform to the protocol of the STREAM SINK actor for table slices.
-  ::extend_with<stream_sink_actor<table_slice>>
-  // Conform to the protocol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
 
 /// The interface of a REST HANDLER actor.
 using rest_handler_actor = typed_actor_fwd<
@@ -476,7 +463,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::evaluator_actor))
   TENZIR_ADD_TYPE_ID((tenzir::exec_node_actor))
   TENZIR_ADD_TYPE_ID((tenzir::exec_node_sink_actor))
-  TENZIR_ADD_TYPE_ID((tenzir::exporter_actor))
   TENZIR_ADD_TYPE_ID((tenzir::filesystem_actor))
   TENZIR_ADD_TYPE_ID((tenzir::flush_listener_actor))
   TENZIR_ADD_TYPE_ID((tenzir::importer_actor))

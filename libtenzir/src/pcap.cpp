@@ -116,7 +116,6 @@ auto need_byte_swap(uint32_t magic) -> std::optional<bool> {
 }
 
 auto file_header_type() -> type {
-  const auto timestamp_type = type{"timestamp", time_type{}};
   return type{
     "pcap.file_header",
     record_type{
@@ -132,12 +131,11 @@ auto file_header_type() -> type {
 }
 
 auto packet_record_type() -> type {
-  const auto timestamp_type = type{"timestamp", time_type{}};
   return type{
     "pcap.packet",
     record_type{
       {"linktype", uint64_type{}}, // uint16 would suffice
-      {"timestamp", timestamp_type},
+      {"timestamp", time_type{}},
       {"captured_packet_length", uint64_type{}},
       {"original_packet_length", uint64_type{}},
       {"data", type{blob_type{}, {{"skip"}}}},

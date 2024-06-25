@@ -2,9 +2,9 @@ type port = uint64
 type timestamp = time
 
 type zeek.conn.custom = record{
-  ts: timestamp,
+  ts: time,
   uid: string,
-  id: record {orig_h: ip, orig_p: port, resp_h: ip, resp_p: port},
+  id: record {orig_h: ip, orig_p: uint64, resp_h: ip, resp_p: uint64},
   proto: string,
   duration: duration,
   orig_bytes: uint64,

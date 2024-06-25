@@ -112,6 +112,7 @@ register_component(node_actor::stateful_pointer<node_state> self,
     }
     return fmt::format("{}/{}", type, label);
   }();
+  self->state.component_names.emplace(component->address(), tag);
   const auto [it, inserted] = self->state.alive_components.insert(
     std::pair{component->address(), std::move(tag)});
   TENZIR_ASSERT(
@@ -284,6 +285,57 @@ auto node_state::get_endpoint_handler(const http_request_description& desc)
   return result->second;
 }
 
+auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
+  using component_plugin_map
+    = std::unordered_map<std::string, const component_plugin*>;
+  // 1. Collect all component_plugins into a name -> plugin* map:
+  component_plugin_map todo = {};
+  for (const auto* component : plugins::get<component_plugin>()) {
+    todo.emplace(component->component_name(), component);
+  }
+  // 2. Calculate an ordered loading sequnce based on the wanted_components of
+  //    each plugin.
+  std::vector<const component_plugin*> sequenced_components = {};
+  std::unordered_set<std::string> done = {};
+  auto derive_sequence = [&](auto derive_sequence, const std::string& name) {
+    auto entry = todo.find(name);
+    if (entry == todo.end()) {
+      return;
+    }
+    const auto* plugin = entry->second;
+    todo.erase(entry);
+    if (done.contains(name)) {
+      return;
+    }
+    for (auto& wanted : plugin->wanted_components()) {
+      derive_sequence(derive_sequence, wanted);
+    }
+    done.insert(name);
+    sequenced_components.push_back(plugin);
+  };
+  while (not todo.empty()) {
+    derive_sequence(derive_sequence, todo.begin()->second->component_name());
+  }
+  // 3. Load all components in order.
+  for (const auto* plugin : sequenced_components) {
+    auto name = plugin->component_name();
+    auto handle = plugin->make_component(self);
+    if (!handle) {
+      diagnostic::error("{} failed to create the {} component", *self, name)
+        .throw_();
+    }
+    self->system().registry().put(fmt::format("tenzir.{}", name), handle);
+    if (auto err
+        = register_component(self, caf::actor_cast<caf::actor>(handle), name)) {
+      diagnostic::error(err)
+        .note("{} failed to register component {} in component registry", *self,
+              name)
+        .throw_();
+    }
+    self->state.ordered_components.push_back(name);
+  }
+}
+
 node_actor::behavior_type
 node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
      std::filesystem::path dir) {
@@ -330,9 +382,36 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       }
     }
   });
+  self->set_exception_handler([=](std::exception_ptr& ptr) -> caf::error {
+    try {
+      std::rethrow_exception(ptr);
+    } catch (const diagnostic& diag) {
+      return diag.to_error();
+    } catch (const std::exception& err) {
+      return diagnostic::error("{}", err.what())
+        .note("unhandled exception in {}", *self)
+        .to_error();
+    } catch (...) {
+      return diagnostic::error("unhandled exception in {}", *self).to_error();
+    }
+  });
   // Terminate deterministically on shutdown.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    TENZIR_DEBUG("{} got EXIT from {}", *self, msg.source);
+    const auto source_name = [&]() -> std::string {
+      const auto component = self->state.component_names.find(msg.source);
+      if (component == self->state.component_names.end()) {
+        return "an unknown component";
+      }
+      return fmt::format("the {} component", component->second);
+    }();
+    TENZIR_DEBUG("{} got EXIT from {}: {}", *self, source_name, msg.reason);
+    const auto node_shutdown_reason
+      = msg.reason == caf::exit_reason::user_shutdown
+          ? msg.reason
+          : diagnostic::error(msg.reason)
+              .note("node terminates after receiving error from {}",
+                    source_name)
+              .to_error();
     self->state.tearing_down = true;
     for (auto&& exec_node :
          std::exchange(self->state.monitored_exec_nodes, {})) {
@@ -354,6 +433,12 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     // Core components are terminated in a second stage, we remove them from the
     // registry upfront and deal with them later.
     std::vector<caf::actor> core_shutdown_handles;
+    for (const auto& name :
+         self->state.ordered_components | std::ranges::views::reverse) {
+      if (auto comp = registry.remove(name)) {
+        core_shutdown_handles.push_back(comp->actor);
+      }
+    }
     caf::actor filesystem_handle;
     // The components listed here need to be terminated in sequential order.
     // The importer needs to shut down first because it might still have
@@ -388,7 +473,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       = [=, core_shutdown_handles = std::move(core_shutdown_handles),
          filesystem_handle = std::move(filesystem_handle)]() mutable {
           shutdown<policy::sequential>(self, std::move(core_shutdown_handles),
-                                       msg.reason);
+                                       node_shutdown_reason);
           // We deliberately do not send an exit message to the filesystem
           // actor, as that would mean that actors not tracked by the component
           // registry which hold a strong handle to the filesystem actor cannot
@@ -457,25 +542,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       return rp;
     },
     [self](atom::internal, atom::spawn, atom::plugin) -> caf::result<void> {
-      // Add all plugins to the component registry.
-      for (const auto& component : plugins::get<component_plugin>()) {
-        auto handle = component->make_component(self);
-        if (!handle)
-          // The spawn function can provide a better log message so we don't
-          // print one here.
-          continue;
-        self->system().registry().put(
-          fmt::format("tenzir.{}", component->component_name()), handle);
-        if (auto err
-            = register_component(self, caf::actor_cast<caf::actor>(handle),
-                                 component->component_name()))
-          return caf::make_error( //
-            ec::unspecified, fmt::format("{} failed to register component {} "
-                                         "from plugin {} in component "
-                                         "registry: {}",
-                                         *self, component->component_name(),
-                                         component->name(), err));
-      }
+      spawn_components(self);
       return {};
     },
     [self](atom::spawn, const invocation& inv) {

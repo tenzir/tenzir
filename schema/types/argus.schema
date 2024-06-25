@@ -8,14 +8,14 @@ type argus.cause = enum{
 
 type argus.record = record{
   // Standard fields that are always present.
-  StartTime: timestamp,           // stime
+  StartTime: time,           // stime
   Flgs: string,                   // flgs
   Proto: string #index=hash,      // proto
   SrcAddr: string,                // saddr (MAC or IP)
-  Sport: port,                    // sport
+  Sport: uint64,                    // sport
   Dir: string #index=hash,        // dir
   DstAddr: string,                // daddr (MAC or IP)
-  Dport: port,                    // dport
+  Dport: uint64,                    // dport
   TotPkts: uint64,                 // pkts
   TotBytes: uint64,                // bytes
   State: string #index=hash,      // state

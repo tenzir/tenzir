@@ -9,6 +9,7 @@
 #include "tenzir/error.hpp"
 
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/env.hpp"
 #include "tenzir/diagnostics.hpp"
 
 #include <caf/deep_to_string.hpp>
@@ -88,23 +89,34 @@ const char* to_string(ec x) {
   return descriptions[index];
 }
 
-std::string render(caf::error err) {
+std::string render(caf::error err, bool pretty_diagnostics) {
   if (!err)
     return "";
   std::ostringstream oss;
   auto category = err.category();
   if (category == caf::type_id_v<tenzir::ec>
       && static_cast<tenzir::ec>(err.code()) == ec::diagnostic) {
-    // TODO: We previously used `make_diagnostic_printer`, but I don't remember
-    // why. Since this shows up bad in logs, I changed it.
+    const auto color = (isatty(STDERR_FILENO) == 1
+                        && detail::getenv("NO_COLOR").value_or("").empty())
+                         ? color_diagnostics::yes
+                         : color_diagnostics::no;
+    auto printer = make_diagnostic_printer(std::nullopt, color, oss);
     auto ctx = err.context();
     caf::message_handler{
       [&](const diagnostic& diag) {
-        oss << fmt::format("{:?}", diag);
+        if (pretty_diagnostics) {
+          printer->emit(diag);
+        } else {
+          oss << fmt::format("{:?}", diag);
+        }
       },
       [&](const std::vector<diagnostic>& diags) {
-        for (auto& diag : diags) {
-          oss << fmt::format("{:?}", diag);
+        for (const auto& diag : diags) {
+          if (pretty_diagnostics) {
+            printer->emit(diag);
+          } else {
+            oss << fmt::format("{:?}", diag);
+          }
         }
       },
       [&](const caf::message& msg) {

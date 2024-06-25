@@ -57,6 +57,9 @@ auto offset::get(const arrow::RecordBatch& batch) const noexcept
 
 auto offset::get(const arrow::StructArray& struct_array) const noexcept
   -> std::shared_ptr<arrow::Array> {
+  if (empty()) {
+    return std::make_shared<arrow::StructArray>(struct_array.data());
+  }
   auto impl
     = [](auto&& impl, std::span<const offset::value_type> index,
          const arrow::StructArray& array) -> std::shared_ptr<arrow::Array> {

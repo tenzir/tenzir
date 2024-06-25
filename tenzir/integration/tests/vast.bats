@@ -36,7 +36,7 @@ teardown() {
 
   check tenzir "export | where resp_h == 192.168.1.104 | sort ts"
   check tenzir "export | where orig_bytes > 1k and orig_bytes < 1Ki | sort ts"
-  check tenzir 'export | where :string == "OrfTtuI5G4e" or :port == 67 or :uint64 == 67 | sort ts'
+  check tenzir 'export | where :string == "OrfTtuI5G4e" or :uint64 == 67 | sort ts'
   check tenzir 'export | where #schema == "zeek.conn" and resp_h == 192.168.1.104 | sort ts'
   check tenzir 'export | where #schema != "zeek.conn" | sort ts'
   check tenzir 'export | where #schema != "foobar" and resp_h == 192.168.1.104 | sort ts'
@@ -49,7 +49,7 @@ teardown() {
 
   check tenzir "export | where resp_h == 192.168.1.104 | extend schema=#schema | sort schema | sort --stable ts"
   check tenzir "export | where zeek.conn.id.resp_h == 192.168.1.104 | extend schema=#schema | sort schema | sort --stable ts"
-  check tenzir 'export | where :timestamp >= 1970-01-01 | summarize count=count(.)'
+  check tenzir 'export | where :time >= 1970-01-01 | summarize count=count(.)'
   check tenzir 'export | where #schema == "zeek.conn" | summarize count=count(.)'
 }
 
@@ -59,7 +59,7 @@ teardown() {
 
   check tenzir "export | where resp_h == 192.168.1.104"
   check tenzir 'export | where resp_h == 192.168.1.104 | write zeek-tsv --disable-timestamp-tags'
-  check tenzir "export | where :port == 53 | summarize count=count(.)"
+  check tenzir "export | where :uint64 == 53 | summarize count=count(.)"
   check tenzir 'export | where :uint64 == 53 and #schema == "zeek.dns" | summarize count=count(.)'
 }
 

@@ -50,7 +50,7 @@ record_type zeekify(record_type schema) {
         record_type::assign({
           {
             "ts",
-            type{"timestamp", time_type{}},
+            time_type{},
           },
         }),
       });

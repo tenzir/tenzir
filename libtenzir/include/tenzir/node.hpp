@@ -74,8 +74,15 @@ struct node_state {
   /// The component registry.
   component_registry registry = {};
 
+  /// The list of component plugin actors in the order that they were spawned.
+  std::vector<std::string> ordered_components = {};
+
   /// Components that are still alive for lifetime-tracking.
   std::set<std::pair<caf::actor_addr, std::string>> alive_components = {};
+
+  /// Map from component actor address to name for better error messages. Never
+  /// cleared.
+  std::unordered_map<caf::actor_addr, std::string> component_names = {};
 
   /// Counters for multi-instance components.
   std::unordered_map<std::string, uint64_t> label_counters = {};

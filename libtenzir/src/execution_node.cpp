@@ -236,8 +236,9 @@ struct exec_node_state {
   caf::typed_response_promise<void> start_rp = {};
 
   /// Exponential backoff for scheduling.
-  static constexpr duration min_backoff = std::chrono::milliseconds{10};
-  static constexpr duration max_backoff = std::chrono::milliseconds{1000};
+  static constexpr duration min_backoff = std::chrono::milliseconds{250};
+  static constexpr duration max_backoff = std::chrono::minutes{1};
+  static constexpr double backoff_rate = 2.0;
   duration backoff = duration::zero();
   caf::disposable backoff_disposable = {};
 
@@ -576,8 +577,9 @@ struct exec_node_state {
     } else if (backoff == duration::zero()) {
       backoff = min_backoff;
     } else {
-      backoff = std::min(std::chrono::duration_cast<duration>(1.25 * backoff),
-                         max_backoff);
+      backoff
+        = std::min(std::chrono::duration_cast<duration>(backoff_rate * backoff),
+                   max_backoff);
     }
     TENZIR_TRACE("{} {} schedules run with a delay of {}", *self, op->name(),
                  data{backoff});
@@ -647,21 +649,25 @@ struct exec_node_state {
     advance_generator();
     // We can continue execution under the following circumstances:
     // 1. The operator's generator is not yet completed.
-    // 2. The operator has one of the three following reasons to do work:
+    // 2. The operator did not signal that we're supposed to wait.
+    // 3. The operator has one of the four following reasons to do work:
     //   a. The upstream operator has completed.
     //   b. The operator has downstream demand and can produce output
     //      independently from receiving input.
     //   c. The operator has input it can consume.
     //   d. The operator is a command, i.e., has both a source and a sink.
+    const auto has_demand
+      = demand.has_value() or std::is_same_v<Output, std::monostate>;
     const auto should_continue
       = instance->it != instance->gen.end()                         // (1)
-        and (not previous                                           // (2a)
-             or (demand.has_value() and op->input_independent())    // (2b)
-             or not inbound_buffer.empty()                          // (2c)
-             or detail::are_same_v<std::monostate, Input, Output>); // (2d)
+        and not waiting                                             // (2)
+        and (not previous                                           // (3a)
+             or (has_demand and op->input_independent())            // (3b)
+             or not inbound_buffer.empty()                          // (3c)
+             or detail::are_same_v<std::monostate, Input, Output>); // (3d)
     if (should_continue) {
       schedule_run(false);
-    } else if (demand.has_value() or std::is_same_v<Output, std::monostate>) {
+    } else if (not waiting and has_demand) {
       // If we shouldn't continue, but there is an upstream demand, then we may
       // be in a situation where the operator has internally buffered events and
       // needs to be polled until some operator-internal timeout expires before

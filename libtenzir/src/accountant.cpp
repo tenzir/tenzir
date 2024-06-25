@@ -125,7 +125,7 @@ struct accountant_state_impl {
     auto& builder = builders[key];
     if (!builder) {
       auto schema_fields = std::vector<record_type::field_view>{
-        {"ts", type{"timestamp", time_type{}}},
+        {"ts", time_type{}},
         {"version", string_type{}},
         {"actor", string_type{}},
         {"value", double_type{}},

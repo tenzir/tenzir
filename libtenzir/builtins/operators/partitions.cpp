@@ -21,14 +21,14 @@ namespace tenzir::plugins::partitions {
 
 namespace {
 
-class plugin final : public virtual aspect_plugin {
+class partitions_operator final : public crtp_operator<partitions_operator> {
 public:
-  auto name() const -> std::string override {
-    return "partitions";
+  partitions_operator() = default;
+  explicit partitions_operator(expression filter) : filter_{std::move(filter)} {
   }
 
-  auto show(operator_control_plane& ctrl) const
-    -> generator<table_slice> override {
+  auto operator()(operator_control_plane& ctrl) const
+    -> generator<table_slice> {
     // TODO: Some of the the requests this operator makes are blocking, so
     // we have to create a scoped actor here; once the operator API uses
     // async we can offer a better mechanism here.
@@ -44,15 +44,17 @@ public:
     co_yield {};
     auto [catalog] = std::move(*components);
     auto synopses = std::vector<partition_synopsis_pair>{};
+    ctrl.set_waiting(true);
     ctrl.self()
-      .request(catalog, caf::infinite, atom::get_v)
+      .request(catalog, caf::infinite, atom::get_v, filter_)
       .await(
-        [&synopses](std::vector<partition_synopsis_pair>& result) {
+        [&](std::vector<partition_synopsis_pair>& result) {
+          ctrl.set_waiting(false);
           synopses = std::move(result);
         },
-        [&ctrl](const caf::error& err) {
+        [&](const caf::error& err) {
           diagnostic::error(err)
-            .note("failed to get partitions")
+            .note("failed to perform catalog lookup")
             .emit(ctrl.diagnostics());
         });
     co_yield {};
@@ -92,11 +94,70 @@ public:
         }
       }
     }
-    if (synopses.size() % max_rows != 0) { // no empty slices
-      for (auto&& result : builder.finish_as_table_slice("tenzir.partition")) {
-        co_yield std::move(result);
-      }
+    for (auto&& result : builder.finish_as_table_slice("tenzir.partition")) {
+      co_yield std::move(result);
     }
+  }
+
+  auto name() const -> std::string override {
+    return "partitions";
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::remote;
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)order;
+    (void)filter;
+    return do_not_optimize(*this);
+  }
+
+  auto internal() const -> bool override {
+    return true;
+  }
+
+  friend auto inspect(auto& f, partitions_operator& x) -> bool {
+    return f.object(x)
+      .pretty_name("tenzir.plugins.partitions.partitions_operator")
+      .fields(f.field("filter", x.filter_));
+  }
+
+private:
+  expression filter_ = trivially_true_expression();
+};
+
+class plugin final : public virtual operator_plugin<partitions_operator> {
+public:
+  auto signature() const -> operator_signature override {
+    return {
+      .source = true,
+      .transformation = false,
+      .sink = false,
+    };
+  }
+
+  auto parse_operator(parser_interface& p) const -> operator_ptr override {
+    auto parser = argument_parser{
+      "partitions",
+      "https://docs.tenzir.com/operators/partitions",
+    };
+    auto expr = std::optional<located<tenzir::expression>>{};
+    parser.add(expr, "<expr>");
+    parser.parse(p);
+    if (not expr) {
+      return std::make_unique<partitions_operator>();
+    }
+    auto normalized_and_validated = normalize_and_validate(expr->inner);
+    if (!normalized_and_validated) {
+      diagnostic::error("invalid expression")
+        .primary(expr->source)
+        .docs("https://tenzir.com/language/expressions")
+        .throw_();
+    }
+    expr->inner = std::move(*normalized_and_validated);
+    return std::make_unique<partitions_operator>(std::move(expr->inner));
   }
 };
 

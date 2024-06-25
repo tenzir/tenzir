@@ -4,7 +4,7 @@
 #unset_field	-
 #path	zeek.dns
 #fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	proto	trans_id	rtt	query	qclass	qclass_name	qtype	qtype_name	rcode	rcode_name	AA	TC	RD	RA	Z	answers	TTLs	rejected	_write_ts
-#types	time	string	addr	port	addr	port	string	count	interval	string	count	string	count	string	count	string	bool	bool	bool	bool	count	vector[string]	vector[interval]	bool	time
+#types	time	string	addr	count	addr	count	string	count	interval	string	count	string	count	string	count	string	bool	bool	bool	bool	count	vector[string]	vector[interval]	bool	time
 2009-11-19T01:47:43.846714	ZkQj2rioZO8	192.168.1.1	137	192.168.1.104	137	udp	32812	-	-	-	-	-	-	-	-	F	F	F	F	0	(empty)	(empty)	F	-
 2009-11-19T01:59:48.322488	QI0zlQ5bASk	192.168.1.1	137	192.168.1.104	137	udp	32821	-	-	-	-	-	-	-	-	F	F	F	F	0	(empty)	(empty)	F	-
 2009-11-19T02:11:52.798124	Ssd01Fv6B09	192.168.1.1	137	192.168.1.104	137	udp	32830	-	-	-	-	-	-	-	-	F	F	F	F	0	(empty)	(empty)	F	-

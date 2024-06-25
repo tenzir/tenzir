@@ -40,8 +40,8 @@ Getting involved is simple:
 
 1. If you're not already a part of our Discord server, [join
    us](https://tenzir.com/discord)!
-2. We'll announce the  hours before they are starting every Tuesday at 8 AM EST
-   / 11 AM EST / 5 PM CET / 9.30 PM IST.
+2. We'll announce the hours before they are starting every second Tuesday at 8
+   AM EST / 11 AM EST / 5 PM CET / 9.30 PM IST.
 3. During the event, head over to the dedicated Office Hours voice channel on
    our Discord server to join.
 

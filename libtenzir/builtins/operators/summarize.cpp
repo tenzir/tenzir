@@ -859,9 +859,11 @@ public:
   }
 
   auto input_independent() const -> bool override {
-    if (config_.created_timeout or config_.update_timeout) {
-      return true;
-    }
+    // Returning false here is technically incorrect when using summarize with
+    // timeouts. However, the handling of input-independent non-source operators
+    // in the execution nodes is so bad, that we accept a potential delay here
+    // over excess CPU usage.
+    // TODO: Fix this properly in the execution nodes.
     return false;
   }
 
