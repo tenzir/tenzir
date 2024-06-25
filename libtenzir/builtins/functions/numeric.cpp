@@ -117,7 +117,7 @@ public:
     -> std::unique_ptr<function_use> override {
     auto value = ast::expression{};
     auto spec = std::optional<ast::expression>{};
-    argument_parser2::fn("round")
+    argument_parser2::function("round")
       .add(value, "<value>")
       .add(spec, "<spec>")
       .parse(inv, ctx);
@@ -134,7 +134,7 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> std::unique_ptr<function_use> override {
     auto expr = ast::expression{};
-    argument_parser2::fn("sqrt").add(expr, "<number>").parse(inv, ctx);
+    argument_parser2::function("sqrt").add(expr, "<number>").parse(inv, ctx);
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         auto value = eval(expr);
@@ -238,7 +238,7 @@ public:
 
   auto make_function(invocation inv, session ctx) const
     -> std::unique_ptr<function_use> override {
-    argument_parser2::fn("random").parse(inv, ctx);
+    argument_parser2::function("random").parse(inv, ctx);
     return function_use::make([](evaluator eval, session ctx) -> series {
       TENZIR_UNUSED(ctx);
       auto b = arrow::DoubleBuilder{};
@@ -413,7 +413,7 @@ public:
   auto make_aggregation(invocation inv, session ctx) const
     -> std::unique_ptr<aggregation_instance> override {
     auto arg = std::optional<ast::expression>{};
-    argument_parser2::fn("count").add(arg, "<expr>").parse(inv, ctx);
+    argument_parser2::function("count").add(arg, "<expr>").parse(inv, ctx);
     return std::make_unique<count_instance>(std::move(arg));
   }
 };
@@ -472,7 +472,7 @@ public:
     auto quantile_opt = std::optional<located<double>>{};
     auto delta_opt = std::optional<located<int64_t>>{};
     auto buffer_size_opt = std::optional<located<int64_t>>{};
-    argument_parser2::fn("quantile")
+    argument_parser2::function("quantile")
       .add(expr, "expr")
       .add("q", quantile_opt)
       // TODO: This is a test for hidden parameters.

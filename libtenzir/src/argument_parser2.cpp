@@ -8,6 +8,7 @@
 
 #include "tenzir/argument_parser2.hpp"
 
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/enumerate.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/exec.hpp"
@@ -23,18 +24,25 @@ concept data_type = detail::tl_contains_v<data::types, T>;
 
 void argument_parser2::parse(const operator_factory_plugin::invocation& inv,
                              session ctx) {
-  TENZIR_ASSERT(function_ == false);
+  TENZIR_ASSERT(kind_ == kind::op);
   return parse(inv.self, inv.args, ctx);
 }
 
 void argument_parser2::parse(const function_plugin::invocation& inv,
                              session ctx) {
-  TENZIR_ASSERT(function_ == true);
+  TENZIR_ASSERT(kind_ != kind::op);
+  if (inv.call.subject) {
+    auto args = std::vector<ast::expression>{};
+    args.reserve(1 + inv.call.args.size());
+    args.push_back(*inv.call.subject);
+    args.insert(args.end(), inv.call.args.begin(), inv.call.args.end());
+    return parse(inv.call.fn, args, ctx);
+  }
   return parse(inv.call.fn, inv.call.args, ctx);
 }
 
 void argument_parser2::parse(const ast::function_call& call, session ctx) {
-  TENZIR_ASSERT(function_ == true);
+  TENZIR_ASSERT(kind_ != kind::op);
   return parse(call.fn, call.args, ctx);
 }
 
@@ -43,20 +51,7 @@ void argument_parser2::parse(const ast::entity& self,
                              session ctx) {
   // TODO: Simplify and deduplicate everything in this function.
   auto emit = [&](diagnostic_builder d) {
-    // TODO
-    TENZIR_ASSERT(self.path.size() == 1);
-    auto name = self.path[0].name;
-    auto invocation = usage();
-    if (function_) {
-      invocation = fmt::format("({})", invocation);
-    } else {
-      invocation = fmt::format(" {}", invocation);
-    }
-    d = std::move(d).usage(fmt::format("{}{}", name, invocation));
-    if (not docs_.empty()) {
-      d = std::move(d).docs(docs_);
-    }
-    std::move(d).emit(ctx);
+    std::move(d).usage(usage()).docs(docs()).emit(ctx);
   };
   auto kind = [](const data& x) -> std::string_view {
     // TODO: Refactor this.
@@ -192,13 +187,26 @@ void argument_parser2::parse(const ast::entity& self,
 
 auto argument_parser2::usage() const -> std::string {
   if (usage_cache_.empty()) {
+    if (kind_ == kind::method) {
+      TENZIR_ASSERT(not positional_.empty());
+      usage_cache_ += positional_[0].meta;
+      usage_cache_ += '.';
+    }
+    usage_cache_ += name_;
+    if (kind_ != kind::op) {
+      usage_cache_ += '(';
+    }
+    auto has_previous = false;
     for (auto [idx, positional] : detail::enumerate(positional_)) {
+      if (kind_ == kind::method && idx == 0) {
+        continue;
+      }
+      if (std::exchange(has_previous, true)) {
+        usage_cache_ += ", ";
+      }
       if (std::holds_alternative<setter<located<pipeline>>>(positional.set)) {
         usage_cache_ += " { ... }";
         continue;
-      }
-      if (not usage_cache_.empty()) {
-        usage_cache_ += ", ";
       }
       if (first_optional_ && idx >= *first_optional_) {
         usage_cache_ += fmt::format("{}?", positional.meta);
@@ -211,7 +219,7 @@ auto argument_parser2::usage() const -> std::string {
         // This denotes an internal/unstable option.
         continue;
       }
-      if (not usage_cache_.empty()) {
+      if (std::exchange(has_previous, true)) {
         usage_cache_ += ", ";
       }
       auto meta = set.match(
@@ -226,8 +234,26 @@ auto argument_parser2::usage() const -> std::string {
         });
       usage_cache_ += fmt::format("{}={}", name, meta);
     }
+    if (kind_ != kind::op) {
+      usage_cache_ += ')';
+    }
   }
   return usage_cache_;
+}
+
+auto argument_parser2::docs() const -> std::string {
+  auto category = std::invoke([&] {
+    switch (kind_) {
+      case kind::op:
+        return "operators";
+      case kind::function:
+        return "functions";
+      case kind::method:
+        return "methods";
+    }
+    TENZIR_UNREACHABLE();
+  });
+  return fmt::format("https://docs.tenzir.com/{}/{}", category, name_);
 }
 
 template <argument_parser_type T>

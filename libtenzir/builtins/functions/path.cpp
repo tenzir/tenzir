@@ -23,7 +23,7 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> std::unique_ptr<function_use> override {
     auto expr = ast::expression{};
-    argument_parser2::fn("file_name").add(expr, "<path>").parse(inv, ctx);
+    argument_parser2::function("file_name").add(expr, "<path>").parse(inv, ctx);
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         auto arg = eval(expr);
@@ -103,7 +103,7 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> std::unique_ptr<function_use> override {
     auto expr = ast::expression{};
-    argument_parser2::fn("file_name").add(expr, "<path>").parse(inv, ctx);
+    argument_parser2::function("file_name").add(expr, "<path>").parse(inv, ctx);
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         auto arg = eval(expr);

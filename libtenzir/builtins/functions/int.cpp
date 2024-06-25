@@ -34,7 +34,9 @@ public:
     // int(<number>)
     // int(<string>)
     auto expr = ast::expression{};
-    argument_parser2::fn(name()).add(expr, "<string|number>").parse(inv, ctx);
+    argument_parser2::function(name())
+      .add(expr, "<string|number>")
+      .parse(inv, ctx);
     return function_use::make([expr = std::move(expr),
                                this](auto eval, session ctx) -> series {
       auto value = eval(expr);

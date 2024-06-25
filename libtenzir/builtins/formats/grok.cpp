@@ -11,6 +11,7 @@
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 // Both Boost.Regex and RE2 are used:
 //  - Boost.Regex is used for actual grokking
@@ -536,6 +537,18 @@ public:
     return std::make_unique<grok_parser>(p);
   }
 };
+
+class plugin2 final : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.grok";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> std::unique_ptr<function_use> override {
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::grok

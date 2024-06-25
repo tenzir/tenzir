@@ -61,13 +61,15 @@ concept argument_parser_type
 class argument_parser2 {
 public:
   static auto op(std::string name) -> argument_parser2 {
-    return argument_parser2{
-      false, fmt::format("https://docs.tenzir.com/operators/{}", name)};
+    return argument_parser2{kind::op, std::move(name)};
   }
 
-  static auto fn(std::string name) -> argument_parser2 {
-    return argument_parser2{
-      true, fmt::format("https://docs.tenzir.com/functions/{}", name)};
+  static auto function(std::string name) -> argument_parser2 {
+    return argument_parser2{kind::function, std::move(name)};
+  }
+
+  static auto method(std::string name) -> argument_parser2 {
+    return argument_parser2{kind::method, std::move(name)};
   }
 
   // ------------------------------------------------------------------------
@@ -96,10 +98,13 @@ public:
              session ctx);
 
   auto usage() const -> std::string;
+  auto docs() const -> std::string;
 
 private:
-  argument_parser2(bool function, std::string docs)
-    : function_{function}, docs_{std::move(docs)} {
+  enum class kind { op, function, method };
+
+  argument_parser2(kind kind, std::string name)
+    : kind_{kind}, name_{std::move(name)} {
   }
 
   template <class T>
@@ -119,11 +124,11 @@ private:
   };
 
   mutable std::string usage_cache_;
-  bool function_;
+  kind kind_;
   std::vector<positional> positional_;
   std::optional<size_t> first_optional_;
   std::vector<named> named_;
-  std::string docs_;
+  std::string name_;
 };
 
 } // namespace tenzir

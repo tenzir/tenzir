@@ -36,7 +36,7 @@ public:
     }
     auto& name = x.path[0].name;
     // TODO: We pretend here that every name directly maps to its path.
-    auto xyz = reg_.try_get(entity_path{{name}});
+    auto entity = reg_.try_get(entity_path{{name}});
     auto expected = std::invoke([&] {
       switch (context_) {
         case context_t::op_name:
@@ -50,7 +50,7 @@ public:
       }
       TENZIR_UNREACHABLE();
     });
-    if (not xyz) {
+    if (not entity) {
       auto available = context_ == context_t::op_name ? reg_.operator_names()
                                                       : reg_.function_names();
       diagnostic::error("{} `{}` not found", expected, name)
@@ -60,10 +60,16 @@ public:
       return;
     }
     // TODO: Check if this entity has right type?
-    xyz->match(
-      [&](const function_plugin*) {
-        // TODO: Methods?
-        if (context_ != context_t::fn_name) {
+    entity->match(
+      [&](const function_plugin* function) {
+        if (dynamic_cast<const method_plugin*>(function)) {
+          if (context_ != context_t::method_name) {
+            diagnostic::error("expected {}, got method", expected)
+              .primary(x)
+              .emit(diag_);
+            return;
+          }
+        } else if (context_ != context_t::fn_name) {
           diagnostic::error("expected {}, got function", expected)
             .primary(x)
             .emit(diag_);

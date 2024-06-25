@@ -24,7 +24,7 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> std::unique_ptr<function_use> override {
     auto expr = ast::expression{};
-    argument_parser2::fn("time").add(expr, "<string>").parse(inv, ctx);
+    argument_parser2::function("time").add(expr, "<string>").parse(inv, ctx);
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         auto arg = eval(expr);
@@ -77,7 +77,7 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> std::unique_ptr<function_use> override {
     auto expr = ast::expression{};
-    argument_parser2::fn("seconds_since_epoch")
+    argument_parser2::function("seconds_since_epoch")
       .add(expr, "<time>")
       .parse(inv, ctx);
     return function_use::make(
@@ -127,7 +127,7 @@ public:
 
   auto make_function(invocation inv, session ctx) const
     -> std::unique_ptr<function_use> override {
-    argument_parser2::fn("now").parse(inv, ctx);
+    argument_parser2::function("now").parse(inv, ctx);
     return function_use::make([](evaluator eval, session ctx) -> series {
       TENZIR_UNUSED(ctx);
       auto result = time{time::clock::now()};

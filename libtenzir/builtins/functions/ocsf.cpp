@@ -25,7 +25,7 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> std::unique_ptr<function_use> override {
     auto expr = ast::expression{};
-    argument_parser2::fn("ocsf_category_uid")
+    argument_parser2::function("ocsf_category_uid")
       .add(expr, "<string>")
       .parse(inv, ctx);
     return function_use::make(
@@ -92,7 +92,7 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> std::unique_ptr<function_use> override {
     auto expr = ast::expression{};
-    argument_parser2::fn("ocsf_category_uid")
+    argument_parser2::function("ocsf_category_uid")
       .add(expr, "<string>")
       .parse(inv, ctx);
     return function_use::make(

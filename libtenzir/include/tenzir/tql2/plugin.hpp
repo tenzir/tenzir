@@ -64,6 +64,8 @@ public:
     = 0;
 };
 
+class method_plugin : public virtual function_plugin {};
+
 class aggregation_instance {
 public:
   virtual ~aggregation_instance() = default;

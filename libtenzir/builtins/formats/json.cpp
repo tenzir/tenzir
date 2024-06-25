@@ -1673,7 +1673,7 @@ public:
   }
 };
 
-class parse_json_plugin final : public virtual function_plugin {
+class parse_json_plugin final : public virtual method_plugin {
 public:
   auto name() const -> std::string override {
     return "tql2.parse_json";
@@ -1688,7 +1688,7 @@ public:
     // many=true (not so important)
     // "{yo: 42}" => [{yo: 42}]
     auto expr = ast::expression{};
-    argument_parser2::fn("parse_json").add(expr, "<string>").parse(inv, ctx);
+    argument_parser2::method("parse_json").add(expr, "<string>").parse(inv, ctx);
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         auto arg = eval(expr);
