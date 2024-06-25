@@ -201,6 +201,13 @@ private:
       // instead. This could be done differently by slightly rewriting the
       // parser. Because this is not (yet) reflected in the AST, the optional
       // parenthesis are not reflected.
+      if (call->subject) {
+        // TODO: We could consider rewriting method calls to mutate their
+        // subject, e.g., `foo.bar.baz(qux) => foo.bar = foo.bar.baz(qux)`.
+        diagnostic::error("expected operator invocation, found method call")
+          .primary(call->fn)
+          .throw_();
+      }
       if (not at_statement_end()) {
         diagnostic::error("expected end of statement")
           .primary(next_location())
