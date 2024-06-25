@@ -410,7 +410,6 @@ namespace ast {
 struct expression;
 } // namespace ast
 
-class function_plugin0;
 class operator_factory_plugin;
 class registry;
 class session;
