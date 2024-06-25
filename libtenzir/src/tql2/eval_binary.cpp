@@ -26,7 +26,7 @@ namespace tenzir {
 
 namespace {
 
-consteval auto is_arithmetic(ast::binary_op op) -> bool {
+[[maybe_unused]] constexpr auto is_arithmetic(ast::binary_op op) -> bool {
   switch (op) {
     using enum ast::binary_op;
     case add:
@@ -39,7 +39,8 @@ consteval auto is_arithmetic(ast::binary_op op) -> bool {
   }
 }
 
-constexpr auto result_if_both_null(ast::binary_op op) -> std::optional<bool> {
+[[maybe_unused]] constexpr auto result_if_both_null(ast::binary_op op)
+  -> std::optional<bool> {
   using enum ast::binary_op;
   switch (op) {
     case eq:
@@ -62,7 +63,7 @@ constexpr auto result_if_both_null(ast::binary_op op) -> std::optional<bool> {
   TENZIR_UNREACHABLE();
 }
 
-consteval auto is_relational(ast::binary_op op) -> bool {
+[[maybe_unused]] constexpr auto is_relational(ast::binary_op op) -> bool {
   switch (op) {
     using enum ast::binary_op;
     case eq:
