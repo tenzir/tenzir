@@ -242,7 +242,7 @@ public:
           if (bp::system(python_executable, "-m", "venv", venv,
                          bp::std_err > std_err,
                          detail::preserved_fds{{STDERR_FILENO}},
-                         boost::process::limit_handles)
+                         bp::detail::limit_handles_{})
               != 0) {
             auto venv_error = drain_pipe(std_err);
             // We need to delete the potentially broken venv here to make sure
@@ -286,7 +286,7 @@ public:
                          fmt::join(pip_invocation, "' '"));
           if (bp::system(pip_invocation, env, bp::std_err > std_err,
                          detail::preserved_fds{{STDOUT_FILENO, STDERR_FILENO}},
-                         boost::process::limit_handles)
+                         bp::detail::limit_handles_{})
               != 0) {
             auto pip_error = drain_pipe(std_err);
             diagnostic::error("{}", pip_error)
@@ -316,7 +316,7 @@ public:
         detail::preserved_fds{{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO,
                                codepipe.pipe().native_source(),
                                errpipe.pipe().native_sink()}},
-        boost::process::limit_handles};
+        bp::detail::limit_handles_{}};
       if (code.empty()) {
         // The current implementation always expects a non-empty input.
         // Otherwise, it blocks forever on a `read` call.
