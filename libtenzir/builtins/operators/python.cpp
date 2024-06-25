@@ -332,8 +332,7 @@ public:
           auto python_error = drain_pipe(errpipe);
           diagnostic::error("{}", python_error)
             .note("python process exited with error")
-            .emit(ctrl.diagnostics());
-          co_return;
+            .throw_();
         }
         if (slice.rows() == 0) {
           co_yield {};
