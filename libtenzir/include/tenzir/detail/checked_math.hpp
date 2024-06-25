@@ -18,19 +18,24 @@
 
 #pragma once
 
+#include <tenzir/config.hpp>
+
 #include <limits>
 #include <type_traits>
 #include <variant>
 
-namespace tenzir::checked_math {
+TENZIR_DIAGNOSTIC_PUSH
 
-template <std::integral L, std::integral R>
-using result_type = std::variant<std::common_type_t<L, R>, const char*>;
+_Pragma("clang diagnostic ignored \"-Wsign-compare\"")
 
-template <std::integral T>
-constexpr T max_v = std::numeric_limits<T>::max();
-template <std::integral T>
-constexpr T min_v = std::numeric_limits<T>::lowest();
+  namespace tenzir::checked_math {
+  template <std::integral L, std::integral R>
+  using result_type = std::variant<std::common_type_t<L, R>, const char*>;
+
+  template <std::integral T>
+  constexpr T max_v = std::numeric_limits<T>::max();
+  template <std::integral T>
+  constexpr T min_v = std::numeric_limits<T>::lowest();
 
 #define SLOWMATH_DETAIL_OVERFLOW_CHECK(boolean_expression)                     \
   if (not(boolean_expression)) {                                               \
@@ -111,3 +116,5 @@ constexpr auto modulo(N n, D d) -> result_type<N, D> {
 
 #undef SLOWMATH_DETAIL_OVERFLOW_CHECK
 } // namespace tenzir::checked_math
+
+TENZIR_DIAGNOSTIC_PUSH

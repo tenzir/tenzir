@@ -98,6 +98,19 @@ concept basic_type = requires {
   requires std::is_trivial_v<T>;
 };
 
+/// Either `int64_type`, `uint64_type`, or `double_type`.
+template <class T>
+concept numeric_type
+  = concrete_type<T> and basic_type<T>
+    and (std::same_as<T, int64_type> || std::same_as<T, uint64_type>
+         || std::same_as<T, double_type>);
+
+/// Either `int64_type` or `uint64_type`.
+template <class T>
+concept integral_type
+  = numeric_type<T>
+    and (std::same_as<T, int64_type> || std::same_as<T, uint64_type>);
+
 /// A concept that models basic concrete types, i.e., types that hold
 /// additional state and extend the lifetime of the surrounding type.
 template <class T>

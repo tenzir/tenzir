@@ -26,17 +26,6 @@ namespace tenzir {
 
 namespace {
 
-template <class T>
-concept numeric_type
-  = concrete_type<T> and basic_type<T>
-    and (std::same_as<T, int64_type> || std::same_as<T, uint64_type>
-         || std::same_as<T, double_type>);
-
-template <class T>
-concept integral_type
-  = numeric_type<T>
-    and (std::same_as<T, int64_type> || std::same_as<T, uint64_type>);
-
 consteval auto is_arithmetic(ast::binary_op op) -> bool {
   switch (op) {
     using enum ast::binary_op;
@@ -109,7 +98,6 @@ struct BinOpKernel<Op, L, R> {
       static_assert(detail::always_false_v<L>,
                     "division is handled by its own specialization");
     }
-    return {};
   }
 };
 
@@ -199,11 +187,6 @@ struct BinOpKernel<Op, L, R> {
   static auto evaluate(view<type_to_data_t<L>> l, view<type_to_data_t<R>> r)
     -> std::variant<result, const char*> {
     using enum ast::binary_op;
-
-    if constexpr (std::same_as<L, string_type>
-                  and std::same_as<R, string_type>) {
-      fmt::print("{} {} {}\n", l, Op, r);
-    }
     if constexpr (Op == eq) {
       return l == r;
     } else if constexpr (Op == neq) {
@@ -257,9 +240,9 @@ struct EvalBinOp;
 template <ast::binary_op Op, concrete_type L, concrete_type R>
   requires caf::detail::is_complete<BinOpKernel<Op, L, R>>
 struct EvalBinOp<Op, L, R> {
-  static auto
-  eval(const type_to_arrow_array_t<L>& l, const type_to_arrow_array_t<R>& r,
-       auto&& warning_emitter) -> std::shared_ptr<arrow::Array> {
+  static auto eval(const type_to_arrow_array_t<L>& l,
+                   const type_to_arrow_array_t<R>& r, auto&& warn)
+    -> std::shared_ptr<arrow::Array> {
     using kernel = BinOpKernel<Op, L, R>;
     using result = kernel::result;
     using result_type = data_to_type_t<result>;
@@ -270,7 +253,7 @@ struct EvalBinOp<Op, L, R> {
       auto ln = l.IsNull(i);
       auto rn = r.IsNull(i);
       if (ln && rn) {
-        auto constexpr res = result_if_both_null(Op);
+        constexpr auto res = result_if_both_null(Op);
         if constexpr (res) {
           check(b->Append(*res));
         } else {
@@ -296,7 +279,7 @@ struct EvalBinOp<Op, L, R> {
       }
     }
     for (auto&& w : warnings) {
-      warning_emitter(w);
+      warn(w);
     }
     return finish(*b);
   }
@@ -323,8 +306,11 @@ struct EvalBinOp<ast::binary_op::add, string_type, string_type> {
 };
 
 // TODO: We probably don't want this.
-template <>
-struct EvalBinOp<ast::binary_op::and_, bool_type, bool_type> {
+template <ast::binary_op Op>
+  requires(Op == ast::binary_op::and_ || Op == ast::binary_op::or_)
+struct EvalBinOp<Op, bool_type, bool_type> {
+  static constexpr auto is_and = Op == ast::binary_op::and_;
+
   static auto eval(const arrow::BooleanArray& l, const arrow::BooleanArray& r,
                    auto&&) -> std::shared_ptr<arrow::BooleanArray> {
     // TODO: Bad.
@@ -339,7 +325,11 @@ struct EvalBinOp<ast::binary_op::and_, bool_type, bool_type> {
       auto r_ptr = r.values()->data();
       auto o_ptr = buffer->mutable_data();
       for (auto i = int64_t{0}; i < size; ++i) {
-        o_ptr[i] = l_ptr[i] & r_ptr[i];
+        if constexpr (is_and) {
+          o_ptr[i] = l_ptr[i] & r_ptr[i]; // NOLINT
+        } else {
+          o_ptr[i] = l_ptr[i] | r_ptr[i]; // NOLINT
+        }
       }
       return std::make_shared<arrow::BooleanArray>(l.length(),
                                                    std::move(buffer));
@@ -355,12 +345,22 @@ struct EvalBinOp<ast::binary_op::and_, bool_type, bool_type> {
       auto lf = not ln && not lv;
       auto rt = not rn && rv;
       auto rf = not rn && not rv;
-      if (lt && rt) {
-        b.UnsafeAppend(true);
-      } else if (lf || rf) {
-        b.UnsafeAppend(false);
+      if constexpr (is_and) {
+        if (lt && rt) {
+          b.UnsafeAppend(true);
+        } else if (lf || rf) {
+          b.UnsafeAppend(false);
+        } else {
+          b.UnsafeAppendNull();
+        }
       } else {
-        b.UnsafeAppendNull();
+        if (lt || rt) {
+          b.UnsafeAppend(true);
+        } else if (lf && rf) {
+          b.UnsafeAppend(false);
+        } else {
+          b.UnsafeAppendNull();
+        }
       }
     }
     return finish(b);
@@ -399,10 +399,9 @@ template <ast::binary_op Op, concrete_type R>
   requires((Op == ast::binary_op::eq || Op == ast::binary_op::neq)
            && not std::same_as<R, null_type>)
 struct EvalBinOp<Op, null_type, R> {
-  static auto
-  eval(const arrow::NullArray& l, const type_to_arrow_array_t<R>& r,
-       auto&& warning_emitter) -> std::shared_ptr<arrow::BooleanArray> {
-    return EvalBinOp<Op, R, null_type>::eval(r, l, warning_emitter);
+  static auto eval(const arrow::NullArray& l, const type_to_arrow_array_t<R>& r,
+                   auto&& warn) -> std::shared_ptr<arrow::BooleanArray> {
+    return EvalBinOp<Op, R, null_type>::eval(r, l, warn);
   }
 };
 
@@ -480,18 +479,10 @@ auto evaluator::eval(const ast::binary_expr& x) -> series {
     X(lt);
     X(le);
     X(in);
+    // TODO: Short circuiting.
+    X(and_);
+    X(or_);
 #undef X
-    case and_: {
-      // TODO: How does short circuiting work?
-      // 1) Evaluate left.
-      auto l = eval(x.left);
-      // 2) Evaluate right, but discard diagnostics if false.
-      // TODO
-      auto r = eval(x.right);
-      return eval_op.operator()<and_>(l, r);
-    }
-    case or_:
-      TENZIR_TODO();
   }
   TENZIR_UNREACHABLE();
 }
