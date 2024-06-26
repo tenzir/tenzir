@@ -60,7 +60,7 @@ public:
             bp::std_in < bp::close,
             bp::on_exit(exit_handler),
             detail::preserved_fds{{STDOUT_FILENO, STDERR_FILENO}},
-            boost::process::limit_handles,
+            bp::detail::limit_handles_{},
           };
           break;
         case stdin_mode::inherit:
@@ -71,7 +71,7 @@ public:
             bp::std_out > result.stdout_,
             bp::on_exit(exit_handler),
             detail::preserved_fds{{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO}},
-            boost::process::limit_handles,
+            bp::detail::limit_handles_{},
           };
           break;
         case stdin_mode::pipe:
@@ -83,7 +83,7 @@ public:
             bp::std_in < result.stdin_,
             bp::on_exit(exit_handler),
             detail::preserved_fds{{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO}},
-            boost::process::limit_handles,
+            bp::detail::limit_handles_{},
           };
           break;
       }
