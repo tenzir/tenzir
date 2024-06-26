@@ -1589,8 +1589,8 @@ public:
 
   auto operator()(generator<table_slice> input,
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    // TODO: Expose a better API for this.
     auto printer = printer_.instantiate(type{}, ctrl);
-    // TODO
     TENZIR_ASSERT(printer);
     TENZIR_ASSERT(*printer);
     for (auto&& slice : input) {
@@ -1644,7 +1644,6 @@ public:
       .add("unnest_separator", unnest_separator)
       .add("raw", args.raw)
       .add("arrays_of_objects", args.arrays_of_objects)
-      // TODO: Might want to react to parsing failure.
       .parse(inv, ctx);
     if (unnest_separator) {
       args.unnest_separator = std::move(*unnest_separator);
@@ -1681,16 +1680,13 @@ public:
 
   auto make_function(invocation inv, session ctx) const
     -> std::unique_ptr<function_use> override {
-    // "[1, 2, 3]" => [1, 2, 3]
-    // "{yo: 42}" => {yo: 42}
-    // "{yo: 42} {yo: 43}" => error
-    //
-    // many=true (not so important)
-    // "{yo: 42}" => [{yo: 42}]
     auto expr = ast::expression{};
+    // TODO: Consider adding a `many` option to expect multiple json values.
+    // TODO: Consider adding a `precise` option (this needs evaluator support).
     argument_parser2::method("parse_json").add(expr, "<string>").parse(inv, ctx);
     return function_use::make(
-      [expr = std::move(expr)](evaluator eval, session ctx) -> series {
+      [call = inv.call.get_location(),
+       expr = std::move(expr)](evaluator eval, session ctx) -> series {
         auto arg = eval(expr);
         auto f = detail::overload{
           [&](const arrow::NullArray&) {
@@ -1716,20 +1712,28 @@ public:
                 // TODO: This can be very noisy.
                 diagnostic::warning("could not parse json: {}",
                                     simdjson::error_message(result.error()))
-                  .primary(expr)
+                  .primary(call)
                   .emit(ctx);
                 b.null();
                 continue;
               }
               b.data(result.value_unsafe());
             }
-            // TODO: Cannot assert this here.
-            return b.finish_assert_one_array();
+            auto result = b.finish();
+            // TODO: Consider whether we need heterogeneous for this. If so,
+            // then we must extend the evaluator accordingly.
+            if (result.size() != 1) {
+              diagnostic::warning("got incompatible JSON values")
+                .primary(call)
+                .emit(ctx);
+              return series::null(null_type{}, arg.length());
+            }
+            return std::move(result[0]);
           },
           [&](const auto&) {
             diagnostic::warning("`parse_json` expected `string`, got `{}`",
                                 arg.type.kind())
-              .primary(expr)
+              .primary(call)
               .emit(ctx);
             return series::null(null_type{}, arg.length());
           },

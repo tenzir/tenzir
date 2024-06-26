@@ -556,7 +556,7 @@ public:
 class plugin2 final : public virtual method_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.parse_grok";
+    return "tql2.grok";
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -566,7 +566,7 @@ public:
     auto indexed_captures = false;
     auto include_unnamed = false;
     auto raw = false;
-    argument_parser2::method("parse_grok")
+    argument_parser2::method("grok")
       .add(input, "<input>")
       .add(pattern, "<pattern>")
       .add("indexed_captures", indexed_captures)
