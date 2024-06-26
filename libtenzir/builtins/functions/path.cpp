@@ -55,7 +55,7 @@ public:
           [&](const auto&) {
             diagnostic::warning("`file_name` expected `string`, but got `{}`",
                                 arg.type.kind())
-              .primary(expr.get_location())
+              .primary(expr)
               .emit(ctx);
             return series::null(string_type{}, arg.length());
           },
@@ -136,7 +136,7 @@ public:
           [&](const auto&) {
             diagnostic::warning("`file_name` expected `string`, but got `{}`",
                                 arg.type.kind())
-              .primary(expr.get_location())
+              .primary(expr)
               .emit(ctx);
             return series::null(string_type{}, arg.length());
           },

@@ -178,10 +178,6 @@ struct root_field {
   }
 };
 
-// selector = meta | data
-// data = this? ["foo"]
-//
-
 using expression_kinds
   = caf::detail::type_list<record, list, meta, this_, root_field, pipeline_expr,
                            constant, field_access, index_expr, binary_expr,
@@ -320,7 +316,7 @@ struct unpack {
   }
 };
 
-TENZIR_ENUM(binary_op, add, sub, mul, div, eq, neq, gt, ge, lt, le, and_, or_,
+TENZIR_ENUM(binary_op, add, sub, mul, div, eq, neq, gt, geq, lt, leq, and_, or_,
             in);
 
 struct binary_expr {
@@ -340,7 +336,7 @@ struct binary_expr {
   }
 
   auto get_location() const -> location {
-    return left.get_location().combine(right.get_location());
+    return left.get_location().combine(right);
   }
 };
 
@@ -361,7 +357,7 @@ struct unary_expr {
   }
 
   auto get_location() const -> location {
-    return op.source.combine(expr.get_location());
+    return op.source.combine(expr);
   }
 };
 
@@ -383,7 +379,7 @@ struct assignment {
   }
 
   auto get_location() const -> location {
-    return left.get_location().combine(right.get_location());
+    return left.get_location().combine(right);
   }
 };
 
@@ -611,7 +607,7 @@ struct let_stmt {
   }
 
   auto get_location() const -> location {
-    return let.combine(expr.get_location());
+    return let.combine(expr);
   }
 };
 

@@ -399,38 +399,6 @@ public:
     }
     return std::make_unique<scheduled_execution_operator<every_scheduler>>(
       std::move(ops[0]), every_scheduler{interval.inner});
-    // if (inv.args.size() != 2) {
-    //   diagnostic::error("TODO")
-    //     .primary(inv.self.get_location())
-    //     .usage("every <duration> { ... }")
-    //     .emit(ctx);
-    //   return nullptr;
-    // }
-    // auto interval_data = tql2::const_eval(inv.args[0], ctx);
-    // if (not interval_data) {
-    //   return nullptr;
-    // }
-    // auto interval = caf::get_if<duration>(&*interval_data);
-    // if (not interval) {
-    //   diagnostic::error("expected a duration, got `{}`", *interval_data)
-    //     .primary(inv.args[0].get_location())
-    //     .emit(ctx);
-    //   return nullptr;
-    // }
-    // auto pipe_expr = std::get_if<ast::pipeline_expr>(&*inv.args[1].kind);
-    // if (not pipe_expr) {
-    //   diagnostic::error("expected a pipeline expression")
-    //     .primary(inv.args[1].get_location())
-    //     .usage("every <duration> { ... }")
-    //     .emit(ctx);
-    //   return nullptr;
-    // }
-    // auto pipe = tql2::prepare_pipeline(std::move(pipe_expr->inner), ctx);
-    // // TODO: Fix `every`?
-    // auto ops = std::move(pipe).unwrap();
-    // TENZIR_ASSERT(ops.size() == 1);
-    // return std::make_unique<scheduled_execution_operator<every_scheduler>>(
-    //   std::move(ops[0]), every_scheduler{*interval});
   }
 };
 

@@ -51,8 +51,19 @@ public:
       TENZIR_UNREACHABLE();
     });
     if (not entity) {
-      auto available = context_ == context_t::op_name ? reg_.operator_names()
-                                                      : reg_.function_names();
+      auto available = std::invoke([&] {
+        switch (context_) {
+          case context_t::op_name:
+            return reg_.operator_names();
+          case context_t::fn_name:
+            return reg_.function_names();
+          case context_t::method_name:
+            return reg_.method_names();
+          case context_t::none:
+            TENZIR_UNREACHABLE();
+        }
+        TENZIR_UNREACHABLE();
+      });
       diagnostic::error("{} `{}` not found", expected, name)
         .primary(x)
         .hint("must be one of: {}", fmt::join(available, ", "))

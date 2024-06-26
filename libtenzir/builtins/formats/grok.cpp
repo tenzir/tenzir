@@ -561,12 +561,6 @@ public:
 
   auto make_function(invocation inv, session ctx) const
     -> std::unique_ptr<function_use> override {
-    // parser.add(input_pattern_.raw_pattern, "<input_pattern>");
-    // std::optional<std::string> pattern_definitions{};
-    // parser.add("--pattern-definitions", pattern_definitions, "<patterns>");
-    // parser.add("--indexed-captures", indexed_captures_);
-    // parser.add("--include-unnamed", include_unnamed_);
-    // parser.add("--raw", raw_);
     auto input = ast::expression{};
     auto pattern = std::string{};
     auto indexed_captures = false;

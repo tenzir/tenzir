@@ -22,7 +22,6 @@
 
 namespace tenzir {
 
-// TODO: This is probably somewhere.
 template <class T>
 struct as_located {
   using type = located<T>;

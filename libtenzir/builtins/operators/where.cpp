@@ -133,25 +133,30 @@ private:
 
 auto to_field_extractor(const ast::expression& x)
   -> std::optional<field_extractor> {
-  // TODO: What if it contains special characters?
-  return x.match<std::optional<field_extractor>>(
-    [](const ast::root_field& x) {
+  auto p = (parsers::alpha | '_') >> *(parsers::alnum | '_');
+  return x.match(
+    [&](const ast::root_field& x) -> std::optional<field_extractor> {
+      if (not p(x.ident.name)) {
+        return std::nullopt;
+      }
       return x.ident.name;
     },
-    [](const ast::field_access& x) -> std::optional<std::string> {
+    [&](const ast::field_access& x) -> std::optional<field_extractor> {
+      if (not p(x.name.name)) {
+        return std::nullopt;
+      }
       if (std::holds_alternative<ast::this_>(*x.left.kind)) {
         return x.name.name;
       }
       TRY(auto left, to_field_extractor(x.left));
       return std::move(left.field) + "." + x.name.name;
     },
-    [](const auto&) {
+    [](const auto&) -> std::optional<field_extractor> {
       return std::nullopt;
     });
 }
 
 auto to_operand(const ast::expression& x) -> std::optional<operand> {
-  // meta_extractor, field_extractor, data
   return x.match<std::optional<operand>>(
     [](const ast::constant& x) {
       return x.as_data();
@@ -193,11 +198,6 @@ auto split_legacy_expression(const ast::expression& x)
   -> std::pair<expression, ast::expression> {
   return x.match<std::pair<expression, ast::expression>>(
     [&](const ast::binary_expr& y) {
-      // auto [lo, ln] = split_legacy_expression(x.left);
-      // auto [ro, rn] = split_legacy_expression(x.right);
-      // auto remainder
-      //   = ast::expression{ast::binary_expr{std::move(ln), x.op,
-      //   std::move(rn)}};
       auto rel_op = std::invoke([&]() -> std::optional<relational_operator> {
         switch (y.op.inner) {
           case ast::binary_op::add:
@@ -211,11 +211,11 @@ auto split_legacy_expression(const ast::expression& x)
             return relational_operator::not_equal;
           case ast::binary_op::gt:
             return relational_operator::greater;
-          case ast::binary_op::ge:
+          case ast::binary_op::geq:
             return relational_operator::greater_equal;
           case ast::binary_op::lt:
             return relational_operator::less;
-          case ast::binary_op::le:
+          case ast::binary_op::leq:
             return relational_operator::less_equal;
           case ast::binary_op::and_:
           case ast::binary_op::or_:
@@ -322,54 +322,26 @@ public:
       auto array = caf::get_if<arrow::BooleanArray>(&*filter.array);
       if (not array) {
         diagnostic::warning("expected `bool`, got `{}`", filter.type.kind())
-          .primary(expr_.get_location())
+          .primary(expr_)
           .emit(ctrl.diagnostics());
         co_yield {};
         continue;
       }
-#if 1
       auto length = array->length();
       auto current_value = array->Value(0);
       auto current_begin = int64_t{0};
-      // Add `false` at index `length` to flush.r
-      // auto& x = *to_record_batch(slice)->ToStructArray().ValueOrDie()->data();
+      // We add an artificial `false` at index `length` to flush.
       for (auto i = int64_t{1}; i < length + 1; ++i) {
         auto next = i != length && array->Value(i);
         if (current_value == next) {
           continue;
         }
         if (current_value) {
-          // emit
           co_yield subslice(slice, current_begin, i);
-        } else {
-          // discard
         }
         current_value = next;
         current_begin = i;
       }
-#else
-      // TODO: This ignores nulls.
-      auto length = array->length();
-      auto begin = length;
-      for (auto i = int64_t{0}; i < length; ++i) {
-        if (array->Value(i)) {
-          begin = i;
-          break;
-        }
-      }
-      if (begin == length) {
-        // done
-      }
-      auto end = length;
-      for (auto i = begin + 1; i < length; ++i) {
-        if (not array->Value(i)) {
-          end = i;
-          break;
-        }
-      }
-      // TODO: Merge small.
-      co_yield subslice(slice, begin, end);
-#endif
     }
   }
 
@@ -403,13 +375,6 @@ public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto expr = ast::expression{};
     argument_parser2::op("where").add(expr, "<expr>").parse(inv, ctx);
-    // auto ty = type_checker{ctx}.visit(args[0]);
-    // if (ty && ty->kind().is_not<bool_type>()) {
-    //   diagnostic::error("expected `bool`, got `{}`", *ty)
-    //     .primary(args[0].get_location())
-    //     .emit(ctx.dh());
-    // }
-    // TODO: `expr` might be empty here.
     return std::make_unique<where_operator2>(std::move(expr));
   }
 };

@@ -35,6 +35,7 @@ public:
   // TODO: This cannot stay this way, but for now we use it in error messages.
   auto operator_names() const -> std::vector<std::string_view>;
   auto function_names() const -> std::vector<std::string_view>;
+  auto method_names() const -> std::vector<std::string_view>;
 
   // TODO: Change signature.
   void add(std::string name, entity_def def);

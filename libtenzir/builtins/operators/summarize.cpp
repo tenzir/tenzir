@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/tql2/ast.hpp"
-
 #include <tenzir/aggregation_function.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/concept/convertible/data.hpp>
@@ -1090,7 +1088,7 @@ public:
             }
           }
         };
-    // TODO: Group by schema again.
+    // TODO: Group by schema again to make this more efficient.
     auto b = series_builder{};
     for (auto& [key, group] : groups_) {
       auto result = record{};
@@ -1119,7 +1117,7 @@ public:
                 arg = "this";
               }
               for (auto& segment : sel->path()) {
-                // TODO: This is wrong.
+                // TODO: This is wrong if the path contains special characters.
                 if (not arg.empty()) {
                   arg += '.';
                 }
@@ -1203,7 +1201,6 @@ public:
           // TODO: Improve this and try to forward function handle directly.
           auto fn
             = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(call));
-          // TODO: Check if aggregation function.
           if (not fn) {
             diagnostic::error("function does not support aggregations")
               .primary(call.fn)

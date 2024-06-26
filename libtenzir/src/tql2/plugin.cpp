@@ -10,67 +10,6 @@
 
 #include "tenzir/tql2/eval_impl.hpp"
 
-namespace tenzir::tql2 {
-
-// auto aggregation_function_plugin::eval(invocation inv,
-//                                        diagnostic_handler& dh) const ->
-//                                        series {
-//   if (inv.args.size() != 1) {
-//     diagnostic::error("function `{}` expects exactly one argument", name())
-//       .primary(inv.self.get_location())
-//       .emit(dh);
-//     return series::null(null_type{}, inv.length);
-//   }
-//   auto arg = std::get_if<positional_argument>(&inv.args[0]);
-//   if (not arg) {
-//     diagnostic::error("function `{}` expects a positional argument", name())
-//       .primary(inv.self.get_location())
-//       .emit(dh);
-//     return series::null(null_type{}, inv.length);
-//   }
-//   auto& array = arg->inner.array;
-//   auto& type = arg->inner.type;
-//   auto list = dynamic_cast<arrow::ListArray*>(&*array);
-//   if (not list) {
-//     diagnostic::warning("function `{}` expects a list, got {}", name(),
-//                         type.kind())
-//       .primary(inv.self.fn.get_location())
-//       .emit(dh);
-//     return series::null(null_type{}, inv.length);
-//   }
-//   auto inner_type = caf::get<list_type>(type).value_type();
-//   auto b = series_builder{};
-//   for (auto i = int64_t{0}; i < list->length(); ++i) {
-//     if (list->IsNull(i)) {
-//       // TODO: What do we want to do here?
-//       b.null();
-//       continue;
-//     }
-//     auto instance = make_aggregation();
-//     TENZIR_ASSERT(instance);
-//     instance->add(
-//       aggregation_instance::add_info{
-//         inv.self.fn, located{series{inner_type, list->value_slice(i)},
-//                              inv.self.args[0].get_location()}},
-//       dh);
-//     b.data(instance->finish());
-//   }
-//   auto result = b.finish();
-//   // TODO: Can this happen? If so, what do we want to do? Do we need to
-//   adjust
-//   // the plugin interface?
-//   if (result.size() != 1) {
-//     diagnostic::warning("internal error in `{}`: unexpected array count: {}",
-//                         result.size(), name())
-//       .primary(inv.self.fn.get_location())
-//       .emit(dh);
-//     return series::null(null_type{}, inv.length);
-//   }
-//   return std::move(result[0]);
-// }
-
-} // namespace tenzir::tql2
-
 namespace tenzir {
 
 auto function_use::evaluator::length() const -> int64_t {
@@ -101,7 +40,7 @@ auto function_use::make(
     }
 
     auto run(evaluator eval, session ctx) const -> series override {
-      return f_(std::move(eval), ctx);
+      return f_(eval, ctx);
     }
 
   private:

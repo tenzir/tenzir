@@ -73,7 +73,7 @@ public:
             diagnostic::warning("`ocsf_category_uid` expected `string`, but "
                                 "got `{}`",
                                 arg.type.kind())
-              .primary(expr.get_location())
+              .primary(expr)
               .emit(ctx);
             return series::null(int64_type{}, arg.length());
           },
@@ -126,7 +126,7 @@ public:
             diagnostic::warning("`ocsf_category_uid` expected `string`, but "
                                 "got `{}`",
                                 arg.type.kind())
-              .primary(expr.get_location())
+              .primary(expr)
               .emit(ctx);
             return series::null(int64_type{}, arg.length());
           },

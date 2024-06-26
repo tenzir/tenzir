@@ -14,7 +14,6 @@
 namespace tenzir {
 
 auto evaluator::eval(const ast::record& x) -> series {
-  // TODO: Soooo bad.
   auto fields = detail::stable_map<std::string, series>{};
   for (auto& item : x.content) {
     item.match(
@@ -31,13 +30,13 @@ auto evaluator::eval(const ast::record& x) -> series {
         TENZIR_TODO();
       });
   }
-  auto field_names = fields | std::ranges::views::transform([](auto& x) {
+  auto field_names = fields | std::views::transform([](auto& x) {
                        return x.first;
                      });
-  auto field_arrays = fields | std::ranges::views::transform([](auto& x) {
+  auto field_arrays = fields | std::views::transform([](auto& x) {
                         return x.second.array;
                       });
-  auto field_types = fields | std::ranges::views::transform([](auto& x) {
+  auto field_types = fields | std::views::transform([](auto& x) {
                        return record_type::field_view{x.first, x.second.type};
                      });
   auto result
@@ -91,36 +90,13 @@ auto evaluator::eval(const ast::list& x) -> series {
   return b.finish_assert_one_array();
 }
 
-// auto evaluator::eval(const ast::data_selector& x) -> series {
-//   auto result = resolve(x, input_or_throw(x.get_location()));
-//   return result.match(
-//     [](series& x) -> series {
-//       return std::move(x);
-//     },
-//     [&](resolve_error& err) -> series {
-//       err.reason.match(
-//         [&](resolve_error::field_of_non_record& reason) {
-//           diagnostic::warning("type `{}` does not have a field `{}`",
-//                               reason.type.kind(), err.ident.name)
-//             .primary(err.ident.location)
-//             .emit(dh_);
-//         },
-//         [&](resolve_error::field_not_found&) {
-//           diagnostic::warning("field `{}` not found", err.ident.name)
-//             .primary(err.ident.location)
-//             .emit(dh_);
-//         });
-//       return null();
-//     });
-// }
-
 auto evaluator::eval(const ast::field_access& x) -> series {
   auto l = eval(x.left);
   auto rec_ty = caf::get_if<record_type>(&l.type);
   if (not rec_ty) {
     diagnostic::warning("cannot access field of non-record type")
       .primary(x.dot.combine(x.name))
-      .secondary(x.left.get_location(), "type `{}`", l.type.kind())
+      .secondary(x.left, "type `{}`", l.type.kind())
       .emit(ctx_);
     return null();
   }
@@ -137,7 +113,9 @@ auto evaluator::eval(const ast::field_access& x) -> series {
 }
 
 auto evaluator::eval(const ast::function_call& x) -> series {
-  // TODO: This is very hacky.
+  // TODO: We parse the function call every time we get a new batch here. We
+  // could store the result in the AST if that becomes a problem, but that is
+  // also not an optimal solution.
   auto func
     = ctx_.reg().get(x).make_function(function_plugin::invocation{x}, ctx_);
   if (not func) {
@@ -149,12 +127,12 @@ auto evaluator::eval(const ast::function_call& x) -> series {
 }
 
 auto evaluator::eval(const ast::this_& x) -> series {
-  auto& input = input_or_throw(x.get_location());
+  auto& input = input_or_throw(x);
   return {input.schema(), to_record_batch(input)->ToStructArray().ValueOrDie()};
 }
 
 auto evaluator::eval(const ast::root_field& x) -> series {
-  auto& input = input_or_throw(x.get_location());
+  auto& input = input_or_throw(x);
   auto& rec_ty = caf::get<record_type>(input.schema());
   for (auto [i, field] : detail::enumerate<int>(rec_ty.fields())) {
     if (field.name == x.ident.name) {
@@ -169,7 +147,6 @@ auto evaluator::eval(const ast::root_field& x) -> series {
 }
 
 auto evaluator::eval(const ast::meta& x) -> series {
-  // TODO: This is quite inefficient.
   auto& input = input_or_throw(x);
   switch (x.kind) {
     case ast::meta::name:

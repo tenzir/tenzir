@@ -27,21 +27,13 @@ public:
   }
 
   auto operator()() const -> generator<table_slice> {
+    // TODO: We are combining all events into a single schema. Is this what we
+    // want, or do we want a more "precise" output if possible?
     auto sb = series_builder{};
-#if 1
     for (auto& event : events_) {
       sb.data(event);
     }
     auto slices = sb.finish_as_table_slice("tenzir.source");
-#else
-    for (auto i = 0; i < 1'000'000; ++i) {
-      for (auto& event : events_) {
-        sb.data(event);
-      }
-    }
-    auto slices = sb.finish_as_table_slice("tenzir.source");
-    std::cerr << "--- DONE ---\n" << std::flush;
-#endif
     for (auto& slice : slices) {
       co_yield std::move(slice);
     }
@@ -76,8 +68,7 @@ public:
     if (inv.args.empty()) {
       return nullptr;
     }
-    // TODO: We want to const-eval instead.
-    // TODO: And we want to const-eval when the operator is instantiated.
+    // TODO: We want to const-eval when the operator is instantiated.
     // For example: `every 1s { source { ts: now() } }`
     auto events = std::vector<record>{};
     inv.args[0].match(
@@ -100,7 +91,6 @@ public:
         }
       },
       [&](ast::record& x) {
-        // TODO
         auto event = const_eval(ast::expression{std::move(x)}, ctx);
         if (not event) {
           return;

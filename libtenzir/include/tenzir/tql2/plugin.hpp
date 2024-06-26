@@ -35,7 +35,8 @@ public:
   // TODO: Improve this.
   class evaluator {
   public:
-    evaluator(void* self) : self_{self} {};
+    explicit evaluator(void* self) : self_{self} {
+    }
 
     auto operator()(const ast::expression& expr) const -> series;
 
@@ -56,6 +57,13 @@ public:
   using evaluator = function_use::evaluator;
 
   struct invocation {
+    explicit invocation(const ast::function_call& call) : call{call} {
+    }
+    invocation(const invocation&) = delete;
+    invocation(invocation&&) = delete;
+    auto operator=(const invocation&) -> invocation& = delete;
+    auto operator=(invocation&&) -> invocation& = delete;
+
     const ast::function_call& call;
   };
 

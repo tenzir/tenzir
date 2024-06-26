@@ -193,9 +193,7 @@ auto argument_parser2::usage() const -> std::string {
       usage_cache_ += '.';
     }
     usage_cache_ += name_;
-    if (kind_ != kind::op) {
-      usage_cache_ += '(';
-    }
+    usage_cache_ += kind_ == kind::op ? ' ' : '(';
     auto has_previous = false;
     for (auto [idx, positional] : detail::enumerate(positional_)) {
       if (kind_ == kind::method && idx == 0) {

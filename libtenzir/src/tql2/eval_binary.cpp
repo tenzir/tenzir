@@ -27,16 +27,25 @@ namespace tenzir {
 namespace {
 
 [[maybe_unused]] constexpr auto is_arithmetic(ast::binary_op op) -> bool {
+  using enum ast::binary_op;
   switch (op) {
-    using enum ast::binary_op;
     case add:
     case sub:
     case mul:
     case div:
       return true;
-    default:
+    case eq:
+    case neq:
+    case gt:
+    case geq:
+    case lt:
+    case leq:
+    case and_:
+    case or_:
+    case in:
       return false;
   }
+  TENZIR_UNREACHABLE();
 }
 
 [[maybe_unused]] constexpr auto result_if_both_null(ast::binary_op op)
@@ -44,8 +53,8 @@ namespace {
   using enum ast::binary_op;
   switch (op) {
     case eq:
-    case ge:
-    case le:
+    case geq:
+    case leq:
       return true;
     case neq:
       return false;
@@ -64,18 +73,25 @@ namespace {
 }
 
 [[maybe_unused]] constexpr auto is_relational(ast::binary_op op) -> bool {
+  using enum ast::binary_op;
   switch (op) {
-    using enum ast::binary_op;
     case eq:
     case neq:
     case gt:
     case lt:
-    case ge:
-    case le:
+    case geq:
+    case leq:
       return true;
-    default:
+    case add:
+    case sub:
+    case mul:
+    case div:
+    case and_:
+    case or_:
+    case in:
       return false;
   }
+  TENZIR_UNREACHABLE();
 }
 
 template <ast::binary_op Op, class L, class R>
@@ -196,9 +212,9 @@ struct BinOpKernel<Op, L, R> {
       return l > r;
     } else if constexpr (Op == lt) {
       return l < r;
-    } else if constexpr (Op == ge) {
+    } else if constexpr (Op == geq) {
       return l >= r;
-    } else if constexpr (Op == le) {
+    } else if constexpr (Op == leq) {
       return l <= r;
     } else {
       static_assert(detail::always_false_v<L>,
@@ -223,9 +239,9 @@ struct BinOpKernel<Op, L, R> {
       return std::cmp_greater(l, r);
     } else if constexpr (Op == lt) {
       return std::cmp_less(l, r);
-    } else if constexpr (Op == ge) {
+    } else if constexpr (Op == geq) {
       return std::cmp_greater_equal(l, r);
-    } else if constexpr (Op == le) {
+    } else if constexpr (Op == leq) {
       return std::cmp_less_equal(l, r);
     } else {
       static_assert(detail::always_false_v<L>,
@@ -476,9 +492,9 @@ auto evaluator::eval(const ast::binary_expr& x) -> series {
     X(eq);
     X(neq);
     X(gt);
-    X(ge);
+    X(geq);
     X(lt);
-    X(le);
+    X(leq);
     X(in);
     // TODO: Short circuiting.
     X(and_);

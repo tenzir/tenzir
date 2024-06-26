@@ -8,26 +8,19 @@
 
 #include "tenzir/tql2/exec.hpp"
 
-#include "tenzir/bitmap.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/exec_pipeline.hpp"
-#include "tenzir/hash/hash.hpp"
 #include "tenzir/pipeline.hpp"
-#include "tenzir/series_builder.hpp"
 #include "tenzir/session.hpp"
 #include "tenzir/tql2/ast.hpp"
-#include "tenzir/tql2/check_type.hpp"
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/parser.hpp"
 #include "tenzir/tql2/plugin.hpp"
 #include "tenzir/tql2/registry.hpp"
 #include "tenzir/tql2/resolve.hpp"
-#include "tenzir/tql2/set.hpp"
 #include "tenzir/tql2/tokens.hpp"
-#include "tenzir/type.hpp"
 
-#include <arrow/compute/api.h>
 #include <arrow/util/utf8.h>
 #include <tsl/robin_set.h>
 
@@ -86,321 +79,11 @@ private:
   std::unique_ptr<diagnostic_handler> inner_;
 };
 
-#if 0
-TENZIR_ENUM(sort_direction, asc, desc);
-
-struct sort_expr {
-  sort_expr(expression expr, sort_direction dir)
-    : expr{std::move(expr)}, dir{dir} {
-  }
-
-  expression expr;
-  sort_direction dir;
-
-  friend auto inspect(auto& f, sort_expr& x) -> bool {
-    return f.object(x).fields(f.field("expr", x.expr), f.field("dir", x.dir));
-  }
-};
-
-class sort_use final : public operator_use {
-public:
-  explicit sort_use(entity self, std::vector<sort_expr> exprs)
-    : self_{std::move(self)}, exprs_{std::move(exprs)} {
-  }
-
-  // void, byte, chunk, event
-  // void, chunk_ptr, vector<chunk_ptr>, table_slice
-
-  auto debug(debug_writer& f) -> bool override {
-    return f.object(*this).fields(f.field("self", self_),
-                                  f.field("exprs", exprs_));
-  }
-
-private:
-  entity self_;
-  std::vector<sort_expr> exprs_;
-};
-
-class sort_def final : public operator_def {
-public:
-  auto make(ast::entity self, std::vector<expression> args, context& ctx) const
-    -> std::unique_ptr<operator_use> override {
-    auto exprs = std::vector<sort_expr>{};
-    exprs.reserve(args.size());
-    for (auto& arg : args) {
-      arg.match(
-        [&](ast::unary_expr& un_expr) {
-          if (un_expr.op.inner == ast::unary_op::neg) {
-            exprs.emplace_back(std::move(un_expr.expr), sort_direction::desc);
-          } else {
-            exprs.emplace_back(std::move(arg), sort_direction::asc);
-          }
-        },
-        [&](assignment& x) {
-          diagnostic::error("we don't like assignments around here")
-            .primary(x.get_location())
-            .emit(ctx.dh());
-        },
-        [&](auto&) {
-          exprs.emplace_back(std::move(arg), sort_direction::asc);
-        });
-    }
-    for (auto& expr : exprs) {
-      type_checker{ctx}.visit(expr.expr);
-    }
-    return std::make_unique<sort_use>(std::move(self), std::move(exprs));
-  }
-};
-
-class plugin_operator_def : public operator_def {
-public:
-  explicit plugin_operator_def(const operator_factory_plugin* plugin)
-    : plugin_{plugin} {
-  }
-
-  auto make(ast::entity self, std::vector<expression> args, context& ctx) const
-    -> std::unique_ptr<operator_use> override {
-    TENZIR_UNUSED(args);
-    diagnostic::error("todo: plugin_operator_def")
-      .primary(self.get_location())
-      .emit(ctx);
-    return nullptr;
-  }
-
-private:
-  const operator_factory_plugin* plugin_;
-};
-
-class from_use final : public operator_use {
-public:
-  explicit from_use(located<std::string> url) {
-    TENZIR_UNUSED(url);
-  }
-};
-
-class from_def final : public operator_def {
-public:
-  auto make(ast::entity self, std::vector<ast::expression> args,
-            context& ctx) const -> std::unique_ptr<operator_use> override {
-    (void)self;
-    if (args.size() != 1) {
-      diagnostic::error("`from` expects exactly one argument")
-        .primary(args.empty() ? self.get_location() : args[1].get_location())
-        .emit(ctx.dh());
-      if (args.empty()) {
-        return nullptr;
-      }
-    }
-    auto arg = std::move(args[0]);
-    // TODO: We don't need this, do we?
-    // auto ty = type_checker{ctx}.visit(arg);
-    // if (ty && ty != string_type{}) {
-    //   diagnostic::error("expected `string` but got `{}`", *ty)
-    //     .primary(arg.get_location())
-    //     .emit(ctx.dh());
-    //   return nullptr;
-    // }
-    auto url_data = evaluate(arg, ctx);
-    if (not url_data) {
-      return nullptr;
-    }
-    auto url = caf::get_if<std::string>(&*url_data);
-    if (not url) {
-      diagnostic::error("expected a string")
-        .primary(arg.get_location())
-        .emit(ctx.dh());
-      return nullptr;
-    }
-    return std::make_unique<from_use>(
-      located{std::move(*url), arg.get_location()});
-  }
-};
-
-class load_file_use final : public operator_use {
-public:
-  explicit load_file_use(std::optional<ast::expression> path)
-    : path_{std::move(path)} {
-  }
-
-private:
-  std::optional<ast::expression> path_;
-};
-
-class load_file_def final : public operator_def {
-public:
-  auto make(ast::entity self, std::vector<ast::expression> args,
-            context& ctx) const -> std::unique_ptr<operator_use> override {
-    (void)self;
-    (void)args;
-    auto usage = "load_file path, follow=false, mmap=false, timeout=null";
-    auto docs = "https://docs.tenzir.com/operators/load_file";
-    if (args.empty()) {
-      diagnostic::error("expected at least one argument")
-        .primary(self.get_location())
-        .usage(usage)
-        .docs(docs)
-        .emit(ctx.dh());
-    }
-    // assume we want `"foo.json"` and `path="foo.json"`.
-    auto path = std::optional<ast::expression>{};
-    for (auto& arg : args) {
-      arg.match(
-        [&](assignment& x) {
-          auto ty = type_checker{ctx}.visit(x.right);
-          if (not x.left.this_ && x.left.path.size() == 1
-              && x.left.path[0].name == "path") {
-            if (ty && ty != type{string_type{}}) {
-              diagnostic::error("expected `string` but got `{}`", *ty)
-                .primary(x.right.get_location())
-                .usage(usage)
-                .docs(docs)
-                .emit(ctx.dh());
-            }
-            path = std::move(x.right);
-          } else {
-            diagnostic::error("unknown named argument")
-              .primary(x.left.get_location())
-              .usage(usage)
-              .docs(docs)
-              .emit(ctx.dh());
-          }
-        },
-        [&](auto& x) {
-          auto ty = type_checker{ctx}.visit(x);
-          if (path) {
-            diagnostic::error("path was already specified")
-              .secondary(path->get_location(), "previous definition")
-              .primary(x.get_location(), "new definition")
-              .usage(usage)
-              .docs(docs)
-              .emit(ctx.dh());
-            return;
-          }
-          if (ty && ty != type{string_type{}}) {
-            diagnostic::error("expected `string`, got `{}`", *ty)
-              .primary(x.get_location())
-              .usage(usage)
-              .docs(docs)
-              .emit(ctx.dh());
-          }
-          path = std::move(x);
-        });
-    };
-    return std::make_unique<load_file_use>(std::move(path));
-  }
-};
-
-struct pipeline_use {
-  pipeline_use() = default;
-
-  explicit pipeline_use(std::vector<std::unique_ptr<operator_use>> ops)
-    : ops{std::move(ops)} {
-  }
-
-  std::vector<std::unique_ptr<operator_use>> ops;
-
-  friend auto inspect(auto& f, pipeline_use& x) -> bool {
-    if (not f.begin_sequence(x.ops.size())) {
-      return false;
-    }
-    for (auto& op : x.ops) {
-      if (not f.apply(*op)) {
-        return false;
-      }
-    }
-    return f.end_sequence();
-  }
-};
-
-class if_use final : public operator_use {
-public:
-  explicit if_use(expression condition, pipeline_use then,
-                  std::optional<pipeline_use> else_)
-    : condition_{std::move(condition)},
-      then_{std::move(then)},
-      else_{std::move(else_)} {
-  }
-
-private:
-  expression condition_;
-  pipeline_use then_;
-  std::optional<pipeline_use> else_;
-};
-
-class head_use final : public operator_use {
-public:
-  explicit head_use(uint64_t count) : count_{count} {
-  }
-
-private:
-  uint64_t count_;
-};
-
-class head_def final : public operator_def {
-public:
-  auto make(ast::entity self, std::vector<ast::expression> args,
-            context& ctx) const -> std::unique_ptr<operator_use> override {
-    if (args.empty()) {
-      diagnostic::error("expected number")
-        .primary(self.get_location())
-        .emit(ctx.dh());
-      return nullptr;
-    }
-    if (args.size() > 1) {
-      diagnostic::error("expected only one argument")
-        .primary(args[1].get_location())
-        .emit(ctx.dh());
-    }
-    // TODO: We want to have better errors here.
-    auto value = evaluate(args[0], ctx);
-    if (not value) {
-      return nullptr;
-    }
-    // TODO: Better promotion?
-    auto count = caf::get_if<int64_t>(&*value);
-    if (not count) {
-      diagnostic::error("expected integer")
-        .primary(args[0].get_location())
-        .emit(ctx.dh());
-      return nullptr;
-    }
-    if (*count < 0) {
-      diagnostic::error("expected count to be non-negative but got {}", *count)
-        .primary(args[0].get_location())
-        .emit(ctx.dh());
-      return nullptr;
-    }
-    return std::make_unique<head_use>(detail::narrow<uint64_t>(*count));
-  }
-};
-
-#endif
-
-#if 1
-// evaluation model !?!
-
-// data
-// arrow::Array
-// bitmap (?) <-- probably not as function input?
-
-// maybe input a `ids` for which we care about the output?
-// or for which we want to `&&` the result?
-
-// if evaluation "fails" -> use `null` for now (for whole expression??)
-// and emit diagnostic
-
-struct eval_input {
-  location fn;
-  std::span<located<variant<data, std::shared_ptr<arrow::Array>, bitmap>>> args;
-};
-
-#endif
 } // namespace
 
 auto prepare_pipeline(ast::pipeline&& pipe, session ctx) -> pipeline {
   auto ops = std::vector<operator_ptr>{};
   for (auto& stmt : pipe.body) {
-    // let_stmt, if_stmt, match_stmt
     stmt.match(
       [&](ast::invocation& x) {
         if (not x.op.ref.resolved()) {
@@ -449,13 +132,7 @@ auto prepare_pipeline(ast::pipeline&& pipe, session ctx) -> pipeline {
 #endif
       },
       [&](ast::if_stmt& x) {
-        // auto ty = check_type(x.condition, ctx);
-        // if (ty && *ty != type{bool_type{}}) {
-        //   diagnostic::error("condition type must be `bool`, but is `{}`", *ty)
-        //     .primary(x.condition.get_location())
-        //     .emit(ctx.dh());
-        // }
-        // TODO: Same problem. Very, very hacky!
+        // TODO: Same problem regarding instantiation outside of plugin.
         auto args = std::vector<ast::expression>{};
         args.reserve(3);
         args.push_back(std::move(x.condition));
@@ -485,11 +162,6 @@ auto prepare_pipeline(ast::pipeline&& pipe, session ctx) -> pipeline {
         diagnostic::error("`let` statements are not implemented yet")
           .primary(x)
           .emit(ctx);
-      },
-      [&](auto& x) {
-        diagnostic::error("statement not implemented yet")
-          .primary(x)
-          .emit(ctx.dh());
       });
   }
   return tenzir::pipeline{std::move(ops)};
@@ -614,13 +286,7 @@ auto exec2(std::string content, std::unique_ptr<diagnostic_handler> diag,
   if (diag_wrapper->error()) {
     return false;
   }
-  // TODO: Todo below might be inaccurate.
-  // TODO: While we want to be able to operator definitions in plugins, we do
-  // not want the mere *existence* to be dependant on which plugins are loaded.
-  // Instead, we should always register all operators and then emit an helpful
-  // error if the corresponding plugin is not loaded.
   if (cfg.dump_ast) {
-    // TODO: Registry?
     fmt::print("{:#?}\n", parsed);
     return not diag_wrapper->error();
   }

@@ -58,7 +58,7 @@ public:
           [&](const auto&) {
             diagnostic::warning("`time` expected `string`, but got `{}`",
                                 arg.type.kind())
-              .primary(expr.get_location())
+              .primary(expr)
               .emit(ctx);
             return series::null(time_type{}, arg.length());
           },
@@ -109,7 +109,7 @@ public:
           [&](const auto&) {
             diagnostic::warning("`time` expected `time`, but got `{}`",
                                 arg.type.kind())
-              .primary(expr.get_location())
+              .primary(expr)
               .emit(ctx);
             return series::null(double_type{}, arg.length());
           },

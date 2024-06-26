@@ -11,7 +11,6 @@
 #include "tenzir/concept/parseable/tenzir/ip.hpp"
 #include "tenzir/concept/parseable/tenzir/time.hpp"
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/expression.hpp"
 #include "tenzir/tql2/ast.hpp"
 
 #include <arrow/util/utf8.h>
@@ -46,9 +45,9 @@ auto precedence(binary_op x) -> int {
     case sub:
       return 5;
     case gt:
-    case ge:
+    case geq:
     case lt:
-    case le:
+    case leq:
     case eq:
     case neq:
     case in:
@@ -75,8 +74,7 @@ public:
       }
       return pipe;
     } catch (diagnostic& d) {
-      // TODO
-      diag.emit(d);
+      diag.emit(std::move(d));
       return ast::pipeline{{}};
     }
   }
@@ -276,56 +274,10 @@ private:
     auto location = expr.get_location();
     auto result = selector::try_from(std::move(expr));
     if (not result) {
-      // TODO: Improve error message, see below.
+      // TODO: Improve error message.
       diagnostic::error("expected selector").primary(location).throw_();
     }
     return std::move(*result);
-    // return x.match(
-    //   [](this_& x) {
-    //     return selector{data_selector{x.source, {}}};
-    //   },
-    //   [](meta& x) {
-    //     return selector{x};
-    //   },
-    //   [&](field_access& x) {
-    //     auto sel = to_selector(x.left);
-    //     sel.match(
-    //       [&](meta&) {
-    //         diagnostic::error("cannot access field of meta")
-    //           .primary(x.dot.combine(x.name.location))
-    //           .throw_();
-    //       },
-    //       [&](data_selector& sel) {
-    //         sel.segments.push_back(x.name);
-    //       });
-    //     return sel;
-    //   },
-    //   [&](index_expr& x) {
-    //     auto lit = std::get_if<literal>(&*x.index.kind);
-    //     auto name = lit ? std::get_if<std::string>(&lit->value) : nullptr;
-    //     if (not name) {
-    //       diagnostic::error("selector only allow string literals at the
-    //       moment")
-    //         .primary(x.index.get_location())
-    //         .throw_();
-    //     }
-    //     auto sel = to_selector(x.expr);
-    //     sel.match(
-    //       [&](meta&) {
-    //         diagnostic::error("cannot index meta")
-    //           .primary(x.lbracket.combine(x.rbracket))
-    //           .throw_();
-    //       },
-    //       [&](data_selector& sel) {
-    //         sel.segments.emplace_back(*name, x.index.get_location());
-    //       });
-    //     return sel;
-    //   },
-    //   [](auto& x) -> selector {
-    //     diagnostic::error("expected selector, found TODO")
-    //       .primary(x.get_location())
-    //       .throw_();
-    //   });
   }
 
   auto parse_expression(int min_prec = 0) -> ast::expression {
@@ -334,12 +286,6 @@ private:
       if (min_prec == 0) {
         if (auto equal = accept(tk::equal)) {
           auto left = to_selector(expr);
-          // if (not left) {
-          //   diagnostic::error("left of `=` must be selector")
-          //     .primary(expr.get_location())
-          //     .hint("equality comparison is done with `==`")
-          //     .throw_();
-          // }
           // TODO: Check precedence.
           auto right = parse_expression();
           expr = assignment{
@@ -366,7 +312,7 @@ private:
       }
       break;
     }
-    // TODO: Does this improve error messages?
+    // We clear the previously tried token to improve error messages.
     tries_.clear();
     return expr;
   }
@@ -396,11 +342,11 @@ private:
         }
         continue;
       }
-      // TODO: We have to differentiate between an operator invocation `foo
-      // [0]` and an assignment `foo[0] = 42`. To make an early decision, we
-      // for now parse it as an operator if there is whitespace after `foo`.
-      // Alternatively, we could whether we can determine what this has to be
-      // from the surrounding context, but that seems a bit brittle.
+      // TODO: We have to differentiate between an operator invocation `foo [0]`
+      // and an assignment `foo[0] = 42`. To make an early decision, we for now
+      // parse it as an operator if there is whitespace after `foo`.
+      // Alternatively, we could see whether we can determine what this has to
+      // be from the surrounding context, but that seems a bit brittle.
       if (not trivia_before_next() && peek(tk::lbracket)) {
         auto lbracket = expect(tk::lbracket);
         if (auto rbracket = accept(tk::rbracket)) {
@@ -489,10 +435,8 @@ private:
     if (auto token = accept(tk::this_)) {
       return ast::this_{token.location};
     }
-    // TODO: Accept entity as function name.
     auto ident = accept(tk::identifier);
     if (not ident) {
-      // TODO: This is maybe a bit hacky?
       diagnostic::error("expected expression, got {}", next_description())
         .primary(next_location(), "got {}", next_description())
         .throw_();
@@ -511,74 +455,7 @@ private:
         .throw_();
     }
     return ast::root_field{std::move(path[0])};
-    // TODO: The code below is a mess and needs to be improved.
-    // auto sel = parse_selector();
-    // auto ent = std::optional<entity>{};
-    // if (accept(tk::single_quote)) {
-    //   if (sel.this_ || sel.path.size() != 1) {
-    //     diagnostic::error("todo: unexpected stuff before entity")
-    //       .primary(sel.get_location())
-    //       .throw_();
-    //   }
-    //   auto path = std::move(sel.path);
-    //   while (true) {
-    //     auto ident = expect(tk::identifier);
-    //     path.push_back(ident.as_identifier());
-    //     if (not accept(tk::single_quote)) {
-    //       break;
-    //     }
-    //   }
-    //   ent = entity{std::move(path)};
-    // }
-    // if (peek(tk::lpar)) {
-    //   // TODO: Consider refactoring this.
-    //   auto subject = std::optional<ast::expression>{};
-    //   if (not ent) {
-    //     if (sel.this_ and sel.path.empty()) {
-    //       diagnostic::error("`this` cannot be called")
-    //         .primary(*sel.this_)
-    //         .throw_();
-    //     }
-    //     TENZIR_ASSERT(not sel.path.empty());
-    //     ent = entity{{std::move(sel.path.back())}};
-    //     sel.path.pop_back();
-    //     if (sel.this_ || not sel.path.empty()) {
-    //       subject = std::move(sel);
-    //     }
-    //   }
-    //   TENZIR_ASSERT(ent);
-    //   return parse_function_call(std::move(subject), std::move(*ent));
-    // }
-    // if (ent) {
-    //   diagnostic::error("todo: referenced entity that is not a function call")
-    //     .primary(ent->get_location())
-    //     .throw_();
-    // }
-    // return sel;
   }
-
-  auto selector_start() -> bool {
-    return peek(tk::identifier) || peek(tk::this_);
-  }
-
-  // auto parse_selector() -> data_selector {
-  //   auto this_ = accept(tk::this_);
-  //   auto path = std::vector<ast::identifier>{};
-  //   while (true) {
-  //     if (this_ || not path.empty()) {
-  //       if (not accept(tk::dot)) {
-  //         break;
-  //       }
-  //     }
-  //     if (auto ident = accept(tk::identifier)) {
-  //       path.emplace_back(std::string{ident.text}, ident.location);
-  //     } else {
-  //       throw_token();
-  //     }
-  //   }
-  //   return data_selector{this_ ? this_.location : std::optional<location>{},
-  //                        std::move(path)};
-  // }
 
   auto parse_record_or_pipeline_expr() -> ast::expression {
     auto begin = expect(tk::lbrace);
@@ -591,8 +468,6 @@ private:
     if (is_record) {
       return parse_record(begin.location);
     }
-    // TODO: If we encounter a `:` while parsing the following pipeline, we want
-    // to emit a more helpful message.
     auto pipe = parse_pipeline();
     auto end = expect(tk::rbrace);
     return pipeline_expr{
@@ -797,9 +672,9 @@ private:
     X(star, mul);
     X(slash, div);
     X(greater, gt);
-    X(greater_equal, ge);
+    X(greater_equal, geq);
     X(less, lt);
-    X(less_equal, le);
+    X(less_equal, leq);
     X(equal_equal, eq);
     X(bang_equal, neq);
     X(and_, and_);
@@ -884,8 +759,8 @@ private:
     return silent_peek(kind);
   }
 
+  // TODO: Can we get rid of this?
   auto silent_peek_n(token_kind kind, size_t offset = 0) -> bool {
-    // TODO: Can we get rid of this?
     auto index = next_;
     while (true) {
       if (index >= tokens_.size()) {
