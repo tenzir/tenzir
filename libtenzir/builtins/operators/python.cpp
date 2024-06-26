@@ -178,7 +178,7 @@ public:
       bp::pipe std_in;
       bp::ipstream std_err;
       auto python_executable = bp::search_path("python3");
-      auto env = boost::this_process::environment();
+      auto env = bp::environment{boost::this_process::environment()};
       // Automatically create a virtualenv with all requirements preinstalled,
       // unless disabled by node config.
       if (config_.venv_base_dir) {
