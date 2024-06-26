@@ -45,6 +45,25 @@ auto exec_command_impl(std::string content, diagnostic_handler& dh,
 auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   auto cfg = exec_config{};
   cfg.dump_tokens = caf::get_or(inv.options, "tenzir.exec.dump-tokens", false);
+  auto color_mode = caf::get_or(inv.options, "tenzir.exec.color", "auto");
+  auto color = color_diagnostics{};
+  if (color_mode == "always") {
+    color = color_diagnostics::yes;
+  } else if (color_mode == "never") {
+    color = color_diagnostics::no;
+  } else {
+    if (not isatty(STDERR_FILENO)
+        || not detail::getenv("NO_COLOR").value_or("").empty()) {
+      color = color_diagnostics::no;
+    } else {
+      color = color_diagnostics::yes;
+    }
+    if (color_mode != "auto") {
+      diagnostic::error("`--color` must be one of `auto`, `always`, `never`")
+        .emit(*make_diagnostic_printer(std::nullopt, color, std::cerr));
+      return false;
+    }
+  }
   cfg.dump_ast = caf::get_or(inv.options, "tenzir.exec.dump-ast", false);
   cfg.dump_diagnostics
     = caf::get_or(inv.options, "tenzir.exec.dump-diagnostics", false);
@@ -65,12 +84,6 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   auto filename = std::string{};
   auto content = std::string{};
   const auto& args = inv.arguments;
-  auto color = (isatty(STDERR_FILENO) == 1
-                && detail::getenv("NO_COLOR").value_or("").empty())
-                 ? color_diagnostics::yes
-                 : color_diagnostics::no;
-  // TODO: Remove this.
-  color = color_diagnostics::yes;
   auto printer = make_diagnostic_printer(std::nullopt, color, std::cerr);
   if (args.size() != 1) {
     printer->emit(diagnostic::error("expected exactly one argument, but got {}",
@@ -118,6 +131,8 @@ public:
       "exec", "execute a pipeline locally",
       command::opts("?tenzir.exec")
         .add<bool>("file,f", "load the pipeline definition from a file")
+        .add<std::string>("color", "whether to emit colorful output (default: "
+                                   "auto, alternatives: never, always)")
         .add<bool>("dump-tokens",
                    "print a textual description of the tokens and then exit")
         .add<bool>("dump-ast",
