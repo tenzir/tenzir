@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
-#include <tenzir/argument_parser2.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
@@ -121,7 +120,7 @@ public:
   }
 
   auto make(invocation inv, session ctx) const -> operator_ptr override {
-    argument_parser2::op("import").parse(inv, ctx);
+    argument_parser2::operator_("import").parse(inv, ctx);
     return std::make_unique<import_operator>();
   }
 };

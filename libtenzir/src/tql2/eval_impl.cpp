@@ -174,4 +174,29 @@ auto evaluator::eval(const ast::constant& x) -> series {
   return to_series(x.as_data());
 }
 
+auto evaluator::eval(const ast::expression& x) -> series {
+  return x.match([&](auto& y) {
+    return eval(y);
+  });
+}
+
+auto evaluator::input_or_throw(into_location location) -> const table_slice& {
+  if (not input_) {
+    diagnostic::error("expected a constant expression")
+      .primary(location)
+      .emit(ctx_);
+    throw std::monostate{};
+  }
+  return *input_;
+}
+
+auto evaluator::to_series(const data& x) const -> series {
+  // TODO: This is overkill.
+  auto b = series_builder{};
+  for (auto i = int64_t{0}; i < length_; ++i) {
+    b.data(x);
+  }
+  return b.finish_assert_one_array();
+}
+
 } // namespace tenzir

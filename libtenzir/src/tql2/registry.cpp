@@ -27,7 +27,8 @@ auto global_registry() -> const registry& {
     auto reg = registry{};
     for (auto op : plugins::get<operator_factory_plugin>()) {
       auto name = op->name();
-      // TODO
+      // TODO: We prefixed some operators with "tql2." to prevent name clashes
+      // with the legacy operators. We should get rid of this eventually.
       if (name.starts_with("tql2.")) {
         name = name.substr(5);
       }
@@ -35,7 +36,7 @@ auto global_registry() -> const registry& {
     }
     for (auto fn : plugins::get<function_plugin>()) {
       auto name = fn->name();
-      // TODO
+      // TODO: Same here.
       if (name.starts_with("tql2.")) {
         name = name.substr(5);
       }

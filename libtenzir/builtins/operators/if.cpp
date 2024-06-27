@@ -34,10 +34,7 @@ auto array_select(const table_slice& slice, const arrow::BooleanArray& array,
       continue;
     }
     if (current_value) {
-      // emit
       co_yield subslice(slice, current_begin, i);
-    } else {
-      // discard
     }
     current_value = next;
     current_begin = i;
@@ -75,89 +72,10 @@ public:
     return do_not_optimize(*this);
   }
 
-  // auto infer_type_impl(operator_type input) const
-  //   -> caf::expected<operator_type> override {
-  //   // We assume input to be events (must be, unless condition is constant).
-  //   // The type after `if x { y }` is same as after `if x { y } else {}`.
-  //   // The type after `if x { y } else { z }` is:
-  //   // - If 2 void: void.
-  //   // - If 1 void: Type of the other.
-  //   // - If 0 void: Both types must be table slice.
-  //   if (not input.is<table_slice>()) {
-  //     return caf::make_error(ec::type_clash, "expected events as input");
-  //   }
-  //   auto then_type = then_.infer_type<table_slice>();
-  //   if (not then_type) {
-  //     return then_type.error();
-  //   }
-  //   auto else_type
-  //     = else_ ? else_->infer_type<table_slice>() : tag_v<table_slice>;
-  //   if (not else_type) {
-  //     return else_type.error();
-  //   }
-  //   if (then_type->is<void>()) {
-  //     return else_type;
-  //   }
-  //   if (else_type->is<void>()) {
-  //     return then_type;
-  //   }
-  //   if (then_type->is<table_slice>() && else_type->is<table_slice>()) {
-  //     return tag_v<table_slice>;
-  //   }
-  //   return caf::make_error(ec::type_clash, "if must have at least one sink or
-  //   "
-  //                                          "both branches must yield
-  //                                          events");
-  // }
-
-  // auto instantiate(operator_input input, operator_control_plane& ctrl) const
-  //   -> caf::expected<operator_output> override {
-  //   // TODO: We assume here that `infer_type` did not report an error.
-  //   return std::invoke(
-  //     [&](generator<table_slice> input) -> operator_output {
-  //       auto then_input = std::optional<table_slice>{table_slice{}};
-  //       auto else_input = std::optional<table_slice>{table_slice{}};
-  //       auto make_input
-  //         = [](std::optional<table_slice>& input) -> generator<table_slice> {
-  //         while (input.has_value()) {
-  //           co_yield std::exchange(*input, table_slice{});
-  //         }
-  //       };
-  //       auto then_result = then_.instantiate(make_input(then_input), ctrl);
-  //       if (not then_result) {
-  //         diagnostic::error(then_result.error()).emit(ctrl.diagnostics());
-  //       }
-  //       auto then_gen = std::move(*then_result);
-  //       auto else_gen = operator_output{};
-  //       if (else_) {
-  //         auto else_result = else_->instantiate(make_input(else_input),
-  //         ctrl); if (not else_result) {
-  //           diagnostic::error(else_result.error()).emit(ctrl.diagnostics());
-  //         }
-  //         else_gen = std::move(*else_result);
-  //       } else {
-  //         else_gen = make_input(else_input);
-  //       }
-  //       auto f = detail::overload{
-  //         [](generator<table_slice> then,
-  //            generator<table_slice> else_) -> operator_output {
-  //           //
-  //         },
-  //         [](generator<void> then, )[]<class T, class E>(
-  //           generator<T> then, generator<E> else_) -> operator_output {
-  //           //
-  //         },
-  //       };
-  //       return std::visit(f, std::move(then_gen), std::move(else_gen));
-  //     },
-  //     std::get<generator<table_slice>>(std::move(input)));
-  // }
-
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    // TODO: All of this is quite bad!
-    // We use empty optional to signal finish!
+    // TODO: All of this is quite bad! Needs to be rewritten.
     auto transpose_gen = [](operator_output gen)
       -> generator<variant<table_slice, chunk_ptr, std::monostate>> {
       return std::visit(
@@ -169,6 +87,7 @@ public:
         },
         std::move(gen));
     };
+    // We use empty optional to signal exhaustion.
     auto then_input = std::optional<table_slice>{table_slice{}};
     auto else_input = std::optional<table_slice>{table_slice{}};
     auto make_input

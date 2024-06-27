@@ -6,11 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/argument_parser2.hpp"
-#include "tenzir/tql2/ast.hpp"
-
 #include <tenzir/tql2/arrow_utils.hpp>
-#include <tenzir/tql2/eval_impl.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::misc {
@@ -31,9 +27,10 @@ public:
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         TENZIR_UNUSED(ctx);
         auto value = eval(expr);
+        // TODO: This is a 64-bit hex-encoded hash. We could also use just use
+        // an integer for this.
         auto type_id = value.type.make_fingerprint();
         auto b = arrow::StringBuilder{};
-        // TODO
         check(b.Reserve(value.length()));
         for (auto i = int64_t{0}; i < value.length(); ++i) {
           check(b.Append(type_id));

@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/argument_parser2.hpp"
-
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
@@ -159,7 +157,7 @@ public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     bool real_time = false;
     bool cumulative = false;
-    argument_parser2::op("measure")
+    argument_parser2::operator_("measure")
       .add("real_time", real_time)
       .add("cumulative", cumulative)
       .parse(inv, ctx);

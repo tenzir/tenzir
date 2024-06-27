@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser2.hpp>
 #include <tenzir/concept/parseable/tenzir/si.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/diagnostics.hpp>
@@ -105,7 +104,7 @@ public:
           }
           if (report) {
             // TODO: It would be helpful to know what string, but then
-            // deduplication doesn't work? Perhaps some unique identifier.
+            // deduplication doesn't work.
             diagnostic::warning("`{}` failed to convert some string", name())
               .primary(expr)
               .emit(ctx);

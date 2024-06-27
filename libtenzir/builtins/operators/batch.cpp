@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
-#include <tenzir/argument_parser2.hpp>
 #include <tenzir/concept/parseable/numeric/integral.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/defaults.hpp>
@@ -156,7 +155,7 @@ public:
   }
 
   auto make(invocation inv, session ctx) const -> operator_ptr override {
-    argument_parser2::op("batch").parse(inv, ctx);
+    argument_parser2::operator_("batch").parse(inv, ctx);
     return std::make_unique<batch_operator>(defaults::import::table_slice_size,
                                             duration::max(),
                                             event_order::ordered);

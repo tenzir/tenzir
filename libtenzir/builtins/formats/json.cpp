@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
-#include <tenzir/argument_parser2.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/cast.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
@@ -1629,7 +1628,7 @@ public:
     auto selector = std::optional<located<std::string>>{};
     auto sep = std::optional<located<std::string>>{};
     auto unnest_separator = std::optional<std::string>{};
-    argument_parser2::op("read_json")
+    argument_parser2::operator_("read_json")
       .add("sep", sep)
       // TODO: We could allow a non-constant expression for `schema` and then
       // evaluate it with (perhaps in some limited fashion) against the current
@@ -1697,11 +1696,9 @@ public:
             auto b = series_builder{};
             for (auto i = int64_t{0}; i < arg.length(); ++i) {
               if (arg.IsNull(i)) {
-                // TODO: What to do here?
                 b.null();
                 continue;
               }
-              // todo: optimize
               auto parse = [&]() -> simdjson::simdjson_result<data> {
                 auto str = std::string{arg.Value(i)};
                 TRY(auto doc, parser.iterate(str));
@@ -1709,7 +1706,8 @@ public:
               };
               auto result = parse();
               if (result.error()) {
-                // TODO: This can be very noisy.
+                // TODO: This can be very noisy. We will deduplicate the
+                // messages, but this is not efficient.
                 diagnostic::warning("could not parse json: {}",
                                     simdjson::error_message(result.error()))
                   .primary(call)
@@ -1748,7 +1746,7 @@ public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     // TODO: More options, and consider `null_fields=false` as default.
     auto args = printer_args{};
-    argument_parser2::op("write_json")
+    argument_parser2::operator_("write_json")
       // TODO: Perhaps "indent=0"?
       .add("ndjson", args.compact_output)
       .add("color", args.color_output)

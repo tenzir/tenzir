@@ -22,14 +22,14 @@ concept data_type = detail::tl_contains_v<data::types, T>;
 
 } // namespace
 
-void argument_parser2::parse(const operator_factory_plugin::invocation& inv,
-                             session ctx) {
+auto argument_parser2::parse(const operator_factory_plugin::invocation& inv,
+                             session ctx) -> bool {
   TENZIR_ASSERT(kind_ == kind::op);
   return parse(inv.self, inv.args, ctx);
 }
 
-void argument_parser2::parse(const function_plugin::invocation& inv,
-                             session ctx) {
+auto argument_parser2::parse(const function_plugin::invocation& inv,
+                             session ctx) -> bool {
   TENZIR_ASSERT(kind_ != kind::op);
   if (inv.call.subject) {
     auto args = std::vector<ast::expression>{};
@@ -41,16 +41,21 @@ void argument_parser2::parse(const function_plugin::invocation& inv,
   return parse(inv.call.fn, inv.call.args, ctx);
 }
 
-void argument_parser2::parse(const ast::function_call& call, session ctx) {
+auto argument_parser2::parse(const ast::function_call& call, session ctx)
+  -> bool {
   TENZIR_ASSERT(kind_ != kind::op);
   return parse(call.fn, call.args, ctx);
 }
 
-void argument_parser2::parse(const ast::entity& self,
-                             std::span<ast::expression const> args,
-                             session ctx) {
+auto argument_parser2::parse(const ast::entity& self,
+                             std::span<ast::expression const> args, session ctx)
+  -> bool {
   // TODO: Simplify and deduplicate everything in this function.
+  auto success = true;
   auto emit = [&](diagnostic_builder d) {
+    if (d.inner().severity == severity::error) {
+      success = false;
+    }
     std::move(d).usage(usage()).docs(docs()).emit(ctx);
   };
   auto kind = [](const data& x) -> std::string_view {
@@ -183,6 +188,7 @@ void argument_parser2::parse(const ast::entity& self,
         set(located{std::move(pipe), expr.get_location()});
       });
   }
+  return success;
 }
 
 auto argument_parser2::usage() const -> std::string {
@@ -196,15 +202,17 @@ auto argument_parser2::usage() const -> std::string {
     usage_cache_ += kind_ == kind::op ? ' ' : '(';
     auto has_previous = false;
     for (auto [idx, positional] : detail::enumerate(positional_)) {
-      if (kind_ == kind::method && idx == 0) {
+      auto first = idx == 0;
+      auto last = idx == positional_.size() - 1;
+      if (first && kind_ == kind::method) {
         continue;
       }
-      if (std::exchange(has_previous, true)) {
+      auto is_pipeline
+        = std::holds_alternative<setter<located<pipeline>>>(positional.set);
+      if (last && is_pipeline) {
+        usage_cache_ += ' ';
+      } else if (std::exchange(has_previous, true)) {
         usage_cache_ += ", ";
-      }
-      if (std::holds_alternative<setter<located<pipeline>>>(positional.set)) {
-        usage_cache_ += " { ... }";
-        continue;
       }
       if (first_optional_ && idx >= *first_optional_) {
         usage_cache_ += fmt::format("{}?", positional.meta);

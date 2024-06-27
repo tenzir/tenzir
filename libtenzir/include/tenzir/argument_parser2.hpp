@@ -22,11 +22,6 @@
 
 namespace tenzir {
 
-template <class T>
-struct as_located {
-  using type = located<T>;
-};
-
 using argument_parser_data_types
   = detail::tl_map_t<caf::detail::tl_filter_not_type_t<data::types, pattern>,
                      as_located>;
@@ -34,9 +29,6 @@ using argument_parser_data_types
 using argument_parser_full_types
   = detail::tl_concat_t<argument_parser_data_types,
                         detail::type_list<located<pipeline>, ast::expression>>;
-
-template <class T>
-struct is_located : caf::detail::is_specialization<located, T> {};
 
 using argument_parser_bare_types
   = detail::tl_map_t<detail::tl_filter_t<argument_parser_full_types, is_located>,
@@ -59,7 +51,7 @@ concept argument_parser_type
 
 class argument_parser2 {
 public:
-  static auto op(std::string name) -> argument_parser2 {
+  static auto operator_(std::string name) -> argument_parser2 {
     return argument_parser2{kind::op, std::move(name)};
   }
 
@@ -90,11 +82,12 @@ public:
 
   // ------------------------------------------------------------------------
 
-  void parse(const operator_factory_plugin::invocation& inv, session ctx);
-  void parse(const ast::function_call& call, session ctx);
-  void parse(const function_plugin::invocation& inv, session ctx);
-  void parse(const ast::entity& self, std::span<ast::expression const> args,
-             session ctx);
+  auto parse(const operator_factory_plugin::invocation& inv, session ctx)
+    -> bool;
+  auto parse(const ast::function_call& call, session ctx) -> bool;
+  auto parse(const function_plugin::invocation& inv, session ctx) -> bool;
+  auto parse(const ast::entity& self, std::span<ast::expression const> args,
+             session ctx) -> bool;
 
   auto usage() const -> std::string;
   auto docs() const -> std::string;

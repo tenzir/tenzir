@@ -6,13 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/argument_parser2.hpp"
-#include "tenzir/operator_control_plane.hpp"
-#include "tenzir/pipeline.hpp"
-#include "tenzir/plugin.hpp"
-#include "tenzir/tql2/ast.hpp"
-#include "tenzir/tql2/exec.hpp"
-
 #include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::fork {
@@ -94,7 +87,7 @@ class plugin final : public virtual operator_plugin2<fork_operator> {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto pipe = located<pipeline>{};
-    argument_parser2::op("fork").add(pipe, "<pipeline>").parse(inv, ctx);
+    argument_parser2::operator_("fork").add(pipe, "<pipeline>").parse(inv, ctx);
     auto loc = operator_location::anywhere;
     for (auto& op : pipe.inner.operators()) {
       auto op_loc = op->location();

@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
-#include <tenzir/argument_parser2.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -58,7 +57,7 @@ public:
   }
 
   auto make(invocation inv, session ctx) const -> operator_ptr override {
-    argument_parser2::op("discard").parse(inv, ctx);
+    argument_parser2::operator_("discard").parse(inv, ctx);
     return std::make_unique<discard_operator>();
   }
 };

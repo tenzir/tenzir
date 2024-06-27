@@ -10,7 +10,9 @@
 
 #include "tenzir/detail/assert.hpp"
 
-#include <arrow/api.h>
+#include <arrow/array.h>
+#include <arrow/result.h>
+#include <arrow/type_traits.h>
 
 namespace tenzir {
 

@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
-#include <tenzir/argument_parser2.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
@@ -99,7 +98,7 @@ public:
 
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto count = std::optional<uint64_t>{};
-    argument_parser2::op("repeat").add(count, "<count>").parse(inv, ctx);
+    argument_parser2::operator_("repeat").add(count, "<count>").parse(inv, ctx);
     return std::make_unique<repeat_operator>(
       count.value_or(std::numeric_limits<uint64_t>::max()));
   }

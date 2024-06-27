@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
-#include <tenzir/argument_parser2.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/concept/parseable/to.hpp>
@@ -583,7 +582,7 @@ public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto args = loader_args{};
     auto timeout = std::optional<located<duration>>{};
-    argument_parser2::op("load_file")
+    argument_parser2::operator_("load_file")
       .add(args.path, "<path>")
       .add("follow", args.follow)
       .add("mmap", args.mmap)
@@ -645,7 +644,7 @@ class save_file_plugin final : public operator_plugin2<save_file_operator> {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto args = saver_args{};
-    argument_parser2::op("save_file")
+    argument_parser2::operator_("save_file")
       .add(args.path, "<path>")
       .add("append", args.append)
       .add("real_time", args.real_time)

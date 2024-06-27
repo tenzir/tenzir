@@ -56,22 +56,16 @@ private:
 class plugin final : public operator_plugin2<source_operator> {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
-    auto usage = "source {...} | [...]";
-    auto docs = "https://docs.tenzir.com/operators/source";
-    if (inv.args.size() != 1) {
-      diagnostic::error("expected exactly one argument")
-        .primary(inv.self)
-        .usage(usage)
-        .docs(docs)
-        .emit(ctx);
-    }
-    if (inv.args.empty()) {
+    auto expr = ast::expression{};
+    auto parser
+      = argument_parser2::operator_("source").add(expr, "{...} | [...]");
+    if (not parser.parse(inv, ctx)) {
       return nullptr;
     }
     // TODO: We want to const-eval when the operator is instantiated.
     // For example: `every 1s { source { ts: now() } }`
     auto events = std::vector<record>{};
-    inv.args[0].match(
+    expr.match(
       [&](ast::list& x) {
         for (auto& y : x.items) {
           auto item = const_eval(y, ctx);
@@ -82,8 +76,8 @@ public:
           if (not rec) {
             diagnostic::error("expected a record")
               .primary(y)
-              .usage(usage)
-              .docs(docs)
+              .usage(parser.usage())
+              .docs(parser.docs())
               .emit(ctx);
             continue;
           }
@@ -100,8 +94,8 @@ public:
       [&](auto&) {
         diagnostic::error("expected a record or a list of records")
           .primary(inv.args[0])
-          .usage(usage)
-          .docs(docs)
+          .usage(parser.usage())
+          .docs(parser.docs())
           .emit(ctx);
       });
     return std::make_unique<source_operator>(std::move(events));

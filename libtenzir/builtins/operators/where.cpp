@@ -7,7 +7,6 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
-#include <tenzir/argument_parser2.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
@@ -374,7 +373,7 @@ class plugin2 final : public virtual operator_plugin2<where_operator2> {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto expr = ast::expression{};
-    argument_parser2::op("where").add(expr, "<expr>").parse(inv, ctx);
+    argument_parser2::operator_("where").add(expr, "<expr>").parse(inv, ctx);
     return std::make_unique<where_operator2>(std::move(expr));
   }
 };

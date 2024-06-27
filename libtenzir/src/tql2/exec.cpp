@@ -22,6 +22,7 @@
 #include "tenzir/tql2/tokens.hpp"
 
 #include <arrow/util/utf8.h>
+#include <boost/functional/hash.hpp>
 #include <tsl/robin_set.h>
 
 namespace tenzir {
@@ -36,7 +37,9 @@ public:
   }
 
   void emit(diagnostic d) override {
-    // TODO: This is obviously quite bad great.
+    // We remember whether we have seen a diagnostic by storing its main message
+    // and the locations of its annotations.
+    // TODO: Improve this.
     auto locations = std::vector<location>{};
     for (auto& annotation : d.annotations) {
       locations.push_back(annotation.source);
@@ -65,10 +68,10 @@ private:
 
   struct hasher {
     auto operator()(const seen_t& x) const -> size_t {
-      // TODO: Very, very, very bad!!
       auto result = std::hash<std::string>{}(x.first);
       for (auto& loc : x.second) {
-        result ^= loc.begin << 1 ^ loc.end;
+        boost::hash_combine(result, loc.begin);
+        boost::hash_combine(result, loc.end);
       }
       return result;
     }

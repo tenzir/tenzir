@@ -11,8 +11,6 @@
 #include "tenzir/data.hpp"
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/enum.hpp"
-#include "tenzir/expression.hpp"
-#include "tenzir/ip.hpp"
 #include "tenzir/location.hpp"
 #include "tenzir/tql2/entity_path.hpp"
 
@@ -34,33 +32,6 @@ auto make_dependent(U&& x) -> U&& {
 } // namespace tenzir::detail
 
 namespace tenzir::ast {
-
-struct assignment;
-struct binary_expr;
-struct dollar_var;
-struct entity;
-struct expression;
-struct field_access;
-struct function_call;
-struct identifier;
-struct if_stmt;
-struct index_expr;
-struct invocation;
-struct let_stmt;
-struct list;
-struct constant;
-struct match_stmt;
-struct null;
-struct pipeline_expr;
-struct pipeline;
-struct record;
-struct meta;
-struct selector_root;
-struct unary_expr;
-struct underscore;
-struct unpack;
-
-class simple_selector;
 
 struct identifier {
   identifier() = default;
@@ -104,7 +75,6 @@ struct meta {
                               f.field("source", x.source));
   }
 
-  // TODO: Remove `schema_id` from this.
   meta_kind kind;
   location source;
 };
@@ -569,9 +539,6 @@ struct invocation {
     return f.object(x).fields(f.field("op", x.op), f.field("args", x.args));
   }
 };
-
-using statement
-  = variant<invocation, assignment, let_stmt, if_stmt, match_stmt>;
 
 struct pipeline {
   pipeline() = default;

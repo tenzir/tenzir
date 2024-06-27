@@ -6,8 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/argument_parser2.hpp"
-#include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/plugin.hpp"
 
 #include <tenzir/argument_parser.hpp>
@@ -47,7 +45,7 @@ public:
 
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto count = std::optional<uint64_t>{};
-    argument_parser2::op("head").add(count, "<count>").parse(inv, ctx);
+    argument_parser2::operator_("head").add(count, "<count>").parse(inv, ctx);
     auto result = pipeline::internal_parse_as_operator(
       fmt::format("slice :{}", count.value_or(10)));
     if (not result) {

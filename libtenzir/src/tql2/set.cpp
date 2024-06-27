@@ -32,7 +32,6 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
             diagnostic_handler& diag) -> table_slice {
   switch (left.kind) {
     case ast::meta::name: {
-      // TODO: Name.
       auto values = dynamic_cast<arrow::StringArray*>(right.array.get());
       if (not values) {
         // TODO: Inaccurate location.
@@ -98,6 +97,12 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
   TENZIR_UNREACHABLE();
 }
 
+/// Creates a record that maps `path` to `value`.
+///
+/// # Examples
+//
+/// ["foo", "bar"] -> {"foo": {"bar": value}}
+/// [] -> value
 auto consume_path(std::span<const ast::identifier> path, series value)
   -> series {
   if (path.empty()) {
@@ -219,7 +224,6 @@ auto set_operator::operator()(generator<table_slice> input,
     // set foo={bar: 42}, foo.bar=foo.bar+42
     auto result = slice;
     for (auto& assignment : assignments_) {
-      // TODO: We are using `slice` here, not `result`. Okay?
       auto right = eval(assignment.right, slice, ctrl.diagnostics());
       result = assign(assignment.left, right, result, ctrl.diagnostics());
     }

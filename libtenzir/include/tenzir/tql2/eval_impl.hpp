@@ -19,15 +19,6 @@
 
 namespace tenzir {
 
-inline auto data_to_series(const data& x, int64_t length) -> series {
-  // TODO: This is overkill.
-  auto b = series_builder{};
-  for (auto i = int64_t{0}; i < length; ++i) {
-    b.data(x);
-  }
-  return b.finish_assert_one_array();
-}
-
 class evaluator {
 public:
   explicit evaluator(const table_slice* input, session ctx)
@@ -36,30 +27,7 @@ public:
       ctx_{ctx} {
   }
 
-  auto to_series(const data& x) -> series {
-    return data_to_series(x, length_);
-  }
-
-  // TODO: This is pretty bad.
-  auto input_or_throw(as_location location) -> const table_slice& {
-    if (not input_) {
-      diagnostic::error("expected a constant expression")
-        .primary(location)
-        .emit(ctx_);
-      throw std::monostate{};
-    }
-    return *input_;
-  }
-
-  auto null() -> series {
-    return to_series(caf::none);
-  }
-
-  auto eval(const ast::expression& x) -> series {
-    return x.match([&](auto& y) {
-      return eval(y);
-    });
-  }
+  auto eval(const ast::expression& x) -> series;
 
   auto eval(const ast::constant& x) -> series;
 
@@ -88,7 +56,16 @@ public:
     return not_implemented(x);
   }
 
-  auto not_implemented(const auto& x) -> series {
+  auto to_series(const data& x) const -> series;
+
+  auto input_or_throw(into_location location) -> const table_slice&;
+
+  auto null() const -> series {
+    return to_series(caf::none);
+  }
+
+  template <class T>
+  auto not_implemented(const T& x) -> series {
     diagnostic::warning("eval not implemented yet for: {:?}",
                         use_default_formatter(x))
       .primary(x)

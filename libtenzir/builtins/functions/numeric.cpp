@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser2.hpp>
 #include <tenzir/concept/parseable/tenzir/si.hpp>
 #include <tenzir/detail/narrow.hpp>
 #include <tenzir/series_builder.hpp>
@@ -141,43 +140,8 @@ public:
         auto compute = [&](const arrow::DoubleArray& x) {
           auto b = arrow::DoubleBuilder{};
           check(b.Reserve(x.length()));
-#if 0
-          // TODO: This is probably UB.
-          auto alloc = arrow::AllocateBuffer(x.length() * sizeof(double));
-          TENZIR_ASSERT(alloc.ok());
-          auto buffer = std::move(*alloc);
-          TENZIR_ASSERT(buffer);
-          auto target = new (buffer->mutable_data()) double[x.length()];
-          auto begin = x.raw_values();
-          auto end = begin + x.length();
-          auto null_alloc = arrow::AllocateBuffer((x.length() + 7) / 8);
-          TENZIR_ASSERT(null_alloc.ok());
-          auto null_buffer = std::move(*null_alloc);
-          TENZIR_ASSERT(null_buffer);
-          auto null_target = null_buffer->mutable_data();
-          if (auto nulls = x.null_bitmap()) {
-            std::memcpy(null_target, nulls->data(), nulls->size());
-          } else {
-            std::memset(null_target, 0xFF, (x.length() + 7) / 8);
-          }
-          while (begin != end) {
-            auto val = *begin;
-            if (val < 0.0) [[unlikely]] {
-              auto mask = 0xFF ^ (0x01 << ((begin - end) % 8));
-              null_target[(begin - end) / 8] &= mask;
-              // TODO: Emit warning/error?
-            }
-            *target = std::sqrt(*begin);
-            ++begin;
-            ++target;
-          }
-          return std::make_shared<arrow::DoubleArray>(
-            x.length(), std::move(buffer), std::move(null_buffer));
-#else
-          // TODO
           for (auto y : x) {
             if (not y) {
-              // TODO: Warning?
               check(b.AppendNull());
               continue;
             }
@@ -189,7 +153,6 @@ public:
             }
             check(b.Append(std::sqrt(z)));
           }
-#endif
           return finish(b);
         };
         auto f = detail::overload{
@@ -251,26 +214,6 @@ public:
       return {double_type{}, finish(b)};
     });
   }
-
-  // auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
-  //   auto success = function_argument_parser{"random"}.parse(inv, dh);
-  //   if (not success) {
-  //     return series::null(double_type{}, inv.length);
-  //   }
-  //   if (not inv.args.empty()) {
-  //     diagnostic::error("`random` expects no arguments")
-  //       .primary(inv.self)
-  //       .emit(dh);
-  //   }
-  //   auto b = arrow::DoubleBuilder{};
-  //   check(b.Reserve(inv.length));
-  //   auto engine = std::default_random_engine{std::random_device{}()};
-  //   auto dist = std::uniform_real_distribution<double>{0.0, 1.0};
-  //   for (auto i = int64_t{0}; i < inv.length; ++i) {
-  //     check(b.Append(dist(engine)));
-  //   }
-  //   return {double_type{}, finish(b)};
-  // }
 };
 
 // TODO: This also needs to work with durations, so the default return value
@@ -283,7 +226,6 @@ public:
   using sum_t = variant<int64_t, uint64_t, double>;
 
   void update(const table_slice& input, session ctx) override {
-    // TODO: values.type
     auto arg = eval(expr_, input, ctx);
     auto f = detail::overload{
       [&](const arrow::Int64Array& array) {
@@ -466,7 +408,6 @@ public:
 
   auto make_aggregation(invocation inv, session ctx) const
     -> std::unique_ptr<aggregation_instance> override {
-    // TODO: Improve.
     auto expr = ast::expression{};
     // TODO: Reconsider whether we want a default here. Maybe positional?
     auto quantile_opt = std::optional<located<double>>{};
@@ -490,7 +431,7 @@ public:
       }
       quantile = quantile_opt->inner;
     }
-    // TODO: We put this function somewhere. Find it.
+    // TODO: This function probably already exists. If not, it should.
     auto try_narrow = [](int64_t x) -> std::optional<uint32_t> {
       if (0 <= x && x <= std::numeric_limits<uint32_t>::max()) {
         return static_cast<uint32_t>(x);

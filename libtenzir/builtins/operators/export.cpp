@@ -6,13 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/tql2/ast.hpp"
-#include "tenzir/tql2/eval.hpp"
-#include "tenzir/tql2/plugin.hpp"
-
 #include <tenzir/actors.hpp>
 #include <tenzir/argument_parser.hpp>
-#include <tenzir/argument_parser2.hpp>
 #include <tenzir/atoms.hpp>
 #include <tenzir/catalog.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
@@ -25,6 +20,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/query_context.hpp>
 #include <tenzir/table_slice.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/uuid.hpp>
 
 #include <arrow/type.h>
@@ -319,13 +315,10 @@ public:
   }
 
   auto make(invocation inv, session ctx) const -> operator_ptr override {
-    // auto usage = "export live=<bool>, internal=<bool>";
-    // auto usage = "export live=false, internal=false";
-    // auto docs = "https://docs.tenzir.com/operators/export";
     auto live = false;
     auto retro = false;
     auto internal = false;
-    argument_parser2::op("export")
+    argument_parser2::operator_("export")
       .add("live", live)
       .add("retro", retro)
       .add("internal", internal)

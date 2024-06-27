@@ -10,6 +10,7 @@
 
 #include "tenzir/data.hpp"
 #include "tenzir/tql2/ast.hpp"
+#include "tenzir/type.hpp"
 
 namespace tenzir {
 

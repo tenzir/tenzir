@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser2.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/detail/croncpp.hpp>
@@ -374,10 +373,11 @@ public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
     auto interval = located<duration>{};
     auto pipe = pipeline{};
-    argument_parser2::op("every")
+    argument_parser2::operator_("every")
       .add(interval, "<duration>")
-      .add(pipe, "<pipeline>") // TODO: Improve meta.
+      .add(pipe, "{ ... }")
       .parse(inv, ctx);
+    // TODO: This is still 0 if we failed to parse.
     if (interval.inner <= duration::zero()) {
       diagnostic::error("expected a positive duration, got {}", interval.inner)
         .primary(interval)
@@ -391,7 +391,6 @@ public:
     }
     if (ops.size() > 1) {
       // TODO: Lift this limitation.
-      // TODO: Is this safe?
       diagnostic::error("expected exactly one operator, found {}", ops.size())
         .primary(inv.args[1])
         .emit(ctx);

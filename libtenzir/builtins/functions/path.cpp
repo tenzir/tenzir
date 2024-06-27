@@ -6,7 +6,6 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/argument_parser2.hpp>
 #include <tenzir/tql2/arrow_utils.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -63,35 +62,6 @@ public:
         return caf::visit(f, *arg.array);
       });
   }
-
-  // auto eval(invocation inv, diagnostic_handler& dh) const -> series override {
-  //   auto arg = basic_series<string_type>{};
-  //   auto success
-  //     = function_argument_parser{"file_name"}.add(arg, "<path>").parse(inv,
-  //     dh);
-  //   if (not success) {
-  //     return series::null(string_type{}, inv.length);
-  //   }
-  //   auto b = arrow::StringBuilder{};
-  //   check(b.Reserve(inv.length));
-  //   for (auto row = int64_t{0}; row < inv.length; ++row) {
-  //     if (arg.array->IsNull(row)) {
-  //       check(b.AppendNull());
-  //       continue;
-  //     }
-  //     auto path = arg.array->GetView(row);
-  //     // TODO: We don't know whether this is a windows/posix path.
-  //     // TODO: Also, btw, string might not be a good type for paths.
-  //     auto pos = path.find_last_of("/\\");
-  //     // TODO: Trailing sep.
-  //     if (pos == std::string::npos) {
-  //       check(b.Append(path));
-  //     } else {
-  //       check(b.Append(path.substr(pos + 1)));
-  //     }
-  //   }
-  //   return series{string_type{}, finish(b)};
-  // }
 };
 
 class parent_dir final : public function_plugin {
@@ -121,11 +91,12 @@ public:
               }
               auto path = arg.GetView(row);
               // TODO: We don't know whether this is a windows/posix path.
-              // TODO: Also, btw, string might not be a good type for paths.
+              // TODO: Also, string might not be a good type for paths because
+              // of invalid UTF-8.
               auto pos = path.find_last_of("/\\");
-              // TODO: Trailing sep.
+              // TODO: Trailing separator.
               if (pos == std::string::npos) {
-                // TODO: Or what?
+                // TODO: What should we do here?
                 check(b.Append(path));
               } else {
                 check(b.Append(path.substr(0, pos)));
