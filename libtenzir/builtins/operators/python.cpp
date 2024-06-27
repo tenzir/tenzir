@@ -178,7 +178,7 @@ public:
       bp::pipe std_in;
       bp::ipstream std_err;
       auto python_executable = bp::search_path("python3");
-      auto env = boost::this_process::environment();
+      auto env = bp::environment{boost::this_process::environment()};
       // Automatically create a virtualenv with all requirements preinstalled,
       // unless disabled by node config.
       if (config_.venv_base_dir) {
@@ -242,7 +242,7 @@ public:
           if (bp::system(python_executable, "-m", "venv", venv,
                          bp::std_err > std_err,
                          detail::preserved_fds{{STDERR_FILENO}},
-                         boost::process::limit_handles)
+                         bp::detail::limit_handles_{})
               != 0) {
             auto venv_error = drain_pipe(std_err);
             // We need to delete the potentially broken venv here to make sure
@@ -286,7 +286,7 @@ public:
                          fmt::join(pip_invocation, "' '"));
           if (bp::system(pip_invocation, env, bp::std_err > std_err,
                          detail::preserved_fds{{STDOUT_FILENO, STDERR_FILENO}},
-                         boost::process::limit_handles)
+                         bp::detail::limit_handles_{})
               != 0) {
             auto pip_error = drain_pipe(std_err);
             diagnostic::error("{}", pip_error)
@@ -316,7 +316,7 @@ public:
         detail::preserved_fds{{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO,
                                codepipe.pipe().native_source(),
                                errpipe.pipe().native_sink()}},
-        boost::process::limit_handles};
+        bp::detail::limit_handles_{}};
       if (code.empty()) {
         // The current implementation always expects a non-empty input.
         // Otherwise, it blocks forever on a `read` call.
@@ -332,8 +332,7 @@ public:
           auto python_error = drain_pipe(errpipe);
           diagnostic::error("{}", python_error)
             .note("python process exited with error")
-            .emit(ctrl.diagnostics());
-          co_return;
+            .throw_();
         }
         if (slice.rows() == 0) {
           co_yield {};
