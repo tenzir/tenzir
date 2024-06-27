@@ -183,122 +183,93 @@ public:
       auto env = bp::environment{boost::this_process::environment()};
       // Automatically create a virtualenv with all requirements preinstalled,
       // unless disabled by node config.
-      if (config_.venv_base_dir) {
-        auto venv_id
-          = hash(config_.implicit_requirements, requirements_, getuid());
-        auto venv_path = std::filesystem::path{config_.venv_base_dir.value()}
-                         / fmt::format("{:x}", venv_id);
-        auto venv = venv_path.string();
-        env["VIRTUAL_ENV"] = venv;
-        auto ec = std::error_code{};
-        // We want to make sure that the venv is only created once on every
-        // host. For this we use a system wide semaphore that starts with the
-        // count one and gets decremented and then incremented by every peer.
-        // In between these calls the thread is in the critical section and it
-        // can create the venv in case it does not exist yet. Only the first
-        // thread to enter the critical section will create the venv.
-        // ---
-        // Boost sometimes prepends a directory separator depending on which
-        // underlying implementation is used for the semaphore. Thankfully it
-        // is smart enough to check if one is already present. We prevent this
-        // hidden modification by starting the semaphore name with a slash.
-        // This ensures that the truncation logic below is correct.
-        auto sem_name = fmt::format("/tnz-python-{:x}", venv_id);
-        // The semaphore name is restricted to a maximum length of 31 characters
-        // (including the '\0') on macOS. This length has been experimentally
-        // verified. We truncate it to this length unconditionally for
-        // consistency.
-        constexpr auto semaphore_name_max_length = 30u;
-        if (sem_name.size() > semaphore_name_max_length) {
-          sem_name.erase(semaphore_name_max_length);
+      auto maybe_venv = std::optional<std::filesystem::path>{};
+      auto venv_cleanup = [&] {
+        if (config_.venv_base_dir) {
+          std::filesystem::create_directories(config_.venv_base_dir.value());
+          auto venv
+            = fmt::format("{}/uvenv-XXXXXX", config_.venv_base_dir.value());
+          if (mkdtemp(venv.data()) == nullptr) {
+            diagnostic::error("{}", detail::describe_errno())
+              .note("failed to create a unique directory for the python "
+                    "virtual "
+                    "environment in {}",
+                    config_.venv_base_dir.value())
+              .throw_();
+          }
+          auto venv_path = std::filesystem::path{venv};
+          maybe_venv = venv_path;
+          env["VIRTUAL_ENV"] = venv;
         }
-        // The initial venv creation tends to take a very long time, and often
-        // causes the pipeline creation to take longer then what our FE tolerate
-        // in terms of wait time. As a workaround we yield early, so that the
-        // pipeline appears as created and do the actual venv setup on first
-        // call. At that point the delay is not problematic any more because
-        // `/serve` takes care of it gracefully.
-        co_yield {};
-        auto sem = boost::interprocess::named_semaphore{
-          boost::interprocess::open_or_create, sem_name.c_str(), 1u};
-        const auto wait_ok = sem.timed_wait(std::chrono::system_clock::now()
-                                            + std::chrono::seconds{60});
-        if (not wait_ok) {
-          diagnostic::error("failed to initialize python venv")
-            .note("could not acquire named semaphore '{}' within 60 seconds",
-                  sem_name)
-            .emit(ctrl.diagnostics());
-          boost::interprocess::named_semaphore::remove(sem_name.c_str());
+        return caf::detail::scope_guard([maybe_venv] {
+          if (maybe_venv) {
+            std::filesystem::remove_all(*maybe_venv);
+          }
+        });
+      }();
+      if (maybe_venv) {
+#if TENZIR_ENABLE_BUNDLED_UV
+        auto uv_executable = detail::install_libexecdir() / "uv";
+#else
+        auto uv_executable = bp::search_path("uv");
+#endif
+        if (uv_executable.empty()) {
+          diagnostic::error("Failed to find uv").emit(ctrl.diagnostics());
           co_return;
         }
-        auto sem_guard = caf::detail::scope_guard{[&] {
-          sem.post();
-        }};
-        // TODO: Handle broken venvs. Maybe there is a way to check whether the
-        // list of requirements is installed correctly?
-        if (!exists(venv_path, ec)) {
-          // The default size of the pipe buffer is 64k on Linux, we assume
-          // (hope) that this is enough. A possible solution would be to wrap
-          // the invocation in a script that drains the pipe continuously but
-          // only forwards the first n bytes.
-          if (bp::system(python_executable, "-m", "venv", venv,
-                         bp::std_err > std_err,
-                         detail::preserved_fds{{STDERR_FILENO}},
-                         bp::detail::limit_handles_{})
-              != 0) {
-            auto venv_error = drain_pipe(std_err);
-            // We need to delete the potentially broken venv here to make sure
-            // that it doesn't stick around to break later runs of the python
-            // operator.
-            std::filesystem::remove_all(venv, ec);
-            if (ec) {
-              diagnostic::error("failed to create virtualenv: {}", venv_error)
-                .note("failed to delete broken virtualenv: {}", ec.message())
-                .hint("please remove `{}`", venv)
-                .emit(ctrl.diagnostics());
-              co_return;
-            }
-            diagnostic::error("failed to create virtualenv: {}", venv_error)
-              .emit(ctrl.diagnostics());
-            co_return;
-          }
-          auto pip_invocation = std::vector<std::string>{
-            venv_path / "bin" / "pip",
-            "install",
-            "--disable-pip-version-check",
-            "-q",
-          };
-          // `split` creates an empty token in case the input was entirely
-          // empty, but we don't want that so we need an extra guard.
-          if (!config_.implicit_requirements.empty()) {
-            auto implicit_requirements_vec
-              = detail::split_escaped(config_.implicit_requirements, " ", "\\");
-            pip_invocation.insert(pip_invocation.end(),
-                                  implicit_requirements_vec.begin(),
-                                  implicit_requirements_vec.end());
-          }
-          if (!requirements_.empty()) {
-            auto requirements_vec = detail::split(requirements_, " ");
-            pip_invocation.insert(pip_invocation.end(),
-                                  requirements_vec.begin(),
-                                  requirements_vec.end());
-          }
-          std_err = bp::ipstream{};
-          TENZIR_VERBOSE("installing python modules with: '{}'",
-                         fmt::join(pip_invocation, "' '"));
-          if (bp::system(pip_invocation, env, bp::std_err > std_err,
-                         detail::preserved_fds{{STDOUT_FILENO, STDERR_FILENO}},
-                         bp::detail::limit_handles_{})
-              != 0) {
-            auto pip_error = drain_pipe(std_err);
-            diagnostic::error("{}", pip_error)
-              .note("failed to install pip requirements")
-              .emit(ctrl.diagnostics());
-            co_return;
-          }
+        auto venv_invocation = std::vector<std::string>{
+          uv_executable.string(),
+          "venv",
+          maybe_venv->string(),
+        };
+        TENZIR_VERBOSE("creating a python venv with: '{}'",
+                       fmt::join(venv_invocation, "' '"));
+        if (bp::system(venv_invocation, bp::std_err > std_err,
+                       detail::preserved_fds{{STDERR_FILENO}},
+                       bp::detail::limit_handles_{})
+            != 0) {
+          auto venv_error = drain_pipe(std_err);
+          // We need to delete the potentially broken venv here to make sure
+          // that it doesn't stick around to break later runs of the python
+          // operator.
+          diagnostic::error("{}", venv_error)
+            .note("failed to create virtualenv")
+            .throw_();
         }
-        python_executable = venv_path / "bin" / "python3";
-        TENZIR_VERBOSE("python operator utilizes virtual environment {}", venv);
+        auto pip_invocation = std::vector<std::string>{
+          uv_executable.string(),
+          "pip",
+          "install",
+          "-q",
+        };
+        // `split` creates an empty token in case the input was entirely
+        // empty, but we don't want that so we need an extra guard.
+        if (!config_.implicit_requirements.empty()) {
+          auto implicit_requirements_vec
+            = detail::split_escaped(config_.implicit_requirements, " ", "\\");
+          pip_invocation.insert(pip_invocation.end(),
+                                implicit_requirements_vec.begin(),
+                                implicit_requirements_vec.end());
+        }
+        if (!requirements_.empty()) {
+          auto requirements_vec = detail::split(requirements_, " ");
+          pip_invocation.insert(pip_invocation.end(), requirements_vec.begin(),
+                                requirements_vec.end());
+        }
+        std_err = bp::ipstream{};
+        TENZIR_VERBOSE("installing python modules with: '{}'",
+                       fmt::join(pip_invocation, "' '"));
+        if (bp::system(pip_invocation, env, bp::std_err > std_err,
+                       detail::preserved_fds{{STDOUT_FILENO, STDERR_FILENO}},
+                       bp::detail::limit_handles_{})
+            != 0) {
+          auto pip_error = drain_pipe(std_err);
+          diagnostic::error("{}", pip_error)
+            .note("failed to install pip requirements")
+            .throw_();
+        }
+        python_executable
+          = std::filesystem::path{*maybe_venv} / "bin" / "python3";
       }
       bp::opstream codepipe; // pipe to transmit the code
       // If we redirect stderr to get error information, we need to switch to a
@@ -306,8 +277,10 @@ public:
       // deadlock when trying to write to stderr. So we use a separate pipe
       // that's only used by the python executor and has well-defined semantics.
       bp::ipstream errpipe;
+      // TODO: Put this into a finalizer so it can be cleaned up correctly in
+      // case of errors or other early returns.
       auto child = bp::child{
-        boost::process::filesystem::path{python_executable},
+        python_executable,
         "-c",
         PYTHON_SCAFFOLD,
         fmt::to_string(codepipe.pipe().native_source()),
