@@ -52,7 +52,7 @@ namespace tenzir {
 auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, node_actor node,
                      receiver_actor<diagnostic> diagnostics_handler,
-                     receiver_actor<metric> metrics_handler, int index,
+                     metrics_receiver_actor metrics_handler, int index,
                      bool has_terminal)
   -> caf::expected<std::pair<exec_node_actor, operator_type>>;
 

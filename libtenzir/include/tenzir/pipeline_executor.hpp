@@ -28,9 +28,9 @@ struct pipeline_executor_state {
   // nodes.
   receiver_actor<diagnostic> diagnostics = {};
 
-  // The diagnostic handler that receives metrics from all the execution
+  // The metric handler that receives metrics from all the execution
   // nodes.
-  receiver_actor<metric> metrics = {};
+  metrics_receiver_actor metrics = {};
 
   /// Flag for disallowing location overrides.
   bool no_location_overrides = {};
@@ -56,7 +56,7 @@ struct pipeline_executor_state {
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
   pipeline pipe, receiver_actor<diagnostic> diagnostics,
-  receiver_actor<metric> metrics, node_actor node, bool has_terminal)
+  metrics_receiver_actor metrics, node_actor node, bool has_terminal)
   -> pipeline_executor_actor::behavior_type;
 
 } // namespace tenzir

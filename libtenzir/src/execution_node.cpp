@@ -138,11 +138,13 @@ template <class Input, class Output>
 struct exec_node_control_plane final : public operator_control_plane {
   exec_node_control_plane(
     exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
-    receiver_actor<diagnostic> diagnostic_handler, bool has_terminal)
+    receiver_actor<diagnostic> diagnostic_handler,
+    metrics_receiver_actor metric_handler, uint64_t op_index, bool has_terminal)
     : state{self->state},
       diagnostic_handler{
         std::make_unique<exec_node_diagnostic_handler<Input, Output>>(
           self, std::move(diagnostic_handler))},
+      metric_handler{metric_handler, op_index},
       has_terminal_{has_terminal} {
   }
 
@@ -213,7 +215,7 @@ struct exec_node_state {
   /// State required for keeping and sending metrics.
   std::chrono::steady_clock::time_point start_time
     = std::chrono::steady_clock::now();
-  receiver_actor<metric> metrics_handler = {};
+  metrics_receiver_actor metrics_handler = {};
   metric metrics = {};
 
   /// Whether this execution node is paused, and when it was.
@@ -736,7 +738,7 @@ auto exec_node(
   exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
   operator_ptr op, node_actor node,
   receiver_actor<diagnostic> diagnostic_handler,
-  receiver_actor<metric> metrics_handler, int index, bool has_terminal)
+  metrics_receiver_actor metrics_handler, int index, bool has_terminal)
   -> exec_node_actor::behavior_type {
   if (self->getf(caf::scheduled_actor::is_detached_flag)) {
     const auto name = fmt::format("tenzir.exec-node.{}", op->name());
@@ -758,7 +760,8 @@ auto exec_node(
       and (std::is_same_v<Input, std::monostate>
            or std::is_same_v<Output, std::monostate>);
   self->state.ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
-    self, std::move(diagnostic_handler), has_terminal);
+    self, std::move(diagnostic_handler), self->state.metrics_handler, index,
+    has_terminal);
   // The node actor must be set when the operator is not a source.
   if (self->state.op->location() == operator_location::remote and not node) {
     self->state.on_error(caf::make_error(
@@ -860,7 +863,7 @@ auto exec_node(
 auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, node_actor node,
                      receiver_actor<diagnostic> diagnostic_handler,
-                     receiver_actor<metric> metrics_handler, int index,
+                     metrics_receiver_actor metrics_handler, int index,
                      bool has_terminal)
   -> caf::expected<std::pair<exec_node_actor, operator_type>> {
   TENZIR_ASSERT(self);
