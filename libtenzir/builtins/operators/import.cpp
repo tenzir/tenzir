@@ -34,12 +34,19 @@ public:
     auto components = get_node_components<importer_actor>(self, ctrl.node());
     TENZIR_ASSERT(components);
     auto [importer] = std::move(*components);
+    auto& metric_handler = ctrl.metrics();
     auto total_events = size_t{0};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
+      metric_handler.emit("tenzir.metrics.import",
+                          {
+                            {"schema", std::string{slice.schema().name()}},
+                            {"schema_id", slice.schema().make_fingerprint()},
+                            {"events", slice.rows()},
+                          });
       total_events += slice.rows();
       // TODO: This temporary solution does not apply back-pressure.
       ctrl.self().send(importer, std::move(slice));
