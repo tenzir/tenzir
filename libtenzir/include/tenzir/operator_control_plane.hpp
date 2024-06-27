@@ -12,6 +12,7 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/metrics.hpp"
 #include "tenzir/shared_diagnostic_handler.hpp"
 
 #include <caf/typed_actor.hpp>
@@ -33,6 +34,9 @@ struct operator_control_plane {
 
   /// Returns the pipeline's diagnostic handler.
   virtual auto diagnostics() noexcept -> diagnostic_handler& = 0;
+
+  /// Returns the pipeline's metric handler.
+  virtual auto metrics() noexcept -> metric_handler& = 0;
 
   /// Returns whether the pipeline may override its location.
   virtual auto no_location_overrides() const noexcept -> bool = 0;

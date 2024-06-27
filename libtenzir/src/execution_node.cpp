@@ -158,6 +158,10 @@ struct exec_node_control_plane final : public operator_control_plane {
     return *diagnostic_handler;
   }
 
+  auto metrics() noexcept -> metric_handler& override {
+    return metric_handler;
+  }
+
   auto no_location_overrides() const noexcept -> bool override {
     return caf::get_or(content(state.self->config()),
                        "tenzir.no-location-overrides", false);
@@ -177,6 +181,7 @@ struct exec_node_control_plane final : public operator_control_plane {
   exec_node_state<Input, Output>& state;
   std::unique_ptr<exec_node_diagnostic_handler<Input, Output>> diagnostic_handler
     = {};
+  metric_handler metric_handler = {};
   bool has_terminal_;
 };
 
