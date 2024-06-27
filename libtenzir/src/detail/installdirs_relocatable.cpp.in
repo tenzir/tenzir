@@ -43,11 +43,6 @@ install_prefix_and_suffix() {
 
 } // namespace
 
-std::filesystem::path install_datadir() {
-  const auto [prefix, _] = install_prefix_and_suffix();
-  return prefix / "@CMAKE_INSTALL_DATADIR@/tenzir";
-}
-
 std::filesystem::path install_configdir() {
   const auto [prefix, _] = install_prefix_and_suffix();
   std::error_code err{};
@@ -63,6 +58,16 @@ std::filesystem::path install_configdir() {
       !std::filesystem::exists(prefix / "@CMAKE_INSTALL_SYSCONFDIR@/tenzir", err))
     return prefix / "@CMAKE_INSTALL_SYSCONFDIR@/tenzir";
   return prefix / "@CMAKE_INSTALL_SYSCONFDIR@/tenzir";
+}
+
+std::filesystem::path install_datadir() {
+  const auto [prefix, _] = install_prefix_and_suffix();
+  return prefix / "@CMAKE_INSTALL_DATADIR@/tenzir";
+}
+
+std::filesystem::path install_libexecdir() {
+  const auto [prefix, suffix] = install_prefix_and_suffix();
+  return prefix / "@CMAKE_INSTALL_LIBEXECDIR@" / suffix;
 }
 
 std::filesystem::path install_plugindir() {
