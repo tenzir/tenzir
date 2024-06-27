@@ -43,6 +43,7 @@
     symlinkJoin,
     extraCmakeFlags ? [],
     python3,
+    uv,
     pkgsBuildHost,
     runCommand,
     makeBinaryWrapper,
@@ -162,6 +163,7 @@
             "-DTENZIR_ENABLE_JEMALLOC=${lib.boolToString isMusl}"
             "-DTENZIR_ENABLE_MANPAGES=OFF"
             "-DTENZIR_ENABLE_BUNDLED_AND_PATCHED_RESTINIO=OFF"
+            "-DTENZIR_ENABLE_BUNDLED_UV=${lib.boolToString isStatic}"
             "-DTENZIR_ENABLE_FLUENT_BIT_SO_WORKAROUNDS=OFF"
             "-DTENZIR_PLUGINS=${lib.concatStringsSep ";" (bundledPlugins ++ extraPlugins')}"
             # Disabled for now, takes long to compile and integration tests give
@@ -169,9 +171,9 @@
             "-DTENZIR_ENABLE_UNIT_TESTS=OFF"
             "-DTENZIR_ENABLE_BATS_TENZIR_INSTALLATION=OFF"
           ] ++ lib.optionals isStatic [
-            "-DBUILD_SHARED_LIBS:BOOL=OFF"
             #"-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
             "-DCPACK_GENERATOR=${if stdenv.isDarwin then "productbuild" else "TGZ;DEB;RPM"}"
+            "-DTENZIR_UV_PATH:STRING=${lib.getBin uv}/bin/uv"
             "-DTENZIR_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
             "-DTENZIR_PACKAGE_FILE_NAME_SUFFIX=static"
             "-DTENZIR_ENABLE_BACKTRACE=${lib.boolToString (!stdenv.isDarwin)}"
@@ -250,7 +252,9 @@
 
         postInstall = ''
           wrapProgram $out/bin/tenzir \
-            --prefix PATH : ${lib.makeBinPath [ py3 ]} \
+            --prefix PATH : ${lib.makeBinPath ([ py3 ]
+            # The static binary bundles uv.
+             ++ lib.optionals (!isStatic) [ uv ])} \
             --suffix PYTHONPATH : ${py3}/${py3.sitePackages}
         '';
 
