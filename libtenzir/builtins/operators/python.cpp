@@ -286,6 +286,7 @@ public:
                                codepipe.pipe().native_source(),
                                errpipe.pipe().native_sink()}},
         bp::detail::limit_handles_{}};
+      ::close(codepipe.pipe().native_source());
       if (code.empty()) {
         // The current implementation always expects a non-empty input.
         // Otherwise, it blocks forever on a `read` call.
@@ -293,6 +294,8 @@ public:
       } else {
         codepipe << code;
       }
+      codepipe.flush();
+      ::close(codepipe.pipe().native_sink());
       codepipe.close();
       ::close(errpipe.pipe().native_sink());
       co_yield {}; // signal successful startup
@@ -374,8 +377,10 @@ public:
         output = table_slice{actual_result, new_type};
         co_yield output;
       }
+      // Wait a limited time for the child to return. The destructor does a
+      // hard-kill if necessary to avoid blocking a worker indefinitely.
+      child.wait_for(std::chrono::seconds{1});
       std_in.close();
-      child.wait();
     } catch (const std::exception& ex) {
       diagnostic::error("{}", ex.what()).emit(ctrl.diagnostics());
     }
