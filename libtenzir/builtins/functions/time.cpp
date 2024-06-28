@@ -8,6 +8,7 @@
 
 #include <tenzir/concept/parseable/tenzir/time.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/table_slice_builder.hpp>
 #include <tenzir/tql2/arrow_utils.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
@@ -68,29 +69,73 @@ public:
   }
 };
 
-class seconds_since_epoch final : public function_plugin {
+class since_epoch final : public method_plugin {
 public:
   auto name() const -> std::string override {
-    return "tql2.seconds_since_epoch";
+    return "since_epoch";
   }
 
   auto make_function(invocation inv, session ctx) const
     -> std::unique_ptr<function_use> override {
     auto expr = ast::expression{};
-    argument_parser2::function("seconds_since_epoch")
-      .add(expr, "<time>")
-      .parse(inv, ctx);
+    argument_parser2::function(name()).add(expr, "<time>").parse(inv, ctx);
+    return function_use::make([expr = std::move(expr),
+                               this](evaluator eval, session ctx) -> series {
+      auto arg = eval(expr);
+      auto f = detail::overload{
+        [](const arrow::NullArray& arg) {
+          return series::null(duration_type{}, arg.length());
+        },
+        [&](const arrow::TimestampArray& arg) {
+          auto& ty = caf::get<arrow::TimestampType>(*arg.type());
+          TENZIR_ASSERT(ty.timezone().empty());
+          auto b
+            = duration_type::make_arrow_builder(arrow::default_memory_pool());
+          check(b->Reserve(arg.length()));
+          for (auto i = 0; i < arg.length(); ++i) {
+            if (arg.IsNull(i)) {
+              check(b->AppendNull());
+              continue;
+            }
+            check(
+              append_builder(duration_type{}, *b,
+                             value_at(time_type{}, arg, i).time_since_epoch()));
+          }
+          return series{duration_type{}, finish(*b)};
+        },
+        [&](const auto&) {
+          diagnostic::warning("`{}` expected `time`, but got `{}`", name(),
+                              arg.type.kind())
+            .primary(expr)
+            .emit(ctx);
+          return series::null(duration_type{}, arg.length());
+        },
+      };
+      return caf::visit(f, *arg.array);
+    });
+  }
+};
+
+class as_secs final : public method_plugin {
+public:
+  auto name() const -> std::string override {
+    return "as_secs";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> std::unique_ptr<function_use> override {
+    auto expr = ast::expression{};
+    argument_parser2::function(name()).add(expr, "<duration>").parse(inv, ctx);
     return function_use::make(
-      [expr = std::move(expr)](evaluator eval, session ctx) -> series {
+      [expr = std::move(expr), this](evaluator eval, session ctx) -> series {
         auto arg = eval(expr);
         auto f = detail::overload{
           [](const arrow::NullArray& arg) {
             return series::null(double_type{}, arg.length());
           },
-          [&](const arrow::TimestampArray& arg) {
-            auto& ty = caf::get<arrow::TimestampType>(*arg.type());
+          [&](const arrow::DurationArray& arg) {
+            auto& ty = caf::get<arrow::DurationType>(*arg.type());
             TENZIR_ASSERT(ty.unit() == arrow::TimeUnit::NANO);
-            TENZIR_ASSERT(ty.timezone().empty());
             auto factor = 1000 * 1000 * 1000;
             auto b = arrow::DoubleBuilder{};
             check(b.Reserve(arg.length()));
@@ -107,8 +152,8 @@ public:
             return series{double_type{}, finish(b)};
           },
           [&](const auto&) {
-            diagnostic::warning("`time` expected `time`, but got `{}`",
-                                arg.type.kind())
+            diagnostic::warning("`{}` expected `duration`, but got `{}`",
+                                name(), arg.type.kind())
               .primary(expr)
               .emit(ctx);
             return series::null(double_type{}, arg.length());
@@ -145,5 +190,6 @@ public:
 } // namespace tenzir::plugins::time_
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::time_::time_)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::time_::seconds_since_epoch)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::time_::since_epoch)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::time_::as_secs)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::time_::now)
