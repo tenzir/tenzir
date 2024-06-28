@@ -292,6 +292,7 @@ public:
                                codepipe.pipe().native_source(),
                                errpipe.pipe().native_sink()}},
         bp::detail::limit_handles_{}};
+      ::close(codepipe.pipe().native_source());
       if (code.empty()) {
         // The current implementation always expects a non-empty input.
         // Otherwise, it blocks forever on a `read` call.
@@ -299,8 +300,20 @@ public:
       } else {
         codepipe << code;
       }
+      codepipe.flush();
+      // We need to close the file descriptor manually because the `close()`
+      // member function of the codepipe doesn't seem to do this.
+      ::close(codepipe.pipe().native_sink());
+      // Although we already closed the file descriptors of the codepipe we now
+      // also close the wrapper object to make sure we don't leak any resources.
       codepipe.close();
       ::close(errpipe.pipe().native_sink());
+      if (!child.running()) {
+        auto python_error = drain_pipe(errpipe);
+        diagnostic::error("{}", python_error)
+          .note("python process exited with error")
+          .throw_();
+      }
       co_yield {}; // signal successful startup
       for (auto&& slice : input) {
         if (!child.running()) {
@@ -381,7 +394,6 @@ public:
         co_yield output;
       }
       std_in.close();
-      child.wait();
     } catch (const std::exception& ex) {
       diagnostic::error("{}", ex.what()).emit(ctrl.diagnostics());
     }
