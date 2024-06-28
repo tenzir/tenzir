@@ -8,17 +8,13 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/checked_math.hpp"
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/detail/checked_math.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/table_slice_builder.hpp"
 #include "tenzir/tql2/arrow_utils.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval_impl.hpp"
-
-#include <arrow/compute/api_scalar.h>
-
-#include <type_traits>
 
 // TODO: This file takes very long to compile. Consider splitting it up even more.
 
@@ -100,25 +96,36 @@ struct BinOpKernel;
 template <ast::binary_op Op, integral_type L, integral_type R>
   requires(is_arithmetic(Op))
 struct BinOpKernel<Op, L, R> {
-  using result = std::common_type_t<type_to_data_t<L>, type_to_data_t<R>>;
-
-  static auto evaluate(type_to_data_t<L> l, type_to_data_t<R> r)
-    -> std::variant<result, const char*> {
+  // TODO: This is just so that we can have the return type be inferred. This
+  // would not be necessary if the template itself would be friendly to type
+  // inference.
+  static auto inner(type_to_data_t<L> l, type_to_data_t<R> r) {
     using enum ast::binary_op;
     if constexpr (Op == add) {
-      return checked_math::add(l, r);
+      return checked_add(l, r);
     } else if constexpr (Op == sub) {
-      return checked_math::subtract(l, r);
+      return checked_sub(l, r);
     } else if constexpr (Op == mul) {
-      return checked_math::multiply(l, r);
+      return checked_mul(l, r);
     } else {
       static_assert(detail::always_false_v<L>,
                     "division is handled by its own specialization");
     }
   }
+
+  using result = decltype(inner(std::declval<type_to_data_t<L>>(),
+                                std::declval<type_to_data_t<R>>()))::value_type;
+
+  static auto evaluate(type_to_data_t<L> l, type_to_data_t<R> r)
+    -> std::variant<result, const char*> {
+    auto result = inner(l, r);
+    if (not result) {
+      return "integer overflow";
+    }
+    return *result;
+  }
 };
 
-// if any of the operands is double, the result is a double
 template <ast::binary_op Op, numeric_type L, numeric_type R>
   requires(is_arithmetic(Op)
            and (std::same_as<double_type, L> or std::same_as<double_type, R>))
@@ -141,28 +148,6 @@ struct BinOpKernel<Op, L, R> {
   }
 };
 
-template <>
-struct BinOpKernel<ast::binary_op::sub, int64_type, uint64_type> {
-  using result = int64_t;
-
-  static auto evaluate(int64_t l, uint64_t r)
-    -> std::variant<result, const char*> {
-    // r > int_max
-    if (r > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
-      return "subtraction overflow";
-    }
-    // l < 0 and |l| + r > int_max -> l - r < int_min
-    if (l < 0
-        and static_cast<uint64_t>(abs(l)) + r
-              > static_cast<uint64_t>(std::numeric_limits<int64_t>::max())
-                  + 1) {
-      return "subtraction underflow";
-    }
-    return l - static_cast<int64_t>(r);
-  }
-};
-
-// division always yields doubles
 template <numeric_type L, numeric_type R>
 struct BinOpKernel<ast::binary_op::div, L, R> {
   using result = double;

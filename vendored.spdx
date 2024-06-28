@@ -253,14 +253,3 @@ LicenseInfoInFile: MIT
 LicenseComments: https://github.com/mariusbancila/croncpp
 
 Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-include-tenzir-croncpp-hpp
-
-FileName: ./libtenzir/include/tenzir/detail/checked_math.hpp
-SPDXID: SPDXRef-file-libtenzir-include-tenzir-checked_math-hpp
-FileChecksum: SHA1: TODO
-FileChecksum: SHA256: TODO
-FileCopyrightText: Copyright 2018, 2020 Moritz Beutel
-LicenseConcluded: TODO
-LicenseInfoInFile: TODO
-LicenseComments: https://github.com/mbeutel/slowmath
-
-Relationship: SPDXRef-Tenzir CONTAINS SPDXRef-file-libtenzir-include-tenzir-checked_math-hpp
