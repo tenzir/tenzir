@@ -26,6 +26,10 @@ auto pattern::make(std::string str, pattern_options options) noexcept
   -> caf::expected<pattern> {
   auto opts = re2::RE2::Options(re2::RE2::CannedOptions::Quiet);
   opts.set_case_sensitive(!options.case_insensitive);
+  // Make the pattern consider newlines when encountering the dot metacharacter,
+  // given that we often have string fields with messages and bunch of other
+  // quasi-structured data including newlines.
+  opts.set_dot_nl(true);
   auto regex = re2::RE2(str, opts);
   auto result = pattern{};
   result.str_ = std::move(str);
