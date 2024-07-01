@@ -10,6 +10,7 @@
 
 #include "tenzir/collect.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/metrics.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql/parser.hpp"
@@ -49,6 +50,10 @@ public:
       handler_ = std::make_unique<handler>(*this);
     }
     return *handler_;
+  }
+
+  auto metrics() noexcept -> metric_handler& override {
+    die("not implemented");
   }
 
   auto no_location_overrides() const noexcept -> bool override {

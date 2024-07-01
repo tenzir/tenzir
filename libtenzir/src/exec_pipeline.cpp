@@ -231,7 +231,7 @@ auto exec_pipeline(std::string content,
       self->state.executor = self->spawn<caf::monitored>(
         pipeline_executor, std::move(pipe),
         caf::actor_cast<receiver_actor<diagnostic>>(self),
-        caf::actor_cast<receiver_actor<metric>>(self), node_actor{}, true);
+        caf::actor_cast<metrics_receiver_actor>(self), node_actor{}, true);
       self->request(self->state.executor, caf::infinite, atom::start_v)
         .then(
           []() {
@@ -245,6 +245,9 @@ auto exec_pipeline(std::string content,
       return {
         [&](diagnostic& d) {
           diag->emit(std::move(d));
+        },
+        [&](std::string&, record&) {
+          // drop custom metrics.
         },
         [&](metric& m) {
           if (cfg.dump_metrics) {
