@@ -185,6 +185,7 @@ public:
         ++it;
         continue;
       }
+      visit(let->expr);
       auto value = const_eval(let->expr, ctx_);
       if (value) {
         auto f = detail::overload{
