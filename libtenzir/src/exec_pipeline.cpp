@@ -21,7 +21,7 @@ namespace tenzir {
 
 namespace {
 
-auto format_metric(const metric& metric) -> std::string {
+auto format_metric(const operator_metric& metric) -> std::string {
   auto result = std::string{};
   auto it = std::back_inserter(result);
   constexpr auto indent = std::string_view{"  "};
@@ -194,7 +194,7 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
   pipe = pipe.optimize_if_closed();
   auto self = caf::scoped_actor{sys};
   auto result = caf::expected<void>{};
-  auto metrics = std::vector<metric>{};
+  auto metrics = std::vector<operator_metric>{};
   // TODO: This command should probably implement signal handling, and check
   // whether a signal was raised in every iteration over the executor. This
   // will likely be easier to implement once we switch to the actor-based
@@ -233,7 +233,7 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
         [&](std::string&, record&) {
           // drop custom metrics.
         },
-        [&](metric& m) {
+        [&](operator_metric& m) {
           if (cfg.dump_metrics) {
             const auto idx = m.operator_index;
             if (idx >= metrics.size()) {

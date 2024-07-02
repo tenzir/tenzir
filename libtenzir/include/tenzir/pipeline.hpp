@@ -179,7 +179,7 @@ struct operator_measurement {
 
 // Metrics that track the information about inbound and outbound elements that
 // pass through this operator.
-struct [[nodiscard]] metric {
+struct [[nodiscard]] operator_metric {
   uint64_t operator_index = {};
   std::string operator_name = {};
   operator_measurement inbound_measurement = {};
@@ -200,7 +200,7 @@ struct [[nodiscard]] metric {
   bool internal = {};
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, metric& x) -> bool {
+  friend auto inspect(Inspector& f, operator_metric& x) -> bool {
     return f.object(x).pretty_name("metric").fields(
       f.field("operator_index", x.operator_index),
       f.field("operator_name", x.operator_name),
