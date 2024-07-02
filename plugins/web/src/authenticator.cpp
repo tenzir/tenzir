@@ -115,7 +115,9 @@ caf::expected<authenticator_actor>
 get_authenticator(caf::scoped_actor& self, node_actor node,
                   caf::timespan timeout) {
   auto maybe_authenticator = caf::expected<caf::actor>{caf::error{}};
-  self->request(node, timeout, atom::get_v, atom::type_v, "web")
+  self
+    ->request(node, timeout, atom::get_v, atom::label_v,
+              std::vector<std::string>{"web"})
     .receive(
       [&](std::vector<caf::actor>& actors) {
         if (actors.empty()) {

@@ -28,9 +28,6 @@ namespace tenzir {
 /// `tenzir.connection-timeout` from the given settings.
 auto node_connection_timeout(const caf::settings& options) -> caf::timespan;
 
-auto spawn_at_node(caf::scoped_actor& self, const node_actor& node,
-                   invocation inv) -> caf::expected<caf::actor>;
-
 /// Look up components by their typed actor interfaces. Returns the first actor
 /// of each type passed as template parameter.
 template <class... Actors>
