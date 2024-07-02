@@ -12,7 +12,7 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/metrics.hpp"
+#include "tenzir/metric_handler.hpp"
 #include "tenzir/shared_diagnostic_handler.hpp"
 
 #include <caf/typed_actor.hpp>

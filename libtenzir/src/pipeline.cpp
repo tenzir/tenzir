@@ -9,7 +9,7 @@
 #include "tenzir/pipeline.hpp"
 
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/metrics.hpp"
+#include "tenzir/metric_handler.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql/parser.hpp"
