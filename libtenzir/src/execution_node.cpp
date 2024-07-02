@@ -216,7 +216,7 @@ struct exec_node_state {
   std::chrono::steady_clock::time_point start_time
     = std::chrono::steady_clock::now();
   metrics_receiver_actor metrics_handler = {};
-  metric metrics = {};
+  operator_metric metrics = {};
 
   /// Whether this execution node is paused, and when it was.
   std::optional<std::chrono::steady_clock::time_point> paused_at = {};
