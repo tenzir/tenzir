@@ -110,9 +110,6 @@ inline auto split_at_null(generator<chunk_ptr> input, char split)
         continue;
       }
       const auto size = static_cast<size_t>(current - begin);
-      if (size == 0) {
-        continue;
-      }
       const auto capacity = static_cast<size_t>(end - begin);
       if (buffer.empty() and capacity >= size + simdjson::SIMDJSON_PADDING) {
         co_yield simdjson::padded_string_view{begin, size, capacity};
