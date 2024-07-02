@@ -13,6 +13,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/node_control.hpp>
 #include <tenzir/pipeline.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
 
@@ -95,7 +96,8 @@ public:
   }
 };
 
-class plugin final : public virtual operator_plugin<import_operator> {
+class plugin final : public virtual operator_plugin<import_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.sink = true};
@@ -115,6 +117,11 @@ public:
     }
     pipe->append(std::make_unique<import_operator>());
     return std::make_unique<pipeline>(std::move(*pipe));
+  }
+
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
+    argument_parser2::operator_("import").parse(inv, ctx);
+    return std::make_unique<import_operator>();
   }
 };
 

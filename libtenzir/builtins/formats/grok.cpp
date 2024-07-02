@@ -11,6 +11,7 @@
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 // Both Boost.Regex and RE2 are used:
 //  - Boost.Regex is used for actual grokking
@@ -396,6 +397,16 @@ public:
     input_pattern_.resolve(*patterns_, false);
   }
 
+  grok_parser(std::string pattern, bool indexed_captures, bool include_unnamed,
+              bool raw)
+    : patterns_{get_builtin_pattern_store()},
+      indexed_captures_{indexed_captures},
+      include_unnamed_{include_unnamed},
+      raw_{raw} {
+    input_pattern_.raw_pattern = std::move(pattern);
+    input_pattern_.resolve(*patterns_, false);
+  }
+
   auto name() const -> std::string override {
     return "grok";
   }
@@ -409,11 +420,10 @@ public:
     return {};
   }
 
-  auto parse_strings(std::shared_ptr<arrow::StringArray> input,
-                     operator_control_plane& ctrl) const
-    -> std::vector<series> override {
+  auto parse_strings(const arrow::StringArray& input,
+                     diagnostic_handler& dh) const -> std::vector<series> {
     auto builder = series_builder{type{record_type{}}};
-    for (auto&& string : values(string_type{}, *input)) {
+    for (auto&& string : values(string_type{}, input)) {
       if (not string) {
         builder.null();
         continue;
@@ -424,7 +434,7 @@ public:
         diagnostic::warning("pattern could not be matched")
           .hint("input: `{}`", *string)
           .hint("pattern: `{}`", input_pattern_.resolved_pattern->str())
-          .emit(ctrl.diagnostics());
+          .emit(dh);
         builder.null();
         continue;
       }
@@ -503,6 +513,12 @@ public:
     return builder.finish();
   }
 
+  auto parse_strings(std::shared_ptr<arrow::StringArray> input,
+                     operator_control_plane& ctrl) const
+    -> std::vector<series> override {
+    return parse_strings(*input, ctrl.diagnostics());
+  }
+
   friend auto inspect(auto& f, grok_parser& x) -> bool {
     auto get_patterns = [&x]() -> decltype(auto) {
       return *x.patterns_;
@@ -536,8 +552,63 @@ public:
     return std::make_unique<grok_parser>(p);
   }
 };
+
+class plugin2 final : public virtual method_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.grok";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> std::unique_ptr<function_use> override {
+    auto input = ast::expression{};
+    auto pattern = std::string{};
+    auto indexed_captures = false;
+    auto include_unnamed = false;
+    auto raw = false;
+    argument_parser2::method("grok")
+      .add(input, "<input>")
+      .add(pattern, "<pattern>")
+      .add("indexed_captures", indexed_captures)
+      .add("include_unnamed", include_unnamed)
+      .add("raw", raw)
+      .parse(inv, ctx);
+    auto parser = grok_parser{
+      std::move(pattern),
+      indexed_captures,
+      include_unnamed,
+      raw,
+    };
+    return function_use::make(
+      [input = std::move(input),
+       parser = std::move(parser)](evaluator eval, session ctx) -> series {
+        auto values = eval(input);
+        if (values.type.kind().is<null_type>()) {
+          return values;
+        }
+        auto strings = caf::get_if<arrow::StringArray>(&*values.array);
+        if (not strings) {
+          diagnostic::warning("expected string, got `{}`", values.type.kind())
+            .primary(input)
+            .emit(ctx);
+          return series::null(null_type{}, eval.length());
+        }
+        auto output = parser.parse_strings(*strings, ctx);
+        // TODO: Evaluator can only handle single type atm.
+        if (output.size() != 1) {
+          diagnostic::warning("varying type within batch is not yet supported")
+            .primary(input)
+            .emit(ctx);
+          return series::null(null_type{}, eval.length());
+        }
+        return std::move(output[0]);
+      });
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::grok
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::grok::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::grok::plugin2)

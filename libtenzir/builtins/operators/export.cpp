@@ -20,6 +20,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/query_context.hpp>
 #include <tenzir/table_slice.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/uuid.hpp>
 
 #include <arrow/type.h>
@@ -276,7 +277,8 @@ private:
   export_mode mode_;
 };
 
-class plugin final : public virtual operator_plugin<export_operator> {
+class plugin final : public virtual operator_plugin<export_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.source = true};
@@ -310,6 +312,30 @@ public:
         },
       },
       mode);
+  }
+
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
+    auto live = false;
+    auto retro = false;
+    auto internal = false;
+    argument_parser2::operator_("export")
+      .add("live", live)
+      .add("retro", retro)
+      .add("internal", internal)
+      .parse(inv, ctx);
+    if (not live) {
+      // TODO: export live=false, retro=false
+      retro = true;
+    }
+    return std::make_unique<export_operator>(
+      expression{
+        predicate{
+          meta_extractor{meta_extractor::internal},
+          relational_operator::equal,
+          data{internal},
+        },
+      },
+      export_mode{live, retro});
   }
 };
 

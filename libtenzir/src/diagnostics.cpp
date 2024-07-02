@@ -73,7 +73,9 @@ public:
   }
 
   void emit(diagnostic diag) override {
-    // TODO: Do not print color if not a console + provide option.
+    if (not std::exchange(first, false)) {
+      fmt::print("\n");
+    }
     // TODO: Do not print the same line multiple times. Merge annotations instead.
     fmt::print(stream_, "{}{}{}{}: {}{}\n", bold, color(diag.severity),
                diag.severity, uncolor, diag.message, reset);
@@ -170,6 +172,7 @@ private:
     return {line, col};
   }
 
+  bool first = true;
   bool error_ = false;
   std::string storage_;
   std::vector<std::string_view> lines_;

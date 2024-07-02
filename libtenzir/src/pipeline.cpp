@@ -8,9 +8,7 @@
 
 #include "tenzir/pipeline.hpp"
 
-#include "tenzir/collect.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql/parser.hpp"
 
@@ -195,6 +193,18 @@ auto pipeline::optimize(expression const& filter, event_order order) const
     TENZIR_ASSERT(*it);
     auto const& op = **it;
     auto opt = op.optimize(current_filter, current_order);
+    // TODO: This is a small hack to not propagate a TQLv2 `where` unless the
+    // pipeline starts in `export`. By doing this, we make sure that we keep
+    // TQLv2 semantics (including warnings), unless performance demands it. This
+    // hack will be fixed by upgrading the catalog to the new expressions.
+    if (op.name() == "tql2.where") {
+      auto qualifies = std::ranges::all_of(it, operators_.rend(), [](auto& op) {
+        return op->name() == "tql2.where" || op->name() == "export";
+      });
+      if (not qualifies) {
+        opt = optimize_result::order_invariant(op, current_order);
+      }
+    }
     if (opt.filter) {
       current_filter = std::move(*opt.filter);
     } else if (current_filter != trivially_true_expression()) {

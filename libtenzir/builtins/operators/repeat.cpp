@@ -13,6 +13,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
 
@@ -78,7 +79,8 @@ private:
   uint64_t repetitions_;
 };
 
-class plugin final : public virtual operator_plugin<repeat_operator> {
+class plugin final : public virtual operator_plugin<repeat_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
@@ -92,6 +94,13 @@ public:
     parser.parse(p);
     return std::make_unique<repeat_operator>(
       repetitions.value_or(std::numeric_limits<uint64_t>::max()));
+  }
+
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
+    auto count = std::optional<uint64_t>{};
+    argument_parser2::operator_("repeat").add(count, "<count>").parse(inv, ctx);
+    return std::make_unique<repeat_operator>(
+      count.value_or(std::numeric_limits<uint64_t>::max()));
   }
 };
 

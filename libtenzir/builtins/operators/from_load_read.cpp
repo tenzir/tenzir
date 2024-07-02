@@ -6,6 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/tql2/eval.hpp"
+#include "tenzir/tql2/plugin.hpp"
+
 #include <tenzir/detail/loader_saver_resolver.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/plugin.hpp>
@@ -295,9 +298,65 @@ public:
   }
 };
 
+class from_plugin2 final : public virtual operator_factory_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.from";
+  }
+
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
+    if (inv.args.empty()) {
+      diagnostic::error("expected positional argument `<path/url>`")
+        .primary(inv.self)
+        .emit(ctx);
+      return nullptr;
+    }
+    auto path_opt = const_eval(inv.args[0], ctx);
+    if (not path_opt) {
+      return nullptr;
+    }
+    auto path = caf::get_if<std::string>(&*path_opt);
+    if (not path) {
+      diagnostic::error("expected string").primary(inv.args[0]).emit(ctx);
+      return nullptr;
+    }
+    // TODO: This is just for demo purposes!
+    if (not path->ends_with(".json")) {
+      diagnostic::error("`from` currently requires `.json` files")
+        .primary(inv.args[0])
+        .emit(ctx);
+      return nullptr;
+    }
+    // TODO: Obviously not great.
+    auto result = pipeline::internal_parse_as_operator(
+      fmt::format("from \"{}\" read json", *path));
+    if (not result) {
+      diagnostic::error(result.error()).primary(inv.self).emit(ctx);
+      return nullptr;
+    }
+    return std::move(*result);
+  }
+};
+
+class load_plugin2 final : virtual public operator_factory_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.load";
+  }
+
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
+    diagnostic::error("operator is not yet implemented")
+      .primary(inv.self)
+      .emit(ctx);
+    return nullptr;
+  }
+};
+
 } // namespace
 } // namespace tenzir::plugins::from
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::from_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::load_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::read_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::from_plugin2)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::load_plugin2)

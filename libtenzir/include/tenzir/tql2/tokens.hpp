@@ -12,7 +12,7 @@
 
 #include <string_view>
 
-namespace tenzir::tql2 {
+namespace tenzir {
 
 TENZIR_ENUM(
   ///
@@ -20,7 +20,7 @@ TENZIR_ENUM(
   // identifiers
   identifier, dollar_ident,
   // keywords
-  this_, if_, else_, match, not_, and_, or_, underscore, let, in,
+  this_, if_, else_, match, not_, and_, or_, underscore, let, in, meta,
   reserved_keyword,
   // literals
   scalar, true_, false_, null, string, ip, datetime,
@@ -49,4 +49,4 @@ struct token {
 
 auto tokenize(std::string_view content) -> std::vector<token>;
 
-} // namespace tenzir::tql2
+} // namespace tenzir

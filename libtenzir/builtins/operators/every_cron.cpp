@@ -16,6 +16,7 @@
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
 #include <caf/typed_event_based_actor.hpp>
@@ -300,6 +301,7 @@ public:
 private:
   duration interval_;
 };
+
 using every_plugin = scheduled_execution_plugin<every_scheduler>;
 
 class cron_scheduler {
@@ -362,9 +364,47 @@ private:
 };
 using cron_plugin = scheduled_execution_plugin<cron_scheduler>;
 
+class every_plugin2 final : public virtual operator_factory_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.every";
+  }
+
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
+    auto interval = located<duration>{};
+    auto pipe = pipeline{};
+    argument_parser2::operator_("every")
+      .add(interval, "<duration>")
+      .add(pipe, "{ ... }")
+      .parse(inv, ctx);
+    // TODO: This is still 0 if we failed to parse.
+    if (interval.inner <= duration::zero()) {
+      diagnostic::error("expected a positive duration, got {}", interval.inner)
+        .primary(interval)
+        .emit(ctx);
+      return nullptr;
+    }
+    auto ops = std::move(pipe).unwrap();
+    // TODO: How do we know whether `pipe` was set? This looks hacky.
+    if (ops.empty()) {
+      return nullptr;
+    }
+    if (ops.size() > 1) {
+      // TODO: Lift this limitation.
+      diagnostic::error("expected exactly one operator, found {}", ops.size())
+        .primary(inv.args[1])
+        .emit(ctx);
+      return nullptr;
+    }
+    return std::make_unique<scheduled_execution_operator<every_scheduler>>(
+      std::move(ops[0]), every_scheduler{interval.inner});
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::every_cron
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::cron_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::every_cron::every_plugin2)

@@ -12,6 +12,7 @@
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/config_options.hpp>
+#include <tenzir/data.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/env.hpp>
@@ -25,6 +26,8 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/to_lines.hpp>
+#include <tenzir/tql/parser.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/try_simdjson.hpp>
 
 #include <arrow/record_batch.h>
@@ -548,8 +551,10 @@ private:
 /// Converts a simdjson object into `data` object.
 ///
 /// This is used when `--precise` is specified.
-auto json_to_data(simdjson::ondemand::value value, bool raw)
-  -> simdjson::simdjson_result<data>;
+template <class T>
+  requires std::same_as<T, simdjson::ondemand::value>
+           || std::same_as<T, simdjson::ondemand::document>
+auto json_to_data(T& value, bool raw) -> simdjson::simdjson_result<data>;
 
 auto json_to_data(simdjson::ondemand::object object, bool raw)
   -> simdjson::simdjson_result<data> {
@@ -616,8 +621,10 @@ auto json_to_data(std::string_view string, bool raw)
   return data{std::string{string}};
 }
 
-auto json_to_data(simdjson::ondemand::value value, bool raw)
-  -> simdjson::simdjson_result<data> {
+template <class T>
+  requires std::same_as<T, simdjson::ondemand::value>
+           || std::same_as<T, simdjson::ondemand::document>
+auto json_to_data(T& value, bool raw) -> simdjson::simdjson_result<data> {
   TRY(auto type, value.type());
   switch (type) {
     case simdjson::ondemand::json_type::array: {
@@ -641,6 +648,7 @@ auto json_to_data(simdjson::ondemand::value value, bool raw)
       return data{boolean};
     }
     case simdjson::ondemand::json_type::null: {
+      TRY(value.is_null());
       return data{caf::none};
     }
   }
@@ -1127,8 +1135,11 @@ auto make_parser(generator<GeneratorValue> json_chunk_generator,
 }
 
 auto parse_selector(std::string_view x, location source) -> selector {
+  if (x.empty()) {
+    diagnostic::error("selector must not be empty").primary(source).throw_();
+  }
   auto split = detail::split(x, ":");
-  TENZIR_ASSERT(!x.empty());
+  TENZIR_ASSERT(not split.empty());
   if (split.size() > 2 or split[0].empty()) {
     diagnostic::error("invalid selector `{}`: must contain at most "
                       "one `:` and field name must "
@@ -1526,6 +1537,224 @@ public:
 using suricata_parser = selector_parser<"suricata", "event_type:suricata">;
 using zeek_parser = selector_parser<"zeek-json", "_path:zeek", ".">;
 
+class read_json final : public crtp_operator<read_json> {
+public:
+  read_json() = default;
+
+  explicit read_json(parser_args args) : parser_{std::move(args)} {
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.read_json";
+  }
+
+  auto
+  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    // TODO: Rewrite after `crtp_operator` does detection without instantiate.
+    auto gen = parser_.instantiate(std::move(input), ctrl);
+    if (not gen) {
+      co_return;
+    }
+    for (auto&& slice : *gen) {
+      co_yield std::move(slice);
+    }
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, read_json& x) -> bool {
+    return f.apply(x.parser_);
+  }
+
+private:
+  json_parser parser_;
+};
+
+class write_json final : public crtp_operator<write_json> {
+public:
+  write_json() = default;
+
+  explicit write_json(printer_args args) : printer_{std::move(args)} {
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.write_json";
+  }
+
+  auto operator()(generator<table_slice> input,
+                  operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    // TODO: Expose a better API for this.
+    auto printer = printer_.instantiate(type{}, ctrl);
+    TENZIR_ASSERT(printer);
+    TENZIR_ASSERT(*printer);
+    for (auto&& slice : input) {
+      auto yielded = false;
+      for (auto&& chunk : (*printer)->process(slice)) {
+        co_yield std::move(chunk);
+        yielded = true;
+      }
+      if (not yielded) {
+        co_yield {};
+      }
+    }
+    for (auto&& chunk : (*printer)->finish()) {
+      co_yield std::move(chunk);
+    }
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, write_json& x) -> bool {
+    return f.apply(x.printer_);
+  }
+
+private:
+  json_printer printer_;
+};
+
+class read_json_plugin final : public virtual operator_plugin2<read_json> {
+public:
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
+    auto args = parser_args{};
+    auto selector = std::optional<located<std::string>>{};
+    auto sep = std::optional<located<std::string>>{};
+    auto unnest_separator = std::optional<std::string>{};
+    argument_parser2::operator_("read_json")
+      .add("sep", sep)
+      // TODO: We could allow a non-constant expression for `schema` and then
+      // evaluate it with (perhaps in some limited fashion) against the current
+      // JSON document.
+      .add("selector", selector)
+      .add("schema", args.schema)
+      .add("precise", args.precise)
+      .add("no_extra_fields", args.no_infer)
+      // TODO: Decide whether to cover this `sep`.
+      .add("gelf", args.use_gelf_mode)
+      .add("ndjson", args.use_ndjson_mode)
+      .add("unnest_separator", unnest_separator)
+      .add("raw", args.raw)
+      .add("arrays_of_objects", args.arrays_of_objects)
+      .parse(inv, ctx);
+    if (unnest_separator) {
+      args.unnest_separator = std::move(*unnest_separator);
+    }
+    if (selector) {
+      try {
+        args.selector = parse_selector(selector->inner, selector->source);
+      } catch (diagnostic d) {
+        ctx.dh().emit(std::move(d));
+      }
+    }
+    if (sep) {
+      auto& str = sep->inner;
+      if (str == "\n") {
+        args.use_ndjson_mode = true;
+      } else if (str.size() == 1 && str[0] == '\0') {
+        args.use_gelf_mode = true;
+      } else {
+        diagnostic::error("unknown separator {:?}", str)
+          .primary(sep->source)
+          .hint(R"(expected "\n" or "\0")")
+          .emit(ctx);
+      }
+    }
+    return std::make_unique<read_json>(std::move(args));
+  }
+};
+
+class parse_json_plugin final : public virtual method_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.parse_json";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> std::unique_ptr<function_use> override {
+    auto expr = ast::expression{};
+    // TODO: Consider adding a `many` option to expect multiple json values.
+    // TODO: Consider adding a `precise` option (this needs evaluator support).
+    argument_parser2::method("parse_json").add(expr, "<string>").parse(inv, ctx);
+    return function_use::make(
+      [call = inv.call.get_location(),
+       expr = std::move(expr)](evaluator eval, session ctx) -> series {
+        auto arg = eval(expr);
+        auto f = detail::overload{
+          [&](const arrow::NullArray&) {
+            return arg;
+          },
+          [&](const arrow::StringArray& arg) {
+            auto parser = simdjson::ondemand::parser{};
+            auto b = series_builder{};
+            for (auto i = int64_t{0}; i < arg.length(); ++i) {
+              if (arg.IsNull(i)) {
+                b.null();
+                continue;
+              }
+              auto parse = [&]() -> simdjson::simdjson_result<data> {
+                auto str = std::string{arg.Value(i)};
+                TRY(auto doc, parser.iterate(str));
+                return json_to_data(doc, false);
+              };
+              auto result = parse();
+              if (result.error()) {
+                // TODO: This can be very noisy. We will deduplicate the
+                // messages, but this is not efficient.
+                diagnostic::warning("could not parse json: {}",
+                                    simdjson::error_message(result.error()))
+                  .primary(call)
+                  .emit(ctx);
+                b.null();
+                continue;
+              }
+              b.data(result.value_unsafe());
+            }
+            auto result = b.finish();
+            // TODO: Consider whether we need heterogeneous for this. If so,
+            // then we must extend the evaluator accordingly.
+            if (result.size() != 1) {
+              diagnostic::warning("got incompatible JSON values")
+                .primary(call)
+                .emit(ctx);
+              return series::null(null_type{}, arg.length());
+            }
+            return std::move(result[0]);
+          },
+          [&](const auto&) {
+            diagnostic::warning("`parse_json` expected `string`, got `{}`",
+                                arg.type.kind())
+              .primary(call)
+              .emit(ctx);
+            return series::null(null_type{}, arg.length());
+          },
+        };
+        return caf::visit(f, *arg.array);
+      });
+  }
+};
+
+class write_json_plugin final : public virtual operator_plugin2<write_json> {
+public:
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
+    // TODO: More options, and consider `null_fields=false` as default.
+    auto args = printer_args{};
+    argument_parser2::operator_("write_json")
+      // TODO: Perhaps "indent=0"?
+      .add("ndjson", args.compact_output)
+      .add("color", args.color_output)
+      .parse(inv, ctx);
+    return std::make_unique<write_json>(args);
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::json
@@ -1534,3 +1763,6 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::gelf_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::suricata_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::zeek_parser)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_json_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::parse_json_plugin)

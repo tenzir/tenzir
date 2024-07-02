@@ -11,5 +11,6 @@
 2009-11-18T08:07:15.800932	bEgBnkI31Vf	192.168.1.103	138	192.168.1.255	138	udp	-	46.73s	560	0	S0	-	-	0	D	3	644	0	0	(empty)	-	-
 warning: invalid Zeek header: #empty_field
  = note: line 3
+
 warning: invalid Zeek header: #unset_field
  = note: line 4

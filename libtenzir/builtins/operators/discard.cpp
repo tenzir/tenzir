@@ -8,6 +8,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::discard {
 
@@ -44,13 +45,19 @@ public:
   }
 };
 
-class plugin final : public virtual operator_plugin<discard_operator> {
+class plugin final : public virtual operator_plugin<discard_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.sink = true};
   }
 
   auto parse_operator(parser_interface&) const -> operator_ptr override {
+    return std::make_unique<discard_operator>();
+  }
+
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
+    argument_parser2::operator_("discard").parse(inv, ctx);
     return std::make_unique<discard_operator>();
   }
 };

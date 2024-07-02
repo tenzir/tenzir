@@ -22,6 +22,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <caf/detail/scope_guard.hpp>
 #include <caf/error.hpp>
@@ -536,6 +537,123 @@ private:
     tenzir::defaults::import::read_timeout};
 };
 
+class load_file_operator final : public crtp_operator<load_file_operator> {
+public:
+  load_file_operator() = default;
+
+  explicit load_file_operator(loader_args args) : args_{std::move(args)} {
+  }
+
+  auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    auto loader = file_loader{args_};
+    auto instance = loader.instantiate(ctrl);
+    if (not instance) {
+      co_return;
+    }
+    for (auto&& chunk : *instance) {
+      co_yield std::move(chunk);
+    }
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.load_file";
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, load_file_operator& x) -> bool {
+    return f.apply(x.args_);
+  }
+
+private:
+  loader_args args_;
+};
+
+class load_file_plugin final : public operator_plugin2<load_file_operator> {
+public:
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
+    auto args = loader_args{};
+    auto timeout = std::optional<located<duration>>{};
+    argument_parser2::operator_("load_file")
+      .add(args.path, "<path>")
+      .add("follow", args.follow)
+      .add("mmap", args.mmap)
+      .add("timeout", timeout)
+      .parse(inv, ctx);
+    if (timeout) {
+      args.timeout = located{
+        std::chrono::duration_cast<std::chrono::milliseconds>(timeout->inner),
+        timeout->source};
+    }
+    return std::make_unique<load_file_operator>(std::move(args));
+  }
+};
+
+class save_file_operator final : public crtp_operator<save_file_operator> {
+public:
+  save_file_operator() = default;
+
+  explicit save_file_operator(saver_args args) : args_{std::move(args)} {
+  }
+
+  auto
+  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> generator<std::monostate> {
+    auto loader = file_saver{args_};
+    auto instance = loader.instantiate(ctrl, {});
+    if (not instance) {
+      co_return;
+    }
+    for (auto&& chunk : input) {
+      (*instance)(std::move(chunk));
+      co_yield {};
+    }
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.save_file";
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, save_file_operator& x) -> bool {
+    return f.apply(x.args_);
+  }
+
+private:
+  saver_args args_;
+};
+
+class save_file_plugin final : public operator_plugin2<save_file_operator> {
+public:
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
+    auto args = saver_args{};
+    argument_parser2::operator_("save_file")
+      .add(args.path, "<path>")
+      .add("append", args.append)
+      .add("real_time", args.real_time)
+      .add("uds", args.uds)
+      .parse(inv, ctx);
+    return std::make_unique<save_file_operator>(std::move(args));
+  }
+};
+
 } // namespace
 } // namespace tenzir::plugins::file
 
@@ -588,5 +706,7 @@ public:
 } // namespace tenzir::plugins::stdout_
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::file::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::file::load_file_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::file::save_file_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::stdin_::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::stdout_::plugin)

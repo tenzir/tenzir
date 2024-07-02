@@ -60,6 +60,11 @@ public:
     return (std::holds_alternative<tag<Us>>(*this) || ...);
   }
 
+  template <typename... Us>
+  auto none_of() const -> bool {
+    return not is_any<Us...>();
+  }
+
   auto operator<=>(const tag_variant& other) const = default;
 
   template <class Inspector>

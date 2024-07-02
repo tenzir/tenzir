@@ -33,4 +33,5 @@
 {"_path": "corelight_metrics_iface", "x": ["corelight_metrics_iface"]}
 {"_path": "corelight_metrics_disk", "x": ["corelight_metrics_disk"]}
 warning: group-by column `_path` does not exist for schema `tenzir.json`
+
 warning: aggregation column `_path` does not exist for schema `tenzir.json`

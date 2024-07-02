@@ -6,15 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/tql2/entity_id.hpp"
+#pragma once
 
-namespace tenzir::tql2 {
+#include "tenzir/session.hpp"
+#include "tenzir/tql2/ast.hpp"
 
-auto entity_id::debug_inspect(debug_writer& dbg) const -> bool {
-  if (not resolved()) {
-    return dbg.fmt_value("<unresolved>");
-  }
-  return dbg.apply(id);
-}
+namespace tenzir {
 
-} // namespace tenzir::tql2
+void resolve_entities(ast::pipeline& pipe, session ctx);
+
+} // namespace tenzir

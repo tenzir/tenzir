@@ -11,12 +11,13 @@
 #include "tenzir/concept/parseable/tenzir/ip.hpp"
 #include "tenzir/concept/parseable/tenzir/time.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/tql2/ast.hpp"
 
 #include <arrow/util/utf8.h>
 
 #include <ranges>
 
-namespace tenzir::tql2 {
+namespace tenzir {
 
 namespace {
 
@@ -44,9 +45,9 @@ auto precedence(binary_op x) -> int {
     case sub:
       return 5;
     case gt:
-    case ge:
+    case geq:
     case lt:
-    case le:
+    case leq:
     case eq:
     case neq:
     case in:
@@ -64,7 +65,7 @@ public:
   using tk = token_kind;
 
   static auto parse_file(std::span<token> tokens, std::string_view source,
-                         diagnostic_handler& diag) -> pipeline {
+                         diagnostic_handler& diag) -> ast::pipeline {
     try {
       auto self = parser{tokens, source, diag};
       auto pipe = self.parse_pipeline();
@@ -73,14 +74,13 @@ public:
       }
       return pipe;
     } catch (diagnostic& d) {
-      // TODO
-      diag.emit(d);
-      return pipeline{{}};
+      diag.emit(std::move(d));
+      return ast::pipeline{{}};
     }
   }
 
 private:
-  auto parse_pipeline() -> pipeline {
+  auto parse_pipeline() -> ast::pipeline {
     auto scope = ignore_newlines(false);
     auto body = std::vector<statement>{};
     while (true) {
@@ -94,7 +94,7 @@ private:
         throw_token();
       }
     }
-    return pipeline{std::move(body)};
+    return ast::pipeline{std::move(body)};
   }
 
   auto parse_statement() -> statement {
@@ -115,7 +115,7 @@ private:
     if (silent_peek(tk::identifier)) {
       auto ident = expect(tk::identifier);
       diagnostic::error("identifier after `let` must start with `$`")
-        .primary(ident.location, "try `${}` instead", ident.text)
+        .primary(ident, "try `${}` instead", ident.text)
         .throw_();
     }
     auto name = expect(tk::dollar_ident);
@@ -134,7 +134,7 @@ private:
     expect(tk::lbrace);
     auto consequence = parse_pipeline();
     expect(tk::rbrace);
-    auto alternative = std::optional<pipeline>{};
+    auto alternative = std::optional<ast::pipeline>{};
     if (accept(tk::else_)) {
       expect(tk::lbrace);
       alternative = parse_pipeline();
@@ -153,7 +153,7 @@ private:
     //    match foo {
     //      "ok", 42 => { ... }
     //    }
-    expect(tk::match);
+    auto begin = expect(tk::match);
     auto expr = parse_expression();
     auto arms = std::vector<match_stmt::arm>{};
     expect(tk::lbrace);
@@ -164,15 +164,17 @@ private:
       // TODO: require comma or newline?
       (void)accept(tk::comma);
     }
-    expect(tk::rbrace);
+    auto end = expect(tk::rbrace);
     return match_stmt{
+      begin.location,
       std::move(expr),
       std::move(arms),
+      end.location,
     };
   }
 
   auto parse_match_stmt_arm() -> match_stmt::arm {
-    auto filter = std::vector<expression>{};
+    auto filter = std::vector<ast::expression>{};
     while (true) {
       filter.push_back(parse_expression());
       if (accept(tk::fat_arrow)) {
@@ -190,7 +192,28 @@ private:
   }
 
   auto parse_invocation_or_assignment() -> statement {
-    auto left = parse_selector();
+    // TODO: Proper entity parsing.
+    auto unary_expr = parse_unary_expression();
+    if (auto call = std::get_if<ast::function_call>(&*unary_expr.kind)) {
+      // TODO: We patch a top-level function call to be an operator invocation
+      // instead. This could be done differently by slightly rewriting the
+      // parser. Because this is not (yet) reflected in the AST, the optional
+      // parenthesis are not reflected.
+      if (call->subject) {
+        // TODO: We could consider rewriting method calls to mutate their
+        // subject, e.g., `foo.bar.baz(qux) => foo.bar = foo.bar.baz(qux)`.
+        diagnostic::error("expected operator invocation, found method call")
+          .primary(call->fn)
+          .throw_();
+      }
+      if (not at_statement_end()) {
+        diagnostic::error("expected end of statement")
+          .primary(next_location())
+          .throw_();
+      }
+      return ast::invocation{std::move(call->fn), std::move(call->args)};
+    }
+    auto left = to_selector(std::move(unary_expr));
     if (auto equal = accept(tk::equal)) {
       auto right = parse_expression();
       return assignment{
@@ -199,25 +222,29 @@ private:
         std::move(right),
       };
     }
-    // TODO: Proper entity parsing.
-    if (not left.this_ and left.path.size() == 1) {
-      return parse_invocation(entity{std::move(left.path)});
+    // TODO: Improve this.
+    auto simple_sel = std::get_if<simple_selector>(&left);
+    auto root = simple_sel
+                  ? std::get_if<ast::root_field>(&*simple_sel->inner().kind)
+                  : nullptr;
+    if (root) {
+      return parse_invocation(entity{{std::move(root->ident)}});
     }
-    diagnostic::error("expected operator name or `=` afterwards")
-      .primary(left.get_location())
+    diagnostic::error("{}", "expected `=` after selector")
+      .primary(next_location())
       .throw_();
   }
 
-  auto parse_invocation(entity op) -> invocation {
-    auto args = std::vector<expression>{};
+  auto parse_invocation(entity op) -> ast::invocation {
+    auto args = std::vector<ast::expression>{};
     while (not at_statement_end()) {
       if (not args.empty()) {
         if (not accept(tk::comma)) {
           // Allow `{ ... }` without comma as final argument.
           if (not peek(tk::lbrace)) {
-            diagnostic::error("unexpected continuation of arguments")
+            diagnostic::error("unexpected continuation of argument")
               .primary(next_location())
-              .hint("try inserting a `,` before")
+              .hint("try inserting a `,` before if this is the next argument")
               .throw_();
           }
           args.emplace_back(parse_record_or_pipeline_expr());
@@ -237,28 +264,32 @@ private:
       }
       args.push_back(parse_expression());
     }
-    return invocation{
+    return ast::invocation{
       std::move(op),
       std::move(args),
     };
   }
 
-  auto parse_expression(int min_prec = 0) -> expression {
+  auto to_selector(ast::expression expr) -> selector {
+    auto location = expr.get_location();
+    auto result = selector::try_from(std::move(expr));
+    if (not result) {
+      // TODO: Improve error message.
+      diagnostic::error("expected selector").primary(location).throw_();
+    }
+    return std::move(*result);
+  }
+
+  auto parse_expression(int min_prec = 0) -> ast::expression {
     auto expr = parse_unary_expression();
     while (true) {
       if (min_prec == 0) {
         if (auto equal = accept(tk::equal)) {
-          auto left = std::get_if<selector>(expr.kind.get());
-          if (not left) {
-            diagnostic::error("left of `=` must be selector")
-              .primary(expr.get_location())
-              .hint("equality comparison is done with `==`")
-              .throw_();
-          }
+          auto left = to_selector(expr);
           // TODO: Check precedence.
           auto right = parse_expression();
           expr = assignment{
-            std::move(*left),
+            std::move(left),
             equal.location,
             std::move(right),
           };
@@ -281,12 +312,12 @@ private:
       }
       break;
     }
-    // TODO: Does this improve error messages?
+    // We clear the previously tried token to improve error messages.
     tries_.clear();
     return expr;
   }
 
-  auto parse_unary_expression() -> expression {
+  auto parse_unary_expression() -> ast::expression {
     if (auto op = peek_unary_op()) {
       auto location = advance();
       auto expr = parse_expression(precedence(*op));
@@ -309,12 +340,26 @@ private:
             name.as_identifier(),
           };
         }
-      } else if (auto lbracket = accept(tk::lbracket)) {
+        continue;
+      }
+      // TODO: We have to differentiate between an operator invocation `foo [0]`
+      // and an assignment `foo[0] = 42`. To make an early decision, we for now
+      // parse it as an operator if there is whitespace after `foo`.
+      // Alternatively, we could see whether we can determine what this has to
+      // be from the surrounding context, but that seems a bit brittle.
+      if (not trivia_before_next() && peek(tk::lbracket)) {
+        auto lbracket = expect(tk::lbracket);
         if (auto rbracket = accept(tk::rbracket)) {
           expr = unpack{std::move(expr),
                         lbracket.location.combine(rbracket.location)};
         } else {
           auto index = parse_expression();
+          if (auto comma = accept(tk::comma)) {
+            diagnostic::error(
+              "found `,` in index expression, which is not a list")
+              .primary(comma)
+              .throw_();
+          }
           rbracket = expect(tk::rbracket);
           expr = index_expr{
             std::move(expr),
@@ -323,25 +368,25 @@ private:
             rbracket.location,
           };
         }
-      } else {
-        break;
+        continue;
       }
+      break;
     }
     return expr;
   }
 
-  auto parse_primary_expression() -> expression {
+  auto parse_primary_expression() -> ast::expression {
     if (accept(tk::lpar)) {
       auto scope = ignore_newlines(true);
       auto result = parse_expression();
       expect(tk::rpar);
       return result;
     }
-    if (auto lit = accept_literal()) {
-      return std::move(*lit);
+    if (auto constant = accept_constant()) {
+      return std::move(*constant);
     }
     if (auto token = accept(tk::underscore)) {
-      return underscore{};
+      return underscore{token.location};
     }
     if (auto token = accept(tk::dollar_ident)) {
       return dollar_var{token.as_identifier()};
@@ -352,83 +397,67 @@ private:
     if (peek(tk::lbracket)) {
       return parse_list();
     }
-    // TODO: Accept entity as function name.
-    if (not selector_start()) {
-      // TODO: This is maybe a bit hacky?
+    // TODO: Drop one of the syntax possibilities.
+    if (peek(tk::meta) || peek(tk::at)) {
+      auto begin = location{};
+      auto is_at = false;
+      if (auto meta = accept(tk::meta)) {
+        begin = meta.location;
+        expect(tk::dot);
+      } else {
+        begin = expect(tk::at).location;
+        is_at = true;
+      }
+      auto ident = expect(tk::identifier).as_identifier();
+      auto kind = ast::meta_kind{};
+      if (ident.name == "name") {
+        kind = ast::meta::name;
+      } else if (ident.name == "import_time") {
+        kind = ast::meta::import_time;
+      } else if (ident.name == "internal") {
+        kind = ast::meta::internal;
+      } else if (ident.name == "schema") {
+        diagnostic::error("use `{}name` instead", is_at ? "@" : "meta.")
+          .primary(begin.combine(ident))
+          .throw_();
+      } else if (ident.name == "schema_id") {
+        diagnostic::error("use `type_id(this)` instead")
+          .primary(begin.combine(ident))
+          .throw_();
+      } else {
+        diagnostic::error("unknown metadata name `{}`", ident.name)
+          .primary(ident)
+          .hint("must be one of `name`, `import_time`, `internal`")
+          .throw_();
+      }
+      return ast::meta{kind, begin.combine(ident)};
+    }
+    if (auto token = accept(tk::this_)) {
+      return ast::this_{token.location};
+    }
+    auto ident = accept(tk::identifier);
+    if (not ident) {
       diagnostic::error("expected expression, got {}", next_description())
         .primary(next_location(), "got {}", next_description())
         .throw_();
     }
-    // TODO: The code below is a mess and needs to be improved.
-    auto sel = parse_selector();
-    auto ent = std::optional<entity>{};
-    if (accept(tk::single_quote)) {
-      if (sel.this_ || sel.path.size() != 1) {
-        diagnostic::error("todo: unexpected stuff before entity")
-          .primary(sel.get_location())
-          .throw_();
-      }
-      auto path = std::move(sel.path);
-      while (true) {
-        auto ident = expect(tk::identifier);
-        path.push_back(ident.as_identifier());
-        if (not accept(tk::single_quote)) {
-          break;
-        }
-      }
-      ent = entity{std::move(path)};
+    auto path = std::vector<ast::identifier>{};
+    path.push_back(ident.as_identifier());
+    while (accept(tk::single_quote)) {
+      path.push_back(expect(tk::identifier).as_identifier());
     }
     if (peek(tk::lpar)) {
-      // TODO: Consider refactoring this.
-      auto subject = std::optional<expression>{};
-      if (not ent) {
-        if (sel.this_ and sel.path.empty()) {
-          diagnostic::error("`this` cannot be called")
-            .primary(*sel.this_)
-            .throw_();
-        }
-        TENZIR_ASSERT(not sel.path.empty());
-        ent = entity{{std::move(sel.path.back())}};
-        sel.path.pop_back();
-        if (sel.this_ || not sel.path.empty()) {
-          subject = std::move(sel);
-        }
-      }
-      TENZIR_ASSERT(ent);
-      return parse_function_call(std::move(subject), std::move(*ent));
+      return parse_function_call({}, ast::entity{std::move(path)});
     }
-    if (ent) {
-      diagnostic::error("todo: referenced entity that is not a function call")
-        .primary(ent->get_location())
+    if (path.size() != 1) {
+      diagnostic::error("expected function call")
+        .primary(next_location())
         .throw_();
     }
-    return sel;
+    return ast::root_field{std::move(path[0])};
   }
 
-  auto selector_start() -> bool {
-    return peek(tk::identifier) || peek(tk::this_);
-  }
-
-  auto parse_selector() -> selector {
-    auto this_ = accept(tk::this_);
-    auto path = std::vector<identifier>{};
-    while (true) {
-      if (this_ || not path.empty()) {
-        if (not accept(tk::dot)) {
-          break;
-        }
-      }
-      if (auto ident = accept(tk::identifier)) {
-        path.emplace_back(std::string{ident.text}, ident.location);
-      } else {
-        throw_token();
-      }
-    }
-    return selector{this_ ? this_.location : std::optional<location>{},
-                    std::move(path)};
-  }
-
-  auto parse_record_or_pipeline_expr() -> expression {
+  auto parse_record_or_pipeline_expr() -> ast::expression {
     auto begin = expect(tk::lbrace);
     auto scope = ignore_newlines(true);
     // TODO: Try to implement this better.
@@ -448,8 +477,8 @@ private:
     };
   }
 
-  auto parse_record(location begin) -> record {
-    auto content = std::vector<record::content_kind>{};
+  auto parse_record(location begin) -> ast::record {
+    auto content = std::vector<ast::record::content_kind>{};
     while (not peek(tk::rbrace)) {
       // TODO: Parse `{ foo: 42, ...bar }`.
       auto name = accept(tk::identifier);
@@ -460,7 +489,7 @@ private:
       }
       expect(tk::colon);
       auto expr = parse_expression();
-      content.emplace_back(record::field{
+      content.emplace_back(ast::record::field{
         name.as_identifier(),
         std::move(expr),
       });
@@ -469,14 +498,14 @@ private:
       }
     }
     auto end = expect(tk::rbrace);
-    return record{
+    return ast::record{
       begin,
       std::move(content),
       end.location,
     };
   }
 
-  auto parse_string() -> literal {
+  auto parse_string() -> constant {
     auto token = expect(tk::string);
     // TODO: Implement this properly.
     auto result = std::string{};
@@ -501,6 +530,8 @@ private:
         result.push_back('"');
       } else if (x == 'n') {
         result.push_back('\n');
+      } else if (x == '0') {
+        result.push_back('\0');
       } else {
         diagnostic::error("found unknown escape sequence `{}`",
                           token.text.substr(it - f, 2))
@@ -511,35 +542,35 @@ private:
     if (not arrow::util::ValidateUTF8(result)) {
       // TODO: Would be nice to report the actual error location.
       diagnostic::error("string contains invalid utf-8")
-        .primary(token.location)
+        .primary(token)
         .hint("consider using a blob instead: b{}", token.text)
         .throw_();
     }
-    return literal{std::move(result), token.location};
+    return constant{std::move(result), token.location};
   }
 
-  auto parse_scalar() -> literal {
+  auto parse_scalar() -> constant {
     auto token = accept(tk::scalar);
     // TODO: Make this better, do not use existing parsers.
     if (auto result = int64_t{}; parsers::i64(token.text, result)) {
-      return literal{result, token.location};
+      return constant{result, token.location};
     }
     if (auto result = uint64_t{}; parsers::u64(token.text, result)) {
-      return literal{result, token.location};
+      return constant{result, token.location};
     }
     if (auto result = double{}; parsers::real(token.text, result)) {
-      return literal{result, token.location};
+      return constant{result, token.location};
     }
     if (auto result = duration{}; parsers::duration(token.text, result)) {
-      return literal{result, token.location};
+      return constant{result, token.location};
     }
     diagnostic::error("could not parse scalar")
-      .primary(token.location)
+      .primary(token)
       .note("scalar parsing still is very rudimentary")
       .throw_();
   }
 
-  auto accept_literal() -> std::optional<literal> {
+  auto accept_constant() -> std::optional<constant> {
     if (peek(tk::string)) {
       return parse_string();
     }
@@ -549,37 +580,35 @@ private:
     if (auto token = accept(tk::datetime)) {
       // TODO: Make this better.
       if (auto result = time{}; parsers::ymdhms(token.text, result)) {
-        return literal{result, token.location};
+        return constant{result, token.location};
       }
-      diagnostic::error("could not parse datetime")
-        .primary(token.location)
-        .throw_();
+      diagnostic::error("could not parse datetime").primary(token).throw_();
     }
     if (auto token = accept(tk::true_)) {
-      return literal{true, token.location};
+      return constant{true, token.location};
     }
     if (auto token = accept(tk::false_)) {
-      return literal{false, token.location};
+      return constant{false, token.location};
     }
     if (auto token = accept(tk::null)) {
-      return literal{null{}, token.location};
+      return constant{caf::none, token.location};
     }
     if (auto token = accept(tk::ip)) {
       // TODO
       if (auto result = ip{}; parsers::ip(token.text, result)) {
-        return literal{result, token.location};
+        return constant{result, token.location};
       }
     }
     return std::nullopt;
   }
 
-  auto parse_list() -> list {
+  auto parse_list() -> ast::list {
     auto begin = expect(tk::lbracket);
     auto scope = ignore_newlines(true);
-    auto items = std::vector<expression>{};
+    auto items = std::vector<ast::expression>{};
     while (true) {
       if (auto end = accept(tk::rbracket)) {
-        return list{
+        return ast::list{
           begin.location,
           std::move(items),
           end.location,
@@ -592,19 +621,27 @@ private:
     }
   }
 
-  auto parse_function_call(std::optional<expression> subject, entity fn)
-    -> function_call {
+  auto parse_function_call(std::optional<ast::expression> subject,
+                           entity fn) -> function_call {
     expect(tk::lpar);
     auto scope = ignore_newlines(true);
-    auto args = std::vector<expression>{};
-    while (not accept(tk::rpar)) {
+    auto args = std::vector<ast::expression>{};
+    while (true) {
+      if (auto rpar = accept(tk::rpar)) {
+        return ast::function_call{
+          std::move(subject),
+          std::move(fn),
+          std::move(args),
+          rpar.location,
+        };
+      }
       if (auto comma = accept(tk::comma)) {
         if (args.empty()) {
           diagnostic::error("unexpected comma before any arguments")
-            .primary(comma.location)
+            .primary(comma)
             .throw_();
         } else {
-          diagnostic::error("duplicate comma").primary(comma.location).throw_();
+          diagnostic::error("duplicate comma").primary(comma).throw_();
         }
       }
       args.push_back(parse_expression());
@@ -612,11 +649,6 @@ private:
         expect(tk::comma);
       }
     }
-    return function_call{
-      std::move(subject),
-      std::move(fn),
-      std::move(args),
-    };
   }
 
   auto peek_unary_op() -> std::optional<unary_op> {
@@ -640,9 +672,9 @@ private:
     X(star, mul);
     X(slash, div);
     X(greater, gt);
-    X(greater_equal, ge);
-    X(less, le);
-    X(less_equal, le);
+    X(greater_equal, geq);
+    X(less, lt);
+    X(less_equal, leq);
     X(equal_equal, eq);
     X(bang_equal, neq);
     X(and_, and_);
@@ -674,12 +706,16 @@ private:
       return text.data() != nullptr;
     }
 
-    auto as_identifier() const -> identifier {
-      return identifier{text, location};
+    auto as_identifier() const -> ast::identifier {
+      return ast::identifier{text, location};
     }
 
     auto as_string() const -> located<std::string> {
       return {text, location};
+    }
+
+    auto get_location() const -> tenzir::location {
+      return location;
     }
   };
 
@@ -723,8 +759,8 @@ private:
     return silent_peek(kind);
   }
 
+  // TODO: Can we get rid of this?
   auto silent_peek_n(token_kind kind, size_t offset = 0) -> bool {
-    // TODO: Can we get rid of this?
     auto index = next_;
     while (true) {
       if (index >= tokens_.size()) {
@@ -826,6 +862,11 @@ private:
     return next_ == tokens_.size();
   }
 
+  auto trivia_before_next() const -> bool {
+    // TODO: Is this what we want?
+    return next_ > last_ + 1;
+  }
+
   auto next_location() -> location {
     auto loc = location{};
     if (next_ < tokens_.size()) {
@@ -892,4 +933,4 @@ auto parse(std::span<token> tokens, std::string_view source,
   return parser::parse_file(tokens, source, diag);
 }
 
-} // namespace tenzir::tql2
+} // namespace tenzir

@@ -252,7 +252,11 @@ public:
   auto serialize(serializer f, const Base& op) const -> bool override {
     TENZIR_ASSERT(op.name() == name());
     auto x = dynamic_cast<const Concrete*>(&op);
-    TENZIR_ASSERT(x);
+    TENZIR_ASSERT(x, fmt::format("expected {}, got {} ({}) ({} == {})",
+                                 typeid(Concrete).name(), typeid(op).name(),
+                                 typeid(Concrete) == typeid(op),
+                                 typeid(Concrete).hash_code(),
+                                 typeid(op).hash_code()));
     return std::visit(
       [&](auto& f) {
         return f.get().apply(*x);

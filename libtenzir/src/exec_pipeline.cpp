@@ -183,25 +183,9 @@ auto add_implicit_source_and_sink(pipeline pipe, exec_config const& config)
 
 } // namespace
 
-auto exec_pipeline(std::string content,
-                   std::unique_ptr<diagnostic_handler> diag,
+auto exec_pipeline(pipeline pipe, std::unique_ptr<diagnostic_handler> diag,
                    const exec_config& cfg, caf::actor_system& sys)
   -> caf::expected<void> {
-  if (cfg.tql2) {
-    auto success = tql2::exec(std::move(content), std::move(diag), cfg, sys);
-    return success ? ec::no_error : ec::silent;
-  }
-  auto parsed = tql::parse(std::move(content), *diag);
-  if (not parsed) {
-    return ec::silent;
-  }
-  if (cfg.dump_ast) {
-    for (auto& op : *parsed) {
-      fmt::print("{:#?}\n", op);
-    }
-    return {};
-  }
-  auto pipe = tql::to_pipeline(std::move(*parsed));
   auto implicit_pipe = add_implicit_source_and_sink(std::move(pipe), cfg);
   if (not implicit_pipe) {
     return std::move(implicit_pipe.error());
@@ -265,6 +249,28 @@ auto exec_pipeline(std::string content,
     }
   }
   return result;
+}
+
+auto exec_pipeline(std::string content,
+                   std::unique_ptr<diagnostic_handler> diag,
+                   const exec_config& cfg, caf::actor_system& sys)
+  -> caf::expected<void> {
+  if (cfg.tql2) {
+    auto success = exec2(std::move(content), std::move(diag), cfg, sys);
+    return success ? ec::no_error : ec::silent;
+  }
+  auto parsed = tql::parse(std::move(content), *diag);
+  if (not parsed) {
+    return ec::silent;
+  }
+  if (cfg.dump_ast) {
+    for (auto& op : *parsed) {
+      fmt::print("{:#?}\n", op);
+    }
+    return {};
+  }
+  auto pipe = tql::to_pipeline(std::move(*parsed));
+  return exec_pipeline(std::move(pipe), std::move(diag), cfg, sys);
 }
 
 } // namespace tenzir

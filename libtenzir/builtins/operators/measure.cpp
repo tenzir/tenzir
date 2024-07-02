@@ -14,6 +14,7 @@
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice_builder.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
 
@@ -134,7 +135,8 @@ private:
   bool cumulative_ = {};
 };
 
-class plugin final : public virtual operator_plugin<measure_operator> {
+class plugin final : public virtual operator_plugin<measure_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
@@ -148,6 +150,17 @@ public:
     parser.add("--real-time", real_time);
     parser.add("--cumulative", cumulative);
     parser.parse(p);
+    return std::make_unique<measure_operator>(batch_size_, real_time,
+                                              cumulative);
+  }
+
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
+    bool real_time = false;
+    bool cumulative = false;
+    argument_parser2::operator_("measure")
+      .add("real_time", real_time)
+      .add("cumulative", cumulative)
+      .parse(inv, ctx);
     return std::make_unique<measure_operator>(batch_size_, real_time,
                                               cumulative);
   }

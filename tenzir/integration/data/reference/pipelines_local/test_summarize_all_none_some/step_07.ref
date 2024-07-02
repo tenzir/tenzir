@@ -33,15 +33,27 @@
 {"_path": "http", "x": ["113.107.111.117"]}
 {"_path": null, "x": ["193.10.255.99"]}
 warning: group-by column `_path` does not exist for schema `tenzir.json`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_bro`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_cpu`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_disk`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_iface`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_memory`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_system`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.dhcp`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.files`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.pe`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.reporter`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.software`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.weird.123.190`

@@ -1,6 +1,8 @@
 [
   assignment {
-    left: {
+    left: simple_selector {
+      expr: root_field `foo` @ 0..3,
+      has_this: false,
       path: [
         `foo` @ 0..3
       ]
@@ -10,25 +12,25 @@
       left: binary_expr {
         left: binary_expr {
           left: binary_expr {
-            left: literal {
+            left: constant {
               value: int64 1,
               source: 6..7
             },
             op: "add" @ 8..9,
             right: binary_expr {
-              left: literal {
+              left: constant {
                 value: int64 2,
                 source: 10..11
               },
               op: "mul" @ 12..13,
-              right: literal {
+              right: constant {
                 value: int64 3,
                 source: 14..15
               }
             }
           },
           op: "add" @ 16..17,
-          right: literal {
+          right: constant {
             value: int64 4,
             source: 18..19
           }
@@ -38,30 +40,30 @@
           left: binary_expr {
             left: binary_expr {
               left: binary_expr {
-                left: literal {
+                left: constant {
                   value: int64 5,
                   source: 22..23
                 },
                 op: "mul" @ 24..25,
-                right: literal {
+                right: constant {
                   value: int64 6,
                   source: 26..27
                 }
               },
               op: "mul" @ 28..29,
-              right: literal {
+              right: constant {
                 value: int64 7,
                 source: 30..31
               }
             },
             op: "div" @ 32..33,
-            right: literal {
+            right: constant {
               value: int64 8,
               source: 34..35
             }
           },
           op: "div" @ 36..37,
-          right: literal {
+          right: constant {
             value: int64 9,
             source: 38..39
           }
@@ -72,16 +74,12 @@
         left: binary_expr {
           left: unary_expr {
             op: "neg" @ 43..44,
-            expr: selector {
-              path: [
-                `foo` @ 44..47
-              ]
-            }
+            expr: root_field `foo` @ 44..47
           },
           op: "add" @ 48..49,
           right: unary_expr {
             op: "not_" @ 50..53,
-            expr: literal {
+            expr: constant {
               value: int64 2,
               source: 54..55
             }
@@ -89,13 +87,9 @@
         },
         op: "and_" @ 56..59,
         right: binary_expr {
-          left: selector {
-            path: [
-              `bar` @ 60..63
-            ]
-          },
+          left: root_field `bar` @ 60..63,
           op: "eq" @ 64..66,
-          right: literal {
+          right: constant {
             value: int64 42,
             source: 67..69
           }

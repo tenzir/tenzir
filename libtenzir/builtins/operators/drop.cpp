@@ -13,7 +13,10 @@
 #include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
+#include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/type.hpp>
 
 #include <arrow/type.h>
@@ -152,8 +155,93 @@ public:
   }
 };
 
+class drop_operator2 final : public crtp_operator<drop_operator2> {
+public:
+  drop_operator2() = default;
+
+  explicit drop_operator2(std::vector<ast::simple_selector> selectors)
+    : selectors_{std::move(selectors)} {
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.drop";
+  }
+
+  auto
+  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      auto transformations = std::vector<indexed_transformation>{};
+      for (auto& sel : selectors_) {
+        auto resolved = resolve(sel, slice.schema());
+        std::move(resolved).match(
+          [&](offset off) {
+            transformations.emplace_back(
+              std::move(off),
+              [](struct record_type::field, std::shared_ptr<arrow::Array>) {
+                return indexed_transformation::result_type{};
+              });
+          },
+          [&](resolve_error err) {
+            err.reason.match(
+              [&](resolve_error::field_not_found&) {
+                diagnostic::warning("could not find field `{}`", err.ident.name)
+                  .primary(err.ident)
+                  .emit(ctrl.diagnostics());
+              },
+              [&](resolve_error::field_of_non_record& reason) {
+                diagnostic::warning("type `{}` has no field field `{}`",
+                                    reason.type.kind(), err.ident.name)
+                  .primary(err.ident)
+                  .emit(ctrl.diagnostics());
+              });
+          });
+      }
+      std::ranges::sort(transformations);
+      co_yield transform_columns(slice, transformations);
+    }
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, drop_operator2& x) -> bool {
+    return f.apply(x.selectors_);
+  }
+
+private:
+  std::vector<ast::simple_selector> selectors_;
+};
+
+class plugin2 final : public virtual operator_plugin2<drop_operator2> {
+public:
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
+    auto selectors = std::vector<ast::simple_selector>{};
+    for (auto& arg : inv.args) {
+      auto selector = ast::simple_selector::try_from(arg);
+      if (selector) {
+        selectors.push_back(std::move(*selector));
+      } else {
+        // TODO: Improve error message.
+        diagnostic::error("expected simple selector")
+          .primary(arg)
+          .emit(ctx.dh());
+      }
+    }
+    return std::make_unique<drop_operator2>(std::move(selectors));
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::drop
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::drop::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::drop::plugin2)

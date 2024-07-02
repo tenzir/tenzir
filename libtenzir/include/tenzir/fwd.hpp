@@ -262,7 +262,9 @@ struct spawn_arguments;
 struct status;
 struct taxonomies;
 struct type_extractor;
-struct series;
+template <class Type>
+struct basic_series;
+using series = basic_series<type>;
 
 enum class api_version : uint8_t;
 enum class arithmetic_operator : uint8_t;
@@ -403,6 +405,44 @@ using reader_ptr = std::unique_ptr<reader>;
 using writer_ptr = std::unique_ptr<writer>;
 
 } // namespace format
+
+namespace ast {
+
+struct assignment;
+struct binary_expr;
+struct constant;
+struct dollar_var;
+struct entity;
+struct expression;
+struct field_access;
+struct function_call;
+struct identifier;
+struct if_stmt;
+struct index_expr;
+struct invocation;
+struct let_stmt;
+struct list;
+struct match_stmt;
+struct meta;
+struct null;
+struct pipeline_expr;
+struct pipeline;
+struct record;
+struct selector_root;
+struct unary_expr;
+struct underscore;
+struct unpack;
+
+class simple_selector;
+
+using statement
+  = variant<invocation, assignment, let_stmt, if_stmt, match_stmt>;
+
+} // namespace ast
+
+class operator_factory_plugin;
+class registry;
+class session;
 
 } // namespace tenzir
 
