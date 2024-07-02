@@ -14,11 +14,11 @@
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/printable/to_string.hpp>
+#include <tenzir/connect_to_node.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/node.hpp>
 #include <tenzir/node_control.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/spawn_or_connect_to_node.hpp>
 #include <tenzir/type.hpp>
 
 #include <caf/scoped_actor.hpp>

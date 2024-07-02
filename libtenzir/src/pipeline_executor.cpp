@@ -207,7 +207,7 @@ auto pipeline_executor_state::start() -> caf::result<void> {
     for (const auto& op : pipe.operators()) {
       if (op->location() == operator_location::remote) {
         TENZIR_DEBUG("{} connects to node because of remote operators", *self);
-        connect_to_node(self, content(self->system().config()),
+        connect_to_node(self,
                         [this, pipe = std::move(pipe)](
                           caf::expected<node_actor> result) mutable {
                           if (not result) {

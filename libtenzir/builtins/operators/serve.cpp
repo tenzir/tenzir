@@ -794,7 +794,9 @@ auto serve_handler(
   serve_handler_actor::stateful_pointer<serve_handler_state> self,
   const node_actor& node) -> serve_handler_actor::behavior_type {
   self->state.self = self;
-  self->request(node, caf::infinite, atom::get_v, atom::type_v, "serve-manager")
+  self
+    ->request(node, caf::infinite, atom::get_v, atom::label_v,
+              std::vector<std::string>{"serve-manager"})
     .await(
       [self](std::vector<caf::actor>& actors) {
         TENZIR_ASSERT(actors.size() == 1);
@@ -840,8 +842,8 @@ public:
     {
       auto blocking = caf::scoped_actor{ctrl.self().system()};
       blocking
-        ->request(ctrl.node(), caf::infinite, atom::get_v, atom::type_v,
-                  "serve-manager")
+        ->request(ctrl.node(), caf::infinite, atom::get_v, atom::label_v,
+                  std::vector<std::string>{"serve-manager"})
         .receive(
           [&](std::vector<caf::actor>& actors) {
             TENZIR_ASSERT(actors.size() == 1);
@@ -951,8 +953,8 @@ public:
     auto serve_manager = serve_manager_actor{};
     auto blocking = caf::scoped_actor{ctrl.self().system()};
     blocking
-      ->request(ctrl.node(), caf::infinite, atom::get_v, atom::type_v,
-                "serve-manager")
+      ->request(ctrl.node(), caf::infinite, atom::get_v, atom::label_v,
+                std::vector<std::string>{"serve-manager"})
       .receive(
         [&](std::vector<caf::actor>& actors) {
           TENZIR_ASSERT(actors.size() == 1);
