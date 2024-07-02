@@ -298,7 +298,8 @@ load(const std::vector<std::string>& bundled_plugins,
   }
   get_mutable().erase(removed, get_mutable().end());
   // Sort loaded plugins by name (case-insensitive).
-  std::sort(get_mutable().begin(), get_mutable().end());
+  std::ranges::sort(get_mutable());
+  TENZIR_ASSERT(std::ranges::is_sorted(get()));
   return loaded_plugin_paths;
 }
 

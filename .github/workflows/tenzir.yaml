@@ -579,13 +579,9 @@ jobs:
             dependencies-script-path: scripts/macOS/install-dev-dependencies.sh
             cmake-extra-flags: -DTENZIR_ENABLE_BUNDLED_CAF:BOOL=ON
             bundled-plugins:
-              # - Parquet uses illegal instructions on macOS in Arrow version
-              #   14.0.1, so we disable it in the macOS CI. Last checked on
-              #   2023-12-16.
-              # - The http-parser package is disabled on Hoembrew, which means
-              #   we cannot build the web plugin on macOS anymore. Last checked
-              #   on 2024-01-31.
-              - plugins/[^(parquet)(web)]*
+              # macOS runners in GitHub Actions CI are very limited, so we
+              # prefer to have fewer jobs running and build the proprietary
+              # plugins as bundled on macOS.
               - contrib/tenzir-plugins/*
     env:
       BUILD_DIR: build
