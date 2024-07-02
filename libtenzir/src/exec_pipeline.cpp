@@ -211,6 +211,7 @@ auto exec_pipeline(std::string content,
   auto self = caf::scoped_actor{sys};
   auto result = caf::expected<void>{};
   auto metrics = std::vector<operator_metric>{};
+  auto custom_metrics = std::vector<std::vector<record>>{};
   // TODO: This command should probably implement signal handling, and check
   // whether a signal was raised in every iteration over the executor. This
   // will likely be easier to implement once we switch to the actor-based
@@ -246,8 +247,14 @@ auto exec_pipeline(std::string content,
         [&](diagnostic& d) {
           diag->emit(std::move(d));
         },
-        [&](std::string&, record&) {
-          // drop custom metrics.
+        [&](std::string&, record& r) {
+          if (cfg.dump_metrics) {
+            const auto idx = caf::get<uint64_t>(r["operator_index"]);
+            if (idx >= custom_metrics.size()) {
+              custom_metrics.resize(idx + 1);
+            }
+            custom_metrics[idx].emplace_back(std::move(r));
+          }
         },
         [&](operator_metric& m) {
           if (cfg.dump_metrics) {
@@ -263,8 +270,16 @@ auto exec_pipeline(std::string content,
   self->wait_for(handler);
   TENZIR_DEBUG("command is done");
   if (cfg.dump_metrics) {
-    for (const auto& metric : metrics) {
+    for (auto i = size_t{0}; i < metrics.size(); ++i) {
+      const auto& metric = metrics[i];
       fmt::print(stderr, "{}", format_metric(metric));
+      if (i < custom_metrics.size()) {
+        fmt::print(stderr, "custom metrics for operator #{} ({}):\n",
+                   metric.operator_index + 1, metric.operator_name);
+        for (const auto& custom_metric : custom_metrics[i]) {
+          fmt::print(stderr, "{}\n", custom_metric);
+        }
+      }
     }
   }
   return result;
