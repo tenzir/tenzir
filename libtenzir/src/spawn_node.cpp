@@ -29,9 +29,9 @@
 
 namespace tenzir {
 
-caf::expected<scope_linked<node_actor>>
-spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
+caf::expected<scope_linked<node_actor>> spawn_node(caf::scoped_actor& self) {
   using namespace std::string_literals;
+  const auto& opts = content(self->system().config());
   // Fetch values from config.
   auto id = get_or(opts, "tenzir.node-id", defaults::node_id.data());
   auto db_dir
@@ -96,38 +96,7 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
     return {};
   });
   self->system().registry().put("tenzir.node", actor);
-  scope_linked<node_actor> node{std::move(actor)};
-  auto spawn_component = [&](std::string name) {
-    caf::error result = caf::none;
-    auto inv = invocation{opts, "spawn "s + std::move(name), {}};
-    self->request(node.get(), caf::infinite, atom::spawn_v, std::move(inv))
-      .receive(
-        [&](const caf::actor&) {
-          // nop
-        },
-        [&](caf::error& err) { //
-          result = std::move(err);
-        });
-    return result;
-  };
-  std::list components = {"catalog", "index", "importer", "disk-monitor"};
-  for (auto& c : components) {
-    if (auto err = spawn_component(c)) {
-      TENZIR_ERROR("node failed to spawn {}: {}", c, err);
-      return err;
-    }
-  }
-  caf::error error = caf::none;
-  self
-    ->request(node.get(), caf::infinite, atom::internal_v, atom::spawn_v,
-              atom::plugin_v)
-    .receive([]() { /* nop */ },
-             [&](caf::error& err) {
-               error = std::move(err);
-             });
-  if (error)
-    return error;
-  return node;
+  return scope_linked<node_actor>{std::move(actor)};
 }
 
 } // namespace tenzir

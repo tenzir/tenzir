@@ -20,7 +20,6 @@ namespace tenzir {
 /// `self` should be equipped to handle (atom::signal, int)
 /// messages to orchestrate a graceful termination if it runs
 /// a receive-while/until loop after this call.
-caf::expected<scope_linked<node_actor>>
-spawn_node(caf::scoped_actor& self, const caf::settings& opts);
+caf::expected<scope_linked<node_actor>> spawn_node(caf::scoped_actor& self);
 
 } // namespace tenzir

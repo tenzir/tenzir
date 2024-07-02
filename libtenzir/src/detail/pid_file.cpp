@@ -54,8 +54,8 @@ caf::error acquire_pid_file(const std::filesystem::path& filename) {
   // Check if the db directory is owned by an existing Tenzir process.
   const auto exists = std::filesystem::exists(filename, err);
   if (err)
-    TENZIR_WARN("failed to check if the db directory {} exists: {}", filename,
-                err.message());
+    TENZIR_WARN("failed to check if the state directory {} exists: {}",
+                filename, err.message());
   if (exists) {
     // Attempt to read file to display an actionable error message.
     auto contents = detail::load_contents(filename);

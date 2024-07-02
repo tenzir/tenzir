@@ -52,8 +52,6 @@ void add_root_opts(command& cmd) {
                                "console");
   cmd.options.add<caf::config_value::list>("?tenzir", "schema-dirs",
                                            module_desc);
-  cmd.options.add<std::string>("?tenzir", "db-directory",
-                               "deprecated; use state-directory instead");
   cmd.options.add<std::string>("?tenzir", "state-directory,d",
                                "directory for persistent state");
   cmd.options.add<std::string>("?tenzir", "cache-directory",
@@ -67,8 +65,6 @@ void add_root_opts(command& cmd) {
   cmd.options.add<std::string>("?tenzir", "endpoint,e", "node endpoint");
   cmd.options.add<std::string>("?tenzir", "node-id,i",
                                "the unique ID of this node");
-  cmd.options.add<bool>("?tenzir", "node,N",
-                        "spawn a node instead of connecting to one");
   cmd.options.add<bool>("?tenzir", "enable-metrics",
                         "keep track of performance metrics");
   cmd.options.add<caf::config_value::list>("?tenzir", "plugin-dirs",
@@ -96,15 +92,6 @@ void add_root_opts(command& cmd) {
   cmd.options.add<duration>("?tenzir", "active-partition-timeout",
                             "timespan after which an active partition is "
                             "forcibly flushed (default: 30s)");
-  cmd.options.add<int64_t>("?tenzir", "max-resident-partitions",
-                           "maximum number of in-memory "
-                           "partitions (default: 1)");
-  cmd.options.add<int64_t>("?tenzir", "max-taste-partitions",
-                           "maximum number of immediately "
-                           "scheduled partitions");
-  cmd.options.add<int64_t>("?tenzir", "max-queries,q",
-                           "maximum number of "
-                           "concurrent queries");
   cmd.options.add<duration>("?tenzir", "rebuild-interval",
                             "timespan after which an automatic rebuild is "
                             "triggered (default: 2h)");
@@ -203,41 +190,7 @@ make_application(std::string_view path) {
       },
     };
   }
-  if (name == "vast") {
-    fmt::print(stderr, fmt::emphasis::bold, "\nVAST is now called Tenzir.\n\n");
-    fmt::print(stderr, "For more information, see the announcement at ");
-    fmt::print(stderr, fmt::emphasis::underline,
-               "https://docs.tenzir.com/blog/vast-to-tenzir");
-    fmt::print(stderr, ".\n\ntl;dr:\n- Use ");
-    fmt::print(stderr, fmt::emphasis::bold, "tenzir-node");
-    fmt::print(stderr, " instead of ");
-    fmt::print(stderr, fmt::emphasis::bold, "vast start");
-    fmt::print(stderr, "\n- Use ");
-    fmt::print(stderr, fmt::emphasis::bold, "tenzir");
-    fmt::print(stderr, " instead of ");
-    fmt::print(stderr, fmt::emphasis::bold, "vast exec");
-    fmt::print(stderr, "\n- Use ");
-    fmt::print(stderr, fmt::emphasis::bold, "tenzir-ctl");
-    fmt::print(stderr,
-               " for all other commands\n- Move your configuration from ");
-    fmt::print(stderr, fmt::emphasis::bold, "<prefix>/etc/vast/vast.yaml");
-    fmt::print(stderr, " to ");
-    fmt::print(stderr, fmt::emphasis::bold, "<prefix>/etc/tenzir/tenzir.yaml");
-    fmt::print(stderr, "\n- Move your configuration from ");
-    fmt::print(stderr, fmt::emphasis::bold, "$XDG_CONFIG_HOME/vast/vast.yaml");
-    fmt::print(stderr, " to ");
-    fmt::print(stderr, fmt::emphasis::bold,
-               "$XDG_CONFIG_HOME/tenzir/tenzir.yaml");
-    fmt::print(stderr, "\n- In your configuration, replace ");
-    fmt::print(stderr, fmt::emphasis::bold, "vast:");
-    fmt::print(stderr, " with ");
-    fmt::print(stderr, fmt::emphasis::bold, "tenzir:");
-    fmt::print(stderr, "\n- Prefix environment variables with ");
-    fmt::print(stderr, fmt::emphasis::bold, "TENZIR_");
-    fmt::print(stderr, " instead of ");
-    fmt::print(stderr, fmt::emphasis::bold, "VAST_");
-    fmt::print(stderr, "\n\n");
-  }
+  TENZIR_ASSERT(name == "tenzir-ctl");
   auto root = make_root_command(name);
   auto root_factory = command::factory{};
   // Add additional commands from plugins.

@@ -6,7 +6,7 @@ if [ "$1" = "purge" ] ; then
     if dpkg-statoverride --list /var/lib/tenzir >/dev/null 2>&1 ; then
         dpkg-statoverride --remove /var/lib/tenzir
     fi
-    echo "Removing tenzir db directory (/var/lib/tenzir)"
+    echo "Removing tenzir state directory (/var/lib/tenzir)"
     rm -rf /var/lib/tenzir
 
      if dpkg-statoverride --list /var/log/tenzir >/dev/null 2>&1 ; then

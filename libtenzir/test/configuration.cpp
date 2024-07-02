@@ -29,7 +29,7 @@ struct fixture {
     // Emulate and parse command line
     std::vector<std::string> args = {std::forward<Ts>(xs)...};
     std::vector<char*> cmd_line; // argv
-    static std::string argv0 = "tenzir-test";
+    static std::string argv0 = "tenzir-ctl";
     cmd_line.emplace_back(argv0.data());
     for (const auto& arg : args)
       cmd_line.emplace_back(const_cast<char*>(arg.data()));

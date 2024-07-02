@@ -123,9 +123,6 @@ tenzir:
   # The unique ID of this node.
   node-id: "node"
 
-  # Spawn a node instead of connecting to one.
-  node: false
-
   # Forbid unsafe location overrides for pipelines with the 'local' and 'remote'
   # keywords, e.g., remotely reading from a file.
   no-location-overrides: false
@@ -145,16 +142,6 @@ tenzir:
 
   # Timeout after which an automatic rebuild is triggered.
   rebuild-interval: 2 hours
-
-  # The number of index shards that can be cached in memory.
-  max-resident-partitions: 1
-
-  # The number of index shards that are considered for the first evaluation
-  # round of a query.
-  max-taste-partitions: 5
-
-  # The amount of queries that can be executed in parallel.
-  max-queries: 10
 
   # Zstd compression level applied to the Feather store backend.
   # zstd-compression-level: <default>

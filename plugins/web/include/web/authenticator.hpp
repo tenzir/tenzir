@@ -43,7 +43,7 @@ struct authenticator_state {
 
   // Data members
 
-  /// Filesystem path of the authenticator state, relative to db directory.
+  /// Filesystem path of the authenticator state, relative to state directory.
   std::filesystem::path path_ = {};
 
   /// Handle of the filesystem actor.

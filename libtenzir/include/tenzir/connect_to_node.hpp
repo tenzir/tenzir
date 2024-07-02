@@ -35,14 +35,13 @@ auto get_deadline(caf::timespan timeout)
 } // namespace details
 
 /// Connects to a remote Tenzir server.
-auto connect_to_node(caf::scoped_actor& self, const caf::settings& opts)
-  -> caf::expected<node_actor>;
+auto connect_to_node(caf::scoped_actor& self) -> caf::expected<node_actor>;
 
 template <class... Sigs>
 void connect_to_node(caf::typed_event_based_actor<Sigs...>* self,
-                     const caf::settings& opts,
                      std::function<void(caf::expected<node_actor>)> callback) {
   // Fetch values from config.
+  const auto& opts = content(self->system().config());
   auto node_endpoint = details::get_node_endpoint(opts);
   if (!node_endpoint)
     return callback(std::move(node_endpoint.error()));

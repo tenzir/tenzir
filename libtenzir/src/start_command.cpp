@@ -65,14 +65,6 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
   TENZIR_TRACE_SCOPE("{} {}", TENZIR_ARG(inv.options),
                      TENZIR_ARG("args", inv.arguments.begin(),
                                 inv.arguments.end()));
-  // Bail out early for bogus invocations.
-  if (caf::get_or(inv.options, "tenzir.node", false)) {
-    return caf::make_message(
-      caf::make_error(ec::invalid_configuration,
-                      "unable to run 'tenzir start' when spawning a "
-                      "node locally instead of connecting to one; please "
-                      "unset the option tenzir.node"));
-  }
   // Construct an endpoint.
   endpoint node_endpoint;
   auto str = get_or(inv.options, "tenzir.endpoint", defaults::endpoint.data());
@@ -87,7 +79,7 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
   // Get a convenient and blocking way to interact with actors.
   caf::scoped_actor self{sys};
   // Spawn our node.
-  auto node_opt = spawn_node(self, content(sys.config()));
+  auto node_opt = spawn_node(self);
   if (!node_opt) {
     return caf::make_message(std::move(node_opt.error()));
   }
