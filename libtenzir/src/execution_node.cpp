@@ -215,7 +215,7 @@ struct exec_node_state {
   /// State required for keeping and sending metrics.
   std::chrono::steady_clock::time_point start_time
     = std::chrono::steady_clock::now();
-  metrics_receiver_actor metrics_handler = {};
+  metrics_receiver_actor metrics_receiver = {};
   operator_metric metrics = {};
 
   /// Whether this execution node is paused, and when it was.
@@ -292,7 +292,7 @@ struct exec_node_state {
       = std::chrono::duration_cast<duration>(now - start_time);
     metrics_copy.time_running
       = metrics_copy.time_total - metrics_copy.time_paused;
-    caf::anon_send(metrics_handler, std::move(metrics_copy));
+    caf::anon_send(metrics_receiver, std::move(metrics_copy));
   }
 
   auto start(std::vector<caf::actor> all_previous) -> caf::result<void> {
@@ -738,7 +738,7 @@ auto exec_node(
   exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
   operator_ptr op, node_actor node,
   receiver_actor<diagnostic> diagnostic_handler,
-  metrics_receiver_actor metrics_handler, int index, bool has_terminal)
+  metrics_receiver_actor metrics_receiver, int index, bool has_terminal)
   -> exec_node_actor::behavior_type {
   if (self->getf(caf::scheduled_actor::is_detached_flag)) {
     const auto name = fmt::format("tenzir.exec-node.{}", op->name());
@@ -748,7 +748,7 @@ auto exec_node(
   self->state.op = std::move(op);
   auto time_starting_guard = make_timer_guard(
     self->state.metrics.time_scheduled, self->state.metrics.time_starting);
-  self->state.metrics_handler = std::move(metrics_handler);
+  self->state.metrics_receiver = std::move(metrics_receiver);
   self->state.metrics.operator_index = index;
   self->state.metrics.operator_name = self->state.op->name();
   self->state.metrics.inbound_measurement.unit = operator_type_name<Input>();
@@ -760,7 +760,7 @@ auto exec_node(
       and (std::is_same_v<Input, std::monostate>
            or std::is_same_v<Output, std::monostate>);
   self->state.ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
-    self, std::move(diagnostic_handler), self->state.metrics_handler, index,
+    self, std::move(diagnostic_handler), self->state.metrics_receiver, index,
     has_terminal);
   // The node actor must be set when the operator is not a source.
   if (self->state.op->location() == operator_location::remote and not node) {
@@ -863,7 +863,7 @@ auto exec_node(
 auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, node_actor node,
                      receiver_actor<diagnostic> diagnostic_handler,
-                     metrics_receiver_actor metrics_handler, int index,
+                     metrics_receiver_actor metrics_receiver, int index,
                      bool has_terminal)
   -> caf::expected<std::pair<exec_node_actor, operator_type>> {
   TENZIR_ASSERT(self);
@@ -886,7 +886,7 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
         = std::conditional_t<std::is_void_v<Output>, std::monostate, Output>;
       auto result = self->spawn<SpawnOptions>(
         exec_node<input_type, output_type>, std::move(op), std::move(node),
-        std::move(diagnostic_handler), std::move(metrics_handler), index,
+        std::move(diagnostic_handler), std::move(metrics_receiver), index,
         has_terminal);
       return result;
     };
