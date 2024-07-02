@@ -75,39 +75,43 @@ private:
   arrow::internal::TDigest tdigest_;
 };
 
-template <detail::string_literal Name, uint8_t Percentile>
-  requires(Percentile > 0 and Percentile < 100)
 class plugin : public virtual aggregation_function_plugin {
+public:
+  plugin(std::string name, double percentile)
+    : name_{std::move(name)}, percentile_{percentile} {
+    TENZIR_ASSERT(percentile > 0.0);
+    TENZIR_ASSERT(percentile < 1.0);
+  }
+
   auto name() const -> std::string override {
-    return std::string{Name.str()};
+    return name_;
   };
 
   auto make_aggregation_function(const type& input_type) const
     -> caf::expected<std::unique_ptr<aggregation_function>> override {
-    const auto percentile = Percentile / 100.0;
     auto f = detail::overload{
       [&](const uint64_type&)
         -> caf::expected<std::unique_ptr<aggregation_function>> {
         return std::make_unique<quantile_function<uint64_type>>(input_type,
-                                                                percentile);
+                                                                percentile_);
       },
       [&](const int64_type&)
         -> caf::expected<std::unique_ptr<aggregation_function>> {
         return std::make_unique<quantile_function<int64_type>>(input_type,
-                                                               percentile);
+                                                               percentile_);
       },
       [&](const double_type&)
         -> caf::expected<std::unique_ptr<aggregation_function>> {
         return std::make_unique<quantile_function<double_type>>(input_type,
-                                                                percentile);
+                                                                percentile_);
       },
-      [](const concrete_type auto& type)
+      [&](const concrete_type auto& type)
         -> caf::expected<std::unique_ptr<aggregation_function>> {
         return caf::make_error(ec::invalid_configuration,
                                fmt::format("{} aggregation "
                                            "function does not "
                                            "support type {}",
-                                           Name.str(), type));
+                                           name_, type));
       },
     };
     return caf::visit(f, input_type);
@@ -116,22 +120,19 @@ class plugin : public virtual aggregation_function_plugin {
   auto aggregation_default() const -> data override {
     return caf::none;
   }
-};
 
-using median_plugin = plugin<"median", 50>;
-using p50_plugin = plugin<"p50", 50>;
-using p75_plugin = plugin<"p75", 75>;
-using p90_plugin = plugin<"p90", 90>;
-using p95_plugin = plugin<"p95", 95>;
-using p99_plugin = plugin<"p99", 99>;
+private:
+  const std::string name_ = {};
+  const double percentile_ = {};
+};
 
 } // namespace
 
 } // namespace tenzir::plugins::quantile
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::quantile::median_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::quantile::p50_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::quantile::p75_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::quantile::p90_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::quantile::p95_plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::quantile::p99_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::quantile::plugin{"median", 0.5})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::quantile::plugin{"p50", 0.5})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::quantile::plugin{"p75", 0.75})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::quantile::plugin{"p90", 0.90})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::quantile::plugin{"p95", 0.95})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::quantile::plugin{"p99", 0.99})
