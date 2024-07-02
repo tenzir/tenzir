@@ -16,6 +16,7 @@ in
           pkgs.shfmt
           pkgs.poetry
           pkgs.python3Packages.spdx-tools
+          pkgs.uv
           (pkgs.python3.withPackages (ps: with ps; [
             aiohttp
             dynaconf
@@ -40,7 +41,10 @@ in
         # Use editable mode for python code part of the python operator. This
         # makes changes to the python code observable in the python operator
         # without needing to rebuild the wheel.
-        export TENZIR_PLUGINS__PYTHON__IMPLICIT_REQUIREMENTS="-e $PWD/python"
+        export TENZIR_PLUGINS__PYTHON__IMPLICIT_REQUIREMENTS="-e ${builtins.toString ./.}/python"
+        # uv is provided in the nativeBuildInputs above.
+        export TENZIR_ENABLE_BUNDLED_UV=OFF
+        export PYTHONPATH="$PYTHONPATH''${PYTHONPATH:+:}${builtins.toString ./.}/python"
       '';
     }
     // lib.optionalAttrs isStatic {
