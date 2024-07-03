@@ -32,11 +32,12 @@ END
 
 # bats test_tags=python
 @test "empty output throws" {
-  check ! --with-stderr tenzir -f /dev/stdin <<END
+  run ! tenzir -f /dev/stdin <<END
     version
     | put a.b=1, b=2
     | python 'self.clear()'
 END
+  check grep -v '^\s*File ' <<<"$output"
 }
 
 # bats test_tags=python
