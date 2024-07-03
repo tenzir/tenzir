@@ -23,6 +23,8 @@
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/si_literals.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/type.hpp>
 
 #include <arrow/api.h>
@@ -448,7 +450,8 @@ private:
   std::variant<std::filesystem::path, std::string> code_ = {};
 };
 
-class plugin final : public virtual operator_plugin<python_operator> {
+class plugin final : public virtual operator_plugin<python_operator>,
+                     public virtual operator_factory_plugin {
 public:
   struct config config = {};
 
@@ -514,6 +517,39 @@ public:
     }
     return std::make_unique<python_operator>(config, std::move(requirements),
                                              std::move(code));
+  }
+
+  auto make(invocation inv, session ctx) const -> operator_ptr override {
+    auto requirements = std::optional<std::string>{};
+    auto code = std::optional<located<std::string>>{};
+    auto path = std::optional<located<std::string>>{};
+    auto code_or_path = std::variant<std::filesystem::path, std::string>{};
+    argument_parser2::operator_("python")
+      .add(code, "<expr>")
+      .add("file", path)
+      .add("requirements", requirements)
+      .parse(inv, ctx);
+    if (!path && !code) {
+      diagnostic::error("must have either the `--file` argument or inline code")
+        .throw_();
+    }
+    if (path && code) {
+      diagnostic::error(
+        "cannot have `--file` argument together with inline code")
+        .primary(path->source)
+        .primary(code->source)
+        .throw_();
+    }
+    if (code) {
+      code_or_path = code->inner;
+    } else {
+      code_or_path = std::filesystem::path{path->inner};
+    }
+    if (!requirements) {
+      requirements = "";
+    }
+    return std::make_unique<python_operator>(config, std::move(*requirements),
+                                             std::move(code_or_path));
   }
 };
 
