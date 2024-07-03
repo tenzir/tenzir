@@ -8,6 +8,8 @@
 
 #include "tenzir/metric_handler.hpp"
 
+#include "tenzir/pipeline.hpp"
+
 #include <caf/send.hpp>
 
 namespace tenzir {
@@ -22,6 +24,10 @@ auto metric_handler::emit(const std::string& schema, record&& r) -> void {
   r["timestamp"] = time::clock::now();
   r["operator_index"] = op_index;
   caf::anon_send(receiver.lock(), schema, std::move(r));
+}
+
+auto metric_handler::emit(operator_metric&& m) -> void {
+  caf::anon_send(receiver.lock(), std::move(m));
 }
 
 } // namespace tenzir

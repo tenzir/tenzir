@@ -13,6 +13,7 @@
 #include "tenzir/detail/weak_handle.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/metric_handler.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/si_literals.hpp"
@@ -139,12 +140,13 @@ struct exec_node_control_plane final : public operator_control_plane {
   exec_node_control_plane(
     exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
     receiver_actor<diagnostic> diagnostic_handler,
-    metrics_receiver_actor metric_handler, uint64_t op_index, bool has_terminal)
+    metrics_receiver_actor metric_receiver, uint64_t op_index,
+    bool has_terminal)
     : state{self->state},
       diagnostic_handler{
         std::make_unique<exec_node_diagnostic_handler<Input, Output>>(
           self, std::move(diagnostic_handler))},
-      metric_handler{metric_handler, op_index},
+      metric_handler{metric_receiver, op_index},
       has_terminal_{has_terminal} {
   }
 
@@ -267,9 +269,9 @@ struct exec_node_state {
 
   ~exec_node_state() noexcept {
     TENZIR_DEBUG("{} {} shut down", *self, op->name());
+    emit_generic_op_metrics();
     instance.reset();
     ctrl.reset();
-    emit_metrics();
     if (demand and demand->rp.pending()) {
       demand->rp.deliver();
     }
@@ -281,7 +283,7 @@ struct exec_node_state {
     }
   }
 
-  auto emit_metrics() -> void {
+  auto emit_generic_op_metrics() -> void {
     const auto now = std::chrono::steady_clock::now();
     auto metrics_copy = metrics;
     if (paused_at) {
@@ -292,14 +294,14 @@ struct exec_node_state {
       = std::chrono::duration_cast<duration>(now - start_time);
     metrics_copy.time_running
       = metrics_copy.time_total - metrics_copy.time_paused;
-    caf::anon_send(metrics_receiver, std::move(metrics_copy));
+    ctrl->metrics().emit(std::move(metrics_copy));
   }
 
   auto start(std::vector<caf::actor> all_previous) -> caf::result<void> {
     TENZIR_DEBUG("{} {} received start request", *self, op->name());
     detail::weak_run_delayed_loop(self, defaults<>::metrics_interval, [this] {
       auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
-      emit_metrics();
+      emit_generic_op_metrics();
     });
     if (instance.has_value()) {
       return caf::make_error(ec::logic_error,
@@ -382,7 +384,7 @@ struct exec_node_state {
         return {};
       }
       // Emit metrics once to get started.
-      emit_metrics();
+      emit_generic_op_metrics();
       if (instance->it == instance->gen.end()) {
         TENZIR_TRACE("{} {} finished without yielding", *self, op->name());
         if (previous) {
@@ -871,6 +873,7 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
   TENZIR_ASSERT(node != nullptr
                 or not(op->location() == operator_location::remote));
   TENZIR_ASSERT(diagnostic_handler != nullptr);
+  TENZIR_ASSERT(metrics_receiver != nullptr);
   auto output_type = op->infer_type(input_type);
   if (not output_type) {
     return caf::make_error(ec::logic_error,

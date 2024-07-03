@@ -14,6 +14,8 @@
 
 namespace tenzir {
 
+struct operator_metric;
+
 class metric_handler {
 public:
   metric_handler() = default;
@@ -21,6 +23,7 @@ public:
                  uint64_t operator_index);
 
   auto emit(const std::string& schema, record&& r) -> void;
+  auto emit(operator_metric&& m) -> void;
 
   detail::weak_handle<metrics_receiver_actor> receiver;
   uint64_t op_index = {};
