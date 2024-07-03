@@ -15,6 +15,7 @@
 #include "tenzir/try.hpp"
 
 #include <fmt/format.h>
+#include <tsl/robin_set.h>
 
 #include <functional>
 
@@ -447,6 +448,20 @@ template <class T>
 struct tryable<failure_or<T>>
   : tryable<variant<std::conditional_t<std::same_as<T, void>, std::monostate, T>,
                     failure>> {};
+
+class diagnostic_deduplicator {
+public:
+  auto insert(const diagnostic& d) -> bool;
+
+private:
+  using seen_t = std::pair<std::string, std::vector<location>>;
+
+  struct hasher {
+    auto operator()(const seen_t& x) const -> size_t;
+  };
+
+  tsl::robin_set<seen_t, hasher> seen_;
+};
 
 } // namespace tenzir
 

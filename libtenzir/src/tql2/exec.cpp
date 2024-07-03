@@ -23,34 +23,10 @@
 #include "tenzir/try.hpp"
 
 #include <arrow/util/utf8.h>
-#include <boost/functional/hash.hpp>
 #include <tsl/robin_set.h>
 
 namespace tenzir {
 namespace {
-
-/// A diagnostic handler that remembers when it emits an error.
-class diagnostic_handler_wrapper final : public diagnostic_handler {
-public:
-  explicit diagnostic_handler_wrapper(diagnostic_handler& inner)
-    : inner_{inner} {
-  }
-
-  void emit(diagnostic d) override {
-    if (d.severity == severity::error) {
-      error_ = true;
-    }
-    inner_.emit(std::move(d));
-  }
-
-  auto error() const -> bool {
-    return error_;
-  }
-
-private:
-  bool error_ = false;
-  diagnostic_handler& inner_;
-};
 
 /// A diagnostic handler that deduplicate diagnostics.
 class deduplicating_diagnostic_handler final : public diagnostic_handler {
@@ -60,36 +36,13 @@ public:
   }
 
   void emit(diagnostic d) override {
-    // We remember whether we have seen a diagnostic by storing its main message
-    // and the locations of its annotations.
-    // TODO: Improve this.
-    auto locations = std::vector<location>{};
-    for (auto& annotation : d.annotations) {
-      locations.push_back(annotation.source);
+    if (deduplicator_.insert(d)) {
+      inner_.emit(std::move(d));
     }
-    auto inserted
-      = seen_.emplace(std::pair{d.message, std::move(locations)}).second;
-    if (not inserted) {
-      return;
-    }
-    inner_.emit(std::move(d));
   }
 
 private:
-  using seen_t = std::pair<std::string, std::vector<location>>;
-
-  struct hasher {
-    auto operator()(const seen_t& x) const -> size_t {
-      auto result = std::hash<std::string>{}(x.first);
-      for (auto& loc : x.second) {
-        boost::hash_combine(result, loc.begin);
-        boost::hash_combine(result, loc.end);
-      }
-      return result;
-    }
-  };
-
-  tsl::robin_set<seen_t, hasher> seen_;
+  diagnostic_deduplicator deduplicator_;
   diagnostic_handler& inner_;
 };
 

@@ -13,6 +13,7 @@
 #include "tenzir/shared_diagnostic_handler.hpp"
 
 #include <boost/algorithm/string.hpp>
+#include <boost/functional/hash.hpp>
 #include <caf/message_handler.hpp>
 #include <fmt/color.h>
 
@@ -242,4 +243,26 @@ void diagnostic_builder::emit(const shared_diagnostic_handler& diag) && {
   return diag.emit(std::move(result_));
 }
 
+auto diagnostic_deduplicator::insert(const diagnostic& d) -> bool {
+  // We remember whether we have seen a diagnostic by storing its main message
+  // and the locations of its annotations.
+  // TODO: Improve this.
+  auto locations = std::vector<location>{};
+  for (auto& annotation : d.annotations) {
+    locations.push_back(annotation.source);
+  }
+  auto inserted
+    = seen_.emplace(std::pair{d.message, std::move(locations)}).second;
+  return inserted;
+}
+
+auto diagnostic_deduplicator::hasher::operator()(const seen_t& x) const
+  -> size_t {
+  auto result = std::hash<std::string>{}(x.first);
+  for (auto& loc : x.second) {
+    boost::hash_combine(result, loc.begin);
+    boost::hash_combine(result, loc.end);
+  }
+  return result;
+}
 } // namespace tenzir
