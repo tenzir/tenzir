@@ -20,11 +20,11 @@ metric_handler::metric_handler(
   : receiver{std::move(new_receiver)}, op_index{operator_index} {
 }
 
-auto metric_handler::emit(const std::string& schema, record&& r) -> void {
+auto metric_handler::emit(const std::string& name, record&& r) -> void {
   // Explicitly create a data-from-time cast here to support macOS builds.
   r["timestamp"] = data{time{time::clock::now()}};
   r["operator_index"] = op_index;
-  caf::anon_send(receiver.lock(), schema, std::move(r));
+  caf::anon_send(receiver.lock(), name, std::move(r));
 }
 
 auto metric_handler::emit(operator_metric&& m) -> void {

@@ -22,7 +22,7 @@ public:
   metric_handler(detail::weak_handle<metrics_receiver_actor> new_receiver,
                  uint64_t operator_index);
 
-  auto emit(const std::string& schema, record&& r) -> void;
+  auto emit(const std::string& name, record&& r) -> void;
   auto emit(operator_metric&& m) -> void;
 
   detail::weak_handle<metrics_receiver_actor> receiver;
