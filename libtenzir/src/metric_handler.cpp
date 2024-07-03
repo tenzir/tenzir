@@ -21,7 +21,7 @@ metric_handler::metric_handler(
 }
 
 auto metric_handler::emit(const std::string& schema, record&& r) -> void {
-  r["timestamp"] = time::clock::now();
+  r["timestamp"] = data{time::clock::now()};
   r["operator_index"] = op_index;
   caf::anon_send(receiver.lock(), schema, std::move(r));
 }

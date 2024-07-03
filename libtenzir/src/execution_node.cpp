@@ -143,7 +143,7 @@ struct exec_node_control_plane final : public operator_control_plane {
       diagnostic_handler{
         std::make_unique<exec_node_diagnostic_handler<Input, Output>>(
           self, std::move(diagnostic_handler))},
-      metric_handler{metric_receiver, op_index},
+      metrics_handler{metric_receiver, op_index},
       has_terminal_{has_terminal} {
   }
 
@@ -160,7 +160,7 @@ struct exec_node_control_plane final : public operator_control_plane {
   }
 
   auto metrics() noexcept -> metric_handler& override {
-    return metric_handler;
+    return metrics_handler;
   }
 
   auto no_location_overrides() const noexcept -> bool override {
@@ -182,7 +182,7 @@ struct exec_node_control_plane final : public operator_control_plane {
   exec_node_state<Input, Output>& state;
   std::unique_ptr<exec_node_diagnostic_handler<Input, Output>> diagnostic_handler
     = {};
-  metric_handler metric_handler = {};
+  metric_handler metrics_handler = {};
   bool has_terminal_;
 };
 
