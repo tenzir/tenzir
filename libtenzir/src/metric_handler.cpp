@@ -21,7 +21,8 @@ metric_handler::metric_handler(
 }
 
 auto metric_handler::emit(const std::string& schema, record&& r) -> void {
-  r["timestamp"] = data{time::clock::now()};
+  // Explicitly create a data-from-time cast here to support macOS builds.
+  r["timestamp"] = data{time{time::clock::now()}};
   r["operator_index"] = op_index;
   caf::anon_send(receiver.lock(), schema, std::move(r));
 }
