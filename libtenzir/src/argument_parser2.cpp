@@ -95,6 +95,7 @@ auto argument_parser2::parse(const ast::entity& self,
       [&]<data_type T>(setter<located<T>>& set) {
         auto value = const_eval(expr, ctx);
         if (not value) {
+          success = false;
           return;
         }
         // TODO: Make this more beautiful.
@@ -162,6 +163,7 @@ auto argument_parser2::parse(const ast::entity& self,
       [&]<data_type T>(setter<located<T>>& set) {
         auto value = const_eval(expr, ctx);
         if (not value) {
+          success = false;
           return;
         }
         auto cast = caf::get_if<T>(&*value);
