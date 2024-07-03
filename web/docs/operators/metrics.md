@@ -109,6 +109,86 @@ Contains a measurement of the amount of memory used by the `tenzir-node` process
 |`swap_space_usage`|`uint64`|The amount of swap space, in bytes. Only available on Linux systems.|
 |`open_fds`|`uint64`|The amount of open file descriptors by the node. Only available on Linux systems.|
 
+### `tenzir.metrics.export`
+
+Contains a measurement of data that goes through the `export` operator, for each data batch.
+
+|Field|Type|Description|
+|:-|:-|:-|
+|`timestamp`|`time`|The time when this event was emitted.|
+|`operator_index`|`uint64`|The index of the `export` operator in the pipeline.|
+|`schema`|`string`|The schema name of the batch.|
+|`schema_id`|`string`|The schema ID of the batch.|
+|`events`|`uint64`|The amount of events that were exported.|
+
+### `tenzir.metrics.import`
+
+Contains a measurement of batch data that goes through the `import` operator, for each data batch.
+
+|Field|Type|Description|
+|:-|:-|:-|
+|`timestamp`|`time`|The time when this event was emitted.|
+|`operator_index`|`uint64`|The index of the `import` operator in the pipeline.|
+|`schema`|`string`|The schema name of the batch.|
+|`schema_id`|`string`|The schema ID of the batch.|
+|`events`|`uint64`|The amount of events that were imported.|
+
+### `tenzir.metrics.publish`
+
+Contains a measurement of data that goes through the `publish` operator, for each data batch.
+
+|Field|Type|Description|
+|:-|:-|:-|
+|`timestamp`|`time`|The time when this event was emitted.|
+|`operator_index`|`uint64`|The index of the `publish` operator in the pipeline.|
+|`topic`|`string`|The topic name.|
+|`schema`|`string`|The schema name of the batch.|
+|`schema_id`|`string`|The schema ID of the batch.|
+|`events`|`uint64`|The amount of events that were published to the `topic`.|
+
+### `tenzir.metrics.subscribe`
+
+Contains a measurement of data that goes through the `subscribe` operator, for each data batch.
+
+|Field|Type|Description|
+|:-|:-|:-|
+|`timestamp`|`time`|The time when this event was emitted.|
+|`operator_index`|`uint64`|The index of the `subscribe` operator in the pipeline.|
+|`topic`|`string`|The topic name.|
+|`schema`|`string`|The schema name of the batch.|
+|`schema_id`|`string`|The schema ID of the batch.|
+|`events`|`uint64`|The amount of events that were retrieved from the `topic`.|
+
+### `tenzir.metrics.enrich`
+
+Contains a measurement of data that goes through the `enrich` operator, at one second intervals.
+
+|Field|Type|Description|
+|:-|:-|:-|
+|`timestamp`|`time`|The time when this event was emitted.|
+|`operator_index`|`uint64`|The index of the `enrich` operator in the pipeline.|
+|`context_name`|`string`|The name of the context the associated operator is using.|
+|`input_events`|`uint64`|The amount of input events that entered the `enrich` operator since the last metric.|
+|`hits`|`uint64`|The amount of successfully enriched events since the last metric.|
+
+### `tenzir.metrics.lookup`
+
+Contains a measurement of data that goes through the `lookup` operator, at one second intervals.
+
+|Field|Type|Description|
+|:-|:-|:-|
+|`timestamp`|`time`|The time when this event was emitted.|
+|`operator_index`|`uint64`|The index of the `lookup` operator in the pipeline.|
+|`context_name`|`string`|The name of the context the associated operator is using.|
+|`live_input_events`|`uint64`|The total amount of input events used for the live lookup.|
+|`live_matches`|`uint64`|The amount of live lookup matches since the last metric.|
+|`retro_input_events`|`uint64`|The total amount of input events used for the retrospective lookup.|
+|`retro_matches`|`uint64`|The amount of retroactive lookup matches since the last metric.|
+|`snapshot_input_events`|`uint64`|The total amount of input events used for the snapshot lookup.|
+|`snapshot_matches`|`uint64`|The amount of snapshot lookup matches since the last metric.|
+|`context_updates`|`uint64`|The amount of times the underlying context has been updated while the associated lookup is active.|
+|`queued_partitions`|`uint64`|The total amount of partition candidates that were queued for retroactive match evaluation.|
+
 ## Examples
 
 Show the CPU usage over the last hour:
