@@ -10,6 +10,7 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/chunk.hpp"
+#include "tenzir/defaults.hpp"
 #include "tenzir/detail/weak_handle.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/diagnostics.hpp"
@@ -34,21 +35,17 @@ using namespace std::chrono_literals;
 using namespace si_literals;
 
 template <class Element = void>
-struct defaults {
+struct exec_node_defaults {
   /// Defines how much free capacity must be in the inbound buffer of the
   /// execution node before it requests further data.
   inline static constexpr uint64_t min_batch_size = 1;
 
   /// Defines the upper bound for the inbound buffer of the execution node.
   inline static constexpr uint64_t max_buffered = 0;
-
-  /// Defines the time interval for sending metrics of the currently running
-  /// pipeline operator.
-  inline static constexpr auto metrics_interval = 1000ms;
 };
 
 template <>
-struct defaults<table_slice> : defaults<> {
+struct exec_node_defaults<table_slice> : exec_node_defaults<> {
   /// Defines how much free capacity must be in the inbound buffer of the
   /// execution node before it requests further data.
   inline static constexpr uint64_t min_batch_size = 8_Ki;
@@ -58,7 +55,7 @@ struct defaults<table_slice> : defaults<> {
 };
 
 template <>
-struct defaults<chunk_ptr> : defaults<> {
+struct exec_node_defaults<chunk_ptr> : exec_node_defaults<> {
   /// Defines how much free capacity must be in the inbound buffer of the
   /// execution node before it requests further data.
   inline static constexpr uint64_t min_batch_size = 128_Ki;
@@ -299,7 +296,7 @@ struct exec_node_state {
 
   auto start(std::vector<caf::actor> all_previous) -> caf::result<void> {
     TENZIR_DEBUG("{} {} received start request", *self, op->name());
-    detail::weak_run_delayed_loop(self, defaults<>::metrics_interval, [this] {
+    detail::weak_run_delayed_loop(self, defaults::metrics_interval, [this] {
       auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
       emit_generic_op_metrics();
     });
@@ -610,12 +607,13 @@ struct exec_node_state {
 
   auto issue_demand() -> void {
     if (not previous
-        or inbound_buffer_size + defaults<Input>::min_batch_size
-             > defaults<Input>::max_buffered
+        or inbound_buffer_size + exec_node_defaults<Input>::min_batch_size
+             > exec_node_defaults<Input>::max_buffered
         or issue_demand_inflight) {
       return;
     }
-    const auto demand = defaults<Input>::max_buffered - inbound_buffer_size;
+    const auto demand
+      = exec_node_defaults<Input>::max_buffered - inbound_buffer_size;
     TENZIR_TRACE("{} {} issues demand for up to {} elements", *self, op->name(),
                  demand);
     issue_demand_inflight = true;
