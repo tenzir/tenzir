@@ -524,28 +524,37 @@ public:
     auto code = std::optional<located<std::string>>{};
     auto path = std::optional<located<std::string>>{};
     auto code_or_path = std::variant<std::filesystem::path, std::string>{};
-    argument_parser2::operator_("python")
-      .add(code, "<expr>")
-      .add("file", path)
-      .add("requirements", requirements)
-      .parse(inv, ctx);
-    if (!path && !code) {
-      diagnostic::error("must have either the `--file` argument or inline code")
-        .throw_();
+    auto parser = argument_parser2::operator_("python")
+                    .add(code, "<expr>")
+                    .add("file", path)
+                    .add("requirements", requirements);
+    auto success = parser.parse(inv, ctx);
+    if (not success) {
+      return nullptr;
+    }
+    if (not path && not code) {
+      diagnostic::error("must have either the `file` argument or inline code")
+        .primary(inv.self)
+        .usage(parser.usage())
+        .docs(parser.docs())
+        .emit(ctx);
+      return nullptr;
     }
     if (path && code) {
-      diagnostic::error(
-        "cannot have `--file` argument together with inline code")
+      diagnostic::error("cannot have `file` argument together with inline code")
         .primary(path->source)
         .primary(code->source)
-        .throw_();
+        .usage(parser.usage())
+        .docs(parser.docs())
+        .emit(ctx);
+      return nullptr;
     }
     if (code) {
       code_or_path = code->inner;
     } else {
       code_or_path = std::filesystem::path{path->inner};
     }
-    if (!requirements) {
+    if (not requirements) {
       requirements = "";
     }
     return std::make_unique<python_operator>(config, std::move(*requirements),
