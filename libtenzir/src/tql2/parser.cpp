@@ -65,7 +65,8 @@ public:
   using tk = token_kind;
 
   static auto parse_file(std::span<token> tokens, std::string_view source,
-                         diagnostic_handler& diag) -> ast::pipeline {
+                         diagnostic_handler& diag)
+    -> failure_or<ast::pipeline> {
     try {
       auto self = parser{tokens, source, diag};
       auto pipe = self.parse_pipeline();
@@ -74,8 +75,9 @@ public:
       }
       return pipe;
     } catch (diagnostic& d) {
+      TENZIR_ASSERT(d.severity == severity::error);
       diag.emit(std::move(d));
-      return ast::pipeline{{}};
+      return failure::promise();
     }
   }
 
@@ -929,7 +931,7 @@ private:
 } // namespace
 
 auto parse(std::span<token> tokens, std::string_view source,
-           diagnostic_handler& diag) -> ast::pipeline {
+           diagnostic_handler& diag) -> failure_or<ast::pipeline> {
   return parser::parse_file(tokens, source, diag);
 }
 

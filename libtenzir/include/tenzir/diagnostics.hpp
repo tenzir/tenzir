@@ -11,7 +11,8 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/inspect_enum_str.hpp"
-#include "tenzir/tql/basic.hpp"
+#include "tenzir/location.hpp"
+#include "tenzir/try.hpp"
 
 #include <fmt/format.h>
 
@@ -348,8 +349,6 @@ public:
   void emit(diagnostic diag) override {
     (void)diag;
   }
-
-private:
 };
 
 class collecting_diagnostic_handler final : public diagnostic_handler {
@@ -391,6 +390,63 @@ struct location_origin {
 auto make_diagnostic_printer(std::optional<location_origin> origin,
                              color_diagnostics color, std::ostream& stream)
   -> std::unique_ptr<diagnostic_handler>;
+
+// TODO: Return this when emitting an error.
+struct [[nodiscard]] failure {
+public:
+  static auto promise() -> failure {
+    return {};
+  }
+
+private:
+  failure() = default;
+};
+
+// TODO: Use a proper result type here.
+template <class T>
+class [[nodiscard]] failure_or
+  : public variant<std::conditional_t<std::same_as<T, void>, std::monostate, T>,
+                   failure> {
+public:
+  using reference_type = std::add_lvalue_reference_t<T>;
+
+  using variant<std::conditional_t<std::same_as<T, void>, std::monostate, T>,
+                failure>::variant;
+
+  explicit operator bool() const {
+    return is_success();
+  }
+
+  auto is_success() const -> bool {
+    return this->index() == 0;
+  }
+
+  auto is_error() const -> bool {
+    return this->index() == 1;
+  }
+
+  auto unwrap() && -> T {
+    TENZIR_ASSERT(is_success());
+    if constexpr (not std::same_as<T, void>) {
+      return std::get<0>(std::move(*this));
+    }
+  }
+
+  auto operator*() -> reference_type {
+    TENZIR_ASSERT(is_success());
+    if constexpr (not std::same_as<T, void>) {
+      return std::get<0>(*this);
+    }
+  }
+
+  auto operator->()
+    -> T* requires(not std::same_as<T, void>) { return &**this; }
+};
+
+template <class T>
+struct tryable<failure_or<T>>
+  : tryable<variant<std::conditional_t<std::same_as<T, void>, std::monostate, T>,
+                    failure>> {};
 
 } // namespace tenzir
 

@@ -31,8 +31,7 @@ void dump_diagnostics_to_stdout(std::span<const diagnostic> diagnostics,
 
 auto exec_command_impl(std::string content, diagnostic_handler& dh,
                        const exec_config& cfg, caf::actor_system& sys) -> bool {
-  auto result = exec_pipeline(
-    std::move(content), std::make_unique<diagnostic_handler_ref>(dh), cfg, sys);
+  auto result = exec_pipeline(std::move(content), dh, cfg, sys);
   if (result) {
     return true;
   }

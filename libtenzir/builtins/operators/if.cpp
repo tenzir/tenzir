@@ -196,27 +196,32 @@ private:
 class plugin final : public virtual operator_plugin2<if_operator> {
 public:
   auto make(invocation inv, session ctx) const -> operator_ptr override {
-    // TODO: Very hacky!
+    // TODO: This operator is never called by the user directly. It's arguments
+    // are dispatched through the pipeline compilation function. But we still
+    // need to use the plugin interface to implement it.
     TENZIR_ASSERT(inv.args.size() == 2 || inv.args.size() == 3);
     auto condition = std::move(inv.args[0]);
-    auto then = prepare_pipeline(
+    auto then = compile(
       std::get<ast::pipeline_expr>(std::move(*inv.args[1].kind)).inner, ctx);
-    auto else_ = std::optional<pipeline>{};
+    auto else_ = failure_or<pipeline>{};
     if (inv.args.size() == 3) {
-      else_ = prepare_pipeline(
+      else_ = compile(
         std::get<ast::pipeline_expr>(std::move(*inv.args[2].kind)).inner, ctx);
     }
     // TODO: Improve this code (or better: get rid of this limitation).
     auto location = operator_location::anywhere;
-    for (auto& op : then.operators()) {
-      auto op_location = op->location();
-      if (location == operator_location::anywhere) {
-        location = op_location;
-      } else if (op_location != operator_location::anywhere
-                 && location != op_location) {
-        diagnostic::error("operator location conflict between local and remote")
-          .primary(inv.self)
-          .emit(ctx);
+    if (then) {
+      for (auto& op : then->operators()) {
+        auto op_location = op->location();
+        if (location == operator_location::anywhere) {
+          location = op_location;
+        } else if (op_location != operator_location::anywhere
+                   && location != op_location) {
+          diagnostic::error(
+            "operator location conflict between local and remote")
+            .primary(inv.self)
+            .emit(ctx);
+        }
       }
     }
     if (else_) {
@@ -233,8 +238,12 @@ public:
         }
       }
     }
-    return std::make_unique<if_operator>(std::move(condition), std::move(then),
-                                         std::move(else_), location);
+    if (not then || not else_) {
+      return nullptr;
+    }
+    return std::make_unique<if_operator>(std::move(condition),
+                                         std::move(then).unwrap(),
+                                         std::move(else_).unwrap(), location);
   }
 };
 
