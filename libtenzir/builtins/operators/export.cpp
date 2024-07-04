@@ -189,13 +189,12 @@ public:
               .emit(ctrl.diagnostics());
           });
       co_yield {};
-      auto metric_handler = ctrl.metrics({"tenzir.metrics.export",
-                                          record_type{
-                                            {"schema", string_type{}},
-                                            {"schema_id", string_type{}},
-                                            {"events", uint64_type{}},
-                                          },
-                                          {{"internal", ""}}});
+      auto metric_handler
+        = ctrl.metrics({"tenzir.metrics.export", record_type{
+                                                   {"schema", string_type{}},
+                                                   {"schema_id", string_type{}},
+                                                   {"events", uint64_type{}},
+                                                 }});
       for (const auto& [type, info] : current_result.candidate_infos) {
         auto bound_expr = tailor(info.exp, type);
         if (not bound_expr) {

@@ -393,8 +393,8 @@ using exec_node_actor = typed_actor_fwd<
   ::extend_with<exec_node_sink_actor>::unwrap;
 
 /// The interface of the METRICS RECEIVER actor.
-using metrics_receiver_actor = typed_actor_fwd<> //
-  ::extend_with<receiver_actor<operator_metric>> //
+using metrics_receiver_actor = typed_actor_fwd<>       //
+  ::extend_with<receiver_actor<type, operator_metric>> //
   ::extend_with<receiver_actor<type, record>>::unwrap;
 
 /// The interface of the NODE actor.

@@ -24,13 +24,13 @@ metric_handler::metric_handler(
     return;
   }
   auto params_type = metric_record_type->transform({{
-    {metric_record_type->num_fields() - 1},
-    record_type::insert_after({
+    {0},
+    record_type::insert_before({
       {"timestamp", time_type{}},
       {"operator_id", uint64_type{}},
     }),
   }});
-  metric_type_ = type{metric_type.name(), *params_type};
+  metric_type_ = type{metric_type.name(), *params_type, {{"internal", ""}}};
 }
 
 auto metric_handler::emit(record&& r) -> void {
@@ -41,7 +41,7 @@ auto metric_handler::emit(record&& r) -> void {
 }
 
 auto metric_handler::emit(operator_metric&& m) -> void {
-  caf::anon_send(receiver_.lock(), std::move(m));
+  caf::anon_send(receiver_.lock(), metric_type_, std::move(m));
 }
 
 } // namespace tenzir

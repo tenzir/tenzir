@@ -75,12 +75,12 @@ operator instantiation.
 |`pipeline_id`|`string`|The ID of the pipeline where the associated operator is from.|
 |`run`|`uint64`|The number of the run, starting at 1 for the first run.|
 |`hidden`|`bool`|True if the pipeline is running for the explorer.|
+|`timestamp`|`time`|The time when this event was emitted (immediately after the collection period).|
 |`operator_id`|`uint64`|The ID of the operator inside the pipeline referenced above.|
 |`source`|`bool`|True if this is the first operator in the pipeline.|
 |`transformation`|`bool`|True if this is neither the first nor the last operator.|
 |`sink`|`bool`|True if this is the last operator in the pipeline.|
 |`internal`|`bool`|True if the data flow is considered to internal to Tenzir.|
-|`timestamp`|`time`|The time when this event was emitted (immediately after the collection period).|
 |`duration`|`duration`|The timespan over which this data was collected.|
 |`starting_duration`|`duration`|The time spent to start the operator.|
 |`processing_duration`|`duration`|The time spent processing the data.|

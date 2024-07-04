@@ -34,12 +34,10 @@ public:
     auto components = get_node_components<importer_actor>(self, ctrl.node());
     TENZIR_ASSERT(components);
     auto [importer] = std::move(*components);
-    auto metric_handler
-      = ctrl.metrics({"tenzir.metrics.import",
-                      record_type{{"schema", string_type{}},
-                                  {"schema_id", string_type{}},
-                                  {"events", uint64_type{}}},
-                      {{"internal", ""}}});
+    auto metric_handler = ctrl.metrics(
+      {"tenzir.metrics.import", record_type{{"schema", string_type{}},
+                                            {"schema_id", string_type{}},
+                                            {"events", uint64_type{}}}});
     auto total_events = size_t{0};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {

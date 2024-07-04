@@ -766,7 +766,7 @@ auto exec_node(
     self, std::move(diagnostic_handler), self->state.metrics_receiver, index,
     has_terminal);
   self->state.generic_op_metric_handler
-    = self->state.ctrl->metrics(type{"tenzir.metrics.operator", record_type{}});
+    = self->state.ctrl->metrics(operator_metric::to_type());
   // The node actor must be set when the operator is not a source.
   if (self->state.op->location() == operator_location::remote and not node) {
     self->state.on_error(caf::make_error(

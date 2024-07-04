@@ -242,7 +242,7 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
             custom_metrics[idx].emplace_back(std::move(r));
           }
         },
-        [&](operator_metric& m) {
+        [&](type&, operator_metric& m) {
           if (cfg.dump_metrics) {
             const auto idx = m.operator_index;
             if (idx >= metrics.size()) {

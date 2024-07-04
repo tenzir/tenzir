@@ -218,6 +218,34 @@ struct [[nodiscard]] operator_metric {
       f.field("num_runs_processing_output", x.num_runs_processing_output),
       f.field("internal", x.internal));
   }
+
+  static auto to_type() -> type {
+    return {"tenzir.metrics.operator",
+            record_type{
+              {"source", bool_type{}},
+              {"transformation", bool_type{}},
+              {"sink", bool_type{}},
+              {"internal", bool_type{}},
+              {"duration", duration_type{}},
+              {"starting_duration", duration_type{}},
+              {"processing_duration", duration_type{}},
+              {"scheduled_duration", duration_type{}},
+              {"running_duration", duration_type{}},
+              {"paused_duration", duration_type{}},
+              {"input",
+               record_type{
+                 {"unit", string_type{}},
+                 {"elements", uint64_type{}},
+                 {"approx_bytes", uint64_type{}},
+               }},
+              {"output",
+               record_type{
+                 {"unit", string_type{}},
+                 {"elements", uint64_type{}},
+                 {"approx_bytes", uint64_type{}},
+               }},
+            }};
+  }
 };
 
 /// Base class of all pipeline operators. Commonly used as `operator_ptr`.
