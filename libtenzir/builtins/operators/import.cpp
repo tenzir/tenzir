@@ -46,14 +46,14 @@ public:
         co_yield {};
         continue;
       }
+      // TODO: This temporary solution does not apply back-pressure.
+      ctrl.self().send(importer, std::move(slice));
       metric_handler.emit({
         {"schema", std::string{slice.schema().name()}},
         {"schema_id", slice.schema().make_fingerprint()},
         {"events", slice.rows()},
       });
       total_events += slice.rows();
-      // TODO: This temporary solution does not apply back-pressure.
-      ctrl.self().send(importer, std::move(slice));
     }
     TENZIR_VERBOSE("waiting for completion of import after input stream has "
                    "ended");
