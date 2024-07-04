@@ -34,25 +34,29 @@ public:
     auto components = get_node_components<importer_actor>(self, ctrl.node());
     TENZIR_ASSERT(components);
     auto [importer] = std::move(*components);
-    auto& metric_handler = ctrl.metrics();
+    auto metric_handler
+      = ctrl.metrics({"tenzir.metrics.import",
+                      record_type{{"schema", string_type{}},
+                                  {"schema_id", string_type{}},
+                                  {"events", uint64_type{}}},
+                      {{"internal", ""}}});
     auto total_events = size_t{0};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
-      metric_handler.emit("tenzir.metrics.import",
-                          {
-                            {"schema", std::string{slice.schema().name()}},
-                            {"schema_id", slice.schema().make_fingerprint()},
-                            {"events", slice.rows()},
-                          });
+      metric_handler.emit({
+        {"schema", std::string{slice.schema().name()}},
+        {"schema_id", slice.schema().make_fingerprint()},
+        {"events", slice.rows()},
+      });
       total_events += slice.rows();
       // TODO: This temporary solution does not apply back-pressure.
       ctrl.self().send(importer, std::move(slice));
     }
-    TENZIR_VERBOSE(
-      "waiting for completion of import after input stream has ended");
+    TENZIR_VERBOSE("waiting for completion of import after input stream has "
+                   "ended");
     // We empirically need this sleep here for the flushing to take any effect
     // afterwards. I do not fully understand why, but since we're about to
     // rewrite this operator anyways to create partitions in-band and to

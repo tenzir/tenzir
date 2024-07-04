@@ -143,7 +143,8 @@ struct exec_node_control_plane final : public operator_control_plane {
       diagnostic_handler{
         std::make_unique<exec_node_diagnostic_handler<Input, Output>>(
           self, std::move(diagnostic_handler))},
-      metrics_handler{metric_receiver, op_index},
+      metrics_receiver{std::move(metric_receiver)},
+      operator_index{op_index},
       has_terminal_{has_terminal} {
   }
 
@@ -159,8 +160,8 @@ struct exec_node_control_plane final : public operator_control_plane {
     return *diagnostic_handler;
   }
 
-  auto metrics() noexcept -> metric_handler& override {
-    return metrics_handler;
+  auto metrics(type t) noexcept -> metric_handler override {
+    return metric_handler{metrics_receiver, operator_index, std::move(t)};
   }
 
   auto no_location_overrides() const noexcept -> bool override {
@@ -182,7 +183,8 @@ struct exec_node_control_plane final : public operator_control_plane {
   exec_node_state<Input, Output>& state;
   std::unique_ptr<exec_node_diagnostic_handler<Input, Output>> diagnostic_handler
     = {};
-  metric_handler metrics_handler = {};
+  metrics_receiver_actor metrics_receiver = {};
+  uint64_t operator_index = {};
   bool has_terminal_;
 };
 
@@ -216,6 +218,7 @@ struct exec_node_state {
     = std::chrono::steady_clock::now();
   metrics_receiver_actor metrics_receiver = {};
   operator_metric metrics = {};
+  metric_handler generic_op_metric_handler = {};
 
   /// Whether this execution node is paused, and when it was.
   std::optional<std::chrono::steady_clock::time_point> paused_at = {};
@@ -291,7 +294,7 @@ struct exec_node_state {
       = std::chrono::duration_cast<duration>(now - start_time);
     metrics_copy.time_running
       = metrics_copy.time_total - metrics_copy.time_paused;
-    ctrl->metrics().emit(std::move(metrics_copy));
+    generic_op_metric_handler.emit(std::move(metrics_copy));
   }
 
   auto start(std::vector<caf::actor> all_previous) -> caf::result<void> {
@@ -762,6 +765,8 @@ auto exec_node(
   self->state.ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
     self, std::move(diagnostic_handler), self->state.metrics_receiver, index,
     has_terminal);
+  self->state.generic_op_metric_handler
+    = self->state.ctrl->metrics(type{"tenzir.metrics.operator", record_type{}});
   // The node actor must be set when the operator is not a source.
   if (self->state.op->location() == operator_location::remote and not node) {
     self->state.on_error(caf::make_error(

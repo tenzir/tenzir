@@ -395,7 +395,7 @@ using exec_node_actor = typed_actor_fwd<
 /// The interface of the METRICS RECEIVER actor.
 using metrics_receiver_actor = typed_actor_fwd<> //
   ::extend_with<receiver_actor<operator_metric>> //
-  ::extend_with<receiver_actor<std::string, record>>::unwrap;
+  ::extend_with<receiver_actor<type, record>>::unwrap;
 
 /// The interface of the NODE actor.
 using node_actor = typed_actor_fwd<

@@ -26,11 +26,11 @@ public:
   }
 
   auto self() noexcept -> exec_node_actor::base& override {
-    die("not implemented");
+    TENZIR_UNIMPLEMENTED();
   }
 
   auto node() noexcept -> node_actor override {
-    die("not implemented");
+    TENZIR_UNIMPLEMENTED();
   }
 
   auto diagnostics() noexcept -> diagnostic_handler& override {
@@ -51,8 +51,8 @@ public:
     return *handler_;
   }
 
-  auto metrics() noexcept -> metric_handler& override {
-    die("not implemented");
+  auto metrics(type) noexcept -> metric_handler override {
+    TENZIR_UNIMPLEMENTED();
   }
 
   auto no_location_overrides() const noexcept -> bool override {

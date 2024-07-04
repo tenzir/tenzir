@@ -189,7 +189,13 @@ public:
               .emit(ctrl.diagnostics());
           });
       co_yield {};
-      auto& metric_handler = ctrl.metrics();
+      auto metric_handler = ctrl.metrics({"tenzir.metrics.export",
+                                          record_type{
+                                            {"schema", string_type{}},
+                                            {"schema_id", string_type{}},
+                                            {"events", uint64_type{}},
+                                          },
+                                          {{"internal", ""}}});
       for (const auto& [type, info] : current_result.candidate_infos) {
         auto bound_expr = tailor(info.exp, type);
         if (not bound_expr) {
@@ -223,13 +229,11 @@ public:
               continue;
             }
             if (current_slice) {
-              metric_handler.emit(
-                "tenzir.metrics.export",
-                {
-                  {"schema", std::string{current_slice->schema().name()}},
-                  {"schema_id", current_slice->schema().make_fingerprint()},
-                  {"events", current_slice->rows()},
-                });
+              metric_handler.emit({
+                {"schema", std::string{current_slice->schema().name()}},
+                {"schema_id", current_slice->schema().make_fingerprint()},
+                {"events", current_slice->rows()},
+              });
               co_yield *current_slice;
               current_slice.reset();
             } else {

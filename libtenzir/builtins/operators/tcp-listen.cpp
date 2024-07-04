@@ -78,8 +78,8 @@ public:
     return diagnostics_;
   }
 
-  auto metrics() noexcept -> metric_handler& override {
-    die("not implemented");
+  auto metrics(type) noexcept -> metric_handler override {
+    TENZIR_UNIMPLEMENTED();
   }
 
   auto no_location_overrides() const noexcept -> bool override {

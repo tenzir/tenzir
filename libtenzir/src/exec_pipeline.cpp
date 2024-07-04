@@ -231,7 +231,7 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
         [&](diagnostic& d) {
           dh.emit(std::move(d));
         },
-        [&](std::string&, record& r) {
+        [&](type&, record& r) {
           if (cfg.dump_metrics) {
             const auto idx = caf::get<uint64_t>(r["operator_index"]);
             if (idx >= custom_metrics.size()) {
