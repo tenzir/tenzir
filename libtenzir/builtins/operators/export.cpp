@@ -54,7 +54,12 @@ caf::behavior make_bridge(caf::stateful_actor<bridge_state>* self,
           });
   return {
     [self](table_slice slice) {
-      auto filtered = filter(std::move(slice), self->state.expr);
+      auto bound_expr = tailor(self->state.expr, slice.schema());
+      if (not bound_expr) {
+        // failing to bind is not an error.
+        return;
+      }
+      auto filtered = filter(std::move(slice), *bound_expr);
       if (not filtered) {
         return;
       }
