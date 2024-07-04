@@ -78,8 +78,10 @@ auto format_metric(const operator_metric& metric) -> std::string {
     it = fmt::format_to(
       it, "{}{}batches: {} ({:.2f} {}/batch)\n", indent, indent,
       metric.inbound_measurement.num_batches,
-      static_cast<double>(metric.inbound_measurement.num_elements)
-        / static_cast<double>(metric.inbound_measurement.num_batches),
+      metric.inbound_measurement.num_batches == 0
+        ? 0
+        : static_cast<double>(metric.inbound_measurement.num_elements)
+            / static_cast<double>(metric.inbound_measurement.num_batches),
       metric.inbound_measurement.unit);
   }
   if (metric.outbound_measurement.unit != "void") {
