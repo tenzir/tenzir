@@ -479,15 +479,15 @@ private:
 class plugin final : public virtual loader_plugin<zmq_loader>,
                      public virtual saver_plugin<zmq_saver> {
 public:
+  ~plugin() noexcept override {
+    // Destroy the singleton.
+    context.reset();
+  }
+
   auto initialize(const record&, const record&) -> caf::error override {
     // Create the singleton.
     context = std::make_shared<::zmq::context_t>();
     return {};
-  }
-
-  auto deinitialize() -> void override {
-    // Destroy the singleton.
-    context.reset();
   }
 
   auto parse_loader(parser_interface& p) const
