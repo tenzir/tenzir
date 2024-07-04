@@ -17,13 +17,15 @@
 
 namespace tenzir::detail {
 
-[[noreturn]] void panic(std::string message);
+[[noreturn]] void
+panic_impl(std::string message, std::source_location source
+                                = std::source_location::current());
 
 template <class... Ts>
-  requires(sizeof...(Ts) > 0)
 [[noreturn]] TENZIR_NO_INLINE void
-panic(fmt::format_string<Ts...> str, Ts&&... xs) {
-  panic(fmt::format(str, std::forward<Ts>(xs)...));
+panic(fmt::format_string<Ts...> str, Ts&&... xs,
+      std::source_location source = std::source_location::current()) {
+  panic_impl(fmt::format(str, std::forward<Ts>(xs)...), source);
 }
 
 [[noreturn]] void

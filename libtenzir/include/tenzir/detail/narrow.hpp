@@ -44,8 +44,8 @@ auto narrow(U y, std::source_location source = std::source_location::current())
   T x = narrow_cast<T>(y);
   if (static_cast<U>(x) != y
       && (is_same_signedness<T, U>::value || (x < T{}) != (y < U{}))) {
-    detail::panic("cannot narrow {} to {} @ {}:{}", y, typeid(T).name(),
-                  source.file_name(), source.line());
+    detail::panic_impl(
+      fmt::format("cannot narrow {} to {}", y, typeid(T).name()), source);
   }
   return x;
 }
