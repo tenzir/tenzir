@@ -32,6 +32,7 @@ public:
       diagnostic::error("module `{}` not found", x.path[0].name)
         .primary(x.path[0])
         .emit(diag_);
+      result_ = failure::promise();
       return;
     }
     auto& name = x.path[0].name;
@@ -68,6 +69,7 @@ public:
         .primary(x)
         .hint("must be one of: {}", fmt::join(available, ", "))
         .emit(diag_);
+      result_ = failure::promise();
       return;
     }
     // TODO: Check if this entity has right type?
@@ -78,12 +80,14 @@ public:
             diagnostic::error("expected {}, got method", expected)
               .primary(x)
               .emit(diag_);
+            result_ = failure::promise();
             return;
           }
         } else if (context_ != context_t::fn_name) {
           diagnostic::error("expected {}, got function", expected)
             .primary(x)
             .emit(diag_);
+          result_ = failure::promise();
           return;
         }
         x.ref = entity_path{{name}};
@@ -93,6 +97,7 @@ public:
           diagnostic::error("expected {}, got operator", expected)
             .primary(x)
             .emit(diag_);
+          result_ = failure::promise();
           return;
         }
         x.ref = entity_path{{name}};
@@ -126,17 +131,24 @@ public:
     enter(x);
   }
 
+  auto get_failure() -> failure_or<void> {
+    return result_;
+  }
+
 private:
   enum class context_t { none, op_name, fn_name, method_name };
   const registry& reg_;
   diagnostic_handler& diag_;
   context_t context_ = context_t::none;
+  failure_or<void> result_;
 };
 
 } // namespace
 
-void resolve_entities(ast::pipeline& pipe, session ctx) {
-  entity_resolver{ctx}.visit(pipe);
+auto resolve_entities(ast::pipeline& pipe, session ctx) -> failure_or<void> {
+  auto resolver = entity_resolver{ctx};
+  resolver.visit(pipe);
+  return resolver.get_failure();
 }
 
 } // namespace tenzir

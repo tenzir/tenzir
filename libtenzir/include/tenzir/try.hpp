@@ -111,10 +111,11 @@ struct tenzir::tryable<tenzir::variant<V, E>> {
   decl = tenzir::tryable<decltype(var)>::get_success(std::move(var))
 
 #define TENZIR_TRY_DISCARD(var, expr)                                          \
+  TENZIR_TRY_COMMON(var, expr)                                                 \
   if (false) {                                                                 \
-    (expr); /* trigger [[nodiscard]] */                                        \
-  }                                                                            \
-  TENZIR_TRY_COMMON(var, expr)
+    /* trigger [[nodiscard]] */                                                \
+    tenzir::tryable<decltype(var)>::get_success(std::move(var));               \
+  }
 
 #define TENZIR_TRY_1(expr)                                                     \
   TENZIR_TRY_DISCARD(TENZIR_PP_PASTE2(_try, __COUNTER__), expr)

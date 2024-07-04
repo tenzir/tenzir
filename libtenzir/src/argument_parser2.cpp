@@ -134,8 +134,12 @@ auto argument_parser2::parse(const ast::entity& self,
             diagnostic::error("expected a pipeline expression").primary(expr));
           return;
         }
-        auto pipe = prepare_pipeline(std::move(pipe_expr->inner), ctx);
-        set(located{std::move(pipe), expr.get_location()});
+        auto pipe = compile(std::move(pipe_expr->inner), ctx);
+        if (pipe.is_error()) {
+          success = false;
+          return;
+        }
+        set(located{std::move(pipe).unwrap(), expr.get_location()});
       });
     ++arg;
   }
@@ -186,8 +190,12 @@ auto argument_parser2::parse(const ast::entity& self,
             diagnostic::error("expected a pipeline expression").primary(expr));
           return;
         }
-        auto pipe = prepare_pipeline(std::move(pipe_expr->inner), ctx);
-        set(located{std::move(pipe), expr.get_location()});
+        auto pipe = compile(std::move(pipe_expr->inner), ctx);
+        if (pipe.is_error()) {
+          success = false;
+          return;
+        }
+        set(located{std::move(pipe).unwrap(), expr.get_location()});
       });
   }
   return success;

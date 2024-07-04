@@ -1,6 +1,1 @@
-error: invalid UTF8
- --> /dev/stdin:1:1
-  |
-1 | "aÿb" + 42
-  | ^^^^^ 
-  |
+error: found invalid UTF8

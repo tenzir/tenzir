@@ -24,12 +24,11 @@ struct exec_config {
   bool tql2 = false;
 };
 
-auto exec_pipeline(std::string content,
-                   std::unique_ptr<diagnostic_handler> diag,
+auto exec_pipeline(std::string content, diagnostic_handler& dh,
                    const exec_config& cfg, caf::actor_system& sys)
   -> caf::expected<void>;
 
-auto exec_pipeline(pipeline pipe, std::unique_ptr<diagnostic_handler> diag,
+auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
                    const exec_config& cfg, caf::actor_system& sys)
   -> caf::expected<void>;
 

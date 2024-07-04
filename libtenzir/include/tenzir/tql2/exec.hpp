@@ -14,9 +14,12 @@
 
 namespace tenzir {
 
-auto exec2(std::string content, std::unique_ptr<diagnostic_handler> diag,
+auto exec2(std::string_view source, diagnostic_handler& dh,
            const exec_config& cfg, caf::actor_system& sys) -> bool;
 
-auto prepare_pipeline(ast::pipeline&& pipe, session ctx) -> tenzir::pipeline;
+auto compile(ast::pipeline&& pipe, session ctx) -> failure_or<pipeline>;
+
+auto parse_and_compile(std::string_view source, session ctx)
+  -> failure_or<pipeline>;
 
 } // namespace tenzir
