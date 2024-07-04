@@ -873,7 +873,7 @@ private:
     }
   }
 
-  auto self() -> Self {
+  auto self() -> Self& {
     return static_cast<Self&>(*this);
   }
 };
