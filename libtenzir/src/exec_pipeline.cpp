@@ -233,7 +233,7 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
         },
         [&](type&, record& r) {
           if (cfg.dump_metrics) {
-            const auto idx = caf::get<uint64_t>(r["operator_index"]);
+            const auto idx = caf::get<uint64_t>(r["operator_id"]);
             if (idx >= custom_metrics.size()) {
               custom_metrics.resize(idx + 1);
             }

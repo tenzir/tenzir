@@ -116,7 +116,7 @@ Contains a measurement of data that goes through the `export` operator, for each
 |Field|Type|Description|
 |:-|:-|:-|
 |`timestamp`|`time`|The time when this event was emitted.|
-|`operator_index`|`uint64`|The index of the `export` operator in the pipeline.|
+|`operator_id`|`uint64`|The ID of the `export` operator in the pipeline.|
 |`schema`|`string`|The schema name of the batch.|
 |`schema_id`|`string`|The schema ID of the batch.|
 |`events`|`uint64`|The amount of events that were exported.|
@@ -128,7 +128,7 @@ Contains a measurement of batch data that goes through the `import` operator, fo
 |Field|Type|Description|
 |:-|:-|:-|
 |`timestamp`|`time`|The time when this event was emitted.|
-|`operator_index`|`uint64`|The index of the `import` operator in the pipeline.|
+|`operator_id`|`uint64`|The ID of the `import` operator in the pipeline.|
 |`schema`|`string`|The schema name of the batch.|
 |`schema_id`|`string`|The schema ID of the batch.|
 |`events`|`uint64`|The amount of events that were imported.|
@@ -140,7 +140,7 @@ Contains a measurement of data that goes through the `publish` operator, for eac
 |Field|Type|Description|
 |:-|:-|:-|
 |`timestamp`|`time`|The time when this event was emitted.|
-|`operator_index`|`uint64`|The index of the `publish` operator in the pipeline.|
+|`operator_id`|`uint64`|The ID of the `publish` operator in the pipeline.|
 |`topic`|`string`|The topic name.|
 |`schema`|`string`|The schema name of the batch.|
 |`schema_id`|`string`|The schema ID of the batch.|
@@ -153,7 +153,7 @@ Contains a measurement of data that goes through the `subscribe` operator, for e
 |Field|Type|Description|
 |:-|:-|:-|
 |`timestamp`|`time`|The time when this event was emitted.|
-|`operator_index`|`uint64`|The index of the `subscribe` operator in the pipeline.|
+|`operator_id`|`uint64`|The ID of the `subscribe` operator in the pipeline.|
 |`topic`|`string`|The topic name.|
 |`schema`|`string`|The schema name of the batch.|
 |`schema_id`|`string`|The schema ID of the batch.|
@@ -166,7 +166,7 @@ Contains a measurement of data that goes through the `enrich` operator, at one s
 |Field|Type|Description|
 |:-|:-|:-|
 |`timestamp`|`time`|The time when this event was emitted.|
-|`operator_index`|`uint64`|The index of the `enrich` operator in the pipeline.|
+|`operator_id`|`uint64`|The ID of the `enrich` operator in the pipeline.|
 |`context_name`|`string`|The name of the context the associated operator is using.|
 |`input_events`|`uint64`|The amount of input events that entered the `enrich` operator since the last metric.|
 |`hits`|`uint64`|The amount of successfully enriched events since the last metric.|
@@ -178,7 +178,7 @@ Contains a measurement of data that goes through the `lookup` operator, at one s
 |Field|Type|Description|
 |:-|:-|:-|
 |`timestamp`|`time`|The time when this event was emitted.|
-|`operator_index`|`uint64`|The index of the `lookup` operator in the pipeline.|
+|`operator_id`|`uint64`|The ID of the `lookup` operator in the pipeline.|
 |`context_name`|`string`|The name of the context the associated operator is using.|
 |`live_input_events`|`uint64`|The total amount of input events used for the live lookup.|
 |`live_matches`|`uint64`|The amount of live lookup matches since the last metric.|

@@ -36,7 +36,7 @@ metric_handler::metric_handler(
 auto metric_handler::emit(record&& r) -> void {
   // Explicitly create a data-from-time cast here to support macOS builds.
   r["timestamp"] = data{time{time::clock::now()}};
-  r["operator_index"] = op_index;
+  r["operator_id"] = op_index_;
   caf::anon_send(receiver_.lock(), metric_type_, std::move(r));
 }
 
