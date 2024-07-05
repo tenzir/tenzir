@@ -228,7 +228,8 @@ using importer_actor = typed_actor_fwd<
   // Register a FLUSH LISTENER actor.
   auto(atom::subscribe, atom::flush, flush_listener_actor)->caf::result<void>,
   // Register a subscriber for table slices.
-  auto(atom::subscribe, receiver_actor<table_slice>)->caf::result<void>,
+  auto(atom::subscribe, receiver_actor<table_slice>, bool internal)
+    ->caf::result<void>,
   // Push buffered slices downstream to make the data available.
   auto(atom::flush)->caf::result<void>,
   // Import a batch of data.

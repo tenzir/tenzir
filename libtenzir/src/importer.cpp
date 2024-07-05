@@ -177,6 +177,7 @@ void importer_state::send_report() {
 }
 
 void importer_state::on_process(const table_slice& slice) {
+  TENZIR_ASSERT(slice.rows() > 0);
   auto t = timer::start(measurement_);
   auto rows = slice.rows();
   auto name = slice.schema().name();
@@ -185,8 +186,10 @@ void importer_state::on_process(const table_slice& slice) {
   } else {
     schema_counters.emplace(std::string{name}, rows);
   }
-  for (const auto& subscriber : subscribers) {
-    self->send(subscriber, slice);
+  for (const auto& [subscriber, internal] : subscribers) {
+    if (slice.schema().attribute("internal").has_value() == internal) {
+      self->send(subscriber, slice);
+    }
   }
   t.stop(rows);
 }
@@ -226,7 +229,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       = std::remove_if(self->state.subscribers.begin(),
                        self->state.subscribers.end(),
                        [&](const auto& subscriber) {
-                         return subscriber.address() == msg.source;
+                         return subscriber.first.address() == msg.source;
                        });
     self->state.subscribers.erase(subscriber, self->state.subscribers.end());
   });
@@ -244,9 +247,10 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       self->send(self->state.index, atom::subscribe_v, atom::flush_v,
                  std::move(listener));
     },
-    [self](atom::subscribe, receiver_actor<table_slice> subscriber) {
+    [self](atom::subscribe, receiver_actor<table_slice>& subscriber,
+           bool internal) {
       self->monitor(subscriber);
-      self->state.subscribers.push_back(subscriber);
+      self->state.subscribers.emplace_back(std::move(subscriber), internal);
     },
     // Push buffered slices downstream to make the data available.
     [self](atom::flush) -> caf::result<void> {
