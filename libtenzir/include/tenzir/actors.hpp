@@ -393,9 +393,13 @@ using exec_node_actor = typed_actor_fwd<
   ::extend_with<exec_node_sink_actor>::unwrap;
 
 /// The interface of the METRICS RECEIVER actor.
-using metrics_receiver_actor = typed_actor_fwd<>       //
-  ::extend_with<receiver_actor<type, operator_metric>> //
-  ::extend_with<receiver_actor<type, record>>::unwrap;
+using metrics_receiver_actor = typed_actor_fwd<
+  // Register a custom metric type for the metrics of an operator.
+  auto(uint64_t op_index, uint64_t metric_index, type)->caf::result<void>,
+  // Receive custom metrics of an operator.
+  auto(uint64_t op_index, uint64_t metric_index, record)->caf::result<void>,
+  // Receive the standard execution node metrics.
+  auto(operator_metric)->caf::result<void>>::unwrap;
 
 /// The interface of the NODE actor.
 using node_actor = typed_actor_fwd<

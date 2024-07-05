@@ -233,16 +233,18 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
         [&](diagnostic& d) {
           dh.emit(std::move(d));
         },
-        [&](type&, record& r) {
+        [&](uint64_t, uint64_t, type&) {
+          // Don't register types here.
+        },
+        [&](uint64_t op_index, uint64_t, record& r) {
           if (cfg.dump_metrics) {
-            const auto idx = caf::get<uint64_t>(r["operator_id"]);
-            if (idx >= custom_metrics.size()) {
-              custom_metrics.resize(idx + 1);
+            if (op_index >= custom_metrics.size()) {
+              custom_metrics.resize(op_index + 1);
             }
-            custom_metrics[idx].emplace_back(std::move(r));
+            custom_metrics[op_index].emplace_back(std::move(r));
           }
         },
-        [&](type&, operator_metric& m) {
+        [&](operator_metric& m) {
           if (cfg.dump_metrics) {
             const auto idx = m.operator_index;
             if (idx >= metrics.size()) {

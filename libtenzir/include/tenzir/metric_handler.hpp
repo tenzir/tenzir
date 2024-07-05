@@ -19,16 +19,15 @@ struct operator_metric;
 class metric_handler {
 public:
   metric_handler() = default;
-  metric_handler(detail::weak_handle<metrics_receiver_actor> new_receiver,
-                 uint64_t operator_index, type metric_type);
+  metric_handler(metrics_receiver_actor new_receiver, uint64_t operator_index,
+                 uint64_t metric_index, type metric_type);
 
   auto emit(record&& r) -> void;
-  auto emit(operator_metric&& m) -> void;
 
 private:
   detail::weak_handle<metrics_receiver_actor> receiver_;
   uint64_t op_index_ = {};
-  type metric_type_ = {};
+  uint64_t metric_index_ = {};
 };
 
 } // namespace tenzir

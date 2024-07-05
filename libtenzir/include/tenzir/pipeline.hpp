@@ -220,31 +220,39 @@ struct [[nodiscard]] operator_metric {
   }
 
   static auto to_type() -> type {
-    return {"tenzir.metrics.operator",
-            record_type{
-              {"source", bool_type{}},
-              {"transformation", bool_type{}},
-              {"sink", bool_type{}},
-              {"internal", bool_type{}},
-              {"duration", duration_type{}},
-              {"starting_duration", duration_type{}},
-              {"processing_duration", duration_type{}},
-              {"scheduled_duration", duration_type{}},
-              {"running_duration", duration_type{}},
-              {"paused_duration", duration_type{}},
-              {"input",
-               record_type{
-                 {"unit", string_type{}},
-                 {"elements", uint64_type{}},
-                 {"approx_bytes", uint64_type{}},
-               }},
-              {"output",
-               record_type{
-                 {"unit", string_type{}},
-                 {"elements", uint64_type{}},
-                 {"approx_bytes", uint64_type{}},
-               }},
-            }};
+    return {
+      "tenzir.metrics.operator",
+      record_type{
+        {"pipeline_id", string_type{}},
+        {"run", uint64_type{}},
+        {"hidden", bool_type{}},
+        {"operator_id", uint64_type{}},
+        {"source", bool_type{}},
+        {"transformation", bool_type{}},
+        {"sink", bool_type{}},
+        {"internal", bool_type{}},
+        {"timestamp", time_type{}},
+        {"duration", duration_type{}},
+        {"starting_duration", duration_type{}},
+        {"processing_duration", duration_type{}},
+        {"scheduled_duration", duration_type{}},
+        {"running_duration", duration_type{}},
+        {"paused_duration", duration_type{}},
+        {"input",
+         record_type{
+           {"unit", string_type{}},
+           {"elements", uint64_type{}},
+           {"approx_bytes", uint64_type{}},
+         }},
+        {"output",
+         record_type{
+           {"unit", string_type{}},
+           {"elements", uint64_type{}},
+           {"approx_bytes", uint64_type{}},
+         }},
+      },
+      {{"internal", ""}},
+    };
   }
 };
 

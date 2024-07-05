@@ -14,34 +14,23 @@
 
 namespace tenzir {
 
-metric_handler::metric_handler(
-  detail::weak_handle<metrics_receiver_actor> new_receiver,
-  uint64_t operator_index, type metric_type)
-  : receiver_{std::move(new_receiver)}, op_index_{operator_index} {
-  const auto* metric_record_type = caf::get_if<record_type>(&metric_type);
-  TENZIR_ASSERT(metric_record_type);
-  if (metric_record_type->num_fields() == 0) {
-    return;
-  }
-  auto params_type = metric_record_type->transform({{
-    {0},
-    record_type::insert_before({
-      {"timestamp", time_type{}},
-      {"operator_id", uint64_type{}},
-    }),
-  }});
-  metric_type_ = type{metric_type.name(), *params_type, {{"internal", ""}}};
+metric_handler::metric_handler(metrics_receiver_actor new_receiver,
+                               uint64_t operator_index, uint64_t metric_index,
+                               type metric_type)
+  : receiver_{new_receiver},
+    op_index_{operator_index},
+    metric_index_{metric_index} {
+  caf::anon_send(new_receiver, op_index_, metric_index_,
+                 type{metric_type, {{"internal", ""}}});
 }
 
 auto metric_handler::emit(record&& r) -> void {
-  // Explicitly create a data-from-time cast here to support macOS builds.
-  r["timestamp"] = data{time{time::clock::now()}};
-  r["operator_id"] = op_index_;
-  caf::anon_send(receiver_.lock(), metric_type_, std::move(r));
-}
-
-auto metric_handler::emit(operator_metric&& m) -> void {
-  caf::anon_send(receiver_.lock(), metric_type_, std::move(m));
+  if (auto receiver = receiver_.lock()) {
+    // Explicitly create a data-from-time cast here to support macOS builds.
+    r["timestamp"] = data{time{time::clock::now()}};
+    r["operator_id"] = op_index_;
+    caf::anon_send(receiver_.lock(), op_index_, metric_index_, std::move(r));
+  }
 }
 
 } // namespace tenzir
