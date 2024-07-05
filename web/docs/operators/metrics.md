@@ -55,6 +55,67 @@ Contains a measurement of disk space usage.
 |`used_bytes`|`uint64`|The number of bytes occupied on the volume.|
 |`free_bytes`|`uint64`|The number of bytes still free on the volume.|
 
+### `tenzir.metrics.enrich`
+
+Contains a measurement of data that goes through the `enrich` operator, at one second intervals.
+
+|Field|Type|Description|
+|:-|:-|:-|
+|`pipeline_id`|`string`|The ID of the pipeline where the associated operator is from.|
+|`run`|`uint64`|The number of the run, starting at 1 for the first run.|
+|`hidden`|`bool`|True if the pipeline is running for the explorer.|
+|`timestamp`|`time`|The time when this event was emitted.|
+|`operator_id`|`uint64`|The ID of the `enrich` operator in the pipeline.|
+|`context`|`string`|The name of the context the associated operator is using.|
+|`events`|`uint64`|The amount of input events that entered the `enrich` operator since the last metric.|
+|`hits`|`uint64`|The amount of successfully enriched events since the last metric.|
+
+### `tenzir.metrics.import`
+
+Contains a measurement of batch data that goes through the `import` operator, for each data batch.
+
+|Field|Type|Description|
+|:-|:-|:-|
+|`pipeline_id`|`string`|The ID of the pipeline where the associated operator is from.|
+|`run`|`uint64`|The number of the run, starting at 1 for the first run.|
+|`hidden`|`bool`|True if the pipeline is running for the explorer.|
+|`timestamp`|`time`|The time when this event was emitted.|
+|`operator_id`|`uint64`|The ID of the `import` operator in the pipeline.|
+|`schema`|`string`|The schema name of the batch.|
+|`schema_id`|`string`|The schema ID of the batch.|
+|`events`|`uint64`|The amount of events that were imported.|
+
+### `tenzir.metrics.lookup`
+
+Contains a measurement of data that goes through the `lookup` operator, at one second intervals.
+
+|Field|Type|Description|
+|:-|:-|:-|
+|`pipeline_id`|`string`|The ID of the pipeline where the associated operator is from.|
+|`run`|`uint64`|The number of the run, starting at 1 for the first run.|
+|`hidden`|`bool`|True if the pipeline is running for the explorer.|
+|`timestamp`|`time`|The time when this event was emitted.|
+|`operator_id`|`uint64`|The ID of the `lookup` operator in the pipeline.|
+|`context`|`string`|The name of the context the associated operator is using.|
+|`live`|`record`|Information about the live lookup.|
+|`retro`|`record`|Information about the retroactive lookup.|
+|`context_updates`|`uint64`|The amount of times the underlying context has been updated while the associated lookup is active.|
+
+The record `live` has the following schema:
+
+|Field|Type|Description|
+|:-|:-|:-|
+|`events`|`uint64`|The amount of input events used for the live lookup since the last metric.|
+|`hits`|`uint64`|The amount of live lookup matches since the last metric.|
+
+The record `retro` has the following schema:
+
+|Field|Type|Description|
+|:-|:-|:-|
+|`events`|`uint64`|The amount of input events used for the lookup since the last metric.|
+|`hits`|`uint64`|The amount of lookup matches since the last metric.|
+|`queued_events`|`uint64`|The total amount of events that were in the queue for the lookup.|
+
 ### `tenzir.metrics.memory`
 
 Contains a measurement of the available memory on the host.
@@ -109,29 +170,6 @@ Contains a measurement of the amount of memory used by the `tenzir-node` process
 |`swap_space_usage`|`uint64`|The amount of swap space, in bytes. Only available on Linux systems.|
 |`open_fds`|`uint64`|The amount of open file descriptors by the node. Only available on Linux systems.|
 
-### `tenzir.metrics.export`
-
-Contains a measurement of data that goes through the `export` operator, for each data batch.
-
-|Field|Type|Description|
-|:-|:-|:-|
-|`timestamp`|`time`|The time when this event was emitted.|
-|`operator_id`|`uint64`|The ID of the `export` operator in the pipeline.|
-|`schema`|`string`|The schema name of the batch.|
-|`schema_id`|`string`|The schema ID of the batch.|
-|`events`|`uint64`|The amount of events that were exported.|
-
-### `tenzir.metrics.import`
-
-Contains a measurement of batch data that goes through the `import` operator, for each data batch.
-
-|Field|Type|Description|
-|:-|:-|:-|
-|`timestamp`|`time`|The time when this event was emitted.|
-|`operator_id`|`uint64`|The ID of the `import` operator in the pipeline.|
-|`schema`|`string`|The schema name of the batch.|
-|`schema_id`|`string`|The schema ID of the batch.|
-|`events`|`uint64`|The amount of events that were imported.|
 
 ### `tenzir.metrics.publish`
 
@@ -139,6 +177,9 @@ Contains a measurement of data that goes through the `publish` operator, for eac
 
 |Field|Type|Description|
 |:-|:-|:-|
+|`pipeline_id`|`string`|The ID of the pipeline where the associated operator is from.|
+|`run`|`uint64`|The number of the run, starting at 1 for the first run.|
+|`hidden`|`bool`|True if the pipeline is running for the explorer.|
 |`timestamp`|`time`|The time when this event was emitted.|
 |`operator_id`|`uint64`|The ID of the `publish` operator in the pipeline.|
 |`topic`|`string`|The topic name.|
@@ -152,42 +193,15 @@ Contains a measurement of data that goes through the `subscribe` operator, for e
 
 |Field|Type|Description|
 |:-|:-|:-|
+|`pipeline_id`|`string`|The ID of the pipeline where the associated operator is from.|
+|`run`|`uint64`|The number of the run, starting at 1 for the first run.|
+|`hidden`|`bool`|True if the pipeline is running for the explorer.|
 |`timestamp`|`time`|The time when this event was emitted.|
 |`operator_id`|`uint64`|The ID of the `subscribe` operator in the pipeline.|
 |`topic`|`string`|The topic name.|
 |`schema`|`string`|The schema name of the batch.|
 |`schema_id`|`string`|The schema ID of the batch.|
 |`events`|`uint64`|The amount of events that were retrieved from the `topic`.|
-
-### `tenzir.metrics.enrich`
-
-Contains a measurement of data that goes through the `enrich` operator, at one second intervals.
-
-|Field|Type|Description|
-|:-|:-|:-|
-|`timestamp`|`time`|The time when this event was emitted.|
-|`operator_id`|`uint64`|The ID of the `enrich` operator in the pipeline.|
-|`context_name`|`string`|The name of the context the associated operator is using.|
-|`input_events`|`uint64`|The amount of input events that entered the `enrich` operator since the last metric.|
-|`hits`|`uint64`|The amount of successfully enriched events since the last metric.|
-
-### `tenzir.metrics.lookup`
-
-Contains a measurement of data that goes through the `lookup` operator, at one second intervals.
-
-|Field|Type|Description|
-|:-|:-|:-|
-|`timestamp`|`time`|The time when this event was emitted.|
-|`operator_id`|`uint64`|The ID of the `lookup` operator in the pipeline.|
-|`context_name`|`string`|The name of the context the associated operator is using.|
-|`live_input_events`|`uint64`|The total amount of input events used for the live lookup.|
-|`live_matches`|`uint64`|The amount of live lookup matches since the last metric.|
-|`retro_input_events`|`uint64`|The total amount of input events used for the retrospective lookup.|
-|`retro_matches`|`uint64`|The amount of retroactive lookup matches since the last metric.|
-|`snapshot_input_events`|`uint64`|The total amount of input events used for the snapshot lookup.|
-|`snapshot_matches`|`uint64`|The amount of snapshot lookup matches since the last metric.|
-|`context_updates`|`uint64`|The amount of times the underlying context has been updated while the associated lookup is active.|
-|`queued_partitions`|`uint64`|The total amount of partition candidates that were queued for retroactive match evaluation.|
 
 ## Examples
 
