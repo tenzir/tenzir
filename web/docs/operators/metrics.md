@@ -57,7 +57,7 @@ Contains a measurement of disk space usage.
 
 ### `tenzir.metrics.enrich`
 
-Contains a measurement of data that goes through the `enrich` operator, at one second intervals.
+Contains a measurement the `enrich` operator, emitted once every second.
 
 |Field|Type|Description|
 |:-|:-|:-|
@@ -72,7 +72,9 @@ Contains a measurement of data that goes through the `enrich` operator, at one s
 
 ### `tenzir.metrics.import`
 
-Contains a measurement of batch data that goes through the `import` operator, for each data batch.
+Contains a measurement the `import` operator, emitted once every second per
+schema. Note that internal events like metrics or diagnostics to not emit
+metrics themselves.
 
 |Field|Type|Description|
 |:-|:-|:-|
@@ -87,7 +89,7 @@ Contains a measurement of batch data that goes through the `import` operator, fo
 
 ### `tenzir.metrics.lookup`
 
-Contains a measurement of data that goes through the `lookup` operator, at one second intervals.
+Contains a measurement of the `lookup` operator, emitted once every second.
 
 |Field|Type|Description|
 |:-|:-|:-|
@@ -170,10 +172,10 @@ Contains a measurement of the amount of memory used by the `tenzir-node` process
 |`swap_space_usage`|`uint64`|The amount of swap space, in bytes. Only available on Linux systems.|
 |`open_fds`|`uint64`|The amount of open file descriptors by the node. Only available on Linux systems.|
 
-
 ### `tenzir.metrics.publish`
 
-Contains a measurement of data that goes through the `publish` operator, for each data batch.
+Contains a measurement of the `publish` operator, emitted once every second per
+schema.
 
 |Field|Type|Description|
 |:-|:-|:-|
@@ -189,7 +191,8 @@ Contains a measurement of data that goes through the `publish` operator, for eac
 
 ### `tenzir.metrics.subscribe`
 
-Contains a measurement of data that goes through the `subscribe` operator, for each data batch.
+Contains a measurement of the `subscribe` operator, emitted once every second
+per schema.
 
 |Field|Type|Description|
 |:-|:-|:-|
