@@ -62,13 +62,14 @@ the following rules:
    key. This is unambiguous because Tenzir does not have any options that
    include a literal underscore.
 
-From the perspective of the command line, the environment variable key
-`TENZIR_X__Y__Z` maps to `tenzir x y --z`. Here are two examples with
-identical semantics:
+From the perspective of the command line, setting the `--foo` option via `tenzir
+--foo` or `tenzir-node --foo` maps onto the environment variable `TENZIR_FOO`
+and the configuration file key `tenzir.foo`. Here are two examples with
+identical behavior:
 
 ```bash
-TENZIR_IMPORT__BATCH_SIZE=42 tenzir "pipeline"
-tenzir "pipeline"
+TENZIR_ENDPOINT=0.0.0.0:42000 tenzir-node
+tenzir-node --endpoint=0.0.0.0:42000
 ```
 
 :::caution CAF and plugin Settings
