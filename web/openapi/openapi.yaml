@@ -38,7 +38,7 @@ components:
           example: zeek-monitoring-pipeline
         hidden:
           type: boolean
-          description: "A flag specifying whether this pipeline is hidden.\nHidden pipelines are not persisted and will not show up in the /pipeline/list endpoint response.\n"
+          description: "A flag specifying whether this pipeline is hidden.\nHidden pipelines start automatically, are not persisted, and will not show up in the /pipeline/list endpoint response.\n"
           default: false
           example: false
         ttl:
