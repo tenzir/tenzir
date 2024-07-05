@@ -43,6 +43,7 @@ namespace tenzir {
 /// @param node The node actor to expose in the control plane. Must be set if
 /// the operator runs at a remote node.
 /// @param diagnostics_handler The handler asked to spawn diagnostics.
+/// @param metrices_receiver The handler asked to receive and forward metrics.
 /// @param has_terminal True if the operator shall have access to the terminal.
 ///
 /// @returns The execution node actor and its output type, or an error.
@@ -52,7 +53,7 @@ namespace tenzir {
 auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, node_actor node,
                      receiver_actor<diagnostic> diagnostics_handler,
-                     receiver_actor<metric> metrics_handler, int index,
+                     metrics_receiver_actor metrics_receiver, int index,
                      bool has_terminal)
   -> caf::expected<std::pair<exec_node_actor, operator_type>>;
 

@@ -21,7 +21,7 @@ namespace tenzir {
 
 namespace {
 
-auto format_metric(const metric& metric) -> std::string {
+auto format_metric(const operator_metric& metric) -> std::string {
   auto result = std::string{};
   auto it = std::back_inserter(result);
   constexpr auto indent = std::string_view{"  "};
@@ -78,8 +78,10 @@ auto format_metric(const metric& metric) -> std::string {
     it = fmt::format_to(
       it, "{}{}batches: {} ({:.2f} {}/batch)\n", indent, indent,
       metric.inbound_measurement.num_batches,
-      static_cast<double>(metric.inbound_measurement.num_elements)
-        / static_cast<double>(metric.inbound_measurement.num_batches),
+      metric.inbound_measurement.num_batches == 0
+        ? 0
+        : static_cast<double>(metric.inbound_measurement.num_elements)
+            / static_cast<double>(metric.inbound_measurement.num_batches),
       metric.inbound_measurement.unit);
   }
   if (metric.outbound_measurement.unit != "void") {
@@ -194,7 +196,8 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
   pipe = pipe.optimize_if_closed();
   auto self = caf::scoped_actor{sys};
   auto result = caf::expected<void>{};
-  auto metrics = std::vector<metric>{};
+  auto metrics = std::vector<operator_metric>{};
+  auto custom_metrics = std::vector<std::vector<record>>{};
   // TODO: This command should probably implement signal handling, and check
   // whether a signal was raised in every iteration over the executor. This
   // will likely be easier to implement once we switch to the actor-based
@@ -215,7 +218,7 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
       self->state.executor = self->spawn<caf::monitored>(
         pipeline_executor, std::move(pipe),
         caf::actor_cast<receiver_actor<diagnostic>>(self),
-        caf::actor_cast<receiver_actor<metric>>(self), node_actor{}, true);
+        caf::actor_cast<metrics_receiver_actor>(self), node_actor{}, true);
       self->request(self->state.executor, caf::infinite, atom::start_v)
         .then(
           []() {
@@ -230,7 +233,18 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
         [&](diagnostic& d) {
           dh.emit(std::move(d));
         },
-        [&](metric& m) {
+        [&](uint64_t, uint64_t, type&) {
+          // Don't register types here.
+        },
+        [&](uint64_t op_index, uint64_t, record& r) {
+          if (cfg.dump_metrics) {
+            if (op_index >= custom_metrics.size()) {
+              custom_metrics.resize(op_index + 1);
+            }
+            custom_metrics[op_index].emplace_back(std::move(r));
+          }
+        },
+        [&](operator_metric& m) {
           if (cfg.dump_metrics) {
             const auto idx = m.operator_index;
             if (idx >= metrics.size()) {
@@ -244,8 +258,16 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
   self->wait_for(handler);
   TENZIR_DEBUG("command is done");
   if (cfg.dump_metrics) {
-    for (const auto& metric : metrics) {
+    for (auto i = size_t{0}; i < metrics.size(); ++i) {
+      const auto& metric = metrics[i];
       fmt::print(stderr, "{}", format_metric(metric));
+      if (i < custom_metrics.size()) {
+        fmt::print(stderr, "custom metrics for operator #{} ({}):\n",
+                   metric.operator_index + 1, metric.operator_name);
+        for (const auto& custom_metric : custom_metrics[i]) {
+          fmt::print(stderr, "{}\n", custom_metric);
+        }
+      }
     }
   }
   return result;

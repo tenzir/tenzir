@@ -276,4 +276,8 @@ inline constexpr bool create_partition_index = true;
 /// Tenzir node.
 inline constexpr auto node_connection_retry_delay = std::chrono::seconds{3u};
 
+/// The time interval for sending metrics of the currently running pipeline
+/// operator.
+inline constexpr auto metrics_interval = std::chrono::seconds{1};
+
 } // namespace tenzir::defaults

@@ -179,7 +179,7 @@ struct operator_measurement {
 
 // Metrics that track the information about inbound and outbound elements that
 // pass through this operator.
-struct [[nodiscard]] metric {
+struct [[nodiscard]] operator_metric {
   uint64_t operator_index = {};
   std::string operator_name = {};
   operator_measurement inbound_measurement = {};
@@ -200,7 +200,7 @@ struct [[nodiscard]] metric {
   bool internal = {};
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, metric& x) -> bool {
+  friend auto inspect(Inspector& f, operator_metric& x) -> bool {
     return f.object(x).pretty_name("metric").fields(
       f.field("operator_index", x.operator_index),
       f.field("operator_name", x.operator_name),
@@ -217,6 +217,42 @@ struct [[nodiscard]] metric {
       f.field("num_runs_processing_input", x.num_runs_processing_input),
       f.field("num_runs_processing_output", x.num_runs_processing_output),
       f.field("internal", x.internal));
+  }
+
+  static auto to_type() -> type {
+    return {
+      "tenzir.metrics.operator",
+      record_type{
+        {"pipeline_id", string_type{}},
+        {"run", uint64_type{}},
+        {"hidden", bool_type{}},
+        {"operator_id", uint64_type{}},
+        {"source", bool_type{}},
+        {"transformation", bool_type{}},
+        {"sink", bool_type{}},
+        {"internal", bool_type{}},
+        {"timestamp", time_type{}},
+        {"duration", duration_type{}},
+        {"starting_duration", duration_type{}},
+        {"processing_duration", duration_type{}},
+        {"scheduled_duration", duration_type{}},
+        {"running_duration", duration_type{}},
+        {"paused_duration", duration_type{}},
+        {"input",
+         record_type{
+           {"unit", string_type{}},
+           {"elements", uint64_type{}},
+           {"approx_bytes", uint64_type{}},
+         }},
+        {"output",
+         record_type{
+           {"unit", string_type{}},
+           {"elements", uint64_type{}},
+           {"approx_bytes", uint64_type{}},
+         }},
+      },
+      {{"internal", ""}},
+    };
   }
 };
 

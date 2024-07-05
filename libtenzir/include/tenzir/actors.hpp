@@ -392,6 +392,15 @@ using exec_node_actor = typed_actor_fwd<
   // Source.
   ::extend_with<exec_node_sink_actor>::unwrap;
 
+/// The interface of the METRICS RECEIVER actor.
+using metrics_receiver_actor = typed_actor_fwd<
+  // Register a custom metric type for the metrics of an operator.
+  auto(uint64_t op_index, uint64_t metric_index, type)->caf::result<void>,
+  // Receive custom metrics of an operator.
+  auto(uint64_t op_index, uint64_t metric_index, record)->caf::result<void>,
+  // Receive the standard execution node metrics.
+  auto(operator_metric)->caf::result<void>>::unwrap;
+
 /// The interface of the NODE actor.
 using node_actor = typed_actor_fwd<
   // Execute a REST endpoint on this node.
@@ -407,7 +416,7 @@ using node_actor = typed_actor_fwd<
   // Spawn a set of execution nodes for a given pipeline. Does not start the
   // execution nodes.
   auto(atom::spawn, operator_box, operator_type, receiver_actor<diagnostic>,
-       receiver_actor<metric>, int index)
+       metrics_receiver_actor, int index)
     ->caf::result<exec_node_actor>>::unwrap;
 
 /// The interface of a PIPELINE EXECUTOR actor.
@@ -457,12 +466,12 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::importer_actor))
   TENZIR_ADD_TYPE_ID((tenzir::index_actor))
   TENZIR_ADD_TYPE_ID((tenzir::indexer_actor))
+  TENZIR_ADD_TYPE_ID((tenzir::metrics_receiver_actor))
   TENZIR_ADD_TYPE_ID((tenzir::node_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_creation_listener_actor))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::atom::done>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::diagnostic>))
-  TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::metric>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::table_slice>))
   TENZIR_ADD_TYPE_ID((tenzir::rest_handler_actor))
   TENZIR_ADD_TYPE_ID((tenzir::status_client_actor))

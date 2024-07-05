@@ -9,6 +9,8 @@
 #include "tenzir/pipeline.hpp"
 
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/metric_handler.hpp"
+#include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql/parser.hpp"
 
@@ -24,11 +26,11 @@ public:
   }
 
   auto self() noexcept -> exec_node_actor::base& override {
-    die("not implemented");
+    TENZIR_UNIMPLEMENTED();
   }
 
   auto node() noexcept -> node_actor override {
-    die("not implemented");
+    TENZIR_UNIMPLEMENTED();
   }
 
   auto diagnostics() noexcept -> diagnostic_handler& override {
@@ -47,6 +49,10 @@ public:
       handler_ = std::make_unique<handler>(*this);
     }
     return *handler_;
+  }
+
+  auto metrics(type) noexcept -> metric_handler override {
+    TENZIR_UNIMPLEMENTED();
   }
 
   auto no_location_overrides() const noexcept -> bool override {
@@ -109,8 +115,9 @@ auto pipeline::internal_parse(std::string_view repr)
 auto pipeline::internal_parse_as_operator(std::string_view repr)
   -> caf::expected<operator_ptr> {
   auto result = internal_parse(repr);
-  if (not result)
+  if (not result) {
     return std::move(result.error());
+  }
   return std::make_unique<pipeline>(std::move(*result));
 }
 

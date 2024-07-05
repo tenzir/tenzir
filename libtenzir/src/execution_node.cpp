@@ -10,9 +10,11 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/chunk.hpp"
+#include "tenzir/defaults.hpp"
 #include "tenzir/detail/weak_handle.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/metric_handler.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/operator_control_plane.hpp"
 #include "tenzir/si_literals.hpp"
@@ -33,21 +35,17 @@ using namespace std::chrono_literals;
 using namespace si_literals;
 
 template <class Element = void>
-struct defaults {
+struct exec_node_defaults {
   /// Defines how much free capacity must be in the inbound buffer of the
   /// execution node before it requests further data.
   inline static constexpr uint64_t min_batch_size = 1;
 
   /// Defines the upper bound for the inbound buffer of the execution node.
   inline static constexpr uint64_t max_buffered = 0;
-
-  /// Defines the time interval for sending metrics of the currently running
-  /// pipeline operator.
-  inline static constexpr auto metrics_interval = 1000ms;
 };
 
 template <>
-struct defaults<table_slice> : defaults<> {
+struct exec_node_defaults<table_slice> : exec_node_defaults<> {
   /// Defines how much free capacity must be in the inbound buffer of the
   /// execution node before it requests further data.
   inline static constexpr uint64_t min_batch_size = 8_Ki;
@@ -57,7 +55,7 @@ struct defaults<table_slice> : defaults<> {
 };
 
 template <>
-struct defaults<chunk_ptr> : defaults<> {
+struct exec_node_defaults<chunk_ptr> : exec_node_defaults<> {
   /// Defines how much free capacity must be in the inbound buffer of the
   /// execution node before it requests further data.
   inline static constexpr uint64_t min_batch_size = 128_Ki;
@@ -138,11 +136,15 @@ template <class Input, class Output>
 struct exec_node_control_plane final : public operator_control_plane {
   exec_node_control_plane(
     exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
-    receiver_actor<diagnostic> diagnostic_handler, bool has_terminal)
+    receiver_actor<diagnostic> diagnostic_handler,
+    metrics_receiver_actor metric_receiver, uint64_t op_index,
+    bool has_terminal)
     : state{self->state},
       diagnostic_handler{
         std::make_unique<exec_node_diagnostic_handler<Input, Output>>(
           self, std::move(diagnostic_handler))},
+      metrics_receiver{std::move(metric_receiver)},
+      operator_index{op_index},
       has_terminal_{has_terminal} {
   }
 
@@ -156,6 +158,11 @@ struct exec_node_control_plane final : public operator_control_plane {
 
   auto diagnostics() noexcept -> diagnostic_handler& override {
     return *diagnostic_handler;
+  }
+
+  auto metrics(type t) noexcept -> metric_handler override {
+    return metric_handler{metrics_receiver, operator_index, metric_index++,
+                          std::move(t)};
   }
 
   auto no_location_overrides() const noexcept -> bool override {
@@ -177,6 +184,9 @@ struct exec_node_control_plane final : public operator_control_plane {
   exec_node_state<Input, Output>& state;
   std::unique_ptr<exec_node_diagnostic_handler<Input, Output>> diagnostic_handler
     = {};
+  metrics_receiver_actor metrics_receiver = {};
+  uint64_t operator_index = {};
+  uint64_t metric_index = {};
   bool has_terminal_;
 };
 
@@ -208,8 +218,8 @@ struct exec_node_state {
   /// State required for keeping and sending metrics.
   std::chrono::steady_clock::time_point start_time
     = std::chrono::steady_clock::now();
-  receiver_actor<metric> metrics_handler = {};
-  metric metrics = {};
+  metrics_receiver_actor metrics_receiver = {};
+  operator_metric metrics = {};
 
   /// Whether this execution node is paused, and when it was.
   std::optional<std::chrono::steady_clock::time_point> paused_at = {};
@@ -260,9 +270,9 @@ struct exec_node_state {
 
   ~exec_node_state() noexcept {
     TENZIR_DEBUG("{} {} shut down", *self, op->name());
+    emit_generic_op_metrics();
     instance.reset();
     ctrl.reset();
-    emit_metrics();
     if (demand and demand->rp.pending()) {
       demand->rp.deliver();
     }
@@ -274,7 +284,7 @@ struct exec_node_state {
     }
   }
 
-  auto emit_metrics() -> void {
+  auto emit_generic_op_metrics() -> void {
     const auto now = std::chrono::steady_clock::now();
     auto metrics_copy = metrics;
     if (paused_at) {
@@ -285,14 +295,14 @@ struct exec_node_state {
       = std::chrono::duration_cast<duration>(now - start_time);
     metrics_copy.time_running
       = metrics_copy.time_total - metrics_copy.time_paused;
-    caf::anon_send(metrics_handler, std::move(metrics_copy));
+    caf::anon_send(metrics_receiver, std::move(metrics_copy));
   }
 
   auto start(std::vector<caf::actor> all_previous) -> caf::result<void> {
     TENZIR_DEBUG("{} {} received start request", *self, op->name());
-    detail::weak_run_delayed_loop(self, defaults<>::metrics_interval, [this] {
+    detail::weak_run_delayed_loop(self, defaults::metrics_interval, [this] {
       auto time_scheduled_guard = make_timer_guard(metrics.time_scheduled);
-      emit_metrics();
+      emit_generic_op_metrics();
     });
     if (instance.has_value()) {
       return caf::make_error(ec::logic_error,
@@ -375,7 +385,7 @@ struct exec_node_state {
         return {};
       }
       // Emit metrics once to get started.
-      emit_metrics();
+      emit_generic_op_metrics();
       if (instance->it == instance->gen.end()) {
         TENZIR_TRACE("{} {} finished without yielding", *self, op->name());
         if (previous) {
@@ -601,12 +611,13 @@ struct exec_node_state {
 
   auto issue_demand() -> void {
     if (not previous
-        or inbound_buffer_size + defaults<Input>::min_batch_size
-             > defaults<Input>::max_buffered
+        or inbound_buffer_size + exec_node_defaults<Input>::min_batch_size
+             > exec_node_defaults<Input>::max_buffered
         or issue_demand_inflight) {
       return;
     }
-    const auto demand = defaults<Input>::max_buffered - inbound_buffer_size;
+    const auto demand
+      = exec_node_defaults<Input>::max_buffered - inbound_buffer_size;
     TENZIR_TRACE("{} {} issues demand for up to {} elements", *self, op->name(),
                  demand);
     issue_demand_inflight = true;
@@ -731,7 +742,7 @@ auto exec_node(
   exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
   operator_ptr op, node_actor node,
   receiver_actor<diagnostic> diagnostic_handler,
-  receiver_actor<metric> metrics_handler, int index, bool has_terminal)
+  metrics_receiver_actor metrics_receiver, int index, bool has_terminal)
   -> exec_node_actor::behavior_type {
   if (self->getf(caf::scheduled_actor::is_detached_flag)) {
     const auto name = fmt::format("tenzir.exec-node.{}", op->name());
@@ -741,7 +752,7 @@ auto exec_node(
   self->state.op = std::move(op);
   auto time_starting_guard = make_timer_guard(
     self->state.metrics.time_scheduled, self->state.metrics.time_starting);
-  self->state.metrics_handler = std::move(metrics_handler);
+  self->state.metrics_receiver = std::move(metrics_receiver);
   self->state.metrics.operator_index = index;
   self->state.metrics.operator_name = self->state.op->name();
   self->state.metrics.inbound_measurement.unit = operator_type_name<Input>();
@@ -753,7 +764,8 @@ auto exec_node(
       and (std::is_same_v<Input, std::monostate>
            or std::is_same_v<Output, std::monostate>);
   self->state.ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
-    self, std::move(diagnostic_handler), has_terminal);
+    self, std::move(diagnostic_handler), self->state.metrics_receiver, index,
+    has_terminal);
   // The node actor must be set when the operator is not a source.
   if (self->state.op->location() == operator_location::remote and not node) {
     self->state.on_error(caf::make_error(
@@ -855,7 +867,7 @@ auto exec_node(
 auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, node_actor node,
                      receiver_actor<diagnostic> diagnostic_handler,
-                     receiver_actor<metric> metrics_handler, int index,
+                     metrics_receiver_actor metrics_receiver, int index,
                      bool has_terminal)
   -> caf::expected<std::pair<exec_node_actor, operator_type>> {
   TENZIR_ASSERT(self);
@@ -863,6 +875,7 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
   TENZIR_ASSERT(node != nullptr
                 or not(op->location() == operator_location::remote));
   TENZIR_ASSERT(diagnostic_handler != nullptr);
+  TENZIR_ASSERT(metrics_receiver != nullptr);
   auto output_type = op->infer_type(input_type);
   if (not output_type) {
     return caf::make_error(ec::logic_error,
@@ -878,7 +891,7 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
         = std::conditional_t<std::is_void_v<Output>, std::monostate, Output>;
       auto result = self->spawn<SpawnOptions>(
         exec_node<input_type, output_type>, std::move(op), std::move(node),
-        std::move(diagnostic_handler), std::move(metrics_handler), index,
+        std::move(diagnostic_handler), std::move(metrics_receiver), index,
         has_terminal);
       return result;
     };
