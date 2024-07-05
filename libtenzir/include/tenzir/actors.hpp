@@ -399,23 +399,11 @@ using node_actor = typed_actor_fwd<
   // so this skips all authorization and access control mechanisms
   // that come with HTTP(s).
   auto(atom::proxy, http_request_description)->caf::result<rest_response>,
-  // INTERNAL: Spawn component plugins.
-  auto(atom::internal, atom::spawn, atom::plugin)->caf::result<void>,
-  // Run an invocation in the node that spawns an actor.
-  auto(atom::spawn, invocation)->caf::result<caf::actor>,
-  // Add a component to the component registry.
-  auto(atom::put, caf::actor, std::string)->caf::result<atom::ok>,
-  // Retrieve components by their type from the component registry.
-  auto(atom::get, atom::type, std::string)->caf::result<std::vector<caf::actor>>,
-  // Retrieve a component by its label from the component registry.
-  auto(atom::get, atom::label, std::string)->caf::result<caf::actor>,
   // Retrieve components by their label from the component registry.
   auto(atom::get, atom::label, std::vector<std::string>)
     ->caf::result<std::vector<caf::actor>>,
   // Retrieve the version of the process running the NODE.
   auto(atom::get, atom::version)->caf::result<record>,
-  // Retrieve the configuration of the NODE.
-  auto(atom::config)->caf::result<record>,
   // Spawn a set of execution nodes for a given pipeline. Does not start the
   // execution nodes.
   auto(atom::spawn, operator_box, operator_type, receiver_actor<diagnostic>,

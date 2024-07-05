@@ -12,20 +12,30 @@
 
 #include "tenzir/accountant.hpp"
 #include "tenzir/accountant_config.hpp"
+#include "tenzir/actors.hpp"
 #include "tenzir/atoms.hpp"
+#include "tenzir/catalog.hpp"
+#include "tenzir/concept/convertible/data.hpp"
+#include "tenzir/concept/parseable/tenzir/si.hpp"
+#include "tenzir/concept/parseable/tenzir/time.hpp"
+#include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/data.hpp"
+#include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/settings.hpp"
+#include "tenzir/disk_monitor.hpp"
 #include "tenzir/execution_node.hpp"
+#include "tenzir/importer.hpp"
+#include "tenzir/index.hpp"
+#include "tenzir/index_config.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/node.hpp"
+#include "tenzir/node_control.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/posix_filesystem.hpp"
 #include "tenzir/shutdown.hpp"
-#include "tenzir/spawn_arguments.hpp"
-#include "tenzir/spawn_catalog.hpp"
-#include "tenzir/spawn_disk_monitor.hpp"
-#include "tenzir/spawn_importer.hpp"
-#include "tenzir/spawn_index.hpp"
 #include "tenzir/terminate.hpp"
+#include "tenzir/uuid.hpp"
 #include "tenzir/version.hpp"
 
 #include <caf/actor_system_config.hpp>
@@ -40,45 +50,16 @@ namespace tenzir {
 
 namespace {
 
-// This is a side-channel to communicate the self pointer into the spawn- and
-// send-command functions, whose interfaces are constrained by the command
-// factory.
-thread_local node_actor::stateful_pointer<node_state> this_node = nullptr;
-
 /// A list of components that are essential for importing and exporting data
 /// from the node.
-std::set<const char*> core_components = {
-  "catalog",
-  "filesystem",
-  "importer",
-  "index",
+constexpr auto ordered_core_components = std::array{
+  "disk-monitor", "importer", "index", "catalog", "filesystem",
 };
 
-bool is_core_component(std::string_view type) {
-  auto pred = [&](const char* x) {
+auto is_core_component(std::string_view type) -> bool {
+  return std::ranges::any_of(ordered_core_components, [&](auto x) {
     return x == type;
-  };
-  return std::any_of(std::begin(core_components), std::end(core_components),
-                     pred);
-}
-
-/// Helper function to determine whether a component can be spawned at most
-/// once.
-bool is_singleton(std::string_view type) {
-  // TODO: All of these actor interfaces are strongly typed. The value of `type`
-  // is received via the actor interface of the NODE sometimes, which means that
-  // we cannot just pass arbitrary actors to it. Atoms aren't really an option
-  // either, because `caf::atom_value` was removed with CAF 0.18. We can,
-  // however, abuse the fact that every typed actor has a type ID assigned, and
-  // change the node to work with type IDs over actor names everywhere. This
-  // refactoring will be much easier once the NODE itself is a typed actor, so
-  // let's hold off until then.
-  const char* singletons[]
-    = {"disk-monitor", "filesystem", "importer", "index", "catalog"};
-  auto pred = [&](const char* x) {
-    return x == type;
-  };
-  return std::any_of(std::begin(singletons), std::end(singletons), pred);
+  });
 }
 
 auto find_endpoint_plugin(const http_request_description& desc)
@@ -95,10 +76,9 @@ auto find_endpoint_plugin(const http_request_description& desc)
 }
 
 /// Registers (and monitors) a component through the node.
-caf::error
-register_component(node_actor::stateful_pointer<node_state> self,
-                   const caf::actor& component, std::string_view type,
-                   std::string_view label = {}) {
+auto register_component(node_actor::stateful_pointer<node_state> self,
+                        const caf::actor& component, std::string_view type,
+                        std::string_view label = {}) -> caf::error {
   if (!self->state.registry.add(component, std::string{type},
                                 std::string{label})) {
     auto msg // separate variable for clang-format only
@@ -124,144 +104,7 @@ register_component(node_actor::stateful_pointer<node_state> self,
   return caf::none;
 }
 
-/// Spawns the accountant actor.
-accountant_actor
-spawn_accountant(node_actor::stateful_pointer<node_state> self) {
-  if (!caf::get_or(content(self->system().config()), "tenzir.enable-metrics",
-                   false)) {
-    return {};
-  }
-  // It doesn't make much sense to run the accountant for one-shot commands
-  // with a local database using `--node`, so this prevents spawning it.
-  if (caf::get_or(content(self->system().config()), "tenzir.node", false)) {
-    return {};
-  }
-  const auto metrics_opts = caf::get_or(content(self->system().config()),
-                                        "tenzir.metrics", caf::settings{});
-  auto cfg = to_accountant_config(metrics_opts);
-  if (!cfg) {
-    TENZIR_ERROR("{} failed to parse metrics configuration: {}", *self,
-                 cfg.error());
-    return {};
-  }
-  auto accountant = self->spawn<caf::detached + caf::linked>(
-    tenzir::accountant, std::move(*cfg), self->state.dir);
-  auto err = register_component(self, caf::actor_cast<caf::actor>(accountant),
-                                "accountant");
-  // Registration cannot fail; empty registry.
-  TENZIR_ASSERT(err == caf::none);
-  return accountant;
-}
-
 } // namespace
-
-caf::expected<caf::actor>
-spawn_component(node_actor::stateful_pointer<node_state> self,
-                const invocation& inv, spawn_arguments& args) {
-  TENZIR_TRACE_SCOPE("{} {}", TENZIR_ARG(inv), TENZIR_ARG(args));
-  auto i = node_state::component_factory.find(inv.full_name);
-  if (i == node_state::component_factory.end())
-    return caf::make_error(ec::unspecified, "invalid spawn component");
-  return i->second(self, args);
-}
-
-/// Lifts a factory function that accepts `local_actor*` as first argument
-/// to a function accpeting `node_actor::stateful_pointer<node_state>` instead.
-template <caf::expected<caf::actor> (*Fun)(caf::local_actor*, spawn_arguments&)>
-node_state::component_factory_fun lift_component_factory() {
-  return
-    [](node_actor::stateful_pointer<node_state> self, spawn_arguments& args) {
-      // Delegate to lifted function.
-      return Fun(self, args);
-    };
-}
-
-template <caf::expected<caf::actor> (*Fun)(
-  node_actor::stateful_pointer<node_state>, spawn_arguments&)>
-node_state::component_factory_fun lift_component_factory() {
-  return Fun;
-}
-
-auto make_component_factory() {
-  auto result = node_state::named_component_factory{
-    {"spawn disk-monitor", lift_component_factory<spawn_disk_monitor>()},
-    {"spawn importer", lift_component_factory<spawn_importer>()},
-    {"spawn catalog", lift_component_factory<spawn_catalog>()},
-    {"spawn index", lift_component_factory<spawn_index>()},
-  };
-  return result;
-}
-
-auto make_command_factory() {
-  // When updating this list, remember to update its counterpart in
-  // application.cpp as well iff necessary
-  auto result = command::factory{
-    {"spawn accountant", node_state::spawn_command},
-    {"spawn disk-monitor", node_state::spawn_command},
-    {"spawn importer", node_state::spawn_command},
-    {"spawn catalog", node_state::spawn_command},
-    {"spawn index", node_state::spawn_command},
-  };
-  return result;
-}
-
-std::string generate_label(node_actor::stateful_pointer<node_state> self,
-                           std::string_view component) {
-  // C++20: remove the indirection through std::string.
-  auto n = self->state.label_counters[std::string{component}]++;
-  return std::string{component} + '-' + std::to_string(n);
-}
-
-caf::message
-node_state::spawn_command(const invocation& inv,
-                          [[maybe_unused]] caf::actor_system& sys) {
-  TENZIR_TRACE_SCOPE("{}", inv);
-  using std::begin;
-  using std::end;
-  auto* self = this_node;
-  if (self->state.tearing_down)
-    return caf::make_message(caf::make_error( //
-      ec::no_error, "can't spawn a component while tearing down"));
-  // We configured the command to have the name of the component.
-  auto inv_name_split = detail::split(inv.full_name, " ");
-  TENZIR_ASSERT(inv_name_split.size() > 1);
-  std::string comp_type{inv_name_split[1]};
-  // Auto-generate label if none given.
-  std::string label;
-  if (auto label_ptr = caf::get_if<std::string>(&inv.options, "tenzir.spawn."
-                                                              "label")) {
-    label = *label_ptr;
-    if (label.empty()) {
-      auto err = caf::make_error(ec::unspecified, "empty component label");
-      return caf::make_message(std::move(err));
-    }
-    if (self->state.registry.find_by_label(label)) {
-      auto err = caf::make_error(ec::unspecified, "duplicate component label");
-      return caf::make_message(std::move(err));
-    }
-  } else {
-    label = comp_type;
-    if (!is_singleton(comp_type)) {
-      label = generate_label(self, comp_type);
-      TENZIR_DEBUG("{} auto-generated new label: {}", *self, label);
-    }
-  }
-  TENZIR_DEBUG("{} spawns a {} with the label {}", *self, comp_type, label);
-  auto spawn_inv = inv;
-  // Spawn our new Tenzir component.
-  spawn_arguments args{spawn_inv, self->state.dir, label};
-  auto component = spawn_component(self, args.inv, args);
-  if (!component) {
-    if (component.error())
-      TENZIR_WARN("{} failed to spawn component: {}", __func__,
-                  render(component.error()));
-    return caf::make_message(std::move(component.error()));
-  }
-  if (auto err = register_component(self, *component, comp_type, label))
-    return caf::make_message(std::move(err));
-  TENZIR_DEBUG("{} registered {} as {}", *self, comp_type, label);
-  return caf::make_message(*component);
-}
 
 auto node_state::get_endpoint_handler(const http_request_description& desc)
   -> const handler_and_endpoint& {
@@ -285,10 +128,187 @@ auto node_state::get_endpoint_handler(const http_request_description& desc)
   return result->second;
 }
 
+auto spawn_accountant(node_actor::stateful_pointer<node_state> self,
+                      const caf::settings& settings) -> accountant_actor {
+  auto accountant = [&] {
+    if (not caf::get_or(settings, "tenzir.enable-metrics", false)) {
+      return accountant_actor{};
+    }
+    const auto metrics_opts
+      = caf::get_or(settings, "tenzir.metrics", caf::settings{});
+    auto metrics_config = to_accountant_config(metrics_opts);
+    if (!metrics_config) {
+      diagnostic::error(metrics_config.error())
+        .note("failed to parse `tenzir.metrics` configuration")
+        .throw_();
+    }
+    return self->spawn<caf::detached + caf::linked>(
+      tenzir::accountant, std::move(*metrics_config), self->state.dir);
+  }();
+  if (accountant) {
+    if (auto err = register_component(
+          self, caf::actor_cast<caf::actor>(accountant), "accountant")) {
+      diagnostic::error(err).note("failed to register accountant").throw_();
+    }
+  }
+  return accountant;
+}
+
+auto spawn_filesystem(node_actor::stateful_pointer<node_state> self,
+                      const accountant_actor& accountant) -> filesystem_actor {
+  auto filesystem
+    = self->spawn<caf::detached>(posix_filesystem, self->state.dir, accountant);
+  TENZIR_ASSERT(filesystem);
+  if (auto err = register_component(
+        self, caf::actor_cast<caf::actor>(filesystem), "filesystem")) {
+    diagnostic::error(err).note("failed to register accountant").throw_();
+  }
+  return filesystem;
+}
+
+auto spawn_catalog(node_actor::stateful_pointer<node_state> self,
+                   const accountant_actor& accountant) -> catalog_actor {
+  auto catalog = self->spawn<caf::detached>(tenzir::catalog, accountant);
+  TENZIR_ASSERT(catalog);
+  if (auto err = register_component(self, caf::actor_cast<caf::actor>(catalog),
+                                    "catalog")) {
+    diagnostic::error(err).note("failed to register catalog").throw_();
+  }
+  return catalog;
+}
+
+auto spawn_index(node_actor::stateful_pointer<node_state> self,
+                 const caf::settings& settings,
+                 const accountant_actor& accountant,
+                 const filesystem_actor& filesystem,
+                 const catalog_actor& catalog) -> index_actor {
+  auto index = [&] {
+    const auto* index_settings = get_if(&settings, "tenzir.index");
+    auto index_config = tenzir::index_config{};
+    if (index_settings) {
+      const auto index_settings_data = to<data>(*index_settings);
+      if (not index_settings_data) {
+        diagnostic::error(index_settings_data.error())
+          .note("failed to convert `tenzir.index` configuration")
+          .throw_();
+      }
+      if (auto err = convert(*index_settings_data, index_config)) {
+        diagnostic::error(err)
+          .note("failed to parse `tenzir.index` configuration")
+          .throw_();
+      }
+    }
+    return self->spawn<caf::detached>(
+      tenzir::index, accountant, filesystem, catalog, self->state.dir / "index",
+      std::string{defaults::store_backend},
+      get_or(settings, "tenzir.max-partition-size",
+             defaults::max_partition_size),
+      get_or(settings, "tenzir.active-partition-timeout",
+             defaults::active_partition_timeout),
+      defaults::max_in_mem_partitions, defaults::taste_partitions,
+      defaults::num_query_supervisors, self->state.dir / "index",
+      std::move(index_config));
+  }();
+  TENZIR_ASSERT(index);
+  if (auto err
+      = register_component(self, caf::actor_cast<caf::actor>(index), "index")) {
+    diagnostic::error(err).note("failed to register index").throw_();
+  }
+  return index;
+}
+
+auto spawn_importer(node_actor::stateful_pointer<node_state> self,
+                    const accountant_actor& accountant,
+                    const index_actor& index) -> importer_actor {
+  auto importer = self->spawn(tenzir::importer, self->state.dir / "importer",
+                              index, accountant);
+  TENZIR_ASSERT(importer);
+  if (auto err = register_component(self, caf::actor_cast<caf::actor>(importer),
+                                    "importer")) {
+    diagnostic::error(err).note("failed to register importer").throw_();
+  }
+  return importer;
+}
+
+auto spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
+                        const caf::settings& settings, const index_actor& index)
+  -> disk_monitor_actor {
+  auto disk_monitor = [&] {
+    const auto* command = caf::get_if<std::string>(
+      &settings, "tenzir.start.disk-budget-check-binary");
+    const auto hiwater
+      = detail::get_bytesize(settings, "tenzir.start.disk-budget-high", 0);
+    if (!hiwater) {
+      diagnostic::error(hiwater.error())
+        .note("failed to parse `tenzir.start.disk-budget-high`")
+        .throw_();
+    }
+    auto lowater
+      = detail::get_bytesize(settings, "tenzir.start.disk-budget-low", 0);
+    if (!lowater) {
+      diagnostic::error(lowater.error())
+        .note("failed to parse `tenzir.start.disk-budget-low`")
+        .throw_();
+    }
+    // Set low == high as the default value.
+    if (not *lowater) {
+      *lowater = *hiwater;
+    }
+    const auto step_size
+      = caf::get_or(settings, "tenzir.start.disk-budget-step-size",
+                    defaults::disk_monitor_step_size);
+    const auto interval
+      = caf::get_or(settings, "tenzir.start.disk-budget-check-interval",
+                    std::chrono::seconds{defaults::disk_scan_interval}.count());
+    auto disk_monitor_config = tenzir::disk_monitor_config{
+      *hiwater,
+      *lowater,
+      step_size,
+      command ? *command : std::optional<std::string>{},
+      std::chrono::seconds{interval},
+    };
+    if (auto err = validate(disk_monitor_config)) {
+      diagnostic::error(err)
+        .note("failed to validate disk monitor config")
+        .throw_();
+    }
+    if (*hiwater == 0) {
+      if (command) {
+        diagnostic::error("invalid configuration")
+          .note("'tenzir.start.disk-budget-check-binary' is configured but "
+                "'tenzir.start.disk-budget-high' is unset")
+          .throw_();
+      }
+      return disk_monitor_actor{};
+    }
+    const auto db_dir_abs = std::filesystem::absolute(self->state.dir);
+    return self->spawn(tenzir::disk_monitor, disk_monitor_config, db_dir_abs,
+                       index);
+  }();
+  if (disk_monitor) {
+    if (auto err = register_component(
+          self, caf::actor_cast<caf::actor>(disk_monitor), "disk-monitor")) {
+      diagnostic::error(err).note("failed to register disk-monitor").throw_();
+    }
+  }
+  return disk_monitor;
+}
+
 auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
+  // Before we laod any component plugins, we first load all the core components.
+  const auto& settings = content(self->system().config());
+  const auto accountant = spawn_accountant(self, settings);
+  const auto filesystem = spawn_filesystem(self, accountant);
+  const auto catalog = spawn_catalog(self, accountant);
+  const auto index
+    = spawn_index(self, settings, accountant, filesystem, catalog);
+  [[maybe_unused]] const auto importer
+    = spawn_importer(self, accountant, index);
+  [[maybe_unused]] const auto disk_monitor
+    = spawn_disk_monitor(self, settings, index);
+  // 1. Collect all component_plugins into a name -> plugin* map:
   using component_plugin_map
     = std::unordered_map<std::string, const component_plugin*>;
-  // 1. Collect all component_plugins into a name -> plugin* map:
   component_plugin_map todo = {};
   for (const auto* component : plugins::get<component_plugin>()) {
     todo.emplace(component->component_name(), component);
@@ -336,22 +356,10 @@ auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
   }
 }
 
-node_actor::behavior_type
-node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
-     std::filesystem::path dir) {
+auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
+          std::filesystem::path dir) -> node_actor::behavior_type {
   self->state.self = self;
   self->state.dir = std::move(dir);
-  // Initialize component and command factories.
-  node_state::component_factory = make_component_factory();
-  node_state::command_factory = make_command_factory();
-  // Initialize the accountant.
-  auto accountant = spawn_accountant(self);
-  // Initialize the file system with the node directory as root.
-  auto fs
-    = self->spawn<caf::detached>(posix_filesystem, self->state.dir, accountant);
-  auto err
-    = register_component(self, caf::actor_cast<caf::actor>(fs), "filesystem");
-  TENZIR_ASSERT(err == caf::none); // Registration cannot fail; empty registry.
   // Remove monitored components.
   self->set_down_handler([=](const caf::down_msg& msg) {
     TENZIR_DEBUG("{} got DOWN from {}", *self, msg.source);
@@ -440,19 +448,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       }
     }
     caf::actor filesystem_handle;
-    // The components listed here need to be terminated in sequential order.
-    // The importer needs to shut down first because it might still have
-    // buffered data. The filesystem is needed by all others for the persisting
-    // logic.
-    auto shutdown_sequence = std::initializer_list<const char*>{
-      "importer",
-      "index",
-      "catalog",
-      "filesystem",
-    };
-    // Make sure that these remain in sync.
-    TENZIR_ASSERT(std::set<const char*>{shutdown_sequence} == core_components);
-    for (const char* name : shutdown_sequence) {
+    for (const char* name : ordered_core_components) {
       if (auto comp = registry.remove(name)) {
         if (comp->type == "filesystem")
           filesystem_handle = comp->actor;
@@ -496,6 +492,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
           core_shutdown_sequence();
         });
   });
+  spawn_components(self);
   // Define the node behavior.
   return {
     [self](atom::proxy,
@@ -541,71 +538,6 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
           });
       return rp;
     },
-    [self](atom::internal, atom::spawn, atom::plugin) -> caf::result<void> {
-      spawn_components(self);
-      return {};
-    },
-    [self](atom::spawn, const invocation& inv) {
-      TENZIR_DEBUG("{} got spawn command {} with options {} and arguments {}",
-                   *self, inv.full_name, inv.options, inv.arguments);
-      // Run the command.
-      this_node = self;
-      auto msg = run(inv, self->system(), node_state::command_factory);
-      auto result = caf::result<caf::actor>{caf::error{}};
-      if (!msg) {
-        result = caf::result<caf::actor>{std::move(msg.error())};
-      } else if (msg->empty()) {
-        TENZIR_VERBOSE("{} encountered empty invocation response", *self);
-      } else {
-        auto f = caf::message_handler{
-          [&](caf::error& x) {
-            result.get_data() = std::move(x);
-          },
-          [&](caf::actor& x) {
-            result = caf::result<caf::actor>{std::move(x)};
-          },
-          [&](caf::message& x) {
-            TENZIR_ERROR("{} encountered invalid invocation response: {}",
-                         *self, deep_to_string(x));
-            result = caf::result<caf::actor>{caf::make_error(
-              ec::invalid_result, "invalid spawn invocation response",
-              std::move(x))};
-          },
-        };
-        f(*msg);
-      }
-      return result;
-    },
-    [self](atom::put, const caf::actor& component,
-           const std::string& type) -> caf::result<atom::ok> {
-      TENZIR_DEBUG("{} got new {}", *self, type);
-      if (type.empty())
-        return caf::make_error(ec::unspecified, "empty component type");
-      // Check if the new component is a singleton.
-      auto& registry = self->state.registry;
-      if (is_singleton(type) && registry.find_by_label(type))
-        return caf::make_error(ec::unspecified, "component already exists");
-      // Generate label
-      auto label = generate_label(self, type);
-      TENZIR_DEBUG("{} generated new component label {}", *self, label);
-      if (auto err = register_component(self, component, type, label))
-        return err;
-      return atom::ok_v;
-    },
-    [self](atom::get, atom::type, const std::string& type) {
-      TENZIR_DEBUG("{} got a request for a component of type {}", *self, type);
-      auto result = self->state.registry.find_by_type(type);
-      TENZIR_DEBUG("{} responds to the request for {} with {}", *self, type,
-                   result);
-      return result;
-    },
-    [self](atom::get, atom::label, const std::string& label) {
-      TENZIR_DEBUG("{} got a request for the component {}", *self, label);
-      auto result = self->state.registry.find_by_label(label);
-      TENZIR_DEBUG("{} responds to the request for {} with {}", *self, label,
-                   result);
-      return result;
-    },
     [self](atom::get, atom::label, const std::vector<std::string>& labels) {
       TENZIR_DEBUG("{} got a request for the components {}", *self, labels);
       std::vector<caf::actor> result;
@@ -618,11 +550,6 @@ node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     },
     [](atom::get, atom::version) { //
       return retrieve_versions();
-    },
-    [self](atom::config) -> record {
-      auto result = to_data(self->config().content);
-      TENZIR_ASSERT(caf::holds_alternative<record>(result));
-      return std::move(caf::get<record>(result));
     },
     [self](atom::spawn, operator_box& box, operator_type input_type,
            const receiver_actor<diagnostic>& diagnostic_handler,

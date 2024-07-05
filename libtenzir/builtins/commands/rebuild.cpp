@@ -10,6 +10,7 @@
 #include <tenzir/catalog.hpp>
 #include <tenzir/concept/parseable/tenzir/expression.hpp>
 #include <tenzir/concept/parseable/to.hpp>
+#include <tenzir/connect_to_node.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/detail/narrow.hpp>
@@ -24,7 +25,6 @@
 #include <tenzir/query_cursor.hpp>
 #include <tenzir/read_query.hpp>
 #include <tenzir/report.hpp>
-#include <tenzir/spawn_or_connect_to_node.hpp>
 #include <tenzir/status.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/table_slice_builder.hpp>
@@ -558,21 +558,16 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
 caf::expected<rebuilder_actor>
 get_rebuilder(caf::actor_system& sys, const caf::settings& config) {
   auto self = caf::scoped_actor{sys};
-  if (caf::get_or(config, "tenzir.node", false)
-      && caf::get_or(config, "tenzir.rebuild.detached", false))
-    return caf::make_error(ec::invalid_configuration,
-                           "the options 'tenzir.node' and "
-                           "'tenzir.rebuild.detached' "
-                           "are incompatible");
-  auto node_opt = spawn_or_connect_to_node(self, config, content(sys.config()));
-  if (auto* err = std::get_if<caf::error>(&node_opt))
-    return std::move(*err);
-  const auto& node = std::holds_alternative<node_actor>(node_opt)
-                       ? std::get<node_actor>(node_opt)
-                       : std::get<scope_linked<node_actor>>(node_opt).get();
+  auto node_opt = connect_to_node(self);
+  if (not node_opt) {
+    return std::move(node_opt.error());
+  }
+  const auto node = std::move(*node_opt);
   const auto timeout = node_connection_timeout(config);
   auto result = caf::expected<caf::actor>{caf::error{}};
-  self->request(node, timeout, atom::get_v, atom::type_v, "rebuild")
+  self
+    ->request(node, timeout, atom::get_v, atom::label_v,
+              std::vector<std::string>{"rebuilder"})
     .receive(
       [&](std::vector<caf::actor>& actors) {
         if (actors.empty()) {
@@ -677,19 +672,22 @@ public:
   /// Initializes a plugin with its respective entries from the YAML config
   /// file, i.e., `plugin.<NAME>`.
   /// @param config The relevant subsection of the configuration.
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
+  auto initialize(const record&, const record&) -> caf::error override {
     return caf::none;
   }
 
   /// Returns the unique name of the plugin.
-  [[nodiscard]] std::string name() const override {
+  auto name() const -> std::string override {
     return "rebuild";
   }
 
+  auto component_name() const -> std::string override {
+    return "rebuilder";
+  }
+
   /// Creates additional commands.
-  [[nodiscard]] std::pair<std::unique_ptr<command>, command::factory>
-  make_command() const override {
+  auto make_command() const
+    -> std::pair<std::unique_ptr<command>, command::factory> override {
     auto rebuild = std::make_unique<command>(
       "rebuild",
       "rebuilds outdated partitions matching the "
@@ -722,8 +720,8 @@ public:
     return {std::move(rebuild), std::move(factory)};
   }
 
-  component_plugin_actor
-  make_component(node_actor::stateful_pointer<node_state> node) const override {
+  auto make_component(node_actor::stateful_pointer<node_state> node) const
+    -> component_plugin_actor override {
     auto [catalog, index, accountant]
       = node->state.registry
           .find<catalog_actor, index_actor, accountant_actor>();

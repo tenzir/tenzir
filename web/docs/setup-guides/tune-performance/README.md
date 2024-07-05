@@ -83,18 +83,6 @@ and freshness. Tenzir also merges undersized partitions asynchronously in the
 background, which counter-acts the fragmentation effect from choosing a low
 partition timeout.
 
-### Tune partition caching
-
-Tenzir maintains a LRU cache of partitions to accelerate queries involving
-recent partitions. The parameter `tenzir.max-resident-partitions` controls the
-number of partitions in the LRU cache.
-
-:::note
-Run `tenzir flush` to force Tenzir to write all active partitions to disk
-immediately. The command returns only after all active partitions were flushed
-to disk.
-:::
-
 ### Tune catalog fragmentation
 
 The catalog keeps state that grows linear in the number of partitions. The

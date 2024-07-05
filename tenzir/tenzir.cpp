@@ -106,13 +106,6 @@ auto main(int argc, char** argv) -> int {
     TENZIR_ERROR("failed to initialize plugins: {}", err);
     return EXIT_FAILURE;
   }
-  // Warn when we used the fallback path from db-directory to state-directory.
-  // We cannot emit this warning when we override the option, as we do not have
-  // the logger initialized at that time.
-  if (caf::get_if<std::string>(&cfg, "tenzir.db-directory")) {
-    TENZIR_WARN("the option 'tenzir.db-directory' is deprecated; use "
-                "'tenzir.state-directory' instead");
-  }
   // Eagerly verify that the Arrow libraries we're using have Zstd support so
   // we can assert this works when serializing record batches.
   {
