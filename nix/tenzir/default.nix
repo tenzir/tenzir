@@ -252,7 +252,7 @@
 
         postInstall = ''
           wrapProgram $out/bin/tenzir \
-            --prefix PATH : ${lib.makeBinPath ([ py3 ]
+            --prefix PATH : ${lib.makeBinPath ([ py3.python ]
             # The static binary bundles uv.
              ++ lib.optionals (!isStatic) [ uv ])} \
             --suffix PYTHONPATH : ${py3}/${py3.sitePackages}

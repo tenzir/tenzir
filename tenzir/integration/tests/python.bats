@@ -2,6 +2,8 @@
 # has to setup the virtualenv for the operator.
 : "${BATS_TEST_TIMEOUT:=120}"
 
+# bats file_tags=python_operator
+
 setup() {
   bats_load_library bats-support
   bats_load_library bats-assert
