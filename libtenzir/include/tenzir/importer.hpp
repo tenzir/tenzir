@@ -88,7 +88,8 @@ struct importer_state {
   accountant_actor accountant;
 
   /// A list of subscribers for incoming events.
-  std::vector<receiver_actor<table_slice>> subscribers = {};
+  std::vector<std::pair<receiver_actor<table_slice>, bool /*internal*/>>
+    subscribers = {};
 
   /// Name of this actor in log events.
   static inline const char* name = "importer";

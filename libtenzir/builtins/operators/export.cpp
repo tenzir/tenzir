@@ -42,18 +42,19 @@ struct bridge_state {
   expression expr = {};
 };
 
-caf::behavior make_bridge(caf::stateful_actor<bridge_state>* self,
-                          importer_actor importer, expression expr) {
+caf::behavior
+make_bridge(caf::stateful_actor<bridge_state>* self, importer_actor importer,
+            expression expr, bool internal) {
   self->state.expr = std::move(expr);
   self
     ->request(importer, caf::infinite, atom::subscribe_v,
-              caf::actor_cast<receiver_actor<table_slice>>(self))
+              caf::actor_cast<receiver_actor<table_slice>>(self), internal)
     .then([]() {},
           [self](const caf::error& err) {
             self->quit(add_context(err, "failed to subscribe to importer"));
           });
   return {
-    [self](table_slice slice) {
+    [self](table_slice& slice) {
       auto bound_expr = tailor(self->state.expr, slice.schema());
       if (not bound_expr) {
         // failing to bind is not an error.
@@ -110,8 +111,8 @@ class export_operator final : public crtp_operator<export_operator> {
 public:
   export_operator() = default;
 
-  explicit export_operator(expression expr, export_mode mode)
-    : expr_{std::move(expr)}, mode_{mode} {
+  explicit export_operator(expression expr, export_mode mode, bool internal)
+    : expr_{std::move(expr)}, mode_{mode}, internal_{internal} {
   }
 
   auto
@@ -130,7 +131,8 @@ public:
     }
     co_yield {};
     auto [importer] = std::move(*components);
-    auto bridge = ctrl.self().spawn<caf::linked>(make_bridge, importer, expr_);
+    auto bridge
+      = ctrl.self().spawn<caf::linked>(make_bridge, importer, expr_, internal_);
     while (true) {
       auto result = table_slice{};
       ctrl.set_waiting(true);
@@ -269,17 +271,19 @@ public:
                                 : expression{conjunction{std::move(clauses)}};
     return optimize_result{trivially_true_expression(), event_order::ordered,
                            std::make_unique<export_operator>(std::move(expr),
-                                                             mode_)};
+                                                             mode_, internal_)};
   }
 
   friend auto inspect(auto& f, export_operator& x) -> bool {
     return f.object(x).fields(f.field("expression", x.expr_),
-                              f.field("mode", x.mode_));
+                              f.field("mode", x.mode_),
+                              f.field("internal", x.internal_));
   }
 
 private:
   expression expr_;
   export_mode mode_;
+  bool internal_;
 };
 
 class plugin final : public virtual operator_plugin<export_operator>,
@@ -316,7 +320,7 @@ public:
           data{internal},
         },
       },
-      mode);
+      mode, internal);
   }
 
   auto make(invocation inv, session ctx) const -> operator_ptr override {
@@ -340,7 +344,7 @@ public:
           data{internal},
         },
       },
-      export_mode{live, retro});
+      export_mode{live, retro}, internal);
   }
 };
 
