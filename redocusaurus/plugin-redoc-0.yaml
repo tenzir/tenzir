@@ -48,8 +48,8 @@ components:
           description: >
             A flag specifying whether this pipeline is hidden.
 
-            Hidden pipelines are not persisted and will not show up in the
-            /pipeline/list endpoint response.
+            Hidden pipelines start automatically, are not persisted, and will
+            not show up in the /pipeline/list endpoint response.
           default: false
           example: false
         ttl:
