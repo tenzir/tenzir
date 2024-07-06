@@ -304,35 +304,33 @@ public:
     return "tql2.from";
   }
 
-  auto make(invocation inv, session ctx) const -> operator_ptr override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     if (inv.args.empty()) {
       diagnostic::error("expected positional argument `<path/url>`")
         .primary(inv.self)
         .emit(ctx);
-      return nullptr;
+      return failure::promise();
     }
-    auto path_opt = const_eval(inv.args[0], ctx);
-    if (not path_opt) {
-      return nullptr;
-    }
-    auto path = caf::get_if<std::string>(&*path_opt);
-    if (not path) {
+    TRY(auto path, const_eval(inv.args[0], ctx));
+    auto path_str = caf::get_if<std::string>(&path);
+    if (not path_str) {
       diagnostic::error("expected string").primary(inv.args[0]).emit(ctx);
-      return nullptr;
+      return failure::promise();
     }
     // TODO: This is just for demo purposes!
-    if (not path->ends_with(".json")) {
+    if (not path_str->ends_with(".json")) {
       diagnostic::error("`from` currently requires `.json` files")
         .primary(inv.args[0])
         .emit(ctx);
-      return nullptr;
+      return failure::promise();
     }
     // TODO: Obviously not great.
     auto result = pipeline::internal_parse_as_operator(
-      fmt::format("from \"{}\" read json", *path));
+      fmt::format("from \"{}\" read json", *path_str));
     if (not result) {
       diagnostic::error(result.error()).primary(inv.self).emit(ctx);
-      return nullptr;
+      return failure::promise();
     }
     return std::move(*result);
   }
@@ -344,11 +342,12 @@ public:
     return "tql2.load";
   }
 
-  auto make(invocation inv, session ctx) const -> operator_ptr override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     diagnostic::error("operator is not yet implemented")
       .primary(inv.self)
       .emit(ctx);
-    return nullptr;
+    return failure::promise();
   }
 };
 

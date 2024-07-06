@@ -370,31 +370,31 @@ public:
     return "tql2.every";
   }
 
-  auto make(invocation inv, session ctx) const -> operator_ptr override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto interval = located<duration>{};
     auto pipe = pipeline{};
-    argument_parser2::operator_("every")
-      .add(interval, "<duration>")
-      .add(pipe, "{ ... }")
-      .parse(inv, ctx);
-    // TODO: This is still 0 if we failed to parse.
+    TRY(argument_parser2::operator_("every")
+          .add(interval, "<duration>")
+          .add(pipe, "{ ... }")
+          .parse(inv, ctx));
+    auto fail = std::optional<failure>{};
     if (interval.inner <= duration::zero()) {
       diagnostic::error("expected a positive duration, got {}", interval.inner)
         .primary(interval)
         .emit(ctx);
-      return nullptr;
+      fail = failure::promise();
     }
     auto ops = std::move(pipe).unwrap();
-    // TODO: How do we know whether `pipe` was set? This looks hacky.
-    if (ops.empty()) {
-      return nullptr;
-    }
-    if (ops.size() > 1) {
+    if (ops.size() != 1) {
       // TODO: Lift this limitation.
       diagnostic::error("expected exactly one operator, found {}", ops.size())
         .primary(inv.args[1])
         .emit(ctx);
-      return nullptr;
+      fail = failure::promise();
+    }
+    if (fail) {
+      return *fail;
     }
     return std::make_unique<scheduled_execution_operator<every_scheduler>>(
       std::move(ops[0]), every_scheduler{interval.inner});

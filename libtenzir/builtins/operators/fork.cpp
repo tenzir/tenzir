@@ -85,9 +85,12 @@ private:
 
 class plugin final : public virtual operator_plugin2<fork_operator> {
 public:
-  auto make(invocation inv, session ctx) const -> operator_ptr override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto pipe = located<pipeline>{};
-    argument_parser2::operator_("fork").add(pipe, "<pipeline>").parse(inv, ctx);
+    TRY(argument_parser2::operator_("fork")
+          .add(pipe, "<pipeline>")
+          .parse(inv, ctx));
     auto loc = operator_location::anywhere;
     for (auto& op : pipe.inner.operators()) {
       auto op_loc = op->location();

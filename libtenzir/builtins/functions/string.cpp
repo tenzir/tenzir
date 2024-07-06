@@ -23,13 +23,13 @@ public:
   }
 
   auto make_function(invocation inv, session ctx) const
-    -> std::unique_ptr<function_use> override {
+    -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto arg_expr = ast::expression{};
-    argument_parser2::method(name())
-      .add(subject_expr, "<string>")
-      .add(arg_expr, "<string>")
-      .parse(inv, ctx);
+    TRY(argument_parser2::method(name())
+          .add(subject_expr, "<string>")
+          .add(arg_expr, "<string>")
+          .parse(inv, ctx));
     // TODO: This shows the need for some abstraction.
     return function_use::make([subject_expr = std::move(subject_expr),
                                arg_expr = std::move(arg_expr),

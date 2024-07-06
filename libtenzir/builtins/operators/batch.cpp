@@ -154,8 +154,9 @@ public:
       timeout ? timeout->inner : duration::max(), event_order::ordered);
   }
 
-  auto make(invocation inv, session ctx) const -> operator_ptr override {
-    argument_parser2::operator_("batch").parse(inv, ctx);
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    argument_parser2::operator_("batch").parse(inv, ctx).ignore();
     return std::make_unique<batch_operator>(defaults::import::table_slice_size,
                                             duration::max(),
                                             event_order::ordered);

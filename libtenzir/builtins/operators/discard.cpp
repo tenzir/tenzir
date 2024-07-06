@@ -56,8 +56,9 @@ public:
     return std::make_unique<discard_operator>();
   }
 
-  auto make(invocation inv, session ctx) const -> operator_ptr override {
-    argument_parser2::operator_("discard").parse(inv, ctx);
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    argument_parser2::operator_("discard").parse(inv, ctx).ignore();
     return std::make_unique<discard_operator>();
   }
 };

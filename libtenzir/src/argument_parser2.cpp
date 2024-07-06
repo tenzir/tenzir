@@ -23,13 +23,13 @@ concept data_type = detail::tl_contains_v<data::types, T>;
 } // namespace
 
 auto argument_parser2::parse(const operator_factory_plugin::invocation& inv,
-                             session ctx) -> bool {
+                             session ctx) -> failure_or<void> {
   TENZIR_ASSERT(kind_ == kind::op);
   return parse(inv.self, inv.args, ctx);
 }
 
 auto argument_parser2::parse(const function_plugin::invocation& inv,
-                             session ctx) -> bool {
+                             session ctx) -> failure_or<void> {
   TENZIR_ASSERT(kind_ != kind::op);
   if (inv.call.subject) {
     auto args = std::vector<ast::expression>{};
@@ -42,19 +42,19 @@ auto argument_parser2::parse(const function_plugin::invocation& inv,
 }
 
 auto argument_parser2::parse(const ast::function_call& call, session ctx)
-  -> bool {
+  -> failure_or<void> {
   TENZIR_ASSERT(kind_ != kind::op);
   return parse(call.fn, call.args, ctx);
 }
 
 auto argument_parser2::parse(const ast::entity& self,
                              std::span<ast::expression const> args, session ctx)
-  -> bool {
+  -> failure_or<void> {
   // TODO: Simplify and deduplicate everything in this function.
-  auto success = true;
+  auto result = failure_or<void>{};
   auto emit = [&](diagnostic_builder d) {
     if (d.inner().severity == severity::error) {
-      success = false;
+      result = failure::promise();
     }
     std::move(d).usage(usage()).docs(docs()).emit(ctx);
   };
@@ -95,7 +95,7 @@ auto argument_parser2::parse(const ast::entity& self,
       [&]<data_type T>(setter<located<T>>& set) {
         auto value = const_eval(expr, ctx);
         if (not value) {
-          success = false;
+          result = value.error();
           return;
         }
         // TODO: Make this more beautiful.
@@ -118,7 +118,7 @@ auto argument_parser2::parse(const ast::entity& self,
         }
         if (not cast) {
           emit(diagnostic::error("expected argument of type `{}`, but got `{}`",
-                                 type_kind::of<data_to_type_t<T>>, kind(value))
+                                 type_kind::of<data_to_type_t<T>>, kind(*value))
                  .primary(expr));
           return;
         }
@@ -136,7 +136,7 @@ auto argument_parser2::parse(const ast::entity& self,
         }
         auto pipe = compile(std::move(pipe_expr->inner), ctx);
         if (pipe.is_error()) {
-          success = false;
+          result = pipe.error();
           return;
         }
         set(located{std::move(pipe).unwrap(), expr.get_location()});
@@ -167,14 +167,14 @@ auto argument_parser2::parse(const ast::entity& self,
       [&]<data_type T>(setter<located<T>>& set) {
         auto value = const_eval(expr, ctx);
         if (not value) {
-          success = false;
+          result = value.error();
           return;
         }
         auto cast = caf::get_if<T>(&*value);
         if (not cast) {
           // TODO: Attempt conversion.
           emit(diagnostic::error("expected argument of type `{}`, but got `{}`",
-                                 type_kind::of<data_to_type_t<T>>, kind(value))
+                                 type_kind::of<data_to_type_t<T>>, kind(*value))
                  .primary(expr));
           return;
         }
@@ -192,13 +192,13 @@ auto argument_parser2::parse(const ast::entity& self,
         }
         auto pipe = compile(std::move(pipe_expr->inner), ctx);
         if (pipe.is_error()) {
-          success = false;
+          result = pipe.error();
           return;
         }
         set(located{std::move(pipe).unwrap(), expr.get_location()});
       });
   }
-  return success;
+  return result;
 }
 
 auto argument_parser2::usage() const -> std::string {

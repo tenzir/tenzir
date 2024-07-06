@@ -20,9 +20,11 @@ public:
   }
 
   auto make_function(invocation inv, session ctx) const
-    -> std::unique_ptr<function_use> override {
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    argument_parser2::function("type_id").add(expr, "<value>").parse(inv, ctx);
+    TRY(argument_parser2::function("type_id")
+          .add(expr, "<value>")
+          .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         TENZIR_UNUSED(ctx);
@@ -47,9 +49,11 @@ public:
   }
 
   auto make_function(invocation inv, session ctx) const
-    -> std::unique_ptr<function_use> override {
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    argument_parser2::function("secret").add(expr, "<string>").parse(inv, ctx);
+    TRY(argument_parser2::function("secret")
+          .add(expr, "<string>")
+          .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         TENZIR_UNUSED(ctx);

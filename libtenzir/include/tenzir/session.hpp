@@ -12,24 +12,66 @@
 
 namespace tenzir {
 
+class session_provider {
+public:
+  static auto make(diagnostic_handler& dh) -> session_provider {
+    return session_provider{dh};
+  }
+
+  auto as_session() -> session;
+
+private:
+  friend class session;
+
+  class diagnostic_ctx final : public diagnostic_handler {
+  public:
+    explicit diagnostic_ctx(diagnostic_handler& dh) : dh_{dh} {
+    }
+
+    void emit(diagnostic d) override {
+      dh_.emit(d);
+    }
+
+    std::optional<failure> failure_;
+    diagnostic_handler& dh_;
+  };
+
+  explicit session_provider(diagnostic_handler& dh) : dh_{dh} {
+  }
+
+  diagnostic_ctx dh_;
+};
+
 /// This is meant to be used as a value type.
 class session {
 public:
-  explicit session(diagnostic_handler& dh) : dh_{dh} {
+  explicit session(session_provider& provider) : provider_{provider} {
+  }
+
+  auto get_failure() const -> std::optional<failure> {
+    return provider_.dh_.failure_;
+  }
+
+  auto has_failure() const -> bool {
+    return get_failure().has_value();
   }
 
   auto reg() -> const registry&;
 
   auto dh() -> diagnostic_handler& {
-    return dh_;
+    return provider_.dh_;
   }
 
   operator diagnostic_handler&() {
-    return dh_;
+    return dh();
   }
 
 private:
-  diagnostic_handler& dh_;
+  session_provider& provider_;
 };
+
+inline auto session_provider::as_session() -> session {
+  return session{*this};
+}
 
 } // namespace tenzir

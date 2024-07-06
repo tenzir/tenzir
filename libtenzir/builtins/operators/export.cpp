@@ -323,7 +323,8 @@ public:
       mode, internal);
   }
 
-  auto make(invocation inv, session ctx) const -> operator_ptr override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto live = false;
     auto retro = false;
     auto internal = false;
@@ -331,7 +332,8 @@ public:
       .add("live", live)
       .add("retro", retro)
       .add("internal", internal)
-      .parse(inv, ctx);
+      .parse(inv, ctx)
+      .ignore();
     if (not live) {
       // TODO: export live=false, retro=false
       retro = true;

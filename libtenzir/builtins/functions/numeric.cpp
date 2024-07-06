@@ -113,13 +113,13 @@ public:
   }
 
   auto make_function(invocation inv, session ctx) const
-    -> std::unique_ptr<function_use> override {
+    -> failure_or<function_ptr> override {
     auto value = ast::expression{};
     auto spec = std::optional<ast::expression>{};
-    argument_parser2::function("round")
-      .add(value, "<value>")
-      .add(spec, "<spec>")
-      .parse(inv, ctx);
+    TRY(argument_parser2::function("round")
+          .add(value, "<value>")
+          .add(spec, "<spec>")
+          .parse(inv, ctx));
     return std::make_unique<round_use>(std::move(value), std::move(spec));
   }
 };
@@ -131,9 +131,10 @@ public:
   }
 
   auto make_function(invocation inv, session ctx) const
-    -> std::unique_ptr<function_use> override {
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    argument_parser2::function("sqrt").add(expr, "<number>").parse(inv, ctx);
+    TRY(
+      argument_parser2::function("sqrt").add(expr, "<number>").parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         auto value = eval(expr);
@@ -200,8 +201,8 @@ public:
   }
 
   auto make_function(invocation inv, session ctx) const
-    -> std::unique_ptr<function_use> override {
-    argument_parser2::function("random").parse(inv, ctx);
+    -> failure_or<function_ptr> override {
+    argument_parser2::function("random").parse(inv, ctx).ignore();
     return function_use::make([](evaluator eval, session ctx) -> series {
       TENZIR_UNUSED(ctx);
       auto b = arrow::DoubleBuilder{};
@@ -310,15 +311,10 @@ public:
   }
 
   auto make_aggregation(invocation inv, session ctx) const
-    -> std::unique_ptr<aggregation_instance> override {
-    if (inv.call.args.size() != 1) {
-      diagnostic::error("expected exactly one argument, got {}",
-                        inv.call.args.size())
-        .primary(inv.call)
-        .emit(ctx);
-      return nullptr;
-    }
-    return std::make_unique<sum_instance>(inv.call.args[0]);
+    -> failure_or<std::unique_ptr<aggregation_instance>> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function("sum").add(expr, "<expr>").parse(inv, ctx));
+    return std::make_unique<sum_instance>(std::move(expr));
   }
 };
 
@@ -353,10 +349,11 @@ public:
   }
 
   auto make_aggregation(invocation inv, session ctx) const
-    -> std::unique_ptr<aggregation_instance> override {
-    auto arg = std::optional<ast::expression>{};
-    argument_parser2::function("count").add(arg, "<expr>").parse(inv, ctx);
-    return std::make_unique<count_instance>(std::move(arg));
+    -> failure_or<std::unique_ptr<aggregation_instance>> override {
+    auto expr = std::optional<ast::expression>{};
+    TRY(
+      argument_parser2::function("count").add(expr, "<expr>").parse(inv, ctx));
+    return std::make_unique<count_instance>(std::move(expr));
   }
 };
 
@@ -407,19 +404,19 @@ public:
   }
 
   auto make_aggregation(invocation inv, session ctx) const
-    -> std::unique_ptr<aggregation_instance> override {
+    -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
     // TODO: Reconsider whether we want a default here. Maybe positional?
     auto quantile_opt = std::optional<located<double>>{};
     auto delta_opt = std::optional<located<int64_t>>{};
     auto buffer_size_opt = std::optional<located<int64_t>>{};
-    argument_parser2::function("quantile")
-      .add(expr, "expr")
-      .add("q", quantile_opt)
-      // TODO: This is a test for hidden parameters.
-      .add("_delta", delta_opt)
-      .add("_buffer_size", buffer_size_opt)
-      .parse(inv, ctx);
+    TRY(argument_parser2::function("quantile")
+          .add(expr, "expr")
+          .add("q", quantile_opt)
+          // TODO: This is a test for hidden parameters.
+          .add("_delta", delta_opt)
+          .add("_buffer_size", buffer_size_opt)
+          .parse(inv, ctx));
     // TODO: Type conversion? Probably not necessary here, but maybe elsewhere.
     // TODO: This is too much manual labor.
     auto quantile = 0.5;

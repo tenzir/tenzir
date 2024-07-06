@@ -1039,12 +1039,14 @@ public:
       if (it == groups_.end()) {
         auto bucket = std::make_unique<bucket2>();
         for (auto& aggr : cfg_.aggregates) {
-          // We already checked this cast before.
+          // We already checked the cast and instantiation before.
           auto fn = dynamic_cast<const aggregation_plugin*>(
             &ctx_.reg().get(aggr.call));
           TENZIR_ASSERT(fn);
-          bucket->aggregations.push_back(fn->make_aggregation(
-            aggregation_plugin::invocation{aggr.call}, ctx_));
+          bucket->aggregations.push_back(
+            fn->make_aggregation(aggregation_plugin::invocation{aggr.call},
+                                 ctx_)
+              .unwrap());
         }
         it = groups_.emplace_hint(it, materialize(key), std::move(bucket));
       }
@@ -1161,7 +1163,9 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    auto impl = implementation2{cfg_, session{ctrl.diagnostics()}};
+    // TODO: Do not create a new session here.
+    auto provider = session_provider::make(ctrl.diagnostics());
+    auto impl = implementation2{cfg_, provider.as_session()};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
@@ -1190,32 +1194,29 @@ private:
 
 class plugin2 final : public operator_plugin2<summarize_operator2> {
 public:
-  auto make(invocation inv, session ctx) const -> operator_ptr override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto cfg = config{};
-    auto add_aggregate
-      = [&](std::optional<ast::simple_selector> dest, ast::function_call call) {
-          if (not call.fn.ref.resolved()) {
-            // Already reported.
-            return;
-          }
-          // TODO: Improve this and try to forward function handle directly.
-          auto fn
-            = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(call));
-          if (not fn) {
-            diagnostic::error("function does not support aggregations")
-              .primary(call.fn)
-              .hint("if you want to group by this, use assignment before")
-              .docs("https://docs.tenzir.com/operators/summarize")
-              .emit(ctx);
-            return;
-          }
-          // We test the arguments by making and discarding it. This is a bit
-          // hacky and should be improved in the future.
-          (void)fn->make_aggregation(aggregation_plugin::invocation{call}, ctx);
-          auto index = detail::narrow<int64_t>(cfg.aggregates.size());
-          cfg.indices.push_back(index);
-          cfg.aggregates.emplace_back(std::move(dest), std::move(call));
-        };
+    auto add_aggregate = [&](std::optional<ast::simple_selector> dest,
+                             ast::function_call call) {
+      // TODO: Improve this and try to forward function handle directly.
+      auto fn = dynamic_cast<const aggregation_plugin*>(&ctx.reg().get(call));
+      if (not fn) {
+        diagnostic::error("function does not support aggregations")
+          .primary(call.fn)
+          .hint("if you want to group by this, use assignment before")
+          .docs("https://docs.tenzir.com/operators/summarize")
+          .emit(ctx);
+        return;
+      }
+      // We test the arguments by making and discarding it. This is a bit
+      // hacky and should be improved in the future.
+      if (fn->make_aggregation(aggregation_plugin::invocation{call}, ctx)) {
+        auto index = detail::narrow<int64_t>(cfg.aggregates.size());
+        cfg.indices.push_back(index);
+        cfg.aggregates.emplace_back(std::move(dest), std::move(call));
+      }
+    };
     auto add_group = [&](std::optional<ast::simple_selector> dest,
                          ast::simple_selector expr) {
       auto index = -detail::narrow<int64_t>(cfg.groups.size()) - 1;

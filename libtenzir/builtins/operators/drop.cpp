@@ -222,7 +222,9 @@ private:
 
 class plugin2 final : public virtual operator_plugin2<drop_operator2> {
 public:
-  auto make(invocation inv, session ctx) const -> operator_ptr override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto parser = argument_parser2::operator_("drop");
     auto selectors = std::vector<ast::simple_selector>{};
     for (auto& arg : inv.args) {
       auto selector = ast::simple_selector::try_from(arg);
@@ -232,6 +234,8 @@ public:
         // TODO: Improve error message.
         diagnostic::error("expected simple selector")
           .primary(arg)
+          .usage(parser.usage())
+          .docs(parser.docs())
           .emit(ctx.dh());
       }
     }

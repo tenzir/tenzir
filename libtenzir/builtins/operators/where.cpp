@@ -371,9 +371,11 @@ private:
 
 class plugin2 final : public virtual operator_plugin2<where_operator2> {
 public:
-  auto make(invocation inv, session ctx) const -> operator_ptr override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto expr = ast::expression{};
-    argument_parser2::operator_("where").add(expr, "<expr>").parse(inv, ctx);
+    TRY(
+      argument_parser2::operator_("where").add(expr, "<expr>").parse(inv, ctx));
     return std::make_unique<where_operator2>(std::move(expr));
   }
 };

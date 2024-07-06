@@ -519,7 +519,8 @@ public:
                                              std::move(code));
   }
 
-  auto make(invocation inv, session ctx) const -> operator_ptr override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto requirements = std::optional<std::string>{};
     auto code = std::optional<located<std::string>>{};
     auto path = std::optional<located<std::string>>{};
@@ -528,17 +529,14 @@ public:
                     .add(code, "<expr>")
                     .add("file", path)
                     .add("requirements", requirements);
-    auto success = parser.parse(inv, ctx);
-    if (not success) {
-      return nullptr;
-    }
+    TRY(parser.parse(inv, ctx));
     if (not path && not code) {
       diagnostic::error("must have either the `file` argument or inline code")
         .primary(inv.self)
         .usage(parser.usage())
         .docs(parser.docs())
         .emit(ctx);
-      return nullptr;
+      return failure::promise();
     }
     if (path && code) {
       diagnostic::error("cannot have `file` argument together with inline code")
@@ -547,7 +545,7 @@ public:
         .usage(parser.usage())
         .docs(parser.docs())
         .emit(ctx);
-      return nullptr;
+      return failure::promise();
     }
     if (code) {
       code_or_path = code->inner;

@@ -123,6 +123,7 @@ auto resolve_let_bindings(ast::pipeline& pipe, session ctx)
 
 auto compile_resolved(ast::pipeline&& pipe, session ctx)
   -> failure_or<pipeline> {
+  auto fail = std::optional<failure>{};
   auto ops = std::vector<operator_ptr>{};
   for (auto& stmt : pipe.body) {
     stmt.match(
@@ -139,9 +140,10 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
           },
           ctx);
         if (op) {
-          ops.push_back(std::move(op));
+          TENZIR_ASSERT(*op);
+          ops.push_back(std::move(*op));
         } else {
-          // We assume we emitted an error.
+          fail = op.error();
         }
       },
       [&](ast::assignment& x) {
@@ -163,7 +165,7 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
           },
           ctx);
         TENZIR_ASSERT(op);
-        ops.push_back(std::move(op));
+        ops.push_back(std::move(*op));
 #endif
       },
       [&](ast::if_stmt& x) {
@@ -186,18 +188,21 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
           },
           ctx);
         TENZIR_ASSERT(op);
-        ops.push_back(std::move(op));
+        ops.push_back(std::move(*op));
       },
       [&](ast::match_stmt& x) {
         diagnostic::error("`match` not yet implemented, try using `if` instead")
           .primary(x)
           .emit(ctx.dh());
+        fail = failure::promise();
       },
       [&](ast::let_stmt&) {
         TENZIR_UNREACHABLE();
       });
   }
-  // TODO: We can reach this if we emitted an error.
+  if (fail) {
+    return *fail;
+  }
   return tenzir::pipeline{std::move(ops)};
 }
 
@@ -228,38 +233,47 @@ auto compile(ast::pipeline&& pipe, session ctx) -> failure_or<pipeline> {
   return compile_resolved(std::move(pipe), ctx);
 }
 
+auto dump_tokens(std::span<token const> tokens, std::string_view source)
+  -> bool {
+  auto last = size_t{0};
+  auto has_error = false;
+  for (auto& token : tokens) {
+    fmt::print("{:>15} {:?}\n", token.kind,
+               source.substr(last, token.end - last));
+    last = token.end;
+    has_error |= token.kind == token_kind::error;
+  }
+  return not has_error;
+}
+
 auto exec2(std::string_view source, diagnostic_handler& dh,
            const exec_config& cfg, caf::actor_system& sys) -> bool {
   TENZIR_UNUSED(sys);
   auto result = std::invoke([&]() -> failure_or<bool> {
     auto dedup = std::make_unique<deduplicating_diagnostic_handler>(dh);
-    auto ctx = session{*dedup};
+    auto provider = session_provider::make(*dedup);
+    auto ctx = provider.as_session();
     TRY(validate_utf8(source, ctx));
     auto tokens = tokenize_permissive(source);
     if (cfg.dump_tokens) {
-      auto last = size_t{0};
-      auto has_error = false;
-      for (auto& token : tokens) {
-        fmt::print("{:>15} {:?}\n", token.kind,
-                   source.substr(last, token.end - last));
-        last = token.end;
-        has_error |= token.kind == token_kind::error;
-      }
-      return not has_error;
+      return dump_tokens(tokens, source);
     }
     TRY(verify_tokens(tokens, ctx));
     TRY(auto parsed, parse(tokens, source, ctx));
     if (cfg.dump_ast) {
       fmt::print("{:#?}\n", parsed);
-      return true;
+      return not ctx.has_failure();
     }
     TRY(auto pipe, compile(std::move(parsed), ctx));
+    if (ctx.has_failure()) {
+      // Do not proceed to execution if there has been an error.
+      return false;
+    }
     auto result = exec_pipeline(std::move(pipe), ctx, cfg, sys);
     if (not result) {
       diagnostic::error(result.error()).emit(ctx);
-      return failure::promise();
     }
-    return true;
+    return not ctx.has_failure();
   });
   return result ? *result : false;
 }

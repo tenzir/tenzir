@@ -23,9 +23,10 @@ public:
   }
 
   auto make_function(invocation inv, session ctx) const
-    -> std::unique_ptr<function_use> override {
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    argument_parser2::function("time").add(expr, "<string>").parse(inv, ctx);
+    TRY(
+      argument_parser2::function("time").add(expr, "<string>").parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         auto arg = eval(expr);
@@ -76,9 +77,9 @@ public:
   }
 
   auto make_function(invocation inv, session ctx) const
-    -> std::unique_ptr<function_use> override {
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    argument_parser2::function(name()).add(expr, "<time>").parse(inv, ctx);
+    TRY(argument_parser2::function(name()).add(expr, "<time>").parse(inv, ctx));
     return function_use::make([expr = std::move(expr),
                                this](evaluator eval, session ctx) -> series {
       auto arg = eval(expr);
@@ -123,9 +124,11 @@ public:
   }
 
   auto make_function(invocation inv, session ctx) const
-    -> std::unique_ptr<function_use> override {
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    argument_parser2::function(name()).add(expr, "<duration>").parse(inv, ctx);
+    TRY(argument_parser2::function(name())
+          .add(expr, "<duration>")
+          .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr), this](evaluator eval, session ctx) -> series {
         auto arg = eval(expr);
@@ -171,8 +174,8 @@ public:
   }
 
   auto make_function(invocation inv, session ctx) const
-    -> std::unique_ptr<function_use> override {
-    argument_parser2::function("now").parse(inv, ctx);
+    -> failure_or<function_ptr> override {
+    TRY(argument_parser2::function("now").parse(inv, ctx));
     return function_use::make([](evaluator eval, session ctx) -> series {
       TENZIR_UNUSED(ctx);
       auto result = time{time::clock::now()};

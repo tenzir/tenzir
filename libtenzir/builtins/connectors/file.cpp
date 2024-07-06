@@ -579,15 +579,16 @@ private:
 
 class load_file_plugin final : public operator_plugin2<load_file_operator> {
 public:
-  auto make(invocation inv, session ctx) const -> operator_ptr override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = loader_args{};
     auto timeout = std::optional<located<duration>>{};
-    argument_parser2::operator_("load_file")
-      .add(args.path, "<path>")
-      .add("follow", args.follow)
-      .add("mmap", args.mmap)
-      .add("timeout", timeout)
-      .parse(inv, ctx);
+    TRY(argument_parser2::operator_("load_file")
+          .add(args.path, "<path>")
+          .add("follow", args.follow)
+          .add("mmap", args.mmap)
+          .add("timeout", timeout)
+          .parse(inv, ctx));
     if (timeout) {
       args.timeout = located{
         std::chrono::duration_cast<std::chrono::milliseconds>(timeout->inner),
@@ -642,14 +643,15 @@ private:
 
 class save_file_plugin final : public operator_plugin2<save_file_operator> {
 public:
-  auto make(invocation inv, session ctx) const -> operator_ptr override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto args = saver_args{};
-    argument_parser2::operator_("save_file")
-      .add(args.path, "<path>")
-      .add("append", args.append)
-      .add("real_time", args.real_time)
-      .add("uds", args.uds)
-      .parse(inv, ctx);
+    TRY(argument_parser2::operator_("save_file")
+          .add(args.path, "<path>")
+          .add("append", args.append)
+          .add("real_time", args.real_time)
+          .add("uds", args.uds)
+          .parse(inv, ctx));
     return std::make_unique<save_file_operator>(std::move(args));
   }
 };

@@ -22,12 +22,12 @@ auto function_use::evaluator::operator()(const ast::expression& expr) const
 }
 
 auto aggregation_plugin::make_function(invocation inv, session ctx) const
-  -> std::unique_ptr<function_use> {
+  -> failure_or<function_ptr> {
   // TODO: Consider making this pure-virtual or provide a default implementation.
   diagnostic::error("this function can only be used as an aggregation function")
     .primary(inv.call.fn)
     .emit(ctx);
-  return nullptr;
+  return failure::promise();
 }
 
 auto function_use::make(
