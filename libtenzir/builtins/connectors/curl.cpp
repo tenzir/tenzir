@@ -13,6 +13,7 @@
 #include <tenzir/http.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/transfer.hpp>
 
 #include <filesystem>
@@ -365,8 +366,6 @@ private:
   }
 };
 
-} // namespace
-
 // Available protocol names according to the documentation at
 // https://curl.se/libcurl/c/CURLOPT_DEFAULT_PROTOCOL.html are: dict, file, ftp,
 // ftps, gopher, http, https, imap, imaps, ldap, ldaps, pop3, pop3s, rtsp, scp,
@@ -377,9 +376,100 @@ using ftps = plugin<"ftps">;
 using http = plugin<"http">;
 using https = plugin<"https">;
 
+class load_http_operator final : public crtp_operator<load_http_operator> {
+public:
+  load_http_operator() = default;
+
+  explicit load_http_operator(connector_args args) : args_{std::move(args)} {
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.load_http";
+  }
+
+  auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    // TODO: Clean this up.
+    auto loader = curl_loader<"TODO: not using this">{args_};
+    auto gen = loader.instantiate(ctrl);
+    TENZIR_ASSERT(gen);
+    for (auto chunk : *gen) {
+      co_yield std::move(chunk);
+    }
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, load_http_operator& x) -> bool {
+    return f.apply(x.args_);
+  }
+
+private:
+  connector_args args_;
+};
+
+class load_http_plugin final
+  : public virtual operator_plugin2<load_http_operator> {
+public:
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto url = std::string{};
+    auto method = std::optional<std::string>{};
+    auto params = std::optional<located<record>>{};
+    auto headers = std::optional<located<record>>{};
+    argument_parser2::operator_("load_http")
+      .add(url, "<url>")
+      .add("method", method)
+      .add("params", params)
+      .add("headers", headers)
+      .parse(inv, ctx)
+      .ignore();
+    auto args = connector_args{};
+    args.url = std::move(url);
+    if (method) {
+      args.http_opts.method = *method;
+    }
+    if (params) {
+      for (auto& [name, value] : params->inner) {
+        // TODO: What about other types?
+        auto str = caf::get_if<std::string>(&value);
+        if (not str) {
+          diagnostic::error("expected `string` for parameter `{}`", name)
+            .primary(*params)
+            .emit(ctx);
+          continue;
+        }
+        args.http_opts.items.emplace_back(tenzir::http::request_item::url_param,
+                                          std::move(name), std::move(*str));
+      }
+    }
+    if (headers) {
+      for (auto& [name, value] : headers->inner) {
+        // TODO: What about other types?
+        auto str = caf::get_if<std::string>(&value);
+        if (not str) {
+          diagnostic::error("expected `string` for header `{}`", name)
+            .primary(*params)
+            .emit(ctx);
+          continue;
+        }
+        args.http_opts.items.emplace_back(tenzir::http::request_item::header,
+                                          std::move(name), std::move(*str));
+      }
+    }
+    return std::make_unique<load_http_operator>(std::move(args));
+  }
+};
+
+} // namespace
+
 } // namespace tenzir::plugins
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ftp)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ftps)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::https)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::load_http_plugin)

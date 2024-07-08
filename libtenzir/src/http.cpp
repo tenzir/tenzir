@@ -75,8 +75,6 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
   auto body = record{};
   for (auto& item : items) {
     switch (item.type) {
-      default:
-        return caf::make_error(ec::unimplemented, "unsupported item type");
       case request_item::header: {
         req.headers.emplace_back(std::move(item.key), std::move(item.value));
         break;
@@ -94,7 +92,21 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
         if (not data)
           return data.error();
         body.emplace(std::move(item.key), std::move(*data));
+        break;
       }
+      case request_item::url_param: {
+        auto pos = req.uri.find('?');
+        if (pos == std::string::npos) {
+          req.uri += '?';
+        } else if (pos + 1 != req.uri.size()) {
+          req.uri += '&';
+        }
+        req.uri += fmt::format("{}={}", curl::escape(item.key),
+                               curl::escape(item.value));
+        break;
+      }
+      default:
+        return caf::make_error(ec::unimplemented, "unsupported item type");
     }
   }
   auto json_encode = [](const auto& x) {
