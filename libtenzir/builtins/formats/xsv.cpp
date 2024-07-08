@@ -18,6 +18,7 @@
 #include "tenzir/series_builder.hpp"
 #include "tenzir/to_lines.hpp"
 #include "tenzir/tql/basic.hpp"
+#include "tenzir/tql2/plugin.hpp"
 #include "tenzir/view.hpp"
 
 #include <arrow/record_batch.h>
@@ -588,9 +589,34 @@ using csv_plugin = configured_xsv_plugin<"csv", ',', ';', "">;
 using tsv_plugin = configured_xsv_plugin<"tsv", '\t', ',', "-">;
 using ssv_plugin = configured_xsv_plugin<"ssv", ' ', ',', "-">;
 
+class read_csv final : public operator_plugin2<parser_adapter<xsv_parser>> {
+public:
+  auto name() const -> std::string override {
+    return "read_csv";
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto comments = false;
+    argument_parser2::operator_(name())
+      .add("comments", comments)
+      .parse(inv, ctx)
+      .ignore();
+    auto options = xsv_options{};
+    options.name = "csv";
+    options.field_sep = ',';
+    options.list_sep = ';';
+    options.null_value = "";
+    options.allow_comments = comments;
+    return std::make_unique<parser_adapter<xsv_parser>>(
+      xsv_parser{std::move(options)});
+  }
+};
+
 } // namespace tenzir::plugins::xsv
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::xsv_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::csv_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::tsv_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::ssv_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::read_csv)

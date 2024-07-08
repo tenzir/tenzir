@@ -1534,44 +1534,6 @@ public:
 using suricata_parser = selector_parser<"suricata", "event_type:suricata">;
 using zeek_parser = selector_parser<"zeek-json", "_path:zeek", ".">;
 
-class read_json final : public crtp_operator<read_json> {
-public:
-  read_json() = default;
-
-  explicit read_json(parser_args args) : parser_{std::move(args)} {
-  }
-
-  auto name() const -> std::string override {
-    return "tql2.read_json";
-  }
-
-  auto
-  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
-    // TODO: Rewrite after `crtp_operator` does detection without instantiate.
-    auto gen = parser_.instantiate(std::move(input), ctrl);
-    if (not gen) {
-      co_return;
-    }
-    for (auto&& slice : *gen) {
-      co_yield std::move(slice);
-    }
-  }
-
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
-    TENZIR_UNUSED(filter, order);
-    return do_not_optimize(*this);
-  }
-
-  friend auto inspect(auto& f, read_json& x) -> bool {
-    return f.apply(x.parser_);
-  }
-
-private:
-  json_parser parser_;
-};
-
 class write_json final : public crtp_operator<write_json> {
 public:
   write_json() = default;
@@ -1618,7 +1580,8 @@ private:
   json_printer printer_;
 };
 
-class read_json_plugin final : public virtual operator_plugin2<read_json> {
+class read_json_plugin final
+  : public virtual operator_plugin2<parser_adapter<json_parser>> {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
@@ -1626,7 +1589,7 @@ public:
     auto selector = std::optional<located<std::string>>{};
     auto sep = std::optional<located<std::string>>{};
     auto unnest_separator = std::optional<std::string>{};
-    auto result = argument_parser2::operator_("read_json")
+    auto result = argument_parser2::operator_(name())
                     .add("sep", sep)
                     // TODO: We could allow a non-constant expression for
                     // `schema` and then evaluate it with (perhaps in some
@@ -1669,7 +1632,8 @@ public:
       }
     }
     TRY(result);
-    return std::make_unique<read_json>(std::move(args));
+    return std::make_unique<parser_adapter<json_parser>>(
+      json_parser{std::move(args)});
   }
 };
 
@@ -1684,7 +1648,9 @@ public:
     auto expr = ast::expression{};
     // TODO: Consider adding a `many` option to expect multiple json values.
     // TODO: Consider adding a `precise` option (this needs evaluator support).
-    TRY(argument_parser2::method("parse_json").add(expr, "<string>").parse(inv, ctx));
+    TRY(argument_parser2::method("parse_json")
+          .add(expr, "<string>")
+          .parse(inv, ctx));
     return function_use::make(
       [call = inv.call.get_location(),
        expr = std::move(expr)](evaluator eval, session ctx) -> series {
