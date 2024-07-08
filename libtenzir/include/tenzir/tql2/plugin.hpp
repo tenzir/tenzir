@@ -98,6 +98,64 @@ public:
     = 0;
 };
 
+/// This adapter transforms a legacy parser object to an operator.
+///
+/// Should be deleted once the transition is done.
+template <class Parser>
+class parser_adapter final : public crtp_operator<parser_adapter<Parser>> {
+public:
+  parser_adapter() = default;
+
+  explicit parser_adapter(Parser parser) : parser_{std::move(parser)} {
+  }
+
+  auto name() const -> std::string override {
+    return fmt::format("read_{}", Parser{}.name());
+  }
+
+  auto
+  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    auto gen = parser_.instantiate(std::move(input), ctrl);
+    if (not gen) {
+      co_return;
+    }
+    for (auto&& slice : *gen) {
+      co_yield std::move(slice);
+    }
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    TENZIR_UNUSED(filter);
+    // TODO: Function should be const.
+    auto parser = parser_;
+    auto replacement = parser.optimize(order);
+    if (not replacement) {
+      return optimize_result{
+        std::nullopt,
+        event_order::ordered,
+        std::make_unique<parser_adapter>(std::move(parser)),
+      };
+    }
+    // TODO: This is a hack.
+    auto cast = dynamic_cast<Parser*>(replacement.get());
+    TENZIR_ASSERT(cast);
+    return optimize_result{
+      std::nullopt,
+      event_order::ordered,
+      std::make_unique<parser_adapter>(std::move(*cast)),
+    };
+  }
+
+  friend auto inspect(auto& f, parser_adapter& x) -> bool {
+    return f.apply(x.parser_);
+  }
+
+private:
+  Parser parser_;
+};
+
 } // namespace tenzir
 
 // TODO: Change this.
