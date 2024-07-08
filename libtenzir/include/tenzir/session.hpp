@@ -29,6 +29,9 @@ private:
     }
 
     void emit(diagnostic d) override {
+      if (d.severity == severity::error) {
+        failure_ = failure::promise();
+      }
       dh_.emit(d);
     }
 
