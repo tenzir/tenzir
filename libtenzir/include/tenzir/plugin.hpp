@@ -19,7 +19,6 @@
 #include "tenzir/expression.hpp"
 #include "tenzir/http_api.hpp"
 #include "tenzir/operator_control_plane.hpp"
-#include "tenzir/package.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/type.hpp"

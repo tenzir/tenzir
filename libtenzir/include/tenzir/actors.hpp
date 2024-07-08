@@ -297,6 +297,8 @@ using filesystem_actor = typed_actor_fwd<
   auto(atom::write, std::filesystem::path, chunk_ptr)->caf::result<atom::ok>,
   // Reads a chunk of data from a given path and returns the chunk.
   auto(atom::read, std::filesystem::path)->caf::result<chunk_ptr>,
+  // Reads all files from a given directory and returns their content as a 'blob'.
+  auto(atom::read, atom::recursive, std::filesystem::path)->caf::result<record>,
   // Moves a file on the fielsystem.
   auto(atom::move, std::filesystem::path, std::filesystem::path)
     ->caf::result<atom::done>,

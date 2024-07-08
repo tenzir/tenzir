@@ -12,6 +12,7 @@
 #include <tenzir/detail/flat_map.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/fwd.hpp>
+#include <tenzir/plugin.hpp>
 #include <tenzir/view.hpp>
 
 #include <string>
@@ -97,7 +98,7 @@ struct package_pipeline final {
 struct package_context final {
   std::string type = {};
   std::string description = {};
-  detail::flat_map<std::string, std::string> arguments;
+  tenzir::context::parameter_map arguments = {};
   bool disabled = false;
 
   auto to_record() const -> record;
