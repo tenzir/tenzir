@@ -42,16 +42,20 @@ public:
     return std::move(*result);
   }
 
-  auto make(invocation inv, session ctx) const -> operator_ptr override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto count = std::optional<uint64_t>{};
-    argument_parser2::operator_("tail").add(count, "<count>").parse(inv, ctx);
+    argument_parser2::operator_("tail")
+      .add(count, "<count>")
+      .parse(inv, ctx)
+      .ignore();
     auto result = pipeline::internal_parse_as_operator(
       fmt::format("slice -{}:", count.value_or(10)));
     if (not result) {
       diagnostic::error("failed to transform `tail` into `slice` operator: {}",
                         result.error())
         .emit(ctx);
-      return nullptr;
+      return failure::promise();
     }
     return std::move(*result);
   }

@@ -15,7 +15,8 @@ namespace {
 
 class set final : public operator_plugin2<set_operator> {
 public:
-  auto make(invocation inv, session ctx) const -> operator_ptr override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto usage = "set <path>=<expr>...";
     auto docs = "https://docs.tenzir.com/operators/set";
     auto assignments = std::vector<ast::assignment>{};
@@ -42,7 +43,8 @@ public:
     return "tql2.select";
   }
 
-  auto make(invocation inv, session ctx) const -> operator_ptr override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto assignments = std::vector<ast::assignment>{};
     assignments.reserve(1 + inv.args.size());
     assignments.emplace_back(

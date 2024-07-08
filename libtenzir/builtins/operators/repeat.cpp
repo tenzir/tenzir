@@ -96,9 +96,13 @@ public:
       repetitions.value_or(std::numeric_limits<uint64_t>::max()));
   }
 
-  auto make(invocation inv, session ctx) const -> operator_ptr override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto count = std::optional<uint64_t>{};
-    argument_parser2::operator_("repeat").add(count, "<count>").parse(inv, ctx);
+    argument_parser2::operator_("repeat")
+      .add(count, "<count>")
+      .parse(inv, ctx)
+      .ignore();
     return std::make_unique<repeat_operator>(
       count.value_or(std::numeric_limits<uint64_t>::max()));
   }

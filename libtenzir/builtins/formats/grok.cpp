@@ -560,19 +560,19 @@ public:
   }
 
   auto make_function(invocation inv, session ctx) const
-    -> std::unique_ptr<function_use> override {
+    -> failure_or<function_ptr> override {
     auto input = ast::expression{};
     auto pattern = std::string{};
     auto indexed_captures = false;
     auto include_unnamed = false;
     auto raw = false;
-    argument_parser2::method("grok")
-      .add(input, "<input>")
-      .add(pattern, "<pattern>")
-      .add("indexed_captures", indexed_captures)
-      .add("include_unnamed", include_unnamed)
-      .add("raw", raw)
-      .parse(inv, ctx);
+    TRY(argument_parser2::method("grok")
+          .add(input, "<input>")
+          .add(pattern, "<pattern>")
+          .add("indexed_captures", indexed_captures)
+          .add("include_unnamed", include_unnamed)
+          .add("raw", raw)
+          .parse(inv, ctx));
     auto parser = grok_parser{
       std::move(pattern),
       indexed_captures,

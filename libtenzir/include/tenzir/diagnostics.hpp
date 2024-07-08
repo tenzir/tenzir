@@ -414,6 +414,10 @@ public:
   using variant<std::conditional_t<std::same_as<T, void>, std::monostate, T>,
                 failure>::variant;
 
+  void ignore() const {
+    // no-op
+  }
+
   explicit operator bool() const {
     return is_success();
   }
@@ -431,6 +435,11 @@ public:
     if constexpr (not std::same_as<T, void>) {
       return std::get<0>(std::move(*this));
     }
+  }
+
+  auto error() const -> failure {
+    TENZIR_ASSERT(is_error());
+    return std::get<1>(*this);
   }
 
   auto operator*() -> reference_type {

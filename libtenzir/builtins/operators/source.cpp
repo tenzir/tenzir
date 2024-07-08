@@ -55,13 +55,12 @@ private:
 
 class plugin final : public operator_plugin2<source_operator> {
 public:
-  auto make(invocation inv, session ctx) const -> operator_ptr override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto expr = ast::expression{};
     auto parser
       = argument_parser2::operator_("source").add(expr, "{...} | [...]");
-    if (not parser.parse(inv, ctx)) {
-      return nullptr;
-    }
+    TRY(parser.parse(inv, ctx));
     // TODO: We want to const-eval when the operator is instantiated.
     // For example: `every 1s { source { ts: now() } }`
     auto events = std::vector<record>{};

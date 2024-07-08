@@ -121,7 +121,7 @@ auto evaluator::eval(const ast::function_call& x) -> series {
   if (not func) {
     return series::null(null_type{}, length_);
   }
-  auto result = func->run(function_use::evaluator{this}, ctx_);
+  auto result = (*func)->run(function_use::evaluator{this}, ctx_);
   TENZIR_ASSERT(result.length() == length_);
   return result;
 }
@@ -185,7 +185,7 @@ auto evaluator::input_or_throw(into_location location) -> const table_slice& {
     diagnostic::error("expected a constant expression")
       .primary(location)
       .emit(ctx_);
-    throw std::monostate{};
+    throw failure::promise();
   }
   return *input_;
 }

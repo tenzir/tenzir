@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/data.hpp"
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
 
@@ -18,7 +19,7 @@ auto eval(const ast::expression& expr, const table_slice& input,
           diagnostic_handler& dh) -> series;
 
 auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
-  -> std::optional<data>;
+  -> failure_or<data>;
 
 struct resolve_error {
   struct field_not_found {};

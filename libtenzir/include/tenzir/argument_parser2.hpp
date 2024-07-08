@@ -83,11 +83,12 @@ public:
   // ------------------------------------------------------------------------
 
   auto parse(const operator_factory_plugin::invocation& inv, session ctx)
-    -> bool;
-  auto parse(const ast::function_call& call, session ctx) -> bool;
-  auto parse(const function_plugin::invocation& inv, session ctx) -> bool;
+    -> failure_or<void>;
+  auto parse(const ast::function_call& call, session ctx) -> failure_or<void>;
+  auto parse(const function_plugin::invocation& inv, session ctx)
+    -> failure_or<void>;
   auto parse(const ast::entity& self, std::span<ast::expression const> args,
-             session ctx) -> bool;
+             session ctx) -> failure_or<void>;
 
   auto usage() const -> std::string;
   auto docs() const -> std::string;

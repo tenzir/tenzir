@@ -134,8 +134,9 @@ public:
     return std::make_unique<pipeline>(std::move(*pipe));
   }
 
-  auto make(invocation inv, session ctx) const -> operator_ptr override {
-    argument_parser2::operator_("import").parse(inv, ctx);
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    argument_parser2::operator_("import").parse(inv, ctx).ignore();
     return std::make_unique<import_operator>();
   }
 };

@@ -154,13 +154,15 @@ public:
                                               cumulative);
   }
 
-  auto make(invocation inv, session ctx) const -> operator_ptr override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     bool real_time = false;
     bool cumulative = false;
     argument_parser2::operator_("measure")
       .add("real_time", real_time)
       .add("cumulative", cumulative)
-      .parse(inv, ctx);
+      .parse(inv, ctx)
+      .ignore();
     return std::make_unique<measure_operator>(batch_size_, real_time,
                                               cumulative);
   }

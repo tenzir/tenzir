@@ -67,17 +67,20 @@ auto resolve(const ast::simple_selector& sel, type ty)
 
 auto eval(const ast::expression& expr, const table_slice& input,
           diagnostic_handler& dh) -> series {
-  return evaluator{&input, session{dh}}.eval(expr);
+  // TODO: Do not create a new session here.
+  return evaluator{&input, session_provider::make(dh).as_session()}.eval(expr);
 }
 
 auto const_eval(const ast::expression& expr, diagnostic_handler& dh)
-  -> std::optional<data> {
+  -> failure_or<data> {
+  // TODO: Do not create a new session here.
   try {
-    auto result = evaluator{nullptr, session{dh}}.eval(expr);
+    auto result
+      = evaluator{nullptr, session_provider::make(dh).as_session()}.eval(expr);
     TENZIR_ASSERT(result.length() == 1);
     return materialize(value_at(result.type, *result.array, 0));
-  } catch (std::monostate) {
-    return std::nullopt;
+  } catch (failure fail) {
+    return fail;
   }
 }
 

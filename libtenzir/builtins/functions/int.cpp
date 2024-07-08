@@ -29,11 +29,11 @@ public:
   }
 
   auto make_function(invocation inv, session ctx) const
-    -> std::unique_ptr<function_use> override {
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    argument_parser2::function(name())
-      .add(expr, "<string|number>")
-      .parse(inv, ctx);
+    TRY(argument_parser2::function(name())
+          .add(expr, "<string|number>")
+          .parse(inv, ctx));
     return function_use::make([expr = std::move(expr),
                                this](auto eval, session ctx) -> series {
       auto value = eval(expr);

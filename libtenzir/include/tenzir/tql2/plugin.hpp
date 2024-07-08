@@ -21,12 +21,18 @@ public:
     std::vector<ast::expression> args;
   };
 
-  virtual auto make(invocation inv, session ctx) const -> operator_ptr = 0;
+  virtual auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr>
+    = 0;
 };
 
 template <class Operator>
 class operator_plugin2 : public virtual operator_factory_plugin,
                          public virtual operator_inspection_plugin<Operator> {};
+
+class function_use;
+
+using function_ptr = std::unique_ptr<function_use>;
 
 class function_use {
 public:
@@ -49,9 +55,8 @@ public:
   virtual auto run(evaluator eval, session ctx) const -> series = 0;
 
   static auto make(std::function<auto(evaluator eval, session ctx)->series> f)
-    -> std::unique_ptr<function_use>;
+    -> function_ptr;
 };
-
 class function_plugin : public virtual plugin {
 public:
   using evaluator = function_use::evaluator;
@@ -68,7 +73,7 @@ public:
   };
 
   virtual auto make_function(invocation inv, session ctx) const
-    -> std::unique_ptr<function_use>
+    -> failure_or<function_ptr>
     = 0;
 };
 
@@ -86,10 +91,10 @@ public:
 class aggregation_plugin : public virtual function_plugin {
 public:
   auto make_function(invocation inv, session ctx) const
-    -> std::unique_ptr<function_use> override;
+    -> failure_or<function_ptr> override;
 
   virtual auto make_aggregation(invocation inv, session ctx) const
-    -> std::unique_ptr<aggregation_instance>
+    -> failure_or<std::unique_ptr<aggregation_instance>>
     = 0;
 };
 
