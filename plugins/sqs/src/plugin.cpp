@@ -51,6 +51,10 @@ public:
     if (auto endpoint_url = detail::getenv("AWS_ENDPOINT_URL_SQS")) {
       config.endpointOverride = *endpoint_url;
     }
+    // Proxy settings should be honored.
+    // This is documented as "Off by default for legacy reasons" at
+    // https://sdk.amazonaws.com/cpp/api/LATEST/aws-cpp-sdk-core/html/struct_aws_1_1_client_1_1_client_configuration.html#a0197eb33dffeb845f98d14e5058921c1
+    config.allowSystemProxy = true;
     // The HTTP request timeout should be longer than the poll time. The overall
     // request timeout, including retries, should be even larger.
     auto poll_time_ms = std::chrono::milliseconds{poll_time};
