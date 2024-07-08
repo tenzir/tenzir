@@ -23,7 +23,7 @@ void panic_impl(std::string message, std::source_location source) {
   // should be change to a special panic exception.
   backtrace();
   TENZIR_ERROR("panic: {}", message);
-  TENZIR_ERROR("version: {}", version::version);
+  TENZIR_ERROR("version: {} {}", version::version, version::build_metadata);
   TENZIR_ERROR("source: {}:{}", source.file_name(), source.line());
   TENZIR_ERROR("this is a bug, we would appreciate a report - thank you!");
   // TODO: Consider making this available through the normal configuration
