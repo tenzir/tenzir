@@ -166,7 +166,9 @@
                     $val
                   end)
                 );
-              deepmerge({}; .)' $TMP/nix2.spdx.json $TMP/vendored.spdx.json > tenzir.spdx.json
+              deepmerge({}; .)' $TMP/nix2.spdx.json $TMP/vendored.spdx.json > $TMP/nix3.spdx.json
+            echo "Sorting the output"
+            jq '.packages|=sort_by(.name)|.relationships|=sort_by(.spdxElementId,.relatedSpdxElement)' $TMP/nix3.spdx.json > tenzir.spdx.json
             echo "Wrote tenzir.spdx.json"
           '';
         };
