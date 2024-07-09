@@ -422,6 +422,7 @@ public:
 
   auto parse_strings(const arrow::StringArray& input,
                      diagnostic_handler& dh) const -> std::vector<series> {
+    auto too_complex = false;
     auto builder = series_builder{type{record_type{}}};
     for (auto&& string : values(string_type{}, input)) {
       if (not string) {
@@ -429,12 +430,21 @@ public:
         continue;
       }
       boost::cmatch matches{};
-      if (not boost::regex_match(string->begin(), string->end(), matches,
-                                 *input_pattern_.resolved_pattern)) {
-        diagnostic::warning("pattern could not be matched")
-          .hint("input: `{}`", *string)
-          .hint("pattern: `{}`", input_pattern_.resolved_pattern->str())
-          .emit(dh);
+      try {
+        if (not boost::regex_match(string->begin(), string->end(), matches,
+                                   *input_pattern_.resolved_pattern)) {
+          diagnostic::warning("pattern could not be matched")
+            .hint("input: `{}`", *string)
+            .hint("pattern: `{}`", input_pattern_.resolved_pattern->str())
+            .emit(dh);
+          builder.null();
+          continue;
+        }
+      } catch (const boost::regex_error& e) {
+        if (e.code() != boost::regex_constants::error_complexity) {
+          throw;
+        }
+        too_complex = true;
         builder.null();
         continue;
       }
@@ -509,6 +519,11 @@ public:
           add_field(name, convert_match(matches[name], type), type);
         }
       }
+    }
+    if (too_complex) {
+      diagnostic::warning("failed to apply grok pattern due to its complexity")
+        .hint("try to simplify or optimize your grok pattern")
+        .emit(dh);
     }
     return builder.finish();
   }
