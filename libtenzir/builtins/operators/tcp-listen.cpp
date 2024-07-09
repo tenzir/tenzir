@@ -361,6 +361,8 @@ auto make_connection_manager(
   self->state.endpoint = endpoints.begin()->endpoint();
   self->state.acceptor = boost::asio::ip::tcp::acceptor(*self->state.io_context,
                                                         *self->state.endpoint);
+  boost::asio::ip::tcp::acceptor::reuse_address reuse_address(true);
+  self->state.acceptor->set_option(reuse_address);
   self->state.acceptor->listen(boost::asio::socket_base::max_connections);
   self->state.socket = boost::asio::ip::tcp::socket(*self->state.io_context);
 #if TENZIR_LINUX
