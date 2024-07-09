@@ -32,7 +32,7 @@ See [`export` operator](export.md#--retro) for more details.
 
 ### `<name>`
 
-Show only metrics with the specified name. For example `metrics cpu` shows only
+Show only metrics with the specified name. For example, `metrics cpu` only shows
 CPU metrics.
 
 ## Schemas
