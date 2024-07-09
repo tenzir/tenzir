@@ -27,8 +27,10 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto parser = argument_parser{"metrics", "https://docs.tenzir.com/"
                                              "operators/metrics"};
-    bool live = false;
-    bool retro = false;
+    auto name = std::optional<std::string>{};
+    auto live = false;
+    auto retro = false;
+    parser.add(name, "<name>");
     parser.add("--live", live);
     parser.add("--retro", retro);
     parser.parse(p);
@@ -36,9 +38,10 @@ public:
       retro = true;
     }
     const auto definition
-      = fmt::format("export --internal{}{} | where #schema "
-                    "== /tenzir\\.metrics\\..+/",
-                    live ? " --live" : "", retro ? " --retro" : "");
+      = fmt::format("export --internal{}{} | where #schema == {}",
+                    live ? " --live" : "", retro ? " --retro" : "",
+                    name ? fmt::format("\"tenzir.metrics.{}\"", *name)
+                         : "/tenzir\\.metrics\\..+/");
     auto result = pipeline::internal_parse_as_operator(definition);
     if (not result) {
       diagnostic::error("failed to transform `metrics` operator into `{}`",

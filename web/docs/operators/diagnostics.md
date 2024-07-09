@@ -11,7 +11,7 @@ Retrieves diagnostic events from a Tenzir node.
 ## Synopsis
 
 ```
-diagnostics [--live]
+diagnostics [--live] [--retro]
 ```
 
 ## Description
