@@ -178,11 +178,10 @@ inline constexpr uint64_t max_events = 1024;
 
 /// The maximum amount of time to wait for additional having at least
 /// `min_events`.
-inline constexpr std::chrono::milliseconds timeout
-  = std::chrono::milliseconds{2000};
+inline constexpr auto timeout = std::chrono::seconds{5};
 
 /// The maximum timeout that can be requested by the client.
-inline constexpr std::chrono::seconds max_timeout = std::chrono::seconds{5};
+inline constexpr std::chrono::seconds max_timeout = std::chrono::seconds{10};
 
 } // namespace serve
 
