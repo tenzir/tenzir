@@ -422,7 +422,7 @@ public:
 
   auto parse_strings(const arrow::StringArray& input,
                      diagnostic_handler& dh) const -> std::vector<series> {
-    auto too_complex = false;
+    auto too_complex = std::optional<std::string_view>{};
     auto builder = series_builder{type{record_type{}}};
     for (auto&& string : values(string_type{}, input)) {
       if (not string) {
@@ -444,7 +444,9 @@ public:
         if (e.code() != boost::regex_constants::error_complexity) {
           throw;
         }
-        too_complex = true;
+        if (not too_complex) {
+          too_complex = string;
+        }
         builder.null();
         continue;
       }
@@ -522,6 +524,7 @@ public:
     }
     if (too_complex) {
       diagnostic::warning("failed to apply grok pattern due to its complexity")
+        .note("example input: {:?}", *too_complex)
         .hint("try to simplify or optimize your grok pattern")
         .emit(dh);
     }
