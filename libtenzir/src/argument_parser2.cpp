@@ -171,6 +171,21 @@ auto argument_parser2::parse(const ast::entity& self,
           return;
         }
         auto cast = caf::get_if<T>(&*value);
+        if constexpr (std::same_as<T, uint64_t>) {
+          if (not cast) {
+            auto other = caf::get_if<int64_t>(&*value);
+            if (other) {
+              if (*other < 0) {
+                emit(diagnostic::error("expected positive integer, got `{}`",
+                                       *other)
+                       .primary(expr));
+                return;
+              }
+              value = static_cast<uint64_t>(*other);
+              cast = caf::get_if<T>(&*value);
+            }
+          }
+        }
         if (not cast) {
           // TODO: Attempt conversion.
           emit(diagnostic::error("expected argument of type `{}`, but got `{}`",
