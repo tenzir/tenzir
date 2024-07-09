@@ -11,7 +11,7 @@ Retrieves metrics events from a Tenzir node.
 ## Synopsis
 
 ```
-metrics [--live]
+metrics [--live] [--retro] [<name>]
 ```
 
 ## Description
@@ -29,6 +29,11 @@ metrics events persisted at a Tenzir node.
 Work on persisted diagnostic events (first), even when `--live` is given.
 
 See [`export` operator](export.md#--retro) for more details.
+
+### `<name>`
+
+Show only metrics with the specified name. For example `metrics cpu` shows only
+CPU metrics.
 
 ## Schemas
 
