@@ -39,6 +39,20 @@ CPU metrics.
 
 Tenzir collects metrics with the following schemas.
 
+### `tenzir.metrics.api`
+
+Contains information about all accessed API endpoints, emitted once per second.
+
+|Field|Type|Description|
+|:-|:-|:-|
+|`timestamp`|`time`|The time at which this metric was recorded.|
+|`method`|`double`|The HTTP method used to access the API.|
+|`path`|`double`|The path of the accessed API endpoint.|
+|`params`|`record`|The API endpoints parameters passed inused.|
+
+The schema of the record `params` depends on the API endpoint used. Refer to the
+[API documentation](/api) to see the available parameters per endpoint.
+
 ### `tenzir.metrics.cpu`
 
 Contains a measurement of CPU utilization.

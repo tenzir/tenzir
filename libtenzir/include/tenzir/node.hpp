@@ -9,8 +9,8 @@
 #pragma once
 
 #include "tenzir/actors.hpp"
-#include "tenzir/command.hpp"
 #include "tenzir/component_registry.hpp"
+#include "tenzir/series_builder.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/stateful_actor.hpp>
@@ -18,7 +18,6 @@
 
 #include <chrono>
 #include <filesystem>
-#include <map>
 #include <string>
 #include <unordered_map>
 
@@ -65,6 +64,9 @@ struct node_state {
 
   /// Counters for multi-instance components.
   std::unordered_map<std::string, uint64_t> label_counters = {};
+
+  /// Builder for API metrics.
+  std::unordered_map<std::string, series_builder> api_metrics_builders = {};
 
   /// Startup timestamp.
   time start_time = time::clock::now();
