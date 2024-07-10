@@ -61,7 +61,7 @@ which details all the available metrics and their schema.
 At this point it's an open secret that we're working working on a major revamp
 to the Tenzir Query Language. We still have quite a way to go before
 making the next version the new default, but we're excited to announce that as
-of Tenzir v4.18, it is now possible to use it without being a Tenzir developer.
+of Tenzir v4.18, it is now possible to try it out without being a Tenzir developer.
 
 To use TQL2 on [app.tenzir.com](https://app.tenzir.com), for pipelines
 configured in the `tenzir.yaml` configuration file, or through the API, start
@@ -69,12 +69,15 @@ the pipeline with a `// experimental-tql2` comment. For example:
 
 ```
 // experimental-tql2
-source {
-    foo: random(),
+export live=true
+where @name == "zeek.http"
+if method == "GET" {
+  where request_body.len > 0
+  publish "weird"
+} else {
+  where uri.ends_with(".exe") and status_code < 400
+  publish "suspicious"
 }
-| repeat 10
-| bar = random()
-| baz = sqrt(foo * bar) < 0.5
 ```
 
 Use `tenzir --tql2 <pipeline>` to use TQL2 with the `tenzir` binary on the
