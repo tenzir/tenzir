@@ -546,38 +546,54 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       if (!params)
         return rest_response::make_error(400, "invalid parameters",
                                          params.error());
-      {
-        auto it = self->state.api_metrics_builders.find(desc.canonical_path);
-        if (it == self->state.api_metrics_builders.end()) {
-          auto builder = series_builder{type{
-            "tenzir.metrics.api",
-            record_type{
-              {"timestamp", time_type{}},
-              {"method", string_type{}},
-              {"path", string_type{}},
-              {"params", endpoint.params.value_or(record_type{})},
-            },
-            {{"internal"}},
-          }};
-          it = self->state.api_metrics_builders.emplace_hint(
-            it, desc.canonical_path, std::move(builder));
-        }
-        auto metric = it->second.record();
-        metric.field("timestamp", time::clock::now());
-        metric.field("method", fmt::to_string(endpoint.method));
-        metric.field("path", endpoint.path);
-        metric.field("params", *params);
-      }
       auto rp = self->make_response_promise<rest_response>();
+      auto deliver = [rp, self, desc, params, endpoint,
+                      start_time = std::chrono::steady_clock::now()](
+                       caf::expected<rest_response> response) mutable {
+        {
+          auto it = self->state.api_metrics_builders.find(desc.canonical_path);
+          if (it == self->state.api_metrics_builders.end()) {
+            auto builder = series_builder{type{
+              "tenzir.metrics.api",
+              record_type{
+                {"timestamp", time_type{}},
+                {"method", string_type{}},
+                {"path", string_type{}},
+                {"response_time", duration_type{}},
+                {"status_code", uint64_type{}},
+                {"params", endpoint.params.value_or(record_type{})},
+              },
+              {{"internal"}},
+            }};
+            it = self->state.api_metrics_builders.emplace_hint(
+              it, desc.canonical_path, std::move(builder));
+          }
+          auto metric = it->second.record();
+          metric.field("timestamp", time::clock::now());
+          metric.field("method", fmt::to_string(endpoint.method));
+          metric.field("path", endpoint.path);
+          metric.field("response_time",
+                       duration{std::chrono::steady_clock::now() - start_time});
+          metric.field("status_code",
+                       response ? uint64_t{response->code()} : uint64_t{500});
+          metric.field("params", *params);
+        }
+        if (not response) {
+          rp.deliver(
+            rest_response::make_error(500, "internal error", response.error()));
+          return;
+        }
+        rp.deliver(std::move(*response));
+      };
       self
         ->request(handler, caf::infinite, atom::http_request_v,
                   endpoint.endpoint_id, *params)
         .then(
-          [rp](rest_response& rsp) mutable {
-            rp.deliver(std::move(rsp));
+          [deliver](rest_response& rsp) mutable {
+            deliver(std::move(rsp));
           },
-          [rp](const caf::error& e) mutable {
-            rp.deliver(rest_response::make_error(500, "internal error", e));
+          [deliver](caf::error& err) mutable {
+            deliver(std::move(err));
           });
       return rp;
     },
