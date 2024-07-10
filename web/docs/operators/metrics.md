@@ -45,10 +45,10 @@ Contains information about all accessed API endpoints, emitted once per second.
 
 |Field|Type|Description|
 |:-|:-|:-|
-|`timestamp`|`time`|The time at which this request API endpoint was accessed.|
+|`timestamp`|`time`|The time at which the API request was received.|
 |`method`|`double`|The HTTP method used to access the API.|
 |`path`|`double`|The path of the accessed API endpoint.|
-|`response_time`|`duration`|The time the API endpoint took to response.|
+|`response_time`|`duration`|The time the API endpoint took to respond.|
 |`status_code`|`uint64`|The HTTP status code of the API response.|
 |`params`|`record`|The API endpoints parameters passed inused.|
 
