@@ -11,7 +11,7 @@ Retrieves events from a Tenzir node. The dual to [`import`](import.md).
 ## Synopsis
 
 ```
-export [--live] [--retro] [--internal] [--paralllel <level>]
+export [--live] [--retro] [--internal] [--parallel <level>]
 ```
 
 ## Description
