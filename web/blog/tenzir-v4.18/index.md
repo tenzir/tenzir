@@ -6,14 +6,14 @@ tags: [release, health-metrics, tql2]
 comments: true
 ---
 
-Monitoring Tenzir Nodes is easier than before with [Tenzir
+Monitoring Tenzir nodes is easier than before with [Tenzir
 v4.18][github-release] and its new health metrics.
 
 TODO: Add a title image
 
 <!-- ![Tenzir v4.18](tenzir-v4.18.excalidraw.svg) -->
 
-[github-release]: https://github.com/tenzir/tenzir/releases/tag/v4.17.1
+[github-release]: https://github.com/tenzir/tenzir/releases/tag/v4.18
 
 <!-- truncate -->
 
@@ -23,7 +23,7 @@ The `metrics` operator now additionally takes a positional argument for the
 metrics name. Now, `metrics cpu` is equivalent to `metrics | where #schema ==
 "tenzir.metrics.cpu"`. That's a lot easier to write!
 
-Tenzir Nodes now collect more metrics than before. In particular, the `import`,
+Tenzir nodes now collect more metrics than before. In particular, the `import`,
 `export`, `publish`, `subscribe`, `enrich`, and `lookup` operators now emit
 metrics, and nodes additionally collect `api` metrics for every API call. These
 are best explained on examples:
@@ -67,7 +67,7 @@ v4.18, it is now possible to use TQL2 without being a Tenzir developer.
 
 To use TQL2 on [app.tenzir.com](https://app.tenzir.com), for pipelines
 configured in the `tenzir.yaml` configuration file, or through the API, start
-the pipeline with `// experimental-tql2`. For example:
+the pipeline with a `// experimental-tql2` comment. For example:
 
 ```
 // experimental-tql2
