@@ -200,6 +200,16 @@ The records `input` and `output` have the following schema:
 |`elements`|`uint64`|Number of elements that were seen during the collection period.|
 |`approx_bytes`|`uint64`|An approximation for the number of bytes transmitted.|
 
+### `tenzir.metrics.platform`
+
+Signals whether the connection to the Tenzir Platform is working from the node's
+perspective. Emitted once per second.
+
+|Field|Type|Description|
+|:-|:-|:-|
+|`timestamp`|`time`|The time at which this metric was recorded.|
+|`connected`|`bool`|The connection status.|
+
 ### `tenzir.metrics.process`
 
 Contains a measurement of the amount of memory used by the `tenzir-node` process.
