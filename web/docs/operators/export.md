@@ -11,7 +11,7 @@ Retrieves events from a Tenzir node. The dual to [`import`](import.md).
 ## Synopsis
 
 ```
-export [--live] [--internal] [--low-priority]
+export [--live] [--retro] [--internal] [--parallel <level>]
 ```
 
 ## Description
@@ -40,10 +40,12 @@ Export internal events, such as metrics or diagnostics, instead. By default,
 `export` only returns events that were previously imported with `import`. In
 contrast, `export --internal` exports internal events such as operator metrics.
 
-### `--low-priority`
+### `--parallel <level>`
 
-Treat this export with a lower priority, causing it to interfere less with
-regular priority exports at the cost of potentially running slower.
+The parallel level controls how many worker threads the operator uses at most
+for querying historical events.
+
+Defaults to 3.
 
 ## Examples
 

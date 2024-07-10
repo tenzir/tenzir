@@ -92,6 +92,14 @@ auto register_component(node_actor::stateful_pointer<node_state> self,
     }
     return fmt::format("{}/{}", type, label);
   }();
+  if (tag != "filesystem") {
+    // TODO: This is a terrible hack, but for historical reasons the filesystem
+    // actor is kept alive through a very manual process, and putting it into
+    // the registry makes that situation even worse for some reason. There's a
+    // related comment in the core shutdown sequence in the node actor's exit
+    // handler; we should really aim to fix this sometime in the future.
+    self->system().registry().put(fmt::format("tenzir.{}", tag), component);
+  }
   self->state.component_names.emplace(component->address(), tag);
   const auto [it, inserted] = self->state.alive_components.insert(
     std::pair{component->address(), std::move(tag)});
@@ -344,7 +352,6 @@ auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
       diagnostic::error("{} failed to create the {} component", *self, name)
         .throw_();
     }
-    self->system().registry().put(fmt::format("tenzir.{}", name), handle);
     if (auto err
         = register_component(self, caf::actor_cast<caf::actor>(handle), name)) {
       diagnostic::error(err)
@@ -371,17 +378,19 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
                                      return alive_component.first == msg.source;
                                    });
     if (it != self->state.alive_components.end()) {
+      auto component = it->second;
+      self->state.alive_components.erase(it);
       TENZIR_VERBOSE("component {} deregistered; {} remaining: [{}])",
-                     it->second, self->state.alive_components.size(),
+                     component, self->state.alive_components.size(),
                      fmt::join(self->state.alive_components
                                  | std::ranges::views::values,
                                ", "));
-      self->state.alive_components.erase(it);
     }
     if (!self->state.tearing_down) {
       auto actor = caf::actor_cast<caf::actor>(msg.source);
       auto component = self->state.registry.remove(actor);
       TENZIR_ASSERT(component);
+      self->system().registry().erase(component->actor.id());
       // Terminate if a singleton dies.
       if (is_core_component(component->type)) {
         TENZIR_ERROR("{} terminates after DOWN from {} with reason {}", *self,
@@ -474,7 +483,6 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
           // actor, as that would mean that actors not tracked by the component
           // registry which hold a strong handle to the filesystem actor cannot
           // use it for persistence on shutdown.
-          filesystem_handle = {};
         };
     terminate<policy::parallel>(self, std::move(aux_components))
       .then(
