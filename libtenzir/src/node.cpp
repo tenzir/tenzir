@@ -515,10 +515,10 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     }
   });
   return {
-    [self](atom::proxy,
-           http_request_description& desc) -> caf::result<rest_response> {
-      TENZIR_VERBOSE("{} proxying request to {} with {}", *self,
-                     desc.canonical_path, desc.json_body);
+    [self](atom::proxy, http_request_description& desc,
+           std::string& request_id) -> caf::result<rest_response> {
+      TENZIR_VERBOSE("{} proxying request with id {} to {} with {}", *self,
+                     request_id, desc.canonical_path, desc.json_body);
       auto [handler, endpoint] = self->state.get_endpoint_handler(desc);
       if (!handler) {
         auto canonical_paths = std::unordered_set<std::string>{};
@@ -548,36 +548,39 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
                                          params.error());
       auto rp = self->make_response_promise<rest_response>();
       auto deliver = [rp, self, desc, params, endpoint,
+                      request_id = std::move(request_id),
                       start_time = std::chrono::steady_clock::now()](
                        caf::expected<rest_response> response) mutable {
-        {
-          auto it = self->state.api_metrics_builders.find(desc.canonical_path);
-          if (it == self->state.api_metrics_builders.end()) {
-            auto builder = series_builder{type{
-              "tenzir.metrics.api",
-              record_type{
-                {"timestamp", time_type{}},
-                {"method", string_type{}},
-                {"path", string_type{}},
-                {"response_time", duration_type{}},
-                {"status_code", uint64_type{}},
-                {"params", endpoint.params.value_or(record_type{})},
-              },
-              {{"internal"}},
-            }};
-            it = self->state.api_metrics_builders.emplace_hint(
-              it, desc.canonical_path, std::move(builder));
-          }
-          auto metric = it->second.record();
-          metric.field("timestamp", time::clock::now());
-          metric.field("method", fmt::to_string(endpoint.method));
-          metric.field("path", endpoint.path);
-          metric.field("response_time",
-                       duration{std::chrono::steady_clock::now() - start_time});
-          metric.field("status_code",
-                       response ? uint64_t{response->code()} : uint64_t{500});
-          metric.field("params", *params);
+        auto it = self->state.api_metrics_builders.find(desc.canonical_path);
+        if (it == self->state.api_metrics_builders.end()) {
+          auto builder = series_builder{type{
+            "tenzir.metrics.api",
+            record_type{
+              {"timestamp", time_type{}},
+              {"request_id", string_type{}},
+              {"method", string_type{}},
+              {"path", string_type{}},
+              {"response_time", duration_type{}},
+              {"status_code", uint64_type{}},
+              {"params", endpoint.params.value_or(record_type{})},
+            },
+            {{"internal"}},
+          }};
+          it = self->state.api_metrics_builders.emplace_hint(
+            it, desc.canonical_path, std::move(builder));
         }
+        auto metric = it->second.record();
+        metric.field("timestamp", time::clock::now());
+        if (not request_id.empty()) {
+          metric.field("request_id", request_id);
+        }
+        metric.field("method", fmt::to_string(endpoint.method));
+        metric.field("path", endpoint.path);
+        metric.field("response_time",
+                     duration{std::chrono::steady_clock::now() - start_time});
+        metric.field("status_code",
+                     response ? uint64_t{response->code()} : uint64_t{500});
+        metric.field("params", *params);
         if (not response) {
           rp.deliver(
             rest_response::make_error(500, "internal error", response.error()));

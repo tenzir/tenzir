@@ -46,6 +46,7 @@ Contains information about all accessed API endpoints, emitted once per second.
 |Field|Type|Description|
 |:-|:-|:-|
 |`timestamp`|`time`|The time at which the API request was received.|
+|`request_id`|`string`|The unique request ID assigned by the Tenzir Platform.|
 |`method`|`double`|The HTTP method used to access the API.|
 |`path`|`double`|The path of the accessed API endpoint.|
 |`response_time`|`duration`|The time the API endpoint took to respond.|
