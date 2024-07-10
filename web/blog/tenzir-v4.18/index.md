@@ -9,11 +9,9 @@ comments: true
 Monitoring Tenzir nodes is easier than before with [Tenzir
 v4.18][github-release] and its new health metrics.
 
-TODO: Add a title image
+![Tenzir v4.18](tenzir-v4.18.excalidraw.svg)
 
-<!-- ![Tenzir v4.18](tenzir-v4.18.excalidraw.svg) -->
-
-[github-release]: https://github.com/tenzir/tenzir/releases/tag/v4.18
+[github-release]: https://github.com/tenzir/tenzir/releases/tag/v4.18.0
 
 <!-- truncate -->
 
@@ -61,9 +59,9 @@ which details all the available metrics and their schema.
 ## Play With TQL2
 
 At this point it's an open secret that we're working working on a major revamp
-to the Tenzir Query Language called TQL2. We still have quite a way to go before
-making TQL2 the new default, but we're excited to announce that as of Tenzir
-v4.18, it is now possible to use TQL2 without being a Tenzir developer.
+to the Tenzir Query Language. We still have quite a way to go before
+making the next version the new default, but we're excited to announce that as
+of Tenzir v4.18, it is now possible to use it without being a Tenzir developer.
 
 To use TQL2 on [app.tenzir.com](https://app.tenzir.com), for pipelines
 configured in the `tenzir.yaml` configuration file, or through the API, start
