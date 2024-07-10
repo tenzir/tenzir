@@ -407,7 +407,8 @@ using node_actor = typed_actor_fwd<
   // Note that nodes connected via CAF trust each other completely,
   // so this skips all authorization and access control mechanisms
   // that come with HTTP(s).
-  auto(atom::proxy, http_request_description)->caf::result<rest_response>,
+  auto(atom::proxy, http_request_description, std::string)
+    ->caf::result<rest_response>,
   // Retrieve components by their label from the component registry.
   auto(atom::get, atom::label, std::vector<std::string>)
     ->caf::result<std::vector<caf::actor>>,
