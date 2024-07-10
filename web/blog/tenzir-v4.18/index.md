@@ -23,8 +23,9 @@ metrics name. Now, `metrics cpu` is equivalent to `metrics | where #schema ==
 
 Tenzir nodes now collect more metrics than before. In particular, the `import`,
 `export`, `publish`, `subscribe`, `enrich`, and `lookup` operators now emit
-metrics, and nodes additionally collect `api` metrics for every API call. These
-are best explained on examples:
+metrics, and nodes additionally collect `api` metrics for every API call and
+`platform` metrics that record the connection status to the Tenzir Platform from
+the node's perspective. These are best explained on examples:
 
 ```text {0} title="Show imported events per schema and day for the last month"
 metrics import
