@@ -75,7 +75,7 @@ public:
 
   void emit(diagnostic diag) override {
     if (not std::exchange(first, false)) {
-      fmt::print("\n");
+      fmt::print(stream_, "\n");
     }
     // TODO: Do not print the same line multiple times. Merge annotations instead.
     fmt::print(stream_, "{}{}{}{}: {}{}\n", bold, color(diag.severity),
