@@ -81,7 +81,7 @@ constexpr auto SPEC_V0 = R"_(
 /serve:
   post:
     summary: Return data from a pipeline
-    description: "Returns events from an existing pipeline. The pipeline definition must include a serve operator. By default, the endpoint performs long polling (`timeout: 2s`) and returns events as soon as they are available (`min_events: 1`)."
+    description: "Returns events from an existing pipeline. The pipeline definition must include a serve operator. By default, the endpoint performs long polling (`timeout: 5s`) and returns events as soon as they are available (`min_events: 1`)."
     requestBody:
       description: Body for the serve endpoint
       required: true
@@ -111,9 +111,9 @@ constexpr auto SPEC_V0 = R"_(
                 description: Wait for this number of events before returning.
               timeout:
                 type: string
-                example: "2000ms"
-                default: "2000ms"
-                description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 5 seconds.
+                example: "200ms"
+                default: "5s"
+                description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 10 seconds.
               use_simple_format:
                 type: bool
                 example: true
