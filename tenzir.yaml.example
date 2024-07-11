@@ -4,8 +4,11 @@
 
 # Options that concern Tenzir.
 tenzir:
-  # The host and port to listen at and connect to.
-  endpoint: "localhost:5158"
+  # The host and port to listen at for node-to-node connections to in the form
+  # `<host>:<port>`. Host or port may be emitted to use their defaults, which
+  # are localhost and 5158, respectively. Set the port to zero to automatically
+  # choose a port. Set to false to disable exposing an endpoint.
+  endpoint: localhost:5158
 
   # The timeout for connecting to a Tenzir server. Set to 0 seconds to wait
   # indefinitely.
