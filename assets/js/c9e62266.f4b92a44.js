@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[58900],{26416:s=>{s.exports=JSON.parse('{"label":"health-metrics","permalink":"/blog/tags/health-metrics","allTagsPath":"/blog/tags","count":1}')}}]);
