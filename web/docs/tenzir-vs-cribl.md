@@ -347,7 +347,9 @@ Tenzir has a [`deduplicate`](operators/deduplicate.md) operator.
 
 ![Deduplicate Controls](operators/deduplicate.excalidraw.svg)
 
-### Enrichment / Contextualization
+### Enrichment
+
+![Cribl vs. Tenzir — Enrichment](cribl-vs-tenzir-enrichment.excalidraw.svg)
 
 #### Cribl
 
@@ -364,7 +366,7 @@ Tenzir has a [`deduplicate`](operators/deduplicate.md) operator.
 
 - [Contexts](contexts.md) are stateful objects usable for enrichment with the
   [`enrich`](operators/enrich.md) operator.
-- There exist several context types, such as lookup table, Bloom filter, GeoIP
+- There exist several context types, such as lookup tables, Bloom filters, GeoIP
   databases, or user-written C++ plugins.
 - Contexts are not static and limited to CSV or MMDB files; you can add data
   dynamically from any another pipeline, using the
@@ -375,6 +377,11 @@ Tenzir has a [`deduplicate`](operators/deduplicate.md) operator.
   enrichment with single IP addresses (using a longest-prefix match). This comes
   in handy for [enriching with a network
   inventory](user-guides/enrich-with-network-inventory/README.md).
+- Tenzir lookup tables support expiration of entries with per-key timeouts. This
+  makes it possible to automatically expire no-longer-relevant entries, e.g.,
+  stale observables. There are two types of timeouts: a *create timeout* that
+  counts down after an entry is inserted into the table and an *update timeout*
+  that resets when an entry gets accessed.
 
 ## Packs vs. Packages
 
