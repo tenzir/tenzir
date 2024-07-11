@@ -230,13 +230,6 @@ struct index_state {
 
   // -- introspection ----------------------------------------------------------
 
-  /// Flushes collected metrics to the accountant.
-  void send_report();
-
-  /// @returns various status metrics.
-  [[nodiscard]] caf::typed_response_promise<record>
-  status(status_verbosity v, duration d) const;
-
   size_t memusage() const;
 
   // -- data members -----------------------------------------------------------
@@ -306,9 +299,6 @@ struct index_state {
                          query_queue::entry>>
     active_lookups;
 
-  /// Keeps temporary statistics that are flushed with the metrics.
-  index_counters counters = {};
-
   /// The CATALOG actor.
   catalog_actor catalog = {};
 
@@ -320,12 +310,6 @@ struct index_state {
 
   /// The directory for in-progress partition transforms.
   std::filesystem::path markersdir = {};
-
-  /// Timekeeper for the scheduling algorithm.
-  struct measurement scheduler_measurement = {};
-
-  /// Handle of the accountant.
-  accountant_actor accountant = {};
 
   /// List of actors that wait for the next flush event.
   std::vector<flush_listener_actor> flush_listeners = {};
@@ -360,7 +344,6 @@ struct index_state {
 };
 
 /// Indexes events in horizontal partitions.
-/// @param accountant The accountant actor.
 /// @param filesystem The filesystem actor. Not used by the index itself but
 /// forwarded to partitions.
 /// @param catalog The catalog actor.
@@ -381,11 +364,11 @@ struct index_state {
 //  TODO: Use a settings struct for the various parameters.
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
-      accountant_actor accountant, filesystem_actor filesystem,
-      catalog_actor catalog, const std::filesystem::path& dir,
-      std::string store_backend, size_t partition_capacity,
-      duration active_partition_timeout, size_t max_inmem_partitions,
-      size_t taste_partitions, size_t max_concurrent_partition_lookups,
+      filesystem_actor filesystem, catalog_actor catalog,
+      const std::filesystem::path& dir, std::string store_backend,
+      size_t partition_capacity, duration active_partition_timeout,
+      size_t max_inmem_partitions, size_t taste_partitions,
+      size_t max_concurrent_partition_lookups,
       const std::filesystem::path& catalog_dir, index_config);
 
 } // namespace tenzir

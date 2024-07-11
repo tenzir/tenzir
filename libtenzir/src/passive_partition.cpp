@@ -21,7 +21,6 @@
 #include "tenzir/indexer.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/plugin.hpp"
-#include "tenzir/report.hpp"
 #include "tenzir/shutdown.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/terminate.hpp"
@@ -322,12 +321,10 @@ passive_partition_state::initialize_from_chunk(const tenzir::chunk_ptr& chunk) {
 
 partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
-  accountant_actor accountant, filesystem_actor filesystem,
-  const std::filesystem::path& path) {
+  filesystem_actor filesystem, const std::filesystem::path& path) {
   auto id_string = fmt::to_string(id);
   self->state.self = self;
   self->state.path = path;
-  self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);
   TENZIR_TRACEPOINT(passive_partition_spawned, id_string.c_str());
   self->set_down_handler([=](const caf::down_msg& msg) {
@@ -410,9 +407,8 @@ partition_actor::behavior_type passive_partition(
           self->quit(std::move(error));
           return;
         }
-        auto store
-          = plugin->make_store(self->state.accountant, self->state.filesystem,
-                               self->state.store_header);
+        auto store = plugin->make_store(self->state.filesystem,
+                                        self->state.store_header);
         if (!store) {
           TENZIR_ERROR("{} failed to spawn store: {}", *self, store.error());
           self->quit(caf::make_error(ec::system_error, "failed to spawn "
@@ -461,7 +457,6 @@ partition_actor::behavior_type passive_partition(
         rp.delegate(self->state.store, atom::query_v, query_context);
         return rp;
       }
-      auto start = std::chrono::steady_clock::now();
       auto triples = detail::evaluate(self->state, query_context.expr);
       if (triples.empty()) {
         rp.deliver(uint64_t{0});
@@ -473,7 +468,7 @@ partition_actor::behavior_type passive_partition(
                               std::move(ids_for_evaluation));
       self->request(eval, caf::infinite, atom::run_v)
         .then(
-          [self, rp, start,
+          [self, rp,
            query_context = std::move(query_context)](const ids& hits) mutable {
             if (!hits.empty() && hits.size() != self->state.events) {
               // FIXME: We run into this for at least the IP index following the
@@ -488,22 +483,6 @@ partition_actor::behavior_type passive_partition(
                            *self, self->state.events, hits.size());
             }
             TENZIR_DEBUG("{} received results from the evaluator", *self);
-            duration runtime = std::chrono::steady_clock::now() - start;
-            auto id_str = fmt::to_string(query_context.id);
-            self->send(self->state.accountant, atom::metrics_v,
-                       "partition.lookup.runtime", runtime,
-                       metrics_metadata{
-                         {"query", id_str},
-                         {"issuer", query_context.issuer},
-                         {"partition-type", "passive"},
-                       });
-            self->send(self->state.accountant, atom::metrics_v,
-                       "partition.lookup.hits", rank(hits),
-                       metrics_metadata{
-                         {"query", std::move(id_str)},
-                         {"issuer", query_context.issuer},
-                         {"partition-type", "passive"},
-                       });
             // TODO: Use the first path if the expression can be evaluated
             // exactly.
             query_context.ids = hits;

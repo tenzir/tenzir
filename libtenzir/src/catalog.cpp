@@ -26,7 +26,6 @@
 #include "tenzir/pipeline.hpp"
 #include "tenzir/prune.hpp"
 #include "tenzir/query_context.hpp"
-#include "tenzir/report.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/synopsis.hpp"
 #include "tenzir/taxonomies.hpp"
@@ -471,78 +470,12 @@ void catalog_state::update_unprunable_fields(const partition_synopsis& ps) {
   // }
 }
 
-void catalog_state::emit_metrics() const {
-  TENZIR_ASSERT(accountant);
-  auto num_partitions_and_events_per_schema_and_version
-    = detail::stable_map<std::pair<std::string_view, uint64_t>,
-                         std::pair<uint64_t, uint64_t>>{};
-  for (const auto& [type, id_synopsis_map] : synopses_per_type) {
-    for (const auto& [id, synopsis] : id_synopsis_map) {
-      TENZIR_ASSERT(synopsis);
-      auto& [num_partitions, num_events]
-        = num_partitions_and_events_per_schema_and_version[std::pair{
-          synopsis->schema.name(), synopsis->version}];
-      num_partitions += 1;
-      num_events += synopsis->events;
-    }
-  }
-  auto total_num_partitions = uint64_t{0};
-  auto total_num_events = uint64_t{0};
-  auto r = report{};
-  r.data.reserve(num_partitions_and_events_per_schema_and_version.size());
-  for (const auto& [schema_and_version, num_partitions_and_events] :
-       num_partitions_and_events_per_schema_and_version) {
-    auto [schema_num_partitions, schema_num_events] = num_partitions_and_events;
-    total_num_partitions += schema_num_partitions;
-    total_num_events += schema_num_events;
-    r.data.push_back(data_point{
-          .key = "catalog.num-partitions",
-          .value = schema_num_partitions,
-          .metadata = {
-            {"schema", std::string{schema_and_version.first}},
-            {"partition-version", fmt::to_string(schema_and_version.second)},
-          },
-        });
-    r.data.push_back(data_point{
-          .key = "catalog.num-events",
-          .value = schema_num_events,
-          .metadata = {
-            {"schema", std::string{schema_and_version.first}},
-            {"partition-version", fmt::to_string(schema_and_version.second)},
-          },
-        });
-  }
-  r.data.push_back(data_point{
-    .key = "catalog.num-partitions-total",
-    .value = total_num_partitions,
-  });
-  r.data.push_back(data_point{
-    .key = "catalog.num-events-total",
-    .value = total_num_events,
-  });
-  r.data.push_back(data_point{
-          .key = "memory-usage",
-          .value = memusage(),
-          .metadata = {
-            {"component", std::string{name}},
-          },
-        });
-  self->send(accountant, atom::metrics_v, std::move(r));
-}
-
-auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
-             accountant_actor accountant) -> catalog_actor::behavior_type {
+auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
+  -> catalog_actor::behavior_type {
   if (self->getf(caf::local_actor::is_detached_flag))
     caf::detail::set_thread_name("tenzir.catalog");
   self->state.self = self;
   self->state.taxonomies.concepts = modules::concepts();
-  if (accountant) {
-    self->state.accountant = std::move(accountant);
-    self->send(self->state.accountant, atom::announce_v, self->name());
-    detail::weak_run_delayed_loop(self, defaults::telemetry_rate, [self] {
-      self->state.emit_metrics();
-    });
-  }
   return {
     [self](
       atom::merge,
@@ -604,31 +537,7 @@ auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
         return caf::make_error(ec::invalid_argument, "catalog expects queries "
                                                      "not to have ids");
       }
-      auto start = std::chrono::steady_clock::now();
-      auto result = self->state.lookup(query_context.expr);
-      if (!result) {
-        return result.error();
-      }
-      auto total_candidate_amount = std::transform_reduce(
-        result->candidate_infos.begin(), result->candidate_infos.end(),
-        size_t{0}, std::plus<>{}, [](const auto& candidate) {
-          return candidate.second.partition_infos.size();
-        });
-      auto id_str = fmt::to_string(query_context.id);
-      duration runtime = std::chrono::steady_clock::now() - start;
-      self->send(self->state.accountant, atom::metrics_v,
-                 "catalog.lookup.runtime", runtime,
-                 metrics_metadata{
-                   {"query", id_str},
-                   {"issuer", query_context.issuer},
-                 });
-      self->send(self->state.accountant, atom::metrics_v,
-                 "catalog.lookup.candidates", total_candidate_amount,
-                 metrics_metadata{
-                   {"query", std::move(id_str)},
-                   {"issuer", query_context.issuer},
-                 });
-      return result;
+      return self->state.lookup(query_context.expr);
     },
     [self](atom::get, uuid uuid) -> caf::result<partition_info> {
       for (const auto& [type, synopses] : self->state.synopses_per_type) {

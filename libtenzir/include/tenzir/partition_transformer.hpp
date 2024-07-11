@@ -65,9 +65,6 @@ struct partition_transformer_state {
   /// Actor handle of the catalog.
   catalog_actor catalog = {};
 
-  /// Actor handle of the accountant.
-  accountant_actor accountant = {};
-
   /// Actor handle of the filesystem actor.
   filesystem_actor fs = {};
 
@@ -170,9 +167,9 @@ struct partition_transformer_state {
 auto partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>,
   std::string store_id, const index_config& synopsis_opts,
-  const caf::settings& index_opts, accountant_actor accountant,
-  catalog_actor catalog, filesystem_actor fs, pipeline transform,
-  std::string partition_path_template, std::string synopsis_path_template)
+  const caf::settings& index_opts, catalog_actor catalog, filesystem_actor fs,
+  pipeline transform, std::string partition_path_template,
+  std::string synopsis_path_template)
   -> partition_transformer_actor::behavior_type;
 
 } // namespace tenzir

@@ -10,8 +10,6 @@
 
 #include "tenzir/fwd.hpp"
 
-#include "tenzir/accountant.hpp"
-#include "tenzir/accountant_config.hpp"
 #include "tenzir/actors.hpp"
 #include "tenzir/atoms.hpp"
 #include "tenzir/catalog.hpp"
@@ -137,47 +135,21 @@ auto node_state::get_endpoint_handler(const http_request_description& desc)
   return result->second;
 }
 
-auto spawn_accountant(node_actor::stateful_pointer<node_state> self,
-                      const caf::settings& settings) -> accountant_actor {
-  auto accountant = [&] {
-    if (not caf::get_or(settings, "tenzir.enable-metrics", false)) {
-      return accountant_actor{};
-    }
-    const auto metrics_opts
-      = caf::get_or(settings, "tenzir.metrics", caf::settings{});
-    auto metrics_config = to_accountant_config(metrics_opts);
-    if (!metrics_config) {
-      diagnostic::error(metrics_config.error())
-        .note("failed to parse `tenzir.metrics` configuration")
-        .throw_();
-    }
-    return self->spawn<caf::detached + caf::linked>(
-      tenzir::accountant, std::move(*metrics_config), self->state.dir);
-  }();
-  if (accountant) {
-    if (auto err = register_component(
-          self, caf::actor_cast<caf::actor>(accountant), "accountant")) {
-      diagnostic::error(err).note("failed to register accountant").throw_();
-    }
-  }
-  return accountant;
-}
-
-auto spawn_filesystem(node_actor::stateful_pointer<node_state> self,
-                      const accountant_actor& accountant) -> filesystem_actor {
+auto spawn_filesystem(node_actor::stateful_pointer<node_state> self)
+  -> filesystem_actor {
   auto filesystem
-    = self->spawn<caf::detached>(posix_filesystem, self->state.dir, accountant);
+    = self->spawn<caf::detached>(posix_filesystem, self->state.dir);
   TENZIR_ASSERT(filesystem);
   if (auto err = register_component(
         self, caf::actor_cast<caf::actor>(filesystem), "filesystem")) {
-    diagnostic::error(err).note("failed to register accountant").throw_();
+    diagnostic::error(err).note("failed to register filesystem").throw_();
   }
   return filesystem;
 }
 
-auto spawn_catalog(node_actor::stateful_pointer<node_state> self,
-                   const accountant_actor& accountant) -> catalog_actor {
-  auto catalog = self->spawn<caf::detached>(tenzir::catalog, accountant);
+auto spawn_catalog(node_actor::stateful_pointer<node_state> self)
+  -> catalog_actor {
+  auto catalog = self->spawn<caf::detached>(tenzir::catalog);
   TENZIR_ASSERT(catalog);
   if (auto err = register_component(self, caf::actor_cast<caf::actor>(catalog),
                                     "catalog")) {
@@ -188,7 +160,6 @@ auto spawn_catalog(node_actor::stateful_pointer<node_state> self,
 
 auto spawn_index(node_actor::stateful_pointer<node_state> self,
                  const caf::settings& settings,
-                 const accountant_actor& accountant,
                  const filesystem_actor& filesystem,
                  const catalog_actor& catalog) -> index_actor {
   auto index = [&] {
@@ -208,7 +179,7 @@ auto spawn_index(node_actor::stateful_pointer<node_state> self,
       }
     }
     return self->spawn<caf::detached>(
-      tenzir::index, accountant, filesystem, catalog, self->state.dir / "index",
+      tenzir::index, filesystem, catalog, self->state.dir / "index",
       std::string{defaults::store_backend},
       get_or(settings, "tenzir.max-partition-size",
              defaults::max_partition_size),
@@ -227,10 +198,9 @@ auto spawn_index(node_actor::stateful_pointer<node_state> self,
 }
 
 auto spawn_importer(node_actor::stateful_pointer<node_state> self,
-                    const accountant_actor& accountant,
                     const index_actor& index) -> importer_actor {
-  auto importer = self->spawn(tenzir::importer, self->state.dir / "importer",
-                              index, accountant);
+  auto importer
+    = self->spawn(tenzir::importer, self->state.dir / "importer", index);
   TENZIR_ASSERT(importer);
   if (auto err = register_component(self, caf::actor_cast<caf::actor>(importer),
                                     "importer")) {
@@ -306,13 +276,10 @@ auto spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
 auto spawn_components(node_actor::stateful_pointer<node_state> self) -> void {
   // Before we laod any component plugins, we first load all the core components.
   const auto& settings = content(self->system().config());
-  const auto accountant = spawn_accountant(self, settings);
-  const auto filesystem = spawn_filesystem(self, accountant);
-  const auto catalog = spawn_catalog(self, accountant);
-  const auto index
-    = spawn_index(self, settings, accountant, filesystem, catalog);
-  [[maybe_unused]] const auto importer
-    = spawn_importer(self, accountant, index);
+  const auto filesystem = spawn_filesystem(self);
+  const auto catalog = spawn_catalog(self);
+  const auto index = spawn_index(self, settings, filesystem, catalog);
+  [[maybe_unused]] const auto importer = spawn_importer(self, index);
   [[maybe_unused]] const auto disk_monitor
     = spawn_disk_monitor(self, settings, index);
   // 1. Collect all component_plugins into a name -> plugin* map:

@@ -195,7 +195,6 @@ class uuid;
 class value_index;
 class wah_bitmap;
 
-struct accountant_config;
 struct active_partition_state;
 struct attribute;
 struct catalog_lookup_result;
@@ -249,14 +248,11 @@ struct partition_info;
 struct partition_synopsis_pair;
 struct partition_synopsis;
 struct passive_partition_state;
-struct performance_report;
-struct performance_sample;
 struct predicate;
 struct qualified_record_field;
 struct query_context;
 struct query_cursor;
 struct query_status;
-struct report;
 struct resource;
 struct rest_endpoint;
 struct rest_response;
@@ -516,16 +512,12 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::detail::stable_map<tenzir::data, tenzir::data>))
 
   TENZIR_ADD_TYPE_ID((tenzir::connect_request))
-  TENZIR_ADD_TYPE_ID((tenzir::metrics_metadata))
-  TENZIR_ADD_TYPE_ID((tenzir::performance_report))
   TENZIR_ADD_TYPE_ID((tenzir::query_cursor))
   TENZIR_ADD_TYPE_ID((tenzir::query_status))
-  TENZIR_ADD_TYPE_ID((tenzir::report))
   TENZIR_ADD_TYPE_ID((tenzir::resource))
   TENZIR_ADD_TYPE_ID((tenzir::keep_original_partition))
   TENZIR_ADD_TYPE_ID((tenzir::status_verbosity))
   TENZIR_ADD_TYPE_ID((tenzir::catalog_lookup_result))
-  TENZIR_ADD_TYPE_ID((tenzir::accountant_config))
   TENZIR_ADD_TYPE_ID((tenzir::send_initial_dbstate))
 
   TENZIR_ADD_TYPE_ID((std::pair<std::string, tenzir::data>))

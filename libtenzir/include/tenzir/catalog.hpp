@@ -102,16 +102,10 @@ public:
   /// Update the list of fields that should not be touched by the pruner.
   void update_unprunable_fields(const partition_synopsis& ps);
 
-  /// Sends metrics to the accountant.
-  void emit_metrics() const;
-
   // -- data members -----------------------------------------------------------
 
   /// A pointer to the parent actor.
   catalog_actor::pointer self = {};
-
-  /// An actor handle to the accountant.
-  accountant_actor accountant = {};
 
   /// For each type, maps a partition ID to the synopses for that partition.
   // We mainly iterate over the whole map and return a sorted set, for which
@@ -131,8 +125,7 @@ public:
 /// represents a list of candidate partition IDs that may contain the desired
 /// data. The CATALOG may return false positives but never false negatives.
 /// @param self The actor handle.
-/// @param accountant An actor handle to the accountant.
-auto catalog(catalog_actor::stateful_pointer<catalog_state> self,
-             accountant_actor accountant) -> catalog_actor::behavior_type;
+auto catalog(catalog_actor::stateful_pointer<catalog_state> self)
+  -> catalog_actor::behavior_type;
 
 } // namespace tenzir
