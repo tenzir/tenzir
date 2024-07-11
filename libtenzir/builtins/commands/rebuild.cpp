@@ -6,14 +6,17 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/actors.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/catalog.hpp>
 #include <tenzir/concept/parseable/tenzir/expression.hpp>
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/connect_to_node.hpp>
 #include <tenzir/data.hpp>
+#include <tenzir/defaults.hpp>
 #include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/index.hpp>
 #include <tenzir/node.hpp>
@@ -506,6 +509,35 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
       rp.deliver(msg.reason);
     self->quit(msg.reason);
   });
+  if (auto importer
+      = self->system().registry().get<importer_actor>("tenzir.importer")) {
+    auto builder = series_builder{type{
+      "tenzir.metrics.rebuild",
+      record_type{
+        {"timestamp", time_type{}},
+        {"partitions", uint64_type{}},
+        {"queued_partitions", uint64_type{}},
+      },
+      {{"internal"}},
+    }};
+    detail::weak_run_delayed_loop(
+      self, defaults::metrics_interval,
+      [self, importer = std::move(importer),
+       builder = std::move(builder)]() mutable {
+        const auto partitions
+          = self->state.run ? self->state.run->statistics.num_rebuilding : 0;
+        const auto queued_partitions
+          = self->state.run ? self->state.run->statistics.num_total
+                                - self->state.run->statistics.num_completed
+                                - self->state.run->statistics.num_rebuilding
+                            : 0;
+        auto metric = builder.record();
+        metric.field("timestamp", time::clock::now());
+        metric.field("partitions", partitions);
+        metric.field("queued_partitions", queued_partitions);
+        self->send(importer, builder.finish_assert_one_slice());
+      });
+  }
   return {
     [self](atom::status, status_verbosity verbosity, duration) {
       return self->state.status(verbosity);
