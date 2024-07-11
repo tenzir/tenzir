@@ -21,10 +21,6 @@ namespace tenzir {
 
 class local_control_plane final : public operator_control_plane {
 public:
-  auto get_error() const -> caf::error {
-    return error_;
-  }
-
   auto self() noexcept -> exec_node_actor::base& override {
     TENZIR_UNIMPLEMENTED();
   }
@@ -40,7 +36,7 @@ public:
       void emit(diagnostic d) override {
         TENZIR_WARN("got diagnostic: {:?}", d);
         if (d.severity == severity::error) {
-          ctrl.error_ = d.to_error();
+          throw std::move(d);
         }
       }
       local_control_plane& ctrl;
@@ -373,28 +369,33 @@ auto pipeline::infer_type_impl(operator_type input) const
 }
 
 auto make_local_executor(pipeline p) -> generator<caf::expected<void>> {
-  local_control_plane ctrl;
-  auto dynamic_gen = p.instantiate(std::monostate{}, ctrl);
-  if (!dynamic_gen) {
-    co_yield std::move(dynamic_gen.error());
-    co_return;
-  }
-  auto gen = std::get_if<generator<std::monostate>>(&*dynamic_gen);
-  if (!gen) {
-    co_yield caf::make_error(ec::logic_error,
-                             "right side of pipeline is not closed");
-    co_return;
-  }
-  for (auto monostate : *gen) {
-    if (auto error = ctrl.get_error()) {
-      co_yield std::move(error);
+  auto error = std::optional<caf::error>{};
+  try {
+    auto ctrl = local_control_plane{};
+    auto dynamic_gen = p.instantiate(std::monostate{}, ctrl);
+    if (!dynamic_gen) {
+      co_yield std::move(dynamic_gen.error());
       co_return;
     }
-    (void)monostate;
-    co_yield {};
+    auto gen = std::get_if<generator<std::monostate>>(&*dynamic_gen);
+    if (!gen) {
+      co_yield caf::make_error(ec::logic_error,
+                               "right side of pipeline is not closed");
+      co_return;
+    }
+    for (auto monostate : *gen) {
+      (void)monostate;
+      co_yield {};
+    }
+  } catch (diagnostic& d) {
+    error = std::move(d).to_error();
+  } catch (std::exception& exc) {
+    error = diagnostic::error("unhandled exception: {}", exc.what()).to_error();
+  } catch (...) {
+    error = diagnostic::error("unhandled exception").to_error();
   }
-  if (auto error = ctrl.get_error()) {
-    co_yield std::move(error);
+  if (error) {
+    co_yield std::move(*error);
   }
 }
 
