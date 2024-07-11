@@ -12,6 +12,7 @@
 
 #include "tenzir/application.hpp"
 #include "tenzir/command.hpp"
+#include "tenzir/concept/parseable/numeric/bool.hpp"
 #include "tenzir/concept/parseable/tenzir/endpoint.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/settings.hpp"
@@ -65,16 +66,32 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
   TENZIR_TRACE_SCOPE("{} {}", TENZIR_ARG(inv.options),
                      TENZIR_ARG("args", inv.arguments.begin(),
                                 inv.arguments.end()));
-  // Construct an endpoint.
-  endpoint node_endpoint;
-  auto str = get_or(inv.options, "tenzir.endpoint", defaults::endpoint.data());
-  if (!parsers::endpoint(str, node_endpoint)) {
-    return caf::make_message(
-      caf::make_error(ec::parse_error, "invalid endpoint", str));
-  }
-  // Default to port 5158/tcp if none is set.
-  if (!node_endpoint.port) {
-    node_endpoint.port = port{defaults::endpoint_port, port_type::tcp};
+  auto node_endpoint = std::optional<endpoint>{};
+  auto listen_endpoint = std::optional<std::string>{};
+  const auto* endpoint_enabled = get_if<bool>(&inv.options, "tenzir.endpoint");
+  if (endpoint_enabled) {
+    if (*endpoint_enabled) {
+      node_endpoint.emplace(defaults::endpoint_host.data());
+    }
+  } else {
+    // Construct an endpoint.
+    auto str
+      = get_or(inv.options, "tenzir.endpoint", defaults::endpoint.data());
+    // The endpoint option is defined in CAF's old option parser, and that
+    // has no notion of options that can either be a boolean or a string, so we
+    // need to correct this here.
+    if (auto endpoint_enabled = false;
+        parsers::boolean(str, endpoint_enabled)) {
+      if (endpoint_enabled) {
+        node_endpoint.emplace(defaults::endpoint_host.data());
+      }
+    } else {
+      node_endpoint.emplace();
+      if (not parsers::endpoint(str, *node_endpoint)) {
+        return caf::make_message(
+          diagnostic::error("invalid endpoint: {}", str).to_error());
+      }
+    }
   }
   // Get a convenient and blocking way to interact with actors.
   caf::scoped_actor self{sys};
@@ -84,32 +101,45 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
     return caf::make_message(std::move(node_opt.error()));
   }
   auto const& node = node_opt->get();
-  // Publish our node.
-  auto const* host = node_endpoint.host.empty() ? defaults::endpoint_host.data()
-                                                : node_endpoint.host.c_str();
-  auto publish = [&]() -> caf::expected<uint16_t> {
-    const auto reuse_address = true;
-    if (sys.has_openssl_manager()) {
-      return caf::openssl::publish(node, node_endpoint.port->number(), host,
-                                   reuse_address);
+  if (node_endpoint) {
+    // Default host and port if they're not yet set.
+    if (node_endpoint->host.empty()) {
+      node_endpoint->host = std::string{defaults::endpoint_host};
     }
-    auto& mm = sys.middleman();
-    return mm.publish(node, node_endpoint.port->number(), host, reuse_address);
-  };
-  auto bound_port = publish();
-  if (!bound_port) {
-    auto err
-      = diagnostic::error("failed to bind to port {}",
-                          node_endpoint.port->number())
-          .note("{}", bound_port.error())
-          .hint("check for other running tenzir-node processes at port {}",
-                node_endpoint.port->number())
-          .to_error();
-    return caf::make_message(std::move(err));
+    if (not node_endpoint->port) {
+      node_endpoint->port = port{defaults::endpoint_port, port_type::tcp};
+    }
+    auto publish = [&]() -> caf::expected<uint16_t> {
+      const auto reuse_address = true;
+      if (sys.has_openssl_manager()) {
+        return caf::openssl::publish(node, node_endpoint->port->number(),
+                                     node_endpoint->host.c_str(),
+                                     reuse_address);
+      }
+      auto& mm = sys.middleman();
+      return mm.publish(node, node_endpoint->port->number(),
+                        node_endpoint->host.c_str(), reuse_address);
+    };
+    auto bound_port = publish();
+    if (!bound_port) {
+      auto err
+        = diagnostic::error("failed to bind to port {}",
+                            node_endpoint->port->number())
+            .note("{}", bound_port.error())
+            .hint("check for other running tenzir-node processes at port {}",
+                  node_endpoint->port->number())
+            .to_error();
+      return caf::make_message(std::move(err));
+    }
+    listen_endpoint = fmt::format("{}:{}", node_endpoint->host, *bound_port);
+    TENZIR_INFO("node listens for node-to-node connections on tcp://{}",
+                *listen_endpoint);
+    // A single line of output to publish out address for scripts.
+    if (caf::get_or(inv.options, "tenzir.start.print-endpoint", false)) {
+      // We're not using fmt::print here because it doesn't flush the stream.
+      std::cout << *listen_endpoint << std::endl;
+    }
   }
-  const auto listen_endpoint = fmt::format("{}:{}", host, *bound_port);
-  TENZIR_INFO("node listens for node-to-node connections on tcp://{}",
-              listen_endpoint);
   // Notify the service manager if it expects an update.
   if (auto error = systemd::notify_ready()) {
     auto err = diagnostic::error("failed to signal readiness to systemd")
@@ -121,11 +151,6 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
   caf::error err;
   auto stop = false;
   self->monitor(node);
-  // A single line of output to publish out address for scripts.
-  if (caf::get_or(inv.options, "tenzir.start.print-endpoint", false)) {
-    // We're not using fmt::print here because it doesn't flush the stream.
-    std::cout << listen_endpoint << std::endl;
-  }
   auto commands = caf::get_or(inv.options, "tenzir.start.commands",
                               std::vector<std::string>{});
   if (commands.empty()) {
@@ -159,7 +184,9 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
                              policy::merge_lists::yes);
       // In case the listen port option was set to 0 we need to set the
       // port that was allocated by the operating system here.
-      caf::put(hook_invocation->options, "tenzir.endpoint", listen_endpoint);
+      if (listen_endpoint) {
+        caf::put(hook_invocation->options, "tenzir.endpoint", *listen_endpoint);
+      }
       auto runner = self->spawn<caf::detached>(command_runner);
       command_runners.push_back(runner);
       self->send(runner, atom::run_v, *hook_invocation);
