@@ -36,7 +36,6 @@
 #include "tenzir/logger.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/qualified_record_field.hpp"
-#include "tenzir/report.hpp"
 #include "tenzir/resource.hpp"
 #include "tenzir/shutdown.hpp"
 #include "tenzir/status.hpp"
@@ -345,14 +344,12 @@ pack_full(const active_partition_state::serialization_data& x,
 
 active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
-  type schema, uuid id, accountant_actor accountant,
-  filesystem_actor filesystem, caf::settings index_opts,
+  type schema, uuid id, filesystem_actor filesystem, caf::settings index_opts,
   const index_config& synopsis_opts, const store_actor_plugin* store_plugin,
   std::shared_ptr<tenzir::taxonomies> taxonomies) {
   TENZIR_TRACE_SCOPE("active partition {} {}", TENZIR_ARG(self->id()),
                      TENZIR_ARG(id));
   self->state.self = self;
-  self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);
   self->state.streaming_initiated = false;
   self->state.data.id = id;
@@ -441,7 +438,7 @@ active_partition_actor::behavior_type active_partition(
   self->state.stage = make_stage();
   self->state.data.store_id = self->state.store_plugin->name();
   auto builder_and_header = self->state.store_plugin->make_store_builder(
-    self->state.accountant, self->state.filesystem, self->state.data.id);
+    self->state.filesystem, self->state.data.id);
   if (!builder_and_header) {
     TENZIR_ERROR("{} failed to create a store builder: {}", *self,
                  builder_and_header.error());

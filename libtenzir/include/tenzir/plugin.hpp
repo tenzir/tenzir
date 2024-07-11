@@ -619,27 +619,21 @@ public:
   /// The store builder is required to keep a reference to itself alive
   /// as long as its input stream is live, and persist itself and exit as
   /// soon as the input stream terminates.
-  /// @param accountant The actor handle of the accountant.
   /// @param fs The actor handle of a filesystem.
   /// @param id The partition id for which we want to create a store. Can be
   /// used as a unique key by the implementation.
   /// @returns A handle to the store builder actor to add events to, and a
   /// header that uniquely identifies this store for later use in `make_store`.
   [[nodiscard]] virtual caf::expected<builder_and_header>
-  make_store_builder(accountant_actor accountant, filesystem_actor fs,
-                     const tenzir::uuid& id) const
-    = 0;
+  make_store_builder(filesystem_actor fs, const tenzir::uuid& id) const = 0;
 
   /// Create a store actor from the given header. Called when deserializing a
   /// partition that uses this partition as a store backend.
-  /// @param accountant The actor handle the accountant.
   /// @param fs The actor handle of a filesystem.
   /// @param header The store header as found in the partition flatbuffer.
   /// @returns A new store actor.
   [[nodiscard]] virtual caf::expected<store_actor>
-  make_store(accountant_actor accountant, filesystem_actor fs,
-             std::span<const std::byte> header) const
-    = 0;
+  make_store(filesystem_actor fs, std::span<const std::byte> header) const = 0;
 };
 
 /// A base class for plugins that add new store backends.
@@ -656,11 +650,10 @@ public:
 
 private:
   [[nodiscard]] caf::expected<builder_and_header>
-  make_store_builder(accountant_actor accountant, filesystem_actor fs,
-                     const tenzir::uuid& id) const final;
+  make_store_builder(filesystem_actor fs, const tenzir::uuid& id) const final;
 
   [[nodiscard]] caf::expected<store_actor>
-  make_store(accountant_actor accountant, filesystem_actor fs,
+  make_store(filesystem_actor fs,
              std::span<const std::byte> header) const final;
 };
 

@@ -67,8 +67,6 @@ void add_root_opts(command& cmd) {
   cmd.options.add<std::string>("?tenzir", "endpoint,e", "node endpoint");
   cmd.options.add<std::string>("?tenzir", "node-id,i",
                                "the unique ID of this node");
-  cmd.options.add<bool>("?tenzir", "enable-metrics",
-                        "keep track of performance metrics");
   cmd.options.add<caf::config_value::list>("?tenzir", "plugin-dirs",
                                            "additional directories "
                                            "to load plugins from");

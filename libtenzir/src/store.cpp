@@ -13,7 +13,6 @@
 #include "tenzir/error.hpp"
 #include "tenzir/ids.hpp"
 #include "tenzir/query_context.hpp"
-#include "tenzir/report.hpp"
 #include "tenzir/table_slice.hpp"
 
 #include <caf/attach_stream_sink.hpp>
@@ -87,24 +86,6 @@ handle_query(const auto& self, const query_context& query_context) {
               return;
             }
             rp.deliver(it->second.num_hits);
-            const duration runtime
-              = std::chrono::steady_clock::now() - it->second.start;
-            const auto id_str = fmt::to_string(query_id);
-            self->send(self->state.accountant, atom::metrics_v,
-                       fmt::format("{}.lookup.runtime", self->name()), runtime,
-                       metrics_metadata{
-                         {"query", id_str},
-                         {"issuer", issuer},
-                         {"store-type", self->state.store_type},
-                       });
-            self->send(self->state.accountant, atom::metrics_v,
-                       fmt::format("{}.lookup.hits", self->name()),
-                       it->second.num_hits,
-                       metrics_metadata{
-                         {"query", id_str},
-                         {"issuer", issuer},
-                         {"store-type", self->state.store_type},
-                       });
             self->state.running_extractions.erase(it);
           },
           [self, expr = query_context.expr, query_id = query_context.id,
@@ -168,13 +149,10 @@ default_passive_store_actor::behavior_type default_passive_store(
   default_passive_store_actor::stateful_pointer<default_passive_store_state>
     self,
   std::unique_ptr<passive_store> store, filesystem_actor filesystem,
-  accountant_actor accountant, std::filesystem::path path,
-  std::string store_type) {
-  const auto start = std::chrono::steady_clock::now();
+  std::filesystem::path path, std::string store_type) {
   // Configure our actor state.
   self->state.self = self;
   self->state.filesystem = std::move(filesystem);
-  self->state.accountant = std::move(accountant);
   self->state.store = std::move(store);
   self->state.path = std::move(path);
   self->state.store_type = std::move(store_type);
@@ -183,14 +161,8 @@ default_passive_store_actor::behavior_type default_passive_store(
     ->request(self->state.filesystem, caf::infinite, atom::mmap_v,
               self->state.path)
     .await(
-      [self, start](chunk_ptr& chunk) {
+      [self](chunk_ptr& chunk) {
         auto load_error = self->state.store->load(std::move(chunk));
-        duration startup_duration = std::chrono::steady_clock::now() - start;
-        self->send(self->state.accountant, atom::metrics_v,
-                   "passive-store.init.runtime", startup_duration,
-                   metrics_metadata{
-                     {"store-type", self->state.store_type},
-                   });
         if (load_error)
           self->quit(std::move(load_error));
       },
@@ -278,12 +250,10 @@ default_passive_store_actor::behavior_type default_passive_store(
 default_active_store_actor::behavior_type default_active_store(
   default_active_store_actor::stateful_pointer<default_active_store_state> self,
   std::unique_ptr<active_store> store, filesystem_actor filesystem,
-  accountant_actor accountant, std::filesystem::path path,
-  std::string store_type) {
+  std::filesystem::path path, std::string store_type) {
   // Configure our actor state.
   self->state.self = self;
   self->state.filesystem = std::move(filesystem);
-  self->state.accountant = std::move(accountant);
   self->state.store = std::move(store);
   self->state.path = std::move(path);
   self->state.store_type = std::move(store_type);

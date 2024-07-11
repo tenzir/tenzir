@@ -22,7 +22,6 @@
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/plugin.hpp"
-#include "tenzir/report.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/table_slice.hpp"
@@ -116,7 +115,6 @@ importer_state::status(status_verbosity v) const {
   auto rs = make_status_request_state(self);
   // Gather general importer status.
   // TODO: caf::config_value can only represent signed 64 bit integers, which
-  // may make it look like overflow happened in the status report. As an
   // intermediate workaround, we convert the values to strings.
   record result;
   if (v >= status_verbosity::detailed) {
@@ -132,48 +130,6 @@ importer_state::status(status_verbosity v) const {
     detail::fill_status_map(rs->content, self);
   }
   return rs->promise;
-}
-
-void importer_state::send_report() {
-  auto now = stopwatch::now();
-  using namespace std::string_literals;
-  auto elapsed = std::chrono::duration_cast<duration>(now - last_report);
-  auto node_throughput = measurement{elapsed, measurement_.events};
-  auto num_schemas_seen = schema_counters.size();
-  std::vector<performance_sample> samples = {};
-  samples.reserve(num_schemas_seen);
-  samples.push_back(performance_sample{"importer"s, measurement_});
-  samples.push_back(performance_sample{"node_throughput"s, node_throughput});
-  auto total_count = uint64_t{0};
-  for (const auto& [name, count] : schema_counters) {
-    total_count += count;
-    samples.push_back(performance_sample{
-      "ingest", measurement{elapsed, count}, {{"schema", name}}});
-  }
-  auto total_measurement = measurement{elapsed, total_count};
-  samples.push_back(performance_sample{"ingest-total"s, total_measurement});
-  schema_counters.clear();
-  auto r = performance_report{
-    .data = std::move(samples),
-  };
-#if TENZIR_LOG_LEVEL >= TENZIR_LOG_LEVEL_VERBOSE
-  auto beat = [&](const auto& sample) {
-    if (sample.value.events > 0) {
-      if (auto rate = sample.value.rate_per_sec(); std::isfinite(rate)) {
-        TENZIR_VERBOSE("{} handled {} events at a rate of {} events/sec in {}",
-                       *self, sample.value.events, static_cast<uint64_t>(rate),
-                       to_string(sample.value.duration));
-      } else {
-        TENZIR_VERBOSE("{} handled {} events in {}", *self, sample.value.events,
-                       to_string(sample.value.duration));
-      }
-    }
-  };
-  beat(r.data[1]);
-#endif
-  measurement_ = measurement{};
-  self->send(accountant, atom::metrics_v, std::move(r));
-  last_report = now;
 }
 
 void importer_state::on_process(const table_slice& slice) {
@@ -196,8 +152,7 @@ void importer_state::on_process(const table_slice& slice) {
 
 importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self,
-         const std::filesystem::path& dir, index_actor index,
-         accountant_actor accountant) {
+         const std::filesystem::path& dir, index_actor index) {
   TENZIR_TRACE_SCOPE("importer {} {}", TENZIR_ARG(self->id()), TENZIR_ARG(dir));
   if (auto ec = std::error_code{};
       std::filesystem::exists(dir / "current_id_block", ec)) {
@@ -205,7 +160,6 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   }
   namespace defs = defaults;
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    self->state.send_report();
     for (auto* inbound : self->state.stage->inbound_paths()) {
       self->send_exit(inbound->hdl, msg.reason);
     }
@@ -215,14 +169,6 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   if (index) {
     self->state.index = std::move(index);
     self->state.stage->add_outbound_path(self->state.index);
-  }
-  if (accountant) {
-    TENZIR_DEBUG("{} registers accountant {}", *self, accountant);
-    self->state.accountant = std::move(accountant);
-    self->send(self->state.accountant, atom::announce_v, self->name());
-    detail::weak_run_delayed_loop(self, defaults::telemetry_rate, [self] {
-      self->state.send_report();
-    });
   }
   self->set_down_handler([self](const caf::down_msg& msg) {
     const auto subscriber
