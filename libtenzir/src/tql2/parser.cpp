@@ -138,9 +138,15 @@ private:
     expect(tk::rbrace);
     auto alternative = std::optional<ast::pipeline>{};
     if (accept(tk::else_)) {
-      expect(tk::lbrace);
-      alternative = parse_pipeline();
-      expect(tk::rbrace);
+      if (peek(tk::if_)) {
+        auto body = std::vector<statement>{};
+        body.emplace_back(parse_if_stmt());
+        alternative = ast::pipeline{std::move(body)};
+      } else {
+        expect(tk::lbrace);
+        alternative = parse_pipeline();
+        expect(tk::rbrace);
+      }
     }
     return if_stmt{
       std::move(condition),
