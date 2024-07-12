@@ -9,12 +9,14 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::metrics {
 
 namespace {
 
-class plugin final : public virtual operator_parser_plugin {
+class plugin final : public virtual operator_parser_plugin,
+                     public virtual operator_factory_plugin {
 public:
   auto name() const -> std::string override {
     return "metrics";
@@ -48,6 +50,34 @@ public:
                         definition)
         .hint("{}", result.error())
         .throw_();
+    }
+    return std::move(*result);
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto name = std::optional<std::string>{};
+    auto live = false;
+    auto retro = false;
+    TRY(argument_parser2::operator_("metrics")
+          .add(name, "<name>")
+          .add("live", live)
+          .add("retro", retro)
+          .parse(inv, ctx));
+    if (not live) {
+      retro = true;
+    }
+    const auto definition
+      = fmt::format("export --internal{}{} | where #schema == {}",
+                    live ? " --live" : "", retro ? " --retro" : "",
+                    name ? fmt::format("\"tenzir.metrics.{}\"", *name)
+                         : "/tenzir\\.metrics\\..+/");
+    auto result = pipeline::internal_parse_as_operator(definition);
+    if (not result) {
+      diagnostic::error(result.error())
+        .note("failed to transform `metrics` operator into `{}`", definition)
+        .emit(ctx);
+      return failure::promise();
     }
     return std::move(*result);
   }
