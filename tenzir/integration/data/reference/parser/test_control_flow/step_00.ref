@@ -4,7 +4,7 @@
       path: [
         `a` @ 0..1
       ],
-      id: <unresolved>
+      ref: unresolved
     },
     args: [
       
@@ -12,13 +12,9 @@
   },
   if_stmt {
     condition: binary_expr {
-      left: selector {
-        path: [
-          `b` @ 5..6
-        ]
-      },
+      left: root_field `b` @ 5..6,
       op: "eq" @ 7..9,
-      right: literal {
+      right: constant {
         value: int64 42,
         source: 10..12
       }
@@ -29,14 +25,10 @@
           path: [
             `c` @ 17..18
           ],
-          id: <unresolved>
+          ref: unresolved
         },
         args: [
-          selector {
-            path: [
-              `d` @ 19..20
-            ]
-          }
+          root_field `d` @ 19..20
         ]
       },
       invocation {
@@ -44,21 +36,19 @@
           path: [
             `e` @ 23..24
           ],
-          id: <unresolved>
+          ref: unresolved
         },
         args: [
           assignment {
-            left: {
+            left: simple_selector {
+              expr: root_field `f` @ 25..26,
+              has_this: false,
               path: [
                 `f` @ 25..26
               ]
             },
             equals: 26..27,
-            right: selector {
-              path: [
-                `g` @ 27..28
-              ]
-            }
+            right: root_field `g` @ 27..28
           }
         ]
       }
@@ -69,18 +59,14 @@
       path: [
         `h` @ 31..32
       ],
-      id: <unresolved>
+      ref: unresolved
     },
     args: [
       
     ]
   },
   if_stmt {
-    condition: selector {
-      path: [
-        `i` @ 36..37
-      ]
-    },
+    condition: root_field `i` @ 36..37,
     then: [
       
     ],
@@ -93,32 +79,27 @@
       path: [
         `j` @ 49..50
       ],
-      id: <unresolved>
+      ref: unresolved
     },
     args: [
       
     ]
   },
   match_stmt {
-    expr: selector {
-      path: [
-        `k` @ 57..58
-      ]
-    },
+    begin: 51..56,
+    expr: root_field `k` @ 57..58,
     arms: [
       
-    ]
+    ],
+    end: 60..61
   },
   match_stmt {
-    expr: selector {
-      path: [
-        `k` @ 68..69
-      ]
-    },
+    begin: 62..67,
+    expr: root_field `k` @ 68..69,
     arms: [
       {
         filter: [
-          literal {
+          constant {
             value: string "foo",
             source: 72..77
           }
@@ -129,7 +110,7 @@
               path: [
                 `bar` @ 83..86
               ],
-              id: <unresolved>
+              ref: unresolved
             },
             args: [
               
@@ -137,18 +118,16 @@
           }
         ]
       }
-    ]
+    ],
+    end: 89..90
   },
   match_stmt {
-    expr: selector {
-      path: [
-        `k` @ 97..98
-      ]
-    },
+    begin: 91..96,
+    expr: root_field `k` @ 97..98,
     arms: [
       {
         filter: [
-          literal {
+          constant {
             value: string "foo",
             source: 103..108
           }
@@ -159,7 +138,7 @@
               path: [
                 `bar` @ 118..121
               ],
-              id: <unresolved>
+              ref: unresolved
             },
             args: [
               
@@ -169,7 +148,7 @@
       },
       {
         filter: [
-          literal {
+          constant {
             value: int64 42,
             source: 128..130
           }
@@ -180,14 +159,10 @@
               path: [
                 `foo` @ 140..143
               ],
-              id: <unresolved>
+              ref: unresolved
             },
             args: [
-              selector {
-                path: [
-                  `bar` @ 144..147
-                ]
-              }
+              root_field `bar` @ 144..147
             ]
           },
           invocation {
@@ -195,18 +170,15 @@
               path: [
                 `qux` @ 152..155
               ],
-              id: <unresolved>
+              ref: unresolved
             },
             args: [
-              selector {
-                path: [
-                  `bar` @ 156..159
-                ]
-              }
+              root_field `bar` @ 156..159
             ]
           }
         ]
       }
-    ]
+    ],
+    end: 164..165
   }
 ]

@@ -514,6 +514,10 @@ public:
     return false;
   };
 
+  auto prints_utf8() const -> bool override {
+    return false;
+  }
+
   friend auto inspect(auto& f, feather_printer& x) -> bool {
     return f.object(x).fields(f.field("options", x.options_));
   }

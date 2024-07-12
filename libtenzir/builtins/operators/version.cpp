@@ -44,6 +44,10 @@ public:
     return do_not_optimize(*this);
   }
 
+  auto internal() const -> bool override {
+    return true;
+  }
+
   friend auto inspect(auto& f, version_operator& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.plugins.version.version_operator")

@@ -33,37 +33,71 @@
 {"_path": "corelight_metrics_disk", "x": null}
 {"_path": null, "x": null}
 warning: group-by column `_path` does not exist for schema `tenzir.json`
+
 warning: aggregation column `y` does not exist for schema `tenzir.json`
+
 warning: aggregation column `y` does not exist for schema `zeek._0_0_2`
+
 warning: aggregation column `y` does not exist for schema `zeek.conn`
+
 warning: aggregation column `y` does not exist for schema `zeek.conn_long`
+
 warning: aggregation column `y` does not exist for schema `zeek.corelight_metrics_bro`
+
 warning: aggregation column `y` does not exist for schema `zeek.corelight_metrics_cpu`
+
 warning: aggregation column `y` does not exist for schema `zeek.corelight_metrics_disk`
+
 warning: aggregation column `y` does not exist for schema `zeek.corelight_metrics_iface`
+
 warning: aggregation column `y` does not exist for schema `zeek.corelight_metrics_memory`
+
 warning: aggregation column `y` does not exist for schema `zeek.corelight_metrics_system`
+
 warning: aggregation column `y` does not exist for schema `zeek.dhcp`
+
 warning: aggregation column `y` does not exist for schema `zeek.dnp3`
+
 warning: aggregation column `y` does not exist for schema `zeek.dns`
+
 warning: aggregation column `y` does not exist for schema `zeek.dpd`
+
 warning: aggregation column `y` does not exist for schema `zeek.files`
+
 warning: aggregation column `y` does not exist for schema `zeek.ftp`
+
 warning: aggregation column `y` does not exist for schema `zeek.http`
+
 warning: aggregation column `y` does not exist for schema `zeek.irc`
+
 warning: aggregation column `y` does not exist for schema `zeek.kerberos`
+
 warning: aggregation column `y` does not exist for schema `zeek.modbus`
+
 warning: aggregation column `y` does not exist for schema `zeek.notice`
+
 warning: aggregation column `y` does not exist for schema `zeek.pe`
+
 warning: aggregation column `y` does not exist for schema `zeek.radius`
+
 warning: aggregation column `y` does not exist for schema `zeek.rdp`
+
 warning: aggregation column `y` does not exist for schema `zeek.reporter`
+
 warning: aggregation column `y` does not exist for schema `zeek.sip`
+
 warning: aggregation column `y` does not exist for schema `zeek.smtp`
+
 warning: aggregation column `y` does not exist for schema `zeek.snmp`
+
 warning: aggregation column `y` does not exist for schema `zeek.software`
+
 warning: aggregation column `y` does not exist for schema `zeek.ssl`
+
 warning: aggregation column `y` does not exist for schema `zeek.syslog`
+
 warning: aggregation column `y` does not exist for schema `zeek.tunnel`
+
 warning: aggregation column `y` does not exist for schema `zeek.weird`
+
 warning: aggregation column `y` does not exist for schema `zeek.weird.123.190`

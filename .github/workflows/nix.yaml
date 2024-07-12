@@ -30,6 +30,15 @@ jobs:
           done
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Tailscale
+        if: false
+        uses: tailscale/github-action@v2
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:ci
+          version: 1.66.4
+          args: --ssh
       - name: Configure
         id: cfg
         run: |
@@ -93,7 +102,7 @@ jobs:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Use Magic Nix Cache
         if: runner.environment == 'github-hosted'
-        uses: DeterminateSystems/magic-nix-cache-action@v6
+        uses: DeterminateSystems/magic-nix-cache-action@v7
         with:
           # disables telemetry
           diagnostic-endpoint: ""

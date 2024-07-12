@@ -106,6 +106,22 @@ TEST(HTTP request items - urlencoded) {
   CHECK_EQUAL(request.body, "foo=42&bar=true");
 }
 
+TEST(HTTP request items - URL param) {
+  auto request = http::request{};
+  auto items = std::vector<http::request_item>{
+    make_item("foo==42"),
+    make_item("bar==true"),
+  };
+  request.uri = "https://example.org/";
+  auto err = apply(items, request);
+  CHECK_EQUAL(err, caf::none);
+  CHECK_EQUAL(request.uri, "https://example.org/?foo=42&bar=true");
+  request.uri = "https://example.org/?";
+  err = apply(items, request);
+  CHECK_EQUAL(err, caf::none);
+  CHECK_EQUAL(request.uri, "https://example.org/?foo=42&bar=true");
+}
+
 TEST(HTTP response) {
   http::response r;
   r.status_code = 200;

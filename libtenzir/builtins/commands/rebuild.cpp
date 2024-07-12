@@ -10,6 +10,7 @@
 #include <tenzir/catalog.hpp>
 #include <tenzir/concept/parseable/tenzir/expression.hpp>
 #include <tenzir/concept/parseable/to.hpp>
+#include <tenzir/connect_to_node.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/detail/narrow.hpp>
@@ -24,7 +25,6 @@
 #include <tenzir/query_cursor.hpp>
 #include <tenzir/read_query.hpp>
 #include <tenzir/report.hpp>
-#include <tenzir/spawn_or_connect_to_node.hpp>
 #include <tenzir/status.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/table_slice_builder.hpp>
@@ -358,7 +358,6 @@ struct rebuilder_state {
       });
     run->remaining_partitions.erase(first_removed,
                                     run->remaining_partitions.end());
-    auto is_oversized = current_run_events > max_partition_size;
     run->statistics.num_rebuilding += current_run_partitions.size();
     // If we have just a single partition then we shouldn't rebuild if our
     // intent was to merge undersized partitions, unless the partition is
@@ -399,8 +398,8 @@ struct rebuilder_state {
       ->request(index, caf::infinite, atom::apply_v, std::move(*rebatch),
                 std::move(current_run_partitions), keep_original_partition::no)
       .then(
-        [this, rp, current_run_events, num_partitions,
-         is_oversized](std::vector<partition_info>& result) mutable {
+        [this, rp, current_run_events,
+         num_partitions](std::vector<partition_info>& result) mutable {
           if (result.empty()) {
             TENZIR_DEBUG("{} skipped {} partitions as they are already being "
                          "transformed by another actor",
@@ -415,8 +414,6 @@ struct rebuilder_state {
           }
           TENZIR_DEBUG("{} rebuilt {} into {} partitions", *self,
                        num_partitions, result.size());
-          // Determines whether we moved partitions back.
-          bool needs_second_stage = false;
           // If the number of events in the resulting partitions does not
           // match the number of events in the partitions that went in we ran
           // into a conflict with other partition transformations on an
@@ -435,27 +432,8 @@ struct rebuilder_state {
           // Adjust the counters, update the indicator, and move back
           // undersized transformed partitions to the list of remainig
           // partitions as desired.
-          TENZIR_ASSERT(!result.empty());
           run->statistics.num_completed += num_partitions;
           run->statistics.num_results += result.size();
-          if (is_oversized) {
-            TENZIR_ASSERT(result.size() > 1);
-            if (result.back().events <= detail::narrow_cast<size_t>(
-                  detail::narrow_cast<double>(max_partition_size)
-                  * undersized_threshold)) {
-              needs_second_stage = true;
-              run->remaining_partitions.push_back(std::move(result.back()));
-              run->statistics.num_completed -= 1;
-              run->statistics.num_results -= 1;
-              run->statistics.num_total += 1;
-            }
-          }
-          if (needs_second_stage)
-            std::sort(run->remaining_partitions.begin(),
-                      run->remaining_partitions.end(),
-                      [](const partition_info& lhs, const partition_info& rhs) {
-                        return lhs.max_import_time > rhs.max_import_time;
-                      });
           run->statistics.num_rebuilding -= num_partitions;
           // Pick up new work until we run out of remainig partitions.
           emit_telemetry();
@@ -580,21 +558,16 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
 caf::expected<rebuilder_actor>
 get_rebuilder(caf::actor_system& sys, const caf::settings& config) {
   auto self = caf::scoped_actor{sys};
-  if (caf::get_or(config, "tenzir.node", false)
-      && caf::get_or(config, "tenzir.rebuild.detached", false))
-    return caf::make_error(ec::invalid_configuration,
-                           "the options 'tenzir.node' and "
-                           "'tenzir.rebuild.detached' "
-                           "are incompatible");
-  auto node_opt = spawn_or_connect_to_node(self, config, content(sys.config()));
-  if (auto* err = std::get_if<caf::error>(&node_opt))
-    return std::move(*err);
-  const auto& node = std::holds_alternative<node_actor>(node_opt)
-                       ? std::get<node_actor>(node_opt)
-                       : std::get<scope_linked<node_actor>>(node_opt).get();
+  auto node_opt = connect_to_node(self);
+  if (not node_opt) {
+    return std::move(node_opt.error());
+  }
+  const auto node = std::move(*node_opt);
   const auto timeout = node_connection_timeout(config);
   auto result = caf::expected<caf::actor>{caf::error{}};
-  self->request(node, timeout, atom::get_v, atom::type_v, "rebuild")
+  self
+    ->request(node, timeout, atom::get_v, atom::label_v,
+              std::vector<std::string>{"rebuilder"})
     .receive(
       [&](std::vector<caf::actor>& actors) {
         if (actors.empty()) {
@@ -699,19 +672,22 @@ public:
   /// Initializes a plugin with its respective entries from the YAML config
   /// file, i.e., `plugin.<NAME>`.
   /// @param config The relevant subsection of the configuration.
-  caf::error initialize([[maybe_unused]] const record& plugin_config,
-                        [[maybe_unused]] const record& global_config) override {
+  auto initialize(const record&, const record&) -> caf::error override {
     return caf::none;
   }
 
   /// Returns the unique name of the plugin.
-  [[nodiscard]] std::string name() const override {
+  auto name() const -> std::string override {
     return "rebuild";
   }
 
+  auto component_name() const -> std::string override {
+    return "rebuilder";
+  }
+
   /// Creates additional commands.
-  [[nodiscard]] std::pair<std::unique_ptr<command>, command::factory>
-  make_command() const override {
+  auto make_command() const
+    -> std::pair<std::unique_ptr<command>, command::factory> override {
     auto rebuild = std::make_unique<command>(
       "rebuild",
       "rebuilds outdated partitions matching the "
@@ -744,8 +720,8 @@ public:
     return {std::move(rebuild), std::move(factory)};
   }
 
-  component_plugin_actor
-  make_component(node_actor::stateful_pointer<node_state> node) const override {
+  auto make_component(node_actor::stateful_pointer<node_state> node) const
+    -> component_plugin_actor override {
     auto [catalog, index, accountant]
       = node->state.registry
           .find<catalog_actor, index_actor, accountant_actor>();

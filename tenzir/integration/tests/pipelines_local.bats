@@ -244,6 +244,7 @@ setup() {
   check tenzir "from ${INPUTSDIR}/zeek/merge.log read zeek-tsv | select uid | sort uid desc | write json"
   check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head | select service | sort service | write json"
   check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head | select service | sort service nulls-first | write json"
+  check tenzir "from ${INPUTSDIR}/pcap/zeek/conn.log.gz read zeek-tsv | select id | sort id.orig_h, id.orig_p, id.resp_h, id.resp_p | head 100 | write lines"
 }
 
 # bats test_tags=pipelines
@@ -467,6 +468,37 @@ EOF
   check tenzir "from ${INPUTSDIR}/syslog/syslog-rfc3164.log read lines | parse line grok --include-unnamed \"(<%{NONNEGINT:priority}>\s*)?%{SYSLOGTIMESTAMP:timestamp} (%{HOSTNAME:hostname}/%{IPV4:hostip}|%{WORD:host}) %{SYSLOGPROG}:%{GREEDYDATA:message}\""
   check tenzir 'show version | put version="v4.5.0-71-gae887a0ca3-dirty" | parse version grok "%{TIMESTAMP_ISO8601}"'
   check tenzir 'show version | put line="55.3.244.1 GET /index.html 15824 0.043" | parse line grok "%{IP:client} %{WORD:method} %{URIPATHPARAM:request} %{NUMBER:bytes} %{NUMBER:duration}"'
+}
+
+# bats test_tags=pipelines
+@test "Print JSON in CEF" {
+  check tenzir "read cef | slice 1:3 | print extension json | select extension" <${INPUTSDIR}/cef/forcepoint.log
+  check ! tenzir "read cef | print extension.dvc json " <${INPUTSDIR}/cef/forcepoint.log
+}
+
+# bats test_tags=pipelines
+@test "Print CSV in CEF" {
+  check tenzir "read cef | slice 1:2 | print extension csv" <${INPUTSDIR}/cef/forcepoint.log
+  check tenzir "read cef | slice 1:2 | print extension csv --no-header | select extension" <${INPUTSDIR}/cef/forcepoint.log
+}
+
+# bats test_tags=pipelines
+@test "Print non UTF8 string" {
+  check ! tenzir "read cef | print extension feather" <${INPUTSDIR}/cef/forcepoint.log
+  check ! tenzir "read cef | print extension bitz" <${INPUTSDIR}/cef/forcepoint.log
+}
+
+@test "Print nested data" {
+  check tenzir "read json | print a csv | parse a csv" <${INPUTSDIR}/json/nested-object.json
+  check tenzir "read json | print a.b csv" <${INPUTSDIR}/json/nested-object.json
+  check tenzir "read json | print a.b zeek-tsv | parse a.b zeek-tsv" <${INPUTSDIR}/json/nested-object.json
+  check ! tenzir "read json | print a.b.c json" <${INPUTSDIR}/json/nested-object.json
+  check tenzir "read json | print a.b csv | print a yaml" <${INPUTSDIR}/json/nested-object.json
+}
+
+@test "Print multiple events" {
+  check tenzir "read json | repeat 4 | print a csv | parse a csv" <${INPUTSDIR}/json/nested-object.json
+  check ! tenzir "read json | repeat 2 | print a.b.c json" <${INPUTSDIR}/json/nested-object.json
 }
 
 # bats test_tags=pipelines, csv

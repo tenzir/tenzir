@@ -22,26 +22,49 @@
 {"id.orig_h": "192.88.99.1", "x": ["192.88.99.1"]}
 {"id.orig_h": "106.75.22.216", "x": ["106.75.22.216"]}
 warning: group-by column `id.orig_h` does not exist for schema `zeek.corelight_metrics_bro`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_bro`
+
 warning: group-by column `id.orig_h` does not exist for schema `zeek.corelight_metrics_cpu`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_cpu`
+
 warning: group-by column `id.orig_h` does not exist for schema `zeek.corelight_metrics_disk`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_disk`
+
 warning: group-by column `id.orig_h` does not exist for schema `zeek.corelight_metrics_iface`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_iface`
+
 warning: group-by column `id.orig_h` does not exist for schema `zeek.corelight_metrics_memory`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_memory`
+
 warning: group-by column `id.orig_h` does not exist for schema `zeek.corelight_metrics_system`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_system`
+
 warning: group-by column `id.orig_h` does not exist for schema `zeek.dhcp`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.dhcp`
+
 warning: group-by column `id.orig_h` does not exist for schema `zeek.files`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.files`
+
 warning: group-by column `id.orig_h` does not exist for schema `zeek.pe`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.pe`
+
 warning: group-by column `id.orig_h` does not exist for schema `zeek.reporter`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.reporter`
+
 warning: group-by column `id.orig_h` does not exist for schema `zeek.software`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.software`
+
 warning: group-by column `id.orig_h` does not exist for schema `zeek.weird.123.190`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.weird.123.190`

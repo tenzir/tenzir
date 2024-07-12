@@ -14,31 +14,81 @@
 
 #include <arrow/array.h>
 #include <arrow/record_batch.h>
+#include <caf/detail/is_one_of.hpp>
 
 #include <memory>
 
 namespace tenzir {
 
-/// A series represents a contiguous representation of nullable data of the same
-/// type, e.g., a column in a table slice.
-struct series {
-  series() = default;
+template <class Type>
+struct basic_series {
+  basic_series() = default;
 
-  series(table_slice slice, offset idx) {
+  template <concrete_type Other>
+    requires(std::same_as<Type, type>)
+  explicit(false) basic_series(basic_series<Other> other)
+    : type{other.type}, array{other.array} {
+  }
+
+  explicit basic_series(const table_slice& slice)
+    requires(std::same_as<Type, type>)
+    : type{slice.schema()},
+      array{to_record_batch(slice)->ToStructArray().ValueOrDie()} {
+  }
+
+  explicit basic_series(const table_slice& slice)
+    requires(std::same_as<Type, record_type>)
+    : type{caf::get<record_type>(slice.schema())},
+      array{to_record_batch(slice)->ToStructArray().ValueOrDie()} {
+  }
+
+  basic_series(table_slice slice, offset idx)
+    requires(std::same_as<Type, type>)
+  {
     std::tie(type, array) = idx.get(slice);
   }
 
-  template <type_or_concrete_type Type>
-  series(Type type, std::shared_ptr<arrow::Array> array)
+  template <class Other>
+    requires(std::same_as<Type, type> || std::same_as<Other, Type>)
+  basic_series(Other type, std::shared_ptr<type_to_arrow_array_t<Type>> array)
     : type{std::move(type)}, array{std::move(array)} {
+  }
+
+  // TODO: std::get_if, etc.
+  template <type_or_concrete_type Other>
+    requires(std::same_as<Type, type>)
+  auto as() const -> std::optional<basic_series<Other>> {
+    if constexpr (std::same_as<Other, tenzir::type>) {
+      return *this;
+    } else {
+      auto other_type = caf::get_if<Other>(&type);
+      if (not other_type) {
+        return std::nullopt;
+      }
+      auto other_array
+        = std::dynamic_pointer_cast<type_to_arrow_array_t<Other>>(array);
+      TENZIR_ASSERT(other_array);
+      return basic_series<Other>{*other_type, std::move(other_array)};
+    }
   }
 
   auto length() const -> int64_t {
     return array ? array->length() : 0;
   }
 
+  template <type_or_concrete_type Other>
+    requires(std::same_as<Type, type> || std::same_as<Other, Type>)
+  static auto null(Other ty, int64_t length) -> basic_series<Type> {
+    auto b = ty.make_arrow_builder(arrow::default_memory_pool());
+    // TODO
+    (void)b->AppendNulls(length);
+    return {std::move(ty),
+            std::static_pointer_cast<type_to_arrow_array_t<Other>>(
+              b->Finish().ValueOrDie())};
+  }
+
   template <class Inspector>
-  friend auto inspect(Inspector& f, series& x) -> bool {
+  friend auto inspect(Inspector& f, basic_series& x) -> bool {
     if constexpr (Inspector::is_loading) {
       table_slice slice;
       auto callback = [&]() noexcept {
@@ -64,22 +114,34 @@ struct series {
     }
   }
 
-  template <type_or_concrete_type Type = type>
+  template <type_or_concrete_type Cast = type>
+    requires(std::same_as<Type, type>)
   auto values() const {
-    if constexpr (concrete_type<Type>) {
-      const auto* ct = caf::get_if<Type>(&type);
+    if constexpr (concrete_type<Cast>) {
+      const auto* ct = caf::get_if<Cast>(&type);
       TENZIR_ASSERT(ct);
       TENZIR_ASSERT(array);
       return tenzir::values(
-        *ct, static_cast<const type_to_arrow_array_t<Type>&>(*array));
+        *ct, static_cast<const type_to_arrow_array_t<Cast>&>(*array));
     } else {
       TENZIR_ASSERT(array);
       return tenzir::values(type, *array);
     }
   }
 
-  tenzir::type type;
-  std::shared_ptr<arrow::Array> array;
+  [[nodiscard]] auto slice(int64_t begin, int64_t end) const
+    -> basic_series<Type> {
+    auto sliced = array->SliceSafe(begin, end - begin);
+    TENZIR_ASSERT(sliced.ok());
+    return {type, sliced.MoveValueUnsafe()};
+  }
+
+  Type type;
+  std::shared_ptr<type_to_arrow_array_t<Type>> array;
 };
+
+/// A series represents a contiguous representation of nullable data of the same
+/// type, e.g., a column in a table slice.
+using series = basic_series<type>;
 
 } // namespace tenzir

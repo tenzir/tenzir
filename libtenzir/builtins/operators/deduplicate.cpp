@@ -185,10 +185,18 @@ public:
     return "deduplicate";
   }
 
-  auto optimize(expression const& filter, event_order order) const
+  auto optimize(const expression& filter, event_order order) const
     -> optimize_result override {
     (void)order;
-    return optimize_result{filter, event_order::schema, copy()};
+    if (cfg_.distance < std::numeric_limits<int64_t>::max()) {
+      // When `--distance` is used, we're not allowed to optimize at all. Here's
+      // a simple example that proves this:
+      //   metrics platform
+      //   | deduplicate connected --distance 1
+      //   | where connected == false
+      return do_not_optimize(*this);
+    }
+    return optimize_result{filter, event_order::ordered, copy()};
   }
 
   friend auto inspect(auto& f, deduplicate_operator& x) -> bool {

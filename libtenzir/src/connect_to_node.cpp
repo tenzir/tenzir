@@ -144,9 +144,13 @@ caf::expected<endpoint> get_node_endpoint(const caf::settings& opts) {
   return node_endpoint;
 }
 
-caf::expected<node_actor>
-connect_to_node(caf::scoped_actor& self, const caf::settings& opts) {
+caf::expected<node_actor> connect_to_node(caf::scoped_actor& self) {
+  // If we already are in a node, do nothing.
+  if (auto node = self->system().registry().get<node_actor>("tenzir.node")) {
+    return node;
+  }
   // Fetch values from config.
+  const auto& opts = content(self->system().config());
   auto node_endpoint = details::get_node_endpoint(opts);
   if (!node_endpoint)
     return std::move(node_endpoint.error());

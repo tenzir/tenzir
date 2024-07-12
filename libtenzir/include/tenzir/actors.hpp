@@ -13,6 +13,7 @@
 #include "tenzir/aliases.hpp"
 #include "tenzir/atoms.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/http_api.hpp"
 
 #include <caf/inspector_access.hpp>
 #include <caf/io/fwd.hpp>
@@ -197,12 +198,16 @@ using catalog_actor = typed_actor_fwd<
   auto(atom::merge,
        std::shared_ptr<std::unordered_map<uuid, partition_synopsis_ptr>>)
     ->caf::result<atom::ok>,
-  // Merge a single partition synopsis.
-  auto(atom::merge, uuid, partition_synopsis_ptr)->caf::result<atom::ok>,
-  // Merge a set of partition synopsis.
+  // Merge a set of partition synopses.
   auto(atom::merge, std::vector<partition_synopsis_pair>)->caf::result<atom::ok>,
-  // Get *ALL* partition synopses stored in the catalog.
+  // Get *ALL* partition synopses stored in the catalog, optionally filtered
+  // with an expression to filter the candidate set.
+  // Note that this returns a pointer into the catalog's internal data
+  // structures, which is inherently unsafe to transfer between processes. The
+  // data pointed to must not be mutated. Functionality that depends on this
+  // should instead be moved inside of the catalog itself.
   auto(atom::get)->caf::result<std::vector<partition_synopsis_pair>>,
+  auto(atom::get, expression)->caf::result<std::vector<partition_synopsis_pair>>,
   // Erase a single partition synopsis.
   auto(atom::erase, uuid)->caf::result<atom::ok>,
   // Atomatically replace a set of partititon synopses with another.
@@ -211,8 +216,6 @@ using catalog_actor = typed_actor_fwd<
   // Return the candidate partitions per type for a query.
   auto(atom::candidates, tenzir::query_context)
     ->caf::result<catalog_lookup_result>,
-  // Retrieves the known taxonomies.
-  auto(atom::get, atom::taxonomies)->caf::result<taxonomies>,
   // Retrieves information about a partition with a given UUID.
   auto(atom::get, uuid)->caf::result<partition_info>>
   // Conform to the procotol of the STATUS CLIENT actor.
@@ -225,7 +228,8 @@ using importer_actor = typed_actor_fwd<
   // Register a FLUSH LISTENER actor.
   auto(atom::subscribe, atom::flush, flush_listener_actor)->caf::result<void>,
   // Register a subscriber for table slices.
-  auto(atom::subscribe, receiver_actor<table_slice>)->caf::result<void>,
+  auto(atom::subscribe, receiver_actor<table_slice>, bool internal)
+    ->caf::result<void>,
   // Push buffered slices downstream to make the data available.
   auto(atom::flush)->caf::result<void>,
   // Import a batch of data.
@@ -332,25 +336,6 @@ using active_partition_actor = typed_actor_fwd<
   // Conform to the protocol of the PARTITION actor.
   ::extend_with<partition_actor>::unwrap;
 
-/// The interface of the EXPORTER actor.
-using exporter_actor = typed_actor_fwd<
-  // Register the ACCOUNTANT actor.
-  auto(atom::set, accountant_actor)->caf::result<void>,
-  // Register the SINK actor.
-  auto(atom::sink, caf::actor)->caf::result<void>,
-  // Execute previously registered query.
-  auto(atom::run)->caf::result<void>,
-  // Execute previously registered query.
-  auto(atom::done)->caf::result<void>,
-  // Register a STATISTICS SUBSCRIBER actor.
-  auto(atom::statistics, caf::actor)->caf::result<void>>
-  // Receive a table slice that belongs to a query.
-  ::extend_with<receiver_actor<table_slice>>
-  // Conform to the protocol of the STREAM SINK actor for table slices.
-  ::extend_with<stream_sink_actor<table_slice>>
-  // Conform to the protocol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
-
 /// The interface of a REST HANDLER actor.
 using rest_handler_actor = typed_actor_fwd<
   // Receive an incoming HTTP request.
@@ -407,34 +392,32 @@ using exec_node_actor = typed_actor_fwd<
   // Source.
   ::extend_with<exec_node_sink_actor>::unwrap;
 
+/// The interface of the METRICS RECEIVER actor.
+using metrics_receiver_actor = typed_actor_fwd<
+  // Register a custom metric type for the metrics of an operator.
+  auto(uint64_t op_index, uint64_t metric_index, type)->caf::result<void>,
+  // Receive custom metrics of an operator.
+  auto(uint64_t op_index, uint64_t metric_index, record)->caf::result<void>,
+  // Receive the standard execution node metrics.
+  auto(operator_metric)->caf::result<void>>::unwrap;
+
 /// The interface of the NODE actor.
 using node_actor = typed_actor_fwd<
   // Execute a REST endpoint on this node.
   // Note that nodes connected via CAF trust each other completely,
   // so this skips all authorization and access control mechanisms
   // that come with HTTP(s).
-  auto(atom::proxy, http_request_description)->caf::result<rest_response>,
-  // INTERNAL: Spawn component plugins.
-  auto(atom::internal, atom::spawn, atom::plugin)->caf::result<void>,
-  // Run an invocation in the node that spawns an actor.
-  auto(atom::spawn, invocation)->caf::result<caf::actor>,
-  // Add a component to the component registry.
-  auto(atom::put, caf::actor, std::string)->caf::result<atom::ok>,
-  // Retrieve components by their type from the component registry.
-  auto(atom::get, atom::type, std::string)->caf::result<std::vector<caf::actor>>,
-  // Retrieve a component by its label from the component registry.
-  auto(atom::get, atom::label, std::string)->caf::result<caf::actor>,
+  auto(atom::proxy, http_request_description, std::string)
+    ->caf::result<rest_response>,
   // Retrieve components by their label from the component registry.
   auto(atom::get, atom::label, std::vector<std::string>)
     ->caf::result<std::vector<caf::actor>>,
   // Retrieve the version of the process running the NODE.
   auto(atom::get, atom::version)->caf::result<record>,
-  // Retrieve the configuration of the NODE.
-  auto(atom::config)->caf::result<record>,
   // Spawn a set of execution nodes for a given pipeline. Does not start the
   // execution nodes.
   auto(atom::spawn, operator_box, operator_type, receiver_actor<diagnostic>,
-       receiver_actor<metric>, int index)
+       metrics_receiver_actor, int index)
     ->caf::result<exec_node_actor>>::unwrap;
 
 /// The interface of a PIPELINE EXECUTOR actor.
@@ -479,18 +462,17 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::evaluator_actor))
   TENZIR_ADD_TYPE_ID((tenzir::exec_node_actor))
   TENZIR_ADD_TYPE_ID((tenzir::exec_node_sink_actor))
-  TENZIR_ADD_TYPE_ID((tenzir::exporter_actor))
   TENZIR_ADD_TYPE_ID((tenzir::filesystem_actor))
   TENZIR_ADD_TYPE_ID((tenzir::flush_listener_actor))
   TENZIR_ADD_TYPE_ID((tenzir::importer_actor))
   TENZIR_ADD_TYPE_ID((tenzir::index_actor))
   TENZIR_ADD_TYPE_ID((tenzir::indexer_actor))
+  TENZIR_ADD_TYPE_ID((tenzir::metrics_receiver_actor))
   TENZIR_ADD_TYPE_ID((tenzir::node_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_creation_listener_actor))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::atom::done>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::diagnostic>))
-  TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::metric>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::table_slice>))
   TENZIR_ADD_TYPE_ID((tenzir::rest_handler_actor))
   TENZIR_ADD_TYPE_ID((tenzir::status_client_actor))

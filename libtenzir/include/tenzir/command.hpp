@@ -11,7 +11,6 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/config_options.hpp"
-#include "tenzir/detail/string.hpp"
 
 #include <caf/error.hpp>
 #include <caf/fwd.hpp>

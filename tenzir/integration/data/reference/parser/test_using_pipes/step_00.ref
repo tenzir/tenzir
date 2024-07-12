@@ -4,20 +4,22 @@
       path: [
         `export` @ 0..6
       ],
-      id: <unresolved>
+      ref: unresolved
     },
     args: [
       
     ]
   },
   assignment {
-    left: {
+    left: simple_selector {
+      expr: root_field `foo` @ 9..12,
+      has_this: false,
       path: [
         `foo` @ 9..12
       ]
     },
     equals: 13..14,
-    right: literal {
+    right: constant {
       value: int64 42,
       source: 15..17
     }
@@ -27,17 +29,19 @@
       path: [
         `set` @ 20..23
       ],
-      id: <unresolved>
+      ref: unresolved
     },
     args: [
       assignment {
-        left: {
+        left: simple_selector {
+          expr: root_field `bar` @ 24..27,
+          has_this: false,
           path: [
             `bar` @ 24..27
           ]
         },
         equals: 28..29,
-        right: literal {
+        right: constant {
           value: int64 43,
           source: 30..32
         }
@@ -49,32 +53,22 @@
       path: [
         `foo` @ 35..38
       ],
-      id: <unresolved>
+      ref: unresolved
     },
     args: [
-      selector {
-        path: [
-          `bar` @ 39..42
-        ]
-      },
+      root_field `bar` @ 39..42,
       assignment {
-        left: {
+        left: simple_selector {
+          expr: root_field `baz` @ 44..47,
+          has_this: false,
           path: [
             `baz` @ 44..47
           ]
         },
         equals: 47..48,
-        right: selector {
-          path: [
-            `qux` @ 48..51
-          ]
-        }
+        right: root_field `qux` @ 48..51
       },
-      selector {
-        path: [
-          `quux` @ 53..57
-        ]
-      }
+      root_field `quux` @ 53..57
     ]
   },
   invocation {
@@ -82,7 +76,7 @@
       path: [
         `import` @ 60..66
       ],
-      id: <unresolved>
+      ref: unresolved
     },
     args: [
       

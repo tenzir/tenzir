@@ -12,6 +12,7 @@
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/printable/tenzir/json.hpp>
 #include <tenzir/config_options.hpp>
+#include <tenzir/data.hpp>
 #include <tenzir/defaults.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/env.hpp>
@@ -27,6 +28,8 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/to_lines.hpp>
+#include <tenzir/tql/parser.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/try_simdjson.hpp>
 
 #include <arrow/record_batch.h>
@@ -40,6 +43,11 @@
 namespace tenzir::plugins::json {
 
 namespace {
+
+/// This is the maximum size of a single object/event when *not* using the
+/// NDJSON mode. If this becomes problematic in the future, we can use a dynamic
+/// approach instead.
+constexpr auto max_object_size = size_t{10'000'000};
 
 inline auto split_at_crlf(generator<chunk_ptr> input)
   -> generator<std::optional<simdjson::padded_string_view>> {
@@ -711,6 +719,7 @@ struct printer_args {
   std::optional<location> omit_nulls;
   std::optional<location> omit_empty_objects;
   std::optional<location> omit_empty_lists;
+  std::optional<location> arrays_of_objects;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, printer_args& x) -> bool {
@@ -722,7 +731,8 @@ struct printer_args {
               f.field("omit_empty", x.omit_empty),
               f.field("omit_nulls", x.omit_nulls),
               f.field("omit_empty_objects", x.omit_empty_objects),
-              f.field("omit_empty_lists", x.omit_empty_lists));
+              f.field("omit_empty_lists", x.omit_empty_lists),
+              f.field("arrays_of_objects", x.arrays_of_objects));
   }
 };
 
@@ -752,10 +762,13 @@ public:
       = args_.omit_empty_objects.has_value() or args_.omit_empty.has_value();
     const auto omit_empty_lists
       = args_.omit_empty_lists.has_value() or args_.omit_empty.has_value();
-    auto meta = chunk_metadata{.content_type = compact ? "application/x-ndjson"
-                                                       : "application/json"};
+    const auto arrays_of_objects = args_.arrays_of_objects.has_value();
+    auto meta = chunk_metadata{.content_type = compact and not arrays_of_objects
+                                                 ? "application/x-ndjson"
+                                                 : "application/json"};
     return printer_instance::make(
       [compact, style, omit_nulls, omit_empty_objects, omit_empty_lists,
+       arrays_of_objects,
        meta = std::move(meta)](table_slice slice) -> generator<chunk_ptr> {
         if (slice.rows() == 0) {
           co_yield {};
@@ -774,10 +787,28 @@ public:
         auto buffer = std::vector<char>{};
         auto resolved_slice = resolve_enumerations(slice);
         auto out_iter = std::back_inserter(buffer);
-        for (const auto& row : resolved_slice.values()) {
-          const auto ok = printer.print(out_iter, row);
-          TENZIR_ASSERT(ok);
-          out_iter = fmt::format_to(out_iter, "\n");
+        auto rows = resolved_slice.values();
+        auto row = rows.begin();
+        if (not arrays_of_objects) {
+          for (; row != rows.end(); ++row) {
+            const auto ok = printer.print(out_iter, *row);
+            TENZIR_ASSERT(ok);
+            out_iter = fmt::format_to(out_iter, "\n");
+          }
+        } else {
+          out_iter = fmt::format_to(out_iter, "[");
+          if (row != rows.end()) {
+            const auto ok = printer.print(out_iter, *row);
+            TENZIR_ASSERT(ok);
+            ++row;
+          }
+          for (; row != rows.end(); ++row) {
+            *out_iter++ = ',';
+            *out_iter++ = compact ? ' ' : '\n';
+            const auto ok = printer.print(out_iter, *row);
+            TENZIR_ASSERT(ok);
+          }
+          out_iter = fmt::format_to(out_iter, "]\n");
         }
         auto chunk = chunk::make(std::move(buffer), meta);
         co_yield std::move(chunk);
@@ -787,6 +818,10 @@ public:
   auto allows_joining() const -> bool override {
     return true;
   };
+
+  auto prints_utf8() const -> bool override {
+    return true;
+  }
 
   friend auto inspect(auto& f, json_printer& x) -> bool {
     return f.apply(x.args_);
@@ -852,6 +887,7 @@ public:
     parser.add("--omit-nulls", args.omit_nulls);
     parser.add("--omit-empty-objects", args.omit_empty_objects);
     parser.add("--omit-empty-lists", args.omit_empty_lists);
+    parser.add("--arrays-of-objects", args.arrays_of_objects);
     parser.parse(p);
     return std::make_unique<json_printer>(std::move(args));
   }
@@ -920,6 +956,196 @@ public:
 using suricata_parser = selector_parser<"suricata", "event_type", "suricata">;
 using zeek_parser = selector_parser<"zeek-json", "_path", "zeek", ".">;
 
+class write_json final : public crtp_operator<write_json> {
+public:
+  write_json() = default;
+
+  explicit write_json(printer_args args) : printer_{std::move(args)} {
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.write_json";
+  }
+
+  auto operator()(generator<table_slice> input,
+                  operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+    // TODO: Expose a better API for this.
+    auto printer = printer_.instantiate(type{}, ctrl);
+    TENZIR_ASSERT(printer);
+    TENZIR_ASSERT(*printer);
+    for (auto&& slice : input) {
+      auto yielded = false;
+      for (auto&& chunk : (*printer)->process(slice)) {
+        co_yield std::move(chunk);
+        yielded = true;
+      }
+      if (not yielded) {
+        co_yield {};
+      }
+    }
+    for (auto&& chunk : (*printer)->finish()) {
+      co_yield std::move(chunk);
+    }
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, write_json& x) -> bool {
+    return f.apply(x.printer_);
+  }
+
+private:
+  json_printer printer_;
+};
+
+class read_json_plugin final
+  : public virtual operator_plugin2<parser_adapter<json_parser>> {
+public:
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto args = parser_args{};
+    auto selector = std::optional<located<std::string>>{};
+    auto sep = std::optional<located<std::string>>{};
+    auto unnest_separator = std::optional<std::string>{};
+    auto result = argument_parser2::operator_(name())
+                    .add("sep", sep)
+                    // TODO: We could allow a non-constant expression for
+                    // `schema` and then evaluate it with (perhaps in some
+                    // limited fashion) against the current JSON document.
+                    .add("selector", selector)
+                    .add("schema", args.schema)
+                    .add("precise", args.precise)
+                    .add("no_extra_fields", args.no_infer)
+                    // TODO: Decide whether to cover this `sep`.
+                    .add("gelf", args.use_gelf_mode)
+                    .add("ndjson", args.use_ndjson_mode)
+                    .add("unnest_separator", unnest_separator)
+                    .add("raw", args.raw)
+                    .add("arrays_of_objects", args.arrays_of_objects)
+                    .parse(inv, ctx);
+    if (unnest_separator) {
+      args.unnest_separator = std::move(*unnest_separator);
+    }
+    if (selector) {
+      try {
+        args.selector = parse_selector(selector->inner, selector->source);
+      } catch (diagnostic d) {
+        TENZIR_ASSERT(d.severity == severity::error);
+        ctx.dh().emit(std::move(d));
+        result = failure::promise();
+      }
+    }
+    if (sep) {
+      auto& str = sep->inner;
+      if (str == "\n") {
+        args.use_ndjson_mode = true;
+      } else if (str.size() == 1 && str[0] == '\0') {
+        args.use_gelf_mode = true;
+      } else {
+        diagnostic::error("unknown separator {:?}", str)
+          .primary(sep->source)
+          .hint(R"(expected "\n" or "\0")")
+          .emit(ctx);
+        result = failure::promise();
+      }
+    }
+    TRY(result);
+    return std::make_unique<parser_adapter<json_parser>>(
+      json_parser{std::move(args)});
+  }
+};
+
+class parse_json_plugin final : public virtual method_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.parse_json";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    // TODO: Consider adding a `many` option to expect multiple json values.
+    // TODO: Consider adding a `precise` option (this needs evaluator support).
+    TRY(argument_parser2::method("parse_json")
+          .add(expr, "<string>")
+          .parse(inv, ctx));
+    return function_use::make(
+      [call = inv.call.get_location(),
+       expr = std::move(expr)](evaluator eval, session ctx) -> series {
+        auto arg = eval(expr);
+        auto f = detail::overload{
+          [&](const arrow::NullArray&) {
+            return arg;
+          },
+          [&](const arrow::StringArray& arg) {
+            auto parser = simdjson::ondemand::parser{};
+            auto b = series_builder{};
+            for (auto i = int64_t{0}; i < arg.length(); ++i) {
+              if (arg.IsNull(i)) {
+                b.null();
+                continue;
+              }
+              auto parse = [&]() -> simdjson::simdjson_result<data> {
+                auto str = std::string{arg.Value(i)};
+                TRY(auto doc, parser.iterate(str));
+                return json_to_data(doc, false);
+              };
+              auto result = parse();
+              if (result.error()) {
+                // TODO: This can be very noisy. We will deduplicate the
+                // messages, but this is not efficient.
+                diagnostic::warning("could not parse json: {}",
+                                    simdjson::error_message(result.error()))
+                  .primary(call)
+                  .emit(ctx);
+                b.null();
+                continue;
+              }
+              b.data(result.value_unsafe());
+            }
+            auto result = b.finish();
+            // TODO: Consider whether we need heterogeneous for this. If so,
+            // then we must extend the evaluator accordingly.
+            if (result.size() != 1) {
+              diagnostic::warning("got incompatible JSON values")
+                .primary(call)
+                .emit(ctx);
+              return series::null(null_type{}, arg.length());
+            }
+            return std::move(result[0]);
+          },
+          [&](const auto&) {
+            diagnostic::warning("`parse_json` expected `string`, got `{}`",
+                                arg.type.kind())
+              .primary(call)
+              .emit(ctx);
+            return series::null(null_type{}, arg.length());
+          },
+        };
+        return caf::visit(f, *arg.array);
+      });
+  }
+};
+
+class write_json_plugin final : public virtual operator_plugin2<write_json> {
+public:
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    // TODO: More options, and consider `null_fields=false` as default.
+    auto args = printer_args{};
+    TRY(argument_parser2::operator_("write_json")
+          // TODO: Perhaps "indent=0"?
+          .add("ndjson", args.compact_output)
+          .add("color", args.color_output)
+          .parse(inv, ctx));
+    return std::make_unique<write_json>(args);
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::json
@@ -928,3 +1154,6 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::gelf_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::suricata_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::zeek_parser)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_json_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::parse_json_plugin)

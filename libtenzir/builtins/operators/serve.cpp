@@ -69,6 +69,8 @@
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include <sstream>
+
 namespace tenzir::plugins::serve {
 
 namespace {
@@ -79,7 +81,7 @@ constexpr auto SPEC_V0 = R"_(
 /serve:
   post:
     summary: Return data from a pipeline
-    description: "Returns events from an existing pipeline. The pipeline definition must include a serve operator. By default, the endpoint performs long polling (`timeout: 2s`) and returns events as soon as they are available (`min_events: 1`)."
+    description: "Returns events from an existing pipeline. The pipeline definition must include a serve operator. By default, the endpoint performs long polling (`timeout: 5s`) and returns events as soon as they are available (`min_events: 1`)."
     requestBody:
       description: Body for the serve endpoint
       required: true
@@ -109,9 +111,9 @@ constexpr auto SPEC_V0 = R"_(
                 description: Wait for this number of events before returning.
               timeout:
                 type: string
-                example: "2000ms"
-                default: "2000ms"
-                description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 5 seconds.
+                example: "200ms"
+                default: "5s"
+                description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 10 seconds.
               use_simple_format:
                 type: bool
                 example: true
@@ -773,7 +775,15 @@ struct serve_handler_state {
         [rp](caf::error& err) mutable {
           // TODO: Use a struct with distinct fields for user-facing
           // error message and detail here.
-          auto rsp = rest_response::make_error(400, fmt::to_string(err), {});
+          // TODO: We don't have the source here to print snippets of the
+          // diagnostic! Either `serve` needs to be aware of that (which seems
+          // like a very bad idea), or the diagnostics need to be rendered
+          // somewhere else.
+          auto stream = std::stringstream{};
+          auto printer = make_diagnostic_printer(
+            std::nullopt, color_diagnostics::yes, stream);
+          printer->emit(diagnostic::error(err).done());
+          auto rsp = rest_response::make_error(400, stream.str(), {});
           rp.deliver(std::move(rsp));
         });
     return rp;
@@ -784,7 +794,9 @@ auto serve_handler(
   serve_handler_actor::stateful_pointer<serve_handler_state> self,
   const node_actor& node) -> serve_handler_actor::behavior_type {
   self->state.self = self;
-  self->request(node, caf::infinite, atom::get_v, atom::type_v, "serve-manager")
+  self
+    ->request(node, caf::infinite, atom::get_v, atom::label_v,
+              std::vector<std::string>{"serve-manager"})
     .await(
       [self](std::vector<caf::actor>& actors) {
         TENZIR_ASSERT(actors.size() == 1);
@@ -830,8 +842,8 @@ public:
     {
       auto blocking = caf::scoped_actor{ctrl.self().system()};
       blocking
-        ->request(ctrl.node(), caf::infinite, atom::get_v, atom::type_v,
-                  "serve-manager")
+        ->request(ctrl.node(), caf::infinite, atom::get_v, atom::label_v,
+                  std::vector<std::string>{"serve-manager"})
         .receive(
           [&](std::vector<caf::actor>& actors) {
             TENZIR_ASSERT(actors.size() == 1);
@@ -941,8 +953,8 @@ public:
     auto serve_manager = serve_manager_actor{};
     auto blocking = caf::scoped_actor{ctrl.self().system()};
     blocking
-      ->request(ctrl.node(), caf::infinite, atom::get_v, atom::type_v,
-                "serve-manager")
+      ->request(ctrl.node(), caf::infinite, atom::get_v, atom::label_v,
+                std::vector<std::string>{"serve-manager"})
       .receive(
         [&](std::vector<caf::actor>& actors) {
           TENZIR_ASSERT(actors.size() == 1);

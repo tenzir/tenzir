@@ -18,6 +18,7 @@
 #include <tenzir/concept/parseable/tenzir/data.hpp>
 #include <tenzir/concept/parseable/tenzir/expression.hpp>
 #include <tenzir/concept/parseable/to.hpp>
+#include <tenzir/connect_to_node.hpp>
 #include <tenzir/detail/flat_map.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/node.hpp>
@@ -25,7 +26,6 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/query_context.hpp>
 #include <tenzir/query_cursor.hpp>
-#include <tenzir/spawn_or_connect_to_node.hpp>
 #include <tenzir/validate.hpp>
 
 #include <caf/event_based_actor.hpp>
@@ -308,15 +308,11 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
       fmt::format("invalid server configuration: {}", server_config.error())));
   }
   // Create necessary actors.
-  auto node_opt = tenzir::spawn_or_connect_to_node(self, inv.options,
-                                                   content(system.config()));
-  if (auto* err = std::get_if<caf::error>(&node_opt)) {
-    TENZIR_ERROR("failed to get node: {}", *err);
-    return caf::make_message(std::move(*err));
+  auto node_opt = tenzir::connect_to_node(self);
+  if (not node_opt) {
+    return caf::make_message(std::move(node_opt.error()));
   }
-  const auto& node = std::holds_alternative<node_actor>(node_opt)
-                       ? std::get<node_actor>(node_opt)
-                       : std::get<scope_linked<node_actor>>(node_opt).get();
+  const auto node = std::move(*node_opt);
   TENZIR_ASSERT(node != nullptr);
   auto authenticator = get_authenticator(self, node, caf::infinite);
   if (!authenticator) {

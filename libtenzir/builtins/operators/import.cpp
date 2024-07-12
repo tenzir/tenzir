@@ -13,6 +13,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/node_control.hpp>
 #include <tenzir/pipeline.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
 
@@ -33,18 +34,33 @@ public:
     auto components = get_node_components<importer_actor>(self, ctrl.node());
     TENZIR_ASSERT(components);
     auto [importer] = std::move(*components);
+    auto metric_handler = ctrl.metrics({
+      "tenzir.metrics.import",
+      record_type{
+        {"schema", string_type{}},
+        {"schema_id", string_type{}},
+        {"events", uint64_type{}},
+      },
+    });
     auto total_events = size_t{0};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
         co_yield {};
         continue;
       }
+      if (not slice.schema().attribute("internal").has_value()) {
+        metric_handler.emit({
+          {"schema", std::string{slice.schema().name()}},
+          {"schema_id", slice.schema().make_fingerprint()},
+          {"events", slice.rows()},
+        });
+      }
       total_events += slice.rows();
       // TODO: This temporary solution does not apply back-pressure.
       ctrl.self().send(importer, std::move(slice));
     }
-    TENZIR_VERBOSE(
-      "waiting for completion of import after input stream has ended");
+    TENZIR_VERBOSE("waiting for completion of import after input stream has "
+                   "ended");
     // We empirically need this sleep here for the flushing to take any effect
     // afterwards. I do not fully understand why, but since we're about to
     // rewrite this operator anyways to create partitions in-band and to
@@ -95,7 +111,8 @@ public:
   }
 };
 
-class plugin final : public virtual operator_plugin<import_operator> {
+class plugin final : public virtual operator_plugin<import_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.sink = true};
@@ -115,6 +132,12 @@ public:
     }
     pipe->append(std::make_unique<import_operator>());
     return std::make_unique<pipeline>(std::move(*pipe));
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    argument_parser2::operator_("import").parse(inv, ctx).ignore();
+    return std::make_unique<import_operator>();
   }
 };
 

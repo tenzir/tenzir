@@ -1,30 +1,41 @@
 [submodule "libtenzir/aux/fast_float"]
 	path = libtenzir/aux/fast_float
 	url = https://github.com/fastfloat/fast_float
+	shallow = true
 [submodule "plugins/web/aux/restinio"]
 	path = plugins/web/aux/restinio
 	url = https://github.com/Stiffstream/restinio
+	shallow = true
 [submodule "web/.github"]
 	path = web/.github
 	url = https://github.com/tenzir/.github.git
+	shallow = true
 [submodule "contrib/tenzir-plugins"]
 	path = contrib/tenzir-plugins
 	url = git@github.com:tenzir/tenzir-plugins
+	shallow = false
+	update = rebase
 [submodule "libtenzir/aux/simdjson"]
 	path = libtenzir/aux/simdjson
 	url = https://github.com/simdjson/simdjson
+	shallow = true
 [submodule "libtenzir/aux/caf"]
 	path = libtenzir/aux/caf
 	url = https://github.com/tenzir/actor-framework
+	shallow = true
 [submodule "libtenzir/aux/pfs"]
 	path = libtenzir/aux/pfs
 	url = https://github.com/tenzir/pfs.git
+	shallow = true
 [submodule "tenzir/integration/bats"]
 	path = tenzir/integration/lib/bats
 	url = https://github.com/bats-core/bats-core
+	shallow = true
 [submodule "tenzir/integration/bats-support"]
 	path = tenzir/integration/lib/bats-support
 	url = https://github.com/bats-core/bats-support
+	shallow = true
 [submodule "tenzir/integration/bats-assert"]
 	path = tenzir/integration/lib/bats-assert
 	url = https://github.com/bats-core/bats-assert
+	shallow = true

@@ -18,6 +18,8 @@
 #include <arrow/compute/api_vector.h>
 #include <arrow/record_batch.h>
 
+#include <ranges>
+
 namespace tenzir::plugins::sort {
 
 namespace {
@@ -70,9 +72,15 @@ public:
     const auto chunked_key
       = arrow::ChunkedArray::Make(std::move(sort_keys_)).ValueOrDie();
     const auto indices
-      = arrow::compute::SortIndices(*chunked_key, sort_options_).ValueOrDie();
+      = arrow::compute::SortIndices(*chunked_key, sort_options_);
+    if (not indices.ok()) {
+      diagnostic::error("{}", indices.status().ToString())
+        .note("failed to sort `{}`", key_)
+        .throw_();
+    }
     auto result_buffer = std::vector<table_slice>{};
-    for (const auto& index : static_cast<const arrow::Int64Array&>(*indices)) {
+    for (const auto& index :
+         static_cast<const arrow::Int64Array&>(*indices.ValueUnsafe())) {
       TENZIR_ASSERT(index.has_value());
       const auto offset = std::prev(
         std::upper_bound(offset_table_.begin(), offset_table_.end(), *index));
@@ -248,27 +256,30 @@ public:
       parsers::end_of_pipeline_operator, parsers::extractor, parsers::str;
     const auto* f = pipeline.begin();
     const auto* const l = pipeline.end();
-    auto key = std::string{};
     const auto p
       = required_ws_or_comment
         >> -(str{"--stable"}.then([&](std::string) -> bool {
             return true;
           }) >> required_ws_or_comment)
-        >> extractor
-        >> -(required_ws_or_comment >> (str{"asc"} | str{"desc"}))
-              .then([&](std::string sort_order) {
-                return !(sort_order.empty() || sort_order == "asc");
-              })
-        >> -(required_ws_or_comment >> (str{"nulls-first"} | str{"nulls-last"}))
-              .then([&](std::string null_placement) {
-                return !(null_placement.empty()
-                         || null_placement == "nulls-last");
-              })
-        >> optional_ws_or_comment >> end_of_pipeline_operator;
+        >> ((extractor
+             >> (-(required_ws_or_comment >> (str{"asc"} | str{"desc"})))
+                  .then([&](caf::optional<std::string> sort_order) {
+                    return sort_order.value_or("asc") == "desc";
+                  })
+             >> (-(required_ws_or_comment
+                   >> (str{"nulls-first"} | str{"nulls-last"})))
+                  .then([&](caf::optional<std::string> null_placement) {
+                    return null_placement.value_or("nulls-last")
+                           == "nulls-first";
+                  })
+             >> optional_ws_or_comment)
+            % (',' >> optional_ws_or_comment))
+        >> end_of_pipeline_operator;
+    auto sort_args
+      = std::vector<std::tuple<std::string /*key*/, bool /*descending*/,
+                               bool /*nulls_first*/>>{};
     bool stable = false;
-    bool descending = false;
-    bool nulls_first = false;
-    if (!p(f, l, stable, key, descending, nulls_first)) {
+    if (!p(f, l, stable, sort_args)) {
       return {
         std::string_view{f, l},
         caf::make_error(ec::syntax_error, fmt::format("failed to parse "
@@ -276,10 +287,24 @@ public:
                                                       pipeline)),
       };
     }
+    if (sort_args.empty()) {
+      return {
+        std::string_view{f, l},
+        caf::make_error(ec::syntax_error, "sort operator requires at least one "
+                                          "sort key"),
+      };
+    }
+    auto result = std::make_unique<tenzir::pipeline>();
+    bool first = true;
+    for (auto& [key, descending, nulls_first] :
+         sort_args | std::ranges::views::reverse) {
+      result->append(std::make_unique<sort_operator>(
+        std::move(key), first ? stable : true, descending, nulls_first));
+      first = false;
+    }
     return {
       std::string_view{f, l},
-      std::make_unique<sort_operator>(std::move(key), stable, descending,
-                                      nulls_first),
+      std::move(result),
     };
   }
 };

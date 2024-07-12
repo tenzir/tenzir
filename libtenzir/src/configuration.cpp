@@ -448,11 +448,8 @@ caf::error configuration::parse(int argc, char** argv) {
   // runtime system and should win over the build-time defaults but loose if set
   // via any other method.
   if (!config->contains("tenzir.state-directory")) {
-    if (config->contains("tenzir.db-directory")) {
-      (*config)["tenzir.state-directory"] = (*config)["tenzir.db-directory"];
-    }
     // Provided by systemd when StateDirectory= is set in the unit.
-    else if (auto state_directory = detail::getenv("STATE_DIRECTORY")) {
+    if (auto state_directory = detail::getenv("STATE_DIRECTORY")) {
       (*config)["tenzir.state-directory"] = std::string{*state_directory};
     }
   }

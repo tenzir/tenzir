@@ -10,6 +10,7 @@
 
 #include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/config.hpp"
+#include "tenzir/diagnostics.hpp"
 
 namespace tenzir {
 
@@ -183,7 +184,7 @@ auto transfer::prepare(chunk_ptr chunk) -> caf::error {
 
 auto transfer::perform() -> caf::error {
   auto code = easy_.perform();
-  if (code == curl::easy::code::ok) {
+  if (code != curl::easy::code::ok) {
     return to_error(code);
   }
   return {};
@@ -244,15 +245,61 @@ auto transfer::download_chunks() -> generator<caf::expected<chunk_ptr>> {
 auto transfer::reset() -> caf::error {
   TENZIR_DEBUG("resetting transfer");
   easy_.reset();
+  if (options.verbose) {
+    auto code = easy_.set(CURLOPT_VERBOSE, 1);
+    TENZIR_ASSERT(code == curl::easy::code::ok);
+  }
   if (not options.default_protocol.empty()) {
     if (auto err = to_error(
           easy_.set(CURLOPT_DEFAULT_PROTOCOL, options.default_protocol))) {
-      return err;
+      return diagnostic::error("invalid default protocol: {}",
+                               options.default_protocol)
+        .note("{}", err)
+        .to_error();
     }
   }
-  if (options.verbose) {
-    if (auto err = to_error(easy_.set(CURLOPT_VERBOSE, 1))) {
-      return err;
+  if (options.skip_peer_verification) {
+    auto code = easy_.set(CURLOPT_SSL_VERIFYPEER, 0);
+    TENZIR_ASSERT(code == curl::easy::code::ok);
+  }
+  if (options.skip_hostname_verification) {
+    auto code = easy_.set(CURLOPT_SSL_VERIFYHOST, 0);
+    TENZIR_ASSERT(code == curl::easy::code::ok);
+  }
+  if (options.username) {
+    auto code = easy_.set(CURLOPT_USERNAME, *options.username);
+    if (code != curl::easy::code::ok) {
+      auto err = to_error(code);
+      return diagnostic::error("failed to set user name")
+        .note("{}", err)
+        .to_error();
+    }
+  }
+  if (options.password) {
+    auto code = easy_.set(CURLOPT_PASSWORD, *options.password);
+    if (code != curl::easy::code::ok) {
+      auto err = to_error(code);
+      return diagnostic::error("failed to set password")
+        .note("{}", err)
+        .to_error();
+    }
+  }
+  if (options.authzid) {
+    auto code = easy_.set(CURLOPT_SASL_AUTHZID, *options.authzid);
+    if (code != curl::easy::code::ok) {
+      auto err = to_error(code);
+      return diagnostic::error("failed to set authorization identity")
+        .note("{}", err)
+        .to_error();
+    }
+  }
+  if (options.authorization) {
+    auto code = easy_.set(CURLOPT_LOGIN_OPTIONS, *options.authorization);
+    if (code != curl::easy::code::ok) {
+      auto err = to_error(code);
+      return diagnostic::error("failed to set login authorization method")
+        .note("{}", err)
+        .to_error();
     }
   }
   return {};

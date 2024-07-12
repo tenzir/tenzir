@@ -292,8 +292,6 @@ struct index_state {
     = {};
 
   /// The maximum number of partitions to serve queries at the same time.
-  /// Assigned from the `max-queries` config option.
-  /// TODO: Rename that option appropriately and deprecate the old name.
   size_t max_concurrent_partition_lookups = 0;
 
   /// A counter to track the number of partitions that are currently serving

@@ -1,7 +1,0 @@
-// This file contains common types and aliases.
-
-// Alias for transport-layer ports.
-type port = uint64
-
-// Alias for timestamps.
-type timestamp = time

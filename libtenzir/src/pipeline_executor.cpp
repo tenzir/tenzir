@@ -11,7 +11,6 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/atoms.hpp"
 #include "tenzir/connect_to_node.hpp"
-#include "tenzir/detail/narrow.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/execution_node.hpp"
@@ -29,8 +28,6 @@
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
 
-#include <iterator>
-
 namespace tenzir {
 
 void pipeline_executor_state::start_nodes_if_all_spawned() {
@@ -44,7 +41,7 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
   }
   self->link_to(exec_nodes.back());
   self->set_exit_handler([this](caf::exit_msg& msg) {
-    TENZIR_DEBUG("{} received exit from all execution nodes: {}", *self,
+    TENZIR_DEBUG("{} received exit from last execution node: {}", *self,
                  msg.reason);
     self->quit(std::move(msg.reason));
   });
@@ -62,6 +59,11 @@ void pipeline_executor_state::start_nodes_if_all_spawned() {
         finish_start();
       },
       [this](const caf::error& err) mutable {
+        if (not err) {
+          // TODO: Is this even reachable?
+          finish_start();
+          return;
+        }
         abort_start(err);
       });
 }
@@ -150,31 +152,20 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
 
 void pipeline_executor_state::abort_start(diagnostic reason) {
   TENZIR_DEBUG("{} sends diagnostic due to start abort: {:?}", *self, reason);
-  self->request(diagnostics, caf::infinite, std::move(reason))
-    .then(
-      [this]() {
-        // We already delivered the error as a diagnostic.
-        TENZIR_DEBUG("{} delivered diagnostic and shuts down silently", *self);
-        start_rp.deliver(ec::diagnostic);
-        self->quit(ec::diagnostic);
-      },
-      [this](const caf::error& error) {
-        start_rp.deliver(diagnostic::error(error)
-                           .note("failed to deliver diagnostic")
-                           .to_error());
-        self->quit(ec::diagnostic);
-      });
+  auto err = caf::make_error(ec::diagnostic, std::move(reason));
+  start_rp.deliver(std::move(err));
+  self->quit(ec::silent);
 }
 
 void pipeline_executor_state::abort_start(caf::error reason) {
+  TENZIR_ASSERT(reason);
   if (reason == ec::silent) {
     TENZIR_DEBUG("{} delivers silent start abort", *self);
     start_rp.deliver(ec::silent);
     self->quit(ec::silent);
     return;
   }
-  abort_start(
-    diagnostic::error(reason).note("pipeline failed to start").done());
+  abort_start(diagnostic::error(std::move(reason)).done());
 }
 
 void pipeline_executor_state::finish_start() {
@@ -216,7 +207,7 @@ auto pipeline_executor_state::start() -> caf::result<void> {
     for (const auto& op : pipe.operators()) {
       if (op->location() == operator_location::remote) {
         TENZIR_DEBUG("{} connects to node because of remote operators", *self);
-        connect_to_node(self, content(self->system().config()),
+        connect_to_node(self,
                         [this, pipe = std::move(pipe)](
                           caf::expected<node_actor> result) mutable {
                           if (not result) {
@@ -273,7 +264,7 @@ auto pipeline_executor_state::resume() -> caf::result<void> {
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
   pipeline pipe, receiver_actor<diagnostic> diagnostics,
-  receiver_actor<metric> metrics, node_actor node, bool has_terminal)
+  metrics_receiver_actor metrics, node_actor node, bool has_terminal)
   -> pipeline_executor_actor::behavior_type {
   TENZIR_DEBUG("{} was created", *self);
   self->state.self = self;

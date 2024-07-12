@@ -125,7 +125,7 @@ struct accountant_state_impl {
     auto& builder = builders[key];
     if (!builder) {
       auto schema_fields = std::vector<record_type::field_view>{
-        {"ts", type{"timestamp", time_type{}}},
+        {"ts", time_type{}},
         {"version", string_type{}},
         {"actor", string_type{}},
         {"value", double_type{}},
@@ -276,10 +276,10 @@ struct accountant_state_impl {
                                           std::filesystem::file_type::regular,
                                           std::ios_base::app);
       if (s) {
-        TENZIR_INFO("{} writing metrics to {}", *self, cfg.file_sink.path);
+        TENZIR_VERBOSE("{} writes metrics to {}", *self, cfg.file_sink.path);
         file_sink = std::move(*s);
       } else {
-        TENZIR_INFO("{} could not open {} for metrics: {}", *self,
+        TENZIR_WARN("{} failed to open {} for metrics: {}", *self,
                     cfg.file_sink.path, s.error());
       }
     }

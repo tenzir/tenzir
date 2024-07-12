@@ -251,6 +251,21 @@ public:
     return iterator{m_coroutine};
   }
 
+  auto exhausted() const -> bool {
+    return unsafe_current() == end();
+  }
+
+  auto next() -> std::optional<value_type> {
+    if (exhausted()) {
+      return {};
+    }
+    ++unsafe_current();
+    if (exhausted()) {
+      return {};
+    }
+    return *unsafe_current();
+  }
+
 private:
   friend class internal::generator_promise<T>;
 

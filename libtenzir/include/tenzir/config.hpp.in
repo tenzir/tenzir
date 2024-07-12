@@ -111,6 +111,8 @@ extern bool has_undefined_behavior_sanitizer;
 #  define TENZIR_DIAGNOSTIC_IGNORE_MAYBE_UNINITIALIZED /* nop */
 #  define TENZIR_DIAGNOSTIC_IGNORE_UNUSED_CONST_VARIABLE                       \
     _Pragma("clang diagnostic ignored \"-Wunused-const-variable\"")
+#  define TENZIR_DIAGNOSTIC_IGNORE_SIGN_COMPARE                                \
+    _Pragma("clang diagnostic ignored \"-Wsign-compare\"")
 #elif TENZIR_GCC
 #  define TENZIR_DIAGNOSTIC_PUSH _Pragma("GCC diagnostic push")
 #  define TENZIR_DIAGNOSTIC_POP _Pragma("GCC diagnostic pop")
@@ -124,6 +126,8 @@ extern bool has_undefined_behavior_sanitizer;
     _Pragma("GCC diagnostic ignored \"-Wmaybe-uninitialized\"")
 #  define TENZIR_DIAGNOSTIC_IGNORE_UNUSED_CONST_VARIABLE                       \
     _Pragma("GCC diagnostic ignored \"-Wunused-const-variable\"")
+#  define TENZIR_DIAGNOSTIC_IGNORE_SIGN_COMPARE                                \
+    _Pragma("GCC diagnostic ignored \"-Wsign-compare\"")
 #endif
 
 #ifdef CAF_BSD

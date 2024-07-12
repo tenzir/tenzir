@@ -1,6 +1,8 @@
 [
   assignment {
-    left: {
+    left: simple_selector {
+      expr: root_field `a` @ 0..1,
+      has_this: false,
       path: [
         `a` @ 0..1
       ]
@@ -11,15 +13,18 @@
         path: [
           `b` @ 4..5
         ],
-        id: <unresolved>
+        ref: unresolved
       },
       args: [
         
-      ]
+      ],
+      rpar: 6..7
     }
   },
   assignment {
-    left: {
+    left: simple_selector {
+      expr: root_field `a` @ 8..9,
+      has_this: false,
       path: [
         `a` @ 8..9
       ]
@@ -30,19 +35,18 @@
         path: [
           `b` @ 12..13
         ],
-        id: <unresolved>
+        ref: unresolved
       },
       args: [
-        selector {
-          path: [
-            `c` @ 14..15
-          ]
-        }
-      ]
+        root_field `c` @ 14..15
+      ],
+      rpar: 15..16
     }
   },
   assignment {
-    left: {
+    left: simple_selector {
+      expr: root_field `a` @ 17..18,
+      has_this: false,
       path: [
         `a` @ 17..18
       ]
@@ -53,27 +57,28 @@
         path: [
           `b` @ 21..22
         ],
-        id: <unresolved>
+        ref: unresolved
       },
       args: [
         assignment {
-          left: {
+          left: simple_selector {
+            expr: root_field `c` @ 23..24,
+            has_this: false,
             path: [
               `c` @ 23..24
             ]
           },
           equals: 24..25,
-          right: selector {
-            path: [
-              `d` @ 25..26
-            ]
-          }
+          right: root_field `d` @ 25..26
         }
-      ]
+      ],
+      rpar: 26..27
     }
   },
   assignment {
-    left: {
+    left: simple_selector {
+      expr: root_field `a` @ 28..29,
+      has_this: false,
       path: [
         `a` @ 28..29
       ]
@@ -84,32 +89,29 @@
         path: [
           `b` @ 32..33
         ],
-        id: <unresolved>
+        ref: unresolved
       },
       args: [
-        selector {
-          path: [
-            `c` @ 34..35
-          ]
-        },
+        root_field `c` @ 34..35,
         assignment {
-          left: {
+          left: simple_selector {
+            expr: root_field `d` @ 37..38,
+            has_this: false,
             path: [
               `d` @ 37..38
             ]
           },
           equals: 38..39,
-          right: selector {
-            path: [
-              `e` @ 39..40
-            ]
-          }
+          right: root_field `e` @ 39..40
         }
-      ]
+      ],
+      rpar: 40..41
     }
   },
   assignment {
-    left: {
+    left: simple_selector {
+      expr: root_field `a` @ 42..43,
+      has_this: false,
       path: [
         `a` @ 42..43
       ]
@@ -120,46 +122,35 @@
         path: [
           `b` @ 46..47
         ],
-        id: <unresolved>
+        ref: unresolved
       },
       args: [
         assignment {
-          left: {
+          left: simple_selector {
+            expr: root_field `c` @ 48..49,
+            has_this: false,
             path: [
               `c` @ 48..49
             ]
           },
           equals: 49..50,
-          right: selector {
-            path: [
-              `d` @ 50..51
-            ]
-          }
+          right: root_field `d` @ 50..51
         },
-        selector {
-          path: [
-            `e` @ 53..54
-          ]
-        },
+        root_field `e` @ 53..54,
         assignment {
-          left: {
+          left: simple_selector {
+            expr: root_field `g` @ 56..57,
+            has_this: false,
             path: [
               `g` @ 56..57
             ]
           },
           equals: 57..58,
-          right: selector {
-            path: [
-              `h` @ 58..59
-            ]
-          }
+          right: root_field `h` @ 58..59
         },
-        selector {
-          path: [
-            `i` @ 61..62
-          ]
-        }
-      ]
+        root_field `i` @ 61..62
+      ],
+      rpar: 63..64
     }
   },
   invocation {
@@ -167,24 +158,21 @@
       path: [
         `foo` @ 65..68
       ],
-      id: <unresolved>
+      ref: unresolved
     },
     args: [
       function_call {
-        subject: selector {
-          path: [
-            `a` @ 69..70
-          ]
-        },
+        subject: root_field `a` @ 69..70,
         fn: {
           path: [
             `b` @ 71..72
           ],
-          id: <unresolved>
+          ref: unresolved
         },
         args: [
           
-        ]
+        ],
+        rpar: 73..74
       }
     ]
   },
@@ -193,28 +181,21 @@
       path: [
         `foo` @ 75..78
       ],
-      id: <unresolved>
+      ref: unresolved
     },
     args: [
       function_call {
-        subject: selector {
-          path: [
-            `a` @ 79..80
-          ]
-        },
+        subject: root_field `a` @ 79..80,
         fn: {
           path: [
             `b` @ 81..82
           ],
-          id: <unresolved>
+          ref: unresolved
         },
         args: [
-          selector {
-            path: [
-              `c` @ 83..84
-            ]
-          }
-        ]
+          root_field `c` @ 83..84
+        ],
+        rpar: 84..85
       }
     ]
   },
@@ -223,36 +204,31 @@
       path: [
         `foo` @ 86..89
       ],
-      id: <unresolved>
+      ref: unresolved
     },
     args: [
       function_call {
-        subject: selector {
-          path: [
-            `a` @ 90..91
-          ]
-        },
+        subject: root_field `a` @ 90..91,
         fn: {
           path: [
             `b` @ 92..93
           ],
-          id: <unresolved>
+          ref: unresolved
         },
         args: [
           assignment {
-            left: {
+            left: simple_selector {
+              expr: root_field `c` @ 94..95,
+              has_this: false,
               path: [
                 `c` @ 94..95
               ]
             },
             equals: 95..96,
-            right: selector {
-              path: [
-                `d` @ 96..97
-              ]
-            }
+            right: root_field `d` @ 96..97
           }
-        ]
+        ],
+        rpar: 97..98
       }
     ]
   },
@@ -261,41 +237,32 @@
       path: [
         `foo` @ 99..102
       ],
-      id: <unresolved>
+      ref: unresolved
     },
     args: [
       function_call {
-        subject: selector {
-          path: [
-            `a` @ 103..104
-          ]
-        },
+        subject: root_field `a` @ 103..104,
         fn: {
           path: [
             `b` @ 105..106
           ],
-          id: <unresolved>
+          ref: unresolved
         },
         args: [
-          selector {
-            path: [
-              `c` @ 107..108
-            ]
-          },
+          root_field `c` @ 107..108,
           assignment {
-            left: {
+            left: simple_selector {
+              expr: root_field `d` @ 110..111,
+              has_this: false,
               path: [
                 `d` @ 110..111
               ]
             },
             equals: 111..112,
-            right: selector {
-              path: [
-                `e` @ 112..113
-              ]
-            }
+            right: root_field `e` @ 112..113
           }
-        ]
+        ],
+        rpar: 113..114
       }
     ]
   },
@@ -304,59 +271,44 @@
       path: [
         `foo` @ 115..118
       ],
-      id: <unresolved>
+      ref: unresolved
     },
     args: [
       function_call {
-        subject: selector {
-          path: [
-            `a` @ 119..120
-          ]
-        },
+        subject: root_field `a` @ 119..120,
         fn: {
           path: [
             `b` @ 121..122
           ],
-          id: <unresolved>
+          ref: unresolved
         },
         args: [
           assignment {
-            left: {
+            left: simple_selector {
+              expr: root_field `c` @ 123..124,
+              has_this: false,
               path: [
                 `c` @ 123..124
               ]
             },
             equals: 124..125,
-            right: selector {
-              path: [
-                `d` @ 125..126
-              ]
-            }
+            right: root_field `d` @ 125..126
           },
-          selector {
-            path: [
-              `e` @ 128..129
-            ]
-          },
+          root_field `e` @ 128..129,
           assignment {
-            left: {
+            left: simple_selector {
+              expr: root_field `g` @ 131..132,
+              has_this: false,
               path: [
                 `g` @ 131..132
               ]
             },
             equals: 132..133,
-            right: selector {
-              path: [
-                `h` @ 133..134
-              ]
-            }
+            right: root_field `h` @ 133..134
           },
-          selector {
-            path: [
-              `i` @ 136..137
-            ]
-          }
-        ]
+          root_field `i` @ 136..137
+        ],
+        rpar: 138..139
       }
     ]
   }

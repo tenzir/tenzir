@@ -211,7 +211,7 @@ public:
   auto send(chunk_ptr chunk, std::optional<std::chrono::milliseconds> timeout
                              = {}) -> caf::error {
     try {
-      TENZIR_DEBUG("waiting until socket is ready to send");
+      TENZIR_TRACE("waiting until socket is ready to send");
       if (not poll(socket_, ZMQ_POLLOUT, timeout)) {
         return caf::make_error(ec::timeout, "timed out while polling socket");
       }
@@ -219,7 +219,7 @@ public:
       auto flags = ::zmq::send_flags::none;
       auto bytes = socket_.send(message, flags);
       TENZIR_ASSERT(bytes); // only nullopt in non-blocking mode.
-      TENZIR_DEBUG("sent message with {} bytes", *bytes);
+      TENZIR_TRACE("sent message with {} bytes", *bytes);
       return {};
     } catch (const ::zmq::error_t& e) {
       return make_error(e);
@@ -229,7 +229,7 @@ public:
   auto receive(std::optional<std::chrono::milliseconds> timeout = {})
     -> caf::expected<chunk_ptr> {
     try {
-      TENZIR_DEBUG("waiting until socket is ready to receive");
+      TENZIR_TRACE("waiting until socket is ready to receive");
       if (not poll(socket_, ZMQ_POLLIN, timeout)) {
         return caf::make_error(ec::timeout, "timed out while polling socket");
       }
@@ -237,7 +237,7 @@ public:
       auto flags = ::zmq::recv_flags::none;
       auto bytes = socket_.recv(*message, flags);
       TENZIR_ASSERT(bytes); // only nullopt in non-blocking mode.
-      TENZIR_DEBUG("got 0mq message with {} bytes", *bytes);
+      TENZIR_TRACE("got 0mq message with {} bytes", *bytes);
       const auto* data = message->data();
       auto size = message->size();
       auto deleter = [msg = std::move(message)]() noexcept {};
@@ -404,6 +404,10 @@ public:
     return "json";
   }
 
+  auto internal() const -> bool override {
+    return args_.endpoint and args_.endpoint->inner.starts_with("inproc://");
+  }
+
   friend auto inspect(auto& f, zmq_loader& x) -> bool {
     return f.object(x)
       .pretty_name("zmq_loader")
@@ -456,6 +460,10 @@ public:
     return "json";
   }
 
+  auto internal() const -> bool override {
+    return args_.endpoint and args_.endpoint->inner.starts_with("inproc://");
+  }
+
   auto is_joining() const -> bool override {
     return true;
   }
@@ -471,15 +479,15 @@ private:
 class plugin final : public virtual loader_plugin<zmq_loader>,
                      public virtual saver_plugin<zmq_saver> {
 public:
+  ~plugin() noexcept override {
+    // Destroy the singleton.
+    context.reset();
+  }
+
   auto initialize(const record&, const record&) -> caf::error override {
     // Create the singleton.
     context = std::make_shared<::zmq::context_t>();
     return {};
-  }
-
-  auto deinitialize() -> void override {
-    // Destroy the singleton.
-    context.reset();
   }
 
   auto parse_loader(parser_interface& p) const

@@ -159,7 +159,7 @@ TEST(module : zeek - style) {
     type zeek.ssl = record{
       ts: time,
       uid: string,
-      id: record {orig_h: ip, orig_p: port, resp_h: ip, resp_p: port},
+      id: record {orig_h: ip, orig_p: uint64, resp_h: ip, resp_p: uint64},
       version: string,
       cipher: string,
       server_name: string,

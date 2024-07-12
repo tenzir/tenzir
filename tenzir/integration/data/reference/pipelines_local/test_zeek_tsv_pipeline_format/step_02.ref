@@ -4,7 +4,7 @@
 #unset_field	-
 #path	zeek.dns
 #fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	proto	trans_id	rtt	query	qclass	qclass_name	qtype	qtype_name	rcode	rcode_name	AA	TC	RD	RA	Z	answers	TTLs	rejected	_write_ts
-#types	time	string	addr	port	addr	port	string	count	interval	string	count	string	count	string	count	string	bool	bool	bool	bool	count	vector[string]	vector[interval]	bool	time
+#types	time	string	addr	count	addr	count	string	count	interval	string	count	string	count	string	count	string	bool	bool	bool	bool	count	vector[string]	vector[interval]	bool	time
 2009-11-18T08:08:02.526316	nkCxlvNN8pi	192.168.1.103	137	192.168.1.255	137	udp	33003	-	WORKGROUP	1	C_INTERNET	32	NB	-	-	F	F	T	F	1	(empty)	(empty)	F	-
 2009-11-18T08:08:00.237253	nkCxlvNN8pi	192.168.1.103	137	192.168.1.255	137	udp	32997	-	DOMEX	1	C_INTERNET	32	NB	-	-	F	F	T	F	1	(empty)	(empty)	F	-
 2009-11-18T08:08:00.268999	nkCxlvNN8pi	192.168.1.103	137	192.168.1.255	137	udp	33000	-	WORKGROUP	1	C_INTERNET	32	NB	-	-	F	F	T	F	1	(empty)	(empty)	F	-

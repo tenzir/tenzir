@@ -213,13 +213,14 @@ struct saver_args {
   std::optional<located<std::string>> topic;
   std::optional<located<std::string>> key;
   std::optional<located<std::string>> timestamp;
+  std::optional<located<std::string>> options;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, saver_args& x) -> bool {
     return f.object(x)
       .pretty_name("saver_args")
       .fields(f.field("topic", x.topic), f.field("key", x.key),
-              f.field("timestamp", x.timestamp));
+              f.field("timestamp", x.timestamp), f.field("options", x.options));
   }
 };
 
@@ -238,6 +239,24 @@ public:
       TENZIR_ERROR("kafka failed to create configuration: {}", cfg.error());
       return cfg.error();
     };
+    // Override configuration with arguments.
+    if (args_.options) {
+      std::vector<std::pair<std::string, std::string>> options;
+      if (!parsers::kvp_list(args_.options->inner, options)) {
+        diagnostic::error("invalid list of key=value pairs")
+          .primary(args_.options->source)
+          .throw_();
+      }
+      for (const auto& [key, value] : options) {
+        TENZIR_INFO("providing librdkafka option {}={}", key, value);
+        if (auto err = cfg->set(key, value)) {
+          diagnostic::error("failed to set librdkafka option {}={}: {}", key,
+                            value, err)
+            .primary(args_.options->source)
+            .throw_();
+        }
+      }
+    }
     if (auto value = cfg->get("bootstrap.servers")) {
       TENZIR_INFO("kafka connects to broker: {}", *value);
     }
@@ -350,6 +369,8 @@ public:
     parser.add("-t,--topic", args.topic, "<topic>");
     parser.add("-k,--key", args.key, "<key>");
     parser.add("-T,--timestamp", args.timestamp, "<time>");
+    // We use -X because that's standard in Kafka applications, cf. kcat.
+    parser.add("-X,--set", args.options, "<key=value>,...");
     parser.parse(p);
     if (args.timestamp)
       if (!parsers::time(args.timestamp->inner))

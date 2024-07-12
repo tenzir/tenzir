@@ -4,29 +4,13 @@
       path: [
         `a` @ 0..1
       ],
-      id: <unresolved>
+      ref: unresolved
     },
     args: [
-      selector {
-        path: [
-          `b` @ 2..3
-        ]
-      },
-      selector {
-        path: [
-          `c` @ 7..8
-        ]
-      },
-      selector {
-        path: [
-          `d` @ 12..13
-        ]
-      },
-      selector {
-        path: [
-          `e` @ 15..16
-        ]
-      }
+      root_field `b` @ 2..3,
+      root_field `c` @ 7..8,
+      root_field `d` @ 12..13,
+      root_field `e` @ 15..16
     ]
   },
   invocation {
@@ -34,14 +18,10 @@
       path: [
         `f` @ 17..18
       ],
-      id: <unresolved>
+      ref: unresolved
     },
     args: [
-      selector {
-        path: [
-          `g` @ 19..20
-        ]
-      }
+      root_field `g` @ 19..20
     ]
   },
   invocation {
@@ -49,24 +29,12 @@
       path: [
         `h` @ 21..22
       ],
-      id: <unresolved>
+      ref: unresolved
     },
     args: [
-      selector {
-        path: [
-          `i` @ 27..28
-        ]
-      },
-      selector {
-        path: [
-          `j` @ 32..33
-        ]
-      },
-      selector {
-        path: [
-          `k` @ 38..39
-        ]
-      }
+      root_field `i` @ 27..28,
+      root_field `j` @ 32..33,
+      root_field `k` @ 38..39
     ]
   },
   invocation {
@@ -74,21 +42,13 @@
       path: [
         `l` @ 40..41
       ],
-      id: <unresolved>
+      ref: unresolved
     },
     args: [
       binary_expr {
-        left: selector {
-          path: [
-            `m` @ 42..43
-          ]
-        },
+        left: root_field `m` @ 42..43,
         op: "add" @ 44..45,
-        right: selector {
-          path: [
-            `n` @ 48..49
-          ]
-        }
+        right: root_field `n` @ 48..49
       }
     ]
   }

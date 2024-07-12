@@ -108,8 +108,9 @@ public:
       } else {
         TENZIR_DEBUG("detected identical byte order in file and host");
       }
-      if (emit_file_headers)
+      if (emit_file_headers) {
         co_yield make_file_header_table_slice(input_file_header);
+      }
       // After the header, the remainder of the file are typically Packet
       // Records, consisting of a 16-byte header and variable-length payload.
       // However, our parser is a bit smarter and also supports concatenated
@@ -193,15 +194,17 @@ public:
               last_finish = now;
               co_yield builder.finish();
             }
-            if (emit_file_headers)
+            if (emit_file_headers) {
               co_yield make_file_header_table_slice(input_file_header);
+            }
             //  Jump back to the while loop that reads pairs of packet header
             //  and packet data.
             continue;
           }
           // Okay, we got a packet header, let's proceed.
-          if (*need_swap)
+          if (*need_swap) {
             packet.header = byteswap(packet.header);
+          }
           break;
         }
         // Read the packet.
@@ -277,15 +280,17 @@ struct printer_args {};
 /// Creates a file header from the first row of table slice (that is assumed to
 /// have one row).
 auto make_file_header(const table_slice& slice) -> std::optional<file_header> {
-  if (slice.schema().name() != "pcap.file_header" || slice.rows() == 0)
+  if (slice.schema().name() != "pcap.file_header" || slice.rows() == 0) {
     return std::nullopt;
+  }
   auto result = file_header{};
   const auto& input_record = caf::get<record_type>(slice.schema());
   auto array = to_record_batch(slice)->ToStructArray().ValueOrDie();
   auto xs = values(input_record, *array);
   auto begin = xs.begin();
-  if (begin == xs.end() || *begin == std::nullopt)
+  if (begin == xs.end() || *begin == std::nullopt) {
     return std::nullopt;
+  }
   for (const auto& [key, value] : **begin) {
     // TODO: Make this more robust, and give a helpful error message if the
     // types are not as expected. This also applies to `to_packet_record`.
@@ -521,6 +526,10 @@ public:
 
   auto allows_joining() const -> bool override {
     return true;
+  }
+
+  auto prints_utf8() const -> bool override {
+    return false;
   }
 
   friend auto inspect(auto& f, pcap_printer& x) -> bool {

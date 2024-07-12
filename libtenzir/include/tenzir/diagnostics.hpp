@@ -11,9 +11,11 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/inspect_enum_str.hpp"
-#include "tenzir/tql/basic.hpp"
+#include "tenzir/location.hpp"
+#include "tenzir/try.hpp"
 
 #include <fmt/format.h>
+#include <tsl/robin_set.h>
 
 #include <functional>
 
@@ -182,8 +184,8 @@ public:
 
   // -- annotations -----------------------------------------------------------
 
-  auto
-  primary(location source, std::string text = "") && -> diagnostic_builder {
+  auto primary(into_location source, std::string text
+                                     = "") && -> diagnostic_builder {
     result_.annotations.push_back(
       diagnostic_annotation{true, std::move(text), source});
     return std::move(*this);
@@ -191,14 +193,14 @@ public:
 
   template <class... Ts>
     requires(sizeof...(Ts) > 0)
-  auto primary(location source, fmt::format_string<Ts...> str,
+  auto primary(into_location source, fmt::format_string<Ts...> str,
                Ts&&... xs) && -> diagnostic_builder {
     return std::move(*this).primary(
       source, fmt::format(std::move(str), std::forward<Ts>(xs)...));
   }
 
-  auto
-  secondary(location source, std::string text = "") && -> diagnostic_builder {
+  auto secondary(into_location source, std::string text
+                                       = "") && -> diagnostic_builder {
     result_.annotations.push_back(
       diagnostic_annotation{false, std::move(text), source});
     return std::move(*this);
@@ -206,7 +208,7 @@ public:
 
   template <class... Ts>
     requires(sizeof...(Ts) > 0)
-  auto secondary(location source, fmt::format_string<Ts...> str,
+  auto secondary(into_location source, fmt::format_string<Ts...> str,
                  Ts&&... xs) && -> diagnostic_builder {
     return std::move(*this).secondary(
       source, fmt::format(std::move(str), std::forward<Ts>(xs)...));
@@ -283,6 +285,10 @@ public:
       fmt::format(std::move(str), std::forward<Ts>(xs)...));
   }
 
+  auto inner() -> diagnostic& {
+    return result_;
+  }
+
   // -- finalizing ------------------------------------------------------------
 
   auto done() && -> diagnostic {
@@ -321,6 +327,7 @@ auto diagnostic::error(fmt::format_string<Ts...> str, Ts&&... xs)
 }
 
 inline auto diagnostic::error(caf::error err) -> diagnostic_builder {
+  TENZIR_ASSERT(err);
   return builder(severity::error, std::move(err));
 }
 
@@ -343,8 +350,6 @@ public:
   void emit(diagnostic diag) override {
     (void)diag;
   }
-
-private:
 };
 
 class collecting_diagnostic_handler final : public diagnostic_handler {
@@ -361,6 +366,19 @@ private:
   std::vector<diagnostic> result;
 };
 
+class diagnostic_handler_ref final : public diagnostic_handler {
+public:
+  explicit diagnostic_handler_ref(diagnostic_handler& inner) : inner_{inner} {
+  }
+
+  void emit(diagnostic d) override {
+    inner_.emit(std::move(d));
+  }
+
+private:
+  diagnostic_handler& inner_;
+};
+
 enum class color_diagnostics { no, yes };
 
 struct location_origin {
@@ -373,6 +391,86 @@ struct location_origin {
 auto make_diagnostic_printer(std::optional<location_origin> origin,
                              color_diagnostics color, std::ostream& stream)
   -> std::unique_ptr<diagnostic_handler>;
+
+// TODO: Return this when emitting an error.
+struct [[nodiscard]] failure {
+public:
+  static auto promise() -> failure {
+    return {};
+  }
+
+private:
+  failure() = default;
+};
+
+// TODO: Use a proper result type here.
+template <class T>
+class [[nodiscard]] failure_or
+  : public variant<std::conditional_t<std::same_as<T, void>, std::monostate, T>,
+                   failure> {
+public:
+  using reference_type = std::add_lvalue_reference_t<T>;
+
+  using variant<std::conditional_t<std::same_as<T, void>, std::monostate, T>,
+                failure>::variant;
+
+  void ignore() const {
+    // no-op
+  }
+
+  explicit operator bool() const {
+    return is_success();
+  }
+
+  auto is_success() const -> bool {
+    return this->index() == 0;
+  }
+
+  auto is_error() const -> bool {
+    return this->index() == 1;
+  }
+
+  auto unwrap() && -> T {
+    TENZIR_ASSERT(is_success());
+    if constexpr (not std::same_as<T, void>) {
+      return std::get<0>(std::move(*this));
+    }
+  }
+
+  auto error() const -> failure {
+    TENZIR_ASSERT(is_error());
+    return std::get<1>(*this);
+  }
+
+  auto operator*() -> reference_type {
+    TENZIR_ASSERT(is_success());
+    if constexpr (not std::same_as<T, void>) {
+      return std::get<0>(*this);
+    }
+  }
+
+  auto operator->()
+    -> T* requires(not std::same_as<T, void>) { return &**this; }
+};
+
+template <class T>
+struct tryable<failure_or<T>>
+  : tryable<variant<std::conditional_t<std::same_as<T, void>, std::monostate, T>,
+                    failure>> {};
+
+class diagnostic_deduplicator {
+public:
+  auto insert(const diagnostic& d) -> bool;
+
+private:
+  using seen_t = std::pair<std::string, std::vector<location>>;
+
+  struct hasher {
+    auto operator()(const seen_t& x) const -> size_t;
+  };
+
+  tsl::robin_set<seen_t, hasher> seen_;
+};
 
 } // namespace tenzir
 

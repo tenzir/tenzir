@@ -9,8 +9,10 @@
 #include "tenzir/error.hpp"
 
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/env.hpp"
 #include "tenzir/diagnostics.hpp"
 
+#include <caf/deep_to_string.hpp>
 #include <caf/exit_reason.hpp>
 #include <caf/message_handler.hpp>
 #include <caf/pec.hpp>
@@ -87,29 +89,38 @@ const char* to_string(ec x) {
   return descriptions[index];
 }
 
-std::string render(caf::error err) {
+std::string render(caf::error err, bool pretty_diagnostics) {
   if (!err)
     return "";
   std::ostringstream oss;
   auto category = err.category();
   if (category == caf::type_id_v<tenzir::ec>
       && static_cast<tenzir::ec>(err.code()) == ec::diagnostic) {
-    auto printer
-      = make_diagnostic_printer(std::nullopt, color_diagnostics::yes, oss);
+    const auto color = (isatty(STDERR_FILENO) == 1
+                        && detail::getenv("NO_COLOR").value_or("").empty())
+                         ? color_diagnostics::yes
+                         : color_diagnostics::no;
+    auto printer = make_diagnostic_printer(std::nullopt, color, oss);
     auto ctx = err.context();
     caf::message_handler{
       [&](const diagnostic& diag) {
-        printer->emit(diag);
+        if (pretty_diagnostics) {
+          printer->emit(diag);
+        } else {
+          oss << fmt::format("{:?}", diag);
+        }
       },
       [&](const std::vector<diagnostic>& diags) {
-        for (auto& diag : diags) {
-          printer->emit(diag);
+        for (const auto& diag : diags) {
+          if (pretty_diagnostics) {
+            printer->emit(diag);
+          } else {
+            oss << fmt::format("{:?}", diag);
+          }
         }
       },
       [&](const caf::message& msg) {
-        printer->emit(diagnostic::error("{}", caf::deep_to_string(msg))
-                        .note("unexpected diagnostic format")
-                        .done());
+        oss << "unexpected diagnostic format: " << caf::deep_to_string(msg);
       },
     }(ctx);
     return std::move(oss).str();

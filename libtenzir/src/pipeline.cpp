@@ -8,8 +8,8 @@
 
 #include "tenzir/pipeline.hpp"
 
-#include "tenzir/collect.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/metric_handler.hpp"
 #include "tenzir/modules.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql/parser.hpp"
@@ -21,16 +21,12 @@ namespace tenzir {
 
 class local_control_plane final : public operator_control_plane {
 public:
-  auto get_error() const -> caf::error {
-    return error_;
-  }
-
   auto self() noexcept -> exec_node_actor::base& override {
-    die("not implemented");
+    TENZIR_UNIMPLEMENTED();
   }
 
   auto node() noexcept -> node_actor override {
-    die("not implemented");
+    TENZIR_UNIMPLEMENTED();
   }
 
   auto diagnostics() noexcept -> diagnostic_handler& override {
@@ -40,7 +36,7 @@ public:
       void emit(diagnostic d) override {
         TENZIR_WARN("got diagnostic: {:?}", d);
         if (d.severity == severity::error) {
-          ctrl.error_ = d.to_error();
+          throw std::move(d);
         }
       }
       local_control_plane& ctrl;
@@ -49,6 +45,10 @@ public:
       handler_ = std::make_unique<handler>(*this);
     }
     return *handler_;
+  }
+
+  auto metrics(type) noexcept -> metric_handler override {
+    TENZIR_UNIMPLEMENTED();
   }
 
   auto no_location_overrides() const noexcept -> bool override {
@@ -111,8 +111,9 @@ auto pipeline::internal_parse(std::string_view repr)
 auto pipeline::internal_parse_as_operator(std::string_view repr)
   -> caf::expected<operator_ptr> {
   auto result = internal_parse(repr);
-  if (not result)
+  if (not result) {
     return std::move(result.error());
+  }
   return std::make_unique<pipeline>(std::move(*result));
 }
 
@@ -195,6 +196,18 @@ auto pipeline::optimize(expression const& filter, event_order order) const
     TENZIR_ASSERT(*it);
     auto const& op = **it;
     auto opt = op.optimize(current_filter, current_order);
+    // TODO: This is a small hack to not propagate a TQLv2 `where` unless the
+    // pipeline starts in `export`. By doing this, we make sure that we keep
+    // TQLv2 semantics (including warnings), unless performance demands it. This
+    // hack will be fixed by upgrading the catalog to the new expressions.
+    if (op.name() == "tql2.where") {
+      auto qualifies = std::ranges::all_of(it, operators_.rend(), [](auto& op) {
+        return op->name() == "tql2.where" || op->name() == "export";
+      });
+      if (not qualifies) {
+        opt = optimize_result::order_invariant(op, current_order);
+      }
+    }
     if (opt.filter) {
       current_filter = std::move(*opt.filter);
     } else if (current_filter != trivially_true_expression()) {
@@ -356,28 +369,33 @@ auto pipeline::infer_type_impl(operator_type input) const
 }
 
 auto make_local_executor(pipeline p) -> generator<caf::expected<void>> {
-  local_control_plane ctrl;
-  auto dynamic_gen = p.instantiate(std::monostate{}, ctrl);
-  if (!dynamic_gen) {
-    co_yield std::move(dynamic_gen.error());
-    co_return;
-  }
-  auto gen = std::get_if<generator<std::monostate>>(&*dynamic_gen);
-  if (!gen) {
-    co_yield caf::make_error(ec::logic_error,
-                             "right side of pipeline is not closed");
-    co_return;
-  }
-  for (auto monostate : *gen) {
-    if (auto error = ctrl.get_error()) {
-      co_yield std::move(error);
+  auto error = std::optional<caf::error>{};
+  try {
+    auto ctrl = local_control_plane{};
+    auto dynamic_gen = p.instantiate(std::monostate{}, ctrl);
+    if (!dynamic_gen) {
+      co_yield std::move(dynamic_gen.error());
       co_return;
     }
-    (void)monostate;
-    co_yield {};
+    auto gen = std::get_if<generator<std::monostate>>(&*dynamic_gen);
+    if (!gen) {
+      co_yield caf::make_error(ec::logic_error,
+                               "right side of pipeline is not closed");
+      co_return;
+    }
+    for (auto monostate : *gen) {
+      (void)monostate;
+      co_yield {};
+    }
+  } catch (diagnostic& d) {
+    error = std::move(d).to_error();
+  } catch (std::exception& exc) {
+    error = diagnostic::error("unhandled exception: {}", exc.what()).to_error();
+  } catch (...) {
+    error = diagnostic::error("unhandled exception").to_error();
   }
-  if (auto error = ctrl.get_error()) {
-    co_yield std::move(error);
+  if (error) {
+    co_yield std::move(*error);
   }
 }
 

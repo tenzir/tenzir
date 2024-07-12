@@ -4,4 +4,3 @@ error: the file `./this-file-does-not-exist.json` does not exist
 1 | every 1s from ./this-file-does-not-exist.json
   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
   |
-error: could not instantiate loader

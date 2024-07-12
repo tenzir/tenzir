@@ -9,10 +9,11 @@
 #pragma once
 
 #include "tenzir/detail/enum.hpp"
+#include "tenzir/diagnostics.hpp"
 
 #include <string_view>
 
-namespace tenzir::tql2 {
+namespace tenzir {
 
 TENZIR_ENUM(
   ///
@@ -20,7 +21,7 @@ TENZIR_ENUM(
   // identifiers
   identifier, dollar_ident,
   // keywords
-  this_, if_, else_, match, not_, and_, or_, underscore, let, in,
+  this_, if_, else_, match, not_, and_, or_, underscore, let, in, meta,
   reserved_keyword,
   // literals
   scalar, true_, false_, null, string, ip, datetime,
@@ -47,6 +48,15 @@ struct token {
   size_t end;
 };
 
-auto tokenize(std::string_view content) -> std::vector<token>;
+/// Try to tokenize the source.
+auto tokenize(std::string_view content, session ctx)
+  -> failure_or<std::vector<token>>;
 
-} // namespace tenzir::tql2
+/// Tokenize without emitting errors for error tokens.
+auto tokenize_permissive(std::string_view content) -> std::vector<token>;
+
+/// Emit errors for error tokens.
+auto verify_tokens(std::span<token const> tokens, session ctx)
+  -> failure_or<void>;
+
+} // namespace tenzir

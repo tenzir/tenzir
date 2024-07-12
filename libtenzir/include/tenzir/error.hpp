@@ -102,7 +102,7 @@ const char* to_string(ec x);
 
 /// A formatting function that converts an error into a human-readable string.
 /// @relates ec
-std::string render(caf::error err);
+std::string render(caf::error err, bool pretty_diagnostics = false);
 
 template <class Inspector>
 auto inspect(Inspector& f, ec& x) {

@@ -17,6 +17,8 @@
 
 namespace tenzir {
 
+struct into_location;
+
 /// Identifies a consecutive byte sequence within a source file.
 ///
 /// If both offsets are zero, the location is unknown. Otherwise, the location
@@ -46,17 +48,7 @@ struct location {
     return {first, last};
   }
 
-  auto combine(location other) const -> location {
-    if (not *this) {
-      return other;
-    }
-    if (not other) {
-      return *this;
-    }
-    other.begin = std::min(begin, other.begin);
-    other.end = std::max(end, other.end);
-    return other;
-  }
+  auto combine(into_location other) const -> location;
 
   auto operator<=>(const location&) const = default;
 
@@ -78,6 +70,8 @@ inline constexpr auto enable_default_formatter<location> = true;
 /// Provides a `T` together with a `location`.
 template <class T>
 struct located {
+  using value_type = T;
+
   T inner{};
   location source;
 
@@ -135,5 +129,43 @@ located(T, location) -> located<T>;
 
 template <class T>
 inline constexpr auto enable_default_formatter<located<T>> = true;
+
+/// Utility type that provides implicit conversions to `location`.
+struct into_location : location {
+  using location::location;
+
+  explicit(false) into_location(location x) : location{x} {
+  }
+
+  template <class T>
+  explicit(false) into_location(const located<T>& x) : location{x.source} {
+  }
+
+  // TODO: Make this a customization point instead.
+  template <class T>
+    requires requires(const T& x) { x.get_location(); }
+  explicit(false) into_location(const T& x) : location{x.get_location()} {
+  }
+};
+
+inline auto location::combine(into_location other) const -> location {
+  if (not *this) {
+    return other;
+  }
+  if (not other) {
+    return *this;
+  }
+  other.begin = std::min(begin, other.begin);
+  other.end = std::max(end, other.end);
+  return other;
+}
+
+template <class T>
+struct as_located {
+  using type = located<T>;
+};
+
+template <class T>
+struct is_located : caf::detail::is_specialization<located, T> {};
 
 } // namespace tenzir

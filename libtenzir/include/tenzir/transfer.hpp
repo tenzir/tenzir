@@ -21,18 +21,27 @@ namespace tenzir {
 /// Options for a cURL-based transfer.
 /// @relates transfer
 struct transfer_options {
-  transfer_options() = default;
-
+  bool verbose = false;
   std::string default_protocol{};
   std::chrono::milliseconds poll_timeout{100};
-  bool verbose = false;
+  std::optional<std::string> username;
+  std::optional<std::string> password;
+  std::optional<std::string> authzid;
+  std::optional<std::string> authorization;
+  bool skip_peer_verification;
+  bool skip_hostname_verification;
 
   friend auto inspect(auto& f, transfer_options& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.transfer_options")
-      .fields(f.field("default_protocol", x.default_protocol),
+      .fields(f.field("verbose", x.verbose),
+              f.field("default_protocol", x.default_protocol),
               f.field("poll_timeout", x.poll_timeout),
-              f.field("verbose", x.verbose));
+              f.field("username", x.username), f.field("password", x.password),
+              f.field("authzid", x.authzid),
+              f.field("authorization", x.authorization),
+              f.field("skip_peer_verification", x.skip_peer_verification),
+              f.field("skip_host_verification", x.skip_hostname_verification));
   }
 };
 

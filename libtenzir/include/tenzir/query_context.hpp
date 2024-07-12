@@ -9,10 +9,9 @@
 #pragma once
 
 #include "tenzir/actors.hpp"
-#include "tenzir/bitmap.hpp"
-#include "tenzir/detail/inspection_common.hpp"
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/expression.hpp"
+#include "tenzir/ids.hpp"
 #include "tenzir/uuid.hpp"
 
 #include <caf/typed_actor_view.hpp>

@@ -54,7 +54,7 @@ public:
       auto last = current;
       if (not field(current, end, unused)) {
         diagnostic::error("expected field name")
-          .primary({to_offset(current), to_offset(current, 1)})
+          .primary(tenzir::location{to_offset(current), to_offset(current, 1)})
           .throw_();
       }
       return projection{std::string{last, current},
@@ -73,12 +73,13 @@ public:
                                                        to_offset(current)});
         } else {
           diagnostic::error("expected `]`")
-            .primary({to_offset(current), to_offset(current, 1)})
+            .primary(
+              tenzir::location{to_offset(current), to_offset(current, 1)})
             .throw_();
         }
       } else {
         diagnostic::error("expected `.<field>` or `[]`")
-          .primary({to_offset(current), to_offset(current, 1)})
+          .primary(tenzir::location{to_offset(current), to_offset(current, 1)})
           .throw_();
       }
     }
@@ -91,46 +92,45 @@ public:
     for (auto& proj : path) {
       auto success = proj.inner.match(
         [&](const std::string& field) {
-          auto rec_ty = caf::get_if<record_type>(&current);
-          if (not rec_ty) {
-            diagnostic::warning("expected a record, but got a {}",
-                                current.kind())
-              .primary(proj.source)
-              .note("for schema `{}`", schema)
-              .emit(ctrl.diagnostics());
-            return false;
-          }
-          auto index = rec_ty->resolve_key(field);
-          if (not index) {
-            diagnostic::warning("record has no field `{}`", field)
-              .primary(proj.source)
-              .hint("must be one of: {}",
-                    fmt::join(
-                      rec_ty->fields()
-                        | std::views::transform(&record_type::field_view::name),
-                      ", "))
-              .note("for schema `{}`", schema)
-              .emit(ctrl.diagnostics());
-            return false;
-          }
-          TENZIR_ASSERT(index->size() == 1);
-          current = rec_ty->field(*index).type;
-          result.push_back((*index)[0]);
-          return true;
-        },
+        auto rec_ty = caf::get_if<record_type>(&current);
+        if (not rec_ty) {
+          diagnostic::warning("expected a record, but got a {}", current.kind())
+            .primary(proj.source)
+            .note("for schema `{}`", schema)
+            .emit(ctrl.diagnostics());
+          return false;
+        }
+        auto index = rec_ty->resolve_key(field);
+        if (not index) {
+          diagnostic::warning("record has no field `{}`", field)
+            .primary(proj.source)
+            .hint("must be one of: {}",
+                  fmt::join(
+                    rec_ty->fields()
+                      | std::views::transform(&record_type::field_view::name),
+                    ", "))
+            .note("for schema `{}`", schema)
+            .emit(ctrl.diagnostics());
+          return false;
+        }
+        TENZIR_ASSERT(index->size() == 1);
+        current = rec_ty->field(*index).type;
+        result.push_back((*index)[0]);
+        return true;
+      },
         [&](unnest) {
-          auto list_ty = caf::get_if<list_type>(&current);
-          if (not list_ty) {
-            diagnostic::warning("expected a list, but got a {}", current.kind())
-              .primary(proj.source)
-              .note("for schema `{}`", schema)
-              .emit(ctrl.diagnostics());
-            return false;
-          }
-          current = list_ty->value_type();
-          result.push_back(unnest_idx);
-          return true;
-        });
+        auto list_ty = caf::get_if<list_type>(&current);
+        if (not list_ty) {
+          diagnostic::warning("expected a list, but got a {}", current.kind())
+            .primary(proj.source)
+            .note("for schema `{}`", schema)
+            .emit(ctrl.diagnostics());
+          return false;
+        }
+        current = list_ty->value_type();
+        result.push_back(unnest_idx);
+        return true;
+      });
       if (not success) {
         return std::nullopt;
       }
@@ -191,6 +191,7 @@ public:
     (void)filter;
     return optimize_result::order_invariant(*this, order);
   }
+
   friend auto inspect(auto& f, yield_operator& x) -> bool {
     return f.apply(x.path);
   }

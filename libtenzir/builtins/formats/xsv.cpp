@@ -18,6 +18,7 @@
 #include "tenzir/series_builder.hpp"
 #include "tenzir/to_lines.hpp"
 #include "tenzir/tql/basic.hpp"
+#include "tenzir/tql2/plugin.hpp"
 #include "tenzir/view.hpp"
 
 #include <arrow/record_batch.h>
@@ -453,41 +454,45 @@ public:
   instantiate([[maybe_unused]] type input_schema, operator_control_plane&) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
     auto metadata = chunk_metadata{.content_type = content_type()};
-    return printer_instance::make([meta = std::move(metadata), args = args_,
-                                   first = true](table_slice slice) mutable
-                                  -> generator<chunk_ptr> {
-      if (slice.rows() == 0) {
-        co_yield {};
-        co_return;
-      }
-      auto printer
-        = xsv_printer_impl{args.field_sep, args.list_sep, args.null_value};
-      auto buffer = std::vector<char>{};
-      auto out_iter = std::back_inserter(buffer);
-      auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
-      auto input_schema = resolved_slice.schema();
-      auto input_type = caf::get<record_type>(input_schema);
-      auto array
-        = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
-      for (const auto& row : values(input_type, *array)) {
-        TENZIR_ASSERT(row);
-        if (first && not args.no_header) {
-          printer.print_header(out_iter, *row);
-          first = false;
+    return printer_instance::make(
+      [meta = std::move(metadata), args = args_,
+       first = true](table_slice slice) mutable -> generator<chunk_ptr> {
+        if (slice.rows() == 0) {
+          co_yield {};
+          co_return;
+        }
+        auto printer
+          = xsv_printer_impl{args.field_sep, args.list_sep, args.null_value};
+        auto buffer = std::vector<char>{};
+        auto out_iter = std::back_inserter(buffer);
+        auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
+        auto input_schema = resolved_slice.schema();
+        auto input_type = caf::get<record_type>(input_schema);
+        auto array
+          = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+        for (const auto& row : values(input_type, *array)) {
+          TENZIR_ASSERT(row);
+          if (first && not args.no_header) {
+            printer.print_header(out_iter, *row);
+            first = false;
+            out_iter = fmt::format_to(out_iter, "\n");
+          }
+          const auto ok = printer.print_values(out_iter, *row);
+          TENZIR_ASSERT(ok);
           out_iter = fmt::format_to(out_iter, "\n");
         }
-        const auto ok = printer.print_values(out_iter, *row);
-        TENZIR_ASSERT(ok);
-        out_iter = fmt::format_to(out_iter, "\n");
-      }
-      auto chunk = chunk::make(std::move(buffer), meta);
-      co_yield std::move(chunk);
-    });
+        auto chunk = chunk::make(std::move(buffer), meta);
+        co_yield std::move(chunk);
+      });
   }
 
   auto allows_joining() const -> bool override {
     return args_.no_header;
   };
+
+  auto prints_utf8() const -> bool override {
+    return true;
+  }
 
   friend auto inspect(auto& f, xsv_printer& x) -> bool {
     return f.apply(x.args_);
@@ -584,9 +589,34 @@ using csv_plugin = configured_xsv_plugin<"csv", ',', ';', "">;
 using tsv_plugin = configured_xsv_plugin<"tsv", '\t', ',', "-">;
 using ssv_plugin = configured_xsv_plugin<"ssv", ' ', ',', "-">;
 
+class read_csv final : public operator_plugin2<parser_adapter<xsv_parser>> {
+public:
+  auto name() const -> std::string override {
+    return "read_csv";
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto comments = false;
+    argument_parser2::operator_(name())
+      .add("comments", comments)
+      .parse(inv, ctx)
+      .ignore();
+    auto options = xsv_options{};
+    options.name = "csv";
+    options.field_sep = ',';
+    options.list_sep = ';';
+    options.null_value = "";
+    options.allow_comments = comments;
+    return std::make_unique<parser_adapter<xsv_parser>>(
+      xsv_parser{std::move(options)});
+  }
+};
+
 } // namespace tenzir::plugins::xsv
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::xsv_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::csv_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::tsv_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::ssv_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::read_csv)

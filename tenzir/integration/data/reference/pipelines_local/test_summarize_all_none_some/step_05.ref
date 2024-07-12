@@ -1,47 +1,92 @@
 {"z": null, "x": ["45.58.146.42", "45.231.152.1", "66.240.236.119", "71.6.167.142", "101.89.191.10", "104.206.128.30", "106.75.3.35", "106.75.22.216", "113.107.111.117", "141.9.32.104", "147.203.238.18", "150.107.75.221", "150.164.15.49", "152.136.69.32", "159.83.123.38", "159.203.34.57", "185.100.59.59", "192.88.99.1", "193.10.255.99", "213.32.39.37", "223.71.167.165", "223.149.205.1"]}
 warning: group-by column `z` does not exist for schema `tenzir.json`
+
 warning: group-by column `z` does not exist for schema `zeek._0_0_2`
+
 warning: group-by column `z` does not exist for schema `zeek.conn`
+
 warning: group-by column `z` does not exist for schema `zeek.conn_long`
+
 warning: group-by column `z` does not exist for schema `zeek.corelight_metrics_bro`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_bro`
+
 warning: group-by column `z` does not exist for schema `zeek.corelight_metrics_cpu`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_cpu`
+
 warning: group-by column `z` does not exist for schema `zeek.corelight_metrics_disk`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_disk`
+
 warning: group-by column `z` does not exist for schema `zeek.corelight_metrics_iface`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_iface`
+
 warning: group-by column `z` does not exist for schema `zeek.corelight_metrics_memory`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_memory`
+
 warning: group-by column `z` does not exist for schema `zeek.corelight_metrics_system`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.corelight_metrics_system`
+
 warning: group-by column `z` does not exist for schema `zeek.dhcp`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.dhcp`
+
 warning: group-by column `z` does not exist for schema `zeek.dnp3`
+
 warning: group-by column `z` does not exist for schema `zeek.dns`
+
 warning: group-by column `z` does not exist for schema `zeek.dpd`
+
 warning: group-by column `z` does not exist for schema `zeek.files`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.files`
+
 warning: group-by column `z` does not exist for schema `zeek.ftp`
+
 warning: group-by column `z` does not exist for schema `zeek.http`
+
 warning: group-by column `z` does not exist for schema `zeek.irc`
+
 warning: group-by column `z` does not exist for schema `zeek.kerberos`
+
 warning: group-by column `z` does not exist for schema `zeek.modbus`
+
 warning: group-by column `z` does not exist for schema `zeek.notice`
+
 warning: group-by column `z` does not exist for schema `zeek.pe`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.pe`
+
 warning: group-by column `z` does not exist for schema `zeek.radius`
+
 warning: group-by column `z` does not exist for schema `zeek.rdp`
+
 warning: group-by column `z` does not exist for schema `zeek.reporter`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.reporter`
+
 warning: group-by column `z` does not exist for schema `zeek.sip`
+
 warning: group-by column `z` does not exist for schema `zeek.smtp`
+
 warning: group-by column `z` does not exist for schema `zeek.snmp`
+
 warning: group-by column `z` does not exist for schema `zeek.software`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.software`
+
 warning: group-by column `z` does not exist for schema `zeek.ssl`
+
 warning: group-by column `z` does not exist for schema `zeek.syslog`
+
 warning: group-by column `z` does not exist for schema `zeek.tunnel`
+
 warning: group-by column `z` does not exist for schema `zeek.weird`
+
 warning: group-by column `z` does not exist for schema `zeek.weird.123.190`
+
 warning: aggregation column `id.orig_h` does not exist for schema `zeek.weird.123.190`

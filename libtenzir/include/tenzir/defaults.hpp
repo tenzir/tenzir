@@ -178,11 +178,10 @@ inline constexpr uint64_t max_events = 1024;
 
 /// The maximum amount of time to wait for additional having at least
 /// `min_events`.
-inline constexpr std::chrono::milliseconds timeout
-  = std::chrono::milliseconds{2000};
+inline constexpr auto timeout = std::chrono::seconds{5};
 
 /// The maximum timeout that can be requested by the client.
-inline constexpr std::chrono::seconds max_timeout = std::chrono::seconds{5};
+inline constexpr std::chrono::seconds max_timeout = std::chrono::seconds{10};
 
 } // namespace serve
 
@@ -275,5 +274,9 @@ inline constexpr bool create_partition_index = true;
 /// Time to wait before trying to make another connection attempt to a remote
 /// Tenzir node.
 inline constexpr auto node_connection_retry_delay = std::chrono::seconds{3u};
+
+/// The time interval for sending metrics of the currently running pipeline
+/// operator.
+inline constexpr auto metrics_interval = std::chrono::seconds{1};
 
 } // namespace tenzir::defaults

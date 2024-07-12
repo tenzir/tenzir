@@ -211,7 +211,6 @@ struct data_extractor;
 struct data_point;
 struct diagnostic;
 struct disjunction;
-struct metric;
 struct extract_query_context;
 struct field_extractor;
 struct flow;
@@ -242,6 +241,7 @@ struct model;
 struct negation;
 struct node_state;
 struct offset;
+struct operator_metric;
 struct partition_info;
 struct partition_synopsis_pair;
 struct partition_synopsis;
@@ -262,7 +262,9 @@ struct spawn_arguments;
 struct status;
 struct taxonomies;
 struct type_extractor;
-struct series;
+template <class Type>
+struct basic_series;
+using series = basic_series<type>;
 
 enum class api_version : uint8_t;
 enum class arithmetic_operator : uint8_t;
@@ -404,6 +406,44 @@ using writer_ptr = std::unique_ptr<writer>;
 
 } // namespace format
 
+namespace ast {
+
+struct assignment;
+struct binary_expr;
+struct constant;
+struct dollar_var;
+struct entity;
+struct expression;
+struct field_access;
+struct function_call;
+struct identifier;
+struct if_stmt;
+struct index_expr;
+struct invocation;
+struct let_stmt;
+struct list;
+struct match_stmt;
+struct meta;
+struct null;
+struct pipeline_expr;
+struct pipeline;
+struct record;
+struct selector_root;
+struct unary_expr;
+struct underscore;
+struct unpack;
+
+class simple_selector;
+
+using statement
+  = variant<invocation, assignment, let_stmt, if_stmt, match_stmt>;
+
+} // namespace ast
+
+class operator_factory_plugin;
+class registry;
+class session;
+
 } // namespace tenzir
 
 // -- type announcements -------------------------------------------------------
@@ -423,7 +463,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::disjunction))
   TENZIR_ADD_TYPE_ID((tenzir::ec))
   TENZIR_ADD_TYPE_ID((tenzir::ewah_bitmap))
-  TENZIR_ADD_TYPE_ID((tenzir::metric))
+  TENZIR_ADD_TYPE_ID((tenzir::operator_metric))
   TENZIR_ADD_TYPE_ID((tenzir::expression))
   TENZIR_ADD_TYPE_ID((tenzir::extract_query_context))
   TENZIR_ADD_TYPE_ID((tenzir::field_extractor))

@@ -1,36 +1,70 @@
 {"z": null, "x": ["_0_0_2", "conn", "conn_long", "corelight_metrics_bro", "corelight_metrics_cpu", "corelight_metrics_disk", "corelight_metrics_iface", "corelight_metrics_memory", "corelight_metrics_system", "dhcp", "dnp3", "dns", "dpd", "files", "ftp", "http", "irc", "kerberos", "modbus", "notice", "pe", "radius", "rdp", "reporter", "sip", "smtp", "snmp", "software", "ssl", "syslog", "tunnel", "weird", "weird.123.190"]}
 warning: group-by column `z` does not exist for schema `tenzir.json`
+
 warning: aggregation column `_path` does not exist for schema `tenzir.json`
+
 warning: group-by column `z` does not exist for schema `zeek._0_0_2`
+
 warning: group-by column `z` does not exist for schema `zeek.conn`
+
 warning: group-by column `z` does not exist for schema `zeek.conn_long`
+
 warning: group-by column `z` does not exist for schema `zeek.corelight_metrics_bro`
+
 warning: group-by column `z` does not exist for schema `zeek.corelight_metrics_cpu`
+
 warning: group-by column `z` does not exist for schema `zeek.corelight_metrics_disk`
+
 warning: group-by column `z` does not exist for schema `zeek.corelight_metrics_iface`
+
 warning: group-by column `z` does not exist for schema `zeek.corelight_metrics_memory`
+
 warning: group-by column `z` does not exist for schema `zeek.corelight_metrics_system`
+
 warning: group-by column `z` does not exist for schema `zeek.dhcp`
+
 warning: group-by column `z` does not exist for schema `zeek.dnp3`
+
 warning: group-by column `z` does not exist for schema `zeek.dns`
+
 warning: group-by column `z` does not exist for schema `zeek.dpd`
+
 warning: group-by column `z` does not exist for schema `zeek.files`
+
 warning: group-by column `z` does not exist for schema `zeek.ftp`
+
 warning: group-by column `z` does not exist for schema `zeek.http`
+
 warning: group-by column `z` does not exist for schema `zeek.irc`
+
 warning: group-by column `z` does not exist for schema `zeek.kerberos`
+
 warning: group-by column `z` does not exist for schema `zeek.modbus`
+
 warning: group-by column `z` does not exist for schema `zeek.notice`
+
 warning: group-by column `z` does not exist for schema `zeek.pe`
+
 warning: group-by column `z` does not exist for schema `zeek.radius`
+
 warning: group-by column `z` does not exist for schema `zeek.rdp`
+
 warning: group-by column `z` does not exist for schema `zeek.reporter`
+
 warning: group-by column `z` does not exist for schema `zeek.sip`
+
 warning: group-by column `z` does not exist for schema `zeek.smtp`
+
 warning: group-by column `z` does not exist for schema `zeek.snmp`
+
 warning: group-by column `z` does not exist for schema `zeek.software`
+
 warning: group-by column `z` does not exist for schema `zeek.ssl`
+
 warning: group-by column `z` does not exist for schema `zeek.syslog`
+
 warning: group-by column `z` does not exist for schema `zeek.tunnel`
+
 warning: group-by column `z` does not exist for schema `zeek.weird`
+
 warning: group-by column `z` does not exist for schema `zeek.weird.123.190`

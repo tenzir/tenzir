@@ -110,6 +110,15 @@ public:
         }
         return std::move(*op);
       }
+      if (aspect->inner == "partitions") {
+        auto op = pipeline::internal_parse_as_operator("partitions");
+        if (not op) {
+          diagnostic::error("failed to parse `partitions` operator: {}",
+                            op.error())
+            .throw_();
+        }
+        return std::move(*op);
+      }
       auto available = std::map<std::string, std::string>{};
       for (const auto& aspect : collect(plugins::get<aspect_plugin>()))
         available.emplace(aspect->aspect_name(), aspect->name());

@@ -38,12 +38,24 @@ auto message::header(const std::string& name) const -> const struct header* {
 }
 
 auto request_item::parse(std::string_view str) -> std::optional<request_item> {
+  auto is_valid_header_name = [](std::string_view name) {
+    for (char c : name) {
+      if (std::isalnum(static_cast<unsigned char>(c)) == 0 and c != '-'
+          and c != '_') {
+        return false;
+      }
+    }
+    return true;
+  };
   auto xs = detail::split_escaped(str, ":=@", "\\", 1);
   if (xs.size() == 2)
     return request_item{.type = file_data_json, .key = xs[0], .value = xs[1]};
   xs = detail::split_escaped(str, ":=", "\\", 1);
   if (xs.size() == 2)
     return request_item{.type = data_json, .key = xs[0], .value = xs[1]};
+  xs = detail::split_escaped(str, ":", "\\", 1);
+  if (xs.size() == 2 and is_valid_header_name(xs[0]))
+    return request_item{.type = header, .key = xs[0], .value = xs[1]};
   xs = detail::split_escaped(str, "==", "\\", 1);
   if (xs.size() == 2)
     return request_item{.type = url_param, .key = xs[0], .value = xs[1]};
@@ -56,9 +68,6 @@ auto request_item::parse(std::string_view str) -> std::optional<request_item> {
   xs = detail::split_escaped(str, "=", "\\", 1);
   if (xs.size() == 2)
     return request_item{.type = data, .key = xs[0], .value = xs[1]};
-  xs = detail::split_escaped(str, ":", "\\", 1);
-  if (xs.size() == 2)
-    return request_item{.type = header, .key = xs[0], .value = xs[1]};
   return {};
 }
 
@@ -66,8 +75,6 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
   auto body = record{};
   for (auto& item : items) {
     switch (item.type) {
-      default:
-        return caf::make_error(ec::unimplemented, "unsupported item type");
       case request_item::header: {
         req.headers.emplace_back(std::move(item.key), std::move(item.value));
         break;
@@ -85,7 +92,21 @@ auto apply(std::vector<request_item> items, request& req) -> caf::error {
         if (not data)
           return data.error();
         body.emplace(std::move(item.key), std::move(*data));
+        break;
       }
+      case request_item::url_param: {
+        auto pos = req.uri.find('?');
+        if (pos == std::string::npos) {
+          req.uri += '?';
+        } else if (pos + 1 != req.uri.size()) {
+          req.uri += '&';
+        }
+        req.uri += fmt::format("{}={}", curl::escape(item.key),
+                               curl::escape(item.value));
+        break;
+      }
+      default:
+        return caf::make_error(ec::unimplemented, "unsupported item type");
     }
   }
   auto json_encode = [](const auto& x) {

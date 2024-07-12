@@ -872,11 +872,9 @@ auto resolve_operand(const table_slice& slice, const operand& op)
     }
     inferred_type = *tmp_inferred_type;
     if (not inferred_type) {
-      inferred_type = type{string_type{}};
-      // Tenzir has no N/A type equivalent for Arrow, so we just use a string
-      // type here.
+      inferred_type = type{null_type{}};
       auto builder
-        = string_type::make_arrow_builder(arrow::default_memory_pool());
+        = null_type::make_arrow_builder(arrow::default_memory_pool());
       const auto append_result = builder->AppendNulls(batch->num_rows());
       TENZIR_ASSERT(append_result.ok(), append_result.ToString().c_str());
       array = builder->Finish().ValueOrDie();

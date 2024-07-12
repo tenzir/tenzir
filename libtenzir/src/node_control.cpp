@@ -8,10 +8,8 @@
 
 #include "tenzir/node_control.hpp"
 
-#include "tenzir/concept/parseable/tenzir/time.hpp"
-#include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/configuration.hpp"
-#include "tenzir/detail/overload.hpp"
+#include "tenzir/defaults.hpp"
 
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
@@ -32,23 +30,6 @@ auto node_connection_timeout(const caf::settings& options) -> caf::timespan {
   if (timeout == timeout.zero())
     return caf::infinite;
   return timeout;
-}
-
-caf::expected<caf::actor>
-spawn_at_node(caf::scoped_actor& self, const node_actor& node, invocation inv) {
-  const auto timeout = node_connection_timeout(self->config().content);
-  caf::expected<caf::actor> result = caf::error{};
-  self->request(node, timeout, atom::spawn_v, inv)
-    .receive(
-      [&](caf::actor& actor) {
-        result = std::move(actor);
-      },
-      [&](caf::error& err) {
-        result = caf::make_error(ec::unspecified,
-                                 fmt::format("failed to spawn '{}' at node: {}",
-                                             inv.full_name, err));
-      });
-  return result;
 }
 
 } // namespace tenzir

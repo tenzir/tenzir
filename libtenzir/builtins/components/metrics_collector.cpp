@@ -63,7 +63,9 @@ struct metrics_collector_state {
         return ok.error();
       }
     }
-    TENZIR_ASSERT(not instances.empty());
+    if (instances.empty()) {
+      return {};
+    }
     detail::weak_run_delayed_loop(
       self, std::chrono::seconds{30},
       [this] {
@@ -139,9 +141,6 @@ public:
 
   auto make_component(node_actor::stateful_pointer<node_state> node) const
     -> component_plugin_actor override {
-    if (collect(plugins::get<metrics_plugin>()).empty()) {
-      return {};
-    }
     auto [importer] = node->state.registry.find<importer_actor>();
     return node->spawn<caf::linked>(metrics_collector, std::move(importer));
   }

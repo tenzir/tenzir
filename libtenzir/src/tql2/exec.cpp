@@ -8,101 +8,274 @@
 
 #include "tenzir/tql2/exec.hpp"
 
+#include "tenzir/detail/assert.hpp"
+#include "tenzir/diagnostics.hpp"
+#include "tenzir/exec_pipeline.hpp"
+#include "tenzir/pipeline.hpp"
+#include "tenzir/session.hpp"
+#include "tenzir/tql2/ast.hpp"
+#include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/parser.hpp"
+#include "tenzir/tql2/plugin.hpp"
+#include "tenzir/tql2/registry.hpp"
+#include "tenzir/tql2/resolve.hpp"
 #include "tenzir/tql2/tokens.hpp"
+#include "tenzir/try.hpp"
 
 #include <arrow/util/utf8.h>
+#include <tsl/robin_set.h>
 
-namespace tenzir::tql2 {
-
+namespace tenzir {
 namespace {
 
-/// A diagnostic handler that remembers when it has emits an error.
-class diagnostic_handler_wrapper final : public diagnostic_handler {
+/// A diagnostic handler that deduplicate diagnostics.
+class deduplicating_diagnostic_handler final : public diagnostic_handler {
 public:
-  explicit diagnostic_handler_wrapper(std::unique_ptr<diagnostic_handler> inner)
-    : inner_{std::move(inner)} {
+  explicit deduplicating_diagnostic_handler(diagnostic_handler& inner)
+    : inner_{inner} {
   }
 
   void emit(diagnostic d) override {
-    if (d.severity == severity::error) {
-      error_ = true;
+    if (deduplicator_.insert(d)) {
+      inner_.emit(std::move(d));
     }
-    inner_->emit(std::move(d));
-  }
-
-  auto error() const -> bool {
-    return error_;
   }
 
 private:
-  bool error_ = false;
-  std::unique_ptr<diagnostic_handler> inner_;
+  diagnostic_deduplicator deduplicator_;
+  diagnostic_handler& inner_;
 };
+
+// TODO: This is a naive implementation and does not do scoping properly.
+class let_resolver : public ast::visitor<let_resolver> {
+public:
+  explicit let_resolver(session ctx) : ctx_{ctx} {
+  }
+
+  void visit(ast::pipeline& x) {
+    // TODO: Extraction + patch is probably a common pattern.
+    for (auto it = x.body.begin(); it != x.body.end();) {
+      auto let = std::get_if<ast::let_stmt>(&*it);
+      if (not let) {
+        visit(*it);
+        ++it;
+        continue;
+      }
+      visit(let->expr);
+      auto value = const_eval(let->expr, ctx_);
+      if (value) {
+        auto f = detail::overload{
+          [](auto x) -> ast::constant::kind {
+            return x;
+          },
+          [](pattern&) -> ast::constant::kind {
+            // TODO
+            TENZIR_UNREACHABLE();
+          },
+        };
+        map_[let->name.name] = caf::visit(f, std::move(*value));
+      } else {
+        map_[let->name.name] = std::nullopt;
+      }
+      it = x.body.erase(it);
+    }
+  }
+
+  void visit(ast::expression& x) {
+    auto dollar_var = std::get_if<ast::dollar_var>(&*x.kind);
+    if (not dollar_var) {
+      enter(x);
+      return;
+    }
+    auto it = map_.find(dollar_var->name);
+    if (it == map_.end()) {
+      diagnostic::error("unresolved variable").primary(x).emit(ctx_);
+      return;
+    }
+    if (not it->second) {
+      // Variable exists but there was an error during evaluation.
+      return;
+    }
+    x = ast::constant{*it->second, x.get_location()};
+  }
+
+  template <class T>
+  void visit(T& x) {
+    enter(x);
+  }
+
+  auto get_failure() -> failure_or<void> {
+    return failure_;
+  }
+
+private:
+  failure_or<void> failure_;
+  std::unordered_map<std::string, std::optional<ast::constant::kind>> map_;
+  session ctx_;
+};
+
+auto resolve_let_bindings(ast::pipeline& pipe, session ctx)
+  -> failure_or<void> {
+  auto resolver = let_resolver{ctx};
+  resolver.visit(pipe);
+  return resolver.get_failure();
+}
+
+auto compile_resolved(ast::pipeline&& pipe, session ctx)
+  -> failure_or<pipeline> {
+  auto fail = std::optional<failure>{};
+  auto ops = std::vector<operator_ptr>{};
+  for (auto& stmt : pipe.body) {
+    stmt.match(
+      [&](ast::invocation& x) {
+        // TODO: Where do we check that this succeeds?
+        auto def = std::get_if<const operator_factory_plugin*>(
+          &ctx.reg().get(x.op.ref));
+        TENZIR_ASSERT(def);
+        TENZIR_ASSERT(*def);
+        auto op = (*def)->make(
+          operator_factory_plugin::invocation{
+            std::move(x.op),
+            std::move(x.args),
+          },
+          ctx);
+        if (op) {
+          TENZIR_ASSERT(*op);
+          ops.push_back(std::move(*op));
+        } else {
+          fail = op.error();
+        }
+      },
+      [&](ast::assignment& x) {
+#if 0
+        // TODO: Cannot do this right now (release typeid problem).
+        auto assignments = std::vector<assignment>();
+        assignments.push_back(std::move(x));
+        ops.push_back(std::make_unique<set_operator>(std::move(assignments)));
+#else
+        auto plugin = plugins::find<operator_factory_plugin>("tql2.set");
+        TENZIR_ASSERT(plugin);
+        auto args = std::vector<ast::expression>{};
+        args.emplace_back(std::move(x));
+        auto op = plugin->make(
+          operator_factory_plugin::invocation{
+            ast::entity{
+              {ast::identifier{std::string{"set"}, location::unknown}}},
+            std::move(args),
+          },
+          ctx);
+        TENZIR_ASSERT(op);
+        ops.push_back(std::move(*op));
+#endif
+      },
+      [&](ast::if_stmt& x) {
+        // TODO: Same problem regarding instantiation outside of plugin.
+        auto args = std::vector<ast::expression>{};
+        args.reserve(3);
+        args.push_back(std::move(x.condition));
+        args.emplace_back(ast::pipeline_expr{
+          location::unknown, std::move(x.then), location::unknown});
+        if (x.else_) {
+          args.emplace_back(ast::pipeline_expr{
+            location::unknown, std::move(*x.else_), location::unknown});
+        }
+        auto plugin = plugins::find<operator_factory_plugin>("tql2.if");
+        TENZIR_ASSERT(plugin);
+        auto op = plugin->make(
+          operator_factory_plugin::invocation{
+            ast::entity{{ast::identifier{std::string{"if"}, location::unknown}}},
+            std::move(args),
+          },
+          ctx);
+        TENZIR_ASSERT(op);
+        ops.push_back(std::move(*op));
+      },
+      [&](ast::match_stmt& x) {
+        diagnostic::error("`match` not yet implemented, try using `if` instead")
+          .primary(x)
+          .emit(ctx.dh());
+        fail = failure::promise();
+      },
+      [&](ast::let_stmt&) {
+        TENZIR_UNREACHABLE();
+      });
+  }
+  if (fail) {
+    return *fail;
+  }
+  return tenzir::pipeline{std::move(ops)};
+}
+
+auto validate_utf8(std::string_view content, session ctx) -> failure_or<void> {
+  // TODO: Refactor this.
+  arrow::util::InitializeUTF8();
+  if (arrow::util::ValidateUTF8(content)) {
+    return {};
+  }
+  // TODO: Consider reporting offset.
+  diagnostic::error("found invalid UTF8").emit(ctx);
+  return failure::promise();
+}
 
 } // namespace
 
-auto exec(std::string content, std::unique_ptr<diagnostic_handler> diag,
-          const exec_config& cfg, caf::actor_system& sys) -> bool {
-  (void)sys;
-  auto content_view = std::string_view{content};
-  auto tokens = tql2::tokenize(content);
-  auto diag_wrapper = diagnostic_handler_wrapper{std::move(diag)};
-  // TODO: Refactor this.
-  arrow::util::InitializeUTF8();
-  if (not arrow::util::ValidateUTF8(content)) {
-    // Figure out the exact token.
-    auto last = size_t{0};
-    for (auto& token : tokens) {
-      if (not arrow::util::ValidateUTF8(content_view.substr(last, token.end))) {
-        // TODO: We can't really do this directly, unless we handle invalid
-        // UTF-8 in diagnostics.
-        diagnostic::error("invalid UTF8")
-          .primary(location{last, token.end})
-          .emit(diag_wrapper);
-      }
-      last = token.end;
-    }
-    return false;
-  }
-  if (cfg.dump_tokens) {
-    auto last = size_t{0};
-    auto has_error = false;
-    for (auto& token : tokens) {
-      fmt::print("{:>15} {:?}\n", token.kind,
-                 content_view.substr(last, token.end - last));
-      last = token.end;
-      has_error |= token.kind == tql2::token_kind::error;
-    }
-    return not has_error;
-  }
-  for (auto& token : tokens) {
-    if (token.kind == tql2::token_kind::error) {
-      auto begin = size_t{0};
-      if (&token != tokens.data()) {
-        begin = (&token - 1)->end;
-      }
-      diagnostic::error("could not parse token")
-        .primary(location{begin, token.end})
-        .emit(diag_wrapper);
-    }
-  }
-  if (diag_wrapper.error()) {
-    return false;
-  }
-  auto parsed = tql2::parse(tokens, content, diag_wrapper);
-  if (diag_wrapper.error()) {
-    return false;
-  }
-  if (cfg.dump_ast) {
-    fmt::print("{:#?}\n", parsed);
-    return true;
-  }
-  diagnostic::warning(
-    "pipeline is syntactically valid, but execution is not yet implemented")
-    .hint("use `--dump-ast` to show AST")
-    .emit(diag_wrapper);
-  return true;
+auto parse_and_compile(std::string_view source, session ctx)
+  -> failure_or<pipeline> {
+  TRY(validate_utf8(source, ctx));
+  TRY(auto tokens, tokenize(source, ctx));
+  TRY(auto ast, parse(tokens, source, ctx));
+  return compile(std::move(ast), ctx);
 }
 
-} // namespace tenzir::tql2
+auto compile(ast::pipeline&& pipe, session ctx) -> failure_or<pipeline> {
+  TRY(resolve_entities(pipe, ctx));
+  TRY(resolve_let_bindings(pipe, ctx));
+  return compile_resolved(std::move(pipe), ctx);
+}
+
+auto dump_tokens(std::span<token const> tokens, std::string_view source)
+  -> bool {
+  auto last = size_t{0};
+  auto has_error = false;
+  for (auto& token : tokens) {
+    fmt::print("{:>15} {:?}\n", token.kind,
+               source.substr(last, token.end - last));
+    last = token.end;
+    has_error |= token.kind == token_kind::error;
+  }
+  return not has_error;
+}
+
+auto exec2(std::string_view source, diagnostic_handler& dh,
+           const exec_config& cfg, caf::actor_system& sys) -> bool {
+  TENZIR_UNUSED(sys);
+  auto result = std::invoke([&]() -> failure_or<bool> {
+    auto dedup = std::make_unique<deduplicating_diagnostic_handler>(dh);
+    auto provider = session_provider::make(*dedup);
+    auto ctx = provider.as_session();
+    TRY(validate_utf8(source, ctx));
+    auto tokens = tokenize_permissive(source);
+    if (cfg.dump_tokens) {
+      return dump_tokens(tokens, source);
+    }
+    TRY(verify_tokens(tokens, ctx));
+    TRY(auto parsed, parse(tokens, source, ctx));
+    if (cfg.dump_ast) {
+      fmt::print("{:#?}\n", parsed);
+      return not ctx.has_failure();
+    }
+    TRY(auto pipe, compile(std::move(parsed), ctx));
+    if (ctx.has_failure()) {
+      // Do not proceed to execution if there has been an error.
+      return false;
+    }
+    auto result = exec_pipeline(std::move(pipe), ctx, cfg, sys);
+    if (not result) {
+      diagnostic::error(result.error()).emit(ctx);
+    }
+    return not ctx.has_failure();
+  });
+  return result ? *result : false;
+}
+
+} // namespace tenzir

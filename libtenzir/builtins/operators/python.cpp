@@ -23,6 +23,8 @@
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/si_literals.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/type.hpp>
 
 #include <arrow/api.h>
@@ -178,7 +180,7 @@ public:
       bp::pipe std_in;
       bp::ipstream std_err;
       auto python_executable = bp::search_path("python3");
-      auto env = boost::this_process::environment();
+      auto env = bp::environment{boost::this_process::environment()};
       // Automatically create a virtualenv with all requirements preinstalled,
       // unless disabled by node config.
       if (config_.venv_base_dir) {
@@ -242,7 +244,7 @@ public:
           if (bp::system(python_executable, "-m", "venv", venv,
                          bp::std_err > std_err,
                          detail::preserved_fds{{STDERR_FILENO}},
-                         boost::process::limit_handles)
+                         bp::detail::limit_handles_{})
               != 0) {
             auto venv_error = drain_pipe(std_err);
             // We need to delete the potentially broken venv here to make sure
@@ -285,8 +287,8 @@ public:
           TENZIR_VERBOSE("installing python modules with: '{}'",
                          fmt::join(pip_invocation, "' '"));
           if (bp::system(pip_invocation, env, bp::std_err > std_err,
-                         detail::preserved_fds{{STDERR_FILENO}},
-                         boost::process::limit_handles)
+                         detail::preserved_fds{{STDOUT_FILENO, STDERR_FILENO}},
+                         bp::detail::limit_handles_{})
               != 0) {
             auto pip_error = drain_pipe(std_err);
             diagnostic::error("{}", pip_error)
@@ -316,7 +318,7 @@ public:
         detail::preserved_fds{{STDIN_FILENO, STDOUT_FILENO, STDERR_FILENO,
                                codepipe.pipe().native_source(),
                                errpipe.pipe().native_sink()}},
-        boost::process::limit_handles};
+        bp::detail::limit_handles_{}};
       if (code.empty()) {
         // The current implementation always expects a non-empty input.
         // Otherwise, it blocks forever on a `read` call.
@@ -332,8 +334,7 @@ public:
           auto python_error = drain_pipe(errpipe);
           diagnostic::error("{}", python_error)
             .note("python process exited with error")
-            .emit(ctrl.diagnostics());
-          co_return;
+            .throw_();
         }
         if (slice.rows() == 0) {
           co_yield {};
@@ -449,7 +450,8 @@ private:
   std::variant<std::filesystem::path, std::string> code_ = {};
 };
 
-class plugin final : public virtual operator_plugin<python_operator> {
+class plugin final : public virtual operator_plugin<python_operator>,
+                     public virtual operator_factory_plugin {
 public:
   struct config config = {};
 
@@ -515,6 +517,46 @@ public:
     }
     return std::make_unique<python_operator>(config, std::move(requirements),
                                              std::move(code));
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto requirements = std::optional<std::string>{};
+    auto code = std::optional<located<std::string>>{};
+    auto path = std::optional<located<std::string>>{};
+    auto code_or_path = std::variant<std::filesystem::path, std::string>{};
+    auto parser = argument_parser2::operator_("python")
+                    .add(code, "<expr>")
+                    .add("file", path)
+                    .add("requirements", requirements);
+    TRY(parser.parse(inv, ctx));
+    if (not path && not code) {
+      diagnostic::error("must have either the `file` argument or inline code")
+        .primary(inv.self)
+        .usage(parser.usage())
+        .docs(parser.docs())
+        .emit(ctx);
+      return failure::promise();
+    }
+    if (path && code) {
+      diagnostic::error("cannot have `file` argument together with inline code")
+        .primary(path->source)
+        .primary(code->source)
+        .usage(parser.usage())
+        .docs(parser.docs())
+        .emit(ctx);
+      return failure::promise();
+    }
+    if (code) {
+      code_or_path = code->inner;
+    } else {
+      code_or_path = std::filesystem::path{path->inner};
+    }
+    if (not requirements) {
+      requirements = "";
+    }
+    return std::make_unique<python_operator>(config, std::move(*requirements),
+                                             std::move(code_or_path));
   }
 };
 
