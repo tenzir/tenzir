@@ -339,9 +339,13 @@ public:
       },
     });
     auto diagnostics_handler = ctrl.shared_diagnostics();
-    auto bridge = ctrl.self().spawn<caf::linked>(
-      make_bridge, expr_, mode_, std::move(filesystem),
-      std::move(metrics_handler), std::move(diagnostics_handler));
+    auto bridge
+      = ctrl.self().spawn(make_bridge, expr_, mode_, std::move(filesystem),
+                          std::move(metrics_handler),
+                          std::move(diagnostics_handler));
+    auto bridge_guard = caf::detail::make_scope_guard([&]() {
+      ctrl.self().send_exit(bridge, caf::exit_reason::normal);
+    });
     co_yield {};
     while (true) {
       auto result = table_slice{};
