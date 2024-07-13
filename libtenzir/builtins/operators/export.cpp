@@ -41,6 +41,8 @@
 
 namespace tenzir::plugins::export_ {
 
+namespace {
+
 struct export_mode {
   bool retro = true;
   bool live = false;
@@ -413,8 +415,8 @@ private:
   export_mode mode_;
 };
 
-class plugin final : public virtual operator_plugin<export_operator>,
-                     public virtual operator_factory_plugin {
+class export_plugin final : public virtual operator_plugin<export_operator>,
+                            public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.source = true};
@@ -426,7 +428,7 @@ public:
     auto retro = false;
     auto live = false;
     auto internal = false;
-    auto parallel = std::optional<located<size_t>>{};
+    auto parallel = std::optional<located<uint64_t>>{};
     parser.add("--retro", retro);
     parser.add("--live", live);
     parser.add("--internal", internal);
@@ -487,6 +489,178 @@ public:
   }
 };
 
+class diagnostics_plugin final : public virtual operator_parser_plugin,
+                                 public virtual operator_factory_plugin {
+public:
+  auto name() const -> std::string override {
+    return "diagnostics";
+  };
+
+  auto signature() const -> operator_signature override {
+    return {.source = true};
+  }
+
+  auto parse_operator(parser_interface& p) const -> operator_ptr override {
+    auto parser = argument_parser{"diagnostics", "https://docs.tenzir.com/"
+                                                 "operators/diagnostics"};
+    auto live = false;
+    auto retro = false;
+    const auto internal = true;
+    auto parallel = std::optional<located<uint64_t>>{};
+    parser.add("--live", live);
+    parser.add("--retro", retro);
+    parser.add("--parallel", parallel, "<level>");
+    parser.parse(p);
+    if (not live) {
+      retro = true;
+    }
+    return std::make_unique<export_operator>(
+      expression{
+        conjunction{
+          predicate{
+            meta_extractor{meta_extractor::internal},
+            relational_operator::equal,
+            data{internal},
+          },
+          predicate{
+            meta_extractor{meta_extractor::schema},
+            relational_operator::equal,
+            data{"tenzir.diagnostic"},
+          },
+        },
+      },
+      export_mode{retro, live, internal, parallel ? parallel->inner : 3});
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto live = false;
+    auto retro = false;
+    const auto internal = true;
+    auto parallel = std::optional<located<uint64_t>>{};
+    TRY(argument_parser2::operator_("diagnostics")
+          .add("live", live)
+          .add("retro", retro)
+          .add("parallel", parallel)
+          .parse(inv, ctx));
+    if (not live) {
+      retro = true;
+    }
+    return std::make_unique<export_operator>(
+      expression{
+        conjunction{
+          predicate{
+            meta_extractor{meta_extractor::internal},
+            relational_operator::equal,
+            data{internal},
+          },
+          predicate{
+            meta_extractor{meta_extractor::schema},
+            relational_operator::equal,
+            data{"tenzir.diagnostic"},
+          },
+        },
+      },
+      export_mode{retro, live, internal, parallel ? parallel->inner : 3});
+  }
+};
+
+class metrics_plugin final : public virtual operator_parser_plugin,
+                             public virtual operator_factory_plugin {
+public:
+  auto name() const -> std::string override {
+    return "metrics";
+  };
+
+  auto signature() const -> operator_signature override {
+    return {.source = true};
+  }
+
+  auto parse_operator(parser_interface& p) const -> operator_ptr override {
+    auto parser = argument_parser{"metrics", "https://docs.tenzir.com/"
+                                             "operators/metrics"};
+    auto name = std::optional<std::string>{};
+    auto live = false;
+    auto retro = false;
+    const auto internal = true;
+    auto parallel = std::optional<located<uint64_t>>{};
+    parser.add(name, "<name>");
+    parser.add("--live", live);
+    parser.add("--retro", retro);
+    parser.add("--parallel", parallel, "<level>");
+    parser.parse(p);
+    if (not live) {
+      retro = true;
+    }
+    static const auto all_metrics = [] {
+      auto result = pattern::make("tenzir\\.metrics\\..*");
+      TENZIR_ASSERT(result);
+      return std::move(*result);
+    }();
+    return std::make_unique<export_operator>(
+      expression{
+        conjunction{
+          predicate{
+            meta_extractor{meta_extractor::internal},
+            relational_operator::equal,
+            data{internal},
+          },
+          predicate{
+            meta_extractor{meta_extractor::schema},
+            relational_operator::equal,
+            name ? data{fmt::format("tenzir.metrics.{}", *name)}
+                 : data{all_metrics},
+          },
+        },
+      },
+      export_mode{retro, live, internal, parallel ? parallel->inner : 3});
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto name = std::optional<std::string>{};
+    auto live = false;
+    auto retro = false;
+    const auto internal = true;
+    auto parallel = std::optional<located<uint64_t>>{};
+    TRY(argument_parser2::operator_("metrics")
+          .add(name, "<name>")
+          .add("live", live)
+          .add("retro", retro)
+          .add("parallel", parallel)
+          .parse(inv, ctx));
+    if (not live) {
+      retro = true;
+    }
+    static const auto all_metrics = [] {
+      auto result = pattern::make("tenzir\\.metrics\\..*");
+      TENZIR_ASSERT(result);
+      return std::move(*result);
+    }();
+    return std::make_unique<export_operator>(
+      expression{
+        conjunction{
+          predicate{
+            meta_extractor{meta_extractor::internal},
+            relational_operator::equal,
+            data{internal},
+          },
+          predicate{
+            meta_extractor{meta_extractor::schema},
+            relational_operator::equal,
+            name ? data{fmt::format("tenzir.metrics.{}", *name)}
+                 : data{all_metrics},
+          },
+        },
+      },
+      export_mode{retro, live, internal, parallel ? parallel->inner : 3});
+  }
+};
+
+} // namespace
+
 } // namespace tenzir::plugins::export_
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::export_::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::export_::export_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::export_::diagnostics_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::export_::metrics_plugin)
