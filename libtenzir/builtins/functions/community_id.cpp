@@ -119,7 +119,8 @@ public:
                               "or `icmp6` as protocol")
             .primary(args.proto)
             .emit(ctx);
-          return null_series();
+          check(b.AppendNull());
+          continue;
         }
         auto flow
           = make_flow(src_ip, dst_ip, detail::narrow<uint16_t>(src_port),
