@@ -34,6 +34,11 @@ public:
   virtual auto save_schemes() const -> std::vector<std::string> {
     return {};
   }
+
+  /// Returns the file extensions which the operator can parse (e.g. `yaml`).
+  virtual auto read_extensions() const -> std::vector<std::string> {
+    return {};
+  }
 };
 
 template <class Operator>

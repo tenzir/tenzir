@@ -309,33 +309,141 @@ public:
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
+    // TODO: Improve diagnostics and consider refactoring.
+    // TODO: Options are only applied to loader?
+    // ```
+    // from "https://example.org/foo.json", headers={"My-Token": "Foo123"}
+    // ---
+    // load "https://example.org/foo.json", headers={"My-Token": "Foo123"}
+    // read_json schema="test123"
+    // ---
+    // from "https://example.org/foo.json",
+    //   headers={"My-Token": "Foo123"},
+    //   read_args=[schema="test123"]
+    // ```
+    auto usage = "from <url/path>, ...<options>";
+    auto docs = "https://docs.tenzir.com/operators/from";
     if (inv.args.empty()) {
       diagnostic::error("expected positional argument `<path/url>`")
         .primary(inv.self)
+        .usage(usage)
+        .docs(docs)
         .emit(ctx);
       return failure::promise();
     }
-    TRY(auto path, const_eval(inv.args[0], ctx));
-    auto path_str = caf::get_if<std::string>(&path);
-    if (not path_str) {
-      diagnostic::error("expected string").primary(inv.args[0]).emit(ctx);
-      return failure::promise();
-    }
-    // TODO: This is just for demo purposes!
-    if (not path_str->ends_with(".json")) {
-      diagnostic::error("`from` currently requires `.json` files")
-        .primary(inv.args[0])
+    auto& string_expr = inv.args[0];
+    TRY(auto string_data, const_eval(string_expr, ctx));
+    auto string = caf::get_if<std::string>(&string_data);
+    if (not string) {
+      diagnostic::error("expected string")
+        .primary(string_expr)
+        .usage(usage)
+        .docs(docs)
         .emit(ctx);
       return failure::promise();
     }
-    // TODO: Obviously not great.
-    auto result = pipeline::internal_parse_as_operator(
-      fmt::format("from \"{}\" read json", *path_str));
-    if (not result) {
-      diagnostic::error(result.error()).primary(inv.self).emit(ctx);
+    auto uri = arrow::util::Uri{};
+    auto load = operator_ptr{};
+    auto filename = std::string{};
+    if (uri.Parse(*string).ok()) {
+      auto target = plugins::find<operator_factory_plugin>("tql2.load_file");
+      TENZIR_ASSERT(target);
+      TRY(load, target->make(inv, ctx));
+      // TODO: Does this work everywhere?
+      filename = std::filesystem::path{uri.path()}.filename();
+    } else {
+      // We assume this is a file path instead.
+      auto target = plugins::find<operator_factory_plugin>("tql2.load_file");
+      TENZIR_ASSERT(target);
+      TRY(load, target->make(inv, ctx));
+      filename = std::filesystem::path{*string}.filename();
+    }
+    auto extension = std::filesystem::path{filename}.extension();
+    // TODO: Refactor this.
+    auto extension_to_compression_map
+      = std::array<std::pair<std::string_view, std::string_view>, 8>{{
+        {".br", "brotli"},
+        {".brotli", "brotli"},
+        {".bz2", "bz2"},
+        {".gz", "gzip"},
+        {".gzip", "gzip"},
+        {".lz4", "lz4"},
+        {".zst", "zstd"},
+        {".zstd", "zstd"},
+      }};
+    auto decompress = operator_ptr{};
+    auto compression
+      = std::ranges::find(extension_to_compression_map, extension, [](auto& x) {
+          return x.first;
+        });
+    if (compression != extension_to_compression_map.end()) {
+      auto plugin = plugins::find<operator_factory_plugin>("decompress");
+      TENZIR_ASSERT(plugin);
+      // TODO: This is not optimal.
+      auto decompress_inv = invocation{
+        ast::entity{
+          {ast::identifier{
+            "decompress",
+            inv.self.get_location(),
+          }},
+        },
+        {
+          ast::constant{
+            std::string{compression->second},
+            string_expr.get_location(),
+          },
+        },
+      };
+      TRY(decompress, plugin->make(std::move(decompress_inv), ctx));
+      extension = std::filesystem::path{filename}.stem().extension();
+    }
+    auto read = operator_ptr{};
+    // TODO: We probably do not want this.
+    if (extension.empty()) {
+      diagnostic::error("failed to infer format").primary(string_expr).emit(ctx);
       return failure::promise();
     }
-    return std::move(*result);
+    auto ext_str = std::string{extension};
+    auto ext_name = ext_str.substr(1);
+    auto available = std::vector<std::string>{};
+    auto read_plugin = static_cast<const operator_factory_plugin*>(nullptr);
+    for (auto plugin : plugins::get<operator_factory_plugin>()) {
+      auto exts = plugin->read_extensions();
+      available.insert(available.end(), exts.begin(), exts.end());
+      if (std::ranges::find(exts, ext_name) != exts.end()) {
+        read_plugin = plugin;
+        break;
+      }
+    }
+    std::ranges::sort(available);
+    if (not read_plugin) {
+      diagnostic::error("could not infer reader from extension `{}`", ext_name)
+        .primary(string_expr)
+        .note("must be one of {}",
+              fmt::join(available | std::views::transform([](auto& str) {
+                          return fmt::format("`{}`", str);
+                        }),
+                        ", "))
+        .hint("try `load \"...\" | read_<format>`")
+        .emit(ctx);
+      return failure::promise();
+    }
+    // TODO: Bad.
+    auto read_inv = invocation{
+      ast::entity{{ast::identifier{"TODO", string_expr.get_location()}}},
+      {},
+    };
+    TRY(read, read_plugin->make(std::move(read_inv), ctx));
+    auto vec = std::vector<operator_ptr>{};
+    TENZIR_ASSERT(load);
+    vec.push_back(std::move(load));
+    if (decompress) {
+      vec.push_back(std::move(decompress));
+    }
+    TENZIR_ASSERT(read);
+    vec.push_back(std::move(read));
+    TENZIR_WARN("{:#?}", use_default_formatter(vec));
+    return std::make_unique<pipeline>(std::move(vec));
   }
 };
 
