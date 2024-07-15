@@ -131,6 +131,20 @@ inline auto split_at_null(generator<chunk_ptr> input, char split)
   }
 }
 
+auto json_string_parser(std::string_view s, const tenzir::type* seed)
+  -> caf::expected<tenzir::data> {
+  if (seed) {
+    return record_builder::basic_seeded_parser(s, *seed);
+  }
+  tenzir::data result;
+  constexpr static auto p = (parsers::data - parsers::number - parsers::number);
+  if (p(s, result)) {
+    return result;
+  } else {
+    return tenzir::data{std::string{s}};
+  }
+}
+
 /// Parses simdjson objects into the given `series_builder` handles.
 class doc_parser {
 public:
@@ -298,15 +312,22 @@ private:
       // string_view's instead is non-trivial
       builder.data(std::string{maybe_str.value_unsafe()});
     } else {
-      builder.data_unparsed(std::string{maybe_str.value_unsafe()});
+      // TODO because of this it would be better to adapt the multi_series_builder
+      if constexpr (std::same_as<decltype(builder), builder_ref>) {
+        auto d = json_string_parser(maybe_str.value_unsafe(), nullptr);
+        if (d.error()) {
+          diagnostic::warning(d.error()).emit(diag_);
+        }
+        builder.data(std::move(*d));
+      } else {
+        builder.data_unparsed(std::string{maybe_str.value_unsafe()});
+      }
     }
     return true;
   }
 
-  [[nodiscard]] auto
-  parse_array(simdjson::ondemand::array arr,
-              auto builder,
-              size_t depth) -> bool {
+  [[nodiscard]] auto parse_array(simdjson::ondemand::array arr, auto builder,
+                                 size_t depth) -> bool {
     for (auto element : arr) {
       if (element.error()) {
         report_parse_err(element, "an array element");
@@ -374,20 +395,6 @@ private:
   bool raw_;
 };
 
-auto json_string_parser(std::string_view s, const tenzir::type* seed)
-  -> caf::expected<tenzir::data> {
-  if (seed) {
-    return record_builder::basic_seeded_parser(s, *seed);
-  }
-  tenzir::data result;
-  constexpr static auto p = (parsers::data - parsers::number - parsers::number);
-  if (p(s, result)) {
-    return result;
-  } else {
-    return tenzir::data{std::string{s}};
-  }
-}
-
 class parser_base {
 public:
   parser_base(operator_control_plane& ctrl,
@@ -427,8 +434,9 @@ public:
       return;
     }
     auto& doc = maybe_doc.value_unsafe();
-    auto success = doc_parser{json_line, this->ctrl.diagnostics(), raw}.parse_object(
-      val.value_unsafe(), builder.record());
+    auto success
+      = doc_parser{json_line, this->ctrl.diagnostics(), raw}.parse_object(
+        val.value_unsafe(), builder.record());
     // After parsing one JSON object it is expected for the result to be at
     // the end. If it's otherwise then it means that a line contains more than
     // one object in which case we don't add any data and emit a warning.
@@ -513,8 +521,8 @@ public:
         for (auto&& elem : arr.value_unsafe()) {
           auto row = builder.record();
           auto success
-            = doc_parser{doc_it.source(), this->ctrl.diagnostics(), raw}.parse_object(
-              elem.value_unsafe(), row);
+            = doc_parser{doc_it.source(), this->ctrl.diagnostics(), raw}
+                .parse_object(elem.value_unsafe(), row);
           if (not success) {
             // We already reported the issue.
             builder.remove_last();
@@ -524,8 +532,8 @@ public:
       } else {
         auto row = builder.record();
         auto success
-          = doc_parser{doc_it.source(), this->ctrl.diagnostics(), raw}.parse_object(
-            doc.value_unsafe(), row);
+          = doc_parser{doc_it.source(), this->ctrl.diagnostics(), raw}
+              .parse_object(doc.value_unsafe(), row);
         if (not success) {
           // We already reported the issue.
           builder.remove_last();
@@ -1100,8 +1108,6 @@ public:
   }
 };
 
-/*
-
 class parse_json_plugin final : public virtual method_plugin {
 public:
   auto name() const -> std::string override {
@@ -1133,13 +1139,17 @@ public:
                 continue;
               }
               auto str = std::string{arg.Value(i)};
-              doc_parser doc_p = doc_parser( str, ctx, false, std::nullopt );
+              doc_parser doc_p = doc_parser(str, ctx, false, std::nullopt);
               auto doc = parser.iterate(str);
-              if ( doc.error() ) {
-                // FIXME
+              if (doc.error()) {
+                diagnostic::warning("{}", error_message(doc.error()))
+                  .primary(call)
+                  .emit(ctx);
+                continue;
               }
-              auto res = doc_p.parse_value(doc.get_value(), builder_ref{b}, 0);
-              if ( not res ) {
+              const auto res
+                = doc_p.parse_value(doc.get_value(), builder_ref{b}, 0);
+              if (not res) {
                 diagnostic::warning("could not parse json")
                   .primary(call)
                   .emit(ctx);
@@ -1147,24 +1157,6 @@ public:
                 b.null();
                 continue;
               }
-
-              // auto parse = [&]() -> simdjson::simdjson_result<data> {
-              //   auto str = std::string{arg.Value(i)};
-              //   TRY(auto doc, parser.iterate(str));
-              //   return json_to_data(doc, false);
-              // };
-              // auto result = parse();
-              // if (result.error()) {
-              //   // TODO: This can be very noisy. We will deduplicate the
-              //   // messages, but this is not efficient.
-              //   diagnostic::warning("could not parse json: {}",
-              //                       simdjson::error_message(result.error()))
-              //     .primary(call)
-              //     .emit(ctx);
-              //   b.null();
-              //   continue;
-              // }
-              // b.data(result.value_unsafe());
             }
             auto result = b.finish();
             // TODO: Consider whether we need heterogeneous for this. If so,
@@ -1178,8 +1170,8 @@ public:
             return std::move(result[0]);
           },
           [&](const auto&) {
-            diagnostic::warning("`parse_json` expected `string`, got `{}`",
-                                arg.type.kind())
+            diagnostic::warning("`parse_json` expected `string`")
+              .note("got `{}`", arg.type.kind())
               .primary(call)
               .emit(ctx);
             return series::null(null_type{}, arg.length());
@@ -1189,8 +1181,6 @@ public:
       });
   }
 };
-
-*/
 
 class write_json_plugin final : public virtual operator_plugin2<write_json> {
 public:
@@ -1217,4 +1207,4 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::suricata_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::zeek_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_json_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin)
-// TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::parse_json_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::parse_json_plugin)
