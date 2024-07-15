@@ -252,14 +252,11 @@ public:
   // FIXME this does not correctly support --schema-only yet
   struct policy_merge {
     static constexpr std::string_view name = "merge";
-    // whether to reset/clear the schema on yield
-    bool reset_on_yield = false;
     // a schema name to seed with. If this is given
     std::optional<std::string> seed_schema = {};
 
     auto friend inspect(auto& f, policy_merge& x) -> bool {
-      return f.object(x).fields(f.field("reset_on_yield", x.reset_on_yield),
-                                f.field("seed_schema", x.seed_schema));
+      return f.object(x).fields(f.field("seed_schema", x.seed_schema));
     }
   };
 
