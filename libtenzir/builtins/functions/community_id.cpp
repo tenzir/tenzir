@@ -39,8 +39,8 @@ public:
     auto args = arguments{};
     TRY(argument_parser2::function("community_id")
           .add(args.src_ip, "<source ip>")
-          .add(args.dst_ip, "<destination ip>")
           .add(args.src_port, "<source port>")
+          .add(args.dst_ip, "<destination ip>")
           .add(args.dst_port, "<destination port>")
           .add(args.proto, "<transport protocol>")
           .parse(inv, ctx));
@@ -50,35 +50,55 @@ public:
         return series::null(string_type{}, eval.length());
       };
       auto src_ip_series = eval(args.src_ip);
-      if (not caf::holds_alternative<ip_type>(src_ip_series.type)) {
+      if (caf::holds_alternative<null_type>(src_ip_series.type)) {
+        return null_series();
+      }
+      auto src_port_series = eval(args.src_port);
+      if (caf::holds_alternative<null_type>(src_port_series.type)) {
+        return null_series();
+      }
+      auto dst_ip_series = eval(args.dst_ip);
+      if (caf::holds_alternative<null_type>(dst_ip_series.type)) {
+        return null_series();
+      }
+      auto dst_port_series = eval(args.dst_port);
+      if (caf::holds_alternative<null_type>(dst_port_series.type)) {
+        return null_series();
+      }
+      auto proto_series = eval(args.proto);
+      if (caf::holds_alternative<null_type>(proto_series.type)) {
+        return null_series();
+      }
+      auto src_ips = src_ip_series.as<ip_type>();
+      if (not src_ips) {
         diagnostic::warning("`community_id` expected `ip` as 1st argument")
           .primary(args.src_ip)
           .emit(ctx);
         return null_series();
       }
-      auto dst_ip_series = eval(args.dst_ip);
-      if (not caf::holds_alternative<ip_type>(dst_ip_series.type)) {
-        diagnostic::warning("`community_id` expected `ip` as 3rd argument")
-          .primary(args.dst_ip)
-          .emit(ctx);
-        return null_series();
-      }
-      auto src_port_series = eval(args.src_port);
-      if (not caf::holds_alternative<int64_type>(src_port_series.type)) {
+      auto src_ports = src_port_series.as<int64_type>();
+      if (not src_ports) {
         diagnostic::warning("`community_id` expected `integer` as 2nd argument")
           .primary(args.src_port)
           .emit(ctx);
         return null_series();
       }
-      auto dst_port_series = eval(args.dst_port);
-      if (not caf::holds_alternative<int64_type>(dst_port_series.type)) {
+      auto dst_ips = dst_ip_series.as<ip_type>();
+      if (not dst_ips) {
+        diagnostic::warning("`community_id` expected `ip` as 3rd argument")
+          .primary(args.dst_ip)
+          .emit(ctx);
+        return null_series();
+      }
+      auto dst_ports = dst_port_series.as<int64_type>();
+      if (not dst_ports) {
         diagnostic::warning("`community_id` expected `integer` as 4th argument")
           .primary(args.dst_port)
           .emit(ctx);
         return null_series();
       }
-      auto proto_series = eval(args.proto);
-      if (not caf::holds_alternative<string_type>(proto_series.type)) {
+      auto protos = proto_series.as<string_type>();
+      if (not protos) {
         diagnostic::warning("`community_id` expected `string` as 5th argument")
           .primary(args.dst_port)
           .emit(ctx);
@@ -86,11 +106,6 @@ public:
       }
       auto b = arrow::StringBuilder{};
       check(b.Reserve(eval.length()));
-      auto src_ips = src_ip_series.as<ip_type>();
-      auto dst_ips = dst_ip_series.as<ip_type>();
-      auto src_ports = src_port_series.as<int64_type>();
-      auto dst_ports = dst_port_series.as<int64_type>();
-      auto protos = proto_series.as<string_type>();
       for (auto i = int64_t{0}; i < eval.length(); ++i) {
         if (src_ips->array->IsNull(i) or src_ports->array->IsNull(i)
             or dst_ips->array->IsNull(i) or dst_ports->array->IsNull(i)
