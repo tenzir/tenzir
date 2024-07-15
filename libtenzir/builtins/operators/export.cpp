@@ -346,7 +346,7 @@ public:
                           std::move(metrics_handler),
                           std::move(diagnostics_handler));
     auto bridge_guard = caf::detail::make_scope_guard([&]() {
-      ctrl.self().send_exit(bridge, caf::exit_reason::normal);
+      ctrl.self().send_exit(bridge, caf::exit_reason::user_shutdown);
     });
     co_yield {};
     while (true) {
