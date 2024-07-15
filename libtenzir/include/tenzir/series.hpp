@@ -65,9 +65,11 @@ struct basic_series {
       if (not other_type) {
         return std::nullopt;
       }
+      // TODO: This could also be a `dynamic_cast`, but that is sometimes broken
+      // when calling this from plugins (due to duplicated RTTI information).
+      TENZIR_ASSERT(typeid(*array) == typeid(type_to_arrow_array_t<Other>));
       auto other_array
-        = std::dynamic_pointer_cast<type_to_arrow_array_t<Other>>(array);
-      TENZIR_ASSERT(other_array);
+        = std::static_pointer_cast<type_to_arrow_array_t<Other>>(array);
       return basic_series<Other>{*other_type, std::move(other_array)};
     }
   }
