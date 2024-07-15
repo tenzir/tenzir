@@ -36,12 +36,10 @@ namespace tenzir::ast {
 struct identifier {
   identifier() = default;
 
-  identifier(std::string name, location location)
-    : name{std::move(name)}, location{location} {
-  }
-
-  identifier(std::string_view name, location location)
-    : identifier{std::string(name), location} {
+  template <class T>
+    requires std::constructible_from<std::string, T>
+  identifier(T&& name, location location)
+    : name{std::forward<T>(name)}, location{location} {
   }
 
   auto get_location() const -> location {

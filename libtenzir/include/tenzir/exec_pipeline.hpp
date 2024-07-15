@@ -17,10 +17,11 @@ struct exec_config {
   std::string implicit_events_source = "from stdin read json";
   std::string implicit_bytes_sink = "save file -";
   std::string implicit_events_sink = "to stdout write json";
+  bool dump_tokens = false;
   bool dump_ast = false;
+  bool dump_pipeline = false;
   bool dump_diagnostics = false;
   bool dump_metrics = false;
-  bool dump_tokens = false;
   bool tql2 = false;
 };
 

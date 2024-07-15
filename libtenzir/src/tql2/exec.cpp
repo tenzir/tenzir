@@ -265,6 +265,10 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
       return not ctx.has_failure();
     }
     TRY(auto pipe, compile(std::move(parsed), ctx));
+    if (cfg.dump_pipeline) {
+      fmt::print("{:#?}\n", pipe);
+      return not ctx.has_failure();
+    }
     if (ctx.has_failure()) {
       // Do not proceed to execution if there has been an error.
       return false;

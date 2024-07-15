@@ -411,56 +411,121 @@ private:
   connector_args args_;
 };
 
+class save_http_operator final : public crtp_operator<save_http_operator> {
+public:
+  save_http_operator() = default;
+
+  explicit save_http_operator(connector_args args) : args_{std::move(args)} {
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.save_http";
+  }
+
+  auto
+  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> generator<std::monostate> {
+    // TODO: Clean this up.
+    auto saver = curl_saver<"TODO: not using this">{args_};
+    auto func = saver.instantiate(ctrl, std::nullopt);
+    if (not func) {
+      diagnostic::error(func.error()).emit(ctrl.diagnostics());
+      co_return;
+    }
+    for (auto chunk : input) {
+      (*func)(std::move(chunk));
+    }
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, save_http_operator& x) -> bool {
+    return f.apply(x.args_);
+  }
+
+private:
+  connector_args args_;
+};
+
+auto parse_http_args(std::string name,
+                     const operator_factory_plugin::invocation& inv,
+                     session ctx) -> failure_or<connector_args> {
+  auto url = std::string{};
+  auto method = std::optional<std::string>{};
+  auto params = std::optional<located<record>>{};
+  auto headers = std::optional<located<record>>{};
+  argument_parser2::operator_(std::move(name))
+    .add(url, "<url>")
+    .add("method", method)
+    .add("params", params)
+    .add("headers", headers)
+    .parse(inv, ctx)
+    .ignore();
+  auto args = connector_args{};
+  args.url = std::move(url);
+  if (method) {
+    args.http_opts.method = *method;
+  }
+  if (params) {
+    for (auto& [name, value] : params->inner) {
+      // TODO: What about other types?
+      auto str = caf::get_if<std::string>(&value);
+      if (not str) {
+        diagnostic::error("expected `string` for parameter `{}`", name)
+          .primary(*params)
+          .emit(ctx);
+        continue;
+      }
+      args.http_opts.items.emplace_back(tenzir::http::request_item::url_param,
+                                        std::move(name), std::move(*str));
+    }
+  }
+  if (headers) {
+    for (auto& [name, value] : headers->inner) {
+      // TODO: What about other types?
+      auto str = caf::get_if<std::string>(&value);
+      if (not str) {
+        diagnostic::error("expected `string` for header `{}`", name)
+          .primary(*headers)
+          .emit(ctx);
+        continue;
+      }
+      args.http_opts.items.emplace_back(tenzir::http::request_item::header,
+                                        std::move(name), std::move(*str));
+    }
+  }
+  return args;
+}
+
 class load_http_plugin final
   : public virtual operator_plugin2<load_http_operator> {
 public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto url = std::string{};
-    auto method = std::optional<std::string>{};
-    auto params = std::optional<located<record>>{};
-    auto headers = std::optional<located<record>>{};
-    argument_parser2::operator_("load_http")
-      .add(url, "<url>")
-      .add("method", method)
-      .add("params", params)
-      .add("headers", headers)
-      .parse(inv, ctx)
-      .ignore();
-    auto args = connector_args{};
-    args.url = std::move(url);
-    if (method) {
-      args.http_opts.method = *method;
-    }
-    if (params) {
-      for (auto& [name, value] : params->inner) {
-        // TODO: What about other types?
-        auto str = caf::get_if<std::string>(&value);
-        if (not str) {
-          diagnostic::error("expected `string` for parameter `{}`", name)
-            .primary(*params)
-            .emit(ctx);
-          continue;
-        }
-        args.http_opts.items.emplace_back(tenzir::http::request_item::url_param,
-                                          std::move(name), std::move(*str));
-      }
-    }
-    if (headers) {
-      for (auto& [name, value] : headers->inner) {
-        // TODO: What about other types?
-        auto str = caf::get_if<std::string>(&value);
-        if (not str) {
-          diagnostic::error("expected `string` for header `{}`", name)
-            .primary(*params)
-            .emit(ctx);
-          continue;
-        }
-        args.http_opts.items.emplace_back(tenzir::http::request_item::header,
-                                          std::move(name), std::move(*str));
-      }
-    }
+    TRY(auto args, parse_http_args("load_http", inv, ctx));
     return std::make_unique<load_http_operator>(std::move(args));
+  }
+
+  auto load_schemes() const -> std::vector<std::string> override {
+    return {"http", "https", "ftp", "ftps"};
+  }
+};
+
+class save_http_plugin final
+  : public virtual operator_plugin2<save_http_operator> {
+public:
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    TRY(auto args, parse_http_args("save_http", inv, ctx));
+    return std::make_unique<save_http_operator>(std::move(args));
+  }
+
+  auto save_schemes() const -> std::vector<std::string> override {
+    return {"http", "https", "ftp", "ftps"};
   }
 };
 
@@ -473,3 +538,4 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::ftps)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::http)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::https)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::load_http_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::save_http_plugin)
