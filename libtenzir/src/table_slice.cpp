@@ -589,8 +589,9 @@ table_slice concatenate(std::vector<table_slice> slices) {
 
   for (const auto& slice : slices) {
     auto batch = to_record_batch(slice);
-    append_columns(caf::get<record_type>(schema),
-                   *batch->ToStructArray().ValueOrDie(), *builder);
+    auto status = append_array(*builder, caf::get<record_type>(schema),
+                               *batch->ToStructArray().ValueOrDie());
+    TENZIR_ASSERT(status.ok());
   }
   const auto rows = builder->length();
   if (rows == 0)
@@ -1218,8 +1219,8 @@ auto unflatten_list(unflatten_field& f, std::string_view nested_field_separator)
         }
         auto status = builder->Append();
         TENZIR_ASSERT(status.ok());
-        status = builder->value_builder()->AppendArraySlice(
-          *new_f.array_->data(), 0, new_f.array_->length());
+        status = append_array(*builder, type::from_arrow(*new_f.array_->type()),
+                              *new_f.array_);
         TENZIR_ASSERT(status.ok());
       }
     }
@@ -1230,22 +1231,15 @@ auto unflatten_list(unflatten_field& f, std::string_view nested_field_separator)
           field_list->value_slice(i));
         auto unflattened
           = unflatten_struct_array(struct_array, nested_field_separator);
-        auto record_builder
-          = caf::get<record_type>(type::from_arrow(*unflattened->type()))
-              .make_arrow_builder(arrow::default_memory_pool());
         auto unflattened_type = type::from_arrow(*unflattened->type());
-        append_columns(
-          caf::get<record_type>(type::from_arrow(*unflattened->type())),
-          *unflattened, *record_builder);
-        const auto array = record_builder->Finish().ValueOrDie();
         if (not builder) {
           builder = list_type{unflattened_type}.make_arrow_builder(
             arrow::default_memory_pool());
         }
         auto status = builder->Append();
         TENZIR_ASSERT(status.ok());
-        status = builder->value_builder()->AppendArraySlice(*array->data(), 0,
-                                                            array->length());
+        status = append_array(*builder->value_builder(), unflattened_type,
+                              *unflattened);
         TENZIR_ASSERT(status.ok());
       }
     }

@@ -18,6 +18,7 @@
 #include "tenzir/fbs/table_slice.hpp"
 #include "tenzir/fbs/utils.hpp"
 #include "tenzir/logger.hpp"
+#include "tenzir/try.hpp"
 #include "tenzir/type.hpp"
 
 #include <arrow/api.h>
@@ -453,8 +454,6 @@ arrow::Status append_builder(const type& hint,
   };
   return caf::visit(f, hint);
 }
-
-#define TRY ARROW_RETURN_NOT_OK
 
 template <concrete_type Ty>
 auto append_array_slice(type_to_arrow_builder_t<Ty>& builder, const Ty& ty,

@@ -231,4 +231,10 @@ auto append_array_slice(type_to_arrow_builder_t<Ty>& builder, const Ty& ty,
                         const type_to_arrow_array_t<Ty>& array, int64_t offset,
                         int64_t length) -> arrow::Status;
 
+template <type_or_concrete_type Ty>
+auto append_array(type_to_arrow_builder_t<Ty>& builder, const Ty& ty,
+                  const type_to_arrow_array_t<Ty>& array) -> arrow::Status {
+  return append_array_slice(builder, ty, array, 0, array.length());
+}
+
 } // namespace tenzir
