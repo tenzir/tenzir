@@ -19,8 +19,11 @@ struct selector {
 };
 
 auto parse_selector(std::string_view x, location source) -> selector {
+  if (x.empty()) {
+    diagnostic::error("selector must not be empty").primary(source).throw_();
+  }
   auto split = detail::split(x, ":");
-  TENZIR_ASSERT(!x.empty());
+  TENZIR_ASSERT(not x.empty());
   if (split.size() > 2 or split[0].empty()) {
     diagnostic::error("invalid selector `{}`: must contain at most "
                       "one `:` and field name must not be empty",
@@ -36,8 +39,13 @@ auto parse_selector(std::string_view x, location source) -> selector {
 }
 } // namespace
 
-void add_schema_only_option(argument_parser& parser, bool& schema_only) {
+void add_schema_only_option(argument_parser& parser,
+                            std::optional<location>& schema_only) {
   parser.add("--no-infer", schema_only);
+}
+void add_schema_only_option(argument_parser2& parser,
+                            std::optional<location>& schema_only) {
+  parser.add("no_extra_fields", schema_only);
 }
 
 auto multi_series_builder_argument_parser::add_to_parser(
@@ -48,12 +56,26 @@ auto multi_series_builder_argument_parser::add_to_parser(
   parser.add("--selector", selector_, "<selector>");
 }
 
+auto multi_series_builder_argument_parser::add_to_parser(
+  argument_parser2& parser) -> void {
+  add_schema_only_option(parser, schema_only_);
+  parser.add("merge", merge_);
+  parser.add("schema", schema_);
+  parser.add("selector", selector_);
+}
+
 auto multi_series_builder_argument_parser::get_settings()
   -> multi_series_builder::settings_type& {
+  if (schema_only_ and not(selector_ or schema_)) {
+    diagnostic::error("`--no-infer` requires either `--schema` or `--selector`")
+      .primary(*schema_only_)
+      .throw_();
+  }
+  settings_.schema_only = schema_only_.has_value();
   return settings_;
 }
 
-auto multi_series_builder_argument_parser::validated_policy(parser_interface& p)
+auto multi_series_builder_argument_parser::get_policy()
   -> multi_series_builder::policy_type& {
   bool has_merge = false;
   bool has_schema = false;
@@ -77,7 +99,7 @@ auto multi_series_builder_argument_parser::validated_policy(parser_interface& p)
   }
   if (has_merge and has_selector) {
     diagnostic::error("`--merge` and `--selector` cannot be combined")
-      .primary(p.current_span())
+      .primary(*merge_)
       .secondary(selector_->source)
       .throw_();
   }
@@ -104,5 +126,17 @@ auto multi_series_builder_argument_parser::validated_policy(parser_interface& p)
     pol->naming_prefix = std::move(*prefix);
   }
   return policy_;
+}
+
+auto common_parser_options_parser::add_to_parser(argument_parser& parser)
+  -> void {
+  parser.add("--raw", raw_);
+  parser.add("--unnest-separator", unnest_, "<nested-key-separator>");
+}
+
+auto common_parser_options_parser::add_to_parser(argument_parser2& parser)
+  -> void {
+  parser.add("raw", raw_);
+  parser.add("unnest-separator", unnest_);
 }
 } // namespace tenzir
