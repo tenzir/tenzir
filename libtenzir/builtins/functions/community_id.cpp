@@ -26,6 +26,7 @@ struct arguments {
   ast::expression dst_port;
   ast::expression src_port;
   ast::expression proto;
+  std::optional<ast::expression> seed;
 };
 
 class plugin final : public function_plugin {
@@ -43,6 +44,7 @@ public:
           .add(args.dst_ip, "<destination ip>")
           .add(args.dst_port, "<destination port>")
           .add(args.proto, "<transport protocol>")
+          .add("seed", args.seed)
           .parse(inv, ctx));
     return function_use::make([args = std::move(args)](evaluator eval,
                                                        session ctx) -> series {
@@ -68,6 +70,13 @@ public:
       auto proto_series = eval(args.proto);
       if (caf::holds_alternative<null_type>(proto_series.type)) {
         return null_series();
+      }
+      auto seed_series = std::optional<series>{};
+      if (args.seed) {
+        seed_series = eval(*args.seed);
+        if (caf::holds_alternative<null_type>(seed_series->type)) {
+          seed_series = std::nullopt;
+        }
       }
       auto src_ips = src_ip_series.as<ip_type>();
       if (not src_ips) {
@@ -103,6 +112,16 @@ public:
           .primary(args.dst_port)
           .emit(ctx);
         return null_series();
+      }
+      auto seeds = std::optional<basic_series<int64_type>>{};
+      if (seed_series) {
+        seeds = seed_series->as<int64_type>();
+        if (not seeds) {
+          diagnostic::warning("`community_id` got an argument type mismatch")
+            .primary(*args.seed)
+            .note("expected argument `seed` to be of type `int64`")
+            .emit(ctx);
+        }
       }
       auto b = arrow::StringBuilder{};
       check(b.Reserve(eval.length()));
@@ -140,7 +159,12 @@ public:
         auto flow
           = make_flow(src_ip, dst_ip, detail::narrow<uint16_t>(src_port),
                       detail::narrow<uint16_t>(dst_port), type);
-        auto seed = uint16_t{0}; // TODO: make an optional parameter.
+        auto seed = uint16_t{0};
+        if (seeds and not seeds->array->IsNull(i)) {
+          // TODO: Perform a bounds check. There are probably already utilities
+          // for this available.
+          seed = detail::narrow_cast<uint16_t>(seeds->array->GetView(i));
+        }
         check(
           b.Append(tenzir::community_id::compute<policy::base64>(flow, seed)));
       }
