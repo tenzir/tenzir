@@ -223,13 +223,13 @@ append_builder(const Type& hint,
 }
 
 auto append_array_slice(arrow::ArrayBuilder& builder, const type& ty,
-                        const arrow::Array& array, int64_t offset,
-                        int64_t length) -> arrow::Status;
+                        const arrow::Array& array, int64_t begin, int64_t count)
+  -> arrow::Status;
 
 template <concrete_type Ty>
 auto append_array_slice(type_to_arrow_builder_t<Ty>& builder, const Ty& ty,
-                        const type_to_arrow_array_t<Ty>& array, int64_t offset,
-                        int64_t length) -> arrow::Status;
+                        const type_to_arrow_array_t<Ty>& array, int64_t begin,
+                        int64_t count) -> arrow::Status;
 
 template <type_or_concrete_type Ty>
 auto append_array(type_to_arrow_builder_t<Ty>& builder, const Ty& ty,

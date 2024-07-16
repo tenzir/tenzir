@@ -1219,7 +1219,8 @@ auto unflatten_list(unflatten_field& f, std::string_view nested_field_separator)
         }
         auto status = builder->Append();
         TENZIR_ASSERT(status.ok());
-        status = append_array(*builder, type::from_arrow(*new_f.array_->type()),
+        status = append_array(*builder->value_builder(),
+                              type::from_arrow(*new_f.array_->type()),
                               *new_f.array_);
         TENZIR_ASSERT(status.ok());
       }
