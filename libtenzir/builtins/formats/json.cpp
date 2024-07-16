@@ -1531,9 +1531,6 @@ public:
   }
 };
 
-using suricata_parser = selector_parser<"suricata", "event_type:suricata">;
-using zeek_parser = selector_parser<"zeek-json", "_path:zeek", ".">;
-
 class write_json final : public crtp_operator<write_json> {
 public:
   write_json() = default;
@@ -1578,6 +1575,38 @@ public:
 
 private:
   json_printer printer_;
+};
+
+class read_json_preset final : public virtual operator_factory_plugin {
+public:
+  read_json_preset(std::string name, std::string_view selector,
+                   std::optional<std::string> separator)
+    : name_{std::move(name)} {
+    args_.selector = parse_selector(selector, location::unknown);
+    if (separator) {
+      TENZIR_ASSERT(not separator->empty());
+      args_.unnest_separator = std::move(*separator);
+    }
+  }
+
+  auto name() const -> std::string override {
+    return name_;
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto args = args_;
+    argument_parser2::operator_(name())
+      .add("no_extra_fields", args.no_infer)
+      .parse(inv, ctx)
+      .ignore();
+    return std::make_unique<parser_adapter<json_parser>>(
+      json_parser{std::move(args)});
+  }
+
+private:
+  std::string name_;
+  parser_args args_;
 };
 
 class read_json_plugin final
@@ -1724,6 +1753,9 @@ public:
   }
 };
 
+using suricata_parser = selector_parser<"suricata", "event_type:suricata">;
+using zeek_parser = selector_parser<"zeek-json", "_path:zeek", ".">;
+
 } // namespace
 
 } // namespace tenzir::plugins::json
@@ -1732,6 +1764,11 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::gelf_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::suricata_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::zeek_parser)
+
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_json_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_json_preset{
+  "read_suricata", "event_type:suricata", std::nullopt});
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_json_preset{
+  "read_zeek_json", "_path:zeek", "."});
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::parse_json_plugin)

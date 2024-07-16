@@ -43,7 +43,6 @@ auto exec_command_impl(std::string content, diagnostic_handler& dh,
 
 auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
   auto cfg = exec_config{};
-  cfg.dump_tokens = caf::get_or(inv.options, "tenzir.exec.dump-tokens", false);
   auto color_mode = caf::get_or(inv.options, "tenzir.exec.color", "auto");
   auto color = color_diagnostics{};
   if (color_mode == "always") {
@@ -63,7 +62,10 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
       return false;
     }
   }
+  cfg.dump_tokens = caf::get_or(inv.options, "tenzir.exec.dump-tokens", false);
   cfg.dump_ast = caf::get_or(inv.options, "tenzir.exec.dump-ast", false);
+  cfg.dump_pipeline
+    = caf::get_or(inv.options, "tenzir.exec.dump-pipeline", false);
   cfg.dump_diagnostics
     = caf::get_or(inv.options, "tenzir.exec.dump-diagnostics", false);
   cfg.dump_metrics
@@ -132,6 +134,8 @@ public:
         .add<bool>("file,f", "load the pipeline definition from a file")
         .add<std::string>("color", "whether to emit colorful output (default: "
                                    "auto, alternatives: never, always)")
+        .add<bool>("dump-pipeline",
+                   "print a textual description of the pipeline and then exit")
         .add<bool>("dump-tokens",
                    "print a textual description of the tokens and then exit")
         .add<bool>("dump-ast",

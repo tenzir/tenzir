@@ -115,7 +115,9 @@ auto registry::method_names() const -> std::vector<std::string_view> {
 }
 
 void registry::add(std::string name, entity_def def) {
-  auto inserted = defs_.emplace(std::move(name), def).second;
-  TENZIR_ASSERT(inserted);
+  auto [it, inserted] = defs_.emplace(std::move(name), def);
+  TENZIR_ASSERT(inserted,
+                fmt::format("found multiple definitions for `{}`", it->first));
 }
+
 } // namespace tenzir
