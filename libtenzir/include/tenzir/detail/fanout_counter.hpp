@@ -9,6 +9,7 @@
 #pragma once
 
 #include <caf/response_promise.hpp>
+#include <caf/typed_response_promise.hpp>
 
 namespace tenzir::detail {
 
@@ -97,6 +98,26 @@ auto make_fanout_counter(size_t expected, Continuation&& then,
   using counter = fanout_counter<State, Continuation, ErrorContinuation>;
   return std::make_shared<counter>(expected, std::forward<Continuation>(then),
                                    std::forward<ErrorContinuation>(error));
+}
+
+// template <typename State>
+// auto make_fanout_counter(size_t expected, caf::typed_response_promise<State>
+// rp) {
+//   return make_fanout_counter<State>(expected,
+//     [rp](State&& state) mutable { rp.deliver(std::move(state)); },
+//     [rp](State&&, caf::error&& e) mutable { rp.deliver(e); });
+// }
+
+inline auto
+make_fanout_counter(size_t expected, caf::typed_response_promise<void> rp) {
+  return make_fanout_counter(
+    expected,
+    [rp]() mutable {
+      rp.deliver();
+    },
+    [rp](caf::error&& e) mutable {
+      rp.deliver(e);
+    });
 }
 
 } // namespace tenzir::detail
