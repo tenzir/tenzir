@@ -1769,6 +1769,6 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_json_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_json_preset{
   "read_suricata", "event_type:suricata", std::nullopt});
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_json_preset{
-  "read_zeek", "_path:zeek", "."});
+  "read_zeek_json", "_path:zeek", "."});
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::parse_json_plugin)
