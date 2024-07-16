@@ -83,7 +83,13 @@ struct bridge_state {
   accountant_actor accountant = {};
   filesystem_actor filesystem = {};
 
-  detail::flat_map<type, size_t> metrics = {};
+  struct metric {
+    size_t emitted = {};
+    size_t queued = {};
+  };
+
+  detail::flat_map<type, metric> metrics = {};
+  size_t num_queued_total = {};
   metric_handler metrics_handler = {};
 
   shared_diagnostic_handler diagnostics_handler = {};
@@ -150,14 +156,14 @@ struct bridge_state {
   auto emit_metrics() -> void {
     TENZIR_ASSERT(not mode.internal);
     TENZIR_DEBUG("{} emits {}", *self, metrics.size());
-    for (const auto& [schema, events] : metrics) {
+    for (auto& [schema, metric] : metrics) {
       metrics_handler.emit({
         {"schema", std::string{schema.name()}},
         {"schema_id", schema.make_fingerprint()},
-        {"events", events},
+        {"events", std::exchange(metric.emitted, {})},
+        {"queued_events", metric.queued},
       });
     }
-    metrics.clear();
   }
 
   ~bridge_state() noexcept {
@@ -262,8 +268,6 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
         return {};
       }
       if (self->current_sender() == self->state.importer_address) {
-        // TODO: Consider dropping events from live export if the following
-        // operators are unable to keep up.
         const auto* bound_expr
           = self->state.bind_expr(slice.schema(), self->state.expr);
         if (not bound_expr) {
@@ -275,14 +279,25 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
           return {};
         }
         slice = std::move(*filtered);
+        // We load up to N partitions depending on our parallel level, and then
+        // limit our buffer to N+1 to account for live data.
+        const auto size_threshold
+          = (self->state.mode.parallel + 1) * defaults::max_partition_size;
+        if (self->state.num_queued_total >= size_threshold) {
+          diagnostic::warning("export failed to keep up and dropped events")
+            .emit(self->state.diagnostics_handler);
+          return {};
+        }
       }
       if (self->state.buffer_rp.pending()) {
         TENZIR_ASSERT(self->state.buffer.empty());
         TENZIR_ASSERT(not self->state.is_done());
-        self->state.metrics[slice.schema()] += slice.rows();
+        self->state.metrics[slice.schema()].emitted += slice.rows();
         self->state.buffer_rp.deliver(std::move(slice));
         return {};
       }
+      self->state.metrics[slice.schema()].queued += slice.rows();
+      self->state.num_queued_total += slice.rows();
       self->state.buffer.push(std::move(slice));
       return {};
     },
@@ -296,7 +311,11 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
         auto slice = std::move(self->state.buffer.front());
         self->state.buffer.pop();
         TENZIR_ASSERT(slice.rows() > 0);
-        self->state.metrics[slice.schema()] += slice.rows();
+        auto& metric = self->state.metrics[slice.schema()];
+        TENZIR_ASSERT(metric.queued >= slice.rows());
+        metric.emitted += slice.rows();
+        metric.queued -= slice.rows();
+        self->state.num_queued_total -= slice.rows();
         return slice;
       }
       self->state.buffer_rp = self->make_response_promise<table_slice>();
@@ -338,6 +357,7 @@ public:
         {"schema", string_type{}},
         {"schema_id", string_type{}},
         {"events", uint64_type{}},
+        {"queued_events", uint64_type{}},
       },
     });
     auto diagnostics_handler = ctrl.shared_diagnostics();
