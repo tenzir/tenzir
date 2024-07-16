@@ -86,7 +86,14 @@ int main(int argc, char** argv) {
 
   // Make sure to deinitialize all plugins at the end.
   auto plugin_guard = caf::detail::make_scope_guard([]() noexcept {
-    tenzir::plugins::get_mutable().clear();
+    // Ideally, we would not have this deinitialize function at all and could
+    // just call `plugins::get_mutable().clear()`, but that has a race condition
+    // in that some detached actors may still be alive that are owned by
+    // plugins, which then often dereference a nullptr through the global actor
+    // system config.
+    for (auto& plugin : tenzir::plugins::get_mutable()) {
+      plugin->deinitialize();
+    }
   });
   caf::settings log_settings;
   put(log_settings, "tenzir.console-verbosity", tenzir_loglevel);

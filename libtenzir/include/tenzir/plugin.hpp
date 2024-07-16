@@ -129,6 +129,10 @@ public:
     return {};
   }
 
+  // Deinitializes a plugin.
+  virtual auto deinitialize() -> void {
+  }
+
   /// Returns the unique name of the plugin.
   [[nodiscard]] virtual std::string name() const = 0;
 };
@@ -1067,16 +1071,13 @@ extern const char* TENZIR_PLUGIN_VERSION;
       }                                                                        \
       static auto init() -> bool {                                             \
         /* NOLINTBEGIN(cppcoreguidelines-owning-memory) */                     \
-        auto plugin = TENZIR_MAKE_PLUGIN(                                      \
+        ::tenzir::plugins::get_mutable().push_back(TENZIR_MAKE_PLUGIN(         \
           new __VA_ARGS__,                                                     \
           +[](::tenzir::plugin* plugin) noexcept {                             \
             delete plugin;                                                     \
           },                                                                   \
-          TENZIR_PLUGIN_VERSION);                                              \
+          TENZIR_PLUGIN_VERSION));                                             \
         /* NOLINTEND(cppcoreguidelines-owning-memory) */                       \
-        const auto it = std::ranges::upper_bound(                              \
-          ::tenzir::plugins::get_mutable(), plugin);                           \
-        ::tenzir::plugins::get_mutable().insert(it, std::move(plugin));        \
         return true;                                                           \
       }                                                                        \
       inline static auto flag = init();                                        \

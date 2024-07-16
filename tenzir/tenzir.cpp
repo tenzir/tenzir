@@ -83,12 +83,6 @@ auto main(int argc, char** argv) -> int {
                           ? app_path
                           : app_path.substr(last_slash + 1);
   bool is_server = (app_name == "tenzir-node");
-  // Make sure to deinitialize all plugins at the end. This has to be done
-  // before we create the log context, as that must be cleared before we clear
-  // the plugins.
-  auto plugin_guard = caf::detail::make_scope_guard([&]() noexcept {
-    plugins::get_mutable().clear();
-  });
   // Create log context as soon as we know the correct configuration.
   auto log_context = create_log_context(is_server, *invocation, cfg.content);
   if (!log_context)
@@ -101,6 +95,17 @@ auto main(int argc, char** argv) -> int {
   // Print the plugins that were loaded, and errors that occured during loading.
   for (const auto& file : *loaded_plugin_paths)
     TENZIR_DEBUG("loaded plugin: {}", file);
+  // Make sure to deinitialize all plugins at the end.
+  auto plugin_guard = caf::detail::make_scope_guard([]() noexcept {
+    // Ideally, we would not have this deinitialize function at all and could
+    // just call `plugins::get_mutable().clear()`, but that has a race condition
+    // in that some detached actors may still be alive that are owned by
+    // plugins, which then often dereference a nullptr through the global actor
+    // system config.
+    for (auto& plugin : plugins::get_mutable()) {
+      plugin->deinitialize();
+    }
+  });
   // Initialize successfully loaded plugins.
   if (auto err = plugins::initialize(cfg)) {
     TENZIR_ERROR("failed to initialize plugins: {}", err);
