@@ -46,8 +46,8 @@ struct tenzir::tryable<arrow::Status> {
     return x.ok();
   }
 
-  static auto get_success(arrow::Status&& x) -> arrow::Status {
-    return std::move(x);
+  static void get_success(arrow::Status&& x) {
+    TENZIR_UNUSED(x);
   }
 
   static auto get_error(arrow::Status&& x) -> arrow::Status {

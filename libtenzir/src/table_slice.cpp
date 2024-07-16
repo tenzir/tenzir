@@ -184,87 +184,6 @@ auto make_unflattened_struct_array(
                            std::move(new_fields));
 }
 
-auto append_columns(const record_type& schema,
-                    const type_to_arrow_array_t<record_type>& array,
-                    type_to_arrow_builder_t<record_type>& builder) -> void {
-  // NOTE: Passing nullptr for the valid_bytes parameter has the undocumented
-  // special meaning of all appended entries being valid. The Arrow unit
-  // tests do the same thing in a few places; if this ever starts to cause
-  // issues, we can create a vector<uint8_t> with desired_batch_size entries
-  // of the value 1, call .data() on that and pass it in here instead.
-  const auto append_status
-    = builder.AppendValues(array.length(), /*valid_bytes*/ nullptr);
-  TENZIR_ASSERT(append_status.ok(), append_status.ToString().c_str());
-  for (auto field_index = 0; field_index < array.num_fields(); ++field_index) {
-    const auto field_type = schema.field(field_index).type;
-    const auto& field_array = *array.field(field_index);
-    auto& field_builder = *builder.field_builder(field_index);
-    const auto append_column = detail::overload{
-      [&](const record_type& concrete_field_type) noexcept {
-        const auto& concrete_field_array
-          = caf::get<type_to_arrow_array_t<record_type>>(field_array);
-        auto& concrete_field_builder
-          = caf::get<type_to_arrow_builder_t<record_type>>(field_builder);
-        append_columns(concrete_field_type, concrete_field_array,
-                       concrete_field_builder);
-      },
-      [&]<concrete_type Type>(
-        [[maybe_unused]] const Type& concrete_field_type) noexcept {
-        const auto& concrete_field_array
-          = caf::get<type_to_arrow_array_t<Type>>(field_array);
-        auto& concrete_field_builder
-          = caf::get<type_to_arrow_builder_t<Type>>(field_builder);
-        constexpr auto can_use_array_slice_api
-          = basic_type<Type> && //
-            !arrow::is_extension_type<type_to_arrow_type_t<Type>>::value;
-        if constexpr (can_use_array_slice_api) {
-          const auto append_array_slice_result
-            = concrete_field_builder.AppendArraySlice(
-              *concrete_field_array.data(), 0, array.length());
-          TENZIR_ASSERT(append_array_slice_result.ok(),
-                        append_array_slice_result.ToString().c_str());
-        } else {
-          // For complex types and extension types we cannot use the
-          // AppendArraySlice API, so we need to take a slight detour by
-          // manually appending column by column. This is almost exactly
-          // what AppendArraySlice does under the hood, but since it's just
-          // not implemented for extension types we need to do some extra
-          // work here.
-          const auto& concrete_field_array_storage
-            = [&]() noexcept -> const type_to_arrow_array_storage_t<Type>& {
-            // For extension types we need to additionally unwrap
-            // the inner storage array.
-            if constexpr (arrow::is_extension_type<
-                            type_to_arrow_type_t<Type>>::value)
-              return static_cast<const type_to_arrow_array_storage_t<Type>&>(
-                *concrete_field_array.storage());
-            else
-              return concrete_field_array;
-          }();
-          const auto reserve_result
-            = concrete_field_builder.Reserve(array.length());
-          TENZIR_ASSERT(reserve_result.ok(), reserve_result.ToString().c_str());
-          for (auto row = 0; row < array.length(); ++row) {
-            if (concrete_field_array_storage.IsNull(row)) {
-              const auto append_null_result
-                = concrete_field_builder.AppendNull();
-              TENZIR_ASSERT(append_null_result.ok(),
-                            append_null_result.ToString().c_str());
-              continue;
-            }
-            const auto append_builder_result = append_builder(
-              concrete_field_type, concrete_field_builder,
-              value_at(concrete_field_type, concrete_field_array_storage, row));
-            TENZIR_ASSERT(append_builder_result.ok(),
-                          append_builder_result.ToString().c_str());
-          }
-        }
-      },
-    };
-    caf::visit(append_column, field_type);
-  }
-}
-
 } // namespace
 
 // -- constructors, destructors, and assignment operators ----------------------
@@ -589,8 +508,9 @@ table_slice concatenate(std::vector<table_slice> slices) {
 
   for (const auto& slice : slices) {
     auto batch = to_record_batch(slice);
-    append_columns(caf::get<record_type>(schema),
-                   *batch->ToStructArray().ValueOrDie(), *builder);
+    auto status = append_array(*builder, caf::get<record_type>(schema),
+                               *batch->ToStructArray().ValueOrDie());
+    TENZIR_ASSERT(status.ok());
   }
   const auto rows = builder->length();
   if (rows == 0)
@@ -1218,8 +1138,9 @@ auto unflatten_list(unflatten_field& f, std::string_view nested_field_separator)
         }
         auto status = builder->Append();
         TENZIR_ASSERT(status.ok());
-        status = builder->value_builder()->AppendArraySlice(
-          *new_f.array_->data(), 0, new_f.array_->length());
+        status = append_array(*builder->value_builder(),
+                              type::from_arrow(*new_f.array_->type()),
+                              *new_f.array_);
         TENZIR_ASSERT(status.ok());
       }
     }
@@ -1230,22 +1151,15 @@ auto unflatten_list(unflatten_field& f, std::string_view nested_field_separator)
           field_list->value_slice(i));
         auto unflattened
           = unflatten_struct_array(struct_array, nested_field_separator);
-        auto record_builder
-          = caf::get<record_type>(type::from_arrow(*unflattened->type()))
-              .make_arrow_builder(arrow::default_memory_pool());
         auto unflattened_type = type::from_arrow(*unflattened->type());
-        append_columns(
-          caf::get<record_type>(type::from_arrow(*unflattened->type())),
-          *unflattened, *record_builder);
-        const auto array = record_builder->Finish().ValueOrDie();
         if (not builder) {
           builder = list_type{unflattened_type}.make_arrow_builder(
             arrow::default_memory_pool());
         }
         auto status = builder->Append();
         TENZIR_ASSERT(status.ok());
-        status = builder->value_builder()->AppendArraySlice(*array->data(), 0,
-                                                            array->length());
+        status = append_array(*builder->value_builder(), unflattened_type,
+                              *unflattened);
         TENZIR_ASSERT(status.ok());
       }
     }
