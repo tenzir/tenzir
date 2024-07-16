@@ -44,6 +44,10 @@ struct operator_control_plane {
   /// Returns true if the operator is hosted by process that has a terminal.
   virtual auto has_terminal() const noexcept -> bool = 0;
 
+  /// Returns true if the operator is marked as hidden, i.e., run in the
+  /// background.
+  virtual auto is_hidden() const noexcept -> bool = 0;
+
   /// Suspend or resume the operator's runloop. A suspended operator will not
   /// get resumed after it yielded to the executor.
   virtual auto set_waiting(bool value) noexcept -> void = 0;

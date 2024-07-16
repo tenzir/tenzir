@@ -109,7 +109,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
       self
         ->request(node, caf::infinite, atom::spawn_v,
                   operator_box{std::move(op)}, input_type, diagnostics, metrics,
-                  op_index)
+                  op_index, is_hidden)
         .then(
           [=, this](exec_node_actor& exec_node) {
             TENZIR_VERBOSE("{} spawned {} remotely", *self, description);
@@ -127,7 +127,7 @@ void pipeline_executor_state::spawn_execution_nodes(pipeline pipe) {
       TENZIR_DEBUG("{} spawns {} locally", *self, description);
       auto spawn_result
         = spawn_exec_node(self, std::move(op), input_type, node, diagnostics,
-                          metrics, op_index, has_terminal);
+                          metrics, op_index, has_terminal, is_hidden);
       if (not spawn_result) {
         abort_start(diagnostic::error(spawn_result.error())
                       .note("failed to spawn {} locally", description)
@@ -264,8 +264,8 @@ auto pipeline_executor_state::resume() -> caf::result<void> {
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
   pipeline pipe, receiver_actor<diagnostic> diagnostics,
-  metrics_receiver_actor metrics, node_actor node, bool has_terminal)
-  -> pipeline_executor_actor::behavior_type {
+  metrics_receiver_actor metrics, node_actor node, bool has_terminal,
+  bool is_hidden) -> pipeline_executor_actor::behavior_type {
   TENZIR_DEBUG("{} was created", *self);
   self->state.self = self;
   self->state.node = std::move(node);
@@ -275,6 +275,7 @@ auto pipeline_executor(
   self->state.no_location_overrides = caf::get_or(
     self->system().config(), "tenzir.no-location-overrides", false);
   self->state.has_terminal = has_terminal;
+  self->state.is_hidden = is_hidden;
   self->set_down_handler([self](caf::down_msg& msg) {
     const auto exec_node
       = std::find_if(self->state.exec_nodes.begin(),
