@@ -13,6 +13,8 @@
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/detail/string_literal.hpp"
 #include "tenzir/detail/to_xsv_sep.hpp"
+#include "tenzir/multi_series_builder.hpp"
+#include "tenzir/multi_series_builder_argument_parser.hpp"
 #include "tenzir/parser_interface.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/series_builder.hpp"
@@ -41,24 +43,21 @@ struct xsv_options {
   bool auto_expand = {};
   std::optional<std::string> header = {};
   bool no_header = {};
+  multi_series_builder::policy_type builder_policy
+    = multi_series_builder::policy_precise{};
+  multi_series_builder::settings_type builder_settings = {};
+  bool raw = false;
+  std::string unnest{};
 
-  static auto try_parse(parser_interface& p, std::string name, bool is_parser)
-    -> xsv_options {
+  static auto try_parse_printer_options(parser_interface& p,
+                                        std::string name) -> xsv_options {
     auto parser = argument_parser{"xsv", "https://docs.tenzir.com/formats/xsv"};
-    auto allow_comments = bool{};
-    auto auto_expand = bool{};
     auto field_sep_str = located<std::string>{};
     auto list_sep_str = located<std::string>{};
     auto null_value = located<std::string>{};
-    auto header = std::optional<std::string>{};
     auto no_header = bool{};
-    if (is_parser) {
-      parser.add("--allow-comments", allow_comments);
-      parser.add("--auto-expand", auto_expand);
-      parser.add("--header", header, "<header>");
-    } else {
-      parser.add("--no-header", no_header);
-    }
+    auto common_parser = common_parser_options_parser{};
+    parser.add("--no-header", no_header);
     parser.add(field_sep_str, "<field-sep>");
     parser.add(list_sep_str, "<list-sep>");
     parser.add(null_value, "<null-value>");
@@ -71,7 +70,8 @@ struct xsv_options {
     }
     auto list_sep = to_xsv_sep(list_sep_str.inner);
     if (!list_sep) {
-      diagnostic::error("invalid separator: {}", list_sep.error())
+      diagnostic::error("invalid separator:")
+        .note("got \"{}\"", list_sep.error())
         .primary(list_sep_str.source)
         .throw_();
     }
@@ -101,9 +101,6 @@ struct xsv_options {
       .field_sep = *field_sep,
       .list_sep = *list_sep,
       .null_value = std::move(null_value.inner),
-      .allow_comments = allow_comments,
-      .auto_expand = auto_expand,
-      .header = std::move(header),
       .no_header = no_header,
     };
   }
@@ -114,8 +111,139 @@ struct xsv_options {
       f.field("list_sep", x.list_sep), f.field("null_value", x.null_value),
       f.field("allow_comments", x.allow_comments),
       f.field("auto_expand", x.auto_expand), f.field("header", x.header),
-      f.field("no_header", x.no_header));
+      f.field("no_header", x.no_header),
+      f.field("builder_policy", x.builder_policy),
+      f.field("builder_settings", x.builder_settings), f.field("raw", x.raw),
+      f.field("unnest", x.unnest));
   }
+};
+
+struct xsv_common_parser_options_parser : multi_series_builder_argument_parser,
+                                          common_parser_options_parser {
+  xsv_common_parser_options_parser(std::string name, char field_sep_default,
+                                   char list_sep_default,
+                                   std::string null_value_default)
+    : name_{std::move(name)},
+      field_sep_str_{
+        located{std::string{field_sep_default}, location::unknown}},
+      list_sep_str_{located{std::string{list_sep_default}, location::unknown}},
+      null_value_{located{std::move(null_value_default), location::unknown}},
+      mode_{mode::special_optional} {
+  }
+
+  xsv_common_parser_options_parser(std::string name) : name_{std::move(name)} {
+  }
+  auto add_to_parser(argument_parser& parser) -> void {
+    if (mode_ == mode::special_optional) {
+      parser.add("--list-sep", list_sep_str_, "<list-sep>");
+      parser.add("--null-value", null_value_, "<null-value>");
+    } else {
+      field_sep_str_ = located{"REQUIRED", location::unknown};
+      list_sep_str_ = located{"REQUIRED", location::unknown};
+      null_value_ = located{"REQUIRED", location::unknown};
+      parser.add(*field_sep_str_, "<field-sep>");
+      parser.add(*list_sep_str_, "<list-sep>");
+      parser.add(*null_value_, "<null-value>");
+    }
+    parser.add("--allow-comments", allow_comments_);
+    parser.add("--auto-expand", auto_expand_);
+    parser.add("--header", header_, "<header>");
+    multi_series_builder_argument_parser::add_to_parser(parser);
+    common_parser_options_parser::add_to_parser(parser);
+  }
+  auto add_to_parser(argument_parser2& parser) -> void {
+    if (mode_ == mode::special_optional) {
+      parser.add("list_sep", list_sep_str_);
+      parser.add("null_value", null_value_);
+    } else {
+      field_sep_str_ = located{"REQUIRED", location::unknown};
+      list_sep_str_ = located{"REQUIRED", location::unknown};
+      null_value_ = located{"REQUIRED", location::unknown};
+      parser.add(*field_sep_str_, "<field-sep>");
+      parser.add(*list_sep_str_, "<list-sep>");
+      parser.add(*null_value_, "<null-value>");
+    }
+    parser.add("comments", allow_comments_);
+    parser.add("auto_expand", auto_expand_);
+    parser.add("header", header_);
+    multi_series_builder_argument_parser::add_to_parser(parser);
+    common_parser_options_parser::add_to_parser(parser);
+  }
+
+  auto get_options() -> xsv_options {
+    auto field_sep = to_xsv_sep(field_sep_str_->inner);
+    if (!field_sep) {
+      diagnostic::error("invalid field separator:")
+        .note("{}", field_sep.error())
+        .primary(field_sep_str_->source)
+        .throw_();
+    }
+    auto list_sep = to_xsv_sep(list_sep_str_->inner);
+    if (!list_sep) {
+      diagnostic::error("invalid list-element separator:")
+        .note("{}", list_sep.error())
+        .primary(list_sep_str_->source)
+        .throw_();
+    }
+    if (*field_sep == *list_sep) {
+      diagnostic::error("field separator and list separator must be "
+                        "different")
+        .primary(field_sep_str_->source)
+        .primary(list_sep_str_->source)
+        .throw_();
+    }
+    for (auto ch : null_value_->inner) {
+      if (ch == *field_sep) {
+        diagnostic::error("null value conflicts with field separator")
+          .primary(field_sep_str_->source)
+          .primary(null_value_->source)
+          .throw_();
+      }
+      if (ch == *list_sep) {
+        diagnostic::error("null value conflicts with list separator")
+          .primary(field_sep_str_->source)
+          .primary(null_value_->source)
+          .throw_();
+      }
+    }
+
+    if (schema_only_ and auto_expand_) {
+      diagnostic::error(
+        "cannot activate `no-infer` and `auto-expand` at the same time")
+        .primary(*schema_only_)
+        .primary(*auto_expand_)
+        .throw_();
+    }
+
+    return xsv_options{
+      .name = "xsv",
+      .field_sep = *field_sep,
+      .list_sep = *list_sep,
+      .null_value = null_value_->inner,
+      .allow_comments = allow_comments_,
+      .auto_expand = auto_expand_.has_value(),
+      .header = header_->inner,
+      .no_header = false,
+      .builder_policy = get_policy(),
+      .builder_settings = get_settings(),
+      .raw = get_raw(),
+      .unnest = get_unnest(),
+    };
+  }
+  enum class mode {
+    all_required,
+    special_optional,
+  };
+
+protected:
+  std::string name_;
+  bool allow_comments_{};
+  std::optional<location> auto_expand_{};
+  std::optional<located<std::string>> header_{};
+  std::optional<located<std::string>> field_sep_str_{};
+  std::optional<located<std::string>> list_sep_str_{};
+  std::optional<located<std::string>> null_value_{};
+  mode mode_ = mode::all_required;
 };
 
 struct xsv_printer_impl {
@@ -251,12 +379,12 @@ struct xsv_printer_impl {
 
 } // namespace
 
-auto parse_impl(generator<std::optional<std::string_view>> lines,
-                operator_control_plane& ctrl, xsv_options args)
-  -> generator<table_slice> {
-  auto last_finish = std::chrono::steady_clock::now();
+auto parse_loop(generator<std::optional<std::string_view>> lines,
+                operator_control_plane& ctrl,
+                xsv_options args) -> generator<table_slice> {
   // Parse header.
   auto it = lines.begin();
+  size_t line_counter = 0;
   auto header = std::optional<std::string_view>{};
   if (args.header) {
     header = *args.header;
@@ -268,6 +396,7 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
         co_yield {};
         continue;
       }
+      ++line_counter;
       if (line->empty()) {
         continue;
       }
@@ -314,101 +443,104 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
       .emit(ctrl.diagnostics());
     co_return;
   }
-  auto b = series_builder{};
+  // parse the body
+  const auto original_field_count = fields.size();
+  auto needs_schemas = true;
+  args.builder_settings.default_name = fmt::format("tenzir.{}", args.name);
+  auto schemas = detail::multi_series_builder::get_schemas_unnested(
+    needs_schemas, not args.unnest.empty());
+  auto msb = multi_series_builder{
+    args.builder_policy,
+    args.builder_settings,
+    record_builder::basic_parser,
+    std::move(schemas),
+  };
   for (; it != lines.end(); ++it) {
-    auto line = *it;
-    const auto now = std::chrono::steady_clock::now();
-    if (b.length()
-          >= detail::narrow_cast<int64_t>(defaults::import::table_slice_size)
-        or last_finish + defaults::import::batch_timeout < now) {
-      last_finish = now;
-      for (auto&& slice :
-           b.finish_as_table_slice(fmt::format("tenzir.{}", args.name))) {
-        co_yield std::move(slice);
-      }
+    for (auto v : msb.yield_ready()) {
+      co_yield series_to_table_slice(std::move(v));
     }
+    for (auto& e : msb.last_errors()) {
+      diagnostic::warning("{} parser: {}", args.name, e)
+        .note("close to line {}", line_counter)
+        .emit(ctrl.diagnostics());
+    }
+    auto line = *it;
     if (not line) {
-      if (last_finish != now) {
-        co_yield {};
-      }
+      co_yield {};
       continue;
     }
+    ++line_counter;
     if (line->empty()) {
       continue;
     }
     if (args.allow_comments && line->front() == '#') {
       continue;
     }
-    const auto single_value_delimiter
-      = (parsers::eoi | args.list_sep | args.field_sep);
-    const auto single_value_parser
-      = (parsers::lit{args.null_value} >> &single_value_delimiter)
-          .then([](std::string) {
-            return data{};
-          })
-        | (parsers::data >> &single_value_delimiter).with([](const data& d) {
-            return caf::visit(
-              []<class T>(const T&) {
-                return not detail::is_any_v<T, pattern, std::string, list,
-                                            record>;
-              },
-              d);
-          })
-        | (qqstring_value_parser >> &single_value_delimiter
-           | *(parsers::any - single_value_delimiter))
-            .then([](std::string str) {
-              return data{std::move(str)};
-            });
-    const auto value_parser = (single_value_parser % args.list_sep)
-                                .then([](std::vector<data> values) -> data {
-                                  TENZIR_ASSERT(not values.empty());
-                                  if (values.size() == 1) {
-                                    return std::move(values[0]);
-                                  }
-                                  return values;
-                                });
-    auto values_parser = (value_parser % args.field_sep);
-    auto values = std::vector<data>{};
-    if (not values_parser(*line, values)) {
-      diagnostic::warning("skips unparseable line")
-        .note("from `{}` parser", args.name)
-        .emit(ctrl.diagnostics());
-      continue;
-    }
-    auto generated_field_id = 0;
-    if (args.auto_expand) {
-      while (fields.size() < values.size()) {
-        auto name = fmt::format("unnamed{}", ++generated_field_id);
-        if (std::find(fields.begin(), fields.end(), name) == fields.end()) {
-          fields.push_back(name);
+    auto r = msb.record();
+    for (size_t field_idx = 0; true; ++field_idx) {
+      if (line->empty()) {
+        if (field_idx < original_field_count) {
+          diagnostic::warning("{} parser found too few values in a line",
+                              args.name)
+            .note("line {}: found {} values, expected {} values", line_counter,
+                  field_idx, original_field_count)
+            .emit(ctrl.diagnostics());
+        }
+        break;
+      } else if (field_idx >= fields.size()) {
+        if (args.auto_expand) {
+          size_t unnamed_idx = 0;
+          while (true) {
+            auto name = fmt::format("unnamed{}", unnamed_idx);
+            if (std::ranges::find(fields, name) == fields.end()) {
+              fields.push_back(name);
+              break;
+            } else {
+              ++unnamed_idx;
+            }
+          }
+        } else {
+          const auto excess_values
+            = 1 + std::ranges::count(*line, args.field_sep);
+          diagnostic::warning("{} parser skipped excess values in a line",
+                              args.name)
+            .note("line {}: {} extra values were skipped", line_counter,
+                  excess_values)
+            .hint("use `--auto-expand` to add fields for excess values")
+            .emit(ctrl.diagnostics());
+          break;
         }
       }
-    } else if (fields.size() < values.size()) {
-      diagnostic::warning("skips {} excess values in line",
-                          values.size() - fields.size())
-        .hint("use `--auto-expand` to add fields for excess values")
-        .note("from `{}` parser", args.name)
-        .emit(ctrl.diagnostics());
-    }
-    auto row = b.record();
-    for (size_t i = 0; i < fields.size(); ++i) {
-      if (i >= values.size()) {
-        row.field(fields[i]).null();
-        continue;
+      auto f = r.unflattend_field(fields[field_idx], args.unnest);
+
+      auto field_text = line->substr(0, line->find(args.field_sep));
+      auto list_element_end = field_text.find(args.list_sep);
+      if (list_element_end != line->npos) { // its a list
+        auto l = f.list();
+        while (not field_text.empty()) {
+          const auto list_element_text = field_text.substr(0, list_element_end);
+          l.data_unparsed(list_element_text);
+          field_text.remove_prefix(list_element_end + 1);
+          list_element_end = field_text.find(args.list_sep);
+        };
+      } else { // its not a list
+        if (*line == args.null_value) {
+          f.null();
+        } else {
+          f.data_unparsed(field_text);
+        }
       }
-      auto result = row.field(fields[i]).try_data(values[i]);
-      if (not result) {
-        diagnostic::warning(result.error())
-          .note("from `{}` parser", args.name)
-          .emit(ctrl.diagnostics());
-      }
+
+      line->remove_prefix(std::min(field_text.size() + 1, line->size()));
     }
   }
-  if (b.length() > 0) {
-    for (auto&& slice :
-         b.finish_as_table_slice(fmt::format("tenzir.{}", args.name))) {
-      co_yield std::move(slice);
-    }
+  for (auto& e : msb.last_errors()) {
+    diagnostic::warning("{} parser: {}", args.name, e)
+      .note("close to line {}", line_counter)
+      .emit(ctrl.diagnostics());
+  }
+  for (auto v : msb.finalize()) {
+    co_yield series_to_table_slice(std::move(v));
   }
 }
 
@@ -426,7 +558,7 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    return parse_impl(to_lines(std::move(input)), ctrl, args_);
+    return parse_loop(to_lines(std::move(input)), ctrl, args_);
   }
 
   friend auto inspect(auto& f, xsv_parser& x) -> bool {
@@ -522,15 +654,20 @@ public:
 
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
-    const auto is_parser = true;
-    auto options = xsv_options::try_parse(p, "xsv", is_parser);
-    return std::make_unique<xsv_parser>(std::move(options));
+    // const auto is_parser = true;
+    // auto options = xsv_options::try_parse(p, "xsv", is_parser);
+    auto parser = argument_parser{
+      name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
+
+    auto opt_parser = xsv_common_parser_options_parser{name()};
+    opt_parser.add_to_parser(parser);
+    parser.parse(p);
+    return std::make_unique<xsv_parser>(opt_parser.get_options());
   }
 
   auto parse_printer(parser_interface& p) const
     -> std::unique_ptr<plugin_printer> override {
-    const auto is_parser = false;
-    auto options = xsv_options::try_parse(p, "xsv", is_parser);
+    auto options = xsv_options::try_parse_printer_options(p, "xsv");
     return std::make_unique<xsv_printer>(std::move(options));
   }
 };
@@ -542,24 +679,13 @@ class configured_xsv_plugin final : public virtual parser_parser_plugin,
 public:
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
-    auto parser = argument_parser{name()};
-    bool allow_comments = {};
-    bool auto_expand = {};
-    std::optional<std::string> header = {};
-    parser.add("--allow-comments", allow_comments);
-    parser.add("--auto-expand", auto_expand);
-    parser.add("--header", header, "<header>");
+    auto parser = argument_parser{
+      name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
+    auto opt_parser = xsv_common_parser_options_parser{name(), Sep, ListSep,
+                                                       std::string{Null.str()}};
+    opt_parser.add_to_parser(parser);
     parser.parse(p);
-    return std::make_unique<xsv_parser>(xsv_options{
-      .name = std::string{Name.str()},
-      .field_sep = Sep,
-      .list_sep = ListSep,
-      .null_value = std::string{Null.str()},
-      .allow_comments = allow_comments,
-      .auto_expand = auto_expand,
-      .header = std::move(header),
-      .no_header = false,
-    });
+    return std::make_unique<xsv_parser>(opt_parser.get_options());
   }
 
   auto parse_printer(parser_interface& p) const
@@ -574,7 +700,6 @@ public:
       .list_sep = ListSep,
       .null_value = std::string{Null.str()},
       .allow_comments = false,
-      .auto_expand = false,
       .header = {},
       .no_header = no_header,
     });
@@ -589,29 +714,58 @@ using csv_plugin = configured_xsv_plugin<"csv", ',', ';', "">;
 using tsv_plugin = configured_xsv_plugin<"tsv", '\t', ',', "-">;
 using ssv_plugin = configured_xsv_plugin<"ssv", ' ', ',', "-">;
 
-class read_csv final : public operator_plugin2<parser_adapter<xsv_parser>> {
+class read_xsv : public operator_plugin2<parser_adapter<xsv_parser>> {
 public:
   auto name() const -> std::string override {
-    return "read_csv";
+    return "read_xsv";
   }
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto parser = argument_parser2::operator_(name());
+    auto opt_parser = xsv_common_parser_options_parser{name()};
+    opt_parser.add_to_parser(parser);
+    auto result = parser.parse(inv, ctx);
+    TRY(result);
 
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto comments = false;
-    argument_parser2::operator_(name())
-      .add("comments", comments)
-      .parse(inv, ctx)
-      .ignore();
-    auto options = xsv_options{};
-    options.name = "csv";
-    options.field_sep = ',';
-    options.list_sep = ';';
-    options.null_value = "";
-    options.allow_comments = comments;
-    return std::make_unique<parser_adapter<xsv_parser>>(
-      xsv_parser{std::move(options)});
+    try {
+      return std::make_unique<parser_adapter<xsv_parser>>(
+        xsv_parser{opt_parser.get_options()});
+    } catch (diagnostic& e) {
+      ctx.dh().emit(e);
+      return failure::promise();
+    }
   }
 };
+
+template <detail::string_literal Name, char Sep, char ListSep,
+          detail::string_literal Null>
+class configured_read_xsv_plugin final
+  : public operator_plugin2<parser_adapter<xsv_parser>> {
+public:
+  auto name() const -> std::string override {
+    return fmt::format("read_{}", Name);
+  }
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto parser = argument_parser2::operator_(name());
+    auto opt_parser = xsv_common_parser_options_parser{name(), Sep, ListSep,
+                                                       std::string{Null.str()}};
+    opt_parser.add_to_parser(parser);
+    try {
+      auto result = parser.parse(inv, ctx);
+      TRY(result);
+      return std::make_unique<parser_adapter<xsv_parser>>(
+        xsv_parser{opt_parser.get_options()});
+    } catch (diagnostic& e) {
+      ctx.dh().emit(e);
+      return failure::promise();
+    }
+  }
+};
+
+using read_csv = configured_read_xsv_plugin<"csv", ',', ';', "">;
+using read_tsv = configured_read_xsv_plugin<"tsv", '\t', ',', "-">;
+using read_ssv = configured_read_xsv_plugin<"ssv", ' ', ',', "-">;
 
 } // namespace tenzir::plugins::xsv
 
@@ -619,4 +773,7 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::xsv_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::csv_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::tsv_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::ssv_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::read_xsv)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::read_csv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::read_tsv)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::xsv::read_ssv)
