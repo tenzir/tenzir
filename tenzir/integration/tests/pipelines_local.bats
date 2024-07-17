@@ -772,3 +772,10 @@ EOF
 {"foo": 42}{"foo": 43}
 EOF
 }
+
+@test "legacy operator" {
+  check ! tenzir --tql2 --dump-pipeline 'legacy'
+  check tenzir --tql2 --dump-pipeline 'legacy ""'
+  check tenzir --tql2 --dump-pipeline 'legacy "from \"example.json.gz\" | write json"'
+  check ! tenzir --tql2 --dump-pipeline 'legacy "this_operator_does_not_exist"'
+}
