@@ -61,6 +61,10 @@ public:
     return false;
   }
 
+  auto is_hidden() const noexcept -> bool override {
+    return true;
+  }
+
   auto set_waiting(bool value) noexcept -> void override {
     (void)value;
     TENZIR_UNIMPLEMENTED();

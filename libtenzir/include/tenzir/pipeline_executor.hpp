@@ -38,6 +38,9 @@ struct pipeline_executor_state {
   /// True if the locally-run nodes shall have access to the terminal.
   bool has_terminal = {};
 
+  /// Indicates whether the pipeline is run in the background.
+  bool is_hidden = {};
+
   auto start() -> caf::result<void>;
   auto pause() -> caf::result<void>;
   auto resume() -> caf::result<void>;
@@ -56,7 +59,7 @@ struct pipeline_executor_state {
 auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
   pipeline pipe, receiver_actor<diagnostic> diagnostics,
-  metrics_receiver_actor metrics, node_actor node, bool has_terminal)
-  -> pipeline_executor_actor::behavior_type;
+  metrics_receiver_actor metrics, node_actor node, bool has_terminal,
+  bool is_hidden) -> pipeline_executor_actor::behavior_type;
 
 } // namespace tenzir
