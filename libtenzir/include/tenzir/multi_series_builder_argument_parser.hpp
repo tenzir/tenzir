@@ -22,8 +22,10 @@ namespace tenzir {
 // adds the schema_only/no-infer option to a parser for use in parser-parsers
 // this is outside of the `multi_series_builder_argument_parser`, since its
 // needed for parsers that dont support any of the other options
-void add_schema_only_option(argument_parser& parser, std::optional<location>& schema_only);
-void add_schema_only_option(argument_parser2& parser, std::optional<location>& schema_only);
+void add_schema_only_option(argument_parser& parser,
+                            std::optional<location>& schema_only);
+void add_schema_only_option(argument_parser2& parser,
+                            std::optional<location>& schema_only);
 
 /// simple utility to parse the command line arguments for a
 /// multi_series_builder's settings and policy
@@ -40,8 +42,7 @@ public:
   auto add_to_parser(argument_parser2& parser) -> void;
 
   auto get_settings() -> multi_series_builder::settings_type&;
-  auto get_policy()
-    -> multi_series_builder::policy_type&;
+  auto get_policy() -> multi_series_builder::policy_type&;
   // If we leave these public, the json parser can keep supporting its old
   // options by checking/setting values here
   // TODO do we even want that?
@@ -64,11 +65,16 @@ struct common_parser_options_parser {
   auto add_to_parser(argument_parser& parser) -> void;
   auto add_to_parser(argument_parser2& parser) -> void;
 
-  auto get_unnest() -> std::optional<std::string> {
+  auto get_unnest() const -> std::string {
     if (unnest_) {
+      if (unnest_->inner.empty()) {
+        diagnostic::error("got empty unflatten-separator")
+          .note("get {}")
+          .throw_();
+      }
       return unnest_->inner;
     }
-    return std::nullopt;
+    return {};
   }
   bool get_raw() const {
     return raw_;

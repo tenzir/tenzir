@@ -137,6 +137,6 @@ auto common_parser_options_parser::add_to_parser(argument_parser& parser)
 auto common_parser_options_parser::add_to_parser(argument_parser2& parser)
   -> void {
   parser.add("raw", raw_);
-  parser.add("unnest-separator", unnest_);
+  parser.add("unflatten", unnest_);
 }
 } // namespace tenzir

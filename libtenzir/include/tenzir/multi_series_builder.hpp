@@ -10,6 +10,7 @@
 
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/modules.hpp"
 #include "tenzir/record_builder.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/series_builder.hpp"
@@ -53,6 +54,9 @@ public:
   }
   /// adds a new field to the record and returns a generator for that field
   auto field(std::string_view name) -> field_generator;
+  
+  auto unflattend_field( std::string_view key, std::string_view unflatten) -> field_generator;
+
 
 private:
   struct series_builder_element {
@@ -66,6 +70,9 @@ class field_generator {
   using raw_pointer = detail::record_builder::node_field*;
 
 public:
+  /// A non-associated field generator. BE CAREFUL WITH THIS.
+  field_generator() : field_generator(nullptr) {
+  }
   field_generator(builder_ref builder, parser_function_type* parser)
     : var_{std::in_place_type<series_builder_element>, builder, parser} {
   }
@@ -173,48 +180,21 @@ private:
   std::variant<series_builder_element, raw_pointer> var_;
 };
 
-template <record_builder::non_structured_data_type T>
-auto insert_data_unflattend_unsafe(record_generator r, std::string_view key,
-                                   std::string_view unflatten, T&& value) {
-  auto pos = key.find(unflatten);
-  if (pos == key.npos) {
-    return r.field(key).data(std::forward<T>(value));
-  }
-  return insert_data_unflattend_unsafe(r.field(key.substr(0, pos)).record(),
-                                       key.substr(pos + unflatten.size()),
-                                       unflatten, std::forward<T>(value));
-}
-
-template <record_builder::non_structured_data_type T>
-auto insert_data_unflattend(record_generator r, std::string_view key,
-                            std::string_view unflatten, T&& value) {
-  if (unflatten.empty()) {
-    return r.field(key).data(std::forward<T>(value));
-  }
-  return insert_data_unflattend_unsafe(r, key, unflatten,
-                                       std::forward<T>(value));
-}
-
 inline auto
-insert_unparsed_unflattend_unsafe(record_generator r, std::string_view key,
-                                  std::string_view unflatten,
-                                  std::string_view value) {
-  auto pos = key.find(unflatten);
-  if (pos == key.npos) {
-    return r.field(key).data_unparsed(value);
+get_schemas_unnested(bool actually_do_it, bool unflatten) -> std::vector<type> {
+  std::vector<type> ret;
+  if (not actually_do_it) {
+    return ret;
   }
-  return insert_unparsed_unflattend_unsafe(r.field(key.substr(0, pos)).record(),
-                                           key.substr(pos + unflatten.size()),
-                                           unflatten, value);
-}
-
-inline auto
-insert_unparsed_unflattend(record_generator r, std::string_view key,
-                           std::string_view unflatten, std::string_view value) {
-  if (unflatten.empty()) {
-    return r.field(key).data_unparsed(value);
+  ret = modules::schemas();
+  if (not unflatten) {
+    return ret;
   }
-  return insert_unparsed_unflattend_unsafe(r, key, unflatten, value);
+  constexpr static auto flatten_in_place = [](type& t) {
+    t = flatten(t);
+  };
+  std::ranges::for_each(ret, flatten_in_place);
+  return ret;
 }
 
 } // namespace detail::multi_series_builder

@@ -47,6 +47,20 @@ auto record_generator::field(std::string_view name) -> field_generator {
   return std::visit(visitor, var_);
 }
 
+auto record_generator::unflattend_field( std::string_view key, std::string_view unflatten ) -> field_generator {
+    if ( unflatten.empty() ) {
+      return field(key);
+    }
+    auto i = key.find(unflatten);
+    if ( i == key.npos ) {
+      return field(key);
+    }
+    auto pre = key.substr(0, i);
+    auto post = key.substr(i + unflatten.size() );
+
+    return field(pre).record().unflattend_field(post, unflatten);
+}
+
 auto field_generator::record() -> record_generator {
   const auto visitor = detail::overload{
     [&](series_builder_element& b) {

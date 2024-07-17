@@ -149,7 +149,7 @@ auto json_string_parser(std::string_view s, const tenzir::type* seed)
 class doc_parser {
 public:
   doc_parser(std::string_view parsed_document, diagnostic_handler& diag,
-             bool raw, std::optional<std::string> unnest = std::nullopt)
+             bool raw, std::string unnest)
     : parsed_document_{parsed_document},
       diag_{diag},
       unnest_{std::move(unnest)},
@@ -157,8 +157,7 @@ public:
   }
 
   doc_parser(std::string_view parsed_document, diagnostic_handler& diag,
-             std::size_t parsed_lines, bool raw,
-             std::optional<std::string> unnest = std::nullopt)
+             std::size_t parsed_lines, bool raw, std::string unnest)
     : parsed_document_{parsed_document},
       diag_{diag},
       parsed_lines_{parsed_lines},
@@ -189,10 +188,16 @@ public:
         report_parse_err(val, fmt::format("object value at key `{}`", key));
         return false;
       }
-      const bool value_parse_success
-        = unnest_
-            ? parse_value_unnest(val.value_unsafe(), key, builder, depth + 1)
-            : parse_value(val.value_unsafe(), builder.field(key), depth + 1);
+      bool value_parse_success = false;
+      // this guards the base series_builder currently used by tql2 parse_json
+      if constexpr (std::same_as<detail::multi_series_builder::record_generator,
+                                 decltype(builder)>) {
+        value_parse_success = parse_value(
+          val.value_unsafe(), builder.unflattend_field(key, unnest_), depth + 1);
+      } else { 
+        value_parse_success = parse_value(
+          val.value_unsafe(), builder.field(key), depth + 1);
+      }
       if (not value_parse_success) {
         return false;
       }
@@ -237,18 +242,6 @@ public:
   }
 
 private:
-  [[nodiscard]] auto
-  parse_value_unnest(simdjson::ondemand::value val, std::string_view key,
-                     auto builder, size_t root_depth) -> bool {
-    auto pos = key.find(*unnest_);
-    if (pos == key.npos) {
-      return parse_value(val, builder.field(key), root_depth);
-    }
-    return parse_value_unnest(val, key.substr(pos + 1),
-                              builder.field(key.substr(0, pos)).record(),
-                              root_depth);
-  }
-
   [[nodiscard]] auto
   parse_number(simdjson::ondemand::value val, auto builder) -> bool {
     auto kind = simdjson::ondemand::number_type{};
@@ -391,7 +384,7 @@ private:
   std::string_view parsed_document_;
   diagnostic_handler& diag_;
   std::optional<std::size_t> parsed_lines_;
-  std::optional<std::string> unnest_;
+  std::string unnest_;
   bool raw_;
 };
 
@@ -400,8 +393,7 @@ public:
   parser_base(operator_control_plane& ctrl,
               multi_series_builder::policy_type policy,
               multi_series_builder::settings_type settings,
-              std::vector<type> schemas, bool raw,
-              std::optional<std::string> unnest)
+              std::vector<type> schemas, bool raw, std::string unnest)
     : builder{std::move(policy), std::move(settings), json_string_parser,
               std::move(schemas)},
       ctrl{ctrl},
@@ -412,7 +404,7 @@ public:
   multi_series_builder builder;
   operator_control_plane& ctrl;
   simdjson::ondemand::parser parser;
-  std::optional<std::string> unnest;
+  std::string unnest;
   bool raw = false;
   bool abort_requested = false;
 };
@@ -434,9 +426,8 @@ public:
       return;
     }
     auto& doc = maybe_doc.value_unsafe();
-    auto success
-      = doc_parser{json_line, this->ctrl.diagnostics(), raw}.parse_object(
-        val.value_unsafe(), builder.record());
+    auto success = doc_parser{json_line, this->ctrl.diagnostics(), raw, unnest}
+                     .parse_object(val.value_unsafe(), builder.record());
     // After parsing one JSON object it is expected for the result to be at
     // the end. If it's otherwise then it means that a line contains more than
     // one object in which case we don't add any data and emit a warning.
@@ -470,8 +461,8 @@ public:
   default_parser(operator_control_plane& ctrl,
                  multi_series_builder::policy_type policy,
                  multi_series_builder::settings_type settings,
-                 std::vector<type> schemas, bool raw,
-                 std::optional<std::string> unnest, bool arrays_of_objects)
+                 std::vector<type> schemas, bool raw, std::string unnest,
+                 bool arrays_of_objects)
     : parser_base{ctrl,
                   std::move(policy),
                   std::move(settings),
@@ -521,7 +512,7 @@ public:
         for (auto&& elem : arr.value_unsafe()) {
           auto row = builder.record();
           auto success
-            = doc_parser{doc_it.source(), this->ctrl.diagnostics(), raw}
+            = doc_parser{doc_it.source(), this->ctrl.diagnostics(), raw, unnest}
                 .parse_object(elem.value_unsafe(), row);
           if (not success) {
             // We already reported the issue.
@@ -532,7 +523,7 @@ public:
       } else {
         auto row = builder.record();
         auto success
-          = doc_parser{doc_it.source(), this->ctrl.diagnostics(), raw}
+          = doc_parser{doc_it.source(), this->ctrl.diagnostics(), raw, unnest}
               .parse_object(doc.value_unsafe(), row);
         if (not success) {
           // We already reported the issue.
@@ -615,7 +606,7 @@ struct parser_args {
   multi_series_builder::policy_type builder_policy
     = multi_series_builder::policy_precise{};
   bool raw = false;
-  std::optional<std::string> unnest = std::nullopt;
+  std::string unnest = {};
   bool arrays_of_objects = false;
   bool use_ndjson_mode = true; // TODO these two could be an enum
   bool use_gelf_mode = false;
@@ -637,22 +628,6 @@ struct parser_args {
   }
 };
 
-std::vector<type> get_schemas(bool actually_do_it, bool unflatten) {
-  std::vector<type> ret;
-  if (not actually_do_it) {
-    return ret;
-  }
-  ret = modules::schemas();
-  if (not unflatten) {
-    return ret;
-  }
-  constexpr static auto flatten_in_place = [](type& t) {
-    t = flatten(t);
-  };
-  std::ranges::for_each(ret, flatten_in_place);
-  return ret;
-}
-
 class json_parser final : public plugin_parser {
 public:
   json_parser() = default;
@@ -673,8 +648,8 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    auto schemas
-      = get_schemas(args_.needs_schemas(), not args_.unnest.has_value());
+    auto schemas = detail::multi_series_builder::get_schemas_unnested(
+      args_.needs_schemas(), not args_.unnest.empty());
     if (args_.use_ndjson_mode) {
       return parser_loop(split_at_crlf(std::move(input)),
                          ndjson_parser{
@@ -1038,7 +1013,6 @@ public:
     parser.add("gelf", use_gelf_mode);
     parser.add("arrays-of-objects", arrays_of_objects);
     auto result = parser.parse(inv, ctx);
-
     auto args = parser_args{};
     try {
       args.builder_settings = msb_parser.get_settings();
@@ -1050,24 +1024,28 @@ public:
       args.unnest = common_parser.get_unnest();
     } catch (diagnostic& d) {
       ctx.dh().emit(std::move(d));
+      result = failure::promise();
     }
     if (use_ndjson_mode and use_gelf_mode) {
       diagnostic::error("`ndjson` and `gelf` are incompatible")
         .primary(*use_ndjson_mode)
         .primary(*use_gelf_mode)
         .emit(ctx);
+      result = failure::promise();
     }
     if (args.use_ndjson_mode and args.arrays_of_objects) {
       diagnostic::error("`ndjson` and `arrays-of-objects` are incompatible")
         .primary(*use_ndjson_mode)
         .primary(*arrays_of_objects)
         .emit(ctx);
+      result = failure::promise();
     }
     if (args.use_gelf_mode and args.arrays_of_objects) {
       diagnostic::error("`gelf` and `arrays-of-objects` are incompatible")
         .primary(*use_gelf_mode)
         .primary(*arrays_of_objects)
         .emit(ctx);
+      result = failure::promise();
     }
     if (sep) {
       auto& str = sep->inner;
@@ -1139,7 +1117,7 @@ public:
                 continue;
               }
               auto str = std::string{arg.Value(i)};
-              doc_parser doc_p = doc_parser(str, ctx, false, std::nullopt);
+              doc_parser doc_p = doc_parser(str, ctx, false, {});
               auto doc = parser.iterate(str);
               if (doc.error()) {
                 diagnostic::warning("{}", error_message(doc.error()))
