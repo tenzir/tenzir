@@ -470,7 +470,7 @@ private:
     auto scope = ignore_newlines(true);
     // TODO: Try to implement this better.
     auto is_record
-      = silent_peek(tk::rbrace)
+      = silent_peek(tk::rbrace) || silent_peek(tk::dot_dot_dot)
         || ((silent_peek(tk::string) || silent_peek(tk::identifier))
             && silent_peek_n(tk::colon, 1));
     if (is_record) {
@@ -485,22 +485,28 @@ private:
     };
   }
 
+  auto parse_record_item() -> ast::record::item {
+    if (accept(tk::dot_dot_dot)) {
+      return ast::record::spread{parse_expression()};
+    }
+    auto name = accept(tk::identifier);
+    if (not name) {
+      // TODO: Decide how to represent string fields in the AST.
+      name = expect(tk::string);
+      name.text = name.text.substr(1, name.text.size() - 2);
+    }
+    expect(tk::colon);
+    auto expr = parse_expression();
+    return ast::record::field{
+      name.as_identifier(),
+      std::move(expr),
+    };
+  }
+
   auto parse_record(location begin) -> ast::record {
-    auto content = std::vector<ast::record::content_kind>{};
+    auto content = std::vector<ast::record::item>{};
     while (not peek(tk::rbrace)) {
-      // TODO: Parse `{ foo: 42, ...bar }`.
-      auto name = accept(tk::identifier);
-      if (not name) {
-        // TODO: Decide how to represent string fields in the AST.
-        name = expect(tk::string);
-        name.text = name.text.substr(1, name.text.size() - 2);
-      }
-      expect(tk::colon);
-      auto expr = parse_expression();
-      content.emplace_back(ast::record::field{
-        name.as_identifier(),
-        std::move(expr),
-      });
+      content.emplace_back(parse_record_item());
       if (not peek(tk::rbrace)) {
         expect(tk::comma);
       }

@@ -43,12 +43,12 @@
     equals: 55..56,
     right: record {
       begin: 57..58,
-      content: [
+      items: [
         field {
           name: `file` @ 61..65,
           expr: record {
             begin: 67..68,
-            content: [
+            items: [
               field {
                 name: `path` @ 73..77,
                 expr: root_field `path` @ 79..83
@@ -192,7 +192,7 @@
     equals: 372..373,
     right: record {
       begin: 374..375,
-      content: [
+      items: [
         field {
           name: `account_type` @ 378..390,
           expr: constant {
@@ -369,7 +369,7 @@
     equals: 730..731,
     right: record {
       begin: 732..733,
-      content: [
+      items: [
         field {
           name: `hostname` @ 736..744,
           expr: field_access {
@@ -382,7 +382,7 @@
           name: `os` @ 767..769,
           expr: record {
             begin: 771..772,
-            content: [
+            items: [
               field {
                 name: `name` @ 777..781,
                 expr: constant {
@@ -466,7 +466,7 @@
     equals: 953..954,
     right: record {
       begin: 955..956,
-      content: [
+      items: [
         field {
           name: `original_time` @ 959..972,
           expr: field_access {
@@ -483,12 +483,12 @@
           name: `product` @ 1000..1007,
           expr: record {
             begin: 1009..1010,
-            content: [
+            items: [
               field {
                 name: `feature` @ 1015..1022,
                 expr: record {
                   begin: 1024..1025,
-                  content: [
+                  items: [
                     field {
                       name: `name` @ 1032..1036,
                       expr: constant {
@@ -585,7 +585,7 @@
     equals: 1240..1241,
     right: record {
       begin: 1242..1243,
-      content: [
+      items: [
         field {
           name: `cmd_line` @ 1246..1254,
           expr: field_access {
@@ -602,7 +602,7 @@
           name: `file` @ 1286..1290,
           expr: record {
             begin: 1292..1293,
-            content: [
+            items: [
               field {
                 name: `path` @ 1298..1302,
                 expr: field_access {

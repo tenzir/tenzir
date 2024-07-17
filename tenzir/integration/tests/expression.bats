@@ -32,3 +32,13 @@ x14 = int(null) + 1
 write_json ndjson=false
 EOF
 }
+
+@test "record spread" {
+  check tenzir -f '/dev/stdin' <<EOF
+source {}
+x = {...this, x: 1}
+y = {y: 2, ...this}
+z = {...x, ...42, ...y}
+write_json
+EOF
+}

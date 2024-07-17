@@ -15,19 +15,25 @@ namespace tenzir {
 
 auto evaluator::eval(const ast::record& x) -> series {
   auto fields = detail::stable_map<std::string, series>{};
-  for (auto& item : x.content) {
+  for (auto& item : x.items) {
     item.match(
       [&](const ast::record::field& field) {
         auto val = eval(field.expr);
-        auto [_, inserted] = fields.emplace(field.name.name, std::move(val));
-        if (not inserted) {
-          diagnostic::warning("todo: overwrite existing?")
-            .primary(field.name)
-            .emit(ctx_);
-        }
+        fields[field.name.name] = std::move(val);
       },
-      [](const ast::record::spread&) {
-        TENZIR_TODO();
+      [&](const ast::record::spread& spread) {
+        auto val = eval(spread.expr);
+        auto rec = val.as<record_type>();
+        if (not rec) {
+          diagnostic::warning("expected record, got {}", val.type.kind())
+            .primary(spread.expr)
+            .emit(ctx_);
+          return;
+        }
+        for (auto [i, array] : detail::enumerate(rec->array->fields())) {
+          auto field = rec->type.field(i);
+          fields[field.name] = series{field.type, array};
+        }
       });
   }
   auto field_names = fields | std::views::transform([](auto& x) {
