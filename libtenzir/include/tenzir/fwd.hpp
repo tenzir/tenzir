@@ -511,6 +511,8 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   // these kinda things. See tenzir/aliases.hpp for their definitions.
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::data>))
   TENZIR_ADD_TYPE_ID((tenzir::detail::stable_map<std::string, tenzir::data>))
+  TENZIR_ADD_TYPE_ID(
+    (std::vector<tenzir::detail::stable_map<std::string, tenzir::data>>))
   TENZIR_ADD_TYPE_ID((tenzir::detail::stable_map<tenzir::data, tenzir::data>))
 
   TENZIR_ADD_TYPE_ID((tenzir::connect_request))
