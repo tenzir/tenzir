@@ -456,8 +456,8 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     std::move(schemas),
   };
   for (; it != lines.end(); ++it) {
-    for (auto v : msb.yield_ready()) {
-      co_yield series_to_table_slice(std::move(v));
+    for (auto& v : msb.yield_ready_as_table_slice()) {
+      co_yield std::move(v);
     }
     for (auto& e : msb.last_errors()) {
       diagnostic::warning("{} parser: {}", args.name, e)
@@ -511,12 +511,11 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
           break;
         }
       }
-      auto f = r.unflattend_field(fields[field_idx], args.unnest);
-
+      auto field = r.unflattend_field(fields[field_idx], args.unnest);
       auto field_text = line->substr(0, line->find(args.field_sep));
       auto list_element_end = field_text.find(args.list_sep);
       if (list_element_end != line->npos) { // its a list
-        auto l = f.list();
+        auto l = field.list();
         while (not field_text.empty()) {
           const auto list_element_text = field_text.substr(0, list_element_end);
           l.data_unparsed(list_element_text);
@@ -525,12 +524,11 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
         };
       } else { // its not a list
         if (*line == args.null_value) {
-          f.null();
+          field.null();
         } else {
-          f.data_unparsed(field_text);
+          field.data_unparsed(field_text);
         }
       }
-
       line->remove_prefix(std::min(field_text.size() + 1, line->size()));
     }
   }
@@ -539,8 +537,8 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       .note("close to line {}", line_counter)
       .emit(ctrl.diagnostics());
   }
-  for (auto v : msb.finalize()) {
-    co_yield series_to_table_slice(std::move(v));
+  for (auto& v : msb.finalize_as_table_slice()) {
+    co_yield std::move(v);
   }
 }
 
@@ -627,7 +625,7 @@ public:
   }
 
   friend auto inspect(auto& f, xsv_printer& x) -> bool {
-    return f.apply(x.args_);
+    return f.object(x).fields(f.field("args", x.args_));
   }
 
 private:
@@ -726,7 +724,6 @@ public:
     opt_parser.add_to_parser(parser);
     auto result = parser.parse(inv, ctx);
     TRY(result);
-
     try {
       return std::make_unique<parser_adapter<xsv_parser>>(
         xsv_parser{opt_parser.get_options()});
