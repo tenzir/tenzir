@@ -49,7 +49,7 @@ std::vector<std::string> get_test_args(int argc, const char* const* argv) {
 
 int main(int argc, char** argv) {
   (void)tenzir::detail::setenv("TENZIR_ABORT_ON_PANIC", "1");
-  std::string tenzir_loglevel = "quiet";
+  std::string tenzir_loglevel = "warning";
   auto test_args = get_test_args(argc, argv);
   if (!test_args.empty()) {
     auto options = caf::config_option_set{}
@@ -94,6 +94,7 @@ int main(int argc, char** argv) {
   bool is_server = false;
   auto log_context
     = tenzir::create_log_context(is_server, tenzir::invocation{}, log_settings);
+  TENZIR_ASSERT(log_context);
   // Initialize factories.
   [[maybe_unused]] auto config = tenzir::configuration{};
   // Run the unit tests.
