@@ -139,4 +139,25 @@ auto common_parser_options_parser::add_to_parser(argument_parser2& parser)
   parser.add("raw", raw_);
   parser.add("unflatten", unnest_);
 }
+
+auto combined_parser_options_parser::add_to_parser(argument_parser& parser)
+  -> void {
+  multi_series_builder_argument_parser::add_to_parser(parser);
+  common_parser_options_parser::add_to_parser(parser);
+}
+auto combined_parser_options_parser::add_to_parser(argument_parser2& parser)
+  -> void {
+  multi_series_builder_argument_parser::add_to_parser(parser);
+  common_parser_options_parser::add_to_parser(parser);
+}
+
+auto combined_parser_options_parser::get_options()
+  -> combined_parser_options {
+    return {
+      .builder_policy = get_policy(),
+      .builder_settings = get_settings(),
+      .raw = get_raw(),
+      .unflatten = get_unnest(),
+    };
+  }
 } // namespace tenzir

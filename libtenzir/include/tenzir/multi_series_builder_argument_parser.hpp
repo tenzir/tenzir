@@ -85,4 +85,27 @@ private:
   bool raw_ = false;
 };
 
+struct combined_parser_options {
+  multi_series_builder::policy_type builder_policy
+    = multi_series_builder::policy_precise{};
+  multi_series_builder::settings_type builder_settings = {};
+  bool raw = false;
+  std::string unflatten = {};
+
+  friend auto inspect(auto& f, combined_parser_options& x) -> bool {
+    return f.object(x).fields(f.field("builder_policy", x.builder_policy),
+                              f.field("builder_settings", x.builder_settings),
+                              f.field("raw", x.raw),
+                              f.field("unflatten", x.unflatten));
+  }
+};
+
+struct combined_parser_options_parser : multi_series_builder_argument_parser,
+                                        common_parser_options_parser {
+  auto add_to_parser(argument_parser& parser) -> void;
+  auto add_to_parser(argument_parser2& parser) -> void;
+
+  auto get_options() -> combined_parser_options;
+};
+
 } // namespace tenzir
