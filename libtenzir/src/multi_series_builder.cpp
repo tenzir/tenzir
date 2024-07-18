@@ -47,18 +47,19 @@ auto record_generator::field(std::string_view name) -> field_generator {
   return std::visit(visitor, var_);
 }
 
-auto record_generator::unflattend_field( std::string_view key, std::string_view unflatten ) -> field_generator {
-    if ( unflatten.empty() ) {
-      return field(key);
-    }
-    auto i = key.find(unflatten);
-    if ( i == key.npos ) {
-      return field(key);
-    }
-    auto pre = key.substr(0, i);
-    auto post = key.substr(i + unflatten.size() );
+auto record_generator::unflattend_field(
+  std::string_view key, std::string_view unflatten) -> field_generator {
+  if (unflatten.empty()) {
+    return field(key);
+  }
+  auto i = key.find(unflatten);
+  if (i == key.npos) {
+    return field(key);
+  }
+  auto pre = key.substr(0, i);
+  auto post = key.substr(i + unflatten.size());
 
-    return field(pre).record().unflattend_field(post, unflatten);
+  return field(pre).record().unflattend_field(post, unflatten);
 }
 
 auto field_generator::record() -> record_generator {
@@ -139,9 +140,10 @@ auto series_to_table_slice(std::vector<series> data,
   -> std::vector<table_slice> {
   auto result = std::vector<table_slice>{};
   result.resize(data.size());
-  std::ranges::transform(data, result.begin(), [fallback_name](auto s) {
-    return series_to_table_slice(s, fallback_name);
-  });
+  std::ranges::transform(
+    std::move(data), result.begin(), [fallback_name](auto& s) {
+      return series_to_table_slice(std::move(s), fallback_name);
+    });
   return result;
 }
 
@@ -166,6 +168,11 @@ auto multi_series_builder::yield_ready() -> std::vector<series> {
       return now - e.flushed >= 10 * timeout;
     });
   return std::exchange(ready_events_, {});
+}
+
+auto multi_series_builder::yield_ready_as_table_slice()
+  -> std::vector<table_slice> {
+  return series_to_table_slice(yield_ready(), settings_.default_name);
 }
 
 auto multi_series_builder::last_errors() -> std::vector<caf::error> {
@@ -203,6 +210,11 @@ auto multi_series_builder::finalize() -> std::vector<series> {
     return true;
   });
   return std::exchange(ready_events_, {});
+}
+
+auto multi_series_builder::finalize_as_table_slice()
+  -> std::vector<table_slice> {
+  return series_to_table_slice(finalize(), settings_.default_name);
 }
 
 void multi_series_builder::complete_last_event() {

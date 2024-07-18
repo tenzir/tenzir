@@ -54,9 +54,9 @@ public:
   }
   /// adds a new field to the record and returns a generator for that field
   auto field(std::string_view name) -> field_generator;
-  
-  auto unflattend_field( std::string_view key, std::string_view unflatten) -> field_generator;
 
+  auto unflattend_field(std::string_view key,
+                        std::string_view unflatten) -> field_generator;
 
 private:
   struct series_builder_element {
@@ -215,6 +215,9 @@ public:
   /// @returns a vector of all currently finished series
   [[nodiscard("The result of a flush must be handled")]]
   auto yield_ready() -> std::vector<series>;
+  /// @returns a vector of all currently finished series
+  [[nodiscard("The result of a flush must be handled")]]
+  auto yield_ready_as_table_slice() -> std::vector<table_slice>;
 
   [[nodiscard("The result of a flush must be handled")]]
   auto last_errors() -> std::vector<caf::error>;
@@ -227,6 +230,8 @@ public:
 
   [[nodiscard("The result of a flush must be handled")]]
   auto finalize() -> std::vector<series>;
+  [[nodiscard("The result of a flush must be handled")]]
+  auto finalize_as_table_slice() -> std::vector<table_slice>;
 
   // this policy will merge all events into a single schema
   // FIXME this does not correctly support --schema-only yet
