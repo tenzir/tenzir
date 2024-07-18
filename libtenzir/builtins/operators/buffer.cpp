@@ -19,6 +19,8 @@
 
 namespace tenzir::plugins::buffer {
 
+TENZIR_ENUM(buffer_policy, block, drop);
+
 namespace {
 
 using buffer_actor = caf::typed_actor<
@@ -26,8 +28,6 @@ using buffer_actor = caf::typed_actor<
   auto(atom::write, table_slice events)->caf::result<void>,
   // Read events from the buffer.
   auto(atom::read)->caf::result<table_slice>>;
-
-TENZIR_ENUM(buffer_policy, block, drop);
 
 struct buffer_state {
   static constexpr auto name = "buffer";
