@@ -17,7 +17,7 @@ buffer [<capacity>] [--policy <block|drop>]
 ## Description
 
 The `buffer` operator buffers up to the specified number of events in an
-in-memory buffer. 
+in-memory buffer.
 
 By default, operators in a pipeline run only when their downstream operators
 want to receive input. This mechanism is called back pressure. The `buffer`
