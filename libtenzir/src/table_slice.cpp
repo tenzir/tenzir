@@ -9,29 +9,28 @@
 #include "tenzir/table_slice.hpp"
 
 #include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/bitmap_algorithms.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/collect.hpp"
-#include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/overload.hpp"
-#include "tenzir/detail/passthrough.hpp"
-#include "tenzir/detail/string.hpp"
 #include "tenzir/detail/zip_iterator.hpp"
-#include "tenzir/error.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/fbs/table_slice.hpp"
-#include "tenzir/fbs/utils.hpp"
 #include "tenzir/ids.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/table_slice_builder.hpp"
+#include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/value_index.hpp"
 
 #include <arrow/record_batch.h>
 
 #include <cstddef>
+#include <ranges>
 #include <span>
 
 namespace tenzir {
@@ -1300,6 +1299,243 @@ auto unflatten(const table_slice& slice,
   ret.import_time(slice.import_time());
   ret.offset(slice.offset());
   return ret;
+}
+
+namespace {
+
+struct unflatten_entry;
+
+struct unflatten_record {
+  unflatten_record(int64_t length, std::shared_ptr<arrow::Buffer> null_bitmap);
+
+  int64_t length;
+  std::shared_ptr<arrow::Buffer> null_bitmap;
+  detail::stable_map<std::string_view, unflatten_entry> fields;
+
+  friend auto inspect(auto& f, unflatten_record& x) -> bool {
+    if (auto dbg = as_debug_writer(f)) {
+      auto has_null_bitmap = !!x.null_bitmap;
+      auto success = dbg->begin_object(caf::invalid_type_id, "")
+                     && dbg->field("length", x.length)(f)
+                     && dbg->field("null_bitmap", has_null_bitmap)(f)
+                     && dbg->begin_field("fields")
+                     && dbg->begin_associative_array(x.fields.size());
+      if (not success) {
+        return false;
+      }
+      for (auto& [name, entry] :
+           detail::make_dependent<decltype(f)>(x).fields) {
+        if (not dbg->field(name, entry)(f)) {
+          return false;
+        }
+      }
+      return dbg->end_associative_array() && dbg->end_object();
+    }
+    return false;
+  }
+};
+
+struct unflatten_entry
+  : variant<std::shared_ptr<arrow::Array>, unflatten_record> {
+  using variant::variant;
+
+  friend auto inspect(auto& f, unflatten_entry& x) -> bool {
+    if (auto dbg = as_debug_writer(f)) {
+      return x.match(
+        [&](const std::shared_ptr<arrow::Array>& array) {
+          return dbg->fmt_value("<{} array", array->type()->ToString());
+        },
+        [&](const unflatten_record& record) {
+          return dbg->apply(record);
+        });
+    }
+    return false;
+  }
+};
+
+unflatten_record::unflatten_record(int64_t length,
+                                   std::shared_ptr<arrow::Buffer> null_bitmap)
+  : length{length}, null_bitmap{std::move(null_bitmap)} {
+}
+
+} // namespace
+
+// {x.y: int64, x: {z: int64}} -> {x: {y: int64, z: int64}}
+//
+// {x.y: 1, x: {z: 2}} ->  {x: {y: 1, z: 2}}
+// {x.y: null, x: {z: 2}} ->  {x: {y: null, z: 2}}
+// {x.y: 1, x: null} ->  {x: null} ?? {x: {y: 1, z: null}}
+// {x.y: null, x: null} ->  {x: null} ?? {x: {y: null, z: null}}
+//
+// {x: {y: int64}} -> {x: {y: int64}}
+// {x: null} -> {x: null}
+//
+// {x.y: int64, x: {}}
+// {x.y: 1, x: null} -> {x.y: 1}
+// {x.y: null, x:null} -> {x: {y: null}}
+// {x.y: null, x: {}}, {x: {y: null}}
+//
+// {x: {x.y: int64}}
+// {x: null}
+//
+// => If at least one entry is non-null, then result is non-null.
+//    (taking care to propagate nulls down)
+// => If all entries are null, then then the result is null.
+//    (where `{x.y: null}` makes `x` non-null)
+
+// auto unflatten(const arrow::Array& array, std::string_view sep)
+//   -> std::shared_ptr<arrow::Array>;
+
+void unflatten_recurse(unflatten_entry& entry,
+                       std::shared_ptr<arrow::Array> array,
+                       std::string_view sep);
+
+auto unflatten(const arrow::ListArray& array, std::string_view sep)
+  -> std::shared_ptr<arrow::ListArray>;
+
+auto bitmap_or(std::shared_ptr<arrow::Buffer> x,
+               std::shared_ptr<arrow::Buffer> y)
+  -> std::shared_ptr<arrow::Buffer> {
+  if (not x || not y) {
+    return nullptr;
+  }
+  auto size = std::min(x->size(), y->size());
+  auto z = check(arrow::AllocateBuffer(size));
+  // TODO: Is this safe?
+  auto x_ptr = x->data();
+  auto y_ptr = y->data();
+  auto z_ptr = z->mutable_data();
+  for (auto i = int64_t{0}; i < size; ++i) {
+    z_ptr[i] = x_ptr[i] | y_ptr[i]; // NOLINT
+  }
+  return z;
+}
+
+void unflatten_recurse(unflatten_entry& root, const arrow::StructArray& array,
+                       std::string_view sep) {
+  auto ty = array.struct_type();
+  auto names = ty->fields() | std::views::transform(&arrow::Field::name);
+  // We need to flatten the null bitmap here because it can happen that the
+  // fields are saved to a record that is made non-null by another entry.
+  auto fields = check(array.Flatten());
+  if (not std::holds_alternative<unflatten_record>(root)) {
+    root.emplace<unflatten_record>(array.length(), array.null_bitmap());
+  }
+  for (auto [name, data] : detail::zip_equal(names, fields)) {
+    // TODO: Empty name? Double separators?
+    auto segments
+      = name | std::views::split(sep)
+        | std::views::transform([](auto subrange) {
+            return std::string_view{subrange.data(), subrange.size()};
+          });
+    auto current = &root;
+    for (auto segment : segments) {
+      auto record = std::get_if<unflatten_record>(current);
+      if (record) {
+        // nullptr -> all valid. we only want to make more valid.
+        record->null_bitmap
+          = bitmap_or(record->null_bitmap, array.null_bitmap());
+      } else {
+        // TODO: Get null bitmap of all ones?
+        record = &current->emplace<unflatten_record>(array.length(),
+                                                     array.null_bitmap());
+      }
+      current = &record->fields[segment];
+    }
+    // TODO: data might be record
+    unflatten_recurse(*current, data, sep);
+  }
+}
+
+void unflatten_recurse(unflatten_entry& entry,
+                       std::shared_ptr<arrow::Array> array,
+                       std::string_view sep) {
+  if (auto record = caf::get_if<arrow::StructArray>(&*array)) {
+    unflatten_recurse(entry, *record, sep);
+  } else if (auto list = caf::get_if<arrow::ListArray>(&*array)) {
+    entry = unflatten(*list, sep);
+  } else {
+    entry = std::move(array);
+  }
+}
+
+auto realize(unflatten_record&& record) -> std::shared_ptr<arrow::StructArray>;
+
+auto realize(unflatten_entry&& entry) -> std::shared_ptr<arrow::Array> {
+  TENZIR_WARN("pre realize");
+  return entry.match<std::shared_ptr<arrow::Array>>(
+    [](std::shared_ptr<arrow::Array>& array) {
+      TENZIR_ASSERT(array);
+      TENZIR_WARN("realizing {}", array->type()->ToString());
+      return std::move(array);
+    },
+    [](unflatten_record& record) {
+      TENZIR_WARN("realizing record");
+      return realize(std::move(record));
+    });
+}
+
+auto realize(unflatten_record&& record) -> std::shared_ptr<arrow::StructArray> {
+  TENZIR_WARN("realizing record now");
+  auto names = std::vector<std::string>{};
+  auto arrays = std::vector<std::shared_ptr<arrow::Array>>{};
+  for (auto& [name, entry] : record.fields) {
+    TENZIR_WARN("seeing {}", name);
+    names.emplace_back(name);
+    arrays.push_back(realize(std::move(entry)));
+  }
+  return make_struct_array(record.length, record.null_bitmap, std::move(names),
+                           arrays);
+}
+
+auto unflatten(const arrow::StructArray& array, std::string_view sep)
+  -> std::shared_ptr<arrow::StructArray> {
+  // { foo.bar.baz: 1, foo.bar.qux: 2, foo: {bar: 42} }
+  auto root = unflatten_entry{unflatten_record{array.length(), nullptr}};
+  unflatten_recurse(root, array, sep);
+  auto record = std::get_if<unflatten_record>(&root);
+  TENZIR_ASSERT(record);
+  return realize(std::move(*record));
+}
+
+auto unflatten(std::shared_ptr<arrow::Array> array, std::string_view sep)
+  -> std::shared_ptr<arrow::Array>;
+
+auto unflatten(const arrow::ListArray& array, std::string_view sep)
+  -> std::shared_ptr<arrow::ListArray> {
+  // TODO: array.offset?
+  auto values = unflatten(array.values(), sep);
+  return check(arrow::ListArray::FromArrays(
+    *array.offsets(), *values, arrow::default_memory_pool(),
+    array.null_bitmap(), array.data()->null_count));
+}
+
+auto unflatten(std::shared_ptr<arrow::Array> array, std::string_view sep)
+  -> std::shared_ptr<arrow::Array> {
+  if (auto record = caf::get_if<arrow::StructArray>(&*array)) {
+    return unflatten(*record, sep);
+  }
+  if (auto list = caf::get_if<arrow::ListArray>(&*array)) {
+    return unflatten(*list, sep);
+  }
+  return array;
+}
+
+auto unflatten2(const table_slice& slice, std::string_view sep) -> table_slice {
+  if (slice.rows() == 0) {
+    // TODO: I don't like this.
+    return slice;
+  }
+  auto array = check(to_record_batch(slice)->ToStructArray());
+  auto result = unflatten(array, sep);
+  auto cast = std::dynamic_pointer_cast<arrow::StructArray>(std::move(result));
+  TENZIR_ASSERT(cast);
+  auto schema = type{slice.schema().name(), type::from_arrow(*cast->type())};
+  // TODO: Is this what we want?
+  auto batch = arrow::RecordBatch::Make(schema.to_arrow_schema(),
+                                        cast->length(), cast->fields());
+  // TODO: Offset, import_time, etc.
+  return table_slice{batch, std::move(schema)};
 }
 
 } // namespace tenzir

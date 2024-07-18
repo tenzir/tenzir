@@ -402,6 +402,9 @@ auto resolve_operand(const table_slice& slice, const operand& op)
 auto unflatten(const table_slice& slice,
                std::string_view nested_field_separator) -> table_slice;
 
+/// Just like `unflatten`, but... better? worse?
+auto unflatten2(const table_slice& slice, std::string_view sep) -> table_slice;
+
 /// @related flatten
 struct flatten_result {
   table_slice slice = {};

@@ -35,7 +35,7 @@ public:
                   [[maybe_unused]] operator_control_plane& ctrl) const
     -> generator<table_slice> {
     for (auto&& slice : input) {
-      auto result = tenzir::unflatten(slice, separator_);
+      auto result = tenzir::unflatten2(slice, separator_);
       co_yield std::move(result);
     }
   }
