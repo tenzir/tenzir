@@ -20,6 +20,8 @@
 #include <tenzir/detail/string.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/module.hpp>
+#include <tenzir/multi_series_builder.hpp>
+#include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/to_lines.hpp>
@@ -59,35 +61,6 @@ struct event {
   char delim = '\t';
   record attributes;
 };
-
-// TODO: it's unlclear whether that's correct. There is not much info out there
-// in the internet that tells us how to do this properly.
-/// Unescapes LEEF string data containing \r, \n, \\, and \=.
-auto unescape(std::string_view value) -> std::string {
-  std::string result;
-  result.reserve(value.size());
-  for (auto i = 0u; i < value.size(); ++i) {
-    if (value[i] != '\\') {
-      result += value[i];
-    } else if (i + 1 < value.size()) {
-      auto next = value[i + 1];
-      switch (next) {
-        default:
-          result += next;
-          break;
-        case 'r':
-        case 'n':
-          result += '\n';
-          break;
-        case 't':
-          result += '\t';
-          break;
-      }
-      ++i;
-    }
-  }
-  return result;
-}
 
 /// Parses a LEEF delimiter.
 auto parse_delimiter(std::string_view field) -> std::variant<char, diagnostic> {
@@ -137,40 +110,38 @@ auto parse_delimiter(std::string_view field) -> std::variant<char, diagnostic> {
   return field[0];
 }
 
-// Converts a raw, unescaped string to a data instance.
-auto to_data(std::string_view str) -> data {
-  auto unescaped = unescape(str);
-  auto result = data{};
-  if (not(parsers::data - parsers::pattern)(unescaped, result)) {
-    result = std::move(unescaped);
-  }
-  return result;
-};
-
 /// Parses the LEEF attributes field as a sequence of key-value pairs.
-auto parse_attributes(char delimiter, std::string_view attributes)
-  -> std::variant<record, diagnostic> {
-  const auto key = +(parsers::printable - '=');
-  const auto value = *(parsers::printable - delimiter);
-  const auto kvp = key >> '=' >> value;
-  const auto kvp_list = kvp % delimiter;
-  auto kvps = std::vector<std::pair<std::string, std::string>>{};
-  if (not kvp_list(attributes, kvps)) {
-    return diagnostic::warning("failed to parse LEEF attributes")
-      .note("attributes: {}", attributes)
-      .done();
+auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
+                      bool raw,
+                      std::string_view unflatten) -> std::optional<diagnostic> {
+  while (not attributes.empty()) {
+    auto attr_end = attributes.find(delimiter);
+    auto sep_pos = attributes.find('=');
+    if (sep_pos == attributes.npos) {
+      return diagnostic::warning("LEEF parser: Ill-formed event missing "
+                                 "key-value separator in attribute")
+        .done();
+    }
+    auto key = attributes.substr(0, sep_pos);
+    auto value = attributes.substr(sep_pos + 1, attr_end - sep_pos - 1);
+    auto field = builder.unflattend_field(key, unflatten);
+    if (raw) {
+      field.data(std::string{value});
+    } else {
+      field.data_unparsed(value);
+    }
+    if (attr_end != attributes.npos) {
+      attributes.remove_prefix(attr_end + 1);
+    } else {
+      break;
+    }
   }
-  auto result = record{};
-  result.reserve(kvps.size());
-  for (auto& [key, value] : kvps) {
-    result.emplace(std::move(key), to_data(value));
-  }
-  return result;
+  return {};
 }
 
 /// Converts a string view into a LEEF event.
-auto to_event(std::string_view line) -> std::variant<event, diagnostic> {
-  auto result = event{};
+auto parse_line(std::string_view line, multi_series_builder& msb, bool raw,
+                std::string_view unflatten) -> std::optional<diagnostic> {
   using namespace std::string_view_literals;
   // We first need to find out whether we are LEEF 1.0 or 2.0. The latter has
   // one additional top-level component.
@@ -188,26 +159,26 @@ auto to_event(std::string_view line) -> std::variant<event, diagnostic> {
   }
   auto colon = line.find(':');
   TENZIR_ASSERT(colon != std::string_view::npos);
-  result.leef_version = line.substr(colon + 1, pipe - colon - 1);
-  if (result.leef_version == "1.0") {
+
+  const auto leef_version = line.substr(colon + 1, pipe - colon - 1);
+  if (leef_version == "1.0") {
     num_fields = 5;
-  } else if (result.leef_version == "2.0") {
+  } else if (leef_version == "2.0") {
     num_fields = 6;
   } else {
-    return diagnostic::warning("unsupported LEEF version: {}",
-                               result.leef_version)
+    return diagnostic::warning("unsupported LEEF version: {}", leef_version)
       .hint("only 1.0 and 2.0 are valid values")
       .done();
   }
   auto fields = detail::split_escaped(line, "|", "\\", num_fields);
   if (fields.size() != num_fields + 1) {
-    return diagnostic::warning("LEEF {}.0 requires at least {} fields",
-                               result.leef_version, num_fields + 1)
+    return diagnostic::warning("LEEF {} requires at least {} fields",
+                               leef_version, num_fields + 1)
       .note("got {} fields", fields.size())
       .done();
   }
   auto delimiter = '\t';
-  if (result.leef_version == "2.0") {
+  if (leef_version == "2.0") {
     auto delim = parse_delimiter(fields[5]);
     if (const auto* c = std::get_if<char>(&delim)) {
       TENZIR_DEBUG("parsed LEEF delimiter: {:#04x}", *c);
@@ -216,33 +187,37 @@ auto to_event(std::string_view line) -> std::variant<event, diagnostic> {
       return std::get<diagnostic>(delim);
     }
   }
-  result.vendor = std::move(fields[1]);
-  result.product_name = std::move(fields[2]);
-  result.product_version = std::move(fields[3]);
-  result.event_id = std::move(fields[4]);
-  auto kvps = parse_attributes(delimiter, fields[num_fields]);
-  if (auto* xs = std::get_if<record>(&kvps)) {
-    result.attributes = std::move(*xs);
-  } else {
-    return std::get<diagnostic>(kvps);
+  auto r = msb.record();
+  r.field("leef_version")
+    .data(std::string{leef_version}); // FIXME support views in MSB
+  r.field("vendor").data(std::move(fields[1]));
+  r.field("product_name").data(std::string{std::string{fields[2]}});
+  r.field("product_version").data(std::string{std::string{fields[3]}});
+
+  auto d = parse_attributes(delimiter, fields[num_fields],
+                            r.field("attributes").record(), raw, unflatten);
+  if (d) {
+    msb.remove_last();
+    return d;
   }
-  return result;
+  return {};
 }
 
-/// Adds a LEEF event to a builder.
-void add(const event& e, builder_ref builder) {
-  auto event = builder.record();
-  event.field("leef_version", e.leef_version);
-  event.field("vendor", e.vendor);
-  event.field("product_name", e.product_name);
-  event.field("product_version", e.product_version);
-  event.field("attributes", e.attributes);
-}
-
-auto impl(generator<std::optional<std::string_view>> lines,
-          operator_control_plane& ctrl) -> generator<table_slice> {
-  auto builder = series_builder{};
+auto parse_loop(generator<std::optional<std::string_view>> lines,
+                diagnostic_handler& diag,
+                combined_parser_options options) -> generator<table_slice> {
+  auto schemas = detail::multi_series_builder::get_schemas_unnested(
+    true, not options.unflatten.empty());
+  auto msb
+    = multi_series_builder{options.builder_policy, options.builder_settings,
+                           record_builder::basic_parser, std::move(schemas)};
   for (auto&& line : lines) {
+    for (auto& v : msb.yield_ready_as_table_slice()) {
+      co_yield std::move(v);
+    }
+    for (auto e : msb.last_errors()) {
+      diagnostic::error(e).emit(diag);
+    }
     if (!line) {
       co_yield {};
       continue;
@@ -251,15 +226,13 @@ auto impl(generator<std::optional<std::string_view>> lines,
       TENZIR_DEBUG("LEEF parser ignored empty line");
       continue;
     }
-    auto e = to_event(*line);
-    if (auto* diag = std::get_if<diagnostic>(&e)) {
-      ctrl.diagnostics().emit(std::move(*diag));
-      continue;
+    auto d = parse_line(*line, msb, options.raw, options.unflatten);
+    if (d) {
+      diag.emit(std::move(*d));
     }
-    add(std::get<event>(e), builder);
   }
-  for (auto& slice : builder.finish_as_table_slice("leef.event")) {
-    co_yield std::move(slice);
+  for (auto& v : msb.finalize_as_table_slice()) {
+    co_yield std::move(v);
   }
 }
 
@@ -269,24 +242,57 @@ public:
     return "leef";
   }
 
+  leef_parser() = default;
+
+  leef_parser(combined_parser_options options) : options_{std::move(options)} {
+    options_.builder_settings.default_name = "leef.event";
+  }
+
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    return impl(to_lines(std::move(input)), ctrl);
+    return parse_loop(to_lines(std::move(input)), ctrl.diagnostics(), options_);
   }
 
   friend auto inspect(auto& f, leef_parser& x) -> bool {
-    return f.object(x).fields();
+    return f.object(x).fields(f.field("options", x.options_));
+  }
+
+private:
+  combined_parser_options options_ = {};
+};
+
+class leef_plugin final : public virtual parser_plugin<leef_parser> {
+  auto parse_parser(parser_interface& p) const
+    -> std::unique_ptr<plugin_parser> override {
+    auto parser = argument_parser{
+      name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
+    auto combined_parser = combined_parser_options_parser{};
+    combined_parser.add_to_parser(parser);
+    parser.parse(p);
+    return std::make_unique<leef_parser>(combined_parser.get_options());
   }
 };
 
-class plugin final : public virtual parser_plugin<leef_parser> {
-  auto parse_parser(parser_interface& p) const
-    -> std::unique_ptr<plugin_parser> override {
-    argument_parser{name(),
-                    fmt::format("https://docs.tenzir.com/formats/{}", name())}
-      .parse(p);
-    return std::make_unique<leef_parser>();
+class read_leef : public operator_plugin2<parser_adapter<leef_parser>> {
+public:
+  auto name() const -> std::string override {
+    return "read_leef";
+  }
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto parser = argument_parser2::operator_(name());
+    auto opt_parser = combined_parser_options_parser{};
+    opt_parser.add_to_parser(parser);
+    auto result = parser.parse(inv, ctx);
+    TRY(result);
+    try {
+      return std::make_unique<parser_adapter<leef_parser>>(
+        leef_parser{opt_parser.get_options()});
+    } catch (diagnostic& e) {
+      ctx.dh().emit(e);
+      return failure::promise();
+    }
   }
 };
 
@@ -294,4 +300,5 @@ class plugin final : public virtual parser_plugin<leef_parser> {
 
 } // namespace tenzir::plugins::leef
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::leef::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::leef::leef_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::leef::read_leef)
