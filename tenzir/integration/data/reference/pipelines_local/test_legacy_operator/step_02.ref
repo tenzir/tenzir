@@ -1,0 +1,20 @@
+[
+  load file {
+    path: "example.json.gz" @ 0..0
+  },
+  decompress {
+    type: "gzip" @ 0..0
+  },
+  read json {
+    unnest_separator: "",
+    use_gelf_mode: false,
+    use_ndjson_mode: false,
+    preserve_order: true,
+    raw: false,
+    arrays_of_objects: false,
+    precise: false
+  },
+  write json {
+    
+  }
+]

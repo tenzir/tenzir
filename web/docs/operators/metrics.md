@@ -110,6 +110,7 @@ metrics themselves.
 |`schema`|`string`|The schema name of the batch.|
 |`schema_id`|`string`|The schema ID of the batch.|
 |`events`|`uint64`|The amount of events that were imported.|
+|`queued_events`|`uint64`|The total amount of events that are enqueued in the export.|
 
 ### `tenzir.metrics.import`
 

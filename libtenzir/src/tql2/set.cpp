@@ -43,9 +43,15 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
       // TODO: We actually have to split the batch sometimes.
       auto new_name = values->GetView(0);
       // TODO: Is this correct?
-      return table_slice{to_record_batch(input),
-                         type{new_name, input.schema(),
-                              collect(input.schema().attributes())}};
+      auto new_type = type{
+        new_name,
+        input.schema(),
+        collect(input.schema().attributes()),
+      };
+      auto new_batch
+        = to_record_batch(input)->ReplaceSchema(new_type.to_arrow_schema());
+      TENZIR_ASSERT(new_batch.ok());
+      return table_slice{new_batch.MoveValueUnsafe(), new_type};
     }
     case ast::meta::import_time: {
       auto values = dynamic_cast<arrow::TimestampArray*>(right.array.get());
@@ -88,10 +94,16 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
       if (new_value) {
         new_attributes.emplace_back("internal", "");
       }
-      // TODO: Is this correct? Probably not!
-      return table_slice{to_record_batch(input),
-                         type{input.schema().name(), input.schema(),
-                              std::move(new_attributes)}};
+      // TODO: Is this correct?
+      auto new_type = type{
+        input.schema().name(),
+        input.schema(),
+        std::move(new_attributes),
+      };
+      auto new_batch
+        = to_record_batch(input)->ReplaceSchema(new_type.to_arrow_schema());
+      TENZIR_ASSERT(new_batch.ok());
+      return table_slice{new_batch.MoveValueUnsafe(), new_type};
     }
   }
   TENZIR_UNREACHABLE();

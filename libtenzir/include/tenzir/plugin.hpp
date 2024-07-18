@@ -227,6 +227,11 @@ auto plugin_inspect(Inspector& f, std::unique_ptr<Base>& x) -> bool {
     p->deserialize(f, x);
     return x != nullptr;
   } else {
+    if (auto dbg = as_debug_writer(f)) {
+      if (not x) {
+        return dbg->fmt_value("<invalid>");
+      }
+    }
     TENZIR_ASSERT(x);
     return plugin_serialize(f, *x);
   }

@@ -137,15 +137,22 @@ tenzir-node
 
           v4.0.0-rc6-0-gf193b51f1f
 Visit https://app.tenzir.com to get started.
+
+[16:50:26.741] node listens for node-to-node connections on tcp://127.0.0.1:5158
+[16:50:26.982] node connected to platform via wss://ws.tenzir.app:443/production
 ```
 
-This will spawn a blocking process that listens by default on the TCP endpoint
-`127.0.0.1:5158`. Select a different endpoint via `--endpoint`, e.g., bind to an
-IPv6 address:
+This will spawn a blocking process that listens by default for node-to-node
+connections on the TCP endpoint `127.0.0.1:5158`. Select a different endpoint
+via the `tenzir.endpoint` option, e.g., bind to an IPv6 address:
 
 ```bash
 tenzir-node --endpoint=[::1]:42000
 ```
+
+Set `tenzir.endpoint` to `false` to disable the endpoint, making the node
+exclusively accessible through the Tenzir Platform. This effectively prevents
+connections from other `tenzir` or `tenzir-node` processes.
 
 ## Stop a node
 

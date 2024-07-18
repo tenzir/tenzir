@@ -6,15 +6,18 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/tql2/eval.hpp"
-#include "tenzir/tql2/plugin.hpp"
-
 #include <tenzir/detail/loader_saver_resolver.hpp>
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/prepend_token.hpp>
 #include <tenzir/tql/fwd.hpp>
 #include <tenzir/tql/parser.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
+
+#include <arrow/util/uri.h>
+
+#include <ranges>
 
 namespace tenzir::plugins::from {
 namespace {
@@ -344,8 +347,99 @@ public:
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    diagnostic::error("operator is not yet implemented")
-      .primary(inv.self)
+    auto usage = "load <url/path>, [options...]";
+    auto docs = "https://docs.tenzir.com/operators/load";
+    if (inv.args.empty()) {
+      diagnostic::error("expected at least one argument")
+        .primary(inv.self)
+        .usage(usage)
+        .docs(docs)
+        .emit(ctx);
+      return failure::promise();
+    }
+    TRY(auto string_data, const_eval(inv.args[0], ctx));
+    auto string = caf::get_if<std::string>(&string_data);
+    if (not string) {
+      diagnostic::error("expected string")
+        .primary(inv.args[0])
+        .usage(usage)
+        .docs(docs)
+        .emit(ctx);
+      return failure::promise();
+    }
+    auto uri = arrow::util::Uri{};
+    if (not uri.Parse(*string).ok()) {
+      auto target = plugins::find<operator_factory_plugin>("tql2.load_file");
+      TENZIR_ASSERT(target);
+      return target->make(inv, ctx);
+    }
+    auto scheme = uri.scheme();
+    auto supported = std::vector<std::string>{};
+    for (auto plugin : plugins::get<operator_factory_plugin>()) {
+      auto plugin_schemes = plugin->load_schemes();
+      if (std::ranges::find(plugin_schemes, scheme) != plugin_schemes.end()) {
+        return plugin->make(inv, ctx);
+      }
+      supported.insert(supported.end(), plugin_schemes.begin(),
+                       plugin_schemes.end());
+    }
+    std::ranges::sort(supported);
+    diagnostic::error("encountered unsupported scheme `{}`", scheme)
+      .primary(inv.args[0])
+      .hint("must be one of: {}", fmt::join(supported, ", "))
+      .emit(ctx);
+    return failure::promise();
+  }
+};
+
+class save_plugin2 final : virtual public operator_factory_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.save";
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto usage = "save <url/path>, [options...]";
+    auto docs = "https://docs.tenzir.com/operators/save";
+    if (inv.args.empty()) {
+      diagnostic::error("expected at least one argument")
+        .primary(inv.self)
+        .usage(usage)
+        .docs(docs)
+        .emit(ctx);
+      return failure::promise();
+    }
+    TRY(auto string_data, const_eval(inv.args[0], ctx));
+    auto string = caf::get_if<std::string>(&string_data);
+    if (not string) {
+      diagnostic::error("expected string")
+        .primary(inv.args[0])
+        .usage(usage)
+        .docs(docs)
+        .emit(ctx);
+      return failure::promise();
+    }
+    auto uri = arrow::util::Uri{};
+    if (not uri.Parse(*string).ok()) {
+      auto target = plugins::find<operator_factory_plugin>("tql2.save_file");
+      TENZIR_ASSERT(target);
+      return target->make(inv, ctx);
+    }
+    auto scheme = uri.scheme();
+    auto supported = std::vector<std::string>{};
+    for (auto plugin : plugins::get<operator_factory_plugin>()) {
+      auto plugin_schemes = plugin->save_schemes();
+      if (std::ranges::find(plugin_schemes, scheme) != plugin_schemes.end()) {
+        return plugin->make(inv, ctx);
+      }
+      supported.insert(supported.end(), plugin_schemes.begin(),
+                       plugin_schemes.end());
+    }
+    std::ranges::sort(supported);
+    diagnostic::error("encountered unsupported scheme `{}`", scheme)
+      .primary(inv.args[0])
+      .hint("must be one of: {}", fmt::join(supported, ", "))
       .emit(ctx);
     return failure::promise();
   }
@@ -359,3 +453,4 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::load_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::read_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::from_plugin2)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::load_plugin2)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::save_plugin2)

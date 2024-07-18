@@ -56,6 +56,13 @@ auto main(int argc, char** argv) -> int {
     fmt::print(stderr, "{}\n", loaded_plugin_paths.error());
     return EXIT_FAILURE;
   }
+  // Make sure to deinitialize all plugins at the end. This guard has to be
+  // created before the call to `make_application`, as the return value of that
+  // can reference dynamically loaded command plugins, which must not be
+  // unloaded before the destructor of the return value.
+  auto plugin_guard = caf::detail::make_scope_guard([&]() noexcept {
+    plugins::get_mutable().clear();
+  });
   // Application setup.
   auto [root, root_factory] = make_application(argv[0]);
   if (!root)
@@ -83,12 +90,6 @@ auto main(int argc, char** argv) -> int {
                           ? app_path
                           : app_path.substr(last_slash + 1);
   bool is_server = (app_name == "tenzir-node");
-  // Make sure to deinitialize all plugins at the end. This has to be done
-  // before we create the log context, as that must be cleared before we clear
-  // the plugins.
-  auto plugin_guard = caf::detail::make_scope_guard([&]() noexcept {
-    plugins::get_mutable().clear();
-  });
   // Create log context as soon as we know the correct configuration.
   auto log_context = create_log_context(is_server, *invocation, cfg.content);
   if (!log_context)

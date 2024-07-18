@@ -1,0 +1,9 @@
+error: no such operator: `this_operator_does_not_exist`
+  = docs: https://docs.tenzir.com/operators
+
+error: failed to parse legacy pipeline
+ --> <input>:1:8
+  |
+1 | legacy "this_operator_does_not_exist"
+  |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ 
+  |

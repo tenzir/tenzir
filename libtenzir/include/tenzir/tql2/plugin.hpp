@@ -24,6 +24,16 @@ public:
   virtual auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr>
     = 0;
+
+  /// Returns the URI schemes from which the operator can load (e.g., `http`).
+  virtual auto load_schemes() const -> std::vector<std::string> {
+    return {};
+  }
+
+  /// Returns the URI schemes to which the operator can save (e.g., `s3`).
+  virtual auto save_schemes() const -> std::vector<std::string> {
+    return {};
+  }
 };
 
 template <class Operator>

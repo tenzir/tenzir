@@ -417,7 +417,7 @@ using node_actor = typed_actor_fwd<
   // Spawn a set of execution nodes for a given pipeline. Does not start the
   // execution nodes.
   auto(atom::spawn, operator_box, operator_type, receiver_actor<diagnostic>,
-       metrics_receiver_actor, int index)
+       metrics_receiver_actor, int index, bool is_hidden)
     ->caf::result<exec_node_actor>>::unwrap;
 
 /// The interface of a PIPELINE EXECUTOR actor.

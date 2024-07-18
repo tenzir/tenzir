@@ -23,6 +23,10 @@ The `export` operator retrieves events from a Tenzir node.
 Work on all events that are imported with `import` operators in real-time
 instead of on events persisted at a Tenzir node.
 
+Note that live exports may drop events if the following pipeline fails to keep
+up. To connect pipelines with back pressure, use the [`publish`](publish.md) and
+[`subscribe`](subscribe.md) operators.
+
 ### `--retro`
 
 Export persistent events at a Tenzir node. Unless `--live` is given, this is

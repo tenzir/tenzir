@@ -13,6 +13,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
 #include <arrow/util/compression.h>
@@ -355,8 +356,8 @@ private:
   operator_args args_ = {};
 };
 
-class compress_plugin final
-  : public virtual operator_plugin<compress_operator> {
+class compress_plugin final : public virtual operator_plugin<compress_operator>,
+                              public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
@@ -371,10 +372,34 @@ public:
     parser.parse(p);
     return std::make_unique<compress_operator>(std::move(args));
   }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto args = operator_args{};
+    auto level = std::optional<located<int64_t>>{};
+    TRY(argument_parser2::operator_(name())
+          .add(args.type, "<type>")
+          .add("level", level)
+          .parse(inv, ctx));
+    // TODO: Where is `try_narrow`?
+    using T = decltype(args.level->inner);
+    if (level) {
+      if (std::numeric_limits<T>::lowest() <= level->inner
+          && level->inner <= std::numeric_limits<T>::max()) {
+        args.level->inner = detail::narrow<T>(level->inner);
+      } else {
+        diagnostic::error("invalid compression level: `{}`", level->inner)
+          .primary(*level)
+          .emit(ctx);
+      }
+    }
+    return std::make_unique<compress_operator>(std::move(args));
+  }
 };
 
 class decompress_plugin final
-  : public virtual operator_plugin<decompress_operator> {
+  : public virtual operator_plugin<decompress_operator>,
+    public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
@@ -386,6 +411,15 @@ public:
     auto args = operator_args{};
     parser.add(args.type, "<type>");
     parser.parse(p);
+    return std::make_unique<decompress_operator>(std::move(args));
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto args = operator_args{};
+    TRY(argument_parser2::operator_(name())
+          .add(args.type, "<type>")
+          .parse(inv, ctx));
     return std::make_unique<decompress_operator>(std::move(args));
   }
 };

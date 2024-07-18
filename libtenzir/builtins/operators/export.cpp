@@ -41,6 +41,8 @@
 
 namespace tenzir::plugins::export_ {
 
+namespace {
+
 struct export_mode {
   bool retro = true;
   bool live = false;
@@ -81,7 +83,13 @@ struct bridge_state {
   accountant_actor accountant = {};
   filesystem_actor filesystem = {};
 
-  detail::flat_map<type, size_t> metrics = {};
+  struct metric {
+    size_t emitted = {};
+    size_t queued = {};
+  };
+
+  detail::flat_map<type, metric> metrics = {};
+  size_t num_queued_total = {};
   metric_handler metrics_handler = {};
 
   shared_diagnostic_handler diagnostics_handler = {};
@@ -148,14 +156,14 @@ struct bridge_state {
   auto emit_metrics() -> void {
     TENZIR_ASSERT(not mode.internal);
     TENZIR_DEBUG("{} emits {}", *self, metrics.size());
-    for (const auto& [schema, events] : metrics) {
+    for (auto& [schema, metric] : metrics) {
       metrics_handler.emit({
         {"schema", std::string{schema.name()}},
         {"schema_id", schema.make_fingerprint()},
-        {"events", events},
+        {"events", std::exchange(metric.emitted, {})},
+        {"queued_events", metric.queued},
       });
     }
-    metrics.clear();
   }
 
   ~bridge_state() noexcept {
@@ -260,8 +268,6 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
         return {};
       }
       if (self->current_sender() == self->state.importer_address) {
-        // TODO: Consider dropping events from live export if the following
-        // operators are unable to keep up.
         const auto* bound_expr
           = self->state.bind_expr(slice.schema(), self->state.expr);
         if (not bound_expr) {
@@ -273,14 +279,25 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
           return {};
         }
         slice = std::move(*filtered);
+        // We load up to N partitions depending on our parallel level, and then
+        // limit our buffer to N+1 to account for live data.
+        const auto size_threshold
+          = (self->state.mode.parallel + 1) * defaults::max_partition_size;
+        if (self->state.num_queued_total >= size_threshold) {
+          diagnostic::warning("export failed to keep up and dropped events")
+            .emit(self->state.diagnostics_handler);
+          return {};
+        }
       }
       if (self->state.buffer_rp.pending()) {
         TENZIR_ASSERT(self->state.buffer.empty());
         TENZIR_ASSERT(not self->state.is_done());
-        self->state.metrics[slice.schema()] += slice.rows();
+        self->state.metrics[slice.schema()].emitted += slice.rows();
         self->state.buffer_rp.deliver(std::move(slice));
         return {};
       }
+      self->state.metrics[slice.schema()].queued += slice.rows();
+      self->state.num_queued_total += slice.rows();
       self->state.buffer.push(std::move(slice));
       return {};
     },
@@ -294,7 +311,11 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
         auto slice = std::move(self->state.buffer.front());
         self->state.buffer.pop();
         TENZIR_ASSERT(slice.rows() > 0);
-        self->state.metrics[slice.schema()] += slice.rows();
+        auto& metric = self->state.metrics[slice.schema()];
+        TENZIR_ASSERT(metric.queued >= slice.rows());
+        metric.emitted += slice.rows();
+        metric.queued -= slice.rows();
+        self->state.num_queued_total -= slice.rows();
         return slice;
       }
       self->state.buffer_rp = self->make_response_promise<table_slice>();
@@ -336,12 +357,17 @@ public:
         {"schema", string_type{}},
         {"schema_id", string_type{}},
         {"events", uint64_type{}},
+        {"queued_events", uint64_type{}},
       },
     });
     auto diagnostics_handler = ctrl.shared_diagnostics();
-    auto bridge = ctrl.self().spawn<caf::linked>(
-      make_bridge, expr_, mode_, std::move(filesystem),
-      std::move(metrics_handler), std::move(diagnostics_handler));
+    auto bridge
+      = ctrl.self().spawn(make_bridge, expr_, mode_, std::move(filesystem),
+                          std::move(metrics_handler),
+                          std::move(diagnostics_handler));
+    auto bridge_guard = caf::detail::make_scope_guard([&]() {
+      ctrl.self().send_exit(bridge, caf::exit_reason::user_shutdown);
+    });
     co_yield {};
     while (true) {
       auto result = table_slice{};
@@ -409,8 +435,8 @@ private:
   export_mode mode_;
 };
 
-class plugin final : public virtual operator_plugin<export_operator>,
-                     public virtual operator_factory_plugin {
+class export_plugin final : public virtual operator_plugin<export_operator>,
+                            public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.source = true};
@@ -422,7 +448,7 @@ public:
     auto retro = false;
     auto live = false;
     auto internal = false;
-    auto parallel = std::optional<located<size_t>>{};
+    auto parallel = std::optional<located<uint64_t>>{};
     parser.add("--retro", retro);
     parser.add("--live", live);
     parser.add("--internal", internal);
@@ -483,6 +509,178 @@ public:
   }
 };
 
+class diagnostics_plugin final : public virtual operator_parser_plugin,
+                                 public virtual operator_factory_plugin {
+public:
+  auto name() const -> std::string override {
+    return "diagnostics";
+  };
+
+  auto signature() const -> operator_signature override {
+    return {.source = true};
+  }
+
+  auto parse_operator(parser_interface& p) const -> operator_ptr override {
+    auto parser = argument_parser{"diagnostics", "https://docs.tenzir.com/"
+                                                 "operators/diagnostics"};
+    auto live = false;
+    auto retro = false;
+    const auto internal = true;
+    auto parallel = std::optional<located<uint64_t>>{};
+    parser.add("--live", live);
+    parser.add("--retro", retro);
+    parser.add("--parallel", parallel, "<level>");
+    parser.parse(p);
+    if (not live) {
+      retro = true;
+    }
+    return std::make_unique<export_operator>(
+      expression{
+        conjunction{
+          predicate{
+            meta_extractor{meta_extractor::internal},
+            relational_operator::equal,
+            data{internal},
+          },
+          predicate{
+            meta_extractor{meta_extractor::schema},
+            relational_operator::equal,
+            data{"tenzir.diagnostic"},
+          },
+        },
+      },
+      export_mode{retro, live, internal, parallel ? parallel->inner : 3});
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto live = false;
+    auto retro = false;
+    const auto internal = true;
+    auto parallel = std::optional<located<uint64_t>>{};
+    TRY(argument_parser2::operator_("diagnostics")
+          .add("live", live)
+          .add("retro", retro)
+          .add("parallel", parallel)
+          .parse(inv, ctx));
+    if (not live) {
+      retro = true;
+    }
+    return std::make_unique<export_operator>(
+      expression{
+        conjunction{
+          predicate{
+            meta_extractor{meta_extractor::internal},
+            relational_operator::equal,
+            data{internal},
+          },
+          predicate{
+            meta_extractor{meta_extractor::schema},
+            relational_operator::equal,
+            data{"tenzir.diagnostic"},
+          },
+        },
+      },
+      export_mode{retro, live, internal, parallel ? parallel->inner : 3});
+  }
+};
+
+class metrics_plugin final : public virtual operator_parser_plugin,
+                             public virtual operator_factory_plugin {
+public:
+  auto name() const -> std::string override {
+    return "metrics";
+  };
+
+  auto signature() const -> operator_signature override {
+    return {.source = true};
+  }
+
+  auto parse_operator(parser_interface& p) const -> operator_ptr override {
+    auto parser = argument_parser{"metrics", "https://docs.tenzir.com/"
+                                             "operators/metrics"};
+    auto name = std::optional<std::string>{};
+    auto live = false;
+    auto retro = false;
+    const auto internal = true;
+    auto parallel = std::optional<located<uint64_t>>{};
+    parser.add(name, "<name>");
+    parser.add("--live", live);
+    parser.add("--retro", retro);
+    parser.add("--parallel", parallel, "<level>");
+    parser.parse(p);
+    if (not live) {
+      retro = true;
+    }
+    static const auto all_metrics = [] {
+      auto result = pattern::make("tenzir\\.metrics\\..*");
+      TENZIR_ASSERT(result);
+      return std::move(*result);
+    }();
+    return std::make_unique<export_operator>(
+      expression{
+        conjunction{
+          predicate{
+            meta_extractor{meta_extractor::internal},
+            relational_operator::equal,
+            data{internal},
+          },
+          predicate{
+            meta_extractor{meta_extractor::schema},
+            relational_operator::equal,
+            name ? data{fmt::format("tenzir.metrics.{}", *name)}
+                 : data{all_metrics},
+          },
+        },
+      },
+      export_mode{retro, live, internal, parallel ? parallel->inner : 3});
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto name = std::optional<std::string>{};
+    auto live = false;
+    auto retro = false;
+    const auto internal = true;
+    auto parallel = std::optional<located<uint64_t>>{};
+    TRY(argument_parser2::operator_("metrics")
+          .add(name, "<name>")
+          .add("live", live)
+          .add("retro", retro)
+          .add("parallel", parallel)
+          .parse(inv, ctx));
+    if (not live) {
+      retro = true;
+    }
+    static const auto all_metrics = [] {
+      auto result = pattern::make("tenzir\\.metrics\\..*");
+      TENZIR_ASSERT(result);
+      return std::move(*result);
+    }();
+    return std::make_unique<export_operator>(
+      expression{
+        conjunction{
+          predicate{
+            meta_extractor{meta_extractor::internal},
+            relational_operator::equal,
+            data{internal},
+          },
+          predicate{
+            meta_extractor{meta_extractor::schema},
+            relational_operator::equal,
+            name ? data{fmt::format("tenzir.metrics.{}", *name)}
+                 : data{all_metrics},
+          },
+        },
+      },
+      export_mode{retro, live, internal, parallel ? parallel->inner : 3});
+  }
+};
+
+} // namespace
+
 } // namespace tenzir::plugins::export_
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::export_::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::export_::export_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::export_::diagnostics_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::export_::metrics_plugin)
