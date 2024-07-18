@@ -1,5 +1,5 @@
-{"x.y": 1, "x": {"z": 2}}
-{"x.y": null, "x": {"z": 2}}
-{"x.y": 1, "x": {"z": null}}
-{"x.y": 1, "x": null}
-{"x.y": null, "x": null}
+{"x": {"y": 1, "z": 2}}
+{"x": {"y": null, "z": 2}}
+{"x": {"y": 1, "z": null}}
+{"x": {"y": 1, "z": null}}
+{"x": {"y": null, "z": null}}
