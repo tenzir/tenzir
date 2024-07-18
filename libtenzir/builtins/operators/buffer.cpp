@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/detail/enum.hpp>
 #include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -26,10 +27,7 @@ using buffer_actor = caf::typed_actor<
   // Read events from the buffer.
   auto(atom::read)->caf::result<table_slice>>;
 
-enum class buffer_policy {
-  block,
-  drop,
-};
+TENZIR_ENUM(buffer_policy, block, drop);
 
 struct buffer_state {
   static constexpr auto name = "buffer";
@@ -300,18 +298,9 @@ public:
   }
 
   friend auto inspect(auto& f, read_buffer_operator& x) -> bool {
-    using policy_t = std::underlying_type_t<buffer_policy>;
-    auto policy = x.policy_ ? std::optional{static_cast<policy_t>(*x.policy_)}
-                            : std::optional<policy_t>{};
-    auto load_callback = [&]() {
-      x.policy_ = policy ? std::optional{static_cast<buffer_policy>(*policy)}
-                         : std::optional<buffer_policy>{};
-      return true;
-    };
-    return f.object(x)
-      .on_load(load_callback)
-      .fields(f.field("id", x.id_), f.field("capacity", x.capacity_),
-              f.field("policy", policy));
+    return f.object(x).fields(f.field("id", x.id_),
+                              f.field("capacity", x.capacity_),
+                              f.field("policy", x.policy_));
   }
 
 private:
@@ -350,11 +339,8 @@ public:
     }
     auto policy = std::optional<buffer_policy>{};
     if (policy_str) {
-      if (policy_str->inner == "block") {
-        policy = buffer_policy::block;
-      } else if (policy_str->inner == "drop") {
-        policy = buffer_policy::drop;
-      } else {
+      policy = from_string<buffer_policy>(policy_str->inner);
+      if (not policy) {
         diagnostic::error("policy must be 'block' or 'drop'")
           .primary(policy_str->source)
           .throw_();
@@ -384,11 +370,8 @@ public:
     }
     auto policy = std::optional<buffer_policy>{};
     if (policy_str) {
-      if (policy_str->inner == "block") {
-        policy = buffer_policy::block;
-      } else if (policy_str->inner == "drop") {
-        policy = buffer_policy::drop;
-      } else {
+      policy = from_string<buffer_policy>(policy_str->inner);
+      if (not policy) {
         diagnostic::error("policy must be 'block' or 'drop'")
           .primary(policy_str->source)
           .emit(ctx);
