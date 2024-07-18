@@ -76,7 +76,9 @@ int main(int argc, char** argv) {
   // TODO: Only initialize built-in endpoints here by default,
   // and allow the unit tests to specify a list of required
   // plugins and their config.
+  fmt::print(std::cerr, "loaded plugins:\n");
   for (auto& plugin : tenzir::plugins::get_mutable()) {
+    fmt::print(std::cerr, "- {}\n", plugin->name());
     if (auto err = plugin->initialize({}, {})) {
       fmt::print(stderr, "failed to initialize plugin {}: {}", plugin->name(),
                  err);
