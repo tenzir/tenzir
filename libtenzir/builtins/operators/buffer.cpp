@@ -36,6 +36,7 @@ struct buffer_state {
   located<uint64_t> capacity = {};
   buffer_policy policy = {};
   metric_handler metrics_handler = {};
+  shared_diagnostic_handler diagnostics_handler = {};
 
   uint64_t buffer_size = {};
   std::queue<table_slice> buffer = {};
@@ -62,16 +63,22 @@ struct buffer_state {
       auto [lhs, rhs] = split(events, capacity.inner - buffer_size);
       buffer_size += lhs.rows();
       buffer.push(std::move(lhs));
+      TENZIR_ASSERT(rhs.rows() > 0);
       switch (policy) {
         case buffer_policy::drop: {
           num_dropped += rhs.rows();
+          diagnostic::warning("buffer exceeded capacity and dropped events")
+            .primary(capacity.source)
+            .hint("the configured policy is `{}`; use `{}` to prevent dropping",
+                  buffer_policy::drop, buffer_policy::block)
+            .note("the `metrics` operator allows for monitoring buffers")
+            .emit(diagnostics_handler);
           return {};
         }
         case buffer_policy::block: {
           TENZIR_ASSERT(blocked_events.rows() == 0);
           TENZIR_ASSERT(not write_rp.pending());
           blocked_events = std::move(rhs);
-          TENZIR_ASSERT(blocked_events.rows() > 0);
           write_rp = self->make_response_promise<void>();
           return write_rp;
         }
@@ -117,12 +124,14 @@ struct buffer_state {
 
 auto make_buffer(buffer_actor::stateful_pointer<buffer_state> self,
                  located<uint64_t> capacity, buffer_policy policy,
-                 metric_handler metrics_handler)
+                 metric_handler metrics_handler,
+                 shared_diagnostic_handler diagnostics_handler)
   -> buffer_actor::behavior_type {
   self->state.self = self;
   self->state.capacity = capacity;
   self->state.policy = policy;
   self->state.metrics_handler = std::move(metrics_handler);
+  self->state.diagnostics_handler = std::move(diagnostics_handler);
   self->set_exit_handler([self](caf::exit_msg& msg) {
     // The buffer actor is linked to both internal operators. We want to
     // unconditionally shut down the buffer actor, even when the operator shuts
@@ -243,7 +252,8 @@ public:
     // internal-write-buffer operator, so we spawn the buffer actor here and
     // move it into the registry before the first yield.
     auto buffer = ctrl.self().spawn<caf::linked>(make_buffer, capacity_,
-                                                 policy(ctrl), metrics(ctrl));
+                                                 policy(ctrl), metrics(ctrl),
+                                                 ctrl.shared_diagnostics());
     ctrl.self().system().registry().put(fmt::format("tenzir.buffer.{}", id_),
                                         buffer);
     co_yield {};
