@@ -192,11 +192,12 @@ public:
       // this guards the base series_builder currently used by tql2 parse_json
       if constexpr (std::same_as<detail::multi_series_builder::record_generator,
                                  decltype(builder)>) {
-        value_parse_success = parse_value(
-          val.value_unsafe(), builder.unflattend_field(key, unnest_), depth + 1);
-      } else { 
-        value_parse_success = parse_value(
-          val.value_unsafe(), builder.field(key), depth + 1);
+        value_parse_success
+          = parse_value(val.value_unsafe(),
+                        builder.unflattend_field(key, unnest_), depth + 1);
+      } else {
+        value_parse_success
+          = parse_value(val.value_unsafe(), builder.field(key), depth + 1);
       }
       if (not value_parse_success) {
         return false;
@@ -575,8 +576,7 @@ auto parser_loop(generator<GeneratorValue> json_chunk_generator,
   for (auto chunk : json_chunk_generator) {
     // get all events that are ready (timeout, batch size, ordered mode
     // constraints)
-    for (auto slice :
-         series_to_table_slice(parser_impl.builder.yield_ready())) {
+    for (auto& slice : parser_impl.builder.yield_ready_as_table_slice()) {
       co_yield std::move(slice);
     }
     for (auto err : parser_impl.builder.last_errors()) {
@@ -596,7 +596,7 @@ auto parser_loop(generator<GeneratorValue> json_chunk_generator,
     co_return;
   }
   // Get all remaining events
-  for (auto slice : series_to_table_slice(parser_impl.builder.finalize())) {
+  for (auto& slice : parser_impl.builder.finalize_as_table_slice()) {
     co_yield std::move(slice);
   }
 }
@@ -684,7 +684,7 @@ public:
   }
 
   friend auto inspect(auto& f, json_parser& x) -> bool {
-    return f.apply(x.args_);
+    return f.object(x).fields(f.field("args", x.args_));
   }
 
 private:
@@ -804,7 +804,7 @@ public:
   }
 
   friend auto inspect(auto& f, json_printer& x) -> bool {
-    return f.apply(x.args_);
+    return f.object(x).fields(f.field("args", x.args_));
   }
 
 private:
@@ -987,7 +987,7 @@ public:
   }
 
   friend auto inspect(auto& f, write_json& x) -> bool {
-    return f.apply(x.printer_);
+    return f.object(x).fields(f.field("printer", x.printer_));
   }
 
 private:
