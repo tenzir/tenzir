@@ -6,15 +6,13 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/argument_parser.hpp"
-#include "tenzir/pipeline.hpp"
-#include "tenzir/table_slice.hpp"
-
+#include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
 
@@ -35,7 +33,7 @@ public:
                   [[maybe_unused]] operator_control_plane& ctrl) const
     -> generator<table_slice> {
     for (auto&& slice : input) {
-      auto result = tenzir::unflatten2(slice, separator_);
+      auto result = tenzir::unflatten(slice, separator_);
       co_yield std::move(result);
     }
   }
@@ -58,7 +56,8 @@ private:
   std::string separator_ = default_unflatten_separator;
 };
 
-class plugin final : public virtual operator_plugin<unflatten_operator> {
+class plugin final : public virtual operator_plugin<unflatten_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
@@ -72,6 +71,17 @@ public:
     parser.parse(p);
     auto separator = (sep) ? sep->inner : default_unflatten_separator;
     return std::make_unique<unflatten_operator>(separator);
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto sep = std::optional<located<std::string>>{};
+    argument_parser2::operator_(name())
+      .add(sep, "<sep>")
+      .parse(inv, ctx)
+      .ignore();
+    return std::make_unique<unflatten_operator>(
+      sep ? std::move(sep->inner) : default_unflatten_separator);
   }
 };
 
