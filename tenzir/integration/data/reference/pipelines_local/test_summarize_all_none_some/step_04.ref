@@ -2,14 +2,12 @@
 {"id.orig_h": "213.32.39.37", "x": null}
 {"id.orig_h": "141.9.32.104", "x": null}
 {"id.orig_h": "223.71.167.165", "x": null}
-{"id.orig_h": "45.231.152.1", "x": null}
 {"id.orig_h": "152.136.69.32", "x": null}
 {"id.orig_h": "223.149.205.1", "x": null}
 {"id.orig_h": "104.206.128.30", "x": null}
 {"id.orig_h": "147.203.238.18", "x": null}
 {"id.orig_h": "159.83.123.38", "x": null}
 {"id.orig_h": "150.164.15.49", "x": null}
-{"id.orig_h": "45.58.146.42", "x": null}
 {"id.orig_h": "71.6.167.142", "x": null}
 {"id.orig_h": "150.107.75.221", "x": null}
 {"id.orig_h": "101.89.191.10", "x": null}
@@ -24,6 +22,8 @@
 warning: aggregation column `y` does not exist for schema `tenzir.json`
 
 warning: aggregation column `y` does not exist for schema `zeek._0_0_2`
+
+warning: group-by column `id.orig_h` does not exist for schema `zeek.conn`
 
 warning: aggregation column `y` does not exist for schema `zeek.conn`
 

@@ -334,6 +334,41 @@ setup() {
   check tenzir "from ${INPUTSDIR}/json/record-in-list2.json read json | unflatten | to stdout"
   check tenzir "from ${INPUTSDIR}/json/record-with-multiple-unflattened-values.json read json | unflatten | to stdout"
   check tenzir "from ${INPUTSDIR}/json/record-with-multi-nested-field-names.json read json | unflatten | to stdout"
+  check tenzir "unflatten" <<EOF
+{}
+EOF
+  # {x.y: int64, x: {}}
+  check tenzir "unflatten" <<EOF
+{"x.y": 1, "x": {}}
+{"x.y": null, "x": {}}
+{"x.y": 1, "x": null}
+{"x.y": null, "x": null}
+EOF
+  # {x.y: int64, x: {z: int64}}
+  check tenzir "unflatten" <<EOF
+{"x.y": 1, "x": {"z": 2}}
+{"x.y": null, "x": {"z": 2}}
+{"x.y": 1, "x": {"z": null}}
+{"x.y": 1, "x": null}
+{"x.y": null, "x": null}
+EOF
+  # {x.y: {z: int64}, x: {y.z: int64}}
+  check tenzir "unflatten" <<EOF
+{"x.y": {"z": 1}, "x": {"y.z": 2}}
+{"x.y": null, "x": {"y.z": 2}}
+{"x.y": {"z": 1}, "x": null}
+{"x.y": null, "x": null}
+EOF
+  # {x.y: {z: {a.b: int64}}, x: {y.z: {a.c: int64}}}
+  check tenzir "unflatten" <<EOF
+{"x.y": {"z": {"a.b": 1}}, "x": {"y.z": {"a.c": 2}}}
+{"x.y": {"z": null}, "x": {"y.z": {"a.c": 2}}}
+{"x.y": {"z": {"a.b": 1}}, "x": {"y.z": null}}
+{"x.y": {"z": null}, "x": {"y.z": null}}
+{"x.y": {"z": {"a.b": 1}}, "x": null}
+{"x.y": null, "x": {"y.z": {"a.c": 2}}}
+{"x.y": null, "x": null}
+EOF
 }
 
 # bats test_tags=pipelines
