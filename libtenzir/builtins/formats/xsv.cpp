@@ -559,6 +559,12 @@ public:
     return parse_loop(to_lines(std::move(input)), ctrl, args_);
   }
 
+  auto optimize(event_order order) -> std::unique_ptr<plugin_parser> override {
+    auto args = args_;
+    args.builder_settings.ordered = order == event_order::ordered;
+    return std::make_unique<xsv_parser>(std::move(args));
+  }
+
   friend auto inspect(auto& f, xsv_parser& x) -> bool {
     return f.object(x)
       .pretty_name("tenzir.plugins.xsv.xsv_parser")
