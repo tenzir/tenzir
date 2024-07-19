@@ -61,8 +61,10 @@ struct buffer_state {
     }
     if (buffer_size + events.rows() > capacity.inner) {
       auto [lhs, rhs] = split(events, capacity.inner - buffer_size);
-      buffer_size += lhs.rows();
-      buffer.push(std::move(lhs));
+      if (lhs.rows() > 0) {
+        buffer_size += lhs.rows();
+        buffer.push(std::move(lhs));
+      }
       TENZIR_ASSERT(rhs.rows() > 0);
       switch (policy) {
         case buffer_policy::drop: {
@@ -99,8 +101,10 @@ struct buffer_state {
         TENZIR_ASSERT(policy == buffer_policy::block);
         const auto free_capacity = capacity.inner - buffer_size;
         auto [lhs, rhs] = split(blocked_events, free_capacity);
-        buffer_size += lhs.rows();
-        buffer.push(std::move(lhs));
+        if (lhs.rows() > 0) {
+          buffer_size += lhs.rows();
+          buffer.push(std::move(lhs));
+        }
         blocked_events = std::move(rhs);
         if (blocked_events.rows() == 0) {
           write_rp.deliver();
@@ -274,9 +278,6 @@ public:
               .emit(ctrl.diagnostics());
           });
       co_yield {};
-      if (events.rows() == 0) {
-        co_return;
-      }
       co_yield std::move(events);
     }
   }
