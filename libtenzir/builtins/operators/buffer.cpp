@@ -19,6 +19,8 @@
 
 namespace tenzir::plugins::buffer {
 
+// TODO: gcc emits a bogus -Wunused-function warning for this macro when used
+// inside an anonymous namespace.
 TENZIR_ENUM(buffer_policy, block, drop);
 
 namespace {
@@ -344,6 +346,9 @@ public:
     parser.add("--policy", policy_str, "<block|drop>");
     parser.parse(p);
     if (capacity.inner == 0) {
+      // TODO: It'd be nice to underline the entire operator's definition here
+      // instead of just the capacity, but there is no easy way to get that
+      // location currently.
       diagnostic::error("capacity must be greater than zero")
         .primary(capacity.source)
         .throw_();
