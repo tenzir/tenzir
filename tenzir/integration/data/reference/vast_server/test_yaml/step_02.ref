@@ -105,327 +105,327 @@ resp_ip_bytes: 4168
 _path: corelight_metrics_bro
 _system_name: sensor_10_0_0_2
 _write_ts: 2020-04-01T16:20:08.000000
-cpu: 37.66
-cpu.logger: 76.5
-cpu.manager: 17.6
-cpu.proxies: 29.4
+cpu:
+  logger: 76.5
+  manager: 17.6
+  proxies: 29.4
 files:
   per-minute: 0
-  total: 0
   queued:
     s3: 0
     sftp: 0
+  total: 0
 logs:
-  entries: 62926941626
   conn:
-    entries: 61842411773
+    entries:
+      per-second: 3880.8188068206
   conn_long:
-    entries: 48919
+    entries:
+      per-second: 0
   corelight_audit_log:
-    entries: 0
+    entries:
+      per-second: 0
   corelight_metrics_bro:
-    entries: 158829
+    entries:
+      per-second: 0
   corelight_metrics_cpu:
-    entries: 158829
+    entries:
+      per-second: 0
   corelight_metrics_disk:
-    entries: 158829
+    entries:
+      per-second: 0
   corelight_metrics_iface:
-    entries: 158829
+    entries:
+      per-second: 0
   corelight_metrics_memory:
-    entries: 158829
+    entries:
+      per-second: 0
   corelight_metrics_s3:
-    entries: 0
+    entries:
+      per-second: 0
   corelight_metrics_sftp:
-    entries: 0
+    entries:
+      per-second: 0
   corelight_metrics_system:
-    entries: 158829
+    entries:
+      per-second: 0
   corelight_profiling:
-    entries: 0
+    entries:
+      per-second: 0
   dce_rpc:
-    entries: 0
+    entries:
+      per-second: 0
   dhcp:
-    entries: 122
+    entries:
+      per-second: 0
   dnp3:
-    entries: 344
+    entries:
+      per-second: 0
   dns:
-    entries: 135966525
+    entries:
+      per-second: 21.6108899399
   dpd:
-    entries: 195318
+    entries:
+      per-second: 0
+  entries:
+    per-second: 3969.3565630792
   files:
-    entries: 799659
+    entries:
+      per-second: 0
   ftp:
-    entries: 60646
+    entries:
+      per-second: 0
   http:
-    entries: 12742329
+    entries:
+      per-second: 0
   intel:
-    entries: 0
+    entries:
+      per-second: 0
   irc:
-    entries: 7939
+    entries:
+      per-second: 0
   json_export:
-    filtered: 0
-    lag: 2975
-    sent: 24065
     conn:
-      bytes: 12090780
+      bytes:
+        per-second: 1777353.2732246569
     conn_long:
-      bytes: 0
+      bytes:
+        per-second: 0
     corelight_audit_log:
-      bytes: 0
+      bytes:
+        per-second: 0
     corelight_metrics_bro:
-      bytes: 0
+      bytes:
+        per-second: 0
     corelight_metrics_cpu:
-      bytes: 0
+      bytes:
+        per-second: 0
     corelight_metrics_disk:
-      bytes: 0
+      bytes:
+        per-second: 0
     corelight_metrics_iface:
-      bytes: 0
+      bytes:
+        per-second: 0
     corelight_metrics_memory:
-      bytes: 0
+      bytes:
+        per-second: 0
     corelight_metrics_s3:
-      bytes: 0
+      bytes:
+        per-second: 0
     corelight_metrics_sftp:
-      bytes: 0
+      bytes:
+        per-second: 0
     corelight_metrics_system:
-      bytes: 0
+      bytes:
+        per-second: 0
     corelight_profiling:
-      bytes: 0
+      bytes:
+        per-second: 0
     dce_rpc:
-      bytes: 0
+      bytes:
+        per-second: 0
     dhcp:
-      bytes: 0
+      bytes:
+        per-second: 0
     dnp3:
-      bytes: 0
+      bytes:
+        per-second: 0
     dns:
-      bytes: 63614
+      bytes:
+        per-second: 9352.0758682778
     dpd:
-      bytes: 0
+      bytes:
+        per-second: 0
     files:
-      bytes: 0
+      bytes:
+        per-second: 0
+    filtered:
+      bytes:
+        per-second: 0
+      per-second: 0
     ftp:
-      bytes: 0
+      bytes:
+        per-second: 0
     http:
-      bytes: 0
+      bytes:
+        per-second: 0
     intel:
-      bytes: 0
+      bytes:
+        per-second: 0
     irc:
-      bytes: 646
+      bytes:
+        per-second: 0
     kerberos:
-      bytes: 0
+      bytes:
+        per-second: 0
+    lag: 2975
     modbus:
-      bytes: 0
+      bytes:
+        per-second: 0
     mqtt_connect:
-      bytes: 0
+      bytes:
+        per-second: 0
     mqtt_publish:
-      bytes: 0
+      bytes:
+        per-second: 0
     mqtt_subscribe:
-      bytes: 0
+      bytes:
+        per-second: 0
     mysql:
-      bytes: 0
+      bytes:
+        per-second: 0
     notice:
-      bytes: 0
+      bytes:
+        per-second: 0
     ntlm:
-      bytes: 0
+      bytes:
+        per-second: 0
     pe:
-      bytes: 0
+      bytes:
+        per-second: 0
     radius:
-      bytes: 0
+      bytes:
+        per-second: 0
     rdp:
-      bytes: 0
+      bytes:
+        per-second: 0
     reporter:
-      bytes: 2762
+      bytes:
+        per-second: 0
     rfb:
-      bytes: 0
+      bytes:
+        per-second: 0
+    sent:
+      per-second: 3537.5526144161
     sip:
-      bytes: 0
+      bytes:
+        per-second: 0
     smb_files:
-      bytes: 0
+      bytes:
+        per-second: 0
     smb_mapping:
-      bytes: 0
+      bytes:
+        per-second: 0
     smtp:
-      bytes: 0
+      bytes:
+        per-second: 0
     smtp_links:
-      bytes: 0
+      bytes:
+        per-second: 0
     snmp:
-      bytes: 0
+      bytes:
+        per-second: 0
     socks:
-      bytes: 0
+      bytes:
+        per-second: 0
     software:
-      bytes: 0
+      bytes:
+        per-second: 0
     ssh:
-      bytes: 0
+      bytes:
+        per-second: 0
     ssl:
-      bytes: 0
+      bytes:
+        per-second: 0
     syslog:
-      bytes: 430
+      bytes:
+        per-second: 63.2068704619
     traceroute:
-      bytes: 0
+      bytes:
+        per-second: 0
     tunnel:
-      bytes: 0
+      bytes:
+        per-second: 0
     weird:
-      bytes: 136449
+      bytes:
+        per-second: 20059.020459999
     x509:
-      bytes: 0
+      bytes:
+        per-second: 0
   kerberos:
-    entries: 990612
+    entries:
+      per-second: 0
   modbus:
-    entries: 1482
+    entries:
+      per-second: 0
   mqtt_connect:
-    entries: 0
+    entries:
+      per-second: 0
   mqtt_publish:
-    entries: 0
+    entries:
+      per-second: 0
   mqtt_subscribe:
-    entries: 0
+    entries:
+      per-second: 0
   mysql:
-    entries: 0
+    entries:
+      per-second: 0
   notice:
-    entries: 58473
+    entries:
+      per-second: 0
   ntlm:
-    entries: 0
+    entries:
+      per-second: 0
   pe:
-    entries: 1280
+    entries:
+      per-second: 0
   radius:
-    entries: 679695
+    entries:
+      per-second: 0
   rdp:
-    entries: 450388
+    entries:
+      per-second: 0
   reporter:
-    entries: 29
+    entries:
+      per-second: 0
   rfb:
-    entries: 0
+    entries:
+      per-second: 0
   sip:
-    entries: 740418314
+    entries:
+      per-second: 0
   smb_files:
-    entries: 0
+    entries:
+      per-second: 0
   smb_mapping:
-    entries: 0
+    entries:
+      per-second: 0
   smtp:
-    entries: 1649
+    entries:
+      per-second: 0
   smtp_links:
-    entries: 0
+    entries:
+      per-second: 0
   snmp:
-    entries: 50842359
+    entries:
+      per-second: 0
   socks:
-    entries: 0
+    entries:
+      per-second: 0
   software:
-    entries: 23543
+    entries:
+      per-second: 0
   ssh:
-    entries: 9826588
+    entries:
+      per-second: 0
   ssl:
-    entries: 1391341
+    entries:
+      per-second: 0
   syslog:
-    entries: 2447429
+    entries:
+      per-second: 0.146992722
   traceroute:
-    entries: 0
+    entries:
+      per-second: 0
   tunnel:
-    entries: 498773
+    entries:
+      per-second: 0
   weird:
-    entries: 126123123
+    entries:
+      per-second: 70.5635792186
   x509:
-    entries: 0
-logs.conn.entries.per-second: 3880.8188068206
-logs.conn_long.entries.per-second: 0
-logs.corelight_audit_log.entries.per-second: 0
-logs.corelight_metrics_bro.entries.per-second: 0
-logs.corelight_metrics_cpu.entries.per-second: 0
-logs.corelight_metrics_disk.entries.per-second: 0
-logs.corelight_metrics_iface.entries.per-second: 0
-logs.corelight_metrics_memory.entries.per-second: 0
-logs.corelight_metrics_s3.entries.per-second: 0
-logs.corelight_metrics_sftp.entries.per-second: 0
-logs.corelight_metrics_system.entries.per-second: 0
-logs.corelight_profiling.entries.per-second: 0
-logs.dce_rpc.entries.per-second: 0
-logs.dhcp.entries.per-second: 0
-logs.dnp3.entries.per-second: 0
-logs.dns.entries.per-second: 21.6108899399
-logs.dpd.entries.per-second: 0
-logs.entries.per-second: 3969.3565630792
-logs.files.entries.per-second: 0
-logs.ftp.entries.per-second: 0
-logs.http.entries.per-second: 0
-logs.intel.entries.per-second: 0
-logs.irc.entries.per-second: 0
-logs.json_export.conn.bytes.per-second: 1777353.2732246569
-logs.json_export.conn_long.bytes.per-second: 0
-logs.json_export.corelight_audit_log.bytes.per-second: 0
-logs.json_export.corelight_metrics_bro.bytes.per-second: 0
-logs.json_export.corelight_metrics_cpu.bytes.per-second: 0
-logs.json_export.corelight_metrics_disk.bytes.per-second: 0
-logs.json_export.corelight_metrics_iface.bytes.per-second: 0
-logs.json_export.corelight_metrics_memory.bytes.per-second: 0
-logs.json_export.corelight_metrics_s3.bytes.per-second: 0
-logs.json_export.corelight_metrics_sftp.bytes.per-second: 0
-logs.json_export.corelight_metrics_system.bytes.per-second: 0
-logs.json_export.corelight_profiling.bytes.per-second: 0
-logs.json_export.dce_rpc.bytes.per-second: 0
-logs.json_export.dhcp.bytes.per-second: 0
-logs.json_export.dnp3.bytes.per-second: 0
-logs.json_export.dns.bytes.per-second: 9352.0758682778
-logs.json_export.dpd.bytes.per-second: 0
-logs.json_export.files.bytes.per-second: 0
-logs.json_export.filtered.bytes: 0
-logs.json_export.filtered.bytes.per-second: 0
-logs.json_export.filtered.per-second: 0
-logs.json_export.ftp.bytes.per-second: 0
-logs.json_export.http.bytes.per-second: 0
-logs.json_export.intel.bytes.per-second: 0
-logs.json_export.irc.bytes.per-second: 0
-logs.json_export.kerberos.bytes.per-second: 0
-logs.json_export.modbus.bytes.per-second: 0
-logs.json_export.mqtt_connect.bytes.per-second: 0
-logs.json_export.mqtt_publish.bytes.per-second: 0
-logs.json_export.mqtt_subscribe.bytes.per-second: 0
-logs.json_export.mysql.bytes.per-second: 0
-logs.json_export.notice.bytes.per-second: 0
-logs.json_export.ntlm.bytes.per-second: 0
-logs.json_export.pe.bytes.per-second: 0
-logs.json_export.radius.bytes.per-second: 0
-logs.json_export.rdp.bytes.per-second: 0
-logs.json_export.reporter.bytes.per-second: 0
-logs.json_export.rfb.bytes.per-second: 0
-logs.json_export.sent.per-second: 3537.5526144161
-logs.json_export.sip.bytes.per-second: 0
-logs.json_export.smb_files.bytes.per-second: 0
-logs.json_export.smb_mapping.bytes.per-second: 0
-logs.json_export.smtp.bytes.per-second: 0
-logs.json_export.smtp_links.bytes.per-second: 0
-logs.json_export.snmp.bytes.per-second: 0
-logs.json_export.socks.bytes.per-second: 0
-logs.json_export.software.bytes.per-second: 0
-logs.json_export.ssh.bytes.per-second: 0
-logs.json_export.ssl.bytes.per-second: 0
-logs.json_export.syslog.bytes.per-second: 63.2068704619
-logs.json_export.traceroute.bytes.per-second: 0
-logs.json_export.tunnel.bytes.per-second: 0
-logs.json_export.weird.bytes.per-second: 20059.020459999
-logs.json_export.x509.bytes.per-second: 0
-logs.kerberos.entries.per-second: 0
-logs.modbus.entries.per-second: 0
-logs.mqtt_connect.entries.per-second: 0
-logs.mqtt_publish.entries.per-second: 0
-logs.mqtt_subscribe.entries.per-second: 0
-logs.mysql.entries.per-second: 0
-logs.notice.entries.per-second: 0
-logs.ntlm.entries.per-second: 0
-logs.pe.entries.per-second: 0
-logs.radius.entries.per-second: 0
-logs.rdp.entries.per-second: 0
-logs.reporter.entries.per-second: 0
-logs.rfb.entries.per-second: 0
-logs.sip.entries.per-second: 0
-logs.smb_files.entries.per-second: 0
-logs.smb_mapping.entries.per-second: 0
-logs.smtp.entries.per-second: 0
-logs.smtp_links.entries.per-second: 0
-logs.snmp.entries.per-second: 0
-logs.socks.entries.per-second: 0
-logs.software.entries.per-second: 0
-logs.ssh.entries.per-second: 0
-logs.ssl.entries.per-second: 0
-logs.syslog.entries.per-second: 0.146992722
-logs.traceroute.entries.per-second: 0
-logs.tunnel.entries.per-second: 0
-logs.weird.entries.per-second: 70.5635792186
-logs.x509.entries.per-second: 0
+    entries:
+      per-second: 0
 memory:
   logger: 0.23
   manager: 0.2
