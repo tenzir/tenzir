@@ -245,7 +245,7 @@ public:
       "tenzir.metrics.buffer",
       record_type{
         {"used", uint64_type{}},
-        {"remaining", uint64_type{}},
+        {"free", uint64_type{}},
         {"dropped", uint64_type{}},
       },
     });
