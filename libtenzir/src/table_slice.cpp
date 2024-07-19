@@ -1081,8 +1081,8 @@ auto realize(unflatten_record&& record) -> std::shared_ptr<arrow::StructArray> {
                            arrays);
 }
 
-auto bitmap_or(std::shared_ptr<arrow::Buffer> x,
-               std::shared_ptr<arrow::Buffer> y)
+auto bitmap_or(const std::shared_ptr<arrow::Buffer>& x,
+               const std::shared_ptr<arrow::Buffer>& y)
   -> std::shared_ptr<arrow::Buffer> {
   if (not x || not y) {
     return nullptr;

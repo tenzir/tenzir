@@ -77,7 +77,7 @@ public:
     -> failure_or<operator_ptr> override {
     auto sep = std::optional<located<std::string>>{};
     argument_parser2::operator_(name())
-      .add(sep, "<sep>")
+      .add(sep, "<separator>")
       .parse(inv, ctx)
       .ignore();
     return std::make_unique<unflatten_operator>(
