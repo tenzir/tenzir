@@ -569,7 +569,11 @@ jobs:
               #   libfluent-bit.so to libtenzir.so directly. The alternative
               #   workaround of using LD_PRELOAD for the standalone plugin build
               #   does not work in the GitHub Actions Runner.
+              # - context, pipeline-manager: Required for running the package
+              #   manager integration tests.
               - plugins/fluent-bit
+              - contrib/tenzir-plugins/context
+              - contrib/tenzir-plugins/pipeline-manager
           - os: macos-14
             container: null
             name: macOS
@@ -808,9 +812,6 @@ jobs:
           - name: Compaction
             target: compaction
             path: contrib/tenzir-plugins/compaction
-          - name: Context
-            target: context
-            path: contrib/tenzir-plugins/context
           - name: Kafka
             target: kafka
             path: plugins/kafka
@@ -820,9 +821,9 @@ jobs:
           - name: Parquet
             target: parquet
             path: plugins/parquet
-          - name: Pipeline Manager
-            target: pipeline-manager
-            path: contrib/tenzir-plugins/pipeline-manager
+          - name: Packages
+            target: packages
+            path: contrib/tenzir-plugins/packages
           - name: Platform
             target: platform
             path: contrib/tenzir-plugins/platform
@@ -866,7 +867,7 @@ jobs:
           apt-get update
           apt-get -y install git curl jq sudo xz-utils
       - name: Tailscale
-        if: false && matrix.plugin.name == 'Context'
+        if: false && matrix.plugin.name == 'Packages'
         uses: tailscale/github-action@v2
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
