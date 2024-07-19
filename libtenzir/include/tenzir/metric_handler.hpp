@@ -10,7 +10,8 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/aliases.hpp"
-#include "tenzir/detail/weak_handle.hpp"
+
+#include <caf/typed_actor.hpp>
 
 namespace tenzir {
 
@@ -19,13 +20,13 @@ struct operator_metric;
 class metric_handler {
 public:
   metric_handler() = default;
-  metric_handler(metrics_receiver_actor new_receiver, uint64_t operator_index,
-                 uint64_t metric_index, type metric_type);
+  metric_handler(metrics_receiver_actor receiver, uint64_t operator_index,
+                 uint64_t metric_index, const type& metric_type);
 
   auto emit(record&& r) -> void;
 
 private:
-  detail::weak_handle<metrics_receiver_actor> receiver_;
+  metrics_receiver_actor receiver_ = {};
   uint64_t op_index_ = {};
   uint64_t metric_index_ = {};
 };
