@@ -297,8 +297,11 @@ using filesystem_actor = typed_actor_fwd<
   auto(atom::write, std::filesystem::path, chunk_ptr)->caf::result<atom::ok>,
   // Reads a chunk of data from a given path and returns the chunk.
   auto(atom::read, std::filesystem::path)->caf::result<chunk_ptr>,
-  // Reads all files from a given directory and returns their content as a 'blob'.
-  auto(atom::read, atom::recursive, std::filesystem::path)->caf::result<record>,
+  // Reads all files from the given directories and for each directory returns
+  // its structure as a record. Directories are modeled as nested records and
+  // their content as a 'blob'. Nonexisting paths are returned as empty records.
+  auto(atom::read, atom::recursive, std::vector<std::filesystem::path>)
+    ->caf::result<std::vector<record>>,
   // Moves a file on the fielsystem.
   auto(atom::move, std::filesystem::path, std::filesystem::path)
     ->caf::result<atom::done>,
@@ -490,7 +493,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::node_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_actor))
   TENZIR_ADD_TYPE_ID((tenzir::partition_creation_listener_actor))
-  TENZIR_ADD_TYPE_ID((tenzir::package_listener_actor))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::atom::done>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::diagnostic>))
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::table_slice>))

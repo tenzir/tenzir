@@ -534,7 +534,8 @@ caf::error configuration::parse(int argc, char** argv) {
   auto is_not_plugin_opt = [](auto& x) {
     return !x.starts_with("--plugins=") && !x.starts_with("--disable-plugins=")
            && !x.starts_with("--plugin-dirs=")
-           && !x.starts_with("--schema-dirs=");
+           && !x.starts_with("--schema-dirs=")
+           && !x.starts_with("--package-dirs=");
   };
   auto plugin_opt = std::stable_partition(
     command_line.begin(), command_line.end(), is_not_plugin_opt);
@@ -566,6 +567,13 @@ caf::error configuration::parse(int argc, char** argv) {
   } else if (auto vast_schema_dirs = detail::getenv("VAST_SCHEMA_DIRS")) {
     plugin_args.push_back(fmt::format("--schema-dirs={}", *vast_schema_dirs));
   }
+  // Package dirs don't need to be parsed early, but we still want to have
+  // the same command-line parsing logic so that a single string is
+  // automatically promoted to a list.
+  if (auto tenzir_package_dirs = detail::getenv("TENZIR_PACKAGE_DIRS")) {
+    plugin_args.push_back(
+      fmt::format("--package-dirs={}", *tenzir_package_dirs));
+  }
   // Copy over the specific plugin options.
   std::move(plugin_opt, command_line.end(), std::back_inserter(plugin_args));
   command_line.erase(plugin_opt, command_line.end());
@@ -573,6 +581,7 @@ caf::error configuration::parse(int argc, char** argv) {
     = config_options{}
         .add<std::vector<std::string>>("?tenzir", "schema-dirs", "")
         .add<std::vector<std::string>>("?tenzir", "plugin-dirs", "")
+        .add<std::vector<std::string>>("?tenzir", "package-dirs", "")
         .add<std::vector<std::string>>("?tenzir", "plugins", "")
         .add<std::vector<std::string>>("?tenzir", "disable-plugins", "");
   auto [ec, it] = plugin_opts.parse(content, plugin_args);

@@ -100,23 +100,15 @@ auto make_fanout_counter(size_t expected, Continuation&& then,
                                    std::forward<ErrorContinuation>(error));
 }
 
-// template <typename State>
-// auto make_fanout_counter(size_t expected, caf::typed_response_promise<State>
-// rp) {
-//   return make_fanout_counter<State>(expected,
-//     [rp](State&& state) mutable { rp.deliver(std::move(state)); },
-//     [rp](State&&, caf::error&& e) mutable { rp.deliver(e); });
-// }
-
-inline auto
-make_fanout_counter(size_t expected, caf::typed_response_promise<void> rp) {
+inline auto make_fanout_counter(size_t expected,
+                                const caf::typed_response_promise<void>& rp) {
   return make_fanout_counter(
     expected,
-    [rp]() mutable {
+    [rp = rp]() mutable {
       rp.deliver();
     },
-    [rp](caf::error&& e) mutable {
-      rp.deliver(e);
+    [rp = rp](caf::error e) mutable {
+      rp.deliver(std::move(e));
     });
 }
 

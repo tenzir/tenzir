@@ -45,8 +45,7 @@ posix_filesystem_state::rename_single_file(const std::filesystem::path& from,
 }
 
 auto read_recursive(const std::filesystem::path& root,
-                    /*const std::filesystem::path& current_path,*/ size_t&
-                      total_size) -> caf::expected<record> {
+                    size_t& total_size) -> caf::expected<record> {
   constexpr size_t MAX_TOTAL_SIZE = 64 * 1024 * 1024; // 64 MiB
   auto result = record{};
   for (const auto& entry : std::filesystem::directory_iterator(root)) {
@@ -153,18 +152,31 @@ filesystem_actor::behavior_type posix_filesystem(
       }
     },
     [self](atom::read, atom::recursive,
-           const std::filesystem::path& filename) -> caf::result<record> {
-      const auto path
-        = filename.is_absolute() ? filename : self->state.root / filename;
-      auto err = std::error_code{};
-      if (!std::filesystem::exists(path, err)) {
-        ++self->state.stats.checks.failed;
-        return record{};
-      } else {
-        ++self->state.stats.checks.successful;
+           const std::vector<std::filesystem::path>& filenames)
+      -> caf::result<std::vector<record>> {
+      auto result = std::vector<record>{};
+      for (auto const& path : filenames) {
+        const auto full_path
+          = path.is_absolute() ? path : self->state.root / path;
+        auto err = std::error_code{};
+        if (!std::filesystem::exists(full_path, err)) {
+          ++self->state.stats.checks.failed;
+          result.emplace_back(record{});
+          continue;
+        } else {
+          ++self->state.stats.checks.successful;
+        }
+        auto total_size = size_t{0};
+        auto contents = read_recursive(full_path, total_size);
+        if (!contents) {
+          return diagnostic::error("failed to read directory")
+            .note("trying to read {}", path)
+            .note("encountered error {}", contents.error())
+            .to_error();
+        }
+        result.push_back(std::move(*contents));
       }
-      auto total_size = size_t{0};
-      return read_recursive(path, total_size);
+      return result;
     },
     [self](atom::move, const std::filesystem::path& from,
            const std::filesystem::path& to) -> caf::result<atom::done> {

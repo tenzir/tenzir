@@ -56,9 +56,9 @@ struct package_config final {
 };
 
 struct package_input final {
-  std::string name = {}; // required
-  std::string description = {};
-  std::string type = {}; // required
+  std::string name = {}; // required to be non-empty
+  std::string type = {}; // required to be non-empty
+  std::optional<std::string> description = {};
   std::optional<std::string> default_ = {};
 
   auto to_record() const -> record;
@@ -74,9 +74,9 @@ struct package_input final {
 };
 
 struct package_pipeline final {
-  std::string name = {};
-  std::string description = {};
-  std::string definition = {}; // required
+  std::optional<std::string> name = {};
+  std::optional<std::string> description = {};
+  std::string definition = {}; // required to be non-empty
   bool disabled = false;
   std::optional<duration> retry_on_error = {};
 
@@ -97,7 +97,7 @@ struct package_pipeline final {
 
 struct package_context final {
   std::string type = {};
-  std::string description = {};
+  std::optional<std::string> description = {};
   tenzir::context::parameter_map arguments = {};
   bool disabled = false;
 
@@ -115,9 +115,9 @@ struct package_context final {
 };
 
 struct package_snippet final {
-  std::string name = {};
-  std::string description = {};
-  std::string definition = {}; // required
+  std::optional<std::string> name = {};
+  std::optional<std::string> description = {};
+  std::string definition = {}; // required to be non-empty
 
   auto to_record() const -> record;
 
@@ -152,12 +152,12 @@ struct package_contexts_map
 using package_snippets_list = std::vector<package_snippet>;
 
 struct package final {
-  std::string id = {};   // required
-  std::string name = {}; // required
-  std::string author = {};
-  std::string description = {};
-  std::string package_icon = {};
-  std::string author_icon = {};
+  std::string id = {};   // required to be non-empty
+  std::string name = {}; // required to be non-empty
+  std::optional<std::string> author = {};
+  std::optional<std::string> description = {};
+  std::optional<std::string> package_icon = {};
+  std::optional<std::string> author_icon = {};
 
   package_inputs_map inputs;
   package_pipelines_map pipelines;

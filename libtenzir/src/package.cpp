@@ -13,8 +13,13 @@
 
 namespace tenzir {
 
-#define TRY_ASSIGN_STRING_TO_RESULT2(name, field)                              \
+#define TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT2(name, field)                     \
   if (key == #name) {                                                          \
+    const auto* null = caf::get_if<caf::none_t>(&value);                       \
+    if (null) {                                                                \
+      result.field = std::nullopt;                                             \
+      continue;                                                                \
+    }                                                                          \
     const auto* id = caf::get_if<std::string_view>(&value);                    \
     if (not id) {                                                              \
       return diagnostic::error(#name " must be a string")                      \
@@ -25,8 +30,20 @@ namespace tenzir {
     continue;                                                                  \
   }
 
+#define TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(name)                             \
+  TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT2(name, name)
+
 #define TRY_ASSIGN_STRING_TO_RESULT(name)                                      \
-  TRY_ASSIGN_STRING_TO_RESULT2(name, name)
+  if (key == #name) {                                                          \
+    const auto* id = caf::get_if<std::string_view>(&value);                    \
+    if (not id) {                                                              \
+      return diagnostic::error(#name " must be a string")                      \
+        .note("invalid package definition")                                    \
+        .to_error();                                                           \
+    }                                                                          \
+    result.name = std::string{*id};                                            \
+    continue;                                                                  \
+  }
 
 #define TRY_ASSIGN_MAP_TO_RESULT(name, value_type)                             \
   if (key == #name) {                                                          \
@@ -138,9 +155,9 @@ auto package_input::parse(const view<record>& data)
   auto result = package_input{};
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRING_TO_RESULT(name)
-    TRY_ASSIGN_STRING_TO_RESULT(description)
     TRY_ASSIGN_STRING_TO_RESULT(type)
-    TRY_ASSIGN_STRING_TO_RESULT2(default, default_);
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description)
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT2(default, default_);
     return diagnostic::error("unknown key '{}'", key)
       .note("while trying to parse 'input'")
       .note("invalid package source definition")
@@ -183,9 +200,9 @@ auto package_pipeline::parse(const view<record>& data)
   -> caf::expected<package_pipeline> {
   auto result = package_pipeline{};
   for (const auto& [key, value] : data) {
-    TRY_ASSIGN_STRING_TO_RESULT(name)
-    TRY_ASSIGN_STRING_TO_RESULT(description)
     TRY_ASSIGN_STRING_TO_RESULT(definition)
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(name)
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description)
     if (key == "disabled") {
       const auto* disabled = caf::get_if<view<bool>>(&value);
       if (not disabled) {
@@ -220,7 +237,7 @@ auto package_context::parse(const view<record>& data)
   auto result = package_context{};
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRING_TO_RESULT(type);
-    TRY_ASSIGN_STRING_TO_RESULT(description);
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description);
     TRY_ASSIGN_STRINGMAP_TO_RESULT(arguments);
   }
   REQUIRED_FIELD(type)
@@ -231,9 +248,9 @@ auto package_snippet::parse(const view<record>& data)
   -> caf::expected<package_snippet> {
   auto result = package_snippet{};
   for (const auto& [key, value] : data) {
-    TRY_ASSIGN_STRING_TO_RESULT(name);
-    TRY_ASSIGN_STRING_TO_RESULT(description);
     TRY_ASSIGN_STRING_TO_RESULT(definition);
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(name);
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description);
   }
   REQUIRED_FIELD(definition)
   return result;
@@ -244,10 +261,10 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRING_TO_RESULT(id);
     TRY_ASSIGN_STRING_TO_RESULT(name);
-    TRY_ASSIGN_STRING_TO_RESULT(author);
-    TRY_ASSIGN_STRING_TO_RESULT(description);
-    TRY_ASSIGN_STRING_TO_RESULT(package_icon);
-    TRY_ASSIGN_STRING_TO_RESULT(author_icon);
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(author);
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description);
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(package_icon);
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(author_icon);
     TRY_ASSIGN_MAP_TO_RESULT(inputs, package_input);
     TRY_ASSIGN_MAP_TO_RESULT(pipelines, package_pipeline);
     TRY_ASSIGN_MAP_TO_RESULT(contexts, package_context);
@@ -259,7 +276,6 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
       .note("invalid package definition")
       .to_error();
   }
-  // Post-parsing checks.
   REQUIRED_FIELD(id)
   REQUIRED_FIELD(name)
   return result;

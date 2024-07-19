@@ -52,6 +52,8 @@ void add_root_opts(command& cmd) {
                                "console");
   cmd.options.add<caf::config_value::list>("?tenzir", "schema-dirs",
                                            module_desc);
+  cmd.options.add<caf::config_value::list>(
+    "?tenzir", "package-dirs", "additional directories containing packages");
   cmd.options.add<std::string>("?tenzir", "state-directory,d",
                                "directory for persistent state");
   cmd.options.add<std::string>("?tenzir", "cache-directory",
