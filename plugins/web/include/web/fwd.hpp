@@ -40,7 +40,7 @@ using authenticator_actor = typed_actor_fwd<
   // Validate a token.
   auto(atom::validate, token_t)->caf::result<bool>>
   // Conform to the protocol of a STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
+  ::extend_with<component_plugin_actor>::unwrap;
 
 } // namespace tenzir::plugins::web
 

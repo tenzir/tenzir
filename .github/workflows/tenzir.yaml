@@ -817,6 +817,13 @@ jobs:
           - name: NIC
             target: nic
             path: plugins/nic
+          # TODO: Enable packages plugin integration tests in CI. The
+          # packages plugin depends on the 'context' and 'pipeline-manager'
+          # plugins, so this requires either merging all three into one single
+          # plugin or bundling the latter two so they're always available.
+          # - name: Packages
+          #   target: packages
+          #   path: contrib/tenzir-plugins/packages
           - name: Parquet
             target: parquet
             path: plugins/parquet

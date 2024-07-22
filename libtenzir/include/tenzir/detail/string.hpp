@@ -146,6 +146,17 @@ replace_all(std::string str, std::string_view search, std::string_view replace);
 std::vector<std::string_view>
 split(std::string_view str, std::string_view sep, size_t max_splits = -1);
 
+/// Splits a character sequence into two substrings.
+/// If `sep` does not occur in `str`, the second substring will be empty.
+/// @param str The string to split.
+/// @param sep The separator where to split.
+/// @pre `!sep.empty()`
+/// @warning The lifetime of the returned substrings are bound to the lifetime
+/// of the string pointed to by `str`.
+/// @returns A pair of substrings.
+std::pair<std::string_view, std::string_view>
+split_once(std::string_view str, std::string_view sep);
+
 /// Splits a character sequence into a vector of substrings, with escaping of
 /// the separator.
 /// @param str The string to split.

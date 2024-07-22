@@ -44,6 +44,38 @@ posix_filesystem_state::rename_single_file(const std::filesystem::path& from,
   return atom::done_v;
 }
 
+auto read_recursive(const std::filesystem::path& root,
+                    size_t& total_size) -> caf::expected<record> {
+  constexpr size_t MAX_TOTAL_SIZE = 64 * 1024 * 1024; // 64 MiB
+  auto result = record{};
+  for (const auto& entry : std::filesystem::directory_iterator(root)) {
+    auto name = entry.path().filename();
+    if (entry.is_directory()) {
+      auto recursive_result = read_recursive(entry.path(), total_size);
+      if (!recursive_result) {
+        return recursive_result.error();
+      }
+      result[name] = *recursive_result;
+    } else if (entry.is_regular_file()) {
+      auto size = entry.file_size();
+      if (total_size + size > MAX_TOTAL_SIZE) {
+        return diagnostic::error("max size exceeded")
+          .note("for file {}", entry.path())
+          .to_error();
+      }
+      auto contents = io::read(entry.path());
+      if (!contents) {
+        return diagnostic::error(contents.error())
+          .note("while trying to read file {}", entry.path())
+          .to_error();
+      }
+      total_size += contents->size();
+      result[name] = blob{contents->begin(), contents->end()};
+    }
+  }
+  return result;
+}
+
 filesystem_actor::behavior_type posix_filesystem(
   filesystem_actor::stateful_pointer<posix_filesystem_state> self,
   std::filesystem::path root, const accountant_actor& accountant) {
@@ -118,6 +150,33 @@ filesystem_actor::behavior_type posix_filesystem(
         ++self->state.stats.reads.failed;
         return bytes.error();
       }
+    },
+    [self](atom::read, atom::recursive,
+           const std::vector<std::filesystem::path>& filenames)
+      -> caf::result<std::vector<record>> {
+      auto result = std::vector<record>{};
+      for (auto const& path : filenames) {
+        const auto full_path
+          = path.is_absolute() ? path : self->state.root / path;
+        auto err = std::error_code{};
+        if (!std::filesystem::exists(full_path, err)) {
+          ++self->state.stats.checks.failed;
+          result.emplace_back(record{});
+          continue;
+        } else {
+          ++self->state.stats.checks.successful;
+        }
+        auto total_size = size_t{0};
+        auto contents = read_recursive(full_path, total_size);
+        if (!contents) {
+          return diagnostic::error("failed to read directory")
+            .note("trying to read {}", path)
+            .note("encountered error {}", contents.error())
+            .to_error();
+        }
+        result.push_back(std::move(*contents));
+      }
+      return result;
     },
     [self](atom::move, const std::filesystem::path& from,
            const std::filesystem::path& to) -> caf::result<atom::done> {

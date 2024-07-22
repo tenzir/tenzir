@@ -297,6 +297,11 @@ using filesystem_actor = typed_actor_fwd<
   auto(atom::write, std::filesystem::path, chunk_ptr)->caf::result<atom::ok>,
   // Reads a chunk of data from a given path and returns the chunk.
   auto(atom::read, std::filesystem::path)->caf::result<chunk_ptr>,
+  // Reads all files from the given directories and for each directory returns
+  // its structure as a record. Directories are modeled as nested records and
+  // their content as a 'blob'. Nonexisting paths are returned as empty records.
+  auto(atom::read, atom::recursive, std::vector<std::filesystem::path>)
+    ->caf::result<std::vector<record>>,
   // Moves a file on the fielsystem.
   auto(atom::move, std::filesystem::path, std::filesystem::path)
     ->caf::result<atom::done>,
@@ -343,9 +348,9 @@ using rest_handler_actor = typed_actor_fwd<
     ->caf::result<rest_response>>::unwrap;
 
 /// The interface of a COMPONENT PLUGIN actor.
-using component_plugin_actor = typed_actor_fwd<>
+using component_plugin_actor = typed_actor_fwd<
   // Conform to the protocol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
+  >::extend_with<status_client_actor>::unwrap;
 
 /// The interface of a SOURCE actor.
 using source_actor = typed_actor_fwd<
@@ -430,6 +435,23 @@ using pipeline_executor_actor = typed_actor_fwd<
   auto(atom::pause)->caf::result<void>,
   // Resume the pipeline execution. No-op if it was not paused.
   auto(atom::resume)->caf::result<void>>::unwrap;
+
+/// The interface of a PACKAGE LISTENER actor.
+// Listeners are notified by the package manager in the following order:
+//  1. context_manager component
+//  2. pipeline_manager component
+//  3. other subscribers (tbd)
+using package_listener_actor = typed_actor_fwd<
+  // Add a new package.
+  auto(atom::package, atom::add, package)->caf::result<void>,
+  // Remove all pipelines from a package.
+  auto(atom::package, atom::remove, std::string)->caf::result<void>,
+  // Send the list of packages that were found on disk
+  // during startup. Listeners should use this information
+  // to purge left-over state from packages that were
+  // removed in the meantime.
+  auto(atom::package, atom::start, std::vector<std::string>)
+    ->caf::result<void>>::unwrap;
 
 using terminator_actor = typed_actor_fwd<
   // Shut down the given actors.

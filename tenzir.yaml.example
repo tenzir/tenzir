@@ -110,6 +110,10 @@ tenzir:
   # from.
   plugin-dirs: []
 
+  # List of paths that contain statically configured packages.
+  # This setting is ignored unless the package manager plugin is enabled.
+  package-dirs: []
+
   # The plugins to load at startup. For relative paths, Tenzir tries to find
   # the files in the specified `tenzir.plugin-dirs`. The special values
   # 'bundled' and 'all' enable autoloading of bundled and all plugins
@@ -269,6 +273,7 @@ tenzir:
       # - Set the option to true to enable with the default delay of 1 minute.
       # - Set the option to a valid duration to enable with a custom delay.
       restart-on-error: 1 minute
+
 
 # The below settings are internal to CAF, and aren't checked by Tenzir directly.
 # Please be careful when changing these options. Note that some CAF options may

@@ -145,6 +145,11 @@ public:
 
   /// Components that should be created before the current one so initialization
   /// can succeed.
+  /// Note that the *only* guarantee made is that components are able to
+  /// retrieve actor handles of the wanted components from the registry.
+  /// If actors send requests before returning their behaviors, there is
+  /// no guarantee that these requests will arrive at the destination in
+  /// the correct order.
   /// Defaults to empty list.
   virtual auto wanted_components() const -> std::vector<std::string>;
 

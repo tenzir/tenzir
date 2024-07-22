@@ -126,6 +126,17 @@ split(std::string_view str, std::string_view sep, size_t max_splits) {
   return out;
 }
 
+std::pair<std::string_view, std::string_view>
+split_once(std::string_view str, std::string_view sep) {
+  auto parts = split(str, sep, 1);
+  TENZIR_ASSERT(parts.size() <= 2);
+  if (parts.size() == 1) {
+    return {parts[0], std::string_view{str.end(), str.end()}};
+  } else {
+    return {parts[0], parts[1]};
+  }
+}
+
 std::vector<std::string>
 split_escaped(std::string_view str, std::string_view sep, std::string_view esc,
               size_t max_splits) {
