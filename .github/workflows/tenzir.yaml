@@ -256,7 +256,10 @@ jobs:
           elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             tags=('main' "${{ github.sha }}")
           elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            tags=('latest' "${{ github.sha }}" "${{ steps.configure.outputs.release-version }}")
+            major_minor_patch='${{ steps.configure.outputs.release-version }}'
+            major_minor=$(echo $major_minor_patch | sed 's/\(v[0-9]*\.[0-9]*\)\..*/\1/')
+            major=$(echo $major_minor_patch | sed 's/\(v[0-9]*\)\..*/\1/')
+            tags=('latest' "${{ github.sha }}" "${major_minor_patch}" "${major_minor}" "${major}")
           else
             echo "::error unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
             exit 1
