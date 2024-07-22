@@ -867,7 +867,7 @@ jobs:
           apt-get update
           apt-get -y install git curl jq sudo xz-utils
       - name: Tailscale
-        if: false && matrix.plugin.name == 'Context'
+        if: matrix.plugin.name == 'Packages'
         uses: tailscale/github-action@v2
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
