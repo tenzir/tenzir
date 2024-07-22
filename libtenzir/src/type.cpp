@@ -835,86 +835,8 @@ data type::construct() const noexcept {
   return caf::visit(f, *this);
 }
 
-data type::to_definition(bool expand) const noexcept {
-  // Utility function for adding the attributes to a type definition, if
-  // required.
-  auto attributes_enriched_definition
-    = [&](data type_definition) noexcept -> data {
-    auto attributes_definition = record::vector_type{};
-    for (const auto& [key, value] : attributes(recurse::no)) {
-      if (value.empty())
-        attributes_definition.emplace_back(std::string{key}, caf::none);
-      else
-        attributes_definition.emplace_back(std::string{key},
-                                           std::string{value});
-    }
-    if (!expand && attributes_definition.empty())
-      return type_definition;
-    return record{
-      {"type", std::move(type_definition)},
-      {"attributes", record::make_unsafe(std::move(attributes_definition))},
-    };
-  };
-  // Check if there is an alias, and if there is then visit then one first.
-  for (const auto& alias : aliases()) {
-    auto definition
-      = attributes_enriched_definition(alias.to_definition(expand));
-    const auto name = this->name();
-    if (!expand && name.empty())
-      return definition;
-    return record{
-      {std::string{name}, std::move(definition)},
-    };
-  }
-  // At this point we've gone through all named aliases, but the last innermost
-  // type may still have attributes.
-  TENZIR_ASSERT(name().empty());
-  auto make_type_definition = detail::overload{
-    [](const null_type&) noexcept -> data {
-      return {};
-    },
-    [](const basic_type auto& self) noexcept -> data {
-      return fmt::to_string(self);
-    },
-    [](const enumeration_type& self) noexcept -> data {
-      auto definition = list{};
-      for (const auto& field : self.fields())
-        definition.push_back(std::string{field.name});
-      return record{
-        {"enum", std::move(definition)},
-      };
-    },
-    [&](const list_type& self) noexcept -> data {
-      return record{
-        {"list", self.value_type().to_definition(expand)},
-      };
-    },
-    [&](const map_type& self) noexcept -> data {
-      return record{
-        {"map",
-         record{
-           {"key", self.key_type().to_definition(expand)},
-           {"value", self.value_type().to_definition(expand)},
-         }},
-      };
-    },
-    [&](const record_type& self) noexcept -> data {
-      auto definition = list{};
-      definition.reserve(self.num_fields());
-      for (const auto& [name, type] : self.fields())
-        definition.push_back(
-          record{{std::string{name}, type.to_definition(expand)}});
-      return record{
-        {"record", std::move(definition)},
-      };
-    },
-  };
-  return attributes_enriched_definition(
-    caf::visit(make_type_definition, *this));
-}
-
-auto type::to_definition2(std::optional<std::string> field_name,
-                          offset parent_path) const noexcept -> record {
+auto type::to_definition(std::optional<std::string> field_name,
+                         offset parent_path) const noexcept -> record {
   auto attributes = record{};
   for (const auto& [key, value] : this->attributes()) {
     attributes.emplace(key, value.empty() ? data{} : data{std::string{value}});
@@ -942,7 +864,7 @@ auto type::to_definition2(std::optional<std::string> field_name,
       if (caf::holds_alternative<record_type>(self.value_type())) {
         parent_path.push_back(-1);
       }
-      auto result = self.value_type().to_definition2(
+      auto result = self.value_type().to_definition(
         field_name.value_or(std::string{name()}), parent_path);
       result["kind"]
         = fmt::format("list<{}>", caf::get<std::string>(result["kind"]));
@@ -958,7 +880,7 @@ auto type::to_definition2(std::optional<std::string> field_name,
       for (const auto& field : self.fields()) {
         ++parent_path.back();
         fields.push_back(
-          field.type.to_definition2(std::string{field.name}, parent_path));
+          field.type.to_definition(std::string{field.name}, parent_path));
       }
       auto result = record{};
       result.emplace("name", field_name.value_or(std::string{name()}));
