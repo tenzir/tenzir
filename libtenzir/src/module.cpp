@@ -149,11 +149,7 @@ get_module_dirs(const caf::actor_system_config& cfg) {
     if (auto xdg_config_home = detail::getenv("XDG_CONFIG_HOME")) {
       result.insert(std::filesystem::path{*xdg_config_home} / "tenzir"
                     / "schema");
-      result.insert(std::filesystem::path{*xdg_config_home} / "tenzir"
-                    / "schema");
     } else if (auto home = detail::getenv("HOME")) {
-      result.insert(std::filesystem::path{*home} / ".config" / "tenzir"
-                    / "schema");
       result.insert(std::filesystem::path{*home} / ".config" / "tenzir"
                     / "schema");
     }
