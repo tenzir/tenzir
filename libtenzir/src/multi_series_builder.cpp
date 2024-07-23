@@ -226,7 +226,6 @@ void multi_series_builder::complete_last_event() {
   }
   std::string schema_name;
   if (auto p = get_policy<policy_selector>()) {
-    // FIXME typed lookup is incorrect
     auto* selected_schema = builder_raw_.find_field_raw(p->field_name);
     if (selected_schema) {
       const auto visitor = detail::overload{
