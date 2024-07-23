@@ -89,6 +89,9 @@ tenzir:
     suricata-over-tcp:
       # An optional user-facing name for the pipeline. Defaults to the id.
       name: Import Suricata from TCP
+      # An optional user-facing description of the pipeline.
+      description: |
+        Imports Suricata Eve JSON from the port 34343 over TCP.
       # The definition of the pipeline. Configured pipelines that fail to start
       # cause the node to fail to start.
       definition: |
@@ -108,4 +111,6 @@ tenzir:
       labels:
         - Suricata
         - Import
+      # Disable the pipeline.
+      disabled: false
 ```
