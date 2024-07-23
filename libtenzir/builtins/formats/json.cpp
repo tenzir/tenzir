@@ -832,9 +832,11 @@ public:
     msb_parser.add_to_parser(parser);
     common_parser_options_parser common_parser;
     common_parser.add_to_parser(parser);
+    std::optional<location> legacy_precise;
     std::optional<location> use_ndjson_mode;
     std::optional<location> use_gelf_mode;
     std::optional<location> arrays_of_objects;
+    parser.add( "--precise", legacy_precise );
     parser.add("--ndjson", use_ndjson_mode);
     parser.add("--gelf", use_gelf_mode);
     parser.add("--arrays-of-objects", arrays_of_objects);
@@ -864,6 +866,12 @@ public:
     args.builder_policy = msb_parser.get_policy();
     args.unnest = common_parser.get_unnest();
     args.raw = common_parser.get_raw();
+
+    if ( legacy_precise and std::get_if<multi_series_builder::policy_merge>(&args.builder_policy) ) {
+      diagnostic::error("`--precise` and `--merge` are incompatible." )
+      .primary(*legacy_precise)
+      .throw_();
+    }
 
     return std::make_unique<json_parser>(std::move(args));
   }
