@@ -279,4 +279,8 @@ inline constexpr auto node_connection_retry_delay = std::chrono::seconds{3u};
 /// operator.
 inline constexpr auto metrics_interval = std::chrono::seconds{1};
 
+///
+inline constexpr auto packaged_pipeline_restart_on_error
+  = std::chrono::minutes{1};
+
 } // namespace tenzir::defaults

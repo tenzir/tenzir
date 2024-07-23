@@ -207,20 +207,42 @@ auto package_pipeline::parse(const view<record>& data)
       const auto* disabled = caf::get_if<view<bool>>(&value);
       if (not disabled) {
         return diagnostic::error("'disabled' must be a bool")
-          .note("invalid package definition")
           .to_error();
       }
       result.disabled = *disabled;
       continue;
     }
-    if (key == "retry_on_error") {
-      const auto* retry_on_error = caf::get_if<view<duration>>(&value);
-      if (not retry_on_error) {
-        return diagnostic::error("'retry_on_error' must be a duration or null")
-          .note("invalid package definition")
+    if (key == "restart-on-error") {
+      if (caf::holds_alternative<caf::none_t>(value)) {
+        continue;
+      }
+      const auto* on_off = caf::get_if<bool>(&value);
+      const auto* retry_delay = caf::get_if<duration>(&value);
+      if (not on_off and not retry_delay) {
+        return diagnostic::error("'restart-on-error' must be a "
+                                 "be a "
+                                 "bool or a positive duration")
+          .note("got '{}'", value)
           .to_error();
       }
-      result.retry_on_error = *retry_on_error;
+      if (on_off) {
+        result.restart_on_error
+          = *on_off ? std::optional<
+                        duration>{defaults::packaged_pipeline_restart_on_error}
+                    : std::optional<duration>{std::nullopt};
+        continue;
+      }
+      TENZIR_ASSERT(retry_delay);
+      if (*retry_delay < duration::zero()) {
+        return diagnostic::error("'restart-on-error' cannot be negative")
+          .to_error();
+      }
+      result.restart_on_error = *retry_delay;
+      continue;
+    }
+    // Hack: Ignore the 'labels' key so we can reuse this function to
+    // parse configured pipelines as well.
+    if (key == "labels") {
       continue;
     }
     return diagnostic::error("unknown key '{}'", key)
@@ -340,8 +362,8 @@ auto package_pipeline::to_record() const -> record {
     {"definition", definition},
     {"disabled", disabled},
   };
-  if (retry_on_error) {
-    result["retry_on_error"] = retry_on_error;
+  if (restart_on_error) {
+    result["restart-on-error"] = restart_on_error;
   }
   return result;
 }
