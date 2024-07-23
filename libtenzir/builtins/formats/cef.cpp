@@ -143,8 +143,8 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     for (auto& v : msb.yield_ready_as_table_slice()) {
       co_yield std::move(v);
     }
-    for (auto e : msb.last_errors()) {
-      diagnostic::error(e).emit(diag);
+    for (auto& e : msb.last_errors()) {
+      diag.emit(std::move(e));
     }
     if (!line) {
       co_yield {};
@@ -160,6 +160,9 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       diagnostic_builder{std::move(*d)}.hint("note {}", line_counter).emit(diag);
     }
   }
+    for (auto& e : msb.last_errors()) {
+      diag.emit(std::move(e));
+    }
   for (auto& slice : msb.finalize_as_table_slice()) {
     co_yield std::move(slice);
   }

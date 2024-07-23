@@ -32,7 +32,7 @@ namespace tenzir {
 
 class multi_series_builder;
 
-using parser_function_type = std::function<caf::expected<tenzir::data>(
+using parser_function_type = std::function<std::variant<tenzir::data,tenzir::diagnostic>(
   std::string_view, const tenzir::type*)>;
 
 namespace detail::multi_series_builder {
@@ -97,8 +97,9 @@ public:
     const auto visitor = detail::overload{
       [&](series_builder_element& b) {
         auto res = (*b.parser)(s, nullptr);
-        TENZIR_ASSERT(res);
-        b.ref.data(*res);
+        auto ptr = std::get_if<tenzir::data>( &res ); 
+        TENZIR_ASSERT(ptr);
+        b.ref.data(*ptr);
       },
       [&](raw_pointer raw) {
         raw->data_unparsed(std::move(s));
@@ -154,8 +155,9 @@ public:
     const auto visitor = detail::overload{
       [&](series_builder_element& b) {
         auto res = (*b.parser)(s, nullptr);
-        TENZIR_ASSERT(res);
-        b.ref.data(*res);
+        auto ptr = std::get_if<tenzir::data>( &res );
+        TENZIR_ASSERT(ptr);
+        b.ref.data(*ptr);
       },
       [&](raw_pointer raw) {
         raw->data_unparsed(s);
@@ -220,7 +222,7 @@ public:
   auto yield_ready_as_table_slice() -> std::vector<table_slice>;
 
   [[nodiscard("The result of a flush must be handled")]]
-  auto last_errors() -> std::vector<caf::error>;
+  auto last_errors() -> std::vector<tenzir::diagnostic>;
 
   /// adds a record to the currently active builder
   [[nodiscard]] auto record() -> record_generator;
@@ -397,7 +399,7 @@ private:
   series_builder merging_builder_;
   std::vector<entry_data> entries_;
   std::vector<series> ready_events_;
-  std::vector<caf::error> errors_;
+  std::vector<diagnostic> errors_;
   std::chrono::steady_clock::time_point last_yield_time_
     = std::chrono::steady_clock::now();
   size_t active_index_ = 0;

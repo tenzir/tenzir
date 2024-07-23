@@ -132,7 +132,7 @@ inline auto split_at_null(generator<chunk_ptr> input, char split)
 }
 
 auto json_string_parser(std::string_view s, const tenzir::type* seed)
-  -> caf::expected<tenzir::data> {
+  -> std::variant<tenzir::data,tenzir::diagnostic> {
   if (seed) {
     return record_builder::basic_seeded_parser(s, *seed);
   }
@@ -309,10 +309,11 @@ private:
       // TODO because of this it would be better to adapt the multi_series_builder
       if constexpr (std::same_as<decltype(builder), builder_ref>) {
         auto d = json_string_parser(maybe_str.value_unsafe(), nullptr);
-        if (d.error()) {
-          diagnostic::warning(d.error()).emit(diag_);
+        auto err = std::get_if<tenzir::diagnostic>( &d );
+        if (err) {
+          diag_.emit(std::move(*err));
         }
-        builder.data(std::move(*d));
+        builder.data( std::get<tenzir::data>(d) );
       } else {
         builder.data_unparsed(std::string{maybe_str.value_unsafe()});
       }
@@ -579,8 +580,8 @@ auto parser_loop(generator<GeneratorValue> json_chunk_generator,
     for (auto& slice : parser_impl.builder.yield_ready_as_table_slice()) {
       co_yield std::move(slice);
     }
-    for (auto err : parser_impl.builder.last_errors()) {
-      diagnostic::warning(err).emit(parser_impl.ctrl.diagnostics());
+    for (auto& e : parser_impl.builder.last_errors()) {
+      parser_impl.ctrl.diagnostics().emit(std::move(e));
     }
     if (not chunk or chunk->size() == 0u) {
       co_yield {};
@@ -595,6 +596,9 @@ auto parser_loop(generator<GeneratorValue> json_chunk_generator,
   if (parser_impl.abort_requested) {
     co_return;
   }
+    for (auto& e : parser_impl.builder.last_errors()) {
+      parser_impl.ctrl.diagnostics().emit(std::move(e));
+    }
   // Get all remaining events
   for (auto& slice : parser_impl.builder.finalize_as_table_slice()) {
     co_yield std::move(slice);

@@ -11,6 +11,7 @@
 #include "tenzir/record_builder.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/type.hpp"
+#include "tenzir/diagnostics.hpp"
 
 #include <tenzir/multi_series_builder.hpp>
 
@@ -175,7 +176,7 @@ auto multi_series_builder::yield_ready_as_table_slice()
   return series_to_table_slice(yield_ready(), settings_.default_name);
 }
 
-auto multi_series_builder::last_errors() -> std::vector<caf::error> {
+auto multi_series_builder::last_errors() -> std::vector<tenzir::diagnostic> {
   return std::exchange(errors_, {});
 }
 
@@ -240,9 +241,8 @@ void multi_series_builder::complete_last_event() {
         [](const caf::none_t&) -> std::string {
           return "null"; // TODO this is a magic constant.
         },
-        [](const blob&) -> std::string {
-          TENZIR_ASSERT(false, "A `blob` cannot be used as the selector field");
-          TENZIR_UNREACHABLE();
+        [&err_vec = this->errors_](const blob&) -> std::string {
+          err_vec.emplace_back(diagnostic::warning("parser: a field of type `blob` cannot be used as a selector").done());
           return {};
         },
         [](const auto&) -> std::string {
@@ -250,6 +250,7 @@ void multi_series_builder::complete_last_event() {
         },
       };
       schema_name = std::visit(visitor, selected_schema->data_);
+      //FIXME raise warning for schema issues
     } else {
       // TODO should this raise some warning?
     }
@@ -267,7 +268,7 @@ void multi_series_builder::complete_last_event() {
   auto e = builder_raw_.append_signature_to(signature_raw_, parser_,
                                             schema_type, settings_.schema_only);
   if (e) {
-    errors_.push_back(std::move(e));
+    errors_.push_back(std::move(*e));
     // TODO re-consider what to do with an errored event
   }
   auto free_index = next_free_index();

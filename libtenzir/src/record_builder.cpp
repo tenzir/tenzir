@@ -115,38 +115,36 @@ static_assert(has_parser<time_type>);
 } // namespace
 
 auto record_builder::basic_seeded_parser(
-  std::string_view s, const tenzir::type& seed) -> caf::expected<tenzir::data> {
+  std::string_view s, const tenzir::type& seed) -> std::variant<tenzir::data,tenzir::diagnostic> {
   const auto visitor = detail::overload{
-    [&s]<has_parser T>(const T& t) -> caf::expected<tenzir::data> {
+    [&s]<has_parser T>(const T& t) -> std::variant<tenzir::data,tenzir::diagnostic> {
       type_to_data_t<T> res;
       using parser = typename type_to_parser<T>::type;
       if (parser{}(s, res)) {
         return res;
       } else {
-        return caf::make_error(
-          ec::parse_error, fmt::format("failed to parse '{}' as '{}'", s, t));
+        return diagnostic::warning( "failed to parse value as requested type" )
+        .hint("value was `{}`; type was `{}`", t, typeid(T).name() ).done();
       }
     },
     [&s](const string_type&) {
       return std::string{s};
     },
-    [](const record_type&) -> caf::expected<tenzir::data> {
-      TENZIR_ERROR("`record_builder::basic_parser` does not support structural "
+    [](const record_type&) -> tenzir::diagnostic {
+      TENZIR_ERROR("`basic_parser` does not support structural "
                    "types. It cannot parsed something as a record");
-      return caf::make_error(ec::parse_error,
-                             "record seed for basic parser is unsupported");
+      return diagnostic::error("`record` seed for basic parser is unsupported").done();
     },
-    [](const list_type&) -> caf::expected<tenzir::data> {
+    [](const list_type&) -> tenzir::diagnostic {
       TENZIR_ERROR(
-        "`record_builder::basic_parser` basic parser does not support "
+        "`basic_parser` basic parser does not support "
         "structural types. It cannot parse something as a list");
-      return caf::make_error(ec::parse_error,
-                             "list seed for basic parser is unsupported");
+      return diagnostic::error("`list` seed for basic parser is unsupported").done();
     },
-    []<typename T>(const T&) -> caf::expected<tenzir::data> {
-      TENZIR_ERROR("`record_builder::basic_parser` does `{}`",
+    []<typename T>(const T&) -> tenzir::diagnostic {
+      TENZIR_ERROR("`basic parser` does not support type `{}`",
                    typeid(T).name());
-      return caf::make_error(ec::parse_error, "Unexpected seed for parsing");
+      return diagnostic::error("`unsupported type in record").hint("type was `{}`",typeid(T).name() ).done();
     },
   };
 
@@ -154,7 +152,7 @@ auto record_builder::basic_seeded_parser(
 }
 
 auto record_builder::basic_parser(std::string_view s, const tenzir::type* seed)
-  -> caf::expected<tenzir::data> {
+  -> std::variant<tenzir::data,tenzir::diagnostic> {
   if (not seed) {
     tenzir::data result;
     if ((parsers::data - parsers::pattern)(s, result)) {
@@ -402,6 +400,7 @@ auto node_field::commit_to(builder_ref r, bool mark_dead) -> void {
       }
     },
     [&r]<non_structured_data_type T>(T& v) {
+      r.try_data(v);
       r.data(v);
     },
     [](auto&) {
