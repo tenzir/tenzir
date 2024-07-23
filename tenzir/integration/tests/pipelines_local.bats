@@ -735,7 +735,7 @@ EOF
 
 }
 
-# bats test_tags=json
+# bats test_tags=json,python_operator
 @test "weird json floats" {
   check tenzir -f /dev/stdin <<EOF
 version |
