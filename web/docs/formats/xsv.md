@@ -14,10 +14,25 @@ Reads and writes lines with separated values.
 Parser:
 
 ```
-csv [--allow-comments] [--auto-expand] [--header <header>]
-ssv [--allow-comments] [--auto-expand] [--header <header>]
-tsv [--allow-comments] [--auto-expand] [--header <header>]
-xsv <field-sep> <list-sep> <null-value> [--allow-comments] [--auto-expand] [--header <header>]
+csv [--list-sep <list-sep>] [--null-value <null-value>]
+    [--allow-comments] [--auto-expand] [--header <header>]
+    [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
+    [--no-infer] [--raw] [--unnest-separator <separator>]
+
+ssv [--list-sep <list-sep>] [--null-value <null-value>]
+    [--allow-comments] [--auto-expand] [--header <header>]
+    [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
+    [--no-infer] [--raw] [--unnest-separator <separator>]
+
+tsv [--list-sep <list-sep>] [--null-value <null-value>]
+    [--allow-comments] [--auto-expand] [--header <header>]
+    [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
+    [--no-infer] [--raw] [--unnest-separator <separator>]
+
+xsv <field-sep> <list-sep> <null-value>
+    [--allow-comments] [--auto-expand] [--header <header>]
+    [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
+    [--no-infer] [--raw] [--unnest-separator <separator>]
 ```
 
 Printer:
@@ -69,17 +84,25 @@ record:
 
 Note that nested records have dot-separated field names.
 
+### Common Options (Parser)
+
+The options are the common parser options, which can be found on the [formats page](formats.md#schema-inference).
+
 ### `<field-sep>`
 
-Specifies the string that separates fields.
+Specifies the string that separates fields. 
+This is required for `XSV`and cannot be set for any of the other variations.
 
 ### `<list-sep>`
 
 Specifies the string that separates list elements *within* a field.
+ This is required for `XSV`, but can be explicitly changed from the respective
+ default for the other parsers.
 
 ### `<null-value>`
 
-Specifies the string that denotes an absent value.
+Specifies the string that denotes an absent value. This is required for `XSV`,
+ but can be explicitly changed from the respective default for the other parsers.
 
 ### `--allow-comments` (Parser)
 
