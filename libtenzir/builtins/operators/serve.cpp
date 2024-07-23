@@ -64,6 +64,7 @@
 #include <tenzir/series_builder.hpp>
 #include <tenzir/status.hpp>
 #include <tenzir/table_slice.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/record_batch.h>
 #include <caf/stateful_actor.hpp>
@@ -249,7 +250,7 @@ struct managed_serve_operator {
   /// The buffered table slice, and the configured buffer size and the number of
   /// currently requested events (may exceed the buffer size).
   std::vector<table_slice> buffer = {};
-  uint64_t buffer_size = 1 << 16;
+  uint64_t buffer_size = defaults::api::serve::max_events;
   uint64_t requested = {};
   uint64_t min_events = {};
 
@@ -823,39 +824,17 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<std::monostate> {
-    // This has to be blocking as the the code up to the first yield is run
-    // synchronously, and we should guarantee that the serve manager knows about
-    // a started pipeline containing a serve operator once it the pipeline
-    // executor indicated that the pipeline started.
-    auto serve_manager = serve_manager_actor{};
-    // Step 1: Get a handle to the SERVE MANAGER actor.
-    // NOTE: It is important that we let this actor run until the end of the
-    // operator. The SERVE MANAGER monitors the actor that sends it the start
-    // atom, and assumes that the operator shut down when it receives the
-    // corresponding down message.
-    {
-      auto blocking = caf::scoped_actor{ctrl.self().system()};
-      blocking
-        ->request(ctrl.node(), caf::infinite, atom::get_v, atom::label_v,
-                  std::vector<std::string>{"serve-manager"})
-        .receive(
-          [&](std::vector<caf::actor>& actors) {
-            TENZIR_ASSERT(actors.size() == 1);
-            serve_manager
-              = caf::actor_cast<serve_manager_actor>(std::move(actors[0]));
-          },
-          [&](const caf::error& err) { //
-            diagnostic::error(err)
-              .note("failed to get serve-manager")
-              .emit(ctrl.diagnostics());
-          });
-    }
-    // Step 2: Register this operator at SERVE MANAGER actor using the serve_id.
+    auto serve_manager
+      = ctrl.self().system().registry().get<serve_manager_actor>(
+        "tenzir.serve-manager");
+    // Register this operator at SERVE MANAGER actor using the serve_id.
+    ctrl.set_waiting(true);
     ctrl.self()
       .request(serve_manager, caf::infinite, atom::start_v, serve_id_,
                buffer_size_)
-      .await(
+      .then(
         [&]() {
+          ctrl.set_waiting(false);
           TENZIR_DEBUG("serve for id {} is now available",
                        escape_operator_arg(serve_id_));
         },
@@ -865,15 +844,16 @@ public:
             .emit(ctrl.diagnostics());
         });
     co_yield {};
-    // Step 3: Forward events to the SERVE MANAGER.
+    //  Forward events to the SERVE MANAGER.
     for (auto&& slice : input) {
       // Send slice to SERVE MANAGER.
+      ctrl.set_waiting(true);
       ctrl.self()
         .request(serve_manager, caf::infinite, atom::put_v, serve_id_,
                  std::move(slice))
-        .await(
-          []() {
-            // nop
+        .then(
+          [&]() {
+            ctrl.set_waiting(false);
           },
           [&](const caf::error& err) {
             diagnostic::error(err)
@@ -882,12 +862,13 @@ public:
           });
       co_yield {};
     }
-    // Step 4: Wait until all events were fetched.
+    //  Wait until all events were fetched.
+    ctrl.set_waiting(true);
     ctrl.self()
       .request(serve_manager, caf::infinite, atom::stop_v, serve_id_)
-      .await(
-        []() {
-          // nop
+      .then(
+        [&]() {
+          ctrl.set_waiting(false);
         },
         [&](const caf::error& err) {
           diagnostic::error(err)
@@ -895,10 +876,6 @@ public:
             .emit(ctrl.diagnostics());
         });
     co_yield {};
-  }
-
-  auto detached() const -> bool override {
-    return true;
   }
 
   auto location() const -> operator_location override {
@@ -932,6 +909,7 @@ private:
 class plugin final : public virtual component_plugin,
                      public virtual rest_endpoint_plugin,
                      public virtual operator_plugin<serve_operator>,
+                     public virtual operator_factory_plugin,
                      public virtual aspect_plugin {
 public:
   auto component_name() const -> std::string override {
@@ -1031,7 +1009,8 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto buffer_size = located<uint64_t>{1 << 16, location::unknown};
+    auto buffer_size
+      = located<uint64_t>{defaults::api::serve::max_events, location::unknown};
     auto id = located<std::string>{};
     auto parser = argument_parser{"serve", "https://docs.tenzir.com/"
                                            "operators/serve"};
@@ -1050,6 +1029,30 @@ public:
     }
     return std::make_unique<serve_operator>(std::move(id.inner),
                                             buffer_size.inner);
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto id = located<std::string>{};
+    auto buffer_size = std::optional<located<uint64_t>>{};
+    argument_parser2::operator_("serve")
+      .add(id, "<id>")
+      .add("buffer_size", buffer_size)
+      .parse(inv, ctx)
+      .ignore();
+    if (id.inner.empty()) {
+      diagnostic::error("serve id must not be empty")
+        .primary(id.source)
+        .emit(ctx);
+    }
+    if (buffer_size and buffer_size->inner == 0) {
+      diagnostic::error("buffer size must not be zero")
+        .primary(buffer_size->source)
+        .emit(ctx);
+    }
+    return std::make_unique<serve_operator>(
+      std::move(id.inner),
+      buffer_size ? buffer_size->inner : defaults::api::serve::max_events);
   }
 };
 
