@@ -51,6 +51,8 @@ public:
 
   auto eval(const ast::meta& x) -> series;
 
+  auto eval(const ast::index_expr& x) -> series;
+
   template <class T>
   auto eval(const T& x) -> series {
     return not_implemented(x);
