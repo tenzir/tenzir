@@ -29,7 +29,7 @@ from path/to/package.yaml
 | package add
 ```
 
-This leverages the [`package` operator](/operators/package.md), which has two
+This leverages the [`package` operator](/next/operators/package), which has two
 modes of operation: `package add` and `package remove`.
 
 To list all installed packages, run `show packages`. Listing pipelines or
@@ -134,9 +134,9 @@ That's it! Our own package, all done and wrapped up.
 :::tip Want to dive deeper?
 We've prepared some reading material:
 - Take a look at the [`package` operator's
-  documentation](/operators/package.md).
+  documentation](/next/operators/package).
 - Read the user guide on [installing a
-  package](/user-guides/install-a-package.md).
+  package](/next/user-guides/install-a-package).
 :::
 
 [pipelines-as-code]: /user-guides/run-pipelines#as-code

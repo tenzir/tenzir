@@ -34,8 +34,6 @@ tenzir:
       arguments:
         capacity: 1B
         fp-probability: 0.001
-      # Disables the context.
-      disabled: false
 ```
 
 import DocCardList from '@theme/DocCardList';
