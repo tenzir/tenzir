@@ -29,8 +29,8 @@ from path/to/package.yaml
 | package add
 ```
 
-This leverages the [`package` operator](/operators/package.md), which has two modes
-of operation: `package add` and `package remove`.
+This leverages the [`package` operator](/operators/package.md), which has two
+modes of operation: `package add` and `package remove`.
 
 To list all installed packages, run `show packages`. Listing pipelines or
 contexts with `show pipelines` and `show contexts` contains an additional
@@ -41,7 +41,8 @@ package into `<config-dir>/package/<package-name>/package.yaml`, which the node
 reads when starting up.
 
 Let's walk through this by writing a package that offers a neat integration with
-the Feodo Tracker Blocklist by integrating it with a context.
+the [Feodo Tracker Blocklist](https://feodotracker.abuse.ch/blocklist/) by
+integrating the data into a context.
 
 We start our package by assigning some metadata:
 
@@ -59,21 +60,21 @@ description: |
   Emotet/Heodo.
 ```
 
-Every package _must_ have a unique identifier. We recommend setting the package
+Every package *must* have a unique identifier. We recommend setting the package
 name, description and author, and we also recommend setting an author and a
 package icon where possible.
 
-Packages _may_ define inputs. This, alongside the author and package icons, will
+Packages *may* define inputs. This, alongside the author and package icons, will
 become relevant in an upcoming release that adds interactive browsing and
 installation of ready-made packages on [app.tenzir.com](https://app.tenzir.com).
-For now, we'll just leave this out:
+For now, we'll just leave inputs out:
 
 ```yaml {0} title="feodo/package.yaml [2/5]"
 config:
   inputs: {}
 ```
 
-Packages _may_ define any number of contexts. For our Feodo Abuse Blocklist
+Packages *may* define any number of contexts. For our Feodo Abuse Blocklist
 package we'll define a context named `feodo` as a [Lookup
 Table](/contexts/lookup-table). We recommend writing a description for every
 context.
@@ -86,7 +87,7 @@ contexts:
       A lookup table that contains the elements of the feodo IP blocklist.
 ```
 
-Packages _may_ define any number of pipelines. These pipelines get automatically
+Packages *may* define any number of pipelines. These pipelines get automatically
 started when the package is installed. For our example, let's add a pipeline
 that ensures that our `feodo` context is continuously updated:
 
@@ -132,8 +133,10 @@ That's it! Our own package, all done and wrapped up.
 
 :::tip Want to dive deeper?
 We've prepared some reading material:
-- Take a look at the [`package` operator's documentation](/operators/package.md).
-- Read the user guide on [installing a package](/user-guides/install-a-package.md).
+- Take a look at the [`package` operator's
+  documentation](/operators/package.md).
+- Read the user guide on [installing a
+  package](/user-guides/install-a-package.md).
 :::
 
 [pipelines-as-code]: /user-guides/run-pipelines#as-code
@@ -141,8 +144,9 @@ We've prepared some reading material:
 
 ## Improving the Python Operator
 
-The `python` operator got a revamp. It now relies on the excellent `uv` rather
-than `python-pip` to install packages, reducing startup time significantly.
+The `python` operator got a revamp. It now relies on the excellent
+[uv](https://github.com/astral-sh/uv) package installer, rather than
+`python-pip`, reducing startup time significantly.
 
 If your installation relies on a custom `pip.conf` file, we recommend [migrating
 to a `uv.toml` configuration file](https://github.com/astral-sh/uv/issues/1404).
