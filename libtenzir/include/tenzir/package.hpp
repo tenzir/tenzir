@@ -78,7 +78,7 @@ struct package_pipeline final {
   std::optional<std::string> description = {};
   std::string definition = {}; // required to be non-empty
   bool disabled = false;
-  std::optional<duration> retry_on_error = {};
+  std::optional<duration> restart_on_error = {};
 
   auto to_record() const -> record;
 
@@ -91,7 +91,7 @@ struct package_pipeline final {
       .fields(f.field("name", x.name), f.field("description", x.description),
               f.field("definition", x.definition),
               f.field("disabled", x.disabled),
-              f.field("retry_on_error", x.retry_on_error));
+              f.field("restart-on-error", x.restart_on_error));
   }
 };
 
