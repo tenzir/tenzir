@@ -149,7 +149,7 @@ namespace tenzir {
     auto parsed = type::parse(*x);                                             \
     if (not parsed) {                                                          \
       return diagnostic::error(parsed.error())                                 \
-        .note("while parsing key {} for field" #name, key)                     \
+        .note("while parsing key {} for field " #name, key)                    \
         .note("invalid package definition")                                    \
         .to_error();                                                           \
     }                                                                          \
