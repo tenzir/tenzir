@@ -315,6 +315,7 @@ void multi_series_builder::complete_last_event() {
                   "refer to a known schema",
                   p->field_name, schema_name)
             .done());
+            builder_raw_.clear();
         return;
       }
       append_name_to_signature(schema_name, signature_raw_);
