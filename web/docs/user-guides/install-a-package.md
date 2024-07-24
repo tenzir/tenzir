@@ -122,10 +122,6 @@ pipelines:
     # - Set the option to true to enable with the default delay of 1 minute.
     # - Set the option to a valid duration to enable with a custom delay.
     restart-on-error: 1 minute
-    # Add a list of labels that are shown in the pipeline overview page at
-    # app.tenzir.com.
-    labels:
-      - Feodo
     # Disables the pipeline.
     disabled: false
 
