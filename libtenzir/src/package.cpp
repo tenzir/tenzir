@@ -13,11 +13,29 @@
 
 namespace tenzir {
 
-#define TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT2(name, field)                     \
+#define TRY_CONVERT_TO_STRING(name, field)                                     \
   if (key == #name) {                                                          \
     const auto* null = caf::get_if<caf::none_t>(&value);                       \
     if (null) {                                                                \
       result.field = std::nullopt;                                             \
+      continue;                                                                \
+    }                                                                          \
+    /* Convert back to yaml because we don't have access to the raw input      \
+       here, and that has the highest chance of round-tripping correctly. */   \
+    auto maybe_string = to_yaml(materialize(value));                           \
+    if (!maybe_string)                                                         \
+      return diagnostic::error("failed to convert " #name " to string")        \
+        .note("due to error: {}", maybe_string.error())                        \
+        .to_error();                                                           \
+    result.field = *maybe_string;                                              \
+    continue;                                                                  \
+  }
+
+#define TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(name)                             \
+  if (key == #name) {                                                          \
+    const auto* null = caf::get_if<caf::none_t>(&value);                       \
+    if (null) {                                                                \
+      result.name = std::nullopt;                                              \
       continue;                                                                \
     }                                                                          \
     const auto* id = caf::get_if<std::string_view>(&value);                    \
@@ -26,12 +44,9 @@ namespace tenzir {
         .note("invalid package definition")                                    \
         .to_error();                                                           \
     }                                                                          \
-    result.field = std::string{*id};                                           \
+    result.name = std::string{*id};                                            \
     continue;                                                                  \
   }
-
-#define TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(name)                             \
-  TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT2(name, name)
 
 #define TRY_ASSIGN_STRING_TO_RESULT(name)                                      \
   if (key == #name) {                                                          \
@@ -91,6 +106,27 @@ namespace tenzir {
           .to_error();                                                         \
       }                                                                        \
       result.name[std::string{key}] = std::string{*value_string};              \
+    }                                                                          \
+    continue;                                                                  \
+  }
+
+#define TRY_ASSIGN_STRINGMAP_CONVERSION_TO_RESULT(name)                        \
+  if (key == #name) {                                                          \
+    const auto* x = caf::get_if<view<record>>(&value);                         \
+    if (not x) {                                                               \
+      return diagnostic::error(#name " must be a record")                      \
+        .note("invalid package definition")                                    \
+        .to_error();                                                           \
+    }                                                                          \
+    for (auto const& [key, value] : *x) {                                      \
+      /* Convert back to yaml because we don't have access to the raw input    \
+         here, and that has the highest chance of round-tripping correctly. */ \
+      auto maybe_string = to_yaml(materialize(value));                         \
+      if (!maybe_string)                                                       \
+        return diagnostic::error("failed to convert " #name " to string")      \
+          .note("due to error: {}", maybe_string.error())                      \
+          .to_error();                                                         \
+      result.name[std::string{key}] = *maybe_string;                           \
     }                                                                          \
     continue;                                                                  \
   }
@@ -157,7 +193,7 @@ auto package_input::parse(const view<record>& data)
     TRY_ASSIGN_STRING_TO_RESULT(name)
     TRY_ASSIGN_STRING_TO_RESULT(type)
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description)
-    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT2(default, default_);
+    TRY_CONVERT_TO_STRING(default, default_);
     return diagnostic::error("unknown key '{}'", key)
       .note("while trying to parse 'input'")
       .note("invalid package source definition")
@@ -191,7 +227,7 @@ auto package_config::parse(const view<record>& data)
   auto result = package_config{};
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRUCTURE_TO_RESULT(source, package_source);
-    TRY_ASSIGN_STRINGMAP_TO_RESULT(inputs);
+    TRY_ASSIGN_STRINGMAP_CONVERSION_TO_RESULT(inputs);
   }
   return result;
 }
@@ -300,6 +336,15 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
   }
   REQUIRED_FIELD(id)
   REQUIRED_FIELD(name)
+  if (result.config) {
+    for (auto& [name, _] : result.config->inputs) {
+      if (!result.inputs.contains(name)) {
+        return diagnostic::error("undeclared input value")
+          .note("input {} is not part of package {}", name, result.id)
+          .to_error();
+      }
+    }
+  }
   return result;
 }
 
