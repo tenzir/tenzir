@@ -19,6 +19,20 @@
 
 namespace tenzir {
 
+// simple utility combining multi_series_builder::settings_type and multi_series_builder::policy_type
+struct multi_series_builder_options {
+  multi_series_builder::policy_type policy
+    = multi_series_builder::policy_precise{};
+  multi_series_builder::settings_type settings = {};
+
+  friend auto inspect(auto& f, multi_series_builder_options& x) -> bool {
+    return f.object(x).fields(f.field("policy", x.policy),
+                              f.field("settings", x.settings));
+  }
+
+  auto get_schemas() const -> std::vector<tenzir::type>;
+};
+
 // adds the schema_only/no-infer option to a parser for use in parser-parsers
 // this is outside of the `multi_series_builder_argument_parser`, since its
 // needed for parsers that dont support any of the other options
@@ -32,14 +46,25 @@ void add_schema_only_option(argument_parser2& parser,
 struct multi_series_builder_argument_parser {
   multi_series_builder_argument_parser(
     multi_series_builder::settings_type settings = {},
-    multi_series_builder::policy_type policy
-    = multi_series_builder::policy_precise{})
+    multi_series_builder::policy_type policy = multi_series_builder::policy_precise{}
+    )
     : settings_{std::move(settings)}, policy_{std::move(policy)} {
   }
 
 public:
-  auto add_to_parser(argument_parser& parser) -> void;
-  auto add_to_parser(argument_parser2& parser) -> void;
+  auto add_settings_to_parser(argument_parser& parser,bool no_unflatten_option=false) -> void;
+  auto add_policy_to_parser(argument_parser& parser) -> void;
+  auto add_all_to_parser(argument_parser& parser) -> void;
+  auto add_settings_to_parser(argument_parser2& parser,bool no_unflatten_option=false) -> void;
+  auto add_policy_to_parser(argument_parser2& parser) -> void;
+  auto add_all_to_parser(argument_parser2& parser) -> void;
+
+  auto get_options() -> multi_series_builder_options {
+    return {
+      .policy = get_policy(),
+      .settings = get_settings(),
+    };
+  }
 
   auto get_settings() -> multi_series_builder::settings_type&;
   auto get_policy() -> multi_series_builder::policy_type&;
@@ -58,54 +83,10 @@ public:
 
   // Policy selector
   std::optional<located<std::string>> selector_;
+
+  // settings
   std::optional<location> schema_only_;
-};
-
-struct common_parser_options_parser {
-  auto add_to_parser(argument_parser& parser) -> void;
-  auto add_to_parser(argument_parser2& parser) -> void;
-
-  auto get_unnest() const -> std::string {
-    if (unnest_) {
-      if (unnest_->inner.empty()) {
-        diagnostic::error("got empty unflatten-separator")
-          .note("get {}")
-          .throw_();
-      }
-      return unnest_->inner;
-    }
-    return {};
-  }
-  bool get_raw() const {
-    return raw_;
-  }
-
-private:
   std::optional<located<std::string>> unnest_;
-  bool raw_ = false;
+  std::optional<location> raw_;
 };
-
-struct combined_parser_options {
-  multi_series_builder::policy_type builder_policy
-    = multi_series_builder::policy_precise{};
-  multi_series_builder::settings_type builder_settings = {};
-  bool raw = false;
-  std::string unflatten = {};
-
-  friend auto inspect(auto& f, combined_parser_options& x) -> bool {
-    return f.object(x).fields(f.field("builder_policy", x.builder_policy),
-                              f.field("builder_settings", x.builder_settings),
-                              f.field("raw", x.raw),
-                              f.field("unflatten", x.unflatten));
-  }
-};
-
-struct combined_parser_options_parser : multi_series_builder_argument_parser,
-                                        common_parser_options_parser {
-  auto add_to_parser(argument_parser& parser) -> void;
-  auto add_to_parser(argument_parser2& parser) -> void;
-
-  auto get_options() -> combined_parser_options;
-};
-
 } // namespace tenzir

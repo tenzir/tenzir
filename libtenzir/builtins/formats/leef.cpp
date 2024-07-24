@@ -129,14 +129,13 @@ auto parse_delimiter(std::string_view field) -> std::variant<char, diagnostic> {
 }
 
 /// Parses the LEEF attributes field as a sequence of key-value pairs.
-auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
-                      bool raw,
-                      std::string_view unflatten) -> std::optional<diagnostic> {
+auto parse_attributes(char delimiter, std::string_view attributes,
+                      auto builder) -> std::optional<diagnostic> {
   while (not attributes.empty()) {
     auto attr_end = attributes.find(delimiter);
     auto sep_pos = attributes.find('=');
-    while ( attributes[sep_pos-1] == '\\' ) {
-      sep_pos = attributes.find('=',sep_pos+1);
+    while (attributes[sep_pos - 1] == '\\') {
+      sep_pos = attributes.find('=', sep_pos + 1);
     }
     if (sep_pos == attributes.npos) {
       return diagnostic::warning("LEEF parser: Ill-formed event missing "
@@ -145,12 +144,8 @@ auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
     }
     auto key = attributes.substr(0, sep_pos);
     auto value = attributes.substr(sep_pos + 1, attr_end - sep_pos - 1);
-    auto field = builder.unflattend_field(key, unflatten);
-    if (raw) {
-      field.data(std::string{value});
-    } else {
-      field.data_unparsed(unescape(value));
-    }
+    auto field = builder.unflattend_field(key);
+    field.data_unparsed(unescape(value));
     if (attr_end != attributes.npos) {
       attributes.remove_prefix(attr_end + 1);
     } else {
@@ -160,8 +155,8 @@ auto parse_attributes(char delimiter, std::string_view attributes, auto builder,
   return {};
 }
 
-auto parse_line(std::string_view line, multi_series_builder& msb, bool raw,
-                std::string_view unflatten) -> std::optional<diagnostic> {
+auto parse_line(std::string_view line,
+                multi_series_builder& msb) -> std::optional<diagnostic> {
   using namespace std::string_view_literals;
   // We first need to find out whether we are LEEF 1.0 or 2.0. The latter has
   // one additional top-level component.
@@ -208,13 +203,13 @@ auto parse_line(std::string_view line, multi_series_builder& msb, bool raw,
     }
   }
   auto r = msb.record();
-  r.field("leef_version").data(std::string{leef_version});
-  r.field("vendor").data(std::move(fields[1]));
-  r.field("product_name").data(std::move(fields[2]));
-  r.field("product_version").data(std::move(fields[3]));
+  r.exact_field("leef_version").data(std::string{leef_version});
+  r.exact_field("vendor").data(std::move(fields[1]));
+  r.exact_field("product_name").data(std::move(fields[2]));
+  r.exact_field("product_version").data(std::move(fields[3]));
 
   auto d = parse_attributes(delimiter, fields[num_fields],
-                            r.field("attributes").record(), raw, unflatten);
+                            r.exact_field("attributes").record());
   if (d) {
     msb.remove_last();
     return d;
@@ -224,11 +219,11 @@ auto parse_line(std::string_view line, multi_series_builder& msb, bool raw,
 
 auto parse_loop(generator<std::optional<std::string_view>> lines,
                 diagnostic_handler& diag,
-                combined_parser_options options) -> generator<table_slice> {
+                multi_series_builder_options options) -> generator<table_slice> {
   auto schemas = detail::multi_series_builder::get_schemas_unnested(
-    true, not options.unflatten.empty());
+    true, not options.settings.unnest_separator.empty());
   auto msb
-    = multi_series_builder{options.builder_policy, options.builder_settings,
+    = multi_series_builder{options.policy, options.settings,
                            record_builder::basic_parser, std::move(schemas)};
   size_t line_counter = 0;
   for (auto&& line : lines) {
@@ -247,14 +242,14 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       TENZIR_DEBUG("LEEF parser ignored empty line");
       continue;
     }
-    auto d = parse_line(*line, msb, options.raw, options.unflatten);
+    auto d = parse_line(*line, msb);
     if (d) {
       diagnostic_builder{std::move(*d)}.hint("note {}", line_counter).emit(diag);
     }
   }
-      for (auto& e : msb.last_errors()) {
-      diag.emit(std::move(e));
-    }
+  for (auto& e : msb.last_errors()) {
+    diag.emit(std::move(e));
+  }
   for (auto& v : msb.finalize_as_table_slice()) {
     co_yield std::move(v);
   }
@@ -268,13 +263,14 @@ public:
 
   leef_parser() = default;
 
-  leef_parser(combined_parser_options options) : options_{std::move(options)} {
-    options_.builder_settings.default_name = "leef.event";
+  leef_parser(multi_series_builder_options options)
+    : options_{std::move(options)} {
+    options_.settings.default_name = "leef.event";
   }
 
   auto optimize(event_order order) -> std::unique_ptr<plugin_parser> override {
     auto opts = options_;
-    opts.builder_settings.ordered = order == event_order::ordered;
+    opts.settings.ordered = order == event_order::ordered;
     return std::make_unique<leef_parser>(std::move(opts));
   }
 
@@ -289,7 +285,7 @@ public:
   }
 
 private:
-  combined_parser_options options_ = {};
+  multi_series_builder_options options_ = {};
 };
 
 class leef_plugin final : public virtual parser_plugin<leef_parser> {
@@ -297,10 +293,10 @@ class leef_plugin final : public virtual parser_plugin<leef_parser> {
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{
       name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
-    auto combined_parser = combined_parser_options_parser{};
-    combined_parser.add_to_parser(parser);
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_all_to_parser(parser);
     parser.parse(p);
-    return std::make_unique<leef_parser>(combined_parser.get_options());
+    return std::make_unique<leef_parser>(msb_parser.get_options());
   }
 };
 
@@ -312,13 +308,13 @@ public:
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
-    auto opt_parser = combined_parser_options_parser{};
-    opt_parser.add_to_parser(parser);
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_all_to_parser(parser);
     auto result = parser.parse(inv, ctx);
     TRY(result);
     try {
       return std::make_unique<parser_adapter<leef_parser>>(
-        leef_parser{opt_parser.get_options()});
+        leef_parser{msb_parser.get_options()});
     } catch (diagnostic& e) {
       ctx.dh().emit(e);
       return failure::promise();

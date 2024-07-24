@@ -114,17 +114,20 @@ concept has_parser = caf::detail::is_complete<type_to_parser<T>>;
 static_assert(has_parser<time_type>);
 } // namespace
 
-auto record_builder::basic_seeded_parser(
-  std::string_view s, const tenzir::type& seed) -> std::variant<tenzir::data,tenzir::diagnostic> {
+auto record_builder::basic_seeded_parser(std::string_view s,
+                                         const tenzir::type& seed)
+  -> std::variant<tenzir::data, tenzir::diagnostic> {
   const auto visitor = detail::overload{
-    [&s]<has_parser T>(const T& t) -> std::variant<tenzir::data,tenzir::diagnostic> {
+    [&s]<has_parser T>(
+      const T& t) -> std::variant<tenzir::data, tenzir::diagnostic> {
       type_to_data_t<T> res;
       using parser = typename type_to_parser<T>::type;
       if (parser{}(s, res)) {
         return res;
       } else {
-        return diagnostic::warning( "failed to parse value as requested type" )
-        .hint("value was `{}`; type was `{}`", t, typeid(T).name() ).done();
+        return diagnostic::warning("failed to parse value as requested type")
+          .hint("value was `{}`; type was `{}`", t, typeid(T).name())
+          .done();
       }
     },
     [&s](const string_type&) {
@@ -133,18 +136,21 @@ auto record_builder::basic_seeded_parser(
     [](const record_type&) -> tenzir::diagnostic {
       TENZIR_ERROR("`basic_parser` does not support structural "
                    "types. It cannot parsed something as a record");
-      return diagnostic::error("`record` seed for basic parser is unsupported").done();
+      return diagnostic::error("`record` seed for basic parser is unsupported")
+        .done();
     },
     [](const list_type&) -> tenzir::diagnostic {
-      TENZIR_ERROR(
-        "`basic_parser` basic parser does not support "
-        "structural types. It cannot parse something as a list");
-      return diagnostic::error("`list` seed for basic parser is unsupported").done();
+      TENZIR_ERROR("`basic_parser` basic parser does not support "
+                   "structural types. It cannot parse something as a list");
+      return diagnostic::error("`list` seed for basic parser is unsupported")
+        .done();
     },
     []<typename T>(const T&) -> tenzir::diagnostic {
       TENZIR_ERROR("`basic parser` does not support type `{}`",
                    typeid(T).name());
-      return diagnostic::error("`unsupported type in record").hint("type was `{}`",typeid(T).name() ).done();
+      return diagnostic::error("`unsupported type in record")
+        .hint("type was `{}`", typeid(T).name())
+        .done();
     },
   };
 
@@ -152,7 +158,7 @@ auto record_builder::basic_seeded_parser(
 }
 
 auto record_builder::basic_parser(std::string_view s, const tenzir::type* seed)
-  -> std::variant<tenzir::data,tenzir::diagnostic> {
+  -> std::variant<tenzir::data, tenzir::diagnostic> {
   if (not seed) {
     tenzir::data result;
     if ((parsers::data - parsers::pattern)(s, result)) {
@@ -300,13 +306,13 @@ auto node_record::reseed(const tenzir::record_type& type) -> void {
 
 auto node_field::null() -> void {
   mark_this_alive();
-  is_raw_ = false;
+  is_unparsed_ = false;
   data_ = caf::none;
 }
 
 auto node_field::data(tenzir::data d) -> void {
   mark_this_alive();
-  is_raw_ = false;
+  is_unparsed_ = false;
   const auto visitor = detail::overload{
     [this](non_structured_data_type auto& x) {
       data(std::move(x));
@@ -335,7 +341,7 @@ auto node_field::data(tenzir::data d) -> void {
 
 auto node_field::data_unparsed(std::string_view text) -> void {
   mark_this_alive();
-  is_raw_ = true;
+  is_unparsed_ = true;
   data_.emplace<std::string>(text);
 }
 

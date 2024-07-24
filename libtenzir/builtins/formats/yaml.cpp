@@ -36,8 +36,7 @@ namespace {
 constexpr auto document_end_marker = "...";
 constexpr auto document_start_marker = "---";
 
-auto parse_node(auto guard, const YAML::Node& node, diagnostic_handler& diag,
-                bool raw, std::string_view unflatten) -> void {
+auto parse_node(auto guard, const YAML::Node& node, diagnostic_handler& diag) -> void {
   switch (node.Type()) {
     case YAML::NodeType::Undefined: {
       diagnostic::warning("yaml parser encountered undefined field").emit(diag);
@@ -54,16 +53,12 @@ auto parse_node(auto guard, const YAML::Node& node, diagnostic_handler& diag,
       }
       // TODO: Do not attempt to parse pattern, map, list, and record here.
       const auto& value_str = node.Scalar();
-      if (raw) {
-        guard.data(value_str);
-      } else {
         guard.data_unparsed(value_str);
-      }
       return;
     }
     case YAML::NodeType::Sequence: {
       for (const auto& element : node) {
-        parse_node(guard.list(), element, diag, raw, unflatten);
+        parse_node(guard.list(), element, diag);
       }
       return;
     }
@@ -71,8 +66,8 @@ auto parse_node(auto guard, const YAML::Node& node, diagnostic_handler& diag,
       auto record = guard.record();
       for (const auto& element : node) {
         const auto& name = element.first.as<std::string>();
-        parse_node(record.unflattend_field(name, unflatten), element.second,
-                   diag, raw, unflatten);
+        parse_node(record.unflattend_field(name), element.second,
+                   diag);
       }
       return;
     }
@@ -80,8 +75,7 @@ auto parse_node(auto guard, const YAML::Node& node, diagnostic_handler& diag,
 };
 
 auto load_document(multi_series_builder& msb, std::string&& document,
-                   diagnostic_handler& diag, bool raw,
-                   std::string_view unflatten) -> void {
+                   diagnostic_handler& diag) -> void {
   auto record = msb.record();
   try {
     auto node = YAML::Load(document);
@@ -91,8 +85,7 @@ auto load_document(multi_series_builder& msb, std::string&& document,
     }
     for (const auto& element : node) {
       const auto& name = element.first.as<std::string>();
-      parse_node(record.unflattend_field(name, unflatten), element.second, diag,
-                 raw, unflatten);
+      parse_node(record.unflattend_field(name), element.second, diag );
     }
   } catch (const YAML::Exception& err) {
     diagnostic::warning("failed to load YAML document: {}", err.what())
@@ -101,14 +94,29 @@ auto load_document(multi_series_builder& msb, std::string&& document,
   }
 };
 
+
+auto yaml_string_parser(std::string_view s, const tenzir::type* seed)
+  -> std::variant<tenzir::data,tenzir::diagnostic> {
+  if (seed) {
+    return record_builder::basic_seeded_parser(s, *seed);
+  }
+  tenzir::data result;
+  constexpr static auto p = (parsers::data - parsers::number - parsers::number);
+  if (p(s, result)) {
+    return result;
+  } else {
+    return tenzir::data{std::string{s}};
+  }
+}
+
 auto parse_loop(generator<std::optional<std::string_view>> lines,
                 diagnostic_handler& diag,
-                combined_parser_options options) -> generator<table_slice> {
+                multi_series_builder_options options) -> generator<table_slice> {
   auto schemas = detail::multi_series_builder::get_schemas_unnested(
-    true, not options.unflatten.empty());
+    true, not options.settings.unnest_separator.empty());
   auto msb
-    = multi_series_builder{options.builder_policy, options.builder_settings,
-                           record_builder::basic_parser, std::move(schemas)};
+    = multi_series_builder{options.policy, options.settings,
+                           yaml_string_parser, std::move(schemas)};
   auto document = std::string{};
   for (auto&& line : lines) {
     for (auto& v : msb.yield_ready_as_table_slice()) {
@@ -125,22 +133,19 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       if (document.empty()) {
         continue;
       }
-      load_document(msb, std::exchange(document, {}), diag, options.raw,
-                    options.unflatten);
+      load_document(msb, std::exchange(document, {}), diag);
       continue;
     }
     if (*line == document_start_marker) {
       if (not document.empty()) {
-        load_document(msb, std::exchange(document, {}), diag, options.raw,
-                      options.unflatten);
+        load_document(msb, std::exchange(document, {}), diag);
       }
       continue;
     }
     fmt::format_to(std::back_inserter(document), "{}\n", *line);
   }
   if (not document.empty()) {
-    load_document(msb, std::exchange(document, {}), diag, options.raw,
-                  options.unflatten);
+    load_document(msb, std::exchange(document, {}), diag);
   }
       for (auto& e : msb.last_errors()) {
       diag.emit(std::move(e));
@@ -204,7 +209,7 @@ class yaml_parser final : public plugin_parser {
 public:
   yaml_parser() = default;
 
-  yaml_parser(combined_parser_options options) : options_{options} {
+  yaml_parser(multi_series_builder_options options) : options_{options} {
   }
 
   auto name() const -> std::string override {
@@ -221,7 +226,7 @@ public:
     return f.object(x).fields(f.field("options", x.options_));
   }
 
-  combined_parser_options options_;
+  multi_series_builder_options options_;
 };
 
 class yaml_printer final : public plugin_printer {
@@ -300,8 +305,8 @@ class yaml_plugin final : public virtual parser_plugin<yaml_parser>,
     auto parser = argument_parser{"yaml", "https://docs.tenzir.com/"
                                           "formats/yaml"};
 
-    auto combined_parser = combined_parser_options_parser{};
-    combined_parser.add_to_parser(parser);
+    auto combined_parser = multi_series_builder_argument_parser{};
+    combined_parser.add_all_to_parser(parser);
     parser.parse(p);
     return std::make_unique<yaml_parser>(combined_parser.get_options());
   }
@@ -321,8 +326,8 @@ class read_yaml final
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_("read_yaml");
 
-    auto combined_parser = combined_parser_options_parser{};
-    combined_parser.add_to_parser(parser);
+    auto combined_parser = multi_series_builder_argument_parser{};
+    combined_parser.add_all_to_parser(parser);
 
     auto res = parser.parse(inv, ctx);
     TRY(res);

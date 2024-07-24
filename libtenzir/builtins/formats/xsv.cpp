@@ -43,11 +43,7 @@ struct xsv_options {
   bool auto_expand = {};
   std::optional<std::string> header = {};
   bool no_header = {};
-  multi_series_builder::policy_type builder_policy
-    = multi_series_builder::policy_precise{};
-  multi_series_builder::settings_type builder_settings = {};
-  bool raw = false;
-  std::string unnest{};
+  multi_series_builder_options builder_options = {};
 
   static auto try_parse_printer_options(parser_interface& p,
                                         std::string name) -> xsv_options {
@@ -56,7 +52,6 @@ struct xsv_options {
     auto list_sep_str = located<std::string>{};
     auto null_value = located<std::string>{};
     auto no_header = bool{};
-    auto common_parser = common_parser_options_parser{};
     parser.add("--no-header", no_header);
     parser.add(field_sep_str, "<field-sep>");
     parser.add(list_sep_str, "<list-sep>");
@@ -112,14 +107,11 @@ struct xsv_options {
       f.field("allow_comments", x.allow_comments),
       f.field("auto_expand", x.auto_expand), f.field("header", x.header),
       f.field("no_header", x.no_header),
-      f.field("builder_policy", x.builder_policy),
-      f.field("builder_settings", x.builder_settings), f.field("raw", x.raw),
-      f.field("unnest", x.unnest));
+      f.field("builder_options", x.builder_options));
   }
 };
 
-struct xsv_common_parser_options_parser : multi_series_builder_argument_parser,
-                                          common_parser_options_parser {
+struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
   xsv_common_parser_options_parser(std::string name, char field_sep_default,
                                    char list_sep_default,
                                    std::string null_value_default)
@@ -148,8 +140,7 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser,
     parser.add("--allow-comments", allow_comments_);
     parser.add("--auto-expand", auto_expand_);
     parser.add("--header", header_, "<header>");
-    multi_series_builder_argument_parser::add_to_parser(parser);
-    common_parser_options_parser::add_to_parser(parser);
+    multi_series_builder_argument_parser::add_all_to_parser(parser);
   }
   auto add_to_parser(argument_parser2& parser) -> void {
     if (mode_ == mode::special_optional) {
@@ -166,8 +157,7 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser,
     parser.add("comments", allow_comments_);
     parser.add("auto_expand", auto_expand_);
     parser.add("header", header_);
-    multi_series_builder_argument_parser::add_to_parser(parser);
-    common_parser_options_parser::add_to_parser(parser);
+    multi_series_builder_argument_parser::add_all_to_parser(parser);
   }
 
   auto get_options() -> xsv_options {
@@ -224,10 +214,7 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser,
       .auto_expand = auto_expand_.has_value(),
       .header = header_->inner,
       .no_header = false,
-      .builder_policy = get_policy(),
-      .builder_settings = get_settings(),
-      .raw = get_raw(),
-      .unnest = get_unnest(),
+      .builder_options = multi_series_builder_argument_parser::get_options(),
     };
   }
   enum class mode {
@@ -446,12 +433,12 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
   // parse the body
   const auto original_field_count = fields.size();
   auto needs_schemas = true;
-  args.builder_settings.default_name = fmt::format("tenzir.{}", args.name);
+  args.builder_options.settings.default_name = fmt::format("tenzir.{}", args.name);
   auto schemas = detail::multi_series_builder::get_schemas_unnested(
-    needs_schemas, not args.unnest.empty());
+    needs_schemas, not args.builder_options.settings.unnest_separator.empty());
   auto msb = multi_series_builder{
-    args.builder_policy,
-    args.builder_settings,
+    args.builder_options.policy,
+    args.builder_options.settings,
     record_builder::basic_parser,
     std::move(schemas),
   };
@@ -511,7 +498,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
           break;
         }
       }
-      auto field = r.unflattend_field(fields[field_idx], args.unnest);
+      auto field = r.unflattend_field(fields[field_idx]);
       auto field_text = line->substr(0, line->find(args.field_sep));
       auto list_element_end = field_text.find(args.list_sep);
       if (list_element_end != line->npos) { // its a list
@@ -561,7 +548,7 @@ public:
 
   auto optimize(event_order order) -> std::unique_ptr<plugin_parser> override {
     auto args = args_;
-    args.builder_settings.ordered = order == event_order::ordered;
+    args.builder_options.settings.ordered = order == event_order::ordered;
     return std::make_unique<xsv_parser>(std::move(args));
   }
 

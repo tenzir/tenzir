@@ -65,8 +65,7 @@ std::string unescape(std::string_view value) {
 /// downstream processing.
 /// @param extension The string value of the extension field.
 /// @returns A vector of key-value pairs with properly unescaped values.
-auto parse_extension(std::string_view extension, auto builder, bool raw,
-                     std::string_view unflatten) -> std::optional<diagnostic> {
+auto parse_extension(std::string_view extension, auto builder) -> std::optional<diagnostic> {
   if (extension.empty()) {
     return {};
   }
@@ -80,12 +79,8 @@ auto parse_extension(std::string_view extension, auto builder, bool raw,
     auto value_end = extension.find_last_of(" \t", next_kv_sep);
     auto value = extension.substr(0, value_end);
     key = tenzir::detail::trim(key);
-    auto field = builder.unflattend_field(key, unflatten);
-    if (raw) {
-      field.data(std::string{value});
-    } else {
-      field.data_unparsed(unescape(value));
-    }
+    auto field = builder.unflattend_field(key);
+    field.data_unparsed(unescape(value));
     if (value_end != extension.npos) {
       key = extension.substr(value_end + 1, next_kv_sep - value_end - 1);
     }
@@ -98,8 +93,7 @@ auto parse_extension(std::string_view extension, auto builder, bool raw,
   return {};
 }
 
-auto parse_line(std::string_view line, multi_series_builder& msb, bool raw,
-                std::string_view unflatten) -> std::optional<diagnostic> {
+auto parse_line(std::string_view line, multi_series_builder& msb) -> std::optional<diagnostic> {
   using namespace std::string_view_literals;
   auto fields = detail::split_escaped(line, "|", "\\", 8);
   if (fields.size() < 7 or fields.size() > 8) {
@@ -112,16 +106,15 @@ auto parse_line(std::string_view line, multi_series_builder& msb, bool raw,
     return diagnostic::warning("invalid CEF header").done();
   }
   auto r = msb.record();
-  r.field("cef_version").data(version);
-  r.field("device_vendor").data(std::move(fields[1]));
-  r.field("device_product").data(std::move(fields[2]));
-  r.field("product_version").data(std::move(fields[3]));
-  r.field("signature_id").data(std::move(fields[4]));
-  r.field("name").data(std::move(fields[5]));
-  r.field("severity").data(std::move(fields[6]));
+  r.exact_field("cef_version").data(version);
+  r.exact_field("device_vendor").data(std::move(fields[1]));
+  r.exact_field("device_product").data(std::move(fields[2]));
+  r.exact_field("product_version").data(std::move(fields[3]));
+  r.exact_field("signature_id").data(std::move(fields[4]));
+  r.exact_field("name").data(std::move(fields[5]));
+  r.exact_field("severity").data(std::move(fields[6]));
   if (fields.size() == 8) {
-    auto d = parse_extension(fields[7], r.field("extension").record(), raw,
-                             unflatten);
+    auto d = parse_extension(fields[7], r.exact_field("extension").record());
     if (d) {
       msb.remove_last();
       return d;
@@ -132,11 +125,11 @@ auto parse_line(std::string_view line, multi_series_builder& msb, bool raw,
 
 auto parse_loop(generator<std::optional<std::string_view>> lines,
                 diagnostic_handler& diag,
-                combined_parser_options options) -> generator<table_slice> {
+                multi_series_builder_options options) -> generator<table_slice> {
   auto schemas = detail::multi_series_builder::get_schemas_unnested(
-    true, not options.unflatten.empty());
+    true, not options.settings.unnest_separator.empty());
   auto msb
-    = multi_series_builder{options.builder_policy, options.builder_settings,
+    = multi_series_builder{options.policy, options.settings,
                            record_builder::basic_parser, std::move(schemas)};
   size_t line_counter = 0;
   for (auto&& line : lines) {
@@ -155,7 +148,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       TENZIR_DEBUG("CEF parser ignored empty line");
       continue;
     }
-    auto d = parse_line(*line, msb, options.raw, options.unflatten);
+    auto d = parse_line(*line, msb);
     if (d) {
       diagnostic_builder{std::move(*d)}.hint("note {}", line_counter).emit(diag);
     }
@@ -175,13 +168,13 @@ public:
   }
 
   cef_parser() = default;
-  cef_parser(combined_parser_options options) : options_{std::move(options)} {
-    options_.builder_settings.default_name = "cef.event";
+  cef_parser(multi_series_builder_options options) : options_{std::move(options)} {
+    options_.settings.default_name = "cef.event";
   }
 
   auto optimize(event_order order) -> std::unique_ptr<plugin_parser> override {
     auto opts = options_;
-    opts.builder_settings.ordered = order == event_order::ordered;
+    opts.settings.ordered = order == event_order::ordered;
     return std::make_unique<cef_parser>(std::move(opts));
   }
 
@@ -196,7 +189,7 @@ public:
   }
 
 private:
-  combined_parser_options options_;
+  multi_series_builder_options options_;
 };
 
 class cef_plugin final : public virtual parser_plugin<cef_parser> {
@@ -204,8 +197,8 @@ class cef_plugin final : public virtual parser_plugin<cef_parser> {
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{"cef", "https://docs.tenzir.com/formats/cef"};
 
-    auto combined_parser = combined_parser_options_parser{};
-    combined_parser.add_to_parser(parser);
+    auto combined_parser = multi_series_builder_argument_parser{};
+    combined_parser.add_all_to_parser(parser);
     parser.parse(p);
     return std::make_unique<cef_parser>(combined_parser.get_options());
   }
@@ -219,8 +212,8 @@ public:
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
-    auto opt_parser = combined_parser_options_parser{};
-    opt_parser.add_to_parser(parser);
+    auto opt_parser = multi_series_builder_argument_parser{};
+    opt_parser.add_all_to_parser(parser);
     auto result = parser.parse(inv, ctx);
     TRY(result);
     try {

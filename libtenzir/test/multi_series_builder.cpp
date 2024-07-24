@@ -122,9 +122,9 @@ TEST(merging records) {
     record_builder::basic_parser,
     {},
   };
-  b.record().field("0").data(0l);
-  b.record().field("0").data(1l);
-  b.record().field("1").data(2.0);
+  b.record().exact_field("0").data(0l);
+  b.record().exact_field("0").data(1l);
+  b.record().exact_field("1").data(2.0);
   const auto res = b.finalize();
   CHECK_EQUAL(res.size(), 1); // merging should produce exactly one series here
 
@@ -153,8 +153,8 @@ TEST(merging records) {
 
   {
     auto r = b.record();
-    r.field("0").data(0l);
-    r.field("1").data(0.0);
+    r.exact_field("0").data(0l);
+    r.exact_field("1").data(0.0);
   }
   const auto res2 = b.finalize();
 
@@ -178,14 +178,15 @@ TEST(merging records with seed and reset) {
     },
   };
   multi_series_builder b{
-    multi_series_builder::policy_merge{.reset_on_yield = true,
-                                       .seed_schema = "seed"},
+    multi_series_builder::policy_merge{
+      .seed_schema = "seed",
+    },
     multi_series_builder::settings_type{},
     record_builder::basic_parser,
     {seed_schema},
   };
-  b.record().field("0").data(0l);
-  b.record().field("2").data(0ul);
+  b.record().exact_field("0").data(0l);
+  b.record().exact_field("2").data(0ul);
   const auto res = b.finalize();
   CHECK_EQUAL(res.size(), 1); // merging should produce exactly one series here
 
@@ -218,7 +219,7 @@ TEST(merging records with seed and reset) {
 
   {
     auto r = b.record();
-    r.field("1").data(0.0);
+    r.exact_field("1").data(0.0);
   }
   const auto res2 = b.finalize();
   CHECK_EQUAL(res2.front().type, seed_schema);
@@ -242,11 +243,11 @@ TEST(precise ordered) {
     {},
   };
   // first schema
-  b.record().field("0").data(0l);
+  b.record().exact_field("0").data(0l);
   // second schema
-  b.record().field("2").data(0ul);
-  b.record().field("2").data(0ul);
-  b.record().field("2").data(0ul);
+  b.record().exact_field("2").data(0ul);
+  b.record().exact_field("2").data(0ul);
+  b.record().exact_field("2").data(0ul);
   const auto res = b.finalize();
 
   const vvr expected_result = {
@@ -278,20 +279,20 @@ TEST(precise unordered) {
     {},
   };
   // first schema
-  b.record().field("0").data(0l);
+  b.record().exact_field("0").data(0l);
   // second schema
-  b.record().field("1").data(0ul);
-  b.record().field("1").data(1ul);
+  b.record().exact_field("1").data(0ul);
+  b.record().exact_field("1").data(1ul);
   // first schema again
-  b.record().field("0").data(1l);
-  b.record().field("0").data(2l);
+  b.record().exact_field("0").data(1l);
+  b.record().exact_field("0").data(2l);
   // third schema
-  b.record().field("2").data(0.0);
-  b.record().field("2").data(1.0);
+  b.record().exact_field("2").data(0.0);
+  b.record().exact_field("2").data(1.0);
   // second schema again
-  b.record().field("1").data(2ul);
+  b.record().exact_field("1").data(2ul);
   // third schema again
-  b.record().field("2").data(2.0);
+  b.record().exact_field("2").data(2.0);
   const auto res = b.finalize();
 
   const vvr expected_result = {
@@ -347,23 +348,24 @@ TEST(precise unordered with seed) {
     {seed_schema},
   };
   // seed schema only
-  b.record().field("0").data(0l);
-  b.record().field("1").data(1.0);
+  b.record().exact_field("0").data(0l);
+  b.record().exact_field("1").data(1.0);
   {
     auto r = b.record();
-    r.field("0").data(2l);
-    r.field("1").data(2.0);
+    r.exact_field("0").data(2l);
+    r.exact_field("1").data(2.0);
   }
   // outside schema with extended fields
   {
     auto r = b.record();
-    r.field("0").data(0l);
-    r.field("2").data(0ul);
+    r.exact_field("0").data(0l);
+    r.exact_field("2").data(0ul);
   }
-  b.record().field("2").data(1ul); // this should land in the same batch as it
-                                   // has the seed for both seed fields
+  b.record().exact_field("2").data(
+    1ul); // this should land in the same batch as it
+          // has the seed for both seed fields
   // outside of schema only
-  { b.record().field("3").data(duration{}); }
+  { b.record().exact_field("3").data(duration{}); }
   // schema only again
   (void)b.record();
 
@@ -438,19 +440,19 @@ TEST(selector) {
   };
   {
     auto r = b.record();
-    r.field("selector").data("seed1"s);
-    r.field("1").data(0.0);
+    r.exact_field("selector").data("seed1"s);
+    r.exact_field("1").data(0.0);
   }
   {
     auto r = b.record();
-    r.field("selector").data("seed1"s);
-    r.field("0").data(1ul);
-    r.field("1").data(1.0);
+    r.exact_field("selector").data("seed1"s);
+    r.exact_field("0").data(1ul);
+    r.exact_field("1").data(1.0);
   }
   {
     auto r = b.record();
-    r.field("selector").data("seed2"s);
-    r.field("1").data(time{});
+    r.exact_field("selector").data("seed2"s);
+    r.exact_field("1").data(time{});
   }
 
   const auto res = b.finalize();
@@ -506,24 +508,24 @@ TEST(selector unordered) {
   };
   {
     auto r = b.record();
-    r.field("selector").data("seed1"s);
-    r.field("1").data(0.0);
+    r.exact_field("selector").data("seed1"s);
+    r.exact_field("1").data(0.0);
   }
   {
     auto r = b.record();
-    r.field("selector").data("seed2"s);
-    r.field("1").data(time{});
+    r.exact_field("selector").data("seed2"s);
+    r.exact_field("1").data(time{});
   }
   {
     auto r = b.record();
-    r.field("selector").data("seed1"s);
-    r.field("0").data(1ul);
-    r.field("1").data(1.0);
+    r.exact_field("selector").data("seed1"s);
+    r.exact_field("0").data(1ul);
+    r.exact_field("1").data(1.0);
   }
   {
     auto r = b.record();
-    r.field("selector").data("seed2"s);
-    r.field("0").data(1l);
+    r.exact_field("selector").data("seed2"s);
+    r.exact_field("0").data(1l);
   }
 
   const auto res = b.finalize();
@@ -591,27 +593,27 @@ TEST(selector unordered schema_only) {
   };
   {
     auto r = b.record();
-    r.field("selector").data("seed1"s);
-    r.field("1").data(0.0);
-    r.field("no").data(0.0);
+    r.exact_field("selector").data("seed1"s);
+    r.exact_field("1").data(0.0);
+    r.exact_field("no").data(0.0);
   }
   {
     auto r = b.record();
-    r.field("selector").data("seed2"s);
-    r.field("1").data(time{});
-    r.field("no").data(0.0);
+    r.exact_field("selector").data("seed2"s);
+    r.exact_field("1").data(time{});
+    r.exact_field("no").data(0.0);
   }
   {
     auto r = b.record();
-    r.field("selector").data("seed1"s);
-    r.field("0").data(1ul);
-    r.field("1").data(1.0);
-    r.field("no").data(0.0);
+    r.exact_field("selector").data("seed1"s);
+    r.exact_field("0").data(1ul);
+    r.exact_field("1").data(1.0);
+    r.exact_field("no").data(0.0);
   }
   {
     auto r = b.record();
-    r.field("selector").data("seed2"s);
-    r.field("0").data(1l);
+    r.exact_field("selector").data("seed2"s);
+    r.exact_field("0").data(1l);
   }
 
   const auto res = b.finalize();

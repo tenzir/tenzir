@@ -8,10 +8,10 @@
 
 #include "tenzir/data.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/record_builder.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/type.hpp"
-#include "tenzir/diagnostics.hpp"
 
 #include <tenzir/multi_series_builder.hpp>
 
@@ -36,13 +36,17 @@ void append_name_to_signature(std::string_view x, signature_type& out) {
 
 namespace detail::multi_series_builder {
 
-auto record_generator::field(std::string_view name) -> field_generator {
+auto record_generator::exact_field(std::string_view name) -> field_generator {
+  const std::string_view unflatten = msb_->settings_.unnest_separator;
+  if (not unflatten.empty()) {
+    return unflattend_field(name, unflatten);
+  }
   const auto visitor = detail::overload{
-    [&](series_builder_element& b) {
-      return field_generator{b.ref.field(name), b.parser};
+    [&](tenzir::record_ref b) {
+      return field_generator{msb_, b.field(name)};
     },
     [&](raw_pointer raw) {
-      return field_generator{raw->field(name)};
+      return field_generator{msb_, raw->field(name)};
     },
   };
   return std::visit(visitor, var_);
@@ -51,25 +55,49 @@ auto record_generator::field(std::string_view name) -> field_generator {
 auto record_generator::unflattend_field(
   std::string_view key, std::string_view unflatten) -> field_generator {
   if (unflatten.empty()) {
-    return field(key);
+    return exact_field(key);
   }
   auto i = key.find(unflatten);
   if (i == key.npos) {
-    return field(key);
+    return exact_field(key);
   }
   auto pre = key.substr(0, i);
   auto post = key.substr(i + unflatten.size());
 
-  return field(pre).record().unflattend_field(post, unflatten);
+  return exact_field(pre).record().unflattend_field(post, unflatten);
+}
+
+auto record_generator::unflattend_field(std::string_view key)
+  -> field_generator {
+  std::string_view unflatten = msb_->settings_.unnest_separator;
+  if (unflatten.empty()) {
+    return exact_field(key);
+  }
+  return unflattend_field(key, unflatten);
+}
+
+auto field_generator::data_unparsed(std::string_view s) -> void {
+  const auto visitor = detail::overload{
+    [&](tenzir::builder_ref b) {
+      auto res = msb_->parser_(s, nullptr);
+      auto ptr = std::get_if<tenzir::data>(&res);
+      TENZIR_ASSERT(ptr);
+      b.data(*ptr);
+    },
+    [&](raw_pointer raw) {
+      raw->data_unparsed(std::move(s));
+    },
+  };
+  return std::visit(visitor, var_);
 }
 
 auto field_generator::record() -> record_generator {
   const auto visitor = detail::overload{
-    [&](series_builder_element& b) {
-      return record_generator{b.ref.record(), b.parser};
+    [&](tenzir::builder_ref b) {
+      return record_generator{msb_, b.record()};
     },
     [&](raw_pointer raw) {
-      return record_generator{raw->record()};
+      return record_generator{msb_, raw->record()};
     },
   };
   return std::visit(visitor, var_);
@@ -77,11 +105,11 @@ auto field_generator::record() -> record_generator {
 
 auto field_generator::list() -> list_generator {
   const auto visitor = detail::overload{
-    [&](series_builder_element& b) {
-      return list_generator{b.ref.list(), b.parser};
+    [&](tenzir::builder_ref b) {
+      return list_generator{msb_, b.list()};
     },
     [&](raw_pointer raw) {
-      return list_generator{raw->list()};
+      return list_generator{msb_, raw->list()};
     },
   };
   return std::visit(visitor, var_);
@@ -94,14 +122,28 @@ void field_generator::null() {
 void list_generator::null() {
   return this->data(caf::none);
 }
+auto list_generator::data_unparsed(std::string_view s) -> void {
+  const auto visitor = detail::overload{
+    [&](tenzir::builder_ref b) {
+      auto res = msb_->parser_(s, nullptr);
+      auto ptr = std::get_if<tenzir::data>(&res);
+      TENZIR_ASSERT(ptr);
+      b.data(*ptr);
+    },
+    [&](raw_pointer raw) {
+      raw->data_unparsed(s);
+    },
+  };
+  return std::visit(visitor, var_);
+}
 
 auto list_generator::record() -> record_generator {
   const auto visitor = detail::overload{
-    [&](series_builder_element& b) {
-      return record_generator{b.ref.record(), b.parser};
+    [&](tenzir::builder_ref b) {
+      return record_generator{msb_, b.record()};
     },
     [&](raw_pointer raw) {
-      return record_generator{raw->record()};
+      return record_generator{msb_, raw->record()};
     },
   };
   return std::visit(visitor, var_);
@@ -109,11 +151,11 @@ auto list_generator::record() -> record_generator {
 
 auto list_generator::list() -> list_generator {
   const auto visitor = detail::overload{
-    [&](series_builder_element& b) {
-      return list_generator{b.ref.list(), b.parser};
+    [&](tenzir::builder_ref b) {
+      return list_generator{msb_, b.list()};
     },
     [&](raw_pointer raw) {
-      return list_generator{raw->list()};
+      return list_generator{msb_, raw->list()};
     },
   };
   return std::visit(visitor, var_);
@@ -182,10 +224,10 @@ auto multi_series_builder::last_errors() -> std::vector<tenzir::diagnostic> {
 
 auto multi_series_builder::record() -> record_generator {
   if (get_policy<policy_merge>()) {
-    return record_generator{merging_builder_.record(), &parser_};
+    return record_generator{this, merging_builder_.record()};
   } else {
     complete_last_event();
-    return record_generator{builder_raw_.record()};
+    return record_generator{this, builder_raw_.record()};
   }
 }
 
@@ -225,10 +267,17 @@ void multi_series_builder::complete_last_event() {
   if (not builder_raw_.has_elements()) {
     return; // an empty raw field does not need to be written back
   }
-  std::string schema_name;
+  signature_raw_.clear();
+  const tenzir::type* schema_type = nullptr;
   if (auto p = get_policy<policy_selector>()) {
     auto* selected_schema = builder_raw_.find_field_raw(p->field_name);
-    if (selected_schema) {
+    if (not selected_schema) {
+      errors_.emplace_back(
+        diagnostic::warning("{} parser: event did not contain selector field",
+                            settings_.default_name)
+          .note("selector field `{}` was not found", p->field_name)
+          .done());
+    } else {
       const auto visitor = detail::overload{
         [p]<detail::record_builder::non_structured_data_type T>(
           const T& v) -> std::string {
@@ -238,35 +287,53 @@ void multi_series_builder::complete_last_event() {
             return fmt::format("{}", v);
           }
         },
-        [](const caf::none_t&) -> std::string {
+        [p](const caf::none_t&) -> std::string {
+          if (p->naming_prefix) {
+            return fmt::format("{}.null", *(p->naming_prefix));
+          }
           return "null"; // TODO this is a magic constant.
         },
         [&err_vec = this->errors_](const blob&) -> std::string {
-          err_vec.emplace_back(diagnostic::warning("parser: a field of type `blob` cannot be used as a selector").done());
+          err_vec.emplace_back(
+            diagnostic::warning("parser: a field of type `blob` cannot be used "
+                                "as a selector")
+              .done());
           return {};
         },
         [](const auto&) -> std::string {
           return {};
         },
       };
-      schema_name = std::visit(visitor, selected_schema->data_);
-      //FIXME raise warning for schema issues
-    } else {
-      // TODO should this raise some warning?
+      const auto schema_name = std::visit(visitor, selected_schema->data_);
+      schema_type = type_for_schema(schema_name);
+      if (not schema_type and settings_.schema_only) {
+        errors_.emplace_back(
+          diagnostic::warning("{} parser: schema for selector not found",
+                              settings_.default_name)
+            .note("selector field is `{}`, but the resulting name `{}` does "
+                  "not "
+                  "refer to a known schema",
+                  p->field_name, schema_name)
+            .done());
+        return;
+      }
+      append_name_to_signature(schema_name, signature_raw_);
+      append_name_to_signature(schema_name, signature_raw_);
     }
   } else if (auto p = get_policy<policy_precise>()) {
     if (p->seed_schema) {
-      schema_name = *(p->seed_schema);
+      schema_type = type_for_schema(*(p->seed_schema));
+      append_name_to_signature(*(p->seed_schema), signature_raw_);
     }
   }
-  if (schema_name.empty()) {
-    schema_name = settings_.default_name;
+  if (not schema_type) {
+    schema_type = type_for_schema(settings_.default_name);
+    append_name_to_signature(settings_.default_name, signature_raw_);
   }
-  signature_raw_.clear();
-  append_name_to_signature(schema_name, signature_raw_);
-  const auto schema_type = type_for_schema(schema_name);
-  auto e = builder_raw_.append_signature_to(signature_raw_, parser_,
-                                            schema_type, settings_.schema_only);
+  if (not schema_type) {
+  }
+  auto e = builder_raw_.append_signature_to(
+    signature_raw_, parser_, schema_type, settings_.schema_only, settings_.raw);
   if (e) {
     errors_.push_back(std::move(*e));
     // TODO re-consider what to do with an errored event
@@ -276,7 +343,7 @@ void multi_series_builder::complete_last_event() {
     std::move(signature_raw_), free_index.value_or(entries_.size()));
   if (inserted) { // the signature wasn't in the map yet
     if (not free_index) {
-      entries_.emplace_back(std::move(schema_name), schema_type);
+      entries_.emplace_back(schema_type);
     } else {
       entries_[it->second].unused = false;
     }
@@ -353,5 +420,20 @@ void multi_series_builder::garbage_collect_where(
       it = signature_map_.erase(it);
     }
   }
+}
+
+auto multi_series_builder::specifies_schema(const policy_type& pol) -> bool {
+  constexpr static auto visitor = detail::overload{
+    [](const policy_merge& p) {
+      return p.seed_schema.has_value();
+    },
+    [](const policy_precise& p) {
+      return p.seed_schema.has_value();
+    },
+    [](const policy_selector&) {
+      return true;
+    },
+  };
+  return std::visit(visitor, pol);
 }
 } // namespace tenzir

@@ -132,7 +132,7 @@ inline auto split_at_null(generator<chunk_ptr> input, char split)
 }
 
 auto json_string_parser(std::string_view s, const tenzir::type* seed)
-  -> std::variant<tenzir::data,tenzir::diagnostic> {
+  -> std::variant<tenzir::data, tenzir::diagnostic> {
   if (seed) {
     return record_builder::basic_seeded_parser(s, *seed);
   }
@@ -148,21 +148,15 @@ auto json_string_parser(std::string_view s, const tenzir::type* seed)
 /// Parses simdjson objects into the given `series_builder` handles.
 class doc_parser {
 public:
-  doc_parser(std::string_view parsed_document, diagnostic_handler& diag,
-             bool raw, std::string unnest)
-    : parsed_document_{parsed_document},
-      diag_{diag},
-      unnest_{std::move(unnest)},
-      raw_{raw} {
+  doc_parser(std::string_view parsed_document, diagnostic_handler& diag)
+    : parsed_document_{parsed_document}, diag_{diag} {
   }
 
   doc_parser(std::string_view parsed_document, diagnostic_handler& diag,
-             std::size_t parsed_lines, bool raw, std::string unnest)
+             std::size_t parsed_lines)
     : parsed_document_{parsed_document},
       diag_{diag},
-      parsed_lines_{parsed_lines},
-      unnest_{std::move(unnest)},
-      raw_{raw} {
+      parsed_lines_{parsed_lines} {
   }
 
   [[nodiscard]] auto parse_object(simdjson::ondemand::value v, auto builder,
@@ -192,9 +186,8 @@ public:
       // this guards the base series_builder currently used by tql2 parse_json
       if constexpr (std::same_as<detail::multi_series_builder::record_generator,
                                  decltype(builder)>) {
-        value_parse_success
-          = parse_value(val.value_unsafe(),
-                        builder.unflattend_field(key, unnest_), depth + 1);
+        value_parse_success = parse_value(
+          val.value_unsafe(), builder.unflattend_field(key), depth + 1);
       } else {
         value_parse_success
           = parse_value(val.value_unsafe(), builder.field(key), depth + 1);
@@ -246,16 +239,12 @@ private:
   [[nodiscard]] auto
   parse_number(simdjson::ondemand::value val, auto builder) -> bool {
     auto kind = simdjson::ondemand::number_type{};
-    if (raw_) {
-      kind = simdjson::ondemand::number_type::floating_point_number;
-    } else {
-      auto result = val.get_number_type();
-      if (result.error()) {
-        report_parse_err(val, "a number");
-        return false;
-      }
-      kind = result.value_unsafe();
+    auto result = val.get_number_type();
+    if (result.error()) {
+      report_parse_err(val, "a number");
+      return false;
     }
+    kind = result.value_unsafe();
     switch (kind) {
       case simdjson::ondemand::number_type::floating_point_number: {
         auto result = val.get_double();
@@ -300,23 +289,17 @@ private:
       report_parse_err(val, "a string");
       return false;
     }
-    if (raw_) {
-      // TODO this is making copies even though we dont strictly need to do them
-      // at this point. *However* the effort to make the record builder support
-      // string_view's instead is non-trivial
-      builder.data(std::string{maybe_str.value_unsafe()});
-    } else {
-      // TODO because of this it would be better to adapt the multi_series_builder
-      if constexpr (std::same_as<decltype(builder), builder_ref>) {
-        auto d = json_string_parser(maybe_str.value_unsafe(), nullptr);
-        auto err = std::get_if<tenzir::diagnostic>( &d );
-        if (err) {
-          diag_.emit(std::move(*err));
-        }
-        builder.data( std::get<tenzir::data>(d) );
-      } else {
-        builder.data_unparsed(std::string{maybe_str.value_unsafe()});
+    builder.data(std::string{maybe_str.value_unsafe()});
+    // TODO because of this it would be better to adapt the multi_series_builder
+    if constexpr (std::same_as<decltype(builder), builder_ref>) {
+      auto d = json_string_parser(maybe_str.value_unsafe(), nullptr);
+      auto err = std::get_if<tenzir::diagnostic>(&d);
+      if (err) {
+        diag_.emit(std::move(*err));
       }
+      builder.data(std::get<tenzir::data>(d));
+    } else {
+      builder.data_unparsed(std::string{maybe_str.value_unsafe()});
     }
     return true;
   }
@@ -386,28 +369,20 @@ private:
   std::string_view parsed_document_;
   diagnostic_handler& diag_;
   std::optional<std::size_t> parsed_lines_;
-  std::string unnest_;
-  bool raw_;
 };
 
 class parser_base {
 public:
   parser_base(operator_control_plane& ctrl,
-              multi_series_builder::policy_type policy,
-              multi_series_builder::settings_type settings,
-              std::vector<type> schemas, bool raw, std::string unnest)
-    : builder{std::move(policy), std::move(settings), json_string_parser,
-              std::move(schemas)},
-      ctrl{ctrl},
-      unnest{std::move(unnest)},
-      raw{raw} {
+              multi_series_builder_options options, std::vector<type> schemas)
+    : builder{std::move(options.policy), std::move(options.settings),
+              json_string_parser, std::move(schemas)},
+      ctrl{ctrl} {
   }
 
   multi_series_builder builder;
   operator_control_plane& ctrl;
   simdjson::ondemand::parser parser;
-  std::string unnest;
-  bool raw = false;
   bool abort_requested = false;
 };
 
@@ -428,8 +403,8 @@ public:
       return;
     }
     auto& doc = maybe_doc.value_unsafe();
-    auto success = doc_parser{json_line, this->ctrl.diagnostics(), raw, unnest}
-                     .parse_object(val.value_unsafe(), builder.record());
+    auto success = doc_parser{json_line, this->ctrl.diagnostics()}.parse_object(
+      val.value_unsafe(), builder.record());
     // After parsing one JSON object it is expected for the result to be at
     // the end. If it's otherwise then it means that a line contains more than
     // one object in which case we don't add any data and emit a warning.
@@ -461,16 +436,9 @@ private:
 class default_parser final : public parser_base {
 public:
   default_parser(operator_control_plane& ctrl,
-                 multi_series_builder::policy_type policy,
-                 multi_series_builder::settings_type settings,
-                 std::vector<type> schemas, bool raw, std::string unnest,
-                 bool arrays_of_objects)
-    : parser_base{ctrl,
-                  std::move(policy),
-                  std::move(settings),
-                  std::move(schemas),
-                  raw,
-                  std::move(unnest)},
+                 multi_series_builder_options options,
+                 std::vector<type> schemas, bool arrays_of_objects)
+    : parser_base{ctrl, std::move(options), std::move(schemas)},
       arrays_of_objects_{arrays_of_objects} {
   }
 
@@ -513,9 +481,8 @@ public:
         }
         for (auto&& elem : arr.value_unsafe()) {
           auto row = builder.record();
-          auto success
-            = doc_parser{doc_it.source(), this->ctrl.diagnostics(), raw, unnest}
-                .parse_object(elem.value_unsafe(), row);
+          auto success = doc_parser{doc_it.source(), this->ctrl.diagnostics()}
+                           .parse_object(elem.value_unsafe(), row);
           if (not success) {
             // We already reported the issue.
             builder.remove_last();
@@ -525,8 +492,8 @@ public:
       } else {
         auto row = builder.record();
         auto success
-          = doc_parser{doc_it.source(), this->ctrl.diagnostics(), raw, unnest}
-              .parse_object(doc.value_unsafe(), row);
+          = doc_parser{doc_it.source(), this->ctrl.diagnostics()}.parse_object(
+            doc.value_unsafe(), row);
         if (not success) {
           // We already reported the issue.
           builder.remove_last();
@@ -596,9 +563,9 @@ auto parser_loop(generator<GeneratorValue> json_chunk_generator,
   if (parser_impl.abort_requested) {
     co_return;
   }
-    for (auto& e : parser_impl.builder.last_errors()) {
-      parser_impl.ctrl.diagnostics().emit(std::move(e));
-    }
+  for (auto& e : parser_impl.builder.last_errors()) {
+    parser_impl.ctrl.diagnostics().emit(std::move(e));
+  }
   // Get all remaining events
   for (auto& slice : parser_impl.builder.finalize_as_table_slice()) {
     co_yield std::move(slice);
@@ -606,26 +573,15 @@ auto parser_loop(generator<GeneratorValue> json_chunk_generator,
 }
 
 struct parser_args {
-  multi_series_builder::settings_type builder_settings = {};
-  multi_series_builder::policy_type builder_policy
-    = multi_series_builder::policy_precise{};
-  bool raw = false;
-  std::string unnest = {};
+  multi_series_builder_options builder_options = {};
   bool arrays_of_objects = false;
   bool use_ndjson_mode = true; // TODO these two could be an enum
   bool use_gelf_mode = false;
 
-  bool needs_schemas() const {
-    return not std::holds_alternative<multi_series_builder::policy_merge>(
-      builder_policy);
-  }
-
   friend auto inspect(auto& f, parser_args& x) {
     return f.object(x)
       .pretty_name("parser_args")
-      .fields(f.field("builder_settings", x.builder_settings),
-              f.field("builder_policy", x.builder_policy),
-              f.field("raw", x.builder_settings), f.field("unnest", x.unnest),
+      .fields(f.field("builder_options", x.builder_options),
               f.field("arrays_of_objects", x.arrays_of_objects),
               f.field("use_ndjson_mode", x.use_ndjson_mode),
               f.field("use_gelf_mode", x.use_gelf_mode));
@@ -645,44 +601,34 @@ public:
 
   auto optimize(event_order order) -> std::unique_ptr<plugin_parser> override {
     auto args = args_;
-    args.builder_settings.ordered = order == event_order::ordered;
+    args.builder_options.settings.ordered = order == event_order::ordered;
     return std::make_unique<json_parser>(std::move(args));
   }
 
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    auto schemas = detail::multi_series_builder::get_schemas_unnested(
-      args_.needs_schemas(), not args_.unnest.empty());
+    auto schemas = args_.builder_options.get_schemas();
     if (args_.use_ndjson_mode) {
       return parser_loop(split_at_crlf(std::move(input)),
                          ndjson_parser{
                            ctrl,
-                           args_.builder_policy,
-                           args_.builder_settings,
+                           args_.builder_options,
                            std::move(schemas),
-                           args_.raw,
-                           args_.unnest,
                          });
     }
     if (args_.use_gelf_mode) {
       return parser_loop(split_at_null(std::move(input), '\0'),
                          ndjson_parser{
                            ctrl,
-                           args_.builder_policy,
-                           args_.builder_settings,
+                           args_.builder_options,
                            std::move(schemas),
-                           args_.raw,
-                           args_.unnest,
                          });
     }
     return parser_loop(std::move(input), default_parser{
                                            ctrl,
-                                           args_.builder_policy,
-                                           args_.builder_settings,
+                                           args_.builder_options,
                                            std::move(schemas),
-                                           args_.raw,
-                                           args_.unnest,
                                            args_.arrays_of_objects,
                                          });
   }
@@ -829,14 +775,12 @@ public:
     parser_args args;
     multi_series_builder_argument_parser msb_parser{
       {.default_name = "tenzir.json"}};
-    msb_parser.add_to_parser(parser);
-    common_parser_options_parser common_parser;
-    common_parser.add_to_parser(parser);
+    msb_parser.add_all_to_parser(parser);
     std::optional<location> legacy_precise;
     std::optional<location> use_ndjson_mode;
     std::optional<location> use_gelf_mode;
     std::optional<location> arrays_of_objects;
-    parser.add( "--precise", legacy_precise );
+    parser.add("--precise", legacy_precise);
     parser.add("--ndjson", use_ndjson_mode);
     parser.add("--gelf", use_gelf_mode);
     parser.add("--arrays-of-objects", arrays_of_objects);
@@ -862,15 +806,14 @@ public:
     args.use_ndjson_mode = use_ndjson_mode.has_value();
     args.use_gelf_mode = use_gelf_mode.has_value();
     args.arrays_of_objects = arrays_of_objects.has_value();
-    args.builder_settings = msb_parser.get_settings();
-    args.builder_policy = msb_parser.get_policy();
-    args.unnest = common_parser.get_unnest();
-    args.raw = common_parser.get_raw();
+    args.builder_options = msb_parser.get_options();
 
-    if ( legacy_precise and std::get_if<multi_series_builder::policy_merge>(&args.builder_policy) ) {
-      diagnostic::error("`--precise` and `--merge` are incompatible." )
-      .primary(*legacy_precise)
-      .throw_();
+    if (legacy_precise
+        and std::get_if<multi_series_builder::policy_merge>(
+          &args.builder_options.policy)) {
+      diagnostic::error("`--precise` and `--merge` are incompatible.")
+        .primary(*legacy_precise)
+        .throw_();
     }
 
     return std::make_unique<json_parser>(std::move(args));
@@ -905,16 +848,16 @@ public:
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{
       name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
-    common_parser_options_parser pc;
-    pc.add_to_parser(parser);
+    auto msb_parser = multi_series_builder_argument_parser{
+      multi_series_builder::settings_type{.default_name = "gelf"},
+      multi_series_builder::policy_precise{},
+    };
+    msb_parser.add_settings_to_parser(parser);
 
     parser.parse(p);
     auto args = parser_args{};
+    args.builder_options = msb_parser.get_options();
     args.use_gelf_mode = true;
-    args.builder_settings.default_name = "gelf";
-    args.builder_policy = multi_series_builder::policy_precise{};
-    args.unnest = pc.get_unnest();
-    args.raw = pc.get_raw();
     return std::make_unique<json_parser>(std::move(args));
   }
 };
@@ -932,26 +875,20 @@ public:
     auto parser = argument_parser{
       name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
     auto args = parser_args{};
-    args.builder_settings = {
-      .default_name = std::string{Prefix.str()},
+    auto msb_parser = multi_series_builder_argument_parser{
+      multi_series_builder::settings_type{
+        .default_name = std::string{Prefix.str()},
+        .unnest_separator = std::string{Separator.str()},
+      },
+      multi_series_builder::policy_selector{
+        .field_name = std::string{Selector.str()},
+        .naming_prefix = std::string{Prefix.str()},
+      },
     };
-    args.builder_policy = multi_series_builder::policy_selector{
-      .field_name = std::string{Selector.str()},
-      .naming_prefix = std::string{Prefix.str()},
-    };
-    std::optional<location> schema_only;
-    add_schema_only_option(parser, schema_only);
-    common_parser_options_parser common_parser;
-    common_parser.add_to_parser(parser);
+    msb_parser.add_settings_to_parser(parser, true);
     parser.parse(p);
-    args.builder_settings.schema_only = schema_only.has_value();
-    args.unnest = common_parser.get_unnest();
-    args.raw = common_parser.get_raw();
+    args.builder_options = msb_parser.get_options();
     args.use_ndjson_mode = true;
-    auto sep_str = Separator.str();
-    if (not sep_str.empty()) {
-      args.unnest = std::move(sep_str);
-    }
 
     return std::make_unique<json_parser>(std::move(args));
   }
@@ -1013,9 +950,7 @@ public:
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
-    msb_parser.add_to_parser(parser);
-    auto common_parser = common_parser_options_parser{};
-    common_parser.add_to_parser(parser);
+    msb_parser.add_all_to_parser(parser);
     auto sep = std::optional<located<std::string>>{};
     std::optional<location> use_ndjson_mode;
     std::optional<location> use_gelf_mode;
@@ -1027,13 +962,10 @@ public:
     auto result = parser.parse(inv, ctx);
     auto args = parser_args{};
     try {
-      args.builder_settings = msb_parser.get_settings();
-      args.builder_policy = msb_parser.get_policy();
+      args.builder_options = msb_parser.get_options();
       args.use_ndjson_mode = use_ndjson_mode.has_value();
       args.use_gelf_mode = use_gelf_mode.has_value();
       args.arrays_of_objects = arrays_of_objects.has_value();
-      args.raw = common_parser.get_raw();
-      args.unnest = common_parser.get_unnest();
     } catch (diagnostic& d) {
       ctx.dh().emit(std::move(d));
       result = failure::promise();
@@ -1129,7 +1061,7 @@ public:
                 continue;
               }
               auto str = std::string{arg.Value(i)};
-              doc_parser doc_p = doc_parser(str, ctx, false, {});
+              doc_parser doc_p = doc_parser(str, ctx);
               auto doc = parser.iterate(str);
               if (doc.error()) {
                 diagnostic::warning("{}", error_message(doc.error()))

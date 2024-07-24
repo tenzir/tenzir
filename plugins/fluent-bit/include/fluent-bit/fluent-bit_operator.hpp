@@ -514,8 +514,7 @@ private:
   std::unique_ptr<std::mutex> buffer_mtx_{}; ///< Protects the shared buffer
 };
 
-auto add(auto field, const msgpack_object& object, bool raw,
-         std::string_view unflatten, bool decode = false) -> void {
+auto add(auto field, const msgpack_object& object, bool decode = false) -> void {
   auto f = detail::overload{
     [&](std::nullopt_t) {
       field.null();
@@ -545,7 +544,7 @@ auto add(auto field, const msgpack_object& object, bool raw,
     [&](std::span<msgpack_object> xs) {
       auto list = field.list();
       for (const auto& x : xs) {
-        add(list, x, raw, unflatten, decode);
+        add(list, x, decode);
       }
     },
     [&](std::span<msgpack_object_kv> xs) {
@@ -558,10 +557,10 @@ auto add(auto field, const msgpack_object& object, bool raw,
             .throw_();
         }
         auto key = msgpack::to_str(kvp.key);
-        auto field = record.unflattend_field(key, unflatten);
+        auto field = record.unflattend_field(key);
         // TODO: restrict this attempt to decode to the top-level field "log"
         // only. We currently attempt to parse *all* fields named "log" as JSON.
-        add(field, kvp.val, raw, unflatten, key == "log");
+        add(field, kvp.val, key == "log");
       }
     },
     [&](const msgpack_object_ext& ext) {
@@ -584,7 +583,7 @@ public:
   fluent_bit_operator() = default;
 
   fluent_bit_operator(operator_args operator_args,
-                      combined_parser_options builder_options, record config)
+                      multi_series_builder_options builder_options, record config)
     : operator_args_{std::move(operator_args)},
       builder_options_{std::move(builder_options)},
       config_{std::move(config)} {
@@ -602,10 +601,10 @@ public:
     auto& engine = *engine_expected;
     // auto builder = series_builder{};
     auto schemas = detail::multi_series_builder::get_schemas_unnested(
-      true, not builder_options_.unflatten.empty());
+      true, not builder_options_.settings.unnest_separator.empty());
     auto msb
-      = multi_series_builder{builder_options_.builder_policy,
-                             builder_options_.builder_settings,
+      = multi_series_builder{builder_options_.policy,
+                             builder_options_.settings,
                              record_builder::basic_parser, std::move(schemas)};
     auto parse = [this, &ctrl, &msb](chunk_ptr chunk) {
       // What we're getting here is the typical Fluent Bit array consisting of
@@ -680,12 +679,12 @@ public:
             .emit(ctrl.diagnostics());
           return;
         }
-        row.field("timestamp").data(*timestamp);
+        row.exact_field("timestamp").data(*timestamp);
         if (xs[1].type == MSGPACK_OBJECT_MAP) {
           auto map = msgpack::to_map(xs[1]);
           if (not map.empty()) {
-            auto metadata = row.field("metadata");
-            add(metadata, xs[1], false, {});
+            auto metadata = row.exact_field("metadata");
+            add(metadata, xs[1]);
           }
         } else {
           diagnostic::warning("invalid Fluent Bit message")
@@ -694,7 +693,7 @@ public:
             .emit(ctrl.diagnostics());
         }
       } else if (auto timestamp = msgpack::to_flb_time(first)) {
-        row.field("timestamp").data(*timestamp);
+        row.exact_field("timestamp").data(*timestamp);
       } else {
         diagnostic::warning("invalid Fluent Bit message")
           .note("failed to parse first-level array element")
@@ -702,8 +701,8 @@ public:
           .emit(ctrl.diagnostics());
       }
       // Process the MESSAGE, i.e., the second top-level array element.
-      auto message = row.field("message");
-      add(message, second, builder_options_.raw, builder_options_.unflatten);
+      auto message = row.exact_field("message");
+      add(message, second);
     };
     while (engine->running()) {
       for (auto& v : msb.yield_ready_as_table_slice()) {
@@ -782,7 +781,7 @@ public:
   auto optimize(expression const& filter,
                 event_order order) const -> optimize_result override {
     auto builder_options = builder_options_;
-    builder_options.builder_settings.ordered = order == event_order::ordered;
+    builder_options.settings.ordered = order == event_order::ordered;
 
     auto replacement = std::make_unique<fluent_bit_operator>(
       this->operator_args_, std::move(builder_options), this->config_);
@@ -797,7 +796,7 @@ public:
 
 private:
   operator_args operator_args_;
-  combined_parser_options builder_options_;
+  multi_series_builder_options builder_options_;
   record config_;
 };
 

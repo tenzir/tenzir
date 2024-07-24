@@ -32,8 +32,9 @@ namespace tenzir {
 
 class multi_series_builder;
 
-using parser_function_type = std::function<std::variant<tenzir::data,tenzir::diagnostic>(
-  std::string_view, const tenzir::type*)>;
+using parser_function_type
+  = std::function<std::variant<tenzir::data, tenzir::diagnostic>(
+    std::string_view, const tenzir::type*)>;
 
 namespace detail::multi_series_builder {
 
@@ -46,24 +47,29 @@ class record_generator {
   using raw_pointer = detail::record_builder::node_record*;
 
 public:
-  explicit record_generator(tenzir::record_ref builder,
-                            parser_function_type* parser)
-    : var_{std::in_place_type<series_builder_element>, builder, parser} {
+  explicit record_generator(class multi_series_builder* msb,
+                            tenzir::record_ref builder)
+    : msb_{msb}, var_{std::in_place_type<tenzir::record_ref>, builder} {
   }
-  explicit record_generator(raw_pointer raw) : var_{raw} {
+  explicit record_generator(class multi_series_builder* msb, raw_pointer raw)
+    : msb_{msb}, var_{raw} {
   }
   /// adds a new field to the record and returns a generator for that field
-  auto field(std::string_view name) -> field_generator;
+  /// if the backing `multi_series_builder` has an unnest-separator, this
+  /// function will also unflatten
+  auto exact_field(std::string_view name) -> field_generator;
 
+  /// creates an explicitly unflattend field.
+  /// DOES NOT RESPECT THE `multi_series_builder`s unflatten settings
   auto unflattend_field(std::string_view key,
                         std::string_view unflatten) -> field_generator;
+  /// creates an explicitly unflattend field according to the
+  /// `multi_series_builder`s unflatten setting
+  auto unflattend_field(std::string_view key) -> field_generator;
 
 private:
-  struct series_builder_element {
-    tenzir::record_ref ref;
-    parser_function_type* parser;
-  };
-  std::variant<series_builder_element, raw_pointer> var_;
+  class multi_series_builder* msb_ = nullptr;
+  std::variant<tenzir::record_ref, raw_pointer> var_;
 };
 
 class field_generator {
@@ -71,20 +77,21 @@ class field_generator {
 
 public:
   /// A non-associated field generator. BE CAREFUL WITH THIS.
-  field_generator() : field_generator(nullptr) {
+  field_generator() : field_generator(nullptr, nullptr) {
   }
-  field_generator(builder_ref builder, parser_function_type* parser)
-    : var_{std::in_place_type<series_builder_element>, builder, parser} {
+  field_generator(class multi_series_builder* msb, builder_ref builder)
+    : msb_{msb}, var_{builder} {
   }
-  field_generator(raw_pointer raw) : var_{raw} {
+  field_generator(class multi_series_builder* msb, raw_pointer raw)
+    : msb_{msb}, var_{raw} {
   }
 
   /// sets the value of the field to some data
   template <tenzir::detail::record_builder::non_structured_data_type T>
   void data(T d) {
     const auto visitor = detail::overload{
-      [&](series_builder_element& b) {
-        b.ref.data(d);
+      [&](tenzir::builder_ref b) {
+        b.data(d);
       },
       [&](raw_pointer raw) {
         raw->data(d);
@@ -93,20 +100,7 @@ public:
     return std::visit(visitor, var_);
   }
 
-  void data_unparsed(std::string_view s) {
-    const auto visitor = detail::overload{
-      [&](series_builder_element& b) {
-        auto res = (*b.parser)(s, nullptr);
-        auto ptr = std::get_if<tenzir::data>( &res ); 
-        TENZIR_ASSERT(ptr);
-        b.ref.data(*ptr);
-      },
-      [&](raw_pointer raw) {
-        raw->data_unparsed(std::move(s));
-      },
-    };
-    return std::visit(visitor, var_);
-  }
+  void data_unparsed(std::string_view s);
 
   /// sets the value of the field an empty record and returns a generator for
   /// the record
@@ -120,29 +114,27 @@ public:
   void null();
 
 private:
-  struct series_builder_element {
-    tenzir::builder_ref ref;
-    parser_function_type* parser;
-  };
-  std::variant<series_builder_element, raw_pointer> var_;
+  class multi_series_builder* msb_;
+  std::variant<tenzir::builder_ref, raw_pointer> var_;
 };
 
 class list_generator {
   using raw_pointer = detail::record_builder::node_list*;
 
 public:
-  list_generator(builder_ref builder, parser_function_type* parser)
-    : var_{std::in_place_type<series_builder_element>, builder, parser} {
+  list_generator(class multi_series_builder* msb, builder_ref builder)
+    : msb_{msb}, var_{builder} {
   }
-  list_generator(raw_pointer raw) : var_{raw} {
+  list_generator(class multi_series_builder* msb, raw_pointer raw)
+    : msb_{msb}, var_{raw} {
   }
 
   /// appends a data value T to the list
   template <tenzir::detail::record_builder::non_structured_data_type T>
   void data(T d) {
     const auto visitor = detail::overload{
-      [&](series_builder_element& b) {
-        b.ref.data(d);
+      [&](tenzir::builder_ref b) {
+        b.data(d);
       },
       [&](raw_pointer raw) {
         raw->data(d);
@@ -151,20 +143,7 @@ public:
     return std::visit(visitor, var_);
   }
 
-  void data_unparsed(std::string_view s) {
-    const auto visitor = detail::overload{
-      [&](series_builder_element& b) {
-        auto res = (*b.parser)(s, nullptr);
-        auto ptr = std::get_if<tenzir::data>( &res );
-        TENZIR_ASSERT(ptr);
-        b.ref.data(*ptr);
-      },
-      [&](raw_pointer raw) {
-        raw->data_unparsed(s);
-      },
-    };
-    return std::visit(visitor, var_);
-  }
+  void data_unparsed(std::string_view s);
   /// appends a record to the list and returns a generator for the record
   auto record() -> record_generator;
 
@@ -175,11 +154,8 @@ public:
   void null();
 
 private:
-  struct series_builder_element {
-    tenzir::builder_ref ref;
-    parser_function_type* parser;
-  };
-  std::variant<series_builder_element, raw_pointer> var_;
+  class multi_series_builder* msb_;
+  std::variant<tenzir::builder_ref, raw_pointer> var_;
 };
 
 inline auto
@@ -279,6 +255,8 @@ public:
   using policy_type
     = tenzir::variant<policy_merge, policy_precise, policy_selector>;
 
+  auto static specifies_schema(const policy_type& pol) -> bool;
+
   struct settings_type {
     // the default name given to a schema
     std::string default_name = "tenzir.unknown";
@@ -287,6 +265,10 @@ public:
     // if the given policy finds a schema, only fields from that schema should
     // be present in the output and extra fields should be discarded
     bool schema_only = false;
+    // whether to not parse fields that are not present in a schema
+    bool raw = false;
+    // unnest separator to be used when calling any `field` in the builder pattern
+    std::string unnest_separator = {};
     // timeout after which events will be yielded regardless of whether the
     // desired batch size has been reached
     duration timeout = defaults::import::batch_timeout;
@@ -347,10 +329,8 @@ private:
   auto type_for_schema(std::string_view str) -> const type*;
 
   struct entry_data {
-    entry_data(std::string name, const tenzir::type* schema = nullptr)
-      : name{std::move(name)},
-        builder{schema},
-        flushed{std::chrono::steady_clock::now()} {
+    entry_data(const tenzir::type* schema = nullptr)
+      : builder{schema}, flushed{std::chrono::steady_clock::now()} {
     }
 
     auto flush() -> std::vector<series> {
@@ -358,7 +338,6 @@ private:
       return builder.finish();
     }
 
-    std::string name;
     series_builder builder;
     std::chrono::steady_clock::time_point flushed;
     bool unused = false;

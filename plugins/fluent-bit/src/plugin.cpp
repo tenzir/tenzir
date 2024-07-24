@@ -34,8 +34,8 @@ public:
     parser.add("options", plugin_options);
     std::optional<tenzir::record> fluentbit_options;
     parser.add("fluent_bit_options", fluentbit_options);
-    auto opt_parser = combined_parser_options_parser{};
-    opt_parser.add_to_parser(parser);
+    auto opt_parser = multi_series_builder_argument_parser{};
+    opt_parser.add_all_to_parser(parser);
     auto result = parser.parse(inv, ctx);
     TRY(result);
 
@@ -46,7 +46,7 @@ public:
     };
     try {
       auto builder_options = opt_parser.get_options();
-      builder_options.builder_settings.default_name
+      builder_options.settings.default_name
         = fmt::format("fluent_bit.{}", args.plugin);
       return std::make_unique<fluent_bit_operator>(
         std::move(args), std::move(builder_options), config_);

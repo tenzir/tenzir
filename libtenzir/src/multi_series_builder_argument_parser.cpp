@@ -47,21 +47,42 @@ void add_schema_only_option(argument_parser2& parser,
                             std::optional<location>& schema_only) {
   parser.add("no_extra_fields", schema_only);
 }
-
-auto multi_series_builder_argument_parser::add_to_parser(
-  argument_parser& parser) -> void {
+auto multi_series_builder_argument_parser::add_settings_to_parser( argument_parser& parser, bool no_unflatten_option ) -> void {
   add_schema_only_option(parser, schema_only_);
+  parser.add("--raw", raw_);
+  if ( not no_unflatten_option )
+  parser.add("--unnest-separator", unnest_, "<nested-key-separator>");
+}
+
+auto multi_series_builder_argument_parser::add_policy_to_parser(
+  argument_parser& parser) -> void {
   parser.add("--merge", merge_);
   parser.add("--schema", schema_, "<schema>");
   parser.add("--selector", selector_, "<selector>");
 }
+auto multi_series_builder_argument_parser::add_all_to_parser(
+  argument_parser& parser) -> void {
+ add_policy_to_parser(parser);
+ add_settings_to_parser(parser);
+}
 
-auto multi_series_builder_argument_parser::add_to_parser(
-  argument_parser2& parser) -> void {
+auto multi_series_builder_argument_parser::add_settings_to_parser( argument_parser2& parser, bool no_unflatten_option ) -> void {
   add_schema_only_option(parser, schema_only_);
+  parser.add("raw", raw_);
+  if ( not no_unflatten_option )
+  parser.add("unflatten", unnest_);
+}
+
+auto multi_series_builder_argument_parser::add_policy_to_parser(
+  argument_parser2& parser) -> void {
   parser.add("merge", merge_);
   parser.add("schema", schema_);
   parser.add("selector", selector_);
+}
+auto multi_series_builder_argument_parser::add_all_to_parser(
+  argument_parser2& parser) -> void {
+    add_policy_to_parser(parser);
+    add_settings_to_parser(parser);
 }
 
 auto multi_series_builder_argument_parser::get_settings()
@@ -71,6 +92,22 @@ auto multi_series_builder_argument_parser::get_settings()
       .primary(*schema_only_)
       .throw_();
   }
+  if (unnest_) {
+    if (unnest_->inner.empty()) {
+      diagnostic::error("got empty unflatten-separator")
+        .primary(unnest_->source)
+        .note("get {}")
+        .throw_();
+    }
+    settings_.unnest_separator = unnest_->inner;
+  }
+  if (raw_ and merge_) {
+    diagnostic::error("`--merge` and `--raw` are incompatible")
+      .primary(*raw_)
+      .primary(*merge_)
+      .throw_();
+  }
+  settings_.raw = raw_.has_value();
   settings_.schema_only = schema_only_.has_value();
   return settings_;
 }
@@ -90,7 +127,6 @@ auto multi_series_builder_argument_parser::get_policy()
   if (selector_) {
     has_selector = true;
   }
-
   if (has_schema and has_selector) {
     diagnostic::error("`--schema` and `--selector` cannot be combined")
       .primary(schema_->source)
@@ -128,36 +164,9 @@ auto multi_series_builder_argument_parser::get_policy()
   return policy_;
 }
 
-auto common_parser_options_parser::add_to_parser(argument_parser& parser)
-  -> void {
-  parser.add("--raw", raw_);
-  parser.add("--unnest-separator", unnest_, "<nested-key-separator>");
+auto multi_series_builder_options::get_schemas() const -> std::vector<tenzir::type> {
+  return detail::multi_series_builder::get_schemas_unnested(
+    multi_series_builder::specifies_schema(policy),
+    not settings.unnest_separator.empty());
 }
-
-auto common_parser_options_parser::add_to_parser(argument_parser2& parser)
-  -> void {
-  parser.add("raw", raw_);
-  parser.add("unflatten", unnest_);
-}
-
-auto combined_parser_options_parser::add_to_parser(argument_parser& parser)
-  -> void {
-  multi_series_builder_argument_parser::add_to_parser(parser);
-  common_parser_options_parser::add_to_parser(parser);
-}
-auto combined_parser_options_parser::add_to_parser(argument_parser2& parser)
-  -> void {
-  multi_series_builder_argument_parser::add_to_parser(parser);
-  common_parser_options_parser::add_to_parser(parser);
-}
-
-auto combined_parser_options_parser::get_options()
-  -> combined_parser_options {
-    return {
-      .builder_policy = get_policy(),
-      .builder_settings = get_settings(),
-      .raw = get_raw(),
-      .unflatten = get_unnest(),
-    };
-  }
 } // namespace tenzir

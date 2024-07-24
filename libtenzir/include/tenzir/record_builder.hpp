@@ -12,8 +12,8 @@
 #include "tenzir/aliases.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/flat_map.hpp"
-#include "tenzir/series_builder.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/series_builder.hpp"
 #include "tsl/robin_map.h"
 
 #include <caf/detail/type_list.hpp>
@@ -38,7 +38,9 @@ namespace detail::record_builder {
 template <typename P>
 concept data_parsing_function
   = requires(P parser, std::string_view str, const tenzir::type* seed) {
-      { parser(str, seed) } -> std::same_as<std::variant<tenzir::data,tenzir::diagnostic>>;
+      {
+        parser(str, seed)
+      } -> std::same_as<std::variant<tenzir::data, tenzir::diagnostic>>;
     };
 
 class node_record;
@@ -223,8 +225,8 @@ public:
   /// parses any unparsed fields using `parser`, potentially providing a
   /// seed/schema to the parser
   template <data_parsing_function Parser>
-  auto parse(Parser& parser, const tenzir::record_type* seed,
-             bool schema_only) -> std::optional<tenzir::diagnostic>;
+  auto parse(Parser& parser, const tenzir::record_type* seed, bool schema_only,
+             bool dont_parse_non_seed) -> std::optional<tenzir::diagnostic>;
 
 private:
   // tries to get a field with the given name. Does not affect any field state
@@ -240,10 +242,10 @@ private:
   // append the signature of this record to `sig`.
   // including sentinels is important for signature computation
   template <data_parsing_function Parser>
-  auto append_to_signature(signature_type& sig, Parser& p,
-                           const tenzir::record_type* seed,
-                           schema_type_lookup_map* lookup,
-                           bool schema_only)  -> std::optional<tenzir::diagnostic>;
+  auto append_to_signature(
+    signature_type& sig, Parser& p, const tenzir::record_type* seed,
+    schema_type_lookup_map* lookup, bool schema_only,
+    bool dont_parse_non_seed) -> std::optional<tenzir::diagnostic>;
   // clears the record by marking everything as dead
   auto clear() -> void;
 
@@ -298,8 +300,8 @@ public:
   /// parses any unparsed fields using `parser`, potentially providing a
   /// seed/schema to the parser
   template <data_parsing_function Parser>
-  auto parse(Parser& parser, const tenzir::list_type* seed,
-             bool schema_only) -> std::optional<tenzir::diagnostic>;
+  auto parse(Parser& parser, const tenzir::list_type* seed, bool schema_only,
+             bool dont_parse_non_seed) -> std::optional<tenzir::diagnostic>;
 
   auto combined_index() const -> size_t {
     return type_index_;
@@ -322,10 +324,10 @@ private:
   // append the signature of this list to `sig`.
   // including sentinels is important for signature computation
   template <data_parsing_function Parser>
-  auto append_to_signature(signature_type& sig, Parser& p,
-                           const tenzir::list_type* seed,
-                           schema_type_lookup_map* lookup,
-                           bool schema_only)  -> std::optional<tenzir::diagnostic>;
+  auto append_to_signature(
+    signature_type& sig, Parser& p, const tenzir::list_type* seed,
+    schema_type_lookup_map* lookup, bool schema_only,
+    bool dont_parse_non_seed) -> std::optional<tenzir::diagnostic>;
   auto clear() -> void;
 
   size_t type_index_ = type_index_empty;
@@ -393,15 +395,16 @@ private:
   /// parses any unparsed fields using `parser`, potentially providing a
   /// seed/schema to the parser
   template <data_parsing_function Parser>
-  auto parse(Parser& parser, const tenzir::type* seed,
-             bool schema_only) -> std::optional<tenzir::diagnostic>;
+  auto parse(Parser& parser, const tenzir::type* seed, bool schema_only,
+             bool dont_parse_non_seed) -> std::optional<tenzir::diagnostic>;
   // append the signature of this field to `sig`.
   // including sentinels is important for signature computation
   template <data_parsing_function Parser>
   auto
   append_to_signature(signature_type& sig, Parser& p, const tenzir::type* seed,
-                      schema_type_lookup_map* lookup,
-                      bool schema_only) -> std::optional<tenzir::diagnostic>;
+                      schema_type_lookup_map* lookup, bool schema_only,
+                      bool dont_parse_non_seed)
+    -> std::optional<tenzir::diagnostic>;
   // writes the field into a series builder
   auto commit_to(tenzir::builder_ref r, bool mark_dead = true) -> void;
   auto commit_to(tenzir::data& r, bool mark_dead = true) -> void;
@@ -415,7 +418,7 @@ private:
   // clang-format on
 
   field_variant_type data_;
-  bool is_raw_ = false;
+  bool is_unparsed_ = false;
 };
 
 struct node_record::entry_type {
@@ -465,7 +468,9 @@ public:
   template <detail::record_builder::data_parsing_function Parser>
   auto append_signature_to(signature_type&, Parser&& p,
                            const tenzir::type* seed = nullptr,
-                           bool schema_only = false) -> std::optional<tenzir::diagnostic>;
+                           bool schema_only = false,
+                           bool dont_parse_non_seed
+                           = false) -> std::optional<tenzir::diagnostic>;
 
   /// clears the builder
   void clear();
@@ -481,16 +486,14 @@ public:
 
   /// a very basic parser that simply uses `tenzir::parsers` under the hood.
   /// this parser does not support the seed pointing to a structural type
-  static auto
-  basic_parser(std::string_view s,
-               const tenzir::type* seed) -> std::variant<tenzir::data,tenzir::diagnostic>;
+  static auto basic_parser(std::string_view s, const tenzir::type* seed)
+    -> std::variant<tenzir::data, tenzir::diagnostic>;
 
   /// a very basic parser that only supports parsing based on a seed
   /// uses the `tenzir::parser` s under the hood.
   /// this parser does not support the seed pointing to a structural type
-  static auto
-  basic_seeded_parser(std::string_view s,
-                      const tenzir::type& seed) -> std::variant<tenzir::data,tenzir::diagnostic>;
+  static auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
+    -> std::variant<tenzir::data, tenzir::diagnostic>;
 
   /// parses any unparsed fields using `parser`, potentially providing a
   /// seed/schema to the parser
@@ -512,30 +515,34 @@ auto record_builder::find_value_typed(std::string_view key) -> T* {
 }
 
 template <detail::record_builder::data_parsing_function Parser>
-auto record_builder::append_signature_to(signature_type& sig, Parser&& p,
-                                         const tenzir::type* seed,
-                                         bool schema_only) -> std::optional<tenzir::diagnostic> {
+auto record_builder::append_signature_to(
+  signature_type& sig, Parser&& p, const tenzir::type* seed, bool schema_only,
+  bool dont_parse_non_seed) -> std::optional<tenzir::diagnostic> {
   auto seed_error = std::optional<tenzir::diagnostic>{};
   auto* seed_as_record_type = caf::get_if<tenzir::record_type>(&*seed);
   if (seed) {
     if (seed_as_record_type) {
       return root_.append_to_signature(sig, p, seed_as_record_type,
-                                       &schema_type_lookup_, schema_only);
+                                       &schema_type_lookup_, schema_only,
+                                       dont_parse_non_seed);
     } else {
-      seed_error = diagnostic::warning("selected schema is not a record and will be ignored" ).done();
+      seed_error = diagnostic::warning(
+                     "selected schema is not a record and will be ignored")
+                     .done();
     }
   }
-  auto plain_error
-    = root_.append_to_signature(sig, p, nullptr, nullptr, schema_only);
-  if ( plain_error ) {
-    return plain_error; 
+  auto plain_error = root_.append_to_signature(
+    sig, p, nullptr, nullptr, schema_only, dont_parse_non_seed);
+  if (plain_error) {
+    return plain_error;
   }
   return seed_error;
 }
 
 template <detail::record_builder::data_parsing_function Parser>
 auto record_builder::parse(Parser&& p, const tenzir::type* seed,
-                           bool schema_only) -> std::optional<tenzir::diagnostic> {
+                           bool schema_only)
+  -> std::optional<tenzir::diagnostic> {
   auto err = std::optional<tenzir::diagnostic>{};
   if (seed) {
     if (auto seed_as_record = caf::get_if<tenzir::record_type>(&*seed)) {
@@ -554,29 +561,32 @@ auto record_builder::parse(Parser&& p, const tenzir::type* seed,
 namespace detail::record_builder {
 
 template <data_parsing_function Parser>
-auto node_record::append_to_signature(signature_type& sig, Parser& p,
-                                      const tenzir::record_type* seed,
-                                      schema_type_lookup_map* lookup,
-                                      bool schema_only)  -> std::optional<tenzir::diagnostic> {
+auto node_record::append_to_signature(
+  signature_type& sig, Parser& p, const tenzir::record_type* seed,
+  schema_type_lookup_map* lookup, bool schema_only,
+  bool dont_parse_non_seed) -> std::optional<tenzir::diagnostic> {
   sig.push_back(record_start_marker);
   // if we have a seed, we need too ensure that all fields exist first
-  auto it = decltype(lookup->begin()){};
+  auto seed_it = decltype(lookup->begin()){};
   if (seed) {
     TENZIR_ASSERT(lookup);
-    it = lookup->find(*seed);
-    if (it == lookup->end()) {
+    seed_it = lookup->find(*seed);
+    if (seed_it == lookup->end()) {
       bool success = false;
-      std::tie(it, success) = lookup->try_emplace(*seed);
+      std::tie(seed_it, success) = lookup->try_emplace(*seed);
       TENZIR_ASSERT(success);
       for (auto v : seed->fields()) {
+        // ensure the field exists
         auto* ptr = try_field(v.name);
         ptr->mark_this_relevant();
+        //add its type back to the lookup map
         const auto [_, field_success]
-          = it.value().try_emplace(std::string{v.name}, std::move(v.type));
+          = seed_it.value().try_emplace(std::string{v.name}, std::move(v.type));
         TENZIR_ASSERT(field_success);
       }
     } else {
-      for (const auto& [k, t] : it->second) {
+      for (const auto& [k, t] : seed_it->second) {
+        //ensure the field exists
         auto* ptr = try_field(k);
         ptr->mark_this_relevant();
       }
@@ -590,17 +600,18 @@ auto node_record::append_to_signature(signature_type& sig, Parser& p,
     if (field.affects_signature()) {
       if (seed) {
         bool handled_by_seed = false;
-        const auto field_it = it->second.find(k);
-        if (field_it != it->second.end()) {
+        const auto field_it = seed_it->second.find(k);
+        if (field_it != seed_it->second.end()) {
           handled_by_seed = true;
           const auto key_bytes = as_bytes(k);
           sig.insert(sig.end(), key_bytes.begin(), key_bytes.end());
-          auto e = field.append_to_signature(sig, p, &(field_it->second),
-                                             lookup, schema_only);
+          auto e
+            = field.append_to_signature(sig, p, &(field_it->second), lookup,
+                                        schema_only, dont_parse_non_seed);
           if (e and not err) {
             err = std::move(e);
           }
-          break;
+          // break; //?????
         }
         if (handled_by_seed) {
           continue;
@@ -612,7 +623,8 @@ auto node_record::append_to_signature(signature_type& sig, Parser& p,
       }
       const auto key_bytes = as_bytes(k);
       sig.insert(sig.end(), key_bytes.begin(), key_bytes.end());
-      auto e = field.append_to_signature(sig, p, nullptr, nullptr, schema_only);
+      auto e = field.append_to_signature(sig, p, nullptr, nullptr, schema_only,
+                                         dont_parse_non_seed);
       if (e and not err) {
         err = std::move(e);
       }
@@ -624,7 +636,8 @@ auto node_record::append_to_signature(signature_type& sig, Parser& p,
 
 template <data_parsing_function Parser>
 auto node_record::parse(Parser& p, const tenzir::record_type* seed,
-                        bool schema_only) -> std::optional<tenzir::diagnostic> {
+                        bool schema_only, bool dont_parse_non_seed)
+  -> std::optional<tenzir::diagnostic> {
   auto err = std::optional<tenzir::diagnostic>{};
   for (auto& [key, value] : data_) {
     if (value.is_alive()) {
@@ -633,7 +646,7 @@ auto node_record::parse(Parser& p, const tenzir::record_type* seed,
         for (auto [seed_key, seed_type] : seed->fields()) {
           if (seed_key == key) {
             handled_by_seed = true;
-            auto e = value.parse(p, &seed_type);
+            auto e = value.parse(p, &seed_type, dont_parse_non_seed);
             if (e and not err) {
               err = std::move(e);
             }
@@ -646,7 +659,7 @@ auto node_record::parse(Parser& p, const tenzir::record_type* seed,
         }
       }
       if (not handled_by_seed) {
-        auto e = value.parse(p, nullptr);
+        auto e = value.parse(p, nullptr, schema_only, dont_parse_non_seed);
         if (e and not err) {
           err = std::move(e);
         }
@@ -659,46 +672,52 @@ auto node_record::parse(Parser& p, const tenzir::record_type* seed,
 template <non_structured_data_type T>
 auto node_field::data(T data) -> void {
   mark_this_alive();
-  is_raw_ = false;
+  is_unparsed_ = false;
   data_.emplace<T>(std::move(data));
 }
 
 template <data_parsing_function Parser>
-auto node_field::parse(Parser& p, const tenzir::type* seed,
-                       bool schema_only) -> std::optional<tenzir::diagnostic> {
-  if (not is_raw_) {
+auto node_field::parse(Parser& p, const tenzir::type* seed, bool schema_only,
+                       bool dont_parse_non_seed)
+  -> std::optional<tenzir::diagnostic> {
+  if (not is_unparsed_) {
     return {};
   }
   if (not is_alive()) {
     return {};
   }
   TENZIR_ASSERT(std::holds_alternative<std::string>(data_));
-  std::string& raw = std::get<std::string>(data_);
-  auto parse_result = p(std::move(raw), seed);
-  if ( auto* p = std::get_if<tenzir::data>(&parse_result) ) {
+  std::string& raw_data = std::get<std::string>(data_);
+  if (not seed and dont_parse_non_seed) {
+    is_unparsed_ = false;
+    return std::nullopt;
+  }
+  auto parse_result = p(std::move(raw_data), seed);
+  if (auto* p = std::get_if<tenzir::data>(&parse_result)) {
     auto& value = *p;
     if (schema_only and seed
         and value.get_data().index() != seed->type_index()) {
       // if schema only is enabled, and the parsed field does not match the
       // schema, we discard its value
-      return diagnostic::warning( "late parsed fields type does not "
-                                             "match the provided schema. This "
-                                             "is a shortcoming of the parser.").done();
+      return diagnostic::warning("late parsed fields type does not "
+                                 "match the provided schema. This "
+                                 "is a shortcoming of the parser.")
+        .done();
     }
     data(std::move(value));
     return {};
   }
-  return std::get<tenzir::diagnostic>( parse_result );
+  return std::get<tenzir::diagnostic>(parse_result);
 }
 
 template <data_parsing_function Parser>
-auto node_field::append_to_signature(signature_type& sig, Parser& p,
-                                     const tenzir::type* seed,
-                                     schema_type_lookup_map* lookup,
-                                     bool schema_only) -> std::optional<tenzir::diagnostic> {
+auto node_field::append_to_signature(
+  signature_type& sig, Parser& p, const tenzir::type* seed,
+  schema_type_lookup_map* lookup, bool schema_only,
+  bool dont_parse_non_seed) -> std::optional<tenzir::diagnostic> {
   auto res = std::optional<tenzir::diagnostic>{};
-  if (is_raw_) {
-    res = parse(p, seed, schema_only);
+  if (is_unparsed_) {
+    res = parse(p, seed, schema_only, dont_parse_non_seed);
   }
   if (state_ == state::sentinel) {
     if (not seed) {
@@ -713,47 +732,55 @@ auto node_field::append_to_signature(signature_type& sig, Parser& p,
     // sentinel structural types get handled by the regular visit below
   }
   const auto visitor = detail::overload{
-    [&sig, &p, lookup, seed, schema_only](node_list& v)-> std::optional<tenzir::diagnostic> {
+    [&sig, &p, lookup, seed, schema_only,
+     dont_parse_non_seed](node_list& v) -> std::optional<tenzir::diagnostic> {
       const auto* ls = caf::get_if<list_type>(seed);
       auto seed_error = std::optional<tenzir::diagnostic>{};
       if (seed and not ls) {
         seed_error = diagnostic::warning("event field is a list, but the "
-                                            "schema does not expect a list").done();
+                                         "schema does not expect a list")
+                       .done();
       }
       if (v.affects_signature() or ls) {
-        auto sig_error = v.append_to_signature(sig, p, ls, lookup, schema_only);
+        auto sig_error = v.append_to_signature(sig, p, ls, lookup, schema_only,
+                                               dont_parse_non_seed);
         if (sig_error) {
           return sig_error;
         }
       }
       return seed_error;
     },
-    [&sig, &p, seed, lookup, schema_only](node_record& v) -> std::optional<tenzir::diagnostic> {
+    [&sig, &p, seed, lookup, schema_only,
+     dont_parse_non_seed](node_record& v) -> std::optional<tenzir::diagnostic> {
       const auto* rs = caf::get_if<record_type>(seed);
       auto seed_error = std::optional<tenzir::diagnostic>{};
       if (seed and not rs) {
-        seed_error
-           = diagnostic::warning("event field is a record, but the "
-                                            "schema does not expect a record").done();
+        seed_error = diagnostic::warning("event field is a record, but the "
+                                         "schema does not expect a record")
+                       .done();
       }
       if (v.affects_signature() or rs) {
-        auto sig_error = v.append_to_signature(sig, p, rs, lookup, schema_only);
+        auto sig_error = v.append_to_signature(sig, p, rs, lookup, schema_only,
+                                               dont_parse_non_seed);
         if (sig_error) {
           return sig_error;
         }
       }
       return seed_error;
     },
-    [&sig, p, seed, this, lookup, schema_only](caf::none_t&) -> std::optional<tenzir::diagnostic>{
+    [&sig, p, seed, this, lookup, schema_only,
+     dont_parse_non_seed](caf::none_t&) -> std::optional<tenzir::diagnostic> {
       // none could be the result of pre-seeding or being built with a true null
       // via the API for the first case we need to ensure we continue doing
       // seeding if we have a seed
       if (seed) {
         if (auto sr = caf::get_if<tenzir::record_type>(seed)) {
-          return record()->append_to_signature(sig, p, sr, lookup, schema_only);
+          return record()->append_to_signature(sig, p, sr, lookup, schema_only,
+                                               dont_parse_non_seed);
         }
         if (auto sl = caf::get_if<tenzir::list_type>(seed)) {
-          return list()->append_to_signature(sig, p, sl, lookup, schema_only);
+          return list()->append_to_signature(sig, p, sl, lookup, schema_only,
+                                             dont_parse_non_seed);
         }
         sig.push_back(static_cast<std::byte>(seed->type_index()));
         return std::nullopt;
@@ -764,7 +791,8 @@ auto node_field::append_to_signature(signature_type& sig, Parser& p,
         return std::nullopt;
       }
     },
-    [&sig, seed, this]<non_structured_data_type T>(T& v) -> std::optional<tenzir::diagnostic> {
+    [&sig, seed, this]<non_structured_data_type T>(
+      T& v) -> std::optional<tenzir::diagnostic> {
       constexpr static auto type_idx
         = caf::detail::tl_index_of<field_type_list, T>::value;
       auto result_index = type_idx;
@@ -801,17 +829,20 @@ auto node_field::append_to_signature(signature_type& sig, Parser& p,
             data(fmt::format("{}", v));
             result_index = type_index_string;
             seed_error = diagnostic::warning(
-              "The provided schema requested a string, but the parsed field "
-              "was typed data"
-              "This is most likely a shortcoming of the parser").done();
+                           "The provided schema requested a string, but the "
+                           "parsed field "
+                           "was typed data"
+                           "This is most likely a shortcoming of the parser")
+                           .done();
           }
         }
 
         seed_error = diagnostic::warning(
-                            "parsed field type (id: {}), does not match the "
-                            "type from the schema (id: {}). This is most "
-                            "likely a shortcoming of the parser",
-                            type_idx, seed_idx).done();
+                       "parsed field type (id: {}), does not match the "
+                       "type from the schema (id: {}). This is most "
+                       "likely a shortcoming of the parser",
+                       type_idx, seed_idx)
+                       .done();
       }
     [[maybe_unused]] done:
       sig.push_back(static_cast<std::byte>(result_index));
@@ -819,7 +850,8 @@ auto node_field::append_to_signature(signature_type& sig, Parser& p,
     },
     [](auto&) -> std::optional<tenzir::diagnostic> {
       TENZIR_UNREACHABLE();
-      return diagnostic::error("node_field::append_to_signature UNREACHABLE").done();
+      return diagnostic::error("node_field::append_to_signature UNREACHABLE")
+        .done();
     },
   };
   auto sig_error = std::visit(visitor, data_);
@@ -843,10 +875,10 @@ auto node_list::data(T data) -> void {
 }
 
 template <data_parsing_function Parser>
-auto node_list::append_to_signature(signature_type& sig, Parser& p,
-                                    const tenzir::list_type* seed,
-                                    schema_type_lookup_map* lookup,
-                                    bool schema_only)  -> std::optional<tenzir::diagnostic> {
+auto node_list::append_to_signature(
+  signature_type& sig, Parser& p, const tenzir::list_type* seed,
+  schema_type_lookup_map* lookup, bool schema_only,
+  bool dont_parse_non_seed) -> std::optional<tenzir::diagnostic> {
   auto err = std::optional<tenzir::diagnostic>{};
   sig.push_back(list_start_marker);
   if (is_numeric(type_index_) or type_index_ == type_index_numeric_mismatch) {
@@ -858,10 +890,11 @@ auto node_list::append_to_signature(signature_type& sig, Parser& p,
       auto seed_idx = seed->value_type().type_index();
       if (seed_idx != type_index_) {
         if (seed_idx == type_index_double) {
-          err =diagnostic::warning(
-                                "numeric type mismatch between list elements "
-                                "and the selected schema. A conversion to "
-                                "'double' will be performed").done();
+          err
+            = diagnostic::warning("numeric type mismatch between list elements "
+                                  "and the selected schema. A conversion to "
+                                  "'double' will be performed")
+                .done();
           goto numeric_mismatch_handling;
         } else {
           goto generic_mismatch_handling;
@@ -897,12 +930,12 @@ auto node_list::append_to_signature(signature_type& sig, Parser& p,
       node_field sentinel;
       sentinel.state_ = state::sentinel;
       return sentinel.append_to_signature(sig, p, seed_type_ptr, lookup,
-                                          schema_only);
+                                          schema_only, dont_parse_non_seed);
     }
     for (auto& v : data_) {
       auto next_sig_index = sig.size();
-      auto element_error
-        = v.append_to_signature(sig, p, seed_type_ptr, lookup, schema_only);
+      auto element_error = v.append_to_signature(
+        sig, p, seed_type_ptr, lookup, schema_only, dont_parse_non_seed);
       if (element_error and not err) {
         // we can only catch one error here, so we catch the first one.
         // all subsequent errors are most likely going to be repeats of the same
@@ -936,7 +969,8 @@ auto node_list::append_to_signature(signature_type& sig, Parser& p,
 
 template <data_parsing_function Parser>
 auto node_list::parse(Parser& p, const tenzir::list_type* seed,
-                      bool schema_only) -> std::optional<tenzir::diagnostic> {
+                      bool schema_only, bool dont_parse_non_seed)
+  -> std::optional<tenzir::diagnostic> {
   auto err = std::optional<tenzir::diagnostic>{};
   auto seed_type = tenzir::type{};
   if (seed) {
@@ -944,7 +978,8 @@ auto node_list::parse(Parser& p, const tenzir::list_type* seed,
   }
   for (auto& element : data_) {
     if (element.is_alive()) {
-      auto e = element.parse(p, seed ? &seed_type : nullptr, schema_only);
+      auto e = element.parse(p, seed ? &seed_type : nullptr, schema_only,
+                             dont_parse_non_seed);
       if (e and not err) {
         err = std::move(e);
       }
