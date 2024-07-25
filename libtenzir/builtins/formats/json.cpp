@@ -1030,6 +1030,73 @@ public:
   }
 };
 
+class read_gelf_plugin final
+  : public virtual operator_plugin2<parser_adapter<json_parser>> {
+public:
+  auto name() const -> std::string override {
+    return "read_gelf";
+  }
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto parser = argument_parser2::operator_(name());
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_all_to_parser(parser);
+    auto result = parser.parse(inv, ctx);
+    TRY(result);
+    auto args = parser_args{};
+    try {
+      args.builder_options = msb_parser.get_options();
+    } catch (diagnostic& d) {
+      ctx.dh().emit(std::move(d));
+      result = failure::promise();
+    }
+    return std::make_unique<parser_adapter<json_parser>>(
+      json_parser{std::move(args)});
+  }
+};
+
+template <detail::string_literal Name, detail::string_literal Selector,
+          detail::string_literal Prefix, detail::string_literal Separator = "">
+class configured_read_plugin final
+  : public virtual operator_plugin2<parser_adapter<json_parser>> {
+public:
+  auto name() const -> std::string override {
+    return fmt::format("read_{}", Name);
+  }
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto parser = argument_parser2::operator_(name());
+    auto msb_parser = multi_series_builder_argument_parser{
+      multi_series_builder::settings_type{
+        .default_name = std::string{Prefix.str()},
+        .unnest_separator = std::string{Separator.str()},
+      },
+      multi_series_builder::policy_selector{
+        .field_name = std::string{Selector.str()},
+        .naming_prefix = std::string{Prefix.str()},
+      },
+    };
+    msb_parser.add_settings_to_parser(parser, true);
+    auto result = parser.parse(inv, ctx);
+    TRY(result);
+    auto args = parser_args{};
+    args.use_ndjson_mode = true;
+    try {
+      args.builder_options = msb_parser.get_options();
+    } catch (diagnostic& d) {
+      ctx.dh().emit(std::move(d));
+      result = failure::promise();
+    }
+    return std::make_unique<parser_adapter<json_parser>>(
+      json_parser{std::move(args)});
+  }
+};
+
+using read_suricata_plugin
+  = configured_read_plugin<"suricata", "event_type", "suricata">;
+using read_zeek_plugin
+  = configured_read_plugin<"zeek_json", "_path", "zeek", ".">;
+
 class parse_json_plugin final : public virtual method_plugin {
 public:
   auto name() const -> std::string override {
@@ -1128,5 +1195,8 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::gelf_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::suricata_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::zeek_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_json_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_gelf_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_zeek_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_suricata_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::write_json_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::parse_json_plugin)
