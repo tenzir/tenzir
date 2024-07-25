@@ -37,7 +37,7 @@ print <field> <format>
 
 Parsers will make a best effort to infer schemas and data types from the input.
 
-Some parsers allow explicitly controlling what schema is inferred from the data.
+Some parser provide options for 
 The following builtin parsers support setting a custom schema:
 
 - [CEF](formats/cef.md)
@@ -48,11 +48,11 @@ The following builtin parsers support setting a custom schema:
 - [Suricata](formats/suricata.md)
 - [XSV](formats/xsv.md)
 - [YAML](formats/json.md)
-- [Zeek TSV](formats/zeek-tsv.md) / [Zeek JSON](formats/zeek-json.md)
+- [Zeek JSON](formats/zeek-json.md)
 
 These parsers expose the following options:
 
-### `--merge`
+### `--merge` (Parsers)
 
 Merges all incoming events into a single schema that converges over time. This
 option is usually the fastest if the data is highly heterogeneous, but can lead
@@ -60,7 +60,7 @@ to huge schemas and imprecise results. Use with caution.
 
 This option must not be combined with `--selector` or `--raw --schema`.
 
-### `--schema <schema>`
+### `--schema <schema>` (Parsers)
 
 Explicitly set the output schema. If a schema with a matching name is
 installed, the result will always all all fields of the specified schema.
@@ -68,7 +68,7 @@ Otherwise, this option only assigns the output schema name only.
 
 This option must not be combined with `--selector` or `--raw --merge`
 
-### `--selector <field>[:<prefix>]`
+### `--selector <field>[:<prefix>]` (Parsers)
 
 Similar to `--schema`, but use the value of the field specified in `<field>`
 as the schema name.
@@ -80,7 +80,7 @@ the field `event_type` set to the value `flow` looks for a schema named
 
 This option must not be combined with `--merge` or `--schema`.
 
-### `--no-infer`
+### `--no-infer` (Parsers)
 
 Ignore fields that are not explicitly specified in the given schema. If the
 specified schema does not exist, this option causes the parser to drop events
@@ -88,7 +88,7 @@ and emit a warning.
 
 This option requires either `--schema` or `--selector` to be set.
 
-### `--unnest-separator <separator>`
+### `--unnest-separator <separator>` (Parsers)
 
 A delimiter that, if present in keys, causes values to be treated as values of
 nested records.
@@ -122,7 +122,7 @@ With the unnest separator set to `.`, Tenzir reads the events like this:
 }
 ```
 
-### `--raw`
+### `--raw` (Parsers)
 
 Use only the raw types that are native to the parsed format. Fields that have a type
  specified in the chosen schema will still be parsed according to the schema.

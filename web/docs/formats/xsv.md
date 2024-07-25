@@ -18,17 +18,20 @@ csv [--list-sep <list-sep>] [--null-value <null-value>]
     [--allow-comments] [--auto-expand] [--header <header>]
     [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
     [--no-infer] [--raw] [--unnest-separator <separator>]
-
+```
+```
 ssv [--list-sep <list-sep>] [--null-value <null-value>]
     [--allow-comments] [--auto-expand] [--header <header>]
     [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
     [--no-infer] [--raw] [--unnest-separator <separator>]
-
+```
+```
 tsv [--list-sep <list-sep>] [--null-value <null-value>]
     [--allow-comments] [--auto-expand] [--header <header>]
     [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
     [--no-infer] [--raw] [--unnest-separator <separator>]
-
+```
+```
 xsv <field-sep> <list-sep> <null-value>
     [--allow-comments] [--auto-expand] [--header <header>]
     [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
@@ -86,7 +89,7 @@ Note that nested records have dot-separated field names.
 
 ### Common Options (Parser)
 
-The options are the common parser options, which can be found on the [formats page](formats.md#parser-schema-inference).
+The XSV parser supports the common [schema inference options](formats.md#parser-schema-inference).
 
 ### `<field-sep>`
 

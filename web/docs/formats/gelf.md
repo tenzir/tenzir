@@ -77,7 +77,7 @@ on ingest](https://github.com/Graylog2/graylog2-server/issues/5504).
 
 ### Common Options (Parser)
 
-The options are the common parser options, which can be found on the [formats page](formats.md#parser-schema-inference).
+The GELF parser supports the common [schema inference options](formats.md#parser-schema-inference).
 
 ## Examples
 

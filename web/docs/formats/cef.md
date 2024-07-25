@@ -93,7 +93,7 @@ event:
 
 ### Common Options (Parser)
 
-The options are the common parser options, which can be found on the [formats page](formats.md#parser-schema-inference).
+The CEF parser supports the common [schema inference options](formats.md#parser-schema-inference).
 
 ## Examples
 
