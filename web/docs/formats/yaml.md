@@ -27,7 +27,7 @@ The `yaml` format provides a parser and printer for YAML documents and streams.
 
 ### Common Options (Parser)
 
-The options are the common parser options, which can be found on the [formats page](formats.md#schema-inference).
+The options are the common parser options, which can be found on the [formats page](formats.md#parser-schema-inference).
 
 ## Examples
 

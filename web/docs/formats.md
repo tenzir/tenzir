@@ -33,9 +33,9 @@ parse <field> <format>
 print <field> <format>
 ```
 
-## Schema Inference
+## Parser Schema Inference
 
-In general, parsers will make a best effort to infer schemas and data types from the input.
+Parsers will make a best effort to infer schemas and data types from the input.
 
 Some parsers allow explicitly controlling what schema is inferred from the data.
 The following builtin parsers support setting a custom schema:
@@ -50,7 +50,7 @@ The following builtin parsers support setting a custom schema:
 - [YAML](formats/json.md)
 - [Zeek TSV](formats/zeek-tsv.md) / [Zeek JSON](formats/zeek-json.md)
 
-They expose the following additional options:
+These parsers expose the following options:
 
 ### `--merge`
 
@@ -58,15 +58,15 @@ Merges all incoming events into a single schema that converges over time. This
 option is usually the fastest if the data is highly heterogeneous, but can lead
 to huge schemas and imprecise results. Use with caution.
 
-This option must not be combined with `--selector`.
+This option must not be combined with `--selector` or `--raw --schema`.
 
 ### `--schema <schema>`
 
-Explicitly set the output schema name. If a schema with a matching name is
+Explicitly set the output schema. If a schema with a matching name is
 installed, the result will always all all fields of the specified schema.
-Otherwise, this option assigns the output schema name only.
+Otherwise, this option only assigns the output schema name only.
 
-This option must not be combined with `--selector`.
+This option must not be combined with `--selector` or `--raw --merge`
 
 ### `--selector <field>[:<prefix>]`
 
@@ -125,10 +125,12 @@ With the unnest separator set to `.`, Tenzir reads the events like this:
 ### `--raw`
 
 Use only the raw types that are native to the parsed format. Fields that have a type
- specified in the chosen schema will still have their type according to the schema.
+ specified in the chosen schema will still be parsed according to the schema.
 
 For example, the JSON format has no notion of an IP address, so this will cause all IP addresses
-to be parsed as strings, unless the fields is specified to be an IP address by the schema. Use with caution.
+to be parsed as strings, unless the fields is specified to be an IP address by the schema. JSON however has numeric types, so those would be parsed. Use with caution.
+
+This option must not be combined with `--merge --schema`
 
 ## MIME Types
 

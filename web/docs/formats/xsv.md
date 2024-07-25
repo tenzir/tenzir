@@ -86,7 +86,7 @@ Note that nested records have dot-separated field names.
 
 ### Common Options (Parser)
 
-The options are the common parser options, which can be found on the [formats page](formats.md#schema-inference).
+The options are the common parser options, which can be found on the [formats page](formats.md#parser-schema-inference).
 
 ### `<field-sep>`
 
