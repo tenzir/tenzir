@@ -852,7 +852,7 @@ public:
       multi_series_builder::settings_type{.default_name = "gelf"},
       multi_series_builder::policy_precise{},
     };
-    msb_parser.add_settings_to_parser(parser);
+    msb_parser.add_all_to_parser(parser);
 
     parser.parse(p);
     auto args = parser_args{};
