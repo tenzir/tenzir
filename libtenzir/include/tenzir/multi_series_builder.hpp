@@ -175,13 +175,23 @@ get_schemas_unnested(bool actually_do_it, bool unflatten) -> std::vector<type> {
   return ret;
 }
 
-} // namespace detail::multi_series_builder
+struct diagnostic_handler : tenzir::diagnostic_handler {
+  virtual void emit(diagnostic d) override {
+    diagnostics.push_back(std::move(d));
+  }
+
+  auto yield() -> std::vector<diagnostic> {
+    return std::exchange(diagnostics, {});
+  }
+  std::vector<diagnostic> diagnostics;
+};
 
 auto series_to_table_slice(series array, std::string_view fallback_name
                                          = "tenzir.unknown") -> table_slice;
 auto series_to_table_slice(std::vector<series> data,
                            std::string_view fallback_name
                            = "tenzir.unknown") -> std::vector<table_slice>;
+} // namespace detail::multi_series_builder
 
 class multi_series_builder {
 public:
@@ -378,7 +388,7 @@ private:
   series_builder merging_builder_;
   std::vector<entry_data> entries_;
   std::vector<series> ready_events_;
-  std::vector<diagnostic> errors_;
+  detail::multi_series_builder::diagnostic_handler dh_;
   std::chrono::steady_clock::time_point last_yield_time_
     = std::chrono::steady_clock::now();
   size_t active_index_ = 0;

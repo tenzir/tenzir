@@ -160,7 +160,6 @@ auto list_generator::list() -> list_generator {
   };
   return std::visit(visitor, var_);
 }
-} // namespace detail::multi_series_builder
 
 auto series_to_table_slice(series array,
                            std::string_view fallback_name) -> table_slice {
@@ -189,6 +188,7 @@ auto series_to_table_slice(std::vector<series> data,
     });
   return result;
 }
+} // namespace detail::multi_series_builder
 
 auto multi_series_builder::yield_ready() -> std::vector<series> {
   const auto now = std::chrono::steady_clock::now();
@@ -215,11 +215,12 @@ auto multi_series_builder::yield_ready() -> std::vector<series> {
 
 auto multi_series_builder::yield_ready_as_table_slice()
   -> std::vector<table_slice> {
-  return series_to_table_slice(yield_ready(), settings_.default_name);
+  return detail::multi_series_builder::series_to_table_slice(
+    yield_ready(), settings_.default_name);
 }
 
 auto multi_series_builder::last_errors() -> std::vector<tenzir::diagnostic> {
-  return std::exchange(errors_, {});
+  return dh_.yield();
 }
 
 auto multi_series_builder::record() -> record_generator {
@@ -257,7 +258,8 @@ auto multi_series_builder::finalize() -> std::vector<series> {
 
 auto multi_series_builder::finalize_as_table_slice()
   -> std::vector<table_slice> {
-  return series_to_table_slice(finalize(), settings_.default_name);
+  return detail::multi_series_builder::series_to_table_slice(
+    finalize(), settings_.default_name);
 }
 
 void multi_series_builder::complete_last_event() {
@@ -272,11 +274,10 @@ void multi_series_builder::complete_last_event() {
   if (auto p = get_policy<policy_selector>()) {
     auto* selected_schema = builder_raw_.find_field_raw(p->field_name);
     if (not selected_schema) {
-      errors_.emplace_back(
-        diagnostic::warning("{} parser: event did not contain selector field",
-                            settings_.default_name)
-          .note("selector field `{}` was not found", p->field_name)
-          .done());
+      diagnostic::warning("{} parser: event did not contain selector field",
+                          settings_.default_name)
+        .note("selector field `{}` was not found", p->field_name)
+        .emit(dh_);
     } else {
       const auto visitor = detail::overload{
         [p]<detail::record_builder::non_structured_data_type T>(
@@ -293,11 +294,10 @@ void multi_series_builder::complete_last_event() {
           }
           return "null"; // TODO this is a magic constant.
         },
-        [&err_vec = this->errors_](const blob&) -> std::string {
-          err_vec.emplace_back(
-            diagnostic::warning("parser: a field of type `blob` cannot be used "
-                                "as a selector")
-              .done());
+        [&dh_ = this->dh_](const blob&) -> std::string {
+          diagnostic::warning("parser: a field of type `blob` cannot be used "
+                              "as a selector")
+            .emit(dh_);
           return {};
         },
         [](const auto&) -> std::string {
@@ -307,15 +307,14 @@ void multi_series_builder::complete_last_event() {
       const auto schema_name = std::visit(visitor, selected_schema->data_);
       schema_type = type_for_schema(schema_name);
       if (not schema_type and settings_.schema_only) {
-        errors_.emplace_back(
-          diagnostic::warning("{} parser: schema for selector not found",
-                              settings_.default_name)
-            .note("selector field is `{}`, but the resulting name `{}` does "
-                  "not "
-                  "refer to a known schema",
-                  p->field_name, schema_name)
-            .done());
-            builder_raw_.clear();
+        diagnostic::warning("{} parser: schema for selector not found",
+                            settings_.default_name)
+          .note("selector field is `{}`, but the resulting name `{}` does "
+                "not "
+                "refer to a known schema",
+                p->field_name, schema_name)
+          .emit(dh_);
+        builder_raw_.clear();
         return;
       }
       append_name_to_signature(schema_name, signature_raw_);
@@ -333,12 +332,8 @@ void multi_series_builder::complete_last_event() {
   }
   if (not schema_type) {
   }
-  auto e = builder_raw_.append_signature_to(
-    signature_raw_, parser_, schema_type, settings_.schema_only, settings_.raw);
-  if (e) {
-    errors_.push_back(std::move(*e));
-    // TODO re-consider what to do with an errored event
-  }
+  builder_raw_.append_signature_to(signature_raw_, parser_, schema_type,
+                                   settings_.schema_only, settings_.raw, &dh_);
   auto free_index = next_free_index();
   auto [it, inserted] = signature_map_.try_emplace(
     std::move(signature_raw_), free_index.value_or(entries_.size()));
