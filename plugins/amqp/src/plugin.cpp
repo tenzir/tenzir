@@ -11,6 +11,7 @@
 #include <tenzir/concept/parseable/tenzir/kvp.hpp>
 #include <tenzir/config.hpp>
 #include <tenzir/data.hpp>
+#include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/plugin.hpp>
 
 #include <caf/expected.hpp>
@@ -279,6 +280,28 @@ public:
     return to_error(status);
   }
 
+  /// Consumes frames from broker, simply for the side effect of processing
+  /// heartbeats implicitly. Required if otherwise no interaction with the
+  /// broker would occur.
+  auto handle_heartbeat(operator_control_plane& ctrl) {
+    amqp_frame_t frame;
+    // We impose no timeout, either there is something to read or not. Never
+    // block!
+    struct timeval tv = {0, 0};
+    int status;
+    if (conn_ == nullptr)
+      return;
+    do {
+      status = amqp_simple_wait_frame_noblock(conn_, &frame, &tv);
+      if (AMQP_STATUS_TIMEOUT != status && AMQP_STATUS_OK != status) {
+        diagnostic::warning("unexpected error while processing heartbeats")
+          .note("{}", amqp_error_string2(status))
+          .emit(ctrl.diagnostics());
+        return;
+      }
+    } while (status == AMQP_STATUS_OK);
+  }
+
   /// Starts a consumer by calling the basic.consume method.
   /// @param opts The consuming options.
   auto start_consumer(const consume_options& opts) -> caf::error {
@@ -321,7 +344,7 @@ public:
   /// @returns The message from the server.
   auto consume(std::optional<std::chrono::microseconds> timeout = {})
     -> caf::expected<chunk_ptr> {
-    TENZIR_DEBUG("consuming message");
+    TENZIR_TRACE("consuming message");
     auto envelope = amqp_envelope_t{};
     amqp_maybe_release_buffers(conn_);
     timeval us{};
@@ -584,11 +607,15 @@ public:
 
   auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
-    auto engine = amqp_engine::make(config_);
-    if (not engine)
-      return engine.error();
-    if (auto err = engine->connect())
+    auto engine = std::shared_ptr<amqp_engine>{};
+    if (auto eng = amqp_engine::make(config_)) {
+      engine = std::make_shared<amqp_engine>(std::move(*eng));
+    } else {
+      return eng.error();
+    }
+    if (auto err = engine->connect()) {
       return err;
+    }
     auto channel = args_.channel ? args_.channel->inner : default_channel;
     if (auto err = engine->open(channel))
       return err;
@@ -600,8 +627,21 @@ public:
       .mandatory = args_.mandatory,
       .immediate = args_.immediate,
     };
-    return [&ctrl, engine = std::make_shared<amqp_engine>(std::move(*engine)),
-            opts = std::move(opts)](chunk_ptr chunk) mutable {
+    auto heartbeat = try_get<uint64_t>(config_, "heartbeat");
+    if (heartbeat and *heartbeat and **heartbeat > 0) {
+      // If we are requesting heartbeats, we are also responsible to handle the
+      // heartbeats we get. If we have long gaps in interaction with the broker,
+      // we need to proactively check explicitly if there is something for us.
+      // We check 3 times per heartbeat interval, at most once per second.
+      auto interval = std::max(uint64_t{1}, **heartbeat / 3);
+      TENZIR_DEBUG("using heartbeat interval of {} seconds", interval);
+      detail::weak_run_delayed_loop(&ctrl.self(),
+        std::chrono::seconds{interval}, [engine, &ctrl] {
+        TENZIR_TRACE("processing heartbeats");
+        engine->handle_heartbeat(ctrl);
+      });
+    }
+    return [&ctrl, engine, opts = std::move(opts)](chunk_ptr chunk) mutable {
       if (!chunk || chunk->size() == 0)
         return;
       if (auto err = engine->publish(chunk, opts))
