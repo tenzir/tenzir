@@ -177,7 +177,7 @@ auto evaluator::eval(const ast::index_expr& x) -> series {
       if (target < 0) {
         target = length + target;
       }
-      if (target >= length) {
+      if (target < 0 || target >= length) {
         out_of_bounds = true;
         check(b->AppendNull());
         continue;

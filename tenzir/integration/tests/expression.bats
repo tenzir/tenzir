@@ -42,3 +42,16 @@ z = {...x, ...42, ...y}
 write_json
 EOF
 }
+
+@test "list indexing" {
+  check tenzir -f '/dev/stdin' <<EOF
+source [
+  { a: [1, 2, 3] },
+  { a: [4, 5] },
+]
+b = a[0]
+c = a[2]
+d = a[-1]
+e = a[-3]
+EOF
+}
