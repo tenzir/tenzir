@@ -200,6 +200,10 @@ public:
           auto venv_path = std::filesystem::path{venv};
           maybe_venv = venv_path;
           env["VIRTUAL_ENV"] = venv;
+          env["UV_CACHE_DIR"]
+            = (std::filesystem::path{config_.venv_base_dir.value()}.parent_path()
+               / "cache" / "uv")
+                .string();
         }
         return caf::detail::scope_guard([maybe_venv] {
           if (maybe_venv) {
@@ -224,7 +228,7 @@ public:
         };
         TENZIR_VERBOSE("creating a python venv with: '{}'",
                        fmt::join(venv_invocation, "' '"));
-        if (bp::system(venv_invocation, bp::std_err > std_err,
+        if (bp::system(venv_invocation, env, bp::std_err > std_err,
                        detail::preserved_fds{{STDERR_FILENO}},
                        bp::detail::limit_handles_{})
             != 0) {
