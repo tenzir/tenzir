@@ -27,8 +27,7 @@ struct stable_map_policy {
 
   template <class Ts, class Key_Like>
   static auto lookup(Ts& xs, const Key_Like& x) {
-    using value_type = typename Ts::value_type;
-    return std::ranges::find(xs, x, &value_type::first);
+    return std::find_if( std::begin(xs), std::end(xs), [&x]( const auto& kvp ){ return kvp.first == x; } );
   }
 
   template <class Ts, class Key_Like, class... Args>
