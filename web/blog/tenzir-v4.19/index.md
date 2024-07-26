@@ -60,21 +60,19 @@ description: |
   Emotet/Heodo.
 ```
 
-Every package *must* have a unique identifier. We recommend setting the package
+Every package must have a unique identifier. We recommend setting the package
 name, description and author, and we also recommend setting an author and a
 package icon where possible.
 
-Packages *may* define inputs. This, alongside the author and package icons, will
-become relevant in an upcoming release that adds interactive browsing and
-installation of ready-made packages on [app.tenzir.com](https://app.tenzir.com).
-For now, we'll just leave inputs out:
+Packages may define inputs, which are user-defined variables that can
+be referenced in pipeline and context definitions. For this package,
+we don't define any inputs:
 
 ```yaml {0} title="feodo/package.yaml [2/5]"
-config:
-  inputs: {}
+inputs: {}
 ```
 
-Packages *may* define any number of contexts. For our Feodo Abuse Blocklist
+Packages may define any number of contexts. For our Feodo Abuse Blocklist
 package we'll define a context named `feodo` as a [Lookup
 Table](/contexts/lookup-table). We recommend writing a description for every
 context.
@@ -87,7 +85,7 @@ contexts:
       A lookup table that contains the elements of the feodo IP blocklist.
 ```
 
-Packages *may* define any number of pipelines. These pipelines get automatically
+Packages may define any number of pipelines. These pipelines get automatically
 started when the package is installed. For our example, let's add a pipeline
 that ensures that our `feodo` context is continuously updated:
 
@@ -105,7 +103,7 @@ pipelines:
 The format for pipelines matches the format for [Pipelines as
 Code][pipelines-as-code].
 
-Lastly, we recommend adding snippets to your package that show just how to use
+Lastly, we recommend adding snippets to your package that show how to use
 it:
 
 ```yaml {0} title="feodo/package.yaml [5/5]"
@@ -177,7 +175,7 @@ anymore. This mechanism is called back pressure.
 :::
 
 Most of the time, back pressure is very useful: It makes it so that your
-pipeline makes no unnecessary work, and so that events do not pile up in memory
+pipeline does no unnecessary work, and so that events do not pile up in memory
 when an operator is slow.
 
 However, some data sources really do not like to be throttled. For example, when
@@ -190,7 +188,7 @@ other operators need to abide by. The operator has two policies: `block` and
 only when the buffer is full. With the `drop` policy, the operator never stops
 emitting demand upstream, but then drops events if the buffer is full.
 
-For example, let's say we acquire syslog messages a very high speed over UDP:
+For example, let's say we acquire syslog messages with a very high speed over UDP:
 
 ```text {0} title="Acquire data from syslog, buffering up to 1M events"
 from udp://localhost:514 read syslog
