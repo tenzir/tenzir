@@ -214,6 +214,16 @@ RUN cmake -S contrib/tenzir-plugins/pipeline-manager -B build-pipeline-manager -
       DESTDIR=/plugin/pipeline-manager cmake --install build-pipeline-manager --strip --component Runtime && \
       rm -rf build-pipeline-manager
 
+FROM plugins-source AS packages-plugin
+
+# TODO: We can't run the packages integration tests here at the moment, since
+# they require the context and pipeline-manager plugins to be available.
+RUN cmake -S contrib/tenzir-plugins/packages -B build-packages -G Ninja \
+      -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
+      cmake --build build-packages --parallel && \
+      DESTDIR=/plugin/packages cmake --install build-packages --strip --component Runtime && \
+      rm -rf build-packages
+
 FROM plugins-source AS platform-plugin
 
 RUN cmake -S contrib/tenzir-plugins/platform -B build-platform -G Ninja \
@@ -240,6 +250,7 @@ COPY --from=azure-log-analytics-plugin --chown=tenzir:tenzir /plugin/azure-log-a
 COPY --from=compaction-plugin --chown=tenzir:tenzir /plugin/compaction /
 COPY --from=context-plugin --chown=tenzir:tenzir /plugin/context /
 COPY --from=pipeline-manager-plugin --chown=tenzir:tenzir /plugin/pipeline-manager /
+COPY --from=packages-plugin --chown=tenzir:tenzir /plugin/packages /
 COPY --from=platform-plugin --chown=tenzir:tenzir /plugin/platform /
 COPY --from=vast-plugin --chown=tenzir:tenzir /plugin/vast /
 
