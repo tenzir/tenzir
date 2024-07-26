@@ -1,7 +1,7 @@
 ---
 title: Tenzir v4.19
 authors: [lava]
-date: 2024-07-25
+date: 2024-07-26
 tags: [release, packages, python]
 comments: true
 ---
