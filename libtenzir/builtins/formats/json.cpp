@@ -137,7 +137,7 @@ auto json_string_parser(std::string_view s, const tenzir::type* seed)
     return record_builder::basic_seeded_parser(s, *seed);
   }
   tenzir::data result;
-  constexpr static auto p = (parsers::data - parsers::number - parsers::number);
+  constexpr static auto p = (parsers::data - parsers::number - parsers::pattern);
   if (p(s, result)) {
     return result;
   } else {
