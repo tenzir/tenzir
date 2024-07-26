@@ -352,14 +352,6 @@ struct binding {
   };
 };
 
-template <class T, class... Ts>
-auto zip_equal(T& x, Ts&... xs) -> detail::zip<T, Ts...> {
-  auto size = x.size();
-  auto match = ((xs.size() == size) && ...);
-  TENZIR_ASSERT(match);
-  return detail::zip{x, xs...};
-}
-
 /// An instantiation of the inter-schematic aggregation process.
 class implementation {
 public:
@@ -397,7 +389,7 @@ public:
         auto&& bucket = *it->second;
         // Check that the group-by values also have matching types.
         for (auto [existing, other] :
-             zip_equal(bucket.group_by_types, bound.group_by_columns)) {
+             detail::zip_equal(bucket.group_by_types, bound.group_by_columns)) {
           if (!other) {
             // If this group-by column does not exist in the input schema, we
             // already warned and can ignore it.
@@ -442,8 +434,8 @@ public:
         }
         // Check that the aggregation extractors have the same type.
         for (auto&& [aggr, column, cfg] :
-             zip_equal(bucket.aggregations, bound.aggregation_columns,
-                       config.aggregations)) {
+             detail::zip_equal(bucket.aggregations, bound.aggregation_columns,
+                               config.aggregations)) {
           if (aggr.is_dead()) {
             continue;
           }
@@ -522,7 +514,7 @@ public:
     auto update_bucket = [&](bucket& bucket, int64_t offset, int64_t length) {
       bucket.updated_at = std::chrono::steady_clock::now();
       for (auto [aggr, input] :
-           zip_equal(bucket.aggregations, aggregation_arrays)) {
+           detail::zip_equal(bucket.aggregations, aggregation_arrays)) {
         if (!input) {
           // If the input column does not exist, we have nothing to do.
           continue;
@@ -620,13 +612,13 @@ public:
       auto fields = std::vector<record_type::field_view>{};
       fields.reserve(config.group_by_extractors.size()
                      + config.aggregations.size());
-      for (auto&& [extractor, group] :
-           zip_equal(config.group_by_extractors, bucket->group_by_types)) {
+      for (auto&& [extractor, group] : detail::zip_equal(
+             config.group_by_extractors, bucket->group_by_types)) {
         fields.emplace_back(extractor, group.is_active() ? group.get_active()
                                                          : type{null_type{}});
       }
       for (auto&& [aggr, cfg] :
-           zip_equal(bucket->aggregations, config.aggregations)) {
+           detail::zip_equal(bucket->aggregations, config.aggregations)) {
         // Same as above.
         fields.emplace_back(cfg.output, aggr.is_active()
                                           ? aggr.get_active()->output_type()
@@ -1032,7 +1024,7 @@ public:
       }
     };
     auto find_or_create_group = [&](int64_t row) -> bucket2* {
-      for (auto&& [key_value, group] : zip_equal(key, group_values)) {
+      for (auto&& [key_value, group] : detail::zip_equal(key, group_values)) {
         key_value = value_at(group.type, *group.array, row);
       }
       auto it = groups_.find(key);

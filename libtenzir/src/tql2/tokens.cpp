@@ -68,6 +68,7 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
     | X("/", slash)
     | X("=", equal)
     | X("|", pipe)
+    | X("...", dot_dot_dot)
     | X(".", dot)
     | X("(", lpar)
     | X(")", rpar)
@@ -166,6 +167,7 @@ auto describe(token_kind k) -> std::string_view {
     X(datetime, "datetime");
     X(delim_comment, "`/*...*/`");
     X(dollar_ident, "dollar identifier");
+    X(dot_dot_dot, "`...`");
     X(dot, "`.`");
     X(else_, "`else`");
     X(equal_equal, "`==`");

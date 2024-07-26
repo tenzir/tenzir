@@ -548,7 +548,7 @@ paths:
   /serve:
     post:
       summary: Return data from a pipeline
-      description: "Returns events from an existing pipeline. The pipeline definition must include a serve operator. By default, the endpoint performs long polling (`timeout: 2s`) and returns events as soon as they are available (`min_events: 1`)."
+      description: "Returns events from an existing pipeline. The pipeline definition must include a serve operator. By default, the endpoint performs long polling (`timeout: 5s`) and returns events as soon as they are available (`min_events: 1`)."
       requestBody:
         description: Body for the serve endpoint
         required: true
@@ -579,14 +579,9 @@ paths:
                   description: Wait for this number of events before returning.
                 timeout:
                   type: string
-                  example: 2.0s
-                  default: 2.0s
-                  description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 5 seconds.
-                use_simple_format:
-                  type: bool
-                  example: true
-                  default: false
-                  description: Use an experimental, more simple format for the contained schema, and render durations as numbers representing seconds as opposed to human-readable strings.
+                  example: 200.0ms
+                  default: 5.0s
+                  description: The maximum amount of time spent on the request. Hitting the timeout is not an error. The timeout must not be greater than 10 seconds.
       responses:
         200:
           description: Success.
@@ -614,11 +609,32 @@ paths:
                     example:
                       - schema_id: c631d301e4b18f4
                         definition:
-                          record:
-                            - timestamp: time
-                              schema: string
-                              schema_id: string
-                              events: uint64
+                          - name: tenzir.summarize
+                            kind: record
+                            type: tenzir.summarize
+                            attributes:
+                              {}
+                            path:
+                              []
+                            fields:
+                              - name: severity
+                                kind: string
+                                type: string
+                                attributes:
+                                  {}
+                                path:
+                                  - 0
+                                fields:
+                                  []
+                              - name: pipeline_id
+                                kind: string
+                                type: string
+                                attributes:
+                                  {}
+                                path:
+                                  - 1
+                                fields:
+                                  []
                   events:
                     type: array
                     items:

@@ -9,29 +9,28 @@
 #include "tenzir/table_slice.hpp"
 
 #include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/bitmap_algorithms.hpp"
 #include "tenzir/chunk.hpp"
 #include "tenzir/collect.hpp"
-#include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/default_formatter.hpp"
 #include "tenzir/detail/overload.hpp"
-#include "tenzir/detail/passthrough.hpp"
-#include "tenzir/detail/string.hpp"
 #include "tenzir/detail/zip_iterator.hpp"
-#include "tenzir/error.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/fbs/table_slice.hpp"
-#include "tenzir/fbs/utils.hpp"
 #include "tenzir/ids.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/table_slice_builder.hpp"
+#include "tenzir/tql2/ast.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/value_index.hpp"
 
 #include <arrow/record_batch.h>
 
 #include <cstddef>
+#include <ranges>
 #include <span>
 
 namespace tenzir {
@@ -102,86 +101,6 @@ template <class Slice, class State>
 constexpr auto&
 state([[maybe_unused]] Slice&& encoded, State&& state) noexcept {
   return std::forward<State>(state).arrow_v2;
-}
-
-// A helper struct for unflatten function.
-struct unflatten_field {
-  unflatten_field(std::string_view field_name,
-                  std::shared_ptr<arrow::Array> array = nullptr)
-    : field_name_{field_name}, array_{std::move(array)} {
-  }
-
-  unflatten_field() = default;
-
-  // Add a child nested field with
-  auto add(std::string_view nested_field, std::string_view separator,
-           std::shared_ptr<arrow::Array> array) -> void {
-    auto separator_pos = nested_field.find_first_of(separator);
-    if (separator_pos == std::string::npos) {
-      nested_fields_[nested_field]
-        = unflatten_field{nested_field, std::move(array)};
-      return;
-    }
-    auto new_field_name = nested_field.substr(0, separator_pos);
-    auto& nested = nested_fields_[new_field_name];
-    nested.field_name_ = new_field_name;
-    nested.add(nested_field.substr(separator_pos + 1), separator,
-               std::move(array));
-  }
-
-  auto to_arrow() const -> std::shared_ptr<arrow::Array> {
-    if (array_)
-      return array_;
-    std::vector<std::shared_ptr<arrow::Array>> children;
-    children.reserve(nested_fields_.size());
-    std::vector<std::string> children_field_names;
-    children_field_names.reserve(nested_fields_.size());
-    for (auto& [_, f] : nested_fields_) {
-      children.push_back(f.to_arrow());
-      children_field_names.push_back(std::string{f.field_name_});
-    }
-    return arrow::StructArray::Make(children, children_field_names).ValueOrDie();
-  }
-
-  std::string_view field_name_;
-  detail::stable_map<std::string_view, unflatten_field> nested_fields_;
-  std::shared_ptr<arrow::Array> array_;
-};
-
-auto count_substring_occurrences(std::string_view input,
-                                 std::string_view substring) {
-  auto separator_count = std::size_t{0};
-  for (auto pos = input.find_first_of(substring); pos != std::string_view::npos;
-       pos = input.find_first_of(substring, pos + 1)) {
-    ++separator_count;
-  }
-  return separator_count;
-}
-
-auto make_unflattened_struct_array(
-  const arrow::StructArray& input,
-  const std::unordered_map<std::string_view, unflatten_field*>&
-    original_field_name_to_new_field_map)
-  -> std::shared_ptr<arrow::StructArray> {
-  auto new_fields
-    = std::vector<std::pair<std::string, std::shared_ptr<arrow::Array>>>{};
-  // Fields that were unflattened may have the same parent field. E.g foo.bar
-  // and foo.baz will have the same parent field (foo). foo.bar and foo.baz map
-  // to the same unflatten_field that already handles nested children fields.
-  // This means we can only use to_arrow method only once as it will produce a
-  // foo struct array with bar and baz as children
-  std::unordered_set<unflatten_field*> handled_fields;
-  for (const auto& field : input.type()->fields()) {
-    TENZIR_ASSERT_EXPENSIVE(
-      original_field_name_to_new_field_map.contains(field->name()));
-    auto* f = original_field_name_to_new_field_map.at(field->name());
-    if (not handled_fields.contains(f)) {
-      new_fields.emplace_back(f->field_name_, f->to_arrow());
-      handled_fields.insert(f);
-    }
-  }
-  return make_struct_array(input.length(), input.null_bitmap(),
-                           std::move(new_fields));
 }
 
 } // namespace
@@ -1115,191 +1034,180 @@ auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
   };
 }
 
-auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
-                            std::string_view nested_field_separator)
-  -> std::shared_ptr<arrow::StructArray>;
+namespace {
 
-auto unflatten_list(unflatten_field& f, std::string_view nested_field_separator)
-  -> void {
-  auto field_array = f.to_arrow();
-  auto field_type = type::from_arrow(*field_array->type());
-  auto arrow_list_type = caf::get<list_type>(field_type);
-  auto list_value_type = arrow_list_type.value_type();
-  auto field_list = std::static_pointer_cast<arrow::ListArray>(field_array);
-  auto builder = std::shared_ptr<arrow::ListBuilder>{};
-  if (caf::holds_alternative<list_type>(list_value_type)) {
-    for (auto i = 0; i < field_list->length(); ++i) {
-      if (field_list->IsValid(i)) {
-        auto new_f = unflatten_field{f.field_name_, field_list->value_slice(i)};
-        unflatten_list(new_f, nested_field_separator);
-        if (not builder) {
-          builder = list_type{type::from_arrow(*new_f.array_->type())}
-                      .make_arrow_builder(arrow::default_memory_pool());
-        }
-        auto status = builder->Append();
-        TENZIR_ASSERT(status.ok());
-        status = append_array(*builder->value_builder(),
-                              type::from_arrow(*new_f.array_->type()),
-                              *new_f.array_);
-        TENZIR_ASSERT(status.ok());
-      }
-    }
-  } else if (caf::holds_alternative<record_type>(list_value_type)) {
-    for (auto i = 0; i < field_list->length(); ++i) {
-      if (field_list->IsValid(i)) {
-        auto struct_array = std::static_pointer_cast<arrow::StructArray>(
-          field_list->value_slice(i));
-        auto unflattened
-          = unflatten_struct_array(struct_array, nested_field_separator);
-        auto unflattened_type = type::from_arrow(*unflattened->type());
-        if (not builder) {
-          builder = list_type{unflattened_type}.make_arrow_builder(
-            arrow::default_memory_pool());
-        }
-        auto status = builder->Append();
-        TENZIR_ASSERT(status.ok());
-        status = append_array(*builder->value_builder(), unflattened_type,
-                              *unflattened);
-        TENZIR_ASSERT(status.ok());
-      }
-    }
+struct unflatten_entry;
+
+/// Basically a mutable `arrow::StructArray`.
+struct unflatten_record {
+  unflatten_record(int64_t length, std::shared_ptr<arrow::Buffer> null_bitmap);
+
+  int64_t length;
+  std::shared_ptr<arrow::Buffer> null_bitmap;
+  detail::stable_map<std::string_view, unflatten_entry> fields;
+};
+
+struct unflatten_entry
+  : variant<std::shared_ptr<arrow::Array>, unflatten_record> {
+  using variant::variant;
+};
+
+unflatten_record::unflatten_record(int64_t length,
+                                   std::shared_ptr<arrow::Buffer> null_bitmap)
+  : length{length}, null_bitmap{std::move(null_bitmap)} {
+}
+
+auto realize(unflatten_record&& record) -> std::shared_ptr<arrow::StructArray>;
+
+auto realize(unflatten_entry&& entry) -> std::shared_ptr<arrow::Array> {
+  return entry.match<std::shared_ptr<arrow::Array>>(
+    [](std::shared_ptr<arrow::Array>& array) {
+      TENZIR_ASSERT(array);
+      return std::move(array);
+    },
+    [](unflatten_record& record) {
+      return realize(std::move(record));
+    });
+}
+
+auto realize(unflatten_record&& record) -> std::shared_ptr<arrow::StructArray> {
+  auto names = std::vector<std::string>{};
+  auto arrays = std::vector<std::shared_ptr<arrow::Array>>{};
+  for (auto& [name, entry] : record.fields) {
+    names.emplace_back(name);
+    arrays.push_back(realize(std::move(entry)));
   }
-  if (builder) {
-    f.array_ = builder->Finish().ValueOrDie();
+  return make_struct_array(record.length, record.null_bitmap, std::move(names),
+                           arrays);
+}
+
+auto bitmap_or(const std::shared_ptr<arrow::Buffer>& x,
+               const std::shared_ptr<arrow::Buffer>& y)
+  -> std::shared_ptr<arrow::Buffer> {
+  if (not x || not y) {
+    return nullptr;
+  }
+  auto size = std::min(x->size(), y->size());
+  auto z = check(arrow::AllocateBuffer(size));
+  auto x_ptr = x->data();
+  auto y_ptr = y->data();
+  auto z_ptr = z->mutable_data();
+  for (auto i = int64_t{0}; i < size; ++i) {
+    z_ptr[i] = x_ptr[i] | y_ptr[i]; // NOLINT
+  }
+  return z;
+}
+
+void unflatten_into(unflatten_entry& entry, std::shared_ptr<arrow::Array> array,
+                    std::string_view sep);
+
+void unflatten_into(unflatten_entry& root, const arrow::StructArray& array,
+                    std::string_view sep) {
+  if (not std::holds_alternative<unflatten_record>(root)) {
+    root.emplace<unflatten_record>(array.length(), array.null_bitmap());
+  }
+  auto names = array.struct_type()->fields()
+               | std::views::transform(&arrow::Field::name);
+  // We need to flatten the null bitmap here because it can happen that the
+  // fields are saved to a record that is made non-null by another entry.
+  auto fields = check(array.Flatten());
+  for (auto [name, data] : detail::zip_equal(names, fields)) {
+    auto segments
+      = name | std::views::split(sep)
+        | std::views::transform([](auto subrange) {
+            return std::string_view{subrange.data(), subrange.size()};
+          });
+    auto current = &root;
+    auto handle_segment = [&](std::string_view segment) {
+      auto record = std::get_if<unflatten_record>(current);
+      if (record) {
+        record->null_bitmap
+          = bitmap_or(record->null_bitmap, array.null_bitmap());
+      } else {
+        record = &current->emplace<unflatten_record>(array.length(),
+                                                     array.null_bitmap());
+      }
+      current = &record->fields[segment];
+    };
+    // We have to work around the fact that `std::views::split` does not yield
+    // anything if `name` is empty.
+    if (segments.empty()) {
+      handle_segment("");
+    } else {
+      for (auto segment : segments) {
+        handle_segment(segment);
+      }
+    }
+    unflatten_into(*current, data, sep);
   }
 }
 
-auto unflatten_struct_array(std::shared_ptr<arrow::StructArray> slice_array,
-                            std::string_view nested_field_separator)
+auto unflatten(const arrow::ListArray& array, std::string_view sep)
+  -> std::shared_ptr<arrow::ListArray>;
+
+void unflatten_into(unflatten_entry& entry, std::shared_ptr<arrow::Array> array,
+                    std::string_view sep) {
+  if (auto record = caf::get_if<arrow::StructArray>(&*array)) {
+    unflatten_into(entry, *record, sep);
+  } else if (auto list = caf::get_if<arrow::ListArray>(&*array)) {
+    entry = unflatten(*list, sep);
+  } else {
+    entry = std::move(array);
+  }
+}
+
+auto unflatten(std::shared_ptr<arrow::Array> array, std::string_view sep)
+  -> std::shared_ptr<arrow::Array>;
+
+auto unflatten(const arrow::StructArray& array, std::string_view sep)
   -> std::shared_ptr<arrow::StructArray> {
-  // Used to map parent fields to its children for unflattening purposes.
-  // Given foo.bar and foo.baz as fields of input slice the algorithm will
-  // first create an instance of unflattened_field for 'foo' key. The created
-  // instance will combine 'bar' and 'baz' fields into a struct array. All the
-  // fields that should be combined under the 'foo' key will use this map to
-  // find the appropriate object which should aggregate it.
-  std::unordered_map<std::string_view, unflatten_field> unflattened_field_map;
-  std::unordered_map<std::string_view, unflatten_field> unflattened_children;
-  std::unordered_map<std::string_view, unflatten_field*>
-    original_field_name_to_new_field_map;
-  // Aggregates all flattened field names under the key that represents the
-  // count of nested_field_separator occurrences. The algorithm starts
-  // iterating over this map so that it can distinguish if a separator
-  // separates nested fields or if it is a part of a field_name. E.g the field
-  // cpu : 5 and cpu.logger : 10 are a valid input. We may also have other
-  // nested fields that are separated by a '.', but these two can't be nested
-  // fields. The algorithm will start with the 'cpu' field and add it to the
-  // unflattened_field_map as it doesn't have any separator in it's field
-  // name. The cpu.logger will be split into 'cpu' and 'logger'. The presence
-  // of 'cpu' in the map indicates that this name is reserved for a field. In
-  // such cases the cpu.logger must itself be a field that cannot be
-  // unflattened.
-  std::map<std::size_t, std::vector<std::string_view>> fields_to_resolve;
-  for (const auto& k : slice_array->struct_type()->fields()) {
-    const auto& field_name = k->name();
-    unflattened_field_map[field_name]
-      = unflatten_field{field_name, slice_array->GetFieldByName(field_name)};
-    auto separator_count
-      = count_substring_occurrences(field_name, nested_field_separator);
-    fields_to_resolve[separator_count].push_back(field_name);
-  }
-  for (auto& [field_name, field] : unflattened_field_map) {
-    // Unflatten children recursively.
-    auto field_array = field.to_arrow();
-    auto field_type = type::from_arrow(*field_array->type());
-    if (caf::holds_alternative<record_type>(field_type)) {
-      auto field_struct
-        = std::static_pointer_cast<arrow::StructArray>(field_array);
-      unflattened_children[field_name]
-        = unflatten_field{field_name, unflatten_struct_array(
-                                        field_struct, nested_field_separator)};
-    } else if (caf::holds_alternative<list_type>(field_type)) {
-      unflatten_list(field, nested_field_separator);
-      unflattened_children[field_name] = field;
-    }
-    original_field_name_to_new_field_map[field_name]
-      = std::addressof(unflattened_field_map[field_name]);
-  }
-  for (const auto& [_, fields] : fields_to_resolve) {
-    for (const auto& field : fields) {
-      auto prefix_separator = field.find_last_of(nested_field_separator);
-      if (prefix_separator != std::string::npos) {
-        auto prefix = std::string_view{field.data(), prefix_separator};
-        // Presence of a prefix means that we cannot unflatten the current
-        // field so it is an unflattend field itself.
-        if (original_field_name_to_new_field_map.contains(prefix)) {
-          unflattened_field_map[field] = unflatten_field{
-            field, slice_array->GetFieldByName(std::string{field})};
-          original_field_name_to_new_field_map[field]
-            = std::addressof(unflattened_field_map[field]);
-          TENZIR_DEBUG("retaining original field {} during unflattening: "
-                       "encountered potential value collision with already "
-                       "unflattened field {}",
-                       field, prefix);
-          continue;
-        }
-      }
-      // Try to find the parent field name. E.g with input fields "foo.bar.x",
-      // "foo.bar.z", "foo", "foo.bar.z.b" The fields with least separators are
-      // handled first. The "foo" is unflattened to "foo". The "foo.bar.x" will
-      // be split into "foo.bar" and "x". The "x" is a field name if
-      // unflattening is successful. The loop should start checking at "foo". If
-      // this field is unflattened then it advanced to the next separator
-      // ("foo.bar") The "foo.bar" is not unflattened field so it can be the
-      // parent for "x". The "foo.bar.z" will be added as a child of the
-      // "foo.bar" as the "foo.bar" is not a name of a field after unflattening.
-      // The "foo.bar.z.b" will be left as "foo.bar.z.b" because "foo.bar.z"
-      // already is mapped to a parent.
-      auto current_pos = field.find_first_of(nested_field_separator);
-      for (; current_pos != std::string_view::npos;
-           current_pos
-           = field.find_first_of(nested_field_separator, current_pos + 1)) {
-        auto parent_field_name = std::string_view{field.data(), current_pos};
-        if (not original_field_name_to_new_field_map.contains(
-              parent_field_name)) {
-          auto& struct_field = unflattened_field_map[parent_field_name];
-          struct_field.field_name_ = parent_field_name;
-          auto child_field_array
-            = slice_array->GetFieldByName(std::string{field});
-          if (unflattened_children.contains(field)) {
-            child_field_array = unflattened_children[field].to_arrow();
-          }
-          struct_field.add(field.substr(current_pos + 1),
-                           nested_field_separator, child_field_array);
-          original_field_name_to_new_field_map[field]
-            = std::addressof(unflattened_field_map[parent_field_name]);
-          break;
-        }
-      }
-      // No parent found
-      if (current_pos == std::string_view::npos) {
-        auto& struct_field = unflattened_children.contains(field)
-                               ? unflattened_children[field]
-                               : unflattened_field_map[field];
-        struct_field.field_name_ = field;
-        original_field_name_to_new_field_map[field]
-          = std::addressof(struct_field);
-      }
-    }
-  }
-  return make_unflattened_struct_array(*slice_array,
-                                       original_field_name_to_new_field_map);
+  // We unflatten records by recursively building up an `unflatten_record`,
+  // which is basically a mutable `arrow::StructArray`.
+  auto root = unflatten_entry{unflatten_record{array.length(), nullptr}};
+  unflatten_into(root, array, sep);
+  auto record = std::get_if<unflatten_record>(&root);
+  TENZIR_ASSERT(record);
+  return realize(std::move(*record));
 }
 
-auto unflatten(const table_slice& slice,
-               std::string_view nested_field_separator) -> table_slice {
-  if (slice.rows() == 0u)
+auto unflatten(const arrow::ListArray& array, std::string_view sep)
+  -> std::shared_ptr<arrow::ListArray> {
+  // Unflattening a list simply means unflattening its values.
+  auto values = unflatten(array.values(), sep);
+  return check(arrow::ListArray::FromArrays(
+    *array.offsets(), *values, arrow::default_memory_pool(),
+    array.null_bitmap(), array.data()->null_count));
+}
+
+auto unflatten(std::shared_ptr<arrow::Array> array, std::string_view sep)
+  -> std::shared_ptr<arrow::Array> {
+  // We only unflatten records, but records can be contained in lists.
+  if (auto record = caf::get_if<arrow::StructArray>(&*array)) {
+    return unflatten(*record, sep);
+  }
+  if (auto list = caf::get_if<arrow::ListArray>(&*array)) {
+    return unflatten(*list, sep);
+  }
+  return array;
+}
+
+} // namespace
+
+auto unflatten(const table_slice& slice, std::string_view sep) -> table_slice {
+  if (slice.rows() == 0) {
     return slice;
-  auto slice_array = to_record_batch(slice)->ToStructArray().ValueOrDie();
-  auto new_arr = unflatten_struct_array(slice_array, nested_field_separator);
-  auto schema
-    = tenzir::type{slice.schema().name(), type::from_arrow(*new_arr->type())};
-  const auto new_batch = arrow::RecordBatch::Make(
-    schema.to_arrow_schema(), new_arr->length(), new_arr->fields());
-  auto ret = table_slice{new_batch, std::move(schema)};
-  ret.import_time(slice.import_time());
-  ret.offset(slice.offset());
-  return ret;
+  }
+  auto array = check(to_record_batch(slice)->ToStructArray());
+  auto result = unflatten(array, sep);
+  auto cast = std::dynamic_pointer_cast<arrow::StructArray>(std::move(result));
+  TENZIR_ASSERT(cast);
+  auto schema = type{slice.schema().name(), type::from_arrow(*cast->type())};
+  auto batch = arrow::RecordBatch::Make(schema.to_arrow_schema(),
+                                        cast->length(), cast->fields());
+  auto out = table_slice{batch, std::move(schema)};
+  out.import_time(slice.import_time());
+  out.offset(slice.offset());
+  return out;
 }
 
 } // namespace tenzir

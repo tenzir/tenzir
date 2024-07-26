@@ -6,7 +6,9 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/detail/enumerate.hpp>
+#include <tenzir/table_slice_builder.hpp>
 #include <tenzir/tql2/eval_impl.hpp>
 
 #include <ranges>
@@ -15,19 +17,25 @@ namespace tenzir {
 
 auto evaluator::eval(const ast::record& x) -> series {
   auto fields = detail::stable_map<std::string, series>{};
-  for (auto& item : x.content) {
+  for (auto& item : x.items) {
     item.match(
       [&](const ast::record::field& field) {
         auto val = eval(field.expr);
-        auto [_, inserted] = fields.emplace(field.name.name, std::move(val));
-        if (not inserted) {
-          diagnostic::warning("todo: overwrite existing?")
-            .primary(field.name)
-            .emit(ctx_);
-        }
+        fields[field.name.name] = std::move(val);
       },
-      [](const ast::record::spread&) {
-        TENZIR_TODO();
+      [&](const ast::record::spread& spread) {
+        auto val = eval(spread.expr);
+        auto rec = val.as<record_type>();
+        if (not rec) {
+          diagnostic::warning("expected record, got {}", val.type.kind())
+            .primary(spread.expr)
+            .emit(ctx_);
+          return;
+        }
+        for (auto [i, array] : detail::enumerate(rec->array->fields())) {
+          auto field = rec->type.field(i);
+          fields[field.name] = series{field.type, array};
+        }
       });
   }
   auto field_names = fields | std::views::transform([](auto& x) {
@@ -144,6 +152,48 @@ auto evaluator::eval(const ast::root_field& x) -> series {
     .primary(x.ident)
     .emit(ctx_);
   return null();
+}
+
+auto evaluator::eval(const ast::index_expr& x) -> series {
+  auto value = eval(x.expr);
+  auto index = eval(x.index);
+  if (auto number = index.as<int64_type>()) {
+    auto list = value.as<list_type>();
+    if (not list) {
+      diagnostic::warning("cannot index into `{}` with `{}`", value.type.kind(),
+                          index.type.kind())
+        .primary(x.index)
+        .emit(ctx_);
+      return null();
+    }
+    auto list_values = list->array->values();
+    auto value_type = list->type.value_type();
+    auto b = value_type.make_arrow_builder(arrow::default_memory_pool());
+    check(b->Reserve(list->length()));
+    auto out_of_bounds = false;
+    for (auto i = int64_t{0}; i < list->length(); ++i) {
+      auto target = number->array->Value(i);
+      auto length = list->array->value_length(i);
+      if (target < 0) {
+        target = length + target;
+      }
+      if (target < 0 || target >= length) {
+        out_of_bounds = true;
+        check(b->AppendNull());
+        continue;
+      }
+      auto offset = list->array->value_offset(i);
+      auto value_index = offset + target;
+      check(append_array_slice(*b, value_type, *list_values, value_index, 1));
+    }
+    if (out_of_bounds) {
+      diagnostic::warning("list index out of bounds")
+        .primary(x.index)
+        .emit(ctx_);
+    }
+    return series{value_type, finish(*b)};
+  }
+  return not_implemented(x);
 }
 
 auto evaluator::eval(const ast::meta& x) -> series {

@@ -242,6 +242,9 @@ struct negation;
 struct node_state;
 struct offset;
 struct operator_metric;
+struct package;
+struct package_pipelines_map;
+struct package_contexts_map;
 struct partition_info;
 struct partition_synopsis_pair;
 struct partition_synopsis;
@@ -476,6 +479,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::null_bitmap))
   TENZIR_ADD_TYPE_ID((tenzir::operator_box))
   TENZIR_ADD_TYPE_ID((tenzir::operator_type))
+  TENZIR_ADD_TYPE_ID((tenzir::package))
   TENZIR_ADD_TYPE_ID((tenzir::partition_info))
   TENZIR_ADD_TYPE_ID((tenzir::partition_synopsis_pair))
   TENZIR_ADD_TYPE_ID((tenzir::partition_synopsis_ptr))
@@ -507,6 +511,8 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   // these kinda things. See tenzir/aliases.hpp for their definitions.
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::data>))
   TENZIR_ADD_TYPE_ID((tenzir::detail::stable_map<std::string, tenzir::data>))
+  TENZIR_ADD_TYPE_ID(
+    (std::vector<tenzir::detail::stable_map<std::string, tenzir::data>>))
   TENZIR_ADD_TYPE_ID((tenzir::detail::stable_map<tenzir::data, tenzir::data>))
 
   TENZIR_ADD_TYPE_ID((tenzir::connect_request))
@@ -547,6 +553,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID(
     (std::unordered_map<std::string, std::optional<std::string>>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::partition_synopsis_pair>))
+  TENZIR_ADD_TYPE_ID((std::vector<std::filesystem::path>))
 
   TENZIR_ADD_TYPE_ID((caf::stream<tenzir::chunk_ptr>))
   TENZIR_ADD_TYPE_ID((caf::stream<tenzir::table_slice>))

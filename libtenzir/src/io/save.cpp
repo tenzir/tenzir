@@ -23,15 +23,22 @@ namespace tenzir::io {
 
 caf::error
 save(const std::filesystem::path& filename, std::span<const std::byte> xs) {
+  std::error_code ec{};
+  if (filename.has_parent_path()) {
+    std::filesystem::create_directories(filename.parent_path(), ec);
+    if (ec) {
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to create directory {}: {}",
+                                         filename.parent_path(), ec));
+    }
+  }
   auto tmp = filename;
   tmp += ".tmp";
   if (auto err = write(tmp, xs)) {
-    std::error_code ec{};
     if (const auto removed = std::filesystem::remove(tmp, ec); !removed || ec)
       TENZIR_WARN("failed to remove file {} : {}", tmp, ec.message());
     return err;
   }
-  std::error_code ec{};
   std::filesystem::rename(tmp, filename, ec);
   if (ec) {
     auto err = caf::make_error(ec::filesystem_error,

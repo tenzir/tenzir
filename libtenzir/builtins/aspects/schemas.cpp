@@ -58,7 +58,7 @@ public:
     co_yield {};
     auto builder = series_builder{};
     for (const auto& schema : schemas) {
-      builder.data(schema.to_definition2());
+      builder.data(schema.to_definition());
       co_yield builder.finish_assert_one_slice(
         fmt::format("tenzir.schema.{}", schema.make_fingerprint()));
     }

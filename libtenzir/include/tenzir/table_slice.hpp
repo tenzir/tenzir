@@ -391,16 +391,10 @@ auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
 auto resolve_operand(const table_slice& slice, const operand& op)
   -> std::pair<type, std::shared_ptr<arrow::Array>>;
 
-/// @brief Unflattens the table slice (e.g a "foo.bar" field will be transformed
-/// into a "foo" record field with a "bar" child field).
-/// @param slice Table slice to unflatten.
-/// @param nested_field_separator A string treated as a separator of a nested
-/// fields. E.g with a field "a.b" and a separator ".", the function will create
-/// a record field "a" that contains a field "b".
-/// @return Unflattened table slice which preserves the original slice schema
-/// name.
-auto unflatten(const table_slice& slice,
-               std::string_view nested_field_separator) -> table_slice;
+/// Split field names by a separator by creating nested records.
+///
+/// Example: Splitting `{a.b: 42}` with `.` yields `{a: {b: 42}}`.
+auto unflatten(const table_slice& slice, std::string_view sep) -> table_slice;
 
 /// @related flatten
 struct flatten_result {

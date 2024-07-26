@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/tql2/arrow_utils.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::string {

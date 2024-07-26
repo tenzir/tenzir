@@ -32,6 +32,7 @@ Available aspects:
 - `operators`: shows all available [operators](../operators.md).
 - `pipelines`: shows all managed pipelines of a remote node.
 - `plugins`: shows all loaded plugins.
+- `packages`: shows all all installed packages.
 
 We also offer some additional aspects for experts that want to take a deeper
 look at what's going on:

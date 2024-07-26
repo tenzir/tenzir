@@ -8,11 +8,11 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/checked_math.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/table_slice_builder.hpp"
-#include "tenzir/tql2/arrow_utils.hpp"
 #include "tenzir/tql2/ast.hpp"
 #include "tenzir/tql2/eval_impl.hpp"
 

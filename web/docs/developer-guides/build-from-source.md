@@ -58,6 +58,7 @@ Every [release](https://github.com/tenzir/tenzir/releases) of Tenzir includes an
 ||[Pandoc](https://github.com/jgm/pandoc)||Required to build the manpage for Tenzir.|
 ||[bash](https://www.gnu.org/software/bash/)|>= 4.0.0|Required to run the integration tests.|
 ||[bats](https://bats-core.readthedocs.io)|>= 1.8.0|Required to run the integration tests.|
+||[uv](https://github.com/astral-sh/uv)|>= 0.2.17|Required to run the python operator.|
 
 The minimum specified versions reflect those versions that we use in CI and
 manual testing. Older versions may still work in select cases.

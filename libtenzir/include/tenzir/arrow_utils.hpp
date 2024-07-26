@@ -28,9 +28,15 @@ template <class T>
 
 template <std::derived_from<arrow::ArrayBuilder> T>
 [[nodiscard]] auto finish(T& x) {
-  using Type = std::conditional_t<std::same_as<arrow::StringBuilder, T>,
-                                  arrow::StringType, typename T::TypeClass>;
-  auto result = std::shared_ptr<typename arrow::TypeTraits<Type>::ArrayType>{};
+  auto result = std::invoke([] {
+    if constexpr (std::same_as<T, arrow::ArrayBuilder>) {
+      return std::shared_ptr<arrow::Array>{};
+    } else {
+      using Type = std::conditional_t<std::same_as<arrow::StringBuilder, T>,
+                                      arrow::StringType, typename T::TypeClass>;
+      return std::shared_ptr<typename arrow::TypeTraits<Type>::ArrayType>{};
+    }
+  });
   check(x.Finish(&result));
   TENZIR_ASSERT(result);
   return result;

@@ -373,14 +373,7 @@ active_partition_actor::behavior_type active_partition(
       [=](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
         TENZIR_TRACE_SCOPE("partition {} got table slice {} {}",
                            self->state.data.id, TENZIR_ARG(out), TENZIR_ARG(x));
-        // The index already sets the correct offset for this slice, but in some
-        // unit tests we test this component separately, causing incoming table
-        // slices not to have an offset at all. We should fix the unit tests
-        // properly, but that takes time we did not want to spend when migrating
-        // to partition-local ids. -- DL
-        if (x.offset() == invalid_id)
-          x.offset(self->state.data.events);
-        TENZIR_ASSERT(x.offset() == self->state.data.events);
+        x.offset(self->state.data.events);
         // Adjust the import time range iff necessary.
         auto& mutable_synopsis = self->state.data.synopsis.unshared();
         mutable_synopsis.min_import_time = std::min(

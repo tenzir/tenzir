@@ -42,8 +42,6 @@ TEST(null_type) {
   CHECK_EQUAL(*lt.to_arrow_type(), *arrow::list(arrow::null()));
   CHECK_EQUAL(*ln.to_arrow_type(), *arrow::list(arrow::null()));
   CHECK_EQUAL(*ltn.to_arrow_type(), *arrow::list(arrow::null()));
-  const auto expected_definition = data{};
-  CHECK_EQUAL(tn.to_definition(), expected_definition);
 }
 
 TEST(bool_type) {
@@ -63,8 +61,6 @@ TEST(bool_type) {
   CHECK(caf::holds_alternative<bool_type>(bt));
   const auto lbt = type::from_legacy_type(legacy_bool_type{});
   CHECK(caf::holds_alternative<bool_type>(lbt));
-  const auto expected_definition = data{"bool"};
-  CHECK_EQUAL(bt.to_definition(), expected_definition);
 }
 
 TEST(int64_type) {
@@ -84,8 +80,6 @@ TEST(int64_type) {
   CHECK(caf::holds_alternative<int64_type>(it));
   const auto lit = type::from_legacy_type(legacy_integer_type{});
   CHECK(caf::holds_alternative<int64_type>(lit));
-  const auto expected_definition = data{"int64"};
-  CHECK_EQUAL(it.to_definition(), expected_definition);
 }
 
 TEST(uint64_type) {
@@ -105,8 +99,6 @@ TEST(uint64_type) {
   CHECK(caf::holds_alternative<uint64_type>(ct));
   const auto lct = type::from_legacy_type(legacy_count_type{});
   CHECK(caf::holds_alternative<uint64_type>(lct));
-  const auto expected_definition = data{"uint64"};
-  CHECK_EQUAL(ct.to_definition(), expected_definition);
 }
 
 TEST(double_type) {
@@ -126,8 +118,6 @@ TEST(double_type) {
   CHECK(caf::holds_alternative<double_type>(rt));
   const auto lrt = type::from_legacy_type(legacy_real_type{});
   CHECK(caf::holds_alternative<double_type>(lrt));
-  const auto expected_definition = data{"double"};
-  CHECK_EQUAL(rt.to_definition(), expected_definition);
 }
 
 TEST(duration_type) {
@@ -147,8 +137,6 @@ TEST(duration_type) {
   CHECK(caf::holds_alternative<duration_type>(dt));
   const auto ldt = type::from_legacy_type(legacy_duration_type{});
   CHECK(caf::holds_alternative<duration_type>(ldt));
-  const auto expected_definition = data{"duration"};
-  CHECK_EQUAL(dt.to_definition(), expected_definition);
 }
 
 TEST(time_type) {
@@ -168,8 +156,6 @@ TEST(time_type) {
   CHECK(caf::holds_alternative<time_type>(tt));
   const auto ltt = type::from_legacy_type(legacy_time_type{});
   CHECK(caf::holds_alternative<time_type>(ltt));
-  const auto expected_definition = data{"time"};
-  CHECK_EQUAL(tt.to_definition(), expected_definition);
 }
 
 TEST(string_type) {
@@ -189,8 +175,6 @@ TEST(string_type) {
   CHECK(caf::holds_alternative<string_type>(st));
   const auto lst = type::from_legacy_type(legacy_string_type{});
   CHECK(caf::holds_alternative<string_type>(lst));
-  const auto expected_definition = data{"string"};
-  CHECK_EQUAL(st.to_definition(), expected_definition);
 }
 
 TEST(ip_type) {
@@ -210,8 +194,6 @@ TEST(ip_type) {
   CHECK(caf::holds_alternative<ip_type>(at));
   const auto lat = type::from_legacy_type(legacy_address_type{});
   CHECK(caf::holds_alternative<ip_type>(lat));
-  const auto expected_definition = data{"ip"};
-  CHECK_EQUAL(at.to_definition(), expected_definition);
 }
 
 TEST(subnet_type) {
@@ -231,8 +213,6 @@ TEST(subnet_type) {
   CHECK(caf::holds_alternative<subnet_type>(st));
   const auto lst = type::from_legacy_type(legacy_subnet_type{});
   CHECK(caf::holds_alternative<subnet_type>(lst));
-  const auto expected_definition = data{"subnet"};
-  CHECK_EQUAL(st.to_definition(), expected_definition);
 }
 
 TEST(enumeration_type) {
@@ -263,9 +243,6 @@ TEST(enumeration_type) {
   CHECK_EQUAL(caf::get<enumeration_type>(let).field(1), "second");
   CHECK_EQUAL(caf::get<enumeration_type>(let).field(2), "third");
   CHECK_EQUAL(caf::get<enumeration_type>(let).field(3), "");
-  const auto expected_definition
-    = data{record{{"enum", list{"first", "third", "fourth"}}}};
-  CHECK_EQUAL(et.to_definition(), expected_definition);
 }
 
 TEST(list_type) {
@@ -289,8 +266,6 @@ TEST(list_type) {
     = type::from_legacy_type(legacy_list_type{legacy_bool_type{}});
   CHECK(caf::holds_alternative<list_type>(llbt));
   CHECK_EQUAL(caf::get<list_type>(llbt).value_type(), type{bool_type{}});
-  const auto expected_definition = data{record{{"list", "int64"}}};
-  CHECK_EQUAL(tlit.to_definition(), expected_definition);
 }
 
 TEST(map_type) {
@@ -316,9 +291,6 @@ TEST(map_type) {
   CHECK(caf::holds_alternative<map_type>(lmabt));
   CHECK_EQUAL(caf::get<map_type>(lmabt).key_type(), type{ip_type{}});
   CHECK_EQUAL(caf::get<map_type>(lmabt).value_type(), type{bool_type{}});
-  const auto expected_definition
-    = data{record{{"map", record{{"key", "string"}, {"value", "int64"}}}}};
-  CHECK_EQUAL(tmsit.to_definition(), expected_definition);
 }
 
 TEST(record_type) {
@@ -347,40 +319,6 @@ TEST(record_type) {
   CHECK_EQUAL(r.field({1, 1}).type, ip_type{});
   CHECK_EQUAL(r.field({3, 0}).name, "s");
   CHECK_EQUAL(flatten(rt), type{flatten(r)});
-  const auto expected_definition = data{record{
-    {"record",
-     list{
-       record{{"i", "int64"}},
-       record{
-         {"r1",
-          record{
-            {
-              "record",
-              list{
-                record{
-                  {"p",
-                   record{
-                     {"port", "int64"},
-                   }},
-                },
-                record{{"a", "ip"}},
-              },
-            },
-          }},
-       },
-       record{{"b", "bool"}},
-       record{
-         {"r2",
-          record{
-            {"record",
-             list{
-               record{{"s", "subnet"}},
-             }},
-          }},
-       },
-     }},
-  }};
-  CHECK_EQUAL(rt.to_definition(), expected_definition);
 }
 
 TEST(record_type name resolving) {
@@ -844,44 +782,6 @@ TEST(aliases) {
   CHECK_EQUAL(aliases[2], t3);
   CHECK_EQUAL(aliases[3], t2);
   CHECK_EQUAL(aliases[4], t1);
-  const auto expected_definition = data{record{
-    {"foo",
-     record{
-       {"type",
-        record{
-          {"bar",
-           record{
-             {"type",
-              record{
-                {"baz",
-                 record{
-                   {"qux",
-                    record{
-                      {"type",
-                       record{
-                         {"quux", "bool"},
-                       }},
-                      {"attributes",
-                       record{
-                         {"first", caf::none},
-                       }},
-                    }},
-                 }},
-              }},
-             {"attributes",
-              record{
-                {"second", caf::none},
-                {"third", caf::none},
-              }},
-           }},
-        }},
-       {"attributes",
-        record{
-          {"fourth", caf::none},
-        }},
-     }},
-  }};
-  CHECK_EQUAL(t7.to_definition(), expected_definition);
 }
 
 TEST(metadata layer merging) {

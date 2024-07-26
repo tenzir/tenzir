@@ -56,6 +56,21 @@ Contains information about all accessed API endpoints, emitted once per second.
 The schema of the record `params` depends on the API endpoint used. Refer to the
 [API documentation](/api) to see the available parameters per endpoint.
 
+### `tenzir.metrics.buffer`
+
+Contains information about the `buffer` operator's internal buffer.
+
+|Field|Type|Description|
+|:-|:-|:-|
+|`pipeline_id`|`string`|The ID of the pipeline where the associated operator is from.|
+|`run`|`uint64`|The number of the run, starting at 1 for the first run.|
+|`hidden`|`bool`|True if the pipeline is running for the explorer.|
+|`timestamp`|`time`|The time at which this metric was recorded.|
+|`operator_id`|`uint64`|The ID of the `buffer` operator in the pipeline.|
+|`used`|`uint64`|The number of events stored in the buffer.|
+|`free`|`uint64`|The remaining capacity of the buffer.|
+|`dropped`|`uint64`|The number of events dropped by the buffer.|
+
 ### `tenzir.metrics.cpu`
 
 Contains a measurement of CPU utilization.

@@ -25,7 +25,7 @@ stdenvNoCC.mkDerivation {
       template = path: ''
         if [ -d "${path}/integration/tests" ]; then
           echo "running ${path} tests"
-          bats -T -j $(nproc) "${path}/integration/tests"
+          bats -T -j $(nproc) --filter-tags !python_operator "${path}/integration/tests"
         fi
       '';
     in

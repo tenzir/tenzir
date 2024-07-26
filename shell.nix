@@ -16,6 +16,7 @@ in
           pkgs.shfmt
           pkgs.poetry
           pkgs.python3Packages.spdx-tools
+          pkgs.uv
           (pkgs.python3.withPackages (ps: with ps; [
             aiohttp
             dynaconf
@@ -41,6 +42,9 @@ in
         # makes changes to the python code observable in the python operator
         # without needing to rebuild the wheel.
         export TENZIR_PLUGINS__PYTHON__IMPLICIT_REQUIREMENTS="-e $PWD/python"
+        # uv is provided in the nativeBuildInputs above.
+        export TENZIR_ENABLE_BUNDLED_UV=OFF
+        export PYTHONPATH="$PYTHONPATH''${PYTHONPATH:+:}$PWD/python"
       '';
     }
     // lib.optionalAttrs isStatic {

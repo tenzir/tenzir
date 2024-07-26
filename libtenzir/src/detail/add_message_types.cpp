@@ -26,6 +26,7 @@
 #include "tenzir/ip.hpp"
 #include "tenzir/module.hpp"
 #include "tenzir/operator.hpp"
+#include "tenzir/package.hpp"
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/pattern.hpp"
 #include "tenzir/pipeline.hpp"

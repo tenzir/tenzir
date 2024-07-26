@@ -17,6 +17,8 @@
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/si_literals.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <boost/asio.hpp>
 #include <boost/process.hpp>
@@ -329,7 +331,8 @@ private:
   std::string command_;
 };
 
-class plugin final : public virtual operator_plugin<shell_operator> {
+class plugin final : public virtual operator_plugin<shell_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {
@@ -345,6 +348,15 @@ public:
     parser.add(command, "<command>");
     parser.parse(p);
     return std::make_unique<shell_operator>(std::move(command));
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto command = located<std::string>{};
+    auto parser
+      = argument_parser2::operator_("shell").add(command, "<command>");
+    TRY(parser.parse(inv, ctx));
+    return std::make_unique<shell_operator>(std::move(command).inner);
   }
 };
 

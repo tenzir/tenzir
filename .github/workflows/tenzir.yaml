@@ -256,7 +256,10 @@ jobs:
           elif [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             tags=('main' "${{ github.sha }}")
           elif [[ "$GITHUB_EVENT_NAME" == "release" ]]; then
-            tags=('latest' "${{ github.sha }}" "${{ steps.configure.outputs.release-version }}")
+            major_minor_patch='${{ steps.configure.outputs.release-version }}'
+            major_minor=$(echo $major_minor_patch | sed 's/\(v[0-9]*\.[0-9]*\)\..*/\1/')
+            major=$(echo $major_minor_patch | sed 's/\(v[0-9]*\)\..*/\1/')
+            tags=('latest' "${{ github.sha }}" "${major_minor_patch}" "${major_minor}" "${major}")
           else
             echo "::error unexpected github.event_name: \"${GITHUB_EVENT_NAME}\""
             exit 1
@@ -817,6 +820,13 @@ jobs:
           - name: NIC
             target: nic
             path: plugins/nic
+          # TODO: Enable packages plugin integration tests in CI. The
+          # packages plugin depends on the 'context' and 'pipeline-manager'
+          # plugins, so this requires either merging all three into one single
+          # plugin or bundling the latter two so they're always available.
+          # - name: Packages
+          #   target: packages
+          #   path: contrib/tenzir-plugins/packages
           - name: Parquet
             target: parquet
             path: plugins/parquet

@@ -285,6 +285,7 @@ in {
       });
   restinio = final.callPackage ./restinio {};
   pfs = final.callPackage ./pfs {};
+  uv = final.callPackage ./uv-binary {};
   caf = let
     source = builtins.fromJSON (builtins.readFile ./caf/source.json);
   in

@@ -293,11 +293,9 @@ public:
   [[nodiscard]] data construct() const noexcept;
 
   /// Converts the type into its type definition.
-  /// @param expand Render the definition in its expanded form.
   /// @pre *this
-  [[nodiscard]] auto to_definition(bool expand = false) const noexcept -> data;
-  [[nodiscard]] auto to_definition2(std::optional<std::string> field_name = {},
-                                    offset parent_path = {}) const noexcept
+  [[nodiscard]] auto to_definition(std::optional<std::string> field_name = {},
+                                   offset parent_path = {}) const noexcept
     -> record;
 
   /// Creates a type from an Arrow DataType, Field, or Schema.

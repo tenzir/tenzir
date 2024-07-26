@@ -1291,9 +1291,6 @@ index(index_actor::stateful_pointer<index_state> self,
         active_partition = *part;
       }
       TENZIR_ASSERT(active_partition->second.actor);
-      const auto offset
-        = self->state.partition_capacity - active_partition->second.capacity;
-      x.offset(offset);
       out.push(x);
       if (active_partition->second.capacity == self->state.partition_capacity
           && x.rows() > active_partition->second.capacity) {

@@ -362,6 +362,10 @@ public:
     return std::move(result);
   }
 
+  auto empty() const -> bool {
+    return result.empty();
+  }
+
 private:
   std::vector<diagnostic> result;
 };

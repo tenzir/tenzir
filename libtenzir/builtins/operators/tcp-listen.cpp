@@ -380,6 +380,14 @@ auto make_connection_manager(
                       SOCK_STREAM | SOCK_CLOEXEC,
                       self->state.endpoint->protocol().protocol());
   TENZIR_ASSERT(sfd >= 0);
+  int opt = 1;
+  if (setsockopt(sfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(int)) < 0) {
+    diagnostic::error("failed to configure socket {}:{}: {}",
+                      self->state.args.hostname, self->state.args.port,
+                      detail::describe_errno())
+      .emit(self->state.diagnostics);
+    return connection_manager_actor::behavior_type::make_empty_behavior();
+  }
   self->state.socket->assign(self->state.endpoint->protocol(), sfd);
 #endif
   self->state.tcp_listen();

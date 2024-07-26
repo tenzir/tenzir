@@ -500,22 +500,21 @@ struct record {
     }
   };
 
-  using content_kind = variant<field, spread>;
+  using item = variant<field, spread>;
 
   record() = default;
 
-  record(location begin, std::vector<content_kind> content, location end)
-    : begin{begin}, content{std::move(content)}, end{end} {
+  record(location begin, std::vector<item> items, location end)
+    : begin{begin}, items{std::move(items)}, end{end} {
   }
 
   location begin;
-  std::vector<content_kind> content;
+  std::vector<item> items;
   location end;
 
   friend auto inspect(auto& f, record& x) -> bool {
     return f.object(x).fields(f.field("begin", x.begin),
-                              f.field("content", x.content),
-                              f.field("end", x.end));
+                              f.field("items", x.items), f.field("end", x.end));
   }
 
   auto get_location() const -> location {
@@ -764,10 +763,10 @@ protected:
   }
 
   void enter(record& x) {
-    go(x.content);
+    go(x.items);
   }
 
-  void enter(record::content_kind& x) {
+  void enter(record::item& x) {
     match(x);
   }
 
