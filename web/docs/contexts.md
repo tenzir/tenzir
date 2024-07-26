@@ -29,7 +29,7 @@ tenzir:
       type: bloom-filter
       # Arguments for creating the context, depending on the type. Refer to the
       # documentation of the individual context types to see the arguments they
-      # require. Note that changes to these arguments to not apply to any
+      # require. Note that changes to these arguments do not apply to any
       # contexts that were previously created.
       arguments:
         capacity: 1B
