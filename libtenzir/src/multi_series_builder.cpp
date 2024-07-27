@@ -61,19 +61,15 @@ auto record_generator::unflattend_field(
   if (i == key.npos) {
     return exact_field(key);
   }
-  auto pre = key.substr(0, i);
-  auto post = key.substr(i + unflatten.size());
+  const auto pre = key.substr(0, i);
+  const auto post = key.substr(i + unflatten.size());
 
   return exact_field(pre).record().unflattend_field(post, unflatten);
 }
 
 auto record_generator::unflattend_field(std::string_view key)
   -> field_generator {
-  std::string_view unflatten = msb_->settings_.unnest_separator;
-  if (unflatten.empty()) {
-    return exact_field(key);
-  }
-  return unflattend_field(key, unflatten);
+  return unflattend_field(key, msb_->settings_.unnest_separator);
 }
 
 auto field_generator::data_unparsed(std::string_view s) -> void {
