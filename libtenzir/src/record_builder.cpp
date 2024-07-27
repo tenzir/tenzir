@@ -16,6 +16,7 @@
 #include "tenzir/data.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/overload.hpp"
+#include "tenzir/detail/string.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/subnet.hpp"
@@ -112,6 +113,24 @@ struct type_to_parser<subnet_type>
 template <typename T>
 concept has_parser = caf::detail::is_complete<type_to_parser<T>>;
 static_assert(has_parser<time_type>);
+
+auto parse_enumeration(std::string_view s, const enumeration_type& e)
+  -> std::variant<tenzir::data, tenzir::diagnostic> {
+  s = detail::trim(s);
+  if (auto opt = e.resolve(s)) {
+    return tenzir::data{*opt};
+  }
+  uint32_t v;
+  const auto [ptr, errc] = std::from_chars(s.begin(), s.end(), v);
+  if (errc == std::errc{}) {
+    if (not e.field(v).empty()) {
+      return static_cast<enumeration>(v);
+    }
+  }
+  return diagnostic::warning("failed to parse enumeration value")
+    .note("value was \"{}\"", s)
+    .done();
+}
 } // namespace
 
 auto record_builder::basic_seeded_parser(std::string_view s,
@@ -145,15 +164,19 @@ auto record_builder::basic_seeded_parser(std::string_view s,
       return diagnostic::error("`list` seed for basic parser is unsupported")
         .done();
     },
+    [&s](const enumeration_type& e)
+      -> std::variant<tenzir::data, tenzir::diagnostic> {
+      return parse_enumeration(s, e);
+    },
     []<typename T>(const T&) -> tenzir::diagnostic {
-      TENZIR_ERROR("`basic parser` does not support type `{}`",
+      TENZIR_ERROR("`basic parser` does not "
+                   "support type `{}`",
                    typeid(T).name());
       return diagnostic::error("`unsupported type in record")
         .hint("type was `{}`", typeid(T).name())
         .done();
     },
-  };
-
+  }; // namespace tenzir
   return caf::visit(visitor, seed);
 }
 
