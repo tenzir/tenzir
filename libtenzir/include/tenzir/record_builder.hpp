@@ -143,6 +143,7 @@ static inline constexpr auto is_numeric(size_t idx) -> bool {
     case caf::detail::tl_index_of<field_type_list, int64_t>::value:
     case caf::detail::tl_index_of<field_type_list, uint64_t>::value:
     case caf::detail::tl_index_of<field_type_list, double>::value:
+    case caf::detail::tl_index_of<field_type_list, enumeration>::value:
       return true;
     default:
       return false;
@@ -800,6 +801,11 @@ auto node_field::append_to_signature(signature_type& sig, Parser& p,
                 data(static_cast<double>(v));
                 result_index
                   = caf::detail::tl_index_of<field_type_list, double>::value;
+                goto done;
+              case caf::detail::tl_index_of<field_type_list, enumeration>::value:
+                data(static_cast<enumeration>(v));
+                result_index
+                  = caf::detail::tl_index_of<field_type_list, enumeration>::value;
                 goto done;
               default:
                 TENZIR_UNREACHABLE();
