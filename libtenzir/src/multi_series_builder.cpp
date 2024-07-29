@@ -290,10 +290,11 @@ void multi_series_builder::complete_last_event() {
           }
           return "null"; // TODO this is a magic constant.
         },
-        [&dh_ = this->dh_](const blob&) -> std::string {
+        [this](const blob&) -> std::string {
           diagnostic::warning("parser: a field of type `blob` cannot be used "
                               "as a selector")
             .emit(dh_);
+          builder_raw_.clear();
           return {};
         },
         [](const auto&) -> std::string {
@@ -305,15 +306,13 @@ void multi_series_builder::complete_last_event() {
       if (not schema_type and settings_.schema_only) {
         diagnostic::warning("{} parser: schema for selector not found",
                             settings_.default_name)
-          .note("selector field is `{}`, but the resulting name `{}` does "
-                "not "
+          .note("selector field is `{}`, but the resulting name `{}` does not "
                 "refer to a known schema",
                 p->field_name, schema_name)
           .emit(dh_);
         builder_raw_.clear();
         return;
       }
-      append_name_to_signature(schema_name, signature_raw_);
       append_name_to_signature(schema_name, signature_raw_);
     }
   } else if (auto p = get_policy<policy_precise>()) {

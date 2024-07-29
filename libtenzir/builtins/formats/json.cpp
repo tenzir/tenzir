@@ -137,7 +137,8 @@ auto json_string_parser(std::string_view s, const tenzir::type* seed)
     return record_builder::basic_seeded_parser(s, *seed);
   }
   tenzir::data result;
-  constexpr static auto p = (parsers::data - parsers::number - parsers::pattern);
+  constexpr static auto p
+    = (parsers::data - parsers::number - parsers::pattern);
   if (p(s, result)) {
     return result;
   } else {
@@ -773,7 +774,9 @@ public:
       = argument_parser{name(), "https://docs.tenzir.com/formats/json"};
     parser_args args;
     multi_series_builder_argument_parser msb_parser{
-      {.default_name = "tenzir.json"}};
+      {.default_name = "tenzir.json"},
+      multi_series_builder::policy_precise{},
+    };
     msb_parser.add_all_to_parser(parser);
     std::optional<location> legacy_precise;
     std::optional<location> use_ndjson_mode;

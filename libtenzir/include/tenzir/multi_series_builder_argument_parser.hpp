@@ -19,7 +19,8 @@
 
 namespace tenzir {
 
-// simple utility combining multi_series_builder::settings_type and multi_series_builder::policy_type
+// simple utility combining multi_series_builder::settings_type and
+// multi_series_builder::policy_type
 struct multi_series_builder_options {
   multi_series_builder::policy_type policy
     = multi_series_builder::policy_precise{};
@@ -44,18 +45,22 @@ void add_schema_only_option(argument_parser2& parser,
 /// simple utility to parse the command line arguments for a
 /// multi_series_builder's settings and policy
 struct multi_series_builder_argument_parser {
+  multi_series_builder_argument_parser() = default;
   multi_series_builder_argument_parser(
-    multi_series_builder::settings_type settings = {},
-    multi_series_builder::policy_type policy = multi_series_builder::policy_precise{}
-    )
-    : settings_{std::move(settings)}, policy_{std::move(policy)} {
+    multi_series_builder::settings_type settings,
+    multi_series_builder::policy_type policy)
+    : has_manual_defaults_{true},
+      settings_{std::move(settings)},
+      policy_{std::move(policy)} {
   }
 
 public:
-  auto add_settings_to_parser(argument_parser& parser,bool no_unflatten_option=false) -> void;
+  auto add_settings_to_parser(argument_parser& parser, bool no_unflatten_option
+                                                       = false) -> void;
   auto add_policy_to_parser(argument_parser& parser) -> void;
   auto add_all_to_parser(argument_parser& parser) -> void;
-  auto add_settings_to_parser(argument_parser2& parser,bool no_unflatten_option=false) -> void;
+  auto add_settings_to_parser(argument_parser2& parser, bool no_unflatten_option
+                                                        = false) -> void;
   auto add_policy_to_parser(argument_parser2& parser) -> void;
   auto add_all_to_parser(argument_parser2& parser) -> void;
 
@@ -68,10 +73,13 @@ public:
 
   auto get_settings() -> multi_series_builder::settings_type&;
   auto get_policy() -> multi_series_builder::policy_type&;
+
   // If we leave these public, the json parser can keep supporting its old
   // options by checking/setting values here
   // TODO do we even want that?
+
   // private:
+  bool has_manual_defaults_ = false;
   multi_series_builder::settings_type settings_ = {};
   multi_series_builder::policy_type policy_
     = multi_series_builder::policy_precise{};

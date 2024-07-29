@@ -91,27 +91,31 @@ auto multi_series_builder_argument_parser::add_all_to_parser(
 
 auto multi_series_builder_argument_parser::get_settings()
   -> multi_series_builder::settings_type& {
-  if (schema_only_ and not(selector_ or schema_)) {
-    diagnostic::error("`--no-infer` requires either `--schema` or `--selector`")
+  policy_ = get_policy();
+  if ( schema_only_ ) {
+    if ( not multi_series_builder::specifies_schema(policy_) ) {
+      diagnostic::error("`--raw` requires a schema to be set via `--schema` or `--selector`")
       .primary(*schema_only_)
       .throw_();
+    }
   }
   if (unnest_) {
     if (unnest_->inner.empty()) {
-      diagnostic::error("got empty unflatten-separator")
+      diagnostic::error("unflatten-separator must not be empty")
         .primary(unnest_->source)
-        .note("get {}")
         .throw_();
     }
     settings_.unnest_separator = unnest_->inner;
   }
   if (raw_ and schema_ and merge_) {
     // In merging mode, we directly write into a series builder
-    // this means that data needs to be parsed to the correct type before writing to the builder
-    // however, when calling `field_generator::data_unparsed`, we dont know the schema
-    // TODO 
-    // [ ] technically its only an issue with *known* schemas. For unknown schemas there is no type issue
-    // [ ] This could also be resolved by having the merging mode keep track of the type at non-trivial cost
+    // this means that data needs to be parsed to the correct type before
+    // writing to the builder however, when calling
+    // `field_generator::data_unparsed`, we dont know the schema
+    // TODO
+    // [ ] technically its only an issue with *known* schemas. For unknown
+    // schemas there is no type issue [ ] This could also be resolved by having
+    // the merging mode keep track of the type at non-trivial cost
     diagnostic::error("`--merge --schema` and `--raw` are incompatible")
       .primary(*raw_)
       .primary(*schema_)
@@ -159,19 +163,19 @@ auto multi_series_builder_argument_parser::get_policy()
       policy_ = multi_series_builder::policy_merge{};
     }
   } else if (has_selector) {
-    policy_ = multi_series_builder::policy_selector{};
+    auto [prefix, field_name]
+      = parse_selector(selector_->inner, selector_->source);
+    policy_ = multi_series_builder::policy_selector{
+      std::move(field_name),
+      std::move(*prefix),
+    };
   } else if (has_schema) {
     policy_
       = multi_series_builder::policy_precise{.seed_schema = schema_->inner};
-  } else {
+  } else if (not has_manual_defaults_) {
     policy_ = multi_series_builder::policy_precise{};
   }
-  if (auto pol = std::get_if<multi_series_builder::policy_selector>(&policy_)) {
-    auto [prefix, field_name]
-      = parse_selector(selector_->inner, selector_->source);
-    pol->field_name = std::move(field_name);
-    pol->naming_prefix = std::move(*prefix);
-  }
+
   return policy_;
 }
 
