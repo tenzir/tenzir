@@ -430,7 +430,7 @@ auto node_field::commit_to(builder_ref r, bool mark_dead) -> void {
     },
     [&r]<non_structured_data_type T>(T& v) {
       r.try_data(v);
-      r.data(v);
+      // r.data(v);
     },
     [](auto&) {
       TENZIR_UNREACHABLE();
