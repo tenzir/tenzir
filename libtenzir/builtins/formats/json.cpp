@@ -289,7 +289,6 @@ private:
       report_parse_err(val, "a string");
       return false;
     }
-    builder.data(std::string{maybe_str.value_unsafe()});
     // TODO because of this it would be better to adapt the multi_series_builder
     if constexpr (std::same_as<decltype(builder), builder_ref>) {
       auto d = json_string_parser(maybe_str.value_unsafe(), nullptr);
