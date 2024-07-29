@@ -55,3 +55,15 @@ d = a[-1]
 e = a[-3]
 EOF
 }
+
+@test "length method" {
+  check tenzir -f '/dev/stdin' <<EOF
+source [
+  { a: null, b: null },
+  { a: "", b: [] },
+  { a: "foo", b: [1, 2, 3] },
+]
+x = a.length()
+y = b.length()
+EOF
+}
