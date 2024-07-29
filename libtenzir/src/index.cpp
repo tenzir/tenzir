@@ -523,7 +523,7 @@ caf::error index_state::load_from_disk() {
     auto partition_uuid = partitions[idx];
     auto error = [&]() -> caf::error {
       auto part_path = partition_path(partition_uuid);
-      TENZIR_DEBUG("{} unpacks partition {} ({}/{})", *self, partition_uuid,
+      TENZIR_TRACE("{} unpacks partition {} ({}/{})", *self, partition_uuid,
                    idx, partitions.size());
       // Generate external partition synopsis file if it doesn't exist.
       auto synopsis_path = partition_synopsis_path(partition_uuid);

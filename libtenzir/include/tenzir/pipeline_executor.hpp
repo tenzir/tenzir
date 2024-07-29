@@ -41,6 +41,8 @@ struct pipeline_executor_state {
   /// Indicates whether the pipeline is run in the background.
   bool is_hidden = {};
 
+  std::optional<std::string> trace_id = {};
+
   auto start() -> caf::result<void>;
   auto pause() -> caf::result<void>;
   auto resume() -> caf::result<void>;
@@ -60,6 +62,7 @@ auto pipeline_executor(
   pipeline_executor_actor::stateful_pointer<pipeline_executor_state> self,
   pipeline pipe, receiver_actor<diagnostic> diagnostics,
   metrics_receiver_actor metrics, node_actor node, bool has_terminal,
-  bool is_hidden) -> pipeline_executor_actor::behavior_type;
+  bool is_hidden, std::optional<std::string> trace_id)
+  -> pipeline_executor_actor::behavior_type;
 
 } // namespace tenzir

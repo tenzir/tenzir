@@ -138,7 +138,7 @@ struct exec_node_control_plane final : public operator_control_plane {
     exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self,
     receiver_actor<diagnostic> diagnostic_handler,
     metrics_receiver_actor metric_receiver, uint64_t op_index,
-    bool has_terminal, bool is_hidden)
+    bool has_terminal, bool is_hidden, std::optional<std::string> trace_id)
     : state{self->state},
       diagnostic_handler{
         std::make_unique<exec_node_diagnostic_handler<Input, Output>>(
@@ -146,7 +146,8 @@ struct exec_node_control_plane final : public operator_control_plane {
       metrics_receiver{std::move(metric_receiver)},
       operator_index{op_index},
       has_terminal_{has_terminal},
-      is_hidden_{is_hidden} {
+      is_hidden_{is_hidden},
+      trace_id_{std::move(trace_id)} {
   }
 
   auto self() noexcept -> exec_node_actor::base& override {
@@ -179,6 +180,10 @@ struct exec_node_control_plane final : public operator_control_plane {
     return is_hidden_;
   }
 
+  auto trace_id() const noexcept -> const std::optional<std::string>& override {
+    return trace_id_;
+  }
+
   auto set_waiting(bool value) noexcept -> void override {
     state.waiting = value;
     if (not state.waiting) {
@@ -194,6 +199,7 @@ struct exec_node_control_plane final : public operator_control_plane {
   uint64_t metric_index = {};
   bool has_terminal_ = {};
   bool is_hidden_ = {};
+  std::optional<std::string> trace_id_;
 };
 
 auto size(const table_slice& slice) -> uint64_t {
@@ -749,7 +755,8 @@ auto exec_node(
   operator_ptr op, node_actor node,
   receiver_actor<diagnostic> diagnostic_handler,
   metrics_receiver_actor metrics_receiver, int index, bool has_terminal,
-  bool is_hidden) -> exec_node_actor::behavior_type {
+  bool is_hidden, std::optional<std::string> trace_id)
+  -> exec_node_actor::behavior_type {
   if (self->getf(caf::scheduled_actor::is_detached_flag)) {
     const auto name = fmt::format("tenzir.exec-node.{}", op->name());
     caf::detail::set_thread_name(name.c_str());
@@ -771,7 +778,7 @@ auto exec_node(
            or std::is_same_v<Output, std::monostate>);
   self->state.ctrl = std::make_unique<exec_node_control_plane<Input, Output>>(
     self, std::move(diagnostic_handler), self->state.metrics_receiver, index,
-    has_terminal, is_hidden);
+    has_terminal, is_hidden, trace_id);
   // The node actor must be set when the operator is not a source.
   if (self->state.op->location() == operator_location::remote and not node) {
     self->state.on_error(caf::make_error(
@@ -874,7 +881,8 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, node_actor node,
                      receiver_actor<diagnostic> diagnostic_handler,
                      metrics_receiver_actor metrics_receiver, int index,
-                     bool has_terminal, bool is_hidden)
+                     bool has_terminal, bool is_hidden,
+                     std::optional<std::string> trace_id)
   -> caf::expected<std::pair<exec_node_actor, operator_type>> {
   TENZIR_ASSERT(self);
   TENZIR_ASSERT(op != nullptr);
@@ -898,7 +906,7 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
       auto result = self->spawn<SpawnOptions>(
         exec_node<input_type, output_type>, std::move(op), std::move(node),
         std::move(diagnostic_handler), std::move(metrics_receiver), index,
-        has_terminal, is_hidden);
+        has_terminal, is_hidden, std::move(trace_id));
       return result;
     };
   };

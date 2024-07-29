@@ -25,6 +25,7 @@
 #include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
 #include <tenzir/tql2/registry.hpp>
+#include <tenzir/tracing.hpp>
 #include <tenzir/type.hpp>
 
 #include <arrow/compute/api_scalar.h>
@@ -828,6 +829,7 @@ public:
             diagnostic::error(result.error()).emit(ctrl.diagnostics());
             co_return;
           }
+          trace(ctrl.trace_id(), "summarize", "sends", result->rows());
           co_yield std::move(*result);
         }
         co_yield {};
@@ -840,6 +842,7 @@ public:
         diagnostic::error(result.error()).emit(ctrl.diagnostics());
         co_return;
       }
+      trace(ctrl.trace_id(), "summarize", "sends", result->rows());
       co_yield std::move(*result);
     }
   }
@@ -1166,6 +1169,7 @@ public:
       impl.add(slice);
     }
     for (auto slice : impl.finish()) {
+      trace(ctrl.trace_id(), "summarize", "sends", slice.rows());
       co_yield std::move(slice);
     }
   }

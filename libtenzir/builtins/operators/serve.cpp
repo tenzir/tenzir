@@ -64,6 +64,7 @@
 #include <tenzir/series_builder.hpp>
 #include <tenzir/status.hpp>
 #include <tenzir/table_slice.hpp>
+#include <tenzir/tracing.hpp>
 
 #include <arrow/record_batch.h>
 #include <caf/stateful_actor.hpp>
@@ -204,7 +205,8 @@ constexpr auto SPEC_V0 = R"_(
 
 using serve_manager_actor = typed_actor_fwd<
   // Register a new serve operator.
-  auto(atom::start, std::string serve_id, uint64_t buffer_size)
+  auto(atom::start, std::string serve_id, std::optional<std::string>,
+       uint64_t buffer_size)
     ->caf::result<void>,
   // Deregister a serve operator, waiting until it completed.
   auto(atom::stop, std::string serve_id)->caf::result<void>,
@@ -239,6 +241,8 @@ struct managed_serve_operator {
   /// The serve ID and next expected continuation token of the operator.
   std::string serve_id = {};
   std::string continuation_token = {};
+
+  std::optional<std::string> trace_id = {};
 
   /// The web is a naturally lossy place, so we cache the last response in case
   /// it didn't get delivered so the client can retry.
@@ -296,6 +300,7 @@ struct managed_serve_operator {
       TENZIR_ASSERT(not put_rp.pending());
       TENZIR_DEBUG("serve for id {} is done", escape_operator_arg(serve_id));
       continuation_token.clear();
+      trace(trace_id, "serve", "deliver", delivered);
       get_rp.deliver(std::make_tuple(std::string{}, std::move(results)));
       stop_rp.deliver();
       return true;
@@ -308,6 +313,7 @@ struct managed_serve_operator {
     continuation_token = fmt::to_string(uuid::random());
     TENZIR_DEBUG("serve for id {} is now available with continuation token {}",
                  escape_operator_arg(serve_id), continuation_token);
+    trace(trace_id, "serve", "deliver", delivered);
     get_rp.deliver(std::make_tuple(continuation_token, std::move(results)));
     return true;
   }
@@ -367,7 +373,8 @@ struct serve_manager_state {
     }
   }
 
-  auto start(std::string serve_id, uint64_t buffer_size) -> caf::result<void> {
+  auto start(std::string serve_id, std::optional<std::string> trace_id,
+             uint64_t buffer_size) -> caf::result<void> {
     const auto found
       = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
           return op.serve_id == serve_id;
@@ -385,6 +392,7 @@ struct serve_manager_state {
       .source = self->current_sender()->address(),
       .serve_id = serve_id,
       .continuation_token = "",
+      .trace_id = std::move(trace_id),
       .buffer_size = buffer_size,
     });
     self->monitor(ops.back().source);
@@ -561,8 +569,10 @@ auto serve_manager(
   });
   return {
     [self](atom::start, std::string& serve_id,
+           std::optional<std::string> trace_id,
            uint64_t buffer_size) -> caf::result<void> {
-      return self->state.start(std::move(serve_id), buffer_size);
+      return self->state.start(std::move(serve_id), std::move(trace_id),
+                               buffer_size);
     },
     [self](atom::stop, std::string& serve_id) -> caf::result<void> {
       return self->state.stop(std::move(serve_id));
@@ -763,8 +773,10 @@ struct serve_handler_state {
       .then(
         [rp](const std::tuple<std::string, std::vector<table_slice>>&
                result) mutable {
-          rp.deliver(rest_response::from_json_string(
-            create_response(std::get<0>(result), std::get<1>(result))));
+          auto response = rest_response::from_json_string(
+            create_response(std::get<0>(result), std::get<1>(result)));
+
+          rp.deliver(std::move(response));
         },
         [rp](caf::error& err) mutable {
           // TODO: Use a struct with distinct fields for user-facing
@@ -853,7 +865,7 @@ public:
     // Step 2: Register this operator at SERVE MANAGER actor using the serve_id.
     ctrl.self()
       .request(serve_manager, caf::infinite, atom::start_v, serve_id_,
-               buffer_size_)
+               ctrl.trace_id(), buffer_size_)
       .await(
         [&]() {
           TENZIR_DEBUG("serve for id {} is now available",

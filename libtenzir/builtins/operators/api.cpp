@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/fwd.hpp>
 #include <tenzir/node.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
@@ -32,9 +33,10 @@ public:
       .json_body = request_body_,
     };
     auto response = std::optional<rest_response>{};
-    const auto request_id = std::string{};
+    const request_header request_header = {};
     ctrl.self()
-      .request(ctrl.node(), caf::infinite, atom::proxy_v, request, request_id)
+      .request(ctrl.node(), caf::infinite, atom::proxy_v, request,
+               request_header)
       .await(
         [&](rest_response& value) {
           response = std::move(value);

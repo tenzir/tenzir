@@ -412,7 +412,7 @@ using node_actor = typed_actor_fwd<
   // Note that nodes connected via CAF trust each other completely,
   // so this skips all authorization and access control mechanisms
   // that come with HTTP(s).
-  auto(atom::proxy, http_request_description, std::string)
+  auto(atom::proxy, http_request_description, request_header)
     ->caf::result<rest_response>,
   // Retrieve components by their label from the component registry.
   auto(atom::get, atom::label, std::vector<std::string>)
@@ -422,7 +422,8 @@ using node_actor = typed_actor_fwd<
   // Spawn a set of execution nodes for a given pipeline. Does not start the
   // execution nodes.
   auto(atom::spawn, operator_box, operator_type, receiver_actor<diagnostic>,
-       metrics_receiver_actor, int index, bool is_hidden)
+       metrics_receiver_actor, int index, bool is_hidden,
+       std::optional<std::string>)
     ->caf::result<exec_node_actor>>::unwrap;
 
 /// The interface of a PIPELINE EXECUTOR actor.

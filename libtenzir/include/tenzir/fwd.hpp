@@ -269,6 +269,17 @@ template <class Type>
 struct basic_series;
 using series = basic_series<type>;
 
+struct request_header {
+  std::string request_id;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, request_header& h) {
+    return f.object(h)
+      .pretty_name("tenzir.request_header")
+      .fields(f.field("id", h.request_id));
+  }
+};
+
 enum class api_version : uint8_t;
 enum class arithmetic_operator : uint8_t;
 enum class bool_operator : uint8_t;
@@ -492,6 +503,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::query_context))
   TENZIR_ADD_TYPE_ID((tenzir::query_options))
   TENZIR_ADD_TYPE_ID((tenzir::relational_operator))
+  TENZIR_ADD_TYPE_ID((tenzir::request_header))
   TENZIR_ADD_TYPE_ID((tenzir::rest_endpoint))
   TENZIR_ADD_TYPE_ID((tenzir::rest_response))
   TENZIR_ADD_TYPE_ID((tenzir::shared_diagnostic_handler))
@@ -528,6 +540,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
   TENZIR_ADD_TYPE_ID((tenzir::accountant_config))
   TENZIR_ADD_TYPE_ID((tenzir::send_initial_dbstate))
 
+  TENZIR_ADD_TYPE_ID((std::optional<std::string>))
   TENZIR_ADD_TYPE_ID((std::pair<std::string, tenzir::data>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::diagnostic>))
   TENZIR_ADD_TYPE_ID((std::vector<uint32_t>))

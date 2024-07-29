@@ -18,6 +18,7 @@
 #include <tenzir/series_builder.hpp>
 #include <tenzir/si_literals.hpp>
 #include <tenzir/time_synopsis.hpp>
+#include <tenzir/tracing.hpp>
 #include <tenzir/uint64_synopsis.hpp>
 
 #include <caf/scoped_actor.hpp>
@@ -66,6 +67,7 @@ public:
             .emit(ctrl.diagnostics());
         });
     co_yield {};
+    trace(ctrl.trace_id(), "partitions", "received partitions");
     auto builders = std::unordered_map<type, series_builder>{};
     using namespace tenzir::si_literals;
     for (auto& synopsis : synopses) {
@@ -139,6 +141,7 @@ public:
     }
     for (auto& [_, builder] : builders) {
       for (auto&& result : builder.finish_as_table_slice("tenzir.partition")) {
+        trace(ctrl.trace_id(), "partitions", "sends", result.rows());
         co_yield std::move(result);
       }
     }

@@ -55,7 +55,8 @@ auto spawn_exec_node(caf::scheduled_actor* self, operator_ptr op,
                      operator_type input_type, node_actor node,
                      receiver_actor<diagnostic> diagnostics_handler,
                      metrics_receiver_actor metrics_receiver, int index,
-                     bool has_terminal, bool is_hidden)
+                     bool has_terminal, bool is_hidden,
+                     std::optional<std::string> trace_id)
   -> caf::expected<std::pair<exec_node_actor, operator_type>>;
 
 } // namespace tenzir

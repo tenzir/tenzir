@@ -45,6 +45,7 @@ struct tcp_listen_args {
   bool no_location_overrides = false;
   bool has_terminal = false;
   bool is_hidden = false;
+  std::optional<std::string> trace_id = {};
 
   friend auto inspect(auto& f, tcp_listen_args& x) -> bool {
     return f.object(x).fields(
@@ -55,7 +56,8 @@ struct tcp_listen_args {
       f.field("tls_keyfile", x.tls_keyfile), f.field("op", x.op),
       f.field("no_location_overrides", x.no_location_overrides),
       f.field("has_terminal", x.has_terminal),
-      f.field("is_hidden", x.is_hidden));
+      f.field("is_hidden", x.is_hidden),
+      f.field("tls_certfile", x.tls_certfile));
   }
 };
 
@@ -63,11 +65,12 @@ class tcp_listen_control_plane final : public operator_control_plane {
 public:
   tcp_listen_control_plane(shared_diagnostic_handler diagnostics,
                            bool has_terminal, bool no_location_overrides,
-                           bool is_hidden)
+                           bool is_hidden, std::optional<std::string> trace_id)
     : diagnostics_{std::move(diagnostics)},
       no_location_overrides_{no_location_overrides},
       has_terminal_{has_terminal},
-      is_hidden_{is_hidden} {
+      is_hidden_{is_hidden},
+      trace_id_{std::move(trace_id)} {
   }
 
   auto self() noexcept -> exec_node_actor::base& override {
@@ -98,6 +101,10 @@ public:
     return is_hidden_;
   }
 
+  auto trace_id() const noexcept -> const std::optional<std::string>& override {
+    return trace_id_;
+  }
+
   auto set_waiting(bool value) noexcept -> void override {
     (void)value;
     TENZIR_UNIMPLEMENTED();
@@ -108,6 +115,7 @@ private:
   bool no_location_overrides_;
   bool has_terminal_;
   bool is_hidden_;
+  std::optional<std::string> trace_id_;
 };
 
 using bridge_actor = caf::typed_actor<
@@ -162,7 +170,7 @@ auto make_connection(connection_actor::stateful_pointer<connection_state> self,
   self->state.args = std::move(args);
   self->state.ctrl = std::make_unique<tcp_listen_control_plane>(
     std::move(diagnostics), args.no_location_overrides, args.has_terminal,
-    args.is_hidden);
+    args.is_hidden, args.trace_id);
   self->set_exception_handler(
     [self](std::exception_ptr exception) -> caf::error {
       try {
@@ -448,6 +456,7 @@ public:
     args.no_location_overrides = ctrl.no_location_overrides();
     args.has_terminal = ctrl.has_terminal();
     args.is_hidden = ctrl.is_hidden();
+    args.trace_id = ctrl.trace_id();
     auto bridge = ctrl.self().spawn<caf::linked>(make_bridge, std::move(args),
                                                  ctrl.shared_diagnostics());
     while (true) {

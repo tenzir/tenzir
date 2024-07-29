@@ -30,13 +30,10 @@
 #include "tenzir/index.hpp"
 #include "tenzir/index_config.hpp"
 #include "tenzir/logger.hpp"
-#include "tenzir/node.hpp"
-#include "tenzir/node_control.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/posix_filesystem.hpp"
 #include "tenzir/shutdown.hpp"
 #include "tenzir/terminate.hpp"
-#include "tenzir/uuid.hpp"
 #include "tenzir/version.hpp"
 
 #include <caf/actor_system_config.hpp>
@@ -516,9 +513,10 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
   });
   return {
     [self](atom::proxy, http_request_description& desc,
-           std::string& request_id) -> caf::result<rest_response> {
+           request_header& request_header) -> caf::result<rest_response> {
       TENZIR_VERBOSE("{} proxying request with id {} to {} with {}", *self,
-                     request_id, desc.canonical_path, desc.json_body);
+                     request_header.request_id, desc.canonical_path,
+                     desc.json_body);
       auto [handler, endpoint] = self->state.get_endpoint_handler(desc);
       if (!handler) {
         auto canonical_paths = std::unordered_set<std::string>{};
@@ -546,9 +544,10 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       if (!params)
         return rest_response::make_error(400, "invalid parameters",
                                          params.error());
+      (*params)["meta"]
+        = record{{"trace", record{{"node_enter", time::clock::now()}}}};
       auto rp = self->make_response_promise<rest_response>();
-      auto deliver = [rp, self, desc, params, endpoint,
-                      request_id = std::move(request_id),
+      auto deliver = [rp, self, desc, params, endpoint, request_header,
                       start_time = std::chrono::steady_clock::now()](
                        caf::expected<rest_response> response) mutable {
         auto it = self->state.api_metrics_builders.find(desc.canonical_path);
@@ -571,8 +570,8 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
         }
         auto metric = it->second.record();
         metric.field("timestamp", time::clock::now());
-        if (not request_id.empty()) {
-          metric.field("request_id", request_id);
+        if (not request_header.request_id.empty()) {
+          metric.field("request_id", request_header.request_id);
         }
         metric.field("method", fmt::to_string(endpoint.method));
         metric.field("path", endpoint.path);
@@ -613,10 +612,11 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     [](atom::get, atom::version) { //
       return retrieve_versions();
     },
-    [self](atom::spawn, operator_box& box, operator_type input_type,
-           const receiver_actor<diagnostic>& diagnostic_handler,
-           const metrics_receiver_actor& metrics_receiver, int index,
-           bool is_hidden) -> caf::result<exec_node_actor> {
+    [self](
+      atom::spawn, operator_box& box, operator_type input_type,
+      const receiver_actor<diagnostic>& diagnostic_handler,
+      const metrics_receiver_actor& metrics_receiver, int index, bool is_hidden,
+      std::optional<std::string> trace_id) -> caf::result<exec_node_actor> {
       auto op = std::move(box).unwrap();
       if (op->location() == operator_location::local) {
         return caf::make_error(ec::logic_error,
@@ -628,7 +628,8 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       auto spawn_result
         = spawn_exec_node(self, std::move(op), input_type,
                           static_cast<node_actor>(self), diagnostic_handler,
-                          metrics_receiver, index, false, is_hidden);
+                          metrics_receiver, index, false, is_hidden,
+                          std::move(trace_id));
       if (not spawn_result) {
         return caf::make_error(ec::logic_error,
                                fmt::format("{} failed to spawn execution node "

@@ -65,6 +65,11 @@ public:
     return true;
   }
 
+  auto trace_id() const noexcept -> const std::optional<std::string>& override {
+    static auto nix = std::optional<std::string>{};
+    return nix;
+  }
+
   auto set_waiting(bool value) noexcept -> void override {
     (void)value;
     TENZIR_UNIMPLEMENTED();

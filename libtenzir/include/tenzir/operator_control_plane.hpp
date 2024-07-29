@@ -48,6 +48,10 @@ struct operator_control_plane {
   /// background.
   virtual auto is_hidden() const noexcept -> bool = 0;
 
+  /// Returns the trace_id if it is set.
+  virtual auto trace_id() const noexcept
+    -> const std::optional<std::string>& = 0;
+
   /// Suspend or resume the operator's runloop. A suspended operator will not
   /// get resumed after it yielded to the executor.
   virtual auto set_waiting(bool value) noexcept -> void = 0;
