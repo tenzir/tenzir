@@ -196,6 +196,12 @@ tenzir:
     # available random port, i.e., when specifying 0 as port value.
     print-endpoint: false
 
+    # Writes the endpoint for clients when the server is ready to accept
+    # connections to the specified destination. This comes in handy when letting
+    # the OS choose an available random port, i.e., when specifying 0 as port
+    # value, and `print-endpoint` is not sufficient.
+    #write-endpoint: /tmp/tenzir-node-endpoint
+
     # An ordered list of commands to run inside the node after starting.
     # As an example, to configure an auto-starting PCAP source that listens
     # on the interface 'en0' and lives inside the Tenzir node, add `spawn

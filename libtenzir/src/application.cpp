@@ -104,6 +104,7 @@ auto make_start_command() {
     "start", "starts a node",
     opts("?tenzir.start")
       .add<bool>("print-endpoint", "print the client endpoint on stdout")
+      .add<std::string>("write-endpoint", "write the client endpoint to a path")
       .add<caf::config_value::list>("commands", "an ordered list of commands "
                                                 "to run inside the node after "
                                                 "starting")
