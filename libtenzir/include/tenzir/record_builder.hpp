@@ -632,43 +632,44 @@ auto node_record::append_to_signature(signature_type& sig, Parser& p,
   // name. this ensures that the signature computation will be the same
   for (const auto& [k, index] : lookup_) {
     auto& field = data_[index].value;
-    if (field.affects_signature()) {
-      if (seed) {
-        bool handled_by_seed = false;
-        TENZIR_ASSERT(seed_it != lookup->end());
-        const auto field_it = seed_it->second.find(k);
-        if (field_it != seed_it->second.end()) {
-          handled_by_seed = true;
-          const auto key_bytes = as_bytes(k);
-          sig.insert(sig.end(), key_bytes.begin(), key_bytes.end());
-
-          field.append_to_signature(sig, p, &(field_it->second), lookup,
-                                    schema_only, dont_parse_non_seed, dh);
-        }
-        // break;
-        // TODO this buggy break gives about 2.5x performance for suricata
-        // However, this de-facto relies on the suricata input data adhering to
-        // the format already it will also lead to fewer and larger batches,
-        // since in practice most fields will be ignore for the signature
-        // computation.
-        // There may be a heuristic that doesnt consider *every* field for the
-        // signature in order to speed up computation.
-        //
-        // The question is what the cost would be for the resulting
-        // event quality
-        if (handled_by_seed) {
-          continue;
-        }
-        if (schema_only) {
-          field.mark_this_dead();
-          continue;
-        }
-      }
-      const auto key_bytes = as_bytes(k);
-      sig.insert(sig.end(), key_bytes.begin(), key_bytes.end());
-      field.append_to_signature(sig, p, nullptr, nullptr, schema_only,
-                                dont_parse_non_seed, dh);
+    if (not field.affects_signature()) {
+      continue;
     }
+    if (seed) {
+      bool handled_by_seed = false;
+      TENZIR_ASSERT(seed_it != lookup->end());
+      const auto field_it = seed_it->second.find(k);
+      if (field_it != seed_it->second.end()) {
+        handled_by_seed = true;
+        const auto key_bytes = as_bytes(k);
+        sig.insert(sig.end(), key_bytes.begin(), key_bytes.end());
+
+        field.append_to_signature(sig, p, &(field_it->second), lookup,
+                                  schema_only, dont_parse_non_seed, dh);
+      }
+      // break;
+      // TODO this buggy break gives about 2.5x performance for suricata
+      // However, this de-facto relies on the suricata input data adhering to
+      // the format and having the fields in a consistent order.
+      // It will also result in larger batches since in practice most fields
+      // will be ignore for the signature computation. There may be a heuristic
+      // that doesnt consider *every* field for the signature in order to speed
+      // up computation.
+      //
+      // The question is what the cost would be for the resulting
+      // event quality
+      if (handled_by_seed) {
+        continue;
+      }
+      if (schema_only) {
+        field.mark_this_dead();
+        continue;
+      }
+    }
+    const auto key_bytes = as_bytes(k);
+    sig.insert(sig.end(), key_bytes.begin(), key_bytes.end());
+    field.append_to_signature(sig, p, nullptr, nullptr, schema_only,
+                              dont_parse_non_seed, dh);
   }
   sig.push_back(record_end_marker);
 }
@@ -717,19 +718,18 @@ auto node_field::parse(Parser& p, const tenzir::type* seed, bool schema_only,
   if (not is_alive()) {
     return;
   }
+  is_unparsed_ = false;
   TENZIR_ASSERT(std::holds_alternative<std::string>(data_));
   std::string_view raw_data = std::get<std::string>(data_);
   if (not seed and dont_parse_non_seed) {
-    is_unparsed_ = false;
     return;
   }
-  is_unparsed_ = false;
   auto parse_result = p(raw_data, seed);
-  auto& [ value, diag ] = parse_result;
-  if ( diag ) {
+  auto& [value, diag] = parse_result;
+  if (diag) {
     emit_or_throw(dh, std::move(*diag));
   }
-  if ( value ) {
+  if (value) {
     if (schema_only and seed
         and value->get_data().index() != seed->type_index()) {
       // if schema only is enabled, and the parsed field does not match the

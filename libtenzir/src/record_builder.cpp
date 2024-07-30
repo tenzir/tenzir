@@ -131,27 +131,6 @@ auto parse_enumeration(std::string_view s, const enumeration_type& e)
     .note("value was \"{}\"", s)
     .done();
 }
-
-template <typename T>
-auto try_parse_as(std::string_view s)
-  -> detail::record_builder::data_parsing_result {
-  T res;
-  auto parser = make_parser<T>{};
-  if (parser(s, res)) {
-    return {res};
-  }
-  return {};
-}
-
-template <typename... T>
-auto sequential_parsing(std::string_view s)
-  -> detail::record_builder::data_parsing_result {
-  detail::record_builder::data_parsing_result res;
-  //FIXME check that fold is guaranteed to short circuit
-  ((res = try_parse_as<T>(s), res.data.has_value()) || ...);
-
-  return res;
-}
 } // namespace
 
 auto record_builder::basic_seeded_parser(std::string_view s,
@@ -205,15 +184,13 @@ auto record_builder::basic_parser(std::string_view s, const tenzir::type* seed)
   if (seed) {
     return basic_seeded_parser(s, *seed);
   }
-  // tenzir::data result;
-  // if ((parsers::data - parsers::pattern)(s, result)) {
-  //   return result;
-  // } else {
-  //   return {};
-  // }
-
-  return sequential_parsing<int64_t, uint64_t, double, duration, time, ip,
-                            subnet, enumeration>(s);
+  auto p = parsers::integer | parsers::count | parsers::real | parsers::time
+           | parsers::duration | parsers::net | parsers::ip;
+  auto res = tenzir::data{};
+  if (p(s, res)) {
+    return res;
+  }
+  return {};
 }
 
 auto record_builder::non_number_parser(std::string_view s,
@@ -222,18 +199,12 @@ auto record_builder::non_number_parser(std::string_view s,
   if (seed) {
     return record_builder::basic_seeded_parser(s, *seed);
   }
-  // tenzir::data result;
-  // constexpr static auto p
-  //   = (parsers::data - parsers::number - parsers::pattern);
-  //   // FIXME this can def be faster.
-  // if (p(s, result)) {
-  //   return result;
-  // } else {
-  //   return {};
-  // }
-
-  return sequential_parsing<duration, time, ip,
-                            subnet, enumeration>(s);
+  auto p = parsers::time | parsers::duration | parsers::net | parsers::ip;
+  auto res = tenzir::data{};
+  if (p(s, res)) {
+    return res;
+  }
+  return {};
 }
 
 namespace detail::record_builder {
