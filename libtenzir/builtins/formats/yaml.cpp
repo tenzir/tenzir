@@ -94,21 +94,6 @@ auto load_document(multi_series_builder& msb, std::string&& document,
   }
 };
 
-
-auto yaml_string_parser(std::string_view s, const tenzir::type* seed)
-  -> std::variant<tenzir::data,tenzir::diagnostic> {
-  if (seed) {
-    return record_builder::basic_seeded_parser(s, *seed);
-  }
-  tenzir::data result;
-  constexpr static auto p = (parsers::data - parsers::number - parsers::pattern);
-  if (p(s, result)) {
-    return result;
-  } else {
-    return tenzir::data{std::string{s}};
-  }
-}
-
 auto parse_loop(generator<std::optional<std::string_view>> lines,
                 diagnostic_handler& diag,
                 multi_series_builder_options options) -> generator<table_slice> {
@@ -116,7 +101,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     true, not options.settings.unnest_separator.empty());
   auto msb
     = multi_series_builder{options.policy, options.settings,
-                           yaml_string_parser, std::move(schemas)};
+                           record_builder::non_number_parser, std::move(schemas)};
   auto document = std::string{};
   for (auto&& line : lines) {
     for (auto& v : msb.yield_ready_as_table_slice()) {

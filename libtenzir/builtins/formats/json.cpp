@@ -131,20 +131,7 @@ inline auto split_at_null(generator<chunk_ptr> input, char split)
   }
 }
 
-auto json_string_parser(std::string_view s, const tenzir::type* seed)
-  -> std::variant<tenzir::data, tenzir::diagnostic> {
-  if (seed) {
-    return record_builder::basic_seeded_parser(s, *seed);
-  }
-  tenzir::data result;
-  constexpr static auto p
-    = (parsers::data - parsers::number - parsers::pattern);
-  if (p(s, result)) {
-    return result;
-  } else {
-    return tenzir::data{std::string{s}};
-  }
-}
+
 
 /// Parses simdjson objects into the given `series_builder` handles.
 class doc_parser {
@@ -292,12 +279,17 @@ private:
     }
     // TODO because of this it would be better to adapt the multi_series_builder
     if constexpr (std::same_as<decltype(builder), builder_ref>) {
-      auto d = json_string_parser(maybe_str.value_unsafe(), nullptr);
-      auto err = std::get_if<tenzir::diagnostic>(&d);
-      if (err) {
-        diag_.emit(std::move(*err));
+      auto res = record_builder::non_number_parser(maybe_str.value_unsafe(), nullptr);
+      auto& [ value, diag ] = res;
+      if (diag) {
+        diag_.emit(std::move(*diag));
       }
-      builder.data(std::get<tenzir::data>(d));
+      if ( value ) {
+        builder.data( std::move(*value) );
+      }
+      else {
+        builder.data( maybe_str.value_unsafe() );
+      }
     } else {
       builder.data_unparsed(std::string{maybe_str.value_unsafe()});
     }
@@ -376,7 +368,7 @@ public:
   parser_base(operator_control_plane& ctrl,
               multi_series_builder_options options, std::vector<type> schemas)
     : builder{std::move(options.policy), std::move(options.settings),
-              json_string_parser, std::move(schemas)},
+              record_builder::non_number_parser, std::move(schemas)},
       ctrl{ctrl} {
   }
 

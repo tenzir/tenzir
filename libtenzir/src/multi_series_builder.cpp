@@ -76,9 +76,15 @@ auto field_generator::data_unparsed(std::string_view s) -> void {
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
       auto res = msb_->parser_(s, nullptr);
-      auto ptr = std::get_if<tenzir::data>(&res);
-      TENZIR_ASSERT(ptr);
-      b.data(*ptr);
+      auto& [value, diag] = res;
+      // if ( diag ) {
+      //   throw std::move(diag);
+      // }
+      if (value) {
+        b.data(std::move(*value));
+      } else {
+        b.data(s);
+      }
     },
     [&](raw_pointer raw) {
       raw->data_unparsed(std::move(s));
@@ -122,9 +128,15 @@ auto list_generator::data_unparsed(std::string_view s) -> void {
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
       auto res = msb_->parser_(s, nullptr);
-      auto ptr = std::get_if<tenzir::data>(&res);
-      TENZIR_ASSERT(ptr);
-      b.data(*ptr);
+      auto& [value, diag] = res;
+      // if ( diag ) {
+      //   throw std::move(diag);
+      // }
+      if (value) {
+        b.data(std::move(*value));
+      } else {
+        b.data(s);
+      }
     },
     [&](raw_pointer raw) {
       raw->data_unparsed(s);

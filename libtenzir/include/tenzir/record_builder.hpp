@@ -32,15 +32,24 @@ class multi_series_builder;
 class record_builder;
 namespace detail::record_builder {
 
-// A function used to parse "std::string -> tenzir::data". Used for late parsing
-// raw fields in the record_builder. The string is moved from the record
-// builders internal structure into the parser
+struct data_parsing_result {
+  std::optional<tenzir::data> data;
+  std::optional<tenzir::diagnostic> diagnostic;
+
+  data_parsing_result() = default;
+  data_parsing_result(tenzir::data data_) : data{std::move(data_)} {};
+
+  data_parsing_result(tenzir::diagnostic diag_)
+    : diagnostic{std::move(diag_)} {};
+
+  data_parsing_result(tenzir::data data_, tenzir::diagnostic diag_)
+    : data{std::move(data_)}, diagnostic{std::move(diag_)} {};
+};
+
 template <typename P>
 concept data_parsing_function
   = requires(P parser, std::string_view str, const tenzir::type* seed) {
-      {
-        parser(str, seed)
-      } -> std::same_as<std::variant<tenzir::data, tenzir::diagnostic>>;
+      { parser(str, seed) } -> std::same_as<data_parsing_result>;
     };
 
 class node_record;
@@ -109,9 +118,15 @@ concept unsupported_types
 // clang-format on
 
 using signature_type = std::vector<std::byte>;
+// using schema_type_lookup_map
+//   = tsl::robin_map<tenzir::record_type,
+//                    tsl::robin_map<std::string, tenzir::type>>;
+// outer map needs iterator stability
+// TODO maybe it can be made faster if we dont use iterator stability
+// and instead requery for `seed_it`
 using schema_type_lookup_map
-  = tsl::robin_map<tenzir::record_type,
-                   tsl::robin_map<std::string, tenzir::type>>;
+  = std::unordered_map<tenzir::record_type,
+                       tsl::robin_map<std::string, tenzir::type>>;
 
 constexpr static size_t type_index_empty
   = caf::detail::tl_size<field_type_list>::value;
@@ -507,13 +522,16 @@ public:
   /// a very basic parser that simply uses `tenzir::parsers` under the hood.
   /// this parser does not support the seed pointing to a structural type
   static auto basic_parser(std::string_view s, const tenzir::type* seed)
-    -> std::variant<tenzir::data, tenzir::diagnostic>;
+    -> detail::record_builder::data_parsing_result;
+
+  static auto non_number_parser(std::string_view s, const tenzir::type* seed)
+    -> detail::record_builder::data_parsing_result;
 
   /// a very basic parser that only supports parsing based on a seed
   /// uses the `tenzir::parser` s under the hood.
   /// this parser does not support the seed pointing to a structural type
   static auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
-    -> std::variant<tenzir::data, tenzir::diagnostic>;
+    -> detail::record_builder::data_parsing_result;
 
   /// parses any unparsed fields using `parser`, potentially providing a
   /// seed/schema to the parser
@@ -595,8 +613,11 @@ auto node_record::append_to_signature(signature_type& sig, Parser& p,
         auto* ptr = try_field(v.name);
         ptr->mark_this_relevant();
         // add its type back to the lookup map
+        // const auto [_, field_success]
+        //   = seed_it.value().try_emplace(std::string{v.name},
+        //   std::move(v.type));
         const auto [_, field_success]
-          = seed_it.value().try_emplace(std::string{v.name}, std::move(v.type));
+          = seed_it->second.try_emplace(std::string{v.name}, std::move(v.type));
         TENZIR_ASSERT(field_success);
       }
     } else {
@@ -614,6 +635,7 @@ auto node_record::append_to_signature(signature_type& sig, Parser& p,
     if (field.affects_signature()) {
       if (seed) {
         bool handled_by_seed = false;
+        TENZIR_ASSERT(seed_it != lookup->end());
         const auto field_it = seed_it->second.find(k);
         if (field_it != seed_it->second.end()) {
           handled_by_seed = true;
@@ -623,6 +645,17 @@ auto node_record::append_to_signature(signature_type& sig, Parser& p,
           field.append_to_signature(sig, p, &(field_it->second), lookup,
                                     schema_only, dont_parse_non_seed, dh);
         }
+        // break;
+        // TODO this buggy break gives about 2.5x performance for suricata
+        // However, this de-facto relies on the suricata input data adhering to
+        // the format already it will also lead to fewer and larger batches,
+        // since in practice most fields will be ignore for the signature
+        // computation.
+        // There may be a heuristic that doesnt consider *every* field for the
+        // signature in order to speed up computation.
+        //
+        // The question is what the cost would be for the resulting
+        // event quality
         if (handled_by_seed) {
           continue;
         }
@@ -690,13 +723,15 @@ auto node_field::parse(Parser& p, const tenzir::type* seed, bool schema_only,
     is_unparsed_ = false;
     return;
   }
+  is_unparsed_ = false;
   auto parse_result = p(raw_data, seed);
-  if (auto* diag = std::get_if<tenzir::diagnostic>(&parse_result)) {
+  auto& [ value, diag ] = parse_result;
+  if ( diag ) {
     emit_or_throw(dh, std::move(*diag));
-  } else {
-    auto& value = std::get<tenzir::data>(parse_result);
+  }
+  if ( value ) {
     if (schema_only and seed
-        and value.get_data().index() != seed->type_index()) {
+        and value->get_data().index() != seed->type_index()) {
       // if schema only is enabled, and the parsed field does not match the
       // schema, we discard its value
       emit_or_throw(dh, diagnostic::warning("parsed field type does not "
@@ -804,8 +839,8 @@ auto node_field::append_to_signature(signature_type& sig, Parser& p,
                 goto done;
               case caf::detail::tl_index_of<field_type_list, enumeration>::value:
                 data(static_cast<enumeration>(v));
-                result_index
-                  = caf::detail::tl_index_of<field_type_list, enumeration>::value;
+                result_index = caf::detail::tl_index_of<field_type_list,
+                                                        enumeration>::value;
                 goto done;
               default:
                 TENZIR_UNREACHABLE();

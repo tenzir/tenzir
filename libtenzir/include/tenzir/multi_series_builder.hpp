@@ -33,7 +33,7 @@ namespace tenzir {
 class multi_series_builder;
 
 using parser_function_type
-  = std::function<std::variant<tenzir::data, tenzir::diagnostic>(
+  = std::function<detail::record_builder::data_parsing_result(
     std::string_view, const tenzir::type*)>;
 
 namespace detail::multi_series_builder {

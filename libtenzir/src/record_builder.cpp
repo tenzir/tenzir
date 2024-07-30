@@ -115,7 +115,7 @@ concept has_parser = caf::detail::is_complete<type_to_parser<T>>;
 static_assert(has_parser<time_type>);
 
 auto parse_enumeration(std::string_view s, const enumeration_type& e)
-  -> std::variant<tenzir::data, tenzir::diagnostic> {
+  -> detail::record_builder::data_parsing_result {
   s = detail::trim(s);
   if (auto opt = e.resolve(s)) {
     return tenzir::data{*opt};
@@ -124,33 +124,54 @@ auto parse_enumeration(std::string_view s, const enumeration_type& e)
   const auto [ptr, errc] = std::from_chars(s.begin(), s.end(), v);
   if (errc == std::errc{}) {
     if (not e.field(v).empty()) {
-      return static_cast<enumeration>(v);
+      return tenzir::data{static_cast<enumeration>(v)};
     }
   }
   return diagnostic::warning("failed to parse enumeration value")
     .note("value was \"{}\"", s)
     .done();
 }
+
+template <typename T>
+auto try_parse_as(std::string_view s)
+  -> detail::record_builder::data_parsing_result {
+  T res;
+  auto parser = make_parser<T>{};
+  if (parser(s, res)) {
+    return {res};
+  }
+  return {};
+}
+
+template <typename... T>
+auto sequential_parsing(std::string_view s)
+  -> detail::record_builder::data_parsing_result {
+  detail::record_builder::data_parsing_result res;
+  //FIXME check that fold is guaranteed to short circuit
+  ((res = try_parse_as<T>(s), res.data.has_value()) || ...);
+
+  return res;
+}
 } // namespace
 
 auto record_builder::basic_seeded_parser(std::string_view s,
                                          const tenzir::type& seed)
-  -> std::variant<tenzir::data, tenzir::diagnostic> {
+  -> detail::record_builder::data_parsing_result {
   const auto visitor = detail::overload{
     [&s]<has_parser T>(
-      const T& t) -> std::variant<tenzir::data, tenzir::diagnostic> {
+      const T& t) -> detail::record_builder::data_parsing_result {
       type_to_data_t<T> res;
       using parser = typename type_to_parser<T>::type;
       if (parser{}(s, res)) {
-        return res;
+        return tenzir::data{std::move(res)};
       } else {
         return diagnostic::warning("failed to parse value as requested type")
           .hint("value was `{}`; type was `{}`", t, typeid(T).name())
           .done();
       }
     },
-    [&s](const string_type&) {
-      return std::string{s};
+    [](const string_type&) -> detail::record_builder::data_parsing_result {
+      return {};
     },
     [](const record_type&) -> tenzir::diagnostic {
       TENZIR_ERROR("`basic_parser` does not support structural "
@@ -164,8 +185,7 @@ auto record_builder::basic_seeded_parser(std::string_view s,
       return diagnostic::error("`list` seed for basic parser is unsupported")
         .done();
     },
-    [&s](const enumeration_type& e)
-      -> std::variant<tenzir::data, tenzir::diagnostic> {
+    [&s](const enumeration_type& e) {
       return parse_enumeration(s, e);
     },
     []<typename T>(const T&) -> tenzir::diagnostic {
@@ -181,16 +201,39 @@ auto record_builder::basic_seeded_parser(std::string_view s,
 }
 
 auto record_builder::basic_parser(std::string_view s, const tenzir::type* seed)
-  -> std::variant<tenzir::data, tenzir::diagnostic> {
-  if (not seed) {
-    tenzir::data result;
-    if ((parsers::data - parsers::pattern)(s, result)) {
-      return result;
-    } else {
-      return tenzir::data{std::string{s}};
-    }
+  -> detail::record_builder::data_parsing_result {
+  if (seed) {
+    return basic_seeded_parser(s, *seed);
   }
-  return basic_seeded_parser(s, *seed);
+  // tenzir::data result;
+  // if ((parsers::data - parsers::pattern)(s, result)) {
+  //   return result;
+  // } else {
+  //   return {};
+  // }
+
+  return sequential_parsing<int64_t, uint64_t, double, duration, time, ip,
+                            subnet, enumeration>(s);
+}
+
+auto record_builder::non_number_parser(std::string_view s,
+                                       const tenzir::type* seed)
+  -> detail::record_builder::data_parsing_result {
+  if (seed) {
+    return record_builder::basic_seeded_parser(s, *seed);
+  }
+  // tenzir::data result;
+  // constexpr static auto p
+  //   = (parsers::data - parsers::number - parsers::pattern);
+  //   // FIXME this can def be faster.
+  // if (p(s, result)) {
+  //   return result;
+  // } else {
+  //   return {};
+  // }
+
+  return sequential_parsing<duration, time, ip,
+                            subnet, enumeration>(s);
 }
 
 namespace detail::record_builder {
