@@ -120,8 +120,11 @@ auto node_state::get_endpoint_handler(const http_request_description& desc)
     return it->second;
   // Spawn handler on first usage
   auto const* plugin = find_endpoint_plugin(desc);
-  if (!plugin)
+  if (!plugin) {
+    TENZIR_WARN("no endpoint plugin found for description: {} BODY: {}",
+                desc.canonical_path, desc.json_body);
     return empty_response;
+  }
   // TODO: Monitor the spawned handler and restart if it goes down.
   auto handler = plugin->handler(self->system(), self);
   for (auto const& endpoint : plugin->rest_endpoints())
@@ -533,7 +536,7 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
                                         fmt::join(canonical_paths, ", "))));
         }
         return rest_response::make_error(
-          500, "internal server error",
+          500, "internal server error: failed to spawn endpoint handler",
           caf::make_error(ec::logic_error, "failed to spawn endpoint handler"));
       }
       auto unparsed_params = http_parameter_map::from_json(desc.json_body);

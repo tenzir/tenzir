@@ -319,10 +319,12 @@ auto rest_response::release() && -> std::string {
 
 auto rest_response::make_error(uint16_t error_code, std::string_view message,
                                caf::error detail) -> rest_response {
-  return make_error_raw(error_code,
-                        fmt::format("{{\"error\": {}}}\n",
-                                    detail::json_escape(message)),
-                        std::move(detail));
+  return make_error_raw(
+    error_code,
+    fmt::format("{{\"error\": {}, \"detail\": {}}}\n",
+                detail::json_escape(message),
+                detail::json_escape(fmt::to_string(detail))),
+    std::move(detail));
 }
 
 auto rest_response::make_error_raw(uint16_t error_code, std::string body,
