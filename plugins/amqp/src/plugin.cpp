@@ -365,8 +365,8 @@ public:
 
   /// Consumes a message.
   /// @returns The message from the server.
-  auto consume(std::optional<std::chrono::microseconds> timeout = {})
-    -> caf::expected<chunk_ptr> {
+  auto consume(std::optional<std::chrono::microseconds> timeout
+               = {}) -> caf::expected<chunk_ptr> {
     TENZIR_TRACE("consuming message");
     auto envelope = amqp_envelope_t{};
     amqp_maybe_release_buffers(conn_);
@@ -711,8 +711,8 @@ private:
 class plugin final : public virtual loader_plugin<rabbitmq_loader>,
                      public virtual saver_plugin<rabbitmq_saver> {
 public:
-  auto initialize(const record& config, const record& /* global_config */)
-    -> caf::error override {
+  auto initialize(const record& config,
+                  const record& /* global_config */) -> caf::error override {
     config_ = config;
     return caf::none;
   }
