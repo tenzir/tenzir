@@ -12,7 +12,7 @@ Parses events in the Log Event Extended Format (LEEF).
 Parser:
 ```
 leef [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
-     [--no-infer] [--raw] [--unnest-separator <separator>]
+     [--expand-schema] [--raw] [--unnest-separator <separator>]
 ```
 
 ## Description

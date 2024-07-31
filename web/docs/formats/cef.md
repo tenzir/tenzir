@@ -13,7 +13,7 @@ Parses events in the Common Event Format (CEF).
 Parser:
 ```
 cef [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
-    [--no-infer] [--raw] [--unnest-separator <separator>]
+    [--expand-schema] [--raw] [--unnest-separator <separator>]
 ```
 
 ## Description

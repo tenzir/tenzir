@@ -15,7 +15,7 @@ for [`json`](json.md) with the arguments:
 ## Synopsis
 
 ```
-suricata [--no-infer] [--raw] [--unnest-separator <separator>]
+suricata [--expand-schema] [--raw] [--unnest-separator <separator>]
 ```
 
 ## Description

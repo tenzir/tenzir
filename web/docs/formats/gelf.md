@@ -12,7 +12,7 @@ Reads Graylog Extended Log Format (GELF) events.
 Parser:
 ```
 gelf [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
-     [--no-infer] [--raw] [--unnest-separator <separator>]
+     [--expand-schema] [--raw] [--unnest-separator <separator>]
 ```
 
 ## Description

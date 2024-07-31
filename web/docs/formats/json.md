@@ -15,8 +15,8 @@ Parser:
 
 ```
 json [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
-     [--no-infer] [--raw] [--unnest-separator <separator>]
-     [--ndjson] [--precise] [--arrays-of-objects]
+     [--expand-schema] [--raw] [--unnest-separator <separator>]
+     [--ndjson] [--arrays-of-objects] [--precise] [--no-infer]
 ```
 
 Printer:
@@ -52,6 +52,10 @@ JSON formats. Tenzir supports [`suricata`](suricata.md) and
 ### `--precise` (Parser)
 
 Legacy flag. Has the same effect as *not* providing `--merge`. This option is incompatible with  `--merge`.
+
+### `--no-infer` (Parser)
+
+Legacy flag. Has no direct effect. Is incompatible with `--expand-schema`
 
 ### `--arrays-of-objects` (Parser)
 

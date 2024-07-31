@@ -62,9 +62,14 @@ This option must not be combined with `--selector` or `--raw --schema`.
 
 ### `--schema <schema>` (Parsers)
 
-Explicitly set the output schema. If a schema with a matching name is
-installed, the result will always all all fields of the specified schema.
-Otherwise, this option only assigns the output schema name only.
+Explicitly set the output schema. 
+
+If a schema with a matching name is
+installed, the result will have exactly all fields of the specified schema. Fields that are in the schema, but did not appear in the input will be null. Fields that appear in the input, but not in the schema will be discarded.
+
+If the given schema does not exist, this option only assigns the output schema name only.
+
+If fields from the input that do not appear in the schema (e.g. because it is incomplete) should also be accepted, `--expand-schema` can be used.
 
 This option must not be combined with `--selector` or `--raw --merge`
 
@@ -80,11 +85,11 @@ the field `event_type` set to the value `flow` looks for a schema named
 
 This option must not be combined with `--merge` or `--schema`.
 
-### `--no-infer` (Parsers)
+### `--expand-schema` (Parsers)
 
-Ignore fields that are not explicitly specified in the given schema. If the
-specified schema does not exist, this option causes the parser to drop events
-and emit a warning.
+If a non-empty schema was given/selected, fields in the input events that are not in the given schema are usually rejected. Enabling this option causes fields in the input that were not in the given schema to still appear in the output.
+
+This option should not be enabled unless you really need the extra fields. If possible, adapt your schema definition instead.
 
 This option requires either `--schema` or `--selector` to be set.
 
