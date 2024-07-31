@@ -205,7 +205,7 @@ struct symbol_resolver {
   // use the resolved symbol_map to resolve symbols that are parsed later.
   symbol_map& local;
   symbol_map resolved = {};
-  module sch = {};
+  tenzir::module sch = {};
 };
 
 struct symbol_map_parser : parser_base<symbol_map_parser> {
