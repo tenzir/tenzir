@@ -303,32 +303,37 @@ void multi_series_builder::complete_last_event() {
           return "null"; // TODO this is a magic constant.
         },
         [this](const blob&) -> std::string {
-          diagnostic::warning("parser: a field of type `blob` cannot be used "
-                              "as a selector")
+          diagnostic::warning("{} parser: selector field contains `blob` data, "
+                              "which cannot be used as a selector",
+                              settings_.parser_name)
             .emit(*dh_);
-          builder_raw_.clear();
           return {};
         },
-        [](const auto&) -> std::string {
+        [this](const auto&) -> std::string {
+          diagnostic::warning("{} parser: selector field contains structural "
+                              "type, which cannot be used as a selector",
+                              settings_.parser_name)
+            .emit(*dh_);
           return {};
         },
       };
       const auto schema_name = std::visit(visitor, selected_schema->data_);
       schema_type = type_for_schema(schema_name);
       if (not schema_type) {
-        diagnostic::warning("{} parser: schema for selector not found",
-                            settings_.parser_name)
-          .note("selector field is `{}`, but the resulting name `{}` does not "
-                "refer to a known schema",
-                p->field_name, schema_name)
-          .emit(*dh_);
+        auto b = diagnostic::warning("{} parser: schema for selector not found",
+                                     settings_.parser_name)
+                   .note("`{}` does not refer to a known schema", schema_name);
+
+        std::move(b).emit(*dh_);
+        naming_sentinel = tenzir::type{schema_name, null_type{}};
+        schema_type = &naming_sentinel;
       }
       append_name_to_signature(schema_name, signature_raw_);
     }
   } else if (auto p = get_policy<policy_precise>()) {
-    if (p->seed_schema) {
-      schema_type = &*p->seed_schema;
-      append_name_to_signature(p->seed_schema->name(), signature_raw_);
+    if (not p->seed_schema.empty()) {
+      schema_type = &naming_sentinel;
+      append_name_to_signature(p->seed_schema, signature_raw_);
     }
   }
   // if we dont know the schema, or allow extra fields, we need to do a full
@@ -419,20 +424,5 @@ void multi_series_builder::garbage_collect_where(
       it = signature_map_.erase(it);
     }
   }
-}
-
-auto multi_series_builder::specifies_schema(const policy_type& pol) -> bool {
-  constexpr static auto visitor = detail::overload{
-    [](const policy_merge& p) {
-      return p.seed_schema.has_value();
-    },
-    [](const policy_precise& p) {
-      return p.seed_schema.has_value();
-    },
-    [](const policy_selector&) {
-      return true;
-    },
-  };
-  return std::visit(visitor, pol);
 }
 } // namespace tenzir

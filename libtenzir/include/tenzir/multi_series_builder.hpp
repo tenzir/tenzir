@@ -209,7 +209,7 @@ public:
   struct policy_merge {
     static constexpr std::string_view name = "merge";
     // a schema name to seed with. If this is given
-    std::optional<tenzir::type> seed_schema = {};
+    std::string seed_schema = {};
 
     auto friend inspect(auto& f, policy_merge& x) -> bool {
       return f.object(x).fields(f.field("seed_schema", x.seed_schema));
@@ -221,7 +221,7 @@ public:
     static constexpr std::string_view name = "precise";
     // If this is given, all resulting events will have exactly this schema
     // * all fields in the schema but not in the event will be null
-    std::optional<tenzir::type> seed_schema = {};
+    std::string seed_schema = {};
 
     auto friend inspect(auto& f, policy_precise& x) -> bool {
       return f.object(x).fields(f.field("seed_schema", x.seed_schema));
@@ -247,8 +247,6 @@ public:
 
   using policy_type
     = tenzir::variant<policy_merge, policy_precise, policy_selector>;
-
-  auto static specifies_schema(const policy_type& pol) -> bool;
 
   struct settings_type {
     // the default name given to a schema
@@ -291,9 +289,23 @@ public:
       const auto [it, success] = schemas_.try_emplace(t.name(), std::move(t));
       TENZIR_ASSERT(success, "Repeated schema name");
     }
+    // setup the merging builder in merging mode
     if (auto p = get_policy<policy_merge>()) {
       settings_.ordered = true; // merging mode is necessarily ordered
-      merging_builder_ = series_builder{p->seed_schema};
+      if (auto seed = type_for_schema(p->seed_schema)) {
+        merging_builder_ = seed;
+      } else {
+        merging_builder_ = tenzir::type{ p->seed_schema, null_type{} };
+      }
+    }
+    // setup the naming sentinel for naming builders in precise mode
+    else if (auto p = get_policy<policy_precise>()) {
+      settings_.ordered = true; // merging mode is necessarily ordered
+      if (auto seed = type_for_schema(p->seed_schema)) {
+        naming_sentinel = *seed;
+      } else {
+        naming_sentinel = tenzir::type{ p->seed_schema, null_type{} };
+      }
     }
   }
 
@@ -367,9 +379,11 @@ private:
   detail::flat_map<std::string, tenzir::type> schemas_;
   std::unique_ptr<detail::multi_series_builder::diagnostic_handler> dh_
     = std::make_unique<
-      detail::multi_series_builder::diagnostic_handler>(); // must be initialized
-                                                           // before builder_raw_
+      detail::multi_series_builder::diagnostic_handler>(); // must be
+                                                           // initialized before
+                                                           // builder_raw_
   record_builder builder_raw_;
+  tenzir::type naming_sentinel; // used to name builders
   signature_type signature_raw_;
   tsl::robin_map<signature_type, size_t, detail::hash_algorithm_proxy<>>
     signature_map_;

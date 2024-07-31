@@ -85,15 +85,21 @@ auto multi_series_builder_argument_parser::add_all_to_parser(
 
 auto multi_series_builder_argument_parser::get_settings()
   -> multi_series_builder::settings_type& {
-  policy_ = get_policy();
-  if (not expand_schema_ and schema_) { // if a schema is set and expand_schema is false (the default)
-    if ( auto* p = std::get_if<multi_series_builder::policy_precise>(&policy_)) {
-      if ( not p->seed_schema ) {
-        diagnostic::error(
-          "`--expand_schema` specified, but given `--schema` does not exist")
+  get_policy();             // force update policy.
+  if (not expand_schema_) { // if a schema is set and expand_schema
+                            // is false (the default)
+    if (auto* p = std::get_if<multi_series_builder::policy_precise>(&policy_)) {
+      const auto schemas = modules::schemas();
+
+      auto it = std::find_if(schemas.begin(), schemas.end(), [p](const auto& t) {
+        return t.name() == p->seed_schema;
+      });
+      if (it == schemas.end()) {
+        diagnostic::error("`--expand-schema` specified, but given `--schema "
+                          "<schema>` does not exist")
           .primary(*expand_schema_)
           .primary(*schema_)
-          .note("schema `{}` could not be found", schema_->inner )
+          .note("schema `{}` could not be found", schema_->inner)
           .throw_();
       }
     }
@@ -153,14 +159,19 @@ auto multi_series_builder_argument_parser::get_policy()
       .secondary(selector_->source)
       .throw_();
   }
-  if (has_merge) {
-    if (has_schema) {
-      auto t = type_for_schema(schema_->inner);
-      policy_ = multi_series_builder::policy_merge{
-        .seed_schema = t ? *t : std::optional<tenzir::type>{}};
-    } else {
-      policy_ = multi_series_builder::policy_merge{};
+  std::string seed_type;
+  if (has_schema) {
+    if (schema_->inner.empty()) {
+      diagnostic::error("`--schema` must not be empty")
+        .primary(schema_->source)
+        .throw_();
     }
+    seed_type = schema_->inner;
+  }
+  if (has_merge) {
+    policy_ = multi_series_builder::policy_merge{
+      .seed_schema = seed_type,
+    };
   } else if (has_selector) {
     auto [prefix, field_name]
       = parse_selector(selector_->inner, selector_->source);
@@ -169,19 +180,19 @@ auto multi_series_builder_argument_parser::get_policy()
       std::move(*prefix),
     };
   } else if (has_schema) {
-    // merge is already handled above
-    auto t = type_for_schema(schema_->inner);
+    // this needs an extra guard for "has_schema", because it could otherwise be
+    // resetting a non-empty default seed merge is already handled above
     policy_ = multi_series_builder::policy_precise{
-      .seed_schema = t ? *t : std::optional<tenzir::type>{}};
-  } else if (not has_manual_defaults_) {
-    policy_ = multi_series_builder::policy_precise{};
+      .seed_schema = seed_type,
+    };
   }
 
   return policy_;
 }
 
-auto multi_series_builder_options::get_schemas() const -> std::vector<tenzir::type> {
-  if ( std::holds_alternative<multi_series_builder::policy_selector>(policy) ) {
+auto multi_series_builder_options::get_schemas() const
+  -> std::vector<tenzir::type> {
+  if (std::holds_alternative<multi_series_builder::policy_selector>(policy)) {
     return modules::schemas();
   }
   return {};

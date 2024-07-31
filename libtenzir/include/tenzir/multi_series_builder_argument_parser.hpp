@@ -75,26 +75,10 @@ protected:
   auto get_settings() -> multi_series_builder::settings_type&;
   auto get_policy() -> multi_series_builder::policy_type&;
 
-  auto type_for_schema(std::string_view name) -> const tenzir::type* {
-    if (schemas_.empty()) {
-      schemas_ = modules::schemas();
-    }
-    const auto it
-      = std::find_if(schemas_.begin(), schemas_.end(), [name](const auto& t) {
-          return t.name() == name;
-        });
-    if (it == schemas_.end()) {
-      return nullptr;
-    } else {
-      return std::addressof(*it);
-    }
-  }
-
   // If we leave these public, the json parser can keep supporting its old
   // options by checking/setting values here
   // TODO do we even want that?
-  public :
-
+public:
   std::vector<tenzir::type> schemas_;
   bool has_manual_defaults_ = false;
   bool is_tql1_ = false;
