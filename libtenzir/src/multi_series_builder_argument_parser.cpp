@@ -181,7 +181,7 @@ auto multi_series_builder_argument_parser::get_policy()
 }
 
 auto multi_series_builder_options::get_schemas() const -> std::vector<tenzir::type> {
-  if ( auto* p = std::get_if<multi_series_builder::policy_selector>(&policy) ) {
+  if ( std::holds_alternative<multi_series_builder::policy_selector>(policy) ) {
     return modules::schemas();
   }
   return {};

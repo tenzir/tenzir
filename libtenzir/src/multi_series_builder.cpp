@@ -75,7 +75,7 @@ auto record_generator::unflattend_field(std::string_view key)
 auto field_generator::data_unparsed(std::string_view s) -> void {
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
-      auto res = msb_->parser_(s, nullptr);
+      auto res = msb_->builder_raw_.parser_(s, nullptr);
       auto& [value, diag] = res;
       // if ( diag ) {
       //   throw std::move(diag);
@@ -127,7 +127,7 @@ void list_generator::null() {
 auto list_generator::data_unparsed(std::string_view s) -> void {
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
-      auto res = msb_->parser_(s, nullptr);
+      auto res = msb_->builder_raw_.parser_(s, nullptr);
       auto& [value, diag] = res;
       // if ( diag ) {
       //   throw std::move(diag);
@@ -228,7 +228,7 @@ auto multi_series_builder::yield_ready_as_table_slice()
 }
 
 auto multi_series_builder::last_errors() -> std::vector<tenzir::diagnostic> {
-  return dh_.yield();
+  return dh_->yield();
 }
 
 auto multi_series_builder::record() -> record_generator {
@@ -285,7 +285,7 @@ void multi_series_builder::complete_last_event() {
       diagnostic::warning("{} parser: event did not contain selector field",
                           settings_.parser_name)
         .note("selector field `{}` was not found", p->field_name)
-        .emit(dh_);
+        .emit(*dh_);
     } else {
       const auto visitor = detail::overload{
         [p]<detail::record_builder::non_structured_data_type T>(
@@ -305,7 +305,7 @@ void multi_series_builder::complete_last_event() {
         [this](const blob&) -> std::string {
           diagnostic::warning("parser: a field of type `blob` cannot be used "
                               "as a selector")
-            .emit(dh_);
+            .emit(*dh_);
           builder_raw_.clear();
           return {};
         },
@@ -321,25 +321,21 @@ void multi_series_builder::complete_last_event() {
           .note("selector field is `{}`, but the resulting name `{}` does not "
                 "refer to a known schema",
                 p->field_name, schema_name)
-          .emit(dh_);
-      //   builder_raw_.clear();
-      //   return;
+          .emit(*dh_);
       }
       append_name_to_signature(schema_name, signature_raw_);
     }
   } else if (auto p = get_policy<policy_precise>()) {
     if (p->seed_schema) {
       schema_type = &*p->seed_schema;
+      append_name_to_signature(p->seed_schema->name(), signature_raw_);
     }
   }
-  // if (not schema_type) {
-  //   schema_type = type_for_schema(settings_.default_name);
-  //   append_name_to_signature(settings_.default_name, signature_raw_);
-  // }
-  if (not(schema_type and settings_.expand_schema )) {
-    builder_raw_.append_signature_to(signature_raw_, parser_, schema_type,
-                                     not settings_.expand_schema, settings_.raw,
-                                     &dh_);
+  // if we dont know the schema, or allow extra fields, we need to do a full
+  // signature compute otherwise the schema name that is already written to the
+  // signature is sufficient
+  if (not schema_type or settings_.expand_schema) {
+    builder_raw_.append_signature_to(signature_raw_, schema_type);
   }
   auto free_index = next_free_index();
   auto [it, inserted] = signature_map_.try_emplace(

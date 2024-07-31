@@ -419,15 +419,11 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
   }
   // parse the body
   const auto original_field_count = fields.size();
-  auto needs_schemas = true;
   args.builder_options.settings.parser_name = fmt::format("tenzir.{}", args.name);
-  auto schemas = detail::multi_series_builder::get_schemas_unnested(
-    needs_schemas, not args.builder_options.settings.unnest_separator.empty());
   auto msb = multi_series_builder{
     args.builder_options.policy,
     args.builder_options.settings,
-    record_builder::basic_parser,
-    std::move(schemas),
+    modules::schemas(),
   };
   for (; it != lines.end(); ++it) {
     for (auto& v : msb.yield_ready_as_table_slice()) {

@@ -43,12 +43,6 @@ auto record_builder::record() -> detail::record_builder::node_record* {
   return &root_;
 }
 
-auto record_builder::reseed(std::optional<tenzir::type> seed) -> void {
-  if (seed) {
-    root_.reseed(caf::get<record_type>(*seed));
-  }
-}
-
 auto record_builder::find_field_raw(std::string_view key)
   -> detail::record_builder::node_field* {
   return root_.at(key);
@@ -65,16 +59,92 @@ auto record_builder::free() -> void {
   root_.lookup_.shrink_to_fit();
 }
 
-auto record_builder::commit_to(series_builder& builder,
-                               bool mark_dead) -> void {
-  root_.commit_to(builder.record(), mark_dead);
+auto record_builder::commit_to(series_builder& builder, bool mark_dead,
+                               const tenzir::type* seed) -> void {
+  const tenzir::record_type* rs = caf::get_if<tenzir::record_type>(seed);
+  if (seed and not rs) {
+    emit_or_throw(diagnostic::warning("selected type is not a record")
+                    .note("type was `{}`", seed->name()));
+  }
+  root_.commit_to(builder.record(), *this, rs, mark_dead);
 }
 
-auto record_builder::materialize(bool mark_dead) -> tenzir::record {
+auto record_builder::materialize(bool mark_dead,
+                                 const tenzir::type* seed) -> tenzir::record {
+  const tenzir::record_type* rs = caf::get_if<tenzir::record_type>(seed);
+  if (seed and not rs) {
+    emit_or_throw(diagnostic::warning("selected type is not a record")
+                    .note("type was `{}`", seed->name()));
+  }
   tenzir::record res;
-  root_.commit_to(res, mark_dead);
-
+  root_.commit_to(res, *this, rs, mark_dead);
   return res;
+}
+
+auto record_builder::lookup_record_fields(
+  const tenzir::record_type* r, detail::record_builder::node_record* apply)
+  -> const detail::record_builder::field_type_lookup_map* {
+  if (not r) {
+    return nullptr;
+  }
+  auto seed_it = schema_type_lookup_.find(*r);
+  if (seed_it == schema_type_lookup_.end()) {
+    bool success = false;
+    std::tie(seed_it, success) = schema_type_lookup_.try_emplace(*r);
+    TENZIR_ASSERT(success);
+    for (auto v : r->fields()) {
+      // ensure the field exists
+      if (apply) {
+        auto* ptr = apply->try_field(v.name);
+        ptr->mark_this_relevant();
+      }
+      // add its type back to the lookup map
+      const auto [_, field_success]
+        = seed_it->second.try_emplace(std::string{v.name}, std::move(v.type));
+      TENZIR_ASSERT(field_success);
+    }
+  } else {
+    for (const auto& [k, t] : seed_it->second) {
+      // ensure the field exists
+      if (apply) {
+        auto* ptr = apply->try_field(k);
+        ptr->mark_this_relevant();
+      }
+    }
+  }
+  return std::addressof(seed_it->second);
+}
+
+auto record_builder::append_signature_to(signature_type& sig,
+                                         const tenzir::type* seed) -> void {
+  auto* seed_as_record_type = caf::get_if<tenzir::record_type>(&*seed);
+  if (seed) {
+    if (seed_as_record_type) {
+      return root_.append_to_signature(sig, *this, seed_as_record_type);
+    } else {
+      emit_or_throw(
+        diagnostic::warning("selected schema is not a record and will be "
+                            "ignored"));
+    }
+  }
+  root_.append_to_signature(sig, *this, nullptr);
+}
+
+auto record_builder::emit_or_throw(tenzir::diagnostic&& diag) -> void {
+  if (dh_) {
+    dh_->emit(std::move(diag));
+  } else {
+    throw std::move(diag);
+  }
+}
+
+auto record_builder::emit_or_throw(tenzir::diagnostic_builder&& builder)
+  -> void {
+  if (dh_) {
+    std::move(builder).emit(*dh_);
+  } else {
+    std::move(builder).throw_();
+  }
 }
 
 namespace {
@@ -117,15 +187,15 @@ static_assert(has_parser<time_type>);
 auto parse_enumeration(std::string_view s, const enumeration_type& e)
   -> detail::record_builder::data_parsing_result {
   s = detail::trim(s);
-  if (auto opt = e.resolve(s)) {
-    return tenzir::data{*opt};
-  }
-  uint32_t v;
+  enumeration v;
   const auto [ptr, errc] = std::from_chars(s.begin(), s.end(), v);
   if (errc == std::errc{}) {
     if (not e.field(v).empty()) {
-      return tenzir::data{static_cast<enumeration>(v)};
+      return tenzir::data{v};
     }
+  }
+  if (auto opt = e.resolve(s)) {
+    return tenzir::data{static_cast<enumeration>(*opt)};
   }
   return diagnostic::warning("failed to parse enumeration value")
     .note("value was \"{}\"", s)
@@ -133,8 +203,9 @@ auto parse_enumeration(std::string_view s, const enumeration_type& e)
 }
 } // namespace
 
-auto record_builder::basic_seeded_parser(std::string_view s,
-                                         const tenzir::type& seed)
+namespace detail::record_builder {
+
+auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
   -> detail::record_builder::data_parsing_result {
   const auto visitor = detail::overload{
     [&s]<has_parser T>(
@@ -175,11 +246,11 @@ auto record_builder::basic_seeded_parser(std::string_view s,
         .hint("type was `{}`", typeid(T).name())
         .done();
     },
-  }; // namespace tenzir
+  };
   return caf::visit(visitor, seed);
 }
 
-auto record_builder::basic_parser(std::string_view s, const tenzir::type* seed)
+auto basic_parser(std::string_view s, const tenzir::type* seed)
   -> detail::record_builder::data_parsing_result {
   if (seed) {
     return basic_seeded_parser(s, *seed);
@@ -193,8 +264,7 @@ auto record_builder::basic_parser(std::string_view s, const tenzir::type* seed)
   return {};
 }
 
-auto record_builder::non_number_parser(std::string_view s,
-                                       const tenzir::type* seed)
+auto non_number_parser(std::string_view s, const tenzir::type* seed)
   -> detail::record_builder::data_parsing_result {
   if (seed) {
     return record_builder::basic_seeded_parser(s, *seed);
@@ -207,7 +277,6 @@ auto record_builder::non_number_parser(std::string_view s,
   return {};
 }
 
-namespace detail::record_builder {
 namespace {
 
 template <typename Field, typename Tenzir_Type>
@@ -300,28 +369,98 @@ auto node_record::at(std::string_view key) -> node_field* {
   return nullptr;
 }
 
-auto node_record::commit_to(record_ref r, bool mark_dead) -> void {
+auto node_record::append_to_signature(signature_type& sig,
+                                      class record_builder& rb,
+                                      const tenzir::record_type* seed) -> void {
+  sig.push_back(record_start_marker);
+  // if we have a seed, we need too ensure that all fields exist first
+
+  const field_type_lookup_map* seed_map = rb.lookup_record_fields(seed, this);
+  // we are intentionally traversing `lookup_` here, because that is sorted by
+  // name. this ensures that the signature computation will be the same
+  for (const auto& [k, index] : lookup_) {
+    auto& field = data_[index].value;
+    if (not field.affects_signature()) {
+      continue;
+    }
+    if (seed) {
+      TENZIR_ASSERT(seed_map);
+      const auto field_it = seed_map->find(k);
+      if (field_it == seed_map->end()) {
+        if (not rb.allow_non_schema_fields_) {
+          field.mark_this_dead();
+          continue;
+        }
+      } else {
+        const auto key_bytes = as_bytes(k);
+        sig.insert(sig.end(), key_bytes.begin(), key_bytes.end());
+
+        field.append_to_signature(sig, rb, &(field_it->second));
+        continue;
+      }
+      // break;
+      // TODO this buggy break gives about 2.5x performance for suricata
+      // However, this de-facto relies on the suricata input data adhering to
+      // the format and having the fields in a consistent order.
+      // It will also result in larger batches since in practice most fields
+      // will be ignore for the signature computation. There may be a heuristic
+      // that doesnt consider *every* field for the signature in order to speed
+      // up computation.
+      //
+      // The question is what the cost would be for the resulting
+      // event quality
+    }
+    const auto key_bytes = as_bytes(k);
+    sig.insert(sig.end(), key_bytes.begin(), key_bytes.end());
+    field.append_to_signature(sig, rb, nullptr);
+  }
+  sig.push_back(record_end_marker);
+}
+
+auto node_record::commit_to(tenzir::record_ref r, class record_builder& rb,
+                            const tenzir::record_type* seed,
+                            bool mark_dead) -> void {
   if (mark_dead) {
     mark_this_dead();
   }
+  auto field_map = rb.lookup_record_fields(seed, this);
   for (auto& [k, v] : data_) {
     if (not v.is_alive()) {
       continue;
     }
-    v.commit_to(r.field(k), mark_dead);
+    if (seed) {
+      if (auto it = field_map->find(k); it != field_map->end()) {
+        v.commit_to(r.field(k), rb, &(it->second), mark_dead);
+        continue;
+      }
+    }
+    v.commit_to(r.field(k), rb, nullptr, mark_dead);
   }
 }
 
-auto node_record::commit_to(tenzir::record& r, bool mark_dead) -> void {
+auto node_record::commit_to(tenzir::record& r, class record_builder& rb,
+                            const tenzir::record_type* seed,
+                            bool mark_dead) -> void {
   if (mark_dead) {
     mark_this_dead();
   }
+
+  if (mark_dead) {
+    mark_this_dead();
+  }
+  auto field_map = rb.lookup_record_fields(seed, this);
   for (auto& [k, v] : data_) {
     if (not v.is_alive()) {
       continue;
     }
-    const auto [it, success] = r.try_emplace(k);
-    v.commit_to(it->second, mark_dead);
+    const auto [entry_it, success] = r.try_emplace(k);
+    if (seed) {
+      if (auto it = field_map->find(k); it != field_map->end()) {
+        v.commit_to(entry_it->second, rb, &(it->second), mark_dead);
+        continue;
+      }
+    }
+    v.commit_to(entry_it->second, rb, nullptr, mark_dead);
   }
 }
 
@@ -329,15 +468,6 @@ auto node_record::clear() -> void {
   node_base::mark_this_dead();
   for (auto& [k, v] : data_) {
     v.clear();
-  }
-}
-
-auto node_record::reseed(const tenzir::record_type& type) -> void {
-  if (is_dead()) {
-    state_ = state::sentinel;
-  }
-  for (const auto& [k, v] : type.fields()) {
-    try_field(k)->reseed(v);
   }
 }
 
@@ -398,51 +528,187 @@ auto node_field::list() -> node_list* {
   return &data_.emplace<node_list>();
 }
 
-auto node_field::reseed(const tenzir::type& seed) -> void {
-  if (is_dead()) {
-    state_ = state::sentinel;
+auto node_field::parse(class record_builder& rb,
+                       const tenzir::type* seed) -> void {
+  if (not is_unparsed_) {
+    return;
   }
-  const auto visitor = detail::overload{
-    [&]<non_structured_type_type T>(const T&) {
-      data(T::construct());
-    },
-    [&](const enumeration_type&) {
-      data(enumeration{});
-    },
-    [&](const record_type&) {
-      auto r = record();
-      r->reseed(caf::get<record_type>(seed));
-    },
-    [&](const list_type&) {
-      auto l = list();
-      l->reseed(caf::get<list_type>(seed));
-    },
-    [](const tenzir::null_type&) {
-
-    },
-    []<unsupported_types T>(const T&) {
-      TENZIR_UNREACHABLE();
-    },
-  };
-  caf::visit(visitor, seed);
+  if (not is_alive()) {
+    return;
+  }
+  is_unparsed_ = false;
+  TENZIR_ASSERT(std::holds_alternative<std::string>(data_));
+  std::string_view raw_data = std::get<std::string>(data_);
+  if (not seed and rb.parse_schema_fields_only_) {
+    return;
+  }
+  auto parse_result = rb.parser_(raw_data, seed);
+  auto& [value, diag] = parse_result;
+  if (diag) {
+    rb.emit_or_throw(std::move(*diag));
+  }
+  if (value) {
+    if (not rb.allow_non_schema_fields_ and seed
+        and value->get_data().index() != seed->type_index()) {
+      // if schema only is enabled, and the parsed field does not match the
+      // schema, we discard its value
+      rb.emit_or_throw(diagnostic::warning("parsed field type does not "
+                                           "match the provided schema. This "
+                                           "is a shortcoming of the parser.")
+                         .note("string `{}` parsed as type index `{}`, but the "
+                               "schema expected `{}`",
+                               raw_data, value->get_data().index(),
+                               seed->type_index()));
+    }
+    data(std::move(value));
+    return;
+  }
 }
 
-auto node_field::commit_to(builder_ref r, bool mark_dead) -> void {
+auto node_field::append_to_signature(signature_type& sig,
+                                     class record_builder& rb,
+                                     const tenzir::type* seed) -> void {
+  if (is_unparsed_) {
+    parse(rb, seed);
+  }
+  if (state_ == state::sentinel) {
+    if (not seed) {
+      return;
+    }
+    const auto seed_idx = seed->type_index();
+    if (not is_structural(seed_idx)) {
+      sig.push_back(static_cast<std::byte>(seed_idx));
+
+      return;
+      ;
+    }
+    // sentinel structural types get handled by the regular visit below
+  }
+  const auto visitor = detail::overload{
+    [&sig, &rb, seed](node_list& v) {
+      const auto* ls = caf::get_if<list_type>(seed);
+      if (seed and not ls) {
+        rb.emit_or_throw(diagnostic::warning("event field is a list, but the "
+                                             "schema does not expect a list"));
+      }
+      if (v.affects_signature() or ls) {
+        v.append_to_signature(sig, rb, ls);
+      }
+    },
+    [&sig, &rb, seed](node_record& v) {
+      const auto* rs = caf::get_if<record_type>(seed);
+      if (seed and not rs) {
+        rb.emit_or_throw(
+          diagnostic::warning("event field is a record, but the "
+                              "schema does not expect a record"));
+      }
+      if (v.affects_signature() or rs) {
+        v.append_to_signature(sig, rb, rs);
+      }
+    },
+    [&sig, &rb, seed, this](caf::none_t&) {
+      // none could be the result of pre-seeding or being built with a true null
+      // via the API for the first case we need to ensure we continue doing
+      // seeding if we have a seed
+      if (seed) {
+        if (auto sr = caf::get_if<tenzir::record_type>(seed)) {
+          return record()->append_to_signature(sig, rb, sr);
+        }
+        if (auto sl = caf::get_if<tenzir::list_type>(seed)) {
+          return list()->append_to_signature(sig, rb, sl);
+        }
+        sig.push_back(static_cast<std::byte>(seed->type_index()));
+      } else {
+        constexpr static auto type_idx
+          = caf::detail::tl_index_of<field_type_list, caf::none_t>::value;
+        sig.push_back(static_cast<std::byte>(type_idx));
+      }
+    },
+    [&sig, &rb, seed, this]<non_structured_data_type T>(T& v) {
+      constexpr static auto type_idx
+        = caf::detail::tl_index_of<field_type_list, T>::value;
+      auto result_index = type_idx;
+      if (seed and type_idx != seed->type_index()) {
+        const auto seed_idx = seed->type_index();
+        if constexpr (is_numeric(type_idx)) {
+          // numeric conversion if possible
+          if (is_numeric(seed_idx)) {
+            switch (seed_idx) {
+              case caf::detail::tl_index_of<field_type_list, int64_t>::value:
+                data(static_cast<int64_t>(v));
+                result_index
+                  = caf::detail::tl_index_of<field_type_list, int64_t>::value;
+                goto done;
+              case caf::detail::tl_index_of<field_type_list, uint64_t>::value:
+                data(static_cast<uint64_t>(v));
+                result_index
+                  = caf::detail::tl_index_of<field_type_list, uint64_t>::value;
+                goto done;
+              case caf::detail::tl_index_of<field_type_list, double>::value:
+                data(static_cast<double>(v));
+                result_index
+                  = caf::detail::tl_index_of<field_type_list, double>::value;
+                goto done;
+              case caf::detail::tl_index_of<field_type_list, enumeration>::value:
+                data(static_cast<enumeration>(v));
+                result_index = caf::detail::tl_index_of<field_type_list,
+                                                        enumeration>::value;
+                goto done;
+              default:
+                TENZIR_UNREACHABLE();
+            }
+          }
+        }
+        if (seed_idx == type_index_string) {
+          // stringify if possible
+          if constexpr (fmt::is_formattable<T>{}) {
+            data(fmt::format("{}", v));
+            result_index = type_index_string;
+            rb.emit_or_throw(diagnostic::warning(
+              "The provided schema requested a string, but the "
+              "parsed field "
+              "was typed data"
+              "This is most likely a shortcoming of the parser"));
+          }
+        }
+        rb.emit_or_throw(
+          diagnostic::warning("parsed field type (id: {}), does not match the "
+                              "type from the schema (id: {}). This is most "
+                              "likely a shortcoming of the parser",
+                              type_idx, seed_idx));
+      }
+    [[maybe_unused]] done:
+      sig.push_back(static_cast<std::byte>(result_index));
+    },
+    [&rb](auto&) {
+      TENZIR_UNREACHABLE();
+      rb.emit_or_throw(diagnostic::error("node_field::append_to_signature "
+                                         "UNREACHABLE"));
+    },
+  };
+  return std::visit(visitor, data_);
+}
+
+auto node_field::commit_to(tenzir::builder_ref r, class record_builder& rb,
+                           const tenzir::type* seed, bool mark_dead) -> void {
   if (mark_dead) {
     mark_this_dead();
   }
   const auto visitor = detail::overload{
-    [&r, mark_dead](node_list& v) {
+    [&r, &rb, seed, mark_dead](node_list& v) {
       if (v.is_alive()) {
-        v.commit_to(r.list(), mark_dead);
+        auto ls = caf::get_if<tenzir::list_type>(seed);
+        v.commit_to(r.list(), rb, ls, mark_dead);
       }
     },
-    [&r, mark_dead](node_record& v) {
+    [&r, &rb, seed, mark_dead](node_record& v) {
       if (v.is_alive()) {
-        v.commit_to(r.record(), mark_dead);
+        auto rs = caf::get_if<tenzir::record_type>(seed);
+        v.commit_to(r.record(), rb, rs, mark_dead);
       }
     },
-    [&r]<non_structured_data_type T>(T& v) {
+    [&r, &rb, seed, this]<non_structured_data_type T>(T& v) {
+      parse(rb, seed);
       r.try_data(v);
       // r.data(v);
     },
@@ -453,21 +719,24 @@ auto node_field::commit_to(builder_ref r, bool mark_dead) -> void {
   std::visit(visitor, data_);
 }
 
-auto node_field::commit_to(tenzir::data& r, bool mark_dead) -> void {
+auto node_field::commit_to(tenzir::data& r, class record_builder& rb,
+                           const tenzir::type* seed, bool mark_dead) -> void {
   if (mark_dead) {
     mark_this_dead();
   }
   const auto visitor = detail::overload{
-    [&r, mark_dead](node_list& v) {
+    [&r, &rb, seed, mark_dead](node_list& v) {
       if (v.is_alive()) {
+        auto ls = caf::get_if<tenzir::list_type>(seed);
         r = tenzir::list{};
-        v.commit_to(caf::get<tenzir::list>(r), mark_dead);
+        v.commit_to(caf::get<tenzir::list>(r), rb, ls, mark_dead);
       }
     },
-    [&r, mark_dead](node_record& v) {
+    [&r, &rb, seed, mark_dead](node_record& v) {
       if (v.is_alive()) {
+        auto rs = caf::get_if<tenzir::record_type>(seed);
         r = tenzir::record{};
-        v.commit_to(caf::get<tenzir::record>(r), mark_dead);
+        v.commit_to(caf::get<tenzir::record>(r), rb, rs, mark_dead);
       }
     },
     [&r, mark_dead]<non_structured_data_type T>(T& v) {
@@ -605,58 +874,114 @@ auto node_list::list() -> node_list* {
   }
 }
 
-auto node_list::reseed(const tenzir::list_type& seed) -> void {
-  const auto& value_type = seed.value_type();
-  const auto visitor = detail::overload{
-    [&]<basic_type T>(const T&) {
-      update_type_index(
-        type_index_, caf::detail::tl_index_of<field_type_list,
-                                              tenzir::type_to_data<T>>::value);
-    },
-    [&](const enumeration_type&) {
-      update_type_index(
-        type_index_,
-        caf::detail::tl_index_of<field_type_list, tenzir::enumeration>::value);
-    },
-    [&](const tenzir::record_type&) {
-      update_type_index(
-        type_index_,
-        caf::detail::tl_index_of<field_type_list, node_record>::value);
-    },
-    [&](const tenzir::list_type&) {
-      update_type_index(
-        type_index_,
-        caf::detail::tl_index_of<field_type_list, node_list>::value);
-    },
-    [&](const auto&) {
-      TENZIR_UNREACHABLE();
-    },
-  };
-  caf::visit(visitor, value_type);
+auto node_list::append_to_signature(signature_type& sig,
+                                    class record_builder& rb,
+                                    const tenzir::list_type* seed) -> void {
+  sig.push_back(list_start_marker);
+  if (is_numeric(type_index_) or type_index_ == type_index_numeric_mismatch) {
+    // first, we handle the case where the current index is numeric
+    // this has special handling, as it will try to convert to the seed type or
+    // to double.
+    size_t result_index = type_index_;
+    if (seed) {
+      auto seed_idx = seed->value_type().type_index();
+      if (seed_idx != type_index_) {
+        if (seed_idx == type_index_double) {
+          rb.emit_or_throw(
+            diagnostic::warning("numeric type mismatch between list elements "
+                                "and the selected schema. A conversion to "
+                                "'double' will be performed"));
+          goto numeric_mismatch_handling;
+        } else {
+          goto generic_mismatch_handling;
+        }
+      }
+    } else if (type_index_ == type_index_numeric_mismatch) {
+    numeric_mismatch_handling:
+      for (auto& e : data_) {
+        e.cast_to<double>();
+      }
+      result_index = type_index_double;
+    }
+    sig.push_back(static_cast<std::byte>(result_index));
+  } else if (is_structural(type_index_)
+             or type_index_ == type_index_generic_mismatch) {
+  generic_mismatch_handling:
+    // this  case also applies when there is any unparsed fields
+    // in the generic "mismatch" handling, we need to iterate every element of
+    // the list we first append an elements signature, and then check if its
+    // identical to the last one we already appended this ensures that if all
+    // elements truly have the same signature, the element count of the list no
+    // longer matters.
+    // Since we need to iterate all elements in the structural case anyways, its
+    // equivalent to the generic mismatch case.
+    tenzir::type seed_type;
+    tenzir::type* seed_type_ptr = nullptr;
+    if (seed) {
+      seed_type = seed->value_type();
+      seed_type_ptr = &seed_type;
+    }
+    auto last_sig_index = 0;
+    if (seed and data_.empty()) {
+      node_field sentinel;
+      sentinel.state_ = state::sentinel;
+      return sentinel.append_to_signature(sig, rb, seed_type_ptr);
+    }
+    for (auto& v : data_) {
+      auto next_sig_index = sig.size();
+      v.append_to_signature(sig, rb, seed_type_ptr);
+      if (last_sig_index != 0) {
+        const auto last_signatures_match = std::ranges::equal(
+          std::span{sig.begin() + last_sig_index, sig.begin() + next_sig_index},
+          std::span{sig.begin() + next_sig_index, sig.end()});
+        if (last_signatures_match) {
+          // drop the last appended signature
+          sig.erase(sig.begin() + last_sig_index, sig.end());
+        }
+        last_sig_index = next_sig_index;
+      }
+    }
+    // err = caf::make_error(ec::type_clash, "list element type mismatch");
+    // if (seed) {
+
+    // }
+  } else {
+    // finally the happy case where our predetermined index is usable (its not
+    // structural and not a mismatch index)
+    sig.push_back(static_cast<std::byte>(type_index_));
+  }
+  // done:
+  sig.push_back(list_end_marker);
 }
 
-auto node_list::commit_to(builder_ref r, bool mark_dead) -> void {
+auto node_list::commit_to(builder_ref r, class record_builder& rb,
+                          const tenzir::list_type* seed,
+                          bool mark_dead) -> void {
   if (mark_dead) {
     type_index_ = type_index_empty;
     mark_this_dead();
   }
+  auto field_seed = seed ? seed->value_type() : tenzir::type{};
   for (auto& v : data_) {
     if (v.is_alive()) {
-      v.commit_to(r, mark_dead);
+      v.commit_to(r, rb, seed ? &field_seed : nullptr, mark_dead);
     } else {
       break;
     }
   }
 }
-auto node_list::commit_to(tenzir::list& r, bool mark_dead) -> void {
+auto node_list::commit_to(tenzir::list& l, class record_builder& rb,
+                          const tenzir::list_type* seed,
+                          bool mark_dead) -> void {
   if (mark_dead) {
     type_index_ = type_index_empty;
     mark_this_dead();
   }
+  auto field_seed = seed ? seed->value_type() : tenzir::type{};
   for (auto& v : data_) {
     if (v.is_alive()) {
-      auto& d = r.emplace_back();
-      v.commit_to(d, mark_dead);
+      auto& d = l.emplace_back();
+      v.commit_to(d, rb, seed ? &field_seed : nullptr, mark_dead);
     } else {
       break;
     }

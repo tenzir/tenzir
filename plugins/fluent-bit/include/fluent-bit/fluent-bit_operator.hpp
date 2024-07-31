@@ -219,15 +219,16 @@ namespace {
 /// A map of key-value pairs of Fluent Bit plugin configuration options.
 using property_map = std::map<std::string, std::string>;
 
-inline auto to_property_map( const std::optional<tenzir::record>& rec ) -> property_map {
+inline auto
+to_property_map(const std::optional<tenzir::record>& rec) -> property_map {
   auto res = property_map{};
 
-  if ( not rec ) {
+  if (not rec) {
     return res;
   }
 
-  for ( const auto& [key, value] : *rec ) {
-    const auto [ it, inserted ] = res.try_emplace( key, fmt::format("{}",value) );
+  for (const auto& [key, value] : *rec) {
+    const auto [it, inserted] = res.try_emplace(key, fmt::format("{}", value));
     TENZIR_ASSERT(inserted);
   }
   return res;
@@ -514,7 +515,8 @@ private:
   std::unique_ptr<std::mutex> buffer_mtx_{}; ///< Protects the shared buffer
 };
 
-auto add(auto field, const msgpack_object& object, bool decode = false) -> void {
+auto add(auto field, const msgpack_object& object,
+         bool decode = false) -> void {
   auto f = detail::overload{
     [&](std::nullopt_t) {
       field.null();
@@ -583,7 +585,8 @@ public:
   fluent_bit_operator() = default;
 
   fluent_bit_operator(operator_args operator_args,
-                      multi_series_builder_options builder_options, record config)
+                      multi_series_builder_options builder_options,
+                      record config)
     : operator_args_{std::move(operator_args)},
       builder_options_{std::move(builder_options)},
       config_{std::move(config)} {
@@ -600,12 +603,11 @@ public:
     }
     auto& engine = *engine_expected;
     // auto builder = series_builder{};
-    auto schemas = detail::multi_series_builder::get_schemas_unnested(
-      true, not builder_options_.settings.unnest_separator.empty());
-    auto msb
-      = multi_series_builder{builder_options_.policy,
-                             builder_options_.settings,
-                             record_builder::basic_parser, std::move(schemas)};
+    auto msb = multi_series_builder{
+      builder_options_.policy,
+      builder_options_.settings,
+      modules::schemas(),
+    };
     auto parse = [this, &ctrl, &msb](chunk_ptr chunk) {
       // What we're getting here is the typical Fluent Bit array consisting of
       // the following format, as described in
@@ -800,5 +802,5 @@ private:
   record config_;
 };
 
-}
-}
+} // namespace
+} // namespace tenzir::plugins::fluentbit

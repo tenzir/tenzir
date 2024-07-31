@@ -65,7 +65,8 @@ std::string unescape(std::string_view value) {
 /// downstream processing.
 /// @param extension The string value of the extension field.
 /// @returns A vector of key-value pairs with properly unescaped values.
-auto parse_extension(std::string_view extension, auto builder) -> std::optional<diagnostic> {
+auto parse_extension(std::string_view extension,
+                     auto builder) -> std::optional<diagnostic> {
   if (extension.empty()) {
     return {};
   }
@@ -93,7 +94,8 @@ auto parse_extension(std::string_view extension, auto builder) -> std::optional<
   return {};
 }
 
-auto parse_line(std::string_view line, multi_series_builder& msb) -> std::optional<diagnostic> {
+auto parse_line(std::string_view line,
+                multi_series_builder& msb) -> std::optional<diagnostic> {
   using namespace std::string_view_literals;
   auto fields = detail::split_escaped(line, "|", "\\", 8);
   if (fields.size() < 7 or fields.size() > 8) {
@@ -126,11 +128,11 @@ auto parse_line(std::string_view line, multi_series_builder& msb) -> std::option
 auto parse_loop(generator<std::optional<std::string_view>> lines,
                 diagnostic_handler& diag,
                 multi_series_builder_options options) -> generator<table_slice> {
-  auto schemas = detail::multi_series_builder::get_schemas_unnested(
-    true, not options.settings.unnest_separator.empty());
-  auto msb
-    = multi_series_builder{options.policy, options.settings,
-                           record_builder::basic_parser, std::move(schemas)};
+  auto msb = multi_series_builder{
+    options.policy,
+    options.settings,
+    modules::schemas(),
+  };
   size_t line_counter = 0;
   for (auto&& line : lines) {
     for (auto& v : msb.yield_ready_as_table_slice()) {
@@ -153,9 +155,9 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       diagnostic_builder{std::move(*d)}.hint("note {}", line_counter).emit(diag);
     }
   }
-    for (auto& e : msb.last_errors()) {
-      diag.emit(std::move(e));
-    }
+  for (auto& e : msb.last_errors()) {
+    diag.emit(std::move(e));
+  }
   for (auto& slice : msb.finalize_as_table_slice()) {
     co_yield std::move(slice);
   }
@@ -168,7 +170,8 @@ public:
   }
 
   cef_parser() = default;
-  cef_parser(multi_series_builder_options options) : options_{std::move(options)} {
+  cef_parser(multi_series_builder_options options)
+    : options_{std::move(options)} {
     options_.settings.parser_name = "cef.event";
   }
 

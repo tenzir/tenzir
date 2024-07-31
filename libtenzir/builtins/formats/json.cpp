@@ -131,8 +131,6 @@ inline auto split_at_null(generator<chunk_ptr> input, char split)
   }
 }
 
-
-
 /// Parses simdjson objects into the given `series_builder` handles.
 class doc_parser {
 public:
@@ -279,16 +277,16 @@ private:
     }
     // TODO because of this it would be better to adapt the multi_series_builder
     if constexpr (std::same_as<decltype(builder), builder_ref>) {
-      auto res = record_builder::non_number_parser(maybe_str.value_unsafe(), nullptr);
-      auto& [ value, diag ] = res;
+      auto res = detail::record_builder::non_number_parser(
+        maybe_str.value_unsafe(), nullptr);
+      auto& [value, diag] = res;
       if (diag) {
         diag_.emit(std::move(*diag));
       }
-      if ( value ) {
-        builder.data( std::move(*value) );
-      }
-      else {
-        builder.data( maybe_str.value_unsafe() );
+      if (value) {
+        builder.data(std::move(*value));
+      } else {
+        builder.data(maybe_str.value_unsafe());
       }
     } else {
       builder.data_unparsed(std::string{maybe_str.value_unsafe()});
@@ -366,9 +364,9 @@ private:
 class parser_base {
 public:
   parser_base(operator_control_plane& ctrl,
-              multi_series_builder_options options, std::vector<type> schemas)
+              multi_series_builder_options options)
     : builder{std::move(options.policy), std::move(options.settings),
-              record_builder::non_number_parser, std::move(schemas)},
+              modules::schemas(), detail::record_builder::non_number_parser},
       ctrl{ctrl} {
   }
 
@@ -428,9 +426,8 @@ private:
 class default_parser final : public parser_base {
 public:
   default_parser(operator_control_plane& ctrl,
-                 multi_series_builder_options options,
-                 std::vector<type> schemas, bool arrays_of_objects)
-    : parser_base{ctrl, std::move(options), std::move(schemas)},
+                 multi_series_builder_options options, bool arrays_of_objects)
+    : parser_base{ctrl, std::move(options)},
       arrays_of_objects_{arrays_of_objects} {
   }
 
@@ -600,13 +597,11 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    auto schemas = args_.builder_options.get_schemas();
     if (args_.use_ndjson_mode) {
       return parser_loop(split_at_crlf(std::move(input)),
                          ndjson_parser{
                            ctrl,
                            args_.builder_options,
-                           std::move(schemas),
                          });
     }
     if (args_.use_gelf_mode) {
@@ -614,13 +609,11 @@ public:
                          ndjson_parser{
                            ctrl,
                            args_.builder_options,
-                           std::move(schemas),
                          });
     }
     return parser_loop(std::move(input), default_parser{
                                            ctrl,
                                            args_.builder_options,
-                                           std::move(schemas),
                                            args_.arrays_of_objects,
                                          });
   }
@@ -811,11 +804,11 @@ public:
         .primary(*legacy_precise)
         .throw_();
     }
-    if ( legacy_no_infer and args.builder_options.settings.expand_schema ) {
+    if (legacy_no_infer and args.builder_options.settings.expand_schema) {
       diagnostic::error("`--no-infer` and `--expand_schema` are incompatible.")
         .primary(*legacy_no_infer)
         .primary(*msb_parser.expand_schema_)
-        .note( "`--no-infer` is a legacy option.")
+        .note("`--no-infer` is a legacy option.")
         .throw_();
     }
 
@@ -1142,7 +1135,7 @@ public:
               const auto res
                 = doc_p.parse_value(doc.get_value(), builder_ref{b}, 0);
               if (not res) {
-                //FIXME only remove last if no value has been added
+                // FIXME only remove last if no value has been added
                 diagnostic::warning("could not parse json")
                   .primary(call)
                   .emit(ctx);

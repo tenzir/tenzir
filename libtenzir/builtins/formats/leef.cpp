@@ -220,11 +220,11 @@ auto parse_line(std::string_view line,
 auto parse_loop(generator<std::optional<std::string_view>> lines,
                 diagnostic_handler& diag,
                 multi_series_builder_options options) -> generator<table_slice> {
-  auto schemas = detail::multi_series_builder::get_schemas_unnested(
-    true, not options.settings.unnest_separator.empty());
-  auto msb
-    = multi_series_builder{options.policy, options.settings,
-                           record_builder::basic_parser, std::move(schemas)};
+  auto msb = multi_series_builder{
+    options.policy,
+    options.settings,
+    modules::schemas(),
+  };
   size_t line_counter = 0;
   for (auto&& line : lines) {
     for (auto& v : msb.yield_ready_as_table_slice()) {

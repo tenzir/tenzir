@@ -36,7 +36,8 @@ namespace {
 constexpr auto document_end_marker = "...";
 constexpr auto document_start_marker = "---";
 
-auto parse_node(auto guard, const YAML::Node& node, diagnostic_handler& diag) -> void {
+auto parse_node(auto guard, const YAML::Node& node,
+                diagnostic_handler& diag) -> void {
   switch (node.Type()) {
     case YAML::NodeType::Undefined: {
       diagnostic::warning("yaml parser encountered undefined field").emit(diag);
@@ -53,7 +54,7 @@ auto parse_node(auto guard, const YAML::Node& node, diagnostic_handler& diag) ->
       }
       // TODO: Do not attempt to parse pattern, map, list, and record here.
       const auto& value_str = node.Scalar();
-        guard.data_unparsed(value_str);
+      guard.data_unparsed(value_str);
       return;
     }
     case YAML::NodeType::Sequence: {
@@ -66,8 +67,7 @@ auto parse_node(auto guard, const YAML::Node& node, diagnostic_handler& diag) ->
       auto record = guard.record();
       for (const auto& element : node) {
         const auto& name = element.first.as<std::string>();
-        parse_node(record.unflattend_field(name), element.second,
-                   diag);
+        parse_node(record.unflattend_field(name), element.second, diag);
       }
       return;
     }
@@ -85,7 +85,7 @@ auto load_document(multi_series_builder& msb, std::string&& document,
     }
     for (const auto& element : node) {
       const auto& name = element.first.as<std::string>();
-      parse_node(record.unflattend_field(name), element.second, diag );
+      parse_node(record.unflattend_field(name), element.second, diag);
     }
   } catch (const YAML::Exception& err) {
     diagnostic::warning("failed to load YAML document: {}", err.what())
@@ -97,11 +97,12 @@ auto load_document(multi_series_builder& msb, std::string&& document,
 auto parse_loop(generator<std::optional<std::string_view>> lines,
                 diagnostic_handler& diag,
                 multi_series_builder_options options) -> generator<table_slice> {
-  auto schemas = detail::multi_series_builder::get_schemas_unnested(
-    true, not options.settings.unnest_separator.empty());
-  auto msb
-    = multi_series_builder{options.policy, options.settings,
-                           record_builder::non_number_parser, std::move(schemas)};
+  auto msb = multi_series_builder{
+    options.policy,
+    options.settings,
+    modules::schemas(),
+    detail::record_builder::non_number_parser,
+  };
   auto document = std::string{};
   for (auto&& line : lines) {
     for (auto& v : msb.yield_ready_as_table_slice()) {
@@ -132,9 +133,9 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
   if (not document.empty()) {
     load_document(msb, std::exchange(document, {}), diag);
   }
-      for (auto& e : msb.last_errors()) {
-      diag.emit(std::move(e));
-    }
+  for (auto& e : msb.last_errors()) {
+    diag.emit(std::move(e));
+  }
   for (auto& slice : msb.finalize_as_table_slice()) {
     co_yield std::move(slice);
   }

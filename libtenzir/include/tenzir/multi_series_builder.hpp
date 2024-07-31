@@ -158,24 +158,6 @@ private:
   std::variant<tenzir::builder_ref, raw_pointer> var_;
 };
 
-inline auto
-get_schemas_unnested(bool actually_do_it, bool unflatten) -> std::vector<type> {
-  std::vector<type> ret;
-  if (not actually_do_it) {
-    return ret;
-  }
-  ret = modules::schemas();
-  // FIXME this should no longer flatten
-  if (not unflatten) {
-    return ret;
-  }
-  constexpr static auto flatten_in_place = [](type& t) {
-    t = flatten(t);
-  };
-  std::ranges::for_each(ret, flatten_in_place);
-  return ret;
-}
-
 struct diagnostic_handler : tenzir::diagnostic_handler {
   virtual void emit(diagnostic d) override {
     diagnostics.push_back(std::move(d));
@@ -295,12 +277,15 @@ public:
     }
   };
 
-  template <detail::record_builder::data_parsing_function Parser>
+  template <detail::record_builder::data_parsing_function Parser
+            = decltype(detail::record_builder::basic_parser)>
   multi_series_builder(policy_type policy, settings_type settings,
-                       Parser&& parser, std::vector<type> schemas = {})
+                       std::vector<type> schemas = {},
+                       Parser&& parser = detail::record_builder::basic_parser)
     : policy_{std::move(policy)},
       settings_{std::move(settings)},
-      parser_{std::forward<Parser>(parser)} {
+      builder_raw_{std::forward<Parser>(parser), dh_.get(),
+                   settings_.expand_schema, settings_.raw} {
     schemas_.reserve(schemas.size());
     for (auto t : schemas) {
       const auto [it, success] = schemas_.try_emplace(t.name(), std::move(t));
@@ -308,7 +293,7 @@ public:
     }
     if (auto p = get_policy<policy_merge>()) {
       settings_.ordered = true; // merging mode is necessarily ordered
-      merging_builder_ = series_builder{ p->seed_schema };
+      merging_builder_ = series_builder{p->seed_schema};
     }
   }
 
@@ -379,9 +364,11 @@ private:
 
   policy_type policy_;
   settings_type settings_;
-  parser_function_type parser_;
   detail::flat_map<std::string, tenzir::type> schemas_;
-
+  std::unique_ptr<detail::multi_series_builder::diagnostic_handler> dh_
+    = std::make_unique<
+      detail::multi_series_builder::diagnostic_handler>(); // must be initialized
+                                                           // before builder_raw_
   record_builder builder_raw_;
   signature_type signature_raw_;
   tsl::robin_map<signature_type, size_t, detail::hash_algorithm_proxy<>>
@@ -389,7 +376,6 @@ private:
   series_builder merging_builder_;
   std::vector<entry_data> entries_;
   std::vector<series> ready_events_;
-  detail::multi_series_builder::diagnostic_handler dh_;
   std::chrono::steady_clock::time_point last_yield_time_
     = std::chrono::steady_clock::now();
   size_t active_index_ = 0;
