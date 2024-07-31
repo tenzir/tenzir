@@ -39,17 +39,10 @@ auto parse_selector(std::string_view x, location source) -> selector {
 }
 } // namespace
 
-void add_schema_only_option(argument_parser& parser,
-                            std::optional<location>& schema_only) {
-  parser.add("--no-infer", schema_only);
-}
-void add_schema_only_option(argument_parser2& parser,
-                            std::optional<location>& schema_only) {
-  parser.add("no_extra_fields", schema_only);
-}
 auto multi_series_builder_argument_parser::add_settings_to_parser(
   argument_parser& parser, bool no_unflatten_option) -> void {
-  add_schema_only_option(parser, schema_only_);
+  is_tql1_ = true;
+  parser.add("--expand-schema", expand_schema_);
   parser.add("--raw", raw_);
   if (not no_unflatten_option) {
     parser.add("--unnest-separator", unnest_, "<nested-key-separator>");
@@ -58,6 +51,7 @@ auto multi_series_builder_argument_parser::add_settings_to_parser(
 
 auto multi_series_builder_argument_parser::add_policy_to_parser(
   argument_parser& parser) -> void {
+  is_tql1_ = true;
   parser.add("--merge", merge_);
   parser.add("--schema", schema_, "<schema>");
   parser.add("--selector", selector_, "<selector>");
@@ -70,7 +64,7 @@ auto multi_series_builder_argument_parser::add_all_to_parser(
 
 auto multi_series_builder_argument_parser::add_settings_to_parser(
   argument_parser2& parser, bool no_unflatten_option) -> void {
-  add_schema_only_option(parser, schema_only_);
+  parser.add("expand_schema", expand_schema_);
   parser.add("raw", raw_);
   if (not no_unflatten_option) {
     parser.add("unflatten", unnest_);
@@ -92,11 +86,16 @@ auto multi_series_builder_argument_parser::add_all_to_parser(
 auto multi_series_builder_argument_parser::get_settings()
   -> multi_series_builder::settings_type& {
   policy_ = get_policy();
-  if ( schema_only_ ) {
-    if ( not multi_series_builder::specifies_schema(policy_) ) {
-      diagnostic::error("`--raw` requires a schema to be set via `--schema` or `--selector`")
-      .primary(*schema_only_)
-      .throw_();
+  if (not expand_schema_ and schema_) { // if a schema is set and expand_schema is false (the default)
+    if ( auto* p = std::get_if<multi_series_builder::policy_precise>(&policy_)) {
+      if ( not p->seed_schema ) {
+        diagnostic::error(
+          "`--expand_schema` specified, but given `--schema` does not exist")
+          .primary(*expand_schema_)
+          .primary(*schema_)
+          .note("schema `{}` could not be found", schema_->inner )
+          .throw_();
+      }
     }
   }
   if (unnest_) {
@@ -123,7 +122,7 @@ auto multi_series_builder_argument_parser::get_settings()
       .throw_();
   }
   settings_.raw = raw_.has_value();
-  settings_.schema_only = schema_only_.has_value();
+  settings_.expand_schema = expand_schema_.has_value();
   return settings_;
 }
 
@@ -156,9 +155,9 @@ auto multi_series_builder_argument_parser::get_policy()
   }
   if (has_merge) {
     if (has_schema) {
-      settings_.default_name = schema_->inner;
-      policy_
-        = multi_series_builder::policy_merge{.seed_schema = schema_->inner};
+      auto t = type_for_schema(schema_->inner);
+      policy_ = multi_series_builder::policy_merge{
+        .seed_schema = t ? *t : std::optional<tenzir::type>{}};
     } else {
       policy_ = multi_series_builder::policy_merge{};
     }
@@ -170,8 +169,10 @@ auto multi_series_builder_argument_parser::get_policy()
       std::move(*prefix),
     };
   } else if (has_schema) {
-    policy_
-      = multi_series_builder::policy_precise{.seed_schema = schema_->inner};
+    // merge is already handled above
+    auto t = type_for_schema(schema_->inner);
+    policy_ = multi_series_builder::policy_precise{
+      .seed_schema = t ? *t : std::optional<tenzir::type>{}};
   } else if (not has_manual_defaults_) {
     policy_ = multi_series_builder::policy_precise{};
   }
@@ -179,28 +180,10 @@ auto multi_series_builder_argument_parser::get_policy()
   return policy_;
 }
 
-auto multi_series_builder_options::get_schemas() const
-  -> std::vector<tenzir::type> {
-  auto res = detail::multi_series_builder::get_schemas_unnested(
-    multi_series_builder::specifies_schema(policy),
-    not settings.unnest_separator.empty());
-
-  if (settings.schema_only) {
-    if (auto p = std::get_if<multi_series_builder::policy_precise>(&policy);
-        p and p->seed_schema) {
-      for (const auto& s : res) {
-        if (s.name() == p->seed_schema) {
-          return res;
-        }
-      }
-      diagnostic::error("no known schema for `--no-infer`")
-        .note("schema `{}` was specified, but no schema by that name could be "
-              "found",
-              p->seed_schema)
-        .throw_();
-    }
+auto multi_series_builder_options::get_schemas() const -> std::vector<tenzir::type> {
+  if ( auto* p = std::get_if<multi_series_builder::policy_selector>(&policy) ) {
+    return modules::schemas();
   }
-
-  return res;
+  return {};
 }
 } // namespace tenzir

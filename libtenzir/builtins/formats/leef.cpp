@@ -265,7 +265,7 @@ public:
 
   leef_parser(multi_series_builder_options options)
     : options_{std::move(options)} {
-    options_.settings.default_name = "leef.event";
+    options_.settings.parser_name = "leef.event";
   }
 
   auto optimize(event_order order) -> std::unique_ptr<plugin_parser> override {

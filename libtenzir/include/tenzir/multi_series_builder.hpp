@@ -165,6 +165,7 @@ get_schemas_unnested(bool actually_do_it, bool unflatten) -> std::vector<type> {
     return ret;
   }
   ret = modules::schemas();
+  // FIXME this should no longer flatten
   if (not unflatten) {
     return ret;
   }
@@ -226,7 +227,7 @@ public:
   struct policy_merge {
     static constexpr std::string_view name = "merge";
     // a schema name to seed with. If this is given
-    std::optional<std::string> seed_schema = {};
+    std::optional<tenzir::type> seed_schema = {};
 
     auto friend inspect(auto& f, policy_merge& x) -> bool {
       return f.object(x).fields(f.field("seed_schema", x.seed_schema));
@@ -238,7 +239,7 @@ public:
     static constexpr std::string_view name = "precise";
     // If this is given, all resulting events will have exactly this schema
     // * all fields in the schema but not in the event will be null
-    std::optional<std::string> seed_schema = {};
+    std::optional<tenzir::type> seed_schema = {};
 
     auto friend inspect(auto& f, policy_precise& x) -> bool {
       return f.object(x).fields(f.field("seed_schema", x.seed_schema));
@@ -269,12 +270,11 @@ public:
 
   struct settings_type {
     // the default name given to a schema
-    std::string default_name = "tenzir.unknown";
+    std::string parser_name = "tenzir.unknown";
     // whether the output should adhere to the input order
     bool ordered = true;
-    // if the given policy finds a schema, only fields from that schema should
-    // be present in the output and extra fields should be discarded
-    bool schema_only = false;
+    // whether a known schema should be expanded.
+    bool expand_schema = false;
     // whether to not parse fields that are not present in a schema
     bool raw = false;
     // unnest separator to be used when calling any `field` in the builder pattern
@@ -287,8 +287,10 @@ public:
 
     auto friend inspect(auto& f, settings_type& x) -> bool {
       return f.object(x).fields(
-        f.field("default_name", x.default_name), f.field("ordered", x.ordered),
-        f.field("schema_only", x.schema_only), f.field("timeout", x.timeout),
+        f.field("default_name", x.parser_name), f.field("ordered", x.ordered),
+        f.field("expand_schema", x.expand_schema), f.field("raw", x.raw),
+        f.field("unnest_separator", x.unnest_separator),
+        f.field("timeout", x.timeout),
         f.field("desired_batch_size", x.desired_batch_size));
     }
   };
@@ -306,8 +308,7 @@ public:
     }
     if (auto p = get_policy<policy_merge>()) {
       settings_.ordered = true; // merging mode is necessarily ordered
-      merging_builder_ = series_builder{
-        type_for_schema(p->seed_schema.value_or(settings_.default_name))};
+      merging_builder_ = series_builder{ p->seed_schema };
     }
   }
 

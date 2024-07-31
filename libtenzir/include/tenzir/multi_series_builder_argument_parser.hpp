@@ -45,6 +45,7 @@ void add_schema_only_option(argument_parser2& parser,
 /// simple utility to parse the command line arguments for a
 /// multi_series_builder's settings and policy
 struct multi_series_builder_argument_parser {
+public:
   multi_series_builder_argument_parser() = default;
   multi_series_builder_argument_parser(
     multi_series_builder::settings_type settings,
@@ -54,7 +55,6 @@ struct multi_series_builder_argument_parser {
       policy_{std::move(policy)} {
   }
 
-public:
   auto add_settings_to_parser(argument_parser& parser, bool no_unflatten_option
                                                        = false) -> void;
   auto add_policy_to_parser(argument_parser& parser) -> void;
@@ -71,15 +71,33 @@ public:
     };
   }
 
+protected:
   auto get_settings() -> multi_series_builder::settings_type&;
   auto get_policy() -> multi_series_builder::policy_type&;
+
+  auto type_for_schema(std::string_view name) -> const tenzir::type* {
+    if (schemas_.empty()) {
+      schemas_ = modules::schemas();
+    }
+    const auto it
+      = std::find_if(schemas_.begin(), schemas_.end(), [name](const auto& t) {
+          return t.name() == name;
+        });
+    if (it == schemas_.end()) {
+      return nullptr;
+    } else {
+      return std::addressof(*it);
+    }
+  }
 
   // If we leave these public, the json parser can keep supporting its old
   // options by checking/setting values here
   // TODO do we even want that?
+  public :
 
-  // private:
+  std::vector<tenzir::type> schemas_;
   bool has_manual_defaults_ = false;
+  bool is_tql1_ = false;
   multi_series_builder::settings_type settings_ = {};
   multi_series_builder::policy_type policy_
     = multi_series_builder::policy_precise{};
@@ -93,7 +111,7 @@ public:
   std::optional<located<std::string>> selector_;
 
   // settings
-  std::optional<location> schema_only_;
+  std::optional<location> expand_schema_;
   std::optional<located<std::string>> unnest_;
   std::optional<location> raw_;
 };

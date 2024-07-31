@@ -766,15 +766,17 @@ public:
       = argument_parser{name(), "https://docs.tenzir.com/formats/json"};
     parser_args args;
     multi_series_builder_argument_parser msb_parser{
-      {.default_name = "tenzir.json"},
+      {.parser_name = "tenzir.json"},
       multi_series_builder::policy_precise{},
     };
     msb_parser.add_all_to_parser(parser);
     std::optional<location> legacy_precise;
+    std::optional<location> legacy_no_infer;
     std::optional<location> use_ndjson_mode;
     std::optional<location> use_gelf_mode;
     std::optional<location> arrays_of_objects;
     parser.add("--precise", legacy_precise);
+    parser.add("--no-infer", legacy_no_infer);
     parser.add("--ndjson", use_ndjson_mode);
     parser.add("--gelf", use_gelf_mode);
     parser.add("--arrays-of-objects", arrays_of_objects);
@@ -807,6 +809,13 @@ public:
           &args.builder_options.policy)) {
       diagnostic::error("`--precise` and `--merge` are incompatible.")
         .primary(*legacy_precise)
+        .throw_();
+    }
+    if ( legacy_no_infer and args.builder_options.settings.expand_schema ) {
+      diagnostic::error("`--no-infer` and `--expand_schema` are incompatible.")
+        .primary(*legacy_no_infer)
+        .primary(*msb_parser.expand_schema_)
+        .note( "`--no-infer` is a legacy option.")
         .throw_();
     }
 
@@ -843,7 +852,7 @@ public:
     auto parser = argument_parser{
       name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
     auto msb_parser = multi_series_builder_argument_parser{
-      multi_series_builder::settings_type{.default_name = "gelf"},
+      multi_series_builder::settings_type{.parser_name = "gelf"},
       multi_series_builder::policy_precise{},
     };
     msb_parser.add_all_to_parser(parser);
@@ -871,7 +880,7 @@ public:
     auto args = parser_args{};
     auto msb_parser = multi_series_builder_argument_parser{
       multi_series_builder::settings_type{
-        .default_name = std::string{Prefix.str()},
+        .parser_name = std::string{Prefix.str()},
         .unnest_separator = std::string{Separator.str()},
       },
       multi_series_builder::policy_selector{
@@ -1062,7 +1071,7 @@ public:
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{
       multi_series_builder::settings_type{
-        .default_name = std::string{Prefix.str()},
+        .parser_name = std::string{Prefix.str()},
         .unnest_separator = std::string{Separator.str()},
       },
       multi_series_builder::policy_selector{
@@ -1133,6 +1142,7 @@ public:
               const auto res
                 = doc_p.parse_value(doc.get_value(), builder_ref{b}, 0);
               if (not res) {
+                //FIXME only remove last if no value has been added
                 diagnostic::warning("could not parse json")
                   .primary(call)
                   .emit(ctx);

@@ -241,8 +241,9 @@ public:
   /// parses any unparsed fields using `parser`, potentially providing a
   /// seed/schema to the parser
   template <data_parsing_function Parser>
-  auto parse(Parser& parser, const tenzir::record_type* seed, bool schema_only,
-             bool dont_parse_non_seed, diagnostic_handler* dh) -> void;
+  auto parse(Parser& parser, const tenzir::record_type* seed,
+             bool allow_non_schema_fields, bool parse_seed_fields_only,
+             diagnostic_handler* dh) -> void;
 
 private:
   // tries to get a field with the given name. Does not affect any field state
@@ -261,8 +262,9 @@ private:
   auto
   append_to_signature(signature_type& sig, Parser& p,
                       const tenzir::record_type* seed,
-                      schema_type_lookup_map* lookup, bool schema_only,
-                      bool dont_parse_non_seed, diagnostic_handler* dh) -> void;
+                      schema_type_lookup_map* lookup,
+                      bool allow_non_schema_fields, bool parse_seed_fields_only,
+                      diagnostic_handler* dh) -> void;
   // clears the record by marking everything as dead
   auto clear() -> void;
 
@@ -317,8 +319,9 @@ public:
   /// parses any unparsed fields using `parser`, potentially providing a
   /// seed/schema to the parser
   template <data_parsing_function Parser>
-  auto parse(Parser& parser, const tenzir::list_type* seed, bool schema_only,
-             bool dont_parse_non_seed, diagnostic_handler* dh) -> void;
+  auto parse(Parser& parser, const tenzir::list_type* seed,
+             bool allow_non_schema_fields, bool parse_seed_fields_only,
+             diagnostic_handler* dh) -> void;
 
   auto combined_index() const -> size_t {
     return type_index_;
@@ -344,8 +347,9 @@ private:
   auto
   append_to_signature(signature_type& sig, Parser& p,
                       const tenzir::list_type* seed,
-                      schema_type_lookup_map* lookup, bool schema_only,
-                      bool dont_parse_non_seed, diagnostic_handler* dh) -> void;
+                      schema_type_lookup_map* lookup,
+                      bool allow_non_schema_fields, bool parse_seed_fields_only,
+                      diagnostic_handler* dh) -> void;
   auto clear() -> void;
 
   size_t type_index_ = type_index_empty;
@@ -413,15 +417,17 @@ private:
   /// parses any unparsed fields using `parser`, potentially providing a
   /// seed/schema to the parser
   template <data_parsing_function Parser>
-  auto parse(Parser& parser, const tenzir::type* seed, bool schema_only,
-             bool dont_parse_non_seed, diagnostic_handler* dh) -> void;
+  auto
+  parse(Parser& parser, const tenzir::type* seed, bool allow_non_schema_fields,
+        bool parse_seed_fields_only, diagnostic_handler* dh) -> void;
   // append the signature of this field to `sig`.
   // including sentinels is important for signature computation
   template <data_parsing_function Parser>
   auto
   append_to_signature(signature_type& sig, Parser& p, const tenzir::type* seed,
-                      schema_type_lookup_map* lookup, bool schema_only,
-                      bool dont_parse_non_seed, diagnostic_handler* dh) -> void;
+                      schema_type_lookup_map* lookup,
+                      bool allow_non_schema_fields, bool parse_seed_fields_only,
+                      diagnostic_handler* dh) -> void;
   // writes the field into a series builder
   auto commit_to(tenzir::builder_ref r, bool mark_dead = true) -> void;
   auto commit_to(tenzir::data& r, bool mark_dead = true) -> void;
@@ -501,11 +507,10 @@ public:
   using signature_type = typename detail::record_builder::signature_type;
   /// computes the "signature" of the currently built record.
   template <detail::record_builder::data_parsing_function Parser>
-  auto append_signature_to(signature_type&, Parser&& p,
-                           const tenzir::type* seed = nullptr,
-                           bool schema_only = false,
-                           bool dont_parse_non_seed = false,
-                           tenzir::diagnostic_handler* = nullptr) -> void;
+  auto
+  append_signature_to(signature_type&, Parser&& p, const tenzir::type* seed,
+                      bool allow_non_schema_fields, bool parse_seed_fields_only,
+                      tenzir::diagnostic_handler*) -> void;
 
   /// clears the builder
   void clear();
@@ -537,8 +542,8 @@ public:
   /// seed/schema to the parser
   template <detail::record_builder::data_parsing_function Parser>
   auto
-  parse(Parser&& parser, const tenzir::type* seed, bool schema_only,
-        bool dont_parse_non_seed, tenzir::diagnostic_handler* diag) -> void;
+  parse(Parser&& parser, const tenzir::type* seed, bool allow_non_schema_fields,
+        bool parse_seed_fields_only, tenzir::diagnostic_handler* diag) -> void;
 
 private:
   detail::record_builder::node_record root_;
@@ -555,48 +560,54 @@ auto record_builder::find_value_typed(std::string_view key) -> T* {
 
 template <detail::record_builder::data_parsing_function Parser>
 auto record_builder::append_signature_to(
-  signature_type& sig, Parser&& p, const tenzir::type* seed, bool schema_only,
-  bool dont_parse_non_seed, tenzir::diagnostic_handler* dh) -> void {
+  signature_type& sig, Parser&& p, const tenzir::type* seed,
+  bool allow_non_schema_fields, bool parse_seed_fields_only,
+  tenzir::diagnostic_handler* dh) -> void {
   auto* seed_as_record_type = caf::get_if<tenzir::record_type>(&*seed);
   if (seed) {
     if (seed_as_record_type) {
       return root_.append_to_signature(sig, p, seed_as_record_type,
-                                       &schema_type_lookup_, schema_only,
-                                       dont_parse_non_seed, dh);
+                                       &schema_type_lookup_,
+                                       allow_non_schema_fields,
+                                       parse_seed_fields_only, dh);
     } else {
       detail::record_builder::emit_or_throw(
         dh, diagnostic::warning("selected schema is not a record and will be "
                                 "ignored"));
     }
   }
-  root_.append_to_signature(sig, p, nullptr, nullptr, schema_only,
-                            dont_parse_non_seed, dh);
+  root_.append_to_signature(sig, p, nullptr, nullptr, allow_non_schema_fields,
+                            parse_seed_fields_only, dh);
 }
 
 template <detail::record_builder::data_parsing_function Parser>
 auto record_builder::parse(Parser&& p, const tenzir::type* seed,
-                           bool schema_only, bool dont_parse_non_seed,
+                           bool allow_non_schema_fields,
+                           bool parse_seed_fields_only,
                            diagnostic_handler* dh) -> void {
   if (seed) {
     if (auto seed_as_record = caf::get_if<tenzir::record_type>(&*seed)) {
-      return root_.parse(p, seed_as_record, schema_only, dont_parse_non_seed,
-                         dh);
+      return root_.parse(p, seed_as_record, allow_non_schema_fields,
+                         parse_seed_fields_only, dh);
     } else {
       detail::record_builder::emit_or_throw(
         dh, diagnostic::warning("schema is not a record"));
     }
   }
-  return parse(p, nullptr, schema_only, dont_parse_non_seed, dh);
+  return parse(p, nullptr, allow_non_schema_fields, parse_seed_fields_only, dh);
 }
 
 namespace detail::record_builder {
+
+// FIXME only use fields that are **NOT** in the seed for the signature
+//  this greatly speeds up its compute
 
 template <data_parsing_function Parser>
 auto node_record::append_to_signature(signature_type& sig, Parser& p,
                                       const tenzir::record_type* seed,
                                       schema_type_lookup_map* lookup,
-                                      bool schema_only,
-                                      bool dont_parse_non_seed,
+                                      bool allow_non_schema_fields,
+                                      bool parse_seed_fields_only,
                                       diagnostic_handler* dh) -> void {
   sig.push_back(record_start_marker);
   // if we have a seed, we need too ensure that all fields exist first
@@ -636,16 +647,21 @@ auto node_record::append_to_signature(signature_type& sig, Parser& p,
       continue;
     }
     if (seed) {
-      bool handled_by_seed = false;
       TENZIR_ASSERT(seed_it != lookup->end());
       const auto field_it = seed_it->second.find(k);
-      if (field_it != seed_it->second.end()) {
-        handled_by_seed = true;
+      if (field_it == seed_it->second.end()) {
+        if (not allow_non_schema_fields) {
+          field.mark_this_dead();
+          continue;
+        }
+      } else {
         const auto key_bytes = as_bytes(k);
         sig.insert(sig.end(), key_bytes.begin(), key_bytes.end());
 
         field.append_to_signature(sig, p, &(field_it->second), lookup,
-                                  schema_only, dont_parse_non_seed, dh);
+                                  allow_non_schema_fields,
+                                  parse_seed_fields_only, dh);
+        continue;
       }
       // break;
       // TODO this buggy break gives about 2.5x performance for suricata
@@ -658,25 +674,19 @@ auto node_record::append_to_signature(signature_type& sig, Parser& p,
       //
       // The question is what the cost would be for the resulting
       // event quality
-      if (handled_by_seed) {
-        continue;
-      }
-      if (schema_only) {
-        field.mark_this_dead();
-        continue;
-      }
     }
     const auto key_bytes = as_bytes(k);
     sig.insert(sig.end(), key_bytes.begin(), key_bytes.end());
-    field.append_to_signature(sig, p, nullptr, nullptr, schema_only,
-                              dont_parse_non_seed, dh);
+    field.append_to_signature(sig, p, nullptr, nullptr, allow_non_schema_fields,
+                              parse_seed_fields_only, dh);
   }
   sig.push_back(record_end_marker);
 }
 
 template <data_parsing_function Parser>
 auto node_record::parse(Parser& p, const tenzir::record_type* seed,
-                        bool schema_only, bool dont_parse_non_seed,
+                        bool allow_non_schema_fields,
+                        bool parse_seed_fields_only,
                         diagnostic_handler* dh) -> void {
   for (auto& [key, value] : data_) {
     if (value.is_alive()) {
@@ -685,17 +695,19 @@ auto node_record::parse(Parser& p, const tenzir::record_type* seed,
         for (auto [seed_key, seed_type] : seed->fields()) {
           if (seed_key == key) {
             handled_by_seed = true;
-            value.parse(p, &seed_type, dont_parse_non_seed, dh);
+            value.parse(p, &seed_type, allow_non_schema_fields,
+                        parse_seed_fields_only, dh);
             break;
           }
         }
-        if (schema_only) {
+      }
+      if (not handled_by_seed) {
+        if (not allow_non_schema_fields) {
           value.state_ = state::sentinel;
           handled_by_seed = true;
         }
-      }
-      if (not handled_by_seed) {
-        value.parse(p, nullptr, schema_only, dont_parse_non_seed, dh);
+        value.parse(p, nullptr, allow_non_schema_fields, parse_seed_fields_only,
+                    dh);
       }
     }
   }
@@ -709,8 +721,9 @@ auto node_field::data(T data) -> void {
 }
 
 template <data_parsing_function Parser>
-auto node_field::parse(Parser& p, const tenzir::type* seed, bool schema_only,
-                       bool dont_parse_non_seed,
+auto node_field::parse(Parser& p, const tenzir::type* seed,
+                       bool allow_non_schema_fields,
+                       bool parse_seed_fields_only,
                        diagnostic_handler* dh) -> void {
   if (not is_unparsed_) {
     return;
@@ -721,7 +734,7 @@ auto node_field::parse(Parser& p, const tenzir::type* seed, bool schema_only,
   is_unparsed_ = false;
   TENZIR_ASSERT(std::holds_alternative<std::string>(data_));
   std::string_view raw_data = std::get<std::string>(data_);
-  if (not seed and dont_parse_non_seed) {
+  if (not seed and parse_seed_fields_only) {
     return;
   }
   auto parse_result = p(raw_data, seed);
@@ -730,7 +743,7 @@ auto node_field::parse(Parser& p, const tenzir::type* seed, bool schema_only,
     emit_or_throw(dh, std::move(*diag));
   }
   if (value) {
-    if (schema_only and seed
+    if (not allow_non_schema_fields and seed
         and value->get_data().index() != seed->type_index()) {
       // if schema only is enabled, and the parsed field does not match the
       // schema, we discard its value
@@ -747,10 +760,11 @@ template <data_parsing_function Parser>
 auto node_field::append_to_signature(signature_type& sig, Parser& p,
                                      const tenzir::type* seed,
                                      schema_type_lookup_map* lookup,
-                                     bool schema_only, bool dont_parse_non_seed,
+                                     bool allow_non_schema_fields,
+                                     bool parse_seed_fields_only,
                                      diagnostic_handler* dh) -> void {
   if (is_unparsed_) {
-    parse(p, seed, schema_only, dont_parse_non_seed, dh);
+    parse(p, seed, allow_non_schema_fields, parse_seed_fields_only, dh);
   }
   if (state_ == state::sentinel) {
     if (not seed) {
@@ -766,7 +780,7 @@ auto node_field::append_to_signature(signature_type& sig, Parser& p,
     // sentinel structural types get handled by the regular visit below
   }
   const auto visitor = detail::overload{
-    [&sig, &p, lookup, seed, schema_only, dont_parse_non_seed,
+    [&sig, &p, lookup, seed, allow_non_schema_fields, parse_seed_fields_only,
      dh](node_list& v) {
       const auto* ls = caf::get_if<list_type>(seed);
       if (seed and not ls) {
@@ -774,11 +788,11 @@ auto node_field::append_to_signature(signature_type& sig, Parser& p,
                                               "schema does not expect a list"));
       }
       if (v.affects_signature() or ls) {
-        v.append_to_signature(sig, p, ls, lookup, schema_only,
-                              dont_parse_non_seed, dh);
+        v.append_to_signature(sig, p, ls, lookup, allow_non_schema_fields,
+                              parse_seed_fields_only, dh);
       }
     },
-    [&sig, &p, seed, lookup, schema_only, dont_parse_non_seed,
+    [&sig, &p, seed, lookup, allow_non_schema_fields, parse_seed_fields_only,
      dh](node_record& v) {
       const auto* rs = caf::get_if<record_type>(seed);
       if (seed and not rs) {
@@ -787,23 +801,25 @@ auto node_field::append_to_signature(signature_type& sig, Parser& p,
                                           "schema does not expect a record"));
       }
       if (v.affects_signature() or rs) {
-        v.append_to_signature(sig, p, rs, lookup, schema_only,
-                              dont_parse_non_seed, dh);
+        v.append_to_signature(sig, p, rs, lookup, allow_non_schema_fields,
+                              parse_seed_fields_only, dh);
       }
     },
-    [&sig, p, seed, this, lookup, schema_only, dont_parse_non_seed,
-     dh](caf::none_t&) {
+    [&sig, p, seed, this, lookup, allow_non_schema_fields,
+     parse_seed_fields_only, dh](caf::none_t&) {
       // none could be the result of pre-seeding or being built with a true null
       // via the API for the first case we need to ensure we continue doing
       // seeding if we have a seed
       if (seed) {
         if (auto sr = caf::get_if<tenzir::record_type>(seed)) {
-          return record()->append_to_signature(sig, p, sr, lookup, schema_only,
-                                               dont_parse_non_seed, dh);
+          return record()->append_to_signature(sig, p, sr, lookup,
+                                               allow_non_schema_fields,
+                                               parse_seed_fields_only, dh);
         }
         if (auto sl = caf::get_if<tenzir::list_type>(seed)) {
-          return list()->append_to_signature(sig, p, sl, lookup, schema_only,
-                                             dont_parse_non_seed, dh);
+          return list()->append_to_signature(sig, p, sl, lookup,
+                                             allow_non_schema_fields,
+                                             parse_seed_fields_only, dh);
         }
         sig.push_back(static_cast<std::byte>(seed->type_index()));
       } else {
@@ -895,7 +911,8 @@ template <data_parsing_function Parser>
 auto node_list::append_to_signature(signature_type& sig, Parser& p,
                                     const tenzir::list_type* seed,
                                     schema_type_lookup_map* lookup,
-                                    bool schema_only, bool dont_parse_non_seed,
+                                    bool allow_non_schema_fields,
+                                    bool parse_seed_fields_only,
                                     diagnostic_handler* dh) -> void {
   sig.push_back(list_start_marker);
   if (is_numeric(type_index_) or type_index_ == type_index_numeric_mismatch) {
@@ -946,12 +963,14 @@ auto node_list::append_to_signature(signature_type& sig, Parser& p,
       node_field sentinel;
       sentinel.state_ = state::sentinel;
       return sentinel.append_to_signature(sig, p, seed_type_ptr, lookup,
-                                          schema_only, dont_parse_non_seed, dh);
+                                          allow_non_schema_fields,
+                                          parse_seed_fields_only, dh);
     }
     for (auto& v : data_) {
       auto next_sig_index = sig.size();
-      v.append_to_signature(sig, p, seed_type_ptr, lookup, schema_only,
-                            dont_parse_non_seed, dh);
+      v.append_to_signature(sig, p, seed_type_ptr, lookup,
+                            allow_non_schema_fields, parse_seed_fields_only,
+                            dh);
       if (last_sig_index != 0) {
         const auto last_signatures_match = std::ranges::equal(
           std::span{sig.begin() + last_sig_index, sig.begin() + next_sig_index},
@@ -978,7 +997,7 @@ auto node_list::append_to_signature(signature_type& sig, Parser& p,
 
 template <data_parsing_function Parser>
 auto node_list::parse(Parser& p, const tenzir::list_type* seed,
-                      bool schema_only, bool dont_parse_non_seed,
+                      bool allow_non_schema_fields, bool parse_seed_fields_only,
                       diagnostic_handler* dh) -> void {
   auto seed_type = tenzir::type{};
   if (seed) {
@@ -986,8 +1005,8 @@ auto node_list::parse(Parser& p, const tenzir::list_type* seed,
   }
   for (auto& element : data_) {
     if (element.is_alive()) {
-      element.parse(p, seed ? &seed_type : nullptr, schema_only,
-                    dont_parse_non_seed, dh);
+      element.parse(p, seed ? &seed_type : nullptr, allow_non_schema_fields,
+                    parse_seed_fields_only, dh);
     }
   }
 }

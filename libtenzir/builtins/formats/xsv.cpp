@@ -40,7 +40,6 @@ struct xsv_options {
   char list_sep = {};
   std::string null_value = {};
   bool allow_comments = {};
-  bool auto_expand = {};
   std::optional<std::string> header = {};
   bool no_header = {};
   multi_series_builder_options builder_options = {};
@@ -105,7 +104,7 @@ struct xsv_options {
       f.field("name", x.name), f.field("field_sep", x.field_sep),
       f.field("list_sep", x.list_sep), f.field("null_value", x.null_value),
       f.field("allow_comments", x.allow_comments),
-      f.field("auto_expand", x.auto_expand), f.field("header", x.header),
+       f.field("header", x.header),
       f.field("no_header", x.no_header),
       f.field("builder_options", x.builder_options));
   }
@@ -138,7 +137,6 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
       parser.add(*null_value_, "<null-value>");
     }
     parser.add("--allow-comments", allow_comments_);
-    parser.add("--auto-expand", auto_expand_);
     parser.add("--header", header_, "<header>");
     multi_series_builder_argument_parser::add_all_to_parser(parser);
   }
@@ -155,7 +153,6 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
       parser.add(*null_value_, "<null-value>");
     }
     parser.add("comments", allow_comments_);
-    parser.add("auto_expand", auto_expand_);
     parser.add("header", header_);
     multi_series_builder_argument_parser::add_all_to_parser(parser);
   }
@@ -197,21 +194,12 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
       }
     }
 
-    if (schema_only_ and auto_expand_) {
-      diagnostic::error(
-        "cannot activate `no-infer` and `auto-expand` at the same time")
-        .primary(*schema_only_)
-        .primary(*auto_expand_)
-        .throw_();
-    }
-
     return xsv_options{
       .name = "xsv",
       .field_sep = *field_sep,
       .list_sep = *list_sep,
       .null_value = null_value_->inner,
       .allow_comments = allow_comments_,
-      .auto_expand = auto_expand_.has_value(),
       .header = header_->inner,
       .no_header = false,
       .builder_options = multi_series_builder_argument_parser::get_options(),
@@ -225,7 +213,6 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
 protected:
   std::string name_;
   bool allow_comments_{};
-  std::optional<location> auto_expand_{};
   std::optional<located<std::string>> header_{};
   std::optional<located<std::string>> field_sep_str_{};
   std::optional<located<std::string>> list_sep_str_{};
@@ -433,7 +420,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
   // parse the body
   const auto original_field_count = fields.size();
   auto needs_schemas = true;
-  args.builder_options.settings.default_name = fmt::format("tenzir.{}", args.name);
+  args.builder_options.settings.parser_name = fmt::format("tenzir.{}", args.name);
   auto schemas = detail::multi_series_builder::get_schemas_unnested(
     needs_schemas, not args.builder_options.settings.unnest_separator.empty());
   auto msb = multi_series_builder{
@@ -475,7 +462,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
         }
         break;
       } else if (field_idx >= fields.size()) {
-        if (args.auto_expand) {
+        if (args.builder_options.settings.expand_schema) {
           size_t unnamed_idx = 0;
           while (true) {
             auto name = fmt::format("unnamed{}", unnamed_idx);

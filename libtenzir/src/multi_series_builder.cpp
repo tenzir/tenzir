@@ -224,7 +224,7 @@ auto multi_series_builder::yield_ready() -> std::vector<series> {
 auto multi_series_builder::yield_ready_as_table_slice()
   -> std::vector<table_slice> {
   return detail::multi_series_builder::series_to_table_slice(
-    yield_ready(), settings_.default_name);
+    yield_ready(), settings_.parser_name);
 }
 
 auto multi_series_builder::last_errors() -> std::vector<tenzir::diagnostic> {
@@ -267,7 +267,7 @@ auto multi_series_builder::finalize() -> std::vector<series> {
 auto multi_series_builder::finalize_as_table_slice()
   -> std::vector<table_slice> {
   return detail::multi_series_builder::series_to_table_slice(
-    finalize(), settings_.default_name);
+    finalize(), settings_.parser_name);
 }
 
 void multi_series_builder::complete_last_event() {
@@ -283,7 +283,7 @@ void multi_series_builder::complete_last_event() {
     auto* selected_schema = builder_raw_.find_field_raw(p->field_name);
     if (not selected_schema) {
       diagnostic::warning("{} parser: event did not contain selector field",
-                          settings_.default_name)
+                          settings_.parser_name)
         .note("selector field `{}` was not found", p->field_name)
         .emit(dh_);
     } else {
@@ -315,32 +315,32 @@ void multi_series_builder::complete_last_event() {
       };
       const auto schema_name = std::visit(visitor, selected_schema->data_);
       schema_type = type_for_schema(schema_name);
-      if (not schema_type and settings_.schema_only) {
+      if (not schema_type) {
         diagnostic::warning("{} parser: schema for selector not found",
-                            settings_.default_name)
+                            settings_.parser_name)
           .note("selector field is `{}`, but the resulting name `{}` does not "
                 "refer to a known schema",
                 p->field_name, schema_name)
           .emit(dh_);
-        builder_raw_.clear();
-        return;
+      //   builder_raw_.clear();
+      //   return;
       }
       append_name_to_signature(schema_name, signature_raw_);
     }
   } else if (auto p = get_policy<policy_precise>()) {
     if (p->seed_schema) {
-      schema_type = type_for_schema(*(p->seed_schema));
-      append_name_to_signature(*(p->seed_schema), signature_raw_);
+      schema_type = &*p->seed_schema;
     }
   }
-  if (not schema_type) {
-    schema_type = type_for_schema(settings_.default_name);
-    append_name_to_signature(settings_.default_name, signature_raw_);
+  // if (not schema_type) {
+  //   schema_type = type_for_schema(settings_.default_name);
+  //   append_name_to_signature(settings_.default_name, signature_raw_);
+  // }
+  if (not(schema_type and settings_.expand_schema )) {
+    builder_raw_.append_signature_to(signature_raw_, parser_, schema_type,
+                                     not settings_.expand_schema, settings_.raw,
+                                     &dh_);
   }
-  if (not schema_type) {
-  }
-  builder_raw_.append_signature_to(signature_raw_, parser_, schema_type,
-                                   settings_.schema_only, settings_.raw, &dh_);
   auto free_index = next_free_index();
   auto [it, inserted] = signature_map_.try_emplace(
     std::move(signature_raw_), free_index.value_or(entries_.size()));

@@ -46,7 +46,7 @@ public:
     };
     try {
       auto builder_options = opt_parser.get_options();
-      builder_options.settings.default_name
+      builder_options.settings.parser_name
         = fmt::format("fluent_bit.{}", args.plugin);
       return std::make_unique<fluent_bit_operator>(
         std::move(args), std::move(builder_options), config_);
