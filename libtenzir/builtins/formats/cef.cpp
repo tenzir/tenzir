@@ -21,6 +21,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/to_lines.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/type.hpp>
 #include <tenzir/view.hpp>
 
@@ -228,8 +229,71 @@ class plugin final : public virtual parser_plugin<cef_parser> {
   }
 };
 
+class parse_cef final : public virtual method_plugin {
+public:
+  auto name() const -> std::string override {
+    return "parse_cef";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::method(name()).add(expr, "<string>").parse(inv, ctx));
+    return function_use::make(
+      [call = inv.call, expr = std::move(expr)](auto eval, session ctx) {
+        auto arg = eval(expr);
+        auto f = detail::overload{
+          [&](const arrow::NullArray&) {
+            return arg;
+          },
+          [&](const arrow::StringArray& arg) {
+            auto warn = false;
+            auto b = series_builder{};
+            for (auto string : arg) {
+              if (not string) {
+                b.null();
+                continue;
+              }
+              auto msg = to<message_view>(*string);
+              if (not msg) {
+                warn = true;
+                b.null();
+                continue;
+              }
+              add(*msg, b);
+            }
+            if (warn) {
+              diagnostic::warning("failed to parse CEF message")
+                .primary(call)
+                .emit(ctx);
+            }
+            auto result = b.finish();
+            // TODO: Consider whether we need heterogeneous for this. If so,
+            // then we must extend the evaluator accordingly.
+            if (result.size() != 1) {
+              diagnostic::warning("got incompatible CEF messages")
+                .primary(call)
+                .emit(ctx);
+              return series::null(null_type{}, arg.length());
+            }
+            return std::move(result[0]);
+          },
+          [&](const auto&) {
+            diagnostic::warning("`parse_cef` expected `string`, got `{}`",
+                                arg.type.kind())
+              .primary(call)
+              .emit(ctx);
+            return series::null(null_type{}, arg.length());
+          },
+        };
+        return caf::visit(f, *arg.array);
+      });
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::cef
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::cef::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::cef::parse_cef)
