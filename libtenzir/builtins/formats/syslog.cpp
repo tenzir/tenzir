@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/tql2/plugin.hpp"
+
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/concept/parseable/core.hpp>
 #include <tenzir/concept/parseable/numeric.hpp>
@@ -653,8 +655,8 @@ public:
     TENZIR_UNREACHABLE();
   }
 
-  auto finish_all(diagnostic_handler&)
-    -> std::optional<std::vector<table_slice>> {
+  auto
+  finish_all(diagnostic_handler&) -> std::optional<std::vector<table_slice>> {
     table_slice_builder builder{make_unknown_type()};
     for (auto& row : rows_) {
       // Adding a `syslog.unknown` can never fail,
@@ -838,8 +840,17 @@ public:
   }
 };
 
-} // namespace
+class read_syslog final
+  : public virtual operator_plugin2<parser_adapter<syslog_parser>> {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    argument_parser2::operator_("read_syslog").parse(inv, ctx).ignore();
+    return std::make_unique<parser_adapter<syslog_parser>>();
+  }
+};
 
+} // namespace
 } // namespace tenzir::plugins::syslog
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::syslog::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::syslog::read_syslog)
