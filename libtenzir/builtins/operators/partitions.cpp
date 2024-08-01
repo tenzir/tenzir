@@ -69,7 +69,9 @@ public:
     auto builders = std::unordered_map<type, series_builder>{};
     using namespace tenzir::si_literals;
     for (auto& synopsis : synopses) {
-      auto& builder = builders[synopsis.synopsis->schema];
+      auto& builder
+        = builders[experimental_include_ranges_ ? synopsis.synopsis->schema
+                                                : type{}];
       auto event = builder.record();
       event.field("uuid").data(fmt::to_string(synopsis.uuid));
       event.field("memusage").data(synopsis.synopsis->memusage());
