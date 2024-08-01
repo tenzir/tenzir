@@ -67,16 +67,18 @@ caf::expected<void> file::open(open_mode mode, bool append) {
     flags |= O_APPEND;
   errno = 0;
   std::error_code err{};
-  const auto parent = path_.parent_path();
-  const auto file_exists = std::filesystem::exists(parent, err);
-  if (mode != read_only && !file_exists) {
-    const auto created_directory
-      = std::filesystem::create_directories(parent, err);
-    if (!created_directory) {
-      return caf::make_error(ec::filesystem_error,
-                             fmt::format("failed to create parent directory "
-                                         "{}: {}",
-                                         parent, err.message()));
+  if (path_.has_parent_path()) {
+    const auto parent = path_.parent_path();
+    const auto file_exists = std::filesystem::exists(parent, err);
+    if (mode != read_only && !file_exists) {
+      const auto created_directory
+        = std::filesystem::create_directories(parent, err);
+      if (!created_directory) {
+        return caf::make_error(ec::filesystem_error,
+                               fmt::format("failed to create parent directory "
+                                           "{}: {}",
+                                           parent, err.message()));
+      }
     }
   }
   handle_ = ::open(path_.string().data(), flags, 0644);
