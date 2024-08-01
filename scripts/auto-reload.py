@@ -3,11 +3,9 @@
 import argparse
 import time
 import os
+import shutil
 import sys
 import subprocess
-
-TENZIR = "../build/release/bin/tenzir"
-
 
 def main():
     parser = argparse.ArgumentParser()
@@ -42,9 +40,11 @@ def main():
         return False
 
     def run():
+        if shutil.which("tenzir") is None:
+            sys.exit("`tenzir` executable not in $PATH")
         p = subprocess.Popen(
             [
-                TENZIR,
+                "tenzir",
                 "--tql2",
                 "--color=always",
                 "-q",
