@@ -88,7 +88,7 @@ auto multi_series_builder_argument_parser::get_settings()
   (void)get_policy(); // force update policy.
   settings_.expand_schema |= expand_schema_.has_value();
   // if a schema is set and expand_schema
-  if (auto* p = std::get_if<multi_series_builder::policy_precise>(&policy_)) {
+  if (auto* p = std::get_if<multi_series_builder::policy_precise>(&policy_); p and not p->seed_schema.empty()) {
     const auto schemas = modules::schemas();
 
     auto it = std::find_if(schemas.begin(), schemas.end(), [p](const auto& t) {
