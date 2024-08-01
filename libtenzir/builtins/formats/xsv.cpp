@@ -103,8 +103,7 @@ struct xsv_options {
     return f.object(x).fields(
       f.field("name", x.name), f.field("field_sep", x.field_sep),
       f.field("list_sep", x.list_sep), f.field("null_value", x.null_value),
-      f.field("allow_comments", x.allow_comments),
-       f.field("header", x.header),
+      f.field("allow_comments", x.allow_comments), f.field("header", x.header),
       f.field("no_header", x.no_header),
       f.field("builder_options", x.builder_options));
   }
@@ -157,42 +156,48 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
     multi_series_builder_argument_parser::add_all_to_parser(parser);
   }
 
-  auto get_options() -> xsv_options {
+  auto get_options(diagnostic_handler& dh) -> failure_or<xsv_options> {
     auto field_sep = to_xsv_sep(field_sep_str_->inner);
     if (!field_sep) {
       diagnostic::error("invalid field separator:")
         .note("{}", field_sep.error())
         .primary(field_sep_str_->source)
-        .throw_();
+        .emit(dh);
+      return failure::promise();
     }
     auto list_sep = to_xsv_sep(list_sep_str_->inner);
     if (!list_sep) {
       diagnostic::error("invalid list-element separator:")
         .note("{}", list_sep.error())
         .primary(list_sep_str_->source)
-        .throw_();
+        .emit(dh);
     }
     if (*field_sep == *list_sep) {
       diagnostic::error("field separator and list separator must be "
                         "different")
         .primary(field_sep_str_->source)
         .primary(list_sep_str_->source)
-        .throw_();
+        .emit(dh);
+      return failure::promise();
     }
     for (auto ch : null_value_->inner) {
       if (ch == *field_sep) {
         diagnostic::error("null value conflicts with field separator")
           .primary(field_sep_str_->source)
           .primary(null_value_->source)
-          .throw_();
+          .emit(dh);
+        return failure::promise();
       }
       if (ch == *list_sep) {
         diagnostic::error("null value conflicts with list separator")
           .primary(field_sep_str_->source)
           .primary(null_value_->source)
-          .throw_();
+          .emit(dh);
+        return failure::promise();
       }
     }
+
+    TRY(auto opts, multi_series_builder_argument_parser::get_options(dh));
 
     return xsv_options{
       .name = "xsv",
@@ -202,7 +207,7 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
       .allow_comments = allow_comments_,
       .header = header_->inner,
       .no_header = false,
-      .builder_options = multi_series_builder_argument_parser::get_options(),
+      .builder_options = std::move(opts),
     };
   }
   enum class mode {
@@ -419,7 +424,8 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
   }
   // parse the body
   const auto original_field_count = fields.size();
-  args.builder_options.settings.parser_name = fmt::format("tenzir.{}", args.name);
+  args.builder_options.settings.parser_name
+    = fmt::format("tenzir.{}", args.name);
   auto msb = multi_series_builder{
     args.builder_options.policy,
     args.builder_options.settings,
@@ -636,7 +642,15 @@ public:
     auto opt_parser = xsv_common_parser_options_parser{name()};
     opt_parser.add_to_parser(parser);
     parser.parse(p);
-    return std::make_unique<xsv_parser>(opt_parser.get_options());
+    auto dh = detail::multi_series_builder::diagnostic_handler{};
+    auto opts = opt_parser.get_options(dh);
+    for (auto& d : dh.yield()) {
+      if (d.severity == severity::error) {
+        throw std::move(d);
+      }
+    }
+    TENZIR_ASSERT(opts);
+    return std::make_unique<xsv_parser>(std::move(*opts));
   }
 
   auto parse_printer(parser_interface& p) const
@@ -659,7 +673,15 @@ public:
                                                        std::string{Null.str()}};
     opt_parser.add_to_parser(parser);
     parser.parse(p);
-    return std::make_unique<xsv_parser>(opt_parser.get_options());
+    auto dh = detail::multi_series_builder::diagnostic_handler{};
+    auto opts = opt_parser.get_options(dh);
+    for (auto& d : dh.yield()) {
+      if (d.severity == severity::error) {
+        throw std::move(d);
+      }
+    }
+    TENZIR_ASSERT(opts);
+    return std::make_unique<xsv_parser>(std::move(*opts));
   }
 
   auto parse_printer(parser_interface& p) const
@@ -700,13 +722,9 @@ public:
     opt_parser.add_to_parser(parser);
     auto result = parser.parse(inv, ctx);
     TRY(result);
-    try {
-      return std::make_unique<parser_adapter<xsv_parser>>(
-        xsv_parser{opt_parser.get_options()});
-    } catch (diagnostic& e) {
-      ctx.dh().emit(e);
-      return failure::promise();
-    }
+    TRY(auto opts, opt_parser.get_options(ctx.dh()));
+    return std::make_unique<parser_adapter<xsv_parser>>(
+      xsv_parser{std::move(opts)});
   }
 };
 
@@ -724,15 +742,11 @@ public:
     auto opt_parser = xsv_common_parser_options_parser{name(), Sep, ListSep,
                                                        std::string{Null.str()}};
     opt_parser.add_to_parser(parser);
-    try {
-      auto result = parser.parse(inv, ctx);
-      TRY(result);
-      return std::make_unique<parser_adapter<xsv_parser>>(
-        xsv_parser{opt_parser.get_options()});
-    } catch (diagnostic& e) {
-      ctx.dh().emit(e);
-      return failure::promise();
-    }
+    auto result = parser.parse(inv, ctx);
+    TRY(result);
+    TRY(auto opts, opt_parser.get_options(ctx.dh()));
+    return std::make_unique<parser_adapter<xsv_parser>>(
+      xsv_parser{std::move(opts)});
   }
 };
 

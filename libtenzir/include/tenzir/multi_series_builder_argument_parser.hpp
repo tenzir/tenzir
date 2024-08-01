@@ -64,16 +64,22 @@ public:
   auto add_policy_to_parser(argument_parser2& parser) -> void;
   auto add_all_to_parser(argument_parser2& parser) -> void;
 
-  auto get_options() -> multi_series_builder_options {
-    return {
-      .policy = get_policy(),
-      .settings = get_settings(),
-    };
+  auto get_options(diagnostic_handler& dh) -> failure_or<multi_series_builder_options> {
+    auto good = get_policy(dh);
+    good |= get_settings(dh);
+    if ( good ) {
+      return multi_series_builder_options{
+        .policy = policy_,
+        .settings = settings_,
+      };
+    } else {
+      return failure::promise();
+    }
   }
 
-protected:
-  auto get_settings() -> multi_series_builder::settings_type&;
-  auto get_policy() -> multi_series_builder::policy_type&;
+private:
+  auto get_settings(diagnostic_handler& dh) -> bool;
+  auto get_policy(diagnostic_handler& dh) -> bool;
 
   // If we leave these public, the json parser can keep supporting its old
   // options by checking/setting values here

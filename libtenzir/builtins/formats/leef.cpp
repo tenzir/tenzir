@@ -296,7 +296,15 @@ class leef_plugin final : public virtual parser_plugin<leef_parser> {
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
     parser.parse(p);
-    return std::make_unique<leef_parser>(msb_parser.get_options());
+    auto dh = detail::multi_series_builder::diagnostic_handler{};
+    auto opts = msb_parser.get_options(dh);
+    for ( auto& d : dh.yield() ) {
+      if ( d.severity == severity::error ) {
+        throw std::move(d);
+      }
+    }
+    TENZIR_ASSERT(opts);
+    return std::make_unique<leef_parser>(std::move(*opts));
   }
 };
 
@@ -312,13 +320,9 @@ public:
     msb_parser.add_all_to_parser(parser);
     auto result = parser.parse(inv, ctx);
     TRY(result);
-    try {
-      return std::make_unique<parser_adapter<leef_parser>>(
-        leef_parser{msb_parser.get_options()});
-    } catch (diagnostic& e) {
-      ctx.dh().emit(e);
-      return failure::promise();
-    }
+    TRY( auto opts, msb_parser.get_options(ctx.dh()) );
+      return std::make_unique<parser_adapter<leef_parser>>(leef_parser{
+        std::move(opts)});
   }
 };
 

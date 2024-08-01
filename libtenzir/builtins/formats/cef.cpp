@@ -200,10 +200,19 @@ class cef_plugin final : public virtual parser_plugin<cef_parser> {
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{"cef", "https://docs.tenzir.com/formats/cef"};
 
-    auto combined_parser = multi_series_builder_argument_parser{};
-    combined_parser.add_all_to_parser(parser);
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_all_to_parser(parser);
     parser.parse(p);
-    return std::make_unique<cef_parser>(combined_parser.get_options());
+
+    auto dh = detail::multi_series_builder::diagnostic_handler{};
+    auto opts = msb_parser.get_options(dh);
+    for (auto& d : dh.yield()) {
+      if (d.severity == severity::error) {
+        throw std::move(d);
+      }
+    }
+    TENZIR_ASSERT(opts);
+    return std::make_unique<cef_parser>(std::move(*opts));
   }
 };
 
@@ -215,17 +224,14 @@ public:
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
-    auto opt_parser = multi_series_builder_argument_parser{};
-    opt_parser.add_all_to_parser(parser);
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_all_to_parser(parser);
     auto result = parser.parse(inv, ctx);
+
     TRY(result);
-    try {
-      return std::make_unique<parser_adapter<cef_parser>>(
-        cef_parser{opt_parser.get_options()});
-    } catch (diagnostic& e) {
-      ctx.dh().emit(e);
-      return failure::promise();
-    }
+    TRY(auto opts, msb_parser.get_options(ctx.dh()));
+    return std::make_unique<parser_adapter<cef_parser>>(
+      cef_parser{std::move(opts)});
   }
 };
 

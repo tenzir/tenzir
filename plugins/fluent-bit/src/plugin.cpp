@@ -38,22 +38,16 @@ public:
     opt_parser.add_all_to_parser(parser);
     auto result = parser.parse(inv, ctx);
     TRY(result);
-
     auto args = operator_args{
       .plugin = plugin.inner,
       .service_properties = to_property_map(fluentbit_options),
       .args = to_property_map(plugin_options),
     };
-    try {
-      auto builder_options = opt_parser.get_options();
-      builder_options.settings.parser_name
-        = fmt::format("fluent_bit.{}", args.plugin);
-      return std::make_unique<fluent_bit_operator>(
-        std::move(args), std::move(builder_options), config_);
-    } catch (diagnostic& e) {
-      ctx.dh().emit(e);
-      return failure::promise();
-    }
+    TRY(auto builder_options, opt_parser.get_options(ctx.dh()));
+    builder_options.settings.parser_name
+      = fmt::format("fluent_bit.{}", args.plugin);
+    return std::make_unique<fluent_bit_operator>(
+      std::move(args), std::move(builder_options), config_);
   }
 
 private:

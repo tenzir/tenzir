@@ -237,7 +237,7 @@ public:
     // selector("event_type", "suricata")
     // => {"event_type": "flow"}
     // => "suricata.flow"
-    std::optional<std::string> naming_prefix = {};
+    std::optional<std::string> naming_prefix = std::nullopt;
 
     auto friend inspect(auto& f, policy_selector& x) -> bool {
       return f.object(x).fields(f.field("field_name", x.field_name),
@@ -302,9 +302,10 @@ public:
     else if (auto p = get_policy<policy_precise>()) {
       settings_.ordered = true; // merging mode is necessarily ordered
       if (auto seed = type_for_schema(p->seed_schema)) {
-        naming_sentinel = *seed;
+        naming_sentinel_ = *seed;
+        known_schema_ = true;
       } else {
-        naming_sentinel = tenzir::type{ p->seed_schema, null_type{} };
+        naming_sentinel_ = tenzir::type{ p->seed_schema, null_type{} };
       }
     }
   }
@@ -383,7 +384,8 @@ private:
                                                            // initialized before
                                                            // builder_raw_
   record_builder builder_raw_;
-  tenzir::type naming_sentinel; // used to name builders
+  bool known_schema_ = true; // used to determine whether we need a signature compute
+  tenzir::type naming_sentinel_; // used to name builders
   signature_type signature_raw_;
   tsl::robin_map<signature_type, size_t, detail::hash_algorithm_proxy<>>
     signature_map_;

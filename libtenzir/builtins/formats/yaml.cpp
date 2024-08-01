@@ -291,10 +291,18 @@ class yaml_plugin final : public virtual parser_plugin<yaml_parser>,
     auto parser = argument_parser{"yaml", "https://docs.tenzir.com/"
                                           "formats/yaml"};
 
-    auto combined_parser = multi_series_builder_argument_parser{};
-    combined_parser.add_all_to_parser(parser);
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_all_to_parser(parser);
     parser.parse(p);
-    return std::make_unique<yaml_parser>(combined_parser.get_options());
+    auto dh = detail::multi_series_builder::diagnostic_handler{};
+    auto opts = msb_parser.get_options(dh);
+    for ( auto& d : dh.yield() ) {
+      if ( d.severity == severity::error ) {
+        throw std::move(d);
+      }
+    }
+    TENZIR_ASSERT(opts);
+    return std::make_unique<yaml_parser>(std::move(*opts));
   }
 
   auto parse_printer(parser_interface& p) const
@@ -312,18 +320,13 @@ class read_yaml final
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_("read_yaml");
 
-    auto combined_parser = multi_series_builder_argument_parser{};
-    combined_parser.add_all_to_parser(parser);
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_all_to_parser(parser);
 
     auto res = parser.parse(inv, ctx);
     TRY(res);
-    try {
-      return std::make_unique<parser_adapter<yaml_parser>>(
-        combined_parser.get_options());
-    } catch (diagnostic& d) {
-      ctx.dh().emit(std::move(d));
-    }
-    return failure::promise();
+    TRY( auto opts, msb_parser.get_options(ctx.dh()) );
+    return std::make_unique<parser_adapter<yaml_parser>>(std::move(opts));
   }
 };
 

@@ -287,7 +287,16 @@ void multi_series_builder::complete_last_event() {
         .note("selector field `{}` was not found", p->field_name)
         .emit(*dh_);
     } else {
+      bool selector_was_string = false;
       const auto visitor = detail::overload{
+        [&](const std::string& v) {
+          selector_was_string = true;
+          if (p->naming_prefix) {
+            return fmt::format("{}.{}", *(p->naming_prefix), v);
+          } else {
+            return v;
+          }
+        },
         [p]<detail::record_builder::non_structured_data_type T>(
           const T& v) -> std::string {
           if (p->naming_prefix) {
@@ -319,28 +328,30 @@ void multi_series_builder::complete_last_event() {
       };
       const auto schema_name = std::visit(visitor, selected_schema->data_);
       schema_type = type_for_schema(schema_name);
-      if (not schema_type) {
-        auto b = diagnostic::warning("{} parser: schema for selector not found",
-                                     settings_.parser_name)
-                   .note("`{}` does not refer to a known schema", schema_name);
-
-        std::move(b).emit(*dh_);
-        naming_sentinel = tenzir::type{schema_name, null_type{}};
-        schema_type = &naming_sentinel;
+      known_schema_ = schema_type != nullptr;
+      if (not known_schema_) {
+        if (selector_was_string) {
+          diagnostic::warning("{} parser: schema for selector not found",
+                              settings_.parser_name)
+            .note("`{}` does not refer to a known schema", schema_name)
+            .emit(*dh_);
+        }
+        naming_sentinel_ = tenzir::type{schema_name, null_type{}};
+        schema_type = &naming_sentinel_;
       }
       append_name_to_signature(schema_name, signature_raw_);
     }
   } else if (auto p = get_policy<policy_precise>()) {
     if (not p->seed_schema.empty()) {
-      schema_type = &naming_sentinel;
+      schema_type = &naming_sentinel_;
       append_name_to_signature(p->seed_schema, signature_raw_);
     }
   }
   // if we dont know the schema, or allow extra fields, we need to do a full
   // signature compute otherwise the schema name that is already written to the
   // signature is sufficient
-  if (not schema_type or settings_.expand_schema) {
-    builder_raw_.append_signature_to(signature_raw_, schema_type);
+  if (not known_schema_ or settings_.expand_schema) {
+    builder_raw_.append_signature_to(signature_raw_, known_schema_ ? schema_type : nullptr);
   }
   auto free_index = next_free_index();
   auto [it, inserted] = signature_map_.try_emplace(

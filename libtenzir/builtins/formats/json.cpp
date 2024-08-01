@@ -795,7 +795,16 @@ public:
     args.use_ndjson_mode = use_ndjson_mode.has_value();
     args.use_gelf_mode = use_gelf_mode.has_value();
     args.arrays_of_objects = arrays_of_objects.has_value();
-    args.builder_options = msb_parser.get_options();
+
+    auto dh = detail::multi_series_builder::diagnostic_handler{};
+    auto opts = msb_parser.get_options(dh);
+    for (auto& d : dh.yield()) {
+      if (d.severity == severity::error) {
+        throw std::move(d);
+      }
+    }
+    TENZIR_ASSERT(opts);
+    args.builder_options = *opts;
 
     if (legacy_precise) {
       if (std::get_if<multi_series_builder::policy_merge>(
@@ -804,9 +813,9 @@ public:
           .primary(*legacy_precise)
           .note("`--precise` is a legacy option and and should not be used")
           .throw_();
-      }
-      else {
-        diagnostic::warning("`--precise` is a legacy option and should not be used")
+      } else {
+        diagnostic::warning(
+          "`--precise` is a legacy option and should not be used")
           .primary(*legacy_precise)
           .note("Unless `--merge` is given, parsers are now precise by default")
           .throw_();
@@ -821,10 +830,11 @@ public:
           .note("`--no-infer` is a legacy option and should not be used")
           .throw_();
       } else {
-         diagnostic::warning(
+        diagnostic::warning(
           "`--no-infer` is a legacy option and should not be used")
           .primary(*legacy_no_infer)
-          .note("If a parser is given a valid schema via `--selector` or `--schema`, it will already enforce that schema")
+          .note("If a parser is given a valid schema via `--selector` or "
+                "`--schema`, it will already enforce that schema")
           .throw_();
       }
     }
@@ -869,7 +879,15 @@ public:
 
     parser.parse(p);
     auto args = parser_args{};
-    args.builder_options = msb_parser.get_options();
+    auto dh = detail::multi_series_builder::diagnostic_handler{};
+    auto opts = msb_parser.get_options(dh);
+    for (auto& d : dh.yield()) {
+      if (d.severity == severity::error) {
+        throw std::move(d);
+      }
+    }
+    TENZIR_ASSERT(opts);
+    args.builder_options = *opts;
     args.use_gelf_mode = true;
     return std::make_unique<json_parser>(std::move(args));
   }
@@ -900,9 +918,16 @@ public:
     };
     msb_parser.add_settings_to_parser(parser, true);
     parser.parse(p);
-    args.builder_options = msb_parser.get_options();
+    auto dh = detail::multi_series_builder::diagnostic_handler{};
+    auto opts = msb_parser.get_options(dh);
+    for (auto& d : dh.yield()) {
+      if (d.severity == severity::error) {
+        throw std::move(d);
+      }
+    }
+    TENZIR_ASSERT(opts);
+    args.builder_options = *opts;
     args.use_ndjson_mode = true;
-
     return std::make_unique<json_parser>(std::move(args));
   }
 };
@@ -974,15 +999,10 @@ public:
     parser.add("arrays-of-objects", arrays_of_objects);
     auto result = parser.parse(inv, ctx);
     auto args = parser_args{};
-    try {
-      args.builder_options = msb_parser.get_options();
-      args.use_ndjson_mode = use_ndjson_mode.has_value();
-      args.use_gelf_mode = use_gelf_mode.has_value();
-      args.arrays_of_objects = arrays_of_objects.has_value();
-    } catch (diagnostic& d) {
-      ctx.dh().emit(std::move(d));
-      result = failure::promise();
-    }
+    TRY(args.builder_options, msb_parser.get_options(ctx.dh()));
+    args.use_ndjson_mode = use_ndjson_mode.has_value();
+    args.use_gelf_mode = use_gelf_mode.has_value();
+    args.arrays_of_objects = arrays_of_objects.has_value();
     if (use_ndjson_mode and use_gelf_mode) {
       diagnostic::error("`ndjson` and `gelf` are incompatible")
         .primary(*use_ndjson_mode)
@@ -1057,12 +1077,8 @@ public:
     auto result = parser.parse(inv, ctx);
     TRY(result);
     auto args = parser_args{};
-    try {
-      args.builder_options = msb_parser.get_options();
-    } catch (diagnostic& d) {
-      ctx.dh().emit(std::move(d));
-      result = failure::promise();
-    }
+
+    TRY(args.builder_options, msb_parser.get_options(ctx.dh()));
     return std::make_unique<parser_adapter<json_parser>>(
       json_parser{std::move(args)});
   }
@@ -1094,12 +1110,7 @@ public:
     TRY(result);
     auto args = parser_args{};
     args.use_ndjson_mode = true;
-    try {
-      args.builder_options = msb_parser.get_options();
-    } catch (diagnostic& d) {
-      ctx.dh().emit(std::move(d));
-      result = failure::promise();
-    }
+    TRY(args.builder_options, msb_parser.get_options(ctx.dh()));
     return std::make_unique<parser_adapter<json_parser>>(
       json_parser{std::move(args)});
   }

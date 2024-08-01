@@ -13,14 +13,11 @@
 
 namespace tenzir {
 namespace {
-struct selector {
-  std::optional<std::string> prefix;
-  std::string field_name;
-};
 
-auto parse_selector(std::string_view x, location source) -> selector {
+auto parse_selector(std::string_view x, location source, diagnostic_handler& dh)
+  -> multi_series_builder::policy_selector {
   if (x.empty()) {
-    diagnostic::error("selector must not be empty").primary(source).throw_();
+    diagnostic::error("selector must not be empty").primary(source).emit(dh);
   }
   auto split = detail::split(x, ":");
   TENZIR_ASSERT(not x.empty());
@@ -29,13 +26,18 @@ auto parse_selector(std::string_view x, location source) -> selector {
                       "one `:` and field name must not be empty",
                       x)
       .primary(source)
-      .throw_();
+      .emit(dh);
   }
-  return selector{
-    split.size() == 2 ? std::optional{std::string(std::move(split[1]))}
-                      : std::nullopt,
-    std::string(split[0]),
-  };
+  if (split.size() == 2) {
+    return {
+      std::string{split[0]},
+      std::string{split[1]},
+    };
+  } else {
+    return {
+      std::string{split[0]},
+    };
+  }
 }
 } // namespace
 
@@ -83,12 +85,13 @@ auto multi_series_builder_argument_parser::add_all_to_parser(
   add_settings_to_parser(parser);
 }
 
-auto multi_series_builder_argument_parser::get_settings()
-  -> multi_series_builder::settings_type& {
-  (void)get_policy(); // force update policy.
+auto multi_series_builder_argument_parser::get_settings(diagnostic_handler& dh)
+  -> bool {
+  (void)get_policy(dh); // force update policy.
   settings_.expand_schema |= expand_schema_.has_value();
   // if a schema is set and expand_schema
-  if (auto* p = std::get_if<multi_series_builder::policy_precise>(&policy_); p and not p->seed_schema.empty()) {
+  if (auto* p = std::get_if<multi_series_builder::policy_precise>(&policy_);
+      p and not p->seed_schema.empty()) {
     const auto schemas = modules::schemas();
 
     auto it = std::find_if(schemas.begin(), schemas.end(), [p](const auto& t) {
@@ -101,13 +104,14 @@ auto multi_series_builder_argument_parser::get_settings()
           .primary(*expand_schema_)
           .primary(*schema_)
           .note("schema `{}` could not be found", schema_->inner)
-          .throw_();
+          .emit(dh);
+        return false;
       } else {
-        diagnostic::warning("Given `--schema` does not exist" )
+        diagnostic::warning("Given `--schema` does not exist")
           .primary(*schema_)
           .note("schema `{}` could not be found", schema_->inner)
           .hint("Consider defining the schema if you know the input's shape")
-          .throw_();
+          .emit(dh);
       }
     }
   }
@@ -115,7 +119,8 @@ auto multi_series_builder_argument_parser::get_settings()
     if (unnest_->inner.empty()) {
       diagnostic::error("unflatten-separator must not be empty")
         .primary(unnest_->source)
-        .throw_();
+        .emit(dh);
+      return false;
     }
     settings_.unnest_separator = unnest_->inner;
   }
@@ -132,14 +137,15 @@ auto multi_series_builder_argument_parser::get_settings()
       .primary(*raw_)
       .primary(*schema_)
       .primary(*merge_)
-      .throw_();
+      .emit(dh);
+    return false;
   }
   settings_.raw = raw_.has_value();
-  return settings_;
+  return true;
 }
 
-auto multi_series_builder_argument_parser::get_policy()
-  -> multi_series_builder::policy_type& {
+auto multi_series_builder_argument_parser::get_policy(diagnostic_handler& dh)
+  -> bool {
   bool has_merge = false;
   bool has_schema = false;
   bool has_selector = false;
@@ -157,20 +163,23 @@ auto multi_series_builder_argument_parser::get_policy()
     diagnostic::error("`--schema` and `--selector` cannot be combined")
       .primary(schema_->source)
       .primary(selector_->source)
-      .throw_();
+      .emit(dh);
+    return false;
   }
   if (has_merge and has_selector) {
     diagnostic::error("`--merge` and `--selector` cannot be combined")
       .primary(*merge_)
       .secondary(selector_->source)
-      .throw_();
+      .emit(dh);
+    return false;
   }
   std::string seed_type;
   if (has_schema) {
     if (schema_->inner.empty()) {
       diagnostic::error("`--schema` must not be empty")
         .primary(schema_->source)
-        .throw_();
+        .emit(dh);
+      return false;
     }
     seed_type = schema_->inner;
   }
@@ -179,12 +188,7 @@ auto multi_series_builder_argument_parser::get_policy()
       .seed_schema = seed_type,
     };
   } else if (has_selector) {
-    auto [prefix, field_name]
-      = parse_selector(selector_->inner, selector_->source);
-    policy_ = multi_series_builder::policy_selector{
-      std::move(field_name),
-      std::move(*prefix),
-    };
+    policy_ = parse_selector(selector_->inner, selector_->source, dh);
   } else if (has_schema) {
     // this needs an extra guard for "has_schema", because it could otherwise be
     // resetting a non-empty default seed merge is already handled above
@@ -193,7 +197,7 @@ auto multi_series_builder_argument_parser::get_policy()
     };
   }
 
-  return policy_;
+  return true;
 }
 
 auto multi_series_builder_options::get_schemas() const
