@@ -37,9 +37,6 @@
 #include <caf/detail/scope_guard.hpp>
 
 #include <filesystem>
-#include <mutex>
-#include <queue>
-#include <thread>
 
 namespace bp = boost::process;
 
@@ -192,8 +189,7 @@ public:
           if (mkdtemp(venv.data()) == nullptr) {
             diagnostic::error("{}", detail::describe_errno())
               .note("failed to create a unique directory for the python "
-                    "virtual "
-                    "environment in {}",
+                    "virtual environment in {}",
                     config_.venv_base_dir.value())
               .throw_();
           }
@@ -207,7 +203,23 @@ public:
         }
         return caf::detail::scope_guard([maybe_venv] {
           if (maybe_venv) {
-            std::filesystem::remove_all(*maybe_venv);
+            std::error_code ec;
+            auto exists = std::filesystem::exists(*maybe_venv, ec);
+            if (ec) {
+              // ctrl can already be gone, so we can't emit a diagnostic here.
+              TENZIR_WARN("python operator failed to remove venv at {}: {}",
+                          *maybe_venv, ec);
+              return;
+            }
+            if (!exists) {
+              return;
+            }
+            std::filesystem::remove_all(*maybe_venv, ec);
+            if (ec) {
+              // ctrl can already be gone, so we can't emit a diagnostic here.
+              TENZIR_WARN("python operator failed to remove venv at {}: {}",
+                          *maybe_venv, ec);
+            }
           }
         });
       }();

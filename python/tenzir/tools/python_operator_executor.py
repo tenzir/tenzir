@@ -13,6 +13,7 @@ from typing import (
     Dict,
     Generator,
     Iterable,
+    Optional,
     SupportsIndex,
     Tuple,
     TypeVar,
@@ -44,7 +45,7 @@ def log(*args):
     print(y, file=sys.stderr)
 
 
-def add_note(e: BaseException | None, msg: str) -> None:
+def add_note(e: Optional[BaseException], msg: str) -> None:
     if e is None:
         return
     if sys.version_info >= (3, 11):

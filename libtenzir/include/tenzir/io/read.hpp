@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2020 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#pragma once
+
 #include "caf/fwd.hpp"
 #include "tenzir/fwd.hpp"
 

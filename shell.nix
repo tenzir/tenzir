@@ -10,7 +10,7 @@ in
       nativeBuildInputs =
         [
           pkgs.ccache
-          pkgs.clang-tools_16
+          pkgs.clang-tools
           pkgs.cmake-format
           pkgs.speeve
           pkgs.shfmt
@@ -28,9 +28,9 @@ in
         ] ++ pkgs.tenzir-integration-test-deps
           ++ lib.optionals (!(pkgs.stdenv.hostPlatform.useLLVM or false)) [
           # Make clang available as alternative compiler when it isn't the default.
-          pkgs.clang_16
+          pkgs.clang
           # Bintools come with a wrapped lld for faster linking.
-          pkgs.llvmPackages_16.bintools
+          pkgs.llvmPackages.bintools
         ] # Temporarily only on Linux.
           ++ lib.optionals pkgs.stdenv.isLinux [
           pkgs.pandoc

@@ -221,15 +221,14 @@ filesystem_actor::behavior_type posix_filesystem(
       TENZIR_DEBUG("{} got request to erase {}", *self, filename);
       const auto path
         = filename.is_absolute() ? filename : self->state.root / filename;
-      std::error_code err;
-      auto size = std::filesystem::file_size(path, err);
-      if (err) {
+      auto size_error = std::error_code{};
+      auto size = std::filesystem::file_size(path, size_error);
+      if (size_error) {
         ++self->state.stats.checks.failed;
-        return caf::make_error(ec::no_such_file,
-                               fmt::format("{} failed to erase {}: {}", *self,
-                                           path, err.message()));
+      } else {
+        ++self->state.stats.checks.successful;
       }
-      ++self->state.stats.checks.successful;
+      auto err = std::error_code{};
       std::filesystem::remove_all(path, err);
       if (err) {
         ++self->state.stats.erases.failed;
@@ -238,7 +237,9 @@ filesystem_actor::behavior_type posix_filesystem(
                                            path, err.message()));
       }
       ++self->state.stats.erases.successful;
-      self->state.stats.erases.bytes += size;
+      if (!size_error) {
+        self->state.stats.erases.bytes += size;
+      }
       return atom::done_v;
     },
     [self](atom::status, status_verbosity v, duration) {
