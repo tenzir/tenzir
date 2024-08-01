@@ -85,21 +85,28 @@ auto multi_series_builder_argument_parser::add_all_to_parser(
 
 auto multi_series_builder_argument_parser::get_settings()
   -> multi_series_builder::settings_type& {
-  get_policy();             // force update policy.
-  if (not expand_schema_) { // if a schema is set and expand_schema
-                            // is false (the default)
-    if (auto* p = std::get_if<multi_series_builder::policy_precise>(&policy_)) {
-      const auto schemas = modules::schemas();
+  (void)get_policy(); // force update policy.
+  settings_.expand_schema |= expand_schema_.has_value();
+  // if a schema is set and expand_schema
+  if (auto* p = std::get_if<multi_series_builder::policy_precise>(&policy_)) {
+    const auto schemas = modules::schemas();
 
-      auto it = std::find_if(schemas.begin(), schemas.end(), [p](const auto& t) {
-        return t.name() == p->seed_schema;
-      });
-      if (it == schemas.end()) {
-        diagnostic::error("`--expand-schema` specified, but given `--schema "
-                          "<schema>` does not exist")
+    auto it = std::find_if(schemas.begin(), schemas.end(), [p](const auto& t) {
+      return t.name() == p->seed_schema;
+    });
+    if (it == schemas.end()) {
+      if (settings_.expand_schema) {
+        diagnostic::error(
+          "`--expand-schema` specified, but given `--schema` does not exist")
           .primary(*expand_schema_)
           .primary(*schema_)
           .note("schema `{}` could not be found", schema_->inner)
+          .throw_();
+      } else {
+        diagnostic::warning("Given `--schema` does not exist" )
+          .primary(*schema_)
+          .note("schema `{}` could not be found", schema_->inner)
+          .hint("Consider defining the schema if you know the input's shape")
           .throw_();
       }
     }
@@ -128,7 +135,6 @@ auto multi_series_builder_argument_parser::get_settings()
       .throw_();
   }
   settings_.raw = raw_.has_value();
-  settings_.expand_schema = expand_schema_.has_value();
   return settings_;
 }
 
