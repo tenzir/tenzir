@@ -537,11 +537,11 @@ auto node_field::parse(class record_builder& rb,
     return;
   }
   is_unparsed_ = false;
-  TENZIR_ASSERT(std::holds_alternative<std::string>(data_));
-  std::string_view raw_data = std::get<std::string>(data_);
   if (not seed and rb.parse_schema_fields_only_) {
     return;
   }
+  TENZIR_ASSERT(std::holds_alternative<std::string>(data_));
+  std::string_view raw_data = std::get<std::string>(data_);
   auto parse_result = rb.parser_(raw_data, seed);
   auto& [value, diag] = parse_result;
   if (diag) {
@@ -691,8 +691,8 @@ auto node_field::append_to_signature(signature_type& sig,
 
 auto node_field::commit_to(tenzir::builder_ref r, class record_builder& rb,
                            const tenzir::type* seed, bool mark_dead) -> void {
-  if (mark_dead) {
-    mark_this_dead();
+  if (std::holds_alternative<std::string>(data_)) {
+    parse(rb, seed);
   }
   const auto visitor = detail::overload{
     [&r, &rb, seed, mark_dead](node_list& v) {
@@ -707,22 +707,23 @@ auto node_field::commit_to(tenzir::builder_ref r, class record_builder& rb,
         v.commit_to(r.record(), rb, rs, mark_dead);
       }
     },
-    [&r, &rb, seed, this]<non_structured_data_type T>(T& v) {
-      parse(rb, seed);
+    [&r]<non_structured_data_type T>(T& v) {
       r.try_data(v);
-      // r.data(v);
     },
     [](auto&) {
       TENZIR_UNREACHABLE();
     },
   };
   std::visit(visitor, data_);
+  if (mark_dead) {
+    mark_this_dead();
+  }
 }
 
 auto node_field::commit_to(tenzir::data& r, class record_builder& rb,
                            const tenzir::type* seed, bool mark_dead) -> void {
-  if (mark_dead) {
-    mark_this_dead();
+  if (std::holds_alternative<std::string>(data_)) {
+    parse(rb, seed);
   }
   const auto visitor = detail::overload{
     [&r, &rb, seed, mark_dead](node_list& v) {
@@ -751,6 +752,9 @@ auto node_field::commit_to(tenzir::data& r, class record_builder& rb,
     },
   };
   std::visit(visitor, data_);
+  if (mark_dead) {
+    mark_this_dead();
+  }
 }
 
 auto node_field::clear() -> void {
