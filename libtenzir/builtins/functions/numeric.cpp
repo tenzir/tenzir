@@ -14,17 +14,12 @@
 #include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/util/tdigest.h>
-#include <caf/detail/is_one_of.hpp>
 
 #include <random>
 
 namespace tenzir::plugins::numeric {
 
 namespace {
-
-// TODO: Move this.
-template <class... Ts>
-concept one_of = caf::detail::is_one_of<Ts...>::value;
 
 class round_use final : public function_use {
 public:
@@ -83,7 +78,8 @@ private:
         }
         return finish(b);
       },
-      [&]<one_of<arrow::DurationArray, arrow::TimestampArray> T>(const T&) {
+      [&]<concepts::one_of<arrow::DurationArray, arrow::TimestampArray> T>(
+        const T&) {
         diagnostic::warning("`round` with duration requires second argument")
           .primary(value)
           .hint("for example `round(x, 1h)`")
@@ -245,8 +241,8 @@ public:
             return sum;
           },
           [&](auto previous) -> sum_t {
-            static_assert(caf::detail::is_one_of<decltype(previous), int64_t,
-                                                 uint64_t>::value);
+            static_assert(
+              concepts::one_of<decltype(previous), int64_t, uint64_t>);
             // TODO: Check narrowing.
             auto sum = static_cast<int64_t>(previous);
             for (auto row = int64_t{0}; row < array.length(); ++row) {
@@ -367,7 +363,8 @@ public:
   void update(const table_slice& input, session ctx) override {
     auto arg = eval(expr_, input, ctx);
     auto f = detail::overload{
-      [&]<one_of<double_type, int64_type, uint64_type> Type>(const Type& ty) {
+      [&]<concepts::one_of<double_type, int64_type, uint64_type> Type>(
+        const Type& ty) {
         auto& array = caf::get<type_to_arrow_array_t<Type>>(*arg.array);
         for (auto value : values(ty, array)) {
           if (value) {

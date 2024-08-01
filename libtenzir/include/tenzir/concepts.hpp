@@ -133,4 +133,7 @@ concept semigroup = requires(const T& x, const T& y) {
 template <class T>
 concept monoid = semigroup<T> && std::is_default_constructible_v<T>;
 
+template <class... Ts>
+concept one_of = caf::detail::is_one_of<Ts...>::value;
+
 } // namespace tenzir::concepts
