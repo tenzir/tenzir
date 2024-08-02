@@ -348,20 +348,18 @@ auto node_record::field(std::string_view name) -> node_field* {
 
 auto node_record::at(std::string_view key) -> node_field* {
   for (const auto& [field_name, index] : lookup_) {
+    if ( not data_[index].value.is_alive()) {
+      continue;
+    }
     const auto [field_name_mismatch, key_mismatch]
       = std::ranges::mismatch(field_name, key);
     if (field_name_mismatch == field_name.end()) {
       if (key_mismatch == key.end()) {
         return &data_[index].value;
       }
-      if (*key_mismatch == '.') {
-        continue;
-      }
       if (auto* r = data_[index].value.get_if<node_record>()) {
         if (auto* result = r->at(key.substr(1 + key_mismatch - key.begin()))) {
           return result;
-        } else {
-          continue;
         }
       }
     }
@@ -374,7 +372,6 @@ auto node_record::append_to_signature(signature_type& sig,
                                       const tenzir::record_type* seed) -> void {
   sig.push_back(record_start_marker);
   // if we have a seed, we need too ensure that all fields exist first
-
   const field_type_lookup_map* seed_map = rb.lookup_record_fields(seed, this);
   // we are intentionally traversing `lookup_` here, because that is sorted by
   // name. this ensures that the signature computation will be the same
