@@ -112,13 +112,14 @@ struct bridge_state {
   auto is_done() const -> bool {
     return importer_address == caf::actor_addr{} and buffer.empty()
            and inflight_partitions == 0 and open_partitions == 0
-           and checked_candidates;
+           and not queued_partitions.empty() and checked_candidates;
   }
 
   auto pop_partition() -> void {
     if (queued_partitions.empty()) {
-      TENZIR_ASSERT(open_partitions > 0);
-      --open_partitions;
+      if (open_partitions > 0) {
+        --open_partitions;
+      }
       if (buffer_rp.pending() and is_done()) {
         buffer_rp.deliver(table_slice{});
       }
@@ -128,28 +129,27 @@ struct bridge_state {
     auto [info, ctx] = std::move(queued_partitions.front());
     queued_partitions.pop();
     ++inflight_partitions;
-    auto next = [this] {
-      --inflight_partitions;
-      detail::weak_run_delayed(self, duration::zero(), [this] {
-        pop_partition();
-      });
-    };
     // TODO: We may want to monitor the spawned partitions to be able to return
     // better diagnostics. As-is, we only get a caf::sec::request_receiver_down
     // if they quit, but not their actual error message.
     const auto partition = self->spawn(
       passive_partition, info.uuid, accountant, filesystem,
       std::filesystem::path{fmt::format("index/{:l}", info.uuid)});
+    partition->attach_functor(
+      [pid = info.uuid](const caf::error&) -> caf::result<void> {
+        TENZIR_WARN("got down from {}", pid);
+        return {};
+      });
     self->request(partition, caf::infinite, atom::query_v, std::move(ctx))
       .then(
-        [next](uint64_t) {
-          next();
+        [this](uint64_t) {
+          --inflight_partitions;
         },
-        [this, next, uuid = info.uuid](const caf::error& error) mutable {
+        [this, uuid = info.uuid](const caf::error& error) mutable {
           diagnostic::warning(error)
             .note("failed to open partition {}", uuid)
             .emit(diagnostics_handler);
-          next();
+          --inflight_partitions;
         });
   }
 
@@ -306,6 +306,11 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
       TENZIR_ASSERT(not self->state.buffer_rp.pending());
       if (self->state.is_done()) {
         return table_slice{};
+      }
+      if (self->state.inflight_partitions < self->state.mode.parallel) {
+        detail::weak_run_delayed(self, duration::zero(), [self] {
+          self->state.pop_partition();
+        });
       }
       if (not self->state.buffer.empty()) {
         auto slice = std::move(self->state.buffer.front());
