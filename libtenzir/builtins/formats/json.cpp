@@ -805,19 +805,12 @@ public:
     }
     TENZIR_ASSERT(opts);
     args.builder_options = *opts;
-
     if (legacy_precise) {
       if (std::get_if<multi_series_builder::policy_merge>(
             &args.builder_options.policy)) {
         diagnostic::error("`--precise` and `--merge` incompatible")
           .primary(*legacy_precise)
           .note("`--precise` is a legacy option and and should not be used")
-          .throw_();
-      } else {
-        diagnostic::warning(
-          "`--precise` is a legacy option and should not be used")
-          .primary(*legacy_precise)
-          .note("Unless `--merge` is given, parsers are now precise by default")
           .throw_();
       }
     }
@@ -828,13 +821,6 @@ public:
           .primary(*legacy_no_infer)
           .primary(*msb_parser.expand_schema_)
           .note("`--no-infer` is a legacy option and should not be used")
-          .throw_();
-      } else {
-        diagnostic::warning(
-          "`--no-infer` is a legacy option and should not be used")
-          .primary(*legacy_no_infer)
-          .note("If a parser is given a valid schema via `--selector` or "
-                "`--schema`, it will already enforce that schema")
           .throw_();
       }
     }
@@ -917,6 +903,17 @@ public:
       },
     };
     msb_parser.add_settings_to_parser(parser, true);
+    std::optional<location> legacy_no_infer;
+     if (legacy_no_infer) {
+      if (args.builder_options.settings.expand_schema) {
+        diagnostic::error(
+          "`--no-infer` and `--expand_schema` are incompatible.")
+          .primary(*legacy_no_infer)
+          .primary(*msb_parser.expand_schema_)
+          .note("`--no-infer` is a legacy option and should not be used")
+          .throw_();
+      }
+    }
     parser.parse(p);
     auto dh = detail::multi_series_builder::diagnostic_handler{};
     auto opts = msb_parser.get_options(dh);
