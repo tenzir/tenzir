@@ -7,6 +7,28 @@ sidebar_position: 5
 This section describes tuning knobs that have a notable effect on system
 performance.
 
+## Demand
+
+Tenzir schedules operators asynchronously. Within a pipeline, every operator
+sends elements (events or bytes) downstream to the next operator, and demand
+upstream to the previous operator. If an operator has no downstream demand,
+Tenzir's pipeline execution engine stops scheduling the operator.
+
+The configuration section `tenzir.demand` controls how operators issue demand to
+their upstream operators. See the [example configuration][example-configuration]
+for all available options.
+
+For example, to minimize memory usage of pipelines at the cost of performance,
+set the following option:
+
+```yaml
+tenzir:
+  demand:
+    max-batches: 1
+```
+
+[example-configuration]: ../../configuration.md#example-configuration
+
 ## Batching
 
 Tenzir processes events in batches. Because the structured data has the shape of
