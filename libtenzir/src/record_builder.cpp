@@ -693,26 +693,33 @@ auto node_field::append_to_signature(signature_type& sig,
   return std::visit(visitor, data_);
 }
 
-auto node_field::commit_to(tenzir::builder_ref r, class record_builder& rb,
-                           const tenzir::type* seed, bool mark_dead) -> void {
+auto node_field::commit_to(tenzir::builder_ref builder,
+                           class record_builder& rb, const tenzir::type* seed,
+                           bool mark_dead) -> void {
   if (std::holds_alternative<std::string>(data_)) {
     parse(rb, seed);
   }
   const auto visitor = detail::overload{
-    [&r, &rb, seed, mark_dead](node_list& v) {
-      if (v.is_alive()) {
-        auto ls = caf::get_if<tenzir::list_type>(seed);
-        v.commit_to(r.list(), rb, ls, mark_dead);
+    [&builder, &rb, seed, mark_dead](node_list& v) {
+      const auto ls = caf::get_if<tenzir::list_type>(seed);
+      auto l = builder.list();
+      if (v.is_alive() or ls) {
+        v.commit_to(std::move(l), rb, ls, mark_dead);
       }
     },
-    [&r, &rb, seed, mark_dead](node_record& v) {
-      if (v.is_alive()) {
-        auto rs = caf::get_if<tenzir::record_type>(seed);
-        v.commit_to(r.record(), rb, rs, mark_dead);
+    [&builder, &rb, seed, mark_dead](node_record& v) {
+      const auto rs = caf::get_if<tenzir::record_type>(seed);
+      auto r = builder.record();
+      if (v.is_alive() or rs) {
+        v.commit_to(std::move(r), rb, rs, mark_dead);
       }
     },
-    [&r]<non_structured_data_type T>(T& v) {
-      r.try_data(v);
+    [&builder, &rb]<non_structured_data_type T>(T& v) {
+      if (auto& e = builder.try_data(v).error()) {
+        rb.emit_or_throw(diagnostic::warning(
+          "unexpected error in `record_builder::commit_to(builder_ref)`: {}",
+          std::move(e)));
+      }
     },
     [](auto&) {
       TENZIR_UNREACHABLE();
@@ -731,16 +738,16 @@ auto node_field::commit_to(tenzir::data& r, class record_builder& rb,
   }
   const auto visitor = detail::overload{
     [&r, &rb, seed, mark_dead](node_list& v) {
-      if (v.is_alive()) {
-        auto ls = caf::get_if<tenzir::list_type>(seed);
-        r = tenzir::list{};
+      auto ls = caf::get_if<tenzir::list_type>(seed);
+      r = tenzir::list{};
+      if (v.is_alive() or ls) {
         v.commit_to(caf::get<tenzir::list>(r), rb, ls, mark_dead);
       }
     },
     [&r, &rb, seed, mark_dead](node_record& v) {
-      if (v.is_alive()) {
-        auto rs = caf::get_if<tenzir::record_type>(seed);
-        r = tenzir::record{};
+      auto rs = caf::get_if<tenzir::record_type>(seed);
+      r = tenzir::record{};
+      if (v.is_alive() or rs) {
         v.commit_to(caf::get<tenzir::record>(r), rb, rs, mark_dead);
       }
     },
@@ -965,26 +972,21 @@ auto node_list::append_to_signature(signature_type& sig,
 auto node_list::commit_to(builder_ref r, class record_builder& rb,
                           const tenzir::list_type* seed,
                           bool mark_dead) -> void {
+  auto field_seed = seed ? seed->value_type() : tenzir::type{};
+  for (auto& v : data_) {
+    if (not v.is_alive()) {
+      break;
+    }
+    v.commit_to(r, rb, seed ? &field_seed : nullptr, mark_dead);
+  }
   if (mark_dead) {
     type_index_ = type_index_empty;
     mark_this_dead();
-  }
-  auto field_seed = seed ? seed->value_type() : tenzir::type{};
-  for (auto& v : data_) {
-    if (v.is_alive()) {
-      v.commit_to(r, rb, seed ? &field_seed : nullptr, mark_dead);
-    } else {
-      break;
-    }
   }
 }
 auto node_list::commit_to(tenzir::list& l, class record_builder& rb,
                           const tenzir::list_type* seed,
                           bool mark_dead) -> void {
-  if (mark_dead) {
-    type_index_ = type_index_empty;
-    mark_this_dead();
-  }
   auto field_seed = seed ? seed->value_type() : tenzir::type{};
   for (auto& v : data_) {
     if (v.is_alive()) {
@@ -993,6 +995,10 @@ auto node_list::commit_to(tenzir::list& l, class record_builder& rb,
     } else {
       break;
     }
+  }
+  if (mark_dead) {
+    type_index_ = type_index_empty;
+    mark_this_dead();
   }
 }
 
