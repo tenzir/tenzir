@@ -253,7 +253,7 @@ struct managed_serve_operator {
   /// The buffered table slice, and the configured buffer size and the number of
   /// currently requested events (may exceed the buffer size).
   std::vector<table_slice> buffer = {};
-  uint64_t buffer_size = 1 << 16;
+  uint64_t buffer_size = defaults::api::serve::max_events;
   uint64_t requested = {};
   uint64_t min_events = {};
 
