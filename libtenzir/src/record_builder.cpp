@@ -420,34 +420,31 @@ auto node_record::append_to_signature(signature_type& sig,
 auto node_record::commit_to(tenzir::record_ref r, class record_builder& rb,
                             const tenzir::record_type* seed,
                             bool mark_dead) -> void {
-  if (mark_dead) {
-    mark_this_dead();
-  }
   auto field_map = rb.lookup_record_fields(seed, this);
   for (auto& [k, v] : data_) {
     if (not v.is_alive()) {
       continue;
     }
     if (seed) {
-      if (auto it = field_map->find(k); it != field_map->end()) {
+      auto it = field_map->find(k);
+      if (it != field_map->end()) {
         v.commit_to(r.field(k), rb, &(it->second), mark_dead);
+        continue;
+      }
+      if (not rb.allow_non_schema_fields_) {
         continue;
       }
     }
     v.commit_to(r.field(k), rb, nullptr, mark_dead);
+  }
+  if (mark_dead) {
+    mark_this_dead();
   }
 }
 
 auto node_record::commit_to(tenzir::record& r, class record_builder& rb,
                             const tenzir::record_type* seed,
                             bool mark_dead) -> void {
-  if (mark_dead) {
-    mark_this_dead();
-  }
-
-  if (mark_dead) {
-    mark_this_dead();
-  }
   auto field_map = rb.lookup_record_fields(seed, this);
   for (auto& [k, v] : data_) {
     if (not v.is_alive()) {
@@ -455,12 +452,19 @@ auto node_record::commit_to(tenzir::record& r, class record_builder& rb,
     }
     const auto [entry_it, success] = r.try_emplace(k);
     if (seed) {
-      if (auto it = field_map->find(k); it != field_map->end()) {
+      auto it = field_map->find(k);
+      if (it != field_map->end()) {
         v.commit_to(entry_it->second, rb, &(it->second), mark_dead);
+        continue;
+      }
+      if (not rb.allow_non_schema_fields_) {
         continue;
       }
     }
     v.commit_to(entry_it->second, rb, nullptr, mark_dead);
+  }
+  if (mark_dead) {
+    mark_this_dead();
   }
 }
 
