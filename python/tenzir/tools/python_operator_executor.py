@@ -395,7 +395,7 @@ def main() -> int:
     # of `errpipe` and aborts the pipeline with them as the error.
     errfd = int(sys.argv[2])
     errpipe_bufsize = 4096
-    if sys.platform == "linux":
+    if sys.platform == "linux" and sys.version_info >= (3, 10):
         errpipe_bufsize = fcntl.fcntl(errfd, fcntl.F_GETPIPE_SZ)
     if sys.platform == "darwin":
         errpipe_bufsize = 65536
