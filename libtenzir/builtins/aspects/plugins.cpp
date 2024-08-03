@@ -9,6 +9,7 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::plugins {
 
@@ -49,6 +50,9 @@ public:
       TENZIR_ADD_PLUGIN_TYPE(rest_endpoint, "rest_endpoint");
       TENZIR_ADD_PLUGIN_TYPE(saver_parser, "saver");
       TENZIR_ADD_PLUGIN_TYPE(store, "store");
+      TENZIR_ADD_PLUGIN_TYPE(operator_factory, "tql2.operator");
+      TENZIR_ADD_PLUGIN_TYPE(aggregation, "tql2.aggregation_function");
+      TENZIR_ADD_PLUGIN_TYPE(function, "tql2.function");
 #undef TENZIR_ADD_PLUGIN_TYPE
       auto dependencies = row.field("dependencies").list();
       for (const auto& dependency : plugin.dependencies()) {
