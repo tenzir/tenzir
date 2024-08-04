@@ -238,10 +238,12 @@ public:
     // => {"event_type": "flow"}
     // => "suricata.flow"
     std::optional<std::string> naming_prefix = std::nullopt;
+    bool unique_selector = false;
 
     auto friend inspect(auto& f, policy_selector& x) -> bool {
       return f.object(x).fields(f.field("field_name", x.field_name),
-                                f.field("naming_prefix", x.naming_prefix));
+                                f.field("naming_prefix", x.naming_prefix),
+                                f.field("unique_selector", x.unique_selector));
     }
   };
 
@@ -254,7 +256,7 @@ public:
     // whether the output should adhere to the input order
     bool ordered = true;
     // whether a known schema should be expanded.
-    bool expand_schema = false;
+    bool schema_only = false;
     // whether to not parse fields that are not present in a schema
     bool raw = false;
     // unnest separator to be used when calling any `field` in the builder pattern
@@ -268,7 +270,7 @@ public:
     auto friend inspect(auto& f, settings_type& x) -> bool {
       return f.object(x).fields(
         f.field("default_name", x.parser_name), f.field("ordered", x.ordered),
-        f.field("expand_schema", x.expand_schema), f.field("raw", x.raw),
+        f.field("expand_schema", x.schema_only), f.field("raw", x.raw),
         f.field("unnest_separator", x.unnest_separator),
         f.field("timeout", x.timeout),
         f.field("desired_batch_size", x.desired_batch_size));
@@ -283,7 +285,7 @@ public:
     : policy_{std::move(policy)},
       settings_{std::move(settings)},
       builder_raw_{std::forward<Parser>(parser), dh_.get(),
-                   settings_.expand_schema, settings_.raw} {
+                   settings_.schema_only, settings_.raw} {
     schemas_.reserve(schemas.size());
     for (auto t : schemas) {
       const auto [it, success] = schemas_.try_emplace(t.name(), std::move(t));
@@ -303,7 +305,7 @@ public:
       settings_.ordered = true; // merging mode is necessarily ordered
       if (auto seed = type_for_schema(p->seed_schema)) {
         naming_sentinel_ = *seed;
-        known_schema_ = true;
+        needs_signature_ = true;
       } else {
         naming_sentinel_ = tenzir::type{ p->seed_schema, null_type{} };
       }
@@ -384,7 +386,7 @@ private:
                                                            // initialized before
                                                            // builder_raw_
   record_builder builder_raw_;
-  bool known_schema_ = true; // used to determine whether we need a signature compute
+  bool needs_signature_ = true; // used to determine whether we need a signature compute
   tenzir::type naming_sentinel_; // used to name builders
   signature_type signature_raw_;
   tsl::robin_map<signature_type, size_t, detail::hash_algorithm_proxy<>>

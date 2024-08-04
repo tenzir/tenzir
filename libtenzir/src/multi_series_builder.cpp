@@ -328,9 +328,15 @@ void multi_series_builder::complete_last_event() {
       };
       const auto schema_name = std::visit(visitor, selected_schema->data_);
       schema_type = type_for_schema(schema_name);
-      known_schema_ = schema_type != nullptr;
-      if (not known_schema_) {
-        if (selector_was_string) {
+      needs_signature_ = schema_type != nullptr; // we may need to compute the signature if its an unknown schema
+      if (p->unique_selector) { // if the user promised that the selector is unique, we dont need to compute the schema
+        needs_signature_ = false;
+      }
+      if ( settings_.schema_only ) {
+        needs_signature_ = false;
+      }
+      if (not schema_type) { // if the selector didnt refer to a known schema
+        if (selector_was_string) { 
           diagnostic::warning("{} parser: schema for selector not found",
                               settings_.parser_name)
             .note("`{}` does not refer to a known schema", schema_name)
@@ -343,6 +349,9 @@ void multi_series_builder::complete_last_event() {
     }
   } else if (auto p = get_policy<policy_precise>()) {
     if (not p->seed_schema.empty()) {
+      // technically there is no need to repeat these two steps. 
+      // But we would need special handling for writing the schema name into the signature
+      // every event
       schema_type = &naming_sentinel_;
       append_name_to_signature(p->seed_schema, signature_raw_);
     }
@@ -350,8 +359,10 @@ void multi_series_builder::complete_last_event() {
   // if we dont know the schema, or allow extra fields, we need to do a full
   // signature compute otherwise the schema name that is already written to the
   // signature is sufficient
-  if (not known_schema_ or settings_.expand_schema) {
-    builder_raw_.append_signature_to(signature_raw_, known_schema_ ? schema_type : nullptr);
+  // FIXME use unique_selector setting
+  if (not needs_signature_ or settings_.schema_only) {
+    builder_raw_.append_signature_to(signature_raw_,
+                                     needs_signature_ ? schema_type : nullptr);
   }
   auto free_index = next_free_index();
   auto [it, inserted] = signature_map_.try_emplace(

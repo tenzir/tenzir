@@ -384,7 +384,7 @@ auto node_record::append_to_signature(signature_type& sig,
       TENZIR_ASSERT(seed_map);
       const auto field_it = seed_map->find(k);
       if (field_it == seed_map->end()) {
-        if (not rb.allow_non_schema_fields_) {
+        if (rb.schema_only_) {
           field.mark_this_dead();
           continue;
         }
@@ -428,7 +428,7 @@ auto node_record::commit_to(tenzir::record_ref r, class record_builder& rb,
         v.commit_to(r.field(k), rb, &(it->second), mark_dead);
         continue;
       }
-      if (not rb.allow_non_schema_fields_) {
+      if (rb.schema_only_) {
         continue;
       }
     }
@@ -454,7 +454,7 @@ auto node_record::commit_to(tenzir::record& r, class record_builder& rb,
         v.commit_to(entry_it->second, rb, &(it->second), mark_dead);
         continue;
       }
-      if (not rb.allow_non_schema_fields_) {
+      if (rb.schema_only_) {
         continue;
       }
     }
@@ -549,7 +549,7 @@ auto node_field::parse(class record_builder& rb,
     rb.emit_or_throw(std::move(*diag));
   }
   if (value) {
-    if (not rb.allow_non_schema_fields_ and seed
+    if (rb.schema_only_ and seed
         and value->get_data().index() != seed->type_index()) {
       // if schema only is enabled, and the parsed field does not match the
       // schema, we discard its value
@@ -712,7 +712,8 @@ auto node_field::commit_to(tenzir::builder_ref builder,
       }
     },
     [&builder, &rb]<non_structured_data_type T>(T& v) {
-      if (auto& e = builder.try_data(v).error()) {
+      auto res = builder.try_data(v);
+      if (auto& e = res.error()) {
         rb.emit_or_throw(diagnostic::warning(
           "unexpected error in `record_builder::commit_to(builder_ref)`: {}",
           std::move(e)));

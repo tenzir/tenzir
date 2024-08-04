@@ -44,7 +44,8 @@ auto parse_selector(std::string_view x, location source, diagnostic_handler& dh)
 auto multi_series_builder_argument_parser::add_settings_to_parser(
   argument_parser& parser, bool no_unflatten_option) -> void {
   is_tql1_ = true;
-  parser.add("--expand-schema", expand_schema_);
+  parser.add("--schema-only", schema_only_);
+  parser.add( "--unique-selector", unique_selector_ );
   parser.add("--raw", raw_);
   if (not no_unflatten_option) {
     parser.add("--unnest-separator", unnest_, "<nested-key-separator>");
@@ -66,7 +67,8 @@ auto multi_series_builder_argument_parser::add_all_to_parser(
 
 auto multi_series_builder_argument_parser::add_settings_to_parser(
   argument_parser2& parser, bool no_unflatten_option) -> void {
-  parser.add("expand_schema", expand_schema_);
+  parser.add("schema_only", schema_only_);
+  parser.add("unique_selector", unique_selector_);
   parser.add("raw", raw_);
   if (not no_unflatten_option) {
     parser.add("unflatten", unnest_);
@@ -88,7 +90,7 @@ auto multi_series_builder_argument_parser::add_all_to_parser(
 auto multi_series_builder_argument_parser::get_settings(diagnostic_handler& dh)
   -> bool {
   (void)get_policy(dh); // force update policy.
-  settings_.expand_schema |= expand_schema_.has_value();
+  settings_.schema_only |= schema_only_.has_value();
   // if a schema is set and expand_schema
   if (auto* p = std::get_if<multi_series_builder::policy_precise>(&policy_);
       p and not p->seed_schema.empty()) {
@@ -98,10 +100,10 @@ auto multi_series_builder_argument_parser::get_settings(diagnostic_handler& dh)
       return t.name() == p->seed_schema;
     });
     if (it == schemas.end()) {
-      if (settings_.expand_schema) {
+      if (settings_.schema_only) {
         diagnostic::error(
           "`--expand-schema` specified, but given `--schema` does not exist")
-          .primary(*expand_schema_)
+          .primary(*schema_only_)
           .primary(*schema_)
           .note("schema `{}` could not be found", schema_->inner)
           .emit(dh);
@@ -169,7 +171,13 @@ auto multi_series_builder_argument_parser::get_policy(diagnostic_handler& dh)
   if (has_merge and has_selector) {
     diagnostic::error("`--merge` and `--selector` cannot be combined")
       .primary(*merge_)
-      .secondary(selector_->source)
+      .primary(selector_->source)
+      .emit(dh);
+    return false;
+  }
+  if ( unique_selector_.has_value() and not has_selector ) {
+    diagnostic::error("`--unique-selector` requires a `--selector` to be set")
+      .primary(*unique_selector_)
       .emit(dh);
     return false;
   }
@@ -188,7 +196,9 @@ auto multi_series_builder_argument_parser::get_policy(diagnostic_handler& dh)
       .seed_schema = seed_type,
     };
   } else if (has_selector) {
-    policy_ = parse_selector(selector_->inner, selector_->source, dh);
+    auto p = parse_selector(selector_->inner, selector_->source, dh);
+    p.unique_selector = unique_selector_.has_value();
+    policy_ = std::move(p);
   } else if (has_schema) {
     // this needs an extra guard for "has_schema", because it could otherwise be
     // resetting a non-empty default seed merge is already handled above

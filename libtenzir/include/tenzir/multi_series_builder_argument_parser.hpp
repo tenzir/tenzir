@@ -99,9 +99,10 @@ public:
 
   // Policy selector
   std::optional<located<std::string>> selector_;
+  std::optional<location> unique_selector_;
 
   // settings
-  std::optional<location> expand_schema_;
+  std::optional<location> schema_only_;
   std::optional<located<std::string>> unnest_;
   std::optional<location> raw_;
 };

@@ -815,14 +815,15 @@ public:
       }
     }
     if (legacy_no_infer) {
-      if (args.builder_options.settings.expand_schema) {
+      if (args.builder_options.settings.schema_only) {
         diagnostic::error(
-          "`--no-infer` and `--expand_schema` are incompatible.")
+          "`--no-infer` and `--expand_schema` are incompatible")
           .primary(*legacy_no_infer)
-          .primary(*msb_parser.expand_schema_)
+          .primary(*msb_parser.schema_only_)
           .note("`--no-infer` is a legacy option and should not be used")
           .throw_();
       }
+      args.builder_options.settings.schema_only = true;
     }
 
     return std::make_unique<json_parser>(std::move(args));
@@ -904,16 +905,7 @@ public:
     };
     msb_parser.add_settings_to_parser(parser, true);
     std::optional<location> legacy_no_infer;
-     if (legacy_no_infer) {
-      if (args.builder_options.settings.expand_schema) {
-        diagnostic::error(
-          "`--no-infer` and `--expand_schema` are incompatible.")
-          .primary(*legacy_no_infer)
-          .primary(*msb_parser.expand_schema_)
-          .note("`--no-infer` is a legacy option and should not be used")
-          .throw_();
-      }
-    }
+    parser.add("--no-infer", legacy_no_infer );
     parser.parse(p);
     auto dh = detail::multi_series_builder::diagnostic_handler{};
     auto opts = msb_parser.get_options(dh);
@@ -921,6 +913,17 @@ public:
       if (d.severity == severity::error) {
         throw std::move(d);
       }
+    }
+     if (legacy_no_infer) {
+      if (args.builder_options.settings.schema_only) {
+        diagnostic::error(
+          "`--no-infer` and `--schema-only` are incompatible.")
+          .primary(*legacy_no_infer)
+          .primary(*msb_parser.schema_only_)
+          .note("`--no-infer` is a legacy option and should not be used")
+          .throw_();
+      }
+      args.builder_options.settings.schema_only = true;
     }
     TENZIR_ASSERT(opts);
     args.builder_options = *opts;

@@ -464,7 +464,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
         }
         break;
       } else if (field_idx >= fields.size()) {
-        if (args.builder_options.settings.expand_schema) {
+        if (args.builder_options.settings.schema_only) {
           size_t unnamed_idx = 0;
           while (true) {
             auto name = fmt::format("unnamed{}", unnamed_idx);

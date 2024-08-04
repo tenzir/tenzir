@@ -449,11 +449,11 @@ public:
             = decltype(detail::record_builder::basic_parser)>
   record_builder(Parser parser = detail::record_builder::basic_parser,
                  diagnostic_handler* dh = nullptr,
-                 bool allow_non_schema_fields = false,
+                 bool schema_only = false,
                  bool parse_schema_fields_only = false)
     : dh_{dh},
       parser_{std::move(parser)},
-      allow_non_schema_fields_{allow_non_schema_fields},
+      schema_only_{schema_only},
       parse_schema_fields_only_{parse_schema_fields_only} {
     root_.mark_this_dead();
   }
@@ -517,7 +517,7 @@ public:
     parser_;
 
 private:
-  bool allow_non_schema_fields_;
+  bool schema_only_;
   bool parse_schema_fields_only_;
 
   auto emit_or_throw(tenzir::diagnostic&& diag) -> void;
