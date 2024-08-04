@@ -14,7 +14,7 @@ us an email at support@tenzir.com. We'll help you out as soon as possible.
 ### A node does not connect to the platform
 
 After you've followed the instructions to [deploy a
-node](setup-guides/deploy-a-node.md), the node does not show up in the platform.
+node](installation/deploy-a-node.md), the node does not show up in the platform.
 
 Here's what you can do:
 

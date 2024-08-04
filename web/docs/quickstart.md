@@ -1,4 +1,4 @@
-# Get Started
+# Quickstart
 
 Tenzir is a data pipeline solution for optimizing cloud and data costs, running
 detections and analytics, building a centralized security data lake, or creating
@@ -11,7 +11,7 @@ a decentralized security data fabric.
 The easiest way to get started is try it out yourself. It takes just a few
 steps:
 
-1. [Create a free account](setup-guides/set-up-an-account.md) by signing in:
+1. [Create a free account](installation/create-an-account.md) by signing in:
 
 ![Sign in](example-signin.png)
 
@@ -38,7 +38,7 @@ Let's run a few example pipelines by copying the below examples
 and pasting them into the [Explorer](https://app.tenzir.com/explorer). We
 pre-loaded the demo node with [Zeek](https://zeek.org) and
 [Suricata](https://suricata.io) logs derived from the M57 dataset that we also
-use in our [user guides](user-guides.md).
+use in our [user guides](installation.md).
 
 Start with:
 
@@ -385,7 +385,7 @@ export
 
 </details>
 
-This was just a quick tour. The [user guides](user-guides.md) cover a lot more
+This was just a quick tour. The [user guides](installation.md) cover a lot more
 material.
 
 Ready to bring your data to the table? Then continue reading to learn how to
@@ -394,9 +394,9 @@ deploy your own node.
 ## Up next
 
 Now that you got a first impression of Tenzir pipelines, [onboard your own
-node](setup-guides/deploy-a-node.md) and dive deeper by
+node](installation/deploy-a-node.md) and dive deeper by
 
-- following the [user guides](user-guides.md) with step-by-step tutorials of
+- following the [user guides](installation.md) with step-by-step tutorials of
   common use cases
 - learning more about the [language](language.md), [operators](operators.md),
   [connectors](connectors.md), [formats](formats.md), and the [data

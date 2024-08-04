@@ -2,18 +2,18 @@
 sidebar_position: 0
 ---
 
-# Set up an account
+# Create an account
 
-In order to use the platform and the manage your nodes through our app, you must
-create an account. Everyone can freely use the [Community
-Edition](https://tenzir.com/pricing).
+If you want to manage your nodes via the platform through our app, you must
+create an account.
 
-## Create an Account
-
-Creating a free account takes just two steps:
+Creating an account is free and takes just two steps:
 
 1. Go to [app.tenzir.com](https://app.tenzir.com)
-2. Sign in with your identity provider or create an account
+2. Sign in with your identity provider
+
+Congratulations, you now have an account and can can freely use the
+[Community Edition](https://tenzir.com/pricing).
 
 ## Delete an Account
 
@@ -28,5 +28,5 @@ Deleting your account will remove all data about you from our cloud platform.
 You will also lose the ability to manage pipelines on your node.
 :::
 
-If you decide to come back just re-create an account as described
+If you decide to come back, just re-create an account as described
 above.
