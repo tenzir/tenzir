@@ -17,7 +17,7 @@ const sidebars = {
     },
     {
       type: 'doc',
-      id: 'get-started',
+      id: 'quickstart',
     },
     {
       type: 'html',
