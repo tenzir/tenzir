@@ -107,7 +107,7 @@ public:
                                 arg.type.kind())
               .primary(expr)
               .emit(ctx);
-            return series::null(double_type{}, arg.length());
+            return series::null(bool_type{}, arg.length());
           },
         };
         return caf::visit(f, *arg.array);
