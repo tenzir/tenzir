@@ -172,6 +172,26 @@ struct BinOpKernel<ast::binary_op::sub, time_type, duration_type> {
 };
 
 template <>
+struct BinOpKernel<ast::binary_op::add, time_type, duration_type> {
+  using result = time;
+
+  static auto evaluate(time l, duration r)
+    -> std::variant<result, const char*> {
+    return l + r;
+  }
+};
+
+template <>
+struct BinOpKernel<ast::binary_op::add, duration_type, time_type> {
+  using result = time;
+
+  static auto evaluate(duration l, time r)
+    -> std::variant<result, const char*> {
+    return l + r;
+  }
+};
+
+template <>
 struct BinOpKernel<ast::binary_op::sub, time_type, time_type> {
   using result = duration;
 
