@@ -192,6 +192,70 @@ struct BinOpKernel<ast::binary_op::add, duration_type, time_type> {
 };
 
 template <>
+struct BinOpKernel<ast::binary_op::add, duration_type, duration_type> {
+  using result = duration;
+
+  static auto evaluate(duration l, duration r)
+    -> std::variant<result, const char*> {
+    return l + r;
+  }
+};
+
+template <>
+struct BinOpKernel<ast::binary_op::sub, duration_type, duration_type> {
+  using result = duration;
+
+  static auto evaluate(duration l, duration r)
+    -> std::variant<result, const char*> {
+    return l - r;
+  }
+};
+
+template <>
+struct BinOpKernel<ast::binary_op::div, duration_type, duration_type> {
+  using result = duration::rep;
+
+  static auto evaluate(duration l, duration r)
+    -> std::variant<result, const char*> {
+    if (r == decltype(r){}) 
+      return "division by zero";
+    return l / r;
+  }
+};
+
+template <>
+struct BinOpKernel<ast::binary_op::mul, duration_type, duration::rep> {
+  using result = duration;
+
+  static auto evaluate(duration l, duration::rep r)
+    -> std::variant<result, const char*> {
+    return l * r;
+  }
+};
+
+template <>
+struct BinOpKernel<ast::binary_op::mul, duration::rep, duration_type> {
+  using result = duration;
+
+  static auto evaluate(duration::rep r, duration l)
+    -> std::variant<result, const char*> {
+    return l * r;
+  }
+};
+
+template <>
+struct BinOpKernel<ast::binary_op::div, duration_type, duration::rep> {
+  using result = duration;
+
+  static auto evaluate(duration l, duration::rep r)
+    -> std::variant<result, const char*> {
+    if (r == decltype(r){}) 
+      return "division by zero";
+    return l / r;
+  }
+};
+
+template <>
 struct BinOpKernel<ast::binary_op::sub, time_type, time_type> {
   using result = duration;
 
