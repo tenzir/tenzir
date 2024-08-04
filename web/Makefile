@@ -5,7 +5,7 @@ POETRY := $(shell command -v poetry 2> /dev/null)
 RSCRIPT := $(shell command -v Rscript 2> /dev/null)
 QUARTO := $(shell command -v quarto 2> /dev/null)
 
-CONTRIBUTING_DIR := docs/contribute
+CONTRIBUTING_DIR := docs/contribution
 
 QUARTO_INPUTS := $(shell find docs blog -name '*.qmd')
 QUARTO_MD_OUTPUTS := $(patsubst %.qmd, %.md, $(QUARTO_INPUTS))
