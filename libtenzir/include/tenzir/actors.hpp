@@ -329,26 +329,7 @@ using component_plugin_actor = typed_actor_fwd<
   // Conform to the protocol of the STATUS CLIENT actor.
   >::extend_with<status_client_actor>::unwrap;
 
-/// The interface of a SOURCE actor.
-using source_actor = typed_actor_fwd<
-  // Retrieve the currently used module of the SOURCE.
-  auto(atom::get, atom::module)->caf::result<module>,
-  // Update the currently used module of the SOURCE.
-  auto(atom::put, module)->caf::result<void>,
-  // Update the expression used for filtering data in the SOURCE.
-  auto(atom::normalize, expression)->caf::result<void>,
-  // Set up a new stream sink for the generated data.
-  auto(stream_sink_actor<table_slice, std::string>)->caf::result<void>>
-  // Conform to the protocol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
-
-/// The interface of a DATAGRAM SOURCE actor.
-using datagram_source_actor = typed_actor_fwd<
-  // Reacts to datagram messages.
-  auto(caf::io::new_datagram_msg)->caf::result<void>>
-  // Conform to the protocol of the SOURCE actor.
-  ::extend_with<source_actor>::unwrap_as_broker;
-
+/// The receiving part of interface of an EXEC NODE actor.
 using exec_node_sink_actor = typed_actor_fwd<
   // Push events.
   auto(atom::push, table_slice events)->caf::result<void>,
@@ -414,10 +395,10 @@ using pipeline_executor_actor = typed_actor_fwd<
   auto(atom::resume)->caf::result<void>>::unwrap;
 
 /// The interface of a PACKAGE LISTENER actor.
-// Listeners are notified by the package manager in the following order:
-//  1. context_manager component
-//  2. pipeline_manager component
-//  3. other subscribers (tbd)
+/// Listeners are notified by the package manager in the following order:
+///  1. context_manager component
+///  2. pipeline_manager component
+///  3. other subscribers (tbd)
 using package_listener_actor = typed_actor_fwd<
   // Add a new package.
   auto(atom::package, atom::add, package)->caf::result<void>,
