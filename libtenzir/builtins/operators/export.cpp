@@ -112,13 +112,26 @@ struct bridge_state {
   auto is_done() const -> bool {
     return importer_address == caf::actor_addr{} and buffer.empty()
            and inflight_partitions == 0 and open_partitions == 0
-           and checked_candidates;
+           and checked_candidates and queued_partitions.empty();
+  }
+
+  auto try_pop_partition() -> void {
+    const auto size_threshold = defaults::max_partition_size * mode.parallel;
+    if (num_queued_total >= size_threshold) {
+      return;
+    }
+    for (auto i = inflight_partitions; i < mode.parallel; ++i) {
+      detail::weak_run_delayed(self, duration::zero(), [this] {
+        pop_partition();
+      });
+    }
   }
 
   auto pop_partition() -> void {
     if (queued_partitions.empty()) {
-      TENZIR_ASSERT(open_partitions > 0);
-      --open_partitions;
+      if (open_partitions > 0) {
+        --open_partitions;
+      }
       if (buffer_rp.pending() and is_done()) {
         buffer_rp.deliver(table_slice{});
       }
@@ -130,9 +143,7 @@ struct bridge_state {
     ++inflight_partitions;
     auto next = [this] {
       --inflight_partitions;
-      detail::weak_run_delayed(self, duration::zero(), [this] {
-        pop_partition();
-      });
+      try_pop_partition();
     };
     // TODO: We may want to monitor the spawned partitions to be able to return
     // better diagnostics. As-is, we only get a caf::sec::request_receiver_down
@@ -187,6 +198,9 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
     = self->system().registry().get<accountant_actor>("tenzir.accountant");
   self->state.filesystem = std::move(filesystem);
   TENZIR_ASSERT(self->state.filesystem);
+  self->set_exit_handler([self](caf::exit_msg& msg) {
+    self->quit(std::move(msg.reason));
+  });
   if (not self->state.mode.internal) {
     detail::weak_run_delayed_loop(self, defaults::metrics_interval, [self] {
       self->state.emit_metrics();
@@ -316,6 +330,7 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
         metric.emitted += slice.rows();
         metric.queued -= slice.rows();
         self->state.num_queued_total -= slice.rows();
+        self->state.try_pop_partition();
         return slice;
       }
       self->state.buffer_rp = self->make_response_promise<table_slice>();
@@ -361,13 +376,9 @@ public:
       },
     });
     auto diagnostics_handler = ctrl.shared_diagnostics();
-    auto bridge
-      = ctrl.self().spawn(make_bridge, expr_, mode_, std::move(filesystem),
-                          std::move(metrics_handler),
-                          std::move(diagnostics_handler));
-    auto bridge_guard = caf::detail::make_scope_guard([&]() {
-      ctrl.self().send_exit(bridge, caf::exit_reason::user_shutdown);
-    });
+    auto bridge = ctrl.self().spawn<caf::linked>(
+      make_bridge, expr_, mode_, std::move(filesystem),
+      std::move(metrics_handler), std::move(diagnostics_handler));
     co_yield {};
     while (true) {
       auto result = table_slice{};

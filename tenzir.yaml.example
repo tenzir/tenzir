@@ -136,7 +136,7 @@ tenzir:
 
   # The size of an index shard, expressed in number of events. This should
   # be a power of 2.
-  max-partition-size: 4194304
+  max-partition-size: 4Mi
 
   # Timeout after which an active partition is forcibly flushed, regardless of
   # its size.
@@ -152,6 +152,26 @@ tenzir:
 
   # Zstd compression level applied to the Feather store backend.
   # zstd-compression-level: <default>
+
+  # Control how operator's calculate demand from their upstream operator. Note
+  # that this is an expert feature and should only be changed if you know what
+  # you are doing. All values may either be set to a number, or to a record
+  # containing `bytes` and `events` fields with numbers depending on the
+  # operator's input type.
+  demand:
+    # Issue demand only if room for at least this many elements is available.
+    # Must be greater than zero.
+    min-elements:
+      bytes: 128Ki
+      events: 8Ki
+    # Controls how many elements may be buffered until the operator stops
+    # issuing demand. Must be greater or equal to min-elements.
+    max-elements:
+      bytes: 4Mi
+      events: 254Ki
+    # Controls how many batches of elements may be buffered until the operator
+    # stops issuing demand. Must be greater than zero.
+    max-batches: 20
 
   # Context configured as part of the configuration that are always available.
   contexts:
