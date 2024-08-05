@@ -49,7 +49,7 @@ public:
   auto operator()(generator<chunk_ptr> input,
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     auto alarm_clock = ctrl.self().spawn(detail::make_alarm_clock);
-    auto last_timestamp = std::chrono::system_clock::now();
+    auto last_timestamp = std::chrono::steady_clock::now();
     auto bytes_per_window = bandwidth_per_second_ * window_.count();
     if (bytes_per_window == size_t{0}) {
       ++bytes_per_window; // Enforce at least some progress every window.
@@ -60,7 +60,7 @@ public:
         co_yield {};
         continue;
       }
-      auto now = std::chrono::system_clock::now();
+      auto now = std::chrono::steady_clock::now();
       auto additional_budget
         = duration_cast<float_seconds>(now - last_timestamp).count()
           * bandwidth_per_second_;
@@ -82,7 +82,7 @@ public:
         ctrl.self()
           .request(alarm_clock, caf::infinite,
                    duration_cast<caf::timespan>(window_))
-          .await(
+          .then(
             [&]() {
               ctrl.set_waiting(false);
             },
@@ -97,7 +97,7 @@ public:
         co_yield {}; // Await the alarm clock.
         co_yield std::move(head);
       }
-      last_timestamp = std::chrono::system_clock::now();
+      last_timestamp = std::chrono::steady_clock::now();
     }
     co_return;
   }
@@ -131,35 +131,37 @@ public:
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     auto const* docs = "https://docs.tenzir.com/operators/throttle";
     auto parser = argument_parser{"throttle", docs};
-    auto max_bandwidth = std::optional<uint64_t>{};
+    auto bandwidth = located<uint64_t>{};
     // TODO: Add option to set window size.
     auto window = float_seconds{1};
-    parser.add(max_bandwidth, "<max_bandwidth>");
+    parser.add(bandwidth, "<bandwidth>");
     parser.parse(p);
-    if (not max_bandwidth) {
-      diagnostic::error("`max_bandwidth` must be a numeric value")
+    if (bandwidth.inner == 0) {
+      diagnostic::error("`bandwidth` must be a positive number")
+        .primary(bandwidth.source)
         .note("the unit of measurement is bytes/second")
         .throw_();
     }
-    return std::make_unique<throttle_operator>(*max_bandwidth, window);
+    return std::make_unique<throttle_operator>(bandwidth.inner, window);
   }
 
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
-    auto max_bandwidth = std::optional<uint64_t>{};
+    auto bandwidth = located<uint64_t>{};
     argument_parser2::operator_("throttle")
-      .add("max_bandwith", max_bandwidth)
+      .add(bandwidth, "<bandwith>")
       .parse(inv, ctx)
       .ignore();
-    if (not max_bandwidth) {
-      diagnostic::error("`max_bandwidth` must be a numeric value")
+    if (bandwidth.inner == 0) {
+      diagnostic::error("`bandwidth` must be a positive value")
+        .primary(bandwidth.source)
         .note("the unit of measurement is bytes/second")
         .emit(ctx);
       return failure::promise();
     }
     // TODO: Add option to set window size.
     auto window = float_seconds{1};
-    return std::make_unique<throttle_operator>(*max_bandwidth, window);
+    return std::make_unique<throttle_operator>(bandwidth.inner, window);
   }
 };
 

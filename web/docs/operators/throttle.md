@@ -11,7 +11,7 @@ Limits the bandwidth of a pipeline.
 ## Synopsis
 
 ```
-throttle <max_bandwidth>
+throttle <bandwidth>
 ```
 
 ## Description
@@ -19,14 +19,14 @@ throttle <max_bandwidth>
 The `throttle` operator limits the amount of data flowing through it to a
 maximum bandwidth.
 
-### `<max_bandwidth>`
+### `<bandwidth>`
 
 An unsigned integer giving the maximum bandwidth that is enforced for
 this pipeline, in bytes per second.
 
 ## Examples
 
-Read a tcp stream and print the data to stdout at a rate of 1 character per
+Read a TCP stream and print the data to stdout at a rate of 1 character per
 second:
 
 ```
