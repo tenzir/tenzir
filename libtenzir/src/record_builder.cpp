@@ -262,7 +262,7 @@ auto basic_parser(std::string_view s, const tenzir::type* seed)
   if (seed) {
     return basic_seeded_parser(s, *seed);
   }
-  auto p = parsers::integer | parsers::count | parsers::real | parsers::time
+  auto p = parsers::boolean | parsers::integer | parsers::count | parsers::real | parsers::time
            | parsers::duration | parsers::net | parsers::ip;
   auto res = tenzir::data{};
   if (p(s, res)) {
@@ -276,7 +276,7 @@ auto non_number_parser(std::string_view s, const tenzir::type* seed)
   if (seed) {
     return record_builder::basic_seeded_parser(s, *seed);
   }
-  auto p = parsers::time | parsers::duration | parsers::net | parsers::ip;
+  auto p = parsers::boolean | parsers::time | parsers::duration | parsers::net | parsers::ip;
   auto res = tenzir::data{};
   if (p(s, res)) {
     return res;
