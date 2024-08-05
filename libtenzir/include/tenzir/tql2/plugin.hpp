@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "tenzir/detail/string_literal.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/tql2/ast.hpp"
 
@@ -111,7 +112,7 @@ public:
 /// This adapter transforms a legacy parser object to an operator.
 ///
 /// Should be deleted once the transition is done.
-template <class Parser>
+template <class Parser, detail::string_literal NameOverride = "">
 class parser_adapter final : public crtp_operator<parser_adapter<Parser>> {
 public:
   parser_adapter() = default;
@@ -120,7 +121,9 @@ public:
   }
 
   auto name() const -> std::string override {
-    return fmt::format("read_{}", Parser{}.name());
+    return fmt::format("read_{}", NameOverride.str().empty()
+                                    ? Parser{}.name()
+                                    : NameOverride.str());
   }
 
   auto
