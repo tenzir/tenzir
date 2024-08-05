@@ -262,9 +262,9 @@ teardown() {
   TENZIR_EXAMPLE_YAML="$(dirname "$BATS_TEST_DIRNAME")/../../tenzir.yaml.example"
 
   check tenzir "from file ${TENZIR_EXAMPLE_YAML} read yaml | put plugins=tenzir.plugins, commands=tenzir.start.commands"
-  check tenzir 'show config | drop tenzir.config | drop tenzir.cache-directory | drop tenzir.metrics | drop tenzir.state-directory | write yaml'
+  check tenzir 'config | drop tenzir.config, tenzir.cache-directory, tenzir.metrics, tenzir.state-directory, tenzir.start, tenzir.endpoint | write yaml'
   check tenzir "from file ${INPUTSDIR}/zeek/zeek.json read zeek-json | head 5 | write yaml"
-  check tenzir 'show plugins | where name == "yaml" | repeat 10 | write yaml | read yaml'
+  check tenzir 'plugins | where name == "yaml" | repeat 10 | write yaml | read yaml'
 }
 
 # bats test_tags=pipelines,zeek

@@ -6,15 +6,11 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include <tenzir/actors.hpp>
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/catalog.hpp>
-#include <tenzir/node_control.hpp>
-#include <tenzir/partition_synopsis.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
-
-#include <caf/scoped_actor.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::fields {
 
@@ -146,34 +142,23 @@ auto add_field(builder_ref builder, const type& t) {
   }
 }
 
-class plugin final : public virtual aspect_plugin {
+class fields_operator final : public crtp_operator<fields_operator> {
 public:
-  auto name() const -> std::string override {
-    return "fields";
-  }
+  fields_operator() = default;
 
-  auto show(operator_control_plane& ctrl) const
-    -> generator<table_slice> override {
-    // TODO: Some of the the requests this operator makes are blocking, so
-    // we have to create a scoped actor here; once the operator API uses
-    // async we can offer a better mechanism here.
-    auto blocking_self = caf::scoped_actor(ctrl.self().system());
-    auto components
-      = get_node_components<catalog_actor>(blocking_self, ctrl.node());
-    if (!components) {
-      diagnostic::error(components.error())
-        .note("failed to get catalog")
-        .emit(ctrl.diagnostics());
-      co_return;
-    }
-    co_yield {};
-    auto [catalog] = std::move(*components);
+  auto operator()(operator_control_plane& ctrl) const
+    -> generator<table_slice> {
+    auto catalog
+      = ctrl.self().system().registry().get<catalog_actor>("tenzir.catalog");
+    TENZIR_ASSERT(catalog);
+    ctrl.set_waiting(true);
     auto synopses = std::vector<partition_synopsis_pair>{};
     ctrl.self()
       .request(catalog, caf::infinite, atom::get_v)
-      .await(
-        [&synopses](std::vector<partition_synopsis_pair>& result) {
+      .then(
+        [&](std::vector<partition_synopsis_pair>& result) {
           synopses = std::move(result);
+          ctrl.set_waiting(false);
         },
         [&ctrl](const caf::error& err) {
           diagnostic::error(err)
@@ -181,16 +166,60 @@ public:
             .emit(ctrl.diagnostics());
         });
     co_yield {};
-    auto schemas = std::set<type>{};
+    auto fields = std::set<type>{};
     for (const auto& synopsis : synopses)
-      schemas.insert(synopsis.synopsis->schema);
+      fields.insert(synopsis.synopsis->schema);
     auto builder = series_builder{field_type()};
-    for (const auto& schema : schemas) {
+    for (const auto& schema : fields) {
       add_field(builder, schema);
     }
     for (auto&& slice : builder.finish_as_table_slice()) {
       co_yield std::move(slice);
     }
+  }
+
+  auto name() const -> std::string override {
+    return "fields";
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::remote;
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)order;
+    (void)filter;
+    return do_not_optimize(*this);
+  }
+
+  auto internal() const -> bool override {
+    return true;
+  }
+
+  friend auto inspect(auto& f, fields_operator& x) -> bool {
+    return f.object(x).fields();
+  }
+};
+
+class plugin final : public virtual operator_plugin<fields_operator>,
+                     operator_factory_plugin {
+public:
+  auto signature() const -> operator_signature override {
+    return {.source = true};
+  }
+
+  auto parse_operator(parser_interface& p) const -> operator_ptr override {
+    auto parser = argument_parser{"fields", "https://docs.tenzir.com/"
+                                            "operators/fields"};
+    parser.parse(p);
+    return std::make_unique<fields_operator>();
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    argument_parser2::operator_("fields").parse(inv, ctx).ignore();
+    return std::make_unique<fields_operator>();
   }
 };
 

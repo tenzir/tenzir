@@ -98,26 +98,23 @@ public:
     parser.add(aspect, "<aspect>");
     parser.parse(p);
     if (aspect) {
-      // We moved `show version` to `version` when we made the `show` operator
-      // always report a remote location for consistency. This makes it less of
-      // a breaking change.
-      if (aspect->inner == "version") {
-        auto op = pipeline::internal_parse_as_operator("version");
-        if (not op) {
-          diagnostic::error("failed to parse `version` operator: {}",
-                            op.error())
-            .throw_();
+      // We're in the process of removing aspect plugins in favor of operators.
+      // For backwards compatibility, this adds support for `show <aspect>` by
+      // redirecting to the operator.
+      static constexpr auto removed_aspects = std::array{
+        "build",   "config",  "partitions", "plugins",
+        "schemas", "version", "fields",
+      };
+      for (const auto& removed_aspect : removed_aspects) {
+        if (aspect->inner == removed_aspect) {
+          auto op = pipeline::internal_parse_as_operator(removed_aspect);
+          if (not op) {
+            diagnostic::error("failed to parse `{}` operator: {}",
+                              removed_aspect, op.error())
+              .throw_();
+          }
+          return std::move(*op);
         }
-        return std::move(*op);
-      }
-      if (aspect->inner == "partitions") {
-        auto op = pipeline::internal_parse_as_operator("partitions");
-        if (not op) {
-          diagnostic::error("failed to parse `partitions` operator: {}",
-                            op.error())
-            .throw_();
-        }
-        return std::move(*op);
       }
       auto available = std::map<std::string, std::string>{};
       for (const auto& aspect : collect(plugins::get<aspect_plugin>()))
