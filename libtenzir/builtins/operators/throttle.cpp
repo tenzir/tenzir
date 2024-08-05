@@ -49,7 +49,7 @@ public:
   auto operator()(generator<chunk_ptr> input,
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
     auto alarm_clock = ctrl.self().spawn(detail::make_alarm_clock);
-    auto last_timestamp = std::chrono::steady_clock::now();
+    auto last_timestamp = std::chrono::steady_clock::now() - window_;
     auto bytes_per_window = bandwidth_per_second_ * window_.count();
     if (bytes_per_window == size_t{0}) {
       ++bytes_per_window; // Enforce at least some progress every window.
@@ -132,9 +132,9 @@ public:
     auto const* docs = "https://docs.tenzir.com/operators/throttle";
     auto parser = argument_parser{"throttle", docs};
     auto bandwidth = located<uint64_t>{};
-    // TODO: Add option to set window size.
-    auto window = float_seconds{1};
+    auto window = std::optional<located<duration>>{};
     parser.add(bandwidth, "<bandwidth>");
+    parser.add("--within", window, "<duration>");
     parser.parse(p);
     if (bandwidth.inner == 0) {
       diagnostic::error("`bandwidth` must be a positive number")
@@ -142,14 +142,24 @@ public:
         .note("the unit of measurement is bytes/second")
         .throw_();
     }
-    return std::make_unique<throttle_operator>(bandwidth.inner, window);
+    if (window and window->inner <= duration::zero()) {
+      diagnostic::error("duration must be greater than zero")
+        .primary(window->source)
+        .throw_();
+    }
+    return std::make_unique<throttle_operator>(
+      bandwidth.inner,
+      window ? std::chrono::duration_cast<float_seconds>(window->inner)
+             : float_seconds{1});
   }
 
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto bandwidth = located<uint64_t>{};
+    auto window = std::optional<located<duration>>{};
     argument_parser2::operator_("throttle")
       .add(bandwidth, "<bandwith>")
+      .add("within", window)
       .parse(inv, ctx)
       .ignore();
     if (bandwidth.inner == 0) {
@@ -157,11 +167,16 @@ public:
         .primary(bandwidth.source)
         .note("the unit of measurement is bytes/second")
         .emit(ctx);
-      return failure::promise();
     }
-    // TODO: Add option to set window size.
-    auto window = float_seconds{1};
-    return std::make_unique<throttle_operator>(bandwidth.inner, window);
+    if (window and window->inner <= duration::zero()) {
+      diagnostic::error("duration must be greater than zero")
+        .primary(window->source)
+        .emit(ctx);
+    }
+    return std::make_unique<throttle_operator>(
+      bandwidth.inner,
+      window ? std::chrono::duration_cast<float_seconds>(window->inner)
+             : float_seconds{1});
   }
 };
 
