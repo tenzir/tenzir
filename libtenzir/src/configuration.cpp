@@ -151,8 +151,6 @@ collect_config_files(std::vector<std::filesystem::path> dirs,
   if (cli_configs.empty()) {
     if (auto file = detail::getenv("TENZIR_CONFIG"))
       cli_configs.emplace_back(*file);
-    else if (auto file = detail::getenv("VAST_CONFIG"))
-      cli_configs.emplace_back(*file);
   }
   for (const auto& file : cli_configs) {
     auto config_file = std::filesystem::path{file};
@@ -425,9 +423,6 @@ caf::error configuration::parse(int argc, char** argv) {
   } else if (auto tenzir_bare_mode = detail::getenv("TENZIR_BARE_MODE")) {
     caf::put(content, "tenzir.bare-mode",
              not falsy_env_values.contains(*tenzir_bare_mode));
-  } else if (auto vast_bare_mode = detail::getenv("VAST_BARE_MODE")) {
-    caf::put(content, "tenzir.bare-mode",
-             not falsy_env_values.contains(*vast_bare_mode));
   }
   // Gather and parse all to-be-considered configuration files.
   std::vector<std::string> cli_configs;
@@ -546,26 +541,16 @@ caf::error configuration::parse(int argc, char** argv) {
   // command-line options. We also get escaping for free this way.
   if (auto tenzir_plugins = detail::getenv("TENZIR_PLUGINS")) {
     plugin_args.push_back(fmt::format("--plugins={}", *tenzir_plugins));
-  } else if (auto vast_plugin = detail::getenv("VAST_PLUGINS")) {
-    plugin_args.push_back(fmt::format("--plugins={}", *vast_plugin));
   }
   if (auto tenzir_disable_plugins = detail::getenv("TENZIR_DISABLE_PLUGINS")) {
     plugin_args.push_back(
       fmt::format("--disable-plugins={}", *tenzir_disable_plugins));
-  } else if (auto vast_disable_plugins
-             = detail::getenv("VAST_DISABLE_PLUGINS")) {
-    plugin_args.push_back(
-      fmt::format("--disable-plugins={}", *vast_disable_plugins));
   }
   if (auto tenzir_plugin_dirs = detail::getenv("TENZIR_PLUGIN_DIRS")) {
     plugin_args.push_back(fmt::format("--plugin-dirs={}", *tenzir_plugin_dirs));
-  } else if (auto vast_plugin_dirs = detail::getenv("VAST_PLUGIN_DIRS")) {
-    plugin_args.push_back(fmt::format("--plugin-dirs={}", *vast_plugin_dirs));
   }
   if (auto tenzir_schema_dirs = detail::getenv("TENZIR_SCHEMA_DIRS")) {
     plugin_args.push_back(fmt::format("--schema-dirs={}", *tenzir_schema_dirs));
-  } else if (auto vast_schema_dirs = detail::getenv("VAST_SCHEMA_DIRS")) {
-    plugin_args.push_back(fmt::format("--schema-dirs={}", *vast_schema_dirs));
   }
   // Package dirs don't need to be parsed early, but we still want to have
   // the same command-line parsing logic so that a single string is
