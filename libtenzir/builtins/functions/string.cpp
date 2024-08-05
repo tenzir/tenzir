@@ -75,10 +75,11 @@ private:
 
 class trim : public virtual method_plugin {
 public:
-  trim() = default;
+  explicit trim(std::string name) : name_{std::move(name)} {
+  }
 
   auto name() const -> std::string override {
-    return "trim";
+    return name_;
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -99,14 +100,15 @@ public:
       }
       options = arrow::compute::TrimOptions{*characters_str};
     }
+    auto fn_name = fmt::format("utf8_{}", name_);
     return function_use::make(
-      [subject_expr = std::move(subject_expr),
-       options = std::move(options)](evaluator eval, session ctx) -> series {
+      [subject_expr = std::move(subject_expr), options = std::move(options),
+       fn_name = std::move(fn_name)](evaluator eval, session ctx) -> series {
         auto subject = eval(subject_expr);
         auto f = detail::overload{
           [&](const arrow::StringArray& array) {
             auto trimmed_array
-              = arrow::compute::CallFunction("utf8_trim", {array}, &options);
+              = arrow::compute::CallFunction(fn_name, {array}, &options);
             if (not trimmed_array.ok()) {
               diagnostic::warning("{}", trimmed_array.status().ToString())
                 .primary(subject_expr)
@@ -127,6 +129,9 @@ public:
         return caf::visit(f, *subject.array);
       });
   }
+
+private:
+  std::string name_ = {};
 };
 
 } // namespace
@@ -135,4 +140,6 @@ public:
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::starts_or_ends_with{true})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::starts_or_ends_with{false})
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::trim)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::trim{"trim"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::trim{"ltrim"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::trim{"rtrim"})
