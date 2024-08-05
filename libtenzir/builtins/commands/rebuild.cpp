@@ -6,14 +6,17 @@
 // SPDX-FileCopyrightText: (c) 2021 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/actors.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/catalog.hpp>
 #include <tenzir/concept/parseable/tenzir/expression.hpp>
 #include <tenzir/concept/parseable/to.hpp>
 #include <tenzir/connect_to_node.hpp>
 #include <tenzir/data.hpp>
+#include <tenzir/defaults.hpp>
 #include <tenzir/detail/inspection_common.hpp>
 #include <tenzir/detail/narrow.hpp>
+#include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/fwd.hpp>
 #include <tenzir/index.hpp>
 #include <tenzir/node.hpp>
@@ -24,7 +27,6 @@
 #include <tenzir/query_context.hpp>
 #include <tenzir/query_cursor.hpp>
 #include <tenzir/read_query.hpp>
-#include <tenzir/report.hpp>
 #include <tenzir/status.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/table_slice_builder.hpp>
@@ -115,7 +117,6 @@ struct rebuilder_state {
   rebuilder_actor::pointer self = {};
   catalog_actor catalog = {};
   index_actor index = {};
-  accountant_actor accountant = {};
 
   /// Constants read once from the system configuration.
   size_t max_partition_size = 0u;
@@ -319,7 +320,6 @@ struct rebuilder_state {
                   run->remaining_partitions.size());
       run->statistics.num_total -= run->remaining_partitions.size();
       run->remaining_partitions.clear();
-      emit_telemetry();
     }
     if (options.detached)
       return {};
@@ -375,7 +375,6 @@ struct rebuilder_state {
       run->statistics.num_rebuilding -= 1;
       run->statistics.num_total -= 1;
       // Pick up new work until we run out of remainig partitions.
-      emit_telemetry();
       return self->delegate(static_cast<rebuilder_actor>(self),
                             atom::internal_v, atom::rebuild_v);
     }
@@ -384,7 +383,6 @@ struct rebuilder_state {
     auto rebatch
       = pipeline::internal_parse(fmt::format("batch {}", desired_batch_size));
     TENZIR_ASSERT(rebatch);
-    emit_telemetry();
     // We sort the selected partitions from old to new so the rebuild transform
     // sees the batches (and events) in the order they arrived. This prevents
     // the rebatching from shuffling events, and rebatching of already correctly
@@ -407,7 +405,6 @@ struct rebuilder_state {
             run->statistics.num_total -= num_partitions;
             run->statistics.num_rebuilding -= num_partitions;
             // Pick up new work until we run out of remaining partitions.
-            emit_telemetry();
             rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
                         atom::rebuild_v);
             return;
@@ -436,7 +433,6 @@ struct rebuilder_state {
           run->statistics.num_results += result.size();
           run->statistics.num_rebuilding -= num_partitions;
           // Pick up new work until we run out of remainig partitions.
-          emit_telemetry();
           rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
                       atom::rebuild_v);
         },
@@ -445,7 +441,6 @@ struct rebuilder_state {
           TENZIR_WARN("{} failed to rebuild partititons: {}", *self, error);
           run->statistics.num_rebuilding -= num_partitions;
           // Pick up new work until we run out of remainig partitions.
-          emit_telemetry();
           rp.delegate(static_cast<rebuilder_actor>(self), atom::internal_v,
                       atom::rebuild_v);
         });
@@ -476,38 +471,18 @@ struct rebuilder_state {
           TENZIR_WARN("{} failed during automatic rebuild: {}", *self, err);
         });
   }
-
-private:
-  /// Send metrics to the accountant for live monitoring.
-  void emit_telemetry() {
-    if (!accountant)
-      return;
-    auto report = tenzir::report {
-      .data = {
-        {"rebuilder.partitions.remaining", run ? run->statistics.num_total - run->statistics.num_completed : 0u},
-        {"rebuilder.partitions.rebuilding", run ? run->statistics.num_rebuilding : 0u},
-        {"rebuilder.partitions.completed", run ? run->statistics.num_completed : 0u},
-      },
-      .metadata = {
-      },
-    };
-    self->send(accountant, atom::metrics_v, std::move(report));
-  }
 };
 
 /// Defines the behavior of the REBUILDER actor.
 /// @param self A pointer to this actor.
 /// @param catalog A handle to the CATALOG actor.
 /// @param index A handle to the INDEX actor.
-/// @param accountant A handle to the ACCOUNTANT actor.
 rebuilder_actor::behavior_type
 rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
-          catalog_actor catalog, index_actor index,
-          accountant_actor accountant) {
+          catalog_actor catalog, index_actor index) {
   self->state.self = self;
   self->state.catalog = std::move(catalog);
   self->state.index = std::move(index);
-  self->state.accountant = std::move(accountant);
   self->state.max_partition_size
     = caf::get_or(self->system().config(), "tenzir.max-partition-size",
                   defaults::max_partition_size);
@@ -534,6 +509,35 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
       rp.deliver(msg.reason);
     self->quit(msg.reason);
   });
+  if (auto importer
+      = self->system().registry().get<importer_actor>("tenzir.importer")) {
+    auto builder = series_builder{type{
+      "tenzir.metrics.rebuild",
+      record_type{
+        {"timestamp", time_type{}},
+        {"partitions", uint64_type{}},
+        {"queued_partitions", uint64_type{}},
+      },
+      {{"internal"}},
+    }};
+    detail::weak_run_delayed_loop(
+      self, defaults::metrics_interval,
+      [self, importer = std::move(importer),
+       builder = std::move(builder)]() mutable {
+        const auto partitions
+          = self->state.run ? self->state.run->statistics.num_rebuilding : 0;
+        const auto queued_partitions
+          = self->state.run ? self->state.run->statistics.num_total
+                                - self->state.run->statistics.num_completed
+                                - self->state.run->statistics.num_rebuilding
+                            : 0;
+        auto metric = builder.record();
+        metric.field("timestamp", time::clock::now());
+        metric.field("partitions", partitions);
+        metric.field("queued_partitions", queued_partitions);
+        self->send(importer, builder.finish_assert_one_slice());
+      });
+  }
   return {
     [self](atom::status, status_verbosity verbosity, duration) {
       return self->state.status(verbosity);
@@ -722,11 +726,9 @@ public:
 
   auto make_component(node_actor::stateful_pointer<node_state> node) const
     -> component_plugin_actor override {
-    auto [catalog, index, accountant]
-      = node->state.registry
-          .find<catalog_actor, index_actor, accountant_actor>();
-    return node->spawn(rebuilder, std::move(catalog), std::move(index),
-                       std::move(accountant));
+    auto [catalog, index]
+      = node->state.registry.find<catalog_actor, index_actor>();
+    return node->spawn(rebuilder, std::move(catalog), std::move(index));
   }
 };
 

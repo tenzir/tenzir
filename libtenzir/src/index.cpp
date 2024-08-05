@@ -44,7 +44,6 @@
 #include "tenzir/partition_synopsis.hpp"
 #include "tenzir/partition_transformer.hpp"
 #include "tenzir/passive_partition.hpp"
-#include "tenzir/report.hpp"
 #include "tenzir/shutdown.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/table_slice.hpp"
@@ -300,8 +299,7 @@ partition_actor partition_factory::operator()(const uuid& id) const {
   const auto path = state_.partition_path(id);
   TENZIR_DEBUG("{} loads partition {} for path {}", *state_.self, id, path);
   materializations_++;
-  return state_.self->spawn(passive_partition, id, state_.accountant,
-                            filesystem_, path);
+  return state_.self->spawn(passive_partition, id, filesystem_, path);
 }
 
 size_t partition_factory::materializations() const {
@@ -406,8 +404,8 @@ caf::error index_state::load_from_disk() {
             // result in incorrect index statistics. This depends on whether the
             // statistics where already updated on-disk before Tenzir crashed or
             // not, which is hard to figure out here.
-            auto partition = self->spawn(passive_partition, uuid, accountant,
-                                         filesystem, path);
+            auto partition
+              = self->spawn(passive_partition, uuid, filesystem, path);
             self->request(partition, caf::infinite, atom::erase_v)
               .then(
                 [this, uuid](atom::done) {
@@ -722,9 +720,8 @@ index_state::create_active_partition(const type& schema) {
   TENZIR_ASSERT(inserted);
   TENZIR_ASSERT(active_partition != active_partitions.end());
   active_partition->second.actor
-    = self->spawn(::tenzir::active_partition, schema, id, accountant,
-                  filesystem, index_opts, synopsis_opts, store_actor_plugin,
-                  taxonomies);
+    = self->spawn(::tenzir::active_partition, schema, id, filesystem,
+                  index_opts, synopsis_opts, store_actor_plugin, taxonomies);
   active_partition->second.stream_slot
     = stage->add_outbound_path(active_partition->second.actor);
   stage->out().set_filter(active_partition->second.stream_slot, schema);
@@ -785,18 +782,6 @@ void index_state::decommission_active_partition(
       [=, this](partition_synopsis_ptr& ps) {
         TENZIR_VERBOSE("{} successfully persisted partition {} {}", *self,
                        schema, id);
-        // Send a metric to the accountant.
-        if (accountant) {
-          auto report = tenzir::report {
-            .data = {
-              {"partition.events-written", ps->events},
-            },
-            .metadata = {
-              {"schema", std::string{schema.name()}},
-            },
-          };
-          self->send(accountant, atom::metrics_v, report);
-        }
         // The catalog expects to own the partition synopsis it receives,
         // so we make a copy for the listeners.
         // TODO: We should skip this continuation if we're currently shutting
@@ -853,11 +838,6 @@ void index_state::add_partition_creation_listener(
 auto index_state::schedule_lookups() -> size_t {
   if (!pending_queries.has_work())
     return 0u;
-  auto t = timer::start(scheduler_measurement);
-  auto num_scheduled = size_t{0};
-  auto on_return = caf::detail::make_scope_guard([&] {
-    t.stop(num_scheduled);
-  });
   const size_t previous_partition_lookups = running_partition_lookups;
   while (running_partition_lookups < max_concurrent_partition_lookups) {
     // 1. Get the partition with the highest accumulated priority.
@@ -921,8 +901,6 @@ auto index_state::schedule_lookups() -> size_t {
       immediate_completion(*next);
       continue;
     }
-    counters.partition_scheduled++;
-    counters.partition_lookups += next->queries.size();
     // 3. request all relevant queries in a loop
     auto ts = std::chrono::system_clock::now();
     auto active_lookup_id = active_lookup_counter++;
@@ -997,70 +975,12 @@ auto index_state::schedule_lookups() -> size_t {
           });
     }
     running_partition_lookups++;
-    num_scheduled++;
   }
   TENZIR_ASSERT(running_partition_lookups >= previous_partition_lookups);
   return running_partition_lookups - previous_partition_lookups;
 }
 
 // -- introspection ----------------------------------------------------------
-
-namespace {
-
-struct query_counters {
-  size_t num_low_prio = 0;
-  size_t num_normal_prio = 0;
-  size_t num_custom_prio = 0;
-};
-
-auto get_query_counters(const query_queue& pending_queries) {
-  auto result = query_counters{};
-  for (const auto& [_, q] : pending_queries.queries()) {
-    auto first_context_entry = q.query_contexts_per_type.begin()->second;
-    if (first_context_entry.priority == query_context::priority::low)
-      result.num_low_prio++;
-    else if (first_context_entry.priority == query_context::priority::normal)
-      result.num_normal_prio++;
-    else
-      result.num_custom_prio++;
-  }
-  return result;
-}
-
-} // namespace
-
-void index_state::send_report() {
-  auto materializations = inmem_partitions.factory().materializations()
-                          - this->counters.previous_materializations;
-  auto counters = std::exchange(this->counters, {});
-  this->counters.previous_materializations
-    = inmem_partitions.factory().materializations();
-  auto query_counters = get_query_counters(pending_queries);
-  auto msg = report{
-    .data = {
-      {"scheduler.backlog.custom", query_counters.num_custom_prio},
-      {"scheduler.backlog.low", query_counters.num_low_prio},
-      {"scheduler.backlog.normal", query_counters.num_normal_prio},
-      {"scheduler.partition.pending", pending_queries.num_partitions()},
-      {"scheduler.partition.materializations", materializations},
-      {"scheduler.partition.lookups", counters.partition_lookups},
-      {"scheduler.partition.scheduled", counters.partition_scheduled},
-      {"scheduler.partition.remaining-capacity",
-       max_concurrent_partition_lookups - running_partition_lookups},
-      {"scheduler.partition.current-lookups", running_partition_lookups},
-    }};
-  msg.data.push_back(data_point{
-          .key = "memory-usage",
-          .value = memusage(),
-          .metadata = {
-            {"component", std::string{name}},
-          },
-        });
-  self->send(accountant, atom::metrics_v, std::move(msg));
-  auto r = performance_report{.data = {{{"scheduler", scheduler_measurement}}}};
-  self->send(accountant, atom::metrics_v, std::move(r));
-  scheduler_measurement = measurement{};
-}
 
 std::size_t index_state::memusage() const {
   auto calculate_usage = []<class T>(const T& collection) -> std::size_t {
@@ -1082,123 +1002,13 @@ std::size_t index_state::memusage() const {
   return usage;
 }
 
-caf::typed_response_promise<record>
-index_state::status(status_verbosity v, duration d) const {
-  struct extra_state {
-    size_t memory_usage = 0;
-    void
-    deliver(caf::typed_response_promise<record>&& promise, record&& content) {
-      content["memory-usage"] = uint64_t{memory_usage};
-      promise.deliver(std::move(content));
-    }
-  };
-  auto rs = make_status_request_state<extra_state>(self);
-  auto xs = record{};
-  if (v >= status_verbosity::detailed) {
-    auto backlog_status = record{};
-    auto query_counters = get_query_counters(pending_queries);
-    backlog_status["num-custom-priority"] = query_counters.num_custom_prio;
-    backlog_status["num-low-priority"] = query_counters.num_low_prio;
-    backlog_status["num-normal-priority"] = query_counters.num_normal_prio;
-    rs->content["backlog"] = std::move(backlog_status);
-    auto worker_status = record{};
-    worker_status["count"] = max_concurrent_partition_lookups;
-    worker_status["idle"]
-      = max_concurrent_partition_lookups - running_partition_lookups;
-    worker_status["busy"] = running_partition_lookups;
-    rs->content["workers"] = std::move(worker_status);
-    auto active_lookup_status = list{};
-    for (const auto& [id, ts, item] : active_lookups) {
-      auto x = record{};
-      x["id"] = id;
-      x["start-time"] = std::chrono::time_point_cast<duration>(ts);
-      x["partition-id"] = fmt::to_string(item.partition);
-      x["schema"] = fmt::to_string(item.schema);
-      x["priority"] = fmt::to_string(item.priority);
-      x["erased"] = fmt::to_string(item.erased);
-      auto queries = list{};
-      for (const auto& q : item.queries) {
-        queries.push_back(fmt::to_string(q));
-      }
-      x["queries"] = std::move(queries);
-      active_lookup_status.emplace_back(std::move(x));
-    }
-    rs->content["active-lookups"] = std::move(active_lookup_status);
-    auto pending_status = list{};
-    for (const auto& [u, qs] : pending_queries.queries()) {
-      auto q = record{};
-      q["id"] = fmt::to_string(u);
-      q["query"] = fmt::to_string(qs);
-      pending_status.emplace_back(std::move(q));
-    }
-    rs->content["pending"] = std::move(pending_status);
-    rs->content["num-active-partitions"] = uint64_t{active_partitions.size()};
-    rs->content["num-cached-partitions"] = uint64_t{inmem_partitions.size()};
-    rs->content["num-unpersisted-partitions"] = uint64_t{unpersisted.size()};
-    const auto timeout = d / 10 * 9;
-    auto partitions = record{};
-    auto partition_status
-      = [&](const uuid& id, const partition_actor& pa, list& xs) {
-          collect_status(
-            rs, timeout, v, pa,
-            [=, &xs](const record& part_status) {
-              auto ps = record{};
-              ps["id"] = to_string(id);
-              auto it = part_status.find("memory-usage");
-              if (it != part_status.end()) {
-                if (const auto* s = caf::get_if<uint64_t>(&it->second))
-                  rs->memory_usage += *s;
-              }
-              if (v >= status_verbosity::debug)
-                merge(part_status, ps, policy::merge_lists::no);
-              xs.push_back(std::move(ps));
-            },
-            [=, this, &xs](const caf::error& err) {
-              TENZIR_WARN("{} failed to retrieve status from {} : {}", *self,
-                          id, render(err));
-              auto ps = record{};
-              ps["id"] = to_string(id);
-              ps["error"] = render(err);
-              xs.push_back(std::move(ps));
-            });
-        };
-    // Resident partitions.
-    // We emplace subrecords directly because we need to give the
-    // right pointer to the collect_status callback.
-    // Otherwise we would assign to a moved from object.
-    partitions.reserve(3u);
-    auto& active
-      = caf::get<list>(partitions.emplace("active", list{}).first->second);
-    active.reserve(active_partitions.size());
-    for (const auto& [_, active_partition] : active_partitions) {
-      if (active_partition.actor != nullptr)
-        partition_status(active_partition.id, active_partition.actor, active);
-    }
-    auto& cached
-      = caf::get<list>(partitions.emplace("cached", list{}).first->second);
-    cached.reserve(inmem_partitions.size());
-    for (const auto& [id, actor] : inmem_partitions)
-      partition_status(id, actor, cached);
-    auto& unpersisted
-      = caf::get<list>(partitions.emplace("unpersisted", list{}).first->second);
-    unpersisted.reserve(this->unpersisted.size());
-    for (const auto& [id, actor_info] : this->unpersisted)
-      partition_status(id, actor_info.second, unpersisted);
-    rs->content["partitions"] = std::move(partitions);
-    // General state such as open streams.
-  }
-  if (v >= status_verbosity::debug)
-    detail::fill_status_map(rs->content, self);
-  return rs->promise;
-}
-
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
-      accountant_actor accountant, filesystem_actor filesystem,
-      catalog_actor catalog, const std::filesystem::path& dir,
-      std::string store_backend, size_t partition_capacity,
-      duration active_partition_timeout, size_t max_inmem_partitions,
-      size_t taste_partitions, size_t max_concurrent_partition_lookups,
+      filesystem_actor filesystem, catalog_actor catalog,
+      const std::filesystem::path& dir, std::string store_backend,
+      size_t partition_capacity, duration active_partition_timeout,
+      size_t max_inmem_partitions, size_t taste_partitions,
+      size_t max_concurrent_partition_lookups,
       const std::filesystem::path& catalog_dir, index_config index_config) {
   TENZIR_TRACE_SCOPE(
     "index {} {} {} {} {} {} {} {} {} {}", TENZIR_ARG(self->id()),
@@ -1232,7 +1042,6 @@ index(index_actor::stateful_pointer<index_state> self,
     self->quit(error);
     return index_actor::behavior_type::make_empty_behavior();
   }
-  self->state.accountant = std::move(accountant);
   self->state.filesystem = std::move(filesystem);
   self->state.catalog = std::move(catalog);
   self->state.taxonomies = std::make_shared<tenzir::taxonomies>();
@@ -1389,13 +1198,6 @@ index(index_actor::stateful_pointer<index_state> self,
     }
     self->state.monitored_queries.erase(it);
   });
-  // Start metrics loop.
-  if (self->state.accountant) {
-    self->send(self->state.accountant, atom::announce_v, self->name());
-    detail::weak_run_delayed_loop(self, defaults::telemetry_rate, [self] {
-      self->state.send_report();
-    });
-  }
   return {
     [self](atom::done, uuid partition_id) {
       TENZIR_DEBUG("{} queried partition {} successfully", *self, partition_id);
@@ -1779,11 +1581,12 @@ index(index_actor::stateful_pointer<index_state> self,
         = self->state.transformer_partition_path_template();
       auto partition_synopsis_path_template
         = self->state.transformer_partition_synopsis_path_template();
-      partition_transformer_actor partition_transfomer = self->spawn(
-        partition_transformer, store_id, self->state.synopsis_opts,
-        self->state.index_opts, self->state.accountant, self->state.catalog,
-        self->state.filesystem, pipe, std::move(partition_path_template),
-        std::move(partition_synopsis_path_template));
+      partition_transformer_actor partition_transfomer
+        = self->spawn(partition_transformer, store_id,
+                      self->state.synopsis_opts, self->state.index_opts,
+                      self->state.catalog, self->state.filesystem, pipe,
+                      std::move(partition_path_template),
+                      std::move(partition_synopsis_path_template));
       // match_everything == '"" in #schema'
       static const auto match_everything
         = tenzir::predicate{meta_extractor{meta_extractor::schema},
@@ -2012,8 +1815,8 @@ index(index_actor::stateful_pointer<index_state> self,
       return rp;
     },
     // -- status_client_actor --------------------------------------------------
-    [self](atom::status, status_verbosity v, duration d) { //
-      return self->state.status(v, d);
+    [](atom::status, status_verbosity, duration) -> record {
+      return {};
     },
   };
 }

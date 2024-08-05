@@ -318,9 +318,9 @@ auto partition_transformer(
   partition_transformer_actor::stateful_pointer<partition_transformer_state>
     self,
   std::string store_id, const index_config& synopsis_opts,
-  const caf::settings& index_opts, accountant_actor accountant,
-  catalog_actor catalog, filesystem_actor fs, pipeline transform,
-  std::string partition_path_template, std::string synopsis_path_template)
+  const caf::settings& index_opts, catalog_actor catalog, filesystem_actor fs,
+  pipeline transform, std::string partition_path_template,
+  std::string synopsis_path_template)
   -> partition_transformer_actor::behavior_type {
   self->state.synopsis_opts = synopsis_opts;
   self->state.partition_path_template = std::move(partition_path_template);
@@ -330,7 +330,6 @@ auto partition_transformer(
   self->state.partition_capacity
     = caf::get_or(index_opts, "cardinality", defaults::max_partition_size);
   self->state.index_opts = index_opts;
-  self->state.accountant = std::move(accountant);
   self->state.fs = std::move(fs);
   self->state.catalog = std::move(catalog);
   self->state.transform = std::move(transform);
@@ -437,7 +436,7 @@ auto partition_transformer(
         if (partition_data.events == 0)
           continue;
         auto builder_and_header = store_actor_plugin->make_store_builder(
-          self->state.accountant, self->state.fs, partition_data.id);
+          self->state.fs, partition_data.id);
         if (!builder_and_header) {
           self->state.stream_error
             = caf::make_error(ec::invalid_argument,

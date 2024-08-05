@@ -93,9 +93,6 @@ struct passive_partition_state {
   /// Stores a list of erasures that could not be answered immediately.
   std::vector<caf::typed_response_promise<atom::done>> deferred_erasures = {};
 
-  /// Actor handle of the accountant.
-  accountant_actor accountant = {};
-
   /// Actor handle of the filesystem.
   filesystem_actor filesystem = {};
 
@@ -142,12 +139,10 @@ struct partition_chunk {
 /// Spawns a read-only partition.
 /// @param self The partition actor.
 /// @param id The UUID of this partition.
-/// @param accountant the accountant to send metrics to.
 /// @param filesystem The actor handle of the filesystem actor.
 /// @param path The path where the partition flatbuffer can be found.
 partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
-  accountant_actor accountant, filesystem_actor filesystem,
-  const std::filesystem::path& path);
+  filesystem_actor filesystem, const std::filesystem::path& path);
 
 } // namespace tenzir

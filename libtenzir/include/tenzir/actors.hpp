@@ -161,29 +161,6 @@ using active_indexer_actor = typed_actor_fwd<
   // Conform to the procol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
-/// The ACCOUNTANT actor interface.
-using accountant_actor = typed_actor_fwd<
-  // Update the configuration of the ACCOUNTANT.
-  auto(atom::config, accountant_config)->caf::result<atom::ok>,
-  // Registers the sender with the ACCOUNTANT.
-  auto(atom::announce, std::string)->caf::result<void>,
-  // Record duration metric.
-  auto(atom::metrics, std::string, duration, metrics_metadata)->caf::result<void>,
-  // Record time metric.
-  auto(atom::metrics, std::string, time, metrics_metadata)->caf::result<void>,
-  // Record integer metric.
-  auto(atom::metrics, std::string, int64_t, metrics_metadata)->caf::result<void>,
-  // Record count metric.
-  auto(atom::metrics, std::string, uint64_t, metrics_metadata)->caf::result<void>,
-  // Record real metric.
-  auto(atom::metrics, std::string, double, metrics_metadata)->caf::result<void>,
-  // Record a metrics report.
-  auto(atom::metrics, report)->caf::result<void>,
-  // Record a performance report.
-  auto(atom::metrics, performance_report)->caf::result<void>>
-  // Conform to the procotol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
-
 /// The PARTITION CREATION LISTENER actor interface.
 using partition_creation_listener_actor = typed_actor_fwd<
   auto(atom::update, partition_synopsis_pair)->caf::result<void>,
@@ -352,26 +329,7 @@ using component_plugin_actor = typed_actor_fwd<
   // Conform to the protocol of the STATUS CLIENT actor.
   >::extend_with<status_client_actor>::unwrap;
 
-/// The interface of a SOURCE actor.
-using source_actor = typed_actor_fwd<
-  // Retrieve the currently used module of the SOURCE.
-  auto(atom::get, atom::module)->caf::result<module>,
-  // Update the currently used module of the SOURCE.
-  auto(atom::put, module)->caf::result<void>,
-  // Update the expression used for filtering data in the SOURCE.
-  auto(atom::normalize, expression)->caf::result<void>,
-  // Set up a new stream sink for the generated data.
-  auto(stream_sink_actor<table_slice, std::string>)->caf::result<void>>
-  // Conform to the protocol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
-
-/// The interface of a DATAGRAM SOURCE actor.
-using datagram_source_actor = typed_actor_fwd<
-  // Reacts to datagram messages.
-  auto(caf::io::new_datagram_msg)->caf::result<void>>
-  // Conform to the protocol of the SOURCE actor.
-  ::extend_with<source_actor>::unwrap_as_broker;
-
+/// The receiving part of interface of an EXEC NODE actor.
 using exec_node_sink_actor = typed_actor_fwd<
   // Push events.
   auto(atom::push, table_slice events)->caf::result<void>,
@@ -437,10 +395,10 @@ using pipeline_executor_actor = typed_actor_fwd<
   auto(atom::resume)->caf::result<void>>::unwrap;
 
 /// The interface of a PACKAGE LISTENER actor.
-// Listeners are notified by the package manager in the following order:
-//  1. context_manager component
-//  2. pipeline_manager component
-//  3. other subscribers (tbd)
+/// Listeners are notified by the package manager in the following order:
+///  1. context_manager component
+///  2. pipeline_manager component
+///  3. other subscribers (tbd)
 using package_listener_actor = typed_actor_fwd<
   // Add a new package.
   auto(atom::package, atom::add, package)->caf::result<void>,
@@ -474,7 +432,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
     (std::vector<
       std::tuple<tenzir::exec_node_actor, tenzir::operator_type, std::string>>))
 
-  TENZIR_ADD_TYPE_ID((tenzir::accountant_actor))
   TENZIR_ADD_TYPE_ID((tenzir::active_indexer_actor))
   TENZIR_ADD_TYPE_ID((tenzir::active_partition_actor))
   TENZIR_ADD_TYPE_ID((tenzir::catalog_actor))

@@ -258,6 +258,17 @@ schema.
 |`schema_id`|`string`|The schema ID of the batch.|
 |`events`|`uint64`|The amount of events that were published to the `topic`.|
 
+### `tenzir.metrics.rebuild`
+
+Contains a measurement of the partition rebuild process, emitted once every
+second.
+
+|Field|Type|Description|
+|:-|:-|:-|
+|`timestamp`|`time`|The time at which this metric was recorded.|
+|`partitions`|`uint64`|The number of partitions currently being rebuilt.|
+|`queued_partitions`|`uint64`|The number of partitions currently queued for rebuilding.|
+
 ### `tenzir.metrics.subscribe`
 
 Contains a measurement of the `subscribe` operator, emitted once every second
