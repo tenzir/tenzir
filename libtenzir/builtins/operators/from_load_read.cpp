@@ -353,7 +353,7 @@ public:
     -> failure_or<operator_ptr> override {
     auto docs = "https://docs.tenzir.com/operators/from";
     if (inv.args.empty()) {
-      diagnostic::error("expected positional argument `<path/url/list>`")
+      diagnostic::error("expected positional argument `<path/url/events>`")
         .primary(inv.self)
         .docs(docs)
         .emit(ctx);
@@ -362,6 +362,11 @@ public:
     auto& expr = inv.args[0];
     TRY(auto value, const_eval(expr, ctx));
     auto f = detail::overload{
+      [&](record& event) -> failure_or<operator_ptr> {
+        auto events = std::vector<record>{};
+        events.push_back(std::move(event));
+        return std::make_unique<from_events>(std::move(events));
+      },
       [&](list& event_list) -> failure_or<operator_ptr> {
         auto events = std::vector<record>{};
         for (auto& event : event_list) {
@@ -382,6 +387,7 @@ public:
         if (not path.ends_with(".json")) {
           diagnostic::error("`from` currently requires `.json` files")
             .primary(expr)
+            .note("this limitation will be lifted very soon")
             .emit(ctx);
           return failure::promise();
         }
@@ -395,8 +401,9 @@ public:
         return std::move(*result);
       },
       [&](auto&) -> failure_or<operator_ptr> {
-        diagnostic::error("expected string or list of records")
+        diagnostic::error("expected string, record or list of records")
           .primary(inv.args[0])
+          .docs(docs)
           .emit(ctx);
         return failure::promise();
       },
