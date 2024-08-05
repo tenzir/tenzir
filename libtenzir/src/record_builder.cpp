@@ -223,8 +223,11 @@ auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
     [](const string_type&) -> detail::record_builder::data_parsing_result {
       return {};
     },
-    [](const blob_type& ) -> detail::record_builder::data_parsing_result {
-      return {};
+    [&s](const blob_type&) -> detail::record_builder::data_parsing_result {
+      // TODO this doesnt necessariy need to copy the same bytes into a blob,
+      // but the record builder has no notion of storing the type outside of the variant alternative
+      auto bytes_data = as_bytes(s);
+      return {tenzir::blob{bytes_data.begin(), bytes_data.end()}};
     },
     [](const record_type&) -> tenzir::diagnostic {
       TENZIR_ERROR("`basic_parser` does not support structural "
@@ -351,7 +354,7 @@ auto node_record::field(std::string_view name) -> node_field* {
 
 auto node_record::at(std::string_view key) -> node_field* {
   for (const auto& [field_name, index] : lookup_) {
-    if ( not data_[index].value.is_alive()) {
+    if (not data_[index].value.is_alive()) {
       continue;
     }
     const auto [field_name_mismatch, key_mismatch]
@@ -566,11 +569,6 @@ auto node_field::parse(class record_builder& rb,
     }
     data(std::move(value));
     return;
-  } else if ( seed and seed->type_index() == blob_type::type_index ) {
-    // TODO this doesnt necessariy need to copy the same bytes into a blob.
-    auto bytes_data = as_bytes(raw_data);
-    auto blob = tenzir::blob{ bytes_data.begin(), bytes_data.end() };
-    data( std::move(blob) );
   }
 }
 
