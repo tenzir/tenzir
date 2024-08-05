@@ -9,6 +9,7 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/util/config.h>
 #include <boost/version.hpp>
@@ -28,13 +29,12 @@ namespace tenzir::plugins::dependencies {
 
 namespace {
 
-class plugin final : public virtual aspect_plugin {
+class dependencies_operator final
+  : public crtp_operator<dependencies_operator> {
 public:
-  auto name() const -> std::string override {
-    return "dependencies";
-  }
+  dependencies_operator() = default;
 
-  auto show(operator_control_plane&) const -> generator<table_slice> override {
+  auto operator()(operator_control_plane&) const -> generator<table_slice> {
     auto builder = series_builder{};
 #define TENZIR_ADD_DEPENDENCY(name, version)                                   \
   do {                                                                         \
@@ -86,8 +86,52 @@ public:
     for (auto&& slice : builder.finish_as_table_slice("tenzir.dependency")) {
       co_yield std::move(slice);
     }
-  } // namespace
-};  // namespace
+  }
+
+  auto name() const -> std::string override {
+    return "dependencies";
+  }
+
+  auto location() const -> operator_location override {
+    return operator_location::local;
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    (void)order;
+    (void)filter;
+    return do_not_optimize(*this);
+  }
+
+  auto internal() const -> bool override {
+    return true;
+  }
+
+  friend auto inspect(auto& f, dependencies_operator& x) -> bool {
+    return f.object(x).fields();
+  }
+};
+
+class plugin final : public virtual operator_plugin<dependencies_operator>,
+                     operator_factory_plugin {
+public:
+  auto signature() const -> operator_signature override {
+    return {.source = true};
+  }
+
+  auto parse_operator(parser_interface& p) const -> operator_ptr override {
+    auto parser = argument_parser{"dependencies", "https://docs.tenzir.com/"
+                                                  "operators/dependencies"};
+    parser.parse(p);
+    return std::make_unique<dependencies_operator>();
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    argument_parser2::operator_("dependencies").parse(inv, ctx).ignore();
+    return std::make_unique<dependencies_operator>();
+  }
+};
 
 } // namespace
 

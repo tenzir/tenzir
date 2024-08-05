@@ -8,6 +8,11 @@ sidebar_custom_props:
 
 Returns information about a Tenzir node.
 
+:::warning Deprecated
+The `show` operator is deprecated. Instead of `show <aspect>`, use the operator
+`<aspect>` if available.
+:::
+
 ## Synopsis
 
 ```
