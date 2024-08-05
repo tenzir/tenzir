@@ -73,14 +73,14 @@ namespace tenzir {
       auto const* value_record = caf::get_if<view<record>>(&value);            \
       if (not value_record) {                                                  \
         return diagnostic::error(#name " values must be records")              \
-          .note("while parsing key {} for field" #name, key)                   \
+          .note("while parsing key {} for field " #name, key)                  \
           .note("invalid package definition")                                  \
           .to_error();                                                         \
       }                                                                        \
       auto parsed_value = value_type::parse(*value_record);                    \
       if (not parsed_value) {                                                  \
         return diagnostic::error(parsed_value.error())                         \
-          .note("while parsing key {} for field" #name, key)                   \
+          .note("while parsing key {} for field " #name, key)                  \
           .note("invalid package definition")                                  \
           .to_error();                                                         \
       }                                                                        \
@@ -101,7 +101,7 @@ namespace tenzir {
       auto const* value_string = caf::get_if<std::string_view>(&value);        \
       if (not value_string) {                                                  \
         return diagnostic::error(#name " values must be strings")              \
-          .note("while parsing key {} for field" #name, key)                   \
+          .note("while parsing key {} for field " #name, key)                  \
           .note("invalid package definition")                                  \
           .to_error();                                                         \
       }                                                                        \
