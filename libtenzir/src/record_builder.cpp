@@ -224,8 +224,9 @@ auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
       return {};
     },
     [&s](const blob_type&) -> detail::record_builder::data_parsing_result {
-      // TODO this doesnt necessariy need to copy the same bytes into a blob,
-      // but the record builder has no notion of storing the type outside of the variant alternative
+      // TODO this doesnt necessarily need to copy the same bytes into a blob,
+      // but the record builder has no notion of storing the type outside of the
+      // variant alternative
       auto bytes_data = as_bytes(s);
       return {tenzir::blob{bytes_data.begin(), bytes_data.end()}};
     },

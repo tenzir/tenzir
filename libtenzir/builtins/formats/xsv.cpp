@@ -205,7 +205,7 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
       .list_sep = *list_sep,
       .null_value = null_value_->inner,
       .allow_comments = allow_comments_,
-      .header = header_->inner,
+      .header = header_ ? std::optional{header_->inner} : std::nullopt,
       .no_header = false,
       .builder_options = std::move(opts),
     };
