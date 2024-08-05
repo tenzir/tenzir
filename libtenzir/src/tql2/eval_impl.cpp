@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/collect.hpp>
 #include <tenzir/detail/enumerate.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/tql2/eval_impl.hpp>
@@ -70,20 +71,21 @@ auto evaluator::eval(const ast::list& x) -> series {
   auto item_ty = type{null_type{}};
   for (auto& item : x.items) {
     auto array = eval(item);
-    // TODO: Rewrite this and handle record extension.
-    if (array.type.kind().is_not<null_type>() && item_ty != array.type) {
-      if (item_ty.kind().is<null_type>()) {
-        item_ty = array.type;
-      } else {
-        diagnostic::warning("type clash in list, using `null` instead")
-          .primary(item)
-          .note("expected `{}` but got `{}`", item_ty.kind(), array.type.kind())
-          .emit(ctx_);
-        arrays.push_back(series::null(null_type{}, length_));
-        continue;
+    auto unified = unify(item_ty, array.type);
+    if (unified) {
+      item_ty = std::move(*unified);
+      arrays.push_back(std::move(array));
+    } else {
+      auto diag
+        = diagnostic::warning("type clash in list, using `null` instead")
+            .primary(item);
+      if (item_ty.kind() != array.type.kind()) {
+        diag = std::move(diag).note("expected `{}` but got `{}`",
+                                    item_ty.kind(), array.type.kind());
       }
+      std::move(diag).emit(ctx_);
+      arrays.push_back(series::null(null_type{}, length_));
     }
-    arrays.push_back(std::move(array));
   }
   // arrays = [<1, 3>, <2, 4>]
   // TODO: Rewrite this, `series_builder` is probably not the right tool.
