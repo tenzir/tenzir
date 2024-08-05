@@ -73,10 +73,12 @@ auto record_generator::unflattend_field(std::string_view key)
 }
 
 auto field_generator::data_unparsed(std::string_view s) -> void {
+  s = unquote(s);
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
       auto res = msb_->builder_raw_.parser_(s, nullptr);
       auto& [value, diag] = res;
+      // TODO maybe accept a diag handler, so we dont have to swallow the diagnostic
       // if ( diag ) {
       //   throw std::move(diag);
       // }
