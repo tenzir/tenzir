@@ -10,7 +10,7 @@ setup() {
 
 @test "add" {
   check tenzir -f /dev/stdin <<EOF
-source {}
+from [{}]
 
 x0 = 1 + 2
 x1 = uint("1") + 2
@@ -35,7 +35,7 @@ EOF
 
 @test "record spread" {
   check tenzir -f '/dev/stdin' <<EOF
-source {}
+from [{}]
 x = {...this, x: 1}
 y = {y: 2, ...this}
 z = {...x, ...42, ...y}
@@ -45,7 +45,7 @@ EOF
 
 @test "list indexing" {
   check tenzir -f '/dev/stdin' <<EOF
-source [
+from [
   { a: [1, 2, 3] },
   { a: [4, 5] },
 ]
@@ -58,7 +58,7 @@ EOF
 
 @test "length method" {
   check tenzir -f '/dev/stdin' <<EOF
-source [
+from [
   { a: null, b: null },
   { a: "", b: [] },
   { a: "foo", b: [1, 2, 3] },
@@ -70,7 +70,7 @@ EOF
 
 @test "list construction" {
   check tenzir -f '/dev/stdin' <<EOF
-source {
+from [{
   x0: [],
   x1: [null],
   x2: [null, null],
@@ -86,7 +86,7 @@ source {
   x12: [{}, []],
   x13: [123, "abc"],
   x14: [[{x: 123}], [{x: "abc"}]],
-}
+}]
 write_json
 EOF
 }

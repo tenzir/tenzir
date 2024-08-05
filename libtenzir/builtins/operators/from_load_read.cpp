@@ -10,6 +10,7 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/prepend_token.hpp>
+#include <tenzir/series_builder.hpp>
 #include <tenzir/tql/fwd.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/eval.hpp>
@@ -301,6 +302,47 @@ public:
   }
 };
 
+class from_events final : public crtp_operator<from_events> {
+public:
+  from_events() = default;
+
+  explicit from_events(std::vector<record> events)
+    : events_{std::move(events)} {
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.from_events";
+  }
+
+  auto operator()() const -> generator<table_slice> {
+    // TODO: We are combining all events into a single schema. Is this what we
+    // want, or do we want a more "precise" output if possible?
+    auto sb = series_builder{};
+    for (auto& event : events_) {
+      sb.data(event);
+    }
+    auto slices = sb.finish_as_table_slice("tenzir.from");
+    for (auto& slice : slices) {
+      co_yield std::move(slice);
+    }
+  }
+
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
+    TENZIR_UNUSED(filter, order);
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, from_events& x) -> bool {
+    return f.apply(x.events_);
+  }
+
+private:
+  std::vector<record> events_;
+};
+
+using from_events_plugin = operator_inspection_plugin<from_events>;
+
 class from_plugin2 final : public virtual operator_factory_plugin {
 public:
   auto name() const -> std::string override {
@@ -309,33 +351,57 @@ public:
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
+    auto docs = "https://docs.tenzir.com/operators/from";
     if (inv.args.empty()) {
-      diagnostic::error("expected positional argument `<path/url>`")
+      diagnostic::error("expected positional argument `<path/url/list>`")
         .primary(inv.self)
+        .docs(docs)
         .emit(ctx);
       return failure::promise();
     }
-    TRY(auto path, const_eval(inv.args[0], ctx));
-    auto path_str = caf::get_if<std::string>(&path);
-    if (not path_str) {
-      diagnostic::error("expected string").primary(inv.args[0]).emit(ctx);
-      return failure::promise();
-    }
-    // TODO: This is just for demo purposes!
-    if (not path_str->ends_with(".json")) {
-      diagnostic::error("`from` currently requires `.json` files")
-        .primary(inv.args[0])
-        .emit(ctx);
-      return failure::promise();
-    }
-    // TODO: Obviously not great.
-    auto result = pipeline::internal_parse_as_operator(
-      fmt::format("from \"{}\" read json", *path_str));
-    if (not result) {
-      diagnostic::error(result.error()).primary(inv.self).emit(ctx);
-      return failure::promise();
-    }
-    return std::move(*result);
+    auto& expr = inv.args[0];
+    TRY(auto value, const_eval(expr, ctx));
+    auto f = detail::overload{
+      [&](list& event_list) -> failure_or<operator_ptr> {
+        auto events = std::vector<record>{};
+        for (auto& event : event_list) {
+          auto event_record = caf::get_if<record>(&event);
+          if (not event_record) {
+            diagnostic::error("expected list of records")
+              .primary(expr)
+              .docs(docs)
+              .emit(ctx);
+            return failure::promise();
+          }
+          events.push_back(std::move(*event_record));
+        }
+        return std::make_unique<from_events>(std::move(events));
+      },
+      [&](std::string& path) -> failure_or<operator_ptr> {
+        // TODO: This is just for demo purposes!
+        if (not path.ends_with(".json")) {
+          diagnostic::error("`from` currently requires `.json` files")
+            .primary(expr)
+            .emit(ctx);
+          return failure::promise();
+        }
+        // TODO: Obviously not great.
+        auto result = pipeline::internal_parse_as_operator(
+          fmt::format("from \"{}\" read json", path));
+        if (not result) {
+          diagnostic::error(result.error()).primary(inv.self).emit(ctx);
+          return failure::promise();
+        }
+        return std::move(*result);
+      },
+      [&](auto&) -> failure_or<operator_ptr> {
+        diagnostic::error("expected string or list of records")
+          .primary(inv.args[0])
+          .emit(ctx);
+        return failure::promise();
+      },
+    };
+    return caf::visit(f, value);
   }
 };
 
@@ -451,6 +517,7 @@ public:
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::from_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::load_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::read_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::from_events_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::from_plugin2)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::load_plugin2)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::from::save_plugin2)
