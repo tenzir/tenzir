@@ -19,48 +19,79 @@
 
 namespace tenzir::plugins::throttle {
 
+namespace {
+
+using float_seconds = std::chrono::duration<double>;
+
+auto split_chunk(const chunk_ptr& in,
+                 size_t position) -> std::pair<chunk_ptr, chunk_ptr> {
+  if (position >= in->size()) {
+    return {in, chunk::make_empty()};
+  }
+  return {in->slice(0, position), in->slice(position)};
+}
+
+} // namespace
+
 class throttle_operator final : public crtp_operator<throttle_operator> {
 public:
   throttle_operator() = default;
 
-  explicit throttle_operator(double max_bandwidth)
-    : max_bandwidth_(max_bandwidth) {
+  explicit throttle_operator(double max_bandwidth, float_seconds window)
+    : bandwidth_per_second_(max_bandwidth / window.count()), window_(window) {
   }
 
+  // TODO: Currently the operator only handles byte stream, but in the future
+  // we also want to be able to handle events as input.
   auto operator()(generator<chunk_ptr> input,
                   operator_control_plane& ctrl) const -> generator<chunk_ptr> {
-    using float_seconds = std::chrono::duration<double>;
     auto alarm_clock = ctrl.self().spawn(detail::make_alarm_clock);
-    auto last = std::chrono::system_clock::now();
-    double budget = 0.0; // measured in bits
+    auto last_timestamp = std::chrono::system_clock::now();
+    auto bytes_per_window = bandwidth_per_second_ * window_.count();
+    if (bytes_per_window == size_t{0}) {
+      ++bytes_per_window; // Enforce at least some progress every window.
+    }
+    double budget = 0.0;
     for (auto&& bytes : input) {
       if (not bytes) {
         co_yield {};
         continue;
       }
       auto now = std::chrono::system_clock::now();
-      auto incoming_bits = 8 * static_cast<double>(bytes->size());
       auto additional_budget
-        = duration_cast<float_seconds>(now - last).count() * max_bandwidth_;
-      budget = std::min(max_bandwidth_, budget + additional_budget);
-      last = now;
-      if (budget < incoming_bits) {
-        auto delay = float_seconds{(incoming_bits - budget) / max_bandwidth_};
+        = duration_cast<float_seconds>(now - last_timestamp).count()
+          * bandwidth_per_second_;
+      budget = std::min(bytes_per_window, budget + additional_budget);
+      auto split_position = static_cast<size_t>(budget);
+      auto head = chunk::make_empty();
+      auto tail = chunk::make_empty();
+      std::tie(head, tail) = split_chunk(bytes, split_position);
+      budget -= static_cast<double>(head->size());
+      co_yield std::move(head);
+      // If we didn't have enough budget to send everything in one go,
+      // send the remainder in intervals according to the configured
+      // window.
+      while (tail->size() > 0) {
+        budget = 0;
+        ctrl.set_waiting(true);
         ctrl.self()
           .request(alarm_clock, caf::infinite,
-                   duration_cast<caf::timespan>(delay))
+                   duration_cast<caf::timespan>(window_))
           .await(
             [&]() {
-              // nop
+              ctrl.set_waiting(false);
             },
             [&ctrl](const caf::error& err) {
               diagnostic::error("throttle operator failed to delay")
                 .note("encountered error: {}", err)
                 .emit(ctrl.diagnostics());
             });
+        std::tie(head, tail)
+          = split_chunk(tail, static_cast<size_t>(bytes_per_window));
+        co_yield {}; // Await the alarm clock.
+        co_yield std::move(head);
       }
-      budget -= incoming_bits;
-      co_yield std::move(bytes);
+      last_timestamp = std::chrono::system_clock::now();
     }
     co_return;
   }
@@ -76,11 +107,12 @@ public:
   }
 
   friend auto inspect(auto& f, throttle_operator& x) -> bool {
-    return f.apply(x.max_bandwidth_);
+    return f.apply(x.bandwidth_per_second_);
   }
 
 private:
-  double max_bandwidth_ = 0.0; // bits/s
+  double bandwidth_per_second_ = 0.0; // bytes
+  float_seconds window_ = {};
 };
 
 class throttle_plugin final
@@ -94,14 +126,16 @@ public:
     auto const* docs = "https://docs.tenzir.com/operators/throttle";
     auto parser = argument_parser{"throttle", docs};
     auto max_bandwidth = std::optional<uint64_t>{};
+    // TODO: Add option to determine window size.
+    auto window = float_seconds{1};
     parser.add(max_bandwidth, "<max_bandwidth>");
     parser.parse(p);
     if (not max_bandwidth) {
       diagnostic::error("`max_bandwidth` must be a numeric value")
-        .note("the unit of measurement is bits/second", name())
+        .note("the unit of measurement is bytes/second", name())
         .throw_();
     }
-    return std::make_unique<throttle_operator>(*max_bandwidth);
+    return std::make_unique<throttle_operator>(*max_bandwidth, window);
   }
 };
 
