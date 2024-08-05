@@ -18,6 +18,7 @@
 #include <tenzir/series_builder.hpp>
 #include <tenzir/si_literals.hpp>
 #include <tenzir/time_synopsis.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/uint64_synopsis.hpp>
 
 #include <caf/scoped_actor.hpp>
@@ -178,7 +179,8 @@ private:
   bool experimental_include_ranges_ = {};
 };
 
-class plugin final : public virtual operator_plugin<partitions_operator> {
+class plugin final : public virtual operator_plugin<partitions_operator>,
+                     operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {
@@ -217,6 +219,19 @@ public:
     expr->inner = std::move(*normalized_and_validated);
     return std::make_unique<partitions_operator>(
       std::move(expr->inner), experimental_include_ranges.has_value());
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto expr = ast::expression{};
+    auto experimental_include_ranges = std::optional<location>{};
+    TRY(argument_parser2::operator_("partitions")
+          .add(expr, "<expr>")
+          .add("experimental_include_ranges", experimental_include_ranges)
+          .parse(inv, ctx));
+    auto [legacy, _] = split_legacy_expression(expr);
+    return std::make_unique<partitions_operator>(
+      std::move(legacy), experimental_include_ranges.has_value());
   }
 };
 
