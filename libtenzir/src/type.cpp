@@ -8,6 +8,7 @@
 
 #include "tenzir/type.hpp"
 
+#include "tenzir/collect.hpp"
 #include "tenzir/concept/parseable/numeric/integral.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/assert.hpp"
@@ -20,6 +21,7 @@
 #include "tenzir/legacy_type.hpp"
 #include "tenzir/module.hpp"
 #include "tenzir/modules.hpp"
+#include "tenzir/try.hpp"
 
 #include <arrow/array.h>
 #include <arrow/type_traits.h>
@@ -3539,6 +3541,59 @@ record_type flatten(const record_type& type) noexcept {
       field.type,
     });
   return record_type{fields};
+}
+
+auto unify(const type& a, const type& b) -> std::optional<type> {
+  // TODO: This function does not preserve metadata.
+  // TODO: Do we want to unify number types?
+  auto f = detail::overload{
+    [](const null_type&, const null_type&) -> std::optional<type> {
+      return type{null_type{}};
+    },
+    [](const null_type&, const auto& b) -> std::optional<type> {
+      return type{b};
+    },
+    [](const auto& a, const null_type&) -> std::optional<type> {
+      return type{a};
+    },
+    [](const record_type& a, const record_type& b) -> std::optional<type> {
+      auto fields = collect(a.fields());
+      for (auto [name, b_ty] : b.fields()) {
+        auto it
+          = std::ranges::find(fields, name, &record_type::field_view::name);
+        if (it == fields.end()) {
+          fields.emplace_back(name, b_ty);
+          continue;
+        }
+        auto& a_ty = it->type;
+        TRY(auto ty, unify(a_ty, b_ty));
+        it->type = std::move(ty);
+      }
+      return type{record_type{fields}};
+    },
+    [](const list_type& a, const list_type& b) -> std::optional<type> {
+      TRY(auto ty, unify(a.value_type(), b.value_type()));
+      return type{list_type{ty}};
+    },
+    [](const enumeration_type& a,
+       const enumeration_type& b) -> std::optional<type> {
+      if (a != b) {
+        return std::nullopt;
+      }
+      return type{a};
+    },
+    []<basic_type T>(const T&, const T&) -> std::optional<type> {
+      return type{T{}};
+    },
+    [](const map_type&, const map_type&) -> std::optional<type> {
+      TENZIR_UNREACHABLE();
+    },
+    []<class A, class B>(const A&, const B&) -> std::optional<type> {
+      static_assert(not std::same_as<A, B>);
+      return std::nullopt;
+    },
+  };
+  return caf::visit(f, a, b);
 }
 
 } // namespace tenzir

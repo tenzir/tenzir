@@ -468,6 +468,13 @@ std::strong_ordering operator<=>(const T& lhs, const U& rhs) noexcept {
 caf::error
 replace_if_congruent(std::initializer_list<type*> xs, const module& with);
 
+/// Attempts to unify two types.
+///
+/// Every type can be unified with `null_type`. Records can be unified if their
+/// overlapping fields can be unified, and lists can be unified if their value
+/// type can be unified.
+auto unify(const type& a, const type& b) -> std::optional<type>;
+
 // -- null_type ---------------------------------------------------------------
 
 /// A monostate value that is always `null`.

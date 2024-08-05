@@ -67,3 +67,26 @@ x = a.length()
 y = b.length()
 EOF
 }
+
+@test "list construction" {
+  check tenzir -f '/dev/stdin' <<EOF
+source {
+  x0: [],
+  x1: [null],
+  x2: [null, null],
+  x3: [null, 42],
+  x4: [42, null],
+  x5: [{}, {}],
+  x6: [{a: 42}, {a: 42}],
+  x7: [{a: 42}, {b: 42}],
+  x8: [{a: null}, {b: 42, a: 42}],
+  x9: [[], []],
+  x10: [[], [42]],
+  x11: [[{x: 42}], [{y: 42}]],
+  x12: [{}, []],
+  x13: [123, "abc"],
+  x14: [[{x: 123}], [{x: "abc"}]],
+}
+write_json
+EOF
+}
