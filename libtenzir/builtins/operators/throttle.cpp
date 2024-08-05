@@ -115,8 +115,8 @@ private:
   float_seconds window_ = {};
 };
 
-class throttle_plugin final
-  : virtual public operator_plugin<throttle_operator> {
+class throttle_plugin final : virtual public operator_plugin<throttle_operator>,
+                              operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
@@ -126,15 +126,33 @@ public:
     auto const* docs = "https://docs.tenzir.com/operators/throttle";
     auto parser = argument_parser{"throttle", docs};
     auto max_bandwidth = std::optional<uint64_t>{};
-    // TODO: Add option to determine window size.
+    // TODO: Add option to set window size.
     auto window = float_seconds{1};
     parser.add(max_bandwidth, "<max_bandwidth>");
     parser.parse(p);
     if (not max_bandwidth) {
       diagnostic::error("`max_bandwidth` must be a numeric value")
-        .note("the unit of measurement is bytes/second", name())
+        .note("the unit of measurement is bytes/second")
         .throw_();
     }
+    return std::make_unique<throttle_operator>(*max_bandwidth, window);
+  }
+
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto max_bandwidth = std::optional<uint64_t>{};
+    argument_parser2::operator_("throttle")
+      .add("max_bandwith", max_bandwidth)
+      .parse(inv, ctx)
+      .ignore();
+    if (not max_bandwidth) {
+      diagnostic::error("`max_bandwidth` must be a numeric value")
+        .note("the unit of measurement is bytes/second")
+        .emit(ctx);
+      return failure::promise();
+    }
+    // TODO: Add option to set window size.
+    auto window = float_seconds{1};
     return std::make_unique<throttle_operator>(*max_bandwidth, window);
   }
 };
