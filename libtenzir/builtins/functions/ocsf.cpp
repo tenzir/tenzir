@@ -127,7 +127,7 @@ auto id_to_name(std::span<const ocsf_pair> lookup,
 /// `OCSF UID`
 /// @tparam Operation the mapping function to use
 /// @tparam Output_Type the tenzir type the operation produces
-/// @tparam Input_Types... The input type arrays that the operation accepts
+/// @tparam Input_Types... The input types that the operation accepts
 template <auto Operation, typename Output_Type, typename... Input_Types>
 class generic_mapping_plugin final : public function_plugin {
 public:
@@ -147,8 +147,9 @@ public:
   auto make_function(invocation inv,
                      session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(
-      argument_parser2::function(name_).add(expr, input_meta_).parse(inv, ctx));
+    TRY(argument_parser2::function(name_)
+          .add(expr, fmt::format("<{}>", input_meta_))
+          .parse(inv, ctx));
     return function_use::make(
       [&, expr = std::move(expr)](evaluator eval, session ctx) -> series {
         auto arg = eval(expr);
@@ -195,7 +196,7 @@ public:
             return series{Output_Type{}, finish(b)};
           }...,
           [&](const auto&) {
-            diagnostic::warning("`{}` expected `string`, but got `{}`", name_,
+            diagnostic::warning("expected `{}`, but got `{}`", input_meta_,
                                 arg.type.kind())
               .primary(expr)
               .emit(ctx);
@@ -227,12 +228,12 @@ using id_to_name_plugin
 using tenzir::plugins::ocsf::category_map;
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::name_to_id_plugin{
-  "ocsf_category_uid", "<string>", category_map, "OCSF category name"})
+  "ocsf_category_uid", "string", category_map, "OCSF category name"})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::id_to_name_plugin{
-  "ocsf_category_name", "<int>", category_map, "OCSF category ID"})
+  "ocsf_category_name", "int", category_map, "OCSF category ID"})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::name_to_id_plugin{
-  "ocsf_class_uid", "<string>", tenzir::plugins::ocsf::class_map,
+  "ocsf_class_uid", "string", tenzir::plugins::ocsf::class_map,
   "OCSF class name"})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ocsf::id_to_name_plugin{
-  "ocsf_class_name", "<int>", tenzir::plugins::ocsf::class_map,
+  "ocsf_class_name", "int", tenzir::plugins::ocsf::class_map,
   "OCSF class ID"})
