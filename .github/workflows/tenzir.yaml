@@ -103,14 +103,12 @@ jobs:
           # limit_version. If the version does not exist yet (e.g., because of
           # an intentional break), only check latest. We usually set this to the
           # minimum supported version.
-          limit_version=v4.9.0
+          limit_version=v4.18.0
           if git rev-parse "${limit_version}" --; then
             dated_versions=$(git for-each-ref --format="%(creatordate:format:%s)#%(refname:short)" "refs/tags/v[1-9]*" | grep -v '\-rc[0-9]\+$')
             dated_limit_version=$(printf "$dated_versions" | grep $limit_version)
-            # We filter out versions older than limit_version, and a set of
-            # releases that are known to be broken, e.g., because their upload
-            # failed in CI.
-            filtered_versions=$(printf "$dated_versions" | awk '-F#' '{if($0>="'$dated_limit_version'")print$2}' | grep -v 'v4.11.0')
+            # We filter out versions older than limit_version.
+            filtered_versions=$(printf "$dated_versions" | awk '-F#' '{if($0>="'$dated_limit_version'")print$2}')
             version_matrix="$(printf "$filtered_versions\nlatest\n" | jq -R | jq -sc 'map({version: .})')"
           else
             version_matrix="$(printf "latest\n" | jq -R | jq -sc 'map({version: .})')"
