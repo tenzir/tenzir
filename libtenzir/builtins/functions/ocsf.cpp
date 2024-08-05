@@ -15,6 +15,7 @@
 namespace tenzir::plugins::ocsf {
 
 namespace {
+
 struct ocsf_pair {
   std::string_view name;
   int64_t id;
@@ -30,6 +31,7 @@ constexpr ocsf_pair category_map[] = {
   {"Application Activity", 6},
   {"Remediation", 7},
 };
+
 // OCSF class name <-> ID
 constexpr ocsf_pair class_map[]{
   {"File System Activity", 1001},
@@ -112,7 +114,8 @@ auto name_to_id(std::span<const ocsf_pair> lookup,
     }
   }
   return std::nullopt;
-};
+}
+
 auto id_to_name(std::span<const ocsf_pair> lookup,
                 int64_t key) -> std::optional<std::string_view> {
   for (const auto& [category, id] : lookup) {
@@ -121,14 +124,14 @@ auto id_to_name(std::span<const ocsf_pair> lookup,
     }
   }
   return std::nullopt;
-};
+}
 
-/// @brief generic mapping function that supports OCSF `Event Type String` <->
-/// `OCSF UID`
-/// @tparam Operation the mapping function to use
-/// @tparam Output_Type the tenzir type the operation produces
-/// @tparam Input_Types... The input types that the operation accepts
-template <auto Operation, typename Output_Type, typename... Input_Types>
+/// Generic mapping plugin that supports `string <-> integer` conversion.
+///
+/// @tparam Operation The mapping function to use
+/// @tparam OutTy The tenzir type the operation produces
+/// @tparam InTys... The input types that the operation accepts
+template <auto Operation, typename OutTy, typename... InTys>
 class generic_mapping_plugin final : public function_plugin {
 public:
   auto name() const -> std::string override {
@@ -155,12 +158,12 @@ public:
         auto arg = eval(expr);
         auto f = detail::overload{
           [&](const arrow::NullArray& arg) {
-            return series::null(Output_Type{}, arg.length());
+            return series::null(OutTy{}, arg.length());
           },
-          [&](const type_to_arrow_array_t<Input_Types>& arg) {
-            using input_data_type = type_to_data_t<Input_Types>;
+          [&](const type_to_arrow_array_t<InTys>& arg) {
+            using input_data_type = type_to_data_t<InTys>;
             std::optional<input_data_type> warn_value;
-            auto b = type_to_arrow_builder_t<Output_Type>{};
+            auto b = type_to_arrow_builder_t<OutTy>{};
             check(b.Reserve(arg.length()));
             for (auto i = int64_t{0}; i < arg.length(); ++i) {
               if (arg.IsNull(i)) {
@@ -193,14 +196,14 @@ public:
                 .primary(expr)
                 .emit(ctx);
             }
-            return series{Output_Type{}, finish(b)};
+            return series{OutTy{}, finish(b)};
           }...,
           [&](const auto&) {
             diagnostic::warning("expected `{}`, but got `{}`", input_meta_,
                                 arg.type.kind())
               .primary(expr)
               .emit(ctx);
-            return series::null(Output_Type{}, arg.length());
+            return series::null(OutTy{}, arg.length());
           },
         };
         return caf::visit(f, *arg.array);
