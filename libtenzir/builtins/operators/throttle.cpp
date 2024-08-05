@@ -23,12 +23,15 @@ namespace {
 
 using float_seconds = std::chrono::duration<double>;
 
-auto split_chunk(const chunk_ptr& in,
+auto split_chunk(const chunk_ptr& in, size_t head_offset,
                  size_t position) -> std::pair<chunk_ptr, chunk_ptr> {
-  if (position >= in->size()) {
-    return {in, chunk::make_empty()};
+  if (head_offset >= in->size()) {
+    return {chunk::make_empty(), chunk::make_empty()};
   }
-  return {in->slice(0, position), in->slice(position)};
+  if (head_offset + position >= in->size()) {
+    return {in->slice(head_offset, position), chunk::make_empty()};
+  }
+  return {in->slice(head_offset, position), in->slice(head_offset + position)};
 }
 
 } // namespace
@@ -65,8 +68,10 @@ public:
       auto split_position = static_cast<size_t>(budget);
       auto head = chunk::make_empty();
       auto tail = chunk::make_empty();
-      std::tie(head, tail) = split_chunk(bytes, split_position);
+      auto head_offset = size_t{0};
+      std::tie(head, tail) = split_chunk(bytes, head_offset, split_position);
       budget -= static_cast<double>(head->size());
+      head_offset += head->size();
       co_yield std::move(head);
       // If we didn't have enough budget to send everything in one go,
       // send the remainder in intervals according to the configured
@@ -86,8 +91,9 @@ public:
                 .note("encountered error: {}", err)
                 .emit(ctrl.diagnostics());
             });
-        std::tie(head, tail)
-          = split_chunk(tail, static_cast<size_t>(bytes_per_window));
+        std::tie(head, tail) = split_chunk(
+          bytes, head_offset, static_cast<size_t>(bytes_per_window));
+        head_offset += head->size();
         co_yield {}; // Await the alarm clock.
         co_yield std::move(head);
       }
