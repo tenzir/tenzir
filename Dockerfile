@@ -264,12 +264,7 @@ ENTRYPOINT ["tenzir-node"]
 
 FROM tenzir-node-ce AS tenzir-demo
 
-ENV TENZIR_PIPELINES__M57_SURICATA__NAME='M57 Suricata' \
-    TENZIR_PIPELINES__M57_SURICATA__DEFINITION='from https://storage.googleapis.com/tenzir-datasets/M57/suricata.json.zst read suricata --no-infer | where #schema != "suricata.stats" | import' \
-    TENZIR_PIPELINES__M57_SURICATA__LABELS='suricata' \
-    TENZIR_PIPELINES__M57_ZEEK__NAME='M57 Zeek' \
-    TENZIR_PIPELINES__M57_ZEEK__DEFINITION='from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read zeek-tsv | import' \
-    TENZIR_PIPELINES__M57_ZEEK__LABELS='zeek'
+ENV TENZIR_START__COMMANDS="exec \"from https://raw.githubusercontent.com/tenzir/library/main/demo/package.yaml | package add\""
 
 # -- tenzir-node -----------------------------------------------------------------
 
