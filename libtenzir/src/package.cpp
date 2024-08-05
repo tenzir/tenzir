@@ -252,8 +252,20 @@ auto package_pipeline::parse(const view<record>& data)
       if (caf::holds_alternative<caf::none_t>(value)) {
         continue;
       }
-      const auto* on_off = caf::get_if<bool>(&value);
-      const auto* retry_delay = caf::get_if<duration>(&value);
+      // As a convenience for users, we also allow a string here and try to
+      // parse the inner value in that case.
+      auto value_copy = materialize(value);
+      if (const auto* as_string = caf::get_if<std::string_view>(&value)) {
+        auto inner_value = from_yaml(*as_string);
+        if (!inner_value) {
+          return diagnostic::error("failed to parse 'restart-on-error' field")
+            .note("error {}", inner_value.error())
+            .to_error();
+        }
+        value_copy = *inner_value;
+      }
+      const auto* on_off = caf::get_if<bool>(&value_copy);
+      const auto* retry_delay = caf::get_if<duration>(&value_copy);
       if (not on_off and not retry_delay) {
         return diagnostic::error("'restart-on-error' must be a "
                                  "be a "
