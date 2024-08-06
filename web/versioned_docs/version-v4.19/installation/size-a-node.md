@@ -4,9 +4,10 @@ sidebar_position: 0
 
 # Size a node
 
-To better understand what resources you need to run a node, we provide guidance
-on sizing and a [calculator](#calculator) to derive concrete **CPU**, **RAM**,
-and **storage** requirements.
+To better understand what resources you need to [run a
+node](../installation/deploy-a-node.md), we provide guidance on sizing and a
+[calculator](#calculator) to derive concrete **CPU**, **RAM**, and **storage**
+requirements.
 
 ## Considerations
 
@@ -21,7 +22,7 @@ profile.
 
 #### Data Shaping
 
-[Shaping](../user-guides/shape-data/README.md) operation changes the form of the
+[Shaping](../usage/shape-data/README.md) operation changes the form of the
 data, e.g., filtering events, removing columns, or changing values. This
 workload predominantly incurs **CPU** load.
   
@@ -34,7 +35,7 @@ increase CPU usage.
 
 #### Enrichment
 
-[Enriching](../user-guides/enrich-with-threat-intel/README.md) dataflows with
+[Enriching](../usage/enrich-with-threat-intel/README.md) dataflows with
 [contexts](../contexts.md) requires holding in-memory state proportional to the
 context size. Therefore, enrichment affects your **RAM** requirements. [Bloom
 filters](../contexts/bloom-filter.md) are a fixed-size space-efficient structure
@@ -45,7 +46,7 @@ grow linearly with the number of entries.
 
 The more data sources you have, the more pipelines you run. In the simplest
 scenario where you just [import all data into a
-node](../user-guides/import-into-a-node/README.md), you deploy one pipeline per
+node](../usage/import-into-a-node/README.md), you deploy one pipeline per
 data source. The number of data sources is a thus a lower bound for the number
 of pipelines.
 
@@ -60,8 +61,8 @@ node proportionally.
 ### Retention
 
 When you leverage the node's built-in storage engine by
-[importing](../user-guides/import-into-a-node/README.md) and
-[exporting](../user-guides/export-from-a-node/README.md) data, you need
+[importing](../usage/import-into-a-node/README.md) and
+[exporting](../usage/export-from-a-node/README.md) data, you need
 persistent **storage**. To assess your retention span, you need to understand
 your data volume and your capacity.
 
