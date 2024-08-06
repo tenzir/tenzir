@@ -245,6 +245,7 @@ three requirement flags **required**, **recommended**, and **optional**.
 This yields the following pipeline pattern:
 
 ```
+// tql2
 read_zeek_tsv
 where @name == "zeek.conn" 
 this = {
@@ -665,9 +666,9 @@ Let's cerebrate real quick what we did:
 
 We could also use an alternative approach:
 
-1. Consider the original event `this = {unmapped: this}`.
+1. Consider the original event `this = {event: this}`.
 2. Go to the original event and map each field to its corresponding attribute.
-3. Drop the mapped field from the input.
+3. Drop the mapped fields from the `event` field, then rename it to `unmapped`.
 4. In the end, `unmapped` will contain the remaining attributes.
 
 ### Option B: Map to OCSF
@@ -708,79 +709,146 @@ As we've already establisehd the mapping from conn.log to OCSF above, let's just
 write the pipeline to illustrate the different approach:
 
 ```text title="conn-to-ocsf.tql"
+// tql2
 read_zeek_tsv
 where @name == "zeek.conn"
-this = {unmapped: this}
-time = unmapped.ts
-drop unmapped.ts
-metadata.uid = unmapped.uid
-drop unmapped.uid
-src_endpoint = {
-  ip: unmapped.id.orig_h,
-  port: unmapped.id.orig_p,
-  svc_name: unmapped.service,
-}
-dst_endpoint = {
-  ip: unmapped.id.resp_h,
-  port: unmapped.id.resp_p,
-  svc_name: unmapped.service,
-}
-drop unmapped.id, unmapped.service
-duration = unmapped.duration
-drop unmapped.duration
-if unmapped.local_orig and unmapped.local_resp {
-  direction = "Lateral"
-  direction_id = 3
-} else if unmapped.local_orig {
-  direction = "Outbound"
-  direction_id = 2
-} else if unmapped.local_resp {
-  direction = "Inbound"
-  direction_id = 1
+this = { event: this }
+tmp.class_uid = 4001
+tmp.activity_id = 6
+tmp.activity_name = "Traffic"
+if event.local_orig and event.local_resp {
+  tmp.direction = "Lateral"
+  tmp.direction_id = 3
+} else if event.local_orig {
+  tmp.direction = "Outbound"
+  tmp.direction_id = 2
+} else if event.local_resp {
+  tmp.direction = "Inbound"
+  tmp.direction_id = 1
 } else {
-  direction = "Unknown"
-  direction_id = 0
+  tmp.direction = "Unknown"
+  tmp.direction_id = 0
 }
-drop unmapped.local_orig, unmapped.local_resp
-if unmapped.proto == "tcp" {
-  protocol_num = 6
-} else if unmapped.proto == "udp" {
-  protocol_num = 17
-} else if unmapped.proto == "icmp" {
-  protocol_num = 1
+if event.proto == "tcp" {
+  tmp.protocol_num = 6
+} else if event.proto == "udp" {
+  tmp.protocol_num = 17
+} else if event.proto == "icmp" {
+  tmp.protocol_num = 1
 } else {
-  protocol_num = -1
+  tmp.protocol_num = -1
 }
-if unmapped.id.orig_h.is_v6() or unmapped.id.resp_h.is_v6() {
-  protocol_ver_id = 6
+if event.id.orig_h.is_v6() or event.id.resp_h.is_v6() {
+  tmp.protocol_ver_id = 6
 } else {
-  protocol_ver_id = 4
+  tmp.protocol_ver_id = 4
 }
-connection_info = {
-  uid: unmapped.community_id,
-  direction: direction,
-  direction_id: direction_id,
-  protocol_ver_id: protocol_ver_id,
-  protocol_name: unmapped.proto,
-  protocol_num: protocol_num,
+this = {
+  // --- Classification (required) ---
+  activity_id: tmp.activity_id,
+  category_uid: 4,
+  class_uid: tmp.class_uid,
+  type_id: tmp.class_uid * 100 + tmp.activity_id,
+  severity_id: 1,
+  // --- Classification (optional) ---
+  activity_name: tmp.activity_name,
+  category_name: "Network Activity",
+  class_name: "Network Activity",
+  severity: "Informational",
+  // TODO: provide a function for this and make it possible to reference
+  // `type_id` from the same assignment.
+  //type_name: ocsf_type_name(type_id),
+  // --- Occurrence (required) ---
+  time: event.ts,
+  // --- Occurrence (recommended) ---
+  // TODO: provide a function for this
+  //timezone_offset: ..
+  // --- Occurrence (optional) ---
+  duration: event.duration,
+  end_time: event.ts + event.duration,
+  start_time: event.ts,
+  // --- Context (required) ---
+  metadata: {
+    log_name: "conn", // Zeek calls it "path"
+    logged_time: event._write_ts,
+    product: {
+      name: "Zeek",
+      vendor_name: "Zeek",
+    },
+    uid: event.uid,
+    version: "1.3.0",
+  },
+  // --- Primary (required) ---
+  dst_endpoint: {
+    ip: event.id.resp_h,
+    port: event.id.resp_p,
+    // TODO: start a conversation in the OCSF Slack to figure out how to
+    // assign the entire connection a protocol. We use svc_name as the
+    // next best thing, but it clearly can't be different between
+    // endpoints for the service semantics that Zeek has.
+    svc_name: event.service,
+  },
+  // --- Primary (recommended) ---
+  connection_info: {
+    uid: event.community_id,
+    direction: tmp.direction,
+    direction_id: tmp.direction_id,
+    protocol_ver_id: tmp.protocol_ver_id,
+    protocol_name: event.proto,
+    protocol_num: tmp.protocol_num,
+  },
+  src_endpoint: {
+    ip: event.id.orig_h,
+    port: event.id.orig_p,
+    svc_name: event.service,
+  },
+  // TODO: we actually could go deeper into the `conn_state` field and
+  // choose a more accurate status. But this would require string
+  // manipulations and/or regex matching, which TQL doesn't have yet.
+  status: "Other",
+  status_code: event.conn_state,
+  status_id: 99,
+  traffic: {
+    bytes_in: event.resp_bytes,
+    bytes_out: event.orig_bytes,
+    packets_in: event.resp_pkts,
+    packets_out: event.orig_pkts,
+    total_bytes: event.orig_bytes + event.resp_bytes,
+    total_packets: event.orig_pkts + event.resp_pkts,
+  },
+  // --- Primary (optional) ---
+  // TODO
+  // - `ja4_fingerprint_list`: once we have some sample logs with JA4
+  //   fingerprints, which requires an additional Zeek package, we should
+  //   populate them here.
+  // - `tls`: if we buffer ssl log for this connection, we could add the
+  //   information in here.
 }
-drop unmapped.community_id, unmapped.proto
-drop direction, direction_id, protocol_ver_id, protocol_num
-traffic = {
-  bytes_in: unmapped.resp_bytes,
-  bytes_out: unmapped.orig_bytes,
-  packets_in: unmapped.resp_pkts,
-  packets_out: unmapped.orig_pkts,
-  total_bytes: unmapped.orig_bytes + unmapped.resp_bytes,
-  total_packets: unmapped.orig_pkts + unmapped.resp_pkts,
-}
-drop unmapped.orig_bytes, unmapped.resp_bytes
-drop unmapped.orig_pkts, unmapped.resp_pkts
-metadata.logged_time = unmapped._write_ts
-drop unmapped._write_ts
+// drop all the mapped fields, then rename event to unmapped
+drop (
+  event._write_ts,
+  event.community_id,
+  event.conn_state,
+  event.duration,
+  event.id,
+  event.local_orig,
+  event.local_resp,
+  event.orig_bytes,
+  event.orig_pkts,
+  event.proto,
+  event.resp_bytes,
+  event.resp_pkts,
+  event.service,
+  event.ts,
+  event.uid,
+  tmp,
+)
+this = { ...this, unmapped: event }
+drop event
+@name = "ocsf.network_activity"
 ```
 
-Let's this pipeline:
+Let's run this pipeline:
 
 ```bash
 tenzir --tql2 -f conn-to-ocsf.tql < conn.log
@@ -851,87 +919,14 @@ Option A:
 - ❌ Lengthy process when original events only have a few fields.
 
 Option (B):
-- ✅ Single pass over the original event.
+- ✅ Single pass over the OCSF event class.
 - ✅ The `unmapped` attribute always contains what hasn't been mapped
-- ❌ Addional noise when referencing fields via `unmapped.field`.
-- ❌ Must explicitly drop fields from `unmapped`.
+- ❌ Addional noise when referencing fields via `event.field`.
+- ❌ Must explicitly drop referenced fields from `event`.
 
 Ultimately it's a matter of preference and use case, so it's good to know both
 approaches and decide which one to pick on a case-by-case basis.
 :::
-
-### Option C: Combine Option A and B
-
-There's a combination of Option A and Option B. We can take the idea of starting
-at the OCSF schema as in Option A, but use the assign-and-drop approach from
-option B.
-
-Here's how it looks like:
-
-```
-read_zeek_tsv
-where @name == "zeek.conn"
-this = { x: this }
-time = x.ts
-metadata.uid = x.uid
-metadata.logged_time = x._write_ts
-src_endpoint.ip = x.id.orig_h
-src_endpoint.port = x.id.orig_p
-src_endpoint.svc_name = x.service
-dst_endpoint.ip = x.id.resp_h
-dst_endpoint.port = x.id.resp_p
-dst_endpoint.svc_name = x.service
-connection_info.uid = x.community_id
-if x.local_orig and x.local_resp {
-  connection_info.direction = "Lateral"
-  connection_info.direction_id = 3
-} else if x.local_orig {
-  connection_info.direction = "Outbound"
-  connection_info.direction_id = 2
-} else if x.local_resp {
-  connection_info.direction = "Inbound"
-  connection_info.direction_id = 1
-} else {
-  connection_info.direction = "Unknown"
-  connection_info.direction_id = 0
-}
-if x.id.orig_h.is_v6() or x.id.resp_h.is_v6() {
-  connection_info.protocol_ver_id = 6
-} else {
-  connection_info.protocol_ver_id = 4
-}
-connection_info.protocol_name = x.proto
-if x.proto == "tcp" {
-  connection_info.protocol_num = 6
-} else if x.proto == "udp" {
-  connection_info.protocol_num = 17
-} else if x.proto == "icmp" {
-  connection_info.protocol_num = 1
-} else {
-  connection_info.protocol_num = -1
-}
-traffic.bytes_in = x.resp_bytes
-traffic.bytes_out = x.orig_bytes
-traffic.packets_in = x.resp_pkts
-traffic.packets_out = x.orig_pkts
-traffic.total_bytes = x.orig_bytes + x.resp_bytes
-traffic.total_packets = x.orig_pkts + x.resp_pkts
-// Drop all mapped fields.
-drop (
-  x.ts, x.uid, x.id, x.service, x.local_orig, x.local_resp, x.community_id,
-  x.proto, x.orig_bytes, x.resp_bytes, x.orig_pkts, x.resp_pkts, x._write_ts,
-)
-// Move the raw event to the back and rename it to unmapped.
-this = {
-  ...this,
-  unmapped: x,
-}
-drop x
-@name = "ocsf.network_activity"
-```
-
-This approach has the advantage of doing a single pass over the OCSF event while
-not explicitly assigning `unmapped`.
 
 ### Extend your mapping to multiple event types
 
