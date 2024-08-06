@@ -60,6 +60,16 @@ namespace tenzir {
     continue;                                                                  \
   }
 
+#define TRY_ASSIGN_BOOL_TO_RESULT(name)                                        \
+  if (key == #name) {                                                          \
+    const auto* x = caf::get_if<view<bool>>(&value);                           \
+    if (not x) {                                                               \
+      return diagnostic::error(#name " must be a bool").to_error();            \
+    }                                                                          \
+    result.name = *x;                                                          \
+    continue;                                                                  \
+  }
+
 #define TRY_ASSIGN_MAP_TO_RESULT(name, value_type)                             \
   if (key == #name) {                                                          \
     const auto* x = caf::get_if<view<record>>(&value);                         \
@@ -239,15 +249,7 @@ auto package_pipeline::parse(const view<record>& data)
     TRY_ASSIGN_STRING_TO_RESULT(definition)
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(name)
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description)
-    if (key == "disabled") {
-      const auto* disabled = caf::get_if<view<bool>>(&value);
-      if (not disabled) {
-        return diagnostic::error("'disabled' must be a bool")
-          .to_error();
-      }
-      result.disabled = *disabled;
-      continue;
-    }
+    TRY_ASSIGN_BOOL_TO_RESULT(disabled);
     if (key == "restart-on-error") {
       if (caf::holds_alternative<caf::none_t>(value)) {
         continue;
@@ -307,6 +309,7 @@ auto package_context::parse(const view<record>& data)
   auto result = package_context{};
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRING_TO_RESULT(type);
+    TRY_ASSIGN_BOOL_TO_RESULT(disabled);
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description);
     TRY_ASSIGN_STRINGMAP_TO_RESULT(arguments);
   }
@@ -401,7 +404,8 @@ auto package_context::to_record() const -> record {
   }
   return record{{"type", type},
                 {"description", description},
-                {"arguments", arguments_record}};
+                {"arguments", arguments_record},
+                {"disabled", disabled}};
 }
 
 auto package_snippet::to_record() const -> record {
