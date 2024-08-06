@@ -260,7 +260,8 @@ private:
         return true;
       }
       case simdjson::ondemand::number_type::big_integer: {
-        report_parse_err(val, "a smaller number");
+        report_parse_err(val, "a big integer",
+                         "integral value does not fit into 64 bits");
         builder.null(); // TODO is this a good idea?
         return false;
       }
@@ -310,7 +311,8 @@ private:
 
   void emit_unparsed_json_diagnostics(
     std::string description,
-    simdjson::simdjson_result<const char*> document_location) {
+    simdjson::simdjson_result<const char*> document_location,
+    std::string note = {}) {
     auto document_to_truncate = parsed_document_;
     auto note_prefix = "somewhere in";
     if (not document_location.error()) {
@@ -319,41 +321,57 @@ private:
       note_prefix = "at";
     }
     constexpr auto character_limit = 50u;
+
     if (document_to_truncate.length() > character_limit) {
-      diagnostic::warning("failed to parse {} in the JSON document",
-                          std::move(description))
-        .note("{} {} ...", note_prefix,
-              document_to_truncate.substr(0, character_limit))
-        .emit(diag_);
+      auto b = diagnostic::warning("failed to parse {} in the JSON document",
+                                   std::move(description))
+                 .note("{} {} ...", note_prefix,
+                       document_to_truncate.substr(0, character_limit));
+      if (not note.empty()) {
+        b = std::move(b).note("{}", note);
+      }
+      std::move(b).emit(diag_);
     }
-    diagnostic::warning("failed to parse {} in the JSON document",
-                        std::move(description))
-      .note("{} {}", note_prefix, document_to_truncate)
-      .emit(diag_);
+    auto b = diagnostic::warning("failed to parse {} in the JSON document",
+                                 std::move(description))
+               .note("{} {}", note_prefix, document_to_truncate);
+    if (not note.empty()) {
+      b = std::move(b).note("{}", note);
+    }
+    std::move(b).emit(diag_);
   }
 
-  void report_parse_err(auto& v, std::string description) {
+  void report_parse_err(auto& v, std::string expected, std::string note = {}) {
     if (parsed_lines_) {
-      report_parse_err_with_parsed_lines(v, std::move(description));
+      report_parse_err_with_parsed_lines(v, std::move(expected),
+                                         std::move(note));
       return;
     }
-    emit_unparsed_json_diagnostics(std::move(description),
-                                   v.current_location());
+    emit_unparsed_json_diagnostics(std::move(expected), v.current_location(),
+                                   std::move(note));
   }
 
-  void report_parse_err_with_parsed_lines(auto& v, std::string description) {
+  void report_parse_err_with_parsed_lines(auto& v, std::string description,
+                                          std::string note) {
     if (v.current_location().error()) {
-      diagnostic::warning("failed to parse {} in the JSON document",
-                          std::move(description))
-        .note("line {}", *parsed_lines_)
-        .emit(diag_);
+      auto b = diagnostic::warning("failed to parse {} in the JSON document",
+                                   std::move(description))
+                 .note("line {}", *parsed_lines_);
+      if (not note.empty()) {
+        b = std::move(b).note("{}", note);
+      }
+
+      std::move(b).emit(diag_);
       return;
     }
     auto column = v.current_location().value_unsafe() - parsed_document_.data();
-    diagnostic::warning("failed to parse {} in the JSON document",
-                        std::move(description))
-      .note("line {} column {}", *parsed_lines_, column)
-      .emit(diag_);
+    auto b = diagnostic::warning("failed to parse {} in the JSON document",
+                                 std::move(description))
+               .note("line {} column {}", *parsed_lines_, column);
+    if (not note.empty()) {
+      b = std::move(b).note("{}", note);
+    }
+    std::move(b).emit(diag_);
   }
 
   std::string_view parsed_document_;
@@ -393,8 +411,9 @@ public:
       return;
     }
     auto& doc = maybe_doc.value_unsafe();
-    auto success = doc_parser{json_line, this->ctrl.diagnostics()}.parse_object(
-      val.value_unsafe(), builder.record());
+    auto success
+      = doc_parser{json_line, this->ctrl.diagnostics(), lines_processed_}
+          .parse_object(val.value_unsafe(), builder.record());
     // After parsing one JSON object it is expected for the result to be at
     // the end. If it's otherwise then it means that a line contains more than
     // one object in which case we don't add any data and emit a warning.
@@ -816,8 +835,7 @@ public:
     }
     if (legacy_no_infer) {
       if (args.builder_options.settings.schema_only) {
-        diagnostic::error(
-          "`--no-infer` and `--expand_schema` are incompatible")
+        diagnostic::error("`--no-infer` and `--expand_schema` are incompatible")
           .primary(*legacy_no_infer)
           .primary(*msb_parser.schema_only_)
           .note("`--no-infer` is a legacy option and should not be used")
@@ -905,7 +923,7 @@ public:
     };
     msb_parser.add_settings_to_parser(parser, true);
     std::optional<location> legacy_no_infer;
-    parser.add("--no-infer", legacy_no_infer );
+    parser.add("--no-infer", legacy_no_infer);
     parser.parse(p);
     auto dh = detail::multi_series_builder::diagnostic_handler{};
     auto opts = msb_parser.get_options(dh);
@@ -914,10 +932,9 @@ public:
         throw std::move(d);
       }
     }
-     if (legacy_no_infer) {
+    if (legacy_no_infer) {
       if (args.builder_options.settings.schema_only) {
-        diagnostic::error(
-          "`--no-infer` and `--schema-only` are incompatible.")
+        diagnostic::error("`--no-infer` and `--schema-only` are incompatible.")
           .primary(*legacy_no_infer)
           .primary(*msb_parser.schema_only_)
           .note("`--no-infer` is a legacy option and should not be used")
