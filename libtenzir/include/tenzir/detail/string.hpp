@@ -63,10 +63,11 @@ inline auto trim(std::string_view value, const std::string_view whitespace
 /// @returns a string_view of without the quotes
 inline auto unquote(std::string_view value, std::string_view quotes
                                             = "\"\'") -> std::string_view {
-  const auto first_quote = value.find_first_of(quotes);
-  const auto last_quote = value.find_last_of(quotes);
-  if (first_quote != value.npos and last_quote != value.npos
-      and value[first_quote] == value[last_quote]) {
+  if (value.empty()) {
+    return {};
+  }
+  if (value.front() == value.back()
+      and quotes.find(value.front()) != quotes.npos) {
     value.remove_prefix(1);
     value.remove_suffix(1);
   }
