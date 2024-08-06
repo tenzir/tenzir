@@ -275,10 +275,6 @@ def extension_array(obj: Sequence, datatype: pa.DataType) -> pa.Array:
             inner_obj = [
                 (item[inner_field.name] if item is not None else None) for item in obj
             ]
-            print(
-                f"making extension array {inner_obj=} {inner_field=} {inner_field.type=}",
-                file=sys.stderr,
-            )
             fields.append(inner_field)
             arrays.append(extension_array(inner_obj, inner_field.type))
         return pa.StructArray.from_arrays(arrays, fields=fields)
@@ -331,6 +327,8 @@ def infer_type(obj: TenzirType) -> pa.DataType:
                  alternative.
     """
     # TODO: Use match statement
+    if (obj is None):
+        return pa.null();
     if isinstance(obj, (ip.IPv4Address, ip.IPv6Address)):
         return IPType()
     if isinstance(obj, (ip.IPv4Network, ip.IPv6Network)):
@@ -358,12 +356,6 @@ def infer_type(obj: TenzirType) -> pa.DataType:
     if isinstance(obj, list):
         gen = (x for x in obj if x is not None)
         sample_value = next(gen, None)
-        if isinstance(sample_value, dict):
-            # The problem with structs is that we'd need to find a non-null sample for
-            # every *nested* field in every subrecord or sublist.
-            raise Exception(
-                "inferring the type of structs in lists is not supported yet"
-            )
         return pa.list_(infer_type(sample_value))
     msg = f"cannot convert value of type {type(obj)} back to arrow"
     raise Exception(msg)
