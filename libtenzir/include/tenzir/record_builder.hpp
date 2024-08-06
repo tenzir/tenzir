@@ -448,8 +448,7 @@ public:
   template <detail::record_builder::data_parsing_function Parser
             = decltype(detail::record_builder::basic_parser)>
   record_builder(Parser parser = detail::record_builder::basic_parser,
-                 diagnostic_handler* dh = nullptr,
-                 bool schema_only = false,
+                 diagnostic_handler* dh = nullptr, bool schema_only = false,
                  bool parse_schema_fields_only = false)
     : dh_{dh},
       parser_{std::move(parser)},

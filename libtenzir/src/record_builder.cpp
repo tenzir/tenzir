@@ -262,8 +262,8 @@ auto basic_parser(std::string_view s, const tenzir::type* seed)
   if (seed) {
     return basic_seeded_parser(s, *seed);
   }
-  auto p = parsers::boolean | parsers::integer | parsers::count | parsers::real | parsers::time
-           | parsers::duration | parsers::net | parsers::ip;
+  auto p = parsers::boolean | parsers::integer | parsers::count | parsers::real
+           | parsers::time | parsers::duration | parsers::net | parsers::ip;
   auto res = tenzir::data{};
   if (p(s, res)) {
     return res;
@@ -276,7 +276,8 @@ auto non_number_parser(std::string_view s, const tenzir::type* seed)
   if (seed) {
     return record_builder::basic_seeded_parser(s, *seed);
   }
-  auto p = parsers::boolean | parsers::time | parsers::duration | parsers::net | parsers::ip;
+  auto p = parsers::boolean | parsers::time | parsers::duration | parsers::net
+           | parsers::ip;
   auto res = tenzir::data{};
   if (p(s, res)) {
     return res;
@@ -700,6 +701,12 @@ auto node_field::append_to_signature(signature_type& sig,
 auto node_field::commit_to(tenzir::builder_ref builder,
                            class record_builder& rb, const tenzir::type* seed,
                            bool mark_dead) -> void {
+  if (rb.schema_only_ and not seed) {
+    if (mark_dead) {
+      mark_this_dead();
+    }
+    return;
+  }
   if (std::holds_alternative<std::string>(data_)) {
     parse(rb, seed);
   }

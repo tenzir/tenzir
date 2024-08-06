@@ -37,10 +37,6 @@ void append_name_to_signature(std::string_view x, signature_type& out) {
 namespace detail::multi_series_builder {
 
 auto record_generator::exact_field(std::string_view name) -> field_generator {
-  const std::string_view unflatten = msb_->settings_.unnest_separator;
-  if (not unflatten.empty()) {
-    return unflattend_field(name, unflatten);
-  }
   const auto visitor = detail::overload{
     [&](tenzir::record_ref b) {
       return field_generator{msb_, b.field(name)};
@@ -78,8 +74,8 @@ auto field_generator::data_unparsed(std::string_view s) -> void {
     [&](tenzir::builder_ref b) {
       auto res = msb_->builder_raw_.parser_(s, nullptr);
       auto& [value, diag] = res;
-      // TODO maybe accept a diag handler, so we dont have to swallow the diagnostic
-      // if ( diag ) {
+      // TODO maybe accept a diag handler, so we dont have to swallow the
+      // diagnostic if ( diag ) {
       //   throw std::move(diag);
       // }
       if (value) {
@@ -206,8 +202,12 @@ auto multi_series_builder::yield_ready() -> std::vector<series> {
     return {};
   }
   last_yield_time_ = now;
-  if (get_policy<policy_merge>()) {
-    return merging_builder_.finish();
+  if (auto* p = get_policy<policy_merge>()) {
+    auto ret = merging_builder_.finish();
+    if (p->reset_on_yield) {
+      merging_builder_ = series_builder{type_for_schema(p->seed_schema)};
+    }
+    return ret;
   }
   make_events_available_where(
     [now, timeout = settings_.timeout,
@@ -330,15 +330,19 @@ void multi_series_builder::complete_last_event() {
       };
       const auto schema_name = std::visit(visitor, selected_schema->data_);
       schema_type = type_for_schema(schema_name);
-      needs_signature_ = schema_type != nullptr; // we may need to compute the signature if its an unknown schema
-      if (p->unique_selector) { // if the user promised that the selector is unique, we dont need to compute the schema
-        needs_signature_ = false;
+      // we may need to compute the signature in selector mode
+      needs_signature_ = true;
+      // if the user promised that the selector is unique, we can rely on the
+      // selectors name
+      if (p->unique_selector) {
+        needs_signature_ = not schema_name.empty();
       }
-      if ( settings_.schema_only ) {
+      // if we only want to output a schema, cam also just rely on its name
+      if (schema_type and settings_.schema_only) {
         needs_signature_ = false;
       }
       if (not schema_type) { // if the selector didnt refer to a known schema
-        if (selector_was_string) { 
+        if (selector_was_string) {
           diagnostic::warning("{} parser: schema for selector not found",
                               settings_.parser_name)
             .note("`{}` does not refer to a known schema", schema_name)
@@ -351,20 +355,15 @@ void multi_series_builder::complete_last_event() {
     }
   } else if (auto p = get_policy<policy_precise>()) {
     if (not p->seed_schema.empty()) {
-      // technically there is no need to repeat these two steps. 
-      // But we would need special handling for writing the schema name into the signature
-      // every event
+      // technically there is no need to repeat these two steps.
+      // But we would need special handling for writing the schema name into the
+      // signature every event
       schema_type = &naming_sentinel_;
       append_name_to_signature(p->seed_schema, signature_raw_);
     }
   }
-  // if we dont know the schema, or allow extra fields, we need to do a full
-  // signature compute otherwise the schema name that is already written to the
-  // signature is sufficient
-  // FIXME use unique_selector setting
-  if (not needs_signature_ or settings_.schema_only) {
-    builder_raw_.append_signature_to(signature_raw_,
-                                     needs_signature_ ? schema_type : nullptr);
+  if (needs_signature_) {
+    builder_raw_.append_signature_to(signature_raw_, schema_type);
   }
   auto free_index = next_free_index();
   auto [it, inserted] = signature_map_.try_emplace(
@@ -385,7 +384,7 @@ void multi_series_builder::complete_last_event() {
   }
   active_index_ = new_index;
   auto& entry = entries_[new_index];
-  builder_raw_.commit_to(entry.builder, true);
+  builder_raw_.commit_to(entry.builder, true, schema_type);
 }
 
 void multi_series_builder::clear_raw_event() {

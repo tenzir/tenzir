@@ -210,6 +210,7 @@ public:
     static constexpr std::string_view name = "merge";
     // a schema name to seed with. If this is given
     std::string seed_schema = {};
+    bool reset_on_yield = false;
 
     auto friend inspect(auto& f, policy_merge& x) -> bool {
       return f.object(x).fields(f.field("seed_schema", x.seed_schema));
@@ -297,19 +298,20 @@ public:
       if (auto seed = type_for_schema(p->seed_schema)) {
         merging_builder_ = seed;
       } else {
-        merging_builder_ = tenzir::type{ p->seed_schema, null_type{} };
+        merging_builder_ = tenzir::type{p->seed_schema, null_type{}};
       }
     }
     // setup the naming sentinel for naming builders in precise mode
     else if (auto p = get_policy<policy_precise>()) {
-      settings_.ordered = true; // merging mode is necessarily ordered
       if (auto seed = type_for_schema(p->seed_schema)) {
         naming_sentinel_ = *seed;
-        needs_signature_ = true;
+        needs_signature_ = not settings_.schema_only;
       } else {
-        naming_sentinel_ = tenzir::type{ p->seed_schema, null_type{} };
+        naming_sentinel_ = tenzir::type{p->seed_schema, null_type{}};
       }
     }
+    // selector mode has not special ctor setup, as it all depends on runtime
+    // inputs
   }
 
   // BE AWARE THAT MOVING A MULTI_SERIES_BUILDER MAY
@@ -372,30 +374,39 @@ private:
   /// function and thus will only be instantiated by other member functions
   void garbage_collect_where(std::predicate<const entry_data&> auto pred);
 
-  constexpr static size_t invalid_index = static_cast<size_t>(-1);
   using signature_type = typename record_builder::signature_type;
-
-  struct schema_lookup_element;
 
   policy_type policy_;
   settings_type settings_;
+  // used for quick name -> schema mapping
   detail::flat_map<std::string, tenzir::type> schemas_;
+  // `dh_` must be constructed before `builder_raw_`, as the builder depends on
+  // the diag handler
   std::unique_ptr<detail::multi_series_builder::diagnostic_handler> dh_
-    = std::make_unique<
-      detail::multi_series_builder::diagnostic_handler>(); // must be
-                                                           // initialized before
-                                                           // builder_raw_
+    = std::make_unique<detail::multi_series_builder::diagnostic_handler>();
+  // builder used in merging mode
+  series_builder merging_builder_;
+  // builder_raw_ must be constructed after `dh_` as it depends on it
   record_builder builder_raw_;
-  bool needs_signature_ = true; // used to determine whether we need a signature compute
-  tenzir::type naming_sentinel_; // used to name builders
+  // used to determine whether we need a signature compute
+  bool needs_signature_ = true;
+  // used to name builders
+  tenzir::type naming_sentinel_;
+  // signature vector, kept around for memory
   signature_type signature_raw_;
+  // lookup map to lookup from signature -> index into `entries_`
   tsl::robin_map<signature_type, size_t, detail::hash_algorithm_proxy<>>
     signature_map_;
-  series_builder merging_builder_;
+  // all currently active builders
   std::vector<entry_data> entries_;
+  // events that have been made ready (timeout,  batch size, ordered mode
+  // builder switch)
   std::vector<series> ready_events_;
+  // time at which the entire builder made its last yields
   std::chrono::steady_clock::time_point last_yield_time_
     = std::chrono::steady_clock::now();
+  // currently active builder index. used in ordered mode to check whether we
+  // need to yield on builder switch
   size_t active_index_ = 0;
 };
 } // namespace tenzir

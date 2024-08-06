@@ -68,6 +68,14 @@ auto check_outcome(const std::vector<series>& res,
                    const vvr& expected) -> void {
   auto res_it = res.begin();
   auto exp_it = expected.begin();
+  if (res.size() != expected.size()) {
+    fmt::print("batch count mismatch. res: {}; expected: {}\n", res.size(),
+               expected.size());
+    fmt::print("res:\n");
+    print(res);
+    fmt::print("exp:\n");
+    print(expected);
+  }
   REQUIRE_EQUAL(res.size(), expected.size());
   size_t batch_number = 0;
   for (; res_it != res.end() and exp_it != expected.end(); ++res_it, ++exp_it) {
@@ -93,6 +101,7 @@ auto check_outcome(const std::vector<series>& res,
         CHECK(false);
         fmt::print("Event mismatch in batch {}, event {}\n", batch_number,
                    event_number);
+        ++event_number;
         fmt::print("Got: {}\nExp: {}\n", event, *exp_event_it);
       } else {
         CHECK(true);
@@ -176,8 +185,10 @@ TEST(merging records with seed and reset) {
   multi_series_builder b{
     multi_series_builder::policy_merge{
       .seed_schema = "seed",
+      .reset_on_yield = true,
     },
     multi_series_builder::settings_type{},
+    {seed_schema},
   };
   b.record().exact_field("0").data(0l);
   b.record().exact_field("2").data(0ul);
@@ -237,9 +248,9 @@ TEST(precise ordered) {
   // first schema
   b.record().exact_field("0").data(0l);
   // second schema
-  b.record().exact_field("2").data(0ul);
-  b.record().exact_field("2").data(0ul);
-  b.record().exact_field("2").data(0ul);
+  b.record().exact_field("2").data(1ul);
+  b.record().exact_field("2").data(2ul);
+  b.record().exact_field("2").data(3ul);
   const auto res = b.finalize();
 
   const vvr expected_result = {
@@ -250,13 +261,13 @@ TEST(precise ordered) {
     },
     {
       {
-        {"2", 0ul},
+        {"2", 1ul},
       },
       {
-        {"2", 0ul},
+        {"2", 2ul},
       },
       {
-        {"2", 0ul},
+        {"2", 3ul},
       },
     },
   };
@@ -266,7 +277,9 @@ TEST(precise ordered) {
 TEST(precise unordered) {
   multi_series_builder b{
     multi_series_builder::policy_precise{},
-    multi_series_builder::settings_type{.ordered = false},
+    multi_series_builder::settings_type{
+      .ordered = false,
+    },
   };
   // first schema
   b.record().exact_field("0").data(0l);
@@ -334,6 +347,7 @@ TEST(precise unordered with seed) {
   multi_series_builder b{
     multi_series_builder::policy_precise{.seed_schema = "seed"},
     multi_series_builder::settings_type{.ordered = false},
+    {seed_schema},
   };
   // seed schema only
   b.record().exact_field("0").data(0l);

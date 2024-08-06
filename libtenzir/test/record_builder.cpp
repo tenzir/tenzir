@@ -474,7 +474,7 @@ TEST(signature record seeding data - field not in seed) {
 }
 
 TEST(signature record seeding data - field not in seed-- no - extend - schema) {
-  record_builder b {
+  record_builder b{
     detail::record_builder::basic_parser,
     nullptr,
     true,
@@ -489,7 +489,7 @@ TEST(signature record seeding data - field not in seed-- no - extend - schema) {
     {"0", uint64_type{}},
   }};
 
-  b.append_signature_to(sig,&seed);
+  b.append_signature_to(sig, &seed);
 
   detail::record_builder::signature_type expected;
   {
