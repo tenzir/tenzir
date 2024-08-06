@@ -108,8 +108,6 @@ TEST(empty builder) {
   multi_series_builder b{
     multi_series_builder::policy_merge{},
     multi_series_builder::settings_type{},
-    record_builder::basic_parser,
-    {},
   };
   CHECK_EQUAL(b.last_errors().size(), 0);
   CHECK_EQUAL(b.yield_ready().size(), 0);
@@ -119,8 +117,6 @@ TEST(merging records) {
   multi_series_builder b{
     multi_series_builder::policy_merge{},
     multi_series_builder::settings_type{},
-    record_builder::basic_parser,
-    {},
   };
   b.record().exact_field("0").data(0l);
   b.record().exact_field("0").data(1l);
@@ -182,8 +178,6 @@ TEST(merging records with seed and reset) {
       .seed_schema = "seed",
     },
     multi_series_builder::settings_type{},
-    record_builder::basic_parser,
-    {seed_schema},
   };
   b.record().exact_field("0").data(0l);
   b.record().exact_field("2").data(0ul);
@@ -239,8 +233,6 @@ TEST(precise ordered) {
   multi_series_builder b{
     multi_series_builder::policy_precise{},
     multi_series_builder::settings_type{},
-    record_builder::basic_parser,
-    {},
   };
   // first schema
   b.record().exact_field("0").data(0l);
@@ -275,8 +267,6 @@ TEST(precise unordered) {
   multi_series_builder b{
     multi_series_builder::policy_precise{},
     multi_series_builder::settings_type{.ordered = false},
-    record_builder::basic_parser,
-    {},
   };
   // first schema
   b.record().exact_field("0").data(0l);
@@ -344,8 +334,6 @@ TEST(precise unordered with seed) {
   multi_series_builder b{
     multi_series_builder::policy_precise{.seed_schema = "seed"},
     multi_series_builder::settings_type{.ordered = false},
-    record_builder::basic_parser,
-    {seed_schema},
   };
   // seed schema only
   b.record().exact_field("0").data(0l);
@@ -435,7 +423,6 @@ TEST(selector) {
     multi_series_builder::policy_selector{.field_name = "selector",
                                           .naming_prefix = "prefix"},
     multi_series_builder::settings_type{},
-    record_builder::basic_parser,
     {seed_schema_1, seed_schema_2},
   };
   {
@@ -503,7 +490,6 @@ TEST(selector unordered) {
     multi_series_builder::policy_selector{.field_name = "selector",
                                           .naming_prefix = "prefix"},
     multi_series_builder::settings_type{.ordered = false},
-    record_builder::basic_parser,
     {seed_schema_1, seed_schema_2},
   };
   {
@@ -588,7 +574,6 @@ TEST(selector unordered schema_only) {
       .ordered = false,
       .schema_only = true,
     },
-    record_builder::basic_parser,
     {seed_schema_1, seed_schema_2},
   };
   {

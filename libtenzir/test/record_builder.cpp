@@ -143,9 +143,8 @@ TEST(overwrite record fields) {
 
   CHECK(b.has_elements());
   detail::record_builder::signature_type sig;
-  test_diagnsotic_handler dh;
-  b.append_signature_to(sig, record_builder::basic_parser,nullptr, false, false, &dh);
-  CHECK( not dh );
+
+  b.append_signature_to(sig, nullptr);
 
   detail::record_builder::signature_type expected;
   {
@@ -172,9 +171,8 @@ TEST(signature record empty) {
 
   CHECK(b.has_elements());
   detail::record_builder::signature_type sig;
-  test_diagnsotic_handler dh;
-  b.append_signature_to(sig, record_builder::basic_parser,nullptr, false, false, &dh);
-  CHECK( not dh );
+
+  b.append_signature_to(sig, nullptr);
 
   detail::record_builder::signature_type expected;
   {
@@ -193,9 +191,8 @@ TEST(signature record simple) {
 
   CHECK(b.has_elements());
   detail::record_builder::signature_type sig;
-  test_diagnsotic_handler dh;
-  b.append_signature_to(sig, record_builder::basic_parser,nullptr, false, false, &dh);
-  CHECK( not dh );
+
+  b.append_signature_to(sig, nullptr);
 
   detail::record_builder::signature_type expected;
   {
@@ -230,9 +227,8 @@ TEST(signature list) {
 
   CHECK(b.has_elements());
   detail::record_builder::signature_type sig;
-  test_diagnsotic_handler dh;
-  b.append_signature_to(sig, record_builder::basic_parser,nullptr, false, false, &dh);
-  CHECK( not dh );
+
+  b.append_signature_to(sig, nullptr);
 
   detail::record_builder::signature_type expected;
   {
@@ -259,9 +255,8 @@ TEST(signature list with null) {
 
   CHECK(b.has_elements());
   detail::record_builder::signature_type sig;
-  test_diagnsotic_handler dh;
-  b.append_signature_to(sig, record_builder::basic_parser,nullptr, false, false, &dh);
-  CHECK( not dh );
+
+  b.append_signature_to(sig, nullptr);
 
   detail::record_builder::signature_type expected;
   {
@@ -288,9 +283,8 @@ TEST(signature list numeric unification) {
 
   CHECK(b.has_elements());
   detail::record_builder::signature_type sig;
-  test_diagnsotic_handler dh;
-  b.append_signature_to(sig, record_builder::basic_parser,nullptr, false, false, &dh);
-  CHECK( not dh );
+
+  b.append_signature_to(sig, nullptr);
 
   detail::record_builder::signature_type expected;
   {
@@ -322,9 +316,8 @@ TEST(signature record seeding matching) {
     {"0", uint64_type{}},
     {"1", int64_type{}},
   }};
-  test_diagnsotic_handler dh;
-  b.append_signature_to(sig, record_builder::basic_parser,&seed, false, false, &dh);
-  CHECK( not dh );
+
+  b.append_signature_to(sig, &seed);
 
   detail::record_builder::signature_type expected;
   {
@@ -364,9 +357,8 @@ TEST(signature record seeding field not in data) {
     {"0", uint64_type{}},
     {"1", int64_type{}},
   }};
-  test_diagnsotic_handler dh;
-  b.append_signature_to(sig, record_builder::basic_parser,&seed, false, false, &dh);
-  CHECK( not dh );
+
+  b.append_signature_to(sig, &seed);
 
   detail::record_builder::signature_type expected;
   {
@@ -396,7 +388,11 @@ TEST(signature record seeding field not in data) {
 }
 
 TEST(signature record seeding field not in data-- no - extend - schema) {
-  record_builder b;
+  record_builder b{
+    detail::record_builder::basic_parser,
+    nullptr,
+    true,
+  };
   auto* r = b.record();
   r->field("0")->data(0ul);
 
@@ -406,9 +402,8 @@ TEST(signature record seeding field not in data-- no - extend - schema) {
     {"0", uint64_type{}},
     {"1", int64_type{}},
   }};
-  test_diagnsotic_handler dh;
-  b.append_signature_to(sig, record_builder::basic_parser,&seed, true, false, &dh);
-  CHECK( not dh );
+
+  b.append_signature_to(sig, &seed);
 
   detail::record_builder::signature_type expected;
   {
@@ -448,9 +443,8 @@ TEST(signature record seeding data - field not in seed) {
   tenzir::type seed{record_type{
     {"0", uint64_type{}},
   }};
-  test_diagnsotic_handler dh;
-  b.append_signature_to(sig, record_builder::basic_parser,&seed, false, false, &dh);
-  CHECK( not dh );
+
+  b.append_signature_to(sig, &seed);
 
   detail::record_builder::signature_type expected;
   {
@@ -480,7 +474,11 @@ TEST(signature record seeding data - field not in seed) {
 }
 
 TEST(signature record seeding data - field not in seed-- no - extend - schema) {
-  record_builder b;
+  record_builder b {
+    detail::record_builder::basic_parser,
+    nullptr,
+    true,
+  };
   auto* r = b.record();
   r->field("1")->data(0l);
   r->field("0")->data(0ul);
@@ -490,9 +488,8 @@ TEST(signature record seeding data - field not in seed-- no - extend - schema) {
   tenzir::type seed{record_type{
     {"0", uint64_type{}},
   }};
-  test_diagnsotic_handler dh;
-  b.append_signature_to(sig, record_builder::basic_parser,&seed, true, false, &dh);
-  CHECK( not dh );
+
+  b.append_signature_to(sig,&seed);
 
   detail::record_builder::signature_type expected;
   {
@@ -525,9 +522,8 @@ TEST(signature record seeding numeric mismatch) {
   }};
   // a strictly numeric mismatch does not return an error and is just handled by
   // casting to the seed type
-  test_diagnsotic_handler dh;
-  b.append_signature_to(sig, record_builder::basic_parser,&seed, false, false, &dh);
-  CHECK( not dh );
+
+  b.append_signature_to(sig, &seed);
 
   detail::record_builder::signature_type expected;
   {

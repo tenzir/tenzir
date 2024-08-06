@@ -480,11 +480,6 @@ public:
 
   using signature_type = typename detail::record_builder::signature_type;
   /// computes the "signature" of the currently built record.
-  template <detail::record_builder::data_parsing_function Parser>
-  auto
-  append_signature_to(signature_type&, Parser&& p, const tenzir::type* seed,
-                      bool allow_non_schema_fields, bool parse_seed_fields_only,
-                      tenzir::diagnostic_handler*) -> void;
   auto append_signature_to(signature_type&, const tenzir::type* seed) -> void;
 
   /// clears the builder
