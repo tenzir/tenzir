@@ -1,6 +1,6 @@
 # Quickstart
 
-Tenzir is a data pipeline solution for optimizing cloud and data costs, running
+Tenzir is the data pipeline engine for optimizing cloud and data costs, running
 detections and analytics, building a centralized security data lake, or creating
 a decentralized security data fabric.
 

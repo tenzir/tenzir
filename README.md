@@ -20,10 +20,10 @@ Data Pipelines for Security Teams
 
 ## What is Tenzir?
 
-Tenzir is a data pipeline for security teams.
+Tenzir is the data pipeline engine for security teams.
 
 If you need to collect, parse, shape, normalize, aggregate, store, query, and
-route security telemetry data at scale, you'll love letting our pipelines manage
+route security telemetry data at scale, you'll love how our pipelines manage
 your dataflows. Tenzir makes it easy to quickly onboard and store data from
 numerous sources, reduce data volumes to optimize cloud and data costs, and
 execute detections and run analytics in-stream.

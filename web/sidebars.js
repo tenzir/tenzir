@@ -20,6 +20,10 @@ const sidebars = {
       id: 'quickstart',
     },
     {
+      type: 'doc',
+      id: 'map-data-to-ocsf/README',
+    },
+    {
       type: 'html',
       value: '<br><b>Guides<b/>',
     },

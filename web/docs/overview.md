@@ -1,55 +1,48 @@
 # Overview
 
-Tenzir is a data pipeline for security teams.
+### Tenzir is the data pipeline engine for security
 
 If you need to collect, parse, shape, normalize, aggregate, store, query, and
-route security telemetry data at scale, you'll love letting our pipelines manage
+route security telemetry data at scale, you'll love how our pipelines manage
 your dataflows. Tenzir makes it easy to quickly onboard and store data from
 numerous sources, reduce data volumes to optimize cloud and data costs, and
 execute detections and run analytics in-stream.
 
-Whether your architecture is a centralized security data lake decentralized
-security data fabric—we got you covered.
+Whether your architecture is a centralized **security data lake** or a
+decentralized **security data fabric**—we got you covered.
 
 <div class="container">
   <div class="row">
     <div class="col col--6">
-      <div class="col-demo">
-      <div class="card-demo">
-        <div class="card">
-          <div class="card__header">
-            <h3>Ready to Dive in?</h3>
-          </div>
-          <div class="card__body">
-            <p>
-            Get your fingers dirty and explore the demo node with just a few
-            clicks and a guided tour. Security data has never been easier.
-            </p>
-          </div>
-          <div class="card__footer">
-            <a class="button button--secondary button--block" href="quickstart">Quick Start</a>
-          </div>
+      <div class="card margin--sm padding--md">
+        <div class="card__header">
+          <h3>Ready to Dive in?</h3>
         </div>
-      </div>
+        <div class="card__body">
+          <p>
+          Get your fingers dirty and explore the demo node with just a few
+          clicks and a guided tour. Security data has never been easier.
+          </p>
+        </div>
+        <div class="card__footer">
+          <a class="button button--primary button--block" href="quickstart">Quick Start</a>
+        </div>
       </div>
     </div>
     <div class="col col--6">
-      <div class="card-demo">
-        <div class="card">
-          <div class="card__header">
-            <h3>New to Tenzir?</h3>
-          </div>
-          <div class="card__body">
-            <p>
-              Learn the basics of pipelines and get familiar with the Tenzir
-              Query Language (TQL). You'll master security data in no time.
-            </p>
-          </div>
-          <div class="card__footer">
-            <a class="button button--secondary button--block" href="pipelines">Pipelines</a>
-          </div>
+      <div class="card margin--sm padding--md">
+        <div class="card__header">
+          <h3>New to Tenzir?</h3>
         </div>
-      </div><div class="col-demo">
+        <div class="card__body">
+          <p>
+            Learn the basics of pipelines and get familiar with the Tenzir
+            Query Language (TQL). You'll master security data in no time.
+          </p>
+        </div>
+        <div class="card__footer">
+          <a class="button button--primary button--block" href="pipelines">Pipelines</a>
+        </div>
       </div>
     </div>
   </div>
