@@ -92,8 +92,19 @@ auto multi_series_builder_argument_parser::get_settings(diagnostic_handler& dh)
   (void)get_policy(dh); // force update policy.
   settings_.schema_only |= schema_only_.has_value();
   // if a schema is set and expand_schema
-  if (auto* p = std::get_if<multi_series_builder::policy_precise>(&policy_);
-      p and not p->seed_schema.empty()) {
+  if ( settings_.schema_only and std::holds_alternative<multi_series_builder::policy_merge>(policy_) ) {
+    diagnostic::error("`--schema-only` requires a `--schema` or `--selector`")
+      .primary(*schema_only_)
+      .emit(dh);
+      return false;
+  }
+  if (auto* p = std::get_if<multi_series_builder::policy_precise>(&policy_) ) {
+    if ( p->seed_schema.empty() and settings_.schema_only ) {
+      diagnostic::error("`--schema-only` requires a `--schema` or `--selector`")
+      .primary(*schema_only_)
+      .emit(dh);
+      return false;
+    }
     const auto schemas = modules::schemas();
 
     auto it = std::find_if(schemas.begin(), schemas.end(), [p](const auto& t) {
@@ -115,6 +126,11 @@ auto multi_series_builder_argument_parser::get_settings(diagnostic_handler& dh)
           .hint("Consider defining the schema if you know the input's shape")
           .emit(dh);
       }
+    } else if ( settings_.schema_only and not raw_.has_value() ) {
+      // TODO do we want this hint/warning?
+      diagnostic::warning( "`--schema` and `--schema-only` were given")
+      .hint("`--schema` with `--merge` has functionally the same effect, but may have better performance" )
+      .emit(dh);
     }
   }
   if (unnest_) {
