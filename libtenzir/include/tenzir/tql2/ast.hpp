@@ -879,6 +879,11 @@ private:
 
 namespace tenzir {
 
+auto is_true_literal(const ast::expression& y) -> bool;
+
+auto split_legacy_expression(const ast::expression& x)
+  -> std::pair<expression, ast::expression>;
+
 template <>
 inline constexpr auto enable_default_formatter<tenzir::ast::pipeline> = true;
 
