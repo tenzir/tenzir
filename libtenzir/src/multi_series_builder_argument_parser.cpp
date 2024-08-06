@@ -208,16 +208,21 @@ auto multi_series_builder_argument_parser::get_policy(diagnostic_handler& dh)
     seed_type = schema_->inner;
   }
   if (has_merge) {
-    policy_ = multi_series_builder::policy_merge{
-      .seed_schema = seed_type,
-    };
+    if ( has_schema ) {
+      policy_ = multi_series_builder::policy_merge{
+        .seed_schema = seed_type,
+      };
+    } else {
+      policy_ = multi_series_builder::policy_merge{};
+    }
   } else if (has_selector) {
     auto p = parse_selector(selector_->inner, selector_->source, dh);
     p.unique_selector = unique_selector_.has_value();
     policy_ = std::move(p);
   } else if (has_schema) {
     // this needs an extra guard for "has_schema", because it could otherwise be
-    // resetting a non-empty default seed merge is already handled above
+    // resetting a non-empty default seed.
+    // the same issue for merge is already handled above
     policy_ = multi_series_builder::policy_precise{
       .seed_schema = seed_type,
     };
