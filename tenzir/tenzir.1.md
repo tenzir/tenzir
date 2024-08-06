@@ -63,7 +63,7 @@ tenzir export json '6.6.6.6 || (dst_port < 1024 && proto == "UDP")'
 
 ## Next steps
 
-To learn more about using Tenzir, continue over at https://docs.tenzir.com/get-started.
+To learn more about using Tenzir, continue over at https://docs.tenzir.com.
 
 # ISSUES
 
