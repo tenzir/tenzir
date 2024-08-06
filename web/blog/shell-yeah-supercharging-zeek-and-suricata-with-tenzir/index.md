@@ -174,4 +174,4 @@ operators](/next/language/user-defined-operators).
 
 Using Zeek or Suricata? Tenzir makes 'em fun to work with. Check out our other
 blogs tagged with [`#zeek`](/blog/tags/zeek) and
-[`#suricata`](/blog/tags/suricata), and [give it a shot](/get-started) yourself.
+[`#suricata`](/blog/tags/suricata), and [give it a shot](/overview) yourself.
