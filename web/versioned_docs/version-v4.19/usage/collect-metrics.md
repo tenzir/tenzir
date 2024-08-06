@@ -30,7 +30,7 @@ historical metrics.
 
 ## Summarize metrics
 
-You can [shape](../user-guides/shape-data/README.md) metrics like ordinary data,
+You can [shape](../usage/shape-data/README.md) metrics like ordinary data,
 e.g., write aggregations over metrics to compute runtime statistics suitable for
 reporting or dashboarding:
 

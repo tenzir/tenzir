@@ -19,7 +19,6 @@ azure-log-analytics --tenant-id <tenant-id> --client-id <client-id>
                     --dce <data-collection-endpoint>
                     --dcr <data-collection-rule-id>
                     --table <table-name>
-                    [--batch-size <batch-size>]
 ```
 
 ## Description
@@ -58,16 +57,6 @@ The data collection rule ID, written as `dcr-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`.
 ### `--table <table-name>`
 
 The table to upload events to.
-
-### `--batch-size <batch-size>`
-
-The event batch size for each upload request. The Azure Logs Ingestion API
-[takes at most 500MB per minute][limit], making sensible batching of events a
-necessity.
-
-Defaults to 8192.
-
-[limit]: https://learn.microsoft.com/en-us/azure/azure-monitor/logs/tutorial-logs-ingestion-code?tabs=net#script-returns-error-code-429
 
 ## Examples
 
