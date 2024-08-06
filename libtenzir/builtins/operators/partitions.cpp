@@ -180,7 +180,7 @@ private:
 };
 
 class plugin final : public virtual operator_plugin<partitions_operator>,
-                     operator_factory_plugin {
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {
