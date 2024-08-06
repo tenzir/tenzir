@@ -345,6 +345,6 @@ was not our only inspiration, we also drew inspiration from Kusto and others.
 As we created TQL, we wanted to learn from missed opportunities while doubling
 down on SPL's great user experience.
 
-If you'd like to give Tenzir a spin, [try our community edition](/get-started)
+If you'd like to give Tenzir a spin, [try our community edition](/overview)
 for free. A demo node with example pipelines is waiting for you. For more
 details about TQL, head over to the [language documentation](/pipelines).
