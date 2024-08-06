@@ -931,4 +931,39 @@ approaches and decide which one to pick on a case-by-case basis.
 ### Extend your mapping to multiple event types
 
 So far we've mapped just a single event. But Zeek has dozens of different event
-types.
+types. The natural next question is: how can we combine many of these individual
+mapping pipelines? Tenzir's answer for this is topic-based publish-subscribe.
+You can use the [`publish`](../operators/publish.md) and
+[`subscribe`](../operators/subscribe.md) operators to send data to a topic and
+read from it, respectively.
+
+Here's an illustration of the pub-sub approach:
+
+![Pub/Sub Appraoch](ocsf-pub-sub.svg)
+
+The first pipeline publishes to the `zeek` topic:
+
+```
+read_zeek_tsv
+publish "zeek"
+```
+
+Each OCSF mapping pipeline has the following structure:
+
+```
+subscribe "zeek"
+where @name == "zeek.conn"
+// map to OCSF
+publish "ocsf.event_class"
+```
+
+The [`where`](../operators/where.md) operator filters the relevant subset by
+event schema so that we can write a specific pipeline that maps exactly one
+event. (Because `where` does predicate pushdown, this is a cheap operation.)
+
+## Summary
+
+In this tutorial, we covered two approaches how to map logs to OCSF event
+classes. We used the Zeek network monitor as a case study to illustrate the
+different option. Finally, we showed a scalable approach to write one pipeline
+per OCSF event class to create a modular set of mappings.
