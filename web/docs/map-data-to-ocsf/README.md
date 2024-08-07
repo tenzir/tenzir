@@ -778,6 +778,8 @@ this = {
     uid: event.uid,
     version: "1.3.0",
   },
+  // --- Context (optional) ---
+  unmapped: event,
   // --- Primary (required) ---
   dst_endpoint: {
     ip: event.id.resp_h,
@@ -824,27 +826,24 @@ this = {
   // - `tls`: if we buffer ssl log for this connection, we could add the
   //   information in here.
 }
-// drop all the mapped fields, then rename event to unmapped
+// Drop all the mapped fields.
 drop (
-  event._write_ts,
-  event.community_id,
-  event.conn_state,
-  event.duration,
-  event.id,
-  event.local_orig,
-  event.local_resp,
-  event.orig_bytes,
-  event.orig_pkts,
-  event.proto,
-  event.resp_bytes,
-  event.resp_pkts,
-  event.service,
-  event.ts,
-  event.uid,
-  tmp,
+  unmapped._write_ts,
+  unmapped.community_id,
+  unmapped.conn_state,
+  unmapped.duration,
+  unmapped.id,
+  unmapped.local_orig,
+  unmapped.local_resp,
+  unmapped.orig_bytes,
+  unmapped.orig_pkts,
+  unmapped.proto,
+  unmapped.resp_bytes,
+  unmapped.resp_pkts,
+  unmapped.service,
+  unmapped.ts,
+  unmapped.uid,
 )
-this = { ...this, unmapped: event }
-drop event
 @name = "ocsf.network_activity"
 ```
 
