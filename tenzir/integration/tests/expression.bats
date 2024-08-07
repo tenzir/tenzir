@@ -90,3 +90,19 @@ from [{
 write_json
 EOF
 }
+
+@test "numeric si prefixes" {
+  check tenzir -f '/dev/stdin' <<EOF
+from {
+  x0: 1Mi,
+  x1: -1M,
+  x2: 1.2k,
+  x3: -1.234k,
+  x4: 1.2345k,
+  x5: -1.0000000000003k,
+  x6: 17.5E,
+  x7: 18.5E,
+}
+write_json
+EOF
+}

@@ -20,7 +20,7 @@
 
 namespace tenzir {
 
-template <concepts::integral T>
+template <concepts::arithmetic T>
 struct si_parser : parser_base<si_parser<T>> {
   using attribute = T;
 
