@@ -713,45 +713,45 @@ write the pipeline to illustrate the different approach:
 read_zeek_tsv
 where @name == "zeek.conn"
 this = { event: this }
-tmp.class_uid = 4001
-tmp.activity_id = 6
-tmp.activity_name = "Traffic"
+class_uid = 4001
+activity_id = 6
+activity_name = "Traffic"
 if event.local_orig and event.local_resp {
-  tmp.direction = "Lateral"
-  tmp.direction_id = 3
+  direction = "Lateral"
+  direction_id = 3
 } else if event.local_orig {
-  tmp.direction = "Outbound"
-  tmp.direction_id = 2
+  direction = "Outbound"
+  direction_id = 2
 } else if event.local_resp {
-  tmp.direction = "Inbound"
-  tmp.direction_id = 1
+  direction = "Inbound"
+  direction_id = 1
 } else {
-  tmp.direction = "Unknown"
-  tmp.direction_id = 0
+  direction = "Unknown"
+  direction_id = 0
 }
 if event.proto == "tcp" {
-  tmp.protocol_num = 6
+  protocol_num = 6
 } else if event.proto == "udp" {
-  tmp.protocol_num = 17
+  protocol_num = 17
 } else if event.proto == "icmp" {
-  tmp.protocol_num = 1
+  protocol_num = 1
 } else {
-  tmp.protocol_num = -1
+  protocol_num = -1
 }
 if event.id.orig_h.is_v6() or event.id.resp_h.is_v6() {
-  tmp.protocol_ver_id = 6
+  protocol_ver_id = 6
 } else {
-  tmp.protocol_ver_id = 4
+  protocol_ver_id = 4
 }
 this = {
   // --- Classification (required) ---
-  activity_id: tmp.activity_id,
+  activity_id: activity_id,
   category_uid: 4,
-  class_uid: tmp.class_uid,
-  type_id: tmp.class_uid * 100 + tmp.activity_id,
+  class_uid: class_uid,
+  type_id: class_uid * 100 + activity_id,
   severity_id: 1,
   // --- Classification (optional) ---
-  activity_name: tmp.activity_name,
+  activity_name: activity_name,
   category_name: "Network Activity",
   class_name: "Network Activity",
   severity: "Informational",
@@ -793,11 +793,11 @@ this = {
   // --- Primary (recommended) ---
   connection_info: {
     uid: event.community_id,
-    direction: tmp.direction,
-    direction_id: tmp.direction_id,
-    protocol_ver_id: tmp.protocol_ver_id,
+    direction: direction,
+    direction_id: direction_id,
+    protocol_ver_id: protocol_ver_id,
     protocol_name: event.proto,
-    protocol_num: tmp.protocol_num,
+    protocol_num: protocol_num,
   },
   src_endpoint: {
     ip: event.id.orig_h,
