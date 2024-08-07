@@ -7,7 +7,10 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+
+#include <arrow/compute/api.h>
 
 namespace tenzir::plugins::string {
 
@@ -70,22 +73,70 @@ private:
   bool starts_with_;
 };
 
-// TODO: We need better runtime configuration of plugin objects.
-class starts_with final : public virtual starts_or_ends_with {
+class trim : public virtual method_plugin {
 public:
-  starts_with() : starts_or_ends_with(true) {
+  explicit trim(std::string name, std::string fn_name)
+    : name_{std::move(name)}, fn_name_{std::move(fn_name)} {
   }
-};
 
-class ends_with final : public virtual starts_or_ends_with {
-public:
-  ends_with() : starts_or_ends_with(false) {
+  auto name() const -> std::string override {
+    return name_;
   }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto subject_expr = ast::expression{};
+    auto characters = std::optional<std::string>{};
+    TRY(argument_parser2::method(name())
+          .add(subject_expr, "<string>")
+          .add(characters, "<characters>")
+          .parse(inv, ctx));
+    auto options = std::optional<arrow::compute::TrimOptions>{};
+    if (characters) {
+      options.emplace(std::move(*characters));
+    }
+    auto fn_name = options ? fn_name_ : fmt::format("{}_whitespace", fn_name_);
+    return function_use::make(
+      [subject_expr = std::move(subject_expr), options = std::move(options),
+       fn_name = std::move(fn_name)](evaluator eval, session ctx) -> series {
+        auto subject = eval(subject_expr);
+        auto f = detail::overload{
+          [&](const arrow::StringArray& array) {
+            auto trimmed_array = arrow::compute::CallFunction(
+              fn_name, {array}, options ? &*options : nullptr);
+            if (not trimmed_array.ok()) {
+              diagnostic::warning("{}", trimmed_array.status().ToString())
+                .primary(subject_expr)
+                .emit(ctx);
+              return series::null(string_type{}, subject.length());
+            }
+            return series{string_type{},
+                          trimmed_array.MoveValueUnsafe().make_array()};
+          },
+          [&](const auto&) {
+            diagnostic::warning("`trim` expected `string`, but got `{}`",
+                                subject.type.kind())
+              .primary(subject_expr)
+              .emit(ctx);
+            return series::null(string_type{}, subject.length());
+          },
+        };
+        return caf::visit(f, *subject.array);
+      });
+  }
+
+private:
+  std::string name_;
+  std::string fn_name_;
 };
 
 } // namespace
 
 } // namespace tenzir::plugins::string
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::starts_with)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::ends_with)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::starts_or_ends_with{true})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::starts_or_ends_with{false})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::trim{"trim", "utf8_trim"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::trim{"trim_start",
+                                                     "utf8_ltrim"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::trim{"trim_end", "utf8_rtrim"})
