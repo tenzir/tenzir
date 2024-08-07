@@ -82,7 +82,7 @@ Finally, the app got a new coat of paint. We went from a playful, monochrome
 look to a much sleeker, modern data app. Check out the difference between now
 and then:
 
-![Redesign Comparison](redesign-comparison.svg)
+![Redesign Comparison](redesign-comparison.png)
 
 ## How can I use the Platform?
 
