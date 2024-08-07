@@ -826,7 +826,7 @@ this = {
   // - `tls`: if we buffer ssl log for this connection, we could add the
   //   information in here.
 }
-// Drop all the mapped fields, then rename event to unmapped.
+// Drop all the mapped fields.
 drop (
   unmapped._write_ts,
   unmapped.community_id,
