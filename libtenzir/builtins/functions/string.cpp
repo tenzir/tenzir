@@ -98,6 +98,7 @@ public:
     auto fn_name = options ? fn_name_ : fmt::format("{}_whitespace", fn_name_);
     return function_use::make(
       [subject_expr = std::move(subject_expr), options = std::move(options),
+       name = name_,
        fn_name = std::move(fn_name)](evaluator eval, session ctx) -> series {
         auto subject = eval(subject_expr);
         auto f = detail::overload{
@@ -114,11 +115,117 @@ public:
                           trimmed_array.MoveValueUnsafe().make_array()};
           },
           [&](const auto&) {
-            diagnostic::warning("`trim` expected `string`, but got `{}`",
+            diagnostic::warning("`{}` expected `string`, but got `{}`", name,
                                 subject.type.kind())
               .primary(subject_expr)
               .emit(ctx);
             return series::null(string_type{}, subject.length());
+          },
+        };
+        return caf::visit(f, *subject.array);
+      });
+  }
+
+private:
+  std::string name_;
+  std::string fn_name_;
+};
+
+class transform : public virtual method_plugin {
+public:
+  explicit transform(std::string name, std::string fn_name)
+    : name_{std::move(name)}, fn_name_{std::move(fn_name)} {
+  }
+
+  auto name() const -> std::string override {
+    return name_;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto subject_expr = ast::expression{};
+    TRY(argument_parser2::method(name())
+          .add(subject_expr, "<string>")
+          .parse(inv, ctx));
+    return function_use::make(
+      [subject_expr = std::move(subject_expr), name = name_,
+       fn_name = fn_name_](evaluator eval, session ctx) -> series {
+        auto subject = eval(subject_expr);
+        auto f = detail::overload{
+          [&](const arrow::StringArray& array) {
+            auto transformed_array
+              = arrow::compute::CallFunction(fn_name, {array});
+            if (not transformed_array.ok()) {
+              diagnostic::warning("{}", transformed_array.status().ToString())
+                .primary(subject_expr)
+                .emit(ctx);
+              return series::null(string_type{}, subject.length());
+            }
+            return series{string_type{},
+                          transformed_array.MoveValueUnsafe().make_array()};
+          },
+          [&](const arrow::NullArray& array) {
+            return series::null(string_type{}, array.length());
+          },
+          [&](const auto&) {
+            diagnostic::warning("`{}` expected `string`, but got `{}`", name,
+                                subject.type.kind())
+              .primary(subject_expr)
+              .emit(ctx);
+            return series::null(string_type{}, subject.length());
+          },
+        };
+        return caf::visit(f, *subject.array);
+      });
+  }
+
+private:
+  std::string name_;
+  std::string fn_name_;
+};
+
+class classify : public virtual method_plugin {
+public:
+  explicit classify(std::string name, std::string fn_name)
+    : name_{std::move(name)}, fn_name_{std::move(fn_name)} {
+  }
+
+  auto name() const -> std::string override {
+    return name_;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto subject_expr = ast::expression{};
+    TRY(argument_parser2::method(name())
+          .add(subject_expr, "<string>")
+          .parse(inv, ctx));
+    return function_use::make(
+      [subject_expr = std::move(subject_expr), name = name_,
+       fn_name = fn_name_](evaluator eval, session ctx) -> series {
+        auto subject = eval(subject_expr);
+        auto f = detail::overload{
+          [&](const arrow::StringArray& array) {
+            auto classified_array
+              = arrow::compute::CallFunction(fn_name, {array});
+            if (not classified_array.ok()) {
+              diagnostic::warning("{}", classified_array.status().ToString())
+                .primary(subject_expr)
+                .emit(ctx);
+              return series::null(bool_type{}, subject.length());
+            }
+            return series{bool_type{},
+                          classified_array.MoveValueUnsafe().make_array()};
+          },
+          [&](const arrow::NullArray& array) {
+            return series::null(bool_type{}, array.length());
+          },
+          [&](const auto&) {
+            diagnostic::warning("`{}` expected `string`, but got `{}`", name,
+                                subject.type.kind())
+              .primary(subject_expr)
+              .emit(ctx);
+            return series::null(bool_type{}, subject.length());
           },
         };
         return caf::visit(f, *subject.array);
@@ -140,3 +247,27 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::trim{"trim", "utf8_trim"})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::trim{"trim_start",
                                                      "utf8_ltrim"})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::trim{"trim_end", "utf8_rtrim"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::transform{"capitalize",
+                                                          "utf8_capitalize"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::transform{"to_lower",
+                                                          "utf8_lower"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::transform{"reverse",
+                                                          "utf8_reverse"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::transform{"to_title",
+                                                          "utf8_title"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::transform{"to_upper",
+                                                          "utf8_upper"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::classify{"is_alnum",
+                                                         "utf8_is_alnum"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::classify{"is_alpha",
+                                                         "utf8_is_alpha"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::classify{"is_lower",
+                                                         "utf8_is_lower"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::classify{"is_numeric",
+                                                         "utf8_is_numeric"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::classify{"is_printable",
+                                                         "utf8_is_printable"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::classify{"is_title",
+                                                         "utf8_is_title"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::classify{"is_upper",
+                                                         "utf8_is_upper"})
