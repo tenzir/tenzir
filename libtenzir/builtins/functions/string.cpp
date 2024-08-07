@@ -98,6 +98,7 @@ public:
     auto fn_name = options ? fn_name_ : fmt::format("{}_whitespace", fn_name_);
     return function_use::make(
       [subject_expr = std::move(subject_expr), options = std::move(options),
+       name = name_,
        fn_name = std::move(fn_name)](evaluator eval, session ctx) -> series {
         auto subject = eval(subject_expr);
         auto f = detail::overload{
@@ -114,7 +115,56 @@ public:
                           trimmed_array.MoveValueUnsafe().make_array()};
           },
           [&](const auto&) {
-            diagnostic::warning("`trim` expected `string`, but got `{}`",
+            diagnostic::warning("`{}` expected `string`, but got `{}`", name,
+                                subject.type.kind())
+              .primary(subject_expr)
+              .emit(ctx);
+            return series::null(string_type{}, subject.length());
+          },
+        };
+        return caf::visit(f, *subject.array);
+      });
+  }
+
+private:
+  std::string name_;
+  std::string fn_name_;
+};
+
+class arrow_nullary : public virtual method_plugin {
+public:
+  explicit arrow_nullary(std::string name, std::string fn_name)
+    : name_{std::move(name)}, fn_name_{std::move(fn_name)} {
+  }
+
+  auto name() const -> std::string override {
+    return name_;
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto subject_expr = ast::expression{};
+    TRY(argument_parser2::method(name())
+          .add(subject_expr, "<string>")
+          .parse(inv, ctx));
+    return function_use::make(
+      [subject_expr = std::move(subject_expr), name = name_,
+       fn_name = fn_name_](evaluator eval, session ctx) -> series {
+        auto subject = eval(subject_expr);
+        auto f = detail::overload{
+          [&](const arrow::StringArray& array) {
+            auto trimmed_array = arrow::compute::CallFunction(fn_name, {array});
+            if (not trimmed_array.ok()) {
+              diagnostic::warning("{}", trimmed_array.status().ToString())
+                .primary(subject_expr)
+                .emit(ctx);
+              return series::null(string_type{}, subject.length());
+            }
+            return series{string_type{},
+                          trimmed_array.MoveValueUnsafe().make_array()};
+          },
+          [&](const auto&) {
+            diagnostic::warning("`{}` expected `string`, but got `{}`", name,
                                 subject.type.kind())
               .primary(subject_expr)
               .emit(ctx);
@@ -140,3 +190,13 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::trim{"trim", "utf8_trim"})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::trim{"trim_start",
                                                      "utf8_ltrim"})
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::trim{"trim_end", "utf8_rtrim"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::arrow_nullary{
+  "capitalize", "utf8_capitalize"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::arrow_nullary{"lower",
+                                                              "utf8_lower"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::arrow_nullary{"reverse",
+                                                              "utf8_reverse"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::arrow_nullary{"title",
+                                                              "utf8_title"})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::string::arrow_nullary{"upper",
+                                                              "utf8_upper"})
