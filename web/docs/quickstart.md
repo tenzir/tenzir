@@ -1,15 +1,13 @@
 # Quickstart
 
-Tenzir is the data pipeline engine for security teams. It optimizes cloud and
-data costs, runs detections and analytics, builds a centralized security data
-lake, and creates a decentralized security data fabric.
+Get up and running quickly with this tutorial. It just takes a few steps to run
+pipelines.
 
 ![Tenzir Platform in action](example-platform-in-action.png)
 
 ## Explore the demo node
 
-The easiest way to get started with Tenzir is try it out yourself. It takes just
-a few steps:
+The easiest way to get started with Tenzir is using our cloud demo setup:
 
 1. [Create a free account](installation/create-an-account.md) by signing in:
 
@@ -26,8 +24,7 @@ a few steps:
 ![Demo node](example-demo-node.png)
 
 4. The demo node comes with the *Demo Node Pipelines* package from the library
-   pre-installed. Let's head to the *Library* page to view the installed
-   package:
+   pre-installed. Head over to the *Library* page to view the installed package:
 
 ![Library](example-library.png)
 
@@ -36,14 +33,14 @@ a few steps:
 
 ![Explorer](example-explorer.png)
 
-6. Start [learning TQL](language.md) and explore the data set visually, e.g., to
+6. Start [learning TQL](language.md) and explore the data set visually, e.g.,
    by running aggregations and [plotting data](operators/chart.md):
 
 ![Bar chart](example-area-chart.png)
 
 ## Up next
 
-Now that you got a first impression of Tenzir pipelines, [onboard your own
+Now that you got a first impression of Tenzir, [onboard your own
 node](installation/deploy-a-node.md) and dive deeper by
 
 - following the [user guides](installation.md) with step-by-step tutorials of
