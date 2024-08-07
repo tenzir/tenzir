@@ -48,25 +48,15 @@ namespace tenzir {
     continue;                                                                  \
   }
 
-#define TRY_ASSIGN_STRING_TO_RESULT(name)                                      \
+#define TRY_ASSIGN_DATA_TO_RESULT(name, type)                                  \
   if (key == #name) {                                                          \
-    const auto* id = caf::get_if<std::string_view>(&value);                    \
+    const auto* id = caf::get_if<view<type>>(&value);                          \
     if (not id) {                                                              \
-      return diagnostic::error(#name " must be a string")                      \
+      return diagnostic::error(#name " must have type " #type)                 \
         .note("invalid package definition")                                    \
         .to_error();                                                           \
     }                                                                          \
-    result.name = std::string{*id};                                            \
-    continue;                                                                  \
-  }
-
-#define TRY_ASSIGN_BOOL_TO_RESULT(name)                                        \
-  if (key == #name) {                                                          \
-    const auto* x = caf::get_if<view<bool>>(&value);                           \
-    if (not x) {                                                               \
-      return diagnostic::error(#name " must be a bool").to_error();            \
-    }                                                                          \
-    result.name = *x;                                                          \
+    result.name = type{*id};                                                   \
     continue;                                                                  \
   }
 
@@ -200,9 +190,9 @@ auto package_input::parse(const view<record>& data)
   -> caf::expected<package_input> {
   auto result = package_input{};
   for (const auto& [key, value] : data) {
-    TRY_ASSIGN_STRING_TO_RESULT(name)
-    TRY_ASSIGN_STRING_TO_RESULT(type)
-    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description)
+    TRY_ASSIGN_DATA_TO_RESULT(name, std::string);
+    TRY_ASSIGN_DATA_TO_RESULT(type, std::string);
+    TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description);
     TRY_CONVERT_TO_STRING(default, default_);
     return diagnostic::error("unknown key '{}'", key)
       .note("while trying to parse 'input'")
@@ -218,9 +208,10 @@ auto package_source::parse(const view<record>& data)
   -> caf::expected<package_source> {
   auto result = package_source{};
   for (const auto& [key, value] : data) {
-    TRY_ASSIGN_STRING_TO_RESULT(repository)
-    TRY_ASSIGN_STRING_TO_RESULT(directory)
-    TRY_ASSIGN_STRING_TO_RESULT(revision)
+    TRY_ASSIGN_DATA_TO_RESULT(repository, std::string);
+    TRY_ASSIGN_DATA_TO_RESULT(directory, std::string);
+    TRY_ASSIGN_DATA_TO_RESULT(revision, std::string);
+    TRY_ASSIGN_DATA_TO_RESULT(version, std::string);
     return diagnostic::error("unknown key '{}'", key)
       .note("while trying to parse 'source' entry")
       .note("invalid package source definition")
@@ -236,6 +227,7 @@ auto package_config::parse(const view<record>& data)
   -> caf::expected<package_config> {
   auto result = package_config{};
   for (const auto& [key, value] : data) {
+    TRY_ASSIGN_DATA_TO_RESULT(install_time, tenzir::time);
     TRY_ASSIGN_STRUCTURE_TO_RESULT(source, package_source);
     TRY_ASSIGN_STRINGMAP_CONVERSION_TO_RESULT(inputs);
   }
@@ -246,10 +238,10 @@ auto package_pipeline::parse(const view<record>& data)
   -> caf::expected<package_pipeline> {
   auto result = package_pipeline{};
   for (const auto& [key, value] : data) {
-    TRY_ASSIGN_STRING_TO_RESULT(definition)
+    TRY_ASSIGN_DATA_TO_RESULT(definition, std::string);
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(name)
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description)
-    TRY_ASSIGN_BOOL_TO_RESULT(disabled);
+    TRY_ASSIGN_DATA_TO_RESULT(disabled, bool);
     if (key == "restart-on-error") {
       if (caf::holds_alternative<caf::none_t>(value)) {
         continue;
@@ -308,8 +300,8 @@ auto package_context::parse(const view<record>& data)
   -> caf::expected<package_context> {
   auto result = package_context{};
   for (const auto& [key, value] : data) {
-    TRY_ASSIGN_STRING_TO_RESULT(type);
-    TRY_ASSIGN_BOOL_TO_RESULT(disabled);
+    TRY_ASSIGN_DATA_TO_RESULT(type, std::string);
+    TRY_ASSIGN_DATA_TO_RESULT(disabled, bool);
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description);
     TRY_ASSIGN_STRINGMAP_TO_RESULT(arguments);
   }
@@ -321,7 +313,7 @@ auto package_snippet::parse(const view<record>& data)
   -> caf::expected<package_snippet> {
   auto result = package_snippet{};
   for (const auto& [key, value] : data) {
-    TRY_ASSIGN_STRING_TO_RESULT(definition);
+    TRY_ASSIGN_DATA_TO_RESULT(definition, std::string);
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(name);
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description);
   }
@@ -332,8 +324,8 @@ auto package_snippet::parse(const view<record>& data)
 auto package::parse(const view<record>& data) -> caf::expected<package> {
   auto result = package{};
   for (const auto& [key, value] : data) {
-    TRY_ASSIGN_STRING_TO_RESULT(id);
-    TRY_ASSIGN_STRING_TO_RESULT(name);
+    TRY_ASSIGN_DATA_TO_RESULT(id, std::string);
+    TRY_ASSIGN_DATA_TO_RESULT(name, std::string);
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(author);
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description);
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(package_icon);
@@ -364,11 +356,15 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
 }
 
 auto package_source::to_record() const -> record {
-  return record{
+  auto result = record{
     {"repository", repository},
     {"directory", directory},
     {"revision", revision},
   };
+  if (version) {
+    result["version"] = version;
+  }
+  return result;
 }
 
 auto package_config::to_record() const -> record {
@@ -379,6 +375,9 @@ auto package_config::to_record() const -> record {
   auto result = record{
     {"inputs", std::move(inputs_map)},
   };
+  if (install_time) {
+    result["install_time"] = install_time;
+  }
   if (source) {
     result["source"] = source->to_record();
   }
