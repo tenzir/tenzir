@@ -68,7 +68,9 @@ platform in a dockerized environment, such as Docker Compose.
 
 The [Professional Edition](https://tenzir.com/pricing) and [Enterprise
 Edition](https://tenzir.com/pricing) are backed by a Tenzir-hosted instance of
-the platform in the public cloud (AWS in Europe).
+the platform in the public cloud (AWS in Europe):
+
+![Tenzir Moving Parts](platform-and-nodes.excalidraw.svg)
 
 ## Does Tenzir offer cloud-native nodes?
 
