@@ -11,7 +11,7 @@ The diagram above illustrates the data lifecycle and the OCSF mapping takes
 place: you collect data from various data sources, each of which has a different
 shape, and then convert them to a standardized representation. The primary
 benefit is that **normalization decouples data acquisition from downstream
-analytics**, allowing the processes to scale indepedently.
+analytics**, allowing the processes to scale independently.
 
 ## OCSF Primer
 
@@ -72,14 +72,21 @@ example of a connection log in TSV format:
 1637156703.913656	C1UE8M1G6ok0h7OrJi	35.87.13.125	8	198.71.247.91	0	-	-	icmp	-	0.000058	8	8	OTH	-	-	0	-	1	36	1	36	-	-	-	64:9e:f3:be:db:66	00:16:3c:f1:fd:6d	US	OR	Boardman	45.8234	-119.7257	US	VA	Ashburn	39.0469	-77.4903	1:A+WZZOx8yg3UCoNV1IeiSNZUxEk=
 ```
 
-### Parse the input
+### Step 1: Parse the input
 
 We first need to parse the log file into structured form that we can work with
 the individual fields. Thanks to Tenzir's [Zeek
-integration](../integrations/zeek.md), this is easy:
+support](../integrations/zeek.md), we can get quickly turn TSV logs into
+structured data using a single operator:
+
+```text title="conn-to-ocsf.tql"
+read_zeek_tsv
+```
+
+Run the pipeline as follows:
 
 ```bash
-tenzir --tql2 'read_zeek_tsv' < conn.log
+tenzir --tql2 -f conn-to-ocsf.tql < conn.log
 ```
 
 <details>
@@ -225,7 +232,7 @@ tenzir --tql2 'read_zeek_tsv' < conn.log
 
 </details>
 
-### Option A: Map from OCSF
+### Step 2: Map to OCSF
 
 Now that we have structured data to work with, our objective is to map the
 fields from the Zeek conn.log to OCSF. The corresponding event class in OCSF
@@ -242,43 +249,59 @@ To make the mapping process more organized, we map per attribute group:
 Within each attribute group, we go through the attributes in the order of the
 three requirement flags **required**, **recommended**, and **optional**.
 
-This yields the following pipeline pattern:
+Here's a template for the mapping pipeline:
 
 ```
-// tql2
-read_zeek_tsv
-where @name == "zeek.conn" 
+// (1) Move original event into dedicated field.
+this = { event: this }
+// (2) Computing new fields.
+class_uid = 4001
+...
+// (3) Populate the OCSF event.
 this = {
-  // Classification (required)
-  // Classification (recommended)
-  // Classification (optional)
-  // Occurrence (required)
-  // Occurrence (recommended)
-  // Occurrence (optional)
-  // Context (required)
-  // Context (recommended)
-  // Context (optional)
-  // Primary (required)
-  // Primary (recommended)
-  // Primary (optional)
+  // --- Classification (required, optional, recommended) ---
+  class_uid = 4001
+  ...
+  // --- Occurrence (required, optional, recommended) ---
+  ..
+  // --- Context (required, optional, recommended) ---
+  unmapped: event, // (4) explicitly assign unmapped
+  // --- Primary (required, optional, recommended) ---
+  ...
 }
+// (5) Drop all mapped fields, with the effect that the remaining fields remain
+// in unmapped.
+drop (
+  unmapped.id,
+  ...
+)
+// (6) Assign a new schema name to the transformed event.
 @name = "ocsf.network_activity"
 ```
 
-This four pipeline operators do the following things:
+Let's unpack this:
 
-1. `read_zeek_tsv`: structure the data
-2. `where`: reestrict ourself to a single event type
-3. `this = { ... }`: assign a new record to this event. This is where all the
-   work happens next.
-4. `@name = ...`: give the event a new schema name.
+1. With `this = { event: this }` we move the original event into the field
+   `event`. This also has the benefit that we avoid name clashes when creating
+   new fields in the next steps.
+2. There are several fields we want to reference in expressions in the
+   subsequent assignment, so we precompute them here.
+3. The giant `this = { ... }` assignment create the OCSF event, with a field
+   order that matches the official [OCSF documentation](https://schema.ocsf.io).
+4. We copy the original event into `unmapped`.
+5. After we mapped all fields, we now explicitly remove them from `unmapped`.
+   This has the effect that everything we didn't touch automatically ends up
+   here.
+6. We give the event a new schema name so that we can easily filter by its shape
+   in further Tenzir pipelines.
+
+Now that we know the general structure, let's get our hands dirty and go deep
+into the actual mapping.
 
 #### Classification Attributes
 
-Now roll your sleeves up and dive into the first attribute group:
-Classification.
-
-Here's the TQL:
+The classification attributes are important for the schema. Mapping them is
+pretty mechanical and mostly involves going through the docs.
 
 ```
 class_uid = 4001
@@ -302,9 +325,8 @@ this = {
 //type_name: ocsf_type_name(type_id),
 ```
 
-Note that we need multiple assignment: three to add new values to the event that
-we then use afterwards in the `type_id` computation `class_uid * 100 +
-activity_id`.
+Because we want to compute the `type_id` as `class_uid * 100 activity_id`, we
+assign these variables in dedicated fields beforehand.
 
 #### Occurrence Attributes
 
@@ -317,14 +339,14 @@ this = {
   // --- Classification ---
   ...
   // --- Occurrence (required) ---
-  time: ts,
+  time: event.ts,
   // --- Occurrence (recommended) ---
   // TODO: provide a function for this.
   // timezone_offset: ...
   // --- Occurrence (optional) ---
-  duration: duration,
-  end_time: ts + duration,
-  start_time: ts,
+  duration: event.duration,
+  end_time: event.ts + event.duration,
+  start_time: event.ts,
 }
 ```
 
@@ -342,60 +364,56 @@ this = {
   // --- Context (required) ---
   metadata: {
     log_name: "conn", // Zeek calls it "path"
-    logged_time: _write_ts,
+    logged_time: event._write_ts,
     product: {
       name: "Zeek",
       vendor_name: "Zeek",
     },
-    uid: uid,
+    uid: event.uid,
     version: "1.3.0",
   },
   // --- Context (optional) ---
-  unmapped: {
-    history: history,
-    missed_bytes: missed_bytes,
-    orig_ip_bytes: orig_ip_bytes,
-    resp_ip_bytes: resp_ip_bytes,
-    // TODO: should we map these to `intermediate_ips` in Network
-    // Endpoint?
-    tunnel_parents: tunnel_parents,
-  },
+  unmapped: event
 }
 ```
+
+Note that we're copying the original event into `unmapped` so that we can in a
+later step remove all mapped fields from it.
 
 #### Primary Attributes
 
 The primary attributes define the semantics of the event class itself. This is
-where the core value is, as we are mapping the most event-specific information.
+where the core value of the data is, as we are mapping the most event-specific
+information.
 
 For this, we still need to precompute several attributes that we are going to
 use in the `this = { ... }` assignment. You can see the use of `if`/`else` here
 to create a constant field based on values in the original event.
 
 ```
-if local_orig and local_resp {
+if event.local_orig and event.local_resp {
   direction = "Lateral"
   direction_id = 3
-} else if local_orig {
+} else if event.local_orig {
   direction = "Outbound"
   direction_id = 2
-} else if local_resp {
+} else if event.local_resp {
   direction = "Inbound"
   direction_id = 1
 } else {
   direction = "Unknown"
   direction_id = 0
 }
-if proto == "tcp" {
+if event.proto == "tcp" {
   protocol_num = 6
-} else if proto == "udp" {
+} else if event.proto == "udp" {
   protocol_num = 17
-} else if proto == "icmp" {
+} else if event.proto == "icmp" {
   protocol_num = 1
 } else {
   protocol_num = -1
 }
-if id.orig_h.is_v6() or id.resp_h.is_v6() {
+if event.id.orig_h.is_v6() or event.id.resp_h.is_v6() {
   protocol_ver_id = 6
 } else {
   protocol_ver_id = 4
@@ -405,41 +423,41 @@ this = {
   ...
   // --- Primary (required) ---
   dst_endpoint: {
-    ip: id.resp_h,
-    port: id.resp_p,
+    ip: event.id.resp_h,
+    port: event.id.resp_p,
     // TODO: start a conversation in the OCSF Slack to figure out how to
     // assign the entire connection a protocol. We use svc_name as the
     // next best thing, but it clearly can't be different between
     // endpoints for the service semantics that Zeek has.
-    svc_name: service,
+    svc_name: event.service,
   },
   // --- Primary (recommended) ---
   connection_info: {
-    uid: community_id,
+    uid: event.community_id,
     direction: direction,
     direction_id: direction_id,
     protocol_ver_id: protocol_ver_id,
-    protocol_name: proto,
+    protocol_name: event.proto,
     protocol_num: protocol_num,
   },
   src_endpoint: {
-    ip: id.orig_h,
-    port: id.orig_p,
-    svc_name: service,
+    ip: event.id.orig_h,
+    port: event.id.orig_p,
+    svc_name: event.service,
   },
   // TODO: we actually could go deeper into the `conn_state` field and
   // choose a more accurate status. But this would require string
   // manipulations and/or regex matching, which TQL doesn't have yet.
   status: "Other",
-  status_code: conn_state,
+  status_code: event.conn_state,
   status_id: 99,
   traffic: {
-    bytes_in: resp_bytes,
-    bytes_out: orig_bytes,
-    packets_in: resp_pkts,
-    packets_out: orig_pkts,
-    total_bytes: orig_bytes + resp_bytes,
-    total_packets: orig_pkts + resp_pkts,
+    bytes_in: event.resp_bytes,
+    bytes_out: event.orig_bytes,
+    packets_in: event.resp_pkts,
+    packets_out: event.orig_pkts,
+    total_bytes: event.orig_bytes + event.resp_bytes,
+    total_packets: event.orig_pkts + event.resp_pkts,
   },
   // --- Primary (optional) ---
   // TODO
@@ -453,8 +471,159 @@ this = {
 
 #### Recap
 
-Phew, that's a wrap. And we just completed one log! Here is the corresponding
-OCSF event:
+Phew, that's a wrap. Here's the entire pipeline in a single piece:
+
+<details>
+<summary>Complete pipeline definition</summary>
+
+```text title="conn-to-ocsf.tql"
+// tql2
+read_zeek_tsv
+where @name == "zeek.conn"
+this = { event: this }
+class_uid = 4001
+activity_id = 6
+activity_name = "Traffic"
+if event.local_orig and event.local_resp {
+  direction = "Lateral"
+  direction_id = 3
+} else if event.local_orig {
+  direction = "Outbound"
+  direction_id = 2
+} else if event.local_resp {
+  direction = "Inbound"
+  direction_id = 1
+} else {
+  direction = "Unknown"
+  direction_id = 0
+}
+if event.proto == "tcp" {
+  protocol_num = 6
+} else if event.proto == "udp" {
+  protocol_num = 17
+} else if event.proto == "icmp" {
+  protocol_num = 1
+} else {
+  protocol_num = -1
+}
+if event.id.orig_h.is_v6() or event.id.resp_h.is_v6() {
+  protocol_ver_id = 6
+} else {
+  protocol_ver_id = 4
+}
+this = {
+  // --- Classification (required) ---
+  activity_id: activity_id,
+  category_uid: 4,
+  class_uid: class_uid,
+  type_id: class_uid * 100 + activity_id,
+  severity_id: 1,
+  // --- Classification (optional) ---
+  activity_name: activity_name,
+  category_name: "Network Activity",
+  class_name: "Network Activity",
+  severity: "Informational",
+  // TODO: provide a function for this and make it possible to reference
+  // `type_id` from the same assignment.
+  //type_name: ocsf_type_name(type_id),
+  // --- Occurrence (required) ---
+  time: event.ts,
+  // --- Occurrence (recommended) ---
+  // TODO: provide a function for this
+  //timezone_offset: ..
+  // --- Occurrence (optional) ---
+  duration: event.duration,
+  end_time: event.ts + event.duration,
+  start_time: event.ts,
+  // --- Context (required) ---
+  metadata: {
+    log_name: "conn", // Zeek calls it "path"
+    logged_time: event._write_ts,
+    product: {
+      name: "Zeek",
+      vendor_name: "Zeek",
+    },
+    uid: event.uid,
+    version: "1.3.0",
+  },
+  // --- Context (optional) ---
+  unmapped: event,
+  // --- Primary (required) ---
+  dst_endpoint: {
+    ip: event.id.resp_h,
+    port: event.id.resp_p,
+    // TODO: start a conversation in the OCSF Slack to figure out how to
+    // assign the entire connection a protocol. We use svc_name as the
+    // next best thing, but it clearly can't be different between
+    // endpoints for the service semantics that Zeek has.
+    svc_name: event.service,
+  },
+  // --- Primary (recommended) ---
+  connection_info: {
+    uid: event.community_id,
+    direction: direction,
+    direction_id: direction_id,
+    protocol_ver_id: protocol_ver_id,
+    protocol_name: event.proto,
+    protocol_num: protocol_num,
+  },
+  src_endpoint: {
+    ip: event.id.orig_h,
+    port: event.id.orig_p,
+    svc_name: event.service,
+  },
+  // TODO: we actually could go deeper into the `conn_state` field and
+  // choose a more accurate status. But this would require string
+  // manipulations and/or regex matching, which TQL doesn't have yet.
+  status: "Other",
+  status_code: event.conn_state,
+  status_id: 99,
+  traffic: {
+    bytes_in: event.resp_bytes,
+    bytes_out: event.orig_bytes,
+    packets_in: event.resp_pkts,
+    packets_out: event.orig_pkts,
+    total_bytes: event.orig_bytes + event.resp_bytes,
+    total_packets: event.orig_pkts + event.resp_pkts,
+  },
+  // --- Primary (optional) ---
+  // TODO
+  // - `ja4_fingerprint_list`: once we have some sample logs with JA4
+  //   fingerprints, which requires an additional Zeek package, we should
+  //   populate them here.
+  // - `tls`: if we buffer ssl log for this connection, we could add the
+  //   information in here.
+}
+// Drop all the mapped fields.
+drop (
+  unmapped._write_ts,
+  unmapped.community_id,
+  unmapped.conn_state,
+  unmapped.duration,
+  unmapped.id,
+  unmapped.local_orig,
+  unmapped.local_resp,
+  unmapped.orig_bytes,
+  unmapped.orig_pkts,
+  unmapped.proto,
+  unmapped.resp_bytes,
+  unmapped.resp_pkts,
+  unmapped.service,
+  unmapped.ts,
+  unmapped.uid,
+)
+@name = "ocsf.network_activity"
+```
+
+</details>
+
+Let's run the pipeline:
+
+```bash
+tenzir --tql2 -f conn-to-ocsf.tql < conn.log
+```
+
+You should get the following output:
 
 ```json
 {
@@ -518,425 +687,17 @@ OCSF event:
 }
 ```
 
-And for completeness, here's the pipeline when stitching together the above
-snippets:
-
-<details>
-<summary>Complete pipeline definition</summary>
-
-```
-read_zeek_tsv
-where @name == "zeek.conn" 
-class_uid = 4001
-activity_id = 6
-activity_name = "Traffic"
-if local_orig and local_resp {
-  direction = "Lateral"
-  direction_id = 3
-} else if local_orig {
-  direction = "Outbound"
-  direction_id = 2
-} else if local_resp {
-  direction = "Inbound"
-  direction_id = 1
-} else {
-  direction = "Unknown"
-  direction_id = 0
-}
-if proto == "tcp" {
-  protocol_num = 6
-} else if proto == "udp" {
-  protocol_num = 17
-} else if proto == "icmp" {
-  protocol_num = 1
-} else {
-  protocol_num = -1
-}
-if id.orig_h.is_v6() or id.resp_h.is_v6() {
-  protocol_ver_id = 6
-} else {
-  protocol_ver_id = 4
-}
-this = {
-  // --- Classification (required) ---
-  activity_id: activity_id,
-  category_uid: 4,
-  class_uid: class_uid,
-  type_id: class_uid * 100 + activity_id,
-  severity_id: 1,
-  // --- Classification (optional) ---
-  activity_name: activity_name,
-  category_name: "Network Activity",
-  class_name: "Network Activity",
-  severity: "Informational",
-  // TODO: provide a function for this and make it possible to reference
-  // `type_id` from the same assignment.
-  //type_name: ocsf_type_name(type_id),
-  // --- Occurrence (required) ---
-  time: ts,
-  // --- Occurrence (recommended) ---
-  // TODO: provide a function for this.
-  // timezone_offset: ...
-  // --- Occurrence (optional) ---
-  duration: duration,
-  end_time: ts + duration,
-  start_time: ts,
-  // --- Context (required) ---
-  metadata: {
-    log_name: "conn", // Zeek calls it "path"
-    logged_time: _write_ts,
-    product: {
-      name: "Zeek",
-      vendor_name: "Zeek",
-    },
-    uid: uid,
-    version: "1.3.0",
-  },
-  // --- Context (optional) ---
-  unmapped: {
-    history: history,
-    missed_bytes: missed_bytes,
-    orig_ip_bytes: orig_ip_bytes,
-    resp_ip_bytes: resp_ip_bytes,
-    // TODO: should we map these to `intermediate_ips` in Network
-    // Endpoint?
-    tunnel_parents: tunnel_parents,
-  },
-  // --- Primary (required) ---
-  dst_endpoint: {
-    ip: id.resp_h,
-    port: id.resp_p,
-    // TODO: start a conversation in the OCSF Slack to figure out how to
-    // assign the entire connection a protocol. We use svc_name as the
-    // next best thing, but it clearly can't be different between
-    // endpoints for the service semantics that Zeek has.
-    svc_name: service,
-  },
-  // --- Primary (recommended) ---
-  connection_info: {
-    uid: community_id,
-    direction: direction,
-    direction_id: direction_id,
-    protocol_ver_id: protocol_ver_id,
-    protocol_name: proto,
-    protocol_num: protocol_num,
-  },
-  src_endpoint: {
-    ip: id.orig_h,
-    port: id.orig_p,
-    svc_name: service,
-  },
-  // TODO: we actually could go deeper into the `conn_state` field and
-  // choose a more accurate status. But this would require string
-  // manipulations and/or regex matching, which TQL doesn't have yet.
-  status: "Other",
-  status_code: conn_state,
-  status_id: 99,
-  traffic: {
-    bytes_in: resp_bytes,
-    bytes_out: orig_bytes,
-    packets_in: resp_pkts,
-    packets_out: orig_pkts,
-    total_bytes: orig_bytes + resp_bytes,
-    total_packets: orig_pkts + resp_pkts,
-  },
-  // --- Primary (optional) ---
-  // TODO
-  // - `ja4_fingerprint_list`: once we have some sample logs with JA4
-  //   fingerprints, which requires an additional Zeek package, we should
-  //   populate them here.
-  // - `tls`: if we buffer ssl log for this connection, we could add the
-  //   information in here.
-}
-@name = "ocsf.network_activity"
-```
-
-</details>
-
-You can imagine that this process is time-consuming when doing it thoroughly, as
-many data sources of dozens of unique event types that each need to be mapped
-individually.
-
-Let's cerebrate real quick what we did:
-
-1. Start at the OCSF event class and map all attributes, partioned by group.
-2. We tried to find counterparts for the attributes in the original event.
-3. Everything that didn't have a counterpart ended in `unmapped`.
-4. In the end, we had a single `this = { .. }` to replace the original event.
-
-We could also use an alternative approach:
-
-1. Consider the original event `this = {event: this}`.
-2. Go to the original event and map each field to its corresponding attribute.
-3. Drop the mapped fields from the `event` field, then rename it to `unmapped`.
-4. In the end, `unmapped` will contain the remaining attributes.
-
-### Option B: Map to OCSF
-
-Let's see how the alternate approach looks like. Here's a sample event again:
-
-```json
-{
-  "ts": "2021-11-17T13:45:03.913656",
-  "uid": "C1UE8M1G6ok0h7OrJi",
-  "id": {
-    "orig_h": "35.87.13.125",
-    "orig_p": 8,
-    "resp_h": "198.71.247.91",
-    "resp_p": 0
-  },
-  "proto": "icmp",
-  "service": null,
-  "duration": "58.0us",
-  "orig_bytes": 8,
-  "resp_bytes": 8,
-  "conn_state": "OTH",
-  "local_orig": null,
-  "local_resp": null,
-  "missed_bytes": 0,
-  "history": null,
-  "orig_pkts": 1,
-  "orig_ip_bytes": 36,
-  "resp_pkts": 1,
-  "resp_ip_bytes": 36,
-  "tunnel_parents": null,
-  "community_id": "1:A+WZZOx8yg3UCoNV1IeiSNZUxEk=",
-  "_write_ts": null
-}
-```
-
-As we've already establisehd the mapping from conn.log to OCSF above, let's just
-write the pipeline to illustrate the different approach:
-
-```text title="conn-to-ocsf.tql"
-// tql2
-read_zeek_tsv
-where @name == "zeek.conn"
-this = { event: this }
-tmp.class_uid = 4001
-tmp.activity_id = 6
-tmp.activity_name = "Traffic"
-if event.local_orig and event.local_resp {
-  tmp.direction = "Lateral"
-  tmp.direction_id = 3
-} else if event.local_orig {
-  tmp.direction = "Outbound"
-  tmp.direction_id = 2
-} else if event.local_resp {
-  tmp.direction = "Inbound"
-  tmp.direction_id = 1
-} else {
-  tmp.direction = "Unknown"
-  tmp.direction_id = 0
-}
-if event.proto == "tcp" {
-  tmp.protocol_num = 6
-} else if event.proto == "udp" {
-  tmp.protocol_num = 17
-} else if event.proto == "icmp" {
-  tmp.protocol_num = 1
-} else {
-  tmp.protocol_num = -1
-}
-if event.id.orig_h.is_v6() or event.id.resp_h.is_v6() {
-  tmp.protocol_ver_id = 6
-} else {
-  tmp.protocol_ver_id = 4
-}
-this = {
-  // --- Classification (required) ---
-  activity_id: tmp.activity_id,
-  category_uid: 4,
-  class_uid: tmp.class_uid,
-  type_id: tmp.class_uid * 100 + tmp.activity_id,
-  severity_id: 1,
-  // --- Classification (optional) ---
-  activity_name: tmp.activity_name,
-  category_name: "Network Activity",
-  class_name: "Network Activity",
-  severity: "Informational",
-  // TODO: provide a function for this and make it possible to reference
-  // `type_id` from the same assignment.
-  //type_name: ocsf_type_name(type_id),
-  // --- Occurrence (required) ---
-  time: event.ts,
-  // --- Occurrence (recommended) ---
-  // TODO: provide a function for this
-  //timezone_offset: ..
-  // --- Occurrence (optional) ---
-  duration: event.duration,
-  end_time: event.ts + event.duration,
-  start_time: event.ts,
-  // --- Context (required) ---
-  metadata: {
-    log_name: "conn", // Zeek calls it "path"
-    logged_time: event._write_ts,
-    product: {
-      name: "Zeek",
-      vendor_name: "Zeek",
-    },
-    uid: event.uid,
-    version: "1.3.0",
-  },
-  // --- Context (optional) ---
-  unmapped: event,
-  // --- Primary (required) ---
-  dst_endpoint: {
-    ip: event.id.resp_h,
-    port: event.id.resp_p,
-    // TODO: start a conversation in the OCSF Slack to figure out how to
-    // assign the entire connection a protocol. We use svc_name as the
-    // next best thing, but it clearly can't be different between
-    // endpoints for the service semantics that Zeek has.
-    svc_name: event.service,
-  },
-  // --- Primary (recommended) ---
-  connection_info: {
-    uid: event.community_id,
-    direction: tmp.direction,
-    direction_id: tmp.direction_id,
-    protocol_ver_id: tmp.protocol_ver_id,
-    protocol_name: event.proto,
-    protocol_num: tmp.protocol_num,
-  },
-  src_endpoint: {
-    ip: event.id.orig_h,
-    port: event.id.orig_p,
-    svc_name: event.service,
-  },
-  // TODO: we actually could go deeper into the `conn_state` field and
-  // choose a more accurate status. But this would require string
-  // manipulations and/or regex matching, which TQL doesn't have yet.
-  status: "Other",
-  status_code: event.conn_state,
-  status_id: 99,
-  traffic: {
-    bytes_in: event.resp_bytes,
-    bytes_out: event.orig_bytes,
-    packets_in: event.resp_pkts,
-    packets_out: event.orig_pkts,
-    total_bytes: event.orig_bytes + event.resp_bytes,
-    total_packets: event.orig_pkts + event.resp_pkts,
-  },
-  // --- Primary (optional) ---
-  // TODO
-  // - `ja4_fingerprint_list`: once we have some sample logs with JA4
-  //   fingerprints, which requires an additional Zeek package, we should
-  //   populate them here.
-  // - `tls`: if we buffer ssl log for this connection, we could add the
-  //   information in here.
-}
-// Drop all the mapped fields.
-drop (
-  unmapped._write_ts,
-  unmapped.community_id,
-  unmapped.conn_state,
-  unmapped.duration,
-  unmapped.id,
-  unmapped.local_orig,
-  unmapped.local_resp,
-  unmapped.orig_bytes,
-  unmapped.orig_pkts,
-  unmapped.proto,
-  unmapped.resp_bytes,
-  unmapped.resp_pkts,
-  unmapped.service,
-  unmapped.ts,
-  unmapped.uid,
-)
-@name = "ocsf.network_activity"
-```
-
-Let's run this pipeline:
-
-```bash
-tenzir --tql2 -f conn-to-ocsf.tql < conn.log
-```
-
-This contains the following event, among many others:
-
-```json
-{
-  "unmapped": {
-    "conn_state": "OTH",
-    "missed_bytes": 0,
-    "history": null,
-    "orig_ip_bytes": 36,
-    "resp_ip_bytes": 36,
-    "tunnel_parents": null
-  },
-  "time": "2021-11-17T13:45:03.913656",
-  "metadata": {
-    "uid": "C1UE8M1G6ok0h7OrJi",
-    "logged_time": null
-  },
-  "src_endpoint": {
-    "ip": "35.87.13.125",
-    "port": 8,
-    "svc_name": null
-  },
-  "dst_endpoint": {
-    "ip": "198.71.247.91",
-    "port": 0,
-    "svc_name": null
-  },
-  "duration": "58.0us",
-  "connection_info": {
-    "uid": "1:A+WZZOx8yg3UCoNV1IeiSNZUxEk=",
-    "direction": "Unknown",
-    "direction_id": 0,
-    "protocol_ver_id": 4,
-    "protocol_name": "icmp",
-    "protocol_num": 1
-  },
-  "traffic": {
-    "bytes_in": 8,
-    "bytes_out": 8,
-    "packets_in": 1,
-    "packets_out": 1,
-    "total_bytes": 16,
-    "total_packets": 2
-  }
-}
-```
-
-We've mapped all Zeek fields to their equivalent OCSF attribute. Are we done?
-No. We are still missing several attributes that are required, recommended, and
-optional in the Network Activity event class. So now you must go back to the
-schema documentation and identify the missing attributes.
-
-:::tip Conclusion: Map from or to OCSF?
-We went through two approaches: (A) mapping from the OCSF event class to the
-original event, and vice versa, (B) starting at the original event and mapping
-to the OCSF event calss. Both approaches have pros and cons:
-
-Option A:
-- ✅ Single pass over the OCSF event class.
-- ✅ Easy to follow assignment of the form `this = { ... }` that describes the
-  whole event.
-- ❌ The `unmapped` attribute must be explicitly constructed.
-- ❌ Lengthy process when original events only have a few fields.
-
-Option (B):
-- ✅ Single pass over the OCSF event class.
-- ✅ The `unmapped` attribute always contains what hasn't been mapped
-- ❌ Addional noise when referencing fields via `event.field`.
-- ❌ Must explicitly drop referenced fields from `event`.
-
-Ultimately it's a matter of preference and use case, so it's good to know both
-approaches and decide which one to pick on a case-by-case basis.
-:::
-
-### Extend your mapping to multiple event types
+### Step 3: Combine multiple pipelines
 
 So far we've mapped just a single event. But Zeek has dozens of different event
-types. The natural next question is: how can we combine many of these individual
-mapping pipelines? Tenzir's answer for this is topic-based publish-subscribe.
-You can use the [`publish`](../operators/publish.md) and
-[`subscribe`](../operators/subscribe.md) operators to send data to a topic and
-read from it, respectively.
+types, and we need to write one mapping pipeline for each. But how do we combine
+the individual pipelines?
 
-Here's an illustration of the pub-sub approach:
+Tenzir's answer for this is topic-based publish-subscribe. The
+[`publish`](../operators/publish.md) and
+[`subscribe`](../operators/subscribe.md) operators send events to, and read
+events from a topic, respectively. Here's an illustration of the conceptual
+approach we are going to use:
 
 ![Pub/Sub Appraoch](ocsf-pub-sub.svg)
 
@@ -947,22 +708,31 @@ read_zeek_tsv
 publish "zeek"
 ```
 
-Each OCSF mapping pipeline has the following structure:
+Then we have one pipeline per Zeek event type `X` and OCSF event class `C`:
 
 ```
 subscribe "zeek"
-where @name == "zeek.conn"
+where @name == "zeek.X"
 // map to OCSF
-publish "ocsf.event_class"
+publish "ocsf.C"
 ```
 
-The [`where`](../operators/where.md) operator filters the relevant subset by
-event schema so that we can write a specific pipeline that maps exactly one
-event. (Because `where` does predicate pushdown, this is a cheap operation.)
+The idea is that all Zeek logs arrive at the topic `zeek`, and all mapping
+pipelines start there by subscribing to the same topic.
+
+:::tip Isn't this inefficient?
+You may think that copying the full feed of the `zeek` topic to every mapping
+pipeline is inefficient. The good news is that it is not, for two reasons:
+1. Data transfers between `publish` and `subscribe` use the same zero-copy
+   mechanism that pipelines use internally for sharing of events.
+2. Pipelines of the form `subscribe ... | where <predicate>` push perform
+   *predicate pushdown* and send `predicate` upstream so that the filtering
+   can happen as early as possible.
+:::
 
 ## Summary
 
-In this tutorial, we covered two approaches how to map logs to OCSF event
-classes. We used the Zeek network monitor as a case study to illustrate the
-different option. Finally, we showed a scalable approach to write one pipeline
-per OCSF event class to create a modular set of mappings.
+In this tutorial, we demonstrated how you map logs to OCSF event classes. We
+used the Zeek network monitor as a case study to illustrate the general mapping
+pattern. Finally, we explained how to use Tenzir's pub-sub mechanism to scale
+from on to many pipelines, each of which handle a specific OCSF event class.
