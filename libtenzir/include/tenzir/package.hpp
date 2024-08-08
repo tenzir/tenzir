@@ -21,9 +21,10 @@
 namespace tenzir {
 
 struct package_source final {
-  std::string repository = {};
-  std::string directory = {};
-  std::string revision = {};
+  std::string repository = {}; // Must be non-empty
+  std::string directory = {};  // Must be non-empty
+  std::string revision = {};   // Must be non-empty
+  std::optional<std::string> version = {};
 
   auto to_record() const -> record;
 
@@ -34,13 +35,15 @@ struct package_source final {
       .pretty_name("package_source")
       .fields(f.field("repository", x.repository),
               f.field("directory", x.directory),
-              f.field("revision", x.revision));
+              f.field("revision", x.revision), f.field("version", x.version));
   }
 };
 
 struct package_config final {
+  std::optional<time> install_time = {};
   std::optional<package_source> source = {};
   detail::flat_map<std::string, std::string> inputs = {};
+
   // TODO: Add an `overrides` field.
   // package_overrides overrides = {};
 
@@ -51,7 +54,9 @@ struct package_config final {
   friend auto inspect(auto& f, package_config& x) -> bool {
     return f.object(x)
       .pretty_name("package_config")
-      .fields(f.field("source", x.source), f.field("inputs", x.inputs));
+      .fields(f.field("source", x.source),
+              f.field("install_time", x.install_time),
+              f.field("inputs", x.inputs));
   }
 };
 
