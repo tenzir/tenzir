@@ -342,7 +342,10 @@ void multi_series_builder::complete_last_event() {
         needs_signature_ = false;
       }
       if (not schema_type) { // if the selector didnt refer to a known schema
-        if (selector_was_string) {
+        //TODO re-consider this warning
+        // * it can get quite noisy
+        // * Do we even want to disable it for unique_selector?
+        if (selector_was_string and not p->unique_selector) {
           diagnostic::warning("{} parser: schema for selector not found",
                               settings_.parser_name)
             .note("`{}` does not refer to a known schema", schema_name)

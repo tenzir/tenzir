@@ -15,6 +15,7 @@
 #include "tenzir/concept/parseable/tenzir/data.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/base64.hpp"
 #include "tenzir/detail/overload.hpp"
 #include "tenzir/detail/string.hpp"
 #include "tenzir/logger.hpp"
@@ -227,8 +228,13 @@ auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
       // TODO this doesnt necessarily need to copy the same bytes into a blob,
       // but the record builder has no notion of storing the type outside of the
       // variant alternative
-      auto bytes_data = as_bytes(s);
-      return {tenzir::blob{bytes_data.begin(), bytes_data.end()}};
+      // auto bytes_data = as_bytes(s);
+      auto dec = detail::base64::try_decode<tenzir::blob>(s);
+      if ( dec ) {
+        return { *dec };
+      } else {
+        return diagnostic::warning("base64 decode failure").done();
+      }
     },
     [](const record_type&) -> tenzir::diagnostic {
       TENZIR_ERROR("`basic_parser` does not support structural "
