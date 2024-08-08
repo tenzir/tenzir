@@ -111,7 +111,7 @@ auto parse_line(std::string_view line,
   r.exact_field("cef_version").data(version);
   r.exact_field("device_vendor").data(std::move(fields[1]));
   r.exact_field("device_product").data(std::move(fields[2]));
-  r.exact_field("product_version").data(std::move(fields[3]));
+  r.exact_field("device_version").data(std::move(fields[3]));
   r.exact_field("signature_id").data(std::move(fields[4]));
   r.exact_field("name").data(std::move(fields[5]));
   r.exact_field("severity").data(std::move(fields[6]));
