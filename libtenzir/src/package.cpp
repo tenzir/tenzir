@@ -167,7 +167,7 @@ namespace tenzir {
     continue;                                                                  \
   }
 
-#define TRY_ASSIGN_LIST_TO_RESULT(name, inner_type)                            \
+#define TRY_ASSIGN_LIST(name, inner_type, target)                              \
   if (key == #name) {                                                          \
     const auto* item_list = caf::get_if<view<list>>(&value);                   \
     if (not item_list) {                                                       \
@@ -190,11 +190,14 @@ namespace tenzir {
           .note("invalid package definition")                                  \
           .to_error();                                                         \
       }                                                                        \
-      result.name.push_back(*item);                                            \
+      target.push_back(*item);                                                 \
       ++pos;                                                                   \
     }                                                                          \
     continue;                                                                  \
   }
+
+#define TRY_ASSIGN_LIST_TO_RESULT(name, inner_type)                            \
+  TRY_ASSIGN_LIST(name, inner_type, result.name)
 
 auto package_input::parse(const view<record>& data)
   -> caf::expected<package_input> {
@@ -318,9 +321,9 @@ auto package_context::parse(const view<record>& data)
   return result;
 }
 
-auto package_snippet::parse(const view<record>& data)
-  -> caf::expected<package_snippet> {
-  auto result = package_snippet{};
+auto package_example::parse(const view<record>& data)
+  -> caf::expected<package_example> {
+  auto result = package_example{};
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRING_TO_RESULT(definition);
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(name);
@@ -332,6 +335,8 @@ auto package_snippet::parse(const view<record>& data)
 
 auto package::parse(const view<record>& data) -> caf::expected<package> {
   auto result = package{};
+  // Briefly support both 'snippets' and 'examples' to enable a smooth transition
+  auto legacy_snippets = std::vector<package_example>{};
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRING_TO_RESULT(id);
     TRY_ASSIGN_STRING_TO_RESULT(name);
@@ -343,7 +348,8 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
     TRY_ASSIGN_MAP_TO_RESULT(pipelines, package_pipeline);
     TRY_ASSIGN_MAP_TO_RESULT(contexts, package_context);
     TRY_ASSIGN_STRUCTURE_TO_RESULT(config, package_config);
-    TRY_ASSIGN_LIST_TO_RESULT(snippets, package_snippet);
+    TRY_ASSIGN_LIST_TO_RESULT(examples, package_example);
+    TRY_ASSIGN_LIST(snippets, package_example, legacy_snippets);
     // Reject unknown keys in the package definition.
     return diagnostic::error("unknown key '{}'", key)
       .note("while trying to parse 'package' entry")
@@ -352,6 +358,14 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
   }
   REQUIRED_FIELD(id)
   REQUIRED_FIELD(name)
+  if (!legacy_snippets.empty()) {
+    if (!result.examples.empty()) {
+      return diagnostic::error("found both 'snippets' and 'examples'")
+        .note("the 'snippets' key is deprecated, use 'examples' instead")
+        .to_error();
+    }
+    result.examples = std::move(legacy_snippets);
+  }
   if (result.config) {
     for (auto& [name, _] : result.config->inputs) {
       if (!result.inputs.contains(name)) {
@@ -409,7 +423,7 @@ auto package_context::to_record() const -> record {
                 {"disabled", disabled}};
 }
 
-auto package_snippet::to_record() const -> record {
+auto package_example::to_record() const -> record {
   return record{
     {"name", name},
     {"description", description},
@@ -452,12 +466,12 @@ auto package::to_record() const -> record {
     contexts_record[context_id] = context.to_record();
   }
   info_record["contexts"] = std::move(contexts_record);
-  auto snippets_list = list{};
-  snippets_list.reserve(snippets.size());
-  for (auto const& snippet : snippets) {
-    snippets_list.emplace_back(snippet.to_record());
+  auto examples_list = list{};
+  examples_list.reserve(examples.size());
+  for (auto const& example : examples) {
+    examples_list.emplace_back(example.to_record());
   }
-  info_record["snippets"] = std::move(snippets_list);
+  info_record["examples"] = std::move(examples_list);
   auto inputs_record = record{};
   for (auto const& [input_name, input] : inputs) {
     inputs_record[input_name] = input.to_record();
