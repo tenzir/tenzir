@@ -453,12 +453,13 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       continue;
     }
     auto r = msb.record();
-    for (size_t field_idx = 0; true; ++field_idx) {
+    size_t field_idx = 0;
+    for (field_idx = 0; true; ++field_idx) {
       if (line->empty()) {
         if (field_idx < original_field_count) {
           diagnostic::warning("{} parser found too few values in a line",
                               args.name)
-            .note("line {}: found {} values, expected {} values", line_counter,
+            .note("line {} has {} values, but should have {} values", line_counter,
                   field_idx, original_field_count)
             .emit(ctrl.diagnostics());
         }
@@ -506,6 +507,9 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
         }
       }
       line->remove_prefix(std::min(field_text.size() + 1, line->size()));
+    }
+    for ( ; field_idx < fields.size(); ++field_idx ) {
+      r.unflattend_field(fields[field_idx] ).null();
     }
   }
   for (auto& e : msb.last_errors()) {
