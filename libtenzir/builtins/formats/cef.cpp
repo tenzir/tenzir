@@ -74,10 +74,10 @@ auto parse_extension(std::string_view extension,
   extension.remove_prefix(key.size() + 1);
   while (not extension.empty()) {
     auto next_kv_sep = extension.find('=');
-    while (extension[next_kv_sep - 1] == '\\') {
+    while ( next_kv_sep != extension.npos and extension[next_kv_sep - 1] == '\\') {
       next_kv_sep = extension.find('=', next_kv_sep + 1);
     }
-    auto value_end = extension.find_last_of(" \t", next_kv_sep);
+    auto value_end = next_kv_sep == extension.npos ? extension.npos : extension.find_last_of(" \t", next_kv_sep);
     auto value = extension.substr(0, value_end);
     key = tenzir::detail::trim(key);
     auto field = builder.unflattend_field(key);

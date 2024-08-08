@@ -225,13 +225,9 @@ auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
       return {};
     },
     [&s](const blob_type&) -> detail::record_builder::data_parsing_result {
-      // TODO this doesnt necessarily need to copy the same bytes into a blob,
-      // but the record builder has no notion of storing the type outside of the
-      // variant alternative
-      // auto bytes_data = as_bytes(s);
       auto dec = detail::base64::try_decode<tenzir::blob>(s);
       if ( dec ) {
-        return { *dec };
+        return { std::move(*dec) };
       } else {
         return diagnostic::warning("base64 decode failure").done();
       }
