@@ -9,6 +9,8 @@
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <arrow/compute/api.h>
+
 namespace tenzir::plugins::misc {
 
 namespace {
@@ -84,8 +86,7 @@ public:
         TENZIR_UNUSED(ctx);
         auto value = eval(expr);
         auto f = detail::overload{
-          [&]<concepts::one_of<arrow::StringArray, arrow::ListArray> T>(
-            const T& array) {
+          [&](const arrow::ListArray& array) {
             auto b = arrow::Int64Builder{};
             check(b.Reserve(value.length()));
             for (auto i = int64_t{0}; i < array.length(); ++i) {
@@ -96,6 +97,20 @@ public:
               check(b.Append(array.value_length(i)));
             }
             return series{int64_type{}, finish(b)};
+          },
+          [&](const arrow::StringArray& array) {
+            auto result = arrow::compute::CallFunction("utf8_length", {array});
+            if (not result.ok()) {
+              diagnostic::warning("{}", result.status().ToString())
+                .primary(expr)
+                .emit(ctx);
+              return series::null(int64_type{}, value.length());
+            }
+            auto as_int64
+              = arrow::compute::Cast(result.MoveValueUnsafe(), arrow::int64());
+            TENZIR_ASSERT(as_int64.ok(), as_int64.status().ToString().c_str());
+            return series{int64_type{},
+                          as_int64.MoveValueUnsafe().make_array()};
           },
           [&](const arrow::NullArray&) {
             return series::null(int64_type{}, value.length());
