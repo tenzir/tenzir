@@ -45,7 +45,7 @@ auto multi_series_builder_argument_parser::add_settings_to_parser(
   argument_parser& parser, bool no_unflatten_option) -> void {
   is_tql1_ = true;
   parser.add("--schema-only", schema_only_);
-  parser.add( "--unique-selector", unique_selector_ );
+  parser.add("--unique-selector", unique_selector_);
   parser.add("--raw", raw_);
   if (not no_unflatten_option) {
     parser.add("--unnest-separator", unnest_, "<nested-key-separator>");
@@ -92,45 +92,52 @@ auto multi_series_builder_argument_parser::get_settings(diagnostic_handler& dh)
   (void)get_policy(dh); // force update policy.
   settings_.schema_only |= schema_only_.has_value();
   // if a schema is set and expand_schema
-  if ( settings_.schema_only and std::holds_alternative<multi_series_builder::policy_merge>(policy_) ) {
+  if (settings_.schema_only
+      and std::holds_alternative<multi_series_builder::policy_merge>(policy_)) {
     diagnostic::error("`--schema-only` requires a `--schema` or `--selector`")
       .primary(*schema_only_)
       .emit(dh);
-      return false;
+    return false;
   }
-  if (auto* p = std::get_if<multi_series_builder::policy_precise>(&policy_) ) {
-    if ( p->seed_schema.empty() and settings_.schema_only ) {
-      diagnostic::error("`--schema-only` requires a `--schema` or `--selector`")
-      .primary(*schema_only_)
-      .emit(dh);
+  if (auto* p = std::get_if<multi_series_builder::policy_precise>(&policy_)) {
+    if (p->seed_schema.empty() and settings_.schema_only) {
+      diagnostic::error(
+        "`--schema-only` requires a non`--schema` or `--selector`")
+        .hint("given schema is empty")
+        .primary(*schema_only_)
+        .emit(dh);
       return false;
     }
-    const auto schemas = modules::schemas();
+    if (not p->seed_schema.empty()) {
+      const auto schemas = modules::schemas();
 
-    auto it = std::find_if(schemas.begin(), schemas.end(), [p](const auto& t) {
-      return t.name() == p->seed_schema;
-    });
-    if (it == schemas.end()) {
-      if (settings_.schema_only) {
-        diagnostic::error(
-          "`--expand-schema` specified, but given `--schema` does not exist")
-          .primary(*schema_only_)
-          .primary(*schema_)
-          .note("schema `{}` could not be found", schema_->inner)
-          .emit(dh);
-        return false;
-      } else {
-        diagnostic::warning("Given `--schema` does not exist")
-          .primary(*schema_)
-          .note("schema `{}` could not be found", schema_->inner)
-          .hint("Consider defining the schema if you know the input's shape")
+      auto it
+        = std::find_if(schemas.begin(), schemas.end(), [p](const auto& t) {
+            return t.name() == p->seed_schema;
+          });
+      if (it == schemas.end()) {
+        if (settings_.schema_only) {
+          diagnostic::error(
+            "`--expand-schema` specified, but given `--schema` does not exist")
+            .primary(*schema_only_)
+            .primary(*schema_)
+            .note("schema `{}` could not be found", schema_->inner)
+            .emit(dh);
+          return false;
+        } else {
+          diagnostic::warning("Given `--schema` does not exist")
+            .primary(*schema_)
+            .note("schema `{}` could not be found", schema_->inner)
+            .hint("Consider defining the schema if you know the input's shape")
+            .emit(dh);
+        }
+      } else if (settings_.schema_only and not raw_.has_value()) {
+        // TODO do we want this hint/warning?
+        diagnostic::warning("`--schema` and `--schema-only` were given")
+          .hint("`--schema` with `--merge` has functionally the same effect, "
+                "but may have better performance")
           .emit(dh);
       }
-    } else if ( settings_.schema_only and not raw_.has_value() ) {
-      // TODO do we want this hint/warning?
-      diagnostic::warning( "`--schema` and `--schema-only` were given")
-      .hint("`--schema` with `--merge` has functionally the same effect, but may have better performance" )
-      .emit(dh);
     }
   }
   if (unnest_) {
@@ -191,7 +198,7 @@ auto multi_series_builder_argument_parser::get_policy(diagnostic_handler& dh)
       .emit(dh);
     return false;
   }
-  if ( unique_selector_.has_value() and not has_selector ) {
+  if (unique_selector_.has_value() and not has_selector) {
     diagnostic::error("`--unique-selector` requires a `--selector` to be set")
       .primary(*unique_selector_)
       .emit(dh);
@@ -208,7 +215,7 @@ auto multi_series_builder_argument_parser::get_policy(diagnostic_handler& dh)
     seed_type = schema_->inner;
   }
   if (has_merge) {
-    if ( has_schema ) {
+    if (has_schema) {
       policy_ = multi_series_builder::policy_merge{
         .seed_schema = seed_type,
       };
