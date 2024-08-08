@@ -524,6 +524,7 @@ auto node_field::data_unparsed(std::string_view text) -> void {
 auto node_field::record() -> node_record* {
   mark_this_alive();
   if (auto* p = get_if<node_record>()) {
+    p->mark_this_alive();
     return p;
   }
   return &data_.emplace<node_record>();
@@ -532,6 +533,7 @@ auto node_field::record() -> node_record* {
 auto node_field::list() -> node_list* {
   mark_this_alive();
   if (auto* p = get_if<node_list>()) {
+    p->mark_this_alive();
     return p;
   }
   return &data_.emplace<node_list>();
@@ -875,6 +877,8 @@ auto node_list::record() -> node_record* {
   }
   if (auto* free = find_free()) {
     if (auto* r = free->get_if<node_record>()) {
+      free->mark_this_alive();
+      r->mark_this_alive();
       return r;
     } else {
       return &free->data_.emplace<node_record>();
@@ -890,8 +894,10 @@ auto node_list::list() -> node_list* {
   mark_this_alive();
   update_type_index(type_index_, type_index_list);
   if (auto* free = find_free()) {
-    if (auto* r = free->get_if<node_list>()) {
-      return r;
+    if (auto* l = free->get_if<node_list>()) {
+      l->mark_this_alive();
+      free->mark_this_alive();
+      return l;
     } else {
       return &free->data_.emplace<node_list>();
     }
