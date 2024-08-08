@@ -70,7 +70,7 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
     = caf::get_or(inv.options, "tenzir.exec.dump-diagnostics", false);
   cfg.dump_metrics
     = caf::get_or(inv.options, "tenzir.exec.dump-metrics", false);
-  auto as_file = caf::get_or(inv.options, "tenzir.exec.file", false);
+  auto filename = caf::get_or(inv.options, "tenzir.exec.file", "");
   cfg.implicit_bytes_sink = caf::get_or(
     inv.options, "tenzir.exec.implicit-bytes-sink", cfg.implicit_bytes_sink);
   cfg.implicit_events_sink = caf::get_or(
@@ -83,18 +83,16 @@ auto exec_command(const invocation& inv, caf::actor_system& sys) -> bool {
                   cfg.implicit_events_source);
   cfg.tql2 = caf::get_or(inv.options, "tenzir.exec.tql2", cfg.tql2);
   cfg.strict = caf::get_or(inv.options, "tenzir.exec.strict", cfg.strict);
-  auto filename = std::string{};
   auto content = std::string{};
   const auto& args = inv.arguments;
   auto printer = make_diagnostic_printer(std::nullopt, color, std::cerr);
-  if (args.size() != 1) {
+  if (filename.empty() and args.size() != 1) {
     printer->emit(diagnostic::error("expected exactly one argument, but got {}",
                                     args.size())
                     .done());
     return false;
   }
-  if (as_file) {
-    filename = args[0];
+  if (not filename.empty()) {
     auto result = detail::load_contents(filename);
     if (not result) {
       // TODO: Better error message.
@@ -132,7 +130,7 @@ public:
     auto exec = std::make_unique<command>(
       "exec", "execute a pipeline locally",
       command::opts("?tenzir.exec")
-        .add<bool>("file,f", "load the pipeline definition from a file")
+        .add<std::string>("file,f", "load the pipeline definition from a file")
         .add<std::string>("color", "whether to emit colorful output (default: "
                                    "auto, alternatives: never, always)")
         .add<bool>("dump-pipeline",
