@@ -41,8 +41,7 @@ struct package_source final {
 struct package_config final {
   std::optional<package_source> source = {};
   detail::flat_map<std::string, std::string> inputs = {};
-  // TODO: Add an `overrides` field.
-  // package_overrides overrides = {};
+  record overrides = {};
 
   auto to_record() const -> record;
 
@@ -51,7 +50,9 @@ struct package_config final {
   friend auto inspect(auto& f, package_config& x) -> bool {
     return f.object(x)
       .pretty_name("package_config")
-      .fields(f.field("source", x.source), f.field("inputs", x.inputs));
+      .fields(f.field("source", x.source),
+              f.field("inputs", x.inputs),
+              f.field("overrides", x.overrides));
   }
 };
 
