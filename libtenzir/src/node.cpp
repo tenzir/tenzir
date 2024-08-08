@@ -600,12 +600,20 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
           });
       return rp;
     },
-    [self](atom::get, atom::label, const std::vector<std::string>& labels) {
+    [self](atom::get, atom::label, const std::vector<std::string>& labels)
+      -> caf::result<std::vector<caf::actor>> {
       TENZIR_DEBUG("{} got a request for the components {}", *self, labels);
       std::vector<caf::actor> result;
       result.reserve(labels.size());
-      for (const auto& label : labels)
-        result.push_back(self->state.registry.find_by_label(label));
+      for (const auto& label : labels) {
+        auto handle = self->state.registry.find_by_label(label);
+        if (not handle) {
+          return diagnostic::error("failed to find `{}` component in registry",
+                                   label)
+            .to_error();
+        }
+        result.push_back(std::move(handle));
+      }
       TENZIR_DEBUG("{} responds to the request for {} with {}", *self, labels,
                    result);
       return result;
