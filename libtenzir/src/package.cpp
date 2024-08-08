@@ -241,6 +241,15 @@ auto package_config::parse(const view<record>& data)
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRUCTURE_TO_RESULT(source, package_source);
     TRY_ASSIGN_STRINGMAP_CONVERSION_TO_RESULT(inputs);
+    if (key == "overrides") {
+      auto const* overrides = caf::get_if<view<record>>(&value);
+      if (not overrides) {
+        return diagnostic::error("'overrides' must be a record")
+          .note("invalid package definition")
+          .to_error();
+      }
+      result.overrides = materialize(*overrides);
+    }
   }
   return result;
 }
@@ -393,6 +402,7 @@ auto package_config::to_record() const -> record {
   }
   auto result = record{
     {"inputs", std::move(inputs_map)},
+    {"overrides", overrides},
   };
   if (source) {
     result["source"] = source->to_record();
