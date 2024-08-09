@@ -58,6 +58,7 @@ public:
   /// if the backing `multi_series_builder` has an unnest-separator, this
   /// function will also unflatten
   auto exact_field(std::string_view name) -> field_generator;
+  auto field(std::string_view name) -> field_generator;
 
   /// creates an explicitly unflattend field.
   /// DOES NOT RESPECT THE `multi_series_builder`s unflatten settings
@@ -157,6 +158,26 @@ private:
   class multi_series_builder* msb_;
   std::variant<tenzir::builder_ref, raw_pointer> var_;
 };
+
+template<typename T>
+concept has_exact_field = requires ( T& t, std::string key ) {
+  t.exact_field(key);
+};
+
+template<typename T>
+concept has_unflattend_field = requires ( T& t, std::string key ) {
+  t.unflattend_field(key);
+};
+
+template<typename T>
+concept has_data_unparsed = requires ( T& t, std::string_view txt ) {
+  t.data_unparsed(txt);
+};
+
+
+static_assert( has_exact_field<record_generator> );
+static_assert( has_unflattend_field<record_generator> );
+static_assert( has_data_unparsed<field_generator> );
 
 struct diagnostic_handler : tenzir::diagnostic_handler {
   virtual void emit(diagnostic d) override {

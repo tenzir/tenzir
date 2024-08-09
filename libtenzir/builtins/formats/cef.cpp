@@ -75,14 +75,30 @@ auto parse_extension(std::string_view extension,
   extension.remove_prefix(key.size() + 1);
   while (not extension.empty()) {
     auto next_kv_sep = extension.find('=');
-    while ( next_kv_sep != extension.npos and extension[next_kv_sep - 1] == '\\') {
+    while (next_kv_sep != extension.npos
+           and extension[next_kv_sep - 1] == '\\') {
       next_kv_sep = extension.find('=', next_kv_sep + 1);
     }
-    auto value_end = next_kv_sep == extension.npos ? extension.npos : extension.find_last_of(" \t", next_kv_sep);
+    auto value_end = next_kv_sep == extension.npos
+                       ? extension.npos
+                       : extension.find_last_of(" \t", next_kv_sep);
     auto value = extension.substr(0, value_end);
     key = tenzir::detail::trim(key);
-    auto field = builder.unflattend_field(key);
-    field.data_unparsed(unescape(value));
+    if constexpr (detail::multi_series_builder::has_unflattend_field<
+                    decltype(builder)>) {
+      auto field = builder.unflattend_field(key);
+      field.data_unparsed(unescape(value));
+    } else {
+      auto field = builder.field(key);
+      auto res = detail::record_builder::basic_parser(unescape(value), nullptr);
+      auto& [data, diag] = res;
+      if (data) {
+        field.data(*data);
+      }
+      if (diag and diag->severity == severity::error ) {
+        return diag;
+      }
+    }
     if (value_end != extension.npos) {
       key = extension.substr(value_end + 1, next_kv_sep - value_end - 1);
     }
@@ -95,8 +111,7 @@ auto parse_extension(std::string_view extension,
   return {};
 }
 
-auto parse_line(std::string_view line,
-                multi_series_builder& msb) -> std::optional<diagnostic> {
+auto parse_line(std::string_view line, auto& msb) -> std::optional<diagnostic> {
   using namespace std::string_view_literals;
   auto fields = detail::split_escaped(line, "|", "\\", 8);
   if (fields.size() < 7 or fields.size() > 8) {
@@ -109,15 +124,15 @@ auto parse_line(std::string_view line,
     return diagnostic::warning("invalid CEF header").done();
   }
   auto r = msb.record();
-  r.exact_field("cef_version").data(version);
-  r.exact_field("device_vendor").data(std::move(fields[1]));
-  r.exact_field("device_product").data(std::move(fields[2]));
-  r.exact_field("device_version").data(std::move(fields[3]));
-  r.exact_field("signature_id").data(std::move(fields[4]));
-  r.exact_field("name").data(std::move(fields[5]));
-  r.exact_field("severity").data(std::move(fields[6]));
+  r.field("cef_version").data(version);
+  r.field("device_vendor").data(std::move(fields[1]));
+  r.field("device_product").data(std::move(fields[2]));
+  r.field("device_version").data(std::move(fields[3]));
+  r.field("signature_id").data(std::move(fields[4]));
+  r.field("name").data(std::move(fields[5]));
+  r.field("severity").data(std::move(fields[6]));
   if (fields.size() == 8) {
-    auto d = parse_extension(fields[7], r.exact_field("extension").record());
+    auto d = parse_extension(fields[7], r.field("extension").record());
     if (d) {
       msb.remove_last();
       return d;
@@ -242,8 +257,8 @@ public:
     return "parse_cef";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::method(name()).add(expr, "<string>").parse(inv, ctx));
     return function_use::make(
@@ -261,13 +276,7 @@ public:
                 b.null();
                 continue;
               }
-              auto msg = to<message_view>(*string);
-              if (not msg) {
-                warn = true;
-                b.null();
-                continue;
-              }
-              add(*msg, b);
+              parse_line(*string, b);
             }
             if (warn) {
               diagnostic::warning("failed to parse CEF message")
@@ -303,4 +312,5 @@ public:
 } // namespace tenzir::plugins::cef
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::cef::cef_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::cef::parse_cef)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::cef::read_cef)

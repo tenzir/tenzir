@@ -48,6 +48,10 @@ auto record_generator::exact_field(std::string_view name) -> field_generator {
   return std::visit(visitor, var_);
 }
 
+auto record_generator::field( std::string_view name ) -> field_generator {
+  return exact_field(name);
+}
+
 auto record_generator::unflattend_field(
   std::string_view key, std::string_view unflatten) -> field_generator {
   if (unflatten.empty()) {
