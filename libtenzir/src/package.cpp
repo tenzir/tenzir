@@ -60,6 +60,16 @@ namespace tenzir {
     continue;                                                                  \
   }
 
+#define TRY_ASSIGN_BOOL_TO_RESULT(name)                                        \
+  if (key == #name) {                                                          \
+    const auto* x = caf::get_if<view<bool>>(&value);                           \
+    if (not x) {                                                               \
+      return diagnostic::error(#name " must be a bool").to_error();            \
+    }                                                                          \
+    result.name = *x;                                                          \
+    continue;                                                                  \
+  }
+
 #define TRY_ASSIGN_MAP_TO_RESULT(name, value_type)                             \
   if (key == #name) {                                                          \
     const auto* x = caf::get_if<view<record>>(&value);                         \
@@ -73,14 +83,14 @@ namespace tenzir {
       auto const* value_record = caf::get_if<view<record>>(&value);            \
       if (not value_record) {                                                  \
         return diagnostic::error(#name " values must be records")              \
-          .note("while parsing key {} for field" #name, key)                   \
+          .note("while parsing key {} for field " #name, key)                  \
           .note("invalid package definition")                                  \
           .to_error();                                                         \
       }                                                                        \
       auto parsed_value = value_type::parse(*value_record);                    \
       if (not parsed_value) {                                                  \
         return diagnostic::error(parsed_value.error())                         \
-          .note("while parsing key {} for field" #name, key)                   \
+          .note("while parsing key {} for field " #name, key)                  \
           .note("invalid package definition")                                  \
           .to_error();                                                         \
       }                                                                        \
@@ -101,7 +111,7 @@ namespace tenzir {
       auto const* value_string = caf::get_if<std::string_view>(&value);        \
       if (not value_string) {                                                  \
         return diagnostic::error(#name " values must be strings")              \
-          .note("while parsing key {} for field" #name, key)                   \
+          .note("while parsing key {} for field " #name, key)                  \
           .note("invalid package definition")                                  \
           .to_error();                                                         \
       }                                                                        \
@@ -239,21 +249,25 @@ auto package_pipeline::parse(const view<record>& data)
     TRY_ASSIGN_STRING_TO_RESULT(definition)
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(name)
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description)
-    if (key == "disabled") {
-      const auto* disabled = caf::get_if<view<bool>>(&value);
-      if (not disabled) {
-        return diagnostic::error("'disabled' must be a bool")
-          .to_error();
-      }
-      result.disabled = *disabled;
-      continue;
-    }
+    TRY_ASSIGN_BOOL_TO_RESULT(disabled);
     if (key == "restart-on-error") {
       if (caf::holds_alternative<caf::none_t>(value)) {
         continue;
       }
-      const auto* on_off = caf::get_if<bool>(&value);
-      const auto* retry_delay = caf::get_if<duration>(&value);
+      // As a convenience for users, we also allow a string here and try to
+      // parse the inner value in that case.
+      auto value_copy = materialize(value);
+      if (const auto* as_string = caf::get_if<std::string_view>(&value)) {
+        auto inner_value = from_yaml(*as_string);
+        if (!inner_value) {
+          return diagnostic::error("failed to parse 'restart-on-error' field")
+            .note("error {}", inner_value.error())
+            .to_error();
+        }
+        value_copy = *inner_value;
+      }
+      const auto* on_off = caf::get_if<bool>(&value_copy);
+      const auto* retry_delay = caf::get_if<duration>(&value_copy);
       if (not on_off and not retry_delay) {
         return diagnostic::error("'restart-on-error' must be a "
                                  "be a "
@@ -295,6 +309,7 @@ auto package_context::parse(const view<record>& data)
   auto result = package_context{};
   for (const auto& [key, value] : data) {
     TRY_ASSIGN_STRING_TO_RESULT(type);
+    TRY_ASSIGN_BOOL_TO_RESULT(disabled);
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description);
     TRY_ASSIGN_STRINGMAP_TO_RESULT(arguments);
   }
@@ -389,7 +404,8 @@ auto package_context::to_record() const -> record {
   }
   return record{{"type", type},
                 {"description", description},
-                {"arguments", arguments_record}};
+                {"arguments", arguments_record},
+                {"disabled", disabled}};
 }
 
 auto package_snippet::to_record() const -> record {

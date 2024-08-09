@@ -100,7 +100,7 @@ Tenzir *complements* a [SIEM][siem] nicely with the following use cases:
   [GDPR](https://en.wikipedia.org/wiki/General_Data_Protection_Regulation) and
   other regulatory requirements. When storage capacity needs careful management,
   Tenzir's *compaction* feature allows for [weighted
-  ageing](user-guides/transform-data-at-rest.md) of your data, so that you can
+  ageing](usage/transform-data-at-rest.md) of your data, so that you can
   specify relative importance of event types. Tenzir's powerful pipelines allow
   you to anonymize, pseudonymize, or encrypt specific fields—either to sanitize
   [PII data](https://en.wikipedia.org/wiki/Personal_data) on import, or ad-hoc

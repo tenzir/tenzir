@@ -8,7 +8,9 @@
 
 #include "tenzir/tql2/parser.hpp"
 
+#include "tenzir/checked_math.hpp"
 #include "tenzir/concept/parseable/tenzir/ip.hpp"
+#include "tenzir/concept/parseable/tenzir/si.hpp"
 #include "tenzir/concept/parseable/tenzir/time.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -563,17 +565,42 @@ private:
     return constant{std::move(result), token.location};
   }
 
+  static auto try_double_to_integer(double x) -> constant::kind {
+    auto integral = double{};
+    auto fractional = std::modf(x, &integral);
+    if (fractional != 0.0) {
+      return x;
+    }
+    if (static_cast<double>(min<int64_t>) <= integral
+        && integral <= static_cast<double>(max<int64_t>)) {
+      return static_cast<int64_t>(x);
+    }
+    if (static_cast<double>(min<uint64_t>) <= integral
+        && integral <= static_cast<double>(max<uint64_t>)) {
+      return static_cast<uint64_t>(x);
+    }
+    return x;
+  }
+
   auto parse_scalar() -> constant {
+    // TODO: Accept separator between digits and unit: 1_000_000, 1_h).
+    // TODO: The parsers used here don't handle out-of-range (e.g., `50E`).
     auto token = accept(tk::scalar);
-    // TODO: Make this better, do not use existing parsers.
-    if (auto result = int64_t{}; parsers::i64(token.text, result)) {
+    // The following two parsers include the SI unit.
+    if (auto result = int64_t{}; parsers::integer(token.text, result)) {
       return constant{result, token.location};
     }
-    if (auto result = uint64_t{}; parsers::u64(token.text, result)) {
+    if (auto result = uint64_t{}; parsers::count(token.text, result)) {
       return constant{result, token.location};
     }
+    // Doubles without SI unit shall always remain doubles.
     if (auto result = double{}; parsers::real(token.text, result)) {
       return constant{result, token.location};
+    }
+    // Otherwise, it might be a double with SI unit, which we try to convert to
+    // an integer, such that `1.2k` becomes `1200`.
+    if (auto result = double{}; si_parser<double>{}(token.text, result)) {
+      return constant{try_double_to_integer(result), token.location};
     }
     if (auto result = duration{}; parsers::duration(token.text, result)) {
       return constant{result, token.location};

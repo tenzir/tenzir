@@ -93,30 +93,6 @@ async function createConfig() {
         {
           redirects: [
             {
-              to: '/why-tenzir',
-              from: '/docs/about-vast',
-            },
-            {
-              to: '/get-started',
-              from: '/docs/try-vast',
-            },
-            {
-              to: '/setup-guides',
-              from: '/docs/setup-vast',
-            },
-            {
-              to: '/user-guides',
-              from: '/docs/use-vast',
-            },
-            {
-              to: '/developer-guides',
-              from: '/docs/develop-vast',
-            },
-            {
-              to: '/contribute',
-              from: '/docs/develop-vast/contributing',
-            },
-            {
               to: '/',
               from: '/docs',
             },
@@ -202,7 +178,7 @@ async function createConfig() {
           items: [
             {
               type: 'doc',
-              docId: 'get-started',
+              docId: 'overview',
               position: 'left',
               label: 'Docs',
             },

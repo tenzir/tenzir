@@ -89,7 +89,7 @@ of the [Sovereign Edition](https://tenzir.com/pricing).
 
 These CLI commands are only available to local platform administrators.
 The `TENZIR_PLATFORM_OIDC_ADMIN_RULES` variable described
-[here](setup-guides/deploy-the-platform#identity-provider-idp) is used
+[here](installation/deploy-the-platform#identity-provider-idp) is used
 to define who is an administrator in your platform deployment.
 
 ### Synopsis
@@ -147,7 +147,7 @@ of the [Sovereign Edition](https://tenzir.com/pricing).
 
 These CLI commands are only available to local platform administrators.
 The `TENZIR_PLATFORM_OIDC_ADMIN_RULES` variable described
-[here](setup-guides/deploy-the-platform#identity-provider-idp) is used
+[here](installation/deploy-the-platform#identity-provider-idp) is used
 to define who is an administrator in your platform deployment.
 
 ### Synopsis

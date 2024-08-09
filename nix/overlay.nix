@@ -411,6 +411,7 @@ in {
         ps.azure-log-analytics
         ps.compaction
         ps.context
+        ps.packages
         ps.pipeline-manager
         ps.platform
         ps.vast

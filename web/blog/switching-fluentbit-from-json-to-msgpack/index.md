@@ -52,7 +52,7 @@ Adding `--dump-metrics` adds detailed per-operator metrics that help us
 understand where operators spend their time. The [`head`](/operators/head)
 operator take the first 10 million events, and [`discard`](/operators/discard)
 simply drops its input. The `eve.json` input into the `tenzir` binary is from
-our Suricata dataset that we use in the [user guides](/user-guides). We measured
+our Suricata dataset that we use in the [user guides](/usage). We measured
 ran our measurements on a 2021 Apple MacBook Pro M1 Max, as well as on a Manjaro
 Linux laptop with a 14-core Intel i7 CPU.
 

@@ -46,8 +46,8 @@ sparse secondary indexes to identify relevant partitions for a given query. It
 offers a transactional interface for adding and removing partitions.
 
 - [Tune catalog
-  fragmentation](./setup-guides/tune-performance/README.md#tune-catalog-fragmentation)
-- [Configure the catalog](./setup-guides/tune-performance/README.md#configure-the-catalog)
+  fragmentation](./installation/tune-performance/README.md#tune-catalog-fragmentation)
+- [Configure the catalog](./installation/tune-performance/README.md#configure-the-catalog)
 
 ## Connector
 
@@ -91,7 +91,7 @@ Optional data structures for accelerating historical queries.
 Tenzir has *sparse* indexes. Sparse indexes live in memory and point to
 [partitions](#partition).
 
-- [Configure the catalog](./setup-guides/tune-performance/README.md#configure-the-catalog)
+- [Configure the catalog](./installation/tune-performance/README.md#configure-the-catalog)
 
 ## Integration
 
@@ -121,16 +121,16 @@ A host for [pipelines](#pipeline) and storage reachable over the network.
 The `tenzir-node` binary starts a node in a dedicated server process that
 listens on TCP port 5158.
 
-- [Deploy a node](./setup-guides/deploy-a-node.md)
+- [Deploy a node](./installation/deploy-a-node.md)
 - Use the [REST API](./rest-api.md) to manage a node
-- [Import into a node](./user-guides/import-into-a-node/README.md)
-- [Export from a node](./user-guides/export-from-a-node/README.md)
+- [Import into a node](./usage/import-into-a-node/README.md)
+- [Export from a node](./usage/export-from-a-node/README.md)
 
 ## Metrics
 
 Runtime statistics about pipeline execution.
 
-- [Collect metrics](./setup-guides/collect-metrics.md)
+- [Collect metrics](./usage/collect-metrics.md)
 
 ## Operator
 
@@ -149,7 +149,7 @@ The acronym PaC stands for *Pipelines as Code*. It is meant as an adaptation of
 represent the (data) infrastructure that is provisioning as code.
 
 - Learn how to provision [piplines as
-  code](./user-guides/run-pipelines/README.md#as-code).
+  code](./usage/run-pipelines/README.md#as-code).
 
 ## Parser
 
@@ -171,12 +171,12 @@ A partition contains the raw data and optionally a set of indexes. Supported
 formats are [Parquet](https://parquet.apache.org) or
 [Feather](https://arrow.apache.org/docs/python/feather.html).
 
-- [Control the partition size](./setup-guides/tune-performance/README.md#control-the-partition-size)
-- [Configure catalog and partition indexes](./setup-guides/tune-performance/README.md#configure-catalog-and-partition-indexes)
-- [Select the store format](./setup-guides/tune-performance/README.md#select-the-store-format)
+- [Control the partition size](./installation/tune-performance/README.md#control-the-partition-size)
+- [Configure catalog and partition indexes](./installation/tune-performance/README.md#configure-catalog-and-partition-indexes)
+- [Select the store format](./installation/tune-performance/README.md#select-the-store-format)
 - [Adjust the store
-  compression](./setup-guides/tune-performance/README.md#adjust-the-store-compression)
-- [Rebuild partitions](./setup-guides/tune-performance/README.md#rebuild-partitions)
+  compression](./installation/tune-performance/README.md#adjust-the-store-compression)
+- [Rebuild partitions](./installation/tune-performance/README.md#rebuild-partitions)
 
 ## Pipeline
 
@@ -184,7 +184,7 @@ Combines a set of [operators](#operator) into a dataflow graph.
 
 - Understand [how pipelines work](./pipelines.md)
 - Understand the [pipeline language](./language.md)
-- [Run a pipeline](./user-guides/run-pipelines/README.md)
+- [Run a pipeline](./usage/run-pipelines/README.md)
 
 ## Platform
 
@@ -218,7 +218,7 @@ A named record type describing the top-level structure of a data frame.
 
 [Schemas](./data-model/schemas.md)
 
-- [Show available schemas](./user-guides/show-available-schemas.md)
+- [Show available schemas](./usage/show-available-schemas.md)
 
 ## Sink
 

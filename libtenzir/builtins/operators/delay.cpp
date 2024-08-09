@@ -8,7 +8,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
-#include <tenzir/detail/weak_run_delayed.hpp>
+#include <tenzir/detail/alarm_clock.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/type.hpp>
@@ -18,23 +18,6 @@
 namespace tenzir::plugins::delay {
 
 namespace {
-
-using alarm_clock_actor = caf::typed_actor<
-  // Waits for `delay` before returning.
-  auto(duration delay)->caf::result<void>>;
-
-auto make_alarm_clock(alarm_clock_actor::pointer self)
-  -> alarm_clock_actor::behavior_type {
-  return {
-    [self](duration delay) -> caf::result<void> {
-      auto rp = self->make_response_promise<void>();
-      detail::weak_run_delayed(self, delay, [rp]() mutable {
-        rp.deliver();
-      });
-      return rp;
-    },
-  };
-}
 
 class delay_operator final : public crtp_operator<delay_operator> {
 public:
@@ -52,7 +35,7 @@ public:
   auto
   operator()(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
-    auto alarm_clock = ctrl.self().spawn(make_alarm_clock);
+    auto alarm_clock = ctrl.self().spawn(detail::make_alarm_clock);
     auto resolved_fields = std::unordered_map<type, std::optional<offset>>{};
     auto start = start_;
     const auto start_time = std::chrono::steady_clock::now();

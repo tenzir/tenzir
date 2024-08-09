@@ -161,7 +161,7 @@ Cribl Stream has the following pipeline
 - A Docker deployment is also an option. The [platform](https://app.tenzir.com)
   generate a Docker Compose file for your node.
 - Tenzir offers a [node sizing
-  calculator](https://docs.tenzir.com/setup-guides/size-a-node) to estimate
+  calculator](https://docs.tenzir.com/installation/size-a-node) to estimate
   CPU cores, RAM, and storage requirements.
 - A typical deployment consists of exactly one Tenzir node process per machine.
 - To scale horizontally, users can spawn multiple nodes, each of which runs a
@@ -257,7 +257,7 @@ Cribl Stream has the following pipeline
   [`to`](operators/to.md), consume bytes.
 - A **transformation** is an operator that consumes and produces data. Numerous
   events-to-events transformations allow for [shaping the
-  data](user-guides/shape-data/README.md).
+  data](usage/shape-data/README.md).
 - A **parser** converts bytes to events and is used in the
   [`read`](operators/read.md) and [`parse`](operators/parse.md) operators.
   Parsers are equivalent to event breakers. For example, breaking at a newline
@@ -376,7 +376,7 @@ Tenzir has a [`deduplicate`](operators/deduplicate.md) operator.
 - When Tenzir lookup tables have CIDR subnets as key, you can perform an
   enrichment with single IP addresses (using a longest-prefix match). This comes
   in handy for [enriching with a network
-  inventory](user-guides/enrich-with-network-inventory/README.md).
+  inventory](usage/enrich-with-network-inventory/README.md).
 - Tenzir lookup tables support expiration of entries with per-key timeouts. This
   makes it possible to automatically expire no-longer-relevant entries, e.g.,
   stale observables. There are two types of timeouts: a *create timeout* that

@@ -10,7 +10,7 @@ and [taxonomy](taxonomies.md) elements in single YAML file.
 
 :::warning Work in Progress
 While you can already [show schema
-definitions](../user-guides/show-available-schemas.md), it is unfortunately not
+definitions](../usage/show-available-schemas.md), it is unfortunately not
 yet possible write them in the same syntax. We are working towards closing this
 gap, as tracked by [the corresponding roadmap
 item](https://github.com/tenzir/public-roadmap/issues/15).

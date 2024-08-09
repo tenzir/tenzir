@@ -134,10 +134,10 @@ We've prepared some reading material:
 - Take a look at the [`package` operator's
   documentation](/next/operators/package).
 - Read the user guide on [installing a
-  package](/next/user-guides/install-a-package).
+  package](/next/installation/install-a-package).
 :::
 
-[pipelines-as-code]: /user-guides/run-pipelines#as-code
+[pipelines-as-code]: /next/usage/run-pipelines#as-code
 [feodotracker-blocklist]: https://feodotracker.abuse.ch/blocklist
 
 ## Improving the Python Operator

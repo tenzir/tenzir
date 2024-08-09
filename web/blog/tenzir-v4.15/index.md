@@ -50,7 +50,7 @@ match is returned.
 
 :::info Want to learn more?
 We wrote a new user guide about using subnet keys in lookup tables: [Enrich with
-Network Inventory](/next/user-guides/enrich-with-network-inventory).
+Network Inventory](/next/usage/enrich-with-network-inventory).
 :::
 
 ## Sort by Multiple Fields

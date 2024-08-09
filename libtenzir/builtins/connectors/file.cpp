@@ -589,6 +589,7 @@ public:
           .add("mmap", args.mmap)
           .add("timeout", timeout)
           .parse(inv, ctx));
+    args.path.inner = expand_path(args.path.inner);
     if (timeout) {
       args.timeout = located{
         std::chrono::duration_cast<std::chrono::milliseconds>(timeout->inner),

@@ -18,8 +18,8 @@
 .rlib
 
 # Docs
-/docs/contribute/code-of-conduct.md
-/docs/contribute/coding-style.md
-/docs/contribute/rfc.md
-/docs/contribute/workflow.md
-/docs/contribute/security.md
+/docs/contribution/code-of-conduct.md
+/docs/contribution/coding-style.md
+/docs/contribution/rfc.md
+/docs/contribution/workflow.md
+/docs/contribution/security.md

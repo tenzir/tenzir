@@ -70,8 +70,58 @@ public:
   }
 };
 
+class is_v4_or_v6 final : public method_plugin {
+public:
+  is_v4_or_v6(bool v4) : v4_{v4} {
+  }
+
+  auto name() const -> std::string override {
+    return v4_ ? "is_v4" : "is_v6";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function(name()).add(expr, "<ip>").parse(inv, ctx));
+    return function_use::make(
+      [expr = std::move(expr), this](evaluator eval, session ctx) -> series {
+        auto arg = eval(expr);
+        auto f = detail::overload{
+          [](const arrow::NullArray& arg) {
+            return series::null(bool_type{}, arg.length());
+          },
+          [&](const ip_type::array_type& arg) {
+            auto b = arrow::BooleanBuilder{};
+            check(b.Reserve(arg.length()));
+            for (const auto& value : values(ip_type{}, arg)) {
+              if (not value) {
+                check(b.AppendNull());
+                continue;
+              }
+              check(b.Append(value->is_v4() == v4_));
+            }
+            return series{bool_type{}, finish(b)};
+          },
+          [&](const auto&) {
+            diagnostic::warning("`{}` expected `ip`, but got `{}`", name(),
+                                arg.type.kind())
+              .primary(expr)
+              .emit(ctx);
+            return series::null(bool_type{}, arg.length());
+          },
+        };
+        return caf::visit(f, *arg.array);
+      });
+  }
+
+private:
+  bool v4_;
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::ip
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::ip::ip)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::ip::is_v4_or_v6{true})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::ip::is_v4_or_v6{false})

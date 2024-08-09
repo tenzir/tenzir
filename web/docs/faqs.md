@@ -68,7 +68,9 @@ platform in a dockerized environment, such as Docker Compose.
 
 The [Professional Edition](https://tenzir.com/pricing) and [Enterprise
 Edition](https://tenzir.com/pricing) are backed by a Tenzir-hosted instance of
-the platform in the public cloud (AWS in Europe).
+the platform in the public cloud (AWS in Europe):
+
+![Tenzir Moving Parts](platform-and-nodes.excalidraw.svg)
 
 ## Does Tenzir offer cloud-native nodes?
 
@@ -178,13 +180,13 @@ or Parquet files, accessible via the [`import`](operators/import.md) and
 catalog that tracks meta data and a thin layer of sketches to accelerate
 queries.
 
-Our [tuning guide](setup-guides/tune-performance/README.md) has further details
+Our [tuning guide](installation/tune-performance/README.md) has further details
 on the inner workings.
 
 ## Does a Tenzir node run on platform *X*?
 
 We currently support the platforms that we mention in our [deployment
-instructions](setup-guides/deploy-a-node.md).
+instructions](installation/deploy-a-node.md).
 
 For any other platform, the answer is most likely *no*. While we would love to
 support a wide variety of platforms, we are still a small team with limited

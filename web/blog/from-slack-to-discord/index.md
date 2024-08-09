@@ -34,8 +34,7 @@ Here are the top four reasons why we are switching:
   permanence of our community discussion.
 
 - **Moderation**: Discord has solid moderation tools that rely on role-based
-  access, and makes it possible adhere to our [Code of
-  Conduct](/next/contribute/code-of-conduct) upon joining.
+  access, and makes it possible adhere to our Code of Conduct upon joining.
 
 - **Invitation**: Unlimited invite links that do not expire.
 

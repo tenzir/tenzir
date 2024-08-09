@@ -31,7 +31,7 @@ The buffer size specifies the maximum number of events to keep in the `serve`
 operator to make them instantly available in the corresponding endpoint before
 throttling the pipeline execution.
 
-Defaults to `64Ki`.
+Defaults to `1Ki`.
 
 ### `<serve-id>`
 

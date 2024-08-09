@@ -18,6 +18,7 @@
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/endpoint.hpp"
 #include "tenzir/error.hpp"
+#include "tenzir/io/write.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/scope_linked.hpp"
 #include "tenzir/spawn_node.hpp"
@@ -135,6 +136,12 @@ auto start_command(const invocation& inv, caf::actor_system& sys)
     TENZIR_INFO("node listens for node-to-node connections on tcp://{}",
                 *listen_endpoint);
     // A single line of output to publish out address for scripts.
+    if (const auto* path = caf::get_if<std::string>(
+          &inv.options, "tenzir.start.write-endpoint")) {
+      if (auto err = io::write(*path, as_bytes(*listen_endpoint))) {
+        TENZIR_WARN("failed to write listen_endpoint to {}: {}", *path, err);
+      }
+    }
     if (caf::get_or(inv.options, "tenzir.start.print-endpoint", false)) {
       // We're not using fmt::print here because it doesn't flush the stream.
       std::cout << *listen_endpoint << std::endl;

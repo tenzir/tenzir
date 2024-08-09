@@ -25,6 +25,7 @@
 #include "tenzir/plugin.hpp"
 #include "tenzir/table_slice_builder.hpp"
 #include "tenzir/to_lines.hpp"
+#include "tenzir/tql2/plugin.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/view.hpp"
 
@@ -920,8 +921,20 @@ public:
   }
 };
 
+using zeek_tsv_parser_adapter = parser_adapter<zeek_tsv_parser, "zeek_tsv">;
+
+class read_zeek_tsv final
+  : public virtual operator_plugin2<zeek_tsv_parser_adapter> {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    argument_parser2::operator_("read_zeek_tsv").parse(inv, ctx).ignore();
+    return std::make_unique<zeek_tsv_parser_adapter>();
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::zeek_tsv
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::zeek_tsv::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::zeek_tsv::read_zeek_tsv)

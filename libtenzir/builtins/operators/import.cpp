@@ -48,6 +48,12 @@ public:
         co_yield {};
         continue;
       }
+      // The current catalog assumes that all events have at least one field.
+      // This check guards against that. We should remove it once we get to
+      // rewriting our catalog.
+      if (caf::get<record_type>(slice.schema()).num_fields() == 0) {
+        continue;
+      }
       if (not slice.schema().attribute("internal").has_value()) {
         metric_handler.emit({
           {"schema", std::string{slice.schema().name()}},

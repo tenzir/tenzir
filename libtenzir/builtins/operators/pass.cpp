@@ -8,6 +8,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::pass {
 
@@ -35,7 +36,8 @@ public:
   }
 };
 
-class plugin final : public virtual operator_plugin<pass_operator> {
+class plugin final : public virtual operator_plugin<pass_operator>,
+                     operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
@@ -43,6 +45,12 @@ public:
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
     argument_parser{"pass", "https://docs.tenzir.com/operators/pass"}.parse(p);
+    return std::make_unique<pass_operator>();
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    argument_parser2::operator_("pass").parse(inv, ctx).ignore();
     return std::make_unique<pass_operator>();
   }
 };

@@ -119,8 +119,8 @@ pipeline="from file $file_name read $format \
           | import"
 ```
 
-Take a look at the [list of operators](/next/operators) for further inspiration
-on things you can do, or check out the [user guides](/user-guides) for concrete
+Take a look at the [list of operators](/operators) for further inspiration
+on things you can do, or check out the [user guides](/usage) for concrete
 ideas.
 
 ### Zeek package
@@ -196,7 +196,7 @@ more flexible push-based delivery.
 | Reliability  |   low    |    high      |
 
 If you are looking for an efficient way to get your Zeek logs flowing, [give
-Tenzir a try](/get-started). [Our Zeek
+Tenzir a try](/overview). [Our Zeek
 package](https://github.com/tenzir/zeek-tenzir) makes it easy to launch
 post-processing pipelines natively from Zeek. And don't forget to check out our
 [other Zeek blogs](/blog/tags/zeek).

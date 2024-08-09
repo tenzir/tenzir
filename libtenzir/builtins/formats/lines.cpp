@@ -8,10 +8,10 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/detail/assert.hpp>
-#include <tenzir/plugin.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/to_lines.hpp>
 #include <tenzir/tql/parser.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <optional>
 
@@ -184,6 +184,25 @@ public:
 
 } // namespace
 
+class read_lines final
+  : public virtual operator_plugin2<parser_adapter<lines_parser>> {
+  auto name() const -> std::string override {
+    return "read_lines";
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto args = parser_args{};
+    argument_parser2::operator_(name())
+      .add("skip_empty", args.skip_empty)
+      .parse(inv, ctx)
+      .ignore();
+    return std::make_unique<parser_adapter<lines_parser>>(
+      lines_parser{std::move(args)});
+  }
+};
+
 } // namespace tenzir::plugins::lines
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::lines::read_lines)

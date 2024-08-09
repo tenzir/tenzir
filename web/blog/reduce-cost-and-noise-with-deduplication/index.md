@@ -23,14 +23,14 @@ allowing us to gain vital insights with fewer extraneous distractions. And as
 our data continues to grow in both volume and complexity, the need for effective
 and efficient deduplication strategies cannot be underestimated. To make this
 task of deduplication easier, we're introducing an efficient and robust tool:
-the [`deduplicate`](/next/operators/deduplicate) operator. This operator serves
+the [`deduplicate`](/operators/deduplicate) operator. This operator serves
 as a powerful ally in the fight against redundant data, enabling easy removal of
 duplicate entries directly within a data stream or data set—delivering cleaner,
 leaner, and more useful data that holds the genuine insights your business
 seeks.
 
 Join us as we dive into the world of deduplication, explore the mechanics and
-benefits of the [`deduplicate`](/next/operators/deduplicate) operator, and
+benefits of the [`deduplicate`](/operators/deduplicate) operator, and
 understand how it can redefine the way your organization approaches data
 management and analysis. The journey towards more effective and efficient data
 operations starts here.
@@ -112,8 +112,8 @@ extractors. By default, the operator works on the entire event.
 
 :::tip Real-world examples
 Let's make the abstract concrete and dive right in! Read our [user
-guide](/next/user-guides/deduplicate-events) on deduplicating events for
-hands-on examples.
+guide](/next/usage/deduplicate-events) on deduplicating events for hands-on
+examples.
 :::
 
 By bringing together these strategically implemented parameters, the
