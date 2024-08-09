@@ -286,6 +286,9 @@ auto basic_parser(std::string_view s, const tenzir::type* seed)
   // if (p(s, res)) {
   //   return res;
   // }
+  if (s.empty()) {
+    return {caf::none};
+  }
   auto res = tenzir::data{};
   if (parse_as_data<bool_type, int64_type, uint64_type, double_type, time_type,
                     duration_type, subnet_type, ip_type>(s, res)) {
@@ -305,6 +308,9 @@ auto non_number_parser(std::string_view s, const tenzir::type* seed)
   // if (p(s, res)) {
   //   return res;
   // }
+  if (s.empty()) {
+    return {caf::none};
+  }
   auto res = tenzir::data{};
   if (parse_as_data<bool_type, time_type, duration_type, subnet_type, ip_type>(
         s, res)) {
