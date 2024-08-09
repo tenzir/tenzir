@@ -85,7 +85,7 @@ auto field_generator::data_unparsed(std::string_view s) -> void {
       }
     },
     [&](raw_pointer raw) {
-      raw->data_unparsed(std::move(s));
+      raw->data_unparsed(s);
     },
   };
   return std::visit(visitor, var_);
@@ -288,6 +288,7 @@ void multi_series_builder::complete_last_event() {
                           settings_.parser_name)
         .note("selector field `{}` was not found", p->field_name)
         .emit(*dh_);
+        needs_signature_ = true;
     } else {
       bool selector_was_string = false;
       const auto visitor = detail::overload{
@@ -307,11 +308,8 @@ void multi_series_builder::complete_last_event() {
             return fmt::format("{}", v);
           }
         },
-        [p](const caf::none_t&) -> std::string {
-          if (p->naming_prefix) {
-            return fmt::format("{}.null", *(p->naming_prefix));
-          }
-          return "null"; // TODO this is a magic constant.
+        [](const caf::none_t&) -> std::string {
+          return {};
         },
         [this](const blob&) -> std::string {
           diagnostic::warning("{} parser: selector field contains `blob` data, "
