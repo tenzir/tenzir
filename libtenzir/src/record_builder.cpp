@@ -202,6 +202,21 @@ auto parse_enumeration(std::string_view s, const enumeration_type& e)
     .note("value was \"{}\"", s)
     .done();
 }
+
+template <has_parser... Types>
+auto parse_as_data(std::string_view s, tenzir::data& d) -> bool {
+  constexpr auto l = []<typename T>(std::string_view s, tenzir::data& d) {
+    auto res = type_to_data_t<T>{};
+    auto p = typename type_to_parser<T>::type{};
+    if (p(s, res)) {
+      d = std::move(res);
+      return true;
+    }
+    return false;
+  };
+  return (l.template operator()<Types>(s, d) or ...);
+}
+
 } // namespace
 
 namespace detail::record_builder {
@@ -226,8 +241,8 @@ auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
     },
     [&s](const blob_type&) -> detail::record_builder::data_parsing_result {
       auto dec = detail::base64::try_decode<tenzir::blob>(s);
-      if ( dec ) {
-        return { std::move(*dec) };
+      if (dec) {
+        return {std::move(*dec)};
       } else {
         return diagnostic::warning("base64 decode failure").done();
       }
@@ -264,10 +279,16 @@ auto basic_parser(std::string_view s, const tenzir::type* seed)
   if (seed) {
     return basic_seeded_parser(s, *seed);
   }
-  auto p = parsers::boolean | parsers::integer | parsers::count | parsers::real
-           | parsers::time | parsers::duration | parsers::net | parsers::ip;
+  // auto p = parsers::boolean | parsers::integer | parsers::count |
+  // parsers::real
+  //          | parsers::time | parsers::duration | parsers::net | parsers::ip;
+  // auto res = tenzir::data{};
+  // if (p(s, res)) {
+  //   return res;
+  // }
   auto res = tenzir::data{};
-  if (p(s, res)) {
+  if (parse_as_data<bool_type, int64_type, uint64_type, double_type, time_type,
+                    duration_type, subnet_type, ip_type>(s, res)) {
     return res;
   }
   return {};
@@ -278,10 +299,15 @@ auto non_number_parser(std::string_view s, const tenzir::type* seed)
   if (seed) {
     return record_builder::basic_seeded_parser(s, *seed);
   }
-  auto p = parsers::boolean | parsers::time | parsers::duration | parsers::net
-           | parsers::ip;
+  // auto p = parsers::boolean | parsers::time | parsers::duration | parsers::net
+  //          | parsers::ip;
+  // auto res = tenzir::data{};
+  // if (p(s, res)) {
+  //   return res;
+  // }
   auto res = tenzir::data{};
-  if (p(s, res)) {
+  if (parse_as_data<bool_type, time_type, duration_type, subnet_type, ip_type>(
+        s, res)) {
     return res;
   }
   return {};
