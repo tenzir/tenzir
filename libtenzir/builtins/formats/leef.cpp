@@ -144,8 +144,21 @@ auto parse_attributes(char delimiter, std::string_view attributes,
     }
     auto key = attributes.substr(0, sep_pos);
     auto value = attributes.substr(sep_pos + 1, attr_end - sep_pos - 1);
-    auto field = builder.unflattend_field(key);
-    field.data_unparsed(unescape(value));
+    if constexpr (detail::multi_series_builder::has_unflattend_field<
+                    decltype(builder)>) {
+      auto field = builder.unflattend_field(key);
+      field.data_unparsed(unescape(value));
+    } else {
+      auto field = builder.field(key);
+      auto res = detail::record_builder::basic_parser(unescape(value), nullptr);
+      auto& [data, diag] = res;
+      if (data) {
+        field.data(*data);
+      }
+      if (diag and diag->severity == severity::error ) {
+        return diag;
+      }
+    }
     if (attr_end != attributes.npos) {
       attributes.remove_prefix(attr_end + 1);
     } else {
@@ -156,7 +169,7 @@ auto parse_attributes(char delimiter, std::string_view attributes,
 }
 
 auto parse_line(std::string_view line,
-                multi_series_builder& msb) -> std::optional<diagnostic> {
+                auto& builder) -> std::optional<diagnostic> {
   using namespace std::string_view_literals;
   // We first need to find out whether we are LEEF 1.0 or 2.0. The latter has
   // one additional top-level component.
@@ -202,16 +215,16 @@ auto parse_line(std::string_view line,
       return std::get<diagnostic>(delim);
     }
   }
-  auto r = msb.record();
-  r.exact_field("leef_version").data(std::string{leef_version});
-  r.exact_field("vendor").data(std::move(fields[1]));
-  r.exact_field("product_name").data(std::move(fields[2]));
-  r.exact_field("product_version").data(std::move(fields[3]));
+  auto r = builder.record();
+  r.field("leef_version").data(std::string{leef_version});
+  r.field("vendor").data(std::move(fields[1]));
+  r.field("product_name").data(std::move(fields[2]));
+  r.field("product_version").data(std::move(fields[3]));
 
   auto d = parse_attributes(delimiter, fields[num_fields],
-                            r.exact_field("attributes").record());
+                            r.field("attributes").record());
   if (d) {
-    msb.remove_last();
+    builder.remove_last();
     return d;
   }
   return {};
@@ -323,6 +336,63 @@ public:
     TRY( auto opts, msb_parser.get_options(ctx.dh()) );
       return std::make_unique<parser_adapter<leef_parser>>(leef_parser{
         std::move(opts)});
+  }
+};
+
+
+class parse_leef final : public virtual method_plugin {
+public:
+  auto name() const -> std::string override {
+    return "parse_leef";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::method(name()).add(expr, "<string>").parse(inv, ctx));
+    return function_use::make(
+      [call = inv.call, expr = std::move(expr)](auto eval, session ctx) {
+        auto arg = eval(expr);
+        auto f = detail::overload{
+          [&](const arrow::NullArray&) {
+            return arg;
+          },
+          [&](const arrow::StringArray& arg) {
+            auto warn = false;
+            auto b = series_builder{};
+            for (auto string : arg) {
+              if (not string) {
+                b.null();
+                continue;
+              }
+              parse_line(*string, b);
+            }
+            if (warn) {
+              diagnostic::warning("failed to parse CEF message")
+                .primary(call)
+                .emit(ctx);
+            }
+            auto result = b.finish();
+            // TODO: Consider whether we need heterogeneous for this. If so,
+            // then we must extend the evaluator accordingly.
+            if (result.size() != 1) {
+              diagnostic::warning("got incompatible CEF messages")
+                .primary(call)
+                .emit(ctx);
+              return series::null(null_type{}, arg.length());
+            }
+            return std::move(result[0]);
+          },
+          [&](const auto&) {
+            diagnostic::warning("`parse_cef` expected `string`, got `{}`",
+                                arg.type.kind())
+              .primary(call)
+              .emit(ctx);
+            return series::null(null_type{}, arg.length());
+          },
+        };
+        return caf::visit(f, *arg.array);
+      });
   }
 };
 
