@@ -384,10 +384,9 @@ caf::error initialize(caf::actor_system_config& cfg) {
                      plugin->name(), merged_config);
     }
     if (auto err = plugin->initialize(merged_config, global_config)) {
-      return caf::make_error(ec::unspecified,
-                             fmt::format("failed to initialize "
-                                         "the {} plugin: {} ",
-                                         plugin->name(), err));
+      return diagnostic::error(err)
+        .note("failed to initialize the `{}` plugin", plugin->name())
+        .to_error();
     }
   }
   return caf::none;

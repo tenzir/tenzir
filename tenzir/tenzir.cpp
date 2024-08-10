@@ -104,7 +104,10 @@ auto main(int argc, char** argv) -> int {
     TENZIR_DEBUG("loaded plugin: {}", file);
   // Initialize successfully loaded plugins.
   if (auto err = plugins::initialize(cfg)) {
-    TENZIR_ERROR("failed to initialize plugins: {}", err);
+    render_error(
+      *root,
+      diagnostic::error(err).note("failed to initialize plugins").to_error(),
+      std::cerr);
     return EXIT_FAILURE;
   }
   // Eagerly verify that the Arrow libraries we're using have Zstd support so
