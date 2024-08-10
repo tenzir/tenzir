@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/detail/heterogeneous_string_hash.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <boost/process/environment.hpp>
@@ -59,14 +60,15 @@ public:
         .note("configuration key `tenzir.secrets` must be a record")
         .to_error();
     }
-    secrets_ = std::move(*secrets);
-    for (auto& [key, value] : secrets_) {
-      if (not caf::holds_alternative<std::string>(value)) {
+    for (const auto& [key, value] : *secrets) {
+      const auto* str = caf::get_if<std::string>(&value);
+      if (not str) {
         return diagnostic::error("secrets must be strings")
           .note("configuration key `tenzir.secrets.{}` is of type `{}`", key,
                 type::infer(value).value_or(type{}).kind())
           .to_error();
       }
+      secrets_.emplace(key, *str);
     }
     return {};
   }
@@ -89,7 +91,7 @@ public:
               check(b.AppendNull());
               continue;
             }
-            const auto it = secrets_.find(array.GetString(i));
+            const auto it = secrets_.find(array.GetView(i));
             if (it == secrets_.end()) {
               diagnostic::warning("unknown secret `{}`", array.GetView(i))
                 .primary(expr)
@@ -97,9 +99,7 @@ public:
               check(b.AppendNull());
               continue;
             }
-            const auto* secret = caf::get_if<std::string>(&it->second);
-            TENZIR_ASSERT(secret);
-            check(b.Append(*secret));
+            check(b.Append(it->second));
           }
           return series{string_type{}, finish(b)};
         },
@@ -118,7 +118,7 @@ public:
   }
 
 private:
-  record secrets_ = {};
+  detail::heterogeneous_string_hashmap<std::string> secrets_ = {};
 };
 
 class env final : public function_plugin {
@@ -131,7 +131,9 @@ public:
     -> caf::error override {
     TENZIR_UNUSED(plugin_config);
     TENZIR_UNUSED(global_config);
-    env_ = boost::this_process::environment();
+    for (const auto& entry : boost::this_process::environment()) {
+      env_.emplace(entry.get_name(), entry.to_string());
+    }
     return {};
   }
 
@@ -152,12 +154,12 @@ public:
               check(b.AppendNull());
               continue;
             }
-            const auto it = env_.find(array.GetString(i));
+            const auto it = env_.find(array.GetView(i));
             if (it == env_.end()) {
               check(b.AppendNull());
               continue;
             }
-            check(b.Append(it->to_string()));
+            check(b.Append(it->second));
           }
           return series{string_type{}, finish(b)};
         },
@@ -176,7 +178,7 @@ public:
   }
 
 private:
-  boost::process::native_environment env_ = {};
+  detail::heterogeneous_string_hashmap<std::string> env_ = {};
 };
 
 class length final : public method_plugin {
