@@ -9,6 +9,7 @@
 #pragma once
 
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/type.hpp"
 
 #include <arrow/array.h>
 #include <arrow/result.h>
@@ -28,18 +29,12 @@ template <class T>
 
 template <std::derived_from<arrow::ArrayBuilder> T>
 [[nodiscard]] auto finish(T& x) {
-  auto result = std::invoke([] {
-    if constexpr (std::same_as<T, arrow::ArrayBuilder>) {
-      return std::shared_ptr<arrow::Array>{};
-    } else {
-      using Type = std::conditional_t<std::same_as<arrow::StringBuilder, T>,
-                                      arrow::StringType, typename T::TypeClass>;
-      return std::shared_ptr<typename arrow::TypeTraits<Type>::ArrayType>{};
-    }
-  });
-  check(x.Finish(&result));
-  TENZIR_ASSERT(result);
-  return result;
+  auto array = check(x.Finish());
+  auto cast
+    = std::dynamic_pointer_cast<type_to_arrow_array_t<type_from_arrow_t<T>>>(
+      std::move(array));
+  TENZIR_ASSERT(cast);
+  return cast;
 }
 
 } // namespace tenzir

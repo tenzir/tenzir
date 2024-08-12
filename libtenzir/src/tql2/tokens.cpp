@@ -28,15 +28,21 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
   // TODO: The char-class parsers (such as `parsers::alnum`) can cause undefined
   // behavior. We should fix them or use something different here.
   using namespace parsers;
-  // clang-format off
   auto continue_ident = alnum | '_';
   auto identifier = (alpha | '_') >> *continue_ident;
   auto digit_us = digit | '_';
+  // Note that many parsers here are not strict, but very lenient instead. This
+  // is so that we can tokenize even if the input is malformed, which produces
+  // better error messages.
+  auto ipv4 = +digit >> '.' >> +digit >> +('.' >> +digit);
+  auto ipv6 = *xdigit >> ':' >> *xdigit >> ':' >> *xdigit
+              >> *(('.' >> +digit) | (':' >> *xdigit));
+  auto ip = ipv4 | ipv6;
+  // clang-format off
   auto p
-    = ignore(*xdigit >> ':' >> *xdigit >> ':' >> *xdigit
-             >> *(('.' >> +digit) | (':' >> *xdigit)))
-      ->* [] { return token_kind::ip; }
-    | ignore(+digit >> '.' >> +digit >> +('.' >> +digit))
+    = ignore(ip >> "/" >> *digit)
+      ->* [] { return token_kind::subnet; }
+    | ignore(ip)
       ->* [] { return token_kind::ip; }
     | ignore(+digit >> '-' >> +digit >> '-' >> +digit >> *(alnum | ':' | '+' | '-'))
       ->* [] { return token_kind::datetime; }
@@ -206,6 +212,7 @@ auto describe(token_kind k) -> std::string_view {
     X(slash, "`/`");
     X(star, "`*`");
     X(string, "string");
+    X(subnet, "subnet");
     X(this_, "`this`");
     X(true_, "`true`");
     X(underscore, "`_`");

@@ -128,18 +128,17 @@ private:
 // -- utility functions -------------------------------------------------------
 
 /// Access a Tenzir data view for a given row in an Arrow Array.
-data_view value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
-                   int64_t row) noexcept;
+auto value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
+              int64_t row) -> data_view;
 
 template <concrete_type Type>
-view<type_to_data_t<Type>>
-value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
-         int64_t row) noexcept;
+auto value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
+              int64_t row) -> view<type_to_data_t<Type>>;
 
 template <concrete_type Type>
-view<type_to_data_t<Type>>
-value_at([[maybe_unused]] const Type& type,
-         const type_to_arrow_array_storage_t<Type>& arr, int64_t row) noexcept {
+auto value_at([[maybe_unused]] const Type& type,
+              const type_to_arrow_array_storage_t<Type>& arr, int64_t row)
+  -> view<type_to_data_t<Type>> {
   TENZIR_ASSERT_EXPENSIVE(!arr.IsNull(row));
   if constexpr (std::is_same_v<Type, null_type>) {
     return caf::none;
@@ -277,10 +276,15 @@ value_at([[maybe_unused]] const Type& type,
   }
 }
 
+template <extension_type Type>
+auto value_at(const Type& type, const type_to_arrow_array_t<Type>& arr,
+              int64_t row) -> view<type_to_data_t<Type>> {
+  return value_at(type, *arr.storage(), row);
+}
+
 template <concrete_type Type>
-view<type_to_data_t<Type>>
-value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
-         int64_t row) noexcept {
+auto value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
+              int64_t row) -> view<type_to_data_t<Type>> {
   TENZIR_ASSERT_EXPENSIVE(type.to_arrow_type()->id() == arr.type_id());
   TENZIR_ASSERT_EXPENSIVE(!arr.IsNull(row));
   if constexpr (arrow::is_extension_type<type_to_arrow_type_t<Type>>::value)
@@ -290,8 +294,8 @@ value_at(const Type& type, const std::same_as<arrow::Array> auto& arr,
     return value_at(type, caf::get<type_to_arrow_array_t<Type>>(arr), row);
 }
 
-data_view value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
-                   int64_t row) noexcept {
+auto value_at(const type& type, const std::same_as<arrow::Array> auto& arr,
+              int64_t row) -> data_view {
   TENZIR_ASSERT_EXPENSIVE(type.to_arrow_type()->id() == arr.type_id());
   if (arr.IsNull(row))
     return caf::none;

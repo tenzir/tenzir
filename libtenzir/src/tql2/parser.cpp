@@ -11,6 +11,7 @@
 #include "tenzir/checked_math.hpp"
 #include "tenzir/concept/parseable/tenzir/ip.hpp"
 #include "tenzir/concept/parseable/tenzir/si.hpp"
+#include "tenzir/concept/parseable/tenzir/subnet.hpp"
 #include "tenzir/concept/parseable/tenzir/time.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -618,8 +619,8 @@ private:
     if (peek(tk::scalar)) {
       return parse_scalar();
     }
+    // TODO: Provide better error messages here.
     if (auto token = accept(tk::datetime)) {
-      // TODO: Make this better.
       if (auto result = time{}; parsers::ymdhms(token.text, result)) {
         return constant{result, token.location};
       }
@@ -635,10 +636,16 @@ private:
       return constant{caf::none, token.location};
     }
     if (auto token = accept(tk::ip)) {
-      // TODO
       if (auto result = ip{}; parsers::ip(token.text, result)) {
         return constant{result, token.location};
       }
+      diagnostic::error("could not parse ip address").primary(token).throw_();
+    }
+    if (auto token = accept(tk::subnet)) {
+      if (auto result = subnet{}; parsers::net(token.text, result)) {
+        return constant{result, token.location};
+      }
+      diagnostic::error("could not parse subnet").primary(token).throw_();
     }
     return std::nullopt;
   }

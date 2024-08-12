@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "tenzir/detail/inspection_common.hpp"
+#include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/operators.hpp"
 #include "tenzir/ip.hpp"
 
@@ -54,14 +54,17 @@ public:
   friend bool operator<(const subnet& x, const subnet& y);
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, subnet& sn) {
-    return detail::apply_all(f, sn.network_, sn.length_);
+  friend auto inspect(Inspector& f, subnet& x) {
+    if (auto g = as_debug_writer(f)) {
+      return x.debug(*g);
+    }
+    return f.object(x).fields(f.field("network", x.network_),
+                              f.field("length", x.length_));
   }
-
-  friend bool convert(const subnet& sn, data& d);
 
 private:
   bool initialize();
+  bool debug(debug_writer& f);
 
   ip network_;
   uint8_t length_;
