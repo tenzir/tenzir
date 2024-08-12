@@ -7,7 +7,10 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_utils.hpp>
+#include <tenzir/detail/heterogeneous_string_hash.hpp>
 #include <tenzir/tql2/plugin.hpp>
+
+#include <boost/process/environment.hpp>
 
 namespace tenzir::plugins::misc {
 
@@ -48,25 +51,134 @@ public:
     return "tql2.secret";
   }
 
+  auto initialize(const record& plugin_config, const record& global_config)
+    -> caf::error override {
+    TENZIR_UNUSED(plugin_config);
+    auto secrets = try_get_or(global_config, "tenzir.secrets", record{});
+    if (not secrets) {
+      return diagnostic::error(secrets.error())
+        .note("configuration key `tenzir.secrets` must be a record")
+        .to_error();
+    }
+    for (const auto& [key, value] : *secrets) {
+      const auto* str = caf::get_if<std::string>(&value);
+      if (not str) {
+        return diagnostic::error("secrets must be strings")
+          .note("configuration key `tenzir.secrets.{}` is of type `{}`", key,
+                type::infer(value).value_or(type{}).kind())
+          .to_error();
+      }
+      secrets_.emplace(key, *str);
+    }
+    return {};
+  }
+
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function("secret")
-          .add(expr, "<string>")
-          .parse(inv, ctx));
-    return function_use::make(
-      [expr = std::move(expr)](evaluator eval, session ctx) -> series {
-        TENZIR_UNUSED(ctx);
-        auto value = eval(expr);
-        auto b = arrow::StringBuilder{};
-        check(b.Reserve(value.length()));
-        for (auto i = int64_t{0}; i < value.length(); ++i) {
-          // TODO: Actually resolve the secret.
-          check(b.Append("A385F-BB052-CAFE9-CEC2D"));
-        }
-        return {string_type{}, finish(b)};
-      });
+    TRY(
+      argument_parser2::function("secret").add(expr, "<key>").parse(inv, ctx));
+    return function_use::make([this, expr = std::move(expr)](
+                                evaluator eval, session ctx) -> series {
+      TENZIR_UNUSED(ctx);
+      auto value = eval(expr);
+      auto f = detail::overload{
+        [&](const arrow::StringArray& array) {
+          auto b = arrow::StringBuilder{};
+          check(b.Reserve(value.length()));
+          for (auto i = int64_t{0}; i < array.length(); ++i) {
+            if (array.IsNull(i)) {
+              check(b.AppendNull());
+              continue;
+            }
+            const auto it = secrets_.find(array.GetView(i));
+            if (it == secrets_.end()) {
+              diagnostic::warning("unknown secret `{}`", array.GetView(i))
+                .primary(expr)
+                .emit(ctx);
+              check(b.AppendNull());
+              continue;
+            }
+            check(b.Append(it->second));
+          }
+          return series{string_type{}, finish(b)};
+        },
+        [&](const arrow::NullArray&) {
+          return series::null(string_type{}, value.length());
+        },
+        [&](const auto&) {
+          diagnostic::warning("expected `string`, got `{}`", value.type.kind())
+            .primary(expr)
+            .emit(ctx);
+          return series::null(string_type{}, value.length());
+        },
+      };
+      return caf::visit(f, *value.array);
+    });
   }
+
+private:
+  detail::heterogeneous_string_hashmap<std::string> secrets_ = {};
+};
+
+class env final : public function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.env";
+  }
+
+  auto initialize(const record& plugin_config, const record& global_config)
+    -> caf::error override {
+    TENZIR_UNUSED(plugin_config);
+    TENZIR_UNUSED(global_config);
+    for (const auto& entry : boost::this_process::environment()) {
+      env_.emplace(entry.get_name(), entry.to_string());
+    }
+    return {};
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function("env").add(expr, "<key>").parse(inv, ctx));
+    return function_use::make([this, expr = std::move(expr)](
+                                evaluator eval, session ctx) -> series {
+      TENZIR_UNUSED(ctx);
+      auto value = eval(expr);
+      auto f = detail::overload{
+        [&](const arrow::StringArray& array) {
+          auto b = arrow::StringBuilder{};
+          check(b.Reserve(value.length()));
+          for (auto i = int64_t{0}; i < array.length(); ++i) {
+            if (array.IsNull(i)) {
+              check(b.AppendNull());
+              continue;
+            }
+            const auto it = env_.find(array.GetView(i));
+            if (it == env_.end()) {
+              check(b.AppendNull());
+              continue;
+            }
+            check(b.Append(it->second));
+          }
+          return series{string_type{}, finish(b)};
+        },
+        [&](const arrow::NullArray&) {
+          return series::null(string_type{}, value.length());
+        },
+        [&](const auto&) {
+          diagnostic::warning("expected `string`, got `{}`", value.type.kind())
+            .primary(expr)
+            .emit(ctx);
+          return series::null(string_type{}, value.length());
+        },
+      };
+      return caf::visit(f, *value.array);
+    });
+  }
+
+private:
+  detail::heterogeneous_string_hashmap<std::string> env_ = {};
 };
 
 class length final : public method_plugin {
@@ -119,4 +231,5 @@ public:
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::type_id)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::secret)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::env)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::length)

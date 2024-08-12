@@ -539,7 +539,6 @@ std::optional<type> type::infer(const data& value) noexcept {
         return std::nullopt;
     return first_inferred;
   };
-
   auto f = detail::overload{
     [](caf::none_t) noexcept -> std::optional<type> {
       return type{};
@@ -597,7 +596,7 @@ std::optional<type> type::infer(const data& value) noexcept {
     [](const record& record) noexcept -> std::optional<type> {
       // Record types cannot be inferred from empty records.
       if (record.empty())
-        return std::nullopt;
+        return type{record_type{}};
       auto fields = std::vector<record_type::field_view>{};
       fields.reserve(record.size());
       for (const auto& field : record)
