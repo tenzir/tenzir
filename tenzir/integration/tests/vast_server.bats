@@ -1,3 +1,5 @@
+: "${BATS_TEST_TIMEOUT:=60}"
+
 # BATS ports of our old integration test suite.
 
 # This file contains the subset of tests that were using
@@ -74,29 +76,29 @@ teardown() {
       | select /* and a comment there /**/ timestamp, flow_id, src_ip, dest_ip, src_port
       | sort timestamp
       /**/ /*foo*/"
-  check tenzir "export 
+  check tenzir "export
       | select timestamp, flow_id, src_ip, dest_ip, src_port
       | sort timestamp
       | drop timestamp"
-  check tenzir "export 
+  check tenzir "export
       | select timestamp, flow_id, src_ip, dest_ip, src_port
       | sort timestamp
       | drop timestamp
       | hash --salt=\"abcdefghij12\" flow_id"
-  check tenzir "export 
+  check tenzir "export
       | select timestamp, flow_id, src_ip, dest_ip, src_port
       | sort timestamp
       | drop timestamp
       | hash --salt=\"abcdefghij12\" flow_id
       | drop flow_id"
-  check tenzir "export 
+  check tenzir "export
       | select timestamp, flow_id, src_ip, dest_ip, src_port
       | sort timestamp
       | drop timestamp
       | hash --salt=\"abcdefghij12\" flow_id
       | drop flow_id
       | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip"
-  check tenzir "export 
+  check tenzir "export
       | select timestamp, flow_id, src_ip, dest_ip, src_port
       | sort timestamp
       | drop timestamp
@@ -104,7 +106,7 @@ teardown() {
       | drop flow_id
       | pseudonymize -m \"crypto-pan\" -s \"123456abcdef\" src_ip, dest_ip
       | rename source_ip=src_ip"
-  check tenzir "export 
+  check tenzir "export
       | select timestamp, flow_id, src_ip, dest_ip, src_port
       | sort timestamp
       | drop timestamp
