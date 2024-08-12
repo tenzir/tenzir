@@ -353,6 +353,19 @@ auto pipeline::is_closed() const -> bool {
   return !!check_type<void, void>();
 }
 
+auto pipeline::infer_location() const -> std::optional<operator_location> {
+  auto result = operator_location::anywhere;
+  for (auto& op : operators_) {
+    if (result == operator_location::anywhere) {
+      result = op->location();
+    } else if (op->location() != operator_location::anywhere
+               && op->location() != result) {
+      return std::nullopt;
+    }
+  }
+  return result;
+}
+
 auto pipeline::infer_type_impl(operator_type input) const
   -> caf::expected<operator_type> {
   auto current = input;

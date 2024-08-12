@@ -59,34 +59,23 @@ class scheduled_execution_operator final : public operator_base {
 public:
   scheduled_execution_operator() = default;
 
-  scheduled_execution_operator(operator_ptr op, Scheduler scheduler)
-    : op_{std::move(op)}, scheduler_{std::move(scheduler)} {
-    if (auto* op = dynamic_cast<scheduled_execution_operator*>(op_.get())) {
-      op_ = std::move(op->op_);
-    }
-    TENZIR_ASSERT(
-      not dynamic_cast<const scheduled_execution_operator*>(op_.get()));
+  explicit scheduled_execution_operator(pipeline pipe, Scheduler scheduler,
+                                        operator_location location)
+    : pipe_{std::move(pipe)},
+      scheduler_{std::move(scheduler)},
+      location_{location} {
   }
 
   auto optimize(expression const& filter,
                 event_order order) const -> optimize_result override {
-    auto result = op_->optimize(filter, order);
+    auto result = pipe_.optimize(filter, order);
     if (not result.replacement) {
       return result;
     }
-    if (auto* pipe = dynamic_cast<pipeline*>(result.replacement.get())) {
-      auto ops = std::move(*pipe).unwrap();
-      for (auto& op : ops) {
-        op = std::make_unique<scheduled_execution_operator>(
-          std::move(result.replacement), scheduler_);
-        // Only the first operator can be a source and needs to be replaced.
-        break;
-      }
-      result.replacement = std::make_unique<pipeline>(std::move(ops));
-      return result;
-    }
+    auto* pipe = dynamic_cast<pipeline*>(result.replacement.get());
+    TENZIR_ASSERT(pipe);
     result.replacement = std::make_unique<scheduled_execution_operator>(
-      std::move(result.replacement), scheduler_);
+      std::move(*pipe), scheduler_, location_);
     return result;
   }
 
@@ -124,7 +113,7 @@ public:
     bool generate_output = Scheduler::immediate;
     while (true) {
       if (generate_output) {
-        auto gen = op_->instantiate(make_input(), ctrl);
+        auto gen = pipe_.instantiate(make_input(), ctrl);
         if (not gen) {
           diagnostic::error(gen.error()).emit(ctrl.diagnostics());
           co_return;
@@ -185,29 +174,31 @@ public:
   }
 
   auto copy() const -> operator_ptr override {
-    return std::make_unique<scheduled_execution_operator>(op_->copy(),
-                                                          scheduler_);
+    return std::make_unique<scheduled_execution_operator>(pipe_, scheduler_,
+                                                          location_);
   };
 
   auto location() const -> operator_location override {
-    return op_->location();
+    return location_;
   }
 
   auto detached() const -> bool override {
-    return op_->detached();
+    return pipe_.operators().empty() ? false : pipe_.operators()[0]->detached();
   }
 
   auto internal() const -> bool override {
-    return op_->internal();
+    return pipe_.operators().empty() ? false : pipe_.operators()[0]->internal();
   }
 
   auto input_independent() const -> bool override {
-    return op_->input_independent();
+    return pipe_.operators().empty()
+             ? false
+             : pipe_.operators()[0]->input_independent();
   }
 
   auto infer_type_impl(operator_type input) const
     -> caf::expected<operator_type> override {
-    return op_->infer_type(input);
+    return pipe_.infer_type(input);
   }
 
   auto name() const -> std::string override {
@@ -215,13 +206,15 @@ public:
   }
 
   friend auto inspect(auto& f, scheduled_execution_operator& x) -> bool {
-    return f.object(x).fields(f.field("op", x.op_),
-                              f.field("scheduler", x.scheduler_));
+    return f.object(x).fields(f.field("pipe", x.pipe_),
+                              f.field("scheduler", x.scheduler_),
+                              f.field("location", x.location_));
   }
 
 private:
-  operator_ptr op_;
+  pipeline pipe_;
   Scheduler scheduler_;
+  operator_location location_;
 };
 
 /// This is the base plugin template for scheduled execution operators.
@@ -239,27 +232,25 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    using operator_type = scheduled_execution_operator<Scheduler>;
     auto scheduler = Scheduler::parse(p);
-
     auto result = p.parse_operator();
     if (not result.inner) {
       diagnostic::error("failed to parse operator")
         .primary(result.source)
         .throw_();
     }
-    if (auto* pipe = dynamic_cast<pipeline*>(result.inner.get())) {
-      auto ops = std::move(*pipe).unwrap();
-      for (auto& op : ops) {
-        op = std::make_unique<operator_type>(std::move(op),
-                                             std::move(scheduler));
-        // Only the first operator can be a source and needs to be replaced.
-        break;
-      }
-      return std::make_unique<pipeline>(std::move(ops));
+    auto ops = std::vector<operator_ptr>{};
+    ops.push_back(std::move(result.inner));
+    auto pipe = pipeline{std::move(ops)};
+    auto location = pipe.infer_location();
+    if (not location) {
+      diagnostic::error("pipeline contains both remote and local operators")
+        .primary(result.source)
+        .note("this limitation will be lifted soon")
+        .throw_();
     }
-    return std::make_unique<operator_type>(std::move(result.inner),
-                                           std::move(scheduler));
+    return std::make_unique<scheduled_execution_operator<Scheduler>>(
+      std::move(pipe), std::move(scheduler), *location);
   }
 };
 
@@ -385,11 +376,11 @@ public:
         .emit(ctx);
       fail = failure::promise();
     }
-    auto ops = std::move(pipe).unwrap();
-    if (ops.size() != 1) {
-      // TODO: Lift this limitation.
-      diagnostic::error("expected exactly one operator, found {}", ops.size())
-        .primary(inv.args[1])
+    auto location = pipe.infer_location();
+    if (not location) {
+      diagnostic::error("pipeline contains both remote and local operators")
+        .primary(inv.self)
+        .note("this limitation will be lifted soon")
         .emit(ctx);
       fail = failure::promise();
     }
@@ -397,7 +388,7 @@ public:
       return *fail;
     }
     return std::make_unique<scheduled_execution_operator<every_scheduler>>(
-      std::move(ops[0]), every_scheduler{interval.inner});
+      std::move(pipe), every_scheduler{interval.inner}, *location);
   }
 };
 

@@ -32,3 +32,21 @@ teardown() {
   check ! tenzir "every 0 version"
   check ! tenzir "every version"
 }
+
+@test "every with multiple operators" {
+  export TENZIR_EXEC__TQL2=true
+  check tenzir -f /dev/stdin <<EOF
+every 10ms {
+  from {x: 42}
+  write_json
+  read_json
+}
+head 5
+EOF
+  check ! tenzir -f /dev/stdin <<EOF
+every 10ms {
+  load_file ""
+  import
+}
+EOF
+}
