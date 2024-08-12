@@ -846,6 +846,10 @@ public:
     co_yield {};
     //  Forward events to the SERVE MANAGER.
     for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
       // Send slice to SERVE MANAGER.
       ctrl.set_waiting(true);
       ctrl.self()
