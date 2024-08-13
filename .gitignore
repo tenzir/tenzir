@@ -6,6 +6,9 @@
 # Docker environment variables
 .env
 
+# Dev env 
+.direnv/
+
 # Build artifacts
 *.egg-info/
 .cache/
