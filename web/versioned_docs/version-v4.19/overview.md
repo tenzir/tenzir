@@ -25,7 +25,7 @@ decentralized **security data fabric**—we got you covered.
           </p>
         </div>
         <div class="card__footer">
-          <a class="button button--primary button--block" href="quickstart">Quick Start</a>
+          <a class="button button--primary button--block" href="quickstart">Quickstart</a>
         </div>
       </div>
     </div>
