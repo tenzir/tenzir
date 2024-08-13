@@ -254,24 +254,29 @@ Here's a template for the mapping pipeline:
 ```
 // (1) Move original event into dedicated field.
 this = { event: this }
-// (2) Computing new fields.
+// (2) Assign some intermediate values for use in the next step, e.g., because
+//     they're used multiple times.
 class_uid = 4001
+activity_id = 6
 ...
 // (3) Populate the OCSF event.
 this = {
-  // --- Classification (required, optional, recommended) ---
-  class_uid = 4001
+  // --- Classification ---
+  activity_id: activity_id,
+  class_uid: class_uid,
+  type_id: class_uid * 100 + activity_id,
   ...
-  // --- Occurrence (required, optional, recommended) ---
-  ..
-  // --- Context (required, optional, recommended) ---
-  unmapped: event, // (4) explicitly assign unmapped
-  // --- Primary (required, optional, recommended) ---
+  // --- Occurrence ---
+  ...
+  // --- Context ---
+  unmapped: event, // (4) Explicitly assign unmapped.
+  ...
+  // --- Primary ---
   ...
 }
 // (5) Drop all mapped fields, with the effect that the remaining fields remain
-// in unmapped.
-drop (
+//     in unmapped.
+drop(
   unmapped.id,
   ...
 )
@@ -595,7 +600,7 @@ this = {
   //   information in here.
 }
 // Drop all the mapped fields.
-drop (
+drop(
   unmapped._write_ts,
   unmapped.community_id,
   unmapped.conn_state,
