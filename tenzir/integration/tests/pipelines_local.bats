@@ -254,6 +254,8 @@ setup() {
   # 3 operators are intentionally chosen to slice in the middle of a batch.
   check tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | select extension.dvc | head 8 | extend foo=extension.dvc | write json"
   check tenzir "from ${INPUTSDIR}/cef/forcepoint.log read cef | select extension.dvc | tail 3 | extend foo=extension.dvc | write json"
+  # This tests for a regression where slice 1:-1 crashes for exactly one event.
+  check tenzir "from ${INPUTSDIR}/zeek/conn.log.gz read zeek-tsv | head 1 | slice 1:-1"
 }
 
 # bats test_tags=pipelines, zeek
