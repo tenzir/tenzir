@@ -1,0 +1,7 @@
+error: pipeline contains both remote and local operators
+ --> /dev/stdin:1:1
+  |
+1 | every 10ms {
+  | ^^^^^ 
+  |
+  = note: this limitation will be lifted soon
