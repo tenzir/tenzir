@@ -203,24 +203,22 @@ public:
           }
           seed = detail::narrow_cast<uint16_t>(value);
         }
-        if (src_ports) {
-          if (src_ports->array->IsNull(i) != dst_ports->array->IsNull(i)) {
+        auto have_src_port = src_ports and not src_ports->array->IsNull(i);
+        auto have_dst_port = dst_ports and not dst_ports->array->IsNull(i);
+        if (have_src_port and have_dst_port) {
+          auto src_port = src_ports->array->GetView(i);
+          auto dst_port = dst_ports->array->GetView(i);
+          auto flow
+            = make_flow(src_ip, dst_ip, detail::narrow<uint16_t>(src_port),
+                        detail::narrow<uint16_t>(dst_port), proto_type);
+          check(b.Append(tenzir::community_id::make(flow, seed)));
+        } else if (have_src_port != have_dst_port) {
             emit_port_warning = true;
             check(b.AppendNull());
             continue;
-          }
-          if (not src_ports->array->IsNull(i)
-              and not dst_ports->array->IsNull(i)) {
-            auto src_port = src_ports->array->GetView(i);
-            auto dst_port = dst_ports->array->GetView(i);
-            auto flow
-              = make_flow(src_ip, dst_ip, detail::narrow<uint16_t>(src_port),
-                          detail::narrow<uint16_t>(dst_port), proto_type);
-            check(b.Append(tenzir::community_id::make(flow, seed)));
-          } else {
-            check(b.Append(
-              tenzir::community_id::make(src_ip, dst_ip, proto_type, seed)));
-          }
+        } else {
+          check(b.Append(
+            tenzir::community_id::make(src_ip, dst_ip, proto_type, seed)));
         }
       }
       if (emit_seed_warning) {
