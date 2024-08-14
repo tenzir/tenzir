@@ -232,6 +232,10 @@ auto exec_pipeline(pipeline pipe, diagnostic_handler& dh,
           });
       return {
         [&](diagnostic& d) {
+          if (cfg.strict and d.severity >= severity::warning and result) {
+            result = diagnostic::error("encountered warnings in strict mode")
+                       .to_error();
+          }
           dh.emit(std::move(d));
         },
         [&](uint64_t, uint64_t, type&) {
