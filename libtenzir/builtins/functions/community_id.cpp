@@ -108,7 +108,6 @@ public:
       auto src_ports = std::optional<basic_series<int64_type>>{};
       auto dst_ports = std::optional<basic_series<int64_type>>{};
       if (src_port_series) {
-        TENZIR_ASSERT(dst_port_series.has_value());
         src_ports = src_port_series->as<int64_type>();
         if (not src_ports) {
           diagnostic::warning("`community_id` got an argument type mismatch")
@@ -117,6 +116,8 @@ public:
             .emit(ctx);
           return null_series();
         }
+      }
+      if (dst_port_series) {
         dst_ports = dst_port_series->as<int64_type>();
         if (not dst_ports) {
           diagnostic::warning("`community_id` got an argument type mismatch")
