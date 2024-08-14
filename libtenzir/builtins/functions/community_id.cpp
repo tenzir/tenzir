@@ -135,6 +135,7 @@ public:
             .primary(*args.seed)
             .note("expected argument `seed` to be of type `int64`")
             .emit(ctx);
+          return null_series();
         }
       }
       auto b = arrow::StringBuilder{};
