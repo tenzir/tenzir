@@ -23,6 +23,7 @@ struct exec_config {
   bool dump_diagnostics = false;
   bool dump_metrics = false;
   bool tql2 = false;
+  bool strict = false;
 };
 
 auto exec_pipeline(std::string content, diagnostic_handler& dh,
