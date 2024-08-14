@@ -77,12 +77,6 @@ public:
           dst_port_series = std::nullopt;
         }
       }
-      if (dst_port_series.has_value() != dst_port_series.has_value()) {
-        diagnostic::warning("`community_id` requires either two ports or none")
-          .hint("set `src_port` and `dst_port` together or omit both")
-          .emit(ctx);
-        return null_series();
-      }
       auto seed_series = std::optional<series>{};
       if (args.seed) {
         seed_series = eval(*args.seed);
@@ -145,6 +139,7 @@ public:
       auto b = arrow::StringBuilder{};
       check(b.Reserve(eval.length()));
       auto emit_proto_warning = false;
+      auto emit_port_warning = false;
       auto emit_seed_warning = false;
       for (auto i = int64_t{0}; i < eval.length(); ++i) {
         if (src_ips->array->IsNull(i) or dst_ips->array->IsNull(i)
@@ -182,29 +177,39 @@ public:
           seed = detail::narrow_cast<uint16_t>(value);
         }
         if (src_ports) {
-          if (src_ports->array->IsNull(i) or dst_ports->array->IsNull(i)) {
+          if (src_ports->array->IsNull(i) != dst_ports->array->IsNull(i)) {
+            emit_port_warning = true;
             check(b.AppendNull());
             continue;
           }
-          auto src_port = src_ports->array->GetView(i);
-          auto dst_port = dst_ports->array->GetView(i);
-          auto flow
-            = make_flow(src_ip, dst_ip, detail::narrow<uint16_t>(src_port),
-                        detail::narrow<uint16_t>(dst_port), proto_type);
-          check(b.Append(tenzir::community_id::make(flow, seed)));
-        } else {
-          check(b.Append(
-            tenzir::community_id::make(src_ip, dst_ip, proto_type, seed)));
+          if (not src_ports->array->IsNull(i)
+              and not dst_ports->array->IsNull(i)) {
+            auto src_port = src_ports->array->GetView(i);
+            auto dst_port = dst_ports->array->GetView(i);
+            auto flow
+              = make_flow(src_ip, dst_ip, detail::narrow<uint16_t>(src_port),
+                          detail::narrow<uint16_t>(dst_port), proto_type);
+            check(b.Append(tenzir::community_id::make(flow, seed)));
+          } else {
+            check(b.Append(
+              tenzir::community_id::make(src_ip, dst_ip, proto_type, seed)));
+          }
         }
       }
       if (emit_seed_warning) {
-        diagnostic::warning("`seed` exceeded maximum value of 65,535")
+        diagnostic::warning("`community_id` got invalid seed")
           .primary(*args.seed)
+          .note("`seed` exceeded maximum value of 65,535")
           .hint("use a seed that's less then the maximum value")
           .emit(ctx);
       }
+      if (emit_port_warning) {
+        diagnostic::warning("`community_id` got invalid port specification")
+          .note("encountered only `src_port` or `dst_port` but not both")
+          .emit(ctx);
+      }
       if (emit_proto_warning) {
-        diagnostic::warning("invalid protocol in `community_id`")
+        diagnostic::warning("`community_id` got invalid protocol")
           .primary(args.proto)
           .hint("expected `tcp`, `udp`, `icmp`, or `icmp6` as protocol")
           .emit(ctx);
