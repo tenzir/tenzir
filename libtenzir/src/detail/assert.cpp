@@ -46,7 +46,6 @@ fail_assertion_impl(const char* expr, std::string_view explanation,
     message += ": ";
     message += explanation;
   }
-  message += fmt::format(" @ {}:{}", source.file_name(), source.line());
   panic_impl(std::move(message), source);
 }
 

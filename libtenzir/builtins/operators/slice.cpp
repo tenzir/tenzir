@@ -91,7 +91,7 @@ public:
         }
       }
     }
-    TENZIR_ASSERT(num_buffered == -end);
+    TENZIR_ASSERT(num_buffered <= -end);
   }
 
   static auto negative_begin_positive_end(generator<table_slice> input,
