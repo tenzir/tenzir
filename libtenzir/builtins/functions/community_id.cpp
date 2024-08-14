@@ -174,9 +174,16 @@ public:
         }
         auto seed = uint16_t{0};
         if (seeds and not seeds->array->IsNull(i)) {
-          // TODO: Perform a bounds check. There are probably already utilities
-          // for this available.
-          seed = detail::narrow_cast<uint16_t>(seeds->array->GetView(i));
+          auto value = seeds->array->GetView(i);
+          if (value > 65'535) {
+            diagnostic::warning("`seed` exceeded maximum value of 65,535")
+              .primary(*args.seed)
+              .hint("use a seed that's less then the maximum value")
+              .emit(ctx);
+            check(b.AppendNull());
+            continue;
+          }
+          seed = detail::narrow_cast<uint16_t>(value);
         }
         if (src_ports) {
           if (src_ports->array->IsNull(i) or dst_ports->array->IsNull(i)) {
