@@ -144,6 +144,8 @@ public:
       }
       auto b = arrow::StringBuilder{};
       check(b.Reserve(eval.length()));
+      auto emit_proto_warning = false;
+      auto emit_seed_warning = false;
       for (auto i = int64_t{0}; i < eval.length(); ++i) {
         if (src_ips->array->IsNull(i) or dst_ips->array->IsNull(i)
             or protos->array->IsNull(i)) {
@@ -165,21 +167,15 @@ public:
         } else if (proto == "icmp6") {
           proto_type = port_type::icmp6;
         } else {
-          diagnostic::warning("`community_id` expected `tcp`, `udp`, `icmp`, "
-                              "or `icmp6` as protocol")
-            .primary(args.proto)
-            .emit(ctx);
+          emit_proto_warning = true;
           check(b.AppendNull());
           continue;
         }
         auto seed = uint16_t{0};
         if (seeds and not seeds->array->IsNull(i)) {
           auto value = seeds->array->GetView(i);
-          if (value > 65'535) {
-            diagnostic::warning("`seed` exceeded maximum value of 65,535")
-              .primary(*args.seed)
-              .hint("use a seed that's less then the maximum value")
-              .emit(ctx);
+          if (value < 0 or value > 65'535) {
+            emit_seed_warning = true;
             check(b.AppendNull());
             continue;
           }
@@ -200,6 +196,18 @@ public:
           check(b.Append(
             tenzir::community_id::make(src_ip, dst_ip, proto_type, seed)));
         }
+      }
+      if (emit_seed_warning) {
+        diagnostic::warning("`seed` exceeded maximum value of 65,535")
+          .primary(*args.seed)
+          .hint("use a seed that's less then the maximum value")
+          .emit(ctx);
+      }
+      if (emit_proto_warning) {
+        diagnostic::warning("invalid protocol in `community_id`")
+          .primary(args.proto)
+          .hint("expected `tcp`, `udp`, `icmp`, or `icmp6` as protocol")
+          .emit(ctx);
       }
       return series{string_type{}, finish(b)};
     });
