@@ -814,3 +814,8 @@ EOF
   check tenzir --tql2 --dump-pipeline 'legacy "from \"example.json.gz\" | write json"'
   check ! tenzir --tql2 --dump-pipeline 'legacy "this_operator_does_not_exist"'
 }
+
+@test "assert operator" {
+  check tenzir --strict --tql2 'from [{x: 1}, {x: 2}, {x: 3}] | assert x != 0'
+  check ! tenzir --strict --tql2 'from [{x: 1}, {x: 2}, {x: 3}] | assert x != 2'
+}
