@@ -35,26 +35,6 @@ namespace tenzir::plugins::where {
 
 namespace {
 
-/// The configuration of the *where* pipeline operator.
-struct configuration {
-  // The expression in the config file.
-  std::string expression;
-
-  /// Support type inspection for easy parsing with convertible.
-  template <class Inspector>
-  friend auto inspect(Inspector& f, configuration& x) {
-    return f.apply(x.expression);
-  }
-
-  /// Enable parsing from a record via convertible.
-  static inline const record_type& schema() noexcept {
-    static auto result = record_type{
-      {"expression", string_type{}},
-    };
-    return result;
-  }
-};
-
 // Selects matching rows from the input.
 class where_operator final
   : public schematic_operator<where_operator, std::optional<expression>> {
@@ -158,11 +138,12 @@ class where_operator2 final : public crtp_operator<where_operator2> {
 public:
   where_operator2() = default;
 
-  explicit where_operator2(ast::expression expr) : expr_{std::move(expr)} {
+  explicit where_operator2(ast::expression expr, bool warn)
+    : expr_{std::move(expr)}, warn_{warn} {
   }
 
   auto name() const -> std::string override {
-    return "tql2.where";
+    return warn_ ? "tql2.assert" : "tql2.where";
   }
 
   auto
@@ -182,6 +163,15 @@ public:
           .emit(ctrl.diagnostics());
         co_yield {};
         continue;
+      }
+      if (array->false_count() == 0) {
+        co_yield std::move(slice);
+        continue;
+      }
+      if (warn_) {
+        diagnostic::warning("assertion failure")
+          .primary(expr_)
+          .emit(ctrl.diagnostics());
       }
       auto length = array->length();
       auto current_value = array->Value(0);
@@ -203,11 +193,14 @@ public:
 
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {
+    if (warn_) {
+      return optimize_result::order_invariant(*this, order);
+    }
     auto [legacy, remainder] = split_legacy_expression(expr_);
     auto remainder_op
       = is_true_literal(remainder)
           ? nullptr
-          : std::make_unique<where_operator2>(std::move(remainder));
+          : std::make_unique<where_operator2>(std::move(remainder), warn_);
     if (filter == trivially_true_expression()) {
       return optimize_result{std::move(legacy), order, std::move(remainder_op)};
     }
@@ -219,26 +212,39 @@ public:
   }
 
   friend auto inspect(auto& f, where_operator2& x) -> bool {
-    return f.apply(x.expr_);
+    return f.object(x).fields(f.field("expression", x.expr_),
+                              f.field("warn", x.warn_));
   }
 
 private:
   ast::expression expr_;
+  bool warn_;
 };
 
 class plugin2 final : public virtual operator_plugin2<where_operator2> {
 public:
+  explicit plugin2(bool warn) : warn_{warn} {
+  }
+
+  auto name() const -> std::string override {
+    return warn_ ? "tql2.assert" : "tql2.where";
+  }
+
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto expr = ast::expression{};
     TRY(
       argument_parser2::operator_("where").add(expr, "<expr>").parse(inv, ctx));
-    return std::make_unique<where_operator2>(std::move(expr));
+    return std::make_unique<where_operator2>(std::move(expr), warn_);
   }
+
+private:
+  bool warn_ = {};
 };
 
 } // namespace
 } // namespace tenzir::plugins::where
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::plugin2)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::plugin2{true})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::where::plugin2{false})
