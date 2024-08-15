@@ -30,7 +30,7 @@ Contains detailed information about the build.
 |Field|Type|Description|
 |:-|:-|:-|
 |`version`|`string`|The formatted version string.|
-|`type`|`string`|The configured build type. One of `Release`, `Debug`, or `RelWithDebInfo`.| 
+|`type`|`string`|The configured build type. One of `Release`, `Debug`, or `RelWithDebInfo`.|
 |`tree_hash`|`string`|A hash of all files in the source directory.|
 |`assertions`|`bool`|Whether potentially expensive run-time checks are enabled.|
 |`sanitizers`|`record`|Contains information about additional run-time checks from sanitizers.|
