@@ -147,6 +147,14 @@ public:
   auto execute(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     try {
+      // Creating a pipeline through the API waits until a pipeline has started
+      // up succesfully, which requires all individual execution nodes to have
+      // started up immediately. This happens once the operator yielded for the
+      // first time. We yield here immediately as creating the virtual
+      // environment can take a fair amount of time, which empirically led to
+      // 504 errors on app.tenzir.com, especially when viewing the dashboard
+      // when many charts were using the Python operator.
+      co_yield {};
       // Get the code to be executed.
       auto maybe_code = std::visit(
         detail::overload{
@@ -330,7 +338,6 @@ public:
           .note("python process exited with error")
           .throw_();
       }
-      co_yield {}; // signal successful startup
       for (auto&& slice : input) {
         if (!child.running()) {
           auto python_error = drain_pipe(errpipe);
