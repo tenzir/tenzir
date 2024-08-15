@@ -217,22 +217,28 @@ public:
     auto chunks_mutex = std::mutex{};
     auto thread = std::thread([&child, &chunks, &chunks_mutex,
                                diagnostics = ctrl.shared_diagnostics()]() {
-      auto buffer = std::vector<char>(block_size);
-      while (true) {
-        auto bytes_read = child->read(as_writeable_bytes(buffer));
-        if (not bytes_read) {
-          diagnostic::error(add_context(bytes_read.error(),
-                                        "failed to read from child process"))
-            .emit(diagnostics);
-          return;
+      try {
+        auto buffer = std::vector<char>(block_size);
+        while (true) {
+          auto bytes_read = child->read(as_writeable_bytes(buffer));
+          if (not bytes_read) {
+            diagnostic::error(bytes_read.error())
+              .note("failed to read from child process")
+              .emit(diagnostics);
+            return;
+          }
+          if (*bytes_read == 0) {
+            // Reading 0 bytes indicates EOF.
+            break;
+          }
+          auto chk = chunk::copy(std::span{buffer.data(), *bytes_read});
+          auto lock = std::lock_guard{chunks_mutex};
+          chunks.push(std::move(chk));
         }
-        if (*bytes_read == 0) {
-          // Reading 0 bytes indicates EOF.
-          break;
-        }
-        auto chk = chunk::copy(std::span{buffer.data(), *bytes_read});
-        auto lock = std::lock_guard{chunks_mutex};
-        chunks.push(std::move(chk));
+      } catch (const std::exception& err) {
+        diagnostic::error("{}", err.what())
+          .note("encountered exception when reading from child process")
+          .emit(diagnostics);
       }
     });
     {
