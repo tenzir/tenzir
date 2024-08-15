@@ -424,7 +424,13 @@ def main() -> int:
                 writer = pa.ipc.RecordBatchStreamWriter(ostream, batch_out.schema)
                 writer.write_batch(batch_out)
                 writer.close()
-                sys.stdout.flush()
+                with suppress(BrokenPipeError):
+                    # For the last batch, it may happen that the data was already written
+                    # without explicit flush, and the other side has closed the pipe.
+                    # Ideally we'd check that the fd is still valid and has flushable data
+                    # here, but there doesn't seem to be an atomic api for that.
+                    sys.stdout.flush()
+
         except pa.lib.ArrowInvalid:
             # The reader throws `ArrowInvalid` when the input is closed
             # by the parent process.
