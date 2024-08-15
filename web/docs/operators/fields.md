@@ -27,5 +27,5 @@ See the top five fields counted by how many schemas they occur in:
 fields
 | summarize count=count_distinct(schema), schemas=distinct(schema) by field
 | sort count desc
-| head 5'
+| head 5
 ```

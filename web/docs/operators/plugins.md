@@ -20,8 +20,8 @@ The `plugins` operator shows all available plugins and built-ins.
 
 Tenzir is built on a modular monolith architecture. Most features are available
 as plugins and extensible by developers. Tenzir comes with a set of built-ins
-and bundled plugins. The former use the plugin API but available as part of the
-core library, and the latter are plugins shipped with Tenzir.
+and bundled plugins. The former use the plugin API but are available as part of
+the core library, and the latter are plugins shipped with Tenzir.
 
 ## Schemas
 
