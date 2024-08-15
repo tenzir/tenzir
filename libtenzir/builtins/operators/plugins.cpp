@@ -20,8 +20,7 @@ class plugins_operator final : public crtp_operator<plugins_operator> {
 public:
   plugins_operator() = default;
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  auto operator()() const -> generator<table_slice> {
     auto builder = series_builder{};
     for (const auto& plugin : tenzir::plugins::get()) {
       auto row = builder.record();
