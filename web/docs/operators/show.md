@@ -8,6 +8,11 @@ sidebar_custom_props:
 
 Returns information about a Tenzir node.
 
+:::warning Deprecated
+The `show` operator is deprecated. Instead of `show <aspect>`, use the operator
+`<aspect>` if available.
+:::
+
 ## Synopsis
 
 ```
@@ -38,7 +43,6 @@ We also offer some additional aspects for experts that want to take a deeper
 look at what's going on:
 
 - `build`: shows compile-time build information.
-- `dependencies`: shows information about build-time dependencies.
 - `fields`: shows all fields of existing tables at a remote node.
 - `schemas` shows all schema definitions for which data is stored at the node.
 - `serves` shows all pipelines with the `serve` sink operator currently
