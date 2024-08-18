@@ -223,15 +223,21 @@ public:
 
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
-    auto expr = ast::expression{};
+    auto expr = std::optional<ast::expression>{};
     auto experimental_include_ranges = std::optional<location>{};
     TRY(argument_parser2::operator_("partitions")
           .add(expr, "<expr>")
           .add("experimental_include_ranges", experimental_include_ranges)
           .parse(inv, ctx));
-    auto [legacy, _] = split_legacy_expression(expr);
+    auto legacy_expr = [&] {
+      if (not expr) {
+        return trivially_true_expression();
+      }
+      auto [legacy, _] = split_legacy_expression(*expr);
+      return std::move(legacy);
+    }();
     return std::make_unique<partitions_operator>(
-      std::move(legacy), experimental_include_ranges.has_value());
+      std::move(legacy_expr), experimental_include_ranges.has_value());
   }
 };
 
