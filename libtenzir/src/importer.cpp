@@ -22,6 +22,7 @@
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/plugin.hpp"
+#include "tenzir/series_builder.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/table_slice.hpp"
@@ -133,17 +134,15 @@ importer_state::status(status_verbosity v) const {
 }
 
 void importer_state::on_process(const table_slice& slice) {
-  TENZIR_ASSERT(slice.rows() > 0);
+  const auto rows = slice.rows();
+  TENZIR_ASSERT(rows > 0);
   auto t = timer::start(measurement_);
-  auto rows = slice.rows();
-  auto name = slice.schema().name();
-  if (auto it = schema_counters.find(name); it != schema_counters.end()) {
-    it.value() += rows;
-  } else {
-    schema_counters.emplace(std::string{name}, rows);
+  const auto is_internal = slice.schema().attribute("internal").has_value();
+  if (not is_internal) {
+    schema_counters[slice.schema()] += rows;
   }
-  for (const auto& [subscriber, internal] : subscribers) {
-    if (slice.schema().attribute("internal").has_value() == internal) {
+  for (const auto& [subscriber, wants_internal] : subscribers) {
+    if (is_internal == wants_internal) {
       self->send(subscriber, slice);
     }
   }
@@ -179,6 +178,35 @@ importer(importer_actor::stateful_pointer<importer_state> self,
                        });
     self->state.subscribers.erase(subscriber, self->state.subscribers.end());
   });
+  auto builder = series_builder{type{
+    "tenzir.metrics.index",
+    record_type{
+      {"timestamp", time_type{}},
+      {"schema", string_type{}},
+      {"schema_id", string_type{}},
+      {"events", uint64_type{}},
+    },
+    {{"internal"}},
+  }};
+  detail::weak_run_delayed_loop(
+    self, defaults::metrics_interval,
+    [self, builder = std::move(builder)]() mutable {
+      const auto now = time::clock::now();
+      for (const auto& [schema, count] : self->state.schema_counters) {
+        auto event = builder.record();
+        event.field("timestamp", now);
+        event.field("schema", schema.name());
+        event.field("schema_id", schema.make_fingerprint());
+        event.field("events", count);
+      }
+      auto slice = builder.finish_assert_one_slice();
+      if (slice.rows() == 0) {
+        return;
+      }
+      slice.import_time(time::clock::now());
+      self->state.on_process(slice);
+      self->state.stage->out().push(std::move(slice));
+    });
   return {
     // Add a new sink.
     [self](stream_sink_actor<table_slice> sink) -> caf::result<void> {

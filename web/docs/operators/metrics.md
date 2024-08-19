@@ -112,7 +112,7 @@ Contains a measurement the `enrich` operator, emitted once every second.
 ### `tenzir.metrics.export`
 
 Contains a measurement the `export` operator, emitted once every second per
-schema. Note that internal events like metrics or diagnostics to not emit
+schema. Note that internal events like metrics or diagnostics do not emit
 metrics themselves.
 
 |Field|Type|Description|
@@ -130,7 +130,7 @@ metrics themselves.
 ### `tenzir.metrics.import`
 
 Contains a measurement the `import` operator, emitted once every second per
-schema. Note that internal events like metrics or diagnostics to not emit
+schema. Note that internal events like metrics or diagnostics do not emit
 metrics themselves.
 
 |Field|Type|Description|
@@ -140,6 +140,18 @@ metrics themselves.
 |`hidden`|`bool`|True if the pipeline is running for the explorer.|
 |`timestamp`|`time`|The time at which this metric was recorded.|
 |`operator_id`|`uint64`|The ID of the `import` operator in the pipeline.|
+|`schema`|`string`|The schema name of the batch.|
+|`schema_id`|`string`|The schema ID of the batch.|
+|`events`|`uint64`|The amount of events that were imported.|
+
+### `tenzir.metrics.index`
+
+Contains a measurement of the index component, emitted once per second and
+schema for all indexed data.
+
+|Field|Type|Description|
+|:-|:-|:-|
+|`timestamp`|`time`|The time at which this metric was recorded.|
 |`schema`|`string`|The schema name of the batch.|
 |`schema_id`|`string`|The schema ID of the batch.|
 |`events`|`uint64`|The amount of events that were imported.|

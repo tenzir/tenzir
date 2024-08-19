@@ -13,7 +13,7 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/aliases.hpp"
 #include "tenzir/data.hpp"
-#include "tenzir/detail/heterogeneous_string_hash.hpp"
+#include "tenzir/detail/flat_map.hpp"
 #include "tenzir/instrumentation.hpp"
 #include "tenzir/table_slice.hpp"
 
@@ -80,7 +80,7 @@ struct importer_state {
 
   measurement measurement_ = {};
   stopwatch::time_point last_report = {};
-  detail::heterogeneous_string_hashmap<uint64_t> schema_counters = {};
+  detail::flat_map<type, uint64_t> schema_counters = {};
 
   /// The index actor.
   index_actor index;
