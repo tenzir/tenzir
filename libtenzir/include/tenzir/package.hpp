@@ -40,8 +40,11 @@ struct package_source final {
 
 struct package_config final {
   std::optional<package_source> source = {};
+  std::optional<std::string> version = {};
   detail::flat_map<std::string, std::string> inputs = {};
-  record overrides = {};
+  record metadata
+    = {}; // opaque extra data that can be set when installing the package
+  record overrides = {}; // overrides for fields in the package definition
 
   auto to_record() const -> record;
 
@@ -50,8 +53,8 @@ struct package_config final {
   friend auto inspect(auto& f, package_config& x) -> bool {
     return f.object(x)
       .pretty_name("package_config")
-      .fields(f.field("source", x.source),
-              f.field("inputs", x.inputs),
+      .fields(f.field("source", x.source), f.field("inputs", x.inputs),
+              f.field("version", x.version), f.field("metadata", x.metadata),
               f.field("overrides", x.overrides));
   }
 };

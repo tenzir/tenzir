@@ -70,6 +70,18 @@ namespace tenzir {
     continue;                                                                  \
   }
 
+#define TRY_ASSIGN_RECORD_TO_RESULT(name)                                      \
+  if (key == #name) {                                                          \
+    auto const* x = caf::get_if<view<record>>(&value);                         \
+    if (not x) {                                                               \
+      return diagnostic::error(#name " must be a record")                      \
+        .note("invalid package definition")                                    \
+        .to_error();                                                           \
+    }                                                                          \
+    result.name = materialize(*x);                                             \
+    continue;                                                                  \
+  }
+
 #define TRY_ASSIGN_MAP_TO_RESULT(name, value_type)                             \
   if (key == #name) {                                                          \
     const auto* x = caf::get_if<view<record>>(&value);                         \
@@ -239,17 +251,15 @@ auto package_config::parse(const view<record>& data)
   -> caf::expected<package_config> {
   auto result = package_config{};
   for (const auto& [key, value] : data) {
+    TRY_CONVERT_TO_STRING(version, version);
     TRY_ASSIGN_STRUCTURE_TO_RESULT(source, package_source);
     TRY_ASSIGN_STRINGMAP_CONVERSION_TO_RESULT(inputs);
-    if (key == "overrides") {
-      auto const* overrides = caf::get_if<view<record>>(&value);
-      if (not overrides) {
-        return diagnostic::error("'overrides' must be a record")
-          .note("invalid package definition")
-          .to_error();
-      }
-      result.overrides = materialize(*overrides);
-    }
+    TRY_ASSIGN_RECORD_TO_RESULT(overrides);
+    TRY_ASSIGN_RECORD_TO_RESULT(metadata);
+    return diagnostic::error("unknown key '{}'", key)
+      .note("while trying to parse 'config' entry")
+      .note("invalid package definition")
+      .to_error();
   }
   return result;
 }
@@ -406,6 +416,12 @@ auto package_config::to_record() const -> record {
   };
   if (source) {
     result["source"] = source->to_record();
+  }
+  if (version) {
+    result["version"] = *version;
+  }
+  if (!metadata.empty()) {
+    result["metadata"] = metadata;
   }
   return result;
 }
