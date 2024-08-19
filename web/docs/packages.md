@@ -5,16 +5,20 @@ and deployed together as a single unit.
 
 ## Anatomy of a Package
 
-A package definition consists of three major parts.
+A package definition consists of four major parts.
 
 1. Package metadata, for example the name, author and description of the
    package.
-2. Snippets, which are example pipelines for use with the Explorer on
+2. Examples, which are prepared pipelines for use with the Explorer on
    [app.tenzir.com](https://app.tenzir.com/explorer) that demonstrate how to use
    the package.
-3. A set of inputs provided by the user to customize the package installation
-   to their environment.
+3. A set of inputs that can be provided by the user to customize the package
+   installation to their environment.
 4. A set of pipelines and contexts that make up the contents of the package.
+
+## Package format
+
+The following describes the fields of a package definition.
 
 ### Package Metadata
 
@@ -23,6 +27,9 @@ Packages start with a set of metadata describing the package.
 ```yaml
 # The unique id of the package (required).
 id: feodo
+
+# 
+version:
 
 # The display name of the package and a path to an icon for the package.
 name: Feodo Abuse Blocklist
@@ -39,35 +46,6 @@ description: |
   QuakBot / Qbot) and BazarLoader (aka BazarBackdoor). It offers various
   blocklists, helping network owners to protect their users from Dridex and
   Emotet/Heodo.
-```
-
-### Snippets
-
-Packages may include snippets that showcase how to use the package, e.g., by
-showing how to display a chart that visualizes data imported by a package, or by
-providing a set of usage examples for data provided by a package.
-
-```yaml
-# Snippets contain a name, a description, and a pipeline definition for use with
-# the explorer on app.tenzir.com.
-snippets:
-  - name: Match historical and live data against the `feodo` context
-    description: |
-      Find persisted events that have an IP address matching the `feodo`
-      context.
-    definition: |
-      lookup feodo --field :ip
-  - name: Visualize successful lookups with the `feodo` context in the last week
-    description: |
-      Creates a stacked area chart that shows the number of hourly hits of
-      pipelines using the `lookup` operator with the `feodo` context.
-    definition: |
-      metrics lookup
-      | where context == "feodo"
-      | where timestamp > 7d ago
-      | summarize retro_hits=sum(retro.hits), live_hits=sum(live.hits) by timestamp resolution 1h
-      | sort timestamp
-      | chart area --position stacked
 ```
 
 ### Inputs
@@ -92,6 +70,43 @@ inputs:
     # An (optional) default value for the input. The input is required if there
     # is no input value.
     default: 1s
+```
+
+Inputs can be referenced in pipeline and example definitions and in context arguments
+with the synatx `{{ inputs.input-name }}`. The are replaced by their configured values
+when installing a package. For example, with the input configured as above the pipeline
+`every {{ inputs.refresh-rate }} { version }` would print the version once per second by default.
+
+To write double curly braces, the syntax `{ '{{' }` can be used to produce the literal
+string enclosed in the single quotes.
+
+### Examples
+
+Packages may include snippets that showcase how to use the package, e.g., by
+showing how to display a chart that visualizes data imported by a package, or by
+providing a set of usage examples for data provided by a package.
+
+```yaml
+# Examples contain a name, a description, and a pipeline definition for use with
+# the explorer on app.tenzir.com.
+examples:
+  - name: Match historical and live data against the `feodo` context
+    description: |
+      Find persisted events that have an IP address matching the `feodo`
+      context.
+    definition: |
+      lookup feodo --field :ip
+  - name: Visualize successful lookups with the `feodo` context in the last week
+    description: |
+      Creates a stacked area chart that shows the number of hourly hits of
+      pipelines using the `lookup` operator with the `feodo` context.
+    definition: |
+      metrics lookup
+      | where context == "feodo"
+      | where timestamp > 7d ago
+      | summarize retro_hits=sum(retro.hits), live_hits=sum(live.hits) by timestamp resolution 1h
+      | sort timestamp
+      | chart area --position stacked
 ```
 
 ### Pipelines and Contexts
@@ -153,3 +168,67 @@ contexts:
 :::tip Use packages
 Start using packages by [installing one](installation/install-a-package.md).
 :::
+
+## User configuration
+
+In order to install a package from the library, the user usually has to provide
+their own customization options to adjust the package to his own preferences
+and his local environment. This is done by adding a new key `config` to the
+package definition:
+
+```
+config:
+  # An optional string to identify the package version being installed.
+  version: "4.0"
+
+  # An unambigous description of the upstream source of this package.
+  source:
+    repository: https://github.com/tenzir/library
+    directory: zeek/
+    revision: 1274bd6042e4b74d07363643b5b01811e191b74c
+
+  # A dictionary mapping input fields to their desired values.
+  inputs:
+    filename: /opt/zeek/data.tsv
+
+  # A set of keys that override the corresponding fields in the package definition.
+  overrides:
+    pipelines:
+      example-pipeline:
+        disabled: true
+
+  # Opaque extra data that is ignored by the node.
+  metadata:
+    ansible:
+      deployment_id: 483dej2
+
+```
+
+### Inputs
+
+Pipeline and context definitions can contain references to user-defined variables,
+as in `from {{ inputs.filename }} version`, that will be replaced by their
+configured value when installing the package.
+
+In order to provide non-default values for the defined inputs, the `config.inputs`
+key is used.
+
+```
+config:
+  inputs:
+    filename: /opt/zeek/data.tsv
+```
+
+### Overrides
+
+The `config.overrides` object can be used to change the value of any field in the
+packag definition. This is intended for fields like `disabled` or `restart-on-error`
+in pipeline definitions to customize them to the users preferences:
+
+```
+config:
+  overrides:
+    pipelines:
+      example-pipeline:
+        disabled: true
+```

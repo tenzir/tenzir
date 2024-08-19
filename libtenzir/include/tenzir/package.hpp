@@ -42,8 +42,7 @@ struct package_config final {
   std::optional<package_source> source = {};
   std::optional<std::string> version = {};
   detail::flat_map<std::string, std::string> inputs = {};
-  record metadata
-    = {}; // opaque extra data that can be set when installing the package
+  record metadata = {};  // opaque extra data that can be set at install time
   record overrides = {}; // overrides for fields in the package definition
 
   auto to_record() const -> record;
