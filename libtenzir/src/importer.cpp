@@ -178,8 +178,11 @@ importer(importer_actor::stateful_pointer<importer_state> self,
                        });
     self->state.subscribers.erase(subscriber, self->state.subscribers.end());
   });
+  // We call the metrics "ingest" to distinguish them from the "import" metrics;
+  // these will disappear again in the future when we rewrite the database
+  // component.
   auto builder = series_builder{type{
-    "tenzir.metrics.index",
+    "tenzir.metrics.ingest",
     record_type{
       {"timestamp", time_type{}},
       {"schema", string_type{}},
@@ -199,6 +202,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
         event.field("schema_id", schema.make_fingerprint());
         event.field("events", count);
       }
+      self->state.schema_counters.clear();
       auto slice = builder.finish_assert_one_slice();
       if (slice.rows() == 0) {
         return;
