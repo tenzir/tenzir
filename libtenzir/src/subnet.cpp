@@ -6,11 +6,10 @@
 // SPDX-FileCopyrightText: (c) 2016 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/concept/printable/tenzir/subnet.hpp"
-
-#include "tenzir/concept/printable/to_string.hpp"
-#include "tenzir/data.hpp"
 #include "tenzir/subnet.hpp"
+
+#include "tenzir/concept/printable/tenzir/subnet.hpp"
+#include "tenzir/concept/printable/to_string.hpp"
 
 #include <tuple>
 
@@ -50,17 +49,16 @@ bool subnet::initialize() {
   return true;
 }
 
+bool subnet::debug(debug_writer& f) {
+  return f.fmt_value("{}", to_string(*this));
+}
+
 bool operator==(const subnet& x, const subnet& y) {
   return x.network_ == y.network_ && x.length_ == y.length_;
 }
 
 bool operator<(const subnet& x, const subnet& y) {
   return std::tie(x.network_, x.length_) < std::tie(y.network_, y.length_);
-}
-
-bool convert(const subnet& sn, data& d) {
-  d = to_string(sn);
-  return true;
 }
 
 } // namespace tenzir

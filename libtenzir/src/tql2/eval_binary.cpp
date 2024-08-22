@@ -259,7 +259,7 @@ template <ast::binary_op Op, concrete_type L, concrete_type R>
 struct EvalBinOp;
 
 // specialization for cases where a kernel is implemented
-template <ast::binary_op Op, concrete_type L, concrete_type R>
+template <ast::binary_op Op, basic_type L, basic_type R>
   requires caf::detail::is_complete<BinOpKernel<Op, L, R>>
 struct EvalBinOp<Op, L, R> {
   static auto eval(const type_to_arrow_array_t<L>& l,
