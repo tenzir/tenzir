@@ -3,6 +3,3 @@
 {"leef_version": "1.0", "vendor": "Tenzir", "product_name": "Tenzir", "product_version": "4.12", "attributes": {"Cat": null, "userName": null, "dst": null, "ExtraDataLabel": null, "ExtraData": null, "EventIdLabel": null, "EventID": null, "devTime": null, "LinkLabel": null, "PTALink": null, "suserLabel": null, "suser": null, "ExternalLinkLabel": null, "ExternalLink": null, "key": "trailing tab next"}}
 warning: failed to parse LEEF attributes
  = note: attributes: just some random junk
-
-warning: failed to parse LEEF attributes
- = note: attributes: key=yikes
