@@ -75,6 +75,15 @@ components:
             failure is disabled.
           default: 1.0m
           example: 500.0ms
+        unstoppable:
+          type: boolean
+          description: >
+            A flag specifying whether this pipeline is unstoppable.
+
+            Unstoppable pipelines start automatically, fail when they complete,
+            and can not be paused or stopped manually.
+          default: false
+          example: true
     Diagnostic:
       type: object
       properties:
@@ -209,6 +218,14 @@ components:
         definition:
           type: string
           description: The pipeline definition.
+        unstoppable:
+          type: boolean
+          description: >
+            A flag specifying whether this pipeline is unstoppable.
+
+            Unstoppable pipelines start automatically, fail when they complete,
+            and can not be paused or stopped manually.
+          example: true
         hidden:
           type: bool
           description: >-
@@ -588,6 +605,14 @@ paths:
 
                     failure is disabled.
                   example: 500.0ms
+                unstoppable:
+                  type: boolean
+                  description: >
+                    A flag specifying whether this pipeline is unstoppable.
+
+                    Unstoppable pipelines start automatically, fail when they
+                    complete, and can not be paused or stopped manually.
+                  example: true
       responses:
         '200':
           description: Success.
