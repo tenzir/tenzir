@@ -129,11 +129,15 @@ struct exec_node_diagnostic_handler final : public diagnostic_handler {
     if (diag.severity == severity::error) {
       throw std::move(diag);
     }
-    self->send(handle, std::move(diag));
+    if (deduplicator_.insert(diag)) {
+      self->send(handle, std::move(diag));
+    }
   }
 
+private:
   exec_node_actor::stateful_pointer<exec_node_state<Input, Output>> self = {};
   receiver_actor<diagnostic> handle = {};
+  diagnostic_deduplicator deduplicator_;
 };
 
 template <class Input, class Output>
