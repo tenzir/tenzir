@@ -105,7 +105,6 @@ struct default_passive_store_state {
 
   default_passive_store_actor::pointer self = {};
   filesystem_actor filesystem = {};
-  accountant_actor accountant = {};
   std::unique_ptr<passive_store> store = {};
   std::filesystem::path path = {};
   std::string store_type = {};
@@ -118,15 +117,13 @@ struct default_passive_store_state {
 /// @param self A pointer to the hosting actor.
 /// @param store The passive store to use.
 /// @param filesystem A handle to the filesystem actor.
-/// @param accountant A handle to the accountant actor.
 /// @param path The path to load the store from.
 /// @param store_type The unique store identifier of the used store plugin.
 default_passive_store_actor::behavior_type default_passive_store(
   default_passive_store_actor::stateful_pointer<default_passive_store_state>
     self,
   std::unique_ptr<passive_store> store, filesystem_actor filesystem,
-  accountant_actor accountant, std::filesystem::path path,
-  std::string store_type);
+  std::filesystem::path path, std::string store_type);
 
 /// The state of the default active store actor implementation.
 struct default_active_store_state {
@@ -136,7 +133,6 @@ struct default_active_store_state {
     file = {};
   default_active_store_actor::pointer self = {};
   filesystem_actor filesystem = {};
-  accountant_actor accountant = {};
   std::unique_ptr<active_store> store = {};
   std::filesystem::path path = {};
   std::string store_type = {};
@@ -149,13 +145,11 @@ struct default_active_store_state {
 /// @param self A pointer to the hosting actor.
 /// @param store The active store to use.
 /// @param filesystem A handle to the filesystem actor.
-/// @param accountant A handle to the accountant actor.
 /// @param path The path to persist the store at.
 /// @param store_type The unique store identifier of the used store plugin.
 default_active_store_actor::behavior_type default_active_store(
   default_active_store_actor::stateful_pointer<default_active_store_state> self,
   std::unique_ptr<active_store> store, filesystem_actor filesystem,
-  accountant_actor accountant, std::filesystem::path path,
-  std::string store_type);
+  std::filesystem::path path, std::string store_type);
 
 } // namespace tenzir

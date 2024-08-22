@@ -80,7 +80,6 @@ struct bridge_state {
   size_t open_partitions = {};
   std::queue<std::pair<partition_info, query_context>> queued_partitions = {};
 
-  accountant_actor accountant = {};
   filesystem_actor filesystem = {};
 
   struct metric {
@@ -149,7 +148,7 @@ struct bridge_state {
     // better diagnostics. As-is, we only get a caf::sec::request_receiver_down
     // if they quit, but not their actual error message.
     const auto partition = self->spawn(
-      passive_partition, info.uuid, accountant, filesystem,
+      passive_partition, info.uuid, filesystem,
       std::filesystem::path{fmt::format("index/{:l}", info.uuid)});
     self->request(partition, caf::infinite, atom::query_v, std::move(ctx))
       .then(
@@ -194,8 +193,6 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
   self->state.mode = mode;
   self->state.metrics_handler = std::move(metrics_handler);
   self->state.diagnostics_handler = std::move(diagnostics_handler);
-  self->state.accountant
-    = self->system().registry().get<accountant_actor>("tenzir.accountant");
   self->state.filesystem = std::move(filesystem);
   TENZIR_ASSERT(self->state.filesystem);
   self->set_exit_handler([self](caf::exit_msg& msg) {

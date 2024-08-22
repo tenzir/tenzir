@@ -425,8 +425,7 @@ auto saver_parser_plugin::supported_uri_schemes() const
 // -- store plugin -------------------------------------------------------------
 
 caf::expected<store_actor_plugin::builder_and_header>
-store_plugin::make_store_builder(accountant_actor accountant,
-                                 filesystem_actor fs,
+store_plugin::make_store_builder(filesystem_actor fs,
                                  const tenzir::uuid& id) const {
   auto store = make_active_store();
   if (!store) {
@@ -439,14 +438,13 @@ store_plugin::make_store_builder(accountant_actor accountant,
   const auto abs_dir = std::filesystem::absolute(db_dir, err);
   auto path = abs_dir / "archive" / fmt::format("{}.{}", id, name());
   auto store_builder = fs->home_system().spawn<caf::lazy_init>(
-    default_active_store, std::move(*store), fs, std::move(accountant),
-    std::move(path), name());
+    default_active_store, std::move(*store), fs, std::move(path), name());
   auto header = chunk::copy(id);
   return builder_and_header{store_builder, header};
 }
 
 caf::expected<store_actor>
-store_plugin::make_store(accountant_actor accountant, filesystem_actor fs,
+store_plugin::make_store(filesystem_actor fs,
                          std::span<const std::byte> header) const {
   auto store = make_passive_store();
   if (!store) {
@@ -465,7 +463,6 @@ store_plugin::make_store(accountant_actor accountant, filesystem_actor fs,
   auto path = abs_dir / "archive" / fmt::format("{}.{}", id, name());
   return fs->home_system().spawn<caf::lazy_init>(default_passive_store,
                                                  std::move(*store), fs,
-                                                 std::move(accountant),
                                                  std::move(path), name());
 }
 

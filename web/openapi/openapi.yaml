@@ -55,6 +55,13 @@ components:
           description: "A duration string specifying the minimum time between automatic restarts\nof a pipeline when an error occurs. Takes no effect if restarting on\nfailure is disabled.\n"
           default: 1.0m
           example: 500.0ms
+        unstoppable:
+          type: boolean
+          description: |
+            A flag specifying whether this pipeline is unstoppable.
+            Unstoppable pipelines start automatically, fail when they complete, and can not be paused or stopped manually.
+          default: false
+          example: true
     Diagnostic:
       type: object
       properties:
@@ -187,6 +194,12 @@ components:
         definition:
           type: string
           description: The pipeline definition.
+        unstoppable:
+          type: boolean
+          description: |
+            A flag specifying whether this pipeline is unstoppable.
+            Unstoppable pipelines start automatically, fail when they complete, and can not be paused or stopped manually.
+          example: true
         hidden:
           type: bool
           description: Whether this pipeline is hidden. Hidden pipelines are only available through the `show pipelines` operator.
@@ -521,6 +534,12 @@ paths:
                   type: string
                   description: "A duration string specifying the minimum time between automatic restarts\nof a pipeline when an error occurs. Takes no effect if restarting on\nfailure is disabled.\n"
                   example: 500.0ms
+                unstoppable:
+                  type: boolean
+                  description: |
+                    A flag specifying whether this pipeline is unstoppable.
+                    Unstoppable pipelines start automatically, fail when they complete, and can not be paused or stopped manually.
+                  example: true
       responses:
         200:
           description: Success.

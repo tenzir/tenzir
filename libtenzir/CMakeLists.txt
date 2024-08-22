@@ -373,7 +373,7 @@ add_feature_info(
   "TENZIR_ENABLE_BUNDLED_FASTFLOAT" TENZIR_ENABLE_BUNDLED_FASTFLOAT
   "use the fast_float submodule.")
 if (NOT TENZIR_ENABLE_BUNDLED_FASTFLOAT)
-  find_package(FastFloat 3.4.0 CONFIG)
+  find_package(FastFloat 6.1.4 CONFIG)
 endif ()
 if (NOT FastFloat_FOUND)
   # Use bundled fast_float.
@@ -384,7 +384,7 @@ if (NOT FastFloat_FOUND)
         " initialize the libtenzir/aux/fast_float submodule")
   endif ()
   add_subdirectory(aux/fast_float)
-  add_library(FastFloat::fast_float ALIAS fast_float)
+  TenzirSystemizeTarget(fast_float)
   dependency_summary("fast_float" "${CMAKE_CURRENT_SOURCE_DIR}/aux/fast_float"
                      "Dependencies")
 else ()

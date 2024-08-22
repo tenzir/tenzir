@@ -117,9 +117,6 @@ struct active_partition_state {
   /// A readable name for this partition.
   static constexpr auto name = "active-partition";
 
-  /// Actor handle of the accountant.
-  accountant_actor accountant = {};
-
   /// Actor handle of the filesystem.
   filesystem_actor filesystem = {};
 
@@ -179,7 +176,6 @@ pack_full(const active_partition_state::serialization_data& x,
 /// @param self The partition actor.
 /// @param schema The schema of this partition.
 /// @param id The UUID of this partition.
-/// @param accountant The actor handle of the accountant.
 /// @param filesystem The actor handle of the filesystem.
 /// @param index_opts Settings that are forwarded when creating indexers.
 /// @param index_config The meta-index configuration of the false-positives
@@ -189,8 +185,7 @@ pack_full(const active_partition_state::serialization_data& x,
 // TODO: Bundle store, store_id and store_header in a single struct
 active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
-  type schema, uuid id, accountant_actor accountant,
-  filesystem_actor filesystem, caf::settings index_opts,
+  type schema, uuid id, filesystem_actor filesystem, caf::settings index_opts,
   const index_config& synopsis_opts, const store_actor_plugin* store_plugin,
   std::shared_ptr<tenzir::taxonomies> taxonomies);
 

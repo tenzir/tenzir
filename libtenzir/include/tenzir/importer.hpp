@@ -13,7 +13,7 @@
 #include "tenzir/actors.hpp"
 #include "tenzir/aliases.hpp"
 #include "tenzir/data.hpp"
-#include "tenzir/detail/heterogeneous_string_hash.hpp"
+#include "tenzir/detail/flat_map.hpp"
 #include "tenzir/instrumentation.hpp"
 #include "tenzir/table_slice.hpp"
 
@@ -80,12 +80,10 @@ struct importer_state {
 
   measurement measurement_ = {};
   stopwatch::time_point last_report = {};
-  detail::heterogeneous_string_hashmap<uint64_t> schema_counters = {};
+  detail::flat_map<type, uint64_t> schema_counters = {};
 
   /// The index actor.
   index_actor index;
-
-  accountant_actor accountant;
 
   /// A list of subscribers for incoming events.
   std::vector<std::pair<receiver_actor<table_slice>, bool /*internal*/>>
@@ -99,11 +97,9 @@ struct importer_state {
 /// @param self The actor handle.
 /// @param dir The directory for persistent state.
 /// @param index A handle to the INDEX.
-/// @param accountant A handle to the ACCOUNTANT.
 /// @param batch_size The initial number of IDs to request when replenishing.
 importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self,
-         const std::filesystem::path& dir, index_actor index,
-         accountant_actor accountant);
+         const std::filesystem::path& dir, index_actor index);
 
 } // namespace tenzir
