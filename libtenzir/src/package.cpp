@@ -249,7 +249,8 @@ auto package_pipeline::parse(const view<record>& data)
     TRY_ASSIGN_STRING_TO_RESULT(definition)
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(name)
     TRY_ASSIGN_OPTIONAL_STRING_TO_RESULT(description)
-    TRY_ASSIGN_BOOL_TO_RESULT(disabled);
+    TRY_ASSIGN_BOOL_TO_RESULT(disabled)
+    TRY_ASSIGN_BOOL_TO_RESULT(unstoppable)
     if (key == "restart-on-error") {
       if (caf::holds_alternative<caf::none_t>(value)) {
         continue;
@@ -422,6 +423,7 @@ auto package_pipeline::to_record() const -> record {
     {"description", description},
     {"definition", definition},
     {"disabled", disabled},
+    {"unstoppable", unstoppable},
   };
   if (restart_on_error) {
     result["restart-on-error"] = restart_on_error;

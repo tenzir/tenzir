@@ -124,6 +124,12 @@ pipelines:
     restart-on-error: 1 minute
     # Disables the pipeline.
     disabled: false
+    # Pipelines that are unstoppable will run automatically and indefinitely.
+    # They are not able to pause or stop.
+    # If they do complete, they will end up in a failed state.
+    # If `restart-on-error` is enabled, they will restart after the specified
+    # duration.
+    unstoppable: true
 
 # Define any number of contexts.
 contexts:
