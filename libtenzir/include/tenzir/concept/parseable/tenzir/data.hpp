@@ -49,8 +49,8 @@ struct simple_data_parser : parser_base<simple_data_parser> {
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    static auto p = parsers::time | parsers::duration | parsers::net
-                    | parsers::ip | parsers::number | parsers::boolean;
+    static auto p = parsers::net | parsers::ip | parsers::time
+                    | parsers::duration | parsers::number | parsers::boolean;
     return p(f, l, a);
   }
 };
@@ -90,10 +90,12 @@ private:
         ->* [](record::vector_type&& xs) {
           return record::make_unsafe(std::move(xs));
         };
-    p = parsers::time
-      | parsers::duration
-      | parsers::net
+    // Order matters here: If X is a prefix of Y, then X must come after Y.
+    // For example `3d` is a prefix of `3d::`, hence duration must be after IP.
+    p = parsers::net
       | parsers::ip
+      | parsers::time
+      | parsers::duration
       | parsers::number
       | parsers::boolean
       | parsers::qqstr

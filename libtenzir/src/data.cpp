@@ -729,7 +729,7 @@ data parse(const simdjson::dom::element& elem, size_t depth = 0) {
       // Attempt type inference for values that are usually stored in a string
       // when printed as JSON.
       const auto p
-        = parsers::ip | parsers::net | parsers::time | parsers::duration;
+        = parsers::net | parsers::ip | parsers::time | parsers::duration;
       if (p(str, result))
         return result;
       // Take the input as-is if nothing worked.

@@ -457,7 +457,7 @@ private:
     if (not raw_ and not builder.is_protected()) {
       // Attempt to parse it as data.
       static constexpr auto parser
-        = parsers::time | parsers::duration | parsers::net | parsers::ip;
+        = parsers::net | parsers::ip | parsers::time | parsers::duration;
       auto result = std::variant<time, duration, subnet, ip>{};
       if (parser(str, result)) {
         return std::visit(
@@ -609,7 +609,7 @@ auto json_to_data(std::string_view string, bool raw)
   -> simdjson::simdjson_result<data> {
   if (not raw) {
     static constexpr auto parser
-      = parsers::time | parsers::duration | parsers::net | parsers::ip;
+      = parsers::net | parsers::ip | parsers::time | parsers::duration;
     auto result = data{};
     if (parser(string, result)) {
       return result;
