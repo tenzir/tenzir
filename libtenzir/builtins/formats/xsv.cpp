@@ -179,10 +179,15 @@ struct xsv_printer_impl {
       TENZIR_UNREACHABLE();
     }
 
+    auto operator()(view<record>) noexcept -> bool {
+      TENZIR_UNREACHABLE();
+    }
+
     auto operator()(view<std::string> x) noexcept -> bool {
       sequence_empty = false;
       auto needs_escaping = std::any_of(x.begin(), x.end(), [this](auto c) {
-        return c == printer.sep || c == '"';
+        return c == printer.sep || c == '"' || c == '\n' || c == '\r'
+               || c == '\v' || c == '\f';
       });
       if (needs_escaping) {
         static auto escaper = [](auto& f, auto out) {
@@ -216,19 +221,6 @@ struct xsv_printer_impl {
     auto operator()(const view<list>& x) noexcept -> bool {
       sequence_empty = true;
       for (const auto& v : x) {
-        if (!sequence_empty) {
-          ++out = printer.list_sep;
-        }
-        if (!caf::visit(*this, v)) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    auto operator()(const view<record>& x) noexcept -> bool {
-      sequence_empty = true;
-      for (const auto& [_, v] : x) {
         if (!sequence_empty) {
           ++out = printer.list_sep;
         }
@@ -467,7 +459,7 @@ public:
         auto out_iter = std::back_inserter(buffer);
         auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
         auto input_schema = resolved_slice.schema();
-        auto input_type = caf::get<record_type>(input_schema);
+        const auto& input_type = caf::get<record_type>(input_schema);
         auto array
           = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
         for (const auto& row : values(input_type, *array)) {
