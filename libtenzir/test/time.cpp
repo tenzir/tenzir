@@ -92,7 +92,7 @@ TEST(compound durations) {
   check_duration("3m42s10ms", 3min + 42s + 10ms);
   check_duration("3s42s10ms", 3s + 42s + 10ms);
   check_duration("42s3m10ms", 3min + 42s + 10ms);
-  check_duration("-10m8ms1ns", -10min + 8ms + 1ns);
+  check_duration("-10m8ms1ns", -(10min + 8ms + 1ns));
   MESSAGE("no intermediate signs");
   auto p = parsers::duration >> parsers::eoi;
   CHECK(!p("-10m-8ms1ns"));
