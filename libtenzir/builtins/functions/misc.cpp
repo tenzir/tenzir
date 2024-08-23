@@ -196,8 +196,7 @@ public:
         TENZIR_UNUSED(ctx);
         auto value = eval(expr);
         auto f = detail::overload{
-          [&]<concepts::one_of<arrow::StringArray, arrow::ListArray> T>(
-            const T& array) {
+          [&](const arrow::ListArray& array) {
             auto b = arrow::Int64Builder{};
             check(b.Reserve(value.length()));
             for (auto i = int64_t{0}; i < array.length(); ++i) {
@@ -212,11 +211,15 @@ public:
           [&](const arrow::NullArray&) {
             return series::null(int64_type{}, value.length());
           },
-          [&](const auto&) {
-            diagnostic::warning("expected `list` or `string`, got `{}`",
-                                value.type.kind())
-              .primary(expr)
-              .emit(ctx);
+          [&]<class T>(const T&) {
+            auto d = diagnostic::warning("expected `list`, got `{}`",
+                                         value.type.kind())
+                       .primary(expr);
+            if constexpr (std::same_as<T, arrow::StringArray>) {
+              d = std::move(d).hint(
+                "use `.length_bytes()` or `.length_chars()` instead");
+            }
+            std::move(d).emit(ctx);
             return series::null(int64_type{}, value.length());
           },
         };
