@@ -1,9 +1,3 @@
----
-sidebar_custom_props:
-  operator:
-    source: true
----
-
 # fields
 
 Retrieves all fields stored at a node.
@@ -21,9 +15,9 @@ available schemas.
 
 See the top five fields counted by how many schemas they occur in:
 
-```
+```tql
 fields
-| summarize count=count_distinct(schema), schemas=distinct(schema) by field
-| sort count desc
-| head 5
+summarize field, count=count_distinct(schema), schemas=distinct(schema)
+sort -count
+head 5
 ```
