@@ -91,7 +91,7 @@ private:
     } else {
       // Parse one element of the variant and assign it to the passed-in
       // attribute.
-      parser_attribute attr;
+      auto attr = parser_attribute{};
       if (!p(f, l, attr))
         return false;
       a = std::move(attr);
