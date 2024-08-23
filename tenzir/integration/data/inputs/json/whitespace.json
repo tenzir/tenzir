@@ -1,0 +1,4 @@
+{
+  "a": ["   ", "b   c", ""],
+  "d": "\n\r\f text, \fwhite \rspace \n"
+}
