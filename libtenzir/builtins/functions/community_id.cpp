@@ -111,21 +111,24 @@ public:
       }
       auto src_ips = src_ip_series.as<ip_type>();
       if (not src_ips) {
-        diagnostic::warning("`community_id` expected `ip` as 1st argument")
+        diagnostic::error("expected argument of type `ip`, but got `{}`",
+                          src_ip_series.type.kind())
           .primary(*args.src_ip)
           .emit(ctx);
         return null_series();
       }
       auto dst_ips = dst_ip_series.as<ip_type>();
       if (not dst_ips) {
-        diagnostic::warning("`community_id` expected `ip` as 2nd argument")
+        diagnostic::error("expected argument of type `ip`, but got `{}`",
+                          dst_ip_series.type.kind())
           .primary(*args.dst_ip)
           .emit(ctx);
         return null_series();
       }
       auto protos = proto_series.as<string_type>();
       if (not protos) {
-        diagnostic::warning("`community_id` expected `string` as 3rd argument")
+        diagnostic::error("expected argument of type `string`, but got `{}`",
+                          proto_series.type.kind())
           .primary(*args.proto)
           .emit(ctx);
         return null_series();
@@ -135,9 +138,9 @@ public:
       if (src_port_series) {
         src_ports = src_port_series->as<int64_type>();
         if (not src_ports) {
-          diagnostic::warning("`community_id` got an argument type mismatch")
+          diagnostic::error("expected argument of type `int64`, but got `{}`",
+                            src_port_series->type.kind())
             .primary(*args.src_port)
-            .note("expected argument `src_port` to be of type `int64`")
             .emit(ctx);
           return null_series();
         }
@@ -145,9 +148,9 @@ public:
       if (dst_port_series) {
         dst_ports = dst_port_series->as<int64_type>();
         if (not dst_ports) {
-          diagnostic::warning("`community_id` got an argument type mismatch")
+          diagnostic::error("expected argument of type `int64`, but got `{}`",
+                            dst_port_series->type.kind())
             .primary(*args.dst_port)
-            .note("expected argument `dst_port` to be of type `int64`")
             .emit(ctx);
           return null_series();
         }
@@ -156,9 +159,9 @@ public:
       if (seed_series) {
         seeds = seed_series->as<int64_type>();
         if (not seeds) {
-          diagnostic::warning("`community_id` got an argument type mismatch")
+          diagnostic::error("expected argument of type `int64`, but got `{}`",
+                            seed_series->type.kind())
             .primary(*args.seed)
-            .note("expected argument `seed` to be of type `int64`")
             .emit(ctx);
           return null_series();
         }
@@ -166,7 +169,8 @@ public:
       auto b = arrow::StringBuilder{};
       check(b.Reserve(eval.length()));
       auto emit_proto_warning = false;
-      auto emit_port_warning = false;
+      auto emit_port_conflict_warning = false;
+      auto emit_port_range_warning = false;
       auto emit_seed_warning = false;
       for (auto i = int64_t{0}; i < eval.length(); ++i) {
         if (src_ips->array->IsNull(i) or dst_ips->array->IsNull(i)
@@ -208,35 +212,43 @@ public:
         if (have_src_port and have_dst_port) {
           auto src_port = src_ports->array->GetView(i);
           auto dst_port = dst_ports->array->GetView(i);
-          auto flow
-            = make_flow(src_ip, dst_ip, detail::narrow<uint16_t>(src_port),
-                        detail::narrow<uint16_t>(dst_port), proto_type);
-          check(b.Append(tenzir::community_id::make(flow, seed)));
-        } else if (have_src_port != have_dst_port) {
-            emit_port_warning = true;
+          // TODO: create an abstraction that bakes this check into the
+          // narrowing operation below.
+          if (src_port < 0 or src_port > 65'535 //
+              or dst_port < 0 or dst_port > 65'535) {
+            emit_port_range_warning = true;
             check(b.AppendNull());
             continue;
+          }
+          auto flow
+            = make_flow(src_ip, dst_ip, detail::narrow_cast<uint16_t>(src_port),
+                        detail::narrow_cast<uint16_t>(dst_port), proto_type);
+          check(b.Append(tenzir::community_id::make(flow, seed)));
+        } else if (have_src_port != have_dst_port) {
+          emit_port_conflict_warning = true;
+          check(b.AppendNull());
+          continue;
         } else {
           check(b.Append(
             tenzir::community_id::make(src_ip, dst_ip, proto_type, seed)));
         }
       }
       if (emit_seed_warning) {
-        diagnostic::warning("`community_id` got invalid seed")
+        diagnostic::warning("`seed` must be between 0 and 65535")
           .primary(*args.seed)
-          .note("`seed` exceeded maximum value of 65,535")
-          .hint("use a seed that's less then the maximum value")
           .emit(ctx);
       }
-      if (emit_port_warning) {
-        diagnostic::warning("`community_id` got invalid port specification")
-          .note("encountered only `src_port` or `dst_port` but not both")
+      if (emit_port_conflict_warning) {
+        diagnostic::warning(
+          "encountered only `src_port` or `dst_port` but not both")
           .emit(ctx);
+      }
+      if (emit_port_range_warning) {
+        diagnostic::warning("`port` must be between 0 and 65535").emit(ctx);
       }
       if (emit_proto_warning) {
-        diagnostic::warning("`community_id` got invalid protocol")
+        diagnostic::warning("`proto` must be `tcp`, `udp`, `icmp`, or `icmp6`")
           .primary(*args.proto)
-          .hint("expected `tcp`, `udp`, `icmp`, or `icmp6` as protocol")
           .emit(ctx);
       }
       return series{string_type{}, finish(b)};
