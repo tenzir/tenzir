@@ -381,8 +381,10 @@ public:
       row.field("key", data{key});
       row.field("value", value->raw_data);
       if (entry_builder.length() >= context::dump_batch_size_limit) {
-        co_yield entry_builder.finish_assert_one_slice(
-          fmt::format("tenzir.{}.info", context_type()));
+        for (auto&& slice : entry_builder.finish_as_table_slice(
+               fmt::format("tenzir.{}.info", context_type()))) {
+          co_yield std::move(slice);
+        }
       }
     }
     for (const auto& [key, value] : context_entries) {
