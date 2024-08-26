@@ -1,6 +1,8 @@
 pipeline [
   write json {
-    
+    args: {
+      
+    }
   },
   save file {
     path: "xyz.json" @ 8..16

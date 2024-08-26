@@ -69,5 +69,21 @@ private:
   ip network_;
   uint8_t length_;
 };
-
 } // namespace tenzir
+
+template <>
+struct fmt::formatter<tenzir::subnet> {
+  constexpr auto parse(fmt::format_parse_context& ctx) {
+    return ctx.begin();
+  }
+
+  auto format(const tenzir::subnet& sn, fmt::format_context& ctx) const {
+    const auto length = sn.length();
+    const auto network = sn.network();
+    const auto is_v4 = network.is_v4();
+    if (is_v4) {
+      return fmt::format_to(ctx.out(), "{}/{}", network, length - 96);
+    }
+    return fmt::format_to(ctx.out(), "{}/{}", network, length);
+  }
+};

@@ -12,10 +12,22 @@
 #include "tenzir/detail/raise_error.hpp"
 
 #include <algorithm>
+#include <concepts>
 #include <functional>
+#include <type_traits>
 #include <vector>
 
 namespace tenzir::detail {
+
+template <typename Policy, typename Key, typename Value>
+concept vector_map_policy
+  = requires(Policy p, Key k, Value v, std::vector<std::pair<Key, Value>> x,
+             std::pair<Key, Value> kvp) {
+      {
+        p.add(x, k, v)
+      } -> std::same_as<std::pair<typename decltype(x)::iterator, bool>>;
+      { p.lookup(x, k) } -> std::same_as<typename decltype(x)::iterator>;
+    };
 
 /// A map abstraction over an unsorted `std::vector`.
 template <class Key, class T, class Allocator, class Policy>
@@ -45,8 +57,9 @@ public:
 
   vector_map(std::initializer_list<value_type> l) {
     reserve(l.size());
-    for (auto& x : l)
+    for (auto& x : l) {
       insert(x);
+    }
   }
 
   template <class InputIterator>
@@ -120,6 +133,12 @@ public:
     return Policy::add(xs_, std::move(x));
   };
 
+  template <typename Key_Like, typename... Args>
+  std::pair<iterator, bool> try_emplace(Key_Like&& key, Args&&... args) {
+    return Policy::try_emplace(xs_, std::forward<Key_Like>(key),
+                               std::forward<Args>(args)...);
+  }
+
   iterator insert(iterator, value_type x) {
     // TODO: don't ignore hint.
     return insert(std::move(x)).first;
@@ -132,8 +151,9 @@ public:
 
   template <class InputIterator>
   void insert(InputIterator first, InputIterator last) {
-    while (first != last)
+    while (first != last) {
       insert(*first++);
+    }
   }
 
   template <class... Ts>
@@ -154,14 +174,31 @@ public:
     return xs_.erase(first, last);
   }
 
-  size_type erase(const key_type& x) {
-    auto pred = [&](auto& p) { return p.first == x; };
-    auto i = std::remove_if(begin(), end(), pred);
-    if (i == end())
+  template <typename Key_Like>
+    requires ( not ( 
+        std::same_as<Key_Like, std::remove_cvref_t<iterator>> or
+        std::same_as<Key_Like, std::remove_cvref_t<const_iterator>>
+      ) )
+  size_type erase(const Key_Like& x) {
+    const auto it = find(x);
+    if (it == end()) {
       return 0;
-    erase(i);
+    }
+    erase(it);
     return 1;
   }
+
+  // size_type erase(const key_type& x) {
+  //   auto pred = [&](auto& p) {
+  //     return p.first == x;
+  //   };
+  //   auto i = std::remove_if(begin(), end(), pred);
+  //   if (i == end()) {
+  //     return 0;
+  //   }
+  //   erase(i);
+  //   return 1;
+  // }
 
   void swap(vector_map& other) {
     xs_.swap(other);
@@ -172,26 +209,29 @@ public:
   template <class L>
   [[nodiscard]] mapped_type& at(const L& key) {
     auto i = find(key);
-    if (i == end())
+    if (i == end()) {
       TENZIR_RAISE_ERROR(std::out_of_range,
                          "tenzir::detail::vector_map::at out of range");
+    }
     return i->second;
   }
 
   template <class L>
   [[nodiscard]] const mapped_type& at(const L& key) const {
     auto i = find(key);
-    if (i == end())
+    if (i == end()) {
       TENZIR_RAISE_ERROR(std::out_of_range,
                          "tenzir::detail::vector_map::at out of range");
+    }
     return i->second;
   }
 
   template <class L>
   [[nodiscard]] mapped_type& operator[](const L& key) {
     auto i = find(key);
-    if (i != end())
+    if (i != end()) {
       return i->second;
+    }
     return insert(i, value_type{key, mapped_type{}})->second;
   }
 
@@ -228,7 +268,7 @@ public:
   // -- non-standard API -----------------------------------------------------
 
   template <class Inspector>
-  friend auto inspect(Inspector&f, vector_map& xs) {
+  friend auto inspect(Inspector& f, vector_map& xs) {
     return f.apply(xs.xs_);
   }
 

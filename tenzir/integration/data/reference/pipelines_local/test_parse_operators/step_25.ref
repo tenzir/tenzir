@@ -3,25 +3,52 @@ pipeline [
     path: "a/b/c.json" @ 5..15
   },
   read json {
-    unnest_separator: "",
-    use_gelf_mode: false,
-    use_ndjson_mode: false,
-    preserve_order: true,
-    raw: false,
-    arrays_of_objects: false,
-    precise: false
+    args: {
+      builder_options: {
+        policy: policy_precise {
+          seed_schema: ""
+        },
+        settings: {
+          default_name: "tenzir.json",
+          ordered: true,
+          expand_schema: false,
+          raw: false,
+          unnest_separator: "",
+          timeout: "1s",
+          desired_batch_size: 65536
+        }
+      },
+      arrays_of_objects: false,
+      mode: "none"
+    }
   }
 ] @ 0..15
 where (xyz == 123 @ 24..35) @ 18..35
 pipeline [
   write xsv {
-    name: "csv",
-    field_sep: 44,
-    list_sep: 59,
-    null_value: "",
-    allow_comments: false,
-    auto_expand: false,
-    no_header: false
+    args: {
+      name: "csv",
+      field_sep: 44,
+      list_sep: 59,
+      null_value: "",
+      allow_comments: false,
+      no_header: false,
+      auto_expand: false,
+      builder_options: {
+        policy: policy_precise {
+          seed_schema: ""
+        },
+        settings: {
+          default_name: "tenzir.unknown",
+          ordered: true,
+          expand_schema: false,
+          raw: false,
+          unnest_separator: "",
+          timeout: "1s",
+          desired_batch_size: 65536
+        }
+      }
+    }
   },
   save file {
     path: "foo.csv" @ 40..47

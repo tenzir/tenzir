@@ -1,1 +1,3 @@
 {"num_events": 729}
+warning: zeek event did not contain selector field
+ = note: selector field `_path` was not found

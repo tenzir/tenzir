@@ -1,5 +1,7 @@
-{"leef_version": "1.0", "vendor": "CyberArk", "product_name": "PTA", "product_version": "14.0", "attributes": {"Cat": "Suspected credentials theft|sev=8|src=src1", "userName": "mike", "dst": "192.168.0.1", "ExtraDataLabel": "ExtraData", "ExtraData": "None", "EventIdLabel": "EventID", "EventID": "52b06812ec3500ed864c461e", "devTime": 1388577600000, "LinkLabel": "PTALink", "PTALink": "https://1.1.1.1/incidents/52b06812ec3500ed864c461e", "suserLabel": "SourceUserName", "suser": "mike2", "ExternalLinkLabel": "ExternalLink", "ExternalLink": "None", "key": null}}
-{"leef_version": "1.0", "vendor": "Tenzir", "product_name": "Tenzir", "product_version": "4.12", "attributes": {"Cat": null, "userName": null, "dst": null, "ExtraDataLabel": null, "ExtraData": null, "EventIdLabel": null, "EventID": null, "devTime": null, "LinkLabel": null, "PTALink": null, "suserLabel": null, "suser": null, "ExternalLinkLabel": null, "ExternalLink": null, "key": ""}}
-{"leef_version": "1.0", "vendor": "Tenzir", "product_name": "Tenzir", "product_version": "4.12", "attributes": {"Cat": null, "userName": null, "dst": null, "ExtraDataLabel": null, "ExtraData": null, "EventIdLabel": null, "EventID": null, "devTime": null, "LinkLabel": null, "PTALink": null, "suserLabel": null, "suser": null, "ExternalLinkLabel": null, "ExternalLink": null, "key": "trailing tab next"}}
-warning: failed to parse LEEF attributes
- = note: attributes: just some random junk
+{"leef_version": "1.0", "vendor": "CyberArk", "product_name": "PTA", "product_version": "14.0", "attributes": {"Cat": "Suspected credentials theft|sev=8|src=src1", "userName": "mike", "dst": "192.168.0.1", "ExtraDataLabel": "ExtraData", "ExtraData": "None", "EventIdLabel": "EventID", "EventID": "52b06812ec3500ed864c461e", "devTime": 1388577600000, "LinkLabel": "PTALink", "PTALink": "https://1.1.1.1/incidents/52b06812ec3500ed864c461e", "suserLabel": "SourceUserName", "suser": "mike2", "ExternalLinkLabel": "ExternalLink", "ExternalLink": "None"}}
+{"leef_version": "1.0", "vendor": "Tenzir", "product_name": "Tenzir", "product_version": "4.12", "attributes": {"key": ""}}
+{"leef_version": "1.0", "vendor": "Tenzir", "product_name": "Tenzir", "product_version": "4.12", "attributes": {"key": "trailing tab next"}}
+{"leef_version": "1.0", "vendor": "Tenzir", "product_name": "Tenzir", "product_version": "4.12", "attributes": {"key": "yikes"}}
+warning: leef parser: Ill-formed event missing key-value separator in attribute
+ = note: line 2
+ = note: attribute was `just some random junk`

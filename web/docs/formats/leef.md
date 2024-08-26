@@ -9,9 +9,10 @@ sidebar_custom_props:
 Parses events in the Log Event Extended Format (LEEF).
 
 ## Synopsis
-
+Parser:
 ```
-leef
+leef [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
+     [--expand-schema] [--raw] [--unnest-separator <separator>]
 ```
 
 ## Description
@@ -71,6 +72,10 @@ pairs map to record fields. Here is an example of the parsed events from above:
   }
 }
 ```
+
+### Common Options (Parser)
+
+The LEEF parser supports the common [schema inference options](formats.md#parser-schema-inference).
 
 ## Examples
 

@@ -10,8 +10,10 @@ Parses events in the Common Event Format (CEF).
 
 ## Synopsis
 
+Parser:
 ```
-cef
+cef [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
+    [--expand-schema] [--raw] [--unnest-separator <separator>]
 ```
 
 ## Description
@@ -88,6 +90,10 @@ event:
   }
 }
 ```
+
+### Common Options (Parser)
+
+The CEF parser supports the common [schema inference options](formats.md#parser-schema-inference).
 
 ## Examples
 

@@ -1,2 +1,4 @@
-warning: BIGINT_ERROR: Big integer value that cannot be represented using 64 bits
- = note: at line 1
+{"foo": "424242424242424242424242"}
+warning: failed to parse a big integer in the JSON document
+ = note: line 1 column 8
+ = note: Value `424242424242424242424242` does not fit into 64bits

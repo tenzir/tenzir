@@ -11,6 +11,12 @@ Reads and writes YAML.
 
 ## Synopsis
 
+Parser:
+```
+yaml [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
+     [--expand-schema] [--raw] [--unnest-separator <separator>]
+```
+Printer:
 ```
 yaml
 ```
@@ -18,6 +24,10 @@ yaml
 ## Description
 
 The `yaml` format provides a parser and printer for YAML documents and streams.
+
+### Common Options (Parser)
+
+The options are the common parser options, which can be found on the [formats page](formats.md#parser-schema-inference).
 
 ## Examples
 

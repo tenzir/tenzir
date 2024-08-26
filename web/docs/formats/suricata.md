@@ -12,12 +12,10 @@ for [`json`](json.md) with the arguments:
 - `--selector=event_type:suricata`
 - `--ndjson`
 
-All other options from [`json`](json.md) are also supported.
-
 ## Synopsis
 
 ```
-suricata
+suricata [--expand-schema] [--raw] [--unnest-separator <separator>]
 ```
 
 ## Description
@@ -35,6 +33,10 @@ Tenzir's [`json`](json.md) can handle EVE JSON correctly, but for the schema
 names to match the value from the `event_type` field, you need to pass the
 option `--selector=event_type:suricata`. The `suricata` parser does this by
 default.
+
+### Common Options (Parser)
+
+The Suricata parser supports some of the common [schema inference options](formats.md#parser-schema-inference).
 
 ## Examples
 

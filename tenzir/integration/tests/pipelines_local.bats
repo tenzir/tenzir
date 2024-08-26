@@ -128,6 +128,7 @@ setup() {
 
 # bats test_tags=json
 @test "Read JSON with new field in record list" {
+  check tenzir "from file ${INPUTSDIR}/json/record-list-new-field.json read json --merge"
   check tenzir "from file ${INPUTSDIR}/json/record-list-new-field.json"
 }
 
@@ -150,9 +151,9 @@ setup() {
 @test "Schema ID Extractor" {
   check -c "cat ${INPUTSDIR}/cef/forcepoint.log | tenzir 'read cef | put fingerprint = #schema_id | write json'"
 
-  check -c "cat ${INPUTSDIR}/cef/forcepoint.log | tenzir 'read cef | where #schema_id == \"6aeddcaa9adee9b9\" | write json'"
+  check -c "cat ${INPUTSDIR}/cef/forcepoint.log | tenzir 'read cef | where #schema_id == \"59e472ba9bb9e014\" | write json'"
 
-  check -c "cat ${INPUTSDIR}/cef/forcepoint.log | tenzir 'read cef | where #schema_id != \"6aeddcaa9adee9b9\" | write json'"
+  check -c "cat ${INPUTSDIR}/cef/forcepoint.log | tenzir 'read cef | where #schema_id != \"59e472ba9bb9e014\" | write json'"
 }
 
 # bats test_tags=pipelines
@@ -340,14 +341,14 @@ setup() {
 {}
 EOF
   # {x.y: int64, x: {}}
-  check tenzir "unflatten" <<EOF
+  check tenzir "read json --merge | unflatten" <<EOF
 {"x.y": 1, "x": {}}
 {"x.y": null, "x": {}}
 {"x.y": 1, "x": null}
 {"x.y": null, "x": null}
 EOF
   # {x.y: int64, x: {z: int64}}
-  check tenzir "unflatten" <<EOF
+  check tenzir "read json --merge | unflatten" <<EOF
 {"x.y": 1, "x": {"z": 2}}
 {"x.y": null, "x": {"z": 2}}
 {"x.y": 1, "x": {"z": null}}
@@ -355,14 +356,14 @@ EOF
 {"x.y": null, "x": null}
 EOF
   # {x.y: {z: int64}, x: {y.z: int64}}
-  check tenzir "unflatten" <<EOF
+  check tenzir "read json --merge | unflatten" <<EOF
 {"x.y": {"z": 1}, "x": {"y.z": 2}}
 {"x.y": null, "x": {"y.z": 2}}
 {"x.y": {"z": 1}, "x": null}
 {"x.y": null, "x": null}
 EOF
   # {x.y: {z: {a.b: int64}}, x: {y.z: {a.c: int64}}}
-  check tenzir "unflatten" <<EOF
+  check tenzir "read json --merge | unflatten" <<EOF
 {"x.y": {"z": {"a.b": 1}}, "x": {"y.z": {"a.c": 2}}}
 {"x.y": {"z": null}, "x": {"y.z": {"a.c": 2}}}
 {"x.y": {"z": {"a.b": 1}}, "x": {"y.z": null}}
@@ -545,9 +546,9 @@ EOF
 
 # bats test_tags=pipelines, xsv
 @test "XSV Format" {
-  check tenzir "from ${INPUTSDIR}/xsv/sample.csv read csv | extend schema=#schema | write csv"
-  check tenzir "from ${INPUTSDIR}/xsv/sample.ssv read ssv | extend schema=#schema | write ssv"
-  check tenzir "from ${INPUTSDIR}/xsv/sample.tsv read tsv | extend schema=#schema | write tsv"
+  check tenzir "from ${INPUTSDIR}/xsv/sample.csv read csv --merge | extend schema=#schema | write csv"
+  check tenzir "from ${INPUTSDIR}/xsv/sample.ssv read ssv --merge | extend schema=#schema | write ssv"
+  check tenzir "from ${INPUTSDIR}/xsv/sample.tsv read tsv --merge | extend schema=#schema | write tsv"
   check tenzir "from ${INPUTSDIR}/xsv/nulls-and-escaping.csv read csv"
   # Test that multiple batches only print the header once.
   check tenzir "read json --ndjson --precise | select foo | write csv" <<EOF
