@@ -23,11 +23,8 @@ brew install --overwrite \
     llvm@17 \
     ninja \
     nmap \
-    openssl \
     pandoc \
     parallel \
-    pipx \
-    pkg-config \
     poetry \
     protobuf \
     rabbitmq-c \
