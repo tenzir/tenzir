@@ -657,16 +657,6 @@ private:
              std::span<const std::byte> header) const final;
 };
 
-// -- lookup table plugin -----------
-
-class lookup_table_plugin : public virtual plugin {
-public:
-  virtual auto apply_lookup(std::vector<table_slice> slices,
-                            std::unordered_set<std::string> fields,
-                            record indicators) const -> std::vector<table_slice>
-    = 0;
-};
-
 // -- context plugin -----------------------------------------------------------
 
 class context {
@@ -676,7 +666,7 @@ public:
   using make_query_type
     = std::function<auto(parameter_map parameters,
                          const std::vector<std::string>& fields)
-                      ->caf::expected<expression>>;
+                      ->caf::expected<std::vector<expression>>>;
 
   static constexpr auto dump_batch_size_limit = 65536;
 
