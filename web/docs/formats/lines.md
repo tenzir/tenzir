@@ -34,10 +34,14 @@ Newline characters include:
 
 The resulting events have a single field called `line`.
 
-The `lines` printer is an alias to `ssv --no-header`.
 Each event is printed on a new line, with fields separated by spaces,
-and nulls marked with dashes (`-`).
+and nulls skipped.
 Use the `put`-operator before the `lines` printer to only print a single field.
+
+:::info
+The lines printer does not perform any escaping. Characters like `\n` and `"` are printed
+as-is.
+:::
 
 ### `-s|--skip-empty` (Parser)
 

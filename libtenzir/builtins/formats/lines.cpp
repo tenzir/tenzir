@@ -8,6 +8,7 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/detail/assert.hpp>
+#include <tenzir/detail/base64.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/to_lines.hpp>
 #include <tenzir/tql/parser.hpp>
@@ -106,31 +107,118 @@ private:
   parser_args args_;
 };
 
-// To get better diagnostics in `write`, i.e.:
-//    "'xsv' does not support heterogeneous outputs..."
-// -> "'lines' does not..."
-// Otherwise, we could just use the `ssv_plugin` directly
-class lines_printer final : public plugin_printer {
-public:
-  lines_printer() = default;
-
-  lines_printer(std::unique_ptr<plugin_printer> inner)
-    : inner_(std::move(inner)) {
+struct lines_printer_impl {
+  template <typename It>
+  auto print_values(It& out, const view<record>& x) const -> bool {
+    auto first = true;
+    for (const auto& [_, v] : x) {
+      if (caf::holds_alternative<caf::none_t>(v)) {
+        continue;
+      }
+      if (!first) {
+        ++out = ' ';
+      } else {
+        first = false;
+      }
+      caf::visit(visitor{out}, v);
+    }
+    return true;
   }
 
+  template <class Iterator>
+  struct visitor {
+    visitor(Iterator& out) : out{out} {
+    }
+
+    auto operator()(caf::none_t) -> bool {
+      TENZIR_UNREACHABLE();
+    }
+
+    auto operator()(auto x) -> bool {
+      sequence_empty = false;
+      make_printer<decltype(x)> p;
+      return p.print(out, x);
+    }
+
+    auto operator()(const view<pattern>&) -> bool {
+      TENZIR_UNREACHABLE();
+    }
+
+    auto operator()(const view<map>&) -> bool {
+      TENZIR_UNREACHABLE();
+    }
+
+    auto operator()(const view<record>&) -> bool {
+      TENZIR_UNREACHABLE();
+    }
+
+    auto operator()(view<std::string> x) -> bool {
+      sequence_empty = false;
+      out = std::copy(x.begin(), x.end(), out);
+      return true;
+    }
+
+    auto operator()(view<blob> x) -> bool {
+      return (*this)(detail::base64::encode(x));
+    }
+
+    auto operator()(const view<list>& x) -> bool {
+      sequence_empty = true;
+      for (const auto& v : x) {
+        if (caf::holds_alternative<caf::none_t>(v)) {
+          continue;
+        }
+        if (!sequence_empty) {
+          ++out = ',';
+        }
+        if (!caf::visit(*this, v)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    Iterator& out;
+    bool sequence_empty{true};
+  };
+};
+
+class lines_printer final : public plugin_printer {
+public:
   auto name() const -> std::string override {
     return "lines";
   }
 
-  auto instantiate(type input_schema, operator_control_plane& ctrl) const
+  auto instantiate(type, operator_control_plane&) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
-    TENZIR_ASSERT(inner_);
-    return inner_->instantiate(std::move(input_schema), ctrl);
+    return printer_instance::make(
+      [](table_slice slice) -> generator<chunk_ptr> {
+        if (slice.rows() == 0) {
+          co_yield {};
+          co_return;
+        }
+        auto printer = lines_printer_impl{};
+        auto buffer = std::vector<char>{};
+        auto out_iter = std::back_inserter(buffer);
+        auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
+        auto input_schema = resolved_slice.schema();
+        const auto& input_type = caf::get<record_type>(input_schema);
+        auto array
+          = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
+        for (const auto& row : values(input_type, *array)) {
+          TENZIR_ASSERT(row);
+          const auto ok = printer.print_values(out_iter, *row);
+          TENZIR_ASSERT(ok);
+          out_iter = fmt::format_to(out_iter, "\n");
+        }
+        auto chunk = chunk::make(std::move(buffer),
+                                 chunk_metadata{.content_type = "text/plain"});
+        co_yield std::move(chunk);
+      });
   }
 
   auto allows_joining() const -> bool override {
-    TENZIR_ASSERT(inner_);
-    return inner_->allows_joining();
+    return true;
   }
 
   auto prints_utf8() const -> bool override {
@@ -138,12 +226,8 @@ public:
   }
 
   friend auto inspect(auto& f, lines_printer& x) -> bool {
-    return f.begin_object(caf::invalid_type_id, "lines_printer")
-           && plugin_inspect(f, x.inner_) && f.end_object();
+    return f.object(x).fields();
   }
-
-private:
-  std::unique_ptr<plugin_printer> inner_;
 };
 
 class plugin final : public virtual parser_plugin<lines_parser>,
@@ -171,14 +255,7 @@ public:
         .docs(fmt::format("https://docs.tenzir.com/formats/{}", name()))
         .throw_();
     }
-    const auto* ssv_plugin = plugins::find<printer_parser_plugin>("ssv");
-    TENZIR_DIAG_ASSERT(ssv_plugin);
-    auto diag = null_diagnostic_handler{};
-    auto parser = tql::make_parser_interface("--no-header", diag);
-    TENZIR_DIAG_ASSERT(parser);
-    auto result = ssv_plugin->parse_printer(*parser);
-    TENZIR_DIAG_ASSERT(result);
-    return std::make_unique<lines_printer>(std::move(result));
+    return std::make_unique<lines_printer>();
   }
 };
 

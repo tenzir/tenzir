@@ -33,14 +33,14 @@ namespace tenzir::plugins::xsv {
 namespace {
 
 struct xsv_options {
-  std::string name = {};
   char field_sep = {};
   char list_sep = {};
-  std::string null_value = {};
+  bool no_header = {};
   bool allow_comments = {};
   bool auto_expand = {};
+  std::string null_value = {};
+  std::string name = {};
   std::optional<std::string> header = {};
-  bool no_header = {};
 
   static auto try_parse(parser_interface& p, std::string name, bool is_parser)
     -> xsv_options {
@@ -97,14 +97,14 @@ struct xsv_options {
       }
     }
     return xsv_options{
-      .name = std::move(name),
       .field_sep = *field_sep,
       .list_sep = *list_sep,
-      .null_value = std::move(null_value.inner),
+      .no_header = no_header,
       .allow_comments = allow_comments,
       .auto_expand = auto_expand,
+      .null_value = std::move(null_value.inner),
+      .name = std::move(name),
       .header = std::move(header),
-      .no_header = no_header,
     };
   }
 
@@ -179,10 +179,15 @@ struct xsv_printer_impl {
       TENZIR_UNREACHABLE();
     }
 
+    auto operator()(view<record>) noexcept -> bool {
+      TENZIR_UNREACHABLE();
+    }
+
     auto operator()(view<std::string> x) noexcept -> bool {
       sequence_empty = false;
       auto needs_escaping = std::any_of(x.begin(), x.end(), [this](auto c) {
-        return c == printer.sep || c == '"';
+        return c == printer.sep || c == '"' || c == '\n' || c == '\r'
+               || c == '\v' || c == '\f';
       });
       if (needs_escaping) {
         static auto escaper = [](auto& f, auto out) {
@@ -216,19 +221,6 @@ struct xsv_printer_impl {
     auto operator()(const view<list>& x) noexcept -> bool {
       sequence_empty = true;
       for (const auto& v : x) {
-        if (!sequence_empty) {
-          ++out = printer.list_sep;
-        }
-        if (!caf::visit(*this, v)) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    auto operator()(const view<record>& x) noexcept -> bool {
-      sequence_empty = true;
-      for (const auto& [_, v] : x) {
         if (!sequence_empty) {
           ++out = printer.list_sep;
         }
@@ -467,7 +459,7 @@ public:
         auto out_iter = std::back_inserter(buffer);
         auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
         auto input_schema = resolved_slice.schema();
-        auto input_type = caf::get<record_type>(input_schema);
+        const auto& input_type = caf::get<record_type>(input_schema);
         auto array
           = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
         for (const auto& row : values(input_type, *array)) {
@@ -551,14 +543,14 @@ public:
     parser.add("--header", header, "<header>");
     parser.parse(p);
     return std::make_unique<xsv_parser>(xsv_options{
-      .name = std::string{Name.str()},
       .field_sep = Sep,
       .list_sep = ListSep,
-      .null_value = std::string{Null.str()},
+      .no_header = false,
       .allow_comments = allow_comments,
       .auto_expand = auto_expand,
+      .null_value = std::string{Null.str()},
+      .name = std::string{Name.str()},
       .header = std::move(header),
-      .no_header = false,
     });
   }
 
@@ -569,14 +561,14 @@ public:
     parser.add("--no-header", no_header);
     parser.parse(p);
     return std::make_unique<xsv_printer>(xsv_options{
-      .name = std::string{Name.str()},
       .field_sep = Sep,
       .list_sep = ListSep,
-      .null_value = std::string{Null.str()},
+      .no_header = no_header,
       .allow_comments = false,
       .auto_expand = false,
+      .null_value = std::string{Null.str()},
+      .name = std::string{Name.str()},
       .header = {},
-      .no_header = no_header,
     });
   }
 

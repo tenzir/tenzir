@@ -450,7 +450,7 @@ transform_columns(const table_slice& slice,
   if (slice.rows() == 0) {
     return {};
   }
-  if (caf::get<record_type>(slice.schema()).num_leaves() == 0) {
+  if (caf::get<record_type>(slice.schema()).num_fields() == 0) {
     return slice;
   }
   auto input_batch = to_record_batch(slice);
