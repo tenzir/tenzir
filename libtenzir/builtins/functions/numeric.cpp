@@ -6,6 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include <tenzir/arrow_time_utils.hpp>
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/tenzir/si.hpp>
 #include <tenzir/detail/narrow.hpp>
@@ -23,7 +24,7 @@ namespace {
 
 class round_use final : public function_use {
 public:
-  round_use(ast::expression value, std::optional<ast::expression> spec)
+  round_use(ast::expression value, std::optional<located<duration>> spec)
     : value_{std::move(value)}, spec_{std::move(spec)} {
   }
 
@@ -37,17 +38,45 @@ public:
     // round(x, 1h) -> round to multiples of 1h
     // round(<time>, <duration>)
     // round(x, 1h) -> round so that time is multiples of 1h (for UTC timezone?)
-    auto spec = located{eval(*spec_), spec_->get_location()};
-    return round_with_spec(std::move(value), std::move(spec), ctx);
+    return round_with_spec(std::move(value), std::move(spec_.value()), ctx);
   }
 
 private:
-  static auto round_with_spec(located<series> value, located<series> spec,
+  static auto round_with_spec(located<series> value, located<duration> spec,
                               session ctx) -> series {
-    diagnostic::warning("round(_, _) is not implemented yet")
-      .primary(spec)
-      .emit(ctx);
-    return series::null(value.inner.type, value.inner.length());
+    auto f = detail::overload{
+      [&](const arrow::DurationArray& array) -> series {
+        auto b
+          = duration_type::make_arrow_builder(arrow::default_memory_pool());
+        check(b->Reserve(array.length()));
+        for (auto i = int64_t{0}; i < array.length(); i++) {
+          if (array.IsNull(i)) {
+            check(b->AppendNull());
+            continue;
+          }
+          const auto val = array.Value(i);
+          const auto count = spec.inner.count();
+          const auto rem = val % std::abs(count);
+          const auto delta = rem * 2 < count ? -rem : count - rem;
+          check(b->Append(val + delta));
+        }
+        return {duration_type{}, finish(*b)};
+      },
+      [&](const arrow::TimestampArray& array) -> series {
+        auto rounded_array
+          = check(arrow::compute::RoundTemporal(
+                    array, make_round_temporal_options(spec.inner)))
+              .array_as<arrow::TimestampArray>();
+        return {time_type{}, rounded_array};
+      },
+      [&](const auto&) {
+        diagnostic::warning("round(_, _) is not implemented for {}",
+                            value.inner.type)
+          .primary(value)
+          .emit(ctx);
+        return series::null(value.inner.type, value.inner.length());
+      }};
+    return caf::visit(f, *value.inner.array);
   }
 
   static auto round_without_spec(located<series> value, session ctx) -> series {
@@ -99,7 +128,7 @@ private:
   }
 
   ast::expression value_;
-  std::optional<ast::expression> spec_;
+  std::optional<located<duration>> spec_;
 };
 
 class round final : public function_plugin {
@@ -111,11 +140,17 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto value = ast::expression{};
-    auto spec = std::optional<ast::expression>{};
+    auto spec = std::optional<located<duration>>{};
     TRY(argument_parser2::function("round")
           .add(value, "<value>")
           .add(spec, "<spec>")
           .parse(inv, ctx));
+    if (spec && spec->inner.count() == 0) {
+      diagnostic::error("resolution must not be 0")
+        .primary(spec.value())
+        .emit(ctx);
+      return failure::promise();
+    }
     return std::make_unique<round_use>(std::move(value), std::move(spec));
   }
 };
@@ -131,62 +166,61 @@ public:
     auto expr = ast::expression{};
     TRY(
       argument_parser2::function("sqrt").add(expr, "<number>").parse(inv, ctx));
-    return function_use::make(
-      [expr = std::move(expr)](evaluator eval, session ctx) -> series {
-        auto value = eval(expr);
-        auto compute = [&](const arrow::DoubleArray& x) {
-          auto b = arrow::DoubleBuilder{};
-          check(b.Reserve(x.length()));
-          for (auto y : x) {
-            if (not y) {
-              check(b.AppendNull());
-              continue;
-            }
-            auto z = *y;
-            if (z < 0.0) {
-              // TODO: Warning?
-              check(b.AppendNull());
-              continue;
-            }
-            check(b.Append(std::sqrt(z)));
+    return function_use::make([expr = std::move(expr)](evaluator eval,
+                                                       session ctx) -> series {
+      auto value = eval(expr);
+      auto compute = [&](const arrow::DoubleArray& x) {
+        auto b = arrow::DoubleBuilder{};
+        check(b.Reserve(x.length()));
+        for (auto y : x) {
+          if (not y) {
+            check(b.AppendNull());
+            continue;
           }
-          return finish(b);
-        };
-        auto f = detail::overload{
-          [&](const arrow::DoubleArray& value) {
-            return compute(value);
-          },
-          [&](const arrow::Int64Array& value) {
-            // TODO: Conversation should be automatic (if not
-            // part of the kernel).
-            auto b = arrow::DoubleBuilder{};
-            check(b.Reserve(value.length()));
-            for (auto y : value) {
-              if (y) {
-                check(b.Append(static_cast<double>(*y)));
-              } else {
-                check(b.AppendNull());
-              }
+          auto z = *y;
+          if (z < 0.0) {
+            // TODO: Warning?
+            check(b.AppendNull());
+            continue;
+          }
+          check(b.Append(std::sqrt(z)));
+        }
+        return finish(b);
+      };
+      auto f = detail::overload{
+        [&](const arrow::DoubleArray& value) {
+          return compute(value);
+        },
+        [&](const arrow::Int64Array& value) {
+          // TODO: Conversation should be automatic (if not
+          // part of the kernel).
+          auto b = arrow::DoubleBuilder{};
+          check(b.Reserve(value.length()));
+          for (auto y : value) {
+            if (y) {
+              check(b.Append(static_cast<double>(*y)));
+            } else {
+              check(b.AppendNull());
             }
-            return compute(*finish(b));
-          },
-          [&](const arrow::NullArray& value) {
-            return series::null(double_type{}, value.length()).array;
-          },
-          [&](const auto&) {
-            // TODO: Think about what we want and generalize this.
-            diagnostic::warning("expected `number`, got `{}`",
-                                value.type.kind())
-              .primary(expr)
-              .docs("https://docs.tenzir.com/functions/sqrt")
-              .emit(ctx);
-            auto b = arrow::DoubleBuilder{};
-            check(b.AppendNulls(value.length()));
-            return finish(b);
-          },
-        };
-        return {double_type{}, caf::visit(f, *value.array)};
-      });
+          }
+          return compute(*finish(b));
+        },
+        [&](const arrow::NullArray& value) {
+          return series::null(double_type{}, value.length()).array;
+        },
+        [&](const auto&) {
+          // TODO: Think about what we want and generalize this.
+          diagnostic::warning("expected `number`, got `{}`", value.type.kind())
+            .primary(expr)
+            .docs("https://docs.tenzir.com/functions/sqrt")
+            .emit(ctx);
+          auto b = arrow::DoubleBuilder{};
+          check(b.AppendNulls(value.length()));
+          return finish(b);
+        },
+      };
+      return {double_type{}, caf::visit(f, *value.array)};
+    });
   }
 };
 
