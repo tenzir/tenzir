@@ -46,12 +46,37 @@ namespace community_id {
 /// The Community ID version.
 constexpr char version = '1';
 
+/// The default seed according to the spec.
+constexpr auto default_seed = uint16_t{0};
+
 template <incremental_hash HashAlgorithm>
-void community_id_hash_append(HashAlgorithm& h, const ip& x) {
+auto community_id_hash_append(HashAlgorithm& h, const ip& x) -> void{
   if (x.is_v4())
     hash_append(h, as_bytes(x).subspan<12, 4>());
   else
     hash_append(h, as_bytes(x).subspan<0, 16>());
+}
+
+/// Computes a hash of a host pair according to the Community ID specification.
+/// @param h The hash algorithm to use.
+/// @param src_addr The IP source address.
+/// @param dst_addr The IP destination address.
+/// @param proto The transport-layer protocol.
+template <incremental_hash HashAlgorithm>
+auto community_id_hash_append(HashAlgorithm& h, const ip& src_addr,
+                              const ip& dst_addr, port_type proto) -> void {
+  static constexpr auto padding = uint8_t{0};
+  if (src_addr < dst_addr) {
+    community_id_hash_append(h, src_addr);
+    community_id_hash_append(h, dst_addr);
+    hash_append(h, proto);
+    hash_append(h, padding);
+  } else {
+    community_id_hash_append(h, dst_addr);
+    community_id_hash_append(h, src_addr);
+    hash_append(h, proto);
+    hash_append(h, padding);
+  }
 }
 
 /// Computes a hash of a flow according to the community ID specification.
@@ -59,7 +84,7 @@ void community_id_hash_append(HashAlgorithm& h, const ip& x) {
 /// @param x The flow to hash.
 /// @relates flow
 template <incremental_hash HashAlgorithm>
-void community_id_hash_append(HashAlgorithm& h, const flow& x) {
+auto community_id_hash_append(HashAlgorithm& h, const flow& x) -> void{
   TENZIR_ASSERT(x.src_port.type() == x.dst_port.type());
   auto src_port_num = x.src_port.number();
   auto dst_port_num = x.dst_port.number();
@@ -103,7 +128,7 @@ void community_id_hash_append(HashAlgorithm& h, const flow& x) {
 
 /// Computes the length of the version prefix.
 /// @see max_length
-constexpr size_t version_prefix_length() {
+constexpr auto version_prefix_length() -> size_t {
   constexpr size_t version_number = 1;
   constexpr size_t version_separator = 1;
   return version_number + version_separator;
@@ -113,7 +138,7 @@ constexpr size_t version_prefix_length() {
 /// @returns An upper bound in bytes.
 /// @see version_prefix_length
 template <class Policy>
-constexpr size_t max_length() {
+constexpr auto max_length() -> size_t {
   constexpr auto hex_size = (160 / 8) * 2; // 160-bit SHA-1 digest as hex.
   auto prefix = version_prefix_length();
   if constexpr (std::is_same_v<Policy, policy::base64>)
@@ -126,11 +151,11 @@ constexpr size_t max_length() {
 
 /// Calculates the Community ID for a given flow.
 /// @tparam Policy The rendering policy to select Base64 or ASCII.
-/// @param x The flow tuple.
 /// @param seed An optional seed to the SHA-1 hash.
+/// @param xs The host pair or flow.
 /// @returns A string representation of the Community ID for *x*.
-template <class Policy>
-std::string compute(const flow& x, uint16_t seed = 0) {
+template <class Policy, class... Ts>
+auto compute(uint16_t seed, const Ts&... xs) -> std::string {
   std::string result;
   // Perform exactly one allocator round-trip.
   result.reserve(max_length<Policy>());
@@ -140,7 +165,7 @@ std::string compute(const flow& x, uint16_t seed = 0) {
   // Compute a SHA-1 hash over the flow tuple.
   sha1 hasher;
   hash_append(hasher, detail::to_network_order(seed));
-  community_id_hash_append(hasher, x);
+  community_id_hash_append(hasher, xs...);
   auto digest = hasher.finish();
   // Convert the binary digest to plain hex ASCII or to Base64.
   if constexpr (std::is_same_v<Policy, policy::base64>) {
@@ -158,6 +183,19 @@ std::string compute(const flow& x, uint16_t seed = 0) {
     static_assert(detail::always_false_v<Policy>, "unsupported policy");
   }
   return result;
+}
+
+// Primary functions to construct a Community ID.
+
+template <class Policy = policy::base64>
+auto make(const flow& x, uint16_t seed = default_seed) -> std::string {
+  return compute<Policy>(seed, x);
+}
+
+template <class Policy = policy::base64>
+auto make(const ip& src_addr, const ip& dst_addr, port_type proto,
+          uint16_t seed = default_seed) -> std::string {
+  return compute<Policy>(seed, src_addr, dst_addr, proto);
 }
 
 } // namespace community_id

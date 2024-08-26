@@ -1,0 +1,9 @@
+{"x0": "1:lGqktS6jbUHZ0E3cfwaJiw2aM3g=", "x1": null, "x2": null, "x3": "1:mpczsiJK8HOtVhqo+YaJ3PuQ0nY=", "x4": null, "x5": "1:IYupyQZipmn4+X+/766iaQdMVz0=", "x6": "1:8178KvX8p08bbJ7e45CMJba/ACk=", "x7": "1:X0snYXpgwiv9TZtqg64sgzUn6Dk=", "x8": "1:dGHyGvjMfljg6Bppwm3bg0LO8TY=", "x9": "1:NdobDX8PQNJbAyfkWxhtL2Pqp5w="}
+warning: encountered only `src_port` or `dst_port` but not both
+
+warning: `proto` must be `tcp`, `udp`, `icmp`, or `icmp6`
+  --> /dev/stdin:12:70
+   |
+12 | x4 = community_id(src_ip=45.146.166.123, dst_ip=198.71.247.91, proto="XXX")
+   |                                                                      ~~~~~ 
+   |

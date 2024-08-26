@@ -263,7 +263,7 @@ auto parse(record_ref builder, std::span<const std::byte> bytes,
   // Compute Community ID.
   auto conn = make_flow(packet->src, packet->dst, segment->src, segment->dst,
                         segment->type);
-  auto cid = community_id::compute<policy::base64>(conn);
+  auto cid = community_id::make(conn);
   builder.field("community_id").data(cid);
   return std::nullopt;
 }
