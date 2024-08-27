@@ -68,6 +68,10 @@ TEST(positive durations) {
   check_duration("42 hours", 42h);
   check_duration("42hour", 42h);
   check_duration("42h", 42h);
+  MESSAGE("days");
+  check_duration("42 days", days(42));
+  check_duration("42day", days(42));
+  check_duration("42d", days(42));
   MESSAGE("weeks");
   check_duration("1 weeks", 168h);
   check_duration("1week", 168h);
