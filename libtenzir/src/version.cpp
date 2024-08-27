@@ -103,6 +103,8 @@ auto tenzir_features() -> std::vector<std::string> {
     // Pipelines can be unstoppable - they can not be paused or stopped manually,
     // and run & repeat indefinitely.
     "unstoppable",
+    // The `/pipeline/launch` endpoint supports caching in its implicit sink.
+    "cache",
   };
 }
 
