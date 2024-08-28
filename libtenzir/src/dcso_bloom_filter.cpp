@@ -8,10 +8,10 @@
 
 #include "tenzir/dcso_bloom_filter.hpp"
 
-#include "tenzir/detail/bit_cast.hpp"
 #include "tenzir/detail/byteswap.hpp"
 #include "tenzir/detail/inspection_common.hpp"
 
+#include <bit>
 #include <cmath>
 #include <cstddef>
 
@@ -43,7 +43,7 @@ public:
     write(1);
     // Write parameters.
     write(*x.params_.n);
-    write(detail::bit_cast<uint64_t>(*x.params_.p));
+    write(std::bit_cast<uint64_t>(*x.params_.p));
     write(*x.params_.k);
     write(*x.params_.m);
     write(x.num_elements_);
@@ -80,7 +80,7 @@ public:
 
   void write(uint64_t value) {
     auto le = detail::swap<std::endian::native, std::endian::little>(value);
-    auto bytes = detail::bit_cast<std::array<std::byte, 8>>(le);
+    auto bytes = std::bit_cast<std::array<std::byte, 8>>(le);
     bytes_.insert(bytes_.end(), bytes.begin(), bytes.end());
   }
 
@@ -118,7 +118,7 @@ public:
       return false;
     }
     x.params_.n = read(header.subspan<8, 8>());
-    x.params_.p = detail::bit_cast<double>(read(header.subspan<16, 8>()));
+    x.params_.p = std::bit_cast<double>(read(header.subspan<16, 8>()));
     x.params_.k = read(header.subspan<24, 8>());
     if (x.params_.k >= std::numeric_limits<int>::max()) {
       last_error_
