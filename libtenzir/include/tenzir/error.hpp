@@ -10,6 +10,7 @@
 
 #include "tenzir/fwd.hpp"
 
+#include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/inspection_common.hpp"
 
 #include <caf/error.hpp>
@@ -98,11 +99,12 @@ enum class ec : uint8_t {
 };
 
 /// @relates ec
-const char* to_string(ec x);
+auto to_string(ec x) -> const char*;
 
 /// A formatting function that converts an error into a human-readable string.
 /// @relates ec
-std::string render(caf::error err, bool pretty_diagnostics = false);
+auto render(const caf::error& err, bool pretty_diagnostics = false)
+  -> std::string;
 
 template <class Inspector>
 auto inspect(Inspector& f, ec& x) {
@@ -116,6 +118,23 @@ auto add_context(const caf::error& error, fmt::format_string<Ts...> fmt,
                  Ts&&... args) -> caf::error {
   return add_context_impl(error, fmt::format(std::move(fmt),
                                              std::forward<Ts>(args)...));
+}
+
+inline void check(const caf::error& err, std::source_location location
+                                         = std::source_location::current()) {
+  if (err) [[unlikely]] {
+    detail::panic_impl(render(err, true), location);
+  }
+}
+
+template <class T>
+[[nodiscard]] auto
+check(caf::expected<T> result, std::source_location location
+                               = std::source_location::current()) -> T {
+  if (not result) [[unlikely]] {
+    detail::panic_impl(render(result.error(), true), location);
+  }
+  return std::move(result.value());
 }
 
 } // namespace tenzir
