@@ -16,7 +16,7 @@ A package definition consists of four major parts.
    installation to their environment.
 4. A set of pipelines and contexts that make up the contents of the package.
 
-## Package format
+## Package Format
 
 The following describes the fields of a package definition.
 
@@ -73,12 +73,12 @@ inputs:
 ```
 
 Inputs can be referenced in pipeline and example definitions and in context arguments
-with the synatx `{{ inputs.input-name }}`. The are replaced by their configured values
+with the syntax `{{ inputs.input-name }}`. They are replaced by their configured values
 when installing a package. For example, with the input configured as above the pipeline
 `every {{ inputs.refresh-rate }} { version }` would print the version once per second by default.
 
-To write double curly braces, the syntax `{ '{{' }` can be used to produce the literal
-string enclosed in the single quotes.
+To write double curly braces, use the syntax `{{ '{{' }}` to produce the
+literal string enclosed inside the single quotes.
 
 ### Examples
 
@@ -169,12 +169,11 @@ contexts:
 Start using packages by [installing one](installation/install-a-package.md).
 :::
 
-## User configuration
+## User Configuration
 
-In order to install a package from the library, the user usually has to provide
-their own customization options to adjust the package to his own preferences
-and his local environment. This is done by adding a new key `config` to the
-package definition:
+In order to install a package from the library, you may want to adjust
+the package to your own preferences and local environment. To do this,
+add a new key `config` to the package definition:
 
 ```
 config:
@@ -206,12 +205,12 @@ config:
 
 ### Inputs
 
-Pipeline and context definitions can contain references to user-defined variables,
-as in `from {{ inputs.filename }} version`, that will be replaced by their
+Pipeline and context definitions may contain references to user-defined variables,
+as in `from {{ inputs.filename }} version`, that are replaced by their
 configured value when installing the package.
 
-In order to provide non-default values for the defined inputs, the `config.inputs`
-key is used.
+In order to provide non-default values for the defined inputs, use the `config.inputs`
+key:
 
 ```
 config:
@@ -221,9 +220,9 @@ config:
 
 ### Overrides
 
-The `config.overrides` object can be used to change the value of any field in the
-packag definition. This is intended for fields like `disabled` or `restart-on-error`
-in pipeline definitions to customize them to the users preferences:
+The `config.overrides` object is used to change the value of any field in the
+package definition. This is intended to customize fields like `disabled` or `restart-on-error`
+in pipeline definitions:
 
 ```
 config:

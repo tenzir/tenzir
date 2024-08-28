@@ -237,7 +237,7 @@ auto package_source::parse(const view<record>& data)
     TRY_ASSIGN_STRING_TO_RESULT(directory)
     TRY_ASSIGN_STRING_TO_RESULT(revision)
     return diagnostic::error("unknown key '{}'", key)
-      .note("while trying to parse 'source' entry")
+      .note("while trying to parse `source` entry")
       .note("invalid package source definition")
       .to_error();
   }
@@ -257,7 +257,7 @@ auto package_config::parse(const view<record>& data)
     TRY_ASSIGN_RECORD_TO_RESULT(overrides);
     TRY_ASSIGN_RECORD_TO_RESULT(metadata);
     return diagnostic::error("unknown key '{}'", key)
-      .note("while trying to parse 'config' entry")
+      .note("while trying to parse `config` entry")
       .note("invalid package definition")
       .to_error();
   }
@@ -283,7 +283,7 @@ auto package_pipeline::parse(const view<record>& data)
       if (const auto* as_string = caf::get_if<std::string_view>(&value)) {
         auto inner_value = from_yaml(*as_string);
         if (!inner_value) {
-          return diagnostic::error("failed to parse 'restart-on-error' field")
+          return diagnostic::error("failed to parse `restart-on-error` field")
             .note("error {}", inner_value.error())
             .to_error();
         }
@@ -292,7 +292,7 @@ auto package_pipeline::parse(const view<record>& data)
       const auto* on_off = caf::get_if<bool>(&value_copy);
       const auto* retry_delay = caf::get_if<duration>(&value_copy);
       if (not on_off and not retry_delay) {
-        return diagnostic::error("'restart-on-error' must be a "
+        return diagnostic::error("`restart-on-error` must be a "
                                  "be a "
                                  "bool or a positive duration")
           .note("got '{}'", value)
@@ -307,7 +307,7 @@ auto package_pipeline::parse(const view<record>& data)
       }
       TENZIR_ASSERT(retry_delay);
       if (*retry_delay < duration::zero()) {
-        return diagnostic::error("'restart-on-error' cannot be negative")
+        return diagnostic::error("`restart-on-error` cannot be negative")
           .to_error();
       }
       result.restart_on_error = *retry_delay;
@@ -319,7 +319,7 @@ auto package_pipeline::parse(const view<record>& data)
       continue;
     }
     return diagnostic::error("unknown key '{}'", key)
-      .note("while trying to parse 'pipeline' entry")
+      .note("while trying to parse `pipeline` entry")
       .note("invalid package source definition")
       .to_error();
   }
@@ -371,7 +371,7 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
     TRY_ASSIGN_LIST(snippets, package_example, legacy_snippets);
     // Reject unknown keys in the package definition.
     return diagnostic::error("unknown key '{}'", key)
-      .note("while trying to parse 'package' entry")
+      .note("while trying to parse `package` entry")
       .note("invalid package definition")
       .to_error();
   }
@@ -379,8 +379,8 @@ auto package::parse(const view<record>& data) -> caf::expected<package> {
   REQUIRED_FIELD(name)
   if (!legacy_snippets.empty()) {
     if (!result.examples.empty()) {
-      return diagnostic::error("found both 'snippets' and 'examples'")
-        .note("the 'snippets' key is deprecated, use 'examples' instead")
+      return diagnostic::error("found both `snippets` and `examples`")
+        .note("the `snippets` key is deprecated, use `examples` instead")
         .to_error();
     }
     result.examples = std::move(legacy_snippets);
