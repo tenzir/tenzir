@@ -785,13 +785,13 @@ type::operator bool() const noexcept {
 bool operator==(const type& lhs, const type& rhs) noexcept {
   const auto lhs_bytes = as_bytes(lhs);
   const auto rhs_bytes = as_bytes(rhs);
-  if ( lhs_bytes.size() != rhs_bytes.size() ) {
+  if (lhs_bytes.size() != rhs_bytes.size()) {
     return false;
   }
-  if ( lhs_bytes.data() == rhs_bytes.data() ) {
+  if (lhs_bytes.data() == rhs_bytes.data()) {
     return true;
   }
-  return std::memcmp( lhs_bytes.data(), rhs_bytes.data(), lhs_bytes.size() ) == 0;
+  return std::memcmp(lhs_bytes.data(), rhs_bytes.data(), lhs_bytes.size()) == 0;
 }
 
 std::strong_ordering operator<=>(const type& lhs, const type& rhs) noexcept {

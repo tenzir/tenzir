@@ -78,7 +78,7 @@ public:
     auto builder_options = multi_series_builder_options{
       multi_series_builder::policy_precise{},
       multi_series_builder::settings_type{
-        .parser_name = table_slice_name,
+        .default_schema_name = table_slice_name,
       },
     };
     return std::make_unique<fluent_bit_operator>(

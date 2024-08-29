@@ -428,7 +428,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
   }
   // parse the body
   const auto original_field_count = fields.size();
-  args.builder_options.settings.parser_name
+  args.builder_options.settings.default_schema_name
     = fmt::format("tenzir.{}", args.name);
   auto dh = transforming_diagnostic_handler{
     ctrl.diagnostics(),

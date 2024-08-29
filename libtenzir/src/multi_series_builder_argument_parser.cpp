@@ -13,7 +13,6 @@
 
 namespace tenzir {
 namespace {
-
 auto parse_selector(std::string_view x, location source, diagnostic_handler& dh)
   -> multi_series_builder::policy_selector {
   if (x.empty()) {
@@ -42,7 +41,8 @@ auto parse_selector(std::string_view x, location source, diagnostic_handler& dh)
 } // namespace
 
 auto multi_series_builder_argument_parser::add_settings_to_parser(
-  argument_parser& parser, bool add_unflatten_option, bool add_unique_selector_option) -> void {
+  argument_parser& parser, bool add_unflatten_option,
+  bool add_unique_selector_option) -> void {
   is_tql1_ = true;
   parser.add("--schema-only", schema_only_);
   if (add_unique_selector_option) {
@@ -61,6 +61,7 @@ auto multi_series_builder_argument_parser::add_policy_to_parser(
   parser.add("--schema", schema_, "<schema>");
   parser.add("--selector", selector_, "<selector>");
 }
+
 auto multi_series_builder_argument_parser::add_all_to_parser(
   argument_parser& parser) -> void {
   add_policy_to_parser(parser);
@@ -68,13 +69,14 @@ auto multi_series_builder_argument_parser::add_all_to_parser(
 }
 
 auto multi_series_builder_argument_parser::add_settings_to_parser(
-  argument_parser2& parser, bool add_unflatten_option, bool add_unique_selector_option) -> void {
+  argument_parser2& parser, bool add_unflatten_option,
+  bool add_unique_selector_option) -> void {
   parser.add("schema_only", schema_only_);
   if (add_unique_selector_option) {
     parser.add("unique_selector", unique_selector_);
   }
   parser.add("raw", raw_);
-  if(add_unflatten_option) {
+  if (add_unflatten_option) {
     parser.add("unflatten", unnest_);
   }
 }
@@ -85,6 +87,7 @@ auto multi_series_builder_argument_parser::add_policy_to_parser(
   parser.add("schema", schema_);
   parser.add("selector", selector_);
 }
+
 auto multi_series_builder_argument_parser::add_all_to_parser(
   argument_parser2& parser) -> void {
   add_policy_to_parser(parser);
@@ -237,15 +240,6 @@ auto multi_series_builder_argument_parser::get_policy(diagnostic_handler& dh)
       .seed_schema = seed_type,
     };
   }
-
   return true;
-}
-
-auto multi_series_builder_options::get_schemas() const
-  -> std::vector<tenzir::type> {
-  if (std::holds_alternative<multi_series_builder::policy_selector>(policy)) {
-    return modules::schemas();
-  }
-  return {};
 }
 } // namespace tenzir

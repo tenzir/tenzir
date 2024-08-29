@@ -338,9 +338,8 @@ private:
       note_prefix = "at";
     }
     auto b = diagnostic::warning("failed to parse {} in the JSON document",
-                                  std::move(description))
-                .note("{} `{}`", note_prefix,
-                      truncate(document_to_truncate));
+                                 std::move(description))
+               .note("{} `{}`", note_prefix, truncate(document_to_truncate));
     if (not note.empty()) {
       b = std::move(b).note("{}", note);
     }
@@ -387,14 +386,18 @@ private:
 
 class parser_base {
 public:
-  parser_base(operator_control_plane& ctrl,
+  parser_base(std::string name_, operator_control_plane& ctrl,
               multi_series_builder_options options)
-    : builder{std::move(options.policy), std::move(options.settings),
-              ctrl.diagnostics(), modules::schemas(),
-              detail::record_builder::non_number_parser},
+    : dh{ctrl.diagnostics(),
+         [name = std::move(name_)](diagnostic d) {
+           d.message = fmt::format("{} parser: {}", name, d.message);
+           return d;
+         }},
+      builder{std::move(options.policy), std::move(options.settings), dh,
+              modules::schemas(), detail::record_builder::non_number_parser},
       ctrl{ctrl} {
   }
-
+  transforming_diagnostic_handler dh;
   multi_series_builder builder;
   operator_control_plane& ctrl;
   simdjson::ondemand::parser json_parser;
@@ -475,9 +478,9 @@ private:
 
 class default_parser final : public parser_base {
 public:
-  default_parser(operator_control_plane& ctrl,
+  default_parser(std::string name_, operator_control_plane& ctrl,
                  multi_series_builder_options options, bool arrays_of_objects)
-    : parser_base{ctrl, std::move(options)},
+    : parser_base{std::move(name_), ctrl, std::move(options)},
       arrays_of_objects_{arrays_of_objects} {
   }
 
@@ -606,6 +609,7 @@ auto parser_loop(generator<GeneratorValue> json_chunk_generator,
 }
 
 struct parser_args {
+  std::string parser_name;
   multi_series_builder_options builder_options = {};
   bool arrays_of_objects = false;
   split_at split_mode = split_at::none;
@@ -643,6 +647,7 @@ public:
       case split_at::newline: {
         return parser_loop(split_at_crlf(std::move(input)),
                            ndjson_parser{
+                             args_.parser_name,
                              ctrl,
                              args_.builder_options,
                            });
@@ -650,12 +655,14 @@ public:
       case split_at::null: {
         return parser_loop(split_at_null(std::move(input), '\0'),
                            ndjson_parser{
+                             args_.parser_name,
                              ctrl,
                              args_.builder_options,
                            });
       }
       case split_at::none: {
         return parser_loop(std::move(input), default_parser{
+                                               args_.parser_name,
                                                ctrl,
                                                args_.builder_options,
                                                args_.arrays_of_objects,
@@ -805,9 +812,9 @@ public:
     -> std::unique_ptr<plugin_parser> override {
     auto parser
       = argument_parser{name(), "https://docs.tenzir.com/formats/json"};
-    parser_args args;
+    auto args = parser_args{"json"};
     multi_series_builder_argument_parser msb_parser{
-      {.parser_name = "tenzir.json"},
+      {.default_schema_name = "tenzir.json"},
       multi_series_builder::policy_precise{},
     };
     msb_parser.add_all_to_parser(parser);
@@ -915,12 +922,12 @@ public:
     auto parser = argument_parser{
       name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
     auto msb_parser = multi_series_builder_argument_parser{
-      multi_series_builder::settings_type{.parser_name = "gelf"},
+      multi_series_builder::settings_type{.default_schema_name = "gelf"},
       multi_series_builder::policy_precise{},
     };
     msb_parser.add_all_to_parser(parser);
     parser.parse(p);
-    auto args = parser_args{};
+    auto args = parser_args{"gelf"};
     auto dh = collecting_diagnostic_handler{};
     auto opts = msb_parser.get_options(dh);
     for (auto& d : std::move(dh).collect()) {
@@ -947,10 +954,10 @@ public:
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{
       name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
-    auto args = parser_args{};
+    auto args = parser_args{std::string{Name.str()}};
     auto msb_parser = multi_series_builder_argument_parser{
       multi_series_builder::settings_type{
-        .parser_name = std::string{Prefix.str()},
+        .default_schema_name = std::string{Prefix.str()},
         .unnest_separator = std::string{Separator.str()},
       },
       multi_series_builder::policy_selector{
@@ -1050,9 +1057,9 @@ public:
     parser.add("sep", sep);
     parser.add("ndjson", use_ndjson_mode);
     parser.add("gelf", use_gelf_mode);
-    parser.add("arrays-of-objects", arrays_of_objects);
+    parser.add("arrays_of_objects", arrays_of_objects);
     auto result = parser.parse(inv, ctx);
-    auto args = parser_args{};
+    auto args = parser_args{"json"};
     TRY(args.builder_options, msb_parser.get_options(ctx.dh()));
     if (use_ndjson_mode and use_gelf_mode) {
       diagnostic::error("`ndjson` and `gelf` are incompatible")
@@ -1089,7 +1096,6 @@ public:
             "gelf mode is incompatible with a separator \"\\n\"")
             .primary(sep->source)
             .primary(*use_gelf_mode)
-            .hint(R"(expected "\n" or "\0")")
             .emit(ctx);
           result = failure::promise();
         }
@@ -1100,7 +1106,6 @@ public:
             "ndjson mode is incompatible with a separator \"\\0\"")
             .primary(sep->source)
             .primary(*use_ndjson_mode)
-            .hint(R"(expected "\n" or "\0")")
             .emit(ctx);
           result = failure::promise();
         }
@@ -1113,7 +1118,6 @@ public:
         result = failure::promise();
       }
     }
-
     TRY(result);
     return std::make_unique<parser_adapter<json_parser>>(
       json_parser{std::move(args)});
@@ -1133,7 +1137,7 @@ public:
     msb_parser.add_all_to_parser(parser);
     auto result = parser.parse(inv, ctx);
     TRY(result);
-    auto args = parser_args{};
+    auto args = parser_args{"gelf"};
 
     TRY(args.builder_options, msb_parser.get_options(ctx.dh()));
     return std::make_unique<parser_adapter<json_parser>>(
@@ -1149,23 +1153,25 @@ public:
   auto name() const -> std::string override {
     return fmt::format("read_{}", Name);
   }
+
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{
       multi_series_builder::settings_type{
-        .parser_name = std::string{Prefix.str()},
+        .default_schema_name = std::string{Prefix.str()},
         .unnest_separator = std::string{Separator.str()},
       },
       multi_series_builder::policy_selector{
         .field_name = std::string{Selector.str()},
+
         .naming_prefix = std::string{Prefix.str()},
       },
     };
     msb_parser.add_settings_to_parser(parser, false, false);
     auto result = parser.parse(inv, ctx);
     TRY(result);
-    auto args = parser_args{};
+    auto args = parser_args{std::string{Name.str()}};
     args.split_mode = split_at::newline;
     TRY(args.builder_options, msb_parser.get_options(ctx.dh()));
     return std::make_unique<parser_adapter<json_parser>>(

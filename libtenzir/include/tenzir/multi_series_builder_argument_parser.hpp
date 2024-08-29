@@ -30,17 +30,7 @@ struct multi_series_builder_options {
     return f.object(x).fields(f.field("policy", x.policy),
                               f.field("settings", x.settings));
   }
-
-  auto get_schemas() const -> std::vector<tenzir::type>;
 };
-
-// adds the schema_only/no-infer option to a parser for use in parser-parsers
-// this is outside of the `multi_series_builder_argument_parser`, since its
-// needed for parsers that dont support any of the other options
-void add_schema_only_option(argument_parser& parser,
-                            std::optional<location>& schema_only);
-void add_schema_only_option(argument_parser2& parser,
-                            std::optional<location>& schema_only);
 
 /// simple utility to parse the command line arguments for a
 /// multi_series_builder's settings and policy
@@ -55,17 +45,22 @@ public:
       policy_{std::move(policy)} {
   }
 
-  auto add_settings_to_parser(argument_parser& parser, bool add_unflatten_option = true, bool add_unique_selector_option = true ) -> void;
+  auto add_settings_to_parser(argument_parser& parser,
+                              bool add_unflatten_option = true,
+                              bool add_unique_selector_option = true) -> void;
   auto add_policy_to_parser(argument_parser& parser) -> void;
   auto add_all_to_parser(argument_parser& parser) -> void;
-  auto add_settings_to_parser(argument_parser2& parser, bool add_unflatten_option = true, bool add_unique_selector_option = true) -> void;
+  auto add_settings_to_parser(argument_parser2& parser,
+                              bool add_unflatten_option = true,
+                              bool add_unique_selector_option = true) -> void;
   auto add_policy_to_parser(argument_parser2& parser) -> void;
   auto add_all_to_parser(argument_parser2& parser) -> void;
 
-  auto get_options(diagnostic_handler& dh) -> failure_or<multi_series_builder_options> {
+  auto get_options(diagnostic_handler& dh)
+    -> failure_or<multi_series_builder_options> {
     auto good = get_policy(dh);
     good |= get_settings(dh);
-    if ( good ) {
+    if (good) {
       return multi_series_builder_options{
         .policy = policy_,
         .settings = settings_,

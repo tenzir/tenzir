@@ -192,7 +192,7 @@ public:
   cef_parser() = default;
   cef_parser(multi_series_builder_options options)
     : options_{std::move(options)} {
-    options_.settings.parser_name = "cef.event";
+    options_.settings.default_schema_name = "cef.event";
   }
 
   auto optimize(event_order order) -> std::unique_ptr<plugin_parser> override {
@@ -219,11 +219,9 @@ class cef_plugin final : public virtual parser_plugin<cef_parser> {
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{"cef", "https://docs.tenzir.com/formats/cef"};
-
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
     parser.parse(p);
-
     auto dh = collecting_diagnostic_handler{};
     auto opts = msb_parser.get_options(dh);
     for (auto& d : std::move(dh).collect()) {
@@ -241,13 +239,13 @@ public:
   auto name() const -> std::string override {
     return "read_cef";
   }
+
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
     auto result = parser.parse(inv, ctx);
-
     TRY(result);
     TRY(auto opts, msb_parser.get_options(ctx.dh()));
     return std::make_unique<parser_adapter<cef_parser>>(
@@ -312,7 +310,6 @@ public:
 };
 
 } // namespace
-
 } // namespace tenzir::plugins::cef
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::cef::cef_plugin)

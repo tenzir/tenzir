@@ -29,7 +29,6 @@ public:
     auto parser = argument_parser2::operator_(name());
     located<std::string> plugin;
     parser.add(plugin, "<plugin>");
-
     std::optional<tenzir::record> plugin_options;
     parser.add("options", plugin_options);
     std::optional<tenzir::record> fluentbit_options;
@@ -44,7 +43,7 @@ public:
       .args = to_property_map(plugin_options),
     };
     TRY(auto builder_options, opt_parser.get_options(ctx.dh()));
-    builder_options.settings.parser_name
+    builder_options.settings.default_schema_name
       = fmt::format("fluent_bit.{}", args.plugin);
     return std::make_unique<fluent_bit_operator>(
       std::move(args), std::move(builder_options), config_);

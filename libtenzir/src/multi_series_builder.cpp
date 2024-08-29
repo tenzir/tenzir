@@ -231,7 +231,7 @@ auto multi_series_builder::yield_ready() -> std::vector<series> {
 auto multi_series_builder::yield_ready_as_table_slice()
   -> std::vector<table_slice> {
   return detail::multi_series_builder::series_to_table_slice(
-    yield_ready(), settings_.parser_name);
+    yield_ready(), settings_.default_schema_name);
 }
 
 auto multi_series_builder::record() -> record_generator {
@@ -270,7 +270,7 @@ auto multi_series_builder::finalize() -> std::vector<series> {
 auto multi_series_builder::finalize_as_table_slice()
   -> std::vector<table_slice> {
   return detail::multi_series_builder::series_to_table_slice(
-    finalize(), settings_.parser_name);
+    finalize(), settings_.default_schema_name);
 }
 
 void multi_series_builder::complete_last_event() {
@@ -284,8 +284,7 @@ void multi_series_builder::complete_last_event() {
   if (auto p = get_policy<policy_selector>()) {
     auto* selected_schema = builder_raw_.find_field_raw(p->field_name);
     if (not selected_schema) {
-      diagnostic::warning("{} event did not contain selector field",
-                          settings_.parser_name)
+      diagnostic::warning("event did not contain selector field")
         .note("selector field `{}` was not found", p->field_name)
         .emit(dh_);
       needs_signature_ = true;
@@ -314,16 +313,14 @@ void multi_series_builder::complete_last_event() {
           return {};
         },
         [this](const blob&) -> std::string {
-          diagnostic::warning("{} selector field contains `blob` data, "
-                              "which cannot be used as a selector",
-                              settings_.parser_name)
+          diagnostic::warning("selector field contains `blob` data, "
+                              "which cannot be used as a selector")
             .emit(dh_);
           return {};
         },
         [this](const auto&) -> std::string {
-          diagnostic::warning("{} selector field contains structural "
-                              "type, which cannot be used as a selector",
-                              settings_.parser_name)
+          diagnostic::warning("selector field contains structural "
+                              "type, which cannot be used as a selector")
             .emit(dh_);
           return {};
         },
@@ -347,8 +344,7 @@ void multi_series_builder::complete_last_event() {
         //  * it can get quite noisy
         //  * Do we even want to disable it for unique_selector?
         if (selector_was_string and not p->unique_selector) {
-          diagnostic::warning("{} selected schema not found",
-                              settings_.parser_name)
+          diagnostic::warning("selected schema not found")
             .note("`{}` does not refer to a known schema", schema_name)
             .emit(dh_);
         }

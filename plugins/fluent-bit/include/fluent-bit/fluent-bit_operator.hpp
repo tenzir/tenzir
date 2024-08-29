@@ -222,11 +222,9 @@ using property_map = std::map<std::string, std::string>;
 inline auto
 to_property_map(const std::optional<tenzir::record>& rec) -> property_map {
   auto res = property_map{};
-
   if (not rec) {
     return res;
   }
-
   for (const auto& [key, value] : *rec) {
     const auto [it, inserted] = res.try_emplace(key, fmt::format("{}", value));
     TENZIR_ASSERT(inserted);
@@ -787,10 +785,8 @@ public:
                 event_order order) const -> optimize_result override {
     auto builder_options = builder_options_;
     builder_options.settings.ordered = order == event_order::ordered;
-
     auto replacement = std::make_unique<fluent_bit_operator>(
       this->operator_args_, std::move(builder_options), this->config_);
-
     return {filter, order, std::move(replacement)};
   }
 

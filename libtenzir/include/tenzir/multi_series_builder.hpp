@@ -257,13 +257,14 @@ public:
                                       policy_precise, policy_selector>;
 
   struct settings_type {
-    // the default name given to a schema
-    std::string parser_name = "tenzir.unknown";
+    // the default name given to a schema, if its not determined by `schema` or `selector`
+    std::string default_schema_name = "tenzir.unknown";
     // whether the output should adhere to the input order
     bool ordered = true;
-    // whether a known schema should be expanded.
+    // whether, given a known schema via `schema` or `selector`, only fields from that
+    // should be output 
     bool schema_only = false;
-    // whether to not parse fields that are not present in a schema
+    // whether to not parse fields that are not present in a known schema
     bool raw = false;
     // unnest separator to be used when calling any `field` in the builder pattern
     std::string unnest_separator = {};
@@ -275,7 +276,7 @@ public:
 
     auto friend inspect(auto& f, settings_type& x) -> bool {
       return f.object(x).fields(
-        f.field("default_name", x.parser_name), f.field("ordered", x.ordered),
+        f.field("default_schema_name", x.default_schema_name), f.field("ordered", x.ordered),
         f.field("expand_schema", x.schema_only), f.field("raw", x.raw),
         f.field("unnest_separator", x.unnest_separator),
         f.field("timeout", x.timeout),
