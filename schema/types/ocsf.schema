@@ -1,0 +1,1471 @@
+type ocsf.objects.tls = record{
+  version: string,
+  alert: int64,
+  key_length: int64,
+  certificate: ocsf.objects.certificate,
+  cipher: string,
+  sni: string,
+  certificate_chain: string,
+  client_ciphers: string,
+  extension_list: ocsf.objects.tls_extension,
+  handshake_dur: int64,
+  ja3_hash: ocsf.objects.fingerprint,
+  ja3s_hash: ocsf.objects.fingerprint,
+  sans: ocsf.objects.san,
+  server_ciphers: string,
+  tls_extension_list: ocsf.objects.tls_extension,
+}
+
+type ocsf.objects.account = record{
+  name: string,
+  type: string,
+  uid: string,
+  labels: string,
+  type_id: int64,
+}
+
+type ocsf.objects.endpoint = record{
+  name: string,
+  owner: ocsf.objects.user,
+  type: string,
+  os: ocsf.objects.os,
+  domain: string,
+  ip: ip,
+  location: ocsf.objects.location,
+  hostname: string,
+  uid: string,
+  mac: string,
+  type_id: int64,
+  agent_list: ocsf.objects.agent,
+  container: ocsf.objects.container,
+  hw_info: ocsf.objects.device_hw_info,
+  instance_uid: string,
+  interface_name: string,
+  interface_uid: string,
+  namespace_pid: int64,
+  subnet_uid: string,
+  vlan_uid: string,
+  vpc_uid: string,
+  zone: string,
+}
+
+type ocsf.objects.kill_chain_phase = record{
+  phase: string,
+  phase_id: int64,
+}
+
+type ocsf.objects.cis_csc = record{
+  control: string,
+  version: string,
+}
+
+type ocsf.objects.policy = record{
+  name: string,
+  version: string,
+  group: ocsf.objects.group,
+  desc: string,
+  uid: string,
+  is_applied: bool,
+}
+
+type ocsf.objects.technique = record{
+  name: string,
+  uid: string,
+  src_url: string,
+}
+
+type ocsf.objects.session = record{
+  count: int64,
+  terminal: string,
+  uid: string,
+  uuid: string,
+  issuer: string,
+  created_time: time,
+  credential_uid: string,
+  expiration_reason: string,
+  expiration_time: time,
+  is_mfa: bool,
+  is_remote: bool,
+  is_vpn: bool,
+  uid_alt: string,
+  created_time_dt: time,
+  expiration_time_dt: time,
+}
+
+type ocsf.objects.autonomous_system = record{
+  name: string,
+  number: int64,
+}
+
+type ocsf.objects.api = record{
+  version: string,
+  request: ocsf.objects.request,
+  service: ocsf.objects.service,
+  group: ocsf.objects.group,
+  response: ocsf.objects.response,
+  operation: string,
+}
+
+type ocsf.objects.security_state = record{
+  state: string,
+  state_id: int64,
+}
+
+type ocsf.objects.network_proxy = record{
+  name: string,
+  owner: ocsf.objects.user,
+  port: int64,
+  type: string,
+  os: ocsf.objects.os,
+  domain: string,
+  ip: ip,
+  location: ocsf.objects.location,
+  hostname: string,
+  uid: string,
+  mac: string,
+  type_id: int64,
+  agent_list: ocsf.objects.agent,
+  autonomous_system: ocsf.objects.autonomous_system,
+  container: ocsf.objects.container,
+  hw_info: ocsf.objects.device_hw_info,
+  instance_uid: string,
+  interface_name: string,
+  interface_uid: string,
+  intermediate_ips: ip,
+  namespace_pid: int64,
+  proxy_endpoint: ocsf.objects.network_proxy,
+  subnet_uid: string,
+  svc_name: string,
+  vlan_uid: string,
+  vpc_uid: string,
+  zone: string,
+}
+
+type ocsf.objects.dns_query = record{
+  type: string,
+  hostname: string,
+  class: string,
+  opcode: string,
+  opcode_id: int64,
+  packet_uid: int64,
+}
+
+type ocsf.objects.email = record{
+  size: int64,
+  uid: string,
+  from: string,
+  cc: string,
+  to: string,
+  subject: string,
+  data_classification: ocsf.objects.data_classification,
+  delivered_to: string,
+  message_uid: string,
+  raw_header: string,
+  reply_to: string,
+  smtp_from: string,
+  smtp_to: string,
+  x_originating_ip: ip,
+}
+
+type ocsf.objects.extension = record{
+  name: string,
+  version: string,
+  uid: string,
+}
+
+type ocsf.objects.firewall_rule = record{
+  name: string,
+  type: string,
+  version: string,
+  desc: string,
+  uid: string,
+  category: string,
+  duration: int64,
+  condition: string,
+  match_details: string,
+  match_location: string,
+  rate_limit: int64,
+  sensitivity: string,
+}
+
+type ocsf.objects.url = record{
+  port: int64,
+  scheme: string,
+  path: string,
+  domain: string,
+  hostname: string,
+  query_string: string,
+  categories: string,
+  category_ids: int64,
+  resource_type: string,
+  subdomain: string,
+  url_string: string,
+}
+
+type ocsf.objects.ldap_person = record{
+  location: ocsf.objects.location,
+  labels: string,
+  manager: ocsf.objects.user,
+  cost_center: string,
+  created_time: time,
+  deleted_time: time,
+  email_addrs: string,
+  employee_uid: string,
+  given_name: string,
+  hire_time: time,
+  job_title: string,
+  last_login_time: time,
+  ldap_cn: string,
+  ldap_dn: string,
+  leave_time: time,
+  modified_time: time,
+  office_location: string,
+  surname: string,
+  created_time_dt: time,
+  modified_time_dt: time,
+  leave_time_dt: time,
+  hire_time_dt: time,
+  last_login_time_dt: time,
+  deleted_time_dt: time,
+}
+
+type ocsf.objects.sub_technique = record{
+  name: string,
+  uid: string,
+  src_url: string,
+}
+
+type ocsf.objects.network_endpoint = record{
+  name: string,
+  owner: ocsf.objects.user,
+  port: int64,
+  type: string,
+  os: ocsf.objects.os,
+  domain: string,
+  ip: ip,
+  location: ocsf.objects.location,
+  hostname: string,
+  uid: string,
+  mac: string,
+  type_id: int64,
+  agent_list: ocsf.objects.agent,
+  autonomous_system: ocsf.objects.autonomous_system,
+  container: ocsf.objects.container,
+  hw_info: ocsf.objects.device_hw_info,
+  instance_uid: string,
+  interface_name: string,
+  interface_uid: string,
+  intermediate_ips: ip,
+  namespace_pid: int64,
+  proxy_endpoint: ocsf.objects.network_proxy,
+  subnet_uid: string,
+  svc_name: string,
+  vlan_uid: string,
+  vpc_uid: string,
+  zone: string,
+}
+
+type ocsf.objects.ja4_fingerprint = record{
+  type: string,
+  value: string,
+  type_id: int64,
+  section_a: string,
+  section_b: string,
+  section_c: string,
+  section_d: string,
+}
+
+type ocsf.objects.display = record{
+  color_depth: int64,
+  physical_height: int64,
+  physical_orientation: int64,
+  physical_width: int64,
+  scale_factor: int64,
+}
+
+type ocsf.objects.metric = record{
+  name: string,
+  value: string,
+}
+
+type ocsf.objects.attack = record{
+  version: string,
+  tactics: ocsf.objects.tactic,
+  technique: ocsf.objects.technique,
+  sub_technique: ocsf.objects.sub_technique,
+  tactic: ocsf.objects.tactic,
+}
+
+type ocsf.objects.auth_factor = record{
+  device: ocsf.objects.device,
+  email_addr: string,
+  factor_type: string,
+  factor_type_id: int64,
+  is_hotp: bool,
+  is_totp: bool,
+  phone_number: string,
+  provider: string,
+  security_questions: string,
+}
+
+type ocsf.objects.http_response = record{
+  code: int64,
+  message: string,
+  status: string,
+  length: int64,
+  content_type: string,
+  http_headers: ocsf.objects.http_header,
+  latency: int64,
+}
+
+type ocsf.objects.network_traffic = record{
+  bytes_in: int64,
+  bytes_out: int64,
+  chunks: int64,
+  bytes: int64,
+  chunks_in: int64,
+  chunks_out: int64,
+  packets: int64,
+  packets_in: int64,
+  packets_out: int64,
+}
+
+type ocsf.objects.image = record{
+  name: string,
+  tag: string,
+  path: string,
+  uid: string,
+  labels: string,
+}
+
+type ocsf.objects.idp = record{
+  name: string,
+  uid: string,
+}
+
+type ocsf.objects.resource_details = record{
+  data: None,
+  name: string,
+  owner: ocsf.objects.user,
+  type: string,
+  version: string,
+  group: ocsf.objects.group,
+  uid: string,
+  labels: string,
+  namespace: string,
+  agent_list: ocsf.objects.agent,
+  cloud_partition: string,
+  criticality: string,
+  data_classification: ocsf.objects.data_classification,
+  region: string,
+}
+
+type ocsf.objects.process = record{
+  name: string,
+  pid: int64,
+  session: ocsf.objects.session,
+  file: ocsf.objects.file,
+  user: ocsf.objects.user,
+  group: ocsf.objects.group,
+  tid: int64,
+  uid: string,
+  loaded_modules: string,
+  cmd_line: string,
+  container: ocsf.objects.container,
+  created_time: time,
+  integrity: string,
+  integrity_id: int64,
+  lineage: string,
+  namespace_pid: int64,
+  parent_process: ocsf.objects.process,
+  sandbox: string,
+  terminated_time: time,
+  xattributes: ocsf.objects.object,
+  auid: int64,
+  euid: int64,
+  egid: int64,
+  terminated_time_dt: time,
+  created_time_dt: time,
+}
+
+type ocsf.objects.d3fend = record{
+  version: string,
+  d3f_tactic: ocsf.objects.d3f_tactic,
+  d3f_technique: ocsf.objects.d3f_technique,
+}
+
+type ocsf.objects.remediation = record{
+  desc: string,
+  references: string,
+  kb_article_list: ocsf.objects.kb_article,
+  kb_articles: string,
+}
+
+type ocsf.objects.win_resource = record{
+  data: None,
+  name: string,
+  type: string,
+  uid: string,
+  labels: string,
+  details: string,
+  type_id: int64,
+  data_classification: ocsf.objects.data_classification,
+  svc_name: string,
+}
+
+type ocsf.objects.load_balancer = record{
+  code: int64,
+  message: string,
+  name: string,
+  ip: ip,
+  uid: string,
+  classification: string,
+  dst_endpoint: ocsf.objects.network_endpoint,
+  endpoint_connections: ocsf.objects.endpoint_connection,
+  error_message: string,
+  metrics: ocsf.objects.metric,
+  status_detail: string,
+}
+
+type ocsf.objects.dns_answer = record{
+  flags: string,
+  type: string,
+  ttl: int64,
+  class: string,
+  flag_ids: int64,
+  packet_uid: int64,
+  rdata: string,
+}
+
+type ocsf.objects.service = record{
+  name: string,
+  version: string,
+  uid: string,
+  labels: string,
+}
+
+type ocsf.objects.keyboard_info = record{
+  function_keys: int64,
+  ime: string,
+  keyboard_layout: string,
+  keyboard_subtype: int64,
+  keyboard_type: string,
+}
+
+type ocsf.objects.container = record{
+  name: string,
+  runtime: string,
+  size: int64,
+  tag: string,
+  uid: string,
+  image: ocsf.objects.image,
+  hash: ocsf.objects.fingerprint,
+  network_driver: string,
+  orchestrator: string,
+  pod_uuid: string,
+}
+
+type ocsf.objects.vulnerability = record{
+  title: string,
+  desc: string,
+  references: string,
+  severity: string,
+  remediation: ocsf.objects.remediation,
+  affected_code: ocsf.objects.affected_code,
+  affected_packages: ocsf.objects.affected_package,
+  cve: ocsf.objects.cve,
+  cwe: ocsf.objects.cwe,
+  first_seen_time: time,
+  fix_available: bool,
+  is_exploit_available: bool,
+  is_fix_available: bool,
+  kb_article_list: ocsf.objects.kb_article,
+  kb_articles: string,
+  last_seen_time: time,
+  packages: ocsf.objects.package,
+  related_vulnerabilities: string,
+  vendor_name: string,
+  first_seen_time_dt: time,
+  last_seen_time_dt: time,
+}
+
+type ocsf.objects.http_cookie = record{
+  name: string,
+  value: string,
+  path: string,
+  domain: string,
+  secure: bool,
+  http_only: bool,
+  expiration_time: time,
+  is_http_only: bool,
+  is_secure: bool,
+  samesite: string,
+  expiration_time_dt: time,
+}
+
+type ocsf.objects.whois = record{
+  status: string,
+  domain: string,
+  registrar: string,
+  subdomains: string,
+  subnet: subnet,
+  autonomous_system: ocsf.objects.autonomous_system,
+  created_time: time,
+  dnssec_status_id: int64,
+  dnssec_status: string,
+  domain_contacts: ocsf.objects.domain_contact,
+  email_addr: string,
+  last_seen_time: time,
+  name_servers: string,
+  phone_number: string,
+  created_time_dt: time,
+  last_seen_time_dt: time,
+}
+
+type ocsf.objects.kb_article = record{
+  size: int64,
+  os: ocsf.objects.os,
+  title: string,
+  product: ocsf.objects.product,
+  uid: string,
+  severity: string,
+  avg_timespan: ocsf.objects.timespan,
+  bulletin: string,
+  classification: string,
+  created_time: time,
+  install_state: string,
+  install_state_id: int64,
+  is_superseded: bool,
+  src_url: string,
+  created_time_dt: time,
+}
+
+type ocsf.objects.domain_contact = record{
+  name: string,
+  type: string,
+  location: ocsf.objects.location,
+  uid: string,
+  type_id: int64,
+  email_addr: string,
+  phone_number: string,
+}
+
+type ocsf.objects.tactic = record{
+  name: string,
+  uid: string,
+  src_url: string,
+}
+
+type ocsf.objects.cve = record{
+  type: string,
+  title: string,
+  product: ocsf.objects.product,
+  desc: string,
+  uid: string,
+  references: string,
+  created_time: time,
+  cvss: ocsf.objects.cvss,
+  cwe: ocsf.objects.cwe,
+  cwe_uid: string,
+  cwe_url: string,
+  epss: ocsf.objects.epss,
+  modified_time: time,
+  created_time_dt: time,
+  modified_time_dt: time,
+}
+
+type ocsf.objects.location = record{
+  desc: string,
+  long: double,
+  city: string,
+  country: string,
+  coordinates: double,
+  continent: string,
+  geohash: string,
+  is_on_premises: bool,
+  isp: string,
+  lat: double,
+  postal_code: string,
+  provider: string,
+  region: string,
+}
+
+type ocsf.objects.module = record{
+  type: string,
+  file: ocsf.objects.file,
+  base_address: string,
+  function_name: string,
+  load_type: string,
+  load_type_id: int64,
+  start_address: string,
+}
+
+type ocsf.objects.agent = record{
+  name: string,
+  type: string,
+  version: string,
+  uid: string,
+  type_id: int64,
+  policies: ocsf.objects.policy,
+  uid_alt: string,
+  vendor_name: string,
+}
+
+type ocsf.objects.http_request = record{
+  args: string,
+  version: string,
+  length: int64,
+  uid: string,
+  url: ocsf.objects.url,
+  x_forwarded_for: ip,
+  user_agent: string,
+  http_headers: ocsf.objects.http_header,
+  http_method: string,
+  referrer: string,
+}
+
+type ocsf.objects.email_auth = record{
+  spf: string,
+  dkim: string,
+  dkim_domain: string,
+  dkim_signature: string,
+  dmarc: string,
+  dmarc_override: string,
+  dmarc_policy: string,
+}
+
+type ocsf.objects.cis_benchmark_result = record{
+  name: string,
+  desc: string,
+  remediation: ocsf.objects.remediation,
+  rule: ocsf.objects.rule,
+}
+
+type ocsf.objects.finding_info = record{
+  title: string,
+  desc: string,
+  uid: string,
+  types: string,
+  attacks: ocsf.objects.attack,
+  analytic: ocsf.objects.analytic,
+  created_time: time,
+  data_sources: string,
+  first_seen_time: time,
+  kill_chain: ocsf.objects.kill_chain_phase,
+  last_seen_time: time,
+  modified_time: time,
+  product_uid: string,
+  related_analytics: ocsf.objects.analytic,
+  related_events: ocsf.objects.related_event,
+  src_url: string,
+  created_time_dt: time,
+  modified_time_dt: time,
+  first_seen_time_dt: time,
+  last_seen_time_dt: time,
+}
+
+type ocsf.objects.device = record{
+  hw_info: ocsf.objects.device_hw_info,
+  groups: ocsf.objects.group,
+  zone: string,
+  namespace_pid: int64,
+  image: ocsf.objects.image,
+  ip: ip,
+  last_seen_time_dt: time,
+  container: ocsf.objects.container,
+  vpc_uid: string,
+  network_interfaces: ocsf.objects.network_interface,
+  boot_time_dt: time,
+  location: ocsf.objects.location,
+  owner: ocsf.objects.user,
+  uid: string,
+  is_managed: bool,
+  created_time_dt: time,
+  is_personal: bool,
+  is_compliant: bool,
+  os: ocsf.objects.os,
+  region: string,
+  org: ocsf.objects.organization,
+  autoscale_uid: string,
+  risk_level_id: int64,
+  mac: string,
+  interface_name: string,
+  imei: string,
+  domain: string,
+  type_id: int64,
+  vlan_uid: string,
+  uid_alt: string,
+  last_seen_time: time,
+  is_trusted: bool,
+  hostname: string,
+  first_seen_time: time,
+  name: string,
+  agent_list: ocsf.objects.agent,
+  first_seen_time_dt: time,
+  interface_uid: string,
+  modified_time: time,
+  subnet_uid: string,
+  created_time: time,
+  subnet: subnet,
+  hypervisor: string,
+  instance_uid: string,
+  type: string,
+  risk_level: string,
+  modified_time_dt: time,
+  desc: string,
+  boot_time: time,
+  risk_score: int64,
+}
+
+type ocsf.objects.d3f_technique = record{
+  name: string,
+  uid: string,
+  src_url: string,
+}
+
+type ocsf.objects.managed_entity = record{
+  data: None,
+  name: string,
+  type: string,
+  version: string,
+  user: ocsf.objects.user,
+  device: ocsf.objects.device,
+  group: ocsf.objects.group,
+  uid: string,
+  email: ocsf.objects.email,
+  org: ocsf.objects.organization,
+  type_id: int64,
+  policy: ocsf.objects.policy,
+}
+
+type ocsf.objects.affected_package = record{
+  name: string,
+  type: string,
+  version: string,
+  path: string,
+  hash: ocsf.objects.fingerprint,
+  release: string,
+  epoch: int64,
+  type_id: int64,
+  license: string,
+  remediation: ocsf.objects.remediation,
+  architecture: string,
+  cpe_name: string,
+  fixed_in_version: string,
+  package_manager: string,
+  purl: string,
+  vendor_name: string,
+}
+
+type ocsf.objects.web_resource = record{
+  data: None,
+  name: string,
+  type: string,
+  desc: string,
+  uid: string,
+  labels: string,
+  data_classification: ocsf.objects.data_classification,
+  url_string: string,
+}
+
+type ocsf.objects.scan = record{
+  name: string,
+  type: string,
+  uid: string,
+  type_id: int64,
+}
+
+type ocsf.objects.cis_control = record{
+  name: string,
+  version: string,
+  desc: string,
+}
+
+type ocsf.objects.network_connection_info = record{
+  session: ocsf.objects.session,
+  uid: string,
+  boundary: string,
+  protocol_name: string,
+  direction: string,
+  boundary_id: int64,
+  direction_id: int64,
+  protocol_num: int64,
+  protocol_ver: string,
+  protocol_ver_id: int64,
+  tcp_flags: int64,
+}
+
+type ocsf.objects.database = record{
+  name: string,
+  size: int64,
+  type: string,
+  desc: string,
+  uid: string,
+  groups: ocsf.objects.group,
+  type_id: int64,
+  created_time: time,
+  data_classification: ocsf.objects.data_classification,
+  modified_time: time,
+  created_time_dt: time,
+  modified_time_dt: time,
+}
+
+type ocsf.objects.rpc_interface = record{
+  version: string,
+  uuid: string,
+  ack_reason: int64,
+  ack_result: int64,
+}
+
+type ocsf.objects.request = record{
+  data: None,
+  flags: string,
+  uid: string,
+  containers: ocsf.objects.container,
+}
+
+type ocsf.objects.tls_extension = record{
+  data: None,
+  type: string,
+  type_id: int64,
+}
+
+type ocsf.objects.san = record{
+  name: string,
+  type: string,
+}
+
+type ocsf.objects.reg_key = record{
+  path: string,
+  is_system: bool,
+  modified_time: time,
+  security_descriptor: string,
+  modified_time_dt: time,
+}
+
+type ocsf.objects.win_service = record{
+  name: string,
+  version: string,
+  uid: string,
+  labels: string,
+  cmd_line: string,
+  load_order_group: string,
+  service_category: string,
+  service_category_id: int64,
+  service_dependencies: string,
+  service_error_control: string,
+  service_error_control_id: int64,
+  service_start_type: string,
+  service_start_type_id: int64,
+  service_start_name: string,
+  service_type: string,
+  service_type_id: int64,
+}
+
+type ocsf.objects.actor = record{
+  process: ocsf.objects.process,
+  session: ocsf.objects.session,
+  user: ocsf.objects.user,
+  app_name: string,
+  app_uid: string,
+  authorizations: ocsf.objects.authorization,
+  idp: ocsf.objects.idp,
+  invoked_by: string,
+}
+
+type ocsf.objects.cis_benchmark = record{
+  name: string,
+  desc: string,
+  cis_controls: ocsf.objects.cis_control,
+}
+
+type ocsf.objects.object = record{
+}
+
+type ocsf.objects.osint = record{
+  name: string,
+  type: string,
+  value: string,
+  location: ocsf.objects.location,
+  uid: string,
+  comment: string,
+  signatures: ocsf.objects.digital_signature,
+  subdomains: string,
+  email: ocsf.objects.email,
+  type_id: int64,
+  attacks: ocsf.objects.attack,
+  answers: ocsf.objects.dns_answer,
+  autonomous_system: ocsf.objects.autonomous_system,
+  confidence: string,
+  confidence_id: int64,
+  email_auth: ocsf.objects.email_auth,
+  kill_chain: ocsf.objects.kill_chain_phase,
+  src_url: string,
+  tlp: string,
+  vendor_name: string,
+  vulnerabilities: ocsf.objects.vulnerability,
+  whois: ocsf.objects.whois,
+}
+
+type ocsf.objects.user = record{
+  name: string,
+  type: string,
+  domain: string,
+  uid: string,
+  org: ocsf.objects.organization,
+  groups: ocsf.objects.group,
+  type_id: int64,
+  full_name: string,
+  account: ocsf.objects.account,
+  credential_uid: string,
+  email_addr: string,
+  ldap_person: ocsf.objects.ldap_person,
+  risk_level: string,
+  risk_level_id: int64,
+  risk_score: int64,
+  uid_alt: string,
+}
+
+type ocsf.objects.reputation = record{
+  base_score: double,
+  provider: string,
+  score: string,
+  score_id: int64,
+}
+
+type ocsf.objects.d3f_tactic = record{
+  name: string,
+  uid: string,
+  src_url: string,
+}
+
+type ocsf.objects.metadata = record{
+  version: string,
+  extension: ocsf.objects.extension,
+  product: ocsf.objects.product,
+  uid: string,
+  extensions: ocsf.objects.extension,
+  labels: string,
+  log_level: string,
+  sequence: int64,
+  profiles: string,
+  correlation_uid: string,
+  data_classification: ocsf.objects.data_classification,
+  event_code: string,
+  log_name: string,
+  log_provider: string,
+  log_version: string,
+  logged_time: time,
+  loggers: ocsf.objects.logger,
+  modified_time: time,
+  original_time: string,
+  processed_time: time,
+  tenant_uid: string,
+  modified_time_dt: time,
+  processed_time_dt: time,
+  logged_time_dt: time,
+}
+
+type ocsf.objects.peripheral_device = record{
+  name: string,
+  class: string,
+  uid: string,
+  model: string,
+  serial_number: string,
+  vendor_name: string,
+}
+
+type ocsf.objects.kernel_driver = record{
+  file: ocsf.objects.file,
+}
+
+type ocsf.objects.os = record{
+  name: string,
+  type: string,
+  version: string,
+  build: string,
+  country: string,
+  type_id: int64,
+  lang: string,
+  cpe_name: string,
+  cpu_bits: int64,
+  edition: string,
+  sp_name: string,
+  sp_ver: int64,
+}
+
+type ocsf.objects.device_hw_info = record{
+  bios_date: string,
+  bios_manufacturer: string,
+  bios_ver: string,
+  chassis: string,
+  cpu_bits: int64,
+  cpu_cores: int64,
+  cpu_count: int64,
+  cpu_speed: int64,
+  cpu_type: string,
+  desktop_display: ocsf.objects.display,
+  keyboard_info: ocsf.objects.keyboard_info,
+  ram_size: int64,
+  serial_number: string,
+}
+
+type ocsf.objects.http_header = record{
+  name: string,
+  value: string,
+}
+
+type ocsf.objects.job = record{
+  name: string,
+  file: ocsf.objects.file,
+  user: ocsf.objects.user,
+  desc: string,
+  cmd_line: string,
+  created_time: time,
+  last_run_time: time,
+  next_run_time: time,
+  run_state: string,
+  run_state_id: int64,
+  last_run_time_dt: time,
+  created_time_dt: time,
+  next_run_time_dt: time,
+}
+
+type ocsf.objects.endpoint_connection = record{
+  code: int64,
+  network_endpoint: ocsf.objects.network_endpoint,
+}
+
+type ocsf.objects.response = record{
+  error: string,
+  code: int64,
+  data: None,
+  flags: string,
+  message: string,
+  containers: ocsf.objects.container,
+  error_message: string,
+}
+
+type ocsf.objects.dce_rpc = record{
+  command: string,
+  flags: string,
+  command_response: string,
+  opnum: int64,
+  rpc_interface: ocsf.objects.rpc_interface,
+}
+
+type ocsf.objects.evidences = record{
+  data: None,
+  process: ocsf.objects.process,
+  file: ocsf.objects.file,
+  user: ocsf.objects.user,
+  device: ocsf.objects.device,
+  query: ocsf.objects.dns_query,
+  connection_info: ocsf.objects.network_connection_info,
+  url: ocsf.objects.url,
+  email: ocsf.objects.email,
+  api: ocsf.objects.api,
+  actor: ocsf.objects.actor,
+  container: ocsf.objects.container,
+  database: ocsf.objects.database,
+  databucket: ocsf.objects.databucket,
+  dst_endpoint: ocsf.objects.network_endpoint,
+  job: ocsf.objects.job,
+  src_endpoint: ocsf.objects.network_endpoint,
+  reg_key: ocsf.objects.reg_key,
+  reg_value: ocsf.objects.reg_value,
+  win_service: ocsf.objects.win_service,
+}
+
+type ocsf.objects.compliance = record{
+  control: string,
+  status: string,
+  compliance_references: ocsf.objects.kb_article,
+  compliance_standards: ocsf.objects.kb_article,
+  requirements: string,
+  standards: string,
+  status_code: string,
+  status_detail: string,
+  status_id: int64,
+}
+
+type ocsf.objects.logger = record{
+  name: string,
+  version: string,
+  device: ocsf.objects.device,
+  product: ocsf.objects.product,
+  uid: string,
+  log_level: string,
+  log_name: string,
+  log_provider: string,
+  log_version: string,
+  logged_time: time,
+  transmit_time: time,
+  transmit_time_dt: time,
+  logged_time_dt: time,
+}
+
+type ocsf.objects.data_classification = record{
+  category: string,
+  category_id: int64,
+  confidentiality: string,
+  confidentiality_id: int64,
+  policy: ocsf.objects.policy,
+}
+
+type ocsf.objects.cloud = record{
+  org: ocsf.objects.organization,
+  account: ocsf.objects.account,
+  project_uid: string,
+  provider: string,
+  region: string,
+  zone: string,
+}
+
+type ocsf.objects.epss = record{
+  version: string,
+  created_time: time,
+  percentile: double,
+  score: string,
+  created_time_dt: time,
+}
+
+type ocsf.objects.analytic = record{
+  name: string,
+  type: string,
+  version: string,
+  desc: string,
+  uid: string,
+  category: string,
+  type_id: int64,
+  related_analytics: ocsf.objects.analytic,
+}
+
+type ocsf.objects.query_info = record{
+  data: None,
+  name: string,
+  bytes: int64,
+  uid: string,
+  query_string: string,
+  query_time: time,
+  query_time_dt: time,
+}
+
+type ocsf.objects.data_security = record{
+  category: string,
+  pattern_match: string,
+  category_id: int64,
+  confidentiality: string,
+  confidentiality_id: int64,
+  data_lifecycle_state: string,
+  data_lifecycle_state_id: int64,
+  detection_pattern: string,
+  detection_system: string,
+  detection_system_id: int64,
+  policy: ocsf.objects.policy,
+}
+
+type ocsf.objects.malware = record{
+  name: string,
+  path: string,
+  uid: string,
+  classification_ids: int64,
+  classifications: string,
+  cves: ocsf.objects.cve,
+  provider: string,
+}
+
+type ocsf.objects.network_interface = record{
+  name: string,
+  type: string,
+  ip: ip,
+  hostname: string,
+  uid: string,
+  mac: string,
+  namespace: string,
+  type_id: int64,
+  subnet_prefix: int64,
+}
+
+type ocsf.objects.databucket = record{
+  name: string,
+  size: int64,
+  type: string,
+  file: ocsf.objects.file,
+  desc: string,
+  uid: string,
+  groups: ocsf.objects.group,
+  type_id: int64,
+  created_time: time,
+  data_classification: ocsf.objects.data_classification,
+  modified_time: time,
+  created_time_dt: time,
+  modified_time_dt: time,
+}
+
+type ocsf.objects.reg_value = record{
+  data: None,
+  name: string,
+  type: string,
+  path: string,
+  type_id: int64,
+  is_default: bool,
+  is_system: bool,
+  modified_time: time,
+  modified_time_dt: time,
+}
+
+type ocsf.objects.ticket = record{
+  type: string,
+  title: string,
+  uid: string,
+  type_id: int64,
+  src_url: string,
+}
+
+type ocsf.objects.hassh = record{
+  algorithm: string,
+  fingerprint: ocsf.objects.fingerprint,
+}
+
+type ocsf.objects.feature = record{
+  name: string,
+  version: string,
+  uid: string,
+}
+
+type ocsf.objects.kernel = record{
+  name: string,
+  type: string,
+  path: string,
+  type_id: int64,
+  is_system: bool,
+  system_call: string,
+}
+
+type ocsf.objects.enrichment = record{
+  data: None,
+  name: string,
+  type: string,
+  value: string,
+  desc: string,
+  created_time: time,
+  provider: string,
+  reputation: ocsf.objects.reputation,
+  short_desc: string,
+  src_url: string,
+  created_time_dt: time,
+}
+
+type ocsf.objects.related_event = record{
+  type: string,
+  uid: string,
+  type_uid: int64,
+  type_name: string,
+  observables: ocsf.objects.observable,
+  attacks: ocsf.objects.attack,
+  kill_chain: ocsf.objects.kill_chain_phase,
+  product_uid: string,
+}
+
+type ocsf.objects.product = record{
+  name: string,
+  version: string,
+  path: string,
+  uid: string,
+  feature: ocsf.objects.feature,
+  lang: string,
+  cpe_name: string,
+  data_classification: ocsf.objects.data_classification,
+  url_string: string,
+  vendor_name: string,
+}
+
+type ocsf.objects.file = record{
+  attributes: int64,
+  name: string,
+  owner: ocsf.objects.user,
+  size: int64,
+  type: string,
+  version: string,
+  path: string,
+  signature: ocsf.objects.digital_signature,
+  modifier: ocsf.objects.user,
+  product: ocsf.objects.product,
+  desc: string,
+  uid: string,
+  ext: string,
+  type_id: int64,
+  accessor: ocsf.objects.user,
+  company_name: string,
+  creator: ocsf.objects.user,
+  mime_type: string,
+  parent_folder: string,
+  accessed_time: time,
+  confidentiality: string,
+  confidentiality_id: int64,
+  created_time: time,
+  data_classification: ocsf.objects.data_classification,
+  hashes: ocsf.objects.fingerprint,
+  is_system: bool,
+  modified_time: time,
+  security_descriptor: string,
+  xattributes: ocsf.objects.object,
+  created_time_dt: time,
+  accessed_time_dt: time,
+  modified_time_dt: time,
+}
+
+type ocsf.objects.affected_code = record{
+  owner: ocsf.objects.user,
+  file: ocsf.objects.file,
+  end_line: int64,
+  remediation: ocsf.objects.remediation,
+  start_line: int64,
+}
+
+type ocsf.objects.observable = record{
+  name: string,
+  type: string,
+  value: string,
+  type_id: int64,
+  reputation: ocsf.objects.reputation,
+}
+
+type ocsf.objects.table = record{
+  name: string,
+  size: int64,
+  desc: string,
+  uid: string,
+  groups: ocsf.objects.group,
+  created_time: time,
+  modified_time: time,
+  created_time_dt: time,
+  modified_time_dt: time,
+}
+
+type ocsf.objects.cvss = record{
+  version: string,
+  depth: string,
+  severity: string,
+  base_score: double,
+  metrics: ocsf.objects.metric,
+  overall_score: double,
+  vector_string: string,
+}
+
+type ocsf.objects.rule = record{
+  name: string,
+  type: string,
+  version: string,
+  desc: string,
+  uid: string,
+  category: string,
+}
+
+type ocsf.objects.finding = record{
+  title: string,
+  desc: string,
+  uid: string,
+  types: string,
+  remediation: ocsf.objects.remediation,
+  created_time: time,
+  first_seen_time: time,
+  last_seen_time: time,
+  modified_time: time,
+  product_uid: string,
+  related_events: ocsf.objects.related_event,
+  src_url: string,
+  supporting_data: None,
+  created_time_dt: time,
+  modified_time_dt: time,
+  first_seen_time_dt: time,
+  last_seen_time_dt: time,
+}
+
+type ocsf.objects.digital_signature = record{
+  state: string,
+  digest: ocsf.objects.fingerprint,
+  certificate: ocsf.objects.certificate,
+  algorithm: string,
+  algorithm_id: int64,
+  created_time: time,
+  developer_uid: string,
+  state_id: int64,
+  created_time_dt: time,
+}
+
+type ocsf.objects.group = record{
+  name: string,
+  type: string,
+  domain: string,
+  desc: string,
+  uid: string,
+  privileges: string,
+}
+
+type ocsf.objects.certificate = record{
+  version: string,
+  uid: string,
+  is_self_signed: bool,
+  subject: string,
+  issuer: string,
+  fingerprints: ocsf.objects.fingerprint,
+  created_time: time,
+  expiration_time: time,
+  serial_number: string,
+  created_time_dt: time,
+  expiration_time_dt: time,
+}
+
+type ocsf.objects.timespan = record{
+  type: string,
+  duration: int64,
+  type_id: int64,
+  duration_days: int64,
+  duration_hours: int64,
+  duration_mins: int64,
+  duration_months: int64,
+  duration_secs: int64,
+  duration_weeks: int64,
+  duration_years: int64,
+}
+
+type ocsf.objects.cwe = record{
+  uid: string,
+  caption: string,
+  src_url: string,
+}
+
+type ocsf.objects.fingerprint = record{
+  value: string,
+  algorithm: string,
+  algorithm_id: int64,
+}
+
+type ocsf.objects.organization = record{
+  name: string,
+  uid: string,
+  ou_name: string,
+  ou_uid: string,
+}
+
+type ocsf.objects.package = record{
+  name: string,
+  type: string,
+  version: string,
+  hash: ocsf.objects.fingerprint,
+  release: string,
+  epoch: int64,
+  type_id: int64,
+  license: string,
+  architecture: string,
+  cpe_name: string,
+  purl: string,
+  vendor_name: string,
+}
+
+type ocsf.objects.authorization = record{
+  decision: string,
+  policy: ocsf.objects.policy,
+}
