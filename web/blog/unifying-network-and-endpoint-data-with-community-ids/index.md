@@ -127,13 +127,13 @@ relevant fields to the `community_id` function like this:
 
 ```tql title="pipeline.tql"
 // tql2
-from sysmon.json
+from "sysmon.json"
 CommunityID = community_id(
-  src_ip = Event.EventData.SourceIp,
-  src_port = Event.EventData.SourcePort,
-  dst_ip = Event.EventData.DestinationIp,
-  dst_port = Event.EventData.DestinationPort,
-  proto = Event.EventData.Protocol
+  src_ip=Event.EventData.SourceIp,
+  src_port=Event.EventData.SourcePort,
+  dst_ip=Event.EventData.DestinationIp,
+  dst_port=Event.EventData.DestinationPort,
+  proto=Event.EventData.Protocol,
 )
 ```
 
