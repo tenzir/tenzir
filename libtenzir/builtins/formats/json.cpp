@@ -1748,6 +1748,7 @@ public:
           // TODO: Perhaps "indent=0"?
           .add("ndjson", args.compact_output)
           .add("color", args.color_output)
+          .add("omit_nulls", args.omit_nulls)
           .parse(inv, ctx));
     return std::make_unique<write_json>(args);
   }

@@ -11,6 +11,7 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/concept/parseable/tenzir/data.hpp"
 #include "tenzir/detail/base64.hpp"
 #include "tenzir/detail/passthrough.hpp"
@@ -18,6 +19,7 @@
 #include "tenzir/table_slice_builder.hpp"
 #include "tenzir/type.hpp"
 
+#include <arrow/compute/cast.h>
 #include <caf/expected.hpp>
 
 namespace tenzir {
@@ -393,13 +395,21 @@ struct cast_helper<record_type, record_type> {
           break;
         }
       }
-      auto visitor = [&]<class FromType, class ToType>(const FromType& from_type, const ToType& to_type) -> std::shared_ptr<arrow::Array>{
-        return cast_helper<FromType, ToType>::cast(from_type, std::dynamic_pointer_cast<type_to_arrow_array_t<FromType>>(from_field_array), to_type);
+      auto visitor = [&]<class FromType, class ToType>(
+                       const FromType& from_type,
+                       const ToType& to_type) -> std::shared_ptr<arrow::Array> {
+        return cast_helper<FromType, ToType>::cast(
+          from_type,
+          std::dynamic_pointer_cast<type_to_arrow_array_t<FromType>>(
+            from_field_array),
+          to_type);
       };
       children.push_back(caf::visit(visitor, from_field_type, to_field.type));
     }
-    return make_struct_array(from_array->length(), from_array->null_bitmap(),
-                             fields, children);
+    auto result = make_struct_array(
+      from_array->length(), from_array->null_bitmap(), fields, children);
+    check(result->ValidateFull());
+    return result;
   }
 
   template <class InputType>
@@ -536,11 +546,17 @@ struct cast_helper<uint64_type, int64_type> {
     return static_cast<int64_t>(value);
   }
 
-  static auto
-  cast(const uint64_type&, std::shared_ptr<type_to_arrow_array_t<uint64_type>>,
-       const int64_type&) noexcept
+  static auto cast(const uint64_type&,
+                   std::shared_ptr<type_to_arrow_array_t<uint64_type>> array,
+                   const int64_type&) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<int64_type>> {
-    die("unimplemented");
+    // TODO: Not properly implemented!
+    auto opts = arrow::compute::CastOptions{};
+    opts.to_type = arrow::int64();
+    auto result = std::dynamic_pointer_cast<arrow::Int64Array>(
+      check(arrow::compute::Cast(array, opts)).make_array());
+    TENZIR_ASSERT(result);
+    return result;
   }
 };
 
@@ -1078,11 +1094,31 @@ struct cast_helper<string_type, ToType> {
     return from_str(value, to);
   }
 
-  static auto
-  cast(const string_type&, std::shared_ptr<type_to_arrow_array_t<string_type>>,
-       const ToType&) noexcept
+  static auto cast(const string_type&,
+                   std::shared_ptr<type_to_arrow_array_t<string_type>> array,
+                   const ToType& to_type) noexcept
     -> std::shared_ptr<type_to_arrow_array_t<ToType>> {
-    die("unimplemented");
+    // TODO: Not properly implemented!
+    auto b = to_type.make_arrow_builder(arrow::default_memory_pool());
+    check(b->Reserve(array->length()));
+    if constexpr (detail::is_any_v<ToType, list_type, record_type, map_type>) {
+      check(b->AppendNulls(array->length()));
+    } else {
+      for (auto str : *array) {
+        if (not str) {
+          check(b->AppendNull());
+          continue;
+        }
+        auto result = from_str(*str, to_type);
+        if (not result) {
+          // TODO
+          check(b->AppendNull());
+          continue;
+        }
+        check(append_builder(to_type, *b, *result));
+      }
+    }
+    return finish(*b);
   }
 };
 

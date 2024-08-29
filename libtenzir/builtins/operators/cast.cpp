@@ -40,9 +40,7 @@ public:
         co_yield {};
         continue;
       }
-      auto result = tenzir::cast(slice, ty_);
-      TENZIR_WARN("produced {}", result.schema().to_arrow_schema()->ToString());
-      co_yield std::move(result);
+      co_yield tenzir::cast(slice, ty_);
     }
   }
 

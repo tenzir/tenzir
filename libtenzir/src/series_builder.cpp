@@ -91,10 +91,6 @@ namespace tenzir {
 
 namespace {
 
-void check(const arrow::Status& status) {
-  TENZIR_ASSERT(status.ok(), status.ToString().c_str());
-}
-
 template <class T>
 struct is_atom_type
   : std::bool_constant<basic_type<T> || std::same_as<T, enumeration_type>> {};
