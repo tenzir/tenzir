@@ -14,7 +14,7 @@
 
 namespace tenzir {
 
-auto cast(table_slice from_slice, const type& to_schema) noexcept
+auto cast(const table_slice& from_slice, const type& to_schema) noexcept
   -> table_slice {
   TENZIR_ASSERT_EXPENSIVE(can_cast(from_slice.schema(), to_schema));
   if (from_slice.schema() == to_schema)

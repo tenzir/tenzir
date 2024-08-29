@@ -1,3 +1,5 @@
+// The Transport Layer Security (TLS) object describes the negotiated TLS
+// protocol used for secure communications over an establish network connection.
 type ocsf.objects.tls = record{
   version: string,
   alert: int64,
@@ -16,6 +18,8 @@ type ocsf.objects.tls = record{
   tls_extension_list: ocsf.objects.tls_extension,
 }
 
+// The Account object contains details about the account that initiated or
+// performed a specific activity within a system or application.
 type ocsf.objects.account = record{
   name: string,
   type: string,
@@ -24,6 +28,12 @@ type ocsf.objects.account = record{
   type_id: int64,
 }
 
+// The Endpoint object describes a physical or virtual device that connects to
+// and exchanges information with a computer network. Some examples of endpoints
+// are mobile devices, desktop computers, virtual machines, embedded devices,
+// and servers. Internet-of-Things devices—like cameras, lighting,
+// refrigerators, security systems, smart speakers, and thermostats—are also
+// endpoints.
 type ocsf.objects.endpoint = record{
   name: string,
   owner: ocsf.objects.user,
@@ -37,28 +47,40 @@ type ocsf.objects.endpoint = record{
   mac: string,
   type_id: int64,
   agent_list: ocsf.objects.agent,
-  container: ocsf.objects.container,
   hw_info: ocsf.objects.device_hw_info,
   instance_uid: string,
   interface_name: string,
   interface_uid: string,
-  namespace_pid: int64,
   subnet_uid: string,
   vlan_uid: string,
   vpc_uid: string,
   zone: string,
 }
 
+// The Kill Chain Phase object represents a single phase of a cyber attack,
+// including the initial reconnaissance and planning stages up to the final
+// objective of the attacker. It provides a detailed description of each phase
+// and its associated activities within the broader context of a cyber attack.
+// See <a target='_blank' href='https://www.lockheedmartin.com/en-
+// us/capabilities/cyber/cyber-kill-chain.html'>Cyber Kill Chain®</a>.
 type ocsf.objects.kill_chain_phase = record{
   phase: string,
   phase_id: int64,
 }
 
+// The CIS Critical Security Control (CSC) contains information as defined by
+// the Center for Internet Security Critical Security Control <a target='_blank'
+// href='https://www.cisecurity.org/controls'>(CIS CSC)</a>. Prioritized set of
+// actions to protect your organization and data from cyber-attack vectors.
 type ocsf.objects.cis_csc = record{
   control: string,
   version: string,
 }
 
+// The Policy object describes the policies that are applicable. <p>Policy
+// attributes provide traceability to the operational state of the security
+// product at the time that the event was captured, facilitating forensics,
+// troubleshooting, and policy tuning/adjustments.</p>
 type ocsf.objects.policy = record{
   name: string,
   version: string,
@@ -68,12 +90,18 @@ type ocsf.objects.policy = record{
   is_applied: bool,
 }
 
+// The MITRE ATT&CK® Technique object describes the technique ID and/or name
+// associated to an attack, as defined by <a target='_blank'
+// href='https://attack.mitre.org/wiki/ATT&CK_Matrix'>ATT&CK® Matrix</a>.
 type ocsf.objects.technique = record{
   name: string,
   uid: string,
   src_url: string,
 }
 
+// The Session object describes details about an authenticated session. e.g.
+// Session Creation Time, Session Issuer. Defined by D3FEND <a target='_blank'
+// href='https://d3fend.mitre.org/dao/artifact/d3f:Session/'>d3f:Session</a>.
 type ocsf.objects.session = record{
   count: int64,
   terminal: string,
@@ -88,15 +116,19 @@ type ocsf.objects.session = record{
   is_remote: bool,
   is_vpn: bool,
   uid_alt: string,
-  created_time_dt: time,
-  expiration_time_dt: time,
 }
 
+// An autonomous system (AS) is a collection of connected Internet Protocol (IP)
+// routing prefixes under the control of one or more network operators on behalf
+// of a single administrative entity or domain that presents a common, clearly
+// defined routing policy to the internet.
 type ocsf.objects.autonomous_system = record{
   name: string,
   number: int64,
 }
 
+// The API, or Application Programming Interface, object represents  information
+// pertaining to an API request and response.
 type ocsf.objects.api = record{
   version: string,
   request: ocsf.objects.request,
@@ -106,11 +138,17 @@ type ocsf.objects.api = record{
   operation: string,
 }
 
+// The Security State object describes the security related state of a managed
+// entity.
 type ocsf.objects.security_state = record{
   state: string,
   state_id: int64,
 }
 
+// The network proxy endpoint object describes a proxy server, which acts as an
+// intermediary between a client requesting a resource and the server providing
+// that resource.  Defined by D3FEND <a target='_blank' href='https://d3fend.mit
+// re.org/dao/artifact/d3f:ProxyServer/'>d3f:ProxyServer</a>.
 type ocsf.objects.network_proxy = record{
   name: string,
   owner: ocsf.objects.user,
@@ -126,14 +164,11 @@ type ocsf.objects.network_proxy = record{
   type_id: int64,
   agent_list: ocsf.objects.agent,
   autonomous_system: ocsf.objects.autonomous_system,
-  container: ocsf.objects.container,
   hw_info: ocsf.objects.device_hw_info,
   instance_uid: string,
   interface_name: string,
   interface_uid: string,
   intermediate_ips: ip,
-  namespace_pid: int64,
-  proxy_endpoint: ocsf.objects.network_proxy,
   subnet_uid: string,
   svc_name: string,
   vlan_uid: string,
@@ -141,6 +176,12 @@ type ocsf.objects.network_proxy = record{
   zone: string,
 }
 
+// The DNS query object represents a specific request made to the Domain Name
+// System (DNS) to retrieve information about a domain or perform a DNS
+// operation. This object encapsulates the necessary attributes and methods to
+// construct and send DNS queries, specify the query type (e.g., A, AAAA, MX).
+// Defined by D3FEND <a target='_blank' href='https://d3fend.mitre.org/dao/artif
+// act/d3f:DNSLookup/'>d3f:DNSLookup</a>.
 type ocsf.objects.dns_query = record{
   type: string,
   hostname: string,
@@ -150,6 +191,9 @@ type ocsf.objects.dns_query = record{
   packet_uid: int64,
 }
 
+// The Email object describes the email metadata such as sender, recipients, and
+// direction. Defined by D3FEND <a target='_blank'
+// href='https://d3fend.mitre.org/dao/artifact/d3f:Email/'>d3f:Email</a>.
 type ocsf.objects.email = record{
   size: int64,
   uid: string,
@@ -157,7 +201,6 @@ type ocsf.objects.email = record{
   cc: string,
   to: string,
   subject: string,
-  data_classification: ocsf.objects.data_classification,
   delivered_to: string,
   message_uid: string,
   raw_header: string,
@@ -167,12 +210,20 @@ type ocsf.objects.email = record{
   x_originating_ip: ip,
 }
 
+// The OCSF Schema Extension object provides detailed information about the
+// schema extension used to construct the event. The schema extensions are
+// registered in the <a target='_blank' href='https://github.com/ocsf/ocsf-
+// schema/blob/main/extensions.md'>extensions.md</a> file.
 type ocsf.objects.extension = record{
   name: string,
   version: string,
   uid: string,
 }
 
+// The Firewall Rule object represents a specific rule within a firewall policy
+// or event. It contains information about a rule's configuration, properties,
+// and associated actions that define how network traffic is handled by the
+// firewall.
 type ocsf.objects.firewall_rule = record{
   name: string,
   type: string,
@@ -188,6 +239,11 @@ type ocsf.objects.firewall_rule = record{
   sensitivity: string,
 }
 
+// The Uniform Resource Locator(URL) object describes the characteristics of a
+// URL. Defined in <a target='_blank'
+// href='https://datatracker.ietf.org/doc/html/rfc1738'>RFC 1738</a> and by
+// D3FEND <a target='_blank'
+// href='https://d3fend.mitre.org/dao/artifact/d3f:URL/'>d3f:URL</a>.
 type ocsf.objects.url = record{
   port: int64,
   scheme: string,
@@ -202,10 +258,10 @@ type ocsf.objects.url = record{
   url_string: string,
 }
 
+// The additional LDAP attributes that describe a person.
 type ocsf.objects.ldap_person = record{
   location: ocsf.objects.location,
   labels: string,
-  manager: ocsf.objects.user,
   cost_center: string,
   created_time: time,
   deleted_time: time,
@@ -221,20 +277,19 @@ type ocsf.objects.ldap_person = record{
   modified_time: time,
   office_location: string,
   surname: string,
-  created_time_dt: time,
-  modified_time_dt: time,
-  leave_time_dt: time,
-  hire_time_dt: time,
-  last_login_time_dt: time,
-  deleted_time_dt: time,
 }
 
+// The MITRE ATT&CK® Sub Technique object describes the sub technique ID and/or
+// name associated to an attack, as defined by <a target='_blank'
+// href='https://attack.mitre.org/wiki/ATT&CK_Matrix'>ATT&CK® Matrix</a>.
 type ocsf.objects.sub_technique = record{
   name: string,
   uid: string,
   src_url: string,
 }
 
+// The Network Endpoint object describes characteristics of a network endpoint.
+// These can be a source or destination of a network connection.
 type ocsf.objects.network_endpoint = record{
   name: string,
   owner: ocsf.objects.user,
@@ -250,13 +305,11 @@ type ocsf.objects.network_endpoint = record{
   type_id: int64,
   agent_list: ocsf.objects.agent,
   autonomous_system: ocsf.objects.autonomous_system,
-  container: ocsf.objects.container,
   hw_info: ocsf.objects.device_hw_info,
   instance_uid: string,
   interface_name: string,
   interface_uid: string,
   intermediate_ips: ip,
-  namespace_pid: int64,
   proxy_endpoint: ocsf.objects.network_proxy,
   subnet_uid: string,
   svc_name: string,
@@ -265,6 +318,8 @@ type ocsf.objects.network_endpoint = record{
   zone: string,
 }
 
+// The JA4+ fingerprint object provides detailed fingerprint information about
+// various aspects of network traffic which is both machine and human readable.
 type ocsf.objects.ja4_fingerprint = record{
   type: string,
   value: string,
@@ -275,6 +330,8 @@ type ocsf.objects.ja4_fingerprint = record{
   section_d: string,
 }
 
+// The Display object contains information about the physical or virtual display
+// connected to a computer system.
 type ocsf.objects.display = record{
   color_depth: int64,
   physical_height: int64,
@@ -283,11 +340,16 @@ type ocsf.objects.display = record{
   scale_factor: int64,
 }
 
+// The Metric object defines a simple name/value pair entity for a metric.
 type ocsf.objects.metric = record{
   name: string,
   value: string,
 }
 
+// The <a target='_blank' href='https://attack.mitre.org'>MITRE ATT&CK®</a>
+// object describes the tactic, technique & sub-technique associated to an
+// attack as defined in <a target='_blank'
+// href='https://attack.mitre.org/wiki/ATT&CK_Matrix'>ATT&CK® Matrix</a>.
 type ocsf.objects.attack = record{
   version: string,
   tactics: ocsf.objects.tactic,
@@ -296,6 +358,8 @@ type ocsf.objects.attack = record{
   tactic: ocsf.objects.tactic,
 }
 
+// An Authentication Factor object describes a category of methods used for
+// identity verification in an authentication attempt.
 type ocsf.objects.auth_factor = record{
   device: ocsf.objects.device,
   email_addr: string,
@@ -308,6 +372,10 @@ type ocsf.objects.auth_factor = record{
   security_questions: string,
 }
 
+// The HTTP Response object contains detailed information about the response
+// sent from a web server to the requester. It encompasses attributes and
+// metadata that describe the response status, headers, body content, and other
+// relevant information.
 type ocsf.objects.http_response = record{
   code: int64,
   message: string,
@@ -318,6 +386,10 @@ type ocsf.objects.http_response = record{
   latency: int64,
 }
 
+// The Network Traffic object describes characteristics of network traffic.
+// Network traffic refers to data moving across a network at a given point of
+// time. Defined by D3FEND <a target='_blank' href='https://d3fend.mitre.org/dao
+// /artifact/d3f:NetworkTraffic/'>d3f:NetworkTraffic</a>.
 type ocsf.objects.network_traffic = record{
   bytes_in: int64,
   bytes_out: int64,
@@ -330,6 +402,9 @@ type ocsf.objects.network_traffic = record{
   packets_out: int64,
 }
 
+// The Image object provides a description of a specific Virtual Machine (VM) or
+// Container image. Defined by D3FEND <a target='_blank' href='https://d3fend.mi
+// tre.org/dao/artifact/d3f:ContainerImage/'>d3f:ContainerImage</a>.
 type ocsf.objects.image = record{
   name: string,
   tag: string,
@@ -338,13 +413,20 @@ type ocsf.objects.image = record{
   labels: string,
 }
 
+// The Identity Provider object contains detailed information about a provider
+// responsible for creating, maintaining, and managing identity information
+// while offering authentication services to applications. An Identity Provider
+// (IdP) serves as a trusted authority that verifies the identity of users and
+// issues authentication tokens or assertions to enable secure access to
+// applications or services.
 type ocsf.objects.idp = record{
   name: string,
   uid: string,
 }
 
+// The Resource Details object describes details about resources that were
+// affected by the activity/event.
 type ocsf.objects.resource_details = record{
-  data: None,
   name: string,
   owner: ocsf.objects.user,
   type: string,
@@ -354,46 +436,43 @@ type ocsf.objects.resource_details = record{
   labels: string,
   namespace: string,
   agent_list: ocsf.objects.agent,
-  cloud_partition: string,
   criticality: string,
-  data_classification: ocsf.objects.data_classification,
-  region: string,
 }
 
+// The Process object describes a running instance of a launched program.
+// Defined by D3FEND <a target='_blank'
+// href='https://d3fend.mitre.org/dao/artifact/d3f:Process/'>d3f:Process</a>.
 type ocsf.objects.process = record{
   name: string,
   pid: int64,
   session: ocsf.objects.session,
   file: ocsf.objects.file,
   user: ocsf.objects.user,
-  group: ocsf.objects.group,
   tid: int64,
   uid: string,
   loaded_modules: string,
   cmd_line: string,
-  container: ocsf.objects.container,
   created_time: time,
   integrity: string,
   integrity_id: int64,
   lineage: string,
-  namespace_pid: int64,
-  parent_process: ocsf.objects.process,
   sandbox: string,
   terminated_time: time,
   xattributes: ocsf.objects.object,
-  auid: int64,
-  euid: int64,
-  egid: int64,
-  terminated_time_dt: time,
-  created_time_dt: time,
 }
 
+// The <a target='_blank' href='https://d3fend.mitre.org'>MITRE D3FEND™</a>
+// object describes the tactic, technique & sub-technique associated with a
+// countermeasure as defined in <a target='_blank'
+// href='https://d3fend.mitre.org/'>DEFEND Matrix<sup>TM</sup></a>.
 type ocsf.objects.d3fend = record{
   version: string,
   d3f_tactic: ocsf.objects.d3f_tactic,
   d3f_technique: ocsf.objects.d3f_technique,
 }
 
+// The Remediation object describes the recommended remediation steps to address
+// identified issue(s).
 type ocsf.objects.remediation = record{
   desc: string,
   references: string,
@@ -401,18 +480,21 @@ type ocsf.objects.remediation = record{
   kb_articles: string,
 }
 
+// The Windows resource object describes a resource object managed by Windows,
+// such as mutant or timer.
 type ocsf.objects.win_resource = record{
-  data: None,
   name: string,
   type: string,
   uid: string,
   labels: string,
   details: string,
   type_id: int64,
-  data_classification: ocsf.objects.data_classification,
   svc_name: string,
 }
 
+// The load balancer object describes the load balancer entity and contains
+// additional information regarding the distribution of traffic across a
+// network.
 type ocsf.objects.load_balancer = record{
   code: int64,
   message: string,
@@ -427,6 +509,10 @@ type ocsf.objects.load_balancer = record{
   status_detail: string,
 }
 
+// The DNS Answer object represents a specific response provided by the Domain
+// Name System (DNS) when querying for information about a domain or performing
+// a DNS operation. It encapsulates the relevant details and data returned by
+// the DNS server in response to a query.
 type ocsf.objects.dns_answer = record{
   flags: string,
   type: string,
@@ -437,6 +523,8 @@ type ocsf.objects.dns_answer = record{
   rdata: string,
 }
 
+// The Service object describes characteristics of a service, <code> e.g. AWS
+// EC2. </code>
 type ocsf.objects.service = record{
   name: string,
   version: string,
@@ -444,6 +532,9 @@ type ocsf.objects.service = record{
   labels: string,
 }
 
+// The Keyboard Information object contains details and attributes related to a
+// computer or device keyboard. It encompasses information that describes the
+// characteristics, capabilities, and configuration of the keyboard.
 type ocsf.objects.keyboard_info = record{
   function_keys: int64,
   ime: string,
@@ -452,6 +543,9 @@ type ocsf.objects.keyboard_info = record{
   keyboard_type: string,
 }
 
+// The Container object describes an instance of a specific container. A
+// container is a prepackaged, portable system image that runs isolated on an
+// existing system using a container runtime like containerd.
 type ocsf.objects.container = record{
   name: string,
   runtime: string,
@@ -465,6 +559,10 @@ type ocsf.objects.container = record{
   pod_uuid: string,
 }
 
+// The vulnerability is an unintended characteristic of a computing component or
+// system configuration that multiplies the risk of an adverse event or a loss
+// occurring either due to accidental exposure, deliberate attack, or conflict
+// with new system components.
 type ocsf.objects.vulnerability = record{
   title: string,
   desc: string,
@@ -485,10 +583,14 @@ type ocsf.objects.vulnerability = record{
   packages: ocsf.objects.package,
   related_vulnerabilities: string,
   vendor_name: string,
-  first_seen_time_dt: time,
-  last_seen_time_dt: time,
 }
 
+// The HTTP Cookie object, also known as a web cookie or browser cookie,
+// contains details and values pertaining to a small piece of data that a server
+// sends to a user's web browser. This data is then stored by the browser and
+// sent back to the server with subsequent requests, allowing the server to
+// remember and track certain information about the user's browsing session or
+// preferences.
 type ocsf.objects.http_cookie = record{
   name: string,
   value: string,
@@ -500,9 +602,11 @@ type ocsf.objects.http_cookie = record{
   is_http_only: bool,
   is_secure: bool,
   samesite: string,
-  expiration_time_dt: time,
 }
 
+// The resources of a WHOIS record for a given domain. This can include domain
+// names, IP address blocks, autonomous system information, and/or contact and
+// registration information for a domain.
 type ocsf.objects.whois = record{
   status: string,
   domain: string,
@@ -518,10 +622,9 @@ type ocsf.objects.whois = record{
   last_seen_time: time,
   name_servers: string,
   phone_number: string,
-  created_time_dt: time,
-  last_seen_time_dt: time,
 }
 
+// The KB Article object contains metadata that describes the patch or update.
 type ocsf.objects.kb_article = record{
   size: int64,
   os: ocsf.objects.os,
@@ -537,9 +640,10 @@ type ocsf.objects.kb_article = record{
   install_state_id: int64,
   is_superseded: bool,
   src_url: string,
-  created_time_dt: time,
 }
 
+// The contact information related to a domain registration, e.g., registrant,
+// administrator, abuse, billing, or technical contact.
 type ocsf.objects.domain_contact = record{
   name: string,
   type: string,
@@ -550,12 +654,19 @@ type ocsf.objects.domain_contact = record{
   phone_number: string,
 }
 
+// The MITRE ATT&CK® Tactic object describes the tactic ID and/or name that is
+// associated to an attack, as defined by <a target='_blank'
+// href='https://attack.mitre.org/wiki/ATT&CK_Matrix'>ATT&CK® Matrix</a>.
 type ocsf.objects.tactic = record{
   name: string,
   uid: string,
   src_url: string,
 }
 
+// The Common Vulnerabilities and Exposures (CVE) object represents publicly
+// disclosed cybersecurity vulnerabilities defined in CVE Program catalog (<a
+// target='_blank' href='https://cve.mitre.org/'>CVE</a>). There is one CVE
+// Record for each vulnerability in the catalog.
 type ocsf.objects.cve = record{
   type: string,
   title: string,
@@ -570,10 +681,11 @@ type ocsf.objects.cve = record{
   cwe_url: string,
   epss: ocsf.objects.epss,
   modified_time: time,
-  created_time_dt: time,
-  modified_time_dt: time,
 }
 
+// The Geo Location object describes a geographical location, usually associated
+// with an IP address. Defined by D3FEND <a target='_blank' href='https://d3fend
+// .mitre.org/dao/artifact/d3f:PhysicalLocation/'>d3f:PhysicalLocation</a>.
 type ocsf.objects.location = record{
   desc: string,
   long: double,
@@ -590,6 +702,7 @@ type ocsf.objects.location = record{
   region: string,
 }
 
+// The Module object describes the load attributes of a module.
 type ocsf.objects.module = record{
   type: string,
   file: ocsf.objects.file,
@@ -600,6 +713,14 @@ type ocsf.objects.module = record{
   start_address: string,
 }
 
+// An Agent (also known as a Sensor) is typically installed on an Operating
+// System (OS) and serves as a specialized software component that can be
+// designed to monitor, detect, collect, archive, or take action. These
+// activities and possible actions are defined by the upstream system
+// controlling the Agent and its intended purpose. For instance, an Agent can
+// include Endpoint Detection & Response (EDR) agents, backup/disaster recovery
+// sensors, Application Performance Monitoring or profiling sensors, and similar
+// software.
 type ocsf.objects.agent = record{
   name: string,
   type: string,
@@ -611,6 +732,10 @@ type ocsf.objects.agent = record{
   vendor_name: string,
 }
 
+// The HTTP Request object represents the attributes of a request made to a web
+// server. It encapsulates the details and metadata associated with an HTTP
+// request, including the request method, headers, URL, query parameters, body
+// content, and other relevant information.
 type ocsf.objects.http_request = record{
   args: string,
   version: string,
@@ -624,6 +749,9 @@ type ocsf.objects.http_request = record{
   referrer: string,
 }
 
+// The Email Authentication object describes the Sender Policy Framework (SPF),
+// DomainKeys Identified Mail (DKIM) and Domain-based Message Authentication,
+// Reporting and Conformance (DMARC) attributes of an email.
 type ocsf.objects.email_auth = record{
   spf: string,
   dkim: string,
@@ -634,6 +762,11 @@ type ocsf.objects.email_auth = record{
   dmarc_policy: string,
 }
 
+// The CIS Benchmark Result object contains information as defined by the Center
+// for Internet Security (<a target='_blank'
+// href='https://www.cisecurity.org/cis-benchmarks/'>CIS</a>) benchmark result.
+// CIS Benchmarks are a collection of best practices for securely configuring IT
+// systems, software, networks, and cloud infrastructure.
 type ocsf.objects.cis_benchmark_result = record{
   name: string,
   desc: string,
@@ -641,6 +774,8 @@ type ocsf.objects.cis_benchmark_result = record{
   rule: ocsf.objects.rule,
 }
 
+// The Finding Information object describes metadata related to a security
+// finding generated by a security tool or system.
 type ocsf.objects.finding_info = record{
   title: string,
   desc: string,
@@ -658,29 +793,25 @@ type ocsf.objects.finding_info = record{
   related_analytics: ocsf.objects.analytic,
   related_events: ocsf.objects.related_event,
   src_url: string,
-  created_time_dt: time,
-  modified_time_dt: time,
-  first_seen_time_dt: time,
-  last_seen_time_dt: time,
 }
 
+// The Device object represents an addressable computer system or host, which is
+// typically connected to a computer network and participates in the
+// transmission or processing of data within the computer network. Defined by
+// D3FEND <a target='_blank'
+// href='https://d3fend.mitre.org/dao/artifact/d3f:Host/'>d3f:Host</a>.
 type ocsf.objects.device = record{
   hw_info: ocsf.objects.device_hw_info,
   groups: ocsf.objects.group,
   zone: string,
-  namespace_pid: int64,
   image: ocsf.objects.image,
   ip: ip,
-  last_seen_time_dt: time,
-  container: ocsf.objects.container,
   vpc_uid: string,
   network_interfaces: ocsf.objects.network_interface,
-  boot_time_dt: time,
   location: ocsf.objects.location,
   owner: ocsf.objects.user,
   uid: string,
   is_managed: bool,
-  created_time_dt: time,
   is_personal: bool,
   is_compliant: bool,
   os: ocsf.objects.os,
@@ -701,7 +832,6 @@ type ocsf.objects.device = record{
   first_seen_time: time,
   name: string,
   agent_list: ocsf.objects.agent,
-  first_seen_time_dt: time,
   interface_uid: string,
   modified_time: time,
   subnet_uid: string,
@@ -711,20 +841,27 @@ type ocsf.objects.device = record{
   instance_uid: string,
   type: string,
   risk_level: string,
-  modified_time_dt: time,
   desc: string,
   boot_time: time,
   risk_score: int64,
 }
 
+// The MITRE DEFEND™ Technique object describes the leaf defensive technique ID
+// and/or name associated to a countermeasure, as defined by <a target='_blank'
+// href='https://d3fend.mitre.org'>D3FEND<sup>TM</sup> Matrix</a>.
 type ocsf.objects.d3f_technique = record{
   name: string,
   uid: string,
   src_url: string,
 }
 
+// The Managed Entity object describes the type and version of an entity, such
+// as a user, device, or policy.  For types in the <code>type_id</code> enum
+// list, an associated attribute should be populated.  If the type of entity is
+// not in the <code>type_id</code> list, information can be put into the
+// <code>data</code> attribute and the <code>type</code> attribute should
+// identify the entity.
 type ocsf.objects.managed_entity = record{
-  data: None,
   name: string,
   type: string,
   version: string,
@@ -738,6 +875,8 @@ type ocsf.objects.managed_entity = record{
   policy: ocsf.objects.policy,
 }
 
+// The Affected Package object describes details about a software package
+// identified as affected by a vulnerability/vulnerabilities.
 type ocsf.objects.affected_package = record{
   name: string,
   type: string,
@@ -757,17 +896,18 @@ type ocsf.objects.affected_package = record{
   vendor_name: string,
 }
 
+// The Web Resource object describes characteristics of a web resource that was
+// affected by the activity/event.
 type ocsf.objects.web_resource = record{
-  data: None,
   name: string,
   type: string,
   desc: string,
   uid: string,
   labels: string,
-  data_classification: ocsf.objects.data_classification,
   url_string: string,
 }
 
+// The Scan object describes characteristics of a proactive scan.
 type ocsf.objects.scan = record{
   name: string,
   type: string,
@@ -775,12 +915,20 @@ type ocsf.objects.scan = record{
   type_id: int64,
 }
 
+// The CIS Control (aka Critical Security Control) object describes a
+// prioritized set of actions to protect your organization and data from cyber-
+// attack vectors. The <a target='_blank'
+// href='https://www.cisecurity.org/controls'>CIS Controls</a> are defined by
+// the Center for Internet Security.
 type ocsf.objects.cis_control = record{
   name: string,
   version: string,
   desc: string,
 }
 
+// The Network Connection Information object describes characteristics of a
+// network connection. Defined by D3FEND <a target='_blank' href='https://d3fend
+// .mitre.org/dao/artifact/d3f:NetworkSession/'>d3f:NetworkSession</a>.
 type ocsf.objects.network_connection_info = record{
   session: ocsf.objects.session,
   uid: string,
@@ -795,6 +943,9 @@ type ocsf.objects.network_connection_info = record{
   tcp_flags: int64,
 }
 
+// The database object is used for databases which are typically datastore
+// services that contain an organized collection of structured and unstructured
+// data or a types of data.
 type ocsf.objects.database = record{
   name: string,
   size: int64,
@@ -804,12 +955,11 @@ type ocsf.objects.database = record{
   groups: ocsf.objects.group,
   type_id: int64,
   created_time: time,
-  data_classification: ocsf.objects.data_classification,
   modified_time: time,
-  created_time_dt: time,
-  modified_time_dt: time,
 }
 
+// The RPC Interface represents the remote procedure call interface used in the
+// DCE/RPC session.
 type ocsf.objects.rpc_interface = record{
   version: string,
   uuid: string,
@@ -817,32 +967,38 @@ type ocsf.objects.rpc_interface = record{
   ack_result: int64,
 }
 
+// The Request Elements object describes characteristics of an API request.
 type ocsf.objects.request = record{
-  data: None,
   flags: string,
   uid: string,
   containers: ocsf.objects.container,
 }
 
+// The TLS Extension object describes additional attributes that extend the base
+// Transport Layer Security (TLS) object.
 type ocsf.objects.tls_extension = record{
-  data: None,
   type: string,
   type_id: int64,
 }
 
+// The Subject Alternative name (SAN) object describes a SAN secured by a
+// digital certificate
 type ocsf.objects.san = record{
   name: string,
   type: string,
 }
 
+// The registry key object describes a Windows registry key. Defined by D3FEND
+// <a target='_blank' href='https://d3fend.mitre.org/dao/artifact/d3f:WindowsReg
+// istryKey/'>d3f:WindowsRegistryKey</a>.
 type ocsf.objects.reg_key = record{
   path: string,
   is_system: bool,
   modified_time: time,
   security_descriptor: string,
-  modified_time_dt: time,
 }
 
+// The Windows Service object describes a Windows service.
 type ocsf.objects.win_service = record{
   name: string,
   version: string,
@@ -862,6 +1018,8 @@ type ocsf.objects.win_service = record{
   service_type_id: int64,
 }
 
+// The Actor object contains details about the user, role, application, service,
+// or process that initiated or performed a specific activity.
 type ocsf.objects.actor = record{
   process: ocsf.objects.process,
   session: ocsf.objects.session,
@@ -873,15 +1031,29 @@ type ocsf.objects.actor = record{
   invoked_by: string,
 }
 
+// The CIS Benchmark object describes best practices for securely configuring IT
+// systems, software, networks, and cloud infrastructure as defined by the <a
+// target='_blank' href='https://www.cisecurity.org/cis-benchmarks/'>Center for
+// Internet Security</a>. See also <a target='_blank'
+// href='https://www.cisecurity.org/insights/blog/getting-to-know-the-cis-
+// benchmarks'>Getting to Know the CIS Benchmarks</a>.
 type ocsf.objects.cis_benchmark = record{
   name: string,
   desc: string,
   cis_controls: ocsf.objects.cis_control,
 }
 
+// An unordered collection of attributes. It defines a set of attributes
+// available in all objects. It can be also used as a generic object to log
+// objects that are not otherwise defined by the schema.
 type ocsf.objects.object = record{
 }
 
+// The OSINT (Open Source Intelligence) object contains details related to an
+// indicator such as the indicator itself, related indicators, geolocation,
+// registrar information, subdomains, analyst commentary, and other contextual
+// information. This information can be used to further enrich a detection or
+// finding by providing decisioning support to other analysts and engineers.
 type ocsf.objects.osint = record{
   name: string,
   type: string,
@@ -907,6 +1079,9 @@ type ocsf.objects.osint = record{
   whois: ocsf.objects.whois,
 }
 
+// The User object describes the characteristics of a user/person or a security
+// principal. Defined by D3FEND <a target='_blank' href='https://d3fend.mitre.or
+// g/dao/artifact/d3f:UserAccount/'>d3f:UserAccount</a>.
 type ocsf.objects.user = record{
   name: string,
   type: string,
@@ -926,6 +1101,8 @@ type ocsf.objects.user = record{
   uid_alt: string,
 }
 
+// The Reputation object describes the reputation/risk score of an entity (e.g.
+// device, user, domain).
 type ocsf.objects.reputation = record{
   base_score: double,
   provider: string,
@@ -933,12 +1110,18 @@ type ocsf.objects.reputation = record{
   score_id: int64,
 }
 
+// The MITRE D3FEND™ Tactic object describes the tactic ID and/or name that is
+// associated to an attack, as defined by <a target='_blank'
+// href='https://d3fend.mitre.org'>D3FEND<sup>TM</sup> Matrix</a>.
 type ocsf.objects.d3f_tactic = record{
   name: string,
   uid: string,
   src_url: string,
 }
 
+// The Metadata object describes the metadata associated with the event. Defined
+// by D3FEND <a target='_blank'
+// href='https://d3fend.mitre.org/dao/artifact/d3f:Metadata/'>d3f:Metadata</a>.
 type ocsf.objects.metadata = record{
   version: string,
   extension: ocsf.objects.extension,
@@ -950,7 +1133,6 @@ type ocsf.objects.metadata = record{
   sequence: int64,
   profiles: string,
   correlation_uid: string,
-  data_classification: ocsf.objects.data_classification,
   event_code: string,
   log_name: string,
   log_provider: string,
@@ -961,11 +1143,10 @@ type ocsf.objects.metadata = record{
   original_time: string,
   processed_time: time,
   tenant_uid: string,
-  modified_time_dt: time,
-  processed_time_dt: time,
-  logged_time_dt: time,
 }
 
+// The peripheral device object describes the identity, vendor and model of a
+// peripheral device.
 type ocsf.objects.peripheral_device = record{
   name: string,
   class: string,
@@ -975,10 +1156,17 @@ type ocsf.objects.peripheral_device = record{
   vendor_name: string,
 }
 
+// The Kernel Extension object describes a kernel driver that has been loaded or
+// unloaded into the operating system (OS) kernel. Defined by D3FEND <a
+// target='_blank' href='https://d3fend.mitre.org/dao/artifact/d3f:KernelModule/
+// '>d3f:KernelModule</a>.
 type ocsf.objects.kernel_driver = record{
   file: ocsf.objects.file,
 }
 
+// The Operating System (OS) object describes characteristics of an OS, such as
+// Linux or Windows. Defined by D3FEND <a target='_blank' href='https://d3fend.m
+// itre.org/dao/artifact/d3f:OperatingSystem/'>d3f:OperatingSystem</a>.
 type ocsf.objects.os = record{
   name: string,
   type: string,
@@ -994,6 +1182,10 @@ type ocsf.objects.os = record{
   sp_ver: int64,
 }
 
+// The Device Hardware Information object contains details and specifications of
+// the physical components that make up a device. This information provides an
+// overview of the hardware capabilities, configuration, and characteristics of
+// the device.
 type ocsf.objects.device_hw_info = record{
   bios_date: string,
   bios_manufacturer: string,
@@ -1010,11 +1202,18 @@ type ocsf.objects.device_hw_info = record{
   serial_number: string,
 }
 
+// TThe HTTP Header object represents the headers sent in an HTTP request or
+// response. HTTP headers are key-value pairs that convey additional information
+// about the HTTP message, including details about the content, caching,
+// authentication, encoding, and other aspects of the communication.
 type ocsf.objects.http_header = record{
   name: string,
   value: string,
 }
 
+// The Job object provides information about a scheduled job or task, including
+// its name, command line, and state. It encompasses attributes that describe
+// the properties and status of the scheduled job.
 type ocsf.objects.job = record{
   name: string,
   file: ocsf.objects.file,
@@ -1026,26 +1225,29 @@ type ocsf.objects.job = record{
   next_run_time: time,
   run_state: string,
   run_state_id: int64,
-  last_run_time_dt: time,
-  created_time_dt: time,
-  next_run_time_dt: time,
 }
 
+// The Endpoint Connection object contains information detailing a connection
+// attempt to an endpoint.
 type ocsf.objects.endpoint_connection = record{
   code: int64,
   network_endpoint: ocsf.objects.network_endpoint,
 }
 
+// The Response Elements object describes characteristics of an API response.
 type ocsf.objects.response = record{
   error: string,
   code: int64,
-  data: None,
   flags: string,
   message: string,
   containers: ocsf.objects.container,
   error_message: string,
 }
 
+// The DCE/RPC, or Distributed Computing Environment/Remote Procedure Call,
+// object describes the remote procedure call system for distributed computing
+// environments. Defined by D3FEND <a target='_blank' href='https://d3fend.mitre
+// .org/dao/artifact/d3f:RemoteProcedureCall/'>d3f:RemoteProcedureCall</a>.
 type ocsf.objects.dce_rpc = record{
   command: string,
   flags: string,
@@ -1054,8 +1256,9 @@ type ocsf.objects.dce_rpc = record{
   rpc_interface: ocsf.objects.rpc_interface,
 }
 
+// A collection of evidence artifacts associated to the activity/activities that
+// triggered a security detection.
 type ocsf.objects.evidences = record{
-  data: None,
   process: ocsf.objects.process,
   file: ocsf.objects.file,
   user: ocsf.objects.user,
@@ -1077,6 +1280,8 @@ type ocsf.objects.evidences = record{
   win_service: ocsf.objects.win_service,
 }
 
+// The Compliance object contains information about Industry and Regulatory
+// Framework standards, controls and requirements.
 type ocsf.objects.compliance = record{
   control: string,
   status: string,
@@ -1089,6 +1294,10 @@ type ocsf.objects.compliance = record{
   status_id: int64,
 }
 
+// The Logger object represents the device and product where events are stored
+// with times for receipt and transmission.  This may be at the source device
+// where the event occurred, a remote scanning device, intermediate hops, or the
+// ultimate destination.
 type ocsf.objects.logger = record{
   name: string,
   version: string,
@@ -1101,10 +1310,10 @@ type ocsf.objects.logger = record{
   log_version: string,
   logged_time: time,
   transmit_time: time,
-  transmit_time_dt: time,
-  logged_time_dt: time,
 }
 
+// The Data Classification object includes information about data classification
+// levels and data category types.
 type ocsf.objects.data_classification = record{
   category: string,
   category_id: int64,
@@ -1113,6 +1322,8 @@ type ocsf.objects.data_classification = record{
   policy: ocsf.objects.policy,
 }
 
+// The Cloud object contains information about a cloud account such as AWS
+// Account ID, regions, etc.
 type ocsf.objects.cloud = record{
   org: ocsf.objects.organization,
   account: ocsf.objects.account,
@@ -1122,14 +1333,21 @@ type ocsf.objects.cloud = record{
   zone: string,
 }
 
+// The Exploit Prediction Scoring System (EPSS) object describes the estimated
+// probability a vulnerability will be exploited. EPSS is a community-driven
+// effort to combine descriptive information about vulnerabilities (CVEs) with
+// evidence of actual exploitation in-the-wild. (<a target='_blank'
+// href='https://www.first.org/epss/'>EPSS</a>).
 type ocsf.objects.epss = record{
   version: string,
   created_time: time,
   percentile: double,
   score: string,
-  created_time_dt: time,
 }
 
+// The Analytic object contains details about the analytic technique used to
+// analyze and derive insights from the data or information that led to the
+// creation of a finding or conclusion.
 type ocsf.objects.analytic = record{
   name: string,
   type: string,
@@ -1138,19 +1356,22 @@ type ocsf.objects.analytic = record{
   uid: string,
   category: string,
   type_id: int64,
-  related_analytics: ocsf.objects.analytic,
 }
 
+// The query info object holds information related to data access within a
+// datastore. To access, manipulate, delete, or retrieve data from a datastore,
+// a query must be written using a specific syntax.
 type ocsf.objects.query_info = record{
-  data: None,
   name: string,
   bytes: int64,
   uid: string,
   query_string: string,
   query_time: time,
-  query_time_dt: time,
 }
 
+// The Data Security object describes the characteristics, techniques and
+// content of a Data Loss Prevention (DLP), Data Loss Detection (DLD), Data
+// Classification, or similar tools' finding, alert, or detection mechanism(s).
 type ocsf.objects.data_security = record{
   category: string,
   pattern_match: string,
@@ -1165,6 +1386,9 @@ type ocsf.objects.data_security = record{
   policy: ocsf.objects.policy,
 }
 
+// The Malware object describes the classification of known malicious software,
+// which is intentionally designed to cause damage to a computer, server,
+// client, or computer network.
 type ocsf.objects.malware = record{
   name: string,
   path: string,
@@ -1175,6 +1399,8 @@ type ocsf.objects.malware = record{
   provider: string,
 }
 
+// The Network Interface object describes the type and associated attributes of
+// a network interface.
 type ocsf.objects.network_interface = record{
   name: string,
   type: string,
@@ -1187,6 +1413,8 @@ type ocsf.objects.network_interface = record{
   subnet_prefix: int64,
 }
 
+// The databucket object is a basic container that holds data, typically
+// organized through the use of data partitions.
 type ocsf.objects.databucket = record{
   name: string,
   size: int64,
@@ -1197,14 +1425,11 @@ type ocsf.objects.databucket = record{
   groups: ocsf.objects.group,
   type_id: int64,
   created_time: time,
-  data_classification: ocsf.objects.data_classification,
   modified_time: time,
-  created_time_dt: time,
-  modified_time_dt: time,
 }
 
+// The registry value object describes a Windows registry value.
 type ocsf.objects.reg_value = record{
-  data: None,
   name: string,
   type: string,
   path: string,
@@ -1212,9 +1437,10 @@ type ocsf.objects.reg_value = record{
   is_default: bool,
   is_system: bool,
   modified_time: time,
-  modified_time_dt: time,
 }
 
+// The Ticket object represents ticket in the customer's systems like
+// Salesforce, jira etc.
 type ocsf.objects.ticket = record{
   type: string,
   title: string,
@@ -1223,17 +1449,30 @@ type ocsf.objects.ticket = record{
   src_url: string,
 }
 
+// The HASSH object contains SSH network fingerprinting values for specific
+// client/server implementations. It provides a standardized way of identifying
+// and categorizing SSH connections based on their unique characteristics and
+// behavior.
 type ocsf.objects.hassh = record{
   algorithm: string,
   fingerprint: ocsf.objects.fingerprint,
 }
 
+// The Feature object provides information about the software product feature
+// that generated a specific event. It encompasses details related to the
+// capabilities, components, user interface (UI) design, and performance
+// upgrades associated with the feature.
 type ocsf.objects.feature = record{
   name: string,
   version: string,
   uid: string,
 }
 
+// The Kernel Resource object provides information about a specific kernel
+// resource, including its name and type. It describes essential attributes
+// associated with a resource managed by the kernel of an operating system.
+// Defined by D3FEND <a target='_blank'
+// href='https://d3fend.mitre.org/dao/artifact/d3f:Kernel/'>d3f:Kernel</a>.
 type ocsf.objects.kernel = record{
   name: string,
   type: string,
@@ -1243,8 +1482,11 @@ type ocsf.objects.kernel = record{
   system_call: string,
 }
 
+// The Enrichment object provides inline enrichment data for specific attributes
+// of interest within an event. It serves as a mechanism to enhance or
+// supplement the information associated with the event by adding additional
+// relevant details or context.
 type ocsf.objects.enrichment = record{
-  data: None,
   name: string,
   type: string,
   value: string,
@@ -1254,9 +1496,9 @@ type ocsf.objects.enrichment = record{
   reputation: ocsf.objects.reputation,
   short_desc: string,
   src_url: string,
-  created_time_dt: time,
 }
 
+// The Related Event object describes an OCSF event related to a finding.
 type ocsf.objects.related_event = record{
   type: string,
   uid: string,
@@ -1268,6 +1510,7 @@ type ocsf.objects.related_event = record{
   product_uid: string,
 }
 
+// The Product object describes characteristics of a software product.
 type ocsf.objects.product = record{
   name: string,
   version: string,
@@ -1276,11 +1519,15 @@ type ocsf.objects.product = record{
   feature: ocsf.objects.feature,
   lang: string,
   cpe_name: string,
-  data_classification: ocsf.objects.data_classification,
   url_string: string,
   vendor_name: string,
 }
 
+// The File object represents the metadata associated with a file stored in a
+// computer system. It encompasses information about the file itself, including
+// its attributes, properties, and organizational details. Defined by D3FEND <a
+// target='_blank'
+// href='https://next.d3fend.mitre.org/dao/artifact/d3f:File/'>d3f:File</a>.
 type ocsf.objects.file = record{
   attributes: int64,
   name: string,
@@ -1305,17 +1552,15 @@ type ocsf.objects.file = record{
   confidentiality: string,
   confidentiality_id: int64,
   created_time: time,
-  data_classification: ocsf.objects.data_classification,
   hashes: ocsf.objects.fingerprint,
   is_system: bool,
   modified_time: time,
   security_descriptor: string,
   xattributes: ocsf.objects.object,
-  created_time_dt: time,
-  accessed_time_dt: time,
-  modified_time_dt: time,
 }
 
+// The Affected Code object describes details about a code block identified as
+// vulnerable.
 type ocsf.objects.affected_code = record{
   owner: ocsf.objects.user,
   file: ocsf.objects.file,
@@ -1324,6 +1569,8 @@ type ocsf.objects.affected_code = record{
   start_line: int64,
 }
 
+// The observable object is a pivot element that contains related information
+// found in many places in the event.
 type ocsf.objects.observable = record{
   name: string,
   type: string,
@@ -1332,6 +1579,9 @@ type ocsf.objects.observable = record{
   reputation: ocsf.objects.reputation,
 }
 
+// The table object represents a table within a structured relational database
+// or datastore, which contains columns and rows of data that are able to be
+// create, updated, deleted and queried.
 type ocsf.objects.table = record{
   name: string,
   size: int64,
@@ -1340,10 +1590,12 @@ type ocsf.objects.table = record{
   groups: ocsf.objects.group,
   created_time: time,
   modified_time: time,
-  created_time_dt: time,
-  modified_time_dt: time,
 }
 
+// The Common Vulnerability Scoring System (<a target='_blank'
+// href='https://www.first.org/cvss/'>CVSS</a>) object provides a way to capture
+// the principal characteristics of a vulnerability and produce a numerical
+// score reflecting its severity.
 type ocsf.objects.cvss = record{
   version: string,
   depth: string,
@@ -1354,6 +1606,8 @@ type ocsf.objects.cvss = record{
   vector_string: string,
 }
 
+// The Rule object describes characteristics of a rule associated with a policy
+// or an event.
 type ocsf.objects.rule = record{
   name: string,
   type: string,
@@ -1363,6 +1617,8 @@ type ocsf.objects.rule = record{
   category: string,
 }
 
+// The Finding object describes metadata related to a security finding generated
+// by a security tool or system.
 type ocsf.objects.finding = record{
   title: string,
   desc: string,
@@ -1376,13 +1632,11 @@ type ocsf.objects.finding = record{
   product_uid: string,
   related_events: ocsf.objects.related_event,
   src_url: string,
-  supporting_data: None,
-  created_time_dt: time,
-  modified_time_dt: time,
-  first_seen_time_dt: time,
-  last_seen_time_dt: time,
 }
 
+// The Digital Signature object contains information about the cryptographic
+// mechanism used to verify the authenticity, integrity, and origin of the file
+// or application.
 type ocsf.objects.digital_signature = record{
   state: string,
   digest: ocsf.objects.fingerprint,
@@ -1392,9 +1646,12 @@ type ocsf.objects.digital_signature = record{
   created_time: time,
   developer_uid: string,
   state_id: int64,
-  created_time_dt: time,
 }
 
+// The Group object represents a collection or association of entities, such as
+// users, policies, or devices. It serves as a logical grouping mechanism to
+// organize and manage entities with similar characteristics or permissions
+// within a system or organization.
 type ocsf.objects.group = record{
   name: string,
   type: string,
@@ -1404,6 +1661,11 @@ type ocsf.objects.group = record{
   privileges: string,
 }
 
+// The Digital Certificate, also known as a Public Key Certificate, object
+// contains information about the ownership and usage of a public key. It serves
+// as a means to establish trust in the authenticity and integrity of the public
+// key and the associated entity. Defined by D3FEND <a target='_blank' href='htt
+// ps://d3fend.mitre.org/dao/artifact/d3f:Certificate/'>d3f:Certificate</a>.
 type ocsf.objects.certificate = record{
   version: string,
   uid: string,
@@ -1414,10 +1676,12 @@ type ocsf.objects.certificate = record{
   created_time: time,
   expiration_time: time,
   serial_number: string,
-  created_time_dt: time,
-  expiration_time_dt: time,
 }
 
+// The Time Span object represents different time period durations. If a
+// timespan is fractional, i.e. crosses one period, e.g. a week and 3 days, more
+// than one may may be populated since each member is of integral type. In that
+// case <code>type_id</code> if present should be set to <code>Other</code>.
 type ocsf.objects.timespan = record{
   type: string,
   duration: int64,
@@ -1431,18 +1695,29 @@ type ocsf.objects.timespan = record{
   duration_years: int64,
 }
 
+// The CWE object represents a weakness in a software system that can be
+// exploited by a threat actor to perform an attack. The CWE object is based on
+// the <a target='_blank' href='https://cwe.mitre.org/'>Common Weakness
+// Enumeration (CWE)</a> catalog.
 type ocsf.objects.cwe = record{
   uid: string,
   caption: string,
   src_url: string,
 }
 
+// The Fingerprint object provides detailed information about a digital
+// fingerprint, which is a compact representation of data used to identify a
+// longer piece of information, such as a public key or file content. It
+// contains the algorithm and value of the fingerprint, enabling efficient and
+// reliable identification of the associated data.
 type ocsf.objects.fingerprint = record{
   value: string,
   algorithm: string,
   algorithm_id: int64,
 }
 
+// The Organization object describes characteristics of an organization or
+// company and its division if any.
 type ocsf.objects.organization = record{
   name: string,
   uid: string,
@@ -1450,6 +1725,9 @@ type ocsf.objects.organization = record{
   ou_uid: string,
 }
 
+// The Software Package object describes details about a software package.
+// Defined by D3FEND <a target='_blank' href='https://d3fend.mitre.org/dao/artif
+// act/d3f:SoftwarePackage/'>d3f:SoftwarePackage</a>.
 type ocsf.objects.package = record{
   name: string,
   type: string,
@@ -1465,7 +1743,2788 @@ type ocsf.objects.package = record{
   vendor_name: string,
 }
 
+// The Authorization Result object provides details about the authorization
+// outcome and associated policies related to activity.
 type ocsf.objects.authorization = record{
   decision: string,
   policy: ocsf.objects.policy,
 }
+
+// Authentication events report authentication session activities such as user
+// attempts a logon or logoff, successfully or otherwise.
+type ocsf.authentication = record{
+  auth_protocol: string,
+  session: ocsf.objects.session,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  auth_protocol_id: int64,
+  auth_factors: ocsf.objects.auth_factor,
+  is_cleartext: bool,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  service: ocsf.objects.service,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  logon_process: ocsf.objects.process,
+  http_request: ocsf.objects.http_request,
+  activity_id: int64,
+  is_remote: bool,
+  type_uid: int64,
+  is_mfa: bool,
+  logon_type_id: int64,
+  logon_type: string,
+  status_id: int64,
+  is_new_logon: bool,
+  user: ocsf.objects.user,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+  certificate: ocsf.objects.certificate,
+  dst_endpoint: ocsf.objects.network_endpoint,
+}
+
+// Email events report activities of emails.
+type ocsf.email_activity = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  email: ocsf.objects.email,
+  direction: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  email_auth: ocsf.objects.email_auth,
+  activity_id: int64,
+  type_uid: int64,
+  banner: string,
+  attempt: int64,
+  status_id: int64,
+  metadata: ocsf.objects.metadata,
+  smtp_hello: string,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  direction_id: int64,
+  raw_data: string,
+  severity_id: int64,
+  dst_endpoint: ocsf.objects.network_endpoint,
+}
+
+// Web Resource Access Activity events describe successful/failed attempts to
+// access a web resource over HTTP.
+type ocsf.web_resource_access_activity = record{
+  tls: ocsf.objects.tls,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  http_response: ocsf.objects.http_response,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  proxy: ocsf.objects.network_proxy,
+  status_detail: string,
+  http_request: ocsf.objects.http_request,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  web_resources: ocsf.objects.web_resource,
+  severity_id: int64,
+}
+
+// Kernel Object Query events report information about discovered kernel
+// resources.
+type ocsf.kernel_object_query = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  query_result: string,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  query_result_id: int64,
+  query_info: ocsf.objects.query_info,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  kernel: ocsf.objects.kernel,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// User Session Query events report information about existing user sessions.
+type ocsf.session_query = record{
+  session: ocsf.objects.session,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  query_result: string,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  query_result_id: int64,
+  query_info: ocsf.objects.query_info,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// Device Config State Change events report state changes that impact the
+// security of the device.
+type ocsf.device_config_state_change = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  state: string,
+  prev_security_states: ocsf.objects.security_state,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  prev_security_level_id: int64,
+  status_detail: string,
+  activity_id: int64,
+  device: ocsf.objects.device,
+  type_uid: int64,
+  status_id: int64,
+  actor: ocsf.objects.actor,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  security_level: string,
+  security_states: ocsf.objects.security_state,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  state_id: int64,
+  severity_id: int64,
+  prev_security_level: string,
+  security_level_id: int64,
+}
+
+// Windows Service Activity events report when a process interacts with the
+// Service Control Manager.
+type ocsf.win_service_activity = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  device: ocsf.objects.device,
+  type_uid: int64,
+  status_id: int64,
+  actor: ocsf.objects.actor,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+  win_service: ocsf.objects.win_service,
+}
+
+// Network Activity events report network connection and traffic activity.
+type ocsf.network_activity = record{
+  tls: ocsf.objects.tls,
+  connection_info: ocsf.objects.network_connection_info,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  url: ocsf.objects.url,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  proxy: ocsf.objects.network_proxy,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  traffic: ocsf.objects.network_traffic,
+  raw_data: string,
+  app_name: string,
+  ja4_fingerprint_list: ocsf.objects.ja4_fingerprint,
+  severity_id: int64,
+  dst_endpoint: ocsf.objects.network_endpoint,
+}
+
+// Account Change events report when specific user account management tasks are
+// performed, such as a user/role being created, changed, deleted, renamed,
+// disabled, enabled, locked out or unlocked.
+type ocsf.account_change = record{
+  policy: ocsf.objects.policy,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  http_request: ocsf.objects.http_request,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  user: ocsf.objects.user,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  user_result: ocsf.objects.user,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// Process Activity events report when a process launches, injects, opens or
+// terminates another process, successful or otherwise.
+type ocsf.process_activity = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  process: ocsf.objects.process,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  module: ocsf.objects.module,
+  status_detail: string,
+  activity_id: int64,
+  device: ocsf.objects.device,
+  type_uid: int64,
+  requested_permissions: int64,
+  injection_type: string,
+  status_id: int64,
+  actor: ocsf.objects.actor,
+  metadata: ocsf.objects.metadata,
+  actual_permissions: int64,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  injection_type_id: int64,
+  raw_data: string,
+  severity_id: int64,
+  exit_code: int64,
+}
+
+// SSH Activity events report remote client connections to a server using the
+// Secure Shell (SSH) Protocol.
+type ocsf.ssh_activity = record{
+  tls: ocsf.objects.tls,
+  connection_info: ocsf.objects.network_connection_info,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  auth_type_id: int64,
+  server_hassh: ocsf.objects.hassh,
+  client_hassh: ocsf.objects.hassh,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  proxy: ocsf.objects.network_proxy,
+  status_detail: string,
+  activity_id: int64,
+  auth_type: string,
+  type_uid: int64,
+  status_id: int64,
+  metadata: ocsf.objects.metadata,
+  protocol_ver: string,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  traffic: ocsf.objects.network_traffic,
+  file: ocsf.objects.file,
+  raw_data: string,
+  app_name: string,
+  ja4_fingerprint_list: ocsf.objects.ja4_fingerprint,
+  severity_id: int64,
+  dst_endpoint: ocsf.objects.network_endpoint,
+}
+
+// Module Query events report information about loaded modules.
+type ocsf.module_query = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  process: ocsf.objects.process,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  module: ocsf.objects.module,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  query_result: string,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  query_result_id: int64,
+  query_info: ocsf.objects.query_info,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// Network Connection Query events report information about active network
+// connections.
+type ocsf.network_connection_query = record{
+  connection_info: ocsf.objects.network_connection_info,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  state: string,
+  process: ocsf.objects.process,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  query_result: string,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  query_result_id: int64,
+  query_info: ocsf.objects.query_info,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  state_id: int64,
+  severity_id: int64,
+}
+
+// An Incident Finding reports the creation, update, or closure of security
+// incidents as a result of detections and/or analytics.
+type ocsf.incident_finding = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  is_suspected_breach: bool,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  impact_id: int64,
+  confidence_score: int64,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  impact: string,
+  impact_score: int64,
+  priority_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  confidence_id: int64,
+  metadata: ocsf.objects.metadata,
+  assignee_group: ocsf.objects.group,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  src_url: string,
+  count: int64,
+  status: string,
+  verdict: string,
+  class_name: string,
+  confidence: string,
+  type_name: string,
+  attacks: ocsf.objects.attack,
+  class_uid: int64,
+  start_time: time,
+  comment: string,
+  timezone_offset: int64,
+  ticket: ocsf.objects.ticket,
+  priority: string,
+  finding_info_list: ocsf.objects.finding_info,
+  raw_data: string,
+  assignee: ocsf.objects.user,
+  severity_id: int64,
+  desc: string,
+  verdict_id: int64,
+}
+
+// Datastore events describe general activities (Read, Update, Query, Delete,
+// etc.) which affect datastores or data within those datastores, e.g. (AWS RDS,
+// AWS S3).
+type ocsf.datastore_activity = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  http_request: ocsf.objects.http_request,
+  activity_id: int64,
+  type_uid: int64,
+  database: ocsf.objects.database,
+  status_id: int64,
+  actor: ocsf.objects.actor,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  type_id: int64,
+  query_info: ocsf.objects.query_info,
+  class_uid: int64,
+  databucket: ocsf.objects.databucket,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  table: ocsf.objects.table,
+  type: string,
+  severity_id: int64,
+  dst_endpoint: ocsf.objects.network_endpoint,
+}
+
+// The Vulnerability Finding event is a notification about weakness in an
+// information system, system security procedures, internal controls, or
+// implementation that could be exploited or triggered by a threat source.
+type ocsf.vulnerability_finding = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  resource: ocsf.objects.resource_details,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  confidence_score: int64,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  resources: ocsf.objects.resource_details,
+  status_detail: string,
+  activity_id: int64,
+  finding_info: ocsf.objects.finding_info,
+  type_uid: int64,
+  status_id: int64,
+  confidence_id: int64,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  confidence: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  comment: string,
+  timezone_offset: int64,
+  raw_data: string,
+  vulnerabilities: ocsf.objects.vulnerability,
+  severity_id: int64,
+}
+
+// Prefetch Query events report information about Windows prefetch files.
+type ocsf.prefetch_query = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  run_count: int64,
+  type_uid: int64,
+  status_id: int64,
+  query_result: string,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  query_result_id: int64,
+  query_info: ocsf.objects.query_info,
+  class_uid: int64,
+  name: string,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  last_run_time: time,
+  severity_id: int64,
+}
+
+// Event Log Activity events report actions pertaining to the system's event
+// logging service(s), such as disabling logging or clearing the log data.
+type ocsf.event_log = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  log_type_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  log_name: string,
+  metadata: ocsf.objects.metadata,
+  log_provider: string,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  log_type: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  file: ocsf.objects.file,
+  raw_data: string,
+  severity_id: int64,
+  dst_endpoint: ocsf.objects.network_endpoint,
+}
+
+// Tunnel Activity events report secure tunnel establishment (such as VPN),
+// teardowns, renewals, and other network tunnel specific actions.
+type ocsf.tunnel_activity = record{
+  tls: ocsf.objects.tls,
+  connection_info: ocsf.objects.network_connection_info,
+  session: ocsf.objects.session,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  tunnel_interface: ocsf.objects.network_interface,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  proxy: ocsf.objects.network_proxy,
+  status_detail: string,
+  activity_id: int64,
+  tunnel_type: string,
+  type_uid: int64,
+  status_id: int64,
+  user: ocsf.objects.user,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  tunnel_type_id: int64,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  traffic: ocsf.objects.network_traffic,
+  raw_data: string,
+  app_name: string,
+  ja4_fingerprint_list: ocsf.objects.ja4_fingerprint,
+  protocol_name: string,
+  severity_id: int64,
+  dst_endpoint: ocsf.objects.network_endpoint,
+}
+
+// Kernel Extension events report when a driver/extension is loaded or unloaded
+// into the kernel
+type ocsf.kernel_extension = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  driver: ocsf.objects.kernel_driver,
+  device: ocsf.objects.device,
+  type_uid: int64,
+  status_id: int64,
+  actor: ocsf.objects.actor,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// Device Inventory Info events report device inventory data that is either
+// logged or proactively collected. For example, when collecting device
+// information from a CMDB or running a network sweep of connected devices.
+type ocsf.inventory_info = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  device: ocsf.objects.device,
+  type_uid: int64,
+  status_id: int64,
+  actor: ocsf.objects.actor,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// The Network Time Protocol (NTP) Activity events report instances of remote
+// clients synchronizing their clocks with an NTP server, as observed on the
+// network.
+type ocsf.ntp_activity = record{
+  tls: ocsf.objects.tls,
+  connection_info: ocsf.objects.network_connection_info,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  delay: int64,
+  stratum: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  version: string,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  proxy: ocsf.objects.network_proxy,
+  precision: int64,
+  status_detail: string,
+  stratum_id: int64,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  dispersion: int64,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  traffic: ocsf.objects.network_traffic,
+  raw_data: string,
+  app_name: string,
+  ja4_fingerprint_list: ocsf.objects.ja4_fingerprint,
+  severity_id: int64,
+  dst_endpoint: ocsf.objects.network_endpoint,
+}
+
+// User Inventory Info events report user inventory data that is either logged
+// or proactively collected. For example, when collecting user information from
+// Active Directory entries.
+type ocsf.user_inventory = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  actor: ocsf.objects.actor,
+  user: ocsf.objects.user,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// Kernel Activity events report when an process creates, reads, or deletes a
+// kernel resource.
+type ocsf.kernel_activity = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  device: ocsf.objects.device,
+  type_uid: int64,
+  status_id: int64,
+  actor: ocsf.objects.actor,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  kernel: ocsf.objects.kernel,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// Network Remediation Activity events report on attempts at remediating
+// computer networks. It follows the MITRE countermeasures defined by the
+// D3FEND™ <a target='_blank' href='https://d3fend.mitre.org/'>Matrix</a>.
+// Techniques and Sub-techniques will include Network, such as Network Isolation
+// or Network Traffic Filtering.
+type ocsf.network_remediation_activity = record{
+  connection_info: ocsf.objects.network_connection_info,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  remediation: ocsf.objects.remediation,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  command_uid: string,
+  scan: ocsf.objects.scan,
+  status_id: int64,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  countermeasures: ocsf.objects.d3fend,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// Networks Query events report information about network adapters.
+type ocsf.networks_query = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  network_interfaces: ocsf.objects.network_interface,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  query_result: string,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  query_result_id: int64,
+  query_info: ocsf.objects.query_info,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// User Query events report user data that have been discovered, queried, polled
+// or searched. This event differs from User Inventory as it describes the
+// result of a targeted search by filtering a subset of user attributes.
+type ocsf.user_query = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  query_result: string,
+  user: ocsf.objects.user,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  query_result_id: int64,
+  query_info: ocsf.objects.query_info,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// Email URL Activity events report URLs within an email.
+type ocsf.email_url_activity = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  url: ocsf.objects.url,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  email_uid: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// A Detection Finding describes detections or alerts generated by security
+// products using correlation engines, detection engines or other methodologies.
+// Note: if the product is a security control, the <code>security_control</code>
+// profile should be applied and its <code>attacks</code> information should be
+// duplicated into the <code>finding_info</code> object.
+type ocsf.detection_finding = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  remediation: ocsf.objects.remediation,
+  impact_id: int64,
+  confidence_score: int64,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  resources: ocsf.objects.resource_details,
+  status_detail: string,
+  activity_id: int64,
+  impact: string,
+  finding_info: ocsf.objects.finding_info,
+  impact_score: int64,
+  type_uid: int64,
+  status_id: int64,
+  confidence_id: int64,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  risk_details: string,
+  count: int64,
+  status: string,
+  risk_level_id: int64,
+  class_name: string,
+  confidence: string,
+  type_name: string,
+  evidences: ocsf.objects.evidences,
+  class_uid: int64,
+  start_time: time,
+  comment: string,
+  timezone_offset: int64,
+  raw_data: string,
+  vulnerabilities: ocsf.objects.vulnerability,
+  severity_id: int64,
+  risk_level: string,
+  risk_score: int64,
+}
+
+// Operating System Patch State reports the installation of an OS patch to a
+// device and any associated knowledgebase articles.
+type ocsf.patch_state = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  kb_article_list: ocsf.objects.kb_article,
+  severity_id: int64,
+}
+
+// Web Resources Activity events describe actions executed on a set of Web
+// Resources.
+type ocsf.web_resources_activity = record{
+  tls: ocsf.objects.tls,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  web_resources_result: ocsf.objects.web_resource,
+  http_response: ocsf.objects.http_response,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  http_request: ocsf.objects.http_request,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  web_resources: ocsf.objects.web_resource,
+  severity_id: int64,
+  dst_endpoint: ocsf.objects.network_endpoint,
+}
+
+// Admin Group Query events report information about administrative groups.
+type ocsf.admin_group_query = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  users: ocsf.objects.user,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  query_result: string,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  query_result_id: int64,
+  query_info: ocsf.objects.query_info,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+  group: ocsf.objects.group,
+}
+
+// Software Inventory Info events report device software inventory data that is
+// either logged or proactively collected. For example, when collecting device
+// information from a CMDB or running a network sweep of connected devices.
+type ocsf.software_info = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  device: ocsf.objects.device,
+  type_uid: int64,
+  status_id: int64,
+  actor: ocsf.objects.actor,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  product: ocsf.objects.product,
+  raw_data: string,
+  severity_id: int64,
+  package: ocsf.objects.package,
+}
+
+// File System Activity events report when a process performs an action on a
+// file or folder.
+type ocsf.file_activity = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  file_diff: string,
+  observables: ocsf.objects.observable,
+  connection_uid: string,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  device: ocsf.objects.device,
+  type_uid: int64,
+  status_id: int64,
+  actor: ocsf.objects.actor,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  component: string,
+  count: int64,
+  status: string,
+  class_name: string,
+  access_mask: int64,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  file: ocsf.objects.file,
+  raw_data: string,
+  file_result: ocsf.objects.file,
+  create_mask: string,
+  severity_id: int64,
+}
+
+// Remote Desktop Protocol (RDP) Activity events report remote client
+// connections to a server as seen on the network.
+type ocsf.rdp_activity = record{
+  tls: ocsf.objects.tls,
+  connection_info: ocsf.objects.network_connection_info,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  proxy: ocsf.objects.network_proxy,
+  status_detail: string,
+  activity_id: int64,
+  remote_display: ocsf.objects.display,
+  type_uid: int64,
+  request: ocsf.objects.request,
+  status_id: int64,
+  metadata: ocsf.objects.metadata,
+  protocol_ver: string,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  response: ocsf.objects.response,
+  type_name: string,
+  capabilities: string,
+  certificate_chain: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  traffic: ocsf.objects.network_traffic,
+  file: ocsf.objects.file,
+  raw_data: string,
+  app_name: string,
+  ja4_fingerprint_list: ocsf.objects.ja4_fingerprint,
+  severity_id: int64,
+  identifier_cookie: string,
+  dst_endpoint: ocsf.objects.network_endpoint,
+}
+
+// Group Management events report management updates to a group, including
+// updates to membership and permissions.
+type ocsf.group_management = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  resource: ocsf.objects.resource_details,
+  severity: string,
+  privileges: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  http_request: ocsf.objects.http_request,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  user: ocsf.objects.user,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+  group: ocsf.objects.group,
+}
+
+// API events describe general CRUD (Create, Read, Update, Delete) API
+// activities, e.g. (AWS Cloudtrail)
+type ocsf.api_activity = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  resources: ocsf.objects.resource_details,
+  status_detail: string,
+  http_request: ocsf.objects.http_request,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  actor: ocsf.objects.actor,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+  dst_endpoint: ocsf.objects.network_endpoint,
+}
+
+// User Access Management events report management updates to a user's
+// privileges.
+type ocsf.user_access = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  resource: ocsf.objects.resource_details,
+  severity: string,
+  privileges: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  http_request: ocsf.objects.http_request,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  user: ocsf.objects.user,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// File Query events report information about files that are present on the
+// system.
+type ocsf.file_query = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  query_result: string,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  query_result_id: int64,
+  query_info: ocsf.objects.query_info,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  file: ocsf.objects.file,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// Authorize Session events report privileges or groups assigned to a new user
+// session, usually at login time.
+type ocsf.authorize_session = record{
+  session: ocsf.objects.session,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  privileges: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  http_request: ocsf.objects.http_request,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  user: ocsf.objects.user,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+  group: ocsf.objects.group,
+  dst_endpoint: ocsf.objects.network_endpoint,
+}
+
+// Device Config State events report device configuration data and CIS Benchmark
+// results.
+type ocsf.config_state = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  cis_benchmark_result: ocsf.objects.cis_benchmark_result,
+  device: ocsf.objects.device,
+  type_uid: int64,
+  status_id: int64,
+  actor: ocsf.objects.actor,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// Email File Activity events report files within emails.
+type ocsf.email_file_activity = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  email_uid: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  file: ocsf.objects.file,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// File Transfer Protocol (FTP) Activity events report file transfers between a
+// server and a client as seen on the network.
+type ocsf.ftp_activity = record{
+  tls: ocsf.objects.tls,
+  connection_info: ocsf.objects.network_connection_info,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  proxy: ocsf.objects.network_proxy,
+  status_detail: string,
+  activity_id: int64,
+  codes: int64,
+  type_uid: int64,
+  command_responses: string,
+  status_id: int64,
+  metadata: ocsf.objects.metadata,
+  command: string,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  port: int64,
+  class_uid: int64,
+  name: string,
+  start_time: time,
+  timezone_offset: int64,
+  traffic: ocsf.objects.network_traffic,
+  file: ocsf.objects.file,
+  raw_data: string,
+  app_name: string,
+  ja4_fingerprint_list: ocsf.objects.ja4_fingerprint,
+  type: string,
+  severity_id: int64,
+  dst_endpoint: ocsf.objects.network_endpoint,
+}
+
+// File Remediation Activity events report on attempts at remediating files. It
+// follows the MITRE countermeasures defined by the D3FEND™ <a target='_blank'
+// href='https://d3fend.mitre.org/'>Matrix</a>. Sub-techniques will include
+// File, such as File Removal or Restore File.
+type ocsf.file_remediation_activity = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  remediation: ocsf.objects.remediation,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  command_uid: string,
+  scan: ocsf.objects.scan,
+  status_id: int64,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  countermeasures: ocsf.objects.d3fend,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  file: ocsf.objects.file,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// Registry Value Activity events reports when a process performs an action on a
+// Windows registry value.
+type ocsf.registry_value_activity = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  prev_reg_value: ocsf.objects.reg_value,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  device: ocsf.objects.device,
+  type_uid: int64,
+  status_id: int64,
+  actor: ocsf.objects.actor,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  reg_value: ocsf.objects.reg_value,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// Registry Value Query events report information about discovered Windows
+// registry values.
+type ocsf.registry_value_query = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  query_result: string,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  reg_value: ocsf.objects.reg_value,
+  type_name: string,
+  query_result_id: int64,
+  query_info: ocsf.objects.query_info,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// Process Remediation Activity events report on attempts at remediating
+// processes. It follows the MITRE countermeasures defined by the D3FEND™ <a
+// target='_blank' href='https://d3fend.mitre.org/'>Matrix</a>. Sub-techniques
+// will include Process, such as Process Termination or Kernel-based Process
+// Isolation.
+type ocsf.process_remediation_activity = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  process: ocsf.objects.process,
+  activity_name: string,
+  message: string,
+  remediation: ocsf.objects.remediation,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  command_uid: string,
+  scan: ocsf.objects.scan,
+  status_id: int64,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  countermeasures: ocsf.objects.d3fend,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// Server Message Block (SMB) Protocol Activity events report client/server
+// connections sharing resources within the network.
+type ocsf.smb_activity = record{
+  tls: ocsf.objects.tls,
+  connection_info: ocsf.objects.network_connection_info,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  share: string,
+  open_type: string,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  proxy: ocsf.objects.network_proxy,
+  status_detail: string,
+  activity_id: int64,
+  share_type: string,
+  type_uid: int64,
+  status_id: int64,
+  tree_uid: string,
+  metadata: ocsf.objects.metadata,
+  command: string,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  response: ocsf.objects.response,
+  dce_rpc: ocsf.objects.dce_rpc,
+  type_name: string,
+  dialect: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  traffic: ocsf.objects.network_traffic,
+  share_type_id: int64,
+  file: ocsf.objects.file,
+  raw_data: string,
+  app_name: string,
+  ja4_fingerprint_list: ocsf.objects.ja4_fingerprint,
+  severity_id: int64,
+  client_dialects: string,
+  dst_endpoint: ocsf.objects.network_endpoint,
+}
+
+// Registry Key Activity events report when a process performs an action on a
+// Windows registry key.
+type ocsf.registry_key_activity = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  device: ocsf.objects.device,
+  type_uid: int64,
+  open_mask: int64,
+  status_id: int64,
+  actor: ocsf.objects.actor,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  access_mask: int64,
+  type_name: string,
+  reg_key: ocsf.objects.reg_key,
+  class_uid: int64,
+  prev_reg_key: ocsf.objects.reg_key,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  create_mask: string,
+  severity_id: int64,
+}
+
+// Job Query events report information about scheduled jobs.
+type ocsf.job_query = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  query_result: string,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  job: ocsf.objects.job,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  query_result_id: int64,
+  query_info: ocsf.objects.query_info,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// Memory Activity events report when a process has memory allocated,
+// read/modified, or other manipulation activities - such as a buffer overflow
+// or turning off data execution protection (DEP).
+type ocsf.memory_activity = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  process: ocsf.objects.process,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  device: ocsf.objects.device,
+  type_uid: int64,
+  size: int64,
+  requested_permissions: int64,
+  status_id: int64,
+  actor: ocsf.objects.actor,
+  metadata: ocsf.objects.metadata,
+  actual_permissions: int64,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  base_address: string,
+  severity_id: int64,
+}
+
+// Service Query events report information about running services.
+type ocsf.service_query = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  service: ocsf.objects.service,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  query_result: string,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  query_result_id: int64,
+  query_info: ocsf.objects.query_info,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// Module  Activity events report when a process loads or unloads the
+// <code>module</code>.
+type ocsf.module_activity = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  module: ocsf.objects.module,
+  status_detail: string,
+  activity_id: int64,
+  device: ocsf.objects.device,
+  type_uid: int64,
+  status_id: int64,
+  actor: ocsf.objects.actor,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// Entity Management events report activity by a managed client, a micro
+// service, or a user at a management console. The activity can be a create,
+// read, update, and delete operation on a managed entity.
+type ocsf.entity_management = record{
+  access_list: string,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  entity: ocsf.objects.managed_entity,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  http_request: ocsf.objects.http_request,
+  activity_id: int64,
+  type_uid: int64,
+  entity_result: ocsf.objects.managed_entity,
+  status_id: int64,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  access_mask: int64,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  comment: string,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// HTTP Activity events report HTTP connection and traffic information.
+type ocsf.http_activity = record{
+  tls: ocsf.objects.tls,
+  connection_info: ocsf.objects.network_connection_info,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  http_status: int64,
+  severity: string,
+  http_cookies: ocsf.objects.http_cookie,
+  duration: int64,
+  http_response: ocsf.objects.http_response,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  proxy: ocsf.objects.network_proxy,
+  status_detail: string,
+  http_request: ocsf.objects.http_request,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  traffic: ocsf.objects.network_traffic,
+  file: ocsf.objects.file,
+  raw_data: string,
+  app_name: string,
+  ja4_fingerprint_list: ocsf.objects.ja4_fingerprint,
+  severity_id: int64,
+  dst_endpoint: ocsf.objects.network_endpoint,
+}
+
+// Peripheral Device Query events report information about peripheral devices.
+type ocsf.peripheral_device_query = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  query_result: string,
+  metadata: ocsf.objects.metadata,
+  peripheral_device: ocsf.objects.peripheral_device,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  query_result_id: int64,
+  query_info: ocsf.objects.query_info,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// Security Finding events describe findings, detections, anomalies, alerts
+// and/or actions performed by security products
+type ocsf.security_finding = record{
+  cis_csc: ocsf.objects.cis_csc,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  data_sources: string,
+  duration: int64,
+  state: string,
+  process: ocsf.objects.process,
+  activity_name: string,
+  message: string,
+  impact_id: int64,
+  confidence_score: int64,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  resources: ocsf.objects.resource_details,
+  status_detail: string,
+  activity_id: int64,
+  impact: string,
+  impact_score: int64,
+  type_uid: int64,
+  kill_chain: ocsf.objects.kill_chain_phase,
+  status_id: int64,
+  confidence_id: int64,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  risk_level_id: int64,
+  class_name: string,
+  confidence: string,
+  type_name: string,
+  compliance: ocsf.objects.compliance,
+  nist: string,
+  attacks: ocsf.objects.attack,
+  analytic: ocsf.objects.analytic,
+  malware: ocsf.objects.malware,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  vulnerabilities: ocsf.objects.vulnerability,
+  state_id: int64,
+  finding: ocsf.objects.finding,
+  severity_id: int64,
+  risk_level: string,
+  risk_score: int64,
+}
+
+// Remediation Activity events report on attempts at remediating a compromised
+// device or computer network. It follows the MITRE countermeasures defined by
+// the D3FEND™ <a target='_blank' href='https://d3fend.mitre.org/'>Matrix</a>.
+type ocsf.remediation_activity = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  remediation: ocsf.objects.remediation,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  command_uid: string,
+  scan: ocsf.objects.scan,
+  status_id: int64,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  countermeasures: ocsf.objects.d3fend,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// File Hosting Activity events report the actions taken by file management
+// applications, including file sharing servers like Sharepoint and services
+// such as Box, MS OneDrive, or Google Drive.
+type ocsf.file_hosting = record{
+  expiration_time: time,
+  connection_info: ocsf.objects.network_connection_info,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  actor: ocsf.objects.actor,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  file: ocsf.objects.file,
+  raw_data: string,
+  file_result: ocsf.objects.file,
+  severity_id: int64,
+  dst_endpoint: ocsf.objects.network_endpoint,
+}
+
+// Folder Query events report information about folders that are present on the
+// system.
+type ocsf.folder_query = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  query_result: string,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  query_result_id: int64,
+  folder: ocsf.objects.file,
+  query_info: ocsf.objects.query_info,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// Process Query events report information about running processes.
+type ocsf.process_query = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  process: ocsf.objects.process,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  query_result: string,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  query_result_id: int64,
+  query_info: ocsf.objects.query_info,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// DNS Activity events report DNS queries and answers as seen on the network.
+type ocsf.dns_activity = record{
+  tls: ocsf.objects.tls,
+  connection_info: ocsf.objects.network_connection_info,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  answers: ocsf.objects.dns_answer,
+  activity_name: string,
+  message: string,
+  rcode: string,
+  response_time: time,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  proxy: ocsf.objects.network_proxy,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  metadata: ocsf.objects.metadata,
+  rcode_id: int64,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  query: ocsf.objects.dns_query,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  traffic: ocsf.objects.network_traffic,
+  raw_data: string,
+  app_name: string,
+  ja4_fingerprint_list: ocsf.objects.ja4_fingerprint,
+  query_time: time,
+  severity_id: int64,
+  dst_endpoint: ocsf.objects.network_endpoint,
+}
+
+// Network File Activity events report file activities traversing the network,
+// including file storage services such as Box, MS OneDrive, or Google Drive.
+type ocsf.network_file_activity = record{
+  expiration_time: time,
+  tls: ocsf.objects.tls,
+  connection_info: ocsf.objects.network_connection_info,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  proxy: ocsf.objects.network_proxy,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  traffic: ocsf.objects.network_traffic,
+  file: ocsf.objects.file,
+  raw_data: string,
+  app_name: string,
+  ja4_fingerprint_list: ocsf.objects.ja4_fingerprint,
+  severity_id: int64,
+  dst_endpoint: ocsf.objects.network_endpoint,
+}
+
+// Scheduled Job Activity events report activities related to scheduled jobs or
+// tasks.
+type ocsf.scheduled_job_activity = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  device: ocsf.objects.device,
+  type_uid: int64,
+  status_id: int64,
+  actor: ocsf.objects.actor,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  job: ocsf.objects.job,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// DHCP Activity events report MAC to IP assignment via DHCP from a client or
+// server.
+type ocsf.dhcp_activity = record{
+  tls: ocsf.objects.tls,
+  connection_info: ocsf.objects.network_connection_info,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  proxy: ocsf.objects.network_proxy,
+  status_detail: string,
+  activity_id: int64,
+  transaction_uid: string,
+  type_uid: int64,
+  status_id: int64,
+  metadata: ocsf.objects.metadata,
+  relay: ocsf.objects.network_interface,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  traffic: ocsf.objects.network_traffic,
+  raw_data: string,
+  app_name: string,
+  ja4_fingerprint_list: ocsf.objects.ja4_fingerprint,
+  lease_dur: int64,
+  is_renewal: bool,
+  severity_id: int64,
+  dst_endpoint: ocsf.objects.network_endpoint,
+}
+
+// Application Lifecycle events report installation, removal, start, stop of an
+// application or service.
+type ocsf.application_lifecycle = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+  app: ocsf.objects.product,
+}
+
+// Windows Resource Activity events report when a process accesses a Windows
+// managed resource object, successful or otherwise.
+type ocsf.resource_activity = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  win_resource: ocsf.objects.win_resource,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  device: ocsf.objects.device,
+  type_uid: int64,
+  status_id: int64,
+  actor: ocsf.objects.actor,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// The base event is a generic and concrete event. It also defines a set of
+// attributes available in most event classes. As a generic event that does not
+// belong to any event category, it could be used to log events that are not
+// otherwise defined by the schema.
+type ocsf.base_event = record{
+  count: int64,
+  message: string,
+  status: string,
+  time: time,
+  metadata: ocsf.objects.metadata,
+  start_time: time,
+  severity: string,
+  duration: int64,
+  category_uid: int64,
+  activity_id: int64,
+  type_uid: int64,
+  type_name: string,
+  observables: ocsf.objects.observable,
+  category_name: string,
+  class_uid: int64,
+  class_name: string,
+  timezone_offset: int64,
+  raw_data: string,
+  unmapped: ocsf.objects.object,
+  end_time: time,
+  activity_name: string,
+  enrichments: ocsf.objects.enrichment,
+  severity_id: int64,
+  status_code: string,
+  status_detail: string,
+  status_id: int64,
+}
+
+// A Data Security Finding describes detections or alerts generated by various
+// data security products such as Data Loss Prevention (DLP), Data
+// Classification, Secrets Management, Digital Rights Management (DRM), Data
+// Security Posture Management (DSPM), and similar tools. These detections or
+// alerts can be created using fingerprinting, statistical analysis, machine
+// learning or other methodologies. The finding describes the actors and
+// endpoints who accessed or own the sensitive data, as well as the resources
+// which store the sensitive data.
+type ocsf.data_security_finding = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  impact_id: int64,
+  confidence_score: int64,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  src_endpoint: ocsf.objects.network_endpoint,
+  category_name: string,
+  time: time,
+  resources: ocsf.objects.resource_details,
+  status_detail: string,
+  activity_id: int64,
+  impact: string,
+  finding_info: ocsf.objects.finding_info,
+  impact_score: int64,
+  type_uid: int64,
+  database: ocsf.objects.database,
+  status_id: int64,
+  confidence_id: int64,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  risk_level_id: int64,
+  class_name: string,
+  confidence: string,
+  type_name: string,
+  data_security: ocsf.objects.data_security,
+  class_uid: int64,
+  databucket: ocsf.objects.databucket,
+  start_time: time,
+  comment: string,
+  timezone_offset: int64,
+  file: ocsf.objects.file,
+  raw_data: string,
+  table: ocsf.objects.table,
+  severity_id: int64,
+  risk_level: string,
+  dst_endpoint: ocsf.objects.network_endpoint,
+  risk_score: int64,
+}
+
+// Scan events report the start, completion, and results of a scan job. The scan
+// event includes the number of items that were scanned and the number of
+// detections that were resolved.
+type ocsf.scan_activity = record{
+  policy: ocsf.objects.policy,
+  schedule_uid: string,
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  command_uid: string,
+  scan: ocsf.objects.scan,
+  num_processes: int64,
+  status_id: int64,
+  num_skipped_items: int64,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  num_detections: int64,
+  count: int64,
+  status: string,
+  num_trusted_items: int64,
+  class_name: string,
+  num_files: int64,
+  type_name: string,
+  total: int64,
+  num_folders: int64,
+  num_resolutions: int64,
+  num_network_items: int64,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  num_registry_items: int64,
+  severity_id: int64,
+}
+
+// Compliance Finding events describe results of evaluations performed against
+// resources, to check compliance with various Industry Frameworks or Security
+// Standards such as <code>NIST SP 800-53, CIS AWS Foundations Benchmark v1.4.0,
+// ISO/IEC 27001</code> etc.
+type ocsf.compliance_finding = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  resource: ocsf.objects.resource_details,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  remediation: ocsf.objects.remediation,
+  confidence_score: int64,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  resources: ocsf.objects.resource_details,
+  status_detail: string,
+  activity_id: int64,
+  finding_info: ocsf.objects.finding_info,
+  type_uid: int64,
+  status_id: int64,
+  confidence_id: int64,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  confidence: string,
+  type_name: string,
+  compliance: ocsf.objects.compliance,
+  class_uid: int64,
+  start_time: time,
+  comment: string,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+
+// Registry Key Query events report information about discovered Windows
+// registry keys.
+type ocsf.registry_key_query = record{
+  unmapped: ocsf.objects.object,
+  category_uid: int64,
+  severity: string,
+  duration: int64,
+  activity_name: string,
+  message: string,
+  observables: ocsf.objects.observable,
+  end_time: time,
+  category_name: string,
+  time: time,
+  status_detail: string,
+  activity_id: int64,
+  type_uid: int64,
+  status_id: int64,
+  query_result: string,
+  metadata: ocsf.objects.metadata,
+  status_code: string,
+  enrichments: ocsf.objects.enrichment,
+  count: int64,
+  status: string,
+  class_name: string,
+  type_name: string,
+  query_result_id: int64,
+  query_info: ocsf.objects.query_info,
+  reg_key: ocsf.objects.reg_key,
+  class_uid: int64,
+  start_time: time,
+  timezone_offset: int64,
+  raw_data: string,
+  severity_id: int64,
+}
+

@@ -397,8 +397,8 @@ struct cast_helper<record_type, record_type> {
           from_type.field(*index).type, index->get(*from_array),
           to_field.type));
       }
-      return type_to_arrow_array_t<record_type>::Make(children, fields)
-        .ValueOrDie();
+      return make_struct_array(from_array->length(), from_array->null_bitmap(),
+                               fields, children);
     };
     return impl(impl, to_type, "");
   }
@@ -1157,7 +1157,7 @@ auto cast_value(const FromType& from_type, ValueType&& value,
 /// @pre can_cast(from_slice.schema(), to_schema)
 /// @post result.schema() == to_schema
 /// @returns A slice that exactly matches *to_schema*.
-auto cast(table_slice from_slice, const type& to_schema) noexcept
+auto cast(const table_slice& from_slice, const type& to_schema) noexcept
   -> table_slice;
 
 template <concrete_type FromType, concrete_type ToType>
