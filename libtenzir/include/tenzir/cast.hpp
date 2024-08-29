@@ -382,32 +382,40 @@ struct cast_helper<record_type, record_type> {
         = from_array->GetFieldByName(std::string{to_field.name});
       fields.push_back(to_field.type.to_arrow_field(to_field.name));
       if (not from_field_array) {
-        children.push_back(arrow::MakeArrayOfNull(to_field.type.to_arrow_type(),
-                                                  from_array->length())
-                             .ValueOrDie());
+        auto b = to_field.type.make_arrow_builder(arrow::default_memory_pool());
+        check(b->AppendNulls(from_array->length()));
+        children.push_back(finish(*b));
+        // TODO: Below segfaults in validate.
+        // children.push_back(arrow::MakeArrayOfNull(to_field.type.to_arrow_type(),
+        //                                           from_array->length())
+        //                      .ValueOrDie());
         continue;
       }
-      // TODO: Assert that it exists.
-      auto from_field_type = type{};
+      TENZIR_WARN("-> begin {}", to_field.name);
+      auto from_field_type = std::optional<type>{};
       for (auto from_field : from_type.fields()) {
         if (from_field.name == to_field.name) {
           from_field_type = std::move(from_field.type);
           break;
         }
       }
+      TENZIR_ASSERT(from_field_type);
       auto visitor = [&]<class FromType, class ToType>(
                        const FromType& from_type,
                        const ToType& to_type) -> std::shared_ptr<arrow::Array> {
-        return cast_helper<FromType, ToType>::cast(
-          from_type,
-          std::dynamic_pointer_cast<type_to_arrow_array_t<FromType>>(
-            from_field_array),
-          to_type);
+        auto cast = std::dynamic_pointer_cast<type_to_arrow_array_t<FromType>>(
+          from_field_array);
+        TENZIR_ASSERT(cast);
+        return cast_helper<FromType, ToType>::cast(from_type, std::move(cast),
+                                                   to_type);
       };
-      children.push_back(caf::visit(visitor, from_field_type, to_field.type));
+      children.push_back(caf::visit(visitor, *from_field_type, to_field.type));
+      TENZIR_WARN("<- end {}", to_field.name);
     }
     auto result = make_struct_array(
       from_array->length(), from_array->null_bitmap(), fields, children);
+    TENZIR_WARN("checking {} -> {}", from_type.to_arrow_type()->ToString(),
+                to_type.to_arrow_type()->ToString());
     check(result->ValidateFull());
     return result;
   }
