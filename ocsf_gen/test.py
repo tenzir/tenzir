@@ -63,14 +63,15 @@ def print_sth(name, prefix=""):
                     type_name = type_name[slash + 1 :]
                 if OMIT.get(object_name) == type_name:
                     continue
-                print(f"  {attr_name}: ", end="")
-                print(f"ocsf.objects.{type_name}", end="")
+                resolved = f"ocsf.objects.{type_name}"
             else:
                 resolved = types[attr_def["type"]]
                 if resolved is None:
                     continue
-                print(f"  {attr_name}: ", end="")
-                print(resolved, end="")
+            print(f"  {attr_name}: ", end="")
+            if attr_def.get("is_array", False):
+                resolved = f"list<{resolved}>"
+            print(resolved, end="")
             print(",")
         print("}\n")
 
