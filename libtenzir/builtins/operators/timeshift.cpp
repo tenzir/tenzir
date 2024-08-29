@@ -11,6 +11,7 @@
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/type.hpp>
 
 namespace tenzir::plugins::timeshift {
@@ -127,10 +128,32 @@ private:
   std::optional<time> start_ = {};
 };
 
-class plugin final : public virtual operator_plugin<timeshift_operator> {
+class plugin final : public virtual operator_plugin<timeshift_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto speed = std::optional<located<double>>{};
+    auto start = std::optional<time>{};
+    auto field = std::string{};
+    argument_parser2::operator_("timeshift")
+      .add(field, "<field>")
+      .add("speed", speed)
+      .add("start", start)
+      .parse(inv, ctx)
+      .ignore();
+    if (speed and speed->inner <= 0.0) {
+      diagnostic::error("`speed` must be greater than 0")
+        .primary(speed.value())
+        .emit(ctx);
+      return failure::promise();
+    }
+    return std::make_unique<timeshift_operator>(
+      std::move(field), speed ? speed->inner : 1.0, start);
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
