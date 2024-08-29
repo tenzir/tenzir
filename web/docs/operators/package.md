@@ -1,7 +1,7 @@
 ---
 sidebar_custom_props:
   operator:
-    source: true
+    source: false
     transformation: false
     sink: true
 ---
@@ -15,12 +15,6 @@ as a single unit. Most packages are installed from a library, a public
 repository of packages, and contain a collection of thematically related
 pipelines and contexts.
 
-:::note Experimental
-This operator is made available in preparation of the upcoming package
-management support of Tenzir. All interfaces are subject to change,
-and user-facing documentation of the package format is still in progress.
-:::
-
 ## Synopsis
 
 ```
@@ -30,15 +24,12 @@ package remove <package_id>
 
 ## Description
 
-The `packages` operator manages packages.
+The `package` operator manages packages.
 
 - The `add` command adds a new package on the node by
   running all pipelines and contexts defined in the package.
 
 - The `remove` command removes an existing package.
-
-To get a list of all successfully installed packages, use the [show](./show.md) operator
-by running `show packages`.
 
 ### `<package_id>`
 
