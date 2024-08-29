@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/tql2/plugin.hpp"
+
 #include "sigma/parse.hpp"
 
 #include <tenzir/argument_parser.hpp>
@@ -182,9 +184,31 @@ private:
   std::string path_ = {};
 };
 
-class plugin final : public virtual operator_plugin<sigma_operator> {
+class plugin final : public virtual operator_plugin<sigma_operator>,
+                     public virtual operator_factory_plugin {
   auto signature() const -> operator_signature override {
     return {.transformation = true};
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto refresh_interval = std::optional<located<duration>>{};
+    auto path = std::string{};
+    argument_parser2::operator_("sigma")
+      .add(path, "<rule-or-directory>")
+      .add("refresh_interval", refresh_interval)
+      .parse(inv, ctx)
+      .ignore();
+    if (not refresh_interval) {
+      refresh_interval->inner = std::chrono::seconds(5);
+    } else if (refresh_interval->inner.count() < 0) {
+      diagnostic::error("refresh_interval must be greater than 0")
+        .primary(refresh_interval.value())
+        .emit(ctx);
+      return failure::promise();
+    }
+    return std::make_unique<sigma_operator>(refresh_interval->inner,
+                                            std::move(path));
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
