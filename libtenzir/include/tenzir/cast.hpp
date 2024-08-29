@@ -385,7 +385,6 @@ struct cast_helper<record_type, record_type> {
                              .ValueOrDie());
         continue;
       }
-      // TODO: Wrong function!
       // TODO: Assert that it exists.
       auto from_field_type = type{};
       for (auto from_field : from_type.fields()) {
@@ -394,9 +393,10 @@ struct cast_helper<record_type, record_type> {
           break;
         }
       }
-      auto f = [](auto from_type, auto to_type) {};
-      return std::visit(f, from_field_type, to_field.type);
-      tenzir::cast_value(from_field_type, from_field_array, to_field.type);
+      auto visitor = [&]<class FromType, class ToType>(const FromType& from_type, const ToType& to_type) -> std::shared_ptr<arrow::Array>{
+        return cast_helper<FromType, ToType>::cast(from_type, std::dynamic_pointer_cast<type_to_arrow_array_t<FromType>>(from_field_array), to_type);
+      };
+      children.push_back(caf::visit(visitor, from_field_type, to_field.type));
     }
     return make_struct_array(from_array->length(), from_array->null_bitmap(),
                              fields, children);
