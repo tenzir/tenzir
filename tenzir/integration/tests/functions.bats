@@ -35,3 +35,7 @@ x9 = community_id(src_ip=3ffe:507:0:1:260:97ff:fe07:69ea,
                   src_port=3, dst_port=0, proto="icmp6")
 EOF
 }
+
+@test "has" {
+  check tenzir --tql2 'from { key: { field: 1 }, error: { nofield: 1, msg: { field: "None" } } } | key = key.has("field") | error = error.has("field")'
+}
