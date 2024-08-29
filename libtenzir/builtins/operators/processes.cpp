@@ -9,6 +9,7 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/os.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::processes {
 
@@ -50,10 +51,17 @@ public:
   }
 };
 
-class plugin final : public virtual operator_plugin<processes_operator> {
+class plugin final : public virtual operator_plugin<processes_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.source = true};
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    argument_parser2::operator_("processes").parse(inv, ctx).ignore();
+    return std::make_unique<processes_operator>();
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
