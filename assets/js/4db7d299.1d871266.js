@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[58262],{81464:e=>{e.exports=JSON.parse('{"permalink":"/blog/tags/finops","page":1,"postsPerPage":20,"totalPages":1,"totalCount":1,"blogDescription":"News from the Tenzir community","blogTitle":"Blog"}')}}]);

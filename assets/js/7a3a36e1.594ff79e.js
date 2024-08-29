@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[70547],{75415:s=>{s.exports=JSON.parse('{"permalink":"/blog/tags/cost-savings","page":1,"postsPerPage":20,"totalPages":1,"totalCount":1,"blogDescription":"News from the Tenzir community","blogTitle":"Blog"}')}}]);

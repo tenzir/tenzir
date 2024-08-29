@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[51985],{9722:(e,c,s)=>{s.d(c,{A:()=>l});var t=s(96540);const l=({url:e})=>(t.useEffect((()=>{window.location.replace(e)}),[]),null)},85124:(e,c,s)=>{s.r(c),s.d(c,{default:()=>a});var t=s(9722),l=s(96540);const a=()=>l.createElement(t.A,{url:"https://discord.gg/xEyaRSMCPQ"})}}]);

@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[81307],{5173:e=>{e.exports=JSON.parse('{"permalink":"/blog/tags/release","page":1,"postsPerPage":20,"totalPages":2,"totalCount":32,"nextPage":"/blog/tags/release/page/2","blogDescription":"News from the Tenzir community","blogTitle":"Blog"}')}}]);

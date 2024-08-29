@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[43631],{70678:a=>{a.exports=JSON.parse('{"label":"azure-log-analytics","permalink":"/blog/tags/azure-log-analytics","allTagsPath":"/blog/tags","count":1}')}}]);

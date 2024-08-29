@@ -1,0 +1,1 @@
+"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[12150],{73097:e=>{e.exports=JSON.parse('{"permalink":"/blog/tags/health-metrics","page":1,"postsPerPage":20,"totalPages":1,"totalCount":1,"blogDescription":"News from the Tenzir community","blogTitle":"Blog"}')}}]);

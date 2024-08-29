@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[65645],{43665:a=>{a.exports=JSON.parse('{"label":"amqp","permalink":"/blog/tags/amqp","allTagsPath":"/blog/tags","count":1}')}}]);
