@@ -86,6 +86,7 @@ auto make_timer_guard(Duration&... elapsed) {
 // of table slices, excluding the schema and disregarding any overlap or custom
 // information from extension types.
 auto approx_bytes(const table_slice& events) -> uint64_t {
+  return 0;
   if (events.rows() == 0)
     return 0;
   auto record_batch = to_record_batch(events);

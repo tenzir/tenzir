@@ -22,6 +22,11 @@
 
 namespace tenzir {
 
+template <type_or_concrete_type FromType, class ValueType,
+          type_or_concrete_type ToType, class... Args>
+auto cast_value(const FromType& from_type, ValueType&& value,
+                const ToType& to_type, Args&&... args) noexcept;
+
 namespace detail {
 
 template <type_or_concrete_type FromType, type_or_concrete_type ToType>
@@ -366,41 +371,35 @@ struct cast_helper<record_type, record_type> {
     if (from_type == to_type) {
       return from_array;
     }
-    // NOLINTNEXTLINE
-    auto impl = [&](const auto& impl, const record_type& to_type,
-                    std::string_view key_prefix) noexcept
-      -> std::shared_ptr<type_to_arrow_array_t<record_type>> {
-      auto fields = arrow::FieldVector{};
-      auto children = arrow::ArrayVector{};
-      fields.reserve(to_type.num_fields());
-      children.reserve(to_type.num_fields());
-      for (const auto& to_field : to_type.fields()) {
-        const auto key = key_prefix.empty()
-                           ? std::string{to_field.name}
-                           : fmt::format("{}.{}", key_prefix, to_field.name);
-        fields.push_back(to_field.type.to_arrow_field(to_field.name));
-        if (const auto* r = caf::get_if<record_type>(&to_field.type)) {
-          children.push_back(impl(impl, *r, key));
-          continue;
-        }
-        const auto index = from_type.resolve_key(key);
-        if (!index) {
-          // The field does not exist, so we insert a bunch of nulls.
-          children.push_back(
-            arrow::MakeArrayOfNull(to_field.type.to_arrow_type(),
-                                   from_array->length())
-              .ValueOrDie());
-          continue;
-        }
-        // The field exists, so we can insert the casted column.
-        children.push_back(cast_helper<type, type>::cast(
-          from_type.field(*index).type, index->get(*from_array),
-          to_field.type));
+    auto fields = arrow::FieldVector{};
+    fields.reserve(to_type.num_fields());
+    auto children = arrow::ArrayVector{};
+    children.reserve(to_type.num_fields());
+    for (auto&& to_field : to_type.fields()) {
+      auto from_field_array
+        = from_array->GetFieldByName(std::string{to_field.name});
+      fields.push_back(to_field.type.to_arrow_field(to_field.name));
+      if (not from_field_array) {
+        children.push_back(arrow::MakeArrayOfNull(to_field.type.to_arrow_type(),
+                                                  from_array->length())
+                             .ValueOrDie());
+        continue;
       }
-      return make_struct_array(from_array->length(), from_array->null_bitmap(),
-                               fields, children);
-    };
-    return impl(impl, to_type, "");
+      // TODO: Wrong function!
+      // TODO: Assert that it exists.
+      auto from_field_type = type{};
+      for (auto from_field : from_type.fields()) {
+        if (from_field.name == to_field.name) {
+          from_field_type = std::move(from_field.type);
+          break;
+        }
+      }
+      auto f = [](auto from_type, auto to_type) {};
+      return std::visit(f, from_field_type, to_field.type);
+      tenzir::cast_value(from_field_type, from_field_array, to_field.type);
+    }
+    return make_struct_array(from_array->length(), from_array->null_bitmap(),
+                             fields, children);
   }
 
   template <class InputType>
