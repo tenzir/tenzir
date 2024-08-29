@@ -17,6 +17,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/table_slice_builder.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/type.h>
 
@@ -35,8 +36,9 @@ public:
   enumerate_operator() = default;
 
   explicit enumerate_operator(std::string field) : field_{std::move(field)} {
-    if (field_.empty())
+    if (field_.empty()) {
       field_ = default_field_name;
+    }
   }
 
   auto
@@ -114,10 +116,21 @@ private:
   std::string field_;
 };
 
-class plugin final : public virtual operator_plugin<enumerate_operator> {
+class plugin final : public virtual operator_plugin<enumerate_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    std::string field;
+    argument_parser2::operator_("enumerate")
+      .add(field, "field")
+      .parse(inv, ctx)
+      .ignore();
+    return std::make_unique<enumerate_operator>(std::move(field));
   }
 
   auto make_operator(std::string_view pipeline) const
