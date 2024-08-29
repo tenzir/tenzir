@@ -11,6 +11,8 @@
 #include <tenzir/detail/alarm_clock.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/type.hpp>
 
 #include <caf/typed_event_based_actor.hpp>
@@ -23,7 +25,7 @@ class delay_operator final : public crtp_operator<delay_operator> {
 public:
   delay_operator() = default;
 
-  explicit delay_operator(std::string field, double speed,
+  explicit delay_operator(located<std::string> field, double speed,
                           std::optional<time> start) noexcept
     : field_{std::move(field)}, speed_{speed}, start_{start} {
   }
@@ -33,8 +35,8 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  operator()(generator<table_slice> input,
+             operator_control_plane& ctrl) const -> generator<table_slice> {
     auto alarm_clock = ctrl.self().spawn(detail::make_alarm_clock);
     auto resolved_fields = std::unordered_map<type, std::optional<offset>>{};
     auto start = start_;
@@ -47,19 +49,21 @@ public:
       const auto& layout = caf::get<record_type>(slice.schema());
       auto resolved_field = resolved_fields.find(slice.schema());
       if (resolved_field == resolved_fields.end()) {
-        const auto index = slice.schema().resolve_key_or_concept_once(field_);
+        const auto index
+          = slice.schema().resolve_key_or_concept_once(field_.inner);
         if (not index) {
           diagnostic::warning("failed to resolve field `{}` for schema `{}`",
-                              field_, slice.schema())
-            .note("from `{}`", name())
+                              field_.inner, slice.schema())
+            .primary(field_)
             .emit(ctrl.diagnostics());
           resolved_field = resolved_fields.emplace_hint(
             resolved_field, slice.schema(), std::nullopt);
         } else if (auto t = layout.field(*index).type;
                    not caf::holds_alternative<time_type>(t)) {
           diagnostic::warning("field `{}` for schema `{}` has type `{}`",
-                              field_, slice.schema(), t.kind())
+                              field_.inner, slice.schema(), t.kind())
             .note("expected `{}`", type{time_type{}}.kind())
+            .primary(field_)
             .emit(ctrl.diagnostics());
           resolved_field = resolved_fields.emplace_hint(
             resolved_field, slice.schema(), std::nullopt);
@@ -118,9 +122,8 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
-    (void)filter;
+  auto optimize(expression const&,
+                event_order order) const -> optimize_result override {
     return optimize_result::order_invariant(*this, order);
   }
 
@@ -132,7 +135,104 @@ public:
   }
 
 private:
-  std::string field_ = {};
+  located<std::string> field_ = {};
+  double speed_ = 1.0;
+  std::optional<time> start_ = {};
+};
+
+class delay_operator2 final : public crtp_operator<delay_operator2> {
+public:
+  delay_operator2() = default;
+
+  explicit delay_operator2(ast::expression expr, double speed,
+                           std::optional<time> start) noexcept
+    : expr_{std::move(expr)}, speed_{speed}, start_{start} {
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.delay";
+  }
+
+  auto
+  operator()(generator<table_slice> input,
+             operator_control_plane& ctrl) const -> generator<table_slice> {
+    auto alarm_clock = ctrl.self().spawn(detail::make_alarm_clock);
+    auto resolved_fields = std::unordered_map<type, std::optional<offset>>{};
+    auto start = start_;
+    const auto start_time = std::chrono::steady_clock::now();
+    for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      auto ser = eval(expr_, slice, ctrl.diagnostics());
+      auto* ptr = caf::get_if<arrow::TimestampArray>(ser.array.get());
+      if (not ptr) {
+        if (ser.type.kind().is_not<null_type>()) {
+          diagnostic::warning("expected `time`, got `{}`", ser.type.kind())
+            .primary(expr_)
+            .emit(ctrl.diagnostics());
+        }
+        co_yield std::move(slice);
+        continue;
+      }
+      size_t begin = 0;
+      size_t end = 0;
+      const auto& array = *ptr;
+      for (const auto&& element : values(time_type{}, array)) {
+        if (not element) {
+          ++end;
+          continue;
+        }
+        if (not start) [[unlikely]] {
+          start = *element;
+        }
+        const auto anchor
+          = *start
+            + std::chrono::duration_cast<duration>(
+              std::chrono::duration_cast<
+                std::chrono::duration<double, duration::period>>(
+                std::chrono::steady_clock::now() - start_time)
+              * speed_);
+        const auto delay = std::chrono::duration_cast<duration>(
+          std::chrono::duration_cast<
+            std::chrono::duration<double, duration::period>>(*element - anchor)
+          / speed_);
+        if (delay > duration::zero()) {
+          co_yield subslice(slice, begin, end);
+          ctrl.self()
+            .request(alarm_clock, caf::infinite, delay)
+            .await(
+              [&]() {
+                begin = end;
+              },
+              [&ctrl, deadline = *element](const caf::error& err) {
+                diagnostic::error("failed to delay until `{}`: {}", deadline,
+                                  err)
+                  .emit(ctrl.diagnostics());
+              });
+          co_yield {};
+        }
+        ++end;
+      }
+      co_yield subslice(slice, begin, end);
+    }
+  }
+
+  auto optimize(expression const&,
+                event_order order) const -> optimize_result override {
+    return optimize_result::order_invariant(*this, order);
+  }
+
+  friend auto inspect(auto& f, delay_operator2& x) -> bool {
+    return f.object(x)
+      .pretty_name("tenzir.plugins.delay.delay_operator2")
+      .fields(f.field("expr", x.expr_), f.field("speed", x.speed_),
+              f.field("start", x.start_));
+  }
+
+private:
+  ast::expression expr_;
   double speed_ = 1.0;
   std::optional<time> start_ = {};
 };
@@ -144,22 +244,45 @@ public:
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
-    auto speed = std::optional<double>{};
+    auto speed = std::optional<located<double>>{};
     auto start = std::optional<time>{};
-    auto field = std::string{};
+    auto field = located<std::string>{};
     auto parser = argument_parser{"delay", "https://docs.tenzir.com/"
                                            "operators/delay"};
     parser.add("--speed", speed, "<factor>");
     parser.add("--start", start, "<time>");
     parser.add(field, "<field>");
     parser.parse(p);
-    if (speed and *speed <= 0.0) {
+    if (speed and speed->inner <= 0.0) {
       diagnostic::error("`--speed` must be greater than 0")
-        .note("from `{}`", name())
+        .primary(speed.value())
         .throw_();
     }
     return std::make_unique<delay_operator>(std::move(field),
-                                            speed.value_or(1.0), start);
+                                            speed ? speed->inner : 1.0, start);
+  }
+};
+
+class plugin2 final : public virtual operator_plugin2<delay_operator2> {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto speed = std::optional<located<double>>{};
+    auto start = std::optional<time>{};
+    auto field = ast::expression{};
+    argument_parser2::operator_("delay")
+      .add(field, "<field>")
+      .add("speed", speed)
+      .add("start", speed)
+      .parse(inv, ctx)
+      .ignore();
+    if (speed and speed->inner <= 0.0) {
+      diagnostic::error("`speed` must be greater than 0")
+        .primary(speed.value())
+        .emit(ctx);
+      return failure::promise();
+    }
+    return std::make_unique<delay_operator2>(std::move(field),
+                                             speed ? speed->inner : 1.0, start);
   }
 };
 
@@ -168,3 +291,4 @@ public:
 } // namespace tenzir::plugins::delay
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::delay::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::delay::plugin2)
