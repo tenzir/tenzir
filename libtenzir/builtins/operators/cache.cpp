@@ -181,7 +181,7 @@ using cache_manager_actor = caf::typed_actor<
   // Get the cache.
   auto(atom::get, std::string id, bool exclusive)->caf::result<caf::actor>,
   // Create the cache if it does not already exist.
-  auto(atom::create, std::string id, bool exlusive,
+  auto(atom::create, std::string id, bool exclusive,
        shared_diagnostic_handler diagnostics, uint64_t capacity,
        location capacity_loc, duration ttl, duration max_ttl)
     ->caf::result<caf::actor>
@@ -523,7 +523,7 @@ public:
   auto input_independent() const -> bool override {
     // We only send stub events between the two operators to break the back
     // pressure and instead use a side channel for transporting events, hence
-    // the nead to schedule the reading side independently of receiving input if
+    // the need to schedule the reading side independently of receiving input if
     // we're not a source.
     return not source_;
   }

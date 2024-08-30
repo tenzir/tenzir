@@ -14,8 +14,8 @@ An in-memory cache shared between pipelines.
 ## Synopsis
 
 ```
-cache [<id>] [--mode <read|write|readwrite>] [--capacity <capacity>]
-             [--ttl <duration>] [--max-ttl <duration>]
+cache <id> [--mode <read|write|readwrite>] [--capacity <capacity>]
+           [--ttl <duration>] [--max-ttl <duration>]
 ```
 
 ## Description
@@ -48,7 +48,7 @@ Configures whether the operator is used a source, a sink, or a transformation:
   already exist.
 - `readwrite`: The operator acts as a transformation passing through events,
   lazily creating a cache if it does not already exist. If a cache exists,
-  upstream operators will not be run.
+  upstream operators will not be run and instead the cache is read.
 
 Defaults to `readwrite`.
 
