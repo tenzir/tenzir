@@ -6,11 +6,11 @@ tags: [tql, functions, community_id]
 comments: true
 ---
 
-The Community ID is a standardized flow hash that generates a unique identifier
-for a network connection. Since it's implemented across multiple tools, it
-allows for tracking events associated with the same connection across different
-systems. This is particularly valuable for correlating network and endpoint
-events.
+The [Community ID](https://github.com/corelight/community-id-spec) is a
+standardized flow hash that generates a unique identifier for a network
+connection. Since it's implemented across multiple tools, it allows for tracking
+events associated with the same connection across different systems. This is
+particularly valuable for correlating network and endpoint events.
 
 ![Community ID](community-id.svg)
 
