@@ -869,6 +869,9 @@ auto flatten_record(
   struct record_type::field field, const std::shared_ptr<arrow::Array>& array)
   -> indexed_transformation::result_type {
   const auto& rt = caf::get<record_type>(field.type);
+  if (rt.num_fields() == 0) {
+    return {};
+  }
   auto struct_array
     = std::static_pointer_cast<type_to_arrow_array_t<record_type>>(array);
   const auto next_name_prefix
@@ -965,7 +968,7 @@ auto make_rename_transformation(std::string new_name)
 } // namespace
 
 auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
-  if (slice.rows() == 0 or slice.columns() == 0) {
+  if (slice.rows() == 0) {
     return {std::move(slice), {}};
   }
   // We cannot use arrow::StructArray::Flatten here because that does not

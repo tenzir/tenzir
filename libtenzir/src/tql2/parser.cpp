@@ -527,6 +527,8 @@ private:
     // TODO: Implement this properly.
     auto result = std::string{};
     TENZIR_ASSERT(token.text.size() >= 2);
+    TENZIR_ASSERT(token.text.front() == '"');
+    TENZIR_ASSERT(token.text.back() == '"');
     auto f = token.text.begin() + 1;
     auto e = token.text.end() - 1;
     for (auto it = f; it != e; ++it) {
@@ -603,7 +605,8 @@ private:
     if (auto result = double{}; si_parser<double>{}(token.text, result)) {
       return constant{try_double_to_integer(result), token.location};
     }
-    if (auto result = duration{}; parsers::duration(token.text, result)) {
+    if (auto result = duration{};
+        parsers::simple_duration(token.text, result)) {
       return constant{result, token.location};
     }
     diagnostic::error("could not parse scalar")

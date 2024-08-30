@@ -57,9 +57,7 @@ components:
           example: 500.0ms
         unstoppable:
           type: boolean
-          description: |
-            A flag specifying whether this pipeline is unstoppable.
-            Unstoppable pipelines start automatically, fail when they complete, and can not be paused or stopped manually.
+          description: "A flag specifying whether this pipeline is unstoppable.\nUnstoppable pipelines start automatically, fail when they complete, and can not be paused or stopped manually.\n"
           default: false
           example: true
     Diagnostic:
@@ -105,16 +103,29 @@ components:
       allOf:
         - $ref: "#/components/schemas/CreateParameters"
           type: null
-          required: null
           properties: null
         - $ref: null
           type: object
-          required:
-            - serve_id
           properties:
+            cache_id:
+              type: string
+              description: "The identifier for the `cache` operator, which is inserted only\nwhen this parameter is provided.\n"
+              example: 4ada2434-32asfe2s
+            cache_capacity:
+              type: integer
+              description: The maximum number of events to keep in the `cache` operator.
+              example: 4000
+            cache_ttl:
+              type: string
+              description: "The time to live of the cache. Resets when reading from the cache.\n"
+              example: 1.0m
+            cache_max_ttl:
+              type: string
+              description: "The maximum time to live of the cache. Unlike the `cache_ttl`\nparameter, this does not reset when reading from the cache.\n"
+              example: 1.0h
             serve_id:
               type: string
-              description: The identifier for the `server` operator.
+              description: The identifier for the `serve` operator.
               example: 4ada2434-32asfe2s
             serve_buffer_size:
               type: integer
@@ -196,9 +207,7 @@ components:
           description: The pipeline definition.
         unstoppable:
           type: boolean
-          description: |
-            A flag specifying whether this pipeline is unstoppable.
-            Unstoppable pipelines start automatically, fail when they complete, and can not be paused or stopped manually.
+          description: "A flag specifying whether this pipeline is unstoppable.\nUnstoppable pipelines start automatically, fail when they complete, and can not be paused or stopped manually.\n"
           example: true
         hidden:
           type: bool
@@ -536,9 +545,7 @@ paths:
                   example: 500.0ms
                 unstoppable:
                   type: boolean
-                  description: |
-                    A flag specifying whether this pipeline is unstoppable.
-                    Unstoppable pipelines start automatically, fail when they complete, and can not be paused or stopped manually.
+                  description: "A flag specifying whether this pipeline is unstoppable.\nUnstoppable pipelines start automatically, fail when they complete, and can not be paused or stopped manually.\n"
                   example: true
       responses:
         200:

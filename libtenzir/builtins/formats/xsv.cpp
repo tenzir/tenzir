@@ -39,10 +39,10 @@ struct xsv_options {
   char field_sep = {};
   char list_sep = {};
   std::string null_value = {};
-  bool allow_comments = {};
-  std::optional<std::string> header = {};
   bool no_header = {};
   bool auto_expand = {};
+  bool allow_comments = {};
+  std::optional<std::string> header = {};
   multi_series_builder_options builder_options = {};
 
   static auto try_parse_printer_options(parser_interface& p,
@@ -199,18 +199,16 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
         return failure::promise();
       }
     }
-
     TRY(auto opts, multi_series_builder_argument_parser::get_options(dh));
-
     return xsv_options{
       .name = "xsv",
       .field_sep = *field_sep,
       .list_sep = *list_sep,
       .null_value = null_value_->inner,
-      .allow_comments = allow_comments_,
-      .header = header_ ? std::optional{header_->inner} : std::nullopt,
       .no_header = false,
       .auto_expand = auto_expand_,
+      .allow_comments = allow_comments_,
+      .header = header_ ? std::optional{header_->inner} : std::nullopt,
       .builder_options = std::move(opts),
     };
   }
@@ -291,10 +289,15 @@ struct xsv_printer_impl {
       TENZIR_UNREACHABLE();
     }
 
+    auto operator()(view<record>) noexcept -> bool {
+      TENZIR_UNREACHABLE();
+    }
+
     auto operator()(view<std::string> x) noexcept -> bool {
       sequence_empty = false;
       auto needs_escaping = std::any_of(x.begin(), x.end(), [this](auto c) {
-        return c == printer.sep || c == '"';
+        return c == printer.sep || c == '"' || c == '\n' || c == '\r'
+               || c == '\v' || c == '\f';
       });
       if (needs_escaping) {
         static auto escaper = [](auto& f, auto out) {
@@ -328,19 +331,6 @@ struct xsv_printer_impl {
     auto operator()(const view<list>& x) noexcept -> bool {
       sequence_empty = true;
       for (const auto& v : x) {
-        if (!sequence_empty) {
-          ++out = printer.list_sep;
-        }
-        if (!caf::visit(*this, v)) {
-          return false;
-        }
-      }
-      return true;
-    }
-
-    auto operator()(const view<record>& x) noexcept -> bool {
-      sequence_empty = true;
-      for (const auto& [_, v] : x) {
         if (!sequence_empty) {
           ++out = printer.list_sep;
         }
@@ -600,7 +590,7 @@ public:
         auto out_iter = std::back_inserter(buffer);
         auto resolved_slice = flatten(resolve_enumerations(slice)).slice;
         auto input_schema = resolved_slice.schema();
-        auto input_type = caf::get<record_type>(input_schema);
+        const auto& input_type = caf::get<record_type>(input_schema);
         auto array
           = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
         for (const auto& row : values(input_type, *array)) {
@@ -717,9 +707,9 @@ public:
       .field_sep = Sep,
       .list_sep = ListSep,
       .null_value = std::string{Null.str()},
-      .allow_comments = false,
-      .header = {},
       .no_header = no_header,
+      .auto_expand = false,
+      .allow_comments = false,
     });
   }
 

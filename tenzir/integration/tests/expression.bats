@@ -59,12 +59,11 @@ EOF
 @test "length method" {
   check tenzir -f '/dev/stdin' <<EOF
 from [
-  { a: null, b: null },
-  { a: "", b: [] },
-  { a: "foo", b: [1, 2, 3] },
+  { x: null },
+  { x: [] },
+  { x: [1, 2, 3] },
 ]
-x = a.length()
-y = b.length()
+y = x.length()
 EOF
 }
 
@@ -103,6 +102,22 @@ from {
   x6: 17.5E,
   x7: 18.5E,
 }
+write_json
+EOF
+}
+
+@test "string length" {
+  check tenzir -f '/dev/stdin' <<EOF
+from {
+  x: "é",
+  y: "👩‍👩‍👦‍👦",
+}
+xa = x.length()
+xb = x.length_bytes()
+xc = x.length_chars()
+ya = y.length()
+yb = y.length_bytes()
+yc = y.length_chars()
 write_json
 EOF
 }

@@ -12,6 +12,8 @@
 
 #include <boost/process/environment.hpp>
 
+#include <ranges>
+
 namespace tenzir::plugins::misc {
 
 namespace {
@@ -196,8 +198,7 @@ public:
         TENZIR_UNUSED(ctx);
         auto value = eval(expr);
         auto f = detail::overload{
-          [&]<concepts::one_of<arrow::StringArray, arrow::ListArray> T>(
-            const T& array) {
+          [&](const arrow::ListArray& array) {
             auto b = arrow::Int64Builder{};
             check(b.Reserve(value.length()));
             for (auto i = int64_t{0}; i < array.length(); ++i) {
@@ -212,16 +213,69 @@ public:
           [&](const arrow::NullArray&) {
             return series::null(int64_type{}, value.length());
           },
-          [&](const auto&) {
-            diagnostic::warning("expected `list` or `string`, got `{}`",
-                                value.type.kind())
-              .primary(expr)
-              .emit(ctx);
+          [&]<class T>(const T&) {
+            auto d = diagnostic::warning("expected `list`, got `{}`",
+                                         value.type.kind())
+                       .primary(expr);
+            if constexpr (std::same_as<T, arrow::StringArray>) {
+              d = std::move(d).hint(
+                "use `.length_bytes()` or `.length_chars()` instead");
+            }
+            std::move(d).emit(ctx);
             return series::null(int64_type{}, value.length());
           },
         };
         return caf::visit(f, *value.array);
       });
+  }
+};
+
+class has final : public method_plugin {
+public:
+  auto name() const -> std::string override {
+    return "has";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    auto needle = located<std::string>{};
+    TRY(argument_parser2::method(name())
+          .add(expr, "<expr>")
+          .add(needle, "<string>")
+          .parse(inv, ctx));
+    return function_use::make([needle = std::move(needle),
+                               expr = std::move(expr)](evaluator eval,
+                                                       session ctx) -> series {
+      auto value = eval(expr);
+      auto f = detail::overload{
+        [&](const arrow::NullArray& array) -> series {
+          return series::null(bool_type{}, array.length());
+        },
+        [&](const arrow::StructArray& array) -> series {
+          const auto names = array.struct_type()->fields()
+                             | std::views::transform(&arrow::Field::name);
+          const auto result
+            = std::ranges::find(names, needle.inner) != std::end(names);
+          auto b = bool_type::make_arrow_builder(arrow::default_memory_pool());
+          check(b->Reserve(array.length()));
+          for (auto i = int64_t{0}; i < array.length(); i++) {
+            if (array.IsNull(i)) {
+              check(b->AppendNull());
+              continue;
+            }
+            check(b->Append(result));
+          }
+          return {bool_type{}, finish(*b)};
+        },
+        [&](const auto&) -> series {
+          diagnostic::warning("expected `record`, got `{}`", value.type.kind())
+            .primary(expr)
+            .emit(ctx);
+          return series::null(bool_type{}, value.length());
+        }};
+      return caf::visit(f, *value.array);
+    });
   }
 };
 
@@ -233,3 +287,4 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::type_id)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::secret)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::env)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::length)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::has)

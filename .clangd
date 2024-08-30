@@ -1,8 +1,11 @@
+If:
+  PathExclude: libtenzir/aux/*
+
 CompileFlags:
   # We use coroutines in Tenzir, but the libstdc++ coroutine
   # header will give an error unless this macro is defined,
   # which is usually set by gcc's `-fcoroutines` flag.
-  Add: [-D__cpp_lib_coroutine=201902L] 
+  Add: [-D__cpp_lib_coroutine=201902L]
 
 Diagnostics:
   # Enable IWYU warnings via clangd.

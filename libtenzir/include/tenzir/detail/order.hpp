@@ -9,9 +9,9 @@
 #pragma once
 
 #include "tenzir/detail/assert.hpp"
-#include "tenzir/detail/bit_cast.hpp"
 #include "tenzir/die.hpp"
 
+#include <bit>
 #include <cmath>
 #include <cstdint>
 #include <limits>
@@ -58,7 +58,7 @@ auto order(T x) {
       case FP_NORMAL: {
         static constexpr auto exp_mask = (~0ull << 53) >> 1;
         static constexpr auto sig_mask = ~0ull >> 12;
-        auto ux = bit_cast<uint64_t>(x);
+        auto ux = std::bit_cast<uint64_t>(x);
         auto exp = (ux & exp_mask) >> 52;
         auto sig = ux & sig_mask;
         // If the value is positive we add a 1 as MSB left of the exponent and

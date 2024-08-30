@@ -381,8 +381,10 @@ public:
       row.field("key", data{key});
       row.field("value", value->raw_data);
       if (entry_builder.length() >= context::dump_batch_size_limit) {
-        co_yield entry_builder.finish_assert_one_slice(
-          fmt::format("tenzir.{}.info", context_type()));
+        for (auto&& slice : entry_builder.finish_as_table_slice(
+               fmt::format("tenzir.{}.info", context_type()))) {
+          co_yield std::move(slice);
+        }
       }
     }
     for (const auto& [key, value] : context_entries) {
@@ -526,11 +528,10 @@ public:
       ++context_it;
     }
     TENZIR_ASSERT(context_it == context_values.end());
-    auto query_f
-      = [key_values_list = std::move(key_values_list)](
-          parameter_map,
-          const std::vector<std::string>& fields) -> caf::expected<expression> {
-      auto result = disjunction{};
+    auto query_f = [key_values_list = std::move(key_values_list)](
+                     parameter_map, const std::vector<std::string>& fields)
+      -> caf::expected<std::vector<expression>> {
+      auto result = std::vector<expression>{};
       result.reserve(fields.size());
       for (const auto& field : fields) {
         auto lhs = to<operand>(field);
@@ -559,23 +560,22 @@ public:
       }
       entry.first.populate_snapshot_data(key_values_list);
     }
-    return
-      [key_values_list = std::move(key_values_list)](
-        parameter_map,
-        const std::vector<std::string>& fields) -> caf::expected<expression> {
-        auto result = disjunction{};
-        result.reserve(fields.size());
-        for (const auto& field : fields) {
-          auto lhs = to<operand>(field);
-          TENZIR_ASSERT(lhs);
-          result.emplace_back(predicate{
-            *lhs,
-            relational_operator::in,
-            data{key_values_list},
-          });
-        }
-        return result;
-      };
+    return [key_values_list = std::move(key_values_list)](
+             parameter_map, const std::vector<std::string>& fields)
+             -> caf::expected<std::vector<expression>> {
+      auto result = std::vector<expression>{};
+      result.reserve(fields.size());
+      for (const auto& field : fields) {
+        auto lhs = to<operand>(field);
+        TENZIR_ASSERT(lhs);
+        result.emplace_back(predicate{
+          *lhs,
+          relational_operator::in,
+          data{key_values_list},
+        });
+      }
+      return result;
+    };
   }
 
   auto reset() -> caf::expected<void> override {

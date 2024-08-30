@@ -11,6 +11,7 @@
 #include "tenzir/arrow_utils.hpp"
 #include "tenzir/checked_math.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/detail/narrow.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/table_slice_builder.hpp"
 #include "tenzir/tql2/ast.hpp"
@@ -192,6 +193,93 @@ struct BinOpKernel<ast::binary_op::add, duration_type, time_type> {
 };
 
 template <>
+struct BinOpKernel<ast::binary_op::add, duration_type, duration_type> {
+  using result = duration;
+
+  static auto evaluate(duration l, duration r)
+    -> std::variant<result, const char*> {
+    if (auto check = checked_add(l.count(), r.count())) {
+      return duration{check.value()};
+    }
+    return "duration addition overflow";
+  }
+};
+
+template <>
+struct BinOpKernel<ast::binary_op::sub, duration_type, duration_type> {
+  using result = duration;
+
+  static auto evaluate(duration l, duration r)
+    -> std::variant<result, const char*> {
+    if (auto check = checked_sub(l.count(), r.count())) {
+      return duration{check.value()};
+    }
+    return "duration subtraction overflow";
+  }
+};
+
+template <>
+struct BinOpKernel<ast::binary_op::div, duration_type, duration_type> {
+  using result = double;
+
+  static auto evaluate(duration l, duration r)
+    -> std::variant<result, const char*> {
+    if (r == decltype(r){}) {
+      return "division by zero";
+    }
+    return detail::narrow_cast<result>(l.count())
+           / detail::narrow_cast<result>(r.count());
+  }
+};
+
+template <integral_type N>
+struct BinOpKernel<ast::binary_op::mul, duration_type, N> {
+  using result = duration;
+
+  static auto evaluate(duration l, type_to_data_t<N> r)
+    -> std::variant<result, const char*> {
+    if (auto check = checked_mul(l.count(), r); check.has_value()) {
+      return duration{check.value()};
+    }
+    return "duration multiplication overflow";
+  }
+};
+
+template <>
+struct BinOpKernel<ast::binary_op::mul, duration_type, double_type> {
+  using result = duration;
+
+  static auto evaluate(duration l, double r)
+    -> std::variant<result, const char*> {
+    return duration_cast<duration>(l * r);
+  }
+};
+
+template <numeric_type N>
+struct BinOpKernel<ast::binary_op::mul, N, duration_type> {
+  using result = duration;
+
+  static auto evaluate(type_to_data_t<N> l, duration r)
+    -> std::variant<result, const char*> {
+    return BinOpKernel<ast::binary_op::mul, duration_type, N>::evaluate(
+      r, l); // Commutative
+  }
+};
+
+template <numeric_type N>
+struct BinOpKernel<ast::binary_op::div, duration_type, N> {
+  using result = duration;
+
+  static auto evaluate(duration l, type_to_data_t<N> r)
+    -> std::variant<result, const char*> {
+    if (r == decltype(r){}) {
+      return "division by zero";
+    }
+    return std::chrono::duration_cast<duration>(l / r);
+  }
+};
+
+template <>
 struct BinOpKernel<ast::binary_op::sub, time_type, time_type> {
   using result = duration;
 
@@ -343,9 +431,9 @@ struct EvalBinOp<Op, bool_type, bool_type> {
       auto size = (l.length() + 7) / 8;
       TENZIR_ASSERT(l.values()->size() >= size);
       TENZIR_ASSERT(r.values()->size() >= size);
-      auto l_ptr = l.values()->data();
-      auto r_ptr = r.values()->data();
-      auto o_ptr = buffer->mutable_data();
+      const auto* l_ptr = l.values()->data();
+      const auto* r_ptr = r.values()->data();
+      auto* o_ptr = buffer->mutable_data();
       for (auto i = int64_t{0}; i < size; ++i) {
         if constexpr (is_and) {
           o_ptr[i] = l_ptr[i] & r_ptr[i]; // NOLINT
