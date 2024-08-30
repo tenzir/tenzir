@@ -277,7 +277,7 @@ public:
     auto friend inspect(auto& f, settings_type& x) -> bool {
       return f.object(x).fields(
         f.field("default_schema_name", x.default_schema_name), f.field("ordered", x.ordered),
-        f.field("expand_schema", x.schema_only), f.field("raw", x.raw),
+        f.field("schema_only", x.schema_only), f.field("raw", x.raw),
         f.field("unnest_separator", x.unnest_separator),
         f.field("timeout", x.timeout),
         f.field("desired_batch_size", x.desired_batch_size));
