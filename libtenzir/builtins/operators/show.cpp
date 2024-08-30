@@ -101,19 +101,23 @@ public:
       // We're in the process of removing aspect plugins in favor of operators.
       // For backwards compatibility, this adds support for `show <aspect>` by
       // redirecting to the operator.
-      static constexpr auto removed_aspects = std::array{
-        "build",   "config",  "partitions", "plugins",
-        "schemas", "version", "fields",
-      };
-      for (const auto& removed_aspect : removed_aspects) {
-        if (aspect->inner == removed_aspect) {
-          auto op = pipeline::internal_parse_as_operator(removed_aspect);
-          if (not op) {
-            diagnostic::error("failed to parse `{}` operator: {}",
-                              removed_aspect, op.error())
-              .throw_();
-          }
-          return std::move(*op);
+      static const auto removed_aspects
+        = std::vector<std::pair<std::string, std::string>>{
+          {"build", "version | set build.features = features | unflatten | "
+                    "yield build | set #schema = \"tenzir.build\""},
+          {"config", "config"},
+          {"dependencies", "version | yield dependencies[] | set #schema = "
+                           "\"tenzir.dependency\""},
+          {"partitions", "partitions"},
+          {"plugins", "plugins"},
+          {"schemas", "schemas"},
+          {"version",
+           "version | drop features, build, dependencies | rename build=tag"},
+          {"fields", "fields"},
+        };
+      for (const auto& [before, after] : removed_aspects) {
+        if (aspect->inner == before) {
+          return check(pipeline::internal_parse_as_operator(after));
         }
       }
       auto available = std::map<std::string, std::string>{};

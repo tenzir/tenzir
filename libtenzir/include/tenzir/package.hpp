@@ -40,9 +40,10 @@ struct package_source final {
 
 struct package_config final {
   std::optional<package_source> source = {};
+  std::optional<std::string> version = {};
   detail::flat_map<std::string, std::string> inputs = {};
-  // TODO: Add an `overrides` field.
-  // package_overrides overrides = {};
+  record metadata = {};  // opaque extra data that can be set at install time
+  record overrides = {}; // overrides for fields in the package definition
 
   auto to_record() const -> record;
 
@@ -51,7 +52,9 @@ struct package_config final {
   friend auto inspect(auto& f, package_config& x) -> bool {
     return f.object(x)
       .pretty_name("package_config")
-      .fields(f.field("source", x.source), f.field("inputs", x.inputs));
+      .fields(f.field("source", x.source), f.field("inputs", x.inputs),
+              f.field("version", x.version), f.field("metadata", x.metadata),
+              f.field("overrides", x.overrides));
   }
 };
 
@@ -116,18 +119,18 @@ struct package_context final {
   }
 };
 
-struct package_snippet final {
+struct package_example final {
   std::optional<std::string> name = {};
   std::optional<std::string> description = {};
   std::string definition = {}; // required to be non-empty
 
   auto to_record() const -> record;
 
-  static auto parse(const view<record>& data) -> caf::expected<package_snippet>;
+  static auto parse(const view<record>& data) -> caf::expected<package_example>;
 
-  friend auto inspect(auto& f, package_snippet& x) -> bool {
+  friend auto inspect(auto& f, package_example& x) -> bool {
     return f.object(x)
-      .pretty_name("package_snippet")
+      .pretty_name("package_example")
       .fields(f.field("name", x.name), f.field("description", x.description),
               f.field("definition", x.definition));
   }
@@ -151,7 +154,7 @@ struct package_contexts_map
   using super::super;
 };
 
-using package_snippets_list = std::vector<package_snippet>;
+using package_examples_list = std::vector<package_example>;
 
 struct package final {
   std::string id = {};   // required to be non-empty
@@ -164,7 +167,7 @@ struct package final {
   package_inputs_map inputs;
   package_pipelines_map pipelines;
   package_contexts_map contexts;
-  package_snippets_list snippets;
+  package_examples_list examples;
 
   // Packages are kept in the library without a `config`. When installing a
   // package, both the package definition and a config must be available.
@@ -185,7 +188,7 @@ struct package final {
       f.field("package_icon", x.package_icon),
       f.field("author_icon", x.author_icon), f.field("inputs", x.inputs),
       f.field("pipelines", x.pipelines), f.field("contexts", x.contexts),
-      f.field("snippets", x.snippets), f.field("config", x.config));
+      f.field("examples", x.examples), f.field("config", x.config));
   }
 };
 

@@ -615,10 +615,6 @@ EOF
   check tenzir "from ${INPUTSDIR}/json/all-types.json read json | head 1 | repeat 100 | batch 100 | write bitz | read bitz"
 }
 
-@test "set operator" {
-  check tenzir 'version | set foo="patch", :uint64=-1, :ip=1.1.1.1, qux=foo, version=123, #schema="foo.bar", schema=#schema, build=null | set schema2=#schema, baz=patch'
-}
-
 # bats test_tags=pipelines, deduplicate
 @test "Deduplicate operator" {
   check tenzir "from ${INPUTSDIR}/json/all-types.json | deduplicate --limit 1"

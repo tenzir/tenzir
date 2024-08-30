@@ -10,6 +10,7 @@
 #include <tenzir/node.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <caf/typed_event_based_actor.hpp>
 
@@ -96,7 +97,8 @@ private:
   std::string request_body_ = {};
 };
 
-class plugin final : public virtual operator_plugin<api_operator> {
+class plugin final : public virtual operator_plugin<api_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.source = true};
@@ -112,6 +114,23 @@ public:
     parser.parse(p);
     return std::make_unique<api_operator>(
       std::move(endpoint), request_body ? std::move(*request_body) : "{}");
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    auto endpoint = located<std::string>{};
+    auto request_body = std::optional<located<record>>{};
+    argument_parser2::operator_("api")
+      .add(endpoint, "<endpoint>")
+      .add(request_body, "<request-body>")
+      .parse(inv, ctx)
+      .ignore();
+    if (not request_body) {
+      return std::make_unique<api_operator>(std::move(endpoint.inner), "{}");
+    }
+    auto request_body_json = check(to_json(request_body->inner));
+    return std::make_unique<api_operator>(std::move(endpoint.inner),
+                                          std::move(request_body_json));
   }
 };
 

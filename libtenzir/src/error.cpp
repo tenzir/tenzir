@@ -73,25 +73,27 @@ void render_default_ctx(std::ostringstream& oss, const caf::message& ctx) {
     oss << ":";
     for (size_t i = 0; i < size; ++i) {
       oss << ' ';
-      if (ctx.match_element<std::string>(i))
+      if (ctx.match_element<std::string>(i)) {
         oss << ctx.get_as<std::string>(i);
-      else
+      } else {
         oss << to_string(ctx);
+      }
     }
   }
 }
 
 } // namespace
 
-const char* to_string(ec x) {
+auto to_string(ec x) -> const char* {
   auto index = static_cast<size_t>(x);
   TENZIR_ASSERT(index < sizeof(descriptions));
   return descriptions[index];
 }
 
-std::string render(caf::error err, bool pretty_diagnostics) {
-  if (!err)
+auto render(const caf::error& err, bool pretty_diagnostics) -> std::string {
+  if (!err) {
     return "";
+  }
   std::ostringstream oss;
   auto category = err.category();
   if (category == caf::type_id_v<tenzir::ec>
@@ -154,8 +156,9 @@ std::string render(caf::error err, bool pretty_diagnostics) {
 }
 
 auto add_context_impl(const caf::error& error, std::string str) -> caf::error {
-  if (!error)
+  if (!error) {
     return error;
+  }
   if (error.category() == caf::type_id_v<tenzir::ec>
       && static_cast<tenzir::ec>(error.code()) == ec::diagnostic) {
     auto ctx = error.context();
