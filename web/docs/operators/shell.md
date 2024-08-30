@@ -34,7 +34,7 @@ line as you would on the shell, use single or double quotes for escaping, e.g.,
 Show a live log from the `tenzir-node` service:
 
 ```
-shell "journalctl -u tenzir-node -f | read json"
+shell "journalctl -u tenzir-node -f" | read json
 ```
 
 Consider the use case of converting CSV to JSON:

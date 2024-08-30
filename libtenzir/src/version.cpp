@@ -106,6 +106,8 @@ auto tenzir_features() -> std::vector<std::string> {
     // There is a `packages` operator can display package information in an
     // extended format.
     "extended_package_format",
+    // The `/pipeline/launch` endpoint supports caching in its implicit sink.
+    "cache",
   };
 }
 

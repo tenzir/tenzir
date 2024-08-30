@@ -1,3 +1,8 @@
+---
+sidebar_custom_props:
+  experimental: true
+---
+
 # TQL2 Migration
 
 This page answers the most frequently asked questions about TQL2.
