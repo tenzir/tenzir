@@ -4,14 +4,15 @@ pipeline [
   },
   read json {
     args: {
+      parser_name: "json",
       builder_options: {
         policy: policy_precise {
           seed_schema: ""
         },
         settings: {
-          default_name: "tenzir.json",
+          default_schema_name: "tenzir.json",
           ordered: true,
-          expand_schema: false,
+          schema_only: false,
           raw: false,
           unnest_separator: "",
           timeout: "1s",
@@ -39,9 +40,9 @@ pipeline [
           seed_schema: ""
         },
         settings: {
-          default_name: "tenzir.unknown",
+          default_schema_name: "tenzir.unknown",
           ordered: true,
-          expand_schema: false,
+          schema_only: false,
           raw: false,
           unnest_separator: "",
           timeout: "1s",

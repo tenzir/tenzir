@@ -1,2 +1,2 @@
-warning: failed to parsed a JSON object
+warning: json parser: failed to parsed a JSON object
  = note: skipped invalid JSON `{"foo": 42`

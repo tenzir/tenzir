@@ -8,9 +8,9 @@ pipeline [
         seed_schema: ""
       },
       settings: {
-        default_name: "cef.event",
+        default_schema_name: "cef.event",
         ordered: true,
-        expand_schema: false,
+        schema_only: false,
         raw: false,
         unnest_separator: "",
         timeout: "1s",

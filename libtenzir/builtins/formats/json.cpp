@@ -386,20 +386,21 @@ private:
 
 class parser_base {
 public:
-  parser_base(std::string name_, operator_control_plane& ctrl,
+  parser_base(std::string name_, diagnostic_handler& dh_,
               multi_series_builder_options options)
-    : dh{ctrl.diagnostics(),
-         [name = std::move(name_)](diagnostic d) {
-           d.message = fmt::format("{} parser: {}", name, d.message);
-           return d;
-         }},
-      builder{std::move(options.policy), std::move(options.settings), dh,
-              modules::schemas(), detail::record_builder::non_number_parser},
-      ctrl{ctrl} {
+    : dh{std::make_unique<transforming_diagnostic_handler>(
+        dh_,
+        [name = std::move(name_)](diagnostic d) {
+          d.message = fmt::format("{} parser: {}", name, d.message);
+          return d;
+        })},
+      builder{std::move(options.policy), std::move(options.settings), *dh,
+              modules::schemas(), detail::record_builder::non_number_parser} {
   }
-  transforming_diagnostic_handler dh;
+  // this has to be pointer stable because `builder` holds a reference to it
+  // internally
+  std::unique_ptr<transforming_diagnostic_handler> dh;
   multi_series_builder builder;
-  operator_control_plane& ctrl;
   simdjson::ondemand::parser json_parser;
   bool abort_requested = false;
 };
@@ -415,8 +416,7 @@ public:
         = this->json_parser
             .iterate_many(json_line.data(), json_line.size(), max_object_size)
             .get(stream)) {
-      diagnostic::warning("{}", error_message(err))
-        .emit(this->ctrl.diagnostics());
+      diagnostic::warning("{}", error_message(err)).emit(*dh);
       return;
     }
     size_t objects_parsed = 0;
@@ -425,47 +425,46 @@ public:
       if (auto err = doc_it.error()) {
         diagnostic::warning("{}", error_message(err))
           .note("skipped invalid JSON at index {}", doc_it.current_index())
-          .emit(this->ctrl.diagnostics());
+          .emit(*dh);
         continue;
       }
       auto doc = *doc_it;
       if (auto err = doc.error()) {
         diagnostic::warning("{}", error_message(err))
           .note("skipped invalid JSON `{}`", truncate(doc_it.source()))
-          .emit(this->ctrl.diagnostics());
+          .emit(*dh);
         continue;
       }
       auto val = doc.get_value();
       if (auto err = val.error()) {
         diagnostic::warning("{}", error_message(err))
           .note("skipped invalid JSON `{}`", truncate(doc_it.source()))
-          .emit(this->ctrl.diagnostics());
+          .emit(*dh);
         continue;
       }
-      auto parser
-        = doc_parser{json_line, this->ctrl.diagnostics(), lines_processed_};
+      auto parser = doc_parser{json_line, *dh, lines_processed_};
       auto success = parser.parse_object(val.value_unsafe(), builder.record());
       if (not success) {
         builder.remove_last();
         diagnostic::warning("failed to parse JSON object `{}`",
                             truncate(doc_it.source()))
-          .emit(this->ctrl.diagnostics());
+          .emit(*dh);
         return;
       }
     }
     if (objects_parsed == 0) {
       diagnostic::warning("failed to parsed a JSON object")
         .note("skipped invalid JSON `{}`", truncate(json_line))
-        .emit(this->ctrl.diagnostics());
+        .emit(*dh);
     } else if (objects_parsed > 1) {
       diagnostic::warning("more than one JSON objects between delimiters")
         .note("encountered a total of {} objects", objects_parsed)
-        .emit(this->ctrl.diagnostics());
+        .emit(*dh);
     }
     if (auto truncated = stream.truncated_bytes() and objects_parsed) {
       diagnostic::warning("skipped remaining invalid JSON bytes")
         .note("{} bytes remained", truncated)
-        .emit(this->ctrl.diagnostics());
+        .emit(*dh);
     }
   }
   void validate_completion() const {
@@ -478,9 +477,9 @@ private:
 
 class default_parser final : public parser_base {
 public:
-  default_parser(std::string name_, operator_control_plane& ctrl,
+  default_parser(std::string name_, diagnostic_handler& dh,
                  multi_series_builder_options options, bool arrays_of_objects)
-    : parser_base{std::move(name_), ctrl, std::move(options)},
+    : parser_base{std::move(name_), dh, std::move(options)},
       arrays_of_objects_{arrays_of_objects} {
   }
 
@@ -498,7 +497,7 @@ public:
       buffer_.reset();
       diagnostic::warning("{}", error_message(err))
         .note("failed to parse")
-        .emit(this->ctrl.diagnostics());
+        .emit(*dh);
       return;
     }
     for (auto doc_it = stream_.begin(); doc_it != stream_.end(); ++doc_it) {
@@ -509,7 +508,7 @@ public:
         abort_requested = true;
         diagnostic::error("{}", error_message(err))
           .note("skips invalid JSON '{}'", view)
-          .emit(this->ctrl.diagnostics());
+          .emit(*dh);
         return;
       }
       if (arrays_of_objects_) {
@@ -518,13 +517,13 @@ public:
           abort_requested = true;
           diagnostic::error("expected an array of objects")
             .note("got: {}", view)
-            .emit(this->ctrl.diagnostics());
+            .emit(*dh);
           return;
         }
         for (auto&& elem : arr.value_unsafe()) {
           auto row = builder.record();
-          auto success = doc_parser{doc_it.source(), this->ctrl.diagnostics()}
-                           .parse_object(elem.value_unsafe(), row);
+          auto success = doc_parser{doc_it.source(), *dh}.parse_object(
+            elem.value_unsafe(), row);
           if (not success) {
             // We already reported the issue.
             builder.remove_last();
@@ -533,9 +532,8 @@ public:
         }
       } else {
         auto row = builder.record();
-        auto success
-          = doc_parser{doc_it.source(), this->ctrl.diagnostics()}.parse_object(
-            doc.value_unsafe(), row);
+        auto success = doc_parser{doc_it.source(), *dh}.parse_object(
+          doc.value_unsafe(), row);
         if (not success) {
           // We already reported the issue.
           builder.remove_last();
@@ -548,8 +546,7 @@ public:
 
   void validate_completion() {
     if (not buffer_.view().empty()) {
-      diagnostic::error("parser input ended with incomplete object")
-        .emit(ctrl.diagnostics());
+      diagnostic::error("parser input ended with incomplete object").emit(*dh);
       abort_requested = true;
     }
   }
@@ -567,7 +564,7 @@ private:
       abort_requested = true;
       diagnostic::error("detected malformed JSON")
         .note("in input '{}'", buffer_.view())
-        .emit(this->ctrl.diagnostics());
+        .emit(*dh);
       return;
     }
     buffer_.truncate(truncated_bytes);
@@ -617,7 +614,8 @@ struct parser_args {
   friend auto inspect(auto& f, parser_args& x) {
     return f.object(x)
       .pretty_name("parser_args")
-      .fields(f.field("builder_options", x.builder_options),
+      .fields(f.field("parser_name", x.parser_name),
+              f.field("builder_options", x.builder_options),
               f.field("arrays_of_objects", x.arrays_of_objects),
               f.field("mode", x.split_mode));
   }
@@ -648,7 +646,7 @@ public:
         return parser_loop(split_at_crlf(std::move(input)),
                            ndjson_parser{
                              args_.parser_name,
-                             ctrl,
+                             ctrl.diagnostics(),
                              args_.builder_options,
                            });
       }
@@ -656,14 +654,14 @@ public:
         return parser_loop(split_at_null(std::move(input), '\0'),
                            ndjson_parser{
                              args_.parser_name,
-                             ctrl,
+                             ctrl.diagnostics(),
                              args_.builder_options,
                            });
       }
       case split_at::none: {
         return parser_loop(std::move(input), default_parser{
                                                args_.parser_name,
-                                               ctrl,
+                                               ctrl.diagnostics(),
                                                args_.builder_options,
                                                args_.arrays_of_objects,
                                              });

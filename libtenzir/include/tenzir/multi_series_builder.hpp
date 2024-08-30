@@ -257,12 +257,13 @@ public:
                                       policy_precise, policy_selector>;
 
   struct settings_type {
-    // the default name given to a schema, if its not determined by `schema` or `selector`
+    // the default name given to a schema, if its not determined by `schema` or
+    // `selector`
     std::string default_schema_name = "tenzir.unknown";
     // whether the output should adhere to the input order
     bool ordered = true;
-    // whether, given a known schema via `schema` or `selector`, only fields from that
-    // should be output 
+    // whether, given a known schema via `schema` or `selector`, only fields
+    // from that should be output
     bool schema_only = false;
     // whether to not parse fields that are not present in a known schema
     bool raw = false;
@@ -276,9 +277,9 @@ public:
 
     auto friend inspect(auto& f, settings_type& x) -> bool {
       return f.object(x).fields(
-        f.field("default_schema_name", x.default_schema_name), f.field("ordered", x.ordered),
-        f.field("schema_only", x.schema_only), f.field("raw", x.raw),
-        f.field("unnest_separator", x.unnest_separator),
+        f.field("default_schema_name", x.default_schema_name),
+        f.field("ordered", x.ordered), f.field("schema_only", x.schema_only),
+        f.field("raw", x.raw), f.field("unnest_separator", x.unnest_separator),
         f.field("timeout", x.timeout),
         f.field("desired_batch_size", x.desired_batch_size));
     }
@@ -328,8 +329,8 @@ public:
 
   // BE AWARE THAT MOVING A MULTI_SERIES_BUILDER MAY
   // INVALIDATE PREVIOUSLY OBTAINED HANDLES
-  // manual implementation of this is required, as it contains some potential
-  // self-referential pointers
+  // manual implementation of the move ctor is required, as it contains some
+  // potential self-referential pointers
   multi_series_builder(multi_series_builder&& other)
     : policy_{std::move(other.policy_)},
       settings_{std::move(other.settings_)},

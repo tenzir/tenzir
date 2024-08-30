@@ -1502,14 +1502,14 @@
   "_write_ts": null,
   "_path": "conn"
 }
-warning: zeek event did not contain selector field
+warning: zeek-json parser: event did not contain selector field
  = note: selector field `_path` was not found
 
-warning: zeek selected schema not found
+warning: zeek-json parser: selected schema not found
  = note: `zeek._0_0_2` does not refer to a known schema
 
-warning: parsed field type does not match the type from the schema
+warning: zeek-json parser: parsed field type does not match the type from the schema
  = note: parsed type had ID `2`, schema expected ID `14`(`zeek.conn_id`)
 
-warning: Issue writing typed data into prepared batch
+warning: zeek-json parser: Issue writing typed data into prepared batch
  = note: !! type_clash: expected record but got int64

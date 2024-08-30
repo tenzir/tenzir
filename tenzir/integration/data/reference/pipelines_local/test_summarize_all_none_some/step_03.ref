@@ -1,14 +1,14 @@
 {"z": null, "x": ["_0_0_2", "conn", "conn_long", "corelight_metrics_bro", "corelight_metrics_cpu", "corelight_metrics_disk", "corelight_metrics_iface", "corelight_metrics_memory", "corelight_metrics_system", "dhcp", "dnp3", "dns", "dpd", "files", "ftp", "http", "irc", "kerberos", "modbus", "notice", "pe", "radius", "rdp", "reporter", "sip", "smtp", "snmp", "software", "ssl", "syslog", "tunnel", "weird", "weird.123.190"]}
-warning: zeek event did not contain selector field
+warning: zeek-json parser: event did not contain selector field
  = note: selector field `_path` was not found
 
-warning: zeek selected schema not found
+warning: zeek-json parser: selected schema not found
  = note: `zeek._0_0_2` does not refer to a known schema
 
-warning: parsed field type does not match the type from the schema
+warning: zeek-json parser: parsed field type does not match the type from the schema
  = note: parsed type had ID `2`, schema expected ID `14`(`zeek.conn_id`)
 
-warning: Issue writing typed data into prepared batch
+warning: zeek-json parser: Issue writing typed data into prepared batch
  = note: !! type_clash: expected record but got int64
 
 warning: group-by column `z` does not exist for schema `zeek`
