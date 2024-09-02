@@ -225,7 +225,6 @@ auto package_input::parse(const view<record>& data)
       .to_error();
   }
   REQUIRED_FIELD(name);
-  REQUIRED_FIELD(type);
   return result;
 }
 
