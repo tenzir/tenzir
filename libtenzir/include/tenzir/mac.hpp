@@ -12,6 +12,7 @@
 #include "tenzir/hash/uniquely_represented.hpp"
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include <array>
 #include <cstring>

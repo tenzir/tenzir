@@ -31,7 +31,7 @@ struct unknown_msgpack_type {};
 
 template <>
 struct fmt::formatter<msgpack_object_type> : fmt::formatter<std::string_view> {
-  auto format(msgpack_object_type type, format_context& ctx) {
+  auto format(msgpack_object_type type, format_context& ctx) const {
     std::string_view name = "Unknown";
     switch (type) {
       case MSGPACK_OBJECT_NIL:

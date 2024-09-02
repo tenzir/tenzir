@@ -128,7 +128,7 @@ struct formatter<tenzir::query_context> {
   }
 
   template <class FormatContext>
-  auto format(const tenzir::query_context& value, FormatContext& ctx)
+  auto format(const tenzir::query_context& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     auto out = ctx.out();
     auto f = tenzir::detail::overload{
