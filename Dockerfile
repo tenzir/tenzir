@@ -264,7 +264,7 @@ ENTRYPOINT ["tenzir-node"]
 
 FROM tenzir-node-ce AS tenzir-demo
 
-ENV TENZIR_START__COMMANDS="exec \"from https://raw.githubusercontent.com/tenzir/library/main/demo/package.yaml | package add\""
+ENV TENZIR_START__COMMANDS="exec \"from https://raw.githubusercontent.com/tenzir/library/main/demo-node/package.yaml | package add\""
 
 # -- tenzir-node -----------------------------------------------------------------
 
