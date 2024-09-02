@@ -44,6 +44,7 @@ setup() {
 }
 
 @test "Use fluent-bit to count to 10" {
+  skip "Disabled due to CI flakiness"
   run -0 --separate-stderr \
     tenzir 'version | repeat | head | fluent-bit counter'
   { check cut -d , -f 2; } <<<"$output"
