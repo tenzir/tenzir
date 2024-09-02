@@ -254,7 +254,8 @@ load(const std::vector<std::string>& bundled_plugins,
                                            "uses the name {}",
                                            path, (*plugin)->name()));
       }
-      get_mutable().push_back(std::move(*plugin));
+      const auto it = std::ranges::upper_bound(plugins::get_mutable(), *plugin);
+      plugins::get_mutable().insert(it, std::move(*plugin));
       loaded_plugin_paths.emplace_back(std::move(path));
     } else {
       return std::move(plugin.error());
