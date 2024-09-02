@@ -17,6 +17,7 @@
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include <array>
 #include <cstddef>

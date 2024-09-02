@@ -366,7 +366,7 @@ struct formatter<std::error_code> {
   }
 
   template <class FormatContext>
-  constexpr auto format(const std::error_code& value, FormatContext& ctx)
+  constexpr auto format(const std::error_code& value, FormatContext& ctx) const
     -> decltype(ctx.out()) {
     return fmt::format_to(ctx.out(), "{}", value.message());
   }

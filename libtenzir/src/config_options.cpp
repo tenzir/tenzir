@@ -8,6 +8,8 @@
 
 #include "tenzir/config_options.hpp"
 
+#include <fmt/ranges.h>
+
 namespace tenzir {
 
 namespace {
