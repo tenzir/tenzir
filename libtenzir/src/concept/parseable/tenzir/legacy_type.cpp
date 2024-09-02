@@ -90,7 +90,8 @@ bool legacy_type_parser::parse(Iterator& f, const Iterator& l,
   auto field = (field_name >> skp >> ':' >> skp >> ref(type_type)) ->* to_field;
   auto legacy_record_type_parser
     = ("record" >> skp >> '{'
-    >> ((skp >> field >> skp) % ',') >> ~(',' >> skp)
+    >> skp
+    >> ~(((skp >> field >> skp) % ',') >> ~(',' >> skp))
     >> '}').with([](const std::vector<record_field>& x) -> bool {
       // Make sure that there are no duplicate field names.
       auto names = std::vector<std::string_view>{};
