@@ -25,15 +25,12 @@ The following describes the fields of a package definition.
 Packages start with a set of metadata describing the package.
 
 ```yaml
-# The unique id of the package (required).
+# The unique ID of the package. (required)
 id: feodo
-
-# 
-version:
 
 # The display name of the package and a path to an icon for the package.
 name: Feodo Abuse Blocklist
-package_icon: null
+package_icon: https://github.com/tenzir.png
 
 # The display name of the package author and a path to a profile picture.
 author: Tenzir
@@ -69,10 +66,11 @@ inputs:
     default: 1s
 ```
 
-Inputs can be referenced in pipeline and example definitions and in context arguments
-with the syntax `{{ inputs.input-name }}`. They are replaced by their configured values
-when installing a package. For example, with the input configured as above the pipeline
-`every {{ inputs.refresh-rate }} { version }` would print the version once per second by default.
+Inputs can be referenced in pipeline and example definitions and in context
+arguments with the syntax `{{ inputs.input-name }}`. They are replaced by their
+configured values when installing a package. For example, with the input
+configured as above the pipeline `every {{ inputs.refresh-rate }} { version }`
+would print the version once per second by default.
 
 To write double curly braces, use the syntax `{{ '{{' }}` to produce the
 literal string enclosed inside the single quotes.

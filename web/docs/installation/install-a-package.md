@@ -5,37 +5,42 @@ deploy them as a single unit.
 
 ## Install from the Tenzir Library
 
-:::info Coming Soon
-The most convenient way to install a package is through the Tenzir Library,
-which will be available on [app.tenzir.com](https://app.tenzir.com) in the near
-future. Stay tuned!
-:::
+The most convenient way to install a package is through the [Tenzir
+Library](https://app.tenzir.com/library):
+
+1. Click on a package
+2. Select the *Install* tab
+3. Define your inputs (optional)
+4. Click the *Install* button in the bottom right
 
 ## Install with the Package Operator
 
 To install a package interactively, use the [`package add`
 operator](../operators/package.md):
 
-```
-from ./package.yaml
-| package add
+```tql
+// tql2
+load_file "package.yaml"
+read_yaml
+package_add
 ```
 
 To set package inputs, simply set the values in the pipeline:
 
-```
-from ./package.yaml
-| python '
-  self.config.inputs.endpoint = "localhost:42000"
-  self.config.inputs.policy = "block"
-'
-| package add
+```tql
+// tql2
+load_file "package.yaml"
+read_yaml
+// Adjust inputs
+set config.inputs.endpoint = "localhost:42000"
+set config.inputs.policy = "block"
+package_add
 ```
 
 Your package should now show when listing all installed packages:
 
-```
-show packages
+```tql
+packages
 ```
 
 ```json5
@@ -46,17 +51,17 @@ show packages
 }
 ```
 
-To uninstall a package interactively, use the [`package remove`
-operator](../operators/package.md).
+To uninstall a package interactively, use [`package_
+remove`](../operators/package.md).
 
-```
-package remove your-package
+```tql
+package_remove "your-package"
 ```
 
 ## Install with Infrastructure as Code
 
-The node searches for packages in a set of directories on startup. Packages live
-right next to your `tenzir.yaml` file:
+For IaC-style deployments, you can install packages *as code* by putting them
+next to your `tenzir.yaml` configuration file:
 
 ```
 /opt/tenzir/etc/tenzir
@@ -67,17 +72,20 @@ right next to your `tenzir.yaml` file:
         └── package.yaml
 ```
 
-Inside the `packages` directory, every package lives in its own directory (which
-by convention should have a name matching the package id), containing a
-`package.yaml` file with the package definition.
+Inside the `packages` directory, every installed package lives in its own
+directory containing a `package.yaml` file with the package definition. By
+convention, the directory name is the package ID.
 
 The node search path for packages consists of the following locations:
+
 1. The `packages` directory in all [configuration
    directories](../configuration.md#configuration-files).
 2. All directories specified in the `tenzir.package-dirs` configuration option.
 
-The directory may optionally contain a `config.yaml` file for customizing the
-package installation:
+As an alternative way to specify inputs visually in the app, or setting them
+explicitly prior to calling `package_add`, you can add a `config.yaml` file next
+to the `package.yaml` file. Here is an example that sets the keys
+`config.inputs.endpoint` and `config.inputs.policy`:
 
 ```yaml
 inputs:
