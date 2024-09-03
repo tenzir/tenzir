@@ -43,7 +43,7 @@ struct xsv_options {
   bool auto_expand = {};
   bool allow_comments = {};
   std::optional<std::string> header = {};
-  multi_series_builder_options builder_options = {};
+  multi_series_builder::options builder_options = {};
 
   static auto try_parse_printer_options(parser_interface& p,
                                         std::string name) -> xsv_options {
@@ -452,7 +452,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       continue;
     }
     auto r = msb.record();
-    size_t field_idx = 0;
+    auto field_idx = size_t{0};
     for (field_idx = 0; true; ++field_idx) {
       if (line->empty()) {
         if (field_idx < original_field_count) {
@@ -462,7 +462,8 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
                   line_counter, field_idx, original_field_count)
             .emit(ctrl.diagnostics());
         }
-        break;
+        r.unflattend_field(fields[field_idx]).null();
+        continue;
       } else if (field_idx >= fields.size()) {
         if (args.auto_expand) {
           size_t unnamed_idx = 1;
@@ -553,9 +554,7 @@ public:
   }
 
   friend auto inspect(auto& f, xsv_parser& x) -> bool {
-    return f.object(x)
-      .pretty_name("tenzir.plugins.xsv.xsv_parser")
-      .fields(f.field("args", x.args_));
+    return f.apply(x.args_);
   }
 
 private:

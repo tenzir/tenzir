@@ -46,12 +46,6 @@ struct data_parsing_result {
     : data{std::move(data_)}, diagnostic{std::move(diag_)} {};
 };
 
-template <typename P>
-concept data_parsing_function
-  = requires(P parser, std::string_view str, const tenzir::type* seed) {
-      { parser(str, seed) } -> std::same_as<data_parsing_result>;
-    };
-
 class node_record;
 class node_field;
 class node_list;
@@ -384,7 +378,9 @@ private:
       };
     return std::visit(visitor, data_);
   }
-  auto try_resolve_nonstructural_field_mismatch( class record_builder& rb, const tenzir::type* seed ) -> void;
+  auto
+  try_resolve_nonstructural_field_mismatch(class record_builder& rb,
+                                           const tenzir::type* seed) -> void;
   /// parses any unparsed fields using `parser`, potentially providing a
   /// seed/schema to the parser
   auto parse(class record_builder& rb, const tenzir::type* seed) -> void;
@@ -408,12 +404,10 @@ private:
 
   field_variant_type data_;
 
-  enum class value_state_type {
-    has_value, unparsed, null
-  };
-  // this is the state of the contained value. This exists in case somebody calls 
+  enum class value_state_type { has_value, unparsed, null };
+  // this is the state of the contained value. This exists in case somebody calls
   // `record.field("key")` but never inserts any data into the field
-  // this is distinctly different from a node not being `alive`, 
+  // this is distinctly different from a node not being `alive`,
   // which only happens as a result of internal storage reuse.
   value_state_type value_state_ = value_state_type::null;
 };
@@ -454,11 +448,16 @@ class record_builder {
   friend class detail::record_builder::node_field;
 
 public:
-  template <detail::record_builder::data_parsing_function Parser
-            = decltype(detail::record_builder::basic_parser)>
-  record_builder(Parser parser = detail::record_builder::basic_parser,
-                 diagnostic_handler* dh = nullptr, bool schema_only = false,
-                 bool parse_schema_fields_only = false)
+  using data_parsing_function
+    = std::function<detail::record_builder::data_parsing_result(
+      std::string_view str, const tenzir::type* seed)>;
+  record_builder(
+    data_parsing_function parser
+    = detail::record_builder::basic_parser, // FIXME move this into a
+                                            // std::function directly and move
+                                            // the ctor into the cpp file
+    diagnostic_handler* dh = nullptr, bool schema_only = false,
+    bool parse_schema_fields_only = false)
     : dh_{dh},
       parser_{std::move(parser)},
       schema_only_{schema_only},
@@ -504,9 +503,9 @@ public:
                  const tenzir::type* seed = nullptr) -> void;
 
 private:
-/// tries to lookup the type `r` in the type lookup map, 
-/// and potentially writes creates sentinel fields in `apply` 
-/// if they dont exist in the record yet
+  /// tries to lookup the type `r` in the type lookup map,
+  /// and potentially writes creates sentinel fields in `apply`
+  /// if they dont exist in the record yet
   auto lookup_record_fields(const tenzir::record_type* r,
                             detail::record_builder::node_record* apply)
     -> const detail::record_builder::field_type_lookup_map*;
@@ -516,9 +515,7 @@ private:
   diagnostic_handler* dh_;
 
 public:
-  std::function<detail::record_builder::data_parsing_result(
-    std::string_view, const tenzir::type*)>
-    parser_;
+  data_parsing_function parser_;
 
 private:
   bool schema_only_;

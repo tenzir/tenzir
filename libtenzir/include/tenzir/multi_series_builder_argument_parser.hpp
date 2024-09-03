@@ -18,20 +18,6 @@
 #include "argument_parser2.hpp"
 
 namespace tenzir {
-
-// simple utility combining multi_series_builder::settings_type and
-// multi_series_builder::policy_type
-struct multi_series_builder_options {
-  multi_series_builder::policy_type policy
-    = multi_series_builder::policy_precise{};
-  multi_series_builder::settings_type settings = {};
-
-  friend auto inspect(auto& f, multi_series_builder_options& x) -> bool {
-    return f.object(x).fields(f.field("policy", x.policy),
-                              f.field("settings", x.settings));
-  }
-};
-
 /// simple utility to parse the command line arguments for a
 /// multi_series_builder's settings and policy
 struct multi_series_builder_argument_parser {
@@ -57,11 +43,11 @@ public:
   auto add_all_to_parser(argument_parser2& parser) -> void;
 
   auto get_options(diagnostic_handler& dh)
-    -> failure_or<multi_series_builder_options> {
+    -> failure_or<multi_series_builder::options> {
     auto good = get_policy(dh);
-    good |= get_settings(dh);
+    good &= get_settings(dh);
     if (good) {
-      return multi_series_builder_options{
+      return multi_series_builder::options{
         .policy = policy_,
         .settings = settings_,
       };

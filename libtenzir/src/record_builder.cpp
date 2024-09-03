@@ -153,20 +153,18 @@ auto record_builder::emit_or_throw(tenzir::diagnostic_builder&& builder)
 }
 
 namespace {
-template<typename Tenzir_Type>
+template <typename Tenzir_Type>
 struct parser_for;
 
-template<typename Tenzir_Type>
+template <typename Tenzir_Type>
   requires caf::detail::is_complete<parser_registry<type_to_data_t<Tenzir_Type>>>
-struct parser_for<Tenzir_Type>
-  : parser_registry<type_to_data_t<Tenzir_Type>>
-{ };
+struct parser_for<Tenzir_Type> : parser_registry<type_to_data_t<Tenzir_Type>> {
+};
 
 // the parser registry for boolean is only for "0 1" ...
-template<>
-struct parser_for<bool_type>
-  : std::type_identity<decltype(parsers::boolean)>
-{ };
+template <>
+struct parser_for<bool_type> : std::type_identity<decltype(parsers::boolean)> {
+};
 
 template <typename T>
 concept has_parser = caf::detail::is_complete<parser_for<T>>;
@@ -238,7 +236,7 @@ auto parse_time(std::string_view s, const type& seed)
     return {*cast_res};
   }
   auto unit = seed.attribute("unit");
-  if ( not unit ) {
+  if (not unit) {
     return diagnostic::warning("failed to parse value as requested type")
       .hint("value was `{}`, desired type was `{}`", s, seed)
       .done();
@@ -751,8 +749,8 @@ auto node_field::try_resolve_nonstructural_field_mismatch(
       rb.emit_or_throw(
         diagnostic::warning("parsed field type does not match the type from "
                             "the schema")
-          .note("parsed type had ID `{}`, schema expected ID `{}`(`{}`)",
-                type_idx, seed->type_index(), *seed));
+          .note("parsed type was `{}`, but the schema expected `{}`",
+                type{data_to_type_t<T>{}}.kind(), *seed));
     },
   };
   std::visit(visitor, data_);
@@ -777,22 +775,33 @@ auto node_field::append_to_signature(signature_type& sig,
   parse(rb, seed);
   try_resolve_nonstructural_field_mismatch(rb, seed);
   const auto visitor = detail::overload{
-    [&sig, &rb, seed](node_list& v) {
+    [&sig, &rb, seed, this](node_list& v) {
       const auto* ls = caf::get_if<list_type>(seed);
       if (seed and not ls) {
-        rb.emit_or_throw(diagnostic::warning("event field is a list, but the "
-                                             "schema does not expect a list"));
+        rb.emit_or_throw(
+          diagnostic::warning("mismatch between event data and expected "
+                              "schema")
+            .note("schema expected `{}`, but event contained `{}`",
+                  seed->kind(), "list"));
+        null();
+        // FIXME this needs to update the signature in some way
+        return;
       }
       if (v.affects_signature() or ls) {
         v.append_to_signature(sig, rb, ls);
       }
     },
-    [&sig, &rb, seed](node_record& v) {
+    [&sig, &rb, seed, this](node_record& v) {
       const auto* rs = caf::get_if<record_type>(seed);
       if (seed and not rs) {
         rb.emit_or_throw(
-          diagnostic::warning("event field is a record, but the "
-                              "schema does not expect a record"));
+          diagnostic::warning("mismatch between event data and expected "
+                              "schema")
+            .note("schema expected `{}`, but event contained `{}`",
+                  seed->kind(), type{record_type{}}.kind()));
+        null();
+        // FIXME this needs to update the signature in some way
+        return;
       }
       if (v.affects_signature() or rs) {
         v.append_to_signature(sig, rb, rs);
@@ -859,6 +868,18 @@ auto node_field::commit_to(tenzir::builder_ref builder,
     [&builder, &rb, seed, mark_dead](node_list& v) {
       if (v.is_alive()) {
         const auto ls = caf::get_if<tenzir::list_type>(seed);
+        if (not ls and seed) {
+          rb.emit_or_throw(
+            diagnostic::warning("mismatch between event data and expected "
+                                "schema")
+              .note("schema expected `{}`, but event contained `{}`",
+                    seed->kind(), "list"));
+          builder.null();
+          v.mark_this_dead();
+          return;
+        }
+        // Because we ensured that the seed matches above, we can now safely
+        // call `builder.list()`
         auto l = builder.list();
         v.commit_to(std::move(l), rb, ls, mark_dead);
       }
@@ -866,15 +887,30 @@ auto node_field::commit_to(tenzir::builder_ref builder,
     [&builder, &rb, seed, mark_dead](node_record& v) {
       if (v.is_alive()) {
         const auto rs = caf::get_if<tenzir::record_type>(seed);
+        if (not rs and seed) {
+          rb.emit_or_throw(
+            diagnostic::warning("mismatch between event data and expected "
+                                "schema")
+              .note("schema expected `{}`, but event contained `{}`",
+                    seed->kind(), type{record_type{}}.kind()));
+          builder.null();
+          v.mark_this_dead();
+          return;
+        }
+        // Because we ensured that the seed matches above, we can now safely
+        // call `builder.record()`
         auto r = builder.record();
         v.commit_to(std::move(r), rb, rs, mark_dead);
       }
     },
-    [&builder, &rb]<non_structured_data_type T>(T& v) {
+    [&builder, seed, &rb]<non_structured_data_type T>(T& v) {
       auto res = builder.try_data(v);
       if (auto& e = res.error()) {
         rb.emit_or_throw(
-          diagnostic::warning("Issue writing typed data into prepared batch")
+          diagnostic::warning("mismatch between event data and "
+                              "expected schema")
+            .note("schema expected `{}`, but event contains `{}`", seed->kind(),
+                  type{data_to_type_t<T>{}}.kind())
             .note("{}", e));
       }
     },

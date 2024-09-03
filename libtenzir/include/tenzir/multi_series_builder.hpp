@@ -54,18 +54,20 @@ public:
   explicit record_generator(class multi_series_builder* msb, raw_pointer raw)
     : msb_{msb}, var_{raw} {
   }
-  /// adds a new field to the record and returns a generator for that field
-  /// if the backing `multi_series_builder` has an unnest-separator, this
-  /// function will also unflatten
+  /// @brief Adds an field with exactly the given name to the record.
+  /// This function does not perform any unflatten operation.
   auto exact_field(std::string_view name) -> field_generator;
+  /// @brief Adds a new field to the record and returns a generator for that
+  /// field. Iff the backing `multi_series_builder` has an unnest-separator,
+  /// this function will also unflatten.
   auto field(std::string_view name) -> field_generator;
 
-  /// creates an explicitly unflattend field.
-  /// DOES NOT RESPECT THE `multi_series_builder`s unflatten settings
+  /// @brief Creates an explicitly unflattend field. This function does
+  /// not respect the builders unflatten setting.
   auto unflattend_field(std::string_view key,
                         std::string_view unflatten) -> field_generator;
-  /// creates an explicitly unflattend field according to the
-  /// `multi_series_builder`s unflatten setting
+  /// @brief Creates an explicitly unflattend field according to the
+  /// `multi_series_builder`s unflatten setting.
   auto unflattend_field(std::string_view key) -> field_generator;
 
 private:
@@ -77,7 +79,7 @@ class field_generator {
   using raw_pointer = detail::record_builder::node_field*;
 
 public:
-  /// A non-associated field generator. BE CAREFUL WITH THIS.
+  /// A non-associated field generator. This is used in the unflatten function.
   field_generator() : field_generator(nullptr, nullptr) {
   }
   field_generator(class multi_series_builder* msb, builder_ref builder)
@@ -87,7 +89,7 @@ public:
     : msb_{msb}, var_{raw} {
   }
 
-  /// sets the value of the field to some data
+  /// @brief Sets the value of the field to some data
   template <tenzir::detail::record_builder::non_structured_data_type T>
   void data(T d) {
     const auto visitor = detail::overload{
@@ -103,15 +105,15 @@ public:
 
   void data_unparsed(std::string_view s);
 
-  /// sets the value of the field an empty record and returns a generator for
-  /// the record
+  /// @brief Sets the value of the field an empty record and returns a generator
+  /// for the record
   auto record() -> record_generator;
 
-  /// sets the value of the field an empty list and returns a generator for the
-  /// list
+  /// @brief Sets the value of the field an empty list and returns a generator
+  /// for the list
   auto list() -> list_generator;
 
-  /// sets the value of the field to null
+  /// @brief Sets the value of the field to null
   void null();
 
 private:
@@ -130,7 +132,7 @@ public:
     : msb_{msb}, var_{raw} {
   }
 
-  /// appends a data value T to the list
+  /// @brief appends a data value T to the list
   template <tenzir::detail::record_builder::non_structured_data_type T>
   void data(T d) {
     const auto visitor = detail::overload{
@@ -144,14 +146,16 @@ public:
     return std::visit(visitor, var_);
   }
 
+  /// @brief appends unparsed data to the list, which will be parsed at a lated
+  /// point
   void data_unparsed(std::string_view s);
-  /// appends a record to the list and returns a generator for the record
+  /// @brief appends a record to the list and returns a generator for the record
   auto record() -> record_generator;
 
-  /// appends a list to the list and returns a generator for the list
+  /// @brief appends a list to the list and returns a generator for the list
   auto list() -> list_generator;
 
-  /// append a null value to the list
+  /// @brief append a null value to the list
   void null();
 
 private:
@@ -182,6 +186,24 @@ auto series_to_table_slice(std::vector<series> data,
                            = "tenzir.unknown") -> std::vector<table_slice>;
 } // namespace detail::multi_series_builder
 
+/// @brief This class provides an incremental builder API to build multiple
+/// different table slices based on the input. Unlike the `series_builder`,
+/// The plain `series_builder`s behaviour can be obtained by using the
+/// `merging_policy`.
+/// In the other policies, there is one `series_builder` per input schema.
+/// An event is first written into a `record_builder`, which is then used
+/// to compute a byte-signature. This byte-signature then determines which
+/// `series_builder` the event is written into.
+///
+/// The API works identical to the `series_builder`:
+/// * record() inserts a record
+/// * list() inserts a list
+/// * data( value ) inserts a value
+/// * data_unparsed( string ) inserts a value that will be parsed later on
+/// * record_generator::field( string ) inserts a field that will be unflattend
+/// * record_generator::exact_field( string ) inserts a field with the exact name
+/// * record_generator::unflattend_field inserts a field that is explicitly
+///   unflattend
 class multi_series_builder {
 public:
   friend class detail::multi_series_builder::record_generator;
@@ -199,7 +221,7 @@ public:
   /// adds a record to the currently active builder
   [[nodiscard]] auto record() -> record_generator;
 
-  /// drops the last event from active builder
+  /// Drops the last event from active builder
   void remove_last();
 
   [[nodiscard("The result of a flush must be handled")]]
@@ -207,7 +229,7 @@ public:
   [[nodiscard("The result of a flush must be handled")]]
   auto finalize_as_table_slice() -> std::vector<table_slice>;
 
-  // this policy will merge all events into a single schema
+  // This policy will merge all events into a single schema
   struct policy_merge {
     static constexpr std::string_view name = "merge";
     // a schema name to seed with. If this is given
@@ -220,7 +242,7 @@ public:
     }
   };
 
-  // this policy will keep all schemas in separate batches
+  // This policy will keep all schemas in separate batches
   struct policy_precise {
     static constexpr std::string_view name = "precise";
     // If this is given, all resulting events will have exactly this schema
@@ -232,12 +254,12 @@ public:
     }
   };
 
-  // this policy will keep all schemas in batches according to selector
+  // This policy will keep all schemas in batches according to selector
   struct policy_selector {
     static constexpr std::string_view name = "selector";
-    // the field name to use for selection
+    // The field name to use for selection
     std::string field_name;
-    // a naming prefix, doing the following transformation on the name:
+    // A naming prefix, doing the following transformation on the name:
     // selector("event_type", "suricata")
     // => {"event_type": "flow"}
     // => "suricata.flow"
@@ -251,28 +273,28 @@ public:
     }
   };
 
-  // TODO the monostate alternative only exists because of an issue when
-  // compiling with GCC-12 in the CI
+  // The monostate alternative only exists because of an issue when
+  // compiling with GCC-12 in the CI.
   using policy_type = tenzir::variant<std::monostate, policy_merge,
                                       policy_precise, policy_selector>;
 
   struct settings_type {
-    // the default name given to a schema, if its not determined by `schema` or
+    // The default name given to a schema, if its not determined by `schema` or
     // `selector`
     std::string default_schema_name = "tenzir.unknown";
-    // whether the output should adhere to the input order
+    // Whether the output should adhere to the input order
     bool ordered = true;
     // whether, given a known schema via `schema` or `selector`, only fields
     // from that should be output
     bool schema_only = false;
-    // whether to not parse fields that are not present in a known schema
+    // Whether to not parse fields that are not present in a known schema
     bool raw = false;
-    // unnest separator to be used when calling any `field` in the builder pattern
+    // Unnest separator to be used when calling any `field` in the builder pattern
     std::string unnest_separator = {};
-    // timeout after which events will be yielded regardless of whether the
+    // Timeout after which events will be yielded regardless of whether the
     // desired batch size has been reached
     duration timeout = defaults::import::batch_timeout;
-    // batch size after which the events should be yielded
+    // Batch size after which the events should be yielded
     size_t desired_batch_size = defaults::import::table_slice_size;
 
     auto friend inspect(auto& f, settings_type& x) -> bool {
@@ -285,76 +307,36 @@ public:
     }
   };
 
-  template <detail::record_builder::data_parsing_function Parser
-            = decltype(detail::record_builder::basic_parser)>
-  multi_series_builder(policy_type policy, settings_type settings,
-                       diagnostic_handler& dh, std::vector<type> schemas = {},
-                       Parser&& parser = detail::record_builder::basic_parser)
-    : policy_{std::move(policy)},
-      settings_{std::move(settings)},
-      dh_{dh},
-      builder_raw_{std::forward<Parser>(parser), &dh, settings_.schema_only,
-                   settings_.raw} {
-    TENZIR_ASSERT(not std::holds_alternative<std::monostate>(policy_));
-    schemas_.reserve(schemas.size());
-    for (auto t : schemas) {
-      const auto [it, success] = schemas_.try_emplace(t.name(), std::move(t));
-      TENZIR_ASSERT(success, "Repeated schema name");
+  struct options {
+    multi_series_builder::policy_type policy
+      = multi_series_builder::policy_precise{};
+    multi_series_builder::settings_type settings = {};
+
+    friend auto inspect(auto& f, options& x) -> bool {
+      return f.object(x).fields(f.field("policy", x.policy),
+                                f.field("settings", x.settings));
     }
-    // setup the merging builder in merging mode
-    if (auto p = get_policy<policy_merge>()) {
-      settings_.ordered = true; // merging mode is necessarily ordered
-      if (auto seed = type_for_schema(p->seed_schema)) {
-        merging_builder_ = seed;
-      } else {
-        merging_builder_ = tenzir::type{p->seed_schema, null_type{}};
-      }
-    }
-    // setup the naming sentinel for naming builders in precise mode
-    else if (auto p = get_policy<policy_precise>()) {
-      if (auto seed = type_for_schema(p->seed_schema)) {
-        naming_sentinel_ = *seed;
-        needs_signature_ = not settings_.schema_only;
-        builder_schema_ = &naming_sentinel_;
-        parsing_signature_schema_ = &naming_sentinel_;
-      } else {
-        naming_sentinel_ = tenzir::type{p->seed_schema, null_type{}};
-        builder_schema_ = &naming_sentinel_;
-        parsing_signature_schema_ = nullptr;
-      }
-    }
-    // selector mode has not special ctor setup, as it all depends on runtime
-    // inputs
+  };
+
+  multi_series_builder(options opts, diagnostic_handler& dh,
+                       std::vector<type> schemas = modules::schemas(),
+                       record_builder::data_parsing_function parser
+                       = detail::record_builder::basic_parser)
+    : multi_series_builder{std::move(opts.policy), std::move(opts.settings), dh,
+                           std::move(schemas), std::move(parser)} {
   }
 
-  // BE AWARE THAT MOVING A MULTI_SERIES_BUILDER MAY
-  // INVALIDATE PREVIOUSLY OBTAINED HANDLES
-  // manual implementation of the move ctor is required, as it contains some
-  // potential self-referential pointers
-  multi_series_builder(multi_series_builder&& other)
-    : policy_{std::move(other.policy_)},
-      settings_{std::move(other.settings_)},
-      dh_{other.dh_},
-      schemas_{std::move(other.schemas_)},
-      merging_builder_{std::move(other.merging_builder_)},
-      builder_raw_{std::move(other.builder_raw_)},
-      needs_signature_{other.needs_signature_},
-      naming_sentinel_{std::move(other.naming_sentinel_)},
-      builder_schema_{other.builder_schema_ == &other.naming_sentinel_
-                        ? &naming_sentinel_
-                        : nullptr},
-      parsing_signature_schema_{other.parsing_signature_schema_
-                                    == &other.naming_sentinel_
-                                  ? &naming_sentinel_
-                                  : nullptr},
-      signature_raw_{std::move(other.signature_raw_)},
-      signature_map_{std::move(other.signature_map_)},
-      entries_{std::move(other.entries_)},
-      ready_events_{std::move(other.ready_events_)},
-      last_yield_time_{std::move(other.last_yield_time_)},
-      active_index_{other.active_index_} {
-  }
+  multi_series_builder(
+    policy_type policy, settings_type settings, diagnostic_handler& dh,
+    std::vector<type> schemas
+    = modules::schemas(), // FIXME remove the explicit call at use sites
+    record_builder::data_parsing_function parser
+    = detail::record_builder::basic_parser);
+
+  multi_series_builder(multi_series_builder&& other) noexcept;
   multi_series_builder& operator=(const multi_series_builder&) = delete;
+  // unimplemented
+  multi_series_builder& operator=(multi_series_builder&&) = delete;
 
 private:
   /// gets a pointer to the active policy, if its the given one.

@@ -134,14 +134,21 @@ auto parse_attributes(char delimiter, std::string_view attributes,
   while (not attributes.empty()) {
     auto attr_end = attributes.find(delimiter);
     auto sep_pos = attributes.find('=');
+    if (sep_pos == 0) {
+      return diagnostic::warning(
+               "Ill-formed event missing key before separator")
+        .note("attribute was `{}`", attributes.substr(0, attr_end))
+        .done();
+    }
+    while (attributes[sep_pos - 1] == '\\' and sep_pos > 1
+           and attributes[sep_pos - 2] != '\\') {
+      sep_pos = attributes.find('=', sep_pos + 1);
+    }
     if (sep_pos == attributes.npos) {
       return diagnostic::warning("Ill-formed event missing "
                                  "key-value separator in attribute")
-        .note("attribute was `{}`", attributes.substr(0,attr_end))
+        .note("attribute was `{}`", attributes.substr(0, attr_end))
         .done();
-    }
-    while ( attributes[sep_pos - 1] == '\\') {
-      sep_pos = attributes.find('=', sep_pos + 1);
     }
     auto key = attributes.substr(0, sep_pos);
     auto value = attributes.substr(sep_pos + 1, attr_end - sep_pos - 1);
@@ -155,10 +162,10 @@ auto parse_attributes(char delimiter, std::string_view attributes,
       auto& [data, diag] = res;
       if (data) {
         field.data(*data);
+      } else {
+        field.data(unescape(value));
       }
-      if (diag and diag->severity == severity::error) {
-        return diag;
-      }
+      TENZIR_ASSERT(not diag);
     }
     if (attr_end != attributes.npos) {
       attributes.remove_prefix(attr_end + 1);
@@ -169,8 +176,8 @@ auto parse_attributes(char delimiter, std::string_view attributes,
   return {};
 }
 
-auto parse_line(std::string_view line,
-                auto& builder) -> std::optional<diagnostic> {
+[[nodiscard]] auto
+parse_line(std::string_view line, auto& builder) -> std::optional<diagnostic> {
   using namespace std::string_view_literals;
   // We first need to find out whether we are LEEF 1.0 or 2.0. The latter has
   // one additional top-level component.
@@ -233,7 +240,7 @@ auto parse_line(std::string_view line,
 
 auto parse_loop(generator<std::optional<std::string_view>> lines,
                 diagnostic_handler& diag,
-                multi_series_builder_options options) -> generator<table_slice> {
+                multi_series_builder::options options) -> generator<table_slice> {
   size_t line_counter = 0;
   auto dh = transforming_diagnostic_handler{
     diag,
@@ -245,10 +252,8 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     },
   };
   auto msb = multi_series_builder{
-    options.policy,
-    options.settings,
+    std::move(options),
     dh,
-    modules::schemas(),
   };
   for (auto&& line : lines) {
     for (auto& v : msb.yield_ready_as_table_slice()) {
@@ -281,7 +286,7 @@ public:
 
   leef_parser() = default;
 
-  leef_parser(multi_series_builder_options options)
+  explicit leef_parser(multi_series_builder::options options)
     : options_{std::move(options)} {
     options_.settings.default_schema_name = "leef.event";
   }
@@ -298,12 +303,13 @@ public:
     return parse_loop(to_lines(std::move(input)), ctrl.diagnostics(), options_);
   }
 
+  // FIXME update this into just an apply
   friend auto inspect(auto& f, leef_parser& x) -> bool {
-    return f.object(x).fields(f.field("options", x.options_));
+    return f.apply(x.options_);
   }
 
 private:
-  multi_series_builder_options options_ = {};
+  multi_series_builder::options options_ = {};
 };
 
 class leef_plugin final : public virtual parser_plugin<leef_parser> {
@@ -336,8 +342,7 @@ public:
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
-    auto result = parser.parse(inv, ctx);
-    TRY(result);
+    TRY(parser.parse(inv, ctx));
     TRY(auto opts, msb_parser.get_options(ctx.dh()));
     return std::make_unique<parser_adapter<leef_parser>>(
       leef_parser{std::move(opts)});
@@ -369,7 +374,12 @@ public:
                 b.null();
                 continue;
               }
-              parse_line(*string, b);
+              auto diag = parse_line(*string, b);
+              if ( diag ) {
+                ctx.dh().emit(std::move(*diag));
+                b.null();
+                warn = true;
+              }
             }
             if (warn) {
               diagnostic::warning("failed to parse CEF message")

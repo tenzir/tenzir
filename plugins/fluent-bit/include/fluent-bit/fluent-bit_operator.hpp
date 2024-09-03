@@ -583,7 +583,7 @@ public:
   fluent_bit_operator() = default;
 
   fluent_bit_operator(operator_args operator_args,
-                      multi_series_builder_options builder_options,
+                      multi_series_builder::options builder_options,
                       record config)
     : operator_args_{std::move(operator_args)},
       builder_options_{std::move(builder_options)},
@@ -610,10 +610,8 @@ public:
       },
     };
     auto msb = multi_series_builder{
-      builder_options_.policy,
-      builder_options_.settings,
+      builder_options_,
       dh,
-      modules::schemas(),
     };
     auto parse = [this, &ctrl, &msb](chunk_ptr chunk) {
       // What we're getting here is the typical Fluent Bit array consisting of
@@ -797,7 +795,7 @@ public:
 
 private:
   operator_args operator_args_;
-  multi_series_builder_options builder_options_;
+  multi_series_builder::options builder_options_;
   record config_;
 };
 

@@ -270,7 +270,7 @@ private:
       }
       case simdjson::ondemand::number_type::big_integer: {
         report_parse_err(val, "a big integer",
-                         fmt::format("Value `{}` does not fit into 64bits",
+                         fmt::format("value `{}` does not fit into 64bits",
                                      truncate(val.raw_json_token())));
         // TODO is this a good idea?
         // from the users PoV this isnt an error/warning. its just a limitation
@@ -387,14 +387,14 @@ private:
 class parser_base {
 public:
   parser_base(std::string name_, diagnostic_handler& dh_,
-              multi_series_builder_options options)
+              multi_series_builder::options options)
     : dh{std::make_unique<transforming_diagnostic_handler>(
         dh_,
         [name = std::move(name_)](diagnostic d) {
           d.message = fmt::format("{} parser: {}", name, d.message);
           return d;
         })},
-      builder{std::move(options.policy), std::move(options.settings), *dh,
+      builder{std::move(options), *dh,
               modules::schemas(), detail::record_builder::non_number_parser} {
   }
   // this has to be pointer stable because `builder` holds a reference to it
@@ -420,12 +420,14 @@ public:
       return;
     }
     size_t objects_parsed = 0;
+    size_t diags_emitted = 0;
     for (auto doc_it = stream.begin(); doc_it != stream.end();
          ++doc_it, ++objects_parsed) {
       if (auto err = doc_it.error()) {
         diagnostic::warning("{}", error_message(err))
           .note("skipped invalid JSON at index {}", doc_it.current_index())
           .emit(*dh);
+          ++diags_emitted;
         continue;
       }
       auto doc = *doc_it;
@@ -433,6 +435,7 @@ public:
         diagnostic::warning("{}", error_message(err))
           .note("skipped invalid JSON `{}`", truncate(doc_it.source()))
           .emit(*dh);
+          ++diags_emitted;
         continue;
       }
       auto val = doc.get_value();
@@ -440,20 +443,19 @@ public:
         diagnostic::warning("{}", error_message(err))
           .note("skipped invalid JSON `{}`", truncate(doc_it.source()))
           .emit(*dh);
+          ++diags_emitted;
         continue;
       }
       auto parser = doc_parser{json_line, *dh, lines_processed_};
       auto success = parser.parse_object(val.value_unsafe(), builder.record());
       if (not success) {
         builder.remove_last();
-        diagnostic::warning("failed to parse JSON object `{}`",
-                            truncate(doc_it.source()))
-          .emit(*dh);
+          ++diags_emitted;
         return;
       }
     }
-    if (objects_parsed == 0) {
-      diagnostic::warning("failed to parsed a JSON object")
+    if (objects_parsed == 0 and diags_emitted == 0) {
+      diagnostic::warning("NDJSON line was empty")
         .note("skipped invalid JSON `{}`", truncate(json_line))
         .emit(*dh);
     } else if (objects_parsed > 1) {
@@ -478,7 +480,7 @@ private:
 class default_parser final : public parser_base {
 public:
   default_parser(std::string name_, diagnostic_handler& dh,
-                 multi_series_builder_options options, bool arrays_of_objects)
+                 multi_series_builder::options options, bool arrays_of_objects)
     : parser_base{std::move(name_), dh, std::move(options)},
       arrays_of_objects_{arrays_of_objects} {
   }
@@ -607,7 +609,7 @@ auto parser_loop(generator<GeneratorValue> json_chunk_generator,
 
 struct parser_args {
   std::string parser_name;
-  multi_series_builder_options builder_options = {};
+  multi_series_builder::options builder_options = {};
   bool arrays_of_objects = false;
   split_at split_mode = split_at::none;
 

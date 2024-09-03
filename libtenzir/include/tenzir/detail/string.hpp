@@ -71,7 +71,7 @@ inline auto find_first_of_not_in_quotes(std::string_view s, std::string_view fin
     if (quotes.find(s[i]) == quotes.npos) {
       return false;
     }
-    return i == 0 or s[i - 1] != '\'';
+    return i == 0 or s[i - 1] != '\''; //FIXME this isnt correct?
   };
 
   for (size_t i = 0; i < s.size(); ++i) {

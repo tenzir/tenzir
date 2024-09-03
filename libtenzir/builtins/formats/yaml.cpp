@@ -96,8 +96,8 @@ auto load_document(multi_series_builder& msb, std::string&& document,
 };
 
 auto parse_loop(generator<std::optional<std::string_view>> lines,
-                diagnostic_handler& diag,
-                multi_series_builder_options options) -> generator<table_slice> {
+                diagnostic_handler& diag, multi_series_builder::options options)
+  -> generator<table_slice> {
   auto dh = transforming_diagnostic_handler{
     diag,
     [&](diagnostic d) {
@@ -106,8 +106,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     },
   };
   auto msb = multi_series_builder{
-    options.policy,
-    options.settings,
+    std::move(options),
     dh,
     modules::schemas(),
     detail::record_builder::non_number_parser,
@@ -198,7 +197,8 @@ class yaml_parser final : public plugin_parser {
 public:
   yaml_parser() = default;
 
-  yaml_parser(multi_series_builder_options options) : options_{options} {
+  explicit yaml_parser(multi_series_builder::options options)
+    : options_{std::move(options)} {
   }
 
   auto name() const -> std::string override {
@@ -212,10 +212,10 @@ public:
   }
 
   friend auto inspect(auto& f, yaml_parser& x) -> bool {
-    return f.object(x).fields(f.field("options", x.options_));
+    return f.apply(x.options_);
   }
 
-  multi_series_builder_options options_;
+  multi_series_builder::options options_;
 };
 
 class yaml_printer final : public plugin_printer {
@@ -326,7 +326,7 @@ class read_yaml final
     auto res = parser.parse(inv, ctx);
     TRY(res);
     TRY(auto opts, msb_parser.get_options(ctx.dh()));
-    return std::make_unique<parser_adapter<yaml_parser>>(std::move(opts));
+    return std::make_unique<parser_adapter<yaml_parser>>(yaml_parser{std::move(opts)});
   }
 };
 

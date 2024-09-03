@@ -75,7 +75,7 @@ public:
       args.args.emplace(kvp[0], kvp[1]);
     }
     constexpr auto table_slice_name = "tenzir.fluentbit";
-    auto builder_options = multi_series_builder_options{
+    auto builder_options = multi_series_builder::options{
       multi_series_builder::policy_precise{},
       multi_series_builder::settings_type{
         .default_schema_name = table_slice_name,

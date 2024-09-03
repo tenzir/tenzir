@@ -201,6 +201,69 @@ auto series_to_table_slice(std::vector<series> data,
 }
 } // namespace detail::multi_series_builder
 
+multi_series_builder::multi_series_builder(
+  policy_type policy, settings_type settings, diagnostic_handler& dh,
+  std::vector<type> schemas, record_builder::data_parsing_function parser)
+  : policy_{std::move(policy)},
+    settings_{std::move(settings)},
+    dh_{dh},
+    builder_raw_{std::move(parser), &dh, settings_.schema_only, settings_.raw} {
+  TENZIR_ASSERT(not std::holds_alternative<std::monostate>(policy_));
+  schemas_.reserve(schemas.size());
+  for (auto t : schemas) {
+    const auto [it, success] = schemas_.try_emplace(t.name(), std::move(t));
+    TENZIR_ASSERT(success, "Repeated schema name");
+  }
+  // Setup the merging builder in merging mode
+  if (auto p = get_policy<policy_merge>()) {
+    settings_.ordered = true; // merging mode is necessarily ordered
+    if (auto seed = type_for_schema(p->seed_schema)) {
+      merging_builder_ = seed;
+    } else {
+      merging_builder_ = tenzir::type{p->seed_schema, null_type{}};
+    }
+  }
+  // Setup the naming sentinel for naming builders in precise mode
+  else if (auto p = get_policy<policy_precise>()) {
+    if (auto seed = type_for_schema(p->seed_schema)) {
+      naming_sentinel_ = *seed;
+      needs_signature_ = not settings_.schema_only;
+      builder_schema_ = &naming_sentinel_;
+      parsing_signature_schema_ = &naming_sentinel_;
+    } else {
+      naming_sentinel_ = tenzir::type{p->seed_schema, null_type{}};
+      builder_schema_ = &naming_sentinel_;
+      parsing_signature_schema_ = nullptr;
+    }
+  }
+  // The selector mode has not special ctor setup, as it all depends on runtime
+  // inputs
+}
+
+multi_series_builder::multi_series_builder(multi_series_builder&& other) noexcept
+  : policy_{std::move(other.policy_)},
+    settings_{std::move(other.settings_)},
+    dh_{other.dh_},
+    schemas_{std::move(other.schemas_)},
+    merging_builder_{std::move(other.merging_builder_)},
+    builder_raw_{std::move(other.builder_raw_)},
+    needs_signature_{other.needs_signature_},
+    naming_sentinel_{std::move(other.naming_sentinel_)},
+    builder_schema_{other.builder_schema_ == &other.naming_sentinel_
+                      ? &naming_sentinel_
+                      : nullptr},
+    parsing_signature_schema_{other.parsing_signature_schema_
+                                  == &other.naming_sentinel_
+                                ? &naming_sentinel_
+                                : nullptr},
+    signature_raw_{std::move(other.signature_raw_)},
+    signature_map_{std::move(other.signature_map_)},
+    entries_{std::move(other.entries_)},
+    ready_events_{std::move(other.ready_events_)},
+    last_yield_time_{std::move(other.last_yield_time_)},
+    active_index_{other.active_index_} {
+}
+
 auto multi_series_builder::yield_ready() -> std::vector<series> {
   const auto now = std::chrono::steady_clock::now();
   if (now - last_yield_time_ < settings_.timeout) {

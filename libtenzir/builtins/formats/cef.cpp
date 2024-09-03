@@ -93,11 +93,11 @@ auto parse_extension(std::string_view extension,
       auto res = detail::record_builder::basic_parser(unescape(value), nullptr);
       auto& [data, diag] = res;
       if (data) {
-        field.data(*data);
+        field.data(*data); // FIXME write a null
+      } else {
+        field.data(unescape(value));
       }
-      if (diag and diag->severity == severity::error) {
-        return diag;
-      }
+      TENZIR_ASSERT(not diag);
     }
     if (value_end != extension.npos) {
       key = extension.substr(value_end + 1, next_kv_sep - value_end - 1);
@@ -111,7 +111,8 @@ auto parse_extension(std::string_view extension,
   return {};
 }
 
-auto parse_line(std::string_view line, auto& msb) -> std::optional<diagnostic> {
+[[nodiscard]] auto
+parse_line(std::string_view line, auto& msb) -> std::optional<diagnostic> {
   using namespace std::string_view_literals;
   auto fields = detail::split_escaped(line, "|", "\\", 8);
   if (fields.size() < 7 or fields.size() > 8) {
@@ -143,7 +144,7 @@ auto parse_line(std::string_view line, auto& msb) -> std::optional<diagnostic> {
 
 auto parse_loop(generator<std::optional<std::string_view>> lines,
                 diagnostic_handler& diag,
-                multi_series_builder_options options) -> generator<table_slice> {
+                multi_series_builder::options options) -> generator<table_slice> {
   size_t line_counter = 0;
   auto dh = transforming_diagnostic_handler{
     diag,
@@ -155,10 +156,8 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     },
   };
   auto msb = multi_series_builder{
-    options.policy,
-    options.settings,
+    std::move(options),
     dh,
-    modules::schemas(),
   };
   for (auto&& line : lines) {
     for (auto& v : msb.yield_ready_as_table_slice()) {
@@ -190,7 +189,7 @@ public:
   }
 
   cef_parser() = default;
-  cef_parser(multi_series_builder_options options)
+  explicit cef_parser(multi_series_builder::options options)
     : options_{std::move(options)} {
     options_.settings.default_schema_name = "cef.event";
   }
@@ -208,11 +207,11 @@ public:
   }
 
   friend auto inspect(auto& f, cef_parser& x) -> bool {
-    return f.object(x).fields(f.field("options", x.options_));
+    return f.apply(x.options_);
   }
 
 private:
-  multi_series_builder_options options_;
+  multi_series_builder::options options_;
 };
 
 class cef_plugin final : public virtual parser_plugin<cef_parser> {
@@ -245,8 +244,7 @@ public:
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
-    auto result = parser.parse(inv, ctx);
-    TRY(result);
+    TRY( parser.parse(inv, ctx) );
     TRY(auto opts, msb_parser.get_options(ctx.dh()));
     return std::make_unique<parser_adapter<cef_parser>>(
       cef_parser{std::move(opts)});
@@ -278,7 +276,12 @@ public:
                 b.null();
                 continue;
               }
-              parse_line(*string, b);
+              auto diag = parse_line(*string, b);
+              if (diag) {
+                ctx.dh().emit(std::move(*diag));
+                b.null();
+                warn = true;
+              }
             }
             if (warn) {
               diagnostic::warning("failed to parse CEF message")
