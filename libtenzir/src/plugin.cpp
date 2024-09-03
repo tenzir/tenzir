@@ -34,6 +34,21 @@
 #include <dlfcn.h>
 #include <memory>
 
+#if defined(__has_include) && __has_include(<sanitizer/lsan_interface.h>)
+#  include <sanitizer/lsan_interface.h>
+#  define TENZIR_DISABLE_LEAK_SANITIZER()                                      \
+    do {                                                                       \
+      __lsan_disable();                                                        \
+    } while (false)
+#  define TENZIR_ENABLE_LEAK_SANITIZER()                                       \
+    do {                                                                       \
+      __lsan_enable();                                                         \
+    } while (false)
+#else
+#  define TENZIR_DISABLE_LEAK_SANITIZER()
+#  define TENZIR_ENABLE_LEAK_SANITIZER()
+#endif
+
 namespace tenzir {
 
 // -- plugin singleton ---------------------------------------------------------
@@ -577,7 +592,9 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
 caf::expected<plugin_ptr>
 plugin_ptr::make_dynamic(const char* filename,
                          caf::actor_system_config& cfg) noexcept {
+  TENZIR_DISABLE_LEAK_SANITIZER();
   auto* library = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
+  TENZIR_ENABLE_LEAK_SANITIZER();
   if (!library) {
     return caf::make_error(ec::system_error, "failed to load plugin", filename,
                            dlerror());
