@@ -295,7 +295,7 @@ private:
     }
     // TODO because of this it would be better to adapt the multi_series_builder
     if constexpr (std::same_as<decltype(builder), builder_ref>) {
-      auto res = detail::record_builder::non_number_parser(
+      auto res = detail::data_builder::non_number_parser(
         maybe_str.value_unsafe(), nullptr);
       auto& [value, diag] = res;
       if (diag) {
@@ -395,7 +395,7 @@ public:
           return d;
         })},
       builder{std::move(options), *dh,
-              modules::schemas(), detail::record_builder::non_number_parser} {
+              modules::schemas(), detail::data_builder::non_number_parser} {
   }
   // this has to be pointer stable because `builder` holds a reference to it
   // internally

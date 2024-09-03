@@ -11,7 +11,7 @@
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/modules.hpp"
-#include "tenzir/record_builder.hpp"
+#include "tenzir/data_builder.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/type.hpp"
@@ -33,7 +33,7 @@ namespace tenzir {
 class multi_series_builder;
 
 using parser_function_type
-  = std::function<detail::record_builder::data_parsing_result(
+  = std::function<detail::data_builder::data_parsing_result(
     std::string_view, const tenzir::type*)>;
 
 namespace detail::multi_series_builder {
@@ -44,7 +44,7 @@ class list_generator;
 class field_generator;
 
 class record_generator {
-  using raw_pointer = detail::record_builder::node_record*;
+  using raw_pointer = detail::data_builder::node_record*;
 
 public:
   explicit record_generator(class multi_series_builder* msb,
@@ -76,7 +76,7 @@ private:
 };
 
 class field_generator {
-  using raw_pointer = detail::record_builder::node_field*;
+  using raw_pointer = detail::data_builder::node_field*;
 
 public:
   /// A non-associated field generator. This is used in the unflatten function.
@@ -90,7 +90,7 @@ public:
   }
 
   /// @brief Sets the value of the field to some data
-  template <tenzir::detail::record_builder::non_structured_data_type T>
+  template <tenzir::detail::data_builder::non_structured_data_type T>
   void data(T d) {
     const auto visitor = detail::overload{
       [&](tenzir::builder_ref b) {
@@ -122,7 +122,7 @@ private:
 };
 
 class list_generator {
-  using raw_pointer = detail::record_builder::node_list*;
+  using raw_pointer = detail::data_builder::node_list*;
 
 public:
   list_generator(class multi_series_builder* msb, builder_ref builder)
@@ -133,7 +133,7 @@ public:
   }
 
   /// @brief appends a data value T to the list
-  template <tenzir::detail::record_builder::non_structured_data_type T>
+  template <tenzir::detail::data_builder::non_structured_data_type T>
   void data(T d) {
     const auto visitor = detail::overload{
       [&](tenzir::builder_ref b) {
@@ -191,7 +191,7 @@ auto series_to_table_slice(std::vector<series> data,
 /// The plain `series_builder`s behaviour can be obtained by using the
 /// `merging_policy`.
 /// In the other policies, there is one `series_builder` per input schema.
-/// An event is first written into a `record_builder`, which is then used
+/// An event is first written into a `data_builder`, which is then used
 /// to compute a byte-signature. This byte-signature then determines which
 /// `series_builder` the event is written into.
 ///
@@ -320,8 +320,8 @@ public:
 
   multi_series_builder(options opts, diagnostic_handler& dh,
                        std::vector<type> schemas = modules::schemas(),
-                       record_builder::data_parsing_function parser
-                       = detail::record_builder::basic_parser)
+                       data_builder::data_parsing_function parser
+                       = detail::data_builder::basic_parser)
     : multi_series_builder{std::move(opts.policy), std::move(opts.settings), dh,
                            std::move(schemas), std::move(parser)} {
   }
@@ -330,8 +330,8 @@ public:
     policy_type policy, settings_type settings, diagnostic_handler& dh,
     std::vector<type> schemas
     = modules::schemas(), // FIXME remove the explicit call at use sites
-    record_builder::data_parsing_function parser
-    = detail::record_builder::basic_parser);
+    data_builder::data_parsing_function parser
+    = detail::data_builder::basic_parser);
 
   multi_series_builder(multi_series_builder&& other) noexcept;
   multi_series_builder& operator=(const multi_series_builder&) = delete;
@@ -391,7 +391,7 @@ private:
   /// function and thus will only be instantiated by other member functions
   void garbage_collect_where(std::predicate<const entry_data&> auto pred);
 
-  using signature_type = typename record_builder::signature_type;
+  using signature_type = typename data_builder::signature_type;
 
   policy_type policy_;
   settings_type settings_;
@@ -401,7 +401,7 @@ private:
   // builder used in merging mode
   series_builder merging_builder_;
   // builder_raw_ must be constructed after `dh_` as it depends on it
-  record_builder builder_raw_;
+  data_builder builder_raw_;
   // used to determine whether we need a signature compute
   bool needs_signature_ = true;
   // used to name builders

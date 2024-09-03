@@ -20,7 +20,7 @@
 namespace tenzir {
 namespace {
 
-using namespace detail::record_builder;
+using namespace detail::data_builder;
 using namespace std::literals;
 using namespace std::chrono_literals;
 

@@ -29,8 +29,8 @@
 
 namespace tenzir {
 class multi_series_builder;
-class record_builder;
-namespace detail::record_builder {
+class data_builder;
+namespace detail::data_builder {
 
 struct data_parsing_result {
   std::optional<tenzir::data> data;
@@ -193,7 +193,7 @@ class node_base {
   friend class node_record;
   friend class node_field;
   friend class node_list;
-  friend class ::tenzir::record_builder;
+  friend class ::tenzir::data_builder;
 
 private:
   auto mark_this_relevant() -> void {
@@ -216,7 +216,7 @@ private:
 class node_record : public node_base {
   friend class node_list;
   friend class node_field;
-  friend class ::tenzir::record_builder;
+  friend class ::tenzir::data_builder;
 
 public:
   /// reserves storage for at least N elements in the record.
@@ -236,14 +236,14 @@ private:
   auto at(std::string_view key) -> node_field*;
   // writes the record into a series builder
   auto
-  commit_to(tenzir::record_ref r, class record_builder& rb,
+  commit_to(tenzir::record_ref r, class data_builder& rb,
             const tenzir::record_type* seed, bool mark_dead = true) -> void;
   auto
-  commit_to(tenzir::record& r, class record_builder& rb,
+  commit_to(tenzir::record& r, class data_builder& rb,
             const tenzir::record_type* seed, bool mark_dead = true) -> void;
   // append the signature of this record to `sig`.
   // including sentinels is important for signature computation
-  auto append_to_signature(signature_type& sig, class record_builder& rb,
+  auto append_to_signature(signature_type& sig, class data_builder& rb,
                            const tenzir::record_type* seed) -> void;
   // clears the record by marking everything as dead
   auto clear() -> void;
@@ -309,13 +309,13 @@ private:
   auto update_new_structural_signature() -> void;
 
   // writes the list into a series builder
-  auto commit_to(tenzir::builder_ref r, class record_builder& rb,
+  auto commit_to(tenzir::builder_ref r, class data_builder& rb,
                  const tenzir::list_type* seed, bool mark_dead = true) -> void;
-  auto commit_to(tenzir::list& r, class record_builder& rb,
+  auto commit_to(tenzir::list& r, class data_builder& rb,
                  const tenzir::list_type* seed, bool mark_dead = true) -> void;
   // append the signature of this list to `sig`.
   // including sentinels is important for signature computation
-  auto append_to_signature(signature_type& sig, class record_builder& rb,
+  auto append_to_signature(signature_type& sig, class data_builder& rb,
                            const tenzir::list_type* seed) -> void;
   auto clear() -> void;
 
@@ -329,7 +329,7 @@ class node_field : public node_base {
   friend class node_record;
   friend class node_list;
   friend struct node_record::entry_type;
-  friend class ::tenzir::record_builder;
+  friend class ::tenzir::data_builder;
   friend class ::tenzir::multi_series_builder;
 
 public:
@@ -379,19 +379,19 @@ private:
     return std::visit(visitor, data_);
   }
   auto
-  try_resolve_nonstructural_field_mismatch(class record_builder& rb,
+  try_resolve_nonstructural_field_mismatch(class data_builder& rb,
                                            const tenzir::type* seed) -> void;
   /// parses any unparsed fields using `parser`, potentially providing a
   /// seed/schema to the parser
-  auto parse(class record_builder& rb, const tenzir::type* seed) -> void;
+  auto parse(class data_builder& rb, const tenzir::type* seed) -> void;
   // append the signature of this field to `sig`.
   // including sentinels is important for signature computation
-  auto append_to_signature(signature_type& sig, class record_builder& rb,
+  auto append_to_signature(signature_type& sig, class data_builder& rb,
                            const tenzir::type* seed) -> void;
   // writes the field into a series builder
-  auto commit_to(tenzir::builder_ref r, class record_builder& rb,
+  auto commit_to(tenzir::builder_ref r, class data_builder& rb,
                  const tenzir::type* seed, bool mark_dead = true) -> void;
-  auto commit_to(tenzir::data& r, class record_builder& rb,
+  auto commit_to(tenzir::data& r, class data_builder& rb,
                  const tenzir::type* seed, bool mark_dead = true) -> void;
   auto clear() -> void;
 
@@ -429,31 +429,31 @@ constexpr static std::byte list_end_marker{0xfd};
 /// a very basic parser that simply uses `tenzir::parsers` under the hood.
 /// this parser does not support the seed pointing to a structural type
 auto basic_parser(std::string_view s, const tenzir::type* seed)
-  -> detail::record_builder::data_parsing_result;
+  -> detail::data_builder::data_parsing_result;
 
 auto non_number_parser(std::string_view s, const tenzir::type* seed)
-  -> detail::record_builder::data_parsing_result;
+  -> detail::data_builder::data_parsing_result;
 
 /// a very basic parser that only supports parsing based on a seed
 /// uses the `tenzir::parser` s under the hood.
 /// this parser does not support the seed pointing to a structural type
 auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
-  -> detail::record_builder::data_parsing_result;
+  -> detail::data_builder::data_parsing_result;
 
-} // namespace detail::record_builder
+} // namespace detail::data_builder
 
-class record_builder {
-  friend class detail::record_builder::node_list;
-  friend class detail::record_builder::node_record;
-  friend class detail::record_builder::node_field;
+class data_builder {
+  friend class detail::data_builder::node_list;
+  friend class detail::data_builder::node_record;
+  friend class detail::data_builder::node_field;
 
 public:
   using data_parsing_function
-    = std::function<detail::record_builder::data_parsing_result(
+    = std::function<detail::data_builder::data_parsing_result(
       std::string_view str, const tenzir::type* seed)>;
-  record_builder(
+  data_builder(
     data_parsing_function parser
-    = detail::record_builder::basic_parser, // FIXME move this into a
+    = detail::data_builder::basic_parser, // FIXME move this into a
                                             // std::function directly and move
                                             // the ctor into the cpp file
     diagnostic_handler* dh = nullptr, bool schema_only = false,
@@ -466,7 +466,7 @@ public:
   }
 
   // accesses the currently building record
-  [[nodiscard]] auto record() -> detail::record_builder::node_record*;
+  [[nodiscard]] auto record() -> detail::data_builder::node_record*;
 
   [[nodiscard]] auto has_elements() -> bool {
     return root_.is_alive();
@@ -477,13 +477,13 @@ public:
 
   /// tries to find a field with the given (nested) key
   [[nodiscard]] auto
-  find_field_raw(std::string_view key) -> detail::record_builder::node_field*;
+  find_field_raw(std::string_view key) -> detail::data_builder::node_field*;
 
   /// tries to find a field with the given (nested) key for a data type
-  // template <detail::record_builder::non_structured_data_type T>
+  // template <detail::data_builder::non_structured_data_type T>
   // [[nodiscard]] auto find_value_typed(std::string_view key) -> T*;
 
-  using signature_type = typename detail::record_builder::signature_type;
+  using signature_type = typename detail::data_builder::signature_type;
   /// computes the "signature" of the currently built record.
   auto append_signature_to(signature_type&, const tenzir::type* seed) -> void;
 
@@ -507,11 +507,11 @@ private:
   /// and potentially writes creates sentinel fields in `apply`
   /// if they dont exist in the record yet
   auto lookup_record_fields(const tenzir::record_type* r,
-                            detail::record_builder::node_record* apply)
-    -> const detail::record_builder::field_type_lookup_map*;
+                            detail::data_builder::node_record* apply)
+    -> const detail::data_builder::field_type_lookup_map*;
 
-  detail::record_builder::node_record root_;
-  detail::record_builder::schema_type_lookup_map schema_type_lookup_;
+  detail::data_builder::node_record root_;
+  detail::data_builder::schema_type_lookup_map schema_type_lookup_;
   diagnostic_handler* dh_;
 
 public:
@@ -525,7 +525,7 @@ private:
   auto emit_or_throw(tenzir::diagnostic_builder&& builder) -> void;
 };
 
-namespace detail::record_builder {
+namespace detail::data_builder {
 template <non_structured_data_type T>
 auto node_field::data(T data) -> void {
   mark_this_alive();
@@ -546,5 +546,5 @@ auto node_list::data(T data) -> void {
     update_type_index(type_index_, data_.back().current_index());
   }
 }
-} // namespace detail::record_builder
+} // namespace detail::data_builder
 } // namespace tenzir

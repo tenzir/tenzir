@@ -9,7 +9,7 @@
 #include "tenzir/data.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/record_builder.hpp"
+#include "tenzir/data_builder.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/type.hpp"
 
@@ -203,7 +203,7 @@ auto series_to_table_slice(std::vector<series> data,
 
 multi_series_builder::multi_series_builder(
   policy_type policy, settings_type settings, diagnostic_handler& dh,
-  std::vector<type> schemas, record_builder::data_parsing_function parser)
+  std::vector<type> schemas, data_builder::data_parsing_function parser)
   : policy_{std::move(policy)},
     settings_{std::move(settings)},
     dh_{dh},
@@ -364,7 +364,7 @@ void multi_series_builder::complete_last_event() {
             return v;
           }
         },
-        [p]<detail::record_builder::non_structured_data_type T>(
+        [p]<detail::data_builder::non_structured_data_type T>(
           const T& v) -> std::string {
           if (p->naming_prefix) {
             return fmt::format("{}.{}", *(p->naming_prefix), v);

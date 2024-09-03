@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/record_builder.hpp"
+#include "tenzir/data_builder.hpp"
 
 #include "tenzir/fwd.hpp"
 
@@ -40,28 +40,28 @@
 
 namespace tenzir {
 
-auto record_builder::record() -> detail::record_builder::node_record* {
+auto data_builder::record() -> detail::data_builder::node_record* {
   root_.mark_this_alive();
   return &root_;
 }
 
-auto record_builder::find_field_raw(std::string_view key)
-  -> detail::record_builder::node_field* {
+auto data_builder::find_field_raw(std::string_view key)
+  -> detail::data_builder::node_field* {
   return root_.at(key);
 }
 
-auto record_builder::clear() -> void {
+auto data_builder::clear() -> void {
   root_.clear();
 }
 
-auto record_builder::free() -> void {
+auto data_builder::free() -> void {
   root_.data_.clear();
   root_.data_.shrink_to_fit();
   root_.lookup_.clear();
   root_.lookup_.shrink_to_fit();
 }
 
-auto record_builder::commit_to(series_builder& builder, bool mark_dead,
+auto data_builder::commit_to(series_builder& builder, bool mark_dead,
                                const tenzir::type* seed) -> void {
   const tenzir::record_type* rs = caf::get_if<tenzir::record_type>(seed);
   if (seed and not rs) {
@@ -72,7 +72,7 @@ auto record_builder::commit_to(series_builder& builder, bool mark_dead,
   root_.commit_to(builder.record(), *this, rs, mark_dead);
 }
 
-auto record_builder::materialize(bool mark_dead,
+auto data_builder::materialize(bool mark_dead,
                                  const tenzir::type* seed) -> tenzir::record {
   const tenzir::record_type* rs = caf::get_if<tenzir::record_type>(seed);
   if (seed and not rs) {
@@ -85,9 +85,9 @@ auto record_builder::materialize(bool mark_dead,
   return res;
 }
 
-auto record_builder::lookup_record_fields(
-  const tenzir::record_type* r, detail::record_builder::node_record* apply)
-  -> const detail::record_builder::field_type_lookup_map* {
+auto data_builder::lookup_record_fields(
+  const tenzir::record_type* r, detail::data_builder::node_record* apply)
+  -> const detail::data_builder::field_type_lookup_map* {
   if (not r) {
     return nullptr;
   }
@@ -119,7 +119,7 @@ auto record_builder::lookup_record_fields(
   return std::addressof(seed_it->second);
 }
 
-auto record_builder::append_signature_to(signature_type& sig,
+auto data_builder::append_signature_to(signature_type& sig,
                                          const tenzir::type* seed) -> void {
   auto* seed_as_record_type = caf::get_if<tenzir::record_type>(&*seed);
   if (seed) {
@@ -135,7 +135,7 @@ auto record_builder::append_signature_to(signature_type& sig,
   root_.append_to_signature(sig, *this, nullptr);
 }
 
-auto record_builder::emit_or_throw(tenzir::diagnostic&& diag) -> void {
+auto data_builder::emit_or_throw(tenzir::diagnostic&& diag) -> void {
   if (dh_) {
     dh_->emit(std::move(diag));
   } else {
@@ -143,7 +143,7 @@ auto record_builder::emit_or_throw(tenzir::diagnostic&& diag) -> void {
   }
 }
 
-auto record_builder::emit_or_throw(tenzir::diagnostic_builder&& builder)
+auto data_builder::emit_or_throw(tenzir::diagnostic_builder&& builder)
   -> void {
   if (dh_) {
     std::move(builder).emit(*dh_);
@@ -186,7 +186,7 @@ auto parse_as_data(std::string_view s, tenzir::data& d) -> bool {
 }
 
 auto parse_enumeration(std::string_view s, const enumeration_type& e)
-  -> detail::record_builder::data_parsing_result {
+  -> detail::data_builder::data_parsing_result {
   s = detail::trim(s);
   enumeration v;
   const auto [ptr, errc] = std::from_chars(s.begin(), s.end(), v);
@@ -204,7 +204,7 @@ auto parse_enumeration(std::string_view s, const enumeration_type& e)
 }
 
 auto parse_duration(std::string_view s, const type& seed)
-  -> detail::record_builder::data_parsing_result {
+  -> detail::data_builder::data_parsing_result {
   auto p = parsers::duration;
   auto parse_res = duration{};
   if (p(s, parse_res)) {
@@ -225,7 +225,7 @@ auto parse_duration(std::string_view s, const type& seed)
   return {*cast_res};
 }
 auto parse_time(std::string_view s, const type& seed)
-  -> detail::record_builder::data_parsing_result {
+  -> detail::data_builder::data_parsing_result {
   auto p = parsers::time;
   auto res = time{};
   if (p(s, res)) {
@@ -259,13 +259,13 @@ auto parse_time(std::string_view s, const type& seed)
 }
 } // namespace
 
-namespace detail::record_builder {
+namespace detail::data_builder {
 
 auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
-  -> detail::record_builder::data_parsing_result {
+  -> detail::data_builder::data_parsing_result {
   const auto visitor = detail::overload{
     [&s]<has_parser Type>(
-      const Type& t) -> detail::record_builder::data_parsing_result {
+      const Type& t) -> detail::data_builder::data_parsing_result {
       using T = type_to_data_t<Type>;
       auto res = T{};
       auto p = typename parser_for<Type>::type{};
@@ -277,22 +277,22 @@ auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
           .done();
       }
     },
-    [](const string_type&) -> detail::record_builder::data_parsing_result {
+    [](const string_type&) -> detail::data_builder::data_parsing_result {
       return {};
     },
     [&s, &seed](
-      const duration_type&) -> detail::record_builder::data_parsing_result {
+      const duration_type&) -> detail::data_builder::data_parsing_result {
       return parse_duration(s, seed);
     },
     [&s,
-     &seed](const time_type&) -> detail::record_builder::data_parsing_result {
+     &seed](const time_type&) -> detail::data_builder::data_parsing_result {
       return parse_time(s, seed);
     },
     [&s](const enumeration_type& e)
-      -> detail::record_builder::data_parsing_result {
+      -> detail::data_builder::data_parsing_result {
       return parse_enumeration(s, e);
     },
-    [&s](const blob_type&) -> detail::record_builder::data_parsing_result {
+    [&s](const blob_type&) -> detail::data_builder::data_parsing_result {
       auto dec = detail::base64::try_decode<tenzir::blob>(s);
       if (dec) {
         return {std::move(*dec)};
@@ -311,7 +311,7 @@ auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
 }
 
 auto basic_parser(std::string_view s, const tenzir::type* seed)
-  -> detail::record_builder::data_parsing_result {
+  -> detail::data_builder::data_parsing_result {
   if (seed) {
     return basic_seeded_parser(s, *seed);
   }
@@ -328,9 +328,9 @@ auto basic_parser(std::string_view s, const tenzir::type* seed)
 }
 
 auto non_number_parser(std::string_view s, const tenzir::type* seed)
-  -> detail::record_builder::data_parsing_result {
+  -> detail::data_builder::data_parsing_result {
   if (seed) {
-    return record_builder::basic_seeded_parser(s, *seed);
+    return data_builder::basic_seeded_parser(s, *seed);
   }
   if (s.empty()) {
     return {std::string{}};
@@ -434,7 +434,7 @@ auto node_record::at(std::string_view key) -> node_field* {
 }
 
 auto node_record::append_to_signature(signature_type& sig,
-                                      class record_builder& rb,
+                                      class data_builder& rb,
                                       const tenzir::record_type* seed) -> void {
   sig.push_back(record_start_marker);
   // if we have a seed, we need too ensure that all fields exist first
@@ -484,7 +484,7 @@ auto node_record::append_to_signature(signature_type& sig,
   sig.push_back(record_end_marker);
 }
 
-auto node_record::commit_to(tenzir::record_ref r, class record_builder& rb,
+auto node_record::commit_to(tenzir::record_ref r, class data_builder& rb,
                             const tenzir::record_type* seed,
                             bool mark_dead) -> void {
   auto field_map = rb.lookup_record_fields(seed, this);
@@ -509,7 +509,7 @@ auto node_record::commit_to(tenzir::record_ref r, class record_builder& rb,
   }
 }
 
-auto node_record::commit_to(tenzir::record& r, class record_builder& rb,
+auto node_record::commit_to(tenzir::record& r, class data_builder& rb,
                             const tenzir::record_type* seed,
                             bool mark_dead) -> void {
   auto field_map = rb.lookup_record_fields(seed, this);
@@ -569,7 +569,7 @@ auto node_field::data(tenzir::data d) -> void {
     },
     []<unsupported_types T>(T&) {
       TENZIR_ASSERT(false, fmt::format("Unexpected type \"{}\" in "
-                                       "`record_builder::data`",
+                                       "`data_builder::data`",
                                        typeid(T).name()));
     },
   };
@@ -603,7 +603,7 @@ auto node_field::list() -> node_list* {
   return &data_.emplace<node_list>();
 }
 
-auto node_field::parse(class record_builder& rb,
+auto node_field::parse(class data_builder& rb,
                        const tenzir::type* seed) -> void {
   if (value_state_ != value_state_type::unparsed) {
     return;
@@ -629,7 +629,7 @@ auto node_field::parse(class record_builder& rb,
 }
 
 auto node_field::try_resolve_nonstructural_field_mismatch(
-  class record_builder& rb, const tenzir::type* seed) -> void {
+  class data_builder& rb, const tenzir::type* seed) -> void {
   if (not seed) {
     return;
   }
@@ -757,7 +757,7 @@ auto node_field::try_resolve_nonstructural_field_mismatch(
 }
 
 auto node_field::append_to_signature(signature_type& sig,
-                                     class record_builder& rb,
+                                     class data_builder& rb,
                                      const tenzir::type* seed) -> void {
   if (state_ == state::sentinel) {
     if (not seed) {
@@ -846,7 +846,7 @@ auto node_field::append_to_signature(signature_type& sig,
 }
 
 auto node_field::commit_to(tenzir::builder_ref builder,
-                           class record_builder& rb, const tenzir::type* seed,
+                           class data_builder& rb, const tenzir::type* seed,
                            bool mark_dead) -> void {
   if (rb.schema_only_ and not seed) {
     if (mark_dead) {
@@ -925,7 +925,7 @@ auto node_field::commit_to(tenzir::builder_ref builder,
   }
 }
 
-auto node_field::commit_to(tenzir::data& r, class record_builder& rb,
+auto node_field::commit_to(tenzir::data& r, class data_builder& rb,
                            const tenzir::type* seed, bool mark_dead) -> void {
   if (rb.schema_only_ and not seed) {
     if (mark_dead) {
@@ -1105,7 +1105,7 @@ auto node_list::list() -> node_list* {
 }
 
 auto node_list::append_to_signature(signature_type& sig,
-                                    class record_builder& rb,
+                                    class data_builder& rb,
                                     const tenzir::list_type* seed) -> void {
   sig.push_back(list_start_marker);
   if (is_numeric(type_index_) or type_index_ == type_index_numeric_mismatch) {
@@ -1184,7 +1184,7 @@ auto node_list::append_to_signature(signature_type& sig,
   sig.push_back(list_end_marker);
 }
 
-auto node_list::commit_to(builder_ref r, class record_builder& rb,
+auto node_list::commit_to(builder_ref r, class data_builder& rb,
                           const tenzir::list_type* seed,
                           bool mark_dead) -> void {
   auto field_seed = seed ? seed->value_type() : tenzir::type{};
@@ -1199,7 +1199,7 @@ auto node_list::commit_to(builder_ref r, class record_builder& rb,
     mark_this_dead();
   }
 }
-auto node_list::commit_to(tenzir::list& l, class record_builder& rb,
+auto node_list::commit_to(tenzir::list& l, class data_builder& rb,
                           const tenzir::list_type* seed,
                           bool mark_dead) -> void {
   auto field_seed = seed ? seed->value_type() : tenzir::type{};
@@ -1224,5 +1224,5 @@ auto node_list::clear() -> void {
   }
 }
 
-} // namespace detail::record_builder
+} // namespace detail::data_builder
 } // namespace tenzir

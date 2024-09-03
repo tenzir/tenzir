@@ -6,7 +6,7 @@
 // SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-#include "tenzir/record_builder.hpp"
+#include "tenzir/data_builder.hpp"
 
 #include "tenzir/aliases.hpp"
 #include "tenzir/test/test.hpp"
@@ -20,7 +20,7 @@
 namespace tenzir {
 namespace {
 
-using namespace detail::record_builder;
+using namespace detail::data_builder;
 using namespace std::literals;
 
 struct test_diagnsotic_handler : diagnostic_handler {
@@ -52,13 +52,13 @@ public:
 };
 
 TEST(empty) {
-  record_builder b;
+  data_builder b;
 
   CHECK(not b.has_elements());
 }
 
 TEST(materialization record) {
-  record_builder b;
+  data_builder b;
   auto* r = b.record();
   r->field("0")->data(uint64_t{0});
   r->field("1")->data(int64_t{1});
@@ -78,7 +78,7 @@ TEST(materialization record) {
 }
 
 TEST(materialization list) {
-  record_builder b;
+  data_builder b;
   auto* r = b.record();
   auto* l = r->field("int list")->list();
   l->data(uint64_t{0});
@@ -97,7 +97,7 @@ TEST(materialization list) {
 }
 
 TEST(materialization nested record) {
-  record_builder b;
+  data_builder b;
   auto* r = b.record();
   r->field("0")->record()->field("1")->null();
 
@@ -113,7 +113,7 @@ TEST(materialization nested record) {
 }
 
 TEST(materialization record list record) {
-  record_builder b;
+  data_builder b;
   auto* r = b.record();
   r->field("0")->list()->record()->field("1")->data(uint64_t{0});
   (void)r->field("1")->record()->field("0")->list();
@@ -134,7 +134,7 @@ TEST(materialization record list record) {
 }
 
 TEST(overwrite record fields) {
-  record_builder b;
+  data_builder b;
   auto* r = b.record();
   r->field("0")->data(uint64_t{0});
   r->field("0")->data(int64_t{0});
@@ -142,14 +142,14 @@ TEST(overwrite record fields) {
   r->field("0")->data(uint64_t{0});
 
   CHECK(b.has_elements());
-  detail::record_builder::signature_type sig;
+  detail::data_builder::signature_type sig;
 
   b.append_signature_to(sig, nullptr);
 
-  detail::record_builder::signature_type expected;
+  detail::data_builder::signature_type expected;
   {
     expected.insert(expected.end(),
-                    detail::record_builder::record_start_marker);
+                    detail::data_builder::record_start_marker);
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
@@ -158,7 +158,7 @@ TEST(overwrite record fields) {
         static_cast<std::byte>(
           caf::detail::tl_index_of<field_type_list, uint64_t>::value));
     }
-    expected.insert(expected.end(), detail::record_builder::record_end_marker);
+    expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
   //   fmt::print("{}\n", sig);
   //   fmt::print("{}\n", expected);
@@ -166,38 +166,38 @@ TEST(overwrite record fields) {
 }
 
 TEST(signature record empty) {
-  record_builder b;
+  data_builder b;
   (void)b.record();
 
   CHECK(b.has_elements());
-  detail::record_builder::signature_type sig;
+  detail::data_builder::signature_type sig;
 
   b.append_signature_to(sig, nullptr);
 
-  detail::record_builder::signature_type expected;
+  detail::data_builder::signature_type expected;
   {
     expected.insert(expected.end(),
-                    detail::record_builder::record_start_marker);
-    expected.insert(expected.end(), detail::record_builder::record_end_marker);
+                    detail::data_builder::record_start_marker);
+    expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
   CHECK(sig == expected);
 }
 
 TEST(signature record simple) {
-  record_builder b;
+  data_builder b;
   auto* r = b.record();
   r->field("0")->data(uint64_t{0});
   r->field("1")->data(int64_t{1});
 
   CHECK(b.has_elements());
-  detail::record_builder::signature_type sig;
+  detail::data_builder::signature_type sig;
 
   b.append_signature_to(sig, nullptr);
 
-  detail::record_builder::signature_type expected;
+  detail::data_builder::signature_type expected;
   {
     expected.insert(expected.end(),
-                    detail::record_builder::record_start_marker);
+                    detail::data_builder::record_start_marker);
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
@@ -214,90 +214,90 @@ TEST(signature record simple) {
         static_cast<std::byte>(
           caf::detail::tl_index_of<field_type_list, int64_t>::value));
     }
-    expected.insert(expected.end(), detail::record_builder::record_end_marker);
+    expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
   CHECK(sig == expected);
 }
 
 TEST(signature list) {
-  record_builder b;
+  data_builder b;
   auto* l = b.record()->field("l")->list();
   l->data(uint64_t{0});
   l->data(uint64_t{1});
 
   CHECK(b.has_elements());
-  detail::record_builder::signature_type sig;
+  detail::data_builder::signature_type sig;
 
   b.append_signature_to(sig, nullptr);
 
-  detail::record_builder::signature_type expected;
+  detail::data_builder::signature_type expected;
   {
     expected.insert(expected.end(),
-                    detail::record_builder::record_start_marker);
+                    detail::data_builder::record_start_marker);
     const auto key_bytes = as_bytes("l"sv);
     expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
-    expected.insert(expected.end(), detail::record_builder::list_start_marker);
+    expected.insert(expected.end(), detail::data_builder::list_start_marker);
     expected.insert(
       expected.end(),
       static_cast<std::byte>(
         caf::detail::tl_index_of<field_type_list, uint64_t>::value));
-    expected.insert(expected.end(), detail::record_builder::list_end_marker);
-    expected.insert(expected.end(), detail::record_builder::record_end_marker);
+    expected.insert(expected.end(), detail::data_builder::list_end_marker);
+    expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
   CHECK(sig == expected);
 }
 
 TEST(signature list with null) {
-  record_builder b;
+  data_builder b;
   auto* l = b.record()->field("l")->list();
   l->data(uint64_t{0});
   l->null();
 
   CHECK(b.has_elements());
-  detail::record_builder::signature_type sig;
+  detail::data_builder::signature_type sig;
 
   b.append_signature_to(sig, nullptr);
 
-  detail::record_builder::signature_type expected;
+  detail::data_builder::signature_type expected;
   {
     expected.insert(expected.end(),
-                    detail::record_builder::record_start_marker);
+                    detail::data_builder::record_start_marker);
     const auto key_bytes = as_bytes("l"sv);
     expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
-    expected.insert(expected.end(), detail::record_builder::list_start_marker);
+    expected.insert(expected.end(), detail::data_builder::list_start_marker);
     expected.insert(
       expected.end(),
       static_cast<std::byte>(
         caf::detail::tl_index_of<field_type_list, uint64_t>::value));
-    expected.insert(expected.end(), detail::record_builder::list_end_marker);
-    expected.insert(expected.end(), detail::record_builder::record_end_marker);
+    expected.insert(expected.end(), detail::data_builder::list_end_marker);
+    expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
   CHECK(sig == expected);
 }
 
 TEST(signature list numeric unification) {
-  record_builder b;
+  data_builder b;
   auto* l = b.record()->field("l")->list();
   l->data(uint64_t{0});
   l->data(1.0);
 
   CHECK(b.has_elements());
-  detail::record_builder::signature_type sig;
+  detail::data_builder::signature_type sig;
 
   b.append_signature_to(sig, nullptr);
 
-  detail::record_builder::signature_type expected;
+  detail::data_builder::signature_type expected;
   {
     expected.insert(expected.end(),
-                    detail::record_builder::record_start_marker);
+                    detail::data_builder::record_start_marker);
     const auto key_bytes = as_bytes("l"sv);
     expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
-    expected.insert(expected.end(), detail::record_builder::list_start_marker);
+    expected.insert(expected.end(), detail::data_builder::list_start_marker);
     expected.insert(
       expected.end(),
-      static_cast<std::byte>(detail::record_builder::type_index_double));
-    expected.insert(expected.end(), detail::record_builder::list_end_marker);
-    expected.insert(expected.end(), detail::record_builder::record_end_marker);
+      static_cast<std::byte>(detail::data_builder::type_index_double));
+    expected.insert(expected.end(), detail::data_builder::list_end_marker);
+    expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
   // fmt::print("{}\n", sig);
   // fmt::print("{}\n", expected);
@@ -305,13 +305,13 @@ TEST(signature list numeric unification) {
 }
 
 TEST(signature record seeding matching) {
-  record_builder b;
+  data_builder b;
   auto* r = b.record();
   r->field("0")->data(uint64_t{0});
   r->field("1")->data(int64_t{1});
 
   CHECK(b.has_elements());
-  detail::record_builder::signature_type sig;
+  detail::data_builder::signature_type sig;
   tenzir::type seed{record_type{
     {"0", uint64_type{}},
     {"1", int64_type{}},
@@ -319,10 +319,10 @@ TEST(signature record seeding matching) {
 
   b.append_signature_to(sig, &seed);
 
-  detail::record_builder::signature_type expected;
+  detail::data_builder::signature_type expected;
   {
     expected.insert(expected.end(),
-                    detail::record_builder::record_start_marker);
+                    detail::data_builder::record_start_marker);
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
@@ -339,7 +339,7 @@ TEST(signature record seeding matching) {
         static_cast<std::byte>(
           caf::detail::tl_index_of<field_type_list, int64_t>::value));
     }
-    expected.insert(expected.end(), detail::record_builder::record_end_marker);
+    expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
   // fmt::print("{}\n", sig);
   // fmt::print("{}\n", expected);
@@ -347,12 +347,12 @@ TEST(signature record seeding matching) {
 }
 
 TEST(signature record seeding field not in data) {
-  record_builder b;
+  data_builder b;
   auto* r = b.record();
   r->field("0")->data(uint64_t{0});
 
   CHECK(b.has_elements());
-  detail::record_builder::signature_type sig;
+  detail::data_builder::signature_type sig;
   tenzir::type seed{record_type{
     {"0", uint64_type{}},
     {"1", int64_type{}},
@@ -360,10 +360,10 @@ TEST(signature record seeding field not in data) {
 
   b.append_signature_to(sig, &seed);
 
-  detail::record_builder::signature_type expected;
+  detail::data_builder::signature_type expected;
   {
     expected.insert(expected.end(),
-                    detail::record_builder::record_start_marker);
+                    detail::data_builder::record_start_marker);
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
@@ -380,7 +380,7 @@ TEST(signature record seeding field not in data) {
         static_cast<std::byte>(
           caf::detail::tl_index_of<field_type_list, int64_t>::value));
     }
-    expected.insert(expected.end(), detail::record_builder::record_end_marker);
+    expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
   // fmt::print("{}\n", sig);
   // fmt::print("{}\n", expected);
@@ -388,8 +388,8 @@ TEST(signature record seeding field not in data) {
 }
 
 TEST(signature record seeding field not in data-- no - extend - schema) {
-  record_builder b{
-    detail::record_builder::basic_parser,
+  data_builder b{
+    detail::data_builder::basic_parser,
     nullptr,
     true,
   };
@@ -397,7 +397,7 @@ TEST(signature record seeding field not in data-- no - extend - schema) {
   r->field("0")->data(uint64_t{0});
 
   CHECK(b.has_elements());
-  detail::record_builder::signature_type sig;
+  detail::data_builder::signature_type sig;
   tenzir::type seed{record_type{
     {"0", uint64_type{}},
     {"1", int64_type{}},
@@ -405,10 +405,10 @@ TEST(signature record seeding field not in data-- no - extend - schema) {
 
   b.append_signature_to(sig, &seed);
 
-  detail::record_builder::signature_type expected;
+  detail::data_builder::signature_type expected;
   {
     expected.insert(expected.end(),
-                    detail::record_builder::record_start_marker);
+                    detail::data_builder::record_start_marker);
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
@@ -425,7 +425,7 @@ TEST(signature record seeding field not in data-- no - extend - schema) {
         static_cast<std::byte>(
           caf::detail::tl_index_of<field_type_list, int64_t>::value));
     }
-    expected.insert(expected.end(), detail::record_builder::record_end_marker);
+    expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
   // fmt::print("{}\n", sig);
   // fmt::print("{}\n", expected);
@@ -433,23 +433,23 @@ TEST(signature record seeding field not in data-- no - extend - schema) {
 }
 
 TEST(signature record seeding data - field not in seed) {
-  record_builder b;
+  data_builder b;
   auto* r = b.record();
   r->field("1")->data(int64_t{0});
   r->field("0")->data(uint64_t{0});
 
   CHECK(b.has_elements());
-  detail::record_builder::signature_type sig;
+  detail::data_builder::signature_type sig;
   tenzir::type seed{record_type{
     {"0", uint64_type{}},
   }};
 
   b.append_signature_to(sig, &seed);
 
-  detail::record_builder::signature_type expected;
+  detail::data_builder::signature_type expected;
   {
     expected.insert(expected.end(),
-                    detail::record_builder::record_start_marker);
+                    detail::data_builder::record_start_marker);
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
@@ -466,7 +466,7 @@ TEST(signature record seeding data - field not in seed) {
         static_cast<std::byte>(
           caf::detail::tl_index_of<field_type_list, int64_t>::value));
     }
-    expected.insert(expected.end(), detail::record_builder::record_end_marker);
+    expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
   // fmt::print("{}\n", sig);
   // fmt::print("{}\n", expected);
@@ -474,8 +474,8 @@ TEST(signature record seeding data - field not in seed) {
 }
 
 TEST(signature record seeding data - field not in seed-- no - extend - schema) {
-  record_builder b{
-    detail::record_builder::basic_parser,
+  data_builder b{
+    detail::data_builder::basic_parser,
     nullptr,
     true,
   };
@@ -484,17 +484,17 @@ TEST(signature record seeding data - field not in seed-- no - extend - schema) {
   r->field("0")->data(uint64_t{0});
 
   CHECK(b.has_elements());
-  detail::record_builder::signature_type sig;
+  detail::data_builder::signature_type sig;
   tenzir::type seed{record_type{
     {"0", uint64_type{}},
   }};
 
   b.append_signature_to(sig, &seed);
 
-  detail::record_builder::signature_type expected;
+  detail::data_builder::signature_type expected;
   {
     expected.insert(expected.end(),
-                    detail::record_builder::record_start_marker);
+                    detail::data_builder::record_start_marker);
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
@@ -503,7 +503,7 @@ TEST(signature record seeding data - field not in seed-- no - extend - schema) {
         static_cast<std::byte>(
           caf::detail::tl_index_of<field_type_list, uint64_t>::value));
     }
-    expected.insert(expected.end(), detail::record_builder::record_end_marker);
+    expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
   // fmt::print("{}\n", sig);
   // fmt::print("{}\n", expected);
@@ -511,12 +511,12 @@ TEST(signature record seeding data - field not in seed-- no - extend - schema) {
 }
 
 TEST(signature record seeding numeric mismatch) {
-  record_builder b;
+  data_builder b;
   auto* r = b.record();
   r->field("0")->data(uint64_t{0});
 
   CHECK(b.has_elements());
-  detail::record_builder::signature_type sig;
+  detail::data_builder::signature_type sig;
   tenzir::type seed{record_type{
     {"0", int64_type{}},
   }};
@@ -525,10 +525,10 @@ TEST(signature record seeding numeric mismatch) {
 
   b.append_signature_to(sig, &seed);
 
-  detail::record_builder::signature_type expected;
+  detail::data_builder::signature_type expected;
   {
     expected.insert(expected.end(),
-                    detail::record_builder::record_start_marker);
+                    detail::data_builder::record_start_marker);
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
@@ -537,7 +537,7 @@ TEST(signature record seeding numeric mismatch) {
         static_cast<std::byte>(
           caf::detail::tl_index_of<field_type_list, int64_t>::value));
     }
-    expected.insert(expected.end(), detail::record_builder::record_end_marker);
+    expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
   // fmt::print("{}\n", sig);
   // fmt::print("{}\n", expected);

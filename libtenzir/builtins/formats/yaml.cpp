@@ -109,7 +109,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     std::move(options),
     dh,
     modules::schemas(),
-    detail::record_builder::non_number_parser,
+    detail::data_builder::non_number_parser,
   };
   auto document = std::string{};
   for (auto&& line : lines) {

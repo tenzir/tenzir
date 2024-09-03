@@ -90,7 +90,7 @@ auto parse_extension(std::string_view extension,
       field.data_unparsed(unescape(value));
     } else {
       auto field = builder.field(key);
-      auto res = detail::record_builder::basic_parser(unescape(value), nullptr);
+      auto res = detail::data_builder::basic_parser(unescape(value), nullptr);
       auto& [data, diag] = res;
       if (data) {
         field.data(*data); // FIXME write a null

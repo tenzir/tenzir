@@ -158,7 +158,7 @@ auto parse_attributes(char delimiter, std::string_view attributes,
       field.data_unparsed(unescape(value));
     } else {
       auto field = builder.field(key);
-      auto res = detail::record_builder::basic_parser(unescape(value), nullptr);
+      auto res = detail::data_builder::basic_parser(unescape(value), nullptr);
       auto& [data, diag] = res;
       if (data) {
         field.data(*data);
