@@ -541,6 +541,30 @@ struct EvalBinOp<Op, string_type, string_type> {
   }
 };
 
+template <ast::binary_op Op>
+  requires(Op == ast::binary_op::eq || Op == ast::binary_op::neq)
+struct EvalBinOp<Op, record_type, record_type> {
+  static auto eval(const arrow::StructArray& l, const arrow::StructArray& r,
+                   auto&&) -> std::shared_ptr<arrow::BooleanArray> {
+    constexpr auto invert = Op == ast::binary_op::neq;
+    auto b = arrow::BooleanBuilder{};
+    check(b.Append(l.Equals(r) != invert));
+    return finish(b);
+  }
+};
+
+template <ast::binary_op Op>
+  requires(Op == ast::binary_op::eq || Op == ast::binary_op::neq)
+struct EvalBinOp<Op, list_type, list_type> {
+  static auto eval(const arrow::ListArray& l, const arrow::ListArray& r,
+                   auto&&) -> std::shared_ptr<arrow::BooleanArray> {
+    constexpr auto invert = Op == ast::binary_op::neq;
+    auto b = arrow::BooleanBuilder{};
+    check(b.Append(l.Equals(r) != invert));
+    return finish(b);
+  }
+};
+
 } // namespace
 
 auto evaluator::eval(const ast::binary_expr& x) -> series {

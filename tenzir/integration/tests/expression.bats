@@ -33,6 +33,10 @@ write_json ndjson=false
 EOF
 }
 
+@test "equals op" {
+  check tenzir --tql2 'from {} | eq1 = {a:1, b:2} == {a:1, b:2} | eq2 = [1,2,3] != [3,2,1]'
+}
+
 @test "record spread" {
   check tenzir -f '/dev/stdin' <<EOF
 from [{}]
