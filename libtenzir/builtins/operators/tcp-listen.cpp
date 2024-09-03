@@ -155,6 +155,11 @@ auto make_connection(connection_actor::stateful_pointer<connection_state> self,
                      tcp_listen_args args,
                      shared_diagnostic_handler diagnostics)
   -> connection_actor::behavior_type {
+  if (self->getf(caf::scheduled_actor::is_detached_flag)) {
+    thread_local auto thread_name
+      = fmt::format("tcp_fd{}", socket.native_handle());
+    caf::detail::set_thread_name(thread_name.data());
+  }
   self->state.self = self;
   self->state.io_context = std::move(io_context);
   self->state.socket = std::move(socket);
