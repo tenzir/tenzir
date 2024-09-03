@@ -520,6 +520,10 @@ function (TenzirRegisterPlugin)
   file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/stub.h" "")
   list(APPEND PLUGIN_SOURCES "${CMAKE_CURRENT_BINARY_DIR}/stub.h")
   add_library(${PLUGIN_TARGET} OBJECT ${PLUGIN_SOURCES})
+  # NOTE: CMake isn't able to deduce this automatically. Usually, this happens
+  # when there are no sources for target, but since the plugins have sources, we
+  # manually specify this here. `CXX` because we only use C/C++ currently.
+  set_target_properties(${PLUGIN_TARGET} PROPERTIES LINKER_LANGUAGE CXX)
   TenzirTargetEnableTooling(${PLUGIN_TARGET})
   target_link_libraries(
     ${PLUGIN_TARGET}
