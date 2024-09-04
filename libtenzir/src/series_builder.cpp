@@ -9,6 +9,7 @@
 #include "tenzir/series_builder.hpp"
 
 #include "tenzir/arrow_table_slice.hpp"
+#include "tenzir/arrow_utils.hpp"
 #include "tenzir/cast.hpp"
 #include "tenzir/concept/printable/tenzir/json.hpp"
 #include "tenzir/detail/assert.hpp"
@@ -90,10 +91,6 @@
 namespace tenzir {
 
 namespace {
-
-void check(const arrow::Status& status) {
-  TENZIR_ASSERT(status.ok(), status.ToString().c_str());
-}
 
 template <class T>
 struct is_atom_type

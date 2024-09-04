@@ -60,9 +60,6 @@ inputs:
   refresh-rate:
     # A user-facing name for the input (required).
     name: Refresh Rate
-    # The type of the input (required). Currently, 'string' is the only
-    # supported option.
-    type: string
     # A user-facing description of the input.
     description: |
       The interval at which the Feodo Tracker context is refreshed. Defaults to

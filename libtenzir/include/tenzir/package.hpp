@@ -101,7 +101,8 @@ struct package_pipeline final {
 };
 
 struct package_context final {
-  std::string type = {};
+  std::string type
+    = "string"; // A type hint for the frontend, ignored by the node.
   std::optional<std::string> description = {};
   tenzir::context::parameter_map arguments = {};
   bool disabled = false;
