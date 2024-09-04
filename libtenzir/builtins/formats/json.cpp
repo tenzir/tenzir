@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
+// SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
@@ -394,8 +394,8 @@ public:
           d.message = fmt::format("{} parser: {}", name, d.message);
           return d;
         })},
-      builder{std::move(options), *dh,
-              modules::schemas(), detail::data_builder::non_number_parser} {
+      builder{std::move(options), *dh, modules::schemas(),
+              detail::data_builder::non_number_parser} {
   }
   // this has to be pointer stable because `builder` holds a reference to it
   // internally
@@ -427,7 +427,7 @@ public:
         diagnostic::warning("{}", error_message(err))
           .note("skipped invalid JSON at index {}", doc_it.current_index())
           .emit(*dh);
-          ++diags_emitted;
+        ++diags_emitted;
         continue;
       }
       auto doc = *doc_it;
@@ -435,7 +435,7 @@ public:
         diagnostic::warning("{}", error_message(err))
           .note("skipped invalid JSON `{}`", truncate(doc_it.source()))
           .emit(*dh);
-          ++diags_emitted;
+        ++diags_emitted;
         continue;
       }
       auto val = doc.get_value();
@@ -443,19 +443,19 @@ public:
         diagnostic::warning("{}", error_message(err))
           .note("skipped invalid JSON `{}`", truncate(doc_it.source()))
           .emit(*dh);
-          ++diags_emitted;
+        ++diags_emitted;
         continue;
       }
       auto parser = doc_parser{json_line, *dh, lines_processed_};
       auto success = parser.parse_object(val.value_unsafe(), builder.record());
       if (not success) {
         builder.remove_last();
-          ++diags_emitted;
+        ++diags_emitted;
         return;
       }
     }
     if (objects_parsed == 0 and diags_emitted == 0) {
-      diagnostic::warning("NDJSON line was empty")
+      diagnostic::warning("NDJSON line did not contain a single valid JSON object")
         .note("skipped invalid JSON `{}`", truncate(json_line))
         .emit(*dh);
     } else if (objects_parsed > 1) {
@@ -674,7 +674,7 @@ public:
   }
 
   friend auto inspect(auto& f, json_parser& x) -> bool {
-    return f.object(x).fields(f.field("args", x.args_));
+    return f.apply(x.args_);
   }
 
 private:
@@ -794,7 +794,7 @@ public:
   }
 
   friend auto inspect(auto& f, json_printer& x) -> bool {
-    return f.object(x).fields(f.field("args", x.args_));
+    return f.apply(x.args_);
   }
 
 private:
@@ -1035,7 +1035,7 @@ public:
   }
 
   friend auto inspect(auto& f, write_json& x) -> bool {
-    return f.object(x).fields(f.field("printer", x.printer_));
+    return f.apply(x.printer_);
   }
 
 private:
@@ -1226,7 +1226,7 @@ public:
               const auto res
                 = doc_p.parse_value(doc.get_value(), builder_ref{b}, 0);
               if (not res) {
-                // FIXME only remove last if no value has been added
+                // TODO only remove last if no value has been added
                 diagnostic::warning("could not parse json")
                   .primary(call)
                   .emit(ctx);

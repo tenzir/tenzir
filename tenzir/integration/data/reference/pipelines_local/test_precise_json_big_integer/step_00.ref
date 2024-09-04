@@ -1,4 +1,4 @@
 {"foo": "424242424242424242424242"}
 warning: json parser: failed to parse a big integer in the JSON document
  = note: line 1 column 8
- = note: Value `424242424242424242424242` does not fit into 64bits
+ = note: value `424242424242424242424242` does not fit into 64bits

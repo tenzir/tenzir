@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
+// SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
@@ -93,7 +93,7 @@ auto parse_extension(std::string_view extension,
       auto res = detail::data_builder::basic_parser(unescape(value), nullptr);
       auto& [data, diag] = res;
       if (data) {
-        field.data(*data); // FIXME write a null
+        field.data(*data);
       } else {
         field.data(unescape(value));
       }

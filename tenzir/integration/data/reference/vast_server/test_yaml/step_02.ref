@@ -440,7 +440,8 @@ warning: zeek-json parser: selected schema not found
  = note: `zeek._0_0_2` does not refer to a known schema
 
 warning: zeek-json parser: parsed field type does not match the type from the schema
- = note: parsed type had ID `2`, schema expected ID `14`(`zeek.conn_id`)
+ = note: parsed type was `int64`, but the schema expected `zeek.conn_id`
 
-warning: zeek-json parser: Issue writing typed data into prepared batch
+warning: zeek-json parser: mismatch between event data and expected schema
+ = note: schema expected `record`, but event contains `int64`
  = note: !! type_clash: expected record but got int64

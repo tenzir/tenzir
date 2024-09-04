@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
+// SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/argument_parser.hpp"
@@ -430,10 +430,8 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     },
   };
   auto msb = multi_series_builder{
-    args.builder_options.policy,
-    args.builder_options.settings,
+    args.builder_options,
     dh,
-    modules::schemas(),
   };
   for (; it != lines.end(); ++it) {
     for (auto& v : msb.yield_ready_as_table_slice()) {
@@ -461,9 +459,11 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
             .note("line {} has {} values, but should have {} values",
                   line_counter, field_idx, original_field_count)
             .emit(ctrl.diagnostics());
+          r.unflattend_field(fields[field_idx]).null();
+          continue;
+        } else {
+          break;
         }
-        r.unflattend_field(fields[field_idx]).null();
-        continue;
       } else if (field_idx >= fields.size()) {
         if (args.auto_expand) {
           size_t unnamed_idx = 1;

@@ -303,7 +303,6 @@ public:
     return parse_loop(to_lines(std::move(input)), ctrl.diagnostics(), options_);
   }
 
-  // FIXME update this into just an apply
   friend auto inspect(auto& f, leef_parser& x) -> bool {
     return f.apply(x.options_);
   }

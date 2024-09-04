@@ -6,29 +6,25 @@
     type: "gzip" @ 0..0
   },
   read json {
-    args: {
-      parser_name: "json",
-      builder_options: {
-        policy: policy_precise {
-          seed_schema: ""
-        },
-        settings: {
-          default_schema_name: "tenzir.json",
-          ordered: true,
-          schema_only: false,
-          raw: false,
-          unnest_separator: "",
-          timeout: "1s",
-          desired_batch_size: 65536
-        }
+    parser_name: "json",
+    builder_options: {
+      policy: policy_precise {
+        seed_schema: ""
       },
-      arrays_of_objects: false,
-      mode: "none"
-    }
+      settings: {
+        default_schema_name: "tenzir.json",
+        ordered: true,
+        schema_only: false,
+        raw: false,
+        unnest_separator: "",
+        timeout: "1s",
+        desired_batch_size: 65536
+      }
+    },
+    arrays_of_objects: false,
+    mode: "none"
   },
   write json {
-    args: {
-      
-    }
+    
   }
 ]

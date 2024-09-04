@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
+// SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/multi_series_builder_argument_parser.hpp"
@@ -52,7 +52,6 @@ auto parse_node(auto guard, const YAML::Node& node,
         guard.data(as_bool);
         return;
       }
-      // TODO: Do not attempt to parse pattern, map, list, and record here.
       const auto& value_str = node.Scalar();
       guard.data_unparsed(value_str);
       return;
@@ -279,7 +278,6 @@ public:
 
   friend auto inspect(auto& f, yaml_printer& x) -> bool {
     return f.object(x).fields();
-    return true;
   }
 };
 

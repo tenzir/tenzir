@@ -1,2 +1,2 @@
-warning: json parser: failed to parsed a JSON object
+warning: json parser: NDJSON line did not contain a single valid JSON object
  = note: skipped invalid JSON `{"foo": 42`

@@ -3,19 +3,17 @@ pipeline [
     path: "a/b/c.json" @ 10..20
   },
   read cef {
-    options: {
-      policy: policy_precise {
-        seed_schema: ""
-      },
-      settings: {
-        default_schema_name: "cef.event",
-        ordered: true,
-        schema_only: false,
-        raw: false,
-        unnest_separator: "",
-        timeout: "1s",
-        desired_batch_size: 65536
-      }
+    policy: policy_precise {
+      seed_schema: ""
+    },
+    settings: {
+      default_schema_name: "cef.event",
+      ordered: true,
+      schema_only: false,
+      raw: false,
+      unnest_separator: "",
+      timeout: "1s",
+      desired_batch_size: 65536
     }
   }
 ] @ 0..29

@@ -728,16 +728,18 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
         }
       }
       // TODO this happens in our intentionally "broken" zeek.json event in the
-      // test input, where we have `id : 0`, whereas the schema expects `id :
-      // zeek.conn_id` The resulting issue is that a protected/preparsed
+      // test input, where we have field `id : 0`, whereas the schema expects
+      // `id : zeek.conn_id` The resulting issue is that a protected/preparsed
       // series_builder will reject the value entirely This could be resolved by
       // not preparing any builders in the `multi_series_builder` and instead
-      // ensuring that all fields top level are written (as null) on commit
+      // ensuring that all fields top level are written (as null) on commit.
+      // This is a non-trivial effort though and should be considered as a
+      // follow-up to precise parsing.
       rb.emit_or_throw(
         diagnostic::warning("parsed field type does not match the type from "
                             "the schema")
-          .note("parsed type was `{}`, but the schema expected `{}`",
-                type{data_to_type_t<T>{}}.kind(), *seed));
+          .note("schema expects `{}` (`{}`), but event contains `{}`",
+                seed->kind(), *seed, type{data_to_type_t<T>{}}.kind()));
     },
   };
   std::visit(visitor, data_);
@@ -768,8 +770,8 @@ auto node_object::append_to_signature(signature_type& sig,
         rb.emit_or_throw(
           diagnostic::warning("mismatch between event data and expected "
                               "schema")
-            .note("schema expected `{}`, but event contained `{}`",
-                  seed->kind(), "list"));
+            .note("schema expects `{}` (`{}`), but event contains `{}`",
+                  seed->kind(), *seed, "list"));
         null();
         // FIXME this needs to update the signature in some way
         return;
@@ -784,8 +786,8 @@ auto node_object::append_to_signature(signature_type& sig,
         rb.emit_or_throw(
           diagnostic::warning("mismatch between event data and expected "
                               "schema")
-            .note("schema expected `{}`, but event contained `{}`",
-                  seed->kind(), type{record_type{}}.kind()));
+            .note("schema expects `{}` (`{}`), but event contains `{}`",
+                  seed->kind(), *seed, type{record_type{}}.kind()));
         null();
         // FIXME this needs to update the signature in some way
         return;
@@ -858,8 +860,9 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
           rb.emit_or_throw(
             diagnostic::warning("mismatch between event data and expected "
                                 "schema")
-              .note("schema expected `{}`, but event contained `{}`",
-                    seed->kind(), "list"));
+              .note("the respective field will be null in the output")
+              .note("schema expects `{}` (`{}`), but event contains `{}`",
+                    seed->kind(), *seed, "list"));
           builder.null();
           v.mark_this_dead();
           return;
@@ -877,8 +880,9 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
           rb.emit_or_throw(
             diagnostic::warning("mismatch between event data and expected "
                                 "schema")
-              .note("schema expected `{}`, but event contained `{}`",
-                    seed->kind(), type{record_type{}}.kind()));
+              .note("the respective field will be null in the output")
+              .note("schema expects `{}` (`{}`), but event contains `{}`",
+                    seed->kind(), *seed, type{record_type{}}.kind()));
           builder.null();
           v.mark_this_dead();
           return;
@@ -892,12 +896,18 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
     [&builder, seed, &rb]<non_structured_data_type T>(T& v) {
       auto res = builder.try_data(v);
       if (auto& e = res.error()) {
-        rb.emit_or_throw(
-          diagnostic::warning("mismatch between event data and "
-                              "expected schema")
-            .note("schema expected `{}`, but event contains `{}`", seed->kind(),
-                  type{data_to_type_t<T>{}}.kind())
-            .note("{}", e));
+        if (tenzir::ec{e.code()} == ec::type_clash) {
+          rb.emit_or_throw(
+            diagnostic::warning("mismatch between event data and "
+                                "expected schema")
+              .note("the respective field will be null in the output")
+              .note("schema expects `{}` (`{}`), but event contains `{}`",
+                    seed->kind(), *seed, type{data_to_type_t<T>{}}.kind()));
+        } else {
+          rb.emit_or_throw(
+            diagnostic::warning("issue writing data into builder")
+              .note("{}", e));
+        }
       }
     },
     [](auto&) {
