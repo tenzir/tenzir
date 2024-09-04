@@ -8,10 +8,10 @@
 
 #pragma once
 
+#include "tenzir/data_builder.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/modules.hpp"
-#include "tenzir/data_builder.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/type.hpp"
@@ -76,7 +76,7 @@ private:
 };
 
 class field_generator {
-  using raw_pointer = detail::data_builder::node_field*;
+  using raw_pointer = detail::data_builder::node_object*;
 
 public:
   /// A non-associated field generator. This is used in the unflatten function.
@@ -210,6 +210,7 @@ public:
   friend class detail::multi_series_builder::field_generator;
   friend class detail::multi_series_builder::list_generator;
   using record_generator = detail::multi_series_builder::record_generator;
+  using list_generator = detail::multi_series_builder::list_generator;
 
   /// @returns a vector of all currently finished series
   [[nodiscard("The result of a flush must be handled")]]
@@ -218,10 +219,23 @@ public:
   [[nodiscard("The result of a flush must be handled")]]
   auto yield_ready_as_table_slice() -> std::vector<table_slice>;
 
-  /// adds a record to the currently active builder
+  /// @brief Starts building a new record.
   [[nodiscard]] auto record() -> record_generator;
+  /// @brief Starts building a new list.
+  [[nodiscard]] auto list() -> list_generator;
 
-  /// Drops the last event from active builder
+  /// @brief Inserts a new value into the builder.
+  template <detail::data_builder::non_structured_data_type T>
+  auto data(T value) -> void {
+    if (get_policy<policy_merge>()) {
+      return merging_builder_.data(value);
+    } else {
+      complete_last_event();
+      return builder_raw_.data(std::move(value));
+    }
+  }
+
+  /// @brief Drops the last event from active builder.
   void remove_last();
 
   [[nodiscard("The result of a flush must be handled")]]
@@ -229,7 +243,7 @@ public:
   [[nodiscard("The result of a flush must be handled")]]
   auto finalize_as_table_slice() -> std::vector<table_slice>;
 
-  // This policy will merge all events into a single schema
+  /// @brief This policy will merge all events into a single schema
   struct policy_merge {
     static constexpr std::string_view name = "merge";
     // a schema name to seed with. If this is given
@@ -242,7 +256,7 @@ public:
     }
   };
 
-  // This policy will keep all schemas in separate batches
+  /// @brief This policy will keep all schemas in separate batches
   struct policy_precise {
     static constexpr std::string_view name = "precise";
     // If this is given, all resulting events will have exactly this schema
@@ -254,7 +268,7 @@ public:
     }
   };
 
-  // This policy will keep all schemas in batches according to selector
+  /// @brief This policy will keep all schemas in batches according to selector
   struct policy_selector {
     static constexpr std::string_view name = "selector";
     // The field name to use for selection
@@ -278,6 +292,7 @@ public:
   using policy_type = tenzir::variant<std::monostate, policy_merge,
                                       policy_precise, policy_selector>;
 
+  /// @brief Holds generic settings for the builder.
   struct settings_type {
     // The default name given to a schema, if its not determined by `schema` or
     // `selector`
@@ -307,6 +322,7 @@ public:
     }
   };
 
+  /// @brief A simple convenience wrapper, holding both settings and policy.
   struct options {
     multi_series_builder::policy_type policy
       = multi_series_builder::policy_precise{};
@@ -339,26 +355,26 @@ public:
   multi_series_builder& operator=(multi_series_builder&&) = delete;
 
 private:
-  /// gets a pointer to the active policy, if its the given one.
-  /// the implementation is in the source file, since its a private/internal
-  /// function and thus will only be instantiated by other member functions
+  /// @brief Gets a pointer to the active policy, if its the given one.
   template <typename T>
   T* get_policy() {
     return std::get_if<T>(&policy_);
   }
 
-  // called internally once an event is complete.
-  // this function is responsible for committing
-  // the currently built event to its respective `series_builder`
-  // this is only relevant for the precise mode
+  /// @brief Called internally to complete the last built event.
+  /// This is called whenever the user starts building a new event,
+  /// or requests ready events.
+  /// This function is responsible for computing the signature and
+  /// committing the event to the correct `series_builder` based on that.
   void complete_last_event();
 
-  // clears the currently build raw event
+  /// @brief clears the currently build raw event.
   void clear_raw_event();
 
-  // gets the next free index into `entries_`.
+  /// @brief Gets the next free index into `entries_`.
   std::optional<size_t> next_free_index() const;
 
+  /// @brief Look up a schema by name.
   auto type_for_schema(std::string_view str) -> const type*;
 
   struct entry_data {
@@ -376,25 +392,31 @@ private:
     bool unused = false;
   };
 
-  /// finishes all events that satisfy the predicate.
-  /// these events are moved out of their respective series_builders and into
-  /// `ready_events_`
+  /// @brief Finishes all events that satisfy the predicate.
+  /// These events are moved out of their respective series_builders and into
+  /// `ready_events_`.
   /// the implementation is in the source file, since its a private/internal
-  /// function and thus will only be instantiated by other member functions
+  /// function and thus will only be instantiated by other member functions.
+  /// @ref `ready_events_`
+  /// @ref `yield_ready`
   void make_events_available_where(std::predicate<const entry_data&> auto pred);
 
-  /// appends `new_events` to `ready_events_`
+  /// @brief appends `new_events` to `ready_events_`
   void append_ready_events(std::vector<series>&& new_events);
 
-  /// GCs `series_builders` from `entries_` that satisfy the predicate
-  /// the implementation is in the source file, since its a private/internal
-  /// function and thus will only be instantiated by other member functions
+  /// @brief "garbage collects" all entries in `entries_` that satisfy the
+  /// predicate.
+  /// The implementation is in the source file, since its a private/internal
+  /// function and thus will only be instantiated by other member functions.
   void garbage_collect_where(std::predicate<const entry_data&> auto pred);
 
   using signature_type = typename data_builder::signature_type;
 
+  // the builders policy
   policy_type policy_;
+  // the builders settings
   settings_type settings_;
+  // the diagnostic handler to be used
   diagnostic_handler& dh_;
   // used for quick name -> schema mapping
   detail::flat_map<std::string, tenzir::type> schemas_;

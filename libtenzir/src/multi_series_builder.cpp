@@ -7,9 +7,9 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include "tenzir/data.hpp"
+#include "tenzir/data_builder.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/diagnostics.hpp"
-#include "tenzir/data_builder.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/type.hpp"
 
@@ -303,6 +303,15 @@ auto multi_series_builder::record() -> record_generator {
   } else {
     complete_last_event();
     return record_generator{this, builder_raw_.record()};
+  }
+}
+
+auto multi_series_builder::list() -> list_generator {
+  if (get_policy<policy_merge>()) {
+    return list_generator{this, merging_builder_.list()};
+  } else {
+    complete_last_event();
+    return list_generator{this, builder_raw_.list()};
   }
 }
 
