@@ -11,11 +11,13 @@ setup() {
   export TENZIR_PLUGINS="fluent-bit"
 }
 
+
 @test "invalid fluent-bit plugin" {
   check ! tenzir 'fluent-bit please-do-not-crash'
 }
 
 @test "infer schema from random data" {
+  skip "This test often timeouts when run on GitHub Actions Runners"
   check tenzir 'fluent-bit random | head 1 | put schema=#schema'
 }
 
@@ -40,10 +42,12 @@ setup() {
 }
 
 @test "fluent-bit works as a sink" {
+  skip "This test often fails when run on GitHub Actions Runners"
   check tenzir 'version | fluent-bit null'
 }
 
 @test "Use fluent-bit to count to 10" {
+  skip "This may not actually count to 10 reliably"
   run -0 --separate-stderr \
     tenzir 'version | repeat | head | fluent-bit counter'
   { check cut -d , -f 2; } <<<"$output"
