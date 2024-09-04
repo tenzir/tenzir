@@ -47,7 +47,7 @@ struct data_parsing_result {
 };
 
 class node_record;
-class node_field;
+class node_object;
 class node_list;
 
 struct map_dummy {};
@@ -190,12 +190,7 @@ update_type_index(size_t& old_index, size_t new_index) -> void {
 enum class state { alive, sentinel, dead };
 
 class node_base {
-  friend class node_record;
-  friend class node_field;
-  friend class node_list;
-  friend class ::tenzir::data_builder;
-
-private:
+protected:
   auto mark_this_relevant() -> void {
     if (state_ != state::alive) {
       state_ = state::sentinel;
@@ -215,25 +210,25 @@ private:
 
 class node_record : public node_base {
   friend class node_list;
-  friend class node_field;
+  friend class node_object;
   friend class ::tenzir::data_builder;
 
 public:
-  /// reserves storage for at least N elements in the record.
+  /// @brief Reserves storage for at least N elements in the record.
   /// this function can be used to get temporary pointer stability on the
   /// records elements
   auto reserve(size_t N) -> void;
-  /// adds a field to the record.
+  /// @brief Adds a field to the record.
   /// @note the returned pointer is not permanently stable. If the underlying
   /// vector reallocates, the pointer becomes invalid
   /// @ref reserve can be used to ensure stability for a given number of elements
-  [[nodiscard]] auto field(std::string_view name) -> node_field*;
+  [[nodiscard]] auto field(std::string_view name) -> node_object*;
 
 private:
   // tries to get a field with the given name. Does not affect any field state
-  auto try_field(std::string_view name) -> node_field*;
+  auto try_field(std::string_view name) -> node_object*;
   // does lookup of a (nested( key
-  auto at(std::string_view key) -> node_field*;
+  auto at(std::string_view key) -> node_object*;
   // writes the record into a series builder
   auto
   commit_to(tenzir::record_ref r, class data_builder& rb,
@@ -248,49 +243,49 @@ private:
   // clears the record by marking everything as dead
   auto clear() -> void;
 
-  // record entry. contains a string for the key and a field
-  // its defined out of line because node_field cannot be defined at this point
+  // Record entry. This contains a string for the key and a field.
+  // Its defined out of line because node_object cannot be defined at this point.
   struct entry_type;
-  // this stores added fields in order of their appearance
-  // this order is used for committing to the series builder
-  // Using the appearance order to commit, ensures that fields outside of a
-  // possible seed schema retain their order from first appearance The order of
-  // fields in a seed/selector on the other hand is then practically ensured
-  // because the multi_series_builder first seeds the respective series_builder
+  // This stores added fields in order of their appearance
+  // This order is used for committing to the `series_builder`, in order to
+  // (mostly) preserved the field order from the input, apart from fields the
+  // `series_builder` was seeded with. The order of fields in a seed/selector on
+  // the other hand is then practically ensured because the multi_series_builder
+  // first seeds the respective `series_builder`.
   std::vector<entry_type> data_;
-  // this is a SORTED key -> index map. this is used for signature computation
-  // if this map is not sorted, the signature computation algorithm breaks
-  // flat_map<std::string, size_t> lookup_;
+  // This is a sorted key -> index map. It is used for signature computation.
+  // If this map is not sorted, the signature computation algorithm breaks,
+  // since it would then be order dependent.
   flat_map<std::string, size_t> lookup_;
 };
 
 class node_list : public node_base {
   friend class node_record;
-  friend class node_field;
+  friend class node_object;
 
 public:
-  /// reserves storage for at least N elements in the record.
-  /// this function can be used to get temporary pointer stability on the
-  /// records elements
+  /// @brief Reserves storage for at least N elements in the list.
+  /// This function can be used to get temporary pointer stability on the
+  /// list elements.
   auto reserve(size_t N) -> void;
-  /// appends a new typed value to this list
-  /// if its type mismatches with the seed during the later parsing/signature
-  /// computation, an error is returned
+  /// @brief appends a new typed value to this list.
+  /// If its type mismatches with the seed during the later parsing/signature
+  /// computation, a warning is emitted.
   template <non_structured_data_type T>
   auto data(T data) -> void;
-  /// unpacks the tenzir::data into a new element at the end of th list
+  /// @brief Unpacks the tenzir::data into a new element at the end of th list
   auto data(tenzir::data) -> void;
-  /// adds an unparsed data value to this field. It is later parsed during the
-  /// signature computation step
+  /// @brief Appends some unparsed data to this list.
+  /// It is later parsed when a seed is potentially available.
   auto data_unparsed(std::string_view) -> void;
-  /// adds a null value to the list
+  /// @brief adds a null value to the list
   auto null() -> void;
-  /// adds a new record to the list
+  /// @brief adds a new record to the list
   /// @note the returned pointer is not permanently stable. If the underlying
   /// vector reallocates, the pointer becomes invalid
   /// @ref reserve can be used to ensure stability for a given number of elements
   [[nodiscard]] auto record() -> node_record*;
-  /// adds a new list to the list
+  /// @brief Appends a new list to the list.
   /// @note the returned pointer is not permanently stable. If the underlying
   /// vector reallocates, the pointer becomes invalid
   /// @ref reserve can be used to ensure stability for a given number of elements
@@ -303,8 +298,8 @@ public:
 private:
   /// finds an element marked as dead. This is part of the reallocation
   /// optimization.
-  auto find_free() -> node_field*;
-  auto back() -> node_field&;
+  auto find_free() -> node_object*;
+  auto back() -> node_object&;
 
   auto update_new_structural_signature() -> void;
 
@@ -322,10 +317,10 @@ private:
   size_t type_index_ = type_index_empty;
   signature_type current_structural_signature_;
   signature_type new_structural_signature_;
-  std::vector<node_field> data_;
+  std::vector<node_object> data_;
 };
 
-class node_field : public node_base {
+class node_object : public node_base {
   friend class node_record;
   friend class node_list;
   friend struct node_record::entry_type;
@@ -333,24 +328,24 @@ class node_field : public node_base {
   friend class ::tenzir::multi_series_builder;
 
 public:
-  /// sets this field to a parsed, typed data value
-  /// if its type mismatches with the seed during the later parsing/signature
-  /// computation, an error is returned
+  /// @brief Sets this field to a parsed, typed data value.
+  /// If its type mismatches with the seed during the later parsing/signature
+  /// computation, a warning is emitted.
   template <non_structured_data_type T>
   auto data(T data) -> void;
-  /// unpacks the tenzir::data into this field
+  /// @brief Unpacks the tenzir::data into this field
   auto data(tenzir::data) -> void;
-  /// adds an unparsed data value to this field. It is later parsed during the
-  /// signature computation step
+  /// @brief Sets this field to some unparsed data.
+  /// It is later parsed when a seed is potentially available.
   auto data_unparsed(std::string_view raw_text) -> void;
   auto null() -> void;
   [[nodiscard]] auto record() -> node_record*;
   [[nodiscard]] auto list() -> node_list*;
 
-  node_field() : data_{std::in_place_type<caf::none_t>} {
+  node_object() : data_{std::in_place_type<caf::none_t>} {
   }
   template <non_structured_data_type T>
-  node_field(T data) : data_{std::in_place_type<T>, data} {
+  node_object(T data) : data_{std::in_place_type<T>, data} {
   }
 
 private:
@@ -414,7 +409,7 @@ private:
 
 struct node_record::entry_type {
   std::string key;
-  node_field value;
+  node_object value;
 
   entry_type(std::string_view name) : key{name} {
   }
@@ -426,58 +421,80 @@ constexpr static std::byte record_end_marker{0xfb};
 constexpr static std::byte list_start_marker{0xfc};
 constexpr static std::byte list_end_marker{0xfd};
 
-/// a very basic parser that simply uses `tenzir::parsers` under the hood.
-/// this parser does not support the seed pointing to a structural type
+/// A very basic parser that simply uses `tenzir::parsers` under the hood.
+/// This parser does not support the seed pointing to a structural type
 auto basic_parser(std::string_view s, const tenzir::type* seed)
   -> detail::data_builder::data_parsing_result;
 
+/// A very basic parser that simply uses `tenzir::parsers` under the hood.
+/// This parser will not attempt to parse strings as numeric types.
+/// Its used for input formats that already are inherently aware of numbers,
+/// such as JSON or YAML.
+/// This parser does not support the seed pointing to a structural type
 auto non_number_parser(std::string_view s, const tenzir::type* seed)
   -> detail::data_builder::data_parsing_result;
 
-/// a very basic parser that only supports parsing based on a seed
-/// uses the `tenzir::parser` s under the hood.
-/// this parser does not support the seed pointing to a structural type
+/// A very basic parser that only parses the string according to the `seed`
+/// type. This parser does not support the seed pointing to a structural type
 auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
   -> detail::data_builder::data_parsing_result;
 
 } // namespace detail::data_builder
 
+/// @brief The `data_builder` provides an incremental factory API to
+/// create a single `tenzir::data`. It also supports writing the result
+/// directly into a `series_builder` instead.
+/// * record() inserts a record
+/// * list() inserts a list
+/// * data( value ) inserts a value
+/// * data_unparsed( string ) inserts a value that will be parsed later on
+/// * record_generator::field( string ) inserts a field that will be unflattend
+/// * record_generator::exact_field( string ) inserts a field with the exact name
+/// * record_generator::unflattend_field inserts a field that is explicitly
+///   unflattend
 class data_builder {
   friend class detail::data_builder::node_list;
   friend class detail::data_builder::node_record;
-  friend class detail::data_builder::node_field;
+  friend class detail::data_builder::node_object;
 
 public:
   using data_parsing_function
     = std::function<detail::data_builder::data_parsing_result(
       std::string_view str, const tenzir::type* seed)>;
-  data_builder(
-    data_parsing_function parser
-    = detail::data_builder::basic_parser, // FIXME move this into a
-                                            // std::function directly and move
-                                            // the ctor into the cpp file
-    diagnostic_handler* dh = nullptr, bool schema_only = false,
-    bool parse_schema_fields_only = false)
-    : dh_{dh},
-      parser_{std::move(parser)},
-      schema_only_{schema_only},
-      parse_schema_fields_only_{parse_schema_fields_only} {
-    root_.mark_this_dead();
+  data_builder(data_parsing_function parser
+               = detail::data_builder::basic_parser,
+               diagnostic_handler* dh = nullptr, bool schema_only = false,
+               bool parse_schema_fields_only = false);
+
+  /// @brief Start building a record
+  [[nodiscard]] auto record() -> detail::data_builder::node_record*;
+
+  /// @brief Start building a list
+  [[nodiscard]] auto list() -> detail::data_builder::node_list*;
+
+  /// @brief Sets the top level value to the given data
+  template <detail::data_builder::non_structured_data_type T>
+  auto data(T value) {
+    root_.data(std::move(value));
   }
 
-  // accesses the currently building record
-  [[nodiscard]] auto record() -> detail::data_builder::node_record*;
+  /// @brief Sets the top level value to the given data
+  auto data(tenzir::data value) {
+    root_.data(std::move(value));
+  }
+
+  /// @brief Sets the top level the given string.
+  /// The string will automatically be parsed (later) according to the parser
+  /// that was parser the `data_builder` was constructed with.
+  auto data_unparsed(std::string_view) -> void;
 
   [[nodiscard]] auto has_elements() -> bool {
     return root_.is_alive();
   }
 
-  // are not removed, only possible conflict resolved towards string
-  auto seed(std::optional<tenzir::type> seed) -> void;
-
   /// tries to find a field with the given (nested) key
   [[nodiscard]] auto
-  find_field_raw(std::string_view key) -> detail::data_builder::node_field*;
+  find_field_raw(std::string_view key) -> detail::data_builder::node_object*;
 
   /// tries to find a field with the given (nested) key for a data type
   // template <detail::data_builder::non_structured_data_type T>
@@ -496,7 +513,7 @@ public:
   /// @param mark_dead whether to mark nodes in the record builder as dead
   [[nodiscard]] auto
   materialize(bool mark_dead = true, const tenzir::type* seed
-                                     = nullptr) -> tenzir::record;
+                                     = nullptr) -> tenzir::data;
   /// commits the current record into the series builder
   /// @param mark_dead whether to mark nodes in the record builder as dead
   auto commit_to(series_builder&, bool mark_dead = true,
@@ -510,7 +527,7 @@ private:
                             detail::data_builder::node_record* apply)
     -> const detail::data_builder::field_type_lookup_map*;
 
-  detail::data_builder::node_record root_;
+  detail::data_builder::node_object root_;
   detail::data_builder::schema_type_lookup_map schema_type_lookup_;
   diagnostic_handler* dh_;
 
@@ -527,7 +544,7 @@ private:
 
 namespace detail::data_builder {
 template <non_structured_data_type T>
-auto node_field::data(T data) -> void {
+auto node_object::data(T data) -> void {
   mark_this_alive();
   value_state_ = value_state_type::has_value;
   data_.emplace<T>(std::move(data));
@@ -542,7 +559,7 @@ auto node_list::data(T data) -> void {
   } else {
     TENZIR_ASSERT(data_.size() <= 20'000, "Upper limit on list size reached.");
     data_.emplace_back(std::move(data));
-    data_.back().value_state_ = node_field::value_state_type::has_value;
+    data_.back().value_state_ = node_object::value_state_type::has_value;
     update_type_index(type_index_, data_.back().current_index());
   }
 }

@@ -51,6 +51,13 @@ public:
   size_t notes = 0;
 };
 
+
+auto safe_as_record( tenzir::data d ) -> tenzir::record {
+  auto as_record = caf::get_if<tenzir::record>(&d);
+  REQUIRE( as_record );
+  return std::move(*as_record);
+}
+
 TEST(empty) {
   data_builder b;
 
@@ -66,7 +73,7 @@ TEST(materialization record) {
 
   CHECK(b.has_elements());
 
-  auto rec = b.materialize();
+  auto rec = safe_as_record( b.materialize() );
   auto expected = tenzir::record{};
   expected["0"] = uint64_t{0};
   expected["1"] = int64_t{1};
@@ -87,7 +94,7 @@ TEST(materialization list) {
 
   CHECK(b.has_elements());
 
-  auto rec = b.materialize();
+  auto rec = safe_as_record( b.materialize() );
   auto expected = tenzir::record{};
   expected["int list"] = tenzir::list{uint64_t{0}, uint64_t{1}, uint64_t{2}};
   for (const auto& [expected_key, expected_data] : expected) {
@@ -103,7 +110,7 @@ TEST(materialization nested record) {
 
   CHECK(b.has_elements());
 
-  auto rec = b.materialize();
+  auto rec = safe_as_record( b.materialize() );
   auto expected = tenzir::record{};
   expected["0"] = tenzir::record{{"1", caf::none}};
   for (const auto& [rk, rv] : rec) {
@@ -120,7 +127,7 @@ TEST(materialization record list record) {
 
   CHECK(b.has_elements());
 
-  auto rec = b.materialize(false);
+  auto rec = safe_as_record( b.materialize(false) );
   auto expected = tenzir::record{};
   expected["0"] = tenzir::list{tenzir::record{{"1", uint64_t{0}}}};
   expected["1"] = tenzir::record{{"0", tenzir::list{}}};
@@ -128,7 +135,7 @@ TEST(materialization record list record) {
     CHECK(expected.at(rk) == rv);
   }
   CHECK(b.has_elements());
-  auto rec2 = b.materialize();
+  auto rec2 = safe_as_record( b.materialize() );
   CHECK(rec == rec2);
   CHECK(not b.has_elements());
 }
