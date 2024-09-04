@@ -177,10 +177,6 @@ const sidebars = {
     },
     {
       type: 'doc',
-      id: 'packages',
-    },
-    {
-      type: 'doc',
       id: 'rest-api',
     },
     {
@@ -202,6 +198,10 @@ const sidebars = {
     {
       type: 'doc',
       id: 'pipelines',
+    },
+    {
+      type: 'doc',
+      id: 'packages',
     },
     {
       type: 'doc',

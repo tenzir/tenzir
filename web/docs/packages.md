@@ -177,7 +177,7 @@ configuration object. This can happen in three ways:
 
 1. In the [Tenzir Library](https://app.tenzir.com/library), you provide inputs
    that get converted into a `config` object.
-2. Using the [`package_add`](../operators/package.md) operator, you construct a
+2. Using the [`package_add`](operators/package.md) operator, you construct a
    `config` record explicitly.
 3. Using IaC-style installation, you provide a `config.yaml` with a `config`
    key.
