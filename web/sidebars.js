@@ -24,6 +24,10 @@ const sidebars = {
       id: 'map-data-to-ocsf/README',
     },
     {
+      type: 'doc',
+      id: 'write-a-package',
+    },
+    {
       type: 'html',
       value: '<br><b>Guides<b/>',
     },
