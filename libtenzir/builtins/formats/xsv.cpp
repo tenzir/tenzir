@@ -249,13 +249,10 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
   auto last_finish = std::chrono::steady_clock::now();
   // Parse header.
   auto it = lines.begin();
-  auto header = std::optional<std::string_view>{};
-  if (args.header) {
-    header = *args.header;
-  } else {
-    while (it != lines.end()) {
+  auto header = args.header;
+  if (not header) {
+    for (; it != lines.end(); ++it) {
       auto line = *it;
-      ++it;
       if (not line) {
         co_yield {};
         continue;
@@ -266,13 +263,15 @@ auto parse_impl(generator<std::optional<std::string_view>> lines,
       if (args.allow_comments && line->front() == '#') {
         continue;
       }
-      header = line;
+      header = std::string{*line};
+      ++it;
       break;
-      if (not header) {
-        co_return;
-      }
+    }
+    if (not header) {
+      co_return;
     }
   }
+  TENZIR_ASSERT(header);
   const auto qqstring_value_parser = parsers::qqstr.then([](std::string in) {
     static auto unescaper = [](auto& f, auto l, auto out) {
       if (*f != '\\') { // Skip every non-escape character.
