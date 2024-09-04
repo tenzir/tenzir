@@ -12,6 +12,7 @@
 
 #include "tenzir/detail/debug_writer.hpp"
 #include "tenzir/detail/default_formatter.hpp"
+#include "tenzir/tql2/source_map.hpp"
 
 #include <fmt/format.h>
 
@@ -26,8 +27,19 @@ struct into_location;
 /// future, a `file` field might be added in order to support diagnostics from
 /// multiple files simultaneously.
 struct location {
+  // TODO: Backwards compatibility. If not set, take source from diagnostic
+  // printer.
+  source_ref source;
   size_t begin{};
   size_t end{};
+
+  location(source_ref source, size_t begin, size_t end)
+    : source{source}, begin{begin}, end{end} {
+  }
+
+  location(source_ref source, size_t begin, size_t end)
+    : source{source}, begin{begin}, end{end} {
+  }
 
   /// The "unknown" location, where `begin` and `end` are 0.
   static const location unknown;
