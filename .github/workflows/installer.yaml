@@ -16,7 +16,10 @@ jobs:
       fail-fast: false
       matrix:
         image: [ubuntu-20.04, ubuntu-22.04]
+        tag: ["latest", "main"]
     runs-on: ${{ matrix.image }}
+    env:
+      TENZIR_PACKAGE_TAG: ${{ matrix.tag }}
     steps:
       - name: Run installer
         run: curl https://get.tenzir.app | sh
@@ -36,8 +39,11 @@ jobs:
       fail-fast: false
       matrix:
         image: ["ubuntu:22.04", "ubuntu:23.04", "ubuntu:23.10", "debian:11", "debian:12"]
+        tag: ["latest", "main"]
     container:
       image: ${{ matrix.image }}
+    env:
+      TENZIR_PACKAGE_TAG: ${{ matrix.tag }}
     steps:
       - name: Setup dependencies
         run: apt update && apt install -y curl sudo adduser
@@ -50,8 +56,11 @@ jobs:
       fail-fast: false
       matrix:
         image: ["fedora:37", "fedora:38", "fedora:39", "amazonlinux:2", "amazonlinux:2023"]
+        tag: ["latest", "main"]
     container:
       image: ${{ matrix.image }}
+    env:
+      TENZIR_PACKAGE_TAG: ${{ matrix.tag }}
     steps:
       - name: Setup dependencies
         run: yum install -y tar sudo
