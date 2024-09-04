@@ -11,7 +11,6 @@ setup() {
   export TENZIR_PLUGINS="fluent-bit"
 }
 
-
 @test "invalid fluent-bit plugin" {
   check ! tenzir 'fluent-bit please-do-not-crash'
 }
