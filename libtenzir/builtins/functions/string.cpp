@@ -200,7 +200,7 @@ private:
 class replace : public virtual method_plugin {
 public:
   auto name() const -> std::string override {
-    return "replace";
+    return "tql2.replace";
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -265,7 +265,7 @@ public:
 class slice : public virtual method_plugin {
 public:
   auto name() const -> std::string override {
-    return "slice";
+    return "tql2.slice";
   }
 
   auto make_function(invocation inv, session ctx) const
