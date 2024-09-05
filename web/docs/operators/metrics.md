@@ -534,8 +534,7 @@ metrics
 Get inbound TCP traffic over time:
 
 ```c
-metrics
-| where #schema == "tenzir.metrics.tcp-listen"
+metrics tcp
 | sort timestamp
 | put timestamp, port, handle, reads, bytes
 ```
