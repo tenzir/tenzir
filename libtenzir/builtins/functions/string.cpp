@@ -244,11 +244,6 @@ public:
                 .emit(ctx);
               return series::null(result_type, subject.length());
             }
-            if (not result->type()->Equals(result_arrow_type)) {
-              result = arrow::compute::Cast(result.MoveValueUnsafe(),
-                                            result_arrow_type);
-              TENZIR_ASSERT(result.ok(), result.status().ToString());
-            }
             return series{result_type, result.MoveValueUnsafe().make_array()};
           },
           [&](const arrow::NullArray& array) {
@@ -324,11 +319,6 @@ public:
                 .primary(subject_expr)
                 .emit(ctx);
               return series::null(result_type, subject.length());
-            }
-            if (not result->type()->Equals(result_arrow_type)) {
-              result = arrow::compute::Cast(result.MoveValueUnsafe(),
-                                            result_arrow_type);
-              TENZIR_ASSERT(result.ok(), result.status().ToString());
             }
             return series{result_type, result.MoveValueUnsafe().make_array()};
           },
