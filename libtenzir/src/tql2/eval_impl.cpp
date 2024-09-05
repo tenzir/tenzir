@@ -102,6 +102,9 @@ auto evaluator::eval(const ast::list& x) -> series {
 
 auto evaluator::eval(const ast::field_access& x) -> series {
   auto l = eval(x.left);
+  if (auto null = l.as<null_type>()) {
+    return std::move(*null);
+  }
   auto rec_ty = caf::get_if<record_type>(&l.type);
   if (not rec_ty) {
     diagnostic::warning("cannot access field of non-record type")
@@ -113,7 +116,8 @@ auto evaluator::eval(const ast::field_access& x) -> series {
   auto& s = caf::get<arrow::StructArray>(*l.array);
   for (auto [i, field] : detail::enumerate<int>(rec_ty->fields())) {
     if (field.name == x.name.name) {
-      return series{field.type, s.field(i)};
+      // TODO: Emit a warning if the record itself was `null`?
+      return series{field.type, check(s.GetFlattenedField(i))};
     }
   }
   diagnostic::warning("record does not have this field")
@@ -158,7 +162,13 @@ auto evaluator::eval(const ast::root_field& x) -> series {
 
 auto evaluator::eval(const ast::index_expr& x) -> series {
   auto value = eval(x.expr);
+  if (auto null = value.as<null_type>()) {
+    return std::move(*null);
+  }
   auto index = eval(x.index);
+  if (auto null = index.as<null_type>()) {
+    return std::move(*null);
+  }
   if (auto number = index.as<int64_type>()) {
     auto list = value.as<list_type>();
     if (not list) {
@@ -173,7 +183,19 @@ auto evaluator::eval(const ast::index_expr& x) -> series {
     auto b = value_type.make_arrow_builder(arrow::default_memory_pool());
     check(b->Reserve(list->length()));
     auto out_of_bounds = false;
+    auto list_null = false;
+    auto number_null = false;
     for (auto i = int64_t{0}; i < list->length(); ++i) {
+      if (not list->array->IsValid(i)) {
+        list_null = true;
+        check(b->AppendNull());
+        continue;
+      }
+      if (not number->array->IsValid(i)) {
+        number_null = true;
+        check(b->AppendNull());
+        continue;
+      }
       auto target = number->array->Value(i);
       auto length = list->array->value_length(i);
       if (target < 0) {
@@ -190,6 +212,14 @@ auto evaluator::eval(const ast::index_expr& x) -> series {
     }
     if (out_of_bounds) {
       diagnostic::warning("list index out of bounds")
+        .primary(x.index)
+        .emit(ctx_);
+    }
+    if (list_null) {
+      diagnostic::warning("cannot index into `null`").primary(x.expr).emit(ctx_);
+    }
+    if (number_null) {
+      diagnostic::warning("cannot use `null` as index")
         .primary(x.index)
         .emit(ctx_);
     }
