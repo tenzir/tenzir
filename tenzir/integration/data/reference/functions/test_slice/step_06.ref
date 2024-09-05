@@ -1,0 +1,6 @@
+error: `stop` must be at least 0, but got -1
+ --> <input>:5:25
+  |
+5 |     x = x.slice(0, stop=-1)
+  |                         ^^ 
+  |

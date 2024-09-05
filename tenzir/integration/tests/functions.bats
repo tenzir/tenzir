@@ -66,3 +66,60 @@ EOF
     x = x.replace(":", "", max=-100)
   '
 }
+
+@test "slice" {
+  check tenzir '
+    from {
+      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
+    }
+    x = x.slice(0)
+  '
+  check tenzir '
+    from {
+      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
+    }
+    x = x.slice(1)
+  '
+  check ! tenzir '
+    from {
+      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
+    }
+    x = x.slice(-1)
+  '
+  check tenzir '
+    from {
+      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
+    }
+    x = x.slice(0, stop=0)
+  '
+  check tenzir '
+    from {
+      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
+    }
+    x = x.slice(0, stop=4)
+  '
+  check tenzir '
+    from {
+      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
+    }
+    x = x.slice(0, stop=100)
+  '
+  check ! tenzir '
+    from {
+      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
+    }
+    x = x.slice(0, stop=-1)
+  '
+  check tenzir '
+    from {
+      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
+    }
+    x = x.slice(0, stop=12, step=4)
+  '
+  check ! tenzir '
+    from {
+      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
+    }
+    x = x.slice(0, stop=6, step=-1)
+  '
+}

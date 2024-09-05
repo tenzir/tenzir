@@ -1,0 +1,6 @@
+error: `step` must be greater 0, but got -1
+ --> <input>:5:33
+  |
+5 |     x = x.slice(0, stop=6, step=-1)
+  |                                 ^^ 
+  |

@@ -1,0 +1,6 @@
+error: `start` must be at least 0, but got -1
+ --> <input>:5:17
+  |
+5 |     x = x.slice(-1)
+  |                 ^^ 
+  |
