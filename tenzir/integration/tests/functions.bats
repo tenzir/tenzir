@@ -92,11 +92,11 @@ EOF
     }
     x = x.slice(1)
   '
-  check ! tenzir '
+  check tenzir '
     from {
       x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
     }
-    x = x.slice(-1)
+    x = x.slice(-4)
   '
   check tenzir '
     from {

@@ -280,11 +280,6 @@ public:
           .add("end", end)
           .add("stride", stride)
           .parse(inv, ctx));
-    if (begin.inner < 0) {
-      diagnostic::error("`begin` must be at least 0, but got {}", begin.inner)
-        .primary(begin)
-        .emit(ctx);
-    }
     if (end) {
       if (end->inner < 0) {
         diagnostic::error("`end` must be at least 0, but got {}", end->inner)
