@@ -37,5 +37,32 @@ EOF
 }
 
 @test "has" {
-  check tenzir --tql2 'from { key: { field: 1 }, error: { nofield: 1, msg: { field: "None" } } } | key = key.has("field") | error = error.has("field")'
+  check tenzir 'from { key: { field: 1 }, error: { nofield: 1, msg: { field: "None" } } } | key = key.has("field") | error = error.has("field")'
+}
+
+@test "replace" {
+  check tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace(":", "")
+  '
+  check tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace(":", "", max=0)
+  '
+  check tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace(":", "", max=4)
+  '
+  check tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace(":", "", max=100)
+  '
+  check ! tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace(":", "", max=-1)
+  '
+  check ! tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace(":", "", max=-100)
+  '
 }
