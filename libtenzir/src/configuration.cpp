@@ -15,18 +15,14 @@
 #include "tenzir/config_options.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/detail/add_message_types.hpp"
-#include "tenzir/detail/append.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/env.hpp"
 #include "tenzir/detail/installdirs.hpp"
 #include "tenzir/detail/load_contents.hpp"
-#include "tenzir/detail/overload.hpp"
-#include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/stable_set.hpp"
 #include "tenzir/detail/string.hpp"
-#include "tenzir/detail/system.hpp"
-#include "tenzir/logger.hpp"
-#include "tenzir/plugin.hpp"
+#include "tenzir/diagnostics.hpp"
+#include "tenzir/factory.hpp"
 #include "tenzir/synopsis_factory.hpp"
 #include "tenzir/type.hpp"
 #include "tenzir/value_index_factory.hpp"
@@ -38,14 +34,14 @@
 #include <algorithm>
 #include <cctype>
 #include <filesystem>
+#include <iterator>
 #include <optional>
-#include <unordered_set>
 
 namespace tenzir {
 
 namespace {
 
-std::vector<std::filesystem::path> loaded_config_files_singleton = {};
+std::vector<config_file> loaded_config_files_singleton = {};
 
 template <concrete_type T>
 struct has_extension_type
@@ -58,187 +54,203 @@ struct has_extension_type
 /// 1. A '_' translates into '-'
 /// 2. A "__" translates into the record separator '.'
 /// @pre `!prefix.empty()`
-std::optional<std::string>
-to_config_key(std::string_view key, std::string_view prefix) {
+auto to_config_key(std::string_view key, std::string_view prefix)
+  -> std::optional<std::string> {
   TENZIR_ASSERT(!prefix.empty());
   // PREFIX_X is the shortest allowed key.
-  if (prefix.size() + 2 > key.size())
+  if (prefix.size() + 2 > key.size()) {
     return std::nullopt;
-  if (!key.starts_with(prefix) || key[prefix.size()] != '_')
+  }
+  if (!key.starts_with(prefix) || key[prefix.size()] != '_') {
     return std::nullopt;
+  }
   auto suffix = key.substr(prefix.size() + 1);
   // From here on, "__" is the record separator and '_' translates into '-'.
   auto xs = detail::to_strings(detail::split(suffix, "__"));
-  for (auto& x : xs)
-    for (auto& c : x)
-      c = (c == '_') ? '-' : tolower(c);
+  for (auto& x : xs) {
+    for (auto& c : x) {
+      c = (c == '_')
+            ? '-'
+            : static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    }
+  }
   return detail::join(xs, ".");
 }
 
-caf::expected<caf::config_value> to_config_value(std::string_view value) {
+auto to_config_value(std::string_view value)
+  -> caf::expected<caf::config_value> {
   // Lists of strings can show up as `foo,bar,baz`.
   auto xs = detail::split_escaped(value, ",", "\\");
-  if (xs.size() == 1)
+  if (xs.size() == 1) {
     return caf::config_value::parse(value); // no list
+  }
   std::vector<caf::config_value> result;
-  for (const auto& x : xs)
-    if (auto cfg_val = to_config_value(x))
+  for (const auto& x : xs) {
+    if (auto cfg_val = to_config_value(x)) {
       result.push_back(*std::move(cfg_val));
-    else
+    } else {
       return cfg_val.error();
+    }
+  }
   return caf::config_value{std::move(result)};
 }
 
-caf::expected<std::vector<std::filesystem::path>>
-collect_config_files(std::vector<std::filesystem::path> dirs,
-                     std::vector<std::string> cli_configs) {
-  std::vector<std::filesystem::path> result;
+auto check_yaml_file(const std::filesystem::path& dir,
+                     std::string_view basename)
+  -> caf::expected<std::optional<std::filesystem::path>> {
+  auto err = std::error_code{};
+  const auto path_yaml = dir / fmt::format("{}.yaml", basename);
+  const auto yaml_exists = std::filesystem::exists(path_yaml, err);
+  if (err) {
+    return diagnostic::error("{}", err.message())
+      .note("failed to check if `{}` exists", path_yaml)
+      .to_error();
+  }
+  const auto path_yml = dir / fmt::format("{}.yml", basename);
+  const auto yml_exists = std::filesystem::exists(path_yml, err);
+  if (err) {
+    return diagnostic::error("{}", err.message())
+      .note("failed to check if `{}` exists", path_yaml)
+      .to_error();
+  }
+  if (yaml_exists and yml_exists) {
+    return diagnostic::error("both `{}` and `{}` exist", path_yaml, path_yml)
+      .to_error();
+  }
+  if (yaml_exists) {
+    return path_yaml;
+  }
+  if (yml_exists) {
+    return path_yml;
+  }
+  return std::nullopt;
+};
+
+auto collect_config_files(const std::vector<std::filesystem::path>& dirs,
+                          std::vector<std::string> cli_configs)
+  -> caf::expected<std::vector<config_file>> {
+  auto result = std::vector<config_file>{};
   // First, go through all config file directories and gather config files
   // there. We populate the member variable `config_files` instead of
   // `config_file_path` in the base class so that we can support multiple
   // configuration files.
-  for (auto&& dir : dirs) {
-    // Support both tenzir.* and vast.* stems, as well as *.yaml and *.yml
-    // extensions
-    auto select
-      = [&](std::string_view name) -> caf::expected<std::filesystem::path> {
-      auto base_yaml = fmt::format("{}.yaml", name);
-      auto base_yml = fmt::format("{}.yml", name);
-      auto conf_yaml = dir / base_yaml;
-      auto conf_yml = dir / base_yml;
-      std::error_code err{};
-      const auto exists_conf_yaml = std::filesystem::exists(conf_yaml, err);
-      if (err)
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("failed to check if {} file "
-                                           "exists in {}: {}",
-                                           base_yaml, dir, err.message()));
-      const auto exists_conf_yml = std::filesystem::exists(conf_yml, err);
-      if (err)
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("failed to check if {} file "
-                                           "exists in {}: {}",
-                                           base_yml, dir, err.message()));
-      // We cannot decide which one to pick if we have two, so bail out.
-      if (exists_conf_yaml && exists_conf_yml)
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("detected both '{}' and "
-                                           "'{}' files in {}",
-                                           base_yaml, base_yml, dir));
-      if (exists_conf_yaml)
-        return conf_yaml;
-      else if (exists_conf_yml)
-        return conf_yml;
-      return ec::no_error;
-    };
-    auto tenzir_config = select("tenzir");
-    if (tenzir_config) {
-      result.emplace_back(std::move(*tenzir_config));
-      continue;
-    }
-    if (tenzir_config.error() != ec::no_error)
+  for (const auto& dir : dirs) {
+    auto tenzir_config = check_yaml_file(dir, "tenzir");
+    if (not tenzir_config) {
       return tenzir_config.error();
-    auto vast_config = select("vast");
-    if (vast_config) {
-      result.emplace_back(std::move(*vast_config));
+    }
+    if (*tenzir_config) {
+      result.push_back(config_file{
+        .path = std::move(**tenzir_config),
+        .plugin = {},
+      });
+    }
+    // Iterate over the plugin subdirectory to check plugin-sepcific config
+    // directories.
+    auto err = std::error_code{};
+    const auto plugin_dir = dir / "plugin";
+    const auto plugin_dir_exists = std::filesystem::exists(plugin_dir, err);
+    if (err) {
+      return diagnostic::error("{}", err.message())
+        .note("failed to check if `{}` exists", plugin_dir)
+        .to_error();
+    }
+    if (not plugin_dir_exists) {
       continue;
     }
-    if (vast_config.error() != ec::no_error)
-      return vast_config.error();
+    auto plugin_dir_iter = std::filesystem::directory_iterator{plugin_dir, err};
+    if (err) {
+      return diagnostic::error("{}", err.message())
+        .note("failed to list directory `{}`", plugin_dir)
+        .to_error();
+    }
+    auto added_plugin_configs_per_dir = std::unordered_set<std::string>{};
+    for (const auto& file : plugin_dir_iter) {
+      const auto& path = file.path();
+      const auto& plugin = path.stem().string();
+      if (path.extension() != ".yaml" and path.extension() != ".yml") {
+        continue;
+      }
+      const auto [_, inserted] = added_plugin_configs_per_dir.insert(plugin);
+      if (not inserted) {
+        return diagnostic::error("multiple config files for plugin `{}` in "
+                                 "`{}`",
+                                 plugin, plugin_dir)
+          .to_error();
+      }
+      result.push_back(config_file{
+        .path = path,
+        .plugin = plugin,
+      });
+    }
   }
   // Second, consider command line and environment overrides. But only check
   // the environment if we don't have a config on the command line.
   if (cli_configs.empty()) {
-    if (auto file = detail::getenv("TENZIR_CONFIG"))
+    if (auto file = detail::getenv("TENZIR_CONFIG")) {
       cli_configs.emplace_back(*file);
-    else if (auto file = detail::getenv("VAST_CONFIG"))
-      cli_configs.emplace_back(*file);
+    }
   }
   for (const auto& file : cli_configs) {
-    auto config_file = std::filesystem::path{file};
-    std::error_code err{};
-    if (std::filesystem::exists(config_file, err))
-      result.push_back(std::move(config_file));
-    else if (err)
-      return caf::make_error(ec::invalid_configuration,
-                             fmt::format("cannot find configuration file {}: "
-                                         "{}",
-                                         config_file, err.message()));
-    else
-      return caf::make_error(ec::invalid_configuration,
-                             fmt::format("cannot find configuration file {}",
-                                         config_file));
+    result.push_back({
+      .path = file,
+      .plugin = {},
+    });
   }
   return result;
 }
 
-caf::expected<record>
-load_config_files(std::vector<std::filesystem::path> config_files) {
+auto load_config_files(std::vector<config_file> config_files)
+  -> caf::expected<record> {
   // If a config file is specified multiple times, keep only the latest mention
   // of it. We do this the naive O(n^2) way because there usually aren't many
   // config files and this is never called in a hot loop, and we need this to be
   // order-preserving with removing the _earlier_ instances of duplicates.
   {
-    auto unique_config_files = detail::stable_set<std::filesystem::path>{};
-    std::for_each(std::make_move_iterator(config_files.rbegin()),
-                  std::make_move_iterator(config_files.rend()),
-                  [&](std::filesystem::path&& config_file) noexcept {
-                    unique_config_files.insert(std::move(config_file));
-                  });
+    auto unique_config_files = detail::stable_set<config_file>{};
+    std::ranges::move(config_files, std::inserter(unique_config_files,
+                                                  unique_config_files.end()));
     config_files.clear();
-    std::copy(std::make_move_iterator(unique_config_files.rbegin()),
-              std::make_move_iterator(unique_config_files.rend()),
-              std::back_inserter(config_files));
+    std::ranges::move(unique_config_files, std::back_inserter(config_files));
   }
-  loaded_config_files_singleton.clear();
+  TENZIR_ASSERT(loaded_config_files_singleton.empty(),
+                "config files may be loaded at most once");
   // Parse and merge all configuration files.
-  record merged_config;
+  auto merged_config = record{};
   for (const auto& config : config_files) {
-    std::error_code err{};
-    if (std::filesystem::exists(config, err)) {
-      auto contents = detail::load_contents(config);
-      if (!contents)
+    auto err = std::error_code{};
+    if (std::filesystem::exists(config.path, err)) {
+      auto contents = detail::load_contents(config.path);
+      if (not contents) {
         return caf::make_error(ec::parse_error,
                                fmt::format("failed to read config file {}: {}",
-                                           config, contents.error()));
+                                           config.path, contents.error()));
+      }
       auto yaml = from_yaml(*contents);
-      if (!yaml)
+      if (not yaml) {
         return caf::make_error(ec::parse_error,
                                fmt::format("failed to read config file {}: {}",
-                                           config, yaml.error()));
+                                           config.path, yaml.error()));
+      }
       // Skip empty config files.
-      if (caf::holds_alternative<caf::none_t>(*yaml))
+      if (caf::holds_alternative<caf::none_t>(*yaml)) {
         continue;
+      }
       auto* rec = caf::get_if<record>(&*yaml);
-      if (!rec)
+      if (not rec) {
         return caf::make_error(ec::parse_error,
                                fmt::format("failed to read config file {}: not "
                                            "a map of key-value pairs",
-                                           config));
-      // Rewrite the top-level key 'vast' to 'tenzir' for compatibility.
-      auto tenzir_section
-        = std::find_if(rec->begin(), rec->end(), [&](const auto& x) {
-            return x.first == "tenzir";
-          });
-      auto vast_section
-        = std::find_if(rec->begin(), rec->end(), [&](const auto& x) {
-            return x.first == "vast";
-          });
-      if (vast_section != rec->end()) {
-        fmt::print(stderr,
-                   "In {}: The 'vast' config section name has been deprecated "
-                   "in favor of 'tenzir'\n",
-                   config);
+                                           config.path));
       }
-      if (vast_section != rec->end()) {
-        if (tenzir_section != rec->end()) {
-          return caf::make_error(
-            ec::parse_error,
-            fmt::format("failed to read config file {}: using 'tenzir' and "
-                        "'vast' sections in the same file is not allowed.",
-                        config));
-        }
-        vast_section->first = "tenzir";
+      // If this is a plugin config, move the contents accordingly.
+      if (config.plugin) {
+        *yaml = record{
+          {"plugins",
+           record{
+             {*config.plugin, std::move(*yaml)},
+           }},
+        };
       }
       merge(*rec, merged_config, policy::merge_lists::yes);
       loaded_config_files_singleton.push_back(config);
@@ -248,44 +260,33 @@ load_config_files(std::vector<std::filesystem::path> config_files) {
 }
 
 /// Merges Tenzir environment variables into a configuration.
-caf::error merge_environment(record& config) {
+auto merge_environment(record& config) -> caf::error {
   for (const auto& [key, value] : detail::environment()) {
     if (!value.empty()) {
-      auto compat_to_config_key
-        = [](const auto& key) -> std::optional<std::string> {
-        if (auto result = to_config_key(key, "TENZIR"))
-          return result;
-        auto result = to_config_key(key, "VAST");
-        if (result) {
-          auto tenzir_key
-            = fmt::format("TENZIR{}", std::string_view{key}.substr(4));
-          if (detail::getenv(tenzir_key)) {
-            fmt::print(stderr, "ignoring {} in favor of {}\n", key, tenzir_key);
-            return {};
-          }
-        }
-        return result;
-      };
-      if (auto config_key = compat_to_config_key(key)) {
+      if (auto config_key = to_config_key(key, "TENZIR")) {
         if (!config_key->starts_with("caf.")
-            && !config_key->starts_with("plugins."))
+            && !config_key->starts_with("plugins.")) {
           config_key->insert(0, "tenzir.");
+        }
         // These environment variables have been manually checked already.
         // Inserting them into the config would ignore higher-precedence values
         // from the command line.
-        if (*config_key == "tenzir.bare-mode" || *config_key == "tenzir.config")
+        if (*config_key == "tenzir.bare-mode"
+            || *config_key == "tenzir.config") {
           continue;
+        }
         // Try first as tenzir::data, which is richer.
         if (auto x = to<data>(value)) {
           config[*config_key] = std::move(*x);
         } else if (auto config_value = to_config_value(value)) {
-          if (auto x = to<data>(*config_value))
+          if (auto x = to<data>(*config_value)) {
             config[*config_key] = std::move(*x);
-          else
+          } else {
             return caf::make_error(
               ec::parse_error, fmt::format("could not convert environment "
                                            "variable {}={} to Tenzir value: {}",
                                            key, value, x.error()));
+          }
         } else {
           config[*config_key] = std::string{value};
         }
@@ -295,28 +296,28 @@ caf::error merge_environment(record& config) {
   return caf::none;
 }
 
-caf::expected<caf::settings> to_settings(record config) {
+auto to_settings(record config) -> caf::expected<caf::settings> {
   // Pre-process our configuration so that it can be properly parsed later.
   // Erase all null values because a caf::config_value has no such notion.
   for (auto i = config.begin(); i != config.end();) {
-    if (caf::holds_alternative<caf::none_t>(i->second))
+    if (caf::holds_alternative<caf::none_t>(i->second)) {
       i = config.erase(i);
-    else
+    } else {
       ++i;
+    }
   }
   return to<caf::settings>(config);
 }
 
 auto config_dirs(bool bare_mode) -> std::vector<std::filesystem::path> {
-  if (bare_mode)
+  if (bare_mode) {
     return {};
+  }
   auto result = std::vector<std::filesystem::path>{};
   if (auto xdg_config_home = detail::getenv("XDG_CONFIG_HOME")) {
     result.push_back(std::filesystem::path{*xdg_config_home} / "tenzir");
-    result.push_back(std::filesystem::path{*xdg_config_home} / "vast");
   } else if (auto home = detail::getenv("HOME")) {
     result.push_back(std::filesystem::path{*home} / ".config" / "tenzir");
-    result.push_back(std::filesystem::path{*home} / ".config" / "vast");
   }
   result.push_back(detail::install_configdir());
   return result;
@@ -324,9 +325,9 @@ auto config_dirs(bool bare_mode) -> std::vector<std::filesystem::path> {
 
 } // namespace
 
-std::vector<std::filesystem::path>
-config_dirs(const caf::actor_system_config& config) {
-  return config_dirs(caf::get_or(config.content, "tenzir.bare-mode", false));
+auto config_dirs(const caf::actor_system_config& cfg)
+  -> std::vector<std::filesystem::path> {
+  return config_dirs(caf::get_or(cfg.content, "tenzir.bare-mode", false));
 }
 
 auto config_dirs(const record& cfg) -> std::vector<std::filesystem::path> {
@@ -334,16 +335,16 @@ auto config_dirs(const record& cfg) -> std::vector<std::filesystem::path> {
   return config_dirs(get_or(cfg, "tenzir.bare-mode", fallback));
 }
 
-const std::vector<std::filesystem::path>& loaded_config_files() {
+auto loaded_config_files() -> const std::vector<config_file>& {
   return loaded_config_files_singleton;
 }
 
-caf::expected<duration>
-get_or_duration(const caf::settings& options, std::string_view key,
-                duration fallback) {
-  if (auto duration_arg = caf::get_if<std::string>(&options, key)) {
-    if (auto duration = to<tenzir::duration>(*duration_arg))
+auto get_or_duration(const caf::settings& options, std::string_view key,
+                     duration fallback) -> caf::expected<duration> {
+  if (const auto* duration_arg = caf::get_if<std::string>(&options, key)) {
+    if (auto duration = to<tenzir::duration>(*duration_arg)) {
       return *duration;
+    }
     return caf::make_error(ec::parse_error, fmt::format("cannot parse option "
                                                         "'{}' with value '{}' "
                                                         "as duration",
@@ -368,7 +369,7 @@ configuration::configuration() {
     caf::detail::tl_filter_t<concrete_types, has_extension_type>{});
 }
 
-caf::error configuration::parse(int argc, char** argv) {
+auto configuration::parse(int argc, char** argv) -> caf::error {
   // The main objective of this function is to parse the command line and put
   // it into the actor_system_config instance (`content`), which components
   // throughout Tenzir query to find out the application settings. This process
@@ -389,6 +390,7 @@ caf::error configuration::parse(int argc, char** argv) {
   // 4. Defaults
   TENZIR_ASSERT(argc > 0);
   TENZIR_ASSERT(argv != nullptr);
+  // NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-pointer-arithmetic)
   command_line.assign(argv + 1, argv + argc);
   // Translate -qqq to -vvv to the corresponding log levels. Note that the lhs
   // of the replacements may not be a valid option for any command.
@@ -400,10 +402,13 @@ caf::error configuration::parse(int argc, char** argv) {
     {"-vv", "--console-verbosity=debug"},
     {"-vvv", "--console-verbosity=trace"},
   };
-  for (auto& option : command_line)
-    for (const auto& [old, new_] : replacements)
-      if (option == old)
+  for (auto& option : command_line) {
+    for (const auto& [old, new_] : replacements) {
+      if (option == old) {
         option = new_;
+      }
+    }
+  }
   // Remove CAF options from the command line; we'll parse them at the very
   // end.
   auto is_tenzir_opt = [](const auto& x) {
@@ -425,25 +430,27 @@ caf::error configuration::parse(int argc, char** argv) {
   } else if (auto tenzir_bare_mode = detail::getenv("TENZIR_BARE_MODE")) {
     caf::put(content, "tenzir.bare-mode",
              not falsy_env_values.contains(*tenzir_bare_mode));
-  } else if (auto vast_bare_mode = detail::getenv("VAST_BARE_MODE")) {
-    caf::put(content, "tenzir.bare-mode",
-             not falsy_env_values.contains(*vast_bare_mode));
   }
   // Gather and parse all to-be-considered configuration files.
   std::vector<std::string> cli_configs;
-  for (auto& arg : command_line)
-    if (arg.starts_with("--config="))
+  for (auto& arg : command_line) {
+    if (arg.starts_with("--config=")) {
       cli_configs.push_back(arg.substr(9));
-  if (auto configs = collect_config_files(config_dirs(*this), cli_configs))
+    }
+  }
+  if (auto configs = collect_config_files(config_dirs(*this), cli_configs)) {
     config_files = std::move(*configs);
-  else
+  } else {
     return configs.error();
+  }
   auto config = load_config_files(config_files);
-  if (!config)
+  if (!config) {
     return config.error();
+  }
   *config = flatten(*config);
-  if (auto err = merge_environment(*config))
+  if (auto err = merge_environment(*config)) {
     return err;
+  }
   // Fallback handling for system default paths that may be provided by the
   // runtime system and should win over the build-time defaults but loose if set
   // via any other method.
@@ -472,8 +479,9 @@ caf::error configuration::parse(int argc, char** argv) {
       = [&](std::string_view key,
             auto... suffix) -> std::optional<std::filesystem::path> {
       auto x = detail::getenv(key);
-      if (!x)
+      if (!x) {
         return std::nullopt;
+      }
       auto path = (std::filesystem::path{*x} / ... / suffix);
       std::error_code ec;
       if (std::filesystem::exists(path, ec)) {
@@ -508,19 +516,22 @@ caf::error configuration::parse(int argc, char** argv) {
     } else {
       auto ec = std::error_code{};
       auto tmp = std::filesystem::temp_directory_path(ec);
-      if (ec)
+      if (ec) {
         return caf::make_error(ec::filesystem_error,
                                "failed to determine temp_directory_path");
+      }
       value = tmp / "tenzir" / "cache" / fmt::format("{:}", getuid());
     }
   }
   // From here on, we go into CAF land with the goal to put the configuration
   // into the members of this actor_system_config instance.
   auto settings = to_settings(std::move(*config));
-  if (!settings)
+  if (!settings) {
     return settings.error();
-  if (auto err = embed_config(*settings))
+  }
+  if (auto err = embed_config(*settings)) {
     return err;
+  }
   // Work around CAF quirk where options in the `openssl` group have no effect
   // if they are not seen by the native option or config file parsers.
   openssl_certificate = caf::get_or(content, "caf.openssl.certificate", "");
@@ -546,26 +557,16 @@ caf::error configuration::parse(int argc, char** argv) {
   // command-line options. We also get escaping for free this way.
   if (auto tenzir_plugins = detail::getenv("TENZIR_PLUGINS")) {
     plugin_args.push_back(fmt::format("--plugins={}", *tenzir_plugins));
-  } else if (auto vast_plugin = detail::getenv("VAST_PLUGINS")) {
-    plugin_args.push_back(fmt::format("--plugins={}", *vast_plugin));
   }
   if (auto tenzir_disable_plugins = detail::getenv("TENZIR_DISABLE_PLUGINS")) {
     plugin_args.push_back(
       fmt::format("--disable-plugins={}", *tenzir_disable_plugins));
-  } else if (auto vast_disable_plugins
-             = detail::getenv("VAST_DISABLE_PLUGINS")) {
-    plugin_args.push_back(
-      fmt::format("--disable-plugins={}", *vast_disable_plugins));
   }
   if (auto tenzir_plugin_dirs = detail::getenv("TENZIR_PLUGIN_DIRS")) {
     plugin_args.push_back(fmt::format("--plugin-dirs={}", *tenzir_plugin_dirs));
-  } else if (auto vast_plugin_dirs = detail::getenv("VAST_PLUGIN_DIRS")) {
-    plugin_args.push_back(fmt::format("--plugin-dirs={}", *vast_plugin_dirs));
   }
   if (auto tenzir_schema_dirs = detail::getenv("TENZIR_SCHEMA_DIRS")) {
     plugin_args.push_back(fmt::format("--schema-dirs={}", *tenzir_schema_dirs));
-  } else if (auto vast_schema_dirs = detail::getenv("VAST_SCHEMA_DIRS")) {
-    plugin_args.push_back(fmt::format("--schema-dirs={}", *vast_schema_dirs));
   }
   // Package dirs don't need to be parsed early, but we still want to have
   // the same command-line parsing logic so that a single string is
@@ -600,13 +601,14 @@ caf::error configuration::parse(int argc, char** argv) {
     = !openssl_certificate.empty() || !openssl_key.empty()
       || !openssl_passphrase.empty() || !openssl_capath.empty()
       || !openssl_cafile.empty();
-  if (use_encryption)
+  if (use_encryption) {
     load<caf::openssl::manager>();
+  }
   return result;
 }
 
-caf::error configuration::embed_config(const caf::settings& settings) {
-  for (auto& [key, value] : settings) {
+auto configuration::embed_config(const caf::settings& settings) -> caf::error {
+  for (const auto& [key, value] : settings) {
     // The configuration must have been fully flattened because we cannot
     // mangle dictionaries in here.
     TENZIR_ASSERT(
@@ -616,10 +618,10 @@ caf::error configuration::embed_config(const caf::settings& settings) {
     // hierarchy. The passed in config (file and environment) must abide to it.
     if (const auto* option = custom_options_.qualified_name_lookup(key)) {
       auto val = value;
-      if (auto err = option->sync(val))
+      if (auto err = option->sync(val)) {
         return err;
-      else
-        put(content, key, std::move(val));
+      }
+      put(content, key, std::move(val));
     } else {
       // If the option is not relevant to CAF's custom options, we just store
       // the value directly in the content.
