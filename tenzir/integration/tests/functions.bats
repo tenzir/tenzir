@@ -102,36 +102,36 @@ EOF
     from {
       x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
     }
-    x = x.slice(0, stop=0)
+    x = x.slice(0, end=0)
   '
   check tenzir '
     from {
       x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
     }
-    x = x.slice(0, stop=4)
+    x = x.slice(0, end=4)
   '
   check tenzir '
     from {
       x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
     }
-    x = x.slice(0, stop=100)
+    x = x.slice(0, end=100)
   '
   check ! tenzir '
     from {
       x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
     }
-    x = x.slice(0, stop=-1)
+    x = x.slice(0, end=-1)
   '
   check tenzir '
     from {
       x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
     }
-    x = x.slice(0, stop=12, step=4)
+    x = x.slice(0, end=12, stride=4)
   '
   check ! tenzir '
     from {
       x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
     }
-    x = x.slice(0, stop=6, step=-1)
+    x = x.slice(0, end=6, stride=-1)
   '
 }

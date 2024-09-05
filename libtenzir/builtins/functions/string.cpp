@@ -271,37 +271,37 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
-    auto start = located<int64_t>{};
-    auto stop = std::optional<located<int64_t>>{};
-    auto step = std::optional<located<int64_t>>{};
+    auto begin = located<int64_t>{};
+    auto end = std::optional<located<int64_t>>{};
+    auto stride = std::optional<located<int64_t>>{};
     TRY(argument_parser2::method(name())
           .add(subject_expr, "<string>")
-          .add(start, "<start>")
-          .add("stop", stop)
-          .add("step", step)
+          .add(begin, "<begin>")
+          .add("end", end)
+          .add("stride", stride)
           .parse(inv, ctx));
-    if (start.inner < 0) {
-      diagnostic::error("`start` must be at least 0, but got {}", start.inner)
-        .primary(start)
+    if (begin.inner < 0) {
+      diagnostic::error("`begin` must be at least 0, but got {}", begin.inner)
+        .primary(begin)
         .emit(ctx);
     }
-    if (stop) {
-      if (stop->inner < 0) {
-        diagnostic::error("`stop` must be at least 0, but got {}", stop->inner)
-          .primary(*stop)
+    if (end) {
+      if (end->inner < 0) {
+        diagnostic::error("`end` must be at least 0, but got {}", end->inner)
+          .primary(*end)
           .emit(ctx);
       }
     }
-    if (step) {
-      if (step->inner <= 0) {
-        diagnostic::error("`step` must be greater 0, but got {}", step->inner)
-          .primary(*step)
+    if (stride) {
+      if (stride->inner <= 0) {
+        diagnostic::error("`stride` must be greater 0, but got {}", stride->inner)
+          .primary(*stride)
           .emit(ctx);
       }
     }
     return function_use::make(
-      [this, subject_expr = std::move(subject_expr), start = start, stop = stop,
-       step = step](evaluator eval, session ctx) -> series {
+      [this, subject_expr = std::move(subject_expr), begin = begin, end = end,
+       stride = stride](evaluator eval, session ctx) -> series {
         auto result_type = string_type{};
         auto result_arrow_type
           = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
@@ -309,9 +309,9 @@ public:
         auto f = detail::overload{
           [&](const arrow::StringArray& array) {
             auto options = arrow::compute::SliceOptions(
-              start.inner,
-              stop ? stop->inner : std::numeric_limits<int64_t>::max(),
-              step ? step->inner : 1);
+              begin.inner,
+              end ? end->inner : std::numeric_limits<int64_t>::max(),
+              stride ? stride->inner : 1);
             auto result = arrow::compute::CallFunction("utf8_slice_codeunits",
                                                        {array}, &options);
             if (not result.ok()) {
