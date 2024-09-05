@@ -315,7 +315,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
   }
   auto plugins_record = record{};
   if (global_config.contains("plugins")) {
-    if (auto plugins_entry
+    if (auto* plugins_entry
         = caf::get_if<record>(&global_config.at("plugins"))) {
       plugins_record = std::move(*plugins_entry);
     }
@@ -324,7 +324,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
                global_config.size());
   for (auto& plugin : get_mutable()) {
     auto merged_config = record{};
-    // First, try to read the configurations from the merged Tenzir configuration.
+    // Try to read the configurations from the merged Tenzir configuration.
     if (plugins_record.contains(plugin->name())) {
       if (auto* plugins_entry
           = caf::get_if<record>(&plugins_record.at(plugin->name()))) {
@@ -336,50 +336,7 @@ caf::error initialize(caf::actor_system_config& cfg) {
                                            plugin->name()));
       }
     }
-    // Second, try to read the configuration from the plugin-specific
-    // configuration files at <config-dir>/plugin/<plugin-name>.yaml.
-    for (auto&& config_dir : config_dirs(cfg)) {
-      const auto yaml_path
-        = config_dir / "plugin" / fmt::format("{}.yaml", plugin->name());
-      const auto yml_path
-        = config_dir / "plugin" / fmt::format("{}.yml", plugin->name());
-      auto err = std::error_code{};
-      const auto yaml_path_exists = std::filesystem::exists(yaml_path, err);
-      err.clear();
-      const auto yml_path_exists = std::filesystem::exists(yml_path, err);
-      if (!yaml_path_exists && !yml_path_exists) {
-        continue;
-      }
-      if (yaml_path_exists && yml_path_exists) {
-        return caf::make_error(
-          ec::invalid_configuration,
-          fmt::format("detected configuration files for the "
-                      "{} plugin at "
-                      "conflicting paths {} and {}",
-                      plugin->name(), yaml_path, yml_path));
-      }
-      const auto& path = yaml_path_exists ? yaml_path : yml_path;
-      if (auto opts = load_yaml(path)) {
-        // Skip empty config files.
-        if (caf::holds_alternative<caf::none_t>(*opts)) {
-          continue;
-        }
-        if (const auto& opts_data = caf::get_if<record>(&*opts)) {
-          merge(*opts_data, merged_config, policy::merge_lists::yes);
-          TENZIR_VERBOSE("loaded plugin configuration file: {}", path);
-          loaded_config_files_singleton.push_back(path);
-        } else {
-          return caf::make_error(ec::invalid_configuration,
-                                 fmt::format("detected invalid plugin "
-                                             "configuration file for the {} "
-                                             "plugin at {}",
-                                             plugin->name(), path));
-        }
-      } else {
-        return std::move(opts.error());
-      }
-    }
-    // Third, initialize the plugin with the merged configuration.
+    // Initialize the plugin with the merged configuration.
     if (plugin.type() != plugin_ptr::type::builtin) {
       TENZIR_VERBOSE("initializing the {} plugin with options: {}",
                      plugin->name(), merged_config);
@@ -462,9 +419,8 @@ store_plugin::make_store(filesystem_actor fs,
   std::error_code err{};
   const auto abs_dir = std::filesystem::absolute(db_dir, err);
   auto path = abs_dir / "archive" / fmt::format("{}.{}", id, name());
-  return fs->home_system().spawn<caf::lazy_init>(default_passive_store,
-                                                 std::move(*store), fs,
-                                                 std::move(path), name());
+  return fs->home_system().spawn<caf::lazy_init>(
+    default_passive_store, std::move(*store), fs, std::move(path), name());
 }
 
 // -- context plugin -----------------------------------------------------------
