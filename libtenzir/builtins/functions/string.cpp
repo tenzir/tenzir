@@ -212,7 +212,7 @@ public:
     TRY(argument_parser2::method(name())
           .add(subject_expr, "<string>")
           .add(pattern, "<pattern>")
-          .add(replacement, "<pattern>")
+          .add(replacement, "<replacement>")
           .add("max", max_replacements)
           .parse(inv, ctx));
     if (max_replacements) {
