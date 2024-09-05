@@ -1,6 +1,1 @@
-error: `end` must be at least 0, but got -1
- --> <input>:5:20
-  |
-5 |     x = x.slice(0, -1)
-  |                    ^^ 
-  |
+{"x": "850fd2e19502ab0f5ac3c858f167217d0b4191e"}

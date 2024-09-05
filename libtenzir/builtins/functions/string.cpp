@@ -271,22 +271,15 @@ public:
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
-    auto begin = located<int64_t>{};
+    auto begin = std::optional<located<int64_t>>{};
     auto end = std::optional<located<int64_t>>{};
     auto stride = std::optional<located<int64_t>>{};
     TRY(argument_parser2::method(name())
           .add(subject_expr, "<string>")
-          .add(begin, "<begin>")
-          .add(end, "<end>")
+          .add("begin", begin)
+          .add("end", end)
           .add("stride", stride)
           .parse(inv, ctx));
-    if (end) {
-      if (end->inner < 0) {
-        diagnostic::error("`end` must be at least 0, but got {}", end->inner)
-          .primary(*end)
-          .emit(ctx);
-      }
-    }
     if (stride) {
       if (stride->inner <= 0) {
         diagnostic::error("`stride` must be greater 0, but got {}", stride->inner)
@@ -304,7 +297,7 @@ public:
         auto f = detail::overload{
           [&](const arrow::StringArray& array) {
             auto options = arrow::compute::SliceOptions(
-              begin.inner,
+              begin ? begin->inner : 0,
               end ? end->inner : std::numeric_limits<int64_t>::max(),
               stride ? stride->inner : 1);
             auto result = arrow::compute::CallFunction("utf8_slice_codeunits",

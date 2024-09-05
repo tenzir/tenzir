@@ -84,54 +84,54 @@ EOF
     from {
       x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
     }
-    x = x.slice(0)
+    x = x.slice(begin=0)
   '
   check tenzir '
     from {
       x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
     }
-    x = x.slice(1)
+    x = x.slice(begin=1)
   '
   check tenzir '
     from {
       x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
     }
-    x = x.slice(-4)
+    x = x.slice(begin=-4)
   '
   check tenzir '
     from {
       x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
     }
-    x = x.slice(0, 0)
+    x = x.slice(end=0)
   '
   check tenzir '
     from {
       x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
     }
-    x = x.slice(0, 4)
+    x = x.slice(end=4)
   '
   check tenzir '
     from {
       x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
     }
-    x = x.slice(0, 100)
+    x = x.slice(end=100)
+  '
+  check tenzir '
+    from {
+      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
+    }
+    x = x.slice(end=-1)
+  '
+  check tenzir '
+    from {
+      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
+    }
+    x = x.slice(end=12, stride=4)
   '
   check ! tenzir '
     from {
       x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
     }
-    x = x.slice(0, -1)
-  '
-  check tenzir '
-    from {
-      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
-    }
-    x = x.slice(0, 12, stride=4)
-  '
-  check ! tenzir '
-    from {
-      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
-    }
-    x = x.slice(0, 6, stride=-1)
+    x = x.slice(end=6, stride=-1)
   '
 }
