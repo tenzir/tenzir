@@ -12,6 +12,8 @@
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
+#include <arrow/compute/api.h>
+
 namespace tenzir::plugins::time_ {
 
 namespace {
@@ -188,6 +190,112 @@ public:
   }
 };
 
+class strftime : public virtual method_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.strftime";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto subject_expr = ast::expression{};
+    auto format = located<std::string>{};
+    auto locale = std::optional<located<std::string>>{};
+    TRY(argument_parser2::method(name())
+          .add(subject_expr, "<time>")
+          .add(format, "<format>")
+          .add("locale", locale)
+          .parse(inv, ctx));
+    return function_use::make(
+      [this, subject_expr = std::move(subject_expr), format = std::move(format),
+       locale = std::move(locale)](evaluator eval, session ctx) -> series {
+        auto result_type = string_type{};
+        auto result_arrow_type
+          = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
+        auto subject = eval(subject_expr);
+        auto f = detail::overload{
+          [&](const arrow::TimestampArray& array) {
+            auto options = arrow::compute::StrftimeOptions(
+              format.inner,
+              locale ? locale->inner : "C");
+            auto result = arrow::compute::CallFunction("strftime",
+                                                       {array}, &options);
+            if (not result.ok()) {
+              diagnostic::warning("{}", result.status().ToString())
+                .primary(subject_expr)
+                .emit(ctx);
+              return series::null(result_type, subject.length());
+            }
+            return series{result_type, result.MoveValueUnsafe().make_array()};
+          },
+          [&](const arrow::NullArray& array) {
+            return series::null(result_type, array.length());
+          },
+          [&](const auto&) {
+            diagnostic::warning("`{}` expected `time`, but got `{}`", name(),
+                                subject.type.kind())
+              .primary(subject_expr)
+              .emit(ctx);
+            return series::null(result_type, subject.length());
+          },
+        };
+        return caf::visit(f, *subject.array);
+      });
+  }
+};
+
+class strptime : public virtual method_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.strptime";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto subject_expr = ast::expression{};
+    auto format = located<std::string>{};
+    auto locale = std::optional<located<std::string>>{};
+    TRY(argument_parser2::method(name())
+          .add(subject_expr, "<string>")
+          .add(format, "<format>")
+          .parse(inv, ctx));
+    return function_use::make(
+      [this, subject_expr = std::move(subject_expr), format = std::move(format),
+       locale = std::move(locale)](evaluator eval, session ctx) -> series {
+        auto result_type = time_type{};
+        auto result_arrow_type
+          = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
+        auto subject = eval(subject_expr);
+        auto f = detail::overload{
+          [&](const arrow::StringArray& array) {
+            constexpr auto error_is_null = true;
+            auto options = arrow::compute::StrptimeOptions(
+              format.inner, arrow::TimeUnit::NANO, error_is_null);
+            auto result = arrow::compute::CallFunction("strptime",
+                                                       {array}, &options);
+            if (not result.ok()) {
+              diagnostic::warning("{}", result.status().ToString())
+                .primary(subject_expr)
+                .emit(ctx);
+              return series::null(result_type, subject.length());
+            }
+            return series{result_type, result.MoveValueUnsafe().make_array()};
+          },
+          [&](const arrow::NullArray& array) {
+            return series::null(result_type, array.length());
+          },
+          [&](const auto&) {
+            diagnostic::warning("`{}` expected `time`, but got `{}`", name(),
+                                subject.type.kind())
+              .primary(subject_expr)
+              .emit(ctx);
+            return series::null(result_type, subject.length());
+          },
+        };
+        return caf::visit(f, *subject.array);
+      });
+  }
+};
 } // namespace
 
 } // namespace tenzir::plugins::time_
@@ -196,3 +304,5 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::time_::time_)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::time_::since_epoch)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::time_::as_secs)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::time_::now)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::time_::strftime)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::time_::strptime)
