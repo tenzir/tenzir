@@ -37,7 +37,19 @@ EOF
 }
 
 @test "has" {
-  check tenzir 'from { key: { field: 1 }, error: { nofield: 1, msg: { field: "None" } } } | key = key.has("field") | error = error.has("field")'
+  check tenzir '
+    from {
+      key: { field: 1 },
+      error: {
+        nofield: 1,
+        msg: {
+          field: "None"
+        }
+      }
+    }
+    key = key.has("field")
+    error = error.has("field")
+  '
 }
 
 @test "replace" {
