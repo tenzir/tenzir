@@ -277,7 +277,7 @@ public:
     TRY(argument_parser2::method(name())
           .add(subject_expr, "<string>")
           .add(begin, "<begin>")
-          .add("end", end)
+          .add(end, "<end>")
           .add("stride", stride)
           .parse(inv, ctx));
     if (end) {

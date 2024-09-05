@@ -1,6 +1,6 @@
 error: `stride` must be greater 0, but got -1
- --> <input>:5:34
+ --> <input>:5:30
   |
-5 |     x = x.slice(0, end=6, stride=-1)
-  |                                  ^^ 
+5 |     x = x.slice(0, 6, stride=-1)
+  |                              ^^ 
   |

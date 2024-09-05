@@ -1,6 +1,6 @@
 error: `end` must be at least 0, but got -1
- --> <input>:5:24
+ --> <input>:5:20
   |
-5 |     x = x.slice(0, end=-1)
-  |                        ^^ 
+5 |     x = x.slice(0, -1)
+  |                    ^^ 
   |
