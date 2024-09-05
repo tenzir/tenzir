@@ -135,3 +135,21 @@ EOF
     x = x.slice(end=6, stride=-1)
   '
 }
+
+@test "strftime" {
+  check tenzir '
+    from {
+      x: 2024-12-31+12:59:42,
+    }
+    x = x.strftime("%Y/%m/%d - %T")
+  '
+}
+
+@test "strptime" {
+  check tenzir '
+    from {
+      x: "2024-12-31+12:59:42",
+    }
+    x = x.strptime("%Y-%m-%d+%H:%M:%S")
+  '
+}
