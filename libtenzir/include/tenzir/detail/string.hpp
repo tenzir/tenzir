@@ -60,21 +60,21 @@ inline auto trim(std::string_view value, const std::string_view whitespace
 /// quotes that are not closed are not considered quoting anything
 /// @param s the string to search
 /// @param find a list of characters to search for
-/// @param a list of characters to consider as "quotes"
+/// @param quotes list of characters to consider as "quotes"
+/// @param start index to start the search at
 /// @returns index of the first occurrence of a character from `find` that is`not enclosed by matching `quotes`; `npos` otherwise
 inline auto find_first_of_not_in_quotes(std::string_view s, std::string_view find,
-                                 std::string_view quotes = "\"\'") -> size_t {
+                                 size_t start = 0, std::string_view quotes = "\"\'" ) -> size_t {
   size_t quote_start = s.npos;
   size_t find_pos = s.npos;
-
   const auto is_quote_at = [&](size_t i) {
     if (quotes.find(s[i]) == quotes.npos) {
       return false;
     }
-    return i == 0 or s[i - 1] != '\''; //FIXME this isnt correct?
+    return i == 0 or s[i - 1] != '\'' or (i>1 and s[i-2] == '\\' );
   };
 
-  for (size_t i = 0; i < s.size(); ++i) {
+  for (size_t i = start; i < s.size(); ++i) {
     if (is_quote_at(i)) {
       if (quote_start == s.npos) {
         quote_start = i;
@@ -100,7 +100,6 @@ inline auto find_first_of_not_in_quotes(std::string_view s, std::string_view fin
       }
     }
   }
-
   return find_pos;
 }
 
@@ -109,11 +108,12 @@ inline auto find_first_of_not_in_quotes(std::string_view s, std::string_view fin
 /// quotes that are not closed are not considered quoting anything
 /// @param s the string to search
 /// @param find a character to search for
-/// @param a list of characters to consider as "quotes"
+/// @param start index to start the serach at
+/// @param quotes list of characters to consider as "quotes"
 /// @returns index of the first occurrence of character `find` that is`not enclosed by matching `quotes`; `npos` otherwise
 inline auto find_first_not_in_quotes(std::string_view s, char find,
-                              std::string_view quotes = "\"\'") -> size_t {
-  return find_first_of_not_in_quotes(s, std::string_view(&find, 1), quotes);
+                              size_t start = 0, std::string_view quotes = "\"\'") -> size_t {
+  return find_first_of_not_in_quotes(s, std::string_view(&find, 1), start, quotes);
 }
 
 /// unquotes a string, IFF its enclosed by matching quotes

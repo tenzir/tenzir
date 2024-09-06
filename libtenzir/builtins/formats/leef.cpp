@@ -132,40 +132,39 @@ auto parse_delimiter(std::string_view field) -> std::variant<char, diagnostic> {
 auto parse_attributes(char delimiter, std::string_view attributes,
                       auto builder) -> std::optional<diagnostic> {
   while (not attributes.empty()) {
-    auto attr_end = attributes.find(delimiter);
-    auto sep_pos = attributes.find('=');
+    const auto attr_end = detail::find_first_not_in_quotes(
+      attributes, delimiter);
+    const auto attribute = attributes.substr(0, attr_end);
+    auto sep_pos = detail::find_first_not_in_quotes(attribute, '=');
     if (sep_pos == 0) {
-      return diagnostic::warning(
-               "Ill-formed event missing key before separator")
-        .note("attribute was `{}`", attributes.substr(0, attr_end))
+      return diagnostic::warning("missing key before separator in attributes")
+        .note("attribute was `{}`", attribute)
         .done();
     }
-    while (attributes[sep_pos - 1] == '\\' and sep_pos > 1
-           and attributes[sep_pos - 2] != '\\') {
-      sep_pos = attributes.find('=', sep_pos + 1);
+    while (sep_pos != attribute.npos and attribute[sep_pos - 1] == '\\'
+           and (sep_pos < 2 or attribute[sep_pos - 2] != '\\')) {
+      sep_pos = detail::find_first_not_in_quotes(attribute, '=', sep_pos + 1);
     }
-    if (sep_pos == attributes.npos) {
-      return diagnostic::warning("Ill-formed event missing "
-                                 "key-value separator in attribute")
-        .note("attribute was `{}`", attributes.substr(0, attr_end))
+    if (sep_pos == attribute.npos) {
+      return diagnostic::warning("missing key-value separator in attribute")
+        .note("attribute was `{}`", attribute)
         .done();
     }
-    auto key = attributes.substr(0, sep_pos);
-    auto value = attributes.substr(sep_pos + 1, attr_end - sep_pos - 1);
+    auto key = attribute.substr(0, sep_pos);
+    auto value = attribute.substr(sep_pos + 1);
     if constexpr (detail::multi_series_builder::has_unflattend_field<
                     decltype(builder)>) {
       auto field = builder.unflattend_field(key);
       field.data_unparsed(unescape(value));
     } else {
       auto field = builder.field(key);
-      auto res = detail::data_builder::basic_parser(unescape(value), nullptr);
-      auto& [data, diag] = res;
-      if (data) {
-        field.data(*data);
+      value = unescape(value);
+      auto res = detail::data_builder::best_effort_parser(value);
+      if (res) {
+        field.data(*res);
       } else {
-        field.data(unescape(value));
+        field.data(std::move(value));
       }
-      TENZIR_ASSERT(not diag);
     }
     if (attr_end != attributes.npos) {
       attributes.remove_prefix(attr_end + 1);
@@ -239,8 +238,8 @@ parse_line(std::string_view line, auto& builder) -> std::optional<diagnostic> {
 }
 
 auto parse_loop(generator<std::optional<std::string_view>> lines,
-                diagnostic_handler& diag,
-                multi_series_builder::options options) -> generator<table_slice> {
+                diagnostic_handler& diag, multi_series_builder::options options)
+  -> generator<table_slice> {
   size_t line_counter = 0;
   auto dh = transforming_diagnostic_handler{
     diag,
@@ -366,7 +365,6 @@ public:
             return arg;
           },
           [&](const arrow::StringArray& arg) {
-            auto warn = false;
             auto b = series_builder{};
             for (auto string : arg) {
               if (not string) {
@@ -374,16 +372,10 @@ public:
                 continue;
               }
               auto diag = parse_line(*string, b);
-              if ( diag ) {
+              if (diag) {
                 ctx.dh().emit(std::move(*diag));
                 b.null();
-                warn = true;
               }
-            }
-            if (warn) {
-              diagnostic::warning("failed to parse CEF message")
-                .primary(call)
-                .emit(ctx);
             }
             auto result = b.finish();
             // TODO: Consider whether we need heterogeneous for this. If so,

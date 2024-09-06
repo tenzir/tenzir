@@ -62,8 +62,10 @@ std::string unescape(std::string_view value) {
   return result;
 }
 
-/// Parses the CEF extension field as a sequence of key-value pairs for further
-/// downstream processing.
+/// Parses the CEF extension field as a sequence of key-value pairs.
+/// This works by finding the kv separator ('=') and then using everything
+/// between a (not quoted) whitespace and that separator as the key. The value
+/// is simply the text after the separator before the start of the next key.
 /// @param extension The string value of the extension field.
 /// @returns A vector of key-value pairs with properly unescaped values.
 auto parse_extension(std::string_view extension,
@@ -71,17 +73,34 @@ auto parse_extension(std::string_view extension,
   if (extension.empty()) {
     return {};
   }
-  auto key = extension.substr(0, extension.find('='));
-  extension.remove_prefix(key.size() + 1);
+  // find the first not quoted, not escaped kv separator
+  auto key_end = detail::find_first_not_in_quotes(extension, '=');
+  while (key_end != extension.npos
+         and (key_end > 0 and extension[key_end - 1] == '\\')) {
+    key_end = extension.find('=', key_end + 1);
+  }
+  if (key_end == extension.npos) {
+    return diagnostic::warning(
+             "extension field did not contain a key-value separator")
+      .done();
+  }
+  // extract the first key
+  auto key = extension.substr(0, key_end);
+  extension.remove_prefix(key_end + 1);
+  if (extension.empty()) {
+    return diagnostic::warning("extension field did not contain a value").done();
+  }
+  // find the next not quoted, not escaped kv separator
   while (not extension.empty()) {
-    auto next_kv_sep = extension.find('=');
-    while (next_kv_sep != extension.npos
-           and extension[next_kv_sep - 1] == '\\') {
-      next_kv_sep = extension.find('=', next_kv_sep + 1);
+    key_end = detail::find_first_not_in_quotes(extension, '=');
+    while (key_end != extension.npos
+           and (key_end > 0 and extension[key_end - 1] == '\\')) {
+      key_end = extension.find('=', key_end + 1);
     }
-    auto value_end = next_kv_sep == extension.npos
+    // find the last whitespace, determining the end of the value text
+    auto value_end = key_end == extension.npos
                        ? extension.npos
-                       : extension.find_last_of(" \t", next_kv_sep);
+                       : extension.find_last_of(" \t", key_end);
     auto value = extension.substr(0, value_end);
     key = tenzir::detail::trim(key);
     if constexpr (detail::multi_series_builder::has_unflattend_field<
@@ -90,20 +109,19 @@ auto parse_extension(std::string_view extension,
       field.data_unparsed(unescape(value));
     } else {
       auto field = builder.field(key);
-      auto res = detail::data_builder::basic_parser(unescape(value), nullptr);
-      auto& [data, diag] = res;
-      if (data) {
-        field.data(*data);
+      value = unescape(value);
+      auto res = detail::data_builder::best_effort_parser(value);
+      if (res) {
+        field.data(*res);
       } else {
-        field.data(unescape(value));
+        field.data(std::move(value));
       }
-      TENZIR_ASSERT(not diag);
     }
     if (value_end != extension.npos) {
-      key = extension.substr(value_end + 1, next_kv_sep - value_end - 1);
+      key = extension.substr(value_end + 1, key_end - value_end - 1);
     }
-    if (next_kv_sep != extension.npos) {
-      extension.remove_prefix(next_kv_sep + 1);
+    if (key_end != extension.npos) {
+      extension.remove_prefix(key_end + 1);
     } else {
       break;
     }
@@ -143,8 +161,8 @@ parse_line(std::string_view line, auto& msb) -> std::optional<diagnostic> {
 }
 
 auto parse_loop(generator<std::optional<std::string_view>> lines,
-                diagnostic_handler& diag,
-                multi_series_builder::options options) -> generator<table_slice> {
+                diagnostic_handler& diag, multi_series_builder::options options)
+  -> generator<table_slice> {
   size_t line_counter = 0;
   auto dh = transforming_diagnostic_handler{
     diag,
@@ -244,7 +262,7 @@ public:
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
-    TRY( parser.parse(inv, ctx) );
+    TRY(parser.parse(inv, ctx));
     TRY(auto opts, msb_parser.get_options(ctx.dh()));
     return std::make_unique<parser_adapter<cef_parser>>(
       cef_parser{std::move(opts)});
@@ -269,7 +287,6 @@ public:
             return arg;
           },
           [&](const arrow::StringArray& arg) {
-            auto warn = false;
             auto b = series_builder{};
             for (auto string : arg) {
               if (not string) {
@@ -280,13 +297,7 @@ public:
               if (diag) {
                 ctx.dh().emit(std::move(*diag));
                 b.null();
-                warn = true;
               }
-            }
-            if (warn) {
-              diagnostic::warning("failed to parse CEF message")
-                .primary(call)
-                .emit(ctx);
             }
             auto result = b.finish();
             // TODO: Consider whether we need heterogeneous for this. If so,

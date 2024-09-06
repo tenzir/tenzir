@@ -249,6 +249,15 @@ auto parse_time(std::string_view s,
 
 namespace detail::data_builder {
 
+auto best_effort_parser(std::string_view s) -> std::optional<data> {
+  tenzir::data res;
+  if (parse_as_data<bool_type, int64_type, uint64_type, double_type, time_type,
+                    duration_type, subnet_type, ip_type>(s, res)) {
+    return res;
+  }
+  return std::nullopt;
+}
+
 auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
   -> detail::data_builder::data_parsing_result {
   const auto visitor = detail::overload{
@@ -303,15 +312,14 @@ auto basic_parser(std::string_view s, const tenzir::type* seed)
     return basic_seeded_parser(s, *seed);
   }
   if (s.empty()) {
-    return {std::string{}};
+    return tenzir::data{std::string{}};
   }
-  auto res = tenzir::data{};
-
-  if (parse_as_data<bool_type, int64_type, uint64_type, double_type, time_type,
-                    duration_type, subnet_type, ip_type>(s, res)) {
-    return res;
+  auto res = best_effort_parser(s);
+  if ( res ) {
+    return std::move(*res);
+  } else {
+    return {};
   }
-  return {};
 }
 
 auto non_number_parser(std::string_view s, const tenzir::type* seed)
@@ -320,7 +328,7 @@ auto non_number_parser(std::string_view s, const tenzir::type* seed)
     return data_builder::basic_seeded_parser(s, *seed);
   }
   if (s.empty()) {
-    return {std::string{}};
+    return tenzir::data{std::string{}};
   }
   auto res = tenzir::data{};
   if (parse_as_data<bool_type, time_type, duration_type, subnet_type, ip_type>(

@@ -2,6 +2,6 @@
 {"leef_version": "1.0", "vendor": "Tenzir", "product_name": "Tenzir", "product_version": "4.12", "attributes": {"key": ""}}
 {"leef_version": "1.0", "vendor": "Tenzir", "product_name": "Tenzir", "product_version": "4.12", "attributes": {"key": "trailing tab next"}}
 {"leef_version": "1.0", "vendor": "Tenzir", "product_name": "Tenzir", "product_version": "4.12", "attributes": {"key": "yikes"}}
-warning: leef parser: Ill-formed event missing key-value separator in attribute
+warning: leef parser: missing key-value separator in attribute
  = note: line 2
  = note: attribute was `just some random junk`

@@ -32,6 +32,9 @@ class multi_series_builder;
 class data_builder;
 namespace detail::data_builder {
 
+/// Contains the result of a parser used in the `data_builder`.
+/// If the `data` member optional is empty, that means that the value did not
+/// parse as any type and should remain a string.
 struct data_parsing_result {
   std::optional<tenzir::data> data;
   std::optional<tenzir::diagnostic> diagnostic;
@@ -45,6 +48,29 @@ struct data_parsing_result {
   data_parsing_result(tenzir::data data_, tenzir::diagnostic diag_)
     : data{std::move(data_)}, diagnostic{std::move(diag_)} {};
 };
+
+/// A very basic parser that simply uses `tenzir::parsers` under the hood.
+/// If the returned optional is empty, that means that the value did not parse as
+/// any type and should remain a string.
+auto best_effort_parser(std::string_view s) -> std::optional<data>;
+
+/// A very basic parser that only parses the string according to the `seed`
+/// type. This parser does not support the seed pointing to a structural type
+auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
+  -> detail::data_builder::data_parsing_result;
+
+/// A very basic parser that simply uses `tenzir::parsers` under the hood.
+/// This parser does not support the seed pointing to a structural type
+auto basic_parser(std::string_view s, const tenzir::type* seed)
+  -> detail::data_builder::data_parsing_result;
+
+/// A very basic parser that simply uses `tenzir::parsers` under the hood.
+/// This parser will not attempt to parse strings as numeric types.
+/// Its used for input formats that already are inherently aware of numbers,
+/// such as JSON or YAML.
+/// This parser does not support the seed pointing to a structural type
+auto non_number_parser(std::string_view s, const tenzir::type* seed)
+  -> detail::data_builder::data_parsing_result;
 
 class node_record;
 class node_object;
@@ -420,24 +446,6 @@ constexpr static std::byte record_end_marker{0xfb};
 
 constexpr static std::byte list_start_marker{0xfc};
 constexpr static std::byte list_end_marker{0xfd};
-
-/// A very basic parser that simply uses `tenzir::parsers` under the hood.
-/// This parser does not support the seed pointing to a structural type
-auto basic_parser(std::string_view s, const tenzir::type* seed)
-  -> detail::data_builder::data_parsing_result;
-
-/// A very basic parser that simply uses `tenzir::parsers` under the hood.
-/// This parser will not attempt to parse strings as numeric types.
-/// Its used for input formats that already are inherently aware of numbers,
-/// such as JSON or YAML.
-/// This parser does not support the seed pointing to a structural type
-auto non_number_parser(std::string_view s, const tenzir::type* seed)
-  -> detail::data_builder::data_parsing_result;
-
-/// A very basic parser that only parses the string according to the `seed`
-/// type. This parser does not support the seed pointing to a structural type
-auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
-  -> detail::data_builder::data_parsing_result;
 
 } // namespace detail::data_builder
 
