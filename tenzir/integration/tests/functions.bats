@@ -37,5 +37,101 @@ EOF
 }
 
 @test "has" {
-  check tenzir --tql2 'from { key: { field: 1 }, error: { nofield: 1, msg: { field: "None" } } } | key = key.has("field") | error = error.has("field")'
+  check tenzir '
+    from {
+      key: { field: 1 },
+      error: {
+        nofield: 1,
+        msg: {
+          field: "None"
+        }
+      }
+    }
+    key = key.has("field")
+    error = error.has("field")
+  '
+}
+
+@test "replace" {
+  check tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace(":", "")
+  '
+  check tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace(":", "", max=0)
+  '
+  check tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace(":", "", max=4)
+  '
+  check tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace(":", "", max=100)
+  '
+  check ! tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace(":", "", max=-1)
+  '
+  check ! tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace(":", "", max=-100)
+  '
+}
+
+@test "slice" {
+  check tenzir '
+    from {
+      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
+    }
+    x = x.slice(begin=0)
+  '
+  check tenzir '
+    from {
+      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
+    }
+    x = x.slice(begin=1)
+  '
+  check tenzir '
+    from {
+      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
+    }
+    x = x.slice(begin=-4)
+  '
+  check tenzir '
+    from {
+      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
+    }
+    x = x.slice(end=0)
+  '
+  check tenzir '
+    from {
+      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
+    }
+    x = x.slice(end=4)
+  '
+  check tenzir '
+    from {
+      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
+    }
+    x = x.slice(end=100)
+  '
+  check tenzir '
+    from {
+      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
+    }
+    x = x.slice(end=-1)
+  '
+  check tenzir '
+    from {
+      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
+    }
+    x = x.slice(end=12, stride=4)
+  '
+  check ! tenzir '
+    from {
+      x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
+    }
+    x = x.slice(end=6, stride=-1)
+  '
 }
