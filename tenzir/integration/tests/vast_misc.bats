@@ -64,7 +64,7 @@ setup() {
 
   import_zeek_conn
   sleep 4
-  check tenzir 'export | where #schema == /zeek.*/ | summarize count=count(.)'
+  check tenzir 'partitions | where schema == /zeek.*/ | summarize count=count(.)'
 
   teardown_node
 }
