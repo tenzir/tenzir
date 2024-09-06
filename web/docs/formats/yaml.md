@@ -14,7 +14,7 @@ Reads and writes YAML.
 Parser:
 ```
 yaml [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
-     [--expand-schema] [--raw] [--unnest-separator <separator>]
+     [--schema-only] [--raw] [--unnest-separator <separator>]
 ```
 Printer:
 ```

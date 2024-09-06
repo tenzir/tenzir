@@ -75,9 +75,8 @@ auto parse_extension(std::string_view extension,
   }
   // find the first not quoted, not escaped kv separator
   auto key_end = detail::find_first_not_in_quotes(extension, '=');
-  while (key_end != extension.npos
-         and (key_end > 0 and extension[key_end - 1] == '\\')) {
-    key_end = extension.find('=', key_end + 1);
+  while (detail::is_escaped(key_end, extension)) {
+    key_end = detail::find_first_not_in_quotes(extension, '=', key_end + 1);
   }
   if (key_end == extension.npos) {
     return diagnostic::warning(
@@ -93,23 +92,21 @@ auto parse_extension(std::string_view extension,
   // find the next not quoted, not escaped kv separator
   while (not extension.empty()) {
     key_end = detail::find_first_not_in_quotes(extension, '=');
-    while (key_end != extension.npos
-           and (key_end > 0 and extension[key_end - 1] == '\\')) {
-      key_end = extension.find('=', key_end + 1);
+    while (detail::is_escaped(key_end, extension)) {
+      key_end = detail::find_first_not_in_quotes(extension, '=', key_end + 1);
     }
     // find the last whitespace, determining the end of the value text
     auto value_end = key_end == extension.npos
                        ? extension.npos
                        : extension.find_last_of(" \t", key_end);
-    auto value = extension.substr(0, value_end);
+    auto value = unescape(detail::trim(extension.substr(0, value_end)));
     key = tenzir::detail::trim(key);
     if constexpr (detail::multi_series_builder::has_unflattend_field<
                     decltype(builder)>) {
       auto field = builder.unflattend_field(key);
-      field.data_unparsed(unescape(value));
+      field.data_unparsed(std::move(value));
     } else {
       auto field = builder.field(key);
-      value = unescape(value);
       auto res = detail::data_builder::best_effort_parser(value);
       if (res) {
         field.data(*res);

@@ -24,7 +24,7 @@ namespace tenzir::detail {
 inline auto trim_front(std::string_view value, const std::string_view whitespace
                                                = " \t") -> std::string_view {
   const auto first_character = value.find_first_not_of(whitespace);
-  if (first_character > 0) {
+  if (first_character > 0 and first_character != value.npos ) {
     value.remove_prefix(first_character);
   }
   return value;
@@ -38,7 +38,7 @@ inline auto trim_front(std::string_view value, const std::string_view whitespace
 inline auto trim_back(std::string_view value, const std::string_view whitespace
                                               = " \t") -> std::string_view {
   const auto last_character = value.find_last_not_of(whitespace);
-  if (last_character != value.size() - 1) {
+  if (last_character != value.size() - 1 and last_character != value.npos ) {
     value.remove_suffix(value.size() - last_character + 1);
   }
   return value;
@@ -56,22 +56,42 @@ inline auto trim(std::string_view value, const std::string_view whitespace
   return value;
 }
 
-/// finds the index of the first occurrence that is not enclosed my matching quotes
-/// quotes that are not closed are not considered quoting anything
+/// @brief Checks whether the index `idx` in `text` is escaped
+inline auto is_escaped(size_t idx, std::string_view text) {
+  if (idx > text.size()) {
+    return false;
+  }
+  if (idx == 0) {
+    return false;
+  }
+  if (text[idx - 1] == '\\') {
+    if (idx > 1 and text[idx - 2] == '\\') {
+      return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+/// finds the index of the first occurrence that is not enclosed my matching
+/// quotes quotes that are not closed are not considered quoting anything
 /// @param s the string to search
 /// @param find a list of characters to search for
 /// @param quotes list of characters to consider as "quotes"
 /// @param start index to start the search at
-/// @returns index of the first occurrence of a character from `find` that is`not enclosed by matching `quotes`; `npos` otherwise
-inline auto find_first_of_not_in_quotes(std::string_view s, std::string_view find,
-                                 size_t start = 0, std::string_view quotes = "\"\'" ) -> size_t {
+/// @returns index of the first occurrence of a character from `find` that
+/// is`not enclosed by matching `quotes`; `npos` otherwise
+inline auto
+find_first_of_not_in_quotes(std::string_view s, std::string_view find,
+                            size_t start = 0,
+                            std::string_view quotes = "\"\'") -> size_t {
   size_t quote_start = s.npos;
   size_t find_pos = s.npos;
   const auto is_quote_at = [&](size_t i) {
     if (quotes.find(s[i]) == quotes.npos) {
       return false;
     }
-    return i == 0 or s[i - 1] != '\'' or (i>1 and s[i-2] == '\\' );
+    return not is_escaped(i, s);
   };
 
   for (size_t i = start; i < s.size(); ++i) {
@@ -103,17 +123,20 @@ inline auto find_first_of_not_in_quotes(std::string_view s, std::string_view fin
   return find_pos;
 }
 
-
-/// finds the index of the first occurrence of a character that is not enclosed my matching quotes
-/// quotes that are not closed are not considered quoting anything
+/// finds the index of the first occurrence of a character that is not enclosed
+/// my matching quotes quotes that are not closed are not considered quoting
+/// anything
 /// @param s the string to search
 /// @param find a character to search for
 /// @param start index to start the serach at
 /// @param quotes list of characters to consider as "quotes"
-/// @returns index of the first occurrence of character `find` that is`not enclosed by matching `quotes`; `npos` otherwise
-inline auto find_first_not_in_quotes(std::string_view s, char find,
-                              size_t start = 0, std::string_view quotes = "\"\'") -> size_t {
-  return find_first_of_not_in_quotes(s, std::string_view(&find, 1), start, quotes);
+/// @returns index of the first occurrence of character `find` that is`not
+/// enclosed by matching `quotes`; `npos` otherwise
+inline auto
+find_first_not_in_quotes(std::string_view s, char find, size_t start = 0,
+                         std::string_view quotes = "\"\'") -> size_t {
+  return find_first_of_not_in_quotes(s, std::string_view(&find, 1), start,
+                                     quotes);
 }
 
 /// unquotes a string, IFF its enclosed by matching quotes
@@ -123,8 +146,8 @@ inline auto find_first_not_in_quotes(std::string_view s, char find,
 /// @returns a string_view of without the quotes
 inline auto unquote(std::string_view value, std::string_view quotes
                                             = "\"\'") -> std::string_view {
-  if (value.empty()) {
-    return {};
+  if (value.size() < 2) {
+    return value;
   }
   if (value.front() == value.back()
       and quotes.find(value.front()) != quotes.npos) {

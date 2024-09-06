@@ -132,8 +132,8 @@ auto parse_delimiter(std::string_view field) -> std::variant<char, diagnostic> {
 auto parse_attributes(char delimiter, std::string_view attributes,
                       auto builder) -> std::optional<diagnostic> {
   while (not attributes.empty()) {
-    const auto attr_end = detail::find_first_not_in_quotes(
-      attributes, delimiter);
+    const auto attr_end
+      = detail::find_first_not_in_quotes(attributes, delimiter);
     const auto attribute = attributes.substr(0, attr_end);
     auto sep_pos = detail::find_first_not_in_quotes(attribute, '=');
     if (sep_pos == 0) {
@@ -141,8 +141,7 @@ auto parse_attributes(char delimiter, std::string_view attributes,
         .note("attribute was `{}`", attribute)
         .done();
     }
-    while (sep_pos != attribute.npos and attribute[sep_pos - 1] == '\\'
-           and (sep_pos < 2 or attribute[sep_pos - 2] != '\\')) {
+    while (detail::is_escaped(sep_pos, attribute)) {
       sep_pos = detail::find_first_not_in_quotes(attribute, '=', sep_pos + 1);
     }
     if (sep_pos == attribute.npos) {
@@ -151,14 +150,13 @@ auto parse_attributes(char delimiter, std::string_view attributes,
         .done();
     }
     auto key = attribute.substr(0, sep_pos);
-    auto value = attribute.substr(sep_pos + 1);
+    auto value = unescape(detail::trim(attribute.substr(sep_pos + 1)));
     if constexpr (detail::multi_series_builder::has_unflattend_field<
                     decltype(builder)>) {
       auto field = builder.unflattend_field(key);
-      field.data_unparsed(unescape(value));
+      field.data_unparsed(std::move(value));
     } else {
       auto field = builder.field(key);
-      value = unescape(value);
       auto res = detail::data_builder::best_effort_parser(value);
       if (res) {
         field.data(*res);

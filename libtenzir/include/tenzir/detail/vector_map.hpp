@@ -19,16 +19,6 @@
 
 namespace tenzir::detail {
 
-template <typename Policy, typename Key, typename Value>
-concept vector_map_policy
-  = requires(Policy p, Key k, Value v, std::vector<std::pair<Key, Value>> x,
-             std::pair<Key, Value> kvp) {
-      {
-        p.add(x, k, v)
-      } -> std::same_as<std::pair<typename decltype(x)::iterator, bool>>;
-      { p.lookup(x, k) } -> std::same_as<typename decltype(x)::iterator>;
-    };
-
 /// A map abstraction over an unsorted `std::vector`.
 template <class Key, class T, class Allocator, class Policy>
 class vector_map : totally_ordered<vector_map<Key, T, Allocator, Policy>> {
@@ -187,18 +177,6 @@ public:
     erase(it);
     return 1;
   }
-
-  // size_type erase(const key_type& x) {
-  //   auto pred = [&](auto& p) {
-  //     return p.first == x;
-  //   };
-  //   auto i = std::remove_if(begin(), end(), pred);
-  //   if (i == end()) {
-  //     return 0;
-  //   }
-  //   erase(i);
-  //   return 1;
-  // }
 
   void swap(vector_map& other) {
     xs_.swap(other);

@@ -455,7 +455,8 @@ public:
       }
     }
     if (objects_parsed == 0 and diags_emitted == 0) {
-      diagnostic::warning("NDJSON line did not contain a single valid JSON object")
+      diagnostic::warning(
+        "NDJSON line did not contain a single valid JSON object")
         .note("skipped invalid JSON `{}`", truncate(json_line))
         .emit(*dh);
     } else if (objects_parsed > 1) {
@@ -873,7 +874,7 @@ public:
     }
     if (legacy_no_infer) {
       if (args.builder_options.settings.schema_only) {
-        diagnostic::error("`--no-infer` and `--expand-schema` are incompatible")
+        diagnostic::error("`--no-infer` and `--schema-only` are equivalent")
           .primary(*legacy_no_infer)
           .primary(*msb_parser.schema_only_)
           .note("`--no-infer` is a legacy option and should not be used")
@@ -1223,14 +1224,16 @@ public:
                   .emit(ctx);
                 continue;
               }
+              const auto old_length = b.length();
               const auto res
                 = doc_p.parse_value(doc.get_value(), builder_ref{b}, 0);
               if (not res) {
-                // TODO only remove last if no value has been added
                 diagnostic::warning("could not parse json")
                   .primary(call)
                   .emit(ctx);
-                b.remove_last();
+                if (b.length() != old_length) {
+                  b.remove_last();
+                }
                 b.null();
                 continue;
               }
@@ -1247,8 +1250,7 @@ public:
             return std::move(result[0]);
           },
           [&](const auto&) {
-            diagnostic::warning("`parse_json` expected `string`")
-              .note("got `{}`", arg.type.kind())
+            diagnostic::warning("`parse_json` expected `string`, got `{}`", arg.type.kind())
               .primary(call)
               .emit(ctx);
             return series::null(null_type{}, arg.length());

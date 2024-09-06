@@ -14,9 +14,10 @@
 namespace tenzir {
 namespace {
 auto parse_selector(std::string_view x, location source, diagnostic_handler& dh)
-  -> multi_series_builder::policy_selector {
+  -> std::optional<multi_series_builder::policy_selector> {
   if (x.empty()) {
     diagnostic::error("selector must not be empty").primary(source).emit(dh);
+    return std::nullopt;
   }
   auto split = detail::split(x, ":");
   TENZIR_ASSERT(not x.empty());
@@ -26,14 +27,15 @@ auto parse_selector(std::string_view x, location source, diagnostic_handler& dh)
                       x)
       .primary(source)
       .emit(dh);
+    return std::nullopt;
   }
   if (split.size() == 2) {
-    return {
+    return multi_series_builder::policy_selector{
       std::string{split[0]},
       std::string{split[1]},
     };
   } else {
-    return {
+    return multi_series_builder::policy_selector{
       std::string{split[0]},
     };
   }
@@ -98,9 +100,10 @@ auto multi_series_builder_argument_parser::get_settings(diagnostic_handler& dh)
   -> bool {
   (void)get_policy(dh); // force update policy.
   settings_.schema_only |= schema_only_.has_value();
-  // if a schema is set and expand_schema
   if (settings_.schema_only
       and std::holds_alternative<multi_series_builder::policy_merge>(policy_)) {
+    // this error message is worded to support cases where the `merge` policy
+    // was defaulted by the parser
     diagnostic::error("`--schema-only` requires a `--schema` or `--selector`")
       .primary(*schema_only_)
       .emit(dh);
@@ -109,8 +112,7 @@ auto multi_series_builder_argument_parser::get_settings(diagnostic_handler& dh)
   if (auto* p = std::get_if<multi_series_builder::policy_precise>(&policy_)) {
     if (p->seed_schema.empty() and settings_.schema_only) {
       diagnostic::error(
-        "`--schema-only` requires a non`--schema` or `--selector`")
-        .hint("given schema is empty")
+        "`--schema-only` requires a valid `--schema` or `--selector`")
         .primary(*schema_only_)
         .emit(dh);
       return false;
@@ -124,18 +126,17 @@ auto multi_series_builder_argument_parser::get_settings(diagnostic_handler& dh)
           });
       if (it == schemas.end()) {
         if (settings_.schema_only) {
-          diagnostic::error(
-            "`--expand-schema` specified, but given `--schema` does not exist")
+          diagnostic::error("schema `{}` does not exist, but `--schema-only` "
+                            "was specified",
+                            schema_->inner)
             .primary(*schema_only_)
             .primary(*schema_)
-            .note("schema `{}` could not be found", schema_->inner)
             .emit(dh);
           return false;
         } else {
-          diagnostic::warning("Given `--schema` does not exist")
+          diagnostic::warning("schema `{}` does not exist", schema_->inner)
             .primary(*schema_)
-            .note("schema `{}` could not be found", schema_->inner)
-            .hint("Consider defining the schema if you know the input's shape")
+            .hint("if you know the input's shape, define the schema")
             .emit(dh);
         }
       } else if (settings_.schema_only and not raw_.has_value()) {
@@ -230,8 +231,11 @@ auto multi_series_builder_argument_parser::get_policy(diagnostic_handler& dh)
     }
   } else if (has_selector) {
     auto p = parse_selector(selector_->inner, selector_->source, dh);
-    p.unique_selector = unique_selector_.has_value();
-    policy_ = std::move(p);
+    if ( not p ) {
+      return false;
+    }
+    p->unique_selector = unique_selector_.has_value();
+    policy_ = std::move(*p);
   } else if (has_schema) {
     // this needs an extra guard for "has_schema", because it could otherwise be
     // resetting a non-empty default seed.

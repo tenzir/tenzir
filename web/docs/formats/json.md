@@ -15,7 +15,7 @@ Parser:
 
 ```
 json [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
-     [--expand-schema] [--raw] [--unnest-separator <separator>]
+     [--schema-only] [--raw] [--unnest-separator <separator>]
      [--ndjson] [--arrays-of-objects] [--precise] [--no-infer]
 ```
 
@@ -54,7 +54,7 @@ Legacy flag. Has the same effect as *not* providing `--merge`. This option is in
 
 ### `--no-infer` (Parser)
 
-Legacy flag. Has no direct effect. Is incompatible with `--expand-schema`
+Legacy flag. It is equivalent to the new flag `--schema-only`.
 
 ### `--arrays-of-objects` (Parser)
 

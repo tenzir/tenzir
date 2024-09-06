@@ -76,13 +76,13 @@ auto parse_node(auto guard, const YAML::Node& node,
 
 auto load_document(multi_series_builder& msb, std::string&& document,
                    diagnostic_handler& diag) -> void {
-  auto record = msb.record();
   try {
     auto node = YAML::Load(document);
     if (not node.IsMap()) {
       diagnostic::warning("document is not a map").emit(diag);
       return;
     }
+    auto record = msb.record();
     for (const auto& element : node) {
       const auto& name = element.first.as<std::string>();
       parse_node(record.unflattend_field(name), element.second, diag);
@@ -324,7 +324,8 @@ class read_yaml final
     auto res = parser.parse(inv, ctx);
     TRY(res);
     TRY(auto opts, msb_parser.get_options(ctx.dh()));
-    return std::make_unique<parser_adapter<yaml_parser>>(yaml_parser{std::move(opts)});
+    return std::make_unique<parser_adapter<yaml_parser>>(
+      yaml_parser{std::move(opts)});
   }
 };
 
