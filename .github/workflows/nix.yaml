@@ -178,6 +178,9 @@ jobs:
           sleep 5
           docker exec -e TENZIR_PACKAGE_URL="file:///tmp/packages/${deb_file}" installer-test-ubuntu bash -c \
                  "/src/tenzir/scripts/install.sh"
+          # Verify that we can access privileged ports.
+          docker exec installer-test-ubuntu /opt/tenzir/bin/tenzir \
+            'api /pipeline/create "{\"definition\": \"from udp://0.0.0.0:514 read syslog | discard\", \"autostart\": {\"created\": true}}"'
           docker exec installer-test-ubuntu halt
       - name: Test Installation (Rocky Linux)
         if: runner.os == 'Linux'
@@ -196,4 +199,6 @@ jobs:
           sleep 5
           docker exec -e TENZIR_PACKAGE_URL="file:///tmp/packages/${rpm_file}" installer-test-rocky bash -c \
                  "/src/tenzir/scripts/install.sh"
+          docker exec installer-test-rocky /opt/tenzir/bin/tenzir \
+            'api /pipeline/create "{\"definition\": \"from udp://0.0.0.0:514 read syslog | discard\", \"autostart\": {\"created\": true}}"'
           docker exec installer-test-rocky halt
