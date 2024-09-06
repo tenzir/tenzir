@@ -108,7 +108,7 @@ auto evaluator::eval(const ast::field_access& x) -> series {
   auto rec_ty = caf::get_if<record_type>(&l.type);
   if (not rec_ty) {
     diagnostic::warning("cannot access field of non-record type")
-      .primary(x.dot.combine(x.name))
+      .primary(x.name)
       .secondary(x.left, "type `{}`", l.type.kind())
       .emit(ctx_);
     return null();
@@ -116,8 +116,16 @@ auto evaluator::eval(const ast::field_access& x) -> series {
   auto& s = caf::get<arrow::StructArray>(*l.array);
   for (auto [i, field] : detail::enumerate<int>(rec_ty->fields())) {
     if (field.name == x.name.name) {
-      // TODO: Emit a warning if the record itself was `null`?
-      return series{field.type, check(s.GetFlattenedField(i))};
+      auto has_null = s.null_count() != 0;
+      if (has_null) {
+        // TODO: It's not 100% obvious that we want to have this warning, but we
+        // went with it for now. Note that this can create cascading warnings.
+        diagnostic::warning("tried to access field of `null`")
+          .primary(x.name)
+          .emit(ctx_);
+        return series{field.type, check(s.GetFlattenedField(i))};
+      }
+      return series{field.type, s.field(i)};
     }
   }
   diagnostic::warning("record does not have this field")
