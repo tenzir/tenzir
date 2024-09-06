@@ -28,8 +28,8 @@ public:
     return Signed ? "int" : "uint";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function(name())
           .add(expr, "<string|number>")
@@ -46,6 +46,32 @@ public:
         },
         [](const Array& arg) {
           return std::make_shared<Array>(arg.data());
+        },
+        [&]<class T>(const T& arg)
+          requires integral_type<type_from_arrow_t<T>>
+        {
+          auto b = Builder{};
+          check(b.Reserve(arg.length()));
+          auto overflow = false;
+          for (auto i = int64_t{0}; i < arg.length(); ++i) {
+            if (arg.IsNull(i)) {
+              check(b.AppendNull());
+              continue;
+            }
+            auto val = arg.Value(i);
+            if (not std::in_range<Data>(val)) {
+              check(b.AppendNull());
+              overflow = true;
+              continue;
+            }
+            check(b.Append(static_cast<Data>(val)));
+          }
+          if (overflow) {
+            diagnostic::warning("integer overflow in `{}`", name())
+              .primary(expr)
+              .emit(ctx);
+          }
+          return finish(b);
         },
         [&](const arrow::DoubleArray& arg) {
           auto b = Builder{};
@@ -121,7 +147,7 @@ public:
           check(b.AppendNulls(value.length()));
           return finish(b);
         },
-      };
+        };
       return series{Type{}, caf::visit(f, *value.array)};
     });
   }
