@@ -501,7 +501,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
           if (list_element_text.empty()) {
             l.null();
           } else {
-            l.data_unparsed(list_element_text);
+            l.data_unparsed(detail::unquote(list_element_text));
           }
           if (list_element_end == list_text.npos) {
             break;
@@ -515,7 +515,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
         if (field_text == args.null_value) {
           field.null();
         } else {
-          field.data_unparsed(field_text);
+          field.data_unparsed(detail::unquote(field_text));
         }
       }
       line->remove_prefix(std::min(field_text.size() + 1, line->size()));

@@ -24,7 +24,7 @@ namespace tenzir::detail {
 inline auto trim_front(std::string_view value, const std::string_view whitespace
                                                = " \t") -> std::string_view {
   const auto first_character = value.find_first_not_of(whitespace);
-  if (first_character > 0 and first_character != value.npos ) {
+  if (first_character > 0 and first_character != value.npos) {
     value.remove_prefix(first_character);
   }
   return value;
@@ -38,7 +38,7 @@ inline auto trim_front(std::string_view value, const std::string_view whitespace
 inline auto trim_back(std::string_view value, const std::string_view whitespace
                                               = " \t") -> std::string_view {
   const auto last_character = value.find_last_not_of(whitespace);
-  if (last_character != value.size() - 1 and last_character != value.npos ) {
+  if (last_character != value.size() - 1 and last_character != value.npos) {
     value.remove_suffix(value.size() - last_character + 1);
   }
   return value;
@@ -150,7 +150,8 @@ inline auto unquote(std::string_view value, std::string_view quotes
     return value;
   }
   if (value.front() == value.back()
-      and quotes.find(value.front()) != quotes.npos) {
+      and quotes.find(value.front()) != quotes.npos
+      and not is_escaped(value.size() - 1, value)) {
     value.remove_prefix(1);
     value.remove_suffix(1);
   }

@@ -99,7 +99,7 @@ auto parse_extension(std::string_view extension,
     auto value_end = key_end == extension.npos
                        ? extension.npos
                        : extension.find_last_of(" \t", key_end);
-    auto value = unescape(detail::trim(extension.substr(0, value_end)));
+    auto value = unescape(detail::unquote(detail::trim(extension.substr(0, value_end))));
     key = tenzir::detail::trim(key);
     if constexpr (detail::multi_series_builder::has_unflattend_field<
                     decltype(builder)>) {

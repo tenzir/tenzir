@@ -72,7 +72,6 @@ auto record_generator::unflattend_field(std::string_view key)
 }
 
 auto field_generator::data_unparsed(std::string_view s) -> void {
-  s = unquote(s);
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
       auto res = msb_->builder_raw_.parser_(s, nullptr);
@@ -127,7 +126,6 @@ void list_generator::null() {
   return this->data(caf::none);
 }
 auto list_generator::data_unparsed(std::string_view s) -> void {
-  s = unquote(s);
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
       auto res = msb_->builder_raw_.parser_(s, nullptr);
