@@ -320,8 +320,8 @@ users for an even bigger impact. Here's how:
 1. Join our [Discord server](/discord) and showcase your package in the
    show-and-tell channel. We encourage you to seek feedback to make your package
    even better.
-2. File a pull request in the official [Community
-   Library](https://github.com/tenzir/library) GitHub repository. All packages
-   in there will automatically show up in the [Tenzir
+2. File a [pull request](https://github.com/tenzir/library/pull/23) in the
+   official [Community Library](https://github.com/tenzir/library) GitHub
+   repository. All packages in there will automatically show up in the [Tenzir
    Library](https://app.tenzir.com/library).
 3. Share it on social media and let us know. We'll amplify it! 🫶
