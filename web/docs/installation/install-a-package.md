@@ -15,7 +15,7 @@ Library](https://app.tenzir.com/library):
 
 ## Install with the Package Operator
 
-To install a package interactively, use the [`package add`
+To install a package interactively, use the [`package_add`
 operator](../operators/package.md):
 
 ```tql
@@ -25,7 +25,7 @@ read_yaml
 package_add
 ```
 
-To set package inputs, simply set the values in the pipeline:
+To set package inputs, set the values in the pipeline:
 
 ```tql
 // tql2
@@ -51,8 +51,8 @@ packages
 }
 ```
 
-To uninstall a package interactively, use [`package_
-remove`](../operators/package.md).
+To uninstall a package interactively, use
+[`package_remove`](../operators/package.md).
 
 ```tql
 package_remove "your-package"
