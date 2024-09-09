@@ -85,6 +85,9 @@ struct importer_state {
   /// The index actor.
   index_actor index;
 
+  /// Potentially unpersisted events.
+  std::vector<table_slice> unpersisted_events = {};
+
   /// A list of subscribers for incoming events.
   std::vector<std::pair<receiver_actor<table_slice>, bool /*internal*/>>
     subscribers = {};
