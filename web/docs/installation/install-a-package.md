@@ -32,8 +32,8 @@ To set package inputs, set the values in the pipeline:
 load_file "package.yaml"
 read_yaml
 // Adjust inputs
-set config.inputs.endpoint = "localhost:42000"
-set config.inputs.policy = "block"
+config.inputs.endpoint = "localhost:42000"
+config.inputs.policy = "block"
 package_add
 ```
 

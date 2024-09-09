@@ -13,7 +13,7 @@ want to make it easy to detect malicious certificates that are on the
 the idea is as follows:
 
 1. We get SHA1 hashes of SSL certifcates from network monitor logs, such as
-   [Zeek](https://zeek.org) or [Suricata](https://suricata.io)
+   [Zeek](https://zeek.org) or [Suricata](https://suricata.io).
 2. We check each hash value against a lookup table.
 3. We generate a detection finding when we encounter a match.
 
@@ -124,8 +124,18 @@ read_csv comments=true, header="timestamp,SHA1,reason"
 legacy "context update sslbl --key=SHA1"
 ```
 
-:::tip Minimizing operators that execute periodically
-While we could have wrapped the entire pipeline into `every {...}`, 
+:::tip Why not wrap the entire pipeline in `every`?
+We could've also wrapped the entire pipeline in `every 1h {…}` with the
+resulting context being the exact same.  Operators after `every` never stop
+because they assume their input to be infinite. Operators within `every` stop
+after exhausting their input. We want especially the context update operator to
+run at all times for two reasons:
+- Idle operators continue to emit metrics, allowing for users to distinguish
+  between the context update not running and idling.
+- If the context becomes unavailable for some reason, e.g., because it was
+  deleted, the pipeline would fail immediately instead of needing to wait for
+  the nested pipeline to run again. This reduces the time to an error being
+  visible to the user.
 :::
 
 Now let's copy that into the package definition:
@@ -275,7 +285,7 @@ do this with one extra statement, though:
 ```tql
 load_file "/path/to/package.yaml"
 read_yaml
-set config.inputs["refresh-interval"] = 1h
+config.inputs["refresh-interval"] = 1h
 package_add
 ```
 
