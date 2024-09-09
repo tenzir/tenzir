@@ -8,6 +8,8 @@
 
 #include <tenzir/aggregation_function.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::mean {
 
@@ -68,7 +70,87 @@ private:
   size_t count_ = {};
 };
 
-class plugin : public virtual aggregation_function_plugin {
+class mean_instance final : public aggregation_instance {
+public:
+  explicit mean_instance(ast::expression expr) : expr_{std::move(expr)} {
+  }
+
+  auto update(const table_slice& input, session ctx) -> void override {
+    if (state_ == state::failed) {
+      return;
+    }
+    auto arg = eval(expr_, input, ctx);
+    auto f = detail::overload{
+      [](const arrow::NullArray&) {},
+      [&]<class T>(const T& array)
+        requires numeric_type<type_from_arrow_t<T>>
+                   or std::same_as<T, arrow::DurationArray>
+      {
+        if constexpr (std::same_as<T, arrow::DurationArray>) {
+          if (state_ != state::dur and state_ != state::none) {
+            diagnostic::warning("expected `int`, `uint` or `double`, got `{}`",
+                                arg.type)
+              .primary(expr_)
+              .emit(ctx);
+            state_ = state::failed;
+            return;
+          }
+          state_ = state::dur;
+        } else {
+          if (state_ != state::numeric and state_ != state::none) {
+            diagnostic::warning("expected `duration`, got `{}`", arg.type)
+              .primary(expr_)
+              .emit(ctx);
+            state_ = state::failed;
+            return;
+          }
+          state_ = state::numeric;
+        }
+        for (auto i = int64_t{}; i < array.length(); ++i) {
+          if (array.IsValid(i)) {
+            if constexpr (std::same_as<T, arrow::DoubleArray>) {
+              if (std::isnan(array.Value(i))) {
+                continue;
+              }
+            }
+            count_ += 1;
+            mean_ += (static_cast<double>(array.Value(i)) - mean_) / count_;
+          }
+        }
+      },
+      [&](const auto&) {
+        diagnostic::error("expected types `int`, `uint`, "
+                          "`double` or `duration`, got `{}`",
+                          arg.type)
+          .primary(expr_)
+          .emit(ctx);
+        state_ = state::failed;
+      }};
+    caf::visit(f, *arg.array);
+  }
+
+  auto finish() -> data override {
+    switch (state_) {
+      case state::none:
+      case state::failed:
+        return data{};
+      case state::dur:
+        return duration{static_cast<duration::rep>(mean_)};
+      case state::numeric:
+        return count_ ? data{mean_} : data{};
+    }
+    TENZIR_UNREACHABLE();
+  }
+
+private:
+  ast::expression expr_;
+  enum class state { none, failed, dur, numeric } state_{};
+  double mean_{};
+  size_t count_{};
+};
+
+class plugin : public virtual aggregation_function_plugin,
+               public virtual aggregation_plugin {
   auto name() const -> std::string override {
     return "mean";
   };
@@ -97,6 +179,15 @@ class plugin : public virtual aggregation_function_plugin {
       },
     };
     return caf::visit(f, input_type);
+  }
+
+  auto make_aggregation(invocation inv, session ctx) const
+    -> failure_or<std::unique_ptr<aggregation_instance>> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function("tql2.mean")
+          .add(expr, "<expr>")
+          .parse(inv, ctx));
+    return std::make_unique<mean_instance>(std::move(expr));
   }
 
   auto aggregation_default() const -> data override {
