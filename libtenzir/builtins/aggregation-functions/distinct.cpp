@@ -10,6 +10,8 @@
 #include <tenzir/detail/passthrough.hpp>
 #include <tenzir/hash/hash.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <tsl/robin_set.h>
 
@@ -21,8 +23,8 @@ template <concrete_type Type>
 struct heterogeneous_data_hash {
   using is_transparent = void;
 
-  [[nodiscard]] auto operator()(view<type_to_data_t<Type>> value) const
-    -> size_t {
+  [[nodiscard]] auto
+  operator()(view<type_to_data_t<Type>> value) const -> size_t {
     return hash(value);
   }
 
@@ -67,8 +69,9 @@ private:
 
   void add(const data_view& view) override {
     using view_type = tenzir::view<type_to_data_t<Type>>;
-    if (caf::holds_alternative<caf::none_t>(view))
+    if (caf::holds_alternative<caf::none_t>(view)) {
       return;
+    }
     const auto& typed_view = caf::get<view_type>(view);
     if (!distinct_.contains(typed_view)) {
       const auto [it, inserted] = distinct_.insert(materialize(typed_view));
@@ -79,8 +82,9 @@ private:
   [[nodiscard]] auto finish() && -> caf::expected<data> override {
     auto result = list{};
     result.reserve(distinct_.size());
-    for (auto& value : distinct_)
+    for (auto& value : distinct_) {
       result.emplace_back(std::move(value));
+    }
     std::sort(result.begin(), result.end());
     return data{std::move(result)};
   }
@@ -90,7 +94,35 @@ private:
     distinct_ = {};
 };
 
-class plugin : public virtual aggregation_function_plugin {
+class distinct_instance final : public aggregation_instance {
+public:
+  explicit distinct_instance(ast::expression expr) : expr_{std::move(expr)} {
+  }
+
+  auto update(const table_slice& input, session ctx) -> void override {
+    auto arg = eval(expr_, input, ctx);
+    if (caf::holds_alternative<null_type>(arg.type)) {
+      return;
+    }
+    for (auto i = int64_t{}; i < arg.array->length(); ++i) {
+      if (arg.array->IsNull(i)) {
+        continue;
+      }
+      distinct_.insert(materialize(value_at(arg.type, *arg.array, i)));
+    }
+  }
+
+  auto finish() -> data override {
+    return list{distinct_.begin(), distinct_.end()};
+  }
+
+private:
+  ast::expression expr_;
+  tsl::robin_set<data> distinct_;
+};
+
+class plugin : public virtual aggregation_function_plugin,
+               public virtual aggregation_plugin {
   auto initialize([[maybe_unused]] const record& plugin_config,
                   [[maybe_unused]] const record& global_config)
     -> caf::error override {
@@ -108,6 +140,15 @@ class plugin : public virtual aggregation_function_plugin {
       return std::make_unique<distinct_function<Type>>(input_type);
     };
     return caf::visit(f, input_type);
+  }
+
+  auto make_aggregation(invocation inv, session ctx) const
+    -> failure_or<std::unique_ptr<aggregation_instance>> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function("tql2.distinct")
+          .add(expr, "<expr>")
+          .parse(inv, ctx));
+    return std::make_unique<distinct_instance>(std::move(expr));
   }
 
   auto aggregation_default() const -> data override {
