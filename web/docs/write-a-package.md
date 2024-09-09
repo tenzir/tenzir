@@ -113,29 +113,25 @@ So far we did a one-shot download of the SSLBL data into our lookup table. But
 the fine folks at abuse.ch update the data regularly, and we want to keep our
 lookup table in sync with the latest version.
 
-To this end, we execute that pipeline periodically using `every`:
+To this end, we do the data onboarding periodically with `every`:
 
 ```tql
 // tql2
 every 1h {
   load_http "from https://sslbl.abuse.ch/blacklist/sslblacklist.csv"
+  read_csv comments=true, header="timestamp,SHA1,reason"
 }
-read_csv comments=true, header="timestamp,SHA1,reason"
 legacy "context update sslbl --key=SHA1"
 ```
 
 :::tip Why not wrap the entire pipeline in `every`?
-We could've also wrapped the entire pipeline in `every 1h {…}` with the
-resulting context being the exact same.  Operators after `every` never stop
-because they assume their input to be infinite. Operators within `every` stop
-after exhausting their input. We want especially the context update operator to
-run at all times for two reasons:
-- Idle operators continue to emit metrics, allowing for users to distinguish
-  between the context update not running and idling.
-- If the context becomes unavailable for some reason, e.g., because it was
-  deleted, the pipeline would fail immediately instead of needing to wait for
-  the nested pipeline to run again. This reduces the time to an error being
-  visible to the user.
+We could've also wrapped the entire pipeline in `every 1h {…}` with the same
+effect. However, if we split the data acquisition from the remaining work, we
+have a more local change that turns a one-shot data download into a continuous
+stream. This has the effect that the other pipeline operators outside of `every`
+are running continuously, and more importantly, emit metrics continuously and
+could also fail earlier, leading to an overall more robust pipeline
+architecture.
 :::
 
 Now let's copy that into the package definition:
@@ -150,8 +146,8 @@ pipelines:
       // tql2
       every 1h {
         load_http "from https://sslbl.abuse.ch/blacklist/sslblacklist.csv"
+        read_csv comments=true, header="timestamp,SHA1,reason"
       }
-      read_csv comments=true, header="timestamp,SHA1,reason"
       legacy "context update sslbl --key=SHA1"
     restart-on-error: 1 hour
 ```
