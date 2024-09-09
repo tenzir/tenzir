@@ -54,7 +54,7 @@ section:
 
 ```yaml title="package.yaml"
 contexts:
-  feodo:
+  sslbl:
     type: lookup-table
     description: |
       A table that is keyed by SHA1 hashes of SSL certificates on the SSL
@@ -109,7 +109,7 @@ and ready for enrichment.
 
 ### Keep the context synchronized
 
-So far we did a one-shot download of the SSLB data into our lookup table. But
+So far we did a one-shot download of the SSLBL data into our lookup table. But
 the fine folks at abuse.ch update the data regularly, and we want to keep our
 lookup table in sync with the latest version.
 
@@ -119,10 +119,14 @@ To this end, we execute that pipeline periodically using `every`:
 // tql2
 every 1h {
   load_http "from https://sslbl.abuse.ch/blacklist/sslblacklist.csv"
-  read_csv comments=true, header="timestamp,SHA1,reason"
-  legacy "context update sslbl --key=SHA1"
 }
+read_csv comments=true, header="timestamp,SHA1,reason"
+legacy "context update sslbl --key=SHA1"
 ```
+
+:::tip Minimizing operators that execute periodically
+While we could have wrapped the entire pipeline into `every {...}`, 
+:::
 
 Now let's copy that into the package definition:
 
@@ -136,9 +140,9 @@ pipelines:
       // tql2
       every 1h {
         load_http "from https://sslbl.abuse.ch/blacklist/sslblacklist.csv"
-        read_csv comments=true, header="timestamp,SHA1,reason"
-        legacy "context update sslbl --key=SHA1"
       }
+      read_csv comments=true, header="timestamp,SHA1,reason"
+      legacy "context update sslbl --key=SHA1"
     restart-on-error: 1 hour
 ```
 
@@ -167,9 +171,9 @@ examples:
     definition: |
       // tql2
       subscribe "suricata"
-      | where @name == "suricata.tls"
-      | set sha1 = tls.fingerprint.replace(":", "")
-      | legacy "enrich sha1 sslbl"
+      where @name == "suricata.tls"
+      sha1 = tls.fingerprint.replace(":", "")
+      legacy "enrich sha1 sslbl"
 
   - name: Display top-10 listing reasons
     description: |
