@@ -64,7 +64,6 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
       }
       // Have to potentially split, again.
       auto new_time = value_at(time_type{}, *values, 0);
-      // TODO: Copy is unnecessary.
       auto copy = table_slice{input};
       copy.import_time(new_time);
       return copy;
@@ -94,10 +93,9 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
       if (new_value) {
         new_attributes.emplace_back("internal", "");
       }
-      // TODO: Is this correct?
       auto new_type = type{
         input.schema().name(),
-        input.schema(),
+        caf::get<record_type>(input.schema()),
         std::move(new_attributes),
       };
       auto new_batch
@@ -198,15 +196,17 @@ auto assign(const ast::simple_selector& left, series right,
                         result.type.kind())
       .primary(left)
       .emit(dh);
-    // TODO: Metadata?
     result = {record_type{}, make_struct_array(result.length(), nullptr, {})};
   }
-  // TODO: Metadata?
-  result.type = type{"tenzir.set", result.type};
-  return table_slice{arrow::RecordBatch::Make(
-                       result.type.to_arrow_schema(), result.length(),
-                       caf::get<arrow::StructArray>(*result.array).fields()),
-                     result.type};
+  result.type.assign_metadata(input.schema());
+  auto slice = table_slice{
+    arrow::RecordBatch::Make(
+      result.type.to_arrow_schema(), result.length(),
+      caf::get<arrow::StructArray>(*result.array).fields()),
+    result.type,
+  };
+  slice.import_time(input.import_time());
+  return slice;
 }
 
 auto assign(const ast::selector& left, series right, const table_slice& input,
