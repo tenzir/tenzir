@@ -8,6 +8,8 @@
 
 #include <tenzir/aggregation_function.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::any {
 
@@ -28,20 +30,23 @@ private:
 
   void add(const data_view& view) override {
     using view_type = tenzir::view<bool>;
-    if (caf::holds_alternative<caf::none_t>(view))
+    if (caf::holds_alternative<caf::none_t>(view)) {
       return;
-    if (!any_)
+    }
+    if (!any_) {
       any_ = materialize(caf::get<view_type>(view));
-    else
+    } else {
       any_ = *any_ || caf::get<view_type>(view);
+    }
   }
 
   void add(const arrow::Array& array) override {
     const auto& bool_array = caf::get<type_to_arrow_array_t<bool_type>>(array);
-    if (!any_)
+    if (!any_) {
       any_ = bool_array.true_count() > 0;
-    else
+    } else {
       any_ = *any_ || bool_array.true_count() > 0;
+    }
   }
 
   [[nodiscard]] caf::expected<data> finish() && override {
@@ -51,7 +56,41 @@ private:
   std::optional<bool> any_ = {};
 };
 
-class plugin : public virtual aggregation_function_plugin {
+class any_instance final : public aggregation_instance {
+public:
+  explicit any_instance(ast::expression expr) : expr_{std::move(expr)} {
+  }
+
+  auto update(const table_slice& input, session ctx) -> void override {
+    if (failed) {
+      return;
+    }
+    auto arg = eval(expr_, input, ctx);
+    auto f = detail::overload{
+      [](const arrow::NullArray&) {},
+      [&](const arrow::BooleanArray& array) {
+        any_ = any_ or array.true_count() > 0;
+      },
+      [&](auto&&) {
+        diagnostic::warning("expected type `bool`, got `{}`", arg.type.kind())
+          .primary(expr_)
+          .emit(ctx);
+      }};
+    caf::visit(f, *arg.array);
+  }
+
+  auto finish() -> data override {
+    return failed ? data{} : any_;
+  }
+
+private:
+  ast::expression expr_;
+  bool failed{false};
+  bool any_{false};
+};
+
+class plugin : public virtual aggregation_function_plugin,
+               public virtual aggregation_plugin {
   caf::error initialize([[maybe_unused]] const record& plugin_config,
                         [[maybe_unused]] const record& global_config) override {
     return {};
@@ -63,12 +102,22 @@ class plugin : public virtual aggregation_function_plugin {
 
   [[nodiscard]] caf::expected<std::unique_ptr<aggregation_function>>
   make_aggregation_function(const type& input_type) const override {
-    if (caf::holds_alternative<bool_type>(input_type))
+    if (caf::holds_alternative<bool_type>(input_type)) {
       return std::make_unique<any_function>(input_type);
+    }
     return caf::make_error(ec::invalid_configuration,
                            fmt::format("any aggregation function does not "
                                        "support type {}",
                                        input_type));
+  }
+
+  auto make_aggregation(invocation inv, session ctx) const
+    -> failure_or<std::unique_ptr<aggregation_instance>> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function("tql2.any")
+          .add(expr, "<expr>")
+          .parse(inv, ctx));
+    return std::make_unique<any_instance>(std::move(expr));
   }
 
   auto aggregation_default() const -> data override {
