@@ -263,15 +263,16 @@ struct managed_serve_operator {
   caf::disposable delayed_attempt = {};
   caf::typed_response_promise<void> put_rp = {};
   caf::typed_response_promise<void> stop_rp = {};
-  caf::typed_response_promise<std::tuple<std::string, std::vector<table_slice>>>
-    get_rp = {};
+  std::vector<caf::typed_response_promise<
+    std::tuple<std::string, std::vector<table_slice>>>>
+    get_rps = {};
 
   /// Attempt to deliver up to the number of requested results.
   /// @param force_underful Return underful result sets instead of failing when
   /// not enough results are buffered.
   /// @returns Whether the results were delivered.
   auto try_deliver_results(bool force_underful) -> bool {
-    TENZIR_ASSERT(get_rp.pending());
+    TENZIR_ASSERT(not get_rps.empty());
     // If we throttled the serve operator, then we can continue its operation
     // again if we have less events buffered than desired.
     if (put_rp.pending() and rows(buffer) < std::max(buffer_size, requested)) {
@@ -297,7 +298,10 @@ struct managed_serve_operator {
       TENZIR_ASSERT(not put_rp.pending());
       TENZIR_DEBUG("serve for id {} is done", escape_operator_arg(serve_id));
       continuation_token.clear();
-      get_rp.deliver(std::make_tuple(std::string{}, std::move(results)));
+      for (auto&& get_rp : std::exchange(get_rps, {})) {
+        TENZIR_ASSERT(get_rp.pending());
+        get_rp.deliver(std::make_tuple(std::string{}, results));
+      }
       stop_rp.deliver();
       return true;
     }
@@ -309,7 +313,10 @@ struct managed_serve_operator {
     continuation_token = fmt::to_string(uuid::random());
     TENZIR_DEBUG("serve for id {} is now available with continuation token {}",
                  escape_operator_arg(serve_id), continuation_token);
-    get_rp.deliver(std::make_tuple(continuation_token, std::move(results)));
+    for (auto&& get_rp : std::exchange(get_rps, {})) {
+      TENZIR_ASSERT(get_rp.pending());
+      get_rp.deliver(std::make_tuple(continuation_token, results));
+    }
     return true;
   }
 };
@@ -353,9 +360,11 @@ struct serve_manager_state {
           });
       if (found != ops.end()) {
         expired_ids.emplace(found->serve_id, reason);
-        if (found->get_rp.pending()) {
+        if (not found->get_rps.empty()) {
           found->delayed_attempt.dispose();
-          found->get_rp.deliver(reason);
+          for (auto&& get_rp : std::exchange(found->get_rps, {})) {
+            get_rp.deliver(reason);
+          }
         }
         ops.erase(found);
       }
@@ -431,7 +440,7 @@ struct serve_manager_state {
                                      *self, escape_operator_arg(serve_id)));
     }
     found->buffer.push_back(std::move(slice));
-    if (found->get_rp.pending()) {
+    if (not found->get_rps.empty()) {
       const auto delivered = found->try_deliver_results(false);
       if (delivered) {
         TENZIR_DEBUG("{} delivered results eagerly for serve id {}", *self,
@@ -481,20 +490,14 @@ struct serve_manager_state {
                     "{} for serve id {}",
                     *self, request.continuation_token, request.serve_id));
     }
-    if (found->get_rp.pending()) {
-      return caf::make_error(
-        ec::invalid_argument,
-        fmt::format("{} got duplicate request for events "
-                    "with continuation token {} for serve id {}",
-                    *self, request.continuation_token, request.serve_id));
-    }
-    found->get_rp = self->make_response_promise<
+    auto rp = self->make_response_promise<
       std::tuple<std::string, std::vector<table_slice>>>();
+    found->get_rps.push_back(rp);
     found->requested = request.limits.max_events;
     found->min_events = request.limits.min_events;
     const auto delivered = found->try_deliver_results(false);
     if (delivered) {
-      return found->get_rp;
+      return rp;
     }
     found->delayed_attempt.dispose();
     found->delayed_attempt = detail::weak_run_delayed(
@@ -511,11 +514,11 @@ struct serve_manager_state {
         }
         TENZIR_ASSERT(not found->done);
         TENZIR_ASSERT(found->continuation_token == continuation_token);
-        TENZIR_ASSERT(found->get_rp.pending());
+        TENZIR_ASSERT(not found->get_rps.empty());
         const auto delivered = found->try_deliver_results(true);
         TENZIR_ASSERT(delivered);
       });
-    return found->get_rp;
+    return rp;
   }
 
   auto status(status_verbosity verbosity) const -> caf::result<record> {
@@ -535,7 +538,7 @@ struct serve_manager_state {
       entry.emplace("done", op.done);
       if (verbosity >= status_verbosity::detailed) {
         entry.emplace("put_pending", op.put_rp.pending());
-        entry.emplace("get_pending", op.get_rp.pending());
+        entry.emplace("get_pending", not op.get_rps.empty());
         entry.emplace("stop_pending", op.stop_rp.pending());
       }
       if (verbosity >= status_verbosity::debug) {
