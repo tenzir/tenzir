@@ -655,7 +655,9 @@ jobs:
           ./scripts/debian/install-fluent-bit.sh
       - name: Install Dependencies (macOS)
         if: ${{ matrix.tenzir.name == 'macOS' }}
-        run: ./scripts/macOS/install-dev-dependencies.sh
+        run: |
+          ./scripts/macOS/install-dev-dependencies.sh
+          ./scripts/macOS/install-arrow-adbc.sh
       - name: Setup Python
         if: ${{ matrix.tenzir.name == 'macOS' }}
         uses: actions/setup-python@v5
