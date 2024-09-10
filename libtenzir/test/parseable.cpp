@@ -1059,14 +1059,6 @@ TEST(option set - missing option value) {
 
 // -- API ---------------------------------------------------------------------
 
-// TEST(stream) {
-//   std::istringstream ss{"1,2,3"};
-//   offset xs;
-//   ss >> xs;
-//   CHECK(ss.good());
-//   CHECK_EQUAL(xs, (offset{1, 2, 3}));
-// }
-
 TEST( range ) {
   const auto s = "1,2,3"sv;
   offset xs;

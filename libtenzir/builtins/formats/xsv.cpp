@@ -59,16 +59,13 @@ struct xsv_options {
     parser.parse(p);
     auto field_sep = to_xsv_sep(field_sep_str.inner);
     if (!field_sep) {
-      diagnostic::error("invalid separator: {}", field_sep.error())
+      diagnostic::error(field_sep.error())
         .primary(field_sep_str.source)
         .throw_();
     }
     auto list_sep = to_xsv_sep(list_sep_str.inner);
     if (!list_sep) {
-      diagnostic::error("invalid separator:")
-        .note("got \"{}\"", list_sep.error())
-        .primary(list_sep_str.source)
-        .throw_();
+      diagnostic::error(list_sep.error()).primary(list_sep_str.source).throw_();
     }
     if (*field_sep == *list_sep) {
       diagnostic::error("field separator and list separator must be "
@@ -120,9 +117,11 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
       list_sep_str_{located{std::string{list_sep_default}, location::unknown}},
       null_value_{located{std::move(null_value_default), location::unknown}},
       mode_{mode::special_optional} {
+    settings_.merge = true;
   }
 
   xsv_common_parser_options_parser(std::string name) : name_{std::move(name)} {
+    settings_.merge = true;
   }
   auto add_to_parser(argument_parser& parser) -> void {
     if (mode_ == mode::special_optional) {
@@ -139,7 +138,9 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
     parser.add("--allow-comments", allow_comments_);
     parser.add("--header", header_, "<header>");
     parser.add("--auto-expand", auto_expand_);
-    multi_series_builder_argument_parser::add_all_to_parser(parser);
+    multi_series_builder_argument_parser::add_policy_to_parser(parser);
+    multi_series_builder_argument_parser::add_settings_to_parser(parser, true,
+                                                                 false);
   }
   auto add_to_parser(argument_parser2& parser) -> void {
     if (mode_ == mode::special_optional) {
@@ -156,24 +157,25 @@ struct xsv_common_parser_options_parser : multi_series_builder_argument_parser {
     parser.add("comments", allow_comments_);
     parser.add("header", header_);
     parser.add("auto_expand", auto_expand_);
-    multi_series_builder_argument_parser::add_all_to_parser(parser);
+    multi_series_builder_argument_parser::add_policy_to_parser(parser);
+    multi_series_builder_argument_parser::add_settings_to_parser(parser, true,
+                                                                 false);
   }
 
   auto get_options(diagnostic_handler& dh) -> failure_or<xsv_options> {
     auto field_sep = to_xsv_sep(field_sep_str_->inner);
     if (!field_sep) {
-      diagnostic::error("invalid field separator:")
-        .note("{}", field_sep.error())
+      diagnostic::error(field_sep.error())
         .primary(field_sep_str_->source)
         .emit(dh);
       return failure::promise();
     }
     auto list_sep = to_xsv_sep(list_sep_str_->inner);
     if (!list_sep) {
-      diagnostic::error("invalid list-element separator:")
-        .note("{}", list_sep.error())
+      diagnostic::error(list_sep.error())
         .primary(list_sep_str_->source)
         .emit(dh);
+      return failure::promise();
     }
     if (*field_sep == *list_sep) {
       diagnostic::error("field separator and list separator must be "
@@ -749,8 +751,12 @@ public:
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
-    auto opt_parser = xsv_common_parser_options_parser{name(), Sep, ListSep,
-                                                       std::string{Null.str()}};
+    auto opt_parser = xsv_common_parser_options_parser{
+      name(),
+      Sep,
+      ListSep,
+      std::string{Null.str()},
+    };
     opt_parser.add_to_parser(parser);
     auto result = parser.parse(inv, ctx);
     TRY(result);

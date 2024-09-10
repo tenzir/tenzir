@@ -73,34 +73,32 @@ auto parse_extension(std::string_view extension,
   if (extension.empty()) {
     return {};
   }
-  // find the first not quoted, not escaped kv separator
-  auto key_end = detail::find_first_not_in_quotes(extension, '=');
-  while (detail::is_escaped(key_end, extension)) {
-    key_end = detail::find_first_not_in_quotes(extension, '=', key_end + 1);
-  }
-  if (key_end == extension.npos) {
+  auto find_next_kv_sep = [](std::string_view extension) {
+    auto kv_sep = detail::find_first_not_in_quotes(extension, '=');
+    while (detail::is_escaped(kv_sep, extension)) {
+      kv_sep = detail::find_first_not_in_quotes(extension, '=', kv_sep + 1);
+    }
+    return kv_sep;
+  };
+  // Find the first not quoted, not escaped kv separator.
+  auto kv_sep = find_next_kv_sep(extension);
+  if (kv_sep == extension.npos) {
     return diagnostic::warning(
              "extension field did not contain a key-value separator")
       .done();
   }
-  // extract the first key
-  auto key = extension.substr(0, key_end);
-  extension.remove_prefix(key_end + 1);
-  if (extension.empty()) {
-    return diagnostic::warning("extension field did not contain a value").done();
-  }
-  // find the next not quoted, not escaped kv separator
   while (not extension.empty()) {
-    key_end = detail::find_first_not_in_quotes(extension, '=');
-    while (detail::is_escaped(key_end, extension)) {
-      key_end = detail::find_first_not_in_quotes(extension, '=', key_end + 1);
-    }
-    // find the last whitespace, determining the end of the value text
-    auto value_end = key_end == extension.npos
+    auto key = unescape(detail::trim(extension.substr(0, kv_sep)));
+    extension.remove_prefix(kv_sep + 1);
+    // Find the next not quoted, not escaped kv separator.
+    kv_sep = find_next_kv_sep(extension);
+    // Find the last whitespace before the key, determining the end of the value
+    // text.
+    auto value_end = kv_sep == extension.npos
                        ? extension.npos
-                       : extension.find_last_of(" \t", key_end);
-    auto value = unescape(detail::unquote(detail::trim(extension.substr(0, value_end))));
-    key = tenzir::detail::trim(key);
+                       : extension.find_last_of(" \t", kv_sep);
+    auto value
+      = unescape(detail::unquote(detail::trim(extension.substr(0, value_end))));
     if constexpr (detail::multi_series_builder::has_unflattend_field<
                     decltype(builder)>) {
       auto field = builder.unflattend_field(key);
@@ -114,14 +112,11 @@ auto parse_extension(std::string_view extension,
         field.data(std::move(value));
       }
     }
-    if (value_end != extension.npos) {
-      key = extension.substr(value_end + 1, key_end - value_end - 1);
-    }
-    if (key_end != extension.npos) {
-      extension.remove_prefix(key_end + 1);
-    } else {
+    if (value_end == extension.npos) {
       break;
     }
+    kv_sep -= value_end + 1;
+    extension.remove_prefix(value_end + 1);
   }
   return {};
 }
@@ -133,11 +128,18 @@ parse_line(std::string_view line, auto& msb) -> std::optional<diagnostic> {
   if (fields.size() < 7 or fields.size() > 8) {
     return diagnostic::warning("incorrect field count in CEF event").done();
   }
+  if (not fields[0].starts_with("CEF:")) {
+    return diagnostic::warning("invalid CEF header")
+      .note("header does not start with `CEF:`")
+      .done();
+  }
   int64_t version;
   auto [ptr, ec] = std::from_chars(
     fields[0].c_str() + 4, fields[0].c_str() + fields[0].size(), version);
-  if (not fields[0].starts_with("CEF:") or ec != std::errc{}) {
-    return diagnostic::warning("invalid CEF header").done();
+  if (ec != std::errc{}) {
+    return diagnostic::warning("invalid CEF header")
+      .note("failed to parse CEF version")
+      .done();
   }
   auto r = msb.record();
   r.field("cef_version").data(version);

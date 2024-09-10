@@ -451,25 +451,29 @@ public:
       if (not success) {
         builder.remove_last();
         ++diags_emitted;
-        return;
+        continue;
       }
     }
     if (objects_parsed == 0 and diags_emitted == 0) {
-      diagnostic::warning(
-        "NDJSON line did not contain a single valid JSON object")
+      diagnostic::warning("line did not contain a single valid JSON object")
         .note("skipped invalid JSON `{}`", truncate(json_line))
         .emit(*dh);
     } else if (objects_parsed > 1) {
-      diagnostic::warning("more than one JSON objects between delimiters")
+      diagnostic::warning("more than one JSON object in line")
         .note("encountered a total of {} objects", objects_parsed)
         .emit(*dh);
     }
-    if (auto truncated = stream.truncated_bytes() and objects_parsed) {
+    auto truncated_count = stream.truncated_bytes();
+    if (truncated_count > 0 and objects_parsed) {
+      auto truncated_text = std::string_view{
+        json_line.data() + json_line.size() - truncated_count, truncated_count};
       diagnostic::warning("skipped remaining invalid JSON bytes")
-        .note("{} bytes remained", truncated)
+        .note("{} bytes remained", truncated_count)
+        .note("skipped invalid JSON `{}`", truncate(truncated_text))
         .emit(*dh);
     }
   }
+
   void validate_completion() const {
     // noop, just exists for easy of implementation
   }
@@ -816,7 +820,7 @@ public:
     auto args = parser_args{"json"};
     multi_series_builder_argument_parser msb_parser{
       {.default_schema_name = "tenzir.json"},
-      multi_series_builder::policy_precise{},
+      multi_series_builder::policy_default{},
     };
     msb_parser.add_all_to_parser(parser);
     std::optional<location> legacy_precise;
@@ -864,8 +868,7 @@ public:
     TENZIR_ASSERT(opts);
     args.builder_options = *opts;
     if (legacy_precise) {
-      if (std::get_if<multi_series_builder::policy_merge>(
-            &args.builder_options.policy)) {
+      if (args.builder_options.settings.merge) {
         diagnostic::error("`--precise` and `--merge` incompatible")
           .primary(*legacy_precise)
           .note("`--precise` is a legacy option and and should not be used")
@@ -924,7 +927,7 @@ public:
       name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
     auto msb_parser = multi_series_builder_argument_parser{
       multi_series_builder::settings_type{.default_schema_name = "gelf"},
-      multi_series_builder::policy_precise{},
+      multi_series_builder::policy_default{},
     };
     msb_parser.add_all_to_parser(parser);
     parser.parse(p);
@@ -1131,6 +1134,7 @@ public:
   auto name() const -> std::string override {
     return "read_gelf";
   }
+
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
@@ -1250,7 +1254,8 @@ public:
             return std::move(result[0]);
           },
           [&](const auto&) {
-            diagnostic::warning("`parse_json` expected `string`, got `{}`", arg.type.kind())
+            diagnostic::warning("`parse_json` expected `string`, got `{}`",
+                                arg.type.kind())
               .primary(call)
               .emit(ctx);
             return series::null(null_type{}, arg.length());

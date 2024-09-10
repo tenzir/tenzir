@@ -8,13 +8,14 @@
   read json {
     parser_name: "json",
     builder_options: {
-      policy: policy_precise {
-        seed_schema: ""
+      policy: policy_default {
+        
       },
       settings: {
         default_schema_name: "tenzir.json",
         ordered: true,
         schema_only: false,
+        merge: false,
         raw: false,
         unnest_separator: "",
         timeout: "1s",

@@ -519,7 +519,7 @@ auto add(auto field, const msgpack_object& object,
     [&](std::nullopt_t) {
       field.null();
     },
-    [&](auto x) { // FIXME support raw
+    [&](auto x) {
       field.data(x);
     },
     [&](std::string_view x) {
@@ -531,7 +531,7 @@ auto add(auto field, const msgpack_object& object,
       // `decode_field json <field>`.
       if (decode) {
         if (auto json = from_json(x)) {
-          // field.data(*json); //FIXME
+          field.data(*json);
           return;
         }
       }

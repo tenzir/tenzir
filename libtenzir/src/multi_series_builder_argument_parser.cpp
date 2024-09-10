@@ -44,11 +44,11 @@ auto parse_selector(std::string_view x, location source, diagnostic_handler& dh)
 
 auto multi_series_builder_argument_parser::add_settings_to_parser(
   argument_parser& parser, bool add_unflatten_option,
-  bool add_unique_selector_option) -> void {
+  bool add_merge_option) -> void {
   is_tql1_ = true;
   parser.add("--schema-only", schema_only_);
-  if (add_unique_selector_option) {
-    parser.add("--unique-selector", unique_selector_);
+  if (add_merge_option) {
+    parser.add("--merge", merge_);
   }
   parser.add("--raw", raw_);
   if (add_unflatten_option) {
@@ -59,7 +59,6 @@ auto multi_series_builder_argument_parser::add_settings_to_parser(
 auto multi_series_builder_argument_parser::add_policy_to_parser(
   argument_parser& parser) -> void {
   is_tql1_ = true;
-  parser.add("--merge", merge_);
   parser.add("--schema", schema_, "<schema>");
   parser.add("--selector", selector_, "<selector>");
 }
@@ -72,10 +71,10 @@ auto multi_series_builder_argument_parser::add_all_to_parser(
 
 auto multi_series_builder_argument_parser::add_settings_to_parser(
   argument_parser2& parser, bool add_unflatten_option,
-  bool add_unique_selector_option) -> void {
+  bool add_merge_option) -> void {
   parser.add("schema_only", schema_only_);
-  if (add_unique_selector_option) {
-    parser.add("unique_selector", unique_selector_);
+  if (add_merge_option) {
+    parser.add("merge", merge_);
   }
   parser.add("raw", raw_);
   if (add_unflatten_option) {
@@ -85,7 +84,6 @@ auto multi_series_builder_argument_parser::add_settings_to_parser(
 
 auto multi_series_builder_argument_parser::add_policy_to_parser(
   argument_parser2& parser) -> void {
-  parser.add("merge", merge_);
   parser.add("schema", schema_);
   parser.add("selector", selector_);
 }
@@ -101,15 +99,17 @@ auto multi_series_builder_argument_parser::get_settings(diagnostic_handler& dh)
   (void)get_policy(dh); // force update policy.
   settings_.schema_only |= schema_only_.has_value();
   if (settings_.schema_only
-      and std::holds_alternative<multi_series_builder::policy_merge>(policy_)) {
-    // this error message is worded to support cases where the `merge` policy
+      and std::holds_alternative<multi_series_builder::policy_default>(
+        policy_)) {
+    // This error message is worded to support cases where the `merge` policy
     // was defaulted by the parser
     diagnostic::error("`--schema-only` requires a `--schema` or `--selector`")
       .primary(*schema_only_)
       .emit(dh);
     return false;
   }
-  if (auto* p = std::get_if<multi_series_builder::policy_precise>(&policy_)) {
+  settings_.merge |= merge_.has_value();
+  if (auto* p = std::get_if<multi_series_builder::policy_schema>(&policy_)) {
     if (p->seed_schema.empty() and settings_.schema_only) {
       diagnostic::error(
         "`--schema-only` requires a valid `--schema` or `--selector`")
@@ -178,13 +178,9 @@ auto multi_series_builder_argument_parser::get_settings(diagnostic_handler& dh)
 
 auto multi_series_builder_argument_parser::get_policy(diagnostic_handler& dh)
   -> bool {
-  bool has_merge = false;
   bool has_schema = false;
   bool has_selector = false;
   // policy detection
-  if (merge_) {
-    has_merge = true;
-  }
   if (schema_) {
     has_schema = true;
   }
@@ -198,19 +194,6 @@ auto multi_series_builder_argument_parser::get_policy(diagnostic_handler& dh)
       .emit(dh);
     return false;
   }
-  if (has_merge and has_selector) {
-    diagnostic::error("`--merge` and `--selector` cannot be combined")
-      .primary(*merge_)
-      .primary(selector_->source)
-      .emit(dh);
-    return false;
-  }
-  if (unique_selector_.has_value() and not has_selector) {
-    diagnostic::error("`--unique-selector` requires a `--selector` to be set")
-      .primary(*unique_selector_)
-      .emit(dh);
-    return false;
-  }
   std::string seed_type;
   if (has_schema) {
     if (schema_->inner.empty()) {
@@ -221,26 +204,17 @@ auto multi_series_builder_argument_parser::get_policy(diagnostic_handler& dh)
     }
     seed_type = schema_->inner;
   }
-  if (has_merge) {
-    if (has_schema) {
-      policy_ = multi_series_builder::policy_merge{
-        .seed_schema = seed_type,
-      };
-    } else {
-      policy_ = multi_series_builder::policy_merge{};
-    }
-  } else if (has_selector) {
+  if (has_selector) {
     auto p = parse_selector(selector_->inner, selector_->source, dh);
-    if ( not p ) {
+    if (not p) {
       return false;
     }
-    p->unique_selector = unique_selector_.has_value();
     policy_ = std::move(*p);
   } else if (has_schema) {
     // this needs an extra guard for "has_schema", because it could otherwise be
     // resetting a non-empty default seed.
     // the same issue for merge is already handled above
-    policy_ = multi_series_builder::policy_precise{
+    policy_ = multi_series_builder::policy_schema{
       .seed_schema = seed_type,
     };
   }

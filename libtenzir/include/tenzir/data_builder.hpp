@@ -385,7 +385,7 @@ private:
   /// tries to static_cast the held value to T.
   /// @returns whether the cast was performed
   template <typename T>
-  auto cast_to() -> bool {
+  [[nodiscard]] auto cast_to() -> bool {
     const auto visitor = detail::overload{
       [this]<typename Current>(const Current& v) -> bool
         requires requires(Current c) { static_cast<T>(c); }

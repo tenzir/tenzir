@@ -16,15 +16,19 @@
 
 namespace tenzir::detail {
 
+constexpr inline std::string_view ascii_whitespace = " \t\r\n\f\v";
 /// trims leading whitespace of string according to the given whitespace
 /// @param value the string to trim
 /// @param whitespace a string of characters, each of white is considered
 /// whitespace
 /// @returns a string_view without leading whitespace
 inline auto trim_front(std::string_view value, const std::string_view whitespace
-                                               = " \t") -> std::string_view {
+                                               = ascii_whitespace) -> std::string_view {
+  if (value.empty()) {
+    return value;
+  }
   const auto first_character = value.find_first_not_of(whitespace);
-  if (first_character > 0 and first_character != value.npos) {
+  if (first_character != value.npos) {
     value.remove_prefix(first_character);
   }
   return value;
@@ -36,10 +40,13 @@ inline auto trim_front(std::string_view value, const std::string_view whitespace
 /// whitespace
 /// @returns a string_view without trailing whitespace
 inline auto trim_back(std::string_view value, const std::string_view whitespace
-                                              = " \t") -> std::string_view {
+                                              = ascii_whitespace) -> std::string_view {
+  if (value.empty()) {
+    return value;
+  }
   const auto last_character = value.find_last_not_of(whitespace);
-  if (last_character != value.size() - 1 and last_character != value.npos) {
-    value.remove_suffix(value.size() - last_character + 1);
+  if (last_character != value.npos) {
+    value.remove_suffix(value.size() - last_character - 1);
   }
   return value;
 }
@@ -50,7 +57,7 @@ inline auto trim_back(std::string_view value, const std::string_view whitespace
 /// whitespace
 /// @returns a string_view without leading or trailing whitespace
 inline auto trim(std::string_view value, const std::string_view whitespace
-                                         = " \t") -> std::string_view {
+                                         = ascii_whitespace) -> std::string_view {
   value = trim_front(value, whitespace);
   value = trim_back(value, whitespace);
   return value;
@@ -58,19 +65,17 @@ inline auto trim(std::string_view value, const std::string_view whitespace
 
 /// @brief Checks whether the index `idx` in `text` is escaped
 inline auto is_escaped(size_t idx, std::string_view text) {
-  if (idx > text.size()) {
+  if (idx >= text.size()) {
     return false;
   }
-  if (idx == 0) {
-    return false;
+  // An odd number of preceding backslashes means it is escaped, for example:
+  // `x\n` => true, `x\\n` => false, `x\\\n` => true, 'x\\\\n' => false.
+  auto backslashes = size_t{0};
+  while (idx > 0 and text[idx - 1] == '\\') {
+    ++backslashes;
+    --idx;
   }
-  if (text[idx - 1] == '\\') {
-    if (idx > 1 and text[idx - 2] == '\\') {
-      return false;
-    }
-    return true;
-  }
-  return false;
+  return backslashes % 2 == 1;
 }
 
 /// finds the index of the first occurrence that is not enclosed my matching

@@ -12,4 +12,12 @@ The `zeek-json` format is an alias for [`json`](json.md) with the arguments:
 - `--unnest-separator="."`
 - `--ndjson`
 
-All other options from [`json`](json.md) are also supported, including the common [schema inference options](formats.md#parser-schema-inference).
+# Synoposis
+
+```
+zeek-json [--schema-only] [--raw] [--no-infer]
+```
+
+### Common Options (Parser)
+
+The Suricata parser supports some of the common [schema inference options](formats.md#parser-schema-inference).

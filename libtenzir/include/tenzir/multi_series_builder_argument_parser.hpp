@@ -33,12 +33,12 @@ public:
 
   auto add_settings_to_parser(argument_parser& parser,
                               bool add_unflatten_option = true,
-                              bool add_unique_selector_option = true) -> void;
+                              bool add_merge_option = true) -> void;
   auto add_policy_to_parser(argument_parser& parser) -> void;
   auto add_all_to_parser(argument_parser& parser) -> void;
   auto add_settings_to_parser(argument_parser2& parser,
                               bool add_unflatten_option = true,
-                              bool add_unique_selector_option = true) -> void;
+                              bool add_merge_option = true) -> void;
   auto add_policy_to_parser(argument_parser2& parser) -> void;
   auto add_all_to_parser(argument_parser2& parser) -> void;
 
@@ -69,18 +69,16 @@ public:
   bool is_tql1_ = false;
   multi_series_builder::settings_type settings_ = {};
   multi_series_builder::policy_type policy_
-    = multi_series_builder::policy_precise{};
+    = multi_series_builder::policy_default{};
 
-  std::optional<location> merge_;
-
-  // Policy merge & Policy default(precise)
+  // Policy schema
   std::optional<located<std::string>> schema_;
 
   // Policy selector
   std::optional<located<std::string>> selector_;
-  std::optional<location> unique_selector_;
 
   // settings
+  std::optional<location> merge_;
   std::optional<location> schema_only_;
   std::optional<located<std::string>> unnest_;
   std::optional<location> raw_;

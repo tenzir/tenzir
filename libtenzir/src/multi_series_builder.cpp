@@ -71,6 +71,18 @@ auto record_generator::unflattend_field(std::string_view key)
   return unflattend_field(key, msb_->settings_.unnest_separator);
 }
 
+auto field_generator::data(const tenzir::data& d) -> void {
+  const auto visitor = detail::overload{
+    [&](tenzir::builder_ref b) {
+      b.data(d);
+    },
+    [&](raw_pointer raw) {
+      raw->data(d);
+    },
+  };
+  return std::visit(visitor, var_);
+}
+
 auto field_generator::data_unparsed(std::string_view s) -> void {
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
@@ -125,6 +137,19 @@ void field_generator::null() {
 void list_generator::null() {
   return this->data(caf::none);
 }
+
+auto list_generator::data(const tenzir::data& d) -> void {
+  const auto visitor = detail::overload{
+    [&](tenzir::builder_ref b) {
+      b.data(d);
+    },
+    [&](raw_pointer raw) {
+      raw->data(d);
+    },
+  };
+  return std::visit(visitor, var_);
+}
+
 auto list_generator::data_unparsed(std::string_view s) -> void {
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
@@ -206,32 +231,34 @@ multi_series_builder::multi_series_builder(
     settings_{std::move(settings)},
     dh_{dh},
     builder_raw_{std::move(parser), &dh, settings_.schema_only, settings_.raw} {
-  TENZIR_ASSERT(not std::holds_alternative<std::monostate>(policy_));
   schemas_.reserve(schemas.size());
   for (auto t : schemas) {
     const auto [it, success] = schemas_.try_emplace(t.name(), std::move(t));
     TENZIR_ASSERT(success, "Repeated schema name");
   }
-  // Setup the merging builder in merging mode
-  if (auto p = get_policy<policy_merge>()) {
-    settings_.ordered = true; // merging mode is necessarily ordered
-    if (auto seed = type_for_schema(p->seed_schema)) {
-      merging_builder_ = seed;
+  if (auto p = get_policy<policy_default>()) {
+    // if we merge all events, they are necessarily ordered
+    settings_.ordered |= settings_.merge;
+  } else if (auto p = get_policy<policy_schema>()) {
+    if (settings_.merge) {
+      // if we merge all events, they are necessarily ordered
+      settings_.ordered = true;
+      if (auto seed = type_for_schema(p->seed_schema)) {
+        merging_builder_ = seed;
+      } else {
+        merging_builder_ = tenzir::type{p->seed_schema, null_type{}};
+      }
     } else {
-      merging_builder_ = tenzir::type{p->seed_schema, null_type{}};
-    }
-  }
-  // Setup the naming sentinel for naming builders in precise mode
-  else if (auto p = get_policy<policy_precise>()) {
-    if (auto seed = type_for_schema(p->seed_schema)) {
-      naming_sentinel_ = *seed;
-      needs_signature_ = not settings_.schema_only;
-      builder_schema_ = &naming_sentinel_;
-      parsing_signature_schema_ = &naming_sentinel_;
-    } else {
-      naming_sentinel_ = tenzir::type{p->seed_schema, null_type{}};
-      builder_schema_ = &naming_sentinel_;
-      parsing_signature_schema_ = nullptr;
+      if (auto seed = type_for_schema(p->seed_schema)) {
+        naming_sentinel_ = *seed;
+        needs_signature_ = not settings_.schema_only;
+        builder_schema_ = &naming_sentinel_;
+        parsing_signature_schema_ = &naming_sentinel_;
+      } else {
+        naming_sentinel_ = tenzir::type{p->seed_schema, null_type{}};
+        builder_schema_ = &naming_sentinel_;
+        parsing_signature_schema_ = nullptr;
+      }
     }
   }
   // The selector mode has not special ctor setup, as it all depends on runtime
@@ -268,12 +295,8 @@ auto multi_series_builder::yield_ready() -> std::vector<series> {
     return {};
   }
   last_yield_time_ = now;
-  if (auto* p = get_policy<policy_merge>()) {
-    auto ret = merging_builder_.finish();
-    if (p->reset_on_yield) {
-      merging_builder_ = series_builder{type_for_schema(p->seed_schema)};
-    }
-    return ret;
+  if (settings_.merge and not get_policy<policy_selector>()) {
+    return merging_builder_.finish();
   }
   make_events_available_where(
     [now, timeout = settings_.timeout,
@@ -296,7 +319,7 @@ auto multi_series_builder::yield_ready_as_table_slice()
 }
 
 auto multi_series_builder::record() -> record_generator {
-  if (get_policy<policy_merge>()) {
+  if (uses_merging_builder()) {
     return record_generator{this, merging_builder_.record()};
   } else {
     complete_last_event();
@@ -305,7 +328,7 @@ auto multi_series_builder::record() -> record_generator {
 }
 
 auto multi_series_builder::list() -> list_generator {
-  if (get_policy<policy_merge>()) {
+  if (uses_merging_builder()) {
     return list_generator{this, merging_builder_.list()};
   } else {
     complete_last_event();
@@ -314,7 +337,7 @@ auto multi_series_builder::list() -> list_generator {
 }
 
 void multi_series_builder::remove_last() {
-  if (get_policy<policy_merge>()) {
+  if (uses_merging_builder()) {
     merging_builder_.remove_last();
     return;
   }
@@ -328,7 +351,7 @@ void multi_series_builder::remove_last() {
 }
 
 auto multi_series_builder::finalize() -> std::vector<series> {
-  if (get_policy<policy_merge>()) {
+  if (uses_merging_builder()) {
     return merging_builder_.finish();
   }
   make_events_available_where([](const auto&) {
@@ -344,7 +367,7 @@ auto multi_series_builder::finalize_as_table_slice()
 }
 
 void multi_series_builder::complete_last_event() {
-  if (get_policy<policy_merge>()) {
+  if (uses_merging_builder()) {
     return; // merging mode just writes directly into a series builder
   }
   if (not builder_raw_.has_elements()) {
@@ -402,7 +425,7 @@ void multi_series_builder::complete_last_event() {
       needs_signature_ = true;
       // if the user promised that the selector is unique, we can rely on the
       // selectors name
-      if (p->unique_selector) {
+      if (settings_.merge) {
         needs_signature_ = not schema_name.empty();
       }
       // if we only want to output a schema, cam also just rely on its name
@@ -413,7 +436,7 @@ void multi_series_builder::complete_last_event() {
         // TODO re-consider this warning
         //  * it can get quite noisy
         //  * Do we even want to disable it for unique_selector?
-        if (selector_was_string and not p->unique_selector) {
+        if (selector_was_string and not settings_.merge) {
           diagnostic::warning("selected schema not found")
             .note("`{}` does not refer to a known schema", schema_name)
             .emit(dh_);
@@ -423,7 +446,7 @@ void multi_series_builder::complete_last_event() {
       }
       append_name_to_signature(schema_name, signature_raw_);
     }
-  } else if (auto p = get_policy<policy_precise>()) {
+  } else if (auto p = get_policy<policy_schema>()) {
     if (not p->seed_schema.empty()) {
       // technically there is no need to repeat these steps every iteration
       // But we would need special handling for writing the schema name into the
@@ -501,7 +524,7 @@ void multi_series_builder::append_ready_events(
 
 void multi_series_builder::garbage_collect_where(
   std::predicate<const entry_data&> auto pred) {
-  if (get_policy<policy_merge>()) {
+  if (uses_merging_builder()) {
     return;
   }
   for (auto it = signature_map_.begin(); it != signature_map_.end(); ++it) {

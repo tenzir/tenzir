@@ -16,25 +16,25 @@ Parser:
 ```
 csv [--list-sep <list-sep>] [--null-value <null-value>]
     [--allow-comments] [--auto-expand] [--header <header>]
-    [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
+    [--schema <schema>] [--selector <fieldname[:prefix]>]
     [--schema-only] [--raw] [--unnest-separator <separator>]
 ```
 ```
 ssv [--list-sep <list-sep>] [--null-value <null-value>]
     [--allow-comments] [--auto-expand] [--header <header>]
-    [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
+    [--schema <schema>] [--selector <fieldname[:prefix]>]
     [--schema-only] [--raw] [--unnest-separator <separator>]
 ```
 ```
 tsv [--list-sep <list-sep>] [--null-value <null-value>]
     [--allow-comments] [--auto-expand] [--header <header>]
-    [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
+     [--schema <schema>] [--selector <fieldname[:prefix]>]
     [--schema-only] [--raw] [--unnest-separator <separator>]
 ```
 ```
 xsv <field-sep> <list-sep> <null-value>
     [--allow-comments] [--auto-expand] [--header <header>]
-    [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
+    [--schema <schema>] [--selector <fieldname[:prefix]>]
     [--schema-only] [--raw] [--unnest-separator <separator>]
 ```
 

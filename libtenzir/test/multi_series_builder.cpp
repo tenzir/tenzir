@@ -195,7 +195,7 @@ TEST(merging records with seed and reset) {
   multi_series_builder b{
     multi_series_builder::policy_merge{
       .seed_schema = "seed",
-      .reset_on_yield = true,
+      .reset_on_yield = false,
     },
     multi_series_builder::settings_type{},
     dh,

@@ -547,9 +547,9 @@ EOF
 
 # bats test_tags=pipelines, xsv
 @test "XSV Format" {
-  check tenzir "from ${INPUTSDIR}/xsv/sample.csv read csv --merge | extend schema=#schema | write csv"
-  check tenzir "from ${INPUTSDIR}/xsv/sample.ssv read ssv --merge | extend schema=#schema | write ssv"
-  check tenzir "from ${INPUTSDIR}/xsv/sample.tsv read tsv --merge | extend schema=#schema | write tsv"
+  check tenzir "from ${INPUTSDIR}/xsv/sample.csv read csv | extend schema=#schema | write csv"
+  check tenzir "from ${INPUTSDIR}/xsv/sample.ssv read ssv | extend schema=#schema | write ssv"
+  check tenzir "from ${INPUTSDIR}/xsv/sample.tsv read tsv | extend schema=#schema | write tsv"
   check tenzir "from ${INPUTSDIR}/xsv/nulls-and-escaping.csv read csv"
   # Test that multiple batches only print the header once.
   check tenzir "read json --ndjson --precise | select foo | write csv" <<EOF

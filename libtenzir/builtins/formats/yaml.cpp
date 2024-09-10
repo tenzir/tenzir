@@ -76,6 +76,7 @@ auto parse_node(auto guard, const YAML::Node& node,
 
 auto load_document(multi_series_builder& msb, std::string&& document,
                    diagnostic_handler& diag) -> void {
+  bool added_event = false;
   try {
     auto node = YAML::Load(document);
     if (not node.IsMap()) {
@@ -83,6 +84,7 @@ auto load_document(multi_series_builder& msb, std::string&& document,
       return;
     }
     auto record = msb.record();
+    added_event = true;
     for (const auto& element : node) {
       const auto& name = element.first.as<std::string>();
       parse_node(record.unflattend_field(name), element.second, diag);
@@ -90,7 +92,9 @@ auto load_document(multi_series_builder& msb, std::string&& document,
   } catch (const YAML::Exception& err) {
     diagnostic::warning("failed to load YAML document: {}", err.what())
       .emit(diag);
-    msb.remove_last();
+    if (added_event) {
+      msb.remove_last();
+    }
   }
 };
 

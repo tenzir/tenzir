@@ -50,16 +50,18 @@ The following builtin parsers support setting a custom schema:
 - [YAML](formats/json.md)
 - [Zeek JSON](formats/zeek-json.md)
 
-The [Suricata](formats/suricata.md) and [Zeek JSON](formats/zeek-json.md) do not
-provide all of the options.
+The [Suricata](formats/suricata.md), [Zeek JSON](formats/zeek-json.md) and
+[XSV](formats/xsv.md) parsers do not provide all of the options.
 
 ### `--merge` (Parsers)
 
-Merges all incoming events into a single schema that converges over time. This
+Merges all incoming events into a single schema\* that converges over time. This
 option is usually the fastest if the data is highly heterogeneous, but can lead
-to huge schemas and imprecise results. Use with caution.
+to huge schemas filled and imprecise results. Use with caution.
 
-This option must not be combined with `--selector` or `--raw --schema`.
+\*: In selector mode, only events with the same selector are merged.
+
+This option can not be combined with the combination `--raw --schema`.
 
 ### `--schema <schema>` (Parsers)
 
@@ -72,7 +74,7 @@ Fields that appear in the input, but not in the schema will be discarded.
 
 If the given schema does not exist, this option only assigns the output schema name only.
 
-This option must not be combined with `--selector` or `--raw --merge`.
+This option can not be combined with `--selector` or the combination `--raw --merge`.
 
 ### `--selector <field>[:<prefix>]` (Parsers)
 
@@ -84,7 +86,7 @@ prefix. For example, the selector `event_type:suricata` with an event that has
 the field `event_type` set to the value `flow` looks for a schema named
 `suricata.flow`.
 
-This option must not be combined with `--merge` or `--schema`.
+This option can not be combined with `--schema`.
 
 ### `--schema-only` (Parsers)
 
@@ -139,13 +141,7 @@ JSON however has numeric types, so those would be parsed.
 
 Use with caution.
 
-This option must not be combined with `--merge --schema`.
-
-### `--unique-selector` (Parsers)
-
-Only consider the selector fields value for batching.
-
-This option requires `--selector`.
+This option can not be combined with the combination `--merge --schema`.
 
 ## MIME Types
 

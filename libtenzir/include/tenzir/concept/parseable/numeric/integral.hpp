@@ -67,16 +67,16 @@ struct integral_parser
     if (first_is_sign and not is_signed) {
       return false;
     }
-    // an array large enough to hold a value of the given type
-    // and a potential sign character
-    // Its a raw array due to better rendering in debuggers
+    // An array large enough to hold a value of the given type
+    // and a potential sign character.
+    // Its a raw array due to better rendering in debuggers.
     char data[MaxDigits + is_signed]{};
     auto end = std::begin(data);
     int take_chars = 0;
     auto save = f;
     while (true) {
       auto c = *f;
-      // take only digits
+      // Take only digits
       if (not is_digit(c)) {
         if constexpr (not is_signed) {
           break;
@@ -89,23 +89,21 @@ struct integral_parser
       ++take_chars;
       ++end;
       ++f;
-      // take at most MaxDigits chars + a potential minus
+      // Take at most MaxDigits chars + a potential minus
       if (take_chars >= MaxDigits + int{first_is_sign}) {
         break;
       }
-      // take at most as many chars as the array can hold
+      // Take at most as many chars as the array can hold
       if (end == std::end(data)) {
         break;
       }
-      // take at most as many chars as are in the input
-      // we only advance f as a last step after the other checks
-      // this is in case its a forward iterator
+      // Take at most as many chars as are in the input
       if (f == l) {
         break;
       }
     }
     auto begin = std::begin(data);
-    // from chars doesn't accept leading plus
+    // From chars doesn't accept leading plus
     if ( *begin == '+' ) {
       ++begin;
     }
@@ -119,9 +117,7 @@ struct integral_parser
         return true;
       }
     }
-    f = save; // this doesnt actually work for forward/stream iterators
-    //TODO no parser that employs the `f = save` pattern actually works for these
-    // it would be a good idea to guard all parsers against this.
+    f = save;
     return false;
   }
 };

@@ -103,6 +103,11 @@ public:
     return std::visit(visitor, var_);
   }
 
+  /// @brief sets the value of the field to the contents of a `tenzir::data`
+  void data(const tenzir::data& d);
+
+  /// @brief sets the value of the field to some unparsed text. Parsing will
+  /// happen at a later time for the precise modes or immediately in merging mode.
   void data_unparsed(std::string_view s);
 
   /// @brief Sets the value of the field an empty record and returns a generator
@@ -134,7 +139,7 @@ public:
 
   /// @brief appends a data value T to the list
   template <tenzir::detail::data_builder::non_structured_data_type T>
-  void data(T d) {
+  auto data(T d) -> void {
     const auto visitor = detail::overload{
       [&](tenzir::builder_ref b) {
         b.data(d);
@@ -146,8 +151,11 @@ public:
     return std::visit(visitor, var_);
   }
 
-  /// @brief appends unparsed data to the list, which will be parsed at a lated
-  /// point
+  /// @brief appends the contents of a `tenzir::data` to the list
+  auto data(const tenzir::data& d) -> void;
+
+  /// @brief sets the value of the field to some unparsed text. Parsing will
+  /// happen at a later time for the precise modes or immediately in merging mode.
   void data_unparsed(std::string_view s);
   /// @brief appends a record to the list and returns a generator for the record
   auto record() -> record_generator;
@@ -227,7 +235,7 @@ public:
   /// @brief Inserts a new value into the builder.
   template <detail::data_builder::non_structured_data_type T>
   auto data(T value) -> void {
-    if (get_policy<policy_merge>()) {
+    if (uses_merging_builder()) {
       return merging_builder_.data(value);
     } else {
       complete_last_event();
@@ -244,26 +252,23 @@ public:
   auto finalize_as_table_slice() -> std::vector<table_slice>;
 
   /// @brief This policy will merge all events into a single schema
-  struct policy_merge {
-    static constexpr std::string_view name = "merge";
+  struct policy_default {
+    static constexpr std::string_view name = "none";
     // a schema name to seed with. If this is given
-    std::string seed_schema = {};
-    bool reset_on_yield = false;
 
-    auto friend inspect(auto& f, policy_merge& x) -> bool {
-      return f.object(x).fields(f.field("seed_schema", x.seed_schema),
-                                f.field("reset_on_yield", x.reset_on_yield));
+    auto friend inspect(auto& f, policy_default& x) -> bool {
+      return f.object(x).fields();
     }
   };
 
   /// @brief This policy will keep all schemas in separate batches
-  struct policy_precise {
-    static constexpr std::string_view name = "precise";
+  struct policy_schema {
+    static constexpr std::string_view name = "schema";
     // If this is given, all resulting events will have exactly this schema
     // * all fields in the schema but not in the event will be null
     std::string seed_schema = {};
 
-    auto friend inspect(auto& f, policy_precise& x) -> bool {
+    auto friend inspect(auto& f, policy_schema& x) -> bool {
       return f.object(x).fields(f.field("seed_schema", x.seed_schema));
     }
   };
@@ -278,19 +283,15 @@ public:
     // => {"event_type": "flow"}
     // => "suricata.flow"
     std::optional<std::string> naming_prefix = std::nullopt;
-    bool unique_selector = false;
 
     auto friend inspect(auto& f, policy_selector& x) -> bool {
       return f.object(x).fields(f.field("field_name", x.field_name),
-                                f.field("naming_prefix", x.naming_prefix),
-                                f.field("unique_selector", x.unique_selector));
+                                f.field("naming_prefix", x.naming_prefix));
     }
   };
 
-  // The monostate alternative only exists because of an issue when
-  // compiling with GCC-12 in the CI.
-  using policy_type = tenzir::variant<std::monostate, policy_merge,
-                                      policy_precise, policy_selector>;
+  using policy_type
+    = tenzir::variant<policy_default, policy_schema, policy_selector>;
 
   /// @brief Holds generic settings for the builder.
   struct settings_type {
@@ -299,24 +300,32 @@ public:
     std::string default_schema_name = "tenzir.unknown";
     // Whether the output should adhere to the input order
     bool ordered = true;
-    // whether, given a known schema via `schema` or `selector`, only fields
-    // from that should be output
+    // Whether, given a known schema via `schema` or `selector`, only fields
+    // from that should be output. If the schema does not exist, this has no
+    // effect.
     bool schema_only = false;
-    // Whether to not parse fields that are not present in a known schema
+    // Whether to "merge" results
+    // * In the `policy_selector`, this merges all events with the same selector
+    // * In the `policy_schema` and `policy_default` this merges all events
+    //   into a single schema
+    bool merge = false;
+    // Whether to not parse fields that are not present in a known schema.
     bool raw = false;
-    // Unnest separator to be used when calling any `field` in the builder pattern
+    // Unnest separator to be used when calling any `field` in the builder
+    // pattern.
     std::string unnest_separator = {};
     // Timeout after which events will be yielded regardless of whether the
-    // desired batch size has been reached
+    // desired batch size has been reached.
     duration timeout = defaults::import::batch_timeout;
-    // Batch size after which the events should be yielded
+    // Batch size after which the events should be yielded.
     size_t desired_batch_size = defaults::import::table_slice_size;
 
     auto friend inspect(auto& f, settings_type& x) -> bool {
       return f.object(x).fields(
         f.field("default_schema_name", x.default_schema_name),
         f.field("ordered", x.ordered), f.field("schema_only", x.schema_only),
-        f.field("raw", x.raw), f.field("unnest_separator", x.unnest_separator),
+        f.field("merge", x.merge), f.field("raw", x.raw),
+        f.field("unnest_separator", x.unnest_separator),
         f.field("timeout", x.timeout),
         f.field("desired_batch_size", x.desired_batch_size));
     }
@@ -325,7 +334,7 @@ public:
   /// @brief A simple convenience wrapper, holding both settings and policy.
   struct options {
     multi_series_builder::policy_type policy
-      = multi_series_builder::policy_precise{};
+      = multi_series_builder::policy_default{};
     multi_series_builder::settings_type settings = {};
 
     friend auto inspect(auto& f, options& x) -> bool {
@@ -357,9 +366,13 @@ public:
 private:
   /// @brief Gets a pointer to the active policy, if its the given one.
   template <typename T>
-  T* get_policy() {
+  auto get_policy() const -> const T* {
     return std::get_if<T>(&policy_);
   }
+
+  auto uses_merging_builder() const -> bool {
+    return not get_policy<policy_selector>() and settings_.merge;
+  };
 
   /// @brief Called internally to complete the last built event.
   /// This is called whenever the user starts building a new event,
