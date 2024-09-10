@@ -165,10 +165,8 @@ public:
   }
 
   template <typename Key_Like>
-    requires ( not ( 
-        std::same_as<Key_Like, std::remove_cvref_t<iterator>> or
-        std::same_as<Key_Like, std::remove_cvref_t<const_iterator>>
-      ) )
+    requires(not(std::same_as<Key_Like, std::remove_cvref_t<iterator>>
+                 or std::same_as<Key_Like, std::remove_cvref_t<const_iterator>>))
   size_type erase(const Key_Like& x) {
     const auto it = find(x);
     if (it == end()) {

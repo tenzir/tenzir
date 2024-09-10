@@ -375,7 +375,7 @@ class transforming_diagnostic_handler : public diagnostic_handler {
 public:
   using transform_function = std::function<diagnostic(diagnostic)>;
   transforming_diagnostic_handler(diagnostic_handler& dh,
-                                   transform_function transform)
+                                  transform_function transform)
     : dh_{dh}, transform_{std::move(transform)} {
   }
 

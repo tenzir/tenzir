@@ -22,8 +22,9 @@ constexpr inline std::string_view ascii_whitespace = " \t\r\n\f\v";
 /// @param whitespace a string of characters, each of white is considered
 /// whitespace
 /// @returns a string_view without leading whitespace
-inline auto trim_front(std::string_view value, const std::string_view whitespace
-                                               = ascii_whitespace) -> std::string_view {
+inline auto
+trim_front(std::string_view value, const std::string_view whitespace
+                                   = ascii_whitespace) -> std::string_view {
   if (value.empty()) {
     return value;
   }
@@ -39,8 +40,9 @@ inline auto trim_front(std::string_view value, const std::string_view whitespace
 /// @param whitespace a string of characters, each of white is considered
 /// whitespace
 /// @returns a string_view without trailing whitespace
-inline auto trim_back(std::string_view value, const std::string_view whitespace
-                                              = ascii_whitespace) -> std::string_view {
+inline auto
+trim_back(std::string_view value, const std::string_view whitespace
+                                  = ascii_whitespace) -> std::string_view {
   if (value.empty()) {
     return value;
   }
@@ -56,8 +58,9 @@ inline auto trim_back(std::string_view value, const std::string_view whitespace
 /// @param whitespace a string of characters, each of white is considered
 /// whitespace
 /// @returns a string_view without leading or trailing whitespace
-inline auto trim(std::string_view value, const std::string_view whitespace
-                                         = ascii_whitespace) -> std::string_view {
+inline auto
+trim(std::string_view value, const std::string_view whitespace
+                             = ascii_whitespace) -> std::string_view {
   value = trim_front(value, whitespace);
   value = trim_back(value, whitespace);
   return value;

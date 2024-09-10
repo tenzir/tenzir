@@ -10,9 +10,9 @@
 
 #include "tenzir/concept/parseable/core.hpp"
 #include "tenzir/detail/coding.hpp"
-#include <charconv>
 
 #include <cctype>
+#include <charconv>
 #include <cstdint>
 
 namespace tenzir {
@@ -104,7 +104,7 @@ struct integral_parser
     }
     auto begin = std::begin(data);
     // From chars doesn't accept leading plus
-    if ( *begin == '+' ) {
+    if (*begin == '+') {
       ++begin;
     }
     auto out = attribute{};

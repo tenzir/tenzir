@@ -114,8 +114,8 @@ auto check_outcome(const std::vector<series>& res,
 }
 
 struct failing_diagnostic_handler : public diagnostic_handler {
-  void emit( diagnostic d ) override {
-    fmt::print("diagnostic {} : {}", d.severity, d.message );
+  void emit(diagnostic d) override {
+    fmt::print("diagnostic {} : {}", d.severity, d.message);
     CHECK(false);
   }
 };
@@ -141,7 +141,8 @@ TEST(merging records) {
   b.record().exact_field("0").data(int64_t{1});
   b.record().exact_field("1").data(2.0);
   const auto res = b.finalize();
-  CHECK_EQUAL(res.size(), size_t{1}); // merging should produce exactly one series here
+  CHECK_EQUAL(res.size(),
+              size_t{1}); // merging should produce exactly one series here
 
   const type expected_type{record_type{
     {"0", int64_type{}},
@@ -204,7 +205,8 @@ TEST(merging records with seed and reset) {
   b.record().exact_field("0").data(int64_t{0});
   b.record().exact_field("2").data(uint64_t{0});
   const auto res = b.finalize();
-  CHECK_EQUAL(res.size(), std::size_t{1}); // merging should produce exactly one series here
+  CHECK_EQUAL(res.size(),
+              std::size_t{1}); // merging should produce exactly one series here
 
   const type expected_type{
     "seed",
@@ -379,7 +381,7 @@ TEST(precise unordered with seed) {
   }
   b.record().exact_field("2").data(
     uint64_t{1}); // this should land in the same batch as it
-          // has the seed for both seed fields
+                  // has the seed for both seed fields
   // outside of schema only
   { b.record().exact_field("3").data(duration{}); }
   // schema only again

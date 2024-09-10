@@ -1059,13 +1059,13 @@ TEST(option set - missing option value) {
 
 // -- API ---------------------------------------------------------------------
 
-TEST( range ) {
+TEST(range) {
   const auto s = "1,2,3"sv;
   offset xs;
   auto begin = s.begin();
   auto end = s.end();
-  CHECK( parse( begin, end, xs) );
-  CHECK( begin == end );
+  CHECK(parse(begin, end, xs));
+  CHECK(begin == end);
   CHECK_EQUAL(xs, (offset{1, 2, 3}));
 }
 

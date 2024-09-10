@@ -315,7 +315,7 @@ auto basic_parser(std::string_view s, const tenzir::type* seed)
     return tenzir::data{std::string{}};
   }
   auto res = best_effort_parser(s);
-  if ( res ) {
+  if (res) {
     return std::move(*res);
   } else {
     return {};
@@ -1132,7 +1132,7 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
     } else if (type_index_ == type_index_numeric_mismatch) {
     numeric_mismatch_handling:
       for (auto& e : data_) {
-        if ( not e.cast_to<double>() ) {
+        if (not e.cast_to<double>()) {
           goto generic_mismatch_handling;
         }
       }

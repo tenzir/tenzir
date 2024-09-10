@@ -150,7 +150,8 @@ auto parse_attributes(char delimiter, std::string_view attributes,
         .done();
     }
     auto key = attribute.substr(0, sep_pos);
-    auto value = unescape(detail::unquote(detail::trim(attribute.substr(sep_pos + 1))));
+    auto value
+      = unescape(detail::unquote(detail::trim(attribute.substr(sep_pos + 1))));
     if constexpr (detail::multi_series_builder::has_unflattend_field<
                     decltype(builder)>) {
       auto field = builder.unflattend_field(key);

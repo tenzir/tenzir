@@ -51,10 +51,9 @@ public:
   size_t notes = 0;
 };
 
-
-auto safe_as_record( tenzir::data d ) -> tenzir::record {
+auto safe_as_record(tenzir::data d) -> tenzir::record {
   auto as_record = caf::get_if<tenzir::record>(&d);
-  REQUIRE( as_record );
+  REQUIRE(as_record);
   return std::move(*as_record);
 }
 
@@ -73,7 +72,7 @@ TEST(materialization record) {
 
   CHECK(b.has_elements());
 
-  auto rec = safe_as_record( b.materialize() );
+  auto rec = safe_as_record(b.materialize());
   auto expected = tenzir::record{};
   expected["0"] = uint64_t{0};
   expected["1"] = int64_t{1};
@@ -94,7 +93,7 @@ TEST(materialization list) {
 
   CHECK(b.has_elements());
 
-  auto rec = safe_as_record( b.materialize() );
+  auto rec = safe_as_record(b.materialize());
   auto expected = tenzir::record{};
   expected["int list"] = tenzir::list{uint64_t{0}, uint64_t{1}, uint64_t{2}};
   for (const auto& [expected_key, expected_data] : expected) {
@@ -110,7 +109,7 @@ TEST(materialization nested record) {
 
   CHECK(b.has_elements());
 
-  auto rec = safe_as_record( b.materialize() );
+  auto rec = safe_as_record(b.materialize());
   auto expected = tenzir::record{};
   expected["0"] = tenzir::record{{"1", caf::none}};
   for (const auto& [rk, rv] : rec) {
@@ -127,7 +126,7 @@ TEST(materialization record list record) {
 
   CHECK(b.has_elements());
 
-  auto rec = safe_as_record( b.materialize(false) );
+  auto rec = safe_as_record(b.materialize(false));
   auto expected = tenzir::record{};
   expected["0"] = tenzir::list{tenzir::record{{"1", uint64_t{0}}}};
   expected["1"] = tenzir::record{{"0", tenzir::list{}}};
@@ -135,7 +134,7 @@ TEST(materialization record list record) {
     CHECK(expected.at(rk) == rv);
   }
   CHECK(b.has_elements());
-  auto rec2 = safe_as_record( b.materialize() );
+  auto rec2 = safe_as_record(b.materialize());
   CHECK(rec == rec2);
   CHECK(not b.has_elements());
 }
@@ -155,8 +154,7 @@ TEST(overwrite record fields) {
 
   detail::data_builder::signature_type expected;
   {
-    expected.insert(expected.end(),
-                    detail::data_builder::record_start_marker);
+    expected.insert(expected.end(), detail::data_builder::record_start_marker);
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
@@ -183,8 +181,7 @@ TEST(signature record empty) {
 
   detail::data_builder::signature_type expected;
   {
-    expected.insert(expected.end(),
-                    detail::data_builder::record_start_marker);
+    expected.insert(expected.end(), detail::data_builder::record_start_marker);
     expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
   CHECK(sig == expected);
@@ -203,8 +200,7 @@ TEST(signature record simple) {
 
   detail::data_builder::signature_type expected;
   {
-    expected.insert(expected.end(),
-                    detail::data_builder::record_start_marker);
+    expected.insert(expected.end(), detail::data_builder::record_start_marker);
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
@@ -239,8 +235,7 @@ TEST(signature list) {
 
   detail::data_builder::signature_type expected;
   {
-    expected.insert(expected.end(),
-                    detail::data_builder::record_start_marker);
+    expected.insert(expected.end(), detail::data_builder::record_start_marker);
     const auto key_bytes = as_bytes("l"sv);
     expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
     expected.insert(expected.end(), detail::data_builder::list_start_marker);
@@ -267,8 +262,7 @@ TEST(signature list with null) {
 
   detail::data_builder::signature_type expected;
   {
-    expected.insert(expected.end(),
-                    detail::data_builder::record_start_marker);
+    expected.insert(expected.end(), detail::data_builder::record_start_marker);
     const auto key_bytes = as_bytes("l"sv);
     expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
     expected.insert(expected.end(), detail::data_builder::list_start_marker);
@@ -295,14 +289,12 @@ TEST(signature list numeric unification) {
 
   detail::data_builder::signature_type expected;
   {
-    expected.insert(expected.end(),
-                    detail::data_builder::record_start_marker);
+    expected.insert(expected.end(), detail::data_builder::record_start_marker);
     const auto key_bytes = as_bytes("l"sv);
     expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
     expected.insert(expected.end(), detail::data_builder::list_start_marker);
-    expected.insert(
-      expected.end(),
-      static_cast<std::byte>(detail::data_builder::type_index_double));
+    expected.insert(expected.end(), static_cast<std::byte>(
+                                      detail::data_builder::type_index_double));
     expected.insert(expected.end(), detail::data_builder::list_end_marker);
     expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
@@ -328,8 +320,7 @@ TEST(signature record seeding matching) {
 
   detail::data_builder::signature_type expected;
   {
-    expected.insert(expected.end(),
-                    detail::data_builder::record_start_marker);
+    expected.insert(expected.end(), detail::data_builder::record_start_marker);
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
@@ -369,8 +360,7 @@ TEST(signature record seeding field not in data) {
 
   detail::data_builder::signature_type expected;
   {
-    expected.insert(expected.end(),
-                    detail::data_builder::record_start_marker);
+    expected.insert(expected.end(), detail::data_builder::record_start_marker);
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
@@ -414,8 +404,7 @@ TEST(signature record seeding field not in data-- no - extend - schema) {
 
   detail::data_builder::signature_type expected;
   {
-    expected.insert(expected.end(),
-                    detail::data_builder::record_start_marker);
+    expected.insert(expected.end(), detail::data_builder::record_start_marker);
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
@@ -455,8 +444,7 @@ TEST(signature record seeding data - field not in seed) {
 
   detail::data_builder::signature_type expected;
   {
-    expected.insert(expected.end(),
-                    detail::data_builder::record_start_marker);
+    expected.insert(expected.end(), detail::data_builder::record_start_marker);
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
@@ -500,8 +488,7 @@ TEST(signature record seeding data - field not in seed-- no - extend - schema) {
 
   detail::data_builder::signature_type expected;
   {
-    expected.insert(expected.end(),
-                    detail::data_builder::record_start_marker);
+    expected.insert(expected.end(), detail::data_builder::record_start_marker);
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
@@ -534,8 +521,7 @@ TEST(signature record seeding numeric mismatch) {
 
   detail::data_builder::signature_type expected;
   {
-    expected.insert(expected.end(),
-                    detail::data_builder::record_start_marker);
+    expected.insert(expected.end(), detail::data_builder::record_start_marker);
     {
       const auto key_bytes = as_bytes("0"sv);
       expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());

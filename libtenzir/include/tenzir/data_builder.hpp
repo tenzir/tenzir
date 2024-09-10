@@ -50,8 +50,8 @@ struct data_parsing_result {
 };
 
 /// A very basic parser that simply uses `tenzir::parsers` under the hood.
-/// If the returned optional is empty, that means that the value did not parse as
-/// any type and should remain a string.
+/// If the returned optional is empty, that means that the value did not parse
+/// as any type and should remain a string.
 auto best_effort_parser(std::string_view s) -> std::optional<data>;
 
 /// A very basic parser that only parses the string according to the `seed`

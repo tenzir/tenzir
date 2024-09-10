@@ -108,6 +108,8 @@ auto multi_series_builder_argument_parser::get_settings(diagnostic_handler& dh)
       .emit(dh);
     return false;
   }
+  // This is intentionally a `|=`, because the parser may have a default that
+  // enables merging and we dont wont to accidentally disable it
   settings_.merge |= merge_.has_value();
   if (auto* p = std::get_if<multi_series_builder::policy_schema>(&policy_)) {
     if (p->seed_schema.empty() and settings_.schema_only) {

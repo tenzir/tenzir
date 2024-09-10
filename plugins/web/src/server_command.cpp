@@ -336,8 +336,7 @@ auto server_command(const tenzir::invocation& inv, caf::actor_system& system)
         continue;
       }
       api_routes.push_back(format_api_route(endpoint));
-      setup_route(self, router, dispatcher, *server_config, endpoint,
-                  handler);
+      setup_route(self, router, dispatcher, *server_config, endpoint, handler);
     }
     // TODO: Monitor the handlers and re-spawn them if they go down.
   }
