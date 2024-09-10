@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/core.hpp>
@@ -20,6 +21,7 @@
 #include <tenzir/optional.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice_builder.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/scalar.h>
 #include <fmt/format.h>
@@ -106,8 +108,8 @@ public:
     return state_type{{*column_index, std::move(transform_fn)}};
   }
 
-  auto process(table_slice slice, state_type& state) const
-    -> output_type override {
+  auto
+  process(table_slice slice, state_type& state) const -> output_type override {
     return transform_columns(slice, state);
   };
 
@@ -115,8 +117,8 @@ public:
     return "hash";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter,
+                event_order order) const -> optimize_result override {
     (void)filter;
     return optimize_result::order_invariant(*this, order);
   }
@@ -193,8 +195,37 @@ public:
   }
 };
 
+class plugin2 : public virtual function_plugin {
+  auto name() const -> std::string override {
+    return "xxhash3";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    auto salt = std::optional<std::string>{};
+    TRY(argument_parser2::function("xxhash3")
+          .add(expr, "<field>")
+          .add(salt, "[salt]")
+          .parse(inv, ctx));
+    return function_use::make(
+      [expr_ = std::move(expr), salt_ = std::move(salt)](evaluator eval,
+                                                         session) -> series {
+        const auto& s = eval(expr_);
+        auto b = string_type::make_arrow_builder(arrow::default_memory_pool());
+        for (const auto& value : values(s.type, *s.array)) {
+          const auto& hash
+            = salt_ ? tenzir::hash(value, salt_.value()) : tenzir::hash(value);
+          check(b->Append(fmt::format("{:x}", hash)));
+        }
+        return {string_type{}, finish(*b)};
+      });
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::hash
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::hash::plugin2)
