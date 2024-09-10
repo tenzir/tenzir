@@ -34,11 +34,11 @@ that are not in the table will be dropped.
 If the sink creates the table (via `--ingest_mode=create` or `create_append`),
 the tables columns are determined by the first event written.
 
-### `<account-identifier>` 
+### `<account-identifier>`
 
 The [snowflake account identifier](https://docs.snowflake.com/en/user-guide/admin-account-identifier) to use.
 
-### `<user-name>` 
+### `<user-name>`
 
 The snowflake user name. The user must have the
 [`CREATE STAGE`](https://docs.snowflake.com/en/sql-reference/sql/create-stage#access-control-requirements)

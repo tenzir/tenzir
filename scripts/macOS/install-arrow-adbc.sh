@@ -2,7 +2,8 @@
 
 set -euo pipefail
 
-brew install go
+brew --version
+brew install --overwrite go
 
 git clone https://github.com/apache/arrow-adbc.git
 cd arrow-adbc
