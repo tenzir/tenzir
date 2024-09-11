@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/convertible/data.hpp>
 #include <tenzir/concept/convertible/to.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
@@ -17,6 +18,7 @@
 #include <tenzir/ip.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice_builder.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/type.hpp>
 
 #include <arrow/table.h>
@@ -96,8 +98,8 @@ public:
     return transformations;
   }
 
-  auto process(table_slice slice, state_type& state) const
-    -> output_type override {
+  auto
+  process(table_slice slice, state_type& state) const -> output_type override {
     return transform_columns(slice, state);
   }
 
@@ -105,8 +107,8 @@ public:
     return "pseudonymize";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter,
+                event_order order) const -> optimize_result override {
     (void)filter;
     return optimize_result::order_invariant(*this, order);
   }
@@ -201,6 +203,66 @@ public:
   }
 };
 
+class plugin2 : public virtual function_plugin {
+  auto name() const -> std::string override {
+    return "encrypt_cryptopan";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    auto seed = std::optional<std::string>{};
+    TRY(argument_parser2::function(name())
+          .add(expr, "<field>")
+          .add(seed, "<seed>")
+          .parse(inv, ctx));
+    auto seed_bytes
+      = std::array<ip::byte_type,
+                   tenzir::ip::pseudonymization_seed_array_size>{};
+    if (seed.has_value()) {
+      auto max_seed_size = std::min(
+        tenzir::ip::pseudonymization_seed_array_size * 2, seed->size());
+      for (auto i = size_t{0}; (i * 2) < max_seed_size; ++i) {
+        auto byte_string_pos = i * 2;
+        auto byte_size = (byte_string_pos + 2 > seed->size()) ? 1 : 2;
+        auto byte = seed->substr(byte_string_pos, byte_size);
+        if (byte_size == 1) {
+          byte.append("0");
+        }
+        TENZIR_ASSERT(i < seed_bytes.size());
+        seed_bytes[i] = std::strtoul(byte.c_str(), 0, 16);
+      }
+    }
+    return function_use::make(
+      [expr = std::move(expr),
+       seed = std::move(seed_bytes)](evaluator eval, session ctx) -> series {
+        auto s = eval(expr);
+        if (caf::holds_alternative<null_type>(s.type)) {
+          return series::null(ip_type{}, s.length());
+        }
+        auto ptr = std::dynamic_pointer_cast<ip_type::array_type>(s.array);
+        if (not ptr) {
+          // XXX: Try coercion?
+          diagnostic::error("expected type `ip`, got `{}`", s.type)
+            .primary(expr)
+            .emit(ctx);
+          return series::null(ip_type{}, s.length());
+        }
+        auto b = ip_type::make_arrow_builder(arrow::default_memory_pool());
+        for (const auto& value : values(ip_type{}, *ptr)) {
+          if (not value) {
+            check(b->AppendNull());
+            continue;
+          }
+          check(append_builder(ip_type{}, *b,
+                               tenzir::ip::pseudonymize(value.value(), seed)));
+        }
+        return {ip_type{}, finish(*b)};
+      });
+  }
+};
+
 } // namespace tenzir::plugins::pseudonymize
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::pseudonymize::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::pseudonymize::plugin2)
