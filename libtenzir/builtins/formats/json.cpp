@@ -425,14 +425,17 @@ public:
          ++doc_it, ++objects_parsed) {
       if (auto err = doc_it.error()) {
         diagnostic::warning("{}", error_message(err))
+          .note("line {}", lines_processed_)
           .note("skipped invalid JSON at index {}", doc_it.current_index())
           .emit(*dh);
         ++diags_emitted;
-        continue;
+        break; // if the iterator itself errors, the document structure is
+               // invalid.
       }
       auto doc = *doc_it;
       if (auto err = doc.error()) {
         diagnostic::warning("{}", error_message(err))
+          .note("line {}", lines_processed_)
           .note("skipped invalid JSON `{}`", truncate(doc_it.source()))
           .emit(*dh);
         ++diags_emitted;
@@ -441,6 +444,7 @@ public:
       auto val = doc.get_value();
       if (auto err = val.error()) {
         diagnostic::warning("{}", error_message(err))
+          .note("line {}", lines_processed_)
           .note("skipped invalid JSON `{}`", truncate(doc_it.source()))
           .emit(*dh);
         ++diags_emitted;
@@ -456,10 +460,12 @@ public:
     }
     if (objects_parsed == 0 and diags_emitted == 0) {
       diagnostic::warning("line did not contain a single valid JSON object")
+        .note("line {}", lines_processed_)
         .note("skipped invalid JSON `{}`", truncate(json_line))
         .emit(*dh);
     } else if (objects_parsed > 1) {
       diagnostic::warning("more than one JSON object in line")
+        .note("line {}", lines_processed_)
         .note("encountered a total of {} objects", objects_parsed)
         .emit(*dh);
     }
@@ -468,6 +474,7 @@ public:
       auto truncated_text = std::string_view{
         json_line.data() + json_line.size() - truncated_count, truncated_count};
       diagnostic::warning("skipped remaining invalid JSON bytes")
+        .note("line {}", lines_processed_)
         .note("{} bytes remained", truncated_count)
         .note("skipped invalid JSON `{}`", truncate(truncated_text))
         .emit(*dh);
