@@ -42,8 +42,8 @@ public:
     return "unflatten";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter,
+                event_order order) const -> optimize_result override {
     (void)filter;
     return optimize_result::order_invariant(*this, order);
   }
@@ -57,7 +57,7 @@ private:
 };
 
 class plugin final : public virtual operator_plugin<unflatten_operator>,
-                     public virtual operator_factory_plugin {
+                     public virtual function_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
@@ -73,15 +73,22 @@ public:
     return std::make_unique<unflatten_operator>(separator);
   }
 
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    auto sep = std::optional<located<std::string>>{};
-    argument_parser2::operator_(name())
-      .add(sep, "<separator>")
-      .parse(inv, ctx)
-      .ignore();
-    return std::make_unique<unflatten_operator>(
-      sep ? std::move(sep->inner) : default_unflatten_separator);
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    auto sep = std::optional<std::string>{};
+    TRY(argument_parser2::function(name())
+          .add(expr, "<field>")
+          .add(sep, R"([separator="."])")
+          .parse(inv, ctx));
+    return function_use::make([expr = std::move(expr), sep = std::move(sep)](
+                                evaluator eval, session) -> series {
+      auto s = eval(expr);
+      auto unflattened = tenzir::unflatten(
+        std::dynamic_pointer_cast<arrow::Array>(s.array), sep.value_or("."));
+      auto schema = type::from_arrow(*unflattened->type());
+      return {type{s.type.name(), schema}, unflattened};
+    });
   }
 };
 

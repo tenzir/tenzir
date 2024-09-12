@@ -51,8 +51,9 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
     // noexcept-specified. When adding a new encoding, add it here as well.
     std::is_nothrow_invocable<Visitor>,
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::arrow::v2&>>) {
-  if (!x)
+  if (!x) {
     return std::invoke(std::forward<Visitor>(visitor));
+  }
   switch (x->table_slice_type()) {
     case fbs::table_slice::TableSlice::NONE:
       return std::invoke(std::forward<Visitor>(visitor));
@@ -73,8 +74,9 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
 /// Get a pointer to the `tenzir.fbs.TableSlice` inside the chunk.
 /// @param chunk The chunk to look at.
 const fbs::TableSlice* as_flatbuffer(const chunk_ptr& chunk) noexcept {
-  if (!chunk)
+  if (!chunk) {
     return nullptr;
+  }
   return fbs::GetTableSlice(chunk->data());
 }
 
@@ -88,8 +90,9 @@ verified_or_none(chunk_ptr&& chunk, enum table_slice::verify verify) noexcept {
   if (verify == table_slice::verify::yes && chunk) {
     const auto* const data = reinterpret_cast<const uint8_t*>(chunk->data());
     auto verifier = flatbuffers::Verifier{data, chunk->size()};
-    if (!verifier.template VerifyBuffer<fbs::TableSlice>())
+    if (!verifier.template VerifyBuffer<fbs::TableSlice>()) {
       chunk = {};
+    }
   }
   return std::move(chunk);
 }
@@ -163,8 +166,9 @@ table_slice::table_slice(const std::shared_ptr<arrow::RecordBatch>& record_batch
 table_slice::table_slice(const table_slice& other) noexcept = default;
 
 table_slice& table_slice::operator=(const table_slice& rhs) noexcept {
-  if (this == &rhs)
+  if (this == &rhs) {
     return *this;
+  }
   chunk_ = rhs.chunk_;
   offset_ = rhs.offset_;
   state_ = rhs.state_;
@@ -197,8 +201,9 @@ table_slice table_slice::unshare() const noexcept {
 
 // TODO: Dispatch to optimized implementations if the encodings are the same.
 bool operator==(const table_slice& lhs, const table_slice& rhs) noexcept {
-  if (!lhs.chunk_ && !rhs.chunk_)
+  if (!lhs.chunk_ && !rhs.chunk_) {
     return true;
+  }
   constexpr auto check_metadata = true;
   return to_record_batch(lhs)->Equals(*to_record_batch(rhs), check_metadata);
 }
@@ -267,8 +272,9 @@ time table_slice::import_time() const noexcept {
 }
 
 void table_slice::import_time(time import_time) noexcept {
-  if (import_time == this->import_time())
+  if (import_time == this->import_time()) {
     return;
+  }
   modify_state([&](auto& state) {
     state.import_time(import_time);
   });
@@ -280,8 +286,9 @@ void table_slice::modify_state(F&& f) {
   // creating a new table slice here that points to the same data as the current
   // table slice. This implies that the table slice is no longer in one
   // contiguous buffer.
-  if (chunk_ && !chunk_->unique())
+  if (chunk_ && !chunk_->unique()) {
     *this = table_slice{to_record_batch(*this), schema()};
+  }
   auto g = detail::overload{
     []() noexcept {
       die("cannot assign import time to invalid table slice");
@@ -412,10 +419,12 @@ table_slice concatenate(std::vector<table_slice> slices) {
                                 return slice.rows() == 0;
                               }),
                slices.end());
-  if (slices.empty())
+  if (slices.empty()) {
     return {};
-  if (slices.size() == 1)
+  }
+  if (slices.size() == 1) {
     return std::move(slices[0]);
+  }
   auto schema = slices[0].schema();
   TENZIR_ASSERT_EXPENSIVE(std::all_of(slices.begin(), slices.end(),
                                       [&](const auto& slice) {
@@ -436,8 +445,9 @@ table_slice concatenate(std::vector<table_slice> slices) {
     TENZIR_ASSERT(status.ok());
   }
   const auto rows = builder->length();
-  if (rows == 0)
+  if (rows == 0) {
     return {};
+  }
   const auto array = builder->Finish().ValueOrDie();
   auto batch = arrow::RecordBatch::Make(
     std::move(arrow_schema), rows,
@@ -456,23 +466,27 @@ select(const table_slice& slice, expression expr, const ids& hints) {
   const auto offset = slice.offset() == invalid_id ? 0 : slice.offset();
   auto slice_ids = make_ids({{offset, offset + slice.rows()}});
   auto selection = slice_ids;
-  if (!hints.empty())
+  if (!hints.empty()) {
     selection &= hints;
+  }
   // Do no rows qualify?
-  if (!any(selection))
+  if (!any(selection)) {
     co_return;
+  }
   // Evaluate the filter expression.
   if (!caf::holds_alternative<caf::none_t>(expr)) {
     // Tailor the expression to the type; this is required for using the
     // evaluate function, which expects field and type extractors to be resolved
     // already.
     auto tailored_expr = tailor(expr, slice.schema());
-    if (!tailored_expr)
+    if (!tailored_expr) {
       co_return;
+    }
     selection = evaluate(*tailored_expr, slice, selection);
     // Do no rows qualify?
-    if (!any(selection))
+    if (!any(selection)) {
       co_return;
+    }
   }
   // Do all rows qualify?
   if (rank(selection) == slice.rows()) {
@@ -507,10 +521,12 @@ split(const table_slice& slice, size_t partition_point) {
   if (slice.rows() == 0) {
     return {{}, {}};
   }
-  if (partition_point == 0)
+  if (partition_point == 0) {
     return {{}, slice};
-  if (partition_point >= slice.rows())
+  }
+  if (partition_point >= slice.rows()) {
     return {slice, {}};
+  }
   return {
     head(slice, partition_point),
     tail(slice, slice.rows() - partition_point),
@@ -552,8 +568,8 @@ auto split(std::vector<table_slice> events, uint64_t partition_point)
   };
 }
 
-auto subslice(const table_slice& slice, size_t begin, size_t end)
-  -> table_slice {
+auto subslice(const table_slice& slice, size_t begin,
+              size_t end) -> table_slice {
   TENZIR_ASSERT(begin <= end);
   TENZIR_ASSERT(end <= slice.rows());
   if (begin == 0 && end == slice.rows()) {
@@ -576,8 +592,9 @@ auto subslice(const table_slice& slice, size_t begin, size_t end)
 
 uint64_t rows(const std::vector<table_slice>& slices) {
   auto result = uint64_t{0};
-  for (const auto& slice : slices)
+  for (const auto& slice : slices) {
     result += slice.rows();
+  }
   return result;
 }
 
@@ -587,8 +604,9 @@ filter(const table_slice& slice, expression expr, const ids& hints) {
     return {};
   }
   auto selected = collect(select(slice, std::move(expr), hints));
-  if (selected.empty())
+  if (selected.empty()) {
     return {};
+  }
   return concatenate(std::move(selected));
 }
 
@@ -610,10 +628,12 @@ uint64_t count_matching(const table_slice& slice, const expression& expr,
   if (expr == expression{}) {
     auto result = uint64_t{};
     for (auto id : select(hints)) {
-      if (id < offset)
+      if (id < offset) {
         continue;
-      if (id >= offset + slice.rows())
+      }
+      if (id >= offset + slice.rows()) {
         break;
+      }
       ++result;
     }
     return result;
@@ -622,8 +642,9 @@ uint64_t count_matching(const table_slice& slice, const expression& expr,
   // evaluate function, which expects field and type extractors to be resolved
   // already.
   auto tailored_expr = tailor(expr, slice.schema());
-  if (!tailored_expr)
+  if (!tailored_expr) {
     return 0;
+  }
   return rank(evaluate(expr, slice, hints));
 }
 
@@ -635,8 +656,9 @@ table_slice resolve_enumerations(table_slice slice) {
   // Resolve enumeration types, if there are any.
   auto transformations = std::vector<indexed_transformation>{};
   for (const auto& [field, index] : type.leaves()) {
-    if (!caf::holds_alternative<enumeration_type>(field.type))
+    if (!caf::holds_alternative<enumeration_type>(field.type)) {
       continue;
+    }
     static auto transformation =
       [](struct record_type::field field,
          std::shared_ptr<arrow::Array> array) noexcept
@@ -670,8 +692,8 @@ table_slice resolve_enumerations(table_slice slice) {
   return transform_columns(slice, transformations);
 }
 
-auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
-  -> data {
+auto resolve_meta_extractor(const table_slice& slice,
+                            const meta_extractor& ex) -> data {
   if (slice.rows() == 0) {
     return {};
   }
@@ -790,9 +812,8 @@ namespace {
 /// are replaced with the values of the next list offsets array, repeated until
 /// all list offsets arrays have been combined into one. This allows for
 /// flattening lists in Arrow's data model.
-auto combine_offsets(
-  const std::vector<std::shared_ptr<arrow::Array>>& list_offsets)
-  -> std::shared_ptr<arrow::Array> {
+auto combine_offsets(const std::vector<std::shared_ptr<arrow::Array>>&
+                       list_offsets) -> std::shared_ptr<arrow::Array> {
   TENZIR_ASSERT(not list_offsets.empty());
   auto it = list_offsets.begin();
   auto result = *it++;
@@ -999,8 +1020,9 @@ auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
     if (std::any_of(transformations.begin(), transformations.end(),
                     [&](const auto& t) {
                       return t.index == leaf.index;
-                    }))
+                    })) {
       continue;
+    }
     for (const auto& index : layout.resolve_key_suffix(leaf.field.name)) {
       // For historical reasons, resolve_key_suffix also suffix matches for dots
       // within a field name. That's pretty stupid, and it can lead to wrong
@@ -1149,9 +1171,6 @@ void unflatten_into(unflatten_entry& root, const arrow::StructArray& array,
   }
 }
 
-auto unflatten(const arrow::ListArray& array, std::string_view sep)
-  -> std::shared_ptr<arrow::ListArray>;
-
 void unflatten_into(unflatten_entry& entry, std::shared_ptr<arrow::Array> array,
                     std::string_view sep) {
   if (auto record = caf::get_if<arrow::StructArray>(&*array)) {
@@ -1163,11 +1182,10 @@ void unflatten_into(unflatten_entry& entry, std::shared_ptr<arrow::Array> array,
   }
 }
 
-auto unflatten(std::shared_ptr<arrow::Array> array, std::string_view sep)
-  -> std::shared_ptr<arrow::Array>;
+} // namespace
 
-auto unflatten(const arrow::StructArray& array, std::string_view sep)
-  -> std::shared_ptr<arrow::StructArray> {
+auto unflatten(const arrow::StructArray& array,
+               std::string_view sep) -> std::shared_ptr<arrow::StructArray> {
   // We unflatten records by recursively building up an `unflatten_record`,
   // which is basically a mutable `arrow::StructArray`.
   auto root = unflatten_entry{unflatten_record{array.length(), nullptr}};
@@ -1177,8 +1195,8 @@ auto unflatten(const arrow::StructArray& array, std::string_view sep)
   return realize(std::move(*record));
 }
 
-auto unflatten(const arrow::ListArray& array, std::string_view sep)
-  -> std::shared_ptr<arrow::ListArray> {
+auto unflatten(const arrow::ListArray& array,
+               std::string_view sep) -> std::shared_ptr<arrow::ListArray> {
   // Unflattening a list simply means unflattening its values.
   auto values = unflatten(array.values(), sep);
   return check(arrow::ListArray::FromArrays(
@@ -1186,8 +1204,8 @@ auto unflatten(const arrow::ListArray& array, std::string_view sep)
     array.null_bitmap(), array.data()->null_count));
 }
 
-auto unflatten(std::shared_ptr<arrow::Array> array, std::string_view sep)
-  -> std::shared_ptr<arrow::Array> {
+auto unflatten(std::shared_ptr<arrow::Array> array,
+               std::string_view sep) -> std::shared_ptr<arrow::Array> {
   // We only unflatten records, but records can be contained in lists.
   if (auto record = caf::get_if<arrow::StructArray>(&*array)) {
     return unflatten(*record, sep);
@@ -1197,8 +1215,6 @@ auto unflatten(std::shared_ptr<arrow::Array> array, std::string_view sep)
   }
   return array;
 }
-
-} // namespace
 
 auto unflatten(const table_slice& slice, std::string_view sep) -> table_slice {
   if (slice.rows() == 0) {

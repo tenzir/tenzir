@@ -343,8 +343,8 @@ auto split(std::vector<table_slice> events, uint64_t partition_point)
 
 /// Selects the rows with indices `[begin, end)`.
 /// @pre `begin <= end && end <= slice.rows()`
-auto subslice(const table_slice& slice, size_t begin, size_t end)
-  -> table_slice;
+auto subslice(const table_slice& slice, size_t begin,
+              size_t end) -> table_slice;
 
 /// Counts the number of total rows of multiple table slices.
 /// @param slices The table slices to count.
@@ -384,8 +384,8 @@ filter(const table_slice& slice, const ids& hints);
 [[nodiscard]] table_slice resolve_enumerations(table_slice slice);
 
 /// Resolve a meta extractor for a given table slice.
-auto resolve_meta_extractor(const table_slice& slice, const meta_extractor& ex)
-  -> data;
+auto resolve_meta_extractor(const table_slice& slice,
+                            const meta_extractor& ex) -> data;
 
 /// Resolve an operand into an Array for a given table slice. Note that this
 /// already uses prefix matching instead of suffix matching.
@@ -396,6 +396,15 @@ auto resolve_operand(const table_slice& slice, const operand& op)
 ///
 /// Example: Splitting `{a.b: 42}` with `.` yields `{a: {b: 42}}`.
 auto unflatten(const table_slice& slice, std::string_view sep) -> table_slice;
+
+auto unflatten(const arrow::ListArray& array,
+               std::string_view sep) -> std::shared_ptr<arrow::ListArray>;
+
+auto unflatten(std::shared_ptr<arrow::Array> array,
+               std::string_view sep) -> std::shared_ptr<arrow::Array>;
+
+auto unflatten(const arrow::StructArray& array,
+               std::string_view sep) -> std::shared_ptr<arrow::StructArray>;
 
 /// @related flatten
 struct flatten_result {
@@ -413,8 +422,8 @@ struct flatten_result {
 ///
 /// @param slice The unflattened table slice.
 /// @param separator The separator to join record field names with.
-auto flatten(table_slice slice, std::string_view separator = ".")
-  -> flatten_result;
+auto flatten(table_slice slice, std::string_view separator
+                                = ".") -> flatten_result;
 
 } // namespace tenzir
 
