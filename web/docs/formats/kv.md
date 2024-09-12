@@ -50,14 +50,13 @@ This means that both the key and value may be enclosed in double-quotes.
 
 For example given `\s*,\s*` and `=`, the input
 
-
 ```
 "key"="nested = value",key2="value, and more"
 ```
 will parse as 
-```json 
-{ 
-  "key" : "nested = value" 
+```json
+{
+  "key" : "nested = value"
 }
 {
   "key2" : "value, and more"
