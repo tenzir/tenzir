@@ -513,14 +513,16 @@ private:
   std::unique_ptr<std::mutex> buffer_mtx_{}; ///< Protects the shared buffer
 };
 
-auto add(auto field, const msgpack_object& object,
-         bool decode = false) -> void {
+auto add(auto field, const msgpack_object& object, diagnostic_handler& dh,
+         bool decode = false) -> bool {
   auto f = detail::overload{
     [&](std::nullopt_t) {
       field.null();
+      return true;
     },
     [&](auto x) {
       field.data(x);
+      return true;
     },
     [&](std::string_view x) {
       // Sometimes we get an escaped string that contains a JSON object
@@ -532,19 +534,24 @@ auto add(auto field, const msgpack_object& object,
       if (decode) {
         if (auto json = from_json(x)) {
           field.data(*json);
-          return;
+          return true;
         }
+        return false;
       }
       field.data_unparsed(x);
+      return true;
     },
     [&](std::span<const std::byte> xs) {
       auto blob_view = std::basic_string_view<std::byte>{xs.data(), xs.size()};
       field.data(tenzir::blob{blob_view});
+      return true;
     },
     [&](std::span<msgpack_object> xs) {
       auto list = field.list();
       for (const auto& x : xs) {
-        add(list, x, decode);
+        if (not add(list, x, dh, decode)) {
+          return false;
+        }
       }
     },
     [&](std::span<msgpack_object_kv> xs) {
@@ -554,28 +561,31 @@ auto add(auto field, const msgpack_object& object,
           diagnostic::warning("invalid Fluent Bit record")
             .note("failed to parse key")
             .note("got {}", kvp.key.type)
-            .throw_();
+            .emit(dh);
+          return false;
         }
         auto key = msgpack::to_str(kvp.key);
         auto field = record.unflattend_field(key);
         // TODO: restrict this attempt to decode to the top-level field "log"
         // only. We currently attempt to parse *all* fields named "log" as JSON.
-        add(field, kvp.val, key == "log");
+        add(field, kvp.val, dh, key == "log");
       }
     },
     [&](const msgpack_object_ext& ext) {
       diagnostic::warning("unknown MsgPack type")
         .note("cannot handle MsgPack extensions")
         .note("got {}", ext.type)
-        .throw_();
+        .emit(dh);
+      return false;
     },
     [&](const unknown_msgpack_type&) {
       diagnostic::warning("unknown MsgPack type")
         .note("got {}", object.type)
-        .throw_();
+        .emit(dh);
+      return false;
     },
   };
-  msgpack::visit(f, object);
+  return msgpack::visit(f, object);
 }
 
 class fluent_bit_operator final : public crtp_operator<fluent_bit_operator> {
@@ -613,7 +623,7 @@ public:
       builder_options_,
       dh,
     };
-    auto parse = [this, &ctrl, &msb](chunk_ptr chunk) {
+    auto parse = [&ctrl, &msb](chunk_ptr chunk) {
       // What we're getting here is the typical Fluent Bit array consisting of
       // the following format, as described in
       // https://docs.fluentbit.io/manual/concepts/key-concepts#event-format:
@@ -676,6 +686,7 @@ public:
             .note("wrong number of array elements in first-level array")
             .note("got {}, expected 2", xs.size())
             .emit(ctrl.diagnostics());
+          msb.remove_last();
           return;
         }
         auto timestamp = msgpack::to_flb_time(xs[0]);
@@ -684,6 +695,7 @@ public:
             .note("failed to parse timestamp in first-level array")
             .note("got MsgPack type {}", xs[0].type)
             .emit(ctrl.diagnostics());
+          msb.remove_last();
           return;
         }
         row.exact_field("timestamp").data(*timestamp);
@@ -691,13 +703,18 @@ public:
           auto map = msgpack::to_map(xs[1]);
           if (not map.empty()) {
             auto metadata = row.exact_field("metadata");
-            add(metadata, xs[1]);
+            if (not add(metadata, xs[1], ctrl.diagnostics())) {
+              msb.remove_last();
+              return;
+            }
           }
         } else {
           diagnostic::warning("invalid Fluent Bit message")
             .note("failed parse metadata in first-level array")
             .note("got MsgPack type {}, expected map", xs[1].type)
             .emit(ctrl.diagnostics());
+          msb.remove_last();
+          return;
         }
       } else if (auto timestamp = msgpack::to_flb_time(first)) {
         row.exact_field("timestamp").data(*timestamp);
@@ -706,10 +723,15 @@ public:
           .note("failed to parse first-level array element")
           .note("got MsgPack type {}, expected array or timestamp", first.type)
           .emit(ctrl.diagnostics());
+        msb.remove_last();
+        return;
       }
       // Process the MESSAGE, i.e., the second top-level array element.
       auto message = row.exact_field("message");
-      add(message, second);
+      if (not add(message, second, ctrl.diagnostics())) {
+        msb.remove_last();
+        return;
+      }
     };
     while (engine->running()) {
       for (auto& v : msb.yield_ready_as_table_slice()) {
