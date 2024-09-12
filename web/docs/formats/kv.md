@@ -48,6 +48,22 @@ The parser is aware of double-quotes (`"`). If the `<field_split>` or
 
 This means that both the key and value may be enclosed in double-quotes.
 
+For example given `\s*,\s*` and `=`, the input
+
+
+```
+"key"="nested = value",key2="value, and more"
+```
+will parse as 
+```json 
+{ 
+  "key" : "nested = value" 
+}
+{
+  "key2" : "value, and more"
+}
+```
+
 ### `<field_split>`
 
 The regular expression used to separate individual fields.
