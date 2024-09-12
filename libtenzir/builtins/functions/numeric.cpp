@@ -294,10 +294,21 @@ public:
   }
 
   void update(const table_slice& input, session ctx) override {
+    if (state_ == state::failed) {
+      return;
+    }
     auto arg = eval(expr_, input, ctx);
     auto f = detail::overload{
       [&]<concepts::one_of<double_type, int64_type, uint64_type> Type>(
         const Type& ty) {
+        if (state_ != state::numeric and state_ != state::none) {
+          diagnostic::warning("expected `number`, got `{}`", arg.type)
+            .primary(expr_)
+            .emit(ctx);
+          state_ = state::failed;
+          return;
+        }
+        state_ = state::numeric;
         auto& array = caf::get<type_to_arrow_array_t<Type>>(*arg.array);
         for (auto value : values(ty, array)) {
           if (value) {
@@ -305,25 +316,53 @@ public:
           }
         }
       },
+      [&](const duration_type& ty) {
+        if (state_ != state::dur and state_ != state::none) {
+          diagnostic::warning("expected `duration`, got `{}`", arg.type)
+            .primary(expr_)
+            .emit(ctx);
+          state_ = state::failed;
+          return;
+        }
+        state_ = state::dur;
+        for (auto value :
+             values(ty, caf::get<arrow::DurationArray>(*arg.array))) {
+          if (value) {
+            digest_.Add(value->count());
+          }
+        }
+      },
       [&](const null_type&) {
         // Silently ignore nulls, like we do above.
       },
       [&](const auto&) {
-        diagnostic::warning("expected number, got `{}`", arg.type.kind())
+        diagnostic::warning("expected `number`, got `{}`", arg.type.kind())
           .primary(expr_)
           .emit(ctx);
+        state_ = state::failed;
       },
     };
     caf::visit(f, arg.type);
   }
 
   auto finish() -> data override {
-    return digest_.Quantile(quantile_);
+    switch (state_) {
+      case state::none:
+      case state::failed:
+        return data{};
+      case state::dur:
+        return duration{
+          static_cast<duration::rep>(digest_.Quantile(quantile_))};
+      case state::numeric:
+        return digest_.Quantile(quantile_);
+    }
+    TENZIR_UNREACHABLE();
   }
 
 private:
   ast::expression expr_;
   double quantile_;
+  enum class state { none, failed, dur, numeric } state_{};
   arrow::internal::TDigest digest_;
 };
 
