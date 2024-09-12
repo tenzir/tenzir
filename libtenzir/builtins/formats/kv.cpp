@@ -23,6 +23,38 @@ namespace {
 
 constexpr auto docs = "https://docs.tenzir.com/formats/kv";
 
+/// @brief Checks whether the index `idx` in `text` is escaped
+/// TODO the precise-parsers PR contains this in string.hpp
+inline auto is_escaped(size_t idx, std::string_view text) -> bool {
+  if (idx >= text.size()) {
+    return false;
+  }
+  // An odd number of preceding backslashes means it is escaped, for example:
+  // `x\n` => true, `x\\n` => false, `x\\\n` => true, 'x\\\\n' => false.
+  auto backslashes = size_t{0};
+  while (idx > 0 and text[idx - 1] == '\\') {
+    ++backslashes;
+    --idx;
+  }
+  return backslashes % 2 == 1;
+}
+
+[[nodiscard]] auto trim_quotes(std::string_view txt) -> std::string_view {
+  if (txt.size() < 2) {
+    return txt;
+  }
+  if (txt.front() != txt.back()) {
+    return txt;
+  }
+
+  if (txt.front() == '\"') {
+    txt.remove_prefix(1);
+    txt.remove_suffix(1);
+    return txt;
+  }
+  return txt;
+}
+
 class splitter {
 public:
   splitter() = default;
@@ -63,11 +95,28 @@ public:
     TENZIR_ASSERT(regex_);
     TENZIR_ASSERT(regex_->NumberOfCapturingGroups() == 1);
     auto group = re2::StringPiece{};
-    if (not re2::RE2::PartialMatch(input, *regex_, &group)) {
-      return {input, {}};
+    auto start_offset = 0;
+    while (true) {
+      if (not re2::RE2::PartialMatch(input.substr(start_offset), *regex_,
+                                     &group)) {
+        return {input, {}};
+      }
+      auto head = std::string_view{input.data(), group.data()};
+      auto tail = std::string_view{group.data() + group.size(),
+                                   input.data() + input.size()};
+      auto quote_count = 0;
+      for (size_t i = 0; i < head.size(); ++i) {
+        if (head[i] == '\"' and not is_escaped(i, head)) {
+          ++quote_count;
+        }
+      }
+      if (quote_count % 2 == 0) {
+        return {head, tail};
+      } else {
+        start_offset = head.size() + 1;
+      }
     }
-    return {{input.data(), group.data()},
-            {group.data() + group.size(), input.data() + input.size()}};
+    return {input, {}};
   }
 
   template <class Inspector>
@@ -146,6 +195,8 @@ public:
         // handle this.
         auto [head, tail] = field_split_.split(rest);
         auto [key, value] = value_split_.split(head);
+        key = trim_quotes(key);
+        value = trim_quotes(value);
         if (auto d = data{}; parsers::simple_data(value, d)) {
           r.field(key, d);
         } else {
