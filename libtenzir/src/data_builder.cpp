@@ -629,6 +629,83 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
     return;
   }
   // TODO this should probably be a double visit on `data_` and `*seed`
+  // The double visit currently cant be done easily, because its std::variant &
+  // caf::variant. (`data_`vs `tenzir::type`).
+  // Below is a nice implementation that I wrote before realizing
+  // that I really dont want to deal with turning the `data_` member into a
+  // caf::variant. Once we update CAF, this will be easy to replace. const auto
+  // visitor2 = detail::overload{
+  //   // fallback
+  //   [&rb,seed]<non_structured_data_type T, typename S>(const T&, const S& s)
+  //   {
+  //     rb.emit_or_throw(
+  //       diagnostic::warning("parsed field type does not match the the
+  //       schema")
+  //         .note("schema expects a `{}`, but event contains `{}`",
+  //         seed->kind(),
+  //               type{data_to_type_t<T>{}}.kind()));
+  //   },
+  //   // generic fallback
+  //   []( const auto&, const auto& ){
+  //     /* noop */
+  //   },
+  //   // null -> anything
+  //   [](const caf::none_t&, const auto&) {
+  //     /* noop */
+  //   },
+  //   // numeric -> double
+  //   [this]<numeric_data_type T>(const T& value, const double_type&) {
+  //     data(static_cast<double>(value));
+  //   },
+  //   // int -> uint
+  //   [this](const int64_t value, const uint64_type&) {
+  //     if (value < 0) {
+  //       null();
+  //     } else {
+  //       data(static_cast<uint64_t>(value));
+  //     }
+  //   },
+  //   // uint -> int
+  //   [this](const uint64_t& value, const int64_type&) {
+  //     if (value > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+  //     {
+  //       null();
+  //     } else {
+  //       data(static_cast<int64_t>(value));
+  //     }
+  //   },
+  //   // numeric -> duration
+  //   [this,seed]<numeric_data_type T>(const T& value, const duration_type&) {
+  //     auto unit = seed->attribute("unit").value_or("s");
+  //     auto res = cast_value(data_to_type_t<T>{}, value, duration_type{},
+  //     unit); if (res) {
+  //       data(*res);
+  //       return;
+  //     }
+  //   },
+  //   // numeric -> time
+  //   [this, seed, &rb]<numeric_data_type T>(const T& value, const time_type&)
+  //   {
+  //     auto unit = seed->attribute("unit");
+  //     if (not unit) {
+  //       rb.emit_or_throw(
+  //         diagnostic::warning("could not parse value as `{}`", time_type{})
+  //           .note("the read value as a number, but the schema does not "
+  //                 "specify a unit"));
+  //       return;
+  //     }
+  //     auto res = cast_value(data_to_type_t<T>{}, value, duration_type{},
+  //     *unit); if (res) {
+  //       data(time{} + *res);
+  //       return;
+  //     }
+  //   },
+  //   // anything -> string
+  //   [this]<fmt_formattable T>(const T& value, const string_type&) {
+  //     data(fmt::format("{}", value));
+  //   },
+  // };
+  // caf::visit( visitor2, data_, *seed );
   const auto visitor = detail::overload{
     [](const auto&) {
       /* noop */
