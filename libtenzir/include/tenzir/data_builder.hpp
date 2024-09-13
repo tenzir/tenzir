@@ -109,16 +109,16 @@ concept non_structured_data_type
     and not detail::is_any_v<T, node_record, node_list, pattern_dummy,
                              map_dummy, enriched_dummy>;
 
-// template <typename T>
-// concept non_structured_type_type
-//   = caf::detail::tl_contains<concrete_types, T>::value
-//     and not detail::is_any_v<record_type, list_type, legacy_pattern_type,
-//                              map_type>;
+template <typename T>
+concept non_structured_type_type
+  = caf::detail::tl_contains<concrete_types, T>::value
+    and not detail::is_any_v<record_type, list_type, legacy_pattern_type,
+                             map_type>;
 
-// template <typename T>
-// concept numeric_data_type
-//   = non_structured_data_type<T>
-//     and detail::is_any_v<T, uint64_type, int64_type, double_type>;
+template <typename T>
+concept numeric_data_type
+  = non_structured_data_type<T>
+    and detail::is_any_v<T, uint64_type, int64_type, double_type>;
 
 template <typename T>
 concept unsupported_type
@@ -567,6 +567,10 @@ private:
 
   auto emit_or_throw(tenzir::diagnostic&& diag) -> void;
   auto emit_or_throw(tenzir::diagnostic_builder&& builder) -> void;
+  auto
+  emit_mismatch_warning(const type& value_type, const type& seed_type) -> void;
+  auto emit_mismatch_warning(std::string_view value_type,
+                             const type& seed_type) -> void;
 };
 
 namespace detail::data_builder {

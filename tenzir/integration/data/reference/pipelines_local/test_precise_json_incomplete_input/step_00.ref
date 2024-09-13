@@ -1,2 +1,3 @@
 warning: json parser: line did not contain a single valid JSON object
+ = note: line 1
  = note: skipped invalid JSON `{"foo": 42`

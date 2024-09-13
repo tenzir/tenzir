@@ -140,6 +140,20 @@ auto data_builder::emit_or_throw(tenzir::diagnostic_builder&& builder) -> void {
   }
 }
 
+auto data_builder::emit_mismatch_warning(const type& value_type,
+                                         const type& seed_type) -> void {
+  emit_or_throw(diagnostic::warning("parsed field contains `{}`, but the "
+                                    "schema expects `{}`",
+                                    value_type.kind(), seed_type.kind()));
+}
+
+auto data_builder::emit_mismatch_warning(std::string_view value_type,
+                                         const type& seed_type) -> void {
+  emit_or_throw(diagnostic::warning("parsed field contains `{}`, but the "
+                                    "schema expects `{}`",
+                                    value_type, seed_type.kind()));
+}
+
 namespace {
 template <typename Tenzir_Type>
 struct parser_for;
@@ -633,17 +647,12 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
   // caf::variant. (`data_`vs `tenzir::type`).
   // Below is a nice implementation that I wrote before realizing
   // that I really dont want to deal with turning the `data_` member into a
-  // caf::variant. Once we update CAF, this will be easy to replace. const auto
-  // visitor2 = detail::overload{
+  // caf::variant. Once we update CAF, this will be easy to replace.
+  // const auto visitor2 = detail::overload{
   //   // fallback
   //   [&rb,seed]<non_structured_data_type T, typename S>(const T&, const S& s)
   //   {
-  //     rb.emit_or_throw(
-  //       diagnostic::warning("parsed field type does not match the the
-  //       schema")
-  //         .note("schema expects a `{}`, but event contains `{}`",
-  //         seed->kind(),
-  //               type{data_to_type_t<T>{}}.kind()));
+  //     rb.emit_mismatch_warning( type{data_to_type_t<T>{}}, *seed );
   //   },
   //   // generic fallback
   //   []( const auto&, const auto& ){
@@ -728,10 +737,21 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
         if (is_numeric(seed_idx)) {
           switch (seed_idx) {
             case caf::detail::tl_index_of<field_type_list, int64_t>::value: {
+              if constexpr (std::same_as<uint64_t, T>) {
+                if (v > static_cast<uint64_t>(
+                      std::numeric_limits<int64_t>::max())) {
+                  null();
+                  return;
+                }
+              }
               data(static_cast<int64_t>(v));
               return;
             }
             case caf::detail::tl_index_of<field_type_list, uint64_t>::value: {
+              if (v < 0) {
+                null();
+                return;
+              }
               data(static_cast<uint64_t>(v));
               return;
             }
@@ -740,6 +760,12 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
               return;
             }
             case caf::detail::tl_index_of<field_type_list, enumeration>::value: {
+              if (v < 0
+                  or v > static_cast<T>(
+                       std::numeric_limits<enumeration>::max())) {
+                null();
+                return;
+              }
               data(static_cast<enumeration>(v));
               return;
             }
@@ -750,13 +776,10 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
                    == caf::detail::tl_index_of<field_type_list,
                                                duration>::value) {
           auto unit = seed->attribute("unit").value_or("s");
-          if constexpr (numeric_type<T>) {
-            auto res
-              = cast_value(data_to_type_t<T>{}, v, duration_type{}, unit);
-            if (res) {
-              data(*res);
-              return;
-            }
+          auto res = cast_value(data_to_type_t<T>{}, v, duration_type{}, unit);
+          if (res) {
+            data(*res);
+            return;
           }
         } else if (seed_idx
                    == caf::detail::tl_index_of<field_type_list, time>::value) {
@@ -768,13 +791,10 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
                       "specify a unit"));
             return;
           }
-          if constexpr (numeric_type<T>) {
-            auto res
-              = cast_value(data_to_type_t<T>{}, v, duration_type{}, *unit);
-            if (res) {
-              data(time{} + *res);
-              return;
-            }
+          auto res = cast_value(data_to_type_t<T>{}, v, duration_type{}, *unit);
+          if (res) {
+            data(time{} + *res);
+            return;
           }
         }
       } else if (seed_idx == type_index_string) {
@@ -792,11 +812,7 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
       // ensuring that all fields top level are written (as null) on commit.
       // This is a non-trivial effort though and should be considered as a
       // follow-up to precise parsing.
-      rb.emit_or_throw(
-        diagnostic::warning("parsed field type does not match the type from "
-                            "the schema")
-          .note("schema expects a `{}`, but event contains `{}`", seed->kind(),
-                type{data_to_type_t<T>{}}.kind()));
+      rb.emit_mismatch_warning(type{data_to_type_t<T>{}}, *seed);
     },
   };
   std::visit(visitor, data_);
@@ -823,11 +839,7 @@ auto node_object::append_to_signature(signature_type& sig,
     [&sig, &rb, seed, this](node_list& v) {
       const auto* ls = caf::get_if<list_type>(seed);
       if (seed and not ls) {
-        rb.emit_or_throw(
-          diagnostic::warning("mismatch between event data and expected "
-                              "schema")
-            .note("schema expects a `{}`, but event contains `{}`",
-                  seed->kind(), "list"));
+        rb.emit_mismatch_warning("list", *seed);
         null();
         // FIXME this needs to update the signature in some way
         return;
@@ -839,11 +851,7 @@ auto node_object::append_to_signature(signature_type& sig,
     [&sig, &rb, seed, this](node_record& v) {
       const auto* rs = caf::get_if<record_type>(seed);
       if (seed and not rs) {
-        rb.emit_or_throw(
-          diagnostic::warning("mismatch between event data and expected "
-                              "schema")
-            .note("schema expects `{}` (`{}`), but event contains `{}`",
-                  seed->kind(), *seed, type{record_type{}}.kind()));
+        rb.emit_mismatch_warning(type{record_type{}}, *seed);
         null();
         // FIXME this needs to update the signature in some way
         return;
@@ -914,12 +922,7 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
       }
       const auto ls = caf::get_if<tenzir::list_type>(seed);
       if (not ls and seed) {
-        rb.emit_or_throw(
-          diagnostic::warning("mismatch between event data and expected "
-                              "schema")
-            .note("the respective field will be null in the output")
-            .note("schema expects `{}` (`{}`), but event contains `{}`",
-                  seed->kind(), *seed, "list"));
+        rb.emit_mismatch_warning("list", *seed);
         builder.null();
         v.mark_this_dead();
         return;
@@ -935,12 +938,7 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
       }
       const auto rs = caf::get_if<tenzir::record_type>(seed);
       if (not rs and seed) {
-        rb.emit_or_throw(
-          diagnostic::warning("mismatch between event data and expected "
-                              "schema")
-            .note("the respective field will be null in the output")
-            .note("schema expects `{}` (`{}`), but event contains `{}`",
-                  seed->kind(), *seed, type{record_type{}}.kind()));
+        rb.emit_mismatch_warning(type{record_type{}}, *seed);
         builder.null();
         v.mark_this_dead();
         return;
@@ -954,12 +952,7 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
       auto res = builder.try_data(v);
       if (auto& e = res.error()) {
         if (tenzir::ec{e.code()} == ec::type_clash) {
-          rb.emit_or_throw(
-            diagnostic::warning("mismatch between event data and "
-                                "expected schema")
-              .note("the respective field will be null in the output")
-              .note("schema expects `{}` (`{}`), but event contains `{}`",
-                    seed->kind(), *seed, type{data_to_type_t<T>{}}.kind()));
+          rb.emit_mismatch_warning(type{data_to_type_t<T>{}}, *seed);
         } else {
           rb.emit_or_throw(
             diagnostic::warning("issue writing data into builder")
@@ -1003,12 +996,7 @@ auto node_object::commit_to(tenzir::data& r, class data_builder& rb,
       }
       const auto ls = caf::get_if<tenzir::list_type>(seed);
       if (not ls and seed) {
-        rb.emit_or_throw(
-          diagnostic::warning("mismatch between event data and expected "
-                              "schema")
-            .note("the respective field will be null in the output")
-            .note("schema expects `{}` (`{}`), but event contains `{}`",
-                  seed->kind(), *seed, "list"));
+        rb.emit_mismatch_warning("list", *seed);
         r = caf::none;
         v.mark_this_dead();
         return;
@@ -1022,12 +1010,7 @@ auto node_object::commit_to(tenzir::data& r, class data_builder& rb,
       }
       const auto rs = caf::get_if<tenzir::record_type>(seed);
       if (not rs and seed) {
-        rb.emit_or_throw(
-          diagnostic::warning("mismatch between event data and expected "
-                              "schema")
-            .note("the respective field will be null in the output")
-            .note("schema expects `{}` (`{}`), but event contains `{}`",
-                  seed->kind(), *seed, type{record_type{}}.kind()));
+        rb.emit_mismatch_warning(type{record_type{}}, *seed);
         r = caf::none;
         v.mark_this_dead();
         return;

@@ -1508,9 +1508,4 @@ warning: zeek-json parser: event did not contain selector field
 warning: zeek-json parser: selected schema not found
  = note: `zeek._0_0_2` does not refer to a known schema
 
-warning: zeek-json parser: parsed field type does not match the type from the schema
- = note: schema expects `record` (`zeek.conn_id`), but event contains `int64`
-
-warning: zeek-json parser: mismatch between event data and expected schema
- = note: the respective field will be null in the output
- = note: schema expects `record` (`zeek.conn_id`), but event contains `int64`
+warning: zeek-json parser: parsed field contains `int64`, but the schema expects `record`
