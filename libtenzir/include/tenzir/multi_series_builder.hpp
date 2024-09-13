@@ -41,7 +41,7 @@ namespace detail::multi_series_builder {
 using signature_type = std::vector<std::byte>;
 
 class list_generator;
-class field_generator;
+class object_generator;
 
 class record_generator {
   using raw_pointer = detail::data_builder::node_record*;
@@ -56,42 +56,42 @@ public:
   }
   /// @brief Adds an field with exactly the given name to the record.
   /// This function does not perform any unflatten operation.
-  auto exact_field(std::string_view name) -> field_generator;
+  auto exact_field(std::string_view name) -> object_generator;
   /// @brief Adds a new field to the record and returns a generator for that
   /// field. Iff the backing `multi_series_builder` has an unnest-separator,
   /// this function will also unflatten.
-  auto field(std::string_view name) -> field_generator;
+  auto field(std::string_view name) -> object_generator;
 
   /// @brief Creates an explicitly unflattend field. This function does
   /// not respect the builders unflatten setting.
   auto unflattend_field(std::string_view key,
-                        std::string_view unflatten) -> field_generator;
+                        std::string_view unflatten) -> object_generator;
   /// @brief Creates an explicitly unflattend field according to the
   /// `multi_series_builder`s unflatten setting.
-  auto unflattend_field(std::string_view key) -> field_generator;
+  auto unflattend_field(std::string_view key) -> object_generator;
 
 private:
   class multi_series_builder* msb_ = nullptr;
   std::variant<tenzir::record_ref, raw_pointer> var_;
 };
 
-class field_generator {
+class object_generator {
   using raw_pointer = detail::data_builder::node_object*;
 
 public:
   /// A non-associated field generator. This is used in the unflatten function.
-  field_generator() : field_generator(nullptr, nullptr) {
+  object_generator() : object_generator(nullptr, nullptr) {
   }
-  field_generator(class multi_series_builder* msb, builder_ref builder)
+  object_generator(class multi_series_builder* msb, builder_ref builder)
     : msb_{msb}, var_{builder} {
   }
-  field_generator(class multi_series_builder* msb, raw_pointer raw)
+  object_generator(class multi_series_builder* msb, raw_pointer raw)
     : msb_{msb}, var_{raw} {
   }
 
   /// @brief Sets the value of the field to some data
   template <tenzir::detail::data_builder::non_structured_data_type T>
-  void data(T d) {
+  auto data(T d) -> void {
     const auto visitor = detail::overload{
       [&](tenzir::builder_ref b) {
         b.data(d);
@@ -104,11 +104,14 @@ public:
   }
 
   /// @brief sets the value of the field to the contents of a `tenzir::data`
-  void data(const tenzir::data& d);
+  auto data(const tenzir::data& d) -> void;
 
   /// @brief sets the value of the field to some unparsed text. Parsing will
   /// happen at a later time for the precise modes or immediately in merging mode.
-  void data_unparsed(std::string_view s);
+  auto data_unparsed(std::string_view s) -> void;
+  /// @brief sets the value of the field to some unparsed text. Parsing will
+  /// happen at a later time for the precise modes or immediately in merging mode.
+  auto data_unparsed(std::string s) -> void;
 
   /// @brief Sets the value of the field an empty record and returns a generator
   /// for the record
@@ -119,7 +122,7 @@ public:
   auto list() -> list_generator;
 
   /// @brief Sets the value of the field to null
-  void null();
+  auto null() -> void;
 
 private:
   class multi_series_builder* msb_;
@@ -156,7 +159,10 @@ public:
 
   /// @brief sets the value of the field to some unparsed text. Parsing will
   /// happen at a later time for the precise modes or immediately in merging mode.
-  void data_unparsed(std::string_view s);
+  auto data_unparsed(std::string_view s) -> void;
+  /// @brief sets the value of the field to some unparsed text. Parsing will
+  /// happen at a later time for the precise modes or immediately in merging mode.
+  auto data_unparsed(std::string s) -> void;
   /// @brief appends a record to the list and returns a generator for the record
   auto record() -> record_generator;
 
@@ -164,7 +170,7 @@ public:
   auto list() -> list_generator;
 
   /// @brief append a null value to the list
-  void null();
+  auto null() -> void;
 
 private:
   class multi_series_builder* msb_;
@@ -185,7 +191,7 @@ concept has_data_unparsed
 
 static_assert(has_exact_field<record_generator>);
 static_assert(has_unflattend_field<record_generator>);
-static_assert(has_data_unparsed<field_generator>);
+static_assert(has_data_unparsed<object_generator>);
 
 auto series_to_table_slice(series array, std::string_view fallback_name
                                          = "tenzir.unknown") -> table_slice;
@@ -215,7 +221,7 @@ auto series_to_table_slice(std::vector<series> data,
 class multi_series_builder {
 public:
   friend class detail::multi_series_builder::record_generator;
-  friend class detail::multi_series_builder::field_generator;
+  friend class detail::multi_series_builder::object_generator;
   friend class detail::multi_series_builder::list_generator;
   using record_generator = detail::multi_series_builder::record_generator;
   using list_generator = detail::multi_series_builder::list_generator;

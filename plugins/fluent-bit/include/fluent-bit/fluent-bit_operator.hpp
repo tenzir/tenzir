@@ -553,6 +553,7 @@ auto add(auto field, const msgpack_object& object, diagnostic_handler& dh,
           return false;
         }
       }
+      return true;
     },
     [&](std::span<msgpack_object_kv> xs) {
       auto record = field.record();
@@ -568,8 +569,11 @@ auto add(auto field, const msgpack_object& object, diagnostic_handler& dh,
         auto field = record.unflattend_field(key);
         // TODO: restrict this attempt to decode to the top-level field "log"
         // only. We currently attempt to parse *all* fields named "log" as JSON.
-        add(field, kvp.val, dh, key == "log");
+        if (not add(field, kvp.val, dh, key == "log")) {
+          return false;
+        }
       }
+      return true;
     },
     [&](const msgpack_object_ext& ext) {
       diagnostic::warning("unknown MsgPack type")

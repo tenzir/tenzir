@@ -83,21 +83,21 @@ struct enriched_dummy {};
 // dummies
 // clang-format off
 using field_type_list = caf::detail::type_list<
-  caf::none_t, 
-  bool, 
-  int64_t, 
+  caf::none_t,
+  bool,
+  int64_t,
   uint64_t,
-  double, 
-  duration, 
-  time, 
+  double,
+  duration,
+  time,
   std::string,
   pattern_dummy,
-  ip, 
-  subnet, 
-  enumeration, 
+  ip,
+  subnet,
+  enumeration,
   node_list,
-  map_dummy, 
-  node_record, 
+  map_dummy,
+  node_record,
   enriched_dummy,
   blob
 >;
@@ -106,36 +106,25 @@ using field_type_list = caf::detail::type_list<
 template <typename T>
 concept non_structured_data_type
   = caf::detail::tl_contains<field_type_list, T>::value
-    and not caf::detail::tl_contains<
-      caf::detail::type_list<node_record, node_list, pattern_dummy, map_dummy,
-                             enriched_dummy>,
-      T>::value;
+    and not detail::is_any_v<T, node_record, node_list, pattern_dummy,
+                             map_dummy, enriched_dummy>;
+
+// template <typename T>
+// concept non_structured_type_type
+//   = caf::detail::tl_contains<concrete_types, T>::value
+//     and not detail::is_any_v<record_type, list_type, legacy_pattern_type,
+//                              map_type>;
+
+// template <typename T>
+// concept numeric_data_type
+//   = non_structured_data_type<T>
+//     and detail::is_any_v<T, uint64_type, int64_type, double_type>;
 
 template <typename T>
-concept non_structured_type_type
-  = caf::detail::tl_contains<concrete_types, T>::value
-    and not caf::detail::tl_contains<
-      caf::detail::type_list<record_type, list_type, legacy_pattern_type,
-                             map_type>,
-      T>::value;
-
-template <typename T>
-concept numeric_data_type
-  = non_structured_data_type<T>
-    and (std::same_as<T, uint64_type> or std::same_as<T, int64_type>
-         or std::same_as<T, double_type>);
-
-// clang-format off
-template <typename T>
-concept unsupported_types
-  =  caf::detail::tl_contains<
-      caf::detail::type_list<
-        tenzir::map_type, tenzir::map, map_dummy,
-        tenzir::legacy_pattern_type, tenzir::pattern, pattern_dummy,
-        enriched_dummy
-      >,
-      T>::value;
-// clang-format on
+concept unsupported_type
+  = detail::is_any_v<T, tenzir::map_type, tenzir::map, map_dummy,
+                     tenzir::legacy_pattern_type, tenzir::pattern,
+                     pattern_dummy, enriched_dummy>;
 
 using signature_type = std::vector<std::byte>;
 // outer map needs iterator stability at the moment
@@ -145,22 +134,22 @@ using field_type_lookup_map = tsl::robin_map<std::string, tenzir::type>;
 using schema_type_lookup_map
   = std::unordered_map<tenzir::record_type, field_type_lookup_map>;
 
-constexpr static size_t type_index_empty
+constexpr inline size_t type_index_empty
   = caf::detail::tl_size<field_type_list>::value;
-constexpr static size_t type_index_numeric_mismatch
+constexpr inline size_t type_index_numeric_mismatch
   = caf::detail::tl_size<field_type_list>::value + 1;
-constexpr static size_t type_index_generic_mismatch
+constexpr inline size_t type_index_generic_mismatch
   = caf::detail::tl_size<field_type_list>::value + 2;
-constexpr static size_t type_index_string
+constexpr inline size_t type_index_string
   = caf::detail::tl_index_of<field_type_list, std::string>::value;
-constexpr static size_t type_index_double
+constexpr inline size_t type_index_double
   = caf::detail::tl_index_of<field_type_list, double>::value;
-constexpr static size_t type_index_list
+constexpr inline size_t type_index_list
   = caf::detail::tl_index_of<field_type_list, node_list>::value;
-constexpr static size_t type_index_record
+constexpr inline size_t type_index_record
   = caf::detail::tl_index_of<field_type_list, node_record>::value;
 
-static inline constexpr auto is_structural(size_t idx) -> bool {
+inline constexpr auto is_structural(size_t idx) -> bool {
   switch (idx) {
     case caf::detail::tl_index_of<field_type_list, node_list>::value:
     case caf::detail::tl_index_of<field_type_list, node_record>::value:
@@ -170,7 +159,7 @@ static inline constexpr auto is_structural(size_t idx) -> bool {
   }
 }
 
-static inline constexpr auto is_numeric(size_t idx) -> bool {
+inline constexpr auto is_numeric(size_t idx) -> bool {
   switch (idx) {
     case caf::detail::tl_index_of<field_type_list, int64_t>::value:
     case caf::detail::tl_index_of<field_type_list, uint64_t>::value:
@@ -182,7 +171,7 @@ static inline constexpr auto is_numeric(size_t idx) -> bool {
   }
 }
 
-static inline auto is_null(size_t idx) -> bool {
+inline auto is_null(size_t idx) -> bool {
   return idx == caf::detail::tl_index_of<field_type_list, caf::none_t>::value;
 }
 
@@ -213,11 +202,25 @@ update_type_index(size_t& old_index, size_t new_index) -> void {
   old_index = type_index_generic_mismatch;
 }
 
-enum class state { alive, sentinel, dead };
+enum class state {
+  /// The node contains an active value
+  /// It should be considered for the signature and actually
+  /// written in `commit_to`
+  alive,
+  /// The node contains a sentinel value
+  /// It only affects the signature, but should not be written in `commit_to`
+  sentinel,
+  /// The node is dead. Its only retained for memory efficiency, so that we dont
+  /// allocate and deallocate nodes all the time
+  dead,
+};
 
 class node_base {
 protected:
-  auto mark_this_relevant() -> void {
+  /// Updates the nodes state to reflect that it affects the signature
+  /// * If the node is already alive or a sentinel, this has no effect.
+  /// * If the node is dead, it makes it a sentinel instead.
+  auto mark_this_relevant_for_signature() -> void {
     if (state_ != state::alive) {
       state_ = state::sentinel;
     }
@@ -303,7 +306,7 @@ public:
   auto data(tenzir::data) -> void;
   /// @brief Appends some unparsed data to this list.
   /// It is later parsed when a seed is potentially available.
-  auto data_unparsed(std::string_view) -> void;
+  auto data_unparsed(std::string) -> void;
   /// @brief adds a null value to the list
   auto null() -> void;
   /// @brief adds a new record to the list
@@ -317,17 +320,11 @@ public:
   /// @ref reserve can be used to ensure stability for a given number of elements
   [[nodiscard]] auto list() -> node_list*;
 
-  auto combined_index() const -> size_t {
-    return type_index_;
-  }
-
 private:
   /// finds an element marked as dead. This is part of the reallocation
   /// optimization.
-  auto find_free() -> node_object*;
+  auto find_dead_and_resurrect() -> node_object*;
   auto back() -> node_object&;
-
-  auto update_new_structural_signature() -> void;
 
   // writes the list into a series builder
   auto commit_to(tenzir::builder_ref r, class data_builder& rb,
@@ -340,9 +337,14 @@ private:
                            const tenzir::list_type* seed) -> void;
   auto clear() -> void;
 
+  /// The index of the last node that is currently alive.
+  size_t last_alive_idx_ = 0;
+  /// The current type index of the entire list
+  /// This is computed when adding elements to the list
+  /// In some cases, this can allow us to avoid iterating the entire list
+  /// when computing the signature.
   size_t type_index_ = type_index_empty;
-  signature_type current_structural_signature_;
-  signature_type new_structural_signature_;
+  /// The actual contents of the list.
   std::vector<node_object> data_;
 };
 
@@ -363,7 +365,7 @@ public:
   auto data(tenzir::data) -> void;
   /// @brief Sets this field to some unparsed data.
   /// It is later parsed when a seed is potentially available.
-  auto data_unparsed(std::string_view raw_text) -> void;
+  auto data_unparsed(std::string raw_text) -> void;
   auto null() -> void;
   [[nodiscard]] auto record() -> node_record*;
   [[nodiscard]] auto list() -> node_list*;
@@ -385,7 +387,7 @@ private:
   /// tries to static_cast the held value to T.
   /// @returns whether the cast was performed
   template <typename T>
-  [[nodiscard]] auto cast_to() -> bool {
+  [[nodiscard]] auto transform_to() -> bool {
     const auto visitor = detail::overload{
       [this]<typename Current>(const Current& v) -> bool
         requires requires(Current c) { static_cast<T>(c); }
@@ -416,20 +418,24 @@ private:
                  const tenzir::type* seed, bool mark_dead = true) -> void;
   auto clear() -> void;
 
-  // clang-format off
-  using field_variant_type = caf::detail::tl_apply_t<
-   field_type_list,
-    std::variant
-  >;
-  // clang-format on
+  using object_variant_type
+    = caf::detail::tl_apply_t<field_type_list, std::variant>;
 
-  field_variant_type data_;
+  object_variant_type data_;
 
-  enum class value_state_type { has_value, unparsed, null };
-  // this is the state of the contained value. This exists in case somebody calls
-  // `record.field("key")` but never inserts any data into the field
-  // this is distinctly different from a node not being `alive`,
-  // which only happens as a result of internal storage reuse.
+  enum class value_state_type {
+    /// The node actually has a value that should be used
+    has_value,
+    /// The node is yet to be parsed
+    unparsed,
+    /// the node is null
+    null,
+  };
+  /// This is the state of the contained value. This exists in case somebody
+  /// calls `record.field("key")` but never inserts any data into the field This
+  /// is distinctly different from a node not being `alive`, which only happens
+  /// as a result of internal storage reuse. This property is only considered if
+  /// the node is actually not dead
   value_state_type value_state_ = value_state_type::null;
 };
 
@@ -494,7 +500,7 @@ public:
   /// @brief Sets the top level the given string.
   /// The string will automatically be parsed (later) according to the parser
   /// that was parser the `data_builder` was constructed with.
-  auto data_unparsed(std::string_view) -> void;
+  auto data_unparsed(std::string) -> void;
 
   [[nodiscard]] auto has_elements() -> bool {
     return root_.is_alive();
@@ -528,14 +534,27 @@ public:
                  const tenzir::type* seed = nullptr) -> void;
 
 private:
-  /// tries to lookup the type `r` in the type lookup map,
-  /// and potentially writes creates sentinel fields in `apply`
-  /// if they dont exist in the record yet
+  ///////
+  /// The members below exist to speed up schema lookup by name
+  /// The map allows us to quickly lookup a record type and get all its fields
+  /// Without the map we would be bottle-necked by iterating
+  /// `record_type::fields`
+  ///////
+  /// @brief tries to lookup the type in the map. If the type looked for is not
+  ////       yet in the map, its also added.
+  /// @param r a pointer to the type to look for. If this is null, the function
+  ///          returns null and has no effect
+  /// @param apply a pointer to a record to which all fields should be added if
+  ///              the type for `r` was found. Doing this inside of this
+  ///              function removes the need for a second traversal later
   auto lookup_record_fields(const tenzir::record_type* r,
                             detail::data_builder::node_record* apply)
     -> const detail::data_builder::field_type_lookup_map*;
 
+  /// This is the root object that actually holds all data
   detail::data_builder::node_object root_;
+  /// The map used to lookup fields and their types.
+  /// This map should only be used via `lookup_record_fields`
   detail::data_builder::schema_type_lookup_map schema_type_lookup_;
   diagnostic_handler* dh_;
 
@@ -561,7 +580,7 @@ auto node_object::data(T data) -> void {
 template <non_structured_data_type T>
 auto node_list::data(T data) -> void {
   mark_this_alive();
-  if (auto* free = find_free()) {
+  if (auto* free = find_dead_and_resurrect()) {
     free->data(std::move(data));
     update_type_index(type_index_, free->current_index());
   } else {

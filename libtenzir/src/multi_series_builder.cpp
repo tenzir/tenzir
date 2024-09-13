@@ -35,24 +35,24 @@ void append_name_to_signature(std::string_view x, signature_type& out) {
 
 namespace detail::multi_series_builder {
 
-auto record_generator::exact_field(std::string_view name) -> field_generator {
+auto record_generator::exact_field(std::string_view name) -> object_generator {
   const auto visitor = detail::overload{
     [&](tenzir::record_ref b) {
-      return field_generator{msb_, b.field(name)};
+      return object_generator{msb_, b.field(name)};
     },
     [&](raw_pointer raw) {
-      return field_generator{msb_, raw->field(name)};
+      return object_generator{msb_, raw->field(name)};
     },
   };
   return std::visit(visitor, var_);
 }
 
-auto record_generator::field(std::string_view name) -> field_generator {
+auto record_generator::field(std::string_view name) -> object_generator {
   return exact_field(name);
 }
 
 auto record_generator::unflattend_field(
-  std::string_view key, std::string_view unflatten) -> field_generator {
+  std::string_view key, std::string_view unflatten) -> object_generator {
   if (unflatten.empty()) {
     return exact_field(key);
   }
@@ -67,11 +67,11 @@ auto record_generator::unflattend_field(
 }
 
 auto record_generator::unflattend_field(std::string_view key)
-  -> field_generator {
+  -> object_generator {
   return unflattend_field(key, msb_->settings_.unnest_separator);
 }
 
-auto field_generator::data(const tenzir::data& d) -> void {
+auto object_generator::data(const tenzir::data& d) -> void {
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
       b.data(d);
@@ -83,16 +83,11 @@ auto field_generator::data(const tenzir::data& d) -> void {
   return std::visit(visitor, var_);
 }
 
-auto field_generator::data_unparsed(std::string_view s) -> void {
+auto object_generator::data_unparsed(std::string_view s) -> void {
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
       auto res = msb_->builder_raw_.parser_(s, nullptr);
       auto& [value, diag] = res;
-      // TODO maybe accept a diag handler, so we dont have to swallow the
-      // diagnostic in merging mode
-      // if ( diag ) {
-      //   throw std::move(diag);
-      // }
       if (value) {
         b.data(std::move(*value));
       } else {
@@ -100,13 +95,31 @@ auto field_generator::data_unparsed(std::string_view s) -> void {
       }
     },
     [&](raw_pointer raw) {
-      raw->data_unparsed(s);
+      raw->data_unparsed(std::string{s});
     },
   };
   return std::visit(visitor, var_);
 }
 
-auto field_generator::record() -> record_generator {
+auto object_generator::data_unparsed(std::string s) -> void {
+  const auto visitor = detail::overload{
+    [&](tenzir::builder_ref b) {
+      auto res = msb_->builder_raw_.parser_(s, nullptr);
+      auto& [value, diag] = res;
+      if (value) {
+        b.data(std::move(*value));
+      } else {
+        b.data(s);
+      }
+    },
+    [&](raw_pointer raw) {
+      raw->data_unparsed(std::move(s));
+    },
+  };
+  return std::visit(visitor, var_);
+}
+
+auto object_generator::record() -> record_generator {
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
       return record_generator{msb_, b.record()};
@@ -118,7 +131,7 @@ auto field_generator::record() -> record_generator {
   return std::visit(visitor, var_);
 }
 
-auto field_generator::list() -> list_generator {
+auto object_generator::list() -> list_generator {
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
       return list_generator{msb_, b.list()};
@@ -130,7 +143,7 @@ auto field_generator::list() -> list_generator {
   return std::visit(visitor, var_);
 }
 
-void field_generator::null() {
+void object_generator::null() {
   return this->data(caf::none);
 }
 
@@ -155,9 +168,6 @@ auto list_generator::data_unparsed(std::string_view s) -> void {
     [&](tenzir::builder_ref b) {
       auto res = msb_->builder_raw_.parser_(s, nullptr);
       auto& [value, diag] = res;
-      // if ( diag ) {
-      //   throw std::move(diag);
-      // }
       if (value) {
         b.data(std::move(*value));
       } else {
@@ -165,7 +175,25 @@ auto list_generator::data_unparsed(std::string_view s) -> void {
       }
     },
     [&](raw_pointer raw) {
-      raw->data_unparsed(s);
+      raw->data_unparsed(std::string{s});
+    },
+  };
+  return std::visit(visitor, var_);
+}
+
+auto list_generator::data_unparsed(std::string s) -> void {
+  const auto visitor = detail::overload{
+    [&](tenzir::builder_ref b) {
+      auto res = msb_->builder_raw_.parser_(s, nullptr);
+      auto& [value, diag] = res;
+      if (value) {
+        b.data(std::move(*value));
+      } else {
+        b.data(s);
+      }
+    },
+    [&](raw_pointer raw) {
+      raw->data_unparsed(std::move(s));
     },
   };
   return std::visit(visitor, var_);
@@ -236,7 +264,7 @@ multi_series_builder::multi_series_builder(
     const auto [it, success] = schemas_.try_emplace(t.name(), std::move(t));
     TENZIR_ASSERT(success, "Repeated schema name");
   }
-  if (auto p = get_policy<policy_default>()) {
+  if (get_policy<policy_default>()) {
     // if we merge all events, they are necessarily ordered
     settings_.ordered |= settings_.merge;
   } else if (auto p = get_policy<policy_schema>()) {

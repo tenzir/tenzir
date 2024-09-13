@@ -100,7 +100,7 @@ auto data_builder::lookup_record_fields(
       // ensure the field exists
       if (apply) {
         auto* ptr = apply->try_field(v.name);
-        ptr->mark_this_relevant();
+        ptr->mark_this_relevant_for_signature();
       }
       // add its type back to the lookup map
       const auto [_, field_success]
@@ -112,7 +112,7 @@ auto data_builder::lookup_record_fields(
       // ensure the field exists
       if (apply) {
         auto* ptr = apply->try_field(k);
-        ptr->mark_this_relevant();
+        ptr->mark_this_relevant_for_signature();
       }
     }
   }
@@ -193,11 +193,6 @@ auto parse_enumeration(std::string_view s, const enumeration_type& e)
 
 auto parse_duration(std::string_view s, const type& seed)
   -> detail::data_builder::data_parsing_result {
-  auto p = parsers::duration;
-  auto parse_res = duration{};
-  if (p(s, parse_res)) {
-    return data{std::move(parse_res)};
-  }
   auto cast_res = cast_value(string_type{}, s, duration_type{});
   if (cast_res) {
     return {*cast_res};
@@ -214,11 +209,6 @@ auto parse_duration(std::string_view s, const type& seed)
 }
 auto parse_time(std::string_view s,
                 const type& seed) -> detail::data_builder::data_parsing_result {
-  auto p = parsers::time;
-  auto res = time{};
-  if (p(s, res)) {
-    return data{std::move(res)};
-  }
   auto cast_res = cast_value(string_type{}, s, time_type{});
   if (cast_res) {
     return {*cast_res};
@@ -297,10 +287,9 @@ auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
       }
     },
     []<typename T>(const T& t) -> tenzir::diagnostic {
-      return diagnostic::warning("parsing a string as a {} is not supported by "
-                                 "the basic parser",
-                                 t)
-        .done();
+      TENZIR_ASSERT_ALWAYS(
+        false,
+        fmt::format("The basic parser does not implement parsing `{}`", t));
     },
   };
   return caf::visit(visitor, seed);
@@ -350,6 +339,11 @@ struct index_regression_tester {
 
   using type = void;
 };
+
+static_assert(caf::detail::tl_size<field_type_list>::value
+                == caf::detail::tl_size<data::types>::value + 1,
+              "The could should match up, apart from the lack of `enriched` in "
+              "`tenzir::data`");
 
 [[maybe_unused]] consteval void test() {
   (void)index_regression_tester<caf::none_t, null_type>{};
@@ -417,6 +411,9 @@ auto node_record::at(std::string_view key) -> node_object* {
     if (field_name_mismatch == field_name.end()) {
       if (key_mismatch == key.end()) {
         return &data_[index].value;
+      }
+      if (*key_mismatch != '.') {
+        continue;
       }
       if (auto* r = data_[index].value.get_if<node_record>()) {
         if (auto* result = r->at(key.substr(1 + key_mismatch - key.begin()))) {
@@ -562,7 +559,7 @@ auto node_object::data(tenzir::data d) -> void {
         r->field(k)->data(std::move(v));
       }
     },
-    []<unsupported_types T>(T&) {
+    []<unsupported_type T>(T&) {
       TENZIR_ASSERT(false, fmt::format("Unexpected type \"{}\" in "
                                        "`data_builder::data`",
                                        typeid(T).name()));
@@ -572,10 +569,10 @@ auto node_object::data(tenzir::data d) -> void {
   return caf::visit(visitor, d);
 }
 
-auto node_object::data_unparsed(std::string_view text) -> void {
+auto node_object::data_unparsed(std::string text) -> void {
   mark_this_alive();
   value_state_ = value_state_type::unparsed;
-  data_.emplace<std::string>(text);
+  data_.emplace<std::string>(std::move(text));
 }
 
 auto node_object::record() -> node_record* {
@@ -676,21 +673,9 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
                    == caf::detail::tl_index_of<field_type_list,
                                                duration>::value) {
           auto unit = seed->attribute("unit").value_or("s");
-          if constexpr (std::same_as<T, int64_t>) {
-            auto res = cast_value(int64_type{}, v, duration_type{}, unit);
-            if (res) {
-              data(*res);
-              return;
-            }
-          } else if constexpr (std::same_as<T, uint64_t>) {
-            auto res = cast_value(uint64_type{}, v, duration_type{}, unit);
-            if (res) {
-              data(*res);
-              return;
-            }
-
-          } else if constexpr (std::same_as<T, double>) {
-            auto res = cast_value(double_type{}, v, duration_type{}, unit);
+          if constexpr (numeric_type<T>) {
+            auto res
+              = cast_value(data_to_type_t<T>{}, v, duration_type{}, unit);
             if (res) {
               data(*res);
               return;
@@ -706,24 +691,11 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
                       "specify a unit"));
             return;
           }
-          if constexpr (std::same_as<T, int64_t>) {
-            auto res = cast_value(int64_type{}, v, duration_type{}, *unit);
+          if constexpr (numeric_type<T>) {
+            auto res
+              = cast_value(data_to_type_t<T>{}, v, duration_type{}, *unit);
             if (res) {
               data(time{} + *res);
-              return;
-            }
-          } else if constexpr (std::same_as<T, uint64_t>) {
-            auto res = cast_value(uint64_type{}, v, duration_type{}, *unit);
-            if (res) {
-              data(time{} + *res);
-              return;
-            }
-
-          } else if constexpr (std::same_as<T, double>) {
-            auto res = cast_value(double_type{}, v, duration_type{}, *unit);
-            if (res) {
-              data(time{} + *res);
-              data(*res);
               return;
             }
           }
@@ -738,7 +710,7 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
       // TODO this happens in our intentionally "broken" zeek.json event in the
       // test input, where we have field `id : 0`, whereas the schema expects
       // `id : zeek.conn_id` The resulting issue is that a protected/preparsed
-      // series_builder will reject the value entirely This could be resolved by
+      // series_builder will reject the value. This could be resolved by
       // not preparing any builders in the `multi_series_builder` and instead
       // ensuring that all fields top level are written (as null) on commit.
       // This is a non-trivial effort though and should be considered as a
@@ -746,8 +718,8 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
       rb.emit_or_throw(
         diagnostic::warning("parsed field type does not match the type from "
                             "the schema")
-          .note("schema expects `{}` (`{}`), but event contains `{}`",
-                seed->kind(), *seed, type{data_to_type_t<T>{}}.kind()));
+          .note("schema expects a `{}`, but event contains `{}`", seed->kind(),
+                type{data_to_type_t<T>{}}.kind()));
     },
   };
   std::visit(visitor, data_);
@@ -763,7 +735,6 @@ auto node_object::append_to_signature(signature_type& sig,
     const auto seed_idx = seed->type_index();
     if (not is_structural(seed_idx)) {
       sig.push_back(static_cast<std::byte>(seed_idx));
-
       return;
       ;
     }
@@ -778,8 +749,8 @@ auto node_object::append_to_signature(signature_type& sig,
         rb.emit_or_throw(
           diagnostic::warning("mismatch between event data and expected "
                               "schema")
-            .note("schema expects `{}` (`{}`), but event contains `{}`",
-                  seed->kind(), *seed, "list"));
+            .note("schema expects a `{}`, but event contains `{}`",
+                  seed->kind(), "list"));
         null();
         // FIXME this needs to update the signature in some way
         return;
@@ -833,10 +804,9 @@ auto node_object::append_to_signature(signature_type& sig,
         = caf::detail::tl_index_of<field_type_list, T>::value;
       sig.push_back(static_cast<std::byte>(type_idx));
     },
-    [&rb](auto&) {
-      rb.emit_or_throw(diagnostic::error("node_object::append_to_signature "
-                                         "UNREACHABLE"));
-      TENZIR_UNREACHABLE();
+    []<typename T>(T&) {
+      TENZIR_ASSERT_ALWAYS(false, fmt::format("No `{}` should ever be stored",
+                                              typeid(T).name()));
     },
   };
   return std::visit(visitor, data_);
@@ -862,44 +832,46 @@ auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
   try_resolve_nonstructural_field_mismatch(rb, seed);
   const auto visitor = detail::overload{
     [&builder, &rb, seed, mark_dead](node_list& v) {
-      if (v.is_alive()) {
-        const auto ls = caf::get_if<tenzir::list_type>(seed);
-        if (not ls and seed) {
-          rb.emit_or_throw(
-            diagnostic::warning("mismatch between event data and expected "
-                                "schema")
-              .note("the respective field will be null in the output")
-              .note("schema expects `{}` (`{}`), but event contains `{}`",
-                    seed->kind(), *seed, "list"));
-          builder.null();
-          v.mark_this_dead();
-          return;
-        }
-        // Because we ensured that the seed matches above, we can now safely
-        // call `builder.list()`
-        auto l = builder.list();
-        v.commit_to(std::move(l), rb, ls, mark_dead);
+      if (v.is_dead()) {
+        return;
       }
+      const auto ls = caf::get_if<tenzir::list_type>(seed);
+      if (not ls and seed) {
+        rb.emit_or_throw(
+          diagnostic::warning("mismatch between event data and expected "
+                              "schema")
+            .note("the respective field will be null in the output")
+            .note("schema expects `{}` (`{}`), but event contains `{}`",
+                  seed->kind(), *seed, "list"));
+        builder.null();
+        v.mark_this_dead();
+        return;
+      }
+      // Because we ensured that the seed matches above, we can now safely
+      // call `builder.list()`
+      auto l = builder.list();
+      v.commit_to(std::move(l), rb, ls, mark_dead);
     },
     [&builder, &rb, seed, mark_dead](node_record& v) {
-      if (v.is_alive()) {
-        const auto rs = caf::get_if<tenzir::record_type>(seed);
-        if (not rs and seed) {
-          rb.emit_or_throw(
-            diagnostic::warning("mismatch between event data and expected "
-                                "schema")
-              .note("the respective field will be null in the output")
-              .note("schema expects `{}` (`{}`), but event contains `{}`",
-                    seed->kind(), *seed, type{record_type{}}.kind()));
-          builder.null();
-          v.mark_this_dead();
-          return;
-        }
-        // Because we ensured that the seed matches above, we can now safely
-        // call `builder.record()`
-        auto r = builder.record();
-        v.commit_to(std::move(r), rb, rs, mark_dead);
+      if (v.is_dead()) {
+        return;
       }
+      const auto rs = caf::get_if<tenzir::record_type>(seed);
+      if (not rs and seed) {
+        rb.emit_or_throw(
+          diagnostic::warning("mismatch between event data and expected "
+                              "schema")
+            .note("the respective field will be null in the output")
+            .note("schema expects `{}` (`{}`), but event contains `{}`",
+                  seed->kind(), *seed, type{record_type{}}.kind()));
+        builder.null();
+        v.mark_this_dead();
+        return;
+      }
+      // Because we ensured that the seed matches above, we can now safely
+      // call `builder.record()`
+      auto r = builder.record();
+      v.commit_to(std::move(r), rb, rs, mark_dead);
     },
     [&builder, seed, &rb]<non_structured_data_type T>(T& v) {
       auto res = builder.try_data(v);
@@ -946,20 +918,45 @@ auto node_object::commit_to(tenzir::data& r, class data_builder& rb,
     return;
   }
   parse(rb, seed);
+  try_resolve_nonstructural_field_mismatch(rb, seed);
   const auto visitor = detail::overload{
     [&r, &rb, seed, mark_dead](node_list& v) {
-      if (v.is_alive()) {
-        auto ls = caf::get_if<tenzir::list_type>(seed);
-        r = tenzir::list{};
-        v.commit_to(caf::get<tenzir::list>(r), rb, ls, mark_dead);
+      if (v.is_dead()) {
+        return;
       }
+      const auto ls = caf::get_if<tenzir::list_type>(seed);
+      if (not ls and seed) {
+        rb.emit_or_throw(
+          diagnostic::warning("mismatch between event data and expected "
+                              "schema")
+            .note("the respective field will be null in the output")
+            .note("schema expects `{}` (`{}`), but event contains `{}`",
+                  seed->kind(), *seed, "list"));
+        r = caf::none;
+        v.mark_this_dead();
+        return;
+      }
+      r = tenzir::list{};
+      v.commit_to(caf::get<tenzir::list>(r), rb, ls, mark_dead);
     },
     [&r, &rb, seed, mark_dead](node_record& v) {
-      if (v.is_alive()) {
-        auto rs = caf::get_if<tenzir::record_type>(seed);
-        r = tenzir::record{};
-        v.commit_to(caf::get<tenzir::record>(r), rb, rs, mark_dead);
+      if (v.is_dead()) {
+        return;
       }
+      const auto rs = caf::get_if<tenzir::record_type>(seed);
+      if (not rs and seed) {
+        rb.emit_or_throw(
+          diagnostic::warning("mismatch between event data and expected "
+                              "schema")
+            .note("the respective field will be null in the output")
+            .note("schema expects `{}` (`{}`), but event contains `{}`",
+                  seed->kind(), *seed, type{record_type{}}.kind()));
+        r = caf::none;
+        v.mark_this_dead();
+        return;
+      }
+      r = tenzir::record{};
+      v.commit_to(caf::get<tenzir::record>(r), rb, rs, mark_dead);
     },
     [&r, mark_dead]<non_structured_data_type T>(T& v) {
       if (mark_dead) {
@@ -968,7 +965,7 @@ auto node_object::commit_to(tenzir::data& r, class data_builder& rb,
         r = v;
       }
     },
-    [](auto&) {
+    []<unsupported_type T>(T&) {
       TENZIR_UNREACHABLE();
     },
   };
@@ -993,9 +990,11 @@ auto node_object::clear() -> void {
   std::visit(visitor, data_);
 }
 
-auto node_list::find_free() -> node_object* {
-  for (auto& value : data_) {
+auto node_list::find_dead_and_resurrect() -> node_object* {
+  for (size_t i = last_alive_idx_; i < data_.size(); ++i) {
+    auto& value = data_[i];
     if (not value.is_alive()) {
+      ++last_alive_idx_;
       return &value;
     }
   }
@@ -1038,18 +1037,17 @@ auto node_list::data(tenzir::data d) -> void {
       TENZIR_UNREACHABLE();
     },
   };
-
   return caf::visit(visitor, d);
 }
 
-auto node_list::data_unparsed(std::string_view text) -> void {
+auto node_list::data_unparsed(std::string text) -> void {
   mark_this_alive();
   type_index_ = type_index_generic_mismatch;
-  if (auto* free = find_free()) {
-    free->data_unparsed(text);
+  if (auto* free = find_dead_and_resurrect()) {
+    free->data_unparsed(std::move(text));
   } else {
     TENZIR_ASSERT(data_.size() <= 20'000, "Upper limit on list size reached.");
-    data_.emplace_back().data_unparsed(text);
+    data_.emplace_back().data_unparsed(std::move(text));
   }
 }
 
@@ -1057,22 +1055,10 @@ auto node_list::null() -> void {
   return data(caf::none);
 }
 
-void node_list::update_new_structural_signature() {
-  if (current_structural_signature_.empty()) {
-    current_structural_signature_ = std::move(new_structural_signature_);
-  } else if (new_structural_signature_ != current_structural_signature_) {
-    type_index_ = type_index_generic_mismatch;
-  }
-}
-
 auto node_list::record() -> node_record* {
   mark_this_alive();
   update_type_index(type_index_, type_index_record);
-  if (type_index_ != type_index_empty
-      and type_index_ != type_index_generic_mismatch) {
-    update_new_structural_signature();
-  }
-  if (auto* free = find_free()) {
+  if (auto* free = find_dead_and_resurrect()) {
     if (auto* r = free->get_if<node_record>()) {
       free->mark_this_alive();
       free->value_state_ = node_object::value_state_type::has_value;
@@ -1092,7 +1078,7 @@ auto node_list::record() -> node_record* {
 auto node_list::list() -> node_list* {
   mark_this_alive();
   update_type_index(type_index_, type_index_list);
-  if (auto* free = find_free()) {
+  if (auto* free = find_dead_and_resurrect()) {
     if (auto* l = free->get_if<node_list>()) {
       l->mark_this_alive();
       free->value_state_ = node_object::value_state_type::has_value;
@@ -1112,7 +1098,7 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
                                     const tenzir::list_type* seed) -> void {
   sig.push_back(list_start_marker);
   if (is_numeric(type_index_) or type_index_ == type_index_numeric_mismatch) {
-    // first, we handle the case where the current index is numeric
+    // First, we handle the case where the current index is numeric
     // this has special handling, as it will try to convert to the seed type or
     // to double.
     size_t result_index = type_index_;
@@ -1120,10 +1106,6 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
       auto seed_idx = seed->value_type().type_index();
       if (seed_idx != type_index_) {
         if (seed_idx == type_index_double) {
-          rb.emit_or_throw(
-            diagnostic::warning("numeric type mismatch between list elements "
-                                "and the selected schema. A conversion to "
-                                "'double' will be performed"));
           goto numeric_mismatch_handling;
         } else {
           goto generic_mismatch_handling;
@@ -1132,7 +1114,7 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
     } else if (type_index_ == type_index_numeric_mismatch) {
     numeric_mismatch_handling:
       for (auto& e : data_) {
-        if (not e.cast_to<double>()) {
+        if (not e.transform_to<double>()) {
           goto generic_mismatch_handling;
         }
       }
@@ -1142,14 +1124,19 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
   } else if (is_structural(type_index_)
              or type_index_ == type_index_generic_mismatch) {
   generic_mismatch_handling:
-    // this  case also applies when there is any unparsed fields
-    // in the generic "mismatch" handling, we need to iterate every element of
-    // the list we first append an elements signature, and then check if its
+    ///////////
+    // This  case also applies when there is any unparsed fields.
+    // In the generic "mismatch" handling case, we need to iterate every element
+    // of the list.
+    // We first append an elements signature,
     // identical to the last one we already appended this ensures that if all
     // elements truly have the same signature, the element count of the list no
     // longer matters.
     // Since we need to iterate all elements in the structural case anyways, its
     // equivalent to the generic mismatch case.
+    ///////////
+    // This has to be a local value because `list_type::value_type` returns a
+    // value.
     tenzir::type seed_type;
     tenzir::type* seed_type_ptr = nullptr;
     if (seed) {
@@ -1160,7 +1147,8 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
     if (seed and data_.empty()) {
       node_object sentinel;
       sentinel.state_ = state::sentinel;
-      return sentinel.append_to_signature(sig, rb, seed_type_ptr);
+      sentinel.append_to_signature(sig, rb, seed_type_ptr);
+      goto done;
     }
     for (auto& v : data_) {
       auto next_sig_index = sig.size();
@@ -1185,7 +1173,7 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
     // structural and not a mismatch index)
     sig.push_back(static_cast<std::byte>(type_index_));
   }
-  // done:
+done:
   sig.push_back(list_end_marker);
 }
 
@@ -1201,6 +1189,7 @@ auto node_list::commit_to(builder_ref r, class data_builder& rb,
   }
   if (mark_dead) {
     type_index_ = type_index_empty;
+    last_alive_idx_ = 0;
     mark_this_dead();
   }
 }
@@ -1217,6 +1206,7 @@ auto node_list::commit_to(tenzir::list& l, class data_builder& rb,
   }
   if (mark_dead) {
     type_index_ = type_index_empty;
+    last_alive_idx_ = 0;
     mark_this_dead();
   }
 }

@@ -124,8 +124,8 @@ failing_diagnostic_handler dh;
 
 TEST(empty builder) {
   multi_series_builder b{
-    multi_series_builder::policy_merge{},
-    multi_series_builder::settings_type{},
+    multi_series_builder::policy_default{},
+    multi_series_builder::settings_type{.merge = true},
     dh,
   };
   CHECK_EQUAL(b.yield_ready().size(), size_t{0});
@@ -133,8 +133,8 @@ TEST(empty builder) {
 
 TEST(merging records) {
   multi_series_builder b{
-    multi_series_builder::policy_merge{},
-    multi_series_builder::settings_type{},
+    multi_series_builder::policy_default{},
+    multi_series_builder::settings_type{.merge = true},
     dh,
   };
   b.record().exact_field("0").data(int64_t{0});
@@ -194,11 +194,12 @@ TEST(merging records with seed and reset) {
     },
   };
   multi_series_builder b{
-    multi_series_builder::policy_merge{
+    multi_series_builder::policy_schema{
       .seed_schema = "seed",
-      .reset_on_yield = false,
     },
-    multi_series_builder::settings_type{},
+    multi_series_builder::settings_type{
+      .merge = true,
+    },
     dh,
     {seed_schema},
   };
@@ -255,7 +256,7 @@ TEST(merging records with seed and reset) {
 
 TEST(precise ordered) {
   multi_series_builder b{
-    multi_series_builder::policy_precise{},
+    multi_series_builder::policy_default{},
     multi_series_builder::settings_type{},
     dh,
   };
@@ -290,7 +291,7 @@ TEST(precise ordered) {
 
 TEST(precise unordered) {
   multi_series_builder b{
-    multi_series_builder::policy_precise{},
+    multi_series_builder::policy_default{},
     multi_series_builder::settings_type{
       .ordered = false,
     },
@@ -360,7 +361,7 @@ TEST(precise unordered with seed) {
     },
   };
   multi_series_builder b{
-    multi_series_builder::policy_precise{.seed_schema = "seed"},
+    multi_series_builder::policy_schema{.seed_schema = "seed"},
     multi_series_builder::settings_type{.ordered = false},
     dh,
     {seed_schema},
