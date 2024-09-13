@@ -11,6 +11,7 @@
 #include <tenzir/config.hpp>
 #include <tenzir/detail/posix.hpp>
 #include <tenzir/detail/string_literal.hpp>
+#include <tenzir/detail/weak_run_delayed.hpp>
 #include <tenzir/location.hpp>
 #include <tenzir/plugin.hpp>
 
@@ -42,6 +43,32 @@ using tcp_bridge_actor = caf::typed_actor<
   // Write a chunk to the socket.
   auto(atom::write, chunk_ptr chunk)->caf::result<void>>;
 
+struct tcp_metrics {
+  auto emit() -> void {
+    metric_handler.emit({
+      {"port", port},
+      {"handle", handle},
+      {"reads", reads},
+      {"writes", writes},
+      {"bytes_read", bytes_read},
+      {"bytes_written", bytes_written},
+    });
+    reads = 0;
+    writes = 0;
+    bytes_read = 0;
+    bytes_written = 0;
+  }
+  class metric_handler metric_handler = {};
+
+  uint16_t port = {};
+  std::string handle = {};
+
+  uint64_t reads = {};
+  uint64_t writes = {};
+  uint64_t bytes_read = {};
+  uint64_t bytes_written = {};
+};
+
 struct tcp_bridge_state {
   static constexpr auto name = "tcp-loader-bridge";
 
@@ -72,21 +99,31 @@ struct tcp_bridge_state {
 
   // Storage for incoming data.
   std::vector<char> read_buffer = {};
+
+  // Metrics.
+  std::shared_ptr<tcp_metrics> metrics = nullptr;
 };
 
-auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
+auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
+                     metric_handler metric_handler)
   -> tcp_bridge_actor::behavior_type {
   self->state.io_ctx = std::make_shared<boost::asio::io_context>();
   self->state.socket.emplace(*self->state.io_ctx);
+  self->state.metrics
+    = std::make_shared<tcp_metrics>(std::move(metric_handler));
   auto worker = std::thread([io_ctx = self->state.io_ctx]() {
     auto guard = boost::asio::make_work_guard(*io_ctx);
     io_ctx->run();
   });
-  self->attach_functor(
-    [worker = std::move(worker), io_ctx = self->state.io_ctx]() mutable {
-      io_ctx->stop();
-      worker.join();
-    });
+  self->attach_functor([worker = std::move(worker), io_ctx = self->state.io_ctx,
+                        metrics = self->state.metrics]() mutable {
+    io_ctx->stop();
+    worker.join();
+    metrics->emit();
+  });
+  detail::weak_run_delayed_loop(self, std::chrono::seconds{1}, [self] {
+    self->state.metrics->emit();
+  });
   return {
     [self](atom::connect, bool tls, const std::string& hostname,
            const std::string& service) -> caf::result<void> {
@@ -145,6 +182,8 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
                             .to_error();
           }
 #endif
+          self->state.metrics->port = endpoint.port();
+          self->state.metrics->handle = self->state.socket->native_handle();
           if (auto hdl = weak_hdl.lock()) {
             caf::anon_send(
               caf::actor_cast<caf::actor>(hdl),
@@ -197,6 +236,7 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
       }
       auto resolver_entry = *endpoints.begin();
       auto endpoint = resolver_entry.endpoint();
+      self->state.metrics->port = endpoint.port();
       // Create a new acceptor and bind to provided endpoint.
       try {
         self->state.acceptor.emplace(*self->state.io_ctx);
@@ -213,6 +253,7 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
         }
         auto backlog = boost::asio::socket_base::max_connections;
         self->state.acceptor->listen(backlog);
+        self->state.metrics->handle = self->state.acceptor->native_handle();
       } catch (std::exception& e) {
         return caf::make_error(ec::system_error,
                                fmt::format("failed to bind to endpoint: {}",
@@ -303,6 +344,8 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
                                fmt::format("failed to read from TCP socket: {}",
                                            ec.message())));
                            }
+                           self->state.metrics->reads++;
+                           self->state.metrics->bytes_read += length;
                            self->state.read_buffer.resize(length);
                            self->state.read_buffer.shrink_to_fit();
                            return self->state.read_rp.deliver(chunk::make(
@@ -346,6 +389,8 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self)
                                            ec.message())));
                              return;
                            }
+                           self->state.metrics->writes++;
+                           self->state.metrics->bytes_written += length;
                            if (length < chunk->size()) {
                              auto remainder = chunk->slice(length);
                              self->state.write_rp.delegate(
@@ -447,7 +492,18 @@ public:
     auto make
       = [](loader_args args,
            operator_control_plane& ctrl) mutable -> generator<chunk_ptr> {
-      auto tcp_bridge = ctrl.self().spawn(make_tcp_bridge);
+      auto tcp_bridge = ctrl.self().spawn(make_tcp_bridge,
+                                          ctrl.metrics({
+                                            "tenzir.metrics.tcp",
+                                            record_type{
+                                              {"port", uint64_type{}},
+                                              {"handle", string_type{}},
+                                              {"reads", uint64_type{}},
+                                              {"writes", uint64_type{}},
+                                              {"bytes_read", uint64_type{}},
+                                              {"bytes_written", uint64_type{}},
+                                            },
+                                          }));
       do {
         if (args.connect) {
           ctrl.self()
@@ -552,7 +608,19 @@ public:
         return caf::make_error(ec::invalid_argument);
       }
     }
-    auto tcp_bridge = ctrl.self().spawn(make_tcp_bridge);
+    auto tcp_bridge
+      = ctrl.self().spawn(make_tcp_bridge, ctrl.metrics({
+                                             "tenzir.metrics.tcp",
+                                             record_type{
+                                               {"port", uint64_type{}},
+                                               {"handle", string_type{}},
+                                               {"reads", uint64_type{}},
+                                               {"writes", uint64_type{}},
+                                               {"bytes_read", uint64_type{}},
+                                               {"bytes_written", uint64_type{}},
+                                             },
+                                           }));
+
     if (not args_.listen) {
       ctrl.self()
         .request(tcp_bridge, caf::infinite, atom::connect_v, args_.tls,
