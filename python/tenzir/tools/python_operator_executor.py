@@ -1,5 +1,6 @@
 """User code wrapper of the Tenzir python operator."""
 
+import errno
 import fcntl
 import linecache
 import os
@@ -36,6 +37,27 @@ while developing. That can be done conveniently with
 export TENZIR_PLUGINS__PYTHON__IMPLICIT_REQUIREMENTS="-e /path/to/tenzir/python[operator]"
 ```
 """
+
+
+def list_fds():
+    """List process currently open FDs and their target """
+    ret = {}
+    if not sys.platform.startswith('linux'):
+        ret[0] = "unimplemented"
+        return ret
+
+    base = '/proc/self/fd'
+    for num in os.listdir(base):
+        path = None
+        try:
+            path = os.readlink(os.path.join(base, num))
+        except OSError as err:
+            # Last FD is always the "listdir" one (which may be closed)
+            if err.errno != errno.ENOENT:
+                raise
+        ret[int(num)] = path
+
+    return ret
 
 
 def log(*args):
@@ -382,61 +404,73 @@ def main() -> int:
     The first is for receiving the user code.
     The second is to write back a message in case an error occurred.
     """
-    # The parent uses `codepipe` to transfer the user code to be executed
-    # into this program.
-    codepipe = os.fdopen(int(sys.argv[1]), "r")
-    code = codepipe.read()
-    codepipe.close()
-    source_name = "<inline>"
-    lines = code.splitlines(keepends=True)
-    linecache.cache[source_name] = len(code), None, lines, source_name
 
-    # When the parent detects an error, it attempts to read the contents
-    # of `errpipe` and aborts the pipeline with them as the error.
-    errfd = int(sys.argv[2])
-    errpipe_bufsize = 4096
-    if sys.platform == "linux" and sys.version_info >= (3, 10):
-        errpipe_bufsize = fcntl.fcntl(errfd, fcntl.F_GETPIPE_SZ)
-    if sys.platform == "darwin":
-        errpipe_bufsize = 65536
-    with write_limited(os.fdopen(errfd, "a"), errpipe_bufsize) as errpipe:
+    start_fds = list_fds()
+    try:
+        # The parent uses `codepipe` to transfer the user code to be executed
+        # into this program.
+        codepipe = os.fdopen(int(sys.argv[1]), "r")
+        code = codepipe.read()
+        codepipe.close()
+        source_name = "<inline>"
+        lines = code.splitlines(keepends=True)
+        linecache.cache[source_name] = len(code), None, lines, source_name
 
-        # The parent uses stdin and stdout to transfer the arrow record batches
-        # back and forth.
-        istream = pa.input_stream(sys.stdin.buffer)
-        ostream = pa.output_stream(sys.stdout.buffer)
+        # When the parent detects an error, it attempts to read the contents
+        # of `errpipe` and aborts the pipeline with them as the error.
+        errfd = int(sys.argv[2])
+        errpipe_bufsize = 4096
+        if sys.platform == "linux" and sys.version_info >= (3, 10):
+            errpipe_bufsize = fcntl.fcntl(errfd, fcntl.F_GETPIPE_SZ)
+        if sys.platform == "darwin":
+            errpipe_bufsize = 65536
+        with write_limited(os.fdopen(errfd, "a"), errpipe_bufsize) as errpipe:
 
-        try:
-            compiled_code = compile(code, source_name, "exec")
-        except (SyntaxError, ValueError):
-            traceback.print_exc(limit=0, file=errpipe)
-            return 1
-        try:
-            while True:
-                reader = pa.ipc.RecordBatchStreamReader(istream)
-                batch_in = reader.read_next_batch()
-                # The writer writes an invalid record batch as end-of-stream
-                # marker; we have to read it now to remove it from the pipe
-                # buffer.
-                with suppress(StopIteration):
-                    reader.read_next_batch()
-                batch_out = execute_user_code(batch_in, compiled_code)
-                writer = pa.ipc.RecordBatchStreamWriter(ostream, batch_out.schema)
-                writer.write_batch(batch_out)
-                writer.close()
-                sys.stdout.flush()
-        except pa.lib.ArrowInvalid:
-            # The reader throws `ArrowInvalid` when the input is closed
-            # by the parent process.
-            pass
-        except WrappedError as e:
-            inner = e.__cause__
-            t = inner.__class__ if inner else None
-            tb = inner.__traceback__ if inner else None
-            tb = tb.tb_next if tb else tb
-            traceback.print_exception(t, inner, tb, file=errpipe)
-            return 1
-        except BaseException:
-            traceback.print_exc(file=errpipe)
-            return 1
+            # The parent uses stdin and stdout to transfer the arrow record batches
+            # back and forth.
+            istream = pa.input_stream(sys.stdin.buffer)
+            ostream = pa.output_stream(sys.stdout.buffer)
+
+            try:
+                compiled_code = compile(code, source_name, "exec")
+            except (SyntaxError, ValueError):
+                traceback.print_exc(limit=0, file=errpipe)
+                return 1
+            try:
+                while True:
+                    reader = pa.ipc.RecordBatchStreamReader(istream)
+                    batch_in = reader.read_next_batch()
+                    # The writer writes an invalid record batch as end-of-stream
+                    # marker; we have to read it now to remove it from the pipe
+                    # buffer.
+                    with suppress(StopIteration):
+                        reader.read_next_batch()
+                    batch_out = execute_user_code(batch_in, compiled_code)
+                    writer = pa.ipc.RecordBatchStreamWriter(ostream, batch_out.schema)
+                    writer.write_batch(batch_out)
+                    writer.close()
+                    sys.stdout.flush()
+            except pa.lib.ArrowInvalid:
+                # The reader throws `ArrowInvalid` when the input is closed
+                # by the parent process.
+                pass
+            except WrappedError as e:
+                inner = e.__cause__
+                t = inner.__class__ if inner else None
+                tb = inner.__traceback__ if inner else None
+                tb = tb.tb_next if tb else tb
+                traceback.print_exception(t, inner, tb, file=errpipe)
+                return 1
+            except BaseException:
+                traceback.print_exc(file=errpipe)
+                return 1
+    except (IOError, OSError) as e:
+        msg = f"cmdline: '{sys.argv}'"
+        add_note(e, msg)
+        msg = f"start fds: {start_fds}"
+        add_note(e, msg)
+        msg = f"current fds: {list_fds()}"
+        add_note(e, msg)
+        raise
+
     return 0
