@@ -46,8 +46,7 @@ inline auto is_escaped(size_t idx, std::string_view text) -> bool {
   if (txt.front() != txt.back()) {
     return txt;
   }
-
-  if (txt.front() == '\"') {
+  if (txt.front() == '\"' and not is_escaped(txt.size() - 1, txt)) {
     txt.remove_prefix(1);
     txt.remove_suffix(1);
     return txt;
@@ -101,6 +100,9 @@ public:
                                      &group)) {
         return {input, {}};
       }
+      if (group.empty()) {
+        return {input, {}};
+      }
       auto head = std::string_view{input.data(), group.data()};
       auto tail = std::string_view{group.data() + group.size(),
                                    input.data() + input.size()};
@@ -110,10 +112,12 @@ public:
           ++quote_count;
         }
       }
-      if (quote_count % 2 == 0) {
+      auto is_valid = quote_count == 0 or quote_count == 2
+                      or (quote_count == 4 and head[0] == '"');
+      if (is_valid) {
         return {head, tail};
       } else {
-        start_offset = head.size() + 1;
+        start_offset = head.size() + group.size();
       }
     }
     return {input, {}};
