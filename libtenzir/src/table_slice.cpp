@@ -400,6 +400,10 @@ std::span<const std::byte> as_bytes(const table_slice& slice) noexcept {
   return as_bytes(slice.chunk_);
 }
 
+auto size(const table_slice& slice) -> uint64_t {
+  return slice.rows();
+}
+
 // -- operations ---------------------------------------------------------------
 
 table_slice concatenate(std::vector<table_slice> slices) {

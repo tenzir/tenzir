@@ -208,14 +208,6 @@ struct exec_node_control_plane final : public operator_control_plane {
   bool is_hidden_ = {};
 };
 
-auto size(const table_slice& slice) -> uint64_t {
-  return slice.rows();
-}
-
-auto size(const chunk_ptr& chunk) -> uint64_t {
-  return chunk ? chunk->size() : 0;
-}
-
 template <class Input, class Output>
 struct exec_node_state {
   exec_node_state() = default;
