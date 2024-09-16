@@ -303,17 +303,19 @@ per schema.
 Contains measurements about the number of read calls and the received bytes per
 TCP connection.
 
-| Field         | Type     | Description                                                   |
-| :------------ | :------- | :------------------------------------------------------------ |
-| `pipeline_id` | `string` | The ID of the pipeline where the associated operator is from. |
-| `run`         | `uint64` | The number of the run, starting at 1 for the first run.       |
-| `hidden`      | `bool`   | True if the pipeline is running for the explorer.             |
-| `timestamp`   | `time`   | The time at which this metric was recorded.                   |
-| `operator_id` | `uint64` | The ID of the `publish` operator in the pipeline.             |
-| `port`        | `uint64` | The TCP port number.                                          |
-| `native`      | `string` | The native handle of the connection (unix: file descriptor).  |
-| `reads`       | `uint64` | The number of attempted reads since the last metric.          |
-| `bytes`       | `uint64` | The number of bytes received since the last metrics.          |
+| Field           | Type     | Description                                                   |
+| :-------------- | :------- | :------------------------------------------------------------ |
+| `pipeline_id`   | `string` | The ID of the pipeline where the associated operator is from. |
+| `run`           | `uint64` | The number of the run, starting at 1 for the first run.       |
+| `hidden`        | `bool`   | True if the pipeline is running for the explorer.             |
+| `timestamp`     | `time`   | The time at which this metric was recorded.                   |
+| `operator_id`   | `uint64` | The ID of the `publish` operator in the pipeline.             |
+| `port`          | `uint64` | The TCP port number.                                          |
+| `native`        | `string` | The native handle of the connection (unix: file descriptor).  |
+| `reads`         | `uint64` | The number of attempted reads since the last metric.          |
+| `writes`        | `uint64` | The number of attempted writes since the last metric.          |
+| `bytes_read`    | `uint64` | The number of bytes received since the last metrics.          |
+| `bytes_written` | `uint64` | The number of bytes written since the last metrics.          |
 
 ## Examples
 
