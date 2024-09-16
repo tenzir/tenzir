@@ -151,8 +151,8 @@ struct exec_node_control_plane final : public operator_control_plane {
       diagnostic_handler{
         std::make_unique<exec_node_diagnostic_handler<Input, Output>>(
           self, std::move(diagnostic_handler))},
-      metrics_receiver{std::move(metric_receiver)},
-      operator_index{op_index},
+      metrics_receiver_{std::move(metric_receiver)},
+      operator_index_{op_index},
       has_terminal_{has_terminal},
       is_hidden_{is_hidden} {
   }
@@ -165,17 +165,25 @@ struct exec_node_control_plane final : public operator_control_plane {
     return state.weak_node.lock();
   }
 
+  auto operator_index() const noexcept -> uint64_t override {
+    return operator_index_;
+  }
+
   auto diagnostics() noexcept -> diagnostic_handler& override {
     return *diagnostic_handler;
   }
 
   auto metrics(type t) noexcept -> metric_handler override {
     return metric_handler{
-      metrics_receiver,
-      operator_index,
+      metrics_receiver_,
+      operator_index_,
       metric_index++,
       t,
     };
+  }
+
+  auto metrics_receiver() const noexcept -> metrics_receiver_actor override {
+    return metrics_receiver_;
   }
 
   auto no_location_overrides() const noexcept -> bool override {
@@ -201,20 +209,12 @@ struct exec_node_control_plane final : public operator_control_plane {
   exec_node_state<Input, Output>& state;
   std::unique_ptr<exec_node_diagnostic_handler<Input, Output>> diagnostic_handler
     = {};
-  metrics_receiver_actor metrics_receiver = {};
-  uint64_t operator_index = {};
+  metrics_receiver_actor metrics_receiver_ = {};
+  uint64_t operator_index_ = {};
   uint64_t metric_index = {};
   bool has_terminal_ = {};
   bool is_hidden_ = {};
 };
-
-auto size(const table_slice& slice) -> uint64_t {
-  return slice.rows();
-}
-
-auto size(const chunk_ptr& chunk) -> uint64_t {
-  return chunk ? chunk->size() : 0;
-}
 
 template <class Input, class Output>
 struct exec_node_state {

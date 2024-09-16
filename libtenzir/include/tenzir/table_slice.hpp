@@ -227,7 +227,6 @@ public:
         TENZIR_ASSERT(x.is_serialized());
         return true;
       };
-
       return f.object(x)
         .pretty_name("tenzir.table_slice")
         .on_load(callback)
@@ -245,6 +244,8 @@ public:
         .fields(f.field("chunk", chunk), f.field("offset", x.offset_));
     }
   }
+
+  friend auto size(const table_slice& slice) -> uint64_t;
 
   // -- operations -------------------------------------------------------------
 
