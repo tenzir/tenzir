@@ -981,7 +981,7 @@ public:
     auto retry_capacity_failure = false;
     // How many documents passed the simdjson batch_size.
     // Those documents must be skipped in order to not duplicate events.
-    auto completed_documents = size_t{};
+    auto completed_documents = size_t{0};
     buffer_.append(
       {reinterpret_cast<const char*>(json_chunk.data()), json_chunk.size()});
     auto view = buffer_.view();
@@ -1002,7 +1002,7 @@ public:
       }
       auto current_document = size_t{};
       for (auto doc_it = stream_.begin(); doc_it != stream_.end(); ++doc_it) {
-        // skip documents that passed the simdjson batch_size limits
+        // Skip documents that passed the simdjson batch_size limits previously
         if (current_document < completed_documents) {
           continue;
         }
