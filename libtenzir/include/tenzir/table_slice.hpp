@@ -412,6 +412,12 @@ struct flatten_result {
   std::vector<std::string> renamed_fields = {};
 };
 
+/// @related flatten
+struct flatten_array_result {
+  type schema;
+  std::shared_ptr<arrow::StructArray> array;
+  std::vector<std::string> renamed_fields;
+};
 /// Flattens a table slice such that it no longer contains nested data
 /// structures by joining nested records over the provided separator and merging
 /// nested lists. Flattening removes all null elements in lists.
@@ -424,6 +430,20 @@ struct flatten_result {
 /// @param separator The separator to join record field names with.
 auto flatten(table_slice slice, std::string_view separator
                                 = ".") -> flatten_result;
+
+/// Flattens an array recursively such that it no longer contains nested data
+/// structures by joining nested records over the provided separator and merging
+/// nested lists. Flattening removes all null elements in lists.
+///
+/// The operator renames later occurences of conflicting joined field names by
+/// appending `_<idx>` to them, and returns names of the renamed fields
+/// alongside the flattened array.
+///
+/// @param schema Schema of the array to flatten.
+/// @param array Array to flatten recursively.
+/// @param separator The separator to join record field names with.
+auto flatten(type schema, const std::shared_ptr<arrow::StructArray>& array,
+             std::string_view separator) -> flatten_array_result;
 
 } // namespace tenzir
 

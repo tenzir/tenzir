@@ -992,28 +992,31 @@ auto make_rename_transformation(std::string new_name)
 
 } // namespace
 
-auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
-  if (slice.rows() == 0) {
-    return {std::move(slice), {}};
-  }
+auto flatten(type schema, const std::shared_ptr<arrow::StructArray>& array,
+             std::string_view separator) -> flatten_array_result {
+  // if (slice.rows() == 0) {
+  //   return {std::move(slice), {}};
+  // }
   // We cannot use arrow::StructArray::Flatten here because that does not
   // work recursively, see apache/arrow#20683. Hence, we roll our own version
   // here.
   auto renamed_fields = std::vector<std::string>{};
   auto transformations = std::vector<indexed_transformation>{};
-  auto num_fields = caf::get<record_type>(slice.schema()).num_fields();
+  auto num_fields = caf::get<record_type>(schema).num_fields();
   transformations.reserve(num_fields);
   for (size_t i = 0; i < num_fields; ++i) {
     transformations.push_back(
       {offset{i}, make_flatten_transformation(separator, "", {})});
   }
-  slice = transform_columns(slice, transformations);
+  // slice = transform_columns(slice, transformations);
+  const auto& [new_schema, transformed]
+    = transform_columns(schema, array, transformations);
   // Flattening cannot fail.
-  TENZIR_ASSERT(slice.rows() > 0);
+  // TENZIR_ASSERT(slice.rows() > 0);
   // The slice may contain duplicate field name here, so we perform an
   // additional transformation to rename them in case we detect any.
   transformations.clear();
-  const auto& layout = caf::get<record_type>(slice.schema());
+  const auto& layout = caf::get<record_type>(new_schema);
   TENZIR_ASSERT_EXPENSIVE(layout.num_fields() == layout.num_leaves());
   for (const auto& leaf : layout.leaves()) {
     size_t num_occurences = 0;
@@ -1054,13 +1057,32 @@ auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
   }
   TENZIR_ASSERT_EXPENSIVE(
     std::is_sorted(transformations.begin(), transformations.end()));
-  slice = transform_columns(slice, transformations);
+  const auto& [sch, arr]
+    = transform_columns(new_schema, transformed, transformations);
+  return {sch, arr, renamed_fields};
   // Renaming cannot fail.
-  TENZIR_ASSERT(slice.rows() > 0);
-  return {
-    std::move(slice),
-    std::move(renamed_fields),
-  };
+  // TENZIR_ASSERT(slice.rows() > 0);
+}
+
+auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
+  if (slice.rows() == 0) {
+    return {};
+  }
+  if (caf::get<record_type>(slice.schema()).num_fields() == 0) {
+    return {std::move(slice), {}};
+  }
+  const auto& array = to_record_batch(slice)->ToStructArray().ValueOrDie();
+  const auto& [schema, transformed, renamed]
+    = flatten(slice.schema(), array, separator);
+  if (!schema) {
+    return {};
+  }
+  auto batch = arrow::RecordBatch::Make(
+    schema.to_arrow_schema(), transformed->length(), transformed->fields());
+  auto result = table_slice{batch, std::move(schema)};
+  result.offset(slice.offset());
+  result.import_time(slice.import_time());
+  return {result, renamed};
 }
 
 namespace {
