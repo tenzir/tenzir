@@ -42,7 +42,7 @@ Specifies what the operator does when the buffer runs full.
   supported for bytes inputs.
 - `block`: Use back pressure to slow down upstream operators.
 
-When buffering events, this option efaults to `block` for pipelines visible on
+When buffering events, this option defaults to `block` for pipelines visible on
 the overview page on [app.tenzir.com](https://app.tenzir.com), and to `drop`
 otherwise. When buffering bytes, this option always defaults to `block`.
 
