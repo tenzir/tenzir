@@ -13,6 +13,7 @@
 #include <tenzir/operator_control_plane.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/to_lines.hpp>
 
 #include <arrow/api.h>
 #include <re2/re2.h>
@@ -63,15 +64,15 @@ std::string unescape(std::string_view value) {
     } else if (i + 1 < value.size()) {
       auto next = value[i + 1];
       switch (next) {
-        default:
+        default: // Anything that isnt a defined escape sequence remains
+          result += '\\';
           result += next;
           break;
-        case 'r':
-        case 'n':
-          result += '\n';
+        case '\\': // Double backslashes are collapsed
+          result += '\\';
           break;
-        case 't':
-          result += '\t';
+        case '\"': // Escaped quotes are unescaped
+          result += '\"';
           break;
       }
       ++i;
@@ -83,6 +84,12 @@ std::string unescape(std::string_view value) {
 class splitter {
 public:
   splitter() = default;
+
+  splitter(const splitter& other)
+    : regex_{std::make_unique<re2::RE2>(other.regex_->pattern())} {
+  }
+  splitter(splitter&&) = default;
+  splitter& operator=(splitter&&) = default;
 
   explicit splitter(located<std::string_view> pattern) {
     auto regex = std::make_unique<re2::RE2>(pattern.inner,
@@ -181,19 +188,32 @@ private:
   std::unique_ptr<re2::RE2> regex_;
 };
 
+class kv_parser;
+auto parse_loop(generator<std::optional<std::string_view>> input,
+                operator_control_plane& ctrl,
+                kv_parser parser) -> generator<table_slice>;
+
 class kv_parser final : public plugin_parser {
 public:
   kv_parser() = default;
 
   explicit kv_parser(parser_interface& p) {
     auto parser = argument_parser{"kv", docs};
-    auto field_split = located<std::string>{};
+    auto field_split = std::optional<located<std::string>>{
+      std::in_place,
+      "\\s",
+      location::unknown,
+    };
+    auto value_split = std::optional<located<std::string>>{
+      std::in_place,
+      "=",
+      location::unknown,
+    };
     parser.add(field_split, "<field_split>");
-    auto value_split = located<std::string>{};
     parser.add(value_split, "<value_split>");
     parser.parse(p);
-    field_split_ = splitter{field_split};
-    value_split_ = splitter{value_split};
+    field_split_ = splitter{*field_split};
+    value_split_ = splitter{*value_split};
   }
 
   auto name() const -> std::string override {
@@ -203,45 +223,45 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    (void)input;
-    diagnostic::error("`{}` cannot be used here", name())
-      .emit(ctrl.diagnostics());
-    return {};
+    return parse_loop(to_lines(std::move(input)), ctrl, *this);
+  }
+
+  auto parse_line(series_builder& builder, operator_control_plane& ctrl,
+                  std::string_view line) const -> void {
+    auto event = builder.record();
+    while (not line.empty()) {
+      // TODO: We ignore split failures here. There might be better ways
+      // to handle this.
+      auto [head, tail] = field_split_.split(line);
+      auto [key_view, value_view] = value_split_.split(head);
+      auto key = unescape(trim_quotes(key_view));
+      auto value = unescape(trim_quotes(value_view));
+      if (auto d = data{}; parsers::simple_data(value, d)) {
+        event.field(key, d);
+      } else {
+        event.field(key, value);
+      }
+      if (line == tail) {
+        diagnostic::error("`kv` did not make progress")
+          .note("check your field splitter")
+          .emit(ctrl.diagnostics());
+      }
+      line = tail;
+    }
   }
 
   auto parse_strings(std::shared_ptr<arrow::StringArray> input,
                      operator_control_plane& ctrl) const
     -> std::vector<series> override {
-    auto b = series_builder{type{record_type{}}};
-    for (auto&& string : values(string_type{}, *input)) {
-      if (not string) {
-        b.null();
+    auto builder = series_builder{type{record_type{}}};
+    for (auto&& line : values(string_type{}, *input)) {
+      if (not line) {
+        builder.null();
         continue;
       }
-      auto r = b.record();
-      auto rest = *string;
-      while (not rest.empty()) {
-        // TODO: We ignore split failures here. There might be better ways to
-        // handle this.
-        auto [head, tail] = field_split_.split(rest);
-        auto [key_view, value_view] = value_split_.split(head);
-        auto key = unescape(trim_quotes(key_view));
-        auto value = unescape(trim_quotes(value_view));
-        if (auto d = data{}; parsers::simple_data(value, d)) {
-          r.field(key, d);
-        } else {
-          r.field(key, value);
-        }
-        if (rest == tail) {
-          diagnostic::error("`kv` did not make progress")
-            .note("check your field splitter")
-            .emit(ctrl.diagnostics());
-          return {};
-        }
-        rest = tail;
-      }
+      parse_line(builder, ctrl, *line);
     }
-    return b.finish();
+    return builder.finish();
   }
 
   friend auto inspect(auto& f, kv_parser& x) -> bool {
@@ -251,10 +271,24 @@ public:
               f.field("value_split", x.value_split_));
   }
 
-private:
+protected:
   splitter field_split_;
   splitter value_split_;
 };
+
+auto parse_loop(generator<std::optional<std::string_view>> input,
+                operator_control_plane& ctrl,
+                kv_parser parser) -> generator<table_slice> {
+  auto builder = series_builder{type{record_type{}}};
+  for (auto&& line : input) {
+    if (not line) {
+      co_yield {};
+      continue;
+    }
+    parser.parse_line(builder, ctrl, *line);
+  }
+  co_yield builder.finish_assert_one_slice("kv");
+}
 
 class plugin final : public virtual parser_plugin<kv_parser> {
 public:
