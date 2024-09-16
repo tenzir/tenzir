@@ -1026,8 +1026,12 @@ public:
           co_return;
         }
         ++completed_documents;
-        auto [action, slices]
-          = this->handle_selector(*doc_it, doc_it.source(), state);
+        TENZIR_ASSERT(not doc.current_location().error());
+        const auto source = std::string_view{
+          doc.current_location().value_unsafe(),
+          view.data() + view.size(),
+        };
+        auto [action, slices] = this->handle_selector(*doc_it, source, state);
         switch (action) {
           case parser_action::skip:
             continue;
@@ -1050,30 +1054,45 @@ public:
             co_return;
           }
           for (auto&& elem : arr.value_unsafe()) {
+            TENZIR_ASSERT(not elem.current_location().error());
+            const auto source = std::string_view{
+              elem.current_location().value_unsafe(),
+              view.data() + view.size(),
+            };
             auto row = builder.record();
             auto success
-              = doc_parser{doc_it.source(), this->ctrl_, no_infer_, raw_}
-                  .parse_object(elem.value_unsafe(), row);
+              = doc_parser{source, this->ctrl_, no_infer_, raw_}.parse_object(
+                elem.value_unsafe(), row);
             if (not success) {
               // We already reported the issue.
               builder.remove_last();
               continue;
             }
+            if (auto slices = this->handle_max_rows(state)) {
+              for (auto& slice : *slices) {
+                co_yield std::move(slice);
+              }
+            }
           }
         } else {
           auto row = builder.record();
+          TENZIR_ASSERT(not doc.current_location().error());
+          const auto source = std::string_view{
+            doc.current_location().value_unsafe(),
+            view.data() + view.size(),
+          };
           auto success
-            = doc_parser{doc_it.source(), this->ctrl_, no_infer_, raw_}
-                .parse_object(doc.value_unsafe(), row);
+            = doc_parser{source, this->ctrl_, no_infer_, raw_}.parse_object(
+              doc.value_unsafe(), row);
           if (not success) {
             // We already reported the issue.
             builder.remove_last();
             continue;
           }
-        }
-        if (auto slices = this->handle_max_rows(state)) {
-          for (auto& slice : *slices) {
-            co_yield std::move(slice);
+          if (auto slices = this->handle_max_rows(state)) {
+            for (auto& slice : *slices) {
+              co_yield std::move(slice);
+            }
           }
         }
       }
