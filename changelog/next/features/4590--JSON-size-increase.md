@@ -1,1 +1,1 @@
-We have improved our JSON parser to be able to handle larger objects.
+The JSON parser is now able to handle extremely large events.

@@ -977,10 +977,14 @@ public:
 
   auto parse(const chunk& json_chunk,
              parser_state& state) -> generator<table_slice> {
+    // Whether to retry on a capacity error
+    auto retry_capacity_failure = false;
+    // How many documents passed the simdjson batch_size.
+    // Those documents must be skipped in order to not duplicate events.
+    auto completed_documents = size_t{};
     buffer_.append(
       {reinterpret_cast<const char*>(json_chunk.data()), json_chunk.size()});
     auto view = buffer_.view();
-    auto retry_capacity_failure = false;
     do {
       retry_capacity_failure = false;
       auto err = this->parser_
@@ -996,7 +1000,13 @@ public:
           .emit(this->ctrl_.diagnostics());
         co_return;
       }
+      auto current_document = size_t{};
       for (auto doc_it = stream_.begin(); doc_it != stream_.end(); ++doc_it) {
+        // skip documents that passed the simdjson batch_size limits
+        if (current_document < completed_documents) {
+          continue;
+        }
+        ++current_document;
         // doc.error() will inherit all errors from *doc_it and get_value.
         // No need to check after each operation.
         auto doc = (*doc_it).get_value();
@@ -1015,6 +1025,7 @@ public:
             .emit(this->ctrl_.diagnostics());
           co_return;
         }
+        ++completed_documents;
         auto [action, slices]
           = this->handle_selector(*doc_it, doc_it.source(), state);
         switch (action) {
@@ -1066,9 +1077,8 @@ public:
           }
         }
       }
-      handle_truncated_bytes(state);
     } while (retry_capacity_failure);
-    co_return;
+    handle_truncated_bytes(state);
   }
 
   void finish(parser_state& state) {
