@@ -558,7 +558,7 @@ metrics tcp
   "handle": "12",
   "reads": 428,
   "writes": 0,
-  "bytes": 5136,
+  "bytes_read": 5136,
   "bytes_written": 0
 }
 {
@@ -567,7 +567,7 @@ metrics tcp
   "handle": "12",
   "reads": 429,
   "writes": 0,
-  "bytes": 5148,
+  "bytes_read": 5148,
   "bytes_written": 0
 }
 ```
