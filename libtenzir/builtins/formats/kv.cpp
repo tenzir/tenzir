@@ -54,6 +54,32 @@ inline auto is_escaped(size_t idx, std::string_view text) -> bool {
   return txt;
 }
 
+std::string unescape(std::string_view value) {
+  std::string result;
+  result.reserve(value.size());
+  for (auto i = 0u; i < value.size(); ++i) {
+    if (value[i] != '\\') {
+      result += value[i];
+    } else if (i + 1 < value.size()) {
+      auto next = value[i + 1];
+      switch (next) {
+        default:
+          result += next;
+          break;
+        case 'r':
+        case 'n':
+          result += '\n';
+          break;
+        case 't':
+          result += '\t';
+          break;
+      }
+      ++i;
+    }
+  }
+  return result;
+}
+
 class splitter {
 public:
   splitter() = default;
@@ -198,9 +224,9 @@ public:
         // TODO: We ignore split failures here. There might be better ways to
         // handle this.
         auto [head, tail] = field_split_.split(rest);
-        auto [key, value] = value_split_.split(head);
-        key = trim_quotes(key);
-        value = trim_quotes(value);
+        auto [key_view, value_view] = value_split_.split(head);
+        auto key = unescape(trim_quotes(key_view));
+        auto value = unescape(trim_quotes(value_view));
         if (auto d = data{}; parsers::simple_data(value, d)) {
           r.field(key, d);
         } else {
