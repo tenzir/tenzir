@@ -45,6 +45,9 @@ using tcp_bridge_actor = caf::typed_actor<
 
 struct tcp_metrics {
   auto emit() -> void {
+    if (reads == 0 and writes == 0 and handle.empty()) {
+      return;
+    }
     metric_handler.emit({
       {"port", port},
       {"handle", handle},
@@ -123,9 +126,12 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
     io_ctx->run();
   });
   self->state.metrics.metric_handler = std::move(metric_handler);
-  detail::weak_run_delayed_loop(self, std::chrono::seconds{1}, [self] {
-    self->state.metrics.emit();
-  });
+  detail::weak_run_delayed_loop(
+    self, std::chrono::seconds{1},
+    [self] {
+      self->state.metrics.emit();
+    },
+    /*run_immediately=*/false);
   return {
     [self](atom::connect, bool tls, const std::string& hostname,
            const std::string& service) -> caf::result<void> {
@@ -185,7 +191,8 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
           }
 #endif
           self->state.metrics.port = endpoint.port();
-          self->state.metrics.handle = self->state.socket->native_handle();
+          self->state.metrics.handle
+            = fmt::to_string(self->state.socket->native_handle());
           if (auto hdl = weak_hdl.lock()) {
             caf::anon_send(
               caf::actor_cast<caf::actor>(hdl),
@@ -255,7 +262,8 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
         }
         auto backlog = boost::asio::socket_base::max_connections;
         self->state.acceptor->listen(backlog);
-        self->state.metrics.handle = self->state.acceptor->native_handle();
+        self->state.metrics.handle
+          = fmt::to_string(self->state.acceptor->native_handle());
       } catch (std::exception& e) {
         return caf::make_error(ec::system_error,
                                fmt::format("failed to bind to endpoint: {}",
