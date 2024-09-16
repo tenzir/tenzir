@@ -111,6 +111,10 @@ public:
     };
   }
 
+  auto idle_after() const -> duration override {
+    return defaults::import::batch_timeout;
+  }
+
   friend auto inspect(auto& f, read_operator& x) -> bool {
     return plugin_inspect(f, x.parser_);
   }

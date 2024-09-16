@@ -311,11 +311,11 @@ public:
     return "internal-read-buffer";
   }
 
-  auto input_independent() const -> bool override {
+  auto idle_after() const -> duration override {
     // We only send stub elements between the two operators to break the back
     // pressure and instead use a side channel for transporting elements, hence
     // the nead to schedule the reading side independently of receiving input.
-    return true;
+    return duration::max();
   }
 
   auto optimize(expression const& filter, event_order order) const
