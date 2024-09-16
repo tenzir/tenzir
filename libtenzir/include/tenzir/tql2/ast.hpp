@@ -881,6 +881,9 @@ namespace tenzir {
 
 auto is_true_literal(const ast::expression& y) -> bool;
 
+/// Partially converts an expression into a legacy expression.
+///
+/// The return value `(y, z)` satisfies `x <=> y and z`.
 auto split_legacy_expression(const ast::expression& x)
   -> std::pair<expression, ast::expression>;
 
