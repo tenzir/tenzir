@@ -72,8 +72,17 @@ struct tcp_metrics {
 struct tcp_bridge_state {
   static constexpr auto name = "tcp-loader-bridge";
 
+  tcp_bridge_state() = default;
+
+  ~tcp_bridge_state() noexcept {
+    io_ctx->stop();
+    worker.join();
+    metrics.emit();
+  }
+
   // The `io_context` running the async callbacks.
   std::shared_ptr<boost::asio::io_context> io_ctx = {};
+  std::thread worker = {};
 
   // The TCP socket holding our connection.
   // (always exists, but wrapped in an optional because `socket`
@@ -101,7 +110,7 @@ struct tcp_bridge_state {
   std::vector<char> read_buffer = {};
 
   // Metrics.
-  std::shared_ptr<tcp_metrics> metrics = nullptr;
+  tcp_metrics metrics = {};
 };
 
 auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
@@ -109,20 +118,13 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
   -> tcp_bridge_actor::behavior_type {
   self->state.io_ctx = std::make_shared<boost::asio::io_context>();
   self->state.socket.emplace(*self->state.io_ctx);
-  self->state.metrics
-    = std::make_shared<tcp_metrics>(std::move(metric_handler));
-  auto worker = std::thread([io_ctx = self->state.io_ctx]() {
+  self->state.worker = std::thread([io_ctx = self->state.io_ctx]() {
     auto guard = boost::asio::make_work_guard(*io_ctx);
     io_ctx->run();
   });
-  self->attach_functor([worker = std::move(worker), io_ctx = self->state.io_ctx,
-                        metrics = self->state.metrics]() mutable {
-    io_ctx->stop();
-    worker.join();
-    metrics->emit();
-  });
+  self->state.metrics.metric_handler = std::move(metric_handler);
   detail::weak_run_delayed_loop(self, std::chrono::seconds{1}, [self] {
-    self->state.metrics->emit();
+    self->state.metrics.emit();
   });
   return {
     [self](atom::connect, bool tls, const std::string& hostname,
@@ -182,8 +184,8 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
                             .to_error();
           }
 #endif
-          self->state.metrics->port = endpoint.port();
-          self->state.metrics->handle = self->state.socket->native_handle();
+          self->state.metrics.port = endpoint.port();
+          self->state.metrics.handle = self->state.socket->native_handle();
           if (auto hdl = weak_hdl.lock()) {
             caf::anon_send(
               caf::actor_cast<caf::actor>(hdl),
@@ -236,7 +238,7 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
       }
       auto resolver_entry = *endpoints.begin();
       auto endpoint = resolver_entry.endpoint();
-      self->state.metrics->port = endpoint.port();
+      self->state.metrics.port = endpoint.port();
       // Create a new acceptor and bind to provided endpoint.
       try {
         self->state.acceptor.emplace(*self->state.io_ctx);
@@ -253,7 +255,7 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
         }
         auto backlog = boost::asio::socket_base::max_connections;
         self->state.acceptor->listen(backlog);
-        self->state.metrics->handle = self->state.acceptor->native_handle();
+        self->state.metrics.handle = self->state.acceptor->native_handle();
       } catch (std::exception& e) {
         return caf::make_error(ec::system_error,
                                fmt::format("failed to bind to endpoint: {}",
@@ -344,8 +346,8 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
                                fmt::format("failed to read from TCP socket: {}",
                                            ec.message())));
                            }
-                           self->state.metrics->reads++;
-                           self->state.metrics->bytes_read += length;
+                           self->state.metrics.reads++;
+                           self->state.metrics.bytes_read += length;
                            self->state.read_buffer.resize(length);
                            self->state.read_buffer.shrink_to_fit();
                            return self->state.read_rp.deliver(chunk::make(
@@ -389,8 +391,8 @@ auto make_tcp_bridge(tcp_bridge_actor::stateful_pointer<tcp_bridge_state> self,
                                            ec.message())));
                              return;
                            }
-                           self->state.metrics->writes++;
-                           self->state.metrics->bytes_written += length;
+                           self->state.metrics.writes++;
+                           self->state.metrics.bytes_written += length;
                            if (length < chunk->size()) {
                              auto remainder = chunk->slice(length);
                              self->state.write_rp.delegate(
