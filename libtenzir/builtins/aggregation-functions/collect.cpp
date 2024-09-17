@@ -66,8 +66,7 @@ public:
     if (caf::holds_alternative<null_type>(arg.type)) {
       return;
     }
-    // XXX: What should happen if it receives different types?
-    // Currently, everything ends up coerced to strings.
+    // NOTE: Currently, different types end up coerced to strings.
     for (auto i = int64_t{}; i < arg.array->length(); ++i) {
       if (arg.array->IsNull(i)) {
         continue;

@@ -70,6 +70,7 @@ public:
         .emit(ctx);
       return caf::none_t{};
     };
+    // TODO: Matching on type of max_ might be better to reduce function calls
     auto f = detail::overload{
       [](const arrow::NullArray&) {},
       [&]<class T>(const T& array)
@@ -88,12 +89,18 @@ public:
                 if constexpr (std::same_as<T, arrow::DoubleArray>) {
                   return std::max(static_cast<double>(self), val);
                 } else {
-                  return std::cmp_less(self, val) ? val : self;
+                  if (std::cmp_greater(val, self)) {
+                    return val;
+                  }
+                  return self;
                 }
               },
               [&](double self) -> max_t {
                 return std::max(self, static_cast<double>(val));
               });
+            if (std::holds_alternative<caf::none_t>(max_.value())) {
+              return;
+            }
           }
         }
       },
@@ -107,6 +114,9 @@ public:
             max_ = max_->match(warn, [&](duration self) -> max_t {
               return duration{std::max(self.count(), val)};
             });
+            if (std::holds_alternative<caf::none_t>(max_.value())) {
+              return;
+            }
           }
         }
       },

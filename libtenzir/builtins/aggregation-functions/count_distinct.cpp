@@ -138,7 +138,7 @@ class plugin : public virtual aggregation_function_plugin,
   auto make_aggregation(invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
-    // XXX: Maybe merge this functionality into `count` or `distinct`
+    // TODO: Maybe merge this functionality into `count` or `distinct`
     TRY(argument_parser2::function("tql2.count_distinct")
           .add(expr, "<expr>")
           .parse(inv, ctx));

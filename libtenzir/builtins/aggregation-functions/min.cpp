@@ -85,12 +85,18 @@ public:
                 if constexpr (std::same_as<T, arrow::DoubleArray>) {
                   return std::min(static_cast<double>(self), val);
                 } else {
-                  return std::cmp_greater(self, val) ? val : self;
+                  if (std::cmp_less(val, self)) {
+                    return val;
+                  }
+                  return self;
                 }
               },
               [&](double self) -> min_t {
                 return std::min(self, static_cast<double>(val));
               });
+            if (std::holds_alternative<caf::none_t>(min_.value())) {
+              return;
+            }
           }
         }
       },
@@ -104,6 +110,9 @@ public:
             min_ = min_->match(warn, [&](duration self) -> min_t {
               return duration{std::min(self.count(), val)};
             });
+            if (std::holds_alternative<caf::none_t>(min_.value())) {
+              return;
+            }
           }
         }
       },

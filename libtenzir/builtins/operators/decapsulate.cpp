@@ -281,14 +281,15 @@ auto parse(record_ref builder, std::span<const std::byte> bytes,
   return std::nullopt;
 }
 
-auto decapsulate(series s, diagnostic_handler& dh) -> std::optional<series> {
-  if (s.type.name() != "pcap.packet") {
-    diagnostic::warning("cannot decapsulate schema '{}'", s.type.name())
-      .note("schema must be 'pcap.packet'")
-      .emit(dh);
+auto decapsulate(const series& s, diagnostic_handler& dh,
+                 bool include_old) -> std::optional<series> {
+  // Get the packet payload.
+  if (s.type.kind().is_not<record_type>()) {
+    if (s.type.kind().is_not<null_type>()) {
+      diagnostic::warning("cannot decapsulate type `{}`", s.type).emit(dh);
+    }
     return std::nullopt;
   }
-  // Get the packet payload.
   const auto& layout = caf::get<record_type>(s.type);
   const auto linktype_index = layout.resolve_key("linktype");
   if (!linktype_index) {
@@ -297,10 +298,10 @@ auto decapsulate(series s, diagnostic_handler& dh) -> std::optional<series> {
       .emit(dh);
     return std::nullopt;
   }
-  // TODO: ADD CHECK
-  auto linktype_array
+  const auto linktype_array
     = linktype_index->get(caf::get<arrow::StructArray>(*s.array));
-  auto linktype_values = caf::get_if<arrow::UInt64Array>(&*linktype_array);
+  const auto linktype_values
+    = caf::get_if<arrow::UInt64Array>(&*linktype_array);
   if (!linktype_values) {
     diagnostic::warning("got a malformed 'pcap.packet' event")
       .note("field 'linktype' not of type uint64")
@@ -314,8 +315,9 @@ auto decapsulate(series s, diagnostic_handler& dh) -> std::optional<series> {
       .emit(dh);
     return std::nullopt;
   }
-  auto data_array = data_index->get(caf::get<arrow::StructArray>(*s.array));
-  auto data_values = caf::get_if<arrow::BinaryArray>(&*data_array);
+  const auto data_array
+    = data_index->get(caf::get<arrow::StructArray>(*s.array));
+  const auto data_values = caf::get_if<arrow::BinaryArray>(&*data_array);
   if (!data_values) {
     diagnostic::warning("got a malformed 'pcap.packet' event")
       .note("field 'data' not of type blob")
@@ -324,38 +326,39 @@ auto decapsulate(series s, diagnostic_handler& dh) -> std::optional<series> {
   }
   auto builder = series_builder{};
   for (auto i = 0u; i < s.length(); ++i) {
-    auto linktype = (*linktype_values)[i];
-    auto data = (*data_values)[i];
+    const auto linktype = (*linktype_values)[i];
+    const auto data = (*data_values)[i];
     if (!data) {
       continue;
     }
-    auto raw_frame = std::span<const std::byte>{
-      reinterpret_cast<const std::byte*>(data->data()), data->size()};
     auto inferred_type = static_cast<frame_type>(linktype ? *linktype : 0);
-    if (auto diag = parse(builder.record(), raw_frame, inferred_type)) {
+    if (auto diag = parse(builder.record(), as_bytes(*data), inferred_type)) {
       dh.emit(std::move(*diag));
     }
   }
-  // Add back the untouched data column at the end.
   auto new_s = builder.finish_assert_one_array();
   new_s.type = type{s.type.name(), new_s.type};
-  auto transformation = indexed_transformation{
-    .index = {caf::get<record_type>(new_s.type).num_fields() - 1},
-    .fun = [&](struct record_type::field in_field,
-               std::shared_ptr<arrow::Array> in_array)
-      -> indexed_transformation::result_type {
-      return {
-        {std::move(in_field), std::move(in_array)},
-        {{"pcap", s.type}, s.array},
-      };
-    },
-  };
-  auto ptr = std::dynamic_pointer_cast<arrow::StructArray>(new_s.array);
-  // XXX: check or assert
-  TENZIR_ASSERT(ptr);
-  auto [ty, array]
-    = transform_columns(new_s.type, ptr, {std::move(transformation)});
-  return series{ty, array};
+  if (include_old) {
+    // Add back the untouched data column at the end.
+    auto transformation = indexed_transformation{
+      .index = {caf::get<record_type>(new_s.type).num_fields() - 1},
+      .fun = [&](struct record_type::field in_field,
+                 std::shared_ptr<arrow::Array> in_array)
+        -> indexed_transformation::result_type {
+        return {
+          {std::move(in_field), std::move(in_array)},
+          {{"pcap", s.type}, s.array},
+        };
+      },
+    };
+    const auto ptr = std::dynamic_pointer_cast<arrow::StructArray>(new_s.array);
+    // XXX: check or assert
+    TENZIR_ASSERT(ptr);
+    auto [ty, transformed]
+      = transform_columns(new_s.type, ptr, {std::move(transformation)});
+    return series{ty, transformed};
+  }
+  return new_s;
 }
 
 class decapsulate_operator final : public crtp_operator<decapsulate_operator> {
@@ -370,7 +373,7 @@ public:
         co_yield {};
         continue;
       }
-      auto s = decapsulate(series{slice}, ctrl.diagnostics());
+      auto s = decapsulate(series{slice}, ctrl.diagnostics(), true);
       if (not s) {
         co_yield {};
         continue;
@@ -418,10 +421,9 @@ public:
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {
         auto series = eval(expr);
-        if (auto op = decapsulate(series, ctx.dh())) {
+        if (auto op = decapsulate(series, ctx.dh(), false)) {
           return op.value();
         }
-        // TODO: Think about type
         return series::null(null_type{}, series.length());
       });
   }

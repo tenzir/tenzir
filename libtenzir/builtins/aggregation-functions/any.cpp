@@ -62,31 +62,45 @@ public:
   }
 
   auto update(const table_slice& input, session ctx) -> void override {
-    if (failed) {
+    if (state_ == state::failed) {
       return;
     }
     auto arg = eval(expr_, input, ctx);
     auto f = detail::overload{
-      [](const arrow::NullArray&) {},
+      [&](const arrow::NullArray&) {
+        state_ = state::nulled;
+      },
       [&](const arrow::BooleanArray& array) {
         any_ = any_ or array.true_count() > 0;
+        if (array.null_count() > 0) {
+          state_ = state::nulled;
+        }
       },
       [&](auto&&) {
         diagnostic::warning("expected type `bool`, got `{}`", arg.type.kind())
           .primary(expr_)
           .emit(ctx);
+        state_ = state::failed;
       }};
     caf::visit(f, *arg.array);
   }
 
   auto finish() -> data override {
-    return failed ? data{} : any_;
+    switch (state_) {
+      case state::none:
+        return any_;
+      case state::nulled:
+        return any_ ? true : data{};
+      case state::failed:
+        return data{};
+    }
+    TENZIR_UNREACHABLE();
   }
 
 private:
   ast::expression expr_;
-  bool failed{false};
   bool any_{false};
+  enum class state : int8_t { none, failed, nulled } state_{state::none};
 };
 
 class plugin : public virtual aggregation_function_plugin,
