@@ -287,8 +287,21 @@ auto make_connection(connection_actor::stateful_pointer<connection_state> self,
         co_return;
       }
       if (ec) {
-        diagnostic::error("{}", ec.message())
+        using namespace std::string_literals;
+        auto remote_endpoint_ec = boost::system::error_code{};
+        auto remote_ip = "unknown address"s;
+        auto remote_endpoint
+          = state.socket->remote_endpoint(remote_endpoint_ec);
+        if (!remote_endpoint_ec) {
+          auto remote_ip_string
+            = remote_endpoint.address().to_string(remote_endpoint_ec);
+          if (!remote_endpoint_ec) {
+            remote_ip = remote_ip_string;
+          }
+        }
+        diagnostic::warning("{}", ec.message())
           .note("failed to read from socket")
+          .note("connection from {} aborted", remote_ip)
           .emit(state.ctrl->diagnostics());
         co_return;
       }
