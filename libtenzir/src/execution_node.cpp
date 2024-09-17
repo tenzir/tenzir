@@ -86,8 +86,9 @@ auto make_timer_guard(Duration&... elapsed) {
 // of table slices, excluding the schema and disregarding any overlap or custom
 // information from extension types.
 auto approx_bytes(const table_slice& events) -> uint64_t {
-  if (events.rows() == 0)
+  if (events.rows() == 0) {
     return 0;
+  }
   auto record_batch = to_record_batch(events);
   TENZIR_ASSERT(record_batch);
   // Note that this function can sometimes fail. Because we ultimately want to
@@ -275,11 +276,12 @@ struct exec_node_state {
   caf::typed_response_promise<void> start_rp = {};
 
   /// Exponential backoff for scheduling.
-  static constexpr duration min_backoff = std::chrono::milliseconds{250};
+  static constexpr duration min_backoff = std::chrono::milliseconds{30};
   static constexpr duration max_backoff = std::chrono::minutes{1};
   static constexpr double backoff_rate = 2.0;
   duration backoff = duration::zero();
   caf::disposable backoff_disposable = {};
+  std::optional<std::chrono::steady_clock::time_point> idle_since = {};
 
   /// A pointer to te operator control plane passed to this operator during
   /// execution, which acts as an escape hatch to this actor.
@@ -517,8 +519,12 @@ struct exec_node_state {
         if (should_quit) {
           self->quit();
         }
+        if (not idle_since) {
+          idle_since = std::chrono::steady_clock::now();
+        }
         return;
       }
+      idle_since.reset();
       produced_output = true;
       metrics.outbound_measurement.num_elements += output_size;
       metrics.outbound_measurement.num_batches += 1;
@@ -611,7 +617,12 @@ struct exec_node_state {
     if (run_scheduled) {
       return;
     }
-    if (not use_backoff) {
+    const auto remaining_until_idle
+      = idle_since
+          ? op->idle_after() - (std::chrono::steady_clock::now() - *idle_since)
+          : duration::zero();
+    const auto is_idle = remaining_until_idle <= duration::zero();
+    if (not use_backoff or not is_idle) {
       backoff = duration::zero();
     } else if (backoff == duration::zero()) {
       backoff = min_backoff;
@@ -698,11 +709,10 @@ struct exec_node_state {
     //   c. The operator is a command, i.e., has both a source and a sink.
     const auto has_demand
       = demand.has_value() or std::is_same_v<Output, std::monostate>;
-    const auto input_independent = not previous or op->input_independent();
     const auto should_continue
       = instance->it != instance->gen.end()                         // (1)
         and not waiting                                             // (2)
-        and ((has_demand and input_independent)                     // (3a)
+        and ((has_demand and not previous)                          // (3a)
              or not inbound_buffer.empty()                          // (3b)
              or detail::are_same_v<std::monostate, Input, Output>); // (3c)
     if (should_continue) {

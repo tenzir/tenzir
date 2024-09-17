@@ -190,10 +190,9 @@ public:
     return pipe_.operators().empty() ? false : pipe_.operators()[0]->internal();
   }
 
-  auto input_independent() const -> bool override {
-    return pipe_.operators().empty()
-             ? false
-             : pipe_.operators()[0]->input_independent();
+  auto idle_after() const -> duration override {
+    return pipe_.operators().empty() ? duration::zero()
+                                     : pipe_.operators()[0]->idle_after();
   }
 
   auto infer_type_impl(operator_type input) const
