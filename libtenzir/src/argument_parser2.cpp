@@ -162,6 +162,13 @@ auto argument_parser2::parse(const ast::entity& self,
              .primary(assignment->left));
       continue;
     }
+    if (it->found) {
+      emit(diagnostic::error("duplicate named argument `{}`", name)
+             .primary(*it->found)
+             .primary(arg->get_location()));
+      continue;
+    }
+    it->found = arg->get_location();
     auto& expr = assignment->right;
     it->set.match(
       [&]<data_type T>(setter<located<T>>& set) {
@@ -213,6 +220,14 @@ auto argument_parser2::parse(const ast::entity& self,
         set(located{std::move(pipe).unwrap(), expr.get_location()});
       });
   }
+  for (const auto& arg : named_) {
+    if (arg.required and not arg.found) {
+      emit(
+        diagnostic::error("required argument `{}` was not provided", arg.name)
+          .primary(self.get_location()));
+      result = failure::promise();
+    }
+  }
   return result;
 }
 
@@ -245,15 +260,15 @@ auto argument_parser2::usage() const -> std::string {
         usage_cache_ += positional.meta;
       }
     }
-    for (auto& [name, set] : named_) {
-      if (name.starts_with("_")) {
+    const auto append_option = [&](const named& opt) {
+      if (opt.name.starts_with("_")) {
         // This denotes an internal/unstable option.
-        continue;
+        return;
       }
       if (std::exchange(has_previous, true)) {
         usage_cache_ += ", ";
       }
-      auto meta = set.match(
+      auto meta = opt.set.match(
         []<data_type T>(const setter<located<T>>&) {
           return fmt::format("<{}>", type_kind::of<data_to_type_t<T>>);
         },
@@ -263,8 +278,24 @@ auto argument_parser2::usage() const -> std::string {
         [](const setter<located<pipeline>>&) -> std::string {
           return "{ ... }";
         });
-      usage_cache_ += fmt::format("{}={}", name, meta);
+      auto txt = fmt::format("{}={}", opt.name, meta);
+      if (not opt.required) {
+        usage_cache_ += "[" + txt + "]";
+      } else {
+        usage_cache_ += txt;
+      }
+    };
+    for (const auto& opt : named_) {
+      if (opt.required) {
+        append_option(opt);
+      }
     }
+    for (const auto& opt : named_) {
+      if (not opt.required) {
+        append_option(opt);
+      }
+    }
+
     if (kind_ != kind::op) {
       usage_cache_ += ')';
     }
@@ -326,6 +357,22 @@ auto argument_parser2::add(std::optional<T>& x, std::string meta)
 }
 
 template <argument_parser_type T>
+auto argument_parser2::add(std::string name, T& x) -> argument_parser2& {
+  if constexpr (argument_parser_bare_type<T>) {
+    named_.emplace_back(std::move(name), setter<located<T>>{[&x](located<T> y) {
+                          x = std::move(y.inner);
+                        }},
+                        true);
+  } else {
+    named_.emplace_back(std::move(name), setter<T>{[&x](T y) {
+                          x = std::move(y);
+                        }},
+                        true);
+  }
+  return *this;
+}
+
+template <argument_parser_type T>
 auto argument_parser2::add(std::string name, std::optional<T>& x)
   -> argument_parser2& {
   if constexpr (argument_parser_bare_type<T>) {
@@ -376,6 +423,7 @@ struct instantiate_argument_parser_add {
     static constexpr auto value = std::tuple{
       static_cast<positional<T>>(&argument_parser2::add)...,
       static_cast<positional<std::optional<T>>>(&argument_parser2::add)...,
+      static_cast<named<T>>(&argument_parser2::add)...,
       static_cast<named<std::optional<T>>>(&argument_parser2::add)...,
     };
   };
