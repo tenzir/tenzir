@@ -40,6 +40,14 @@ inline auto is_escaped(size_t idx, std::string_view text) -> bool {
   return backslashes % 2 == 1;
 }
 
+inline auto is_quoted(std::string_view text) -> bool {
+  if (text.size() < 2) {
+    return false;
+  }
+  return text.front() == text.back() and text.front() == '\"'
+         and not is_escaped(text.size() - 1, text);
+}
+
 [[nodiscard]] auto trim_quotes(std::string_view txt) -> std::string_view {
   if (txt.size() < 2) {
     return txt;
@@ -53,32 +61,6 @@ inline auto is_escaped(size_t idx, std::string_view text) -> bool {
     return txt;
   }
   return txt;
-}
-
-std::string unescape(std::string_view value) {
-  std::string result;
-  result.reserve(value.size());
-  for (auto i = 0u; i < value.size(); ++i) {
-    if (value[i] != '\\') {
-      result += value[i];
-    } else if (i + 1 < value.size()) {
-      auto next = value[i + 1];
-      switch (next) {
-        default: // Anything that isnt a defined escape sequence remains
-          result += '\\';
-          result += next;
-          break;
-        case '\\': // Double backslashes are collapsed
-          result += '\\';
-          break;
-        case '\"': // Escaped quotes are unescaped
-          result += '\"';
-          break;
-      }
-      ++i;
-    }
-  }
-  return result;
 }
 
 class splitter {
@@ -234,8 +216,10 @@ public:
       // to handle this.
       auto [head, tail] = field_split_.split(line);
       auto [key_view, value_view] = value_split_.split(head);
-      auto key = unescape(trim_quotes(key_view));
-      auto value = unescape(trim_quotes(value_view));
+      auto key = is_quoted(key_view) ? detail::json_unescape(key_view)
+                                     : std::string{key_view};
+      auto value = is_quoted(value_view) ? detail::json_unescape(value_view)
+                                         : std::string{value_view};
       if (auto d = data{}; parsers::simple_data(value, d)) {
         event.field(key, d);
       } else {
