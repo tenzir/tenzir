@@ -23,7 +23,7 @@ namespace {
 using namespace detail::data_builder;
 using namespace std::literals;
 
-struct test_diagnsotic_handler : diagnostic_handler {
+struct test_diagnostic_handler : diagnostic_handler {
 public:
   virtual void emit(diagnostic d) override {
     switch (d.severity) {
@@ -45,7 +45,6 @@ public:
   auto reset() -> void {
     *this = {};
   }
-
   size_t errors = 0;
   size_t warnings = 0;
   size_t notes = 0;
@@ -57,14 +56,24 @@ auto safe_as_record(tenzir::data d) -> tenzir::record {
   return std::move(*as_record);
 }
 
+auto compare_signatures(const data_builder::signature_type& expected,
+                        const data_builder::signature_type& actual) -> bool {
+  if (expected != actual) {
+    fmt::print("expected: {}\n", expected);
+    fmt::print("actual  : {}\n", actual);
+    return false;
+  }
+  return true;
+}
+
 TEST(empty) {
-  data_builder b;
+  auto b = data_builder{};
 
   CHECK(not b.has_elements());
 }
 
 TEST(materialization record) {
-  data_builder b;
+  auto b = data_builder{};
   auto* r = b.record();
   r->field("0")->data(uint64_t{0});
   r->field("1")->data(int64_t{1});
@@ -84,7 +93,7 @@ TEST(materialization record) {
 }
 
 TEST(materialization list) {
-  data_builder b;
+  auto b = data_builder{};
   auto* r = b.record();
   auto* l = r->field("int list")->list();
   l->data(uint64_t{0});
@@ -103,7 +112,7 @@ TEST(materialization list) {
 }
 
 TEST(materialization nested record) {
-  data_builder b;
+  auto b = data_builder{};
   auto* r = b.record();
   r->field("0")->record()->field("1")->null();
 
@@ -119,7 +128,7 @@ TEST(materialization nested record) {
 }
 
 TEST(materialization record list record) {
-  data_builder b;
+  auto b = data_builder{};
   auto* r = b.record();
   r->field("0")->list()->record()->field("1")->data(uint64_t{0});
   (void)r->field("1")->record()->field("0")->list();
@@ -140,7 +149,7 @@ TEST(materialization record list record) {
 }
 
 TEST(overwrite record fields) {
-  data_builder b;
+  auto b = data_builder{};
   auto* r = b.record();
   r->field("0")->data(uint64_t{0});
   r->field("0")->data(int64_t{0});
@@ -167,11 +176,11 @@ TEST(overwrite record fields) {
   }
   //   fmt::print("{}\n", sig);
   //   fmt::print("{}\n", expected);
-  CHECK(sig == expected);
+  CHECK(compare_signatures(expected, sig));
 }
 
 TEST(signature record empty) {
-  data_builder b;
+  auto b = data_builder{};
   (void)b.record();
 
   CHECK(b.has_elements());
@@ -184,11 +193,11 @@ TEST(signature record empty) {
     expected.insert(expected.end(), detail::data_builder::record_start_marker);
     expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
-  CHECK(sig == expected);
+  CHECK(compare_signatures(expected, sig));
 }
 
 TEST(signature record simple) {
-  data_builder b;
+  auto b = data_builder{};
   auto* r = b.record();
   r->field("0")->data(uint64_t{0});
   r->field("1")->data(int64_t{1});
@@ -219,19 +228,16 @@ TEST(signature record simple) {
     }
     expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
-  CHECK(sig == expected);
+  CHECK(compare_signatures(expected, sig));
 }
 
 TEST(signature list) {
-  data_builder b;
+  auto b = data_builder{};
   auto* l = b.record()->field("l")->list();
   l->data(uint64_t{0});
   l->data(uint64_t{1});
 
   CHECK(b.has_elements());
-  detail::data_builder::signature_type sig;
-
-  b.append_signature_to(sig, nullptr);
 
   detail::data_builder::signature_type expected;
   {
@@ -246,11 +252,49 @@ TEST(signature list) {
     expected.insert(expected.end(), detail::data_builder::list_end_marker);
     expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
-  CHECK(sig == expected);
+
+  detail::data_builder::signature_type sig;
+  b.append_signature_to(sig, nullptr);
+
+  CHECK(compare_signatures(expected, sig));
+
+  sig.clear();
+  l->data(uint64_t{0});
+  l->null();
+  b.append_signature_to(sig, nullptr);
+  CHECK(compare_signatures(expected, sig));
+}
+
+TEST(signature list records) {
+  auto dh = test_diagnostic_handler{};
+  auto b = data_builder{
+    detail::data_builder::basic_parser,
+    &dh,
+    true,
+  };
+
+  auto* l = b.list();
+  l->record();
+  l->record();
+  l->record()->field("test")->data(1.0);
+
+  detail::data_builder::signature_type sig;
+  b.append_signature_to(sig, nullptr);
+
+  detail::data_builder::signature_type expected;
+  {
+    expected.insert(expected.end(), detail::data_builder::list_start_marker);
+    expected.insert(expected.end(), detail::data_builder::record_start_marker);
+    expected.insert(expected.end(), detail::data_builder::record_end_marker);
+    expected.insert(expected.end(), detail::data_builder::list_end_marker);
+  }
+  CHECK(compare_signatures(expected, sig));
+
+  CHECK_EQUAL(dh.warnings, 0);
 }
 
 TEST(signature list with null) {
-  data_builder b;
+  auto b = data_builder{};
   auto* l = b.record()->field("l")->list();
   l->data(uint64_t{0});
   l->null();
@@ -273,11 +317,11 @@ TEST(signature list with null) {
     expected.insert(expected.end(), detail::data_builder::list_end_marker);
     expected.insert(expected.end(), detail::data_builder::record_end_marker);
   }
-  CHECK(sig == expected);
+  CHECK(compare_signatures(expected, sig));
 }
 
 TEST(signature list numeric unification) {
-  data_builder b;
+  auto b = data_builder{};
   auto* l = b.record()->field("l")->list();
   l->data(uint64_t{0});
   l->data(1.0);
@@ -300,11 +344,44 @@ TEST(signature list numeric unification) {
   }
   // fmt::print("{}\n", sig);
   // fmt::print("{}\n", expected);
-  CHECK(sig == expected);
+  CHECK(compare_signatures(expected, sig));
+}
+
+TEST(signature list mismatch) {
+  auto dh = test_diagnostic_handler{};
+  auto b = data_builder{
+    detail::data_builder::basic_parser,
+    &dh,
+    true,
+  };
+  auto* l = b.list();
+  l->data(0.0);
+  (void)l->record();
+
+  detail::data_builder::signature_type expected;
+  {
+    expected.insert(expected.end(), detail::data_builder::list_start_marker);
+    {
+      expected.insert(
+        expected.end(),
+        static_cast<std::byte>(
+          caf::detail::tl_index_of<field_type_list, double>::value));
+      expected.insert(expected.end(),
+                      detail::data_builder::record_start_marker);
+      expected.insert(expected.end(), detail::data_builder::record_end_marker);
+    }
+    expected.insert(expected.end(), detail::data_builder::list_end_marker);
+  }
+
+  detail::data_builder::signature_type sig;
+  b.append_signature_to(sig, nullptr);
+  CHECK(compare_signatures(expected, sig));
+
+  CHECK_EQUAL(dh.warnings, 1);
 }
 
 TEST(signature record seeding matching) {
-  data_builder b;
+  auto b = data_builder{};
   auto* r = b.record();
   r->field("0")->data(uint64_t{0});
   r->field("1")->data(int64_t{1});
@@ -341,11 +418,11 @@ TEST(signature record seeding matching) {
   }
   // fmt::print("{}\n", sig);
   // fmt::print("{}\n", expected);
-  CHECK(sig == expected);
+  CHECK(compare_signatures(expected, sig));
 }
 
 TEST(signature record seeding field not in data) {
-  data_builder b;
+  auto b = data_builder{};
   auto* r = b.record();
   r->field("0")->data(uint64_t{0});
 
@@ -381,11 +458,167 @@ TEST(signature record seeding field not in data) {
   }
   // fmt::print("{}\n", sig);
   // fmt::print("{}\n", expected);
-  CHECK(sig == expected);
+  CHECK(compare_signatures(expected, sig));
 }
 
-TEST(signature record seeding field not in data-- no - extend - schema) {
-  data_builder b{
+TEST(signature record seeding nested record) {
+  auto dh = test_diagnostic_handler{};
+  auto b = data_builder{
+    detail::data_builder::basic_parser,
+    &dh,
+  };
+
+  tenzir::type seed{record_type{
+    {"x", int64_type{}},
+    {
+      "y",
+      record_type{
+        {
+          "z",
+          int64_type{},
+        },
+      },
+    },
+  }};
+
+  const tenzir::data input[] = {
+    record{},
+    record{{"x", caf::none}},
+    record{{"x", int64_t{}}},
+    record{
+      {"x", int64_t{}},
+      {"y", caf::none},
+    },
+    // warning
+    record{
+      {"x", int64_t{}},
+      {"y", int64_t{}},
+    },
+    record{
+      {"x", int64_t{}},
+      {"y", record{}},
+    },
+    record{
+      {"x", int64_t{}},
+      {"y",
+       record{
+         {"z", caf::none},
+       }},
+    },
+    record{
+      {"x", int64_t{}},
+      {"y",
+       record{
+         {"z", int64_t{}},
+       }},
+    },
+    // warning
+    record{
+      {"x", int64_t{}},
+      {"y",
+       record{
+         {"z", record{}},
+       }},
+    },
+  };
+
+  detail::data_builder::signature_type expected;
+  {
+    expected.insert(expected.end(), detail::data_builder::record_start_marker);
+    { // field x
+      const auto key_bytes = as_bytes("x"sv);
+      expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
+      expected.insert(
+        expected.end(),
+        static_cast<std::byte>(
+          caf::detail::tl_index_of<field_type_list, int64_t>::value));
+    }
+    { // field y
+      const auto key_bytes = as_bytes("y"sv);
+      expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
+      expected.insert(expected.end(),
+                      detail::data_builder::record_start_marker);
+      { // field y.z
+        const auto key_bytes = as_bytes("z"sv);
+        expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
+        expected.insert(
+          expected.end(),
+          static_cast<std::byte>(
+            caf::detail::tl_index_of<field_type_list, int64_t>::value));
+      }
+      expected.insert(expected.end(), detail::data_builder::record_end_marker);
+    }
+    expected.insert(expected.end(), detail::data_builder::record_end_marker);
+  }
+
+  detail::data_builder::signature_type sig;
+  for (const auto& v : input) {
+    sig.clear();
+    b.data(v);
+    b.append_signature_to(sig, &seed);
+    CHECK(compare_signatures(expected, sig));
+    b.clear();
+  }
+  CHECK_EQUAL(dh.errors, 0);
+  CHECK_EQUAL(dh.warnings, 2);
+}
+
+TEST(signature record seeding nested list) {
+  auto dh = test_diagnostic_handler{};
+  auto b = data_builder{
+    detail::data_builder::basic_parser,
+    &dh,
+  };
+
+  tenzir::type seed{record_type{
+    {"l", list_type{int64_type{}}},
+  }};
+
+  const tenzir::data input[] = {
+    record{{"l", caf::none}},
+    // warning
+    record{{"l", int64_t{}}},
+    record{{"l", list{}}},
+    record{{"l", list{caf::none}}},
+    record{{"l", list{int64_t{}}}},
+    record{{"l", list{"yo"}}},
+    record{{"l", list{double{}}}},
+    // warning
+    record{{"l", record{}}},
+    // warning
+    record{{"l", record{{"yo", int64_t{}}}}},
+  };
+
+  detail::data_builder::signature_type expected;
+  {
+    expected.insert(expected.end(), detail::data_builder::record_start_marker);
+    { // field l
+      const auto key_bytes = as_bytes("l"sv);
+      expected.insert(expected.end(), key_bytes.begin(), key_bytes.end());
+      expected.insert(expected.end(), detail::data_builder::list_start_marker);
+      expected.insert(
+        expected.end(),
+        static_cast<std::byte>(
+          caf::detail::tl_index_of<field_type_list, int64_t>::value));
+      expected.insert(expected.end(), detail::data_builder::list_end_marker);
+    }
+    expected.insert(expected.end(), detail::data_builder::record_end_marker);
+  }
+
+  detail::data_builder::signature_type sig;
+  for (const auto& v : input) {
+    sig.clear();
+    b.data(v);
+    b.append_signature_to(sig, &seed);
+    CHECK(compare_signatures(expected, sig));
+    b.clear();
+  }
+  CHECK_EQUAL(dh.errors, 0);
+  CHECK_EQUAL(dh.warnings, 3);
+}
+
+TEST(signature record seeding field not in data schema_only) {
+  auto b = data_builder{
     detail::data_builder::basic_parser,
     nullptr,
     true,
@@ -425,11 +658,11 @@ TEST(signature record seeding field not in data-- no - extend - schema) {
   }
   // fmt::print("{}\n", sig);
   // fmt::print("{}\n", expected);
-  CHECK(sig == expected);
+  CHECK(compare_signatures(expected, sig));
 }
 
 TEST(signature record seeding data - field not in seed) {
-  data_builder b;
+  auto b = data_builder{};
   auto* r = b.record();
   r->field("1")->data(int64_t{0});
   r->field("0")->data(uint64_t{0});
@@ -465,11 +698,11 @@ TEST(signature record seeding data - field not in seed) {
   }
   // fmt::print("{}\n", sig);
   // fmt::print("{}\n", expected);
-  CHECK(sig == expected);
+  CHECK(compare_signatures(expected, sig));
 }
 
-TEST(signature record seeding data - field not in seed-- no - extend - schema) {
-  data_builder b{
+TEST(signature record seeding data - field not in seed schema_only) {
+  auto b = data_builder{
     detail::data_builder::basic_parser,
     nullptr,
     true,
@@ -501,11 +734,11 @@ TEST(signature record seeding data - field not in seed-- no - extend - schema) {
   }
   // fmt::print("{}\n", sig);
   // fmt::print("{}\n", expected);
-  CHECK(sig == expected);
+  CHECK(compare_signatures(expected, sig));
 }
 
 TEST(signature record seeding numeric mismatch) {
-  data_builder b;
+  auto b = data_builder{};
   auto* r = b.record();
   r->field("0")->data(uint64_t{0});
 
@@ -534,7 +767,7 @@ TEST(signature record seeding numeric mismatch) {
   }
   // fmt::print("{}\n", sig);
   // fmt::print("{}\n", expected);
-  CHECK(sig == expected);
+  CHECK(compare_signatures(expected, sig));
 }
 } // namespace
 } // namespace tenzir

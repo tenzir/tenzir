@@ -301,9 +301,10 @@ auto basic_seeded_parser(std::string_view s, const tenzir::type& seed)
       }
     },
     []<typename T>(const T& t) -> tenzir::diagnostic {
-      TENZIR_ASSERT_ALWAYS(
-        false,
-        fmt::format("The basic parser does not implement parsing `{}`", t));
+      return diagnostic::warning("schema expected `{}`, but the input "
+                                 "contained a string",
+                                 tenzir::type{t}.kind())
+        .done();
     },
   };
   return caf::visit(visitor, seed);
@@ -648,7 +649,10 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
   // Below is a nice implementation that I wrote before realizing
   // that I really dont want to deal with turning the `data_` member into a
   // caf::variant. Once we update CAF, this will be easy to replace.
-  // const auto visitor2 = detail::overload{
+  // Be aware that this double visit may be out of date with the behaviour
+  // below:
+  // * its at the very least not warning for double -> int conversions that
+  // loose precision const auto visitor2 = detail::overload{
   //   // fallback
   //   [&rb,seed]<non_structured_data_type T, typename S>(const T&, const S& s)
   //   {
@@ -725,9 +729,6 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
     [&rb, seed, this]<non_structured_data_type T>(const T& v) {
       constexpr static auto type_idx
         = caf::detail::tl_index_of<field_type_list, T>::value;
-      if (not seed) {
-        return;
-      }
       const auto seed_idx = seed->type_index();
       if (type_idx == seed_idx) {
         return;
@@ -741,7 +742,19 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
                 if (v > static_cast<uint64_t>(
                       std::numeric_limits<int64_t>::max())) {
                   null();
+                  rb.emit_or_throw(diagnostic::warning("value is out of range "
+                                                       "for expected type")
+                                     .note("value `{}` does not fit into `{}`",
+                                           v, seed->kind()));
                   return;
+                }
+              } else if constexpr (std::same_as<double, T>) {
+                if (static_cast<double>(static_cast<int64_t>(v)) == v) {
+                  rb.emit_or_throw(diagnostic::warning("fractional value where "
+                                                       "integral was expected")
+                                     .note("value `{}` looses precision when "
+                                           "converted to `{}`",
+                                           v, seed->kind()));
                 }
               }
               data(static_cast<int64_t>(v));
@@ -750,7 +763,20 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
             case caf::detail::tl_index_of<field_type_list, uint64_t>::value: {
               if (v < 0) {
                 null();
+                rb.emit_or_throw(diagnostic::warning("value is out of range "
+                                                     "for expected type")
+                                   .note("value `{}` does not fit into `{}`", v,
+                                         seed->kind()));
                 return;
+              }
+              if constexpr (std::same_as<double, T>) {
+                if (static_cast<double>(static_cast<int64_t>(v)) == v) {
+                  rb.emit_or_throw(diagnostic::warning("fractional value where "
+                                                       "integral was expected")
+                                     .note("value `{}` looses precision when "
+                                           "converted to `{}`",
+                                           v, seed->kind()));
+                }
               }
               data(static_cast<uint64_t>(v));
               return;
@@ -763,8 +789,20 @@ auto node_object::try_resolve_nonstructural_field_mismatch(
               if (v < 0
                   or v > static_cast<T>(
                        std::numeric_limits<enumeration>::max())) {
+                rb.emit_or_throw(diagnostic::warning("value is out of range "
+                                                     "for expected type")
+                                   .note("value `{}` does not fit into `{}`", v,
+                                         seed->kind()));
                 null();
                 return;
+              }
+              auto enum_t = caf::get_if<enumeration_type>(seed);
+              TENZIR_ASSERT(enum_t);
+              if (enum_t->field(static_cast<uint32_t>(v)).empty()) {
+                null();
+                rb.emit_or_throw(
+                  diagnostic::warning("unknown integral enumeration value")
+                    .note("value `{}` is not defined for `{}`", v, *enum_t));
               }
               data(static_cast<enumeration>(v));
               return;
@@ -831,70 +869,92 @@ auto node_object::append_to_signature(signature_type& sig,
       return;
       ;
     }
-    // sentinel structural types get handled by the regular visit below
+    // Sentinel structural types get handled by the regular visit below
   }
   parse(rb, seed);
   try_resolve_nonstructural_field_mismatch(rb, seed);
+  // This lambda handles the case where the node is either null, or its stored
+  // type mismatches the given seed
+  // In case of a mismatch, the node is nulled out and the visit is rerun.
+  // Rerunning the visit then runs into the `caf::none_t` case, which correctly
+  // re-creates the nodes contents according to the seed.
   const auto visitor = detail::overload{
     [&sig, &rb, seed, this](node_list& v) {
       const auto* ls = caf::get_if<list_type>(seed);
       if (seed and not ls) {
         rb.emit_mismatch_warning("list", *seed);
         null();
-        // FIXME this needs to update the signature in some way
-        return;
+        return false;
       }
       if (v.affects_signature() or ls) {
         v.append_to_signature(sig, rb, ls);
       }
+      return true;
     },
     [&sig, &rb, seed, this](node_record& v) {
       const auto* rs = caf::get_if<record_type>(seed);
       if (seed and not rs) {
         rb.emit_mismatch_warning(type{record_type{}}, *seed);
         null();
-        // FIXME this needs to update the signature in some way
-        return;
+        return false;
       }
       if (v.affects_signature() or rs) {
         v.append_to_signature(sig, rb, rs);
       }
+      return true;
     },
     [&sig, &rb, seed, this](caf::none_t&) {
-      // none could be the result of pre-seeding or being built with a true null
-      // via the API for the first case we need to ensure we continue doing
-      // seeding if we have a seed
+      // none could be the result of pre-seeding or being built with a true
+      // null via the API for the first case we need to ensure we continue
+      // doing seeding if we have a seed
       if (seed) {
         if (auto sr = caf::get_if<tenzir::record_type>(seed)) {
           auto r = record();
           r->append_to_signature(sig, rb, sr);
+          r->state_ = state::sentinel;
           this->value_state_ = value_state_type::null;
-          return;
+          return true;
         }
         if (auto sl = caf::get_if<tenzir::list_type>(seed)) {
           auto* l = list();
           l->append_to_signature(sig, rb, sl);
+          l->state_ = state::sentinel;
           this->value_state_ = value_state_type::null;
-          return;
+          return true;
         }
         sig.push_back(static_cast<std::byte>(seed->type_index()));
+        return true;
       } else {
         constexpr static auto type_idx
           = caf::detail::tl_index_of<field_type_list, caf::none_t>::value;
         sig.push_back(static_cast<std::byte>(type_idx));
+        return true;
       }
     },
-    [&sig]<non_structured_data_type T>(T&) {
+    [&sig, seed, this]<non_structured_data_type T>(T&) {
       constexpr static auto type_idx
         = caf::detail::tl_index_of<field_type_list, T>::value;
+      if (seed) {
+        const auto seed_idx = seed->type_index();
+        if (seed_idx != type_idx) {
+          null();
+          return false;
+        }
+      }
       sig.push_back(static_cast<std::byte>(type_idx));
+      return true;
     },
     []<typename T>(T&) {
       TENZIR_ASSERT_ALWAYS(false, fmt::format("No `{}` should ever be stored",
                                               typeid(T).name()));
+      return true;
     },
   };
-  return std::visit(visitor, data_);
+  if (std::visit(visitor, data_)) {
+    return;
+  }
+  // This should never fail a second time.
+  TENZIR_ASSERT(std::visit(visitor, data_));
 }
 
 auto node_object::commit_to(tenzir::builder_ref builder, class data_builder& rb,
@@ -1050,25 +1110,14 @@ auto node_object::clear() -> void {
   std::visit(visitor, data_);
 }
 
-auto node_list::find_dead_and_resurrect() -> node_object* {
-  for (size_t i = last_alive_idx_; i < data_.size(); ++i) {
-    auto& value = data_[i];
-    if (not value.is_alive()) {
-      ++last_alive_idx_;
-      return &value;
-    }
+auto node_list::try_resurrect_dead() -> node_object* {
+  if (first_dead_idx_ >= data_.size()) {
+    return nullptr;
   }
-  return nullptr;
-}
-
-auto node_list::back() -> node_object& {
-  for (size_t i = 0; i < data_.size(); ++i) {
-    if (not data_[i].is_alive()) {
-      return data_[i - 1];
-    }
-  }
-  TENZIR_UNREACHABLE();
-  return data_.back();
+  auto& value = data_[first_dead_idx_];
+  TENZIR_ASSERT(not value.is_alive());
+  ++first_dead_idx_;
+  return &value;
 }
 
 auto node_list::reserve(size_t N) -> void {
@@ -1103,10 +1152,11 @@ auto node_list::data(tenzir::data d) -> void {
 auto node_list::data_unparsed(std::string text) -> void {
   mark_this_alive();
   type_index_ = type_index_generic_mismatch;
-  if (auto* free = find_dead_and_resurrect()) {
+  if (auto* free = try_resurrect_dead()) {
     free->data_unparsed(std::move(text));
   } else {
     TENZIR_ASSERT(data_.size() <= 20'000, "Upper limit on list size reached.");
+    ++first_dead_idx_;
     data_.emplace_back().data_unparsed(std::move(text));
   }
 }
@@ -1118,7 +1168,7 @@ auto node_list::null() -> void {
 auto node_list::record() -> node_record* {
   mark_this_alive();
   update_type_index(type_index_, type_index_record);
-  if (auto* free = find_dead_and_resurrect()) {
+  if (auto* free = try_resurrect_dead()) {
     if (auto* r = free->get_if<node_record>()) {
       free->mark_this_alive();
       free->value_state_ = node_object::value_state_type::has_value;
@@ -1131,6 +1181,7 @@ auto node_list::record() -> node_record* {
   } else {
     TENZIR_ASSERT(data_.size() <= 20'000,
                   "Upper limit on record size reached.");
+    ++first_dead_idx_;
     return data_.emplace_back().record();
   }
 }
@@ -1138,7 +1189,7 @@ auto node_list::record() -> node_record* {
 auto node_list::list() -> node_list* {
   mark_this_alive();
   update_type_index(type_index_, type_index_list);
-  if (auto* free = find_dead_and_resurrect()) {
+  if (auto* free = try_resurrect_dead()) {
     if (auto* l = free->get_if<node_list>()) {
       l->mark_this_alive();
       free->value_state_ = node_object::value_state_type::has_value;
@@ -1150,6 +1201,7 @@ auto node_list::list() -> node_list* {
     }
   } else {
     TENZIR_ASSERT(data_.size() <= 20'000, "Upper limit on list size reached.");
+    ++first_dead_idx_;
     return data_.emplace_back().list();
   }
 }
@@ -1157,83 +1209,147 @@ auto node_list::list() -> node_list* {
 auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
                                     const tenzir::list_type* seed) -> void {
   sig.push_back(list_start_marker);
-  if (is_numeric(type_index_) or type_index_ == type_index_numeric_mismatch) {
-    // First, we handle the case where the current index is numeric
-    // this has special handling, as it will try to convert to the seed type or
-    // to double.
-    size_t result_index = type_index_;
-    if (seed) {
-      auto seed_idx = seed->value_type().type_index();
-      if (seed_idx != type_index_) {
-        if (seed_idx == type_index_double) {
-          goto numeric_mismatch_handling;
-        } else {
-          goto generic_mismatch_handling;
-        }
-      }
-    } else if (type_index_ == type_index_numeric_mismatch) {
-    numeric_mismatch_handling:
-      for (auto& e : data_) {
-        if (not e.transform_to<double>()) {
-          goto generic_mismatch_handling;
-        }
-      }
-      result_index = type_index_double;
-    }
-    sig.push_back(static_cast<std::byte>(result_index));
-  } else if (is_structural(type_index_)
-             or type_index_ == type_index_generic_mismatch) {
-  generic_mismatch_handling:
-    ///////////
-    // This  case also applies when there is any unparsed fields.
-    // In the generic "mismatch" handling case, we need to iterate every element
-    // of the list.
-    // We first append an elements signature,
-    // identical to the last one we already appended this ensures that if all
-    // elements truly have the same signature, the element count of the list no
-    // longer matters.
-    // Since we need to iterate all elements in the structural case anyways, its
-    // equivalent to the generic mismatch case.
-    ///////////
-    // This has to be a local value because `list_type::value_type` returns a
-    // value.
-    tenzir::type seed_type;
-    tenzir::type* seed_type_ptr = nullptr;
-    if (seed) {
-      seed_type = seed->value_type();
-      seed_type_ptr = &seed_type;
-    }
-    auto last_sig_index = 0;
-    if (seed and data_.empty()) {
-      node_object sentinel;
-      sentinel.state_ = state::sentinel;
-      sentinel.append_to_signature(sig, rb, seed_type_ptr);
-      goto done;
-    }
-    for (auto& v : data_) {
-      auto next_sig_index = sig.size();
-      v.append_to_signature(sig, rb, seed_type_ptr);
-      if (last_sig_index != 0) {
-        const auto last_signatures_match = std::ranges::equal(
-          std::span{sig.begin() + last_sig_index, sig.begin() + next_sig_index},
-          std::span{sig.begin() + next_sig_index, sig.end()});
-        if (last_signatures_match) {
-          // drop the last appended signature
-          sig.erase(sig.begin() + last_sig_index, sig.end());
-        }
-        last_sig_index = next_sig_index;
-      }
-    }
-    // err = caf::make_error(ec::type_clash, "list element type mismatch");
-    // if (seed) {
-
-    // }
-  } else {
-    // finally the happy case where our predetermined index is usable (its not
-    // structural and not a mismatch index)
-    sig.push_back(static_cast<std::byte>(type_index_));
+  // This has to be a local value because `list_type::value_type` returns a
+  // value.
+  tenzir::type seed_type;
+  tenzir::type* seed_type_ptr = nullptr;
+  auto seed_index = static_cast<size_t>(-1);
+  if (seed) {
+    seed_type = seed->value_type();
+    seed_type_ptr = &seed_type;
+    seed_index = seed_type.type_index();
   }
-done:
+  if (type_index_ == seed_index and not is_structural(type_index_)) {
+    sig.push_back(static_cast<std::byte>(type_index_));
+  } else if (seed) {
+    node_object sentinel;
+    sentinel.state_ = state::sentinel;
+    sentinel.append_to_signature(sig, rb, seed_type_ptr);
+  } else if (not is_structural(type_index_)
+             and type_index_ < type_index_empty) {
+    sig.push_back(static_cast<std::byte>(type_index_));
+  } else if (not seed and type_index_ == type_index_numeric_mismatch) {
+    auto negative = size_t{0};
+    auto large_positive = size_t{0};
+    auto floating = size_t{0};
+    constexpr static auto idx_int
+      = caf::detail::tl_index_of<field_type_list, int64_t>::value;
+    constexpr static auto idx_uint
+      = caf::detail::tl_index_of<field_type_list, uint64_t>::value;
+    constexpr static auto idx_double
+      = caf::detail::tl_index_of<field_type_list, double>::value;
+    {
+      const auto visitor = detail::overload{
+        [](const auto&) {
+          TENZIR_UNREACHABLE();
+        },
+        [&](const int64_t& value) {
+          if (value < 0) {
+            ++negative;
+          }
+        },
+        [&](const uint64_t& value) {
+          if (value > std::numeric_limits<int64_t>::max()) {
+            ++large_positive;
+          }
+        },
+        [&](const double&) {
+          ++floating;
+        },
+      };
+      for (const auto& e : alive_elements()) {
+        std::visit(visitor, e.data_);
+      }
+    }
+    auto final_index = size_t{0};
+    if (floating > 0) {
+      final_index = idx_double;
+    } else if (negative and large_positive) {
+      final_index = idx_double;
+    } else if (large_positive) {
+      final_index = idx_uint;
+    } else {
+      final_index = idx_int;
+    }
+    sig.push_back(static_cast<std::byte>(final_index));
+  } else {
+    ///////////
+    /// TODO this entire generic path is a best effort trying to match
+    /// the behaviour the of series builder.
+    /// This  case also applies when there is any unparsed fields.
+    /// In the generic "mismatch" handling case, we need to iterate every
+    /// element of the list.
+    /// Originally this function computed the signature of every element, and
+    /// compared it to the previous elements signature. However, that does not
+    /// address cases where the series builder would e.g. merge records
+    /// Currently this function simply ignores structural types, as the
+    /// as the `series_builder` will potentially resolve some conflicts.
+    /// Parsing of unparsed non-structural elements still happens, but the
+    /// contents of structural elements will only be parsed during a `commit_to`
+    /// call.
+    /// The downside of this is lists containing records with different fields
+    /// will have the same signature, causing events that dont formally have the
+    /// same schema to be merged. However, that seems acceptable for now.
+    ///////////
+    auto initial_sig_size = sig.size();
+    auto last_sig_start_index = std::size_t{0};
+    auto non_matching_signatures = false;
+    auto has_list = false;
+    auto has_record = false;
+    for (auto& v : alive_elements()) {
+      if (v.current_index() == type_index_list) {
+        if (not has_list) {
+          sig.push_back(list_start_marker);
+          sig.push_back(list_end_marker);
+          has_list = true;
+        }
+        continue;
+      }
+      if (v.current_index() == type_index_record) {
+        if (not has_record) {
+          sig.push_back(record_start_marker);
+          sig.push_back(record_end_marker);
+          has_record = true;
+        }
+        continue;
+      }
+      if (v.current_index() == type_index_null) {
+        continue;
+      }
+      auto curr_sig_start_index = sig.size();
+      v.append_to_signature(sig, rb, seed_type_ptr);
+      if (last_sig_start_index == 0) {
+        last_sig_start_index = curr_sig_start_index;
+        continue;
+      }
+      TENZIR_ASSERT(curr_sig_start_index >= last_sig_start_index);
+      auto prev_sig = std::span{
+        sig.begin() + last_sig_start_index,
+        sig.begin() + curr_sig_start_index,
+      };
+      auto curr_sig = std::span{
+        sig.begin() + curr_sig_start_index,
+        sig.end(),
+      };
+      ///
+      TENZIR_ASSERT(curr_sig.size() == 1);
+      const auto prev_matches_current = std::ranges::equal(prev_sig, curr_sig);
+      if (prev_matches_current) {
+        // drop the last appended signature
+        sig.erase(sig.begin() + last_sig_start_index, sig.end());
+      } else {
+        non_matching_signatures = true;
+        last_sig_start_index = curr_sig_start_index;
+      }
+    }
+    non_matching_signatures |= (has_record and has_list);
+    non_matching_signatures
+      |= (has_record or has_list) and sig.size() > initial_sig_size + 2;
+    if (non_matching_signatures) {
+      rb.emit_or_throw(
+        diagnostic::warning("type mismatch between list elements"));
+    }
+  }
   sig.push_back(list_end_marker);
 }
 
@@ -1241,15 +1357,12 @@ auto node_list::commit_to(builder_ref r, class data_builder& rb,
                           const tenzir::list_type* seed,
                           bool mark_dead) -> void {
   auto field_seed = seed ? seed->value_type() : tenzir::type{};
-  for (auto& v : data_) {
-    if (not v.is_alive()) {
-      break;
-    }
+  for (auto& v : alive_elements()) {
     v.commit_to(r, rb, seed ? &field_seed : nullptr, mark_dead);
   }
   if (mark_dead) {
     type_index_ = type_index_empty;
-    last_alive_idx_ = 0;
+    first_dead_idx_ = 0;
     mark_this_dead();
   }
 }
@@ -1257,25 +1370,33 @@ auto node_list::commit_to(tenzir::list& l, class data_builder& rb,
                           const tenzir::list_type* seed,
                           bool mark_dead) -> void {
   auto field_seed = seed ? seed->value_type() : tenzir::type{};
-  for (auto& v : data_) {
-    if (not v.is_alive()) {
-      break;
-    }
+  for (auto& v : alive_elements()) {
     auto& d = l.emplace_back();
     v.commit_to(d, rb, seed ? &field_seed : nullptr, mark_dead);
   }
   if (mark_dead) {
     type_index_ = type_index_empty;
-    last_alive_idx_ = 0;
+    first_dead_idx_ = 0;
     mark_this_dead();
   }
+}
+
+auto node_list::alive_elements() -> std::span<node_object> {
+  return {data_.begin(), data_.begin() + first_dead_idx_};
 }
 
 auto node_list::clear() -> void {
   node_base::mark_this_dead();
   type_index_ = type_index_empty;
+  first_dead_idx_ = 0;
   for (auto& v : data_) {
     v.clear();
+  }
+}
+
+node_list::~node_list() {
+  for (const auto& e : data_) {
+    TENZIR_ASSERT(e.state_ != state::sentinel);
   }
 }
 

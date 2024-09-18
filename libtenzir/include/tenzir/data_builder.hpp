@@ -136,10 +136,12 @@ using schema_type_lookup_map
 
 constexpr inline size_t type_index_empty
   = caf::detail::tl_size<field_type_list>::value;
-constexpr inline size_t type_index_numeric_mismatch
-  = caf::detail::tl_size<field_type_list>::value + 1;
 constexpr inline size_t type_index_generic_mismatch
+  = caf::detail::tl_size<field_type_list>::value + 1;
+constexpr inline size_t type_index_numeric_mismatch
   = caf::detail::tl_size<field_type_list>::value + 2;
+constexpr inline size_t type_index_null
+  = caf::detail::tl_index_of<field_type_list, caf::none_t>::value;
 constexpr inline size_t type_index_string
   = caf::detail::tl_index_of<field_type_list, std::string>::value;
 constexpr inline size_t type_index_double
@@ -194,8 +196,7 @@ update_type_index(size_t& old_index, size_t new_index) -> void {
     old_index = new_index;
     return;
   }
-  if ((old_index == type_index_numeric_mismatch or is_numeric(old_index))
-      and is_numeric(new_index)) {
+  if (is_numeric(old_index) and is_numeric(new_index)) {
     old_index = type_index_numeric_mismatch;
     return;
   }
@@ -206,12 +207,22 @@ enum class state {
   /// The node contains an active value
   /// It should be considered for the signature and actually
   /// written in `commit_to`
+  /// This state is used when actual data is written into the builder via
+  /// some `data`, `data_unparsed`, `record`, `list` or `null` call
   alive,
   /// The node contains a sentinel value
   /// It only affects the signature, but should not be written in `commit_to`
+  /// This state is only created when a `node_record` is used in conjuction
+  /// with a seed. The function `data_builder::lookup_record_fields` is used with
+  /// an `apply` parameter, which then ensures that all nodes in the schema that
+  /// aren't already `alive` exist as `sentinel` nodes in the record.
   sentinel,
   /// The node is dead. Its only retained for memory efficiency, so that we dont
-  /// allocate and deallocate nodes all the time
+  /// allocate and deallocate nodes all the time.
+  /// This state is created via the nodes `commit_to` function's `mark_dead`
+  /// parameter or any explicit `clear` call.
+  /// These functions will mark nodes as `dead` so that the node itself remains
+  /// but it can be re-used for the next event created.
   dead,
 };
 
@@ -259,17 +270,36 @@ private:
   // does lookup of a (nested( key
   auto at(std::string_view key) -> node_object*;
   // writes the record into a series builder
+
+  /// @brief writes the list into a series builder
+  /// @param r The builder_ref to write to.
+  /// @param rb The data_builder that is doing the writing.
+  /// @param seed The seed to use. This is used both for parsing and
+  ///             to ensure that field types actually match it.
+  /// @param mark_dead whether to mark the node (and its children) as
+  ///                  `state::dead` afterwards
   auto
   commit_to(tenzir::record_ref r, class data_builder& rb,
             const tenzir::record_type* seed, bool mark_dead = true) -> void;
+
+  /// @brief writes the list into a series builder
+  /// @param r The tenzir::record to write to.
+  /// @param rb The data_builder that is doing the writing.
+  /// @param seed The seed to use. This is used both for parsing and
+  ///             to ensure that field types actually match it.
+  /// @param mark_dead whether to mark the node (and its children) as
+  ///                  `state::dead` afterwards
   auto
   commit_to(tenzir::record& r, class data_builder& rb,
             const tenzir::record_type* seed, bool mark_dead = true) -> void;
-  // append the signature of this record to `sig`.
-  // including sentinels is important for signature computation
+  /// @brief Append the signature of this field to `sig`.
+  /// @param sig The out parameter
+  /// @param rb The data_builder that is doing the writing.
+  /// @param seed The seed to use. This is used both for parsing and
+  ///             to ensure that field types actually match it.
   auto append_to_signature(signature_type& sig, class data_builder& rb,
                            const tenzir::record_type* seed) -> void;
-  // clears the record by marking everything as dead
+  /// @brief marks all fields in the record as dead.
   auto clear() -> void;
 
   // Record entry. This contains a string for the key and a field.
@@ -281,6 +311,13 @@ private:
   // `series_builder` was seeded with. The order of fields in a seed/selector on
   // the other hand is then practically ensured because the multi_series_builder
   // first seeds the respective `series_builder`.
+  // Notably if the series_builder resets on a `finish`, *and* the
+  // `data_builder` looses its internal ordering (because the record node was
+  // replaced), then events with the same fields, but different appearance order
+  // will have the same signature but a different resulting schema.
+  // TODO: Consider dropping the input field order for non-schema fields (just
+  // sort alphabetically) or extending the `series_builder` to not drop fields
+  // on `finish` (probably via some special flag)
   std::vector<entry_type> data_;
   // This is a sorted key -> index map. It is used for signature computation.
   // If this map is not sorted, the signature computation algorithm breaks,
@@ -302,7 +339,7 @@ public:
   /// computation, a warning is emitted.
   template <non_structured_data_type T>
   auto data(T data) -> void;
-  /// @brief Unpacks the tenzir::data into a new element at the end of th list
+  /// @brief Unpacks The tenzir::data into a new element at the end of th list
   auto data(tenzir::data) -> void;
   /// @brief Appends some unparsed data to this list.
   /// It is later parsed when a seed is potentially available.
@@ -313,32 +350,62 @@ public:
   /// @note the returned pointer is not permanently stable. If the underlying
   /// vector reallocates, the pointer becomes invalid
   /// @ref reserve can be used to ensure stability for a given number of elements
-  [[nodiscard]] auto record() -> node_record*;
+  auto record() -> node_record*;
   /// @brief Appends a new list to the list.
   /// @note the returned pointer is not permanently stable. If the underlying
   /// vector reallocates, the pointer becomes invalid
   /// @ref reserve can be used to ensure stability for a given number of elements
-  [[nodiscard]] auto list() -> node_list*;
+  auto list() -> node_list*;
+
+  node_list() = default;
+  node_list(const node_list&) = default;
+  node_list(node_list&&) = default;
+  node_list& operator=(const node_list&) = default;
+  node_list& operator=(node_list&&) = default;
+  ~node_list();
 
 private:
   /// finds an element marked as dead. This is part of the reallocation
   /// optimization.
-  auto find_dead_and_resurrect() -> node_object*;
-  auto back() -> node_object&;
+  auto try_resurrect_dead() -> node_object*;
 
-  // writes the list into a series builder
+  /// @brief writes the list into a series builder
+  /// @param r The builder_ref to write to.
+  /// @param rb The data_builder that is doing the writing.
+  /// @param seed The seed to use. This is used both for parsing and
+  ///             to ensure that field types actually match it.
+  /// @param mark_dead whether to mark the node (and its children) as
+  ///                  `state::dead` afterwards
   auto commit_to(tenzir::builder_ref r, class data_builder& rb,
                  const tenzir::list_type* seed, bool mark_dead = true) -> void;
+
+  /// @brief writes the list into a series builder
+  /// @param r The tenzir::list to write to
+  /// @param rb The data_builder that is doing the writing.
+  /// @param seed The seed to use. This is used both for parsing and
+  ///             to ensure that field types actually match it.
+  /// @param mark_dead whether to mark the node (and its children) as
+  ///                  `state::dead` afterwards
   auto commit_to(tenzir::list& r, class data_builder& rb,
                  const tenzir::list_type* seed, bool mark_dead = true) -> void;
-  // append the signature of this list to `sig`.
-  // including sentinels is important for signature computation
+  /// @brief Append the signature of this field to `sig`.
+  /// @param sig The out parameter
+  /// @param rb The data_builder that is doing the writing.
+  /// @param seed The seed to use. This is used both for parsing and
+  ///             to ensure that field types actually match it.
   auto append_to_signature(signature_type& sig, class data_builder& rb,
                            const tenzir::list_type* seed) -> void;
+  /// @brief marks the list and all its contents as dead, resetting its size to 0
   auto clear() -> void;
 
-  /// The index of the last node that is currently alive.
-  size_t last_alive_idx_ = 0;
+  // gets all alive nodes, i.e. all nodes with indices in `[0, first_dead_idx_)`
+  auto alive_elements() -> std::span<node_object>;
+
+  /// The index of the first node that is already dead.
+  /// Only nodes with indices in `[0, first_dead_idx_)` are `alive`
+  /// All nodes beyond that are `dead` and are only retained to keep the memory
+  /// around.
+  size_t first_dead_idx_ = 0;
   /// The current type index of the entire list
   /// This is computed when adding elements to the list
   /// In some cases, this can allow us to avoid iterating the entire list
@@ -361,14 +428,14 @@ public:
   /// computation, a warning is emitted.
   template <non_structured_data_type T>
   auto data(T data) -> void;
-  /// @brief Unpacks the tenzir::data into this field
+  /// @brief Unpacks The tenzir::data into this field
   auto data(tenzir::data) -> void;
   /// @brief Sets this field to some unparsed data.
   /// It is later parsed when a seed is potentially available.
   auto data_unparsed(std::string raw_text) -> void;
   auto null() -> void;
-  [[nodiscard]] auto record() -> node_record*;
-  [[nodiscard]] auto list() -> node_list*;
+  auto record() -> node_record*;
+  auto list() -> node_list*;
 
   node_object() : data_{std::in_place_type<caf::none_t>} {
   }
@@ -380,42 +447,46 @@ private:
   auto current_index() const -> size_t {
     return data_.index();
   }
+
   template <typename T>
   auto get_if() -> T* {
     return std::get_if<T>(&data_);
   }
-  /// tries to static_cast the held value to T.
-  /// @returns whether the cast was performed
-  template <typename T>
-  [[nodiscard]] auto transform_to() -> bool {
-    const auto visitor = detail::overload{
-      [this]<typename Current>(const Current& v) -> bool
-        requires requires(Current c) { static_cast<T>(c); }
-      {
-        data(static_cast<T>(v));
-        return true;
-      },
-      [](const auto&) -> bool {
-        return false;
-      },
-      };
-    return std::visit(visitor, data_);
-  }
   auto
+
   try_resolve_nonstructural_field_mismatch(class data_builder& rb,
                                            const tenzir::type* seed) -> void;
   /// parses any unparsed fields using `parser`, potentially providing a
   /// seed/schema to the parser
   auto parse(class data_builder& rb, const tenzir::type* seed) -> void;
-  // append the signature of this field to `sig`.
-  // including sentinels is important for signature computation
+  /// @brief Append the signature of this field to `sig`.
+  /// @param sig The out parameter
+  /// @param rb The data_builder that is doing the writing.
+  /// @param seed The seed to use. This is used both for parsing and
+  ///             to ensure that field types actually match it.
   auto append_to_signature(signature_type& sig, class data_builder& rb,
                            const tenzir::type* seed) -> void;
-  // writes the field into a series builder
+
+  /// @brief writes the list into a series builder
+  /// @param r The builder_ref to write to.
+  /// @param rb The data_builder that is doing the writing.
+  /// @param seed The seed to use. This is used both for parsing and
+  ///             to ensure that field types actually match it.
+  /// @param mark_dead whether to mark the node (and its children) as
+  ///                  `state::dead` afterwards
   auto commit_to(tenzir::builder_ref r, class data_builder& rb,
                  const tenzir::type* seed, bool mark_dead = true) -> void;
+
+  /// @brief writes the list into a series builder
+  /// @param r The tenzir::data to write to.
+  /// @param rb The data_builder that is doing the writing.
+  /// @param seed The seed to use. This is used both for parsing and
+  ///             to ensure that field types actually match it.
+  /// @param mark_dead whether to mark the node (and its children) as
+  ///                  `state::dead` afterwards
   auto commit_to(tenzir::data& r, class data_builder& rb,
                  const tenzir::type* seed, bool mark_dead = true) -> void;
+  /// @brief marks the node and its contents as dead
   auto clear() -> void;
 
   using object_variant_type
@@ -424,18 +495,18 @@ private:
   object_variant_type data_;
 
   enum class value_state_type {
-    /// The node actually has a value that should be used
+    /// The node actually has a value that should be used.
+    /// This means that `data`, `list`, `record` or `null` were called on this
+    /// node
     has_value,
-    /// The node is yet to be parsed
+    /// The node is yet to be parsed.
+    /// This means that `data_unparsed` was called on this node.
     unparsed,
-    /// the node is null
+    /// The node is null. This means that it was created in a record as
+    /// `.field("key")`, not nothing further was ever be done with the node.
     null,
   };
-  /// This is the state of the contained value. This exists in case somebody
-  /// calls `record.field("key")` but never inserts any data into the field This
-  /// is distinctly different from a node not being `alive`, which only happens
-  /// as a result of internal storage reuse. This property is only considered if
-  /// the node is actually not dead
+  /// This is the state of the contained value. See `value_state_type`
   value_state_type value_state_ = value_state_type::null;
 };
 
@@ -452,6 +523,7 @@ constexpr static std::byte record_end_marker{0xfb};
 
 constexpr static std::byte list_start_marker{0xfc};
 constexpr static std::byte list_end_marker{0xfd};
+constexpr static std::byte list_error_marker{0xfe};
 
 } // namespace detail::data_builder
 
@@ -545,8 +617,10 @@ private:
   /// @param r a pointer to the type to look for. If this is null, the function
   ///          returns null and has no effect
   /// @param apply a pointer to a record to which all fields should be added if
-  ///              the type for `r` was found. Doing this inside of this
-  ///              function removes the need for a second traversal later
+  ///              the type for `r` was found. Fields that arent already `alive`
+  ///              in `apply` will either be
+  ///               * resurrected if they exist and marked `sentinel`
+  ///               * created and marked `sentinel`
   auto lookup_record_fields(const tenzir::record_type* r,
                             detail::data_builder::node_record* apply)
     -> const detail::data_builder::field_type_lookup_map*;
@@ -562,7 +636,11 @@ public:
   data_parsing_function parser_;
 
 private:
+  /// whether to discard fields that are not present in the used schema.
   bool schema_only_;
+  /// Whether to only parse fields that are present in the used schema.
+  /// If this is enabled, fields created as `data_unparsed` will only be parsed
+  /// as typed data, if the are present in the used schema (seed)
   bool parse_schema_fields_only_;
 
   auto emit_or_throw(tenzir::diagnostic&& diag) -> void;
@@ -584,7 +662,7 @@ auto node_object::data(T data) -> void {
 template <non_structured_data_type T>
 auto node_list::data(T data) -> void {
   mark_this_alive();
-  if (auto* free = find_dead_and_resurrect()) {
+  if (auto* free = try_resurrect_dead()) {
     free->data(std::move(data));
     update_type_index(type_index_, free->current_index());
   } else {
@@ -592,6 +670,7 @@ auto node_list::data(T data) -> void {
     data_.emplace_back(std::move(data));
     data_.back().value_state_ = node_object::value_state_type::has_value;
     update_type_index(type_index_, data_.back().current_index());
+    ++first_dead_idx_;
   }
 }
 } // namespace detail::data_builder

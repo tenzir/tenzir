@@ -141,12 +141,6 @@ auto multi_series_builder_argument_parser::get_settings(diagnostic_handler& dh)
             .hint("if you know the input's shape, define the schema")
             .emit(dh);
         }
-      } else if (settings_.schema_only and not raw_.has_value()) {
-        // TODO do we want this hint/warning?
-        diagnostic::warning("`--schema` and `--schema-only` were given")
-          .hint("`--schema` with `--merge` has functionally the same effect, "
-                "but may have better performance")
-          .emit(dh);
       }
     }
   }

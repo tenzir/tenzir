@@ -316,6 +316,9 @@ public:
     //   into a single schema
     bool merge = false;
     // Whether to not parse fields that are not present in a known schema.
+    // In other words, enabling this will not attempt to parse any fields
+    // created by `data_unparsed` calls, unless those fields are present in
+    // the used schema.
     bool raw = false;
     // Unnest separator to be used when calling any `field` in the builder
     // pattern.

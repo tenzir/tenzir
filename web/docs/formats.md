@@ -35,8 +35,9 @@ print <field> <format>
 
 ## Parser Schema Inference
 
-Parsers will make a best effort to infer schemas and data types from the input.
-Some parser provide options for more specific control over schema inference.
+Parsers will attempt to infer an event [schema](data-model/schemas.md) from the
+input and potentially data format.
+Some parsers provide options for more specific control over schema inference.
 
 The following builtin parsers support setting a custom schema:
 
@@ -57,22 +58,23 @@ The [Suricata](formats/suricata.md), [Zeek JSON](formats/zeek-json.md) and
 
 Merges all incoming events into a single schema\* that converges over time. This
 option is usually the fastest if the data is highly heterogeneous, but can lead
-to huge schemas filled and imprecise results. Use with caution.
+to huge schemas filled with nulls and imprecise results. Use with caution.
 
 \*: In selector mode, only events with the same selector are merged.
 
-This option can not be combined with the combination `--raw --schema`.
+This option can not be combined with the `--raw --schema`.
 
 ### `--schema <schema>` (Parsers)
 
 Explicitly set the output schema.
 
-If a schema with a matching name is installed, the result will have exactly
-all fields of the specified schema.
-Fields that are in the schema, but did not appear in the input will be null.
-Fields that appear in the input, but not in the schema will be discarded.
+If a schema with a matching name is installed, the result will always have
+all fields from that schema.
+* Fields that are specified in the schema, but did not appear in the input will be null.
+* Fields that appear in the input, but not in the schema will also be kept. `--schema-only`
+can be used to reject fields that are not in the schema.
 
-If the given schema does not exist, this option only assigns the output schema name only.
+If the given schema does not exist, this option instead assigns the output schema name only.
 
 This option can not be combined with `--selector` or the combination `--raw --merge`.
 
@@ -90,7 +92,7 @@ This option can not be combined with `--schema`.
 
 ### `--schema-only` (Parsers)
 
-If the an existing schema was given/selected, enabling this option will ensure that the output
+When working with an existing schema, this option will ensure that the output
 schema has *only* the fields from that schema. If the schema name is obtained via a `selector`
 and it does not exist, this has no effect.
 
@@ -136,7 +138,7 @@ Use only the raw types that are native to the parsed format. Fields that have a 
 specified in the chosen schema will still be parsed according to the schema.
 
 For example, the JSON format has no notion of an IP address, so this will cause all IP addresses
-to be parsed as strings, unless the fields is specified to be an IP address by the schema.
+to be parsed as strings, unless the field is specified to be an IP address by the schema.
 JSON however has numeric types, so those would be parsed.
 
 Use with caution.
@@ -151,7 +153,7 @@ can make assumptions about the otherwise opaque content. For example, the
 [`http`](connectors/http.md) saver uses this value to populate the
 `Content-Type` header when copying the raw bytes into the HTTP request body.
 
-The builtin printers set the following MIME types:
+The printers set the following MIME types:
 
 | Format                          | MIME Type                        |
 |---------------------------------|----------------------------------|
