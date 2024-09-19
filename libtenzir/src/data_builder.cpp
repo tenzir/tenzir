@@ -316,7 +316,7 @@ auto basic_parser(std::string_view s, const tenzir::type* seed)
     return basic_seeded_parser(s, *seed);
   }
   if (s.empty()) {
-    return tenzir::data{std::string{}};
+    return {};
   }
   auto res = best_effort_parser(s);
   if (res) {
@@ -1336,7 +1336,7 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
       const auto prev_matches_current = std::ranges::equal(prev_sig, curr_sig);
       if (prev_matches_current) {
         // drop the last appended signature
-        sig.erase(sig.begin() + last_sig_start_index, sig.end());
+        sig.erase(sig.begin() + curr_sig_start_index, sig.end());
       } else {
         non_matching_signatures = true;
         last_sig_start_index = curr_sig_start_index;
