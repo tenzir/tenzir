@@ -4,5 +4,5 @@ error: required argument `src_ip` was not provided
 1 | from {} | x0 = community_id( dst_ip=null, proto=null )
   |                ^^^^^^^^^^^^ 
   |
-  = usage: community_id(src_ip=<expr>, dst_ip=<expr>, proto=<expr>, [src_port=<expr>], [dst_port=<expr>], [seed=<expr>])
+  = usage: community_id(src_ip=<expr>, dst_ip=<expr>, proto=<expr>, src_port=<expr>?, dst_port=<expr>?, seed=<expr>?)
   = docs: https://docs.tenzir.com/functions/community_id

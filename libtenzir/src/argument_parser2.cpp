@@ -260,7 +260,7 @@ auto argument_parser2::usage() const -> std::string {
         usage_cache_ += positional.meta;
       }
     }
-    const auto append_option = [&](const named& opt) {
+    const auto append_named_option = [&](const named& opt) {
       if (opt.name.starts_with("_")) {
         // This denotes an internal/unstable option.
         return;
@@ -279,20 +279,19 @@ auto argument_parser2::usage() const -> std::string {
           return "{ ... }";
         });
       auto txt = fmt::format("{}={}", opt.name, meta);
+      usage_cache_ += txt;
       if (not opt.required) {
-        usage_cache_ += "[" + txt + "]";
-      } else {
-        usage_cache_ += txt;
+        usage_cache_ += "?";
       }
     };
     for (const auto& opt : named_) {
       if (opt.required) {
-        append_option(opt);
+        append_named_option(opt);
       }
     }
     for (const auto& opt : named_) {
       if (not opt.required) {
-        append_option(opt);
+        append_named_option(opt);
       }
     }
 
