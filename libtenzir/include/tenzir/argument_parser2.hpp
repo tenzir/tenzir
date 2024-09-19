@@ -65,30 +65,30 @@ public:
 
   // ------------------------------------------------------------------------
 
-  /// @brief Adds a required positional argument
+  /// Adds a required positional argument.
   template <argument_parser_type T>
   auto add(T& x, std::string meta) -> argument_parser2&;
 
-  /// @brief Adds an optional positional argument
+  /// Adds an optional positional argument.
   template <argument_parser_type T>
   auto add(std::optional<T>& x, std::string meta) -> argument_parser2&;
 
   // ------------------------------------------------------------------------
 
-  /// @brief Adds a required named argument
+  /// Adds a required named argument.
   template <argument_parser_type T>
   auto add(std::string name, T& x) -> argument_parser2&;
 
   // ------------------------------------------------------------------------
 
-  /// @brief Adds an optional named argument
+  /// Adds an optional named argument.
   template <argument_parser_type T>
   auto add(std::string name, std::optional<T>& x) -> argument_parser2&;
 
-  /// @brief Adds an optional named argument
+  /// Adds an optional named argument.
   auto add(std::string name, std::optional<location>& x) -> argument_parser2&;
 
-  /// @brief Adds an optional named argument
+  /// Adds an optional named argument.
   auto add(std::string name, bool& x) -> argument_parser2&;
 
   // ------------------------------------------------------------------------

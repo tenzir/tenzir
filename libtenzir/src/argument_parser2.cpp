@@ -225,7 +225,6 @@ auto argument_parser2::parse(const ast::entity& self,
       emit(
         diagnostic::error("required argument `{}` was not provided", arg.name)
           .primary(self.get_location()));
-      result = failure::promise();
     }
   }
   return result;
