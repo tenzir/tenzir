@@ -21,12 +21,9 @@ namespace tenzir::plugins::community_id {
 namespace {
 
 struct arguments {
-  // TODO: make src_ip, dst_ip, and proto required named arguments. We currently
-  // check this requirement manually, but should remove the std::optional<T> in
-  // the future.
-  std::optional<ast::expression> src_ip;
-  std::optional<ast::expression> dst_ip;
-  std::optional<ast::expression> proto;
+  ast::expression src_ip;
+  ast::expression dst_ip;
+  ast::expression proto;
   std::optional<ast::expression> dst_port;
   std::optional<ast::expression> src_port;
   std::optional<ast::expression> seed;
@@ -49,42 +46,20 @@ public:
           .add("proto", args.proto)
           .add("seed", args.seed)
           .parse(inv, ctx));
-    auto startup_failure = false;
-    if (not args.src_ip) {
-      startup_failure = true;
-      diagnostic::error("missing required argument `src_ip`")
-        .primary(inv.call.fn)
-        .emit(ctx);
-    }
-    if (not args.dst_ip) {
-      startup_failure = true;
-      diagnostic::error("missing required argument `dst_ip`")
-        .primary(inv.call.fn)
-        .emit(ctx);
-    }
-    if (not args.proto) {
-      startup_failure = true;
-      diagnostic::error("missing required argument `proto`")
-        .primary(inv.call.fn)
-        .emit(ctx);
-    }
-    if (startup_failure) {
-      return failure::promise();
-    }
     return function_use::make([args = std::move(args)](evaluator eval,
                                                        session ctx) -> series {
       auto null_series = [&] {
         return series::null(string_type{}, eval.length());
       };
-      auto src_ip_series = eval(*args.src_ip);
+      auto src_ip_series = eval(args.src_ip);
       if (caf::holds_alternative<null_type>(src_ip_series.type)) {
         return null_series();
       }
-      auto dst_ip_series = eval(*args.dst_ip);
+      auto dst_ip_series = eval(args.dst_ip);
       if (caf::holds_alternative<null_type>(dst_ip_series.type)) {
         return null_series();
       }
-      auto proto_series = eval(*args.proto);
+      auto proto_series = eval(args.proto);
       if (caf::holds_alternative<null_type>(proto_series.type)) {
         return null_series();
       }
@@ -113,7 +88,7 @@ public:
       if (not src_ips) {
         diagnostic::warning("expected argument of type `ip`, but got `{}`",
                             src_ip_series.type.kind())
-          .primary(*args.src_ip)
+          .primary(args.src_ip)
           .emit(ctx);
         return null_series();
       }
@@ -121,7 +96,7 @@ public:
       if (not dst_ips) {
         diagnostic::warning("expected argument of type `ip`, but got `{}`",
                             dst_ip_series.type.kind())
-          .primary(*args.dst_ip)
+          .primary(args.dst_ip)
           .emit(ctx);
         return null_series();
       }
@@ -129,7 +104,7 @@ public:
       if (not protos) {
         diagnostic::warning("expected argument of type `string`, but got `{}`",
                             proto_series.type.kind())
-          .primary(*args.proto)
+          .primary(args.proto)
           .emit(ctx);
         return null_series();
       }
@@ -266,7 +241,7 @@ public:
       }
       if (emit_proto_warning) {
         diagnostic::warning("`proto` must be `tcp`, `udp`, `icmp`, or `icmp6`")
-          .primary(*args.proto)
+          .primary(args.proto)
           .emit(ctx);
       }
       return series{string_type{}, finish(b)};
