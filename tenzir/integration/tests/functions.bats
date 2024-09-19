@@ -34,6 +34,9 @@ x9 = community_id(src_ip=3ffe:507:0:1:260:97ff:fe07:69ea,
                   dst_ip=3ffe:507:0:1:200:86ff:fe05:80da,
                   src_port=3, dst_port=0, proto="icmp6")
 EOF
+  check ! tenzir 'from {} | x0 = community_id( src_ip=null, dst_ip=null )'
+  check ! tenzir 'from {} | x0 = community_id( src_ip=null, proto=null )'
+  check ! tenzir 'from {} | x0 = community_id( dst_ip=null, proto=null )'
 }
 
 @test "has" {
