@@ -204,6 +204,8 @@ Cribl Stream has the following pipeline
 
 #### Tenzir
 
+Events:
+
 - An **event** is a semi-structured record, similar to a JSON object but with
   additional data types.
 - Tenzir's [type system](data-model/type-system.md) is a superset of JSON,
@@ -212,6 +214,15 @@ Cribl Stream has the following pipeline
 - Events have a **schema** that includes the field names and types
 - Internally, Tenzir represents events as Apache Arrow *record batches*, which
   you can think of as data frames.
+
+Bytes:
+
+- In addition to events, Tenzir pipelines can also transport raw **bytes**.
+- The operator decides whether it support bytes, events, or both.
+- All Tenzir [connectors](connectors.md) produce or consume byte streams;
+  [formats](formats.md) parse or print byte streams.
+
+See also the section on [dataflow](#dataflow) below.
 
 ## Dataflow
 
@@ -391,10 +402,11 @@ Tenzir has a [`deduplicate`](operators/deduplicate.md) operator.
   workflows for easy deployment.
 - Packs can include routes, pipelines, functions, sample data, and knowledge
   objects (e.g., lookups, parsers, schemas).
+- Cribl hosts various packs at the [Packs Dispensary](https://packs.cribl.io/).
 
 #### Tenzir
 
-- The [Library](https://app.tenzir.com/library) is a set of
+- A [library](https://app.tenzir.com/library) is a set of
   [packages](packages.md).
 - Packages can include [pipelines](pipelines.md) and [contexts](contexts.md).
 - Tenzir maintains an open source [Community
