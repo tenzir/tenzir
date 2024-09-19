@@ -65,19 +65,30 @@ public:
 
   // ------------------------------------------------------------------------
 
+  /// Adds a required positional argument.
   template <argument_parser_type T>
   auto add(T& x, std::string meta) -> argument_parser2&;
 
+  /// Adds an optional positional argument.
   template <argument_parser_type T>
   auto add(std::optional<T>& x, std::string meta) -> argument_parser2&;
 
   // ------------------------------------------------------------------------
 
+  /// Adds a required named argument.
+  template <argument_parser_type T>
+  auto add(std::string name, T& x) -> argument_parser2&;
+
+  // ------------------------------------------------------------------------
+
+  /// Adds an optional named argument.
   template <argument_parser_type T>
   auto add(std::string name, std::optional<T>& x) -> argument_parser2&;
 
+  /// Adds an optional named argument.
   auto add(std::string name, std::optional<location>& x) -> argument_parser2&;
 
+  /// Adds an optional named argument.
   auto add(std::string name, bool& x) -> argument_parser2&;
 
   // ------------------------------------------------------------------------
@@ -114,6 +125,8 @@ private:
   struct named {
     std::string name;
     caf::detail::tl_apply_t<argument_parser_full_types, setter_variant> set;
+    bool required = false;
+    std::optional<location> found = std::nullopt;
   };
 
   mutable std::string usage_cache_;
