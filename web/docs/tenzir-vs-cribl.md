@@ -394,15 +394,10 @@ Tenzir has a [`deduplicate`](operators/deduplicate.md) operator.
 
 #### Tenzir
 
-- The **library** is a set of **packages**.
-- A library corresponds to a GitHub repository.
-- A package can include pipelines and contexts.
-- The Community Edition has read-only access to the community library.
+- The [Library](https://app.tenzir.com/library) is a set of
+  [packages](packages.md).
+- Packages can include [pipelines](pipelines.md) and [contexts](contexts.md).
+- Tenzir maintains an open source [Community
+  Library](https://github.com/tenzir/library) on GitHub.
 - The Professional Edition and Enterprise Edition support managing custom
   libraries.
-
-:::warning coming soon
-The Tenzir library is still under development and coming soon with one of the
-next releases. We're still including a comparison here to explain terminology
-already.
-:::
