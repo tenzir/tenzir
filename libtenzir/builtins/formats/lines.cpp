@@ -9,6 +9,7 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/detail/assert.hpp>
 #include <tenzir/detail/base64.hpp>
+#include <tenzir/split_nulls.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/to_lines.hpp>
 #include <tenzir/tql/parser.hpp>
@@ -22,12 +23,13 @@ namespace {
 
 struct parser_args {
   std::optional<location> skip_empty;
+  std::optional<location> null;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, parser_args& x) -> bool {
     return f.object(x)
       .pretty_name("parser_args")
-      .fields(f.field("skip_empty", x.skip_empty));
+      .fields(f.field("skip_empty", x.skip_empty), f.field("null", x.null));
   }
 };
 
@@ -54,13 +56,14 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    auto make = [](auto& ctrl, generator<chunk_ptr> input,
-                   bool skip_empty) -> generator<table_slice> {
+    auto make = [](auto& ctrl, generator<chunk_ptr> input, bool skip_empty,
+                   bool nulls) -> generator<table_slice> {
       auto num_non_empty_lines = size_t{0};
       auto num_empty_lines = size_t{0};
       auto builder = table_slice_builder{line_type()};
       auto last_finish = std::chrono::steady_clock::now();
-      for (auto line : to_lines(std::move(input))) {
+      auto cutter = nulls ? split_nulls : to_lines;
+      for (auto line : cutter(std::move(input))) {
         if (not line) {
           co_yield {};
           continue;
@@ -94,7 +97,7 @@ public:
         co_yield builder.finish();
       }
     };
-    return make(ctrl, std::move(input), !!args_.skip_empty);
+    return make(ctrl, std::move(input), !!args_.skip_empty, !!args_.null);
   }
 
   friend auto inspect(auto& f, lines_parser& x) -> bool {
@@ -243,6 +246,7 @@ public:
       name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
     auto args = parser_args{};
     parser.add("-s,--skip-empty", args.skip_empty);
+    parser.add("--null", args.null);
     parser.parse(p);
     return std::make_unique<lines_parser>(std::move(args));
   }
@@ -272,6 +276,7 @@ class read_lines final
     auto args = parser_args{};
     argument_parser2::operator_(name())
       .add("skip_empty", args.skip_empty)
+      .add("null", args.null)
       .parse(inv, ctx)
       .ignore();
     return std::make_unique<parser_adapter<lines_parser>>(

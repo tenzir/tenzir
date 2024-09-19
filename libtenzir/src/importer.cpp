@@ -134,9 +134,9 @@ importer_state::status(status_verbosity v) const {
 }
 
 void importer_state::on_process(const table_slice& slice) {
+  auto t = timer::start(measurement_);
   const auto rows = slice.rows();
   TENZIR_ASSERT(rows > 0);
-  auto t = timer::start(measurement_);
   const auto is_internal = slice.schema().attribute("internal").has_value();
   if (not is_internal) {
     schema_counters[slice.schema()] += rows;
@@ -146,6 +146,7 @@ void importer_state::on_process(const table_slice& slice) {
       self->send(subscriber, slice);
     }
   }
+  unpersisted_events.push_back(std::move(slice));
   t.stop(rows);
 }
 
@@ -207,9 +208,29 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       if (slice.rows() == 0) {
         return;
       }
-      slice.import_time(time::clock::now());
+      slice.import_time(now);
       self->state.on_process(slice);
       self->state.stage->out().push(std::move(slice));
+    });
+  // Clean up unpersisted events every second.
+  const auto active_partition_timeout
+    = caf::get_or(content(self->system().config()),
+                  "tenzir.active-partition-timeout",
+                  defaults::active_partition_timeout);
+  detail::weak_run_delayed_loop(
+    self, std::chrono::seconds{1}, [self, active_partition_timeout] {
+      // We clear everything that's older than the active partition timeout plus
+      // a fixed 10 seconds to allow some processing to happen. This is an
+      // estimate, and it's definitely not a perfect solution, but it's good
+      // enough hopefully.
+      const auto cutoff = time::clock::now() - active_partition_timeout
+                          - std::chrono::seconds{10};
+      const auto it = std::ranges::find_if(
+        self->state.unpersisted_events, [&](const auto& slice) {
+          return slice.import_time() > cutoff;
+        });
+      self->state.unpersisted_events.erase(
+        self->state.unpersisted_events.begin(), it);
     });
   return {
     // Add a new sink.
@@ -226,9 +247,10 @@ importer(importer_actor::stateful_pointer<importer_state> self,
                  std::move(listener));
     },
     [self](atom::subscribe, receiver_actor<table_slice>& subscriber,
-           bool internal) {
+           bool internal) -> std::vector<table_slice> {
       self->monitor(subscriber);
       self->state.subscribers.emplace_back(std::move(subscriber), internal);
+      return self->state.unpersisted_events;
     },
     // Push buffered slices downstream to make the data available.
     [self](atom::flush) -> caf::result<void> {

@@ -373,11 +373,12 @@ public:
     return false;
   }
 
-  /// Returns whether the operator can produce output independently from
-  /// receiving input. Set to true to cause operators to be polled rather than
-  /// pulled from. Operators without a source are always polled from.
-  virtual auto input_independent() const -> bool {
-    return false;
+  /// Returns the time after which the operator is considered idle if it does
+  /// not produce any output. Must be a positive duration. If the operator can
+  /// produce output independently from receiving input, return
+  /// `duration::max()` to cause the operator to be polled.
+  virtual auto idle_after() const -> duration {
+    return duration::zero();
   }
 
   /// Retrieve the output type of this operator for a given input.
@@ -533,8 +534,8 @@ public:
     detail::panic("pipeline::internal() must not be called");
   }
 
-  auto input_independent() const -> bool override {
-    detail::panic("pipeline::input_independent() must not be called");
+  auto idle_after() const -> duration override {
+    detail::panic("pipeline::idle_after() must not be called");
   }
 
   auto instantiate(operator_input input, operator_control_plane& control) const

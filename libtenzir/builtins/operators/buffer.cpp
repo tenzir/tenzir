@@ -25,26 +25,28 @@ TENZIR_ENUM(buffer_policy, block, drop);
 
 namespace {
 
+template <class Elements>
 using buffer_actor = caf::typed_actor<
-  // Write events into the buffer.
-  auto(atom::write, table_slice events)->caf::result<void>,
-  // Read events from the buffer.
-  auto(atom::read)->caf::result<table_slice>>;
+  // Write elements into the buffer.
+  auto(atom::write, Elements elements)->caf::result<void>,
+  // Read elements from the buffer.
+  auto(atom::read)->caf::result<Elements>>;
 
+template <class Elements>
 struct buffer_state {
   static constexpr auto name = "buffer";
 
-  buffer_actor::pointer self = {};
+  buffer_actor<Elements>::pointer self = {};
   located<uint64_t> capacity = {};
   buffer_policy policy = {};
   metric_handler metrics_handler = {};
   shared_diagnostic_handler diagnostics_handler = {};
 
   uint64_t buffer_size = {};
-  std::queue<table_slice> buffer = {};
-  caf::typed_response_promise<table_slice> read_rp = {};
+  std::queue<Elements> buffer = {};
+  caf::typed_response_promise<Elements> read_rp = {};
 
-  table_slice blocked_events = {};
+  Elements blocked_elements = {};
   caf::typed_response_promise<void> write_rp = {};
 
   uint64_t num_dropped = {};
@@ -52,26 +54,26 @@ struct buffer_state {
   ~buffer_state() noexcept {
     emit_metrics();
     if (read_rp.pending()) {
-      read_rp.deliver(table_slice{});
+      read_rp.deliver(Elements{});
     }
   }
 
-  auto write(table_slice events) -> caf::result<void> {
+  auto write(Elements elements) -> caf::result<void> {
     if (read_rp.pending()) {
-      read_rp.deliver(std::move(events));
+      read_rp.deliver(std::move(elements));
       return {};
     }
-    if (buffer_size + events.rows() > capacity.inner) {
-      auto [lhs, rhs] = split(events, capacity.inner - buffer_size);
-      if (lhs.rows() > 0) {
-        buffer_size += lhs.rows();
+    if (buffer_size + size(elements) > capacity.inner) {
+      auto [lhs, rhs] = split(elements, capacity.inner - buffer_size);
+      if (const auto lhs_size = size(lhs); lhs_size > 0) {
+        buffer_size += lhs_size;
         buffer.push(std::move(lhs));
       }
-      TENZIR_ASSERT(rhs.rows() > 0);
+      TENZIR_ASSERT(size(rhs) > 0);
       switch (policy) {
         case buffer_policy::drop: {
-          num_dropped += rhs.rows();
-          diagnostic::warning("buffer exceeded capacity and dropped events")
+          num_dropped += size(rhs);
+          diagnostic::warning("buffer exceeded capacity and dropped elements")
             .primary(capacity.source)
             .hint("the configured policy is `{}`; use `{}` to prevent dropping",
                   buffer_policy::drop, buffer_policy::block)
@@ -80,41 +82,41 @@ struct buffer_state {
           return {};
         }
         case buffer_policy::block: {
-          TENZIR_ASSERT(blocked_events.rows() == 0);
+          TENZIR_ASSERT(size(blocked_elements) == 0);
           TENZIR_ASSERT(not write_rp.pending());
-          blocked_events = std::move(rhs);
-          write_rp = self->make_response_promise<void>();
+          blocked_elements = std::move(rhs);
+          write_rp = self->template make_response_promise<void>();
           return write_rp;
         }
       }
     }
-    buffer_size += events.rows();
-    buffer.push(std::move(events));
+    buffer_size += size(elements);
+    buffer.push(std::move(elements));
     return {};
   }
 
-  auto read() -> caf::result<table_slice> {
+  auto read() -> caf::result<Elements> {
     TENZIR_ASSERT(not read_rp.pending());
     if (not buffer.empty()) {
-      auto events = std::move(buffer.front());
-      buffer_size -= events.rows();
+      auto elements = std::move(buffer.front());
+      buffer_size -= size(elements);
       buffer.pop();
       if (write_rp.pending()) {
         TENZIR_ASSERT(policy == buffer_policy::block);
         const auto free_capacity = capacity.inner - buffer_size;
-        auto [lhs, rhs] = split(blocked_events, free_capacity);
-        if (lhs.rows() > 0) {
-          buffer_size += lhs.rows();
+        auto [lhs, rhs] = split(blocked_elements, free_capacity);
+        if (const auto lhs_size = size(lhs); lhs_size > 0) {
+          buffer_size += lhs_size;
           buffer.push(std::move(lhs));
         }
-        blocked_events = std::move(rhs);
-        if (blocked_events.rows() == 0) {
+        blocked_elements = std::move(rhs);
+        if (size(blocked_elements) == 0) {
           write_rp.deliver();
         }
       }
-      return events;
+      return elements;
     }
-    read_rp = self->make_response_promise<table_slice>();
+    read_rp = self->template make_response_promise<Elements>();
     return read_rp;
   }
 
@@ -128,11 +130,14 @@ struct buffer_state {
   }
 };
 
-auto make_buffer(buffer_actor::stateful_pointer<buffer_state> self,
+template <class Elements>
+auto make_buffer(typename buffer_actor<Elements>::template stateful_pointer<
+                   buffer_state<Elements>>
+                   self,
                  located<uint64_t> capacity, buffer_policy policy,
                  metric_handler metrics_handler,
                  shared_diagnostic_handler diagnostics_handler)
-  -> buffer_actor::behavior_type {
+  -> buffer_actor<Elements>::behavior_type {
   self->state.self = self;
   self->state.capacity = capacity;
   self->state.policy = policy;
@@ -148,10 +153,10 @@ auto make_buffer(buffer_actor::stateful_pointer<buffer_state> self,
     self->state.emit_metrics();
   });
   return {
-    [self](atom::write, table_slice& events) -> caf::result<void> {
-      return self->state.write(std::move(events));
+    [self](atom::write, Elements& elements) -> caf::result<void> {
+      return self->state.write(std::move(elements));
     },
-    [self](atom::read) -> caf::result<table_slice> {
+    [self](atom::read) -> caf::result<Elements> {
       return self->state.read();
     },
   };
@@ -165,27 +170,28 @@ public:
   explicit write_buffer_operator(uuid id) : id_{id} {
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  template <class Elements>
+    requires(detail::is_any_v<Elements, table_slice, chunk_ptr>)
+  auto operator()(generator<Elements> input,
+                  operator_control_plane& ctrl) const -> generator<Elements> {
     // The internal-write-buffer operator is spawned after the
     // internal-read-buffer operator, so we can safely get the buffer actor here
     // after the first yield and then just remove it from the registry again.
     co_yield {};
-    auto buffer = ctrl.self().system().registry().get<buffer_actor>(
+    auto buffer = ctrl.self().system().registry().get<buffer_actor<Elements>>(
       fmt::format("tenzir.buffer.{}", id_));
     TENZIR_ASSERT(buffer);
     ctrl.self().link_to(buffer);
     ctrl.self().system().registry().erase(buffer->id());
     // Now, all we need to do is send our inputs to the buffer batch by batch.
-    for (auto&& events : input) {
-      if (events.rows() == 0) {
+    for (auto&& elements : input) {
+      if (size(elements) == 0) {
         co_yield {};
         continue;
       }
       ctrl.set_waiting(true);
       ctrl.self()
-        .request(buffer, caf::infinite, atom::write_v, std::move(events))
+        .request(buffer, caf::infinite, atom::write_v, std::move(elements))
         .then(
           [&]() {
             ctrl.set_waiting(false);
@@ -213,6 +219,9 @@ public:
     if (input.is<table_slice>()) {
       return tag_v<table_slice>;
     }
+    if (input.is<chunk_ptr>()) {
+      return tag_v<chunk_ptr>;
+    }
     return diagnostic::error("`buffer` does not accept {} as input",
                              operator_type_name(input))
       .to_error();
@@ -231,13 +240,25 @@ public:
   read_buffer_operator() = default;
 
   explicit read_buffer_operator(uuid id, located<uint64_t> capacity,
-                                std::optional<buffer_policy> policy)
+                                std::optional<located<buffer_policy>> policy)
     : id_{id}, capacity_{capacity}, policy_{policy} {
   }
 
+  template <class Elements>
   auto policy(operator_control_plane& ctrl) const -> buffer_policy {
-    return policy_.value_or(ctrl.is_hidden() ? buffer_policy::drop
-                                             : buffer_policy::block);
+    if (std::is_same_v<Elements, table_slice>) {
+      if (policy_) {
+        return policy_->inner;
+      }
+      return ctrl.is_hidden() ? buffer_policy::drop : buffer_policy::block;
+    }
+    if (policy_ and policy_->inner == buffer_policy::drop) {
+      diagnostic::error("`drop` policy is unsupported for bytes inputs")
+        .note("use `block` instead")
+        .primary(policy_->source)
+        .emit(ctrl.diagnostics());
+    }
+    return buffer_policy::block;
   }
 
   auto metrics(operator_control_plane& ctrl) const -> metric_handler {
@@ -251,28 +272,30 @@ public:
     });
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  template <class Elements>
+    requires(detail::is_any_v<Elements, table_slice, chunk_ptr>)
+  auto operator()(generator<Elements> input,
+                  operator_control_plane& ctrl) const -> generator<Elements> {
     // The internal-read-buffer operator is spawned before the
     // internal-write-buffer operator, so we spawn the buffer actor here and
     // move it into the registry before the first yield.
-    auto buffer = ctrl.self().spawn<caf::linked>(make_buffer, capacity_,
-                                                 policy(ctrl), metrics(ctrl),
-                                                 ctrl.shared_diagnostics());
+    auto buffer
+      = ctrl.self().spawn<caf::linked>(make_buffer<Elements>, capacity_,
+                                       policy<Elements>(ctrl), metrics(ctrl),
+                                       ctrl.shared_diagnostics());
     ctrl.self().system().registry().put(fmt::format("tenzir.buffer.{}", id_),
                                         buffer);
     co_yield {};
     // Now, we can get batch by batch from the buffer.
-    for (auto&& events : input) {
-      TENZIR_ASSERT(events.rows() == 0);
+    for (auto&& elements : input) {
+      TENZIR_ASSERT(size(elements) == 0);
       ctrl.set_waiting(true);
       ctrl.self()
         .request(buffer, caf::infinite, atom::read_v)
         .then(
-          [&](table_slice& response) {
+          [&](Elements& response) {
             ctrl.set_waiting(false);
-            events = std::move(response);
+            elements = std::move(response);
           },
           [&](caf::error& err) {
             diagnostic::error(err)
@@ -280,7 +303,7 @@ public:
               .emit(ctrl.diagnostics());
           });
       co_yield {};
-      co_yield std::move(events);
+      co_yield std::move(elements);
     }
   }
 
@@ -288,11 +311,11 @@ public:
     return "internal-read-buffer";
   }
 
-  auto input_independent() const -> bool override {
-    // We only send stub events between the two operators to break the back
-    // pressure and instead use a side channel for transporting events, hence
+  auto idle_after() const -> duration override {
+    // We only send stub elements between the two operators to break the back
+    // pressure and instead use a side channel for transporting elements, hence
     // the nead to schedule the reading side independently of receiving input.
-    return true;
+    return duration::max();
   }
 
   auto optimize(expression const& filter, event_order order) const
@@ -304,6 +327,9 @@ public:
     -> caf::expected<operator_type> override {
     if (input.is<table_slice>()) {
       return tag_v<table_slice>;
+    }
+    if (input.is<chunk_ptr>()) {
+      return tag_v<chunk_ptr>;
     }
     return diagnostic::error("`buffer` does not accept {} as input",
                              operator_type_name(input))
@@ -319,7 +345,7 @@ public:
 private:
   uuid id_ = {};
   located<uint64_t> capacity_ = {};
-  std::optional<buffer_policy> policy_ = {};
+  std::optional<located<buffer_policy>> policy_ = {};
 };
 
 class buffer_plugin final : public virtual operator_parser_plugin,
@@ -353,14 +379,15 @@ public:
         .primary(capacity.source)
         .throw_();
     }
-    auto policy = std::optional<buffer_policy>{};
+    auto policy = std::optional<located<buffer_policy>>{};
     if (policy_str) {
-      policy = from_string<buffer_policy>(policy_str->inner);
-      if (not policy) {
+      const auto parsed_policy = from_string<buffer_policy>(policy_str->inner);
+      if (not parsed_policy) {
         diagnostic::error("policy must be 'block' or 'drop'")
           .primary(policy_str->source)
           .throw_();
       }
+      policy = {*parsed_policy, policy_str->source};
     }
     const auto id = uuid::random();
     auto result = std::make_unique<pipeline>();
@@ -379,19 +406,26 @@ public:
       .add("policy", policy_str)
       .parse(inv, ctx)
       .ignore();
+    auto failed = false;
     if (capacity.inner == 0) {
       diagnostic::error("capacity must be greater than zero")
         .primary(capacity.source)
         .emit(ctx);
+      failed = true;
     }
-    auto policy = std::optional<buffer_policy>{};
+    auto policy = std::optional<located<buffer_policy>>{};
     if (policy_str) {
-      policy = from_string<buffer_policy>(policy_str->inner);
-      if (not policy) {
+      const auto parsed_policy = from_string<buffer_policy>(policy_str->inner);
+      if (not parsed_policy) {
         diagnostic::error("policy must be 'block' or 'drop'")
           .primary(policy_str->source)
           .emit(ctx);
+        failed = true;
       }
+      policy = {*parsed_policy, policy_str->source};
+    }
+    if (failed) {
+      return failure::promise();
     }
     const auto id = uuid::random();
     auto result = std::make_unique<pipeline>();

@@ -234,11 +234,13 @@ auto split_legacy_expression(const ast::expression& x)
         return std::pair{expression{conjunction{lo, ro}}, std::move(n)};
       }
       if (y.op.inner == ast::binary_op::or_) {
-        // TODO: When exactly can we split this?
         auto [lo, ln] = split_legacy_expression(y.left);
         auto [ro, rn] = split_legacy_expression(y.right);
+        // We have `(lo and ln) or (ro and rn)`, but we cannot easily split this
+        // into an expression of the form `O and N`. But if `ln` and `rn` are
+        // `true`, then this is just `lo or ro <=> (lo or ro) and true`.
         if (is_true_literal(ln) && is_true_literal(rn)) {
-          return std::pair{expression{conjunction{lo, ro}}, std::move(ln)};
+          return std::pair{expression{disjunction{lo, ro}}, std::move(ln)};
         }
       }
       return std::pair{trivially_true_expression(), x};

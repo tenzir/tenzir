@@ -559,18 +559,16 @@ rebuilder(rebuilder_actor::stateful_pointer<rebuilder_state> self,
 
 /// A helper function to get a handle to the REBUILDER actor from a client
 /// process.
-caf::expected<rebuilder_actor>
-get_rebuilder(caf::actor_system& sys, const caf::settings& config) {
+caf::expected<rebuilder_actor> get_rebuilder(caf::actor_system& sys) {
   auto self = caf::scoped_actor{sys};
   auto node_opt = connect_to_node(self);
   if (not node_opt) {
     return std::move(node_opt.error());
   }
-  const auto node = std::move(*node_opt);
-  const auto timeout = node_connection_timeout(config);
   auto result = caf::expected<caf::actor>{caf::error{}};
+  const auto node = std::move(*node_opt);
   self
-    ->request(node, timeout, atom::get_v, atom::label_v,
+    ->request(node, caf::infinite, atom::get_v, atom::label_v,
               std::vector<std::string>{"rebuilder"})
     .receive(
       [&](std::vector<caf::actor>& actors) {
@@ -602,7 +600,7 @@ rebuild_start_command(const invocation& inv, caf::actor_system& sys) {
   // Create a scoped actor for interaction with the actor system and connect to
   // the node.
   auto self = caf::scoped_actor{sys};
-  auto rebuilder = get_rebuilder(sys, inv.options);
+  auto rebuilder = get_rebuilder(sys);
   if (!rebuilder)
     return caf::make_message(std::move(rebuilder.error()));
   // Parse the query expression, iff it exists.
@@ -645,7 +643,7 @@ rebuild_stop_command(const invocation& inv, caf::actor_system& sys) {
   // Create a scoped actor for interaction with the actor system and connect to
   // the node.
   auto self = caf::scoped_actor{sys};
-  auto rebuilder = get_rebuilder(sys, inv.options);
+  auto rebuilder = get_rebuilder(sys);
   if (!rebuilder)
     return caf::make_message(std::move(rebuilder.error()));
   auto result = caf::message{};

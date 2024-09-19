@@ -65,8 +65,9 @@ auto main(int argc, char** argv) -> int {
   });
   // Application setup.
   auto [root, root_factory] = make_application(argv[0]);
-  if (!root)
+  if (!root) {
     return EXIT_FAILURE;
+  }
   // Parse the CLI.
   auto invocation
     = parse(*root, cfg.command_line.begin(), cfg.command_line.end());
@@ -92,16 +93,20 @@ auto main(int argc, char** argv) -> int {
   bool is_server = (app_name == "tenzir-node");
   // Create log context as soon as we know the correct configuration.
   auto log_context = create_log_context(is_server, *invocation, cfg.content);
-  if (!log_context)
+  if (!log_context) {
     return EXIT_FAILURE;
+  }
   // Print the configuration file(s) that were loaded.
-  if (!cfg.config_file_path.empty())
+  if (!cfg.config_file_path.empty()) {
     cfg.config_files.emplace_back(std::move(cfg.config_file_path));
-  for (const auto& file : loaded_config_files())
-    TENZIR_VERBOSE("loaded configuration file: {}", file);
+  }
+  for (const auto& file : loaded_config_files()) {
+    TENZIR_VERBOSE("loaded configuration file: {}", file.path);
+  }
   // Print the plugins that were loaded, and errors that occured during loading.
-  for (const auto& file : *loaded_plugin_paths)
+  for (const auto& file : *loaded_plugin_paths) {
     TENZIR_DEBUG("loaded plugin: {}", file);
+  }
   // Initialize successfully loaded plugins.
   if (auto err = plugins::initialize(cfg)) {
     render_error(
@@ -213,16 +218,18 @@ auto main(int argc, char** argv) -> int {
   // Put it into the actor registry so any actor can communicate with it.
   sys.registry().put("signal-reflector", reflector.get());
   auto run_error = caf::error{};
-  if (auto result = run(*invocation, sys, root_factory); !result)
+  if (auto result = run(*invocation, sys, root_factory); !result) {
     run_error = std::move(result.error());
-  else
+  } else {
     caf::message_handler{[&](caf::error& err) {
       run_error = std::move(err);
     }}(*result);
+  }
   sys.registry().erase("signal-reflector");
   stop = true;
-  if (pthread_cancel(signal_monitoring_thread.native_handle()) != 0)
+  if (pthread_cancel(signal_monitoring_thread.native_handle()) != 0) {
     TENZIR_ERROR("failed to cancel signal monitoring thread");
+  }
   signal_monitoring_thread.join();
   pthread_sigmask(SIG_UNBLOCK, &sigset, nullptr);
   if (run_error) {

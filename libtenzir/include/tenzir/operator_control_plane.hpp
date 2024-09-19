@@ -32,11 +32,17 @@ struct operator_control_plane {
   /// Returns the node actor, if the operator location is remote.
   virtual auto node() noexcept -> node_actor = 0;
 
+  /// Returns the operator index.
+  virtual auto operator_index() const noexcept -> uint64_t = 0;
+
   /// Returns the pipeline's diagnostic handler.
   virtual auto diagnostics() noexcept -> diagnostic_handler& = 0;
 
   /// Returns the pipeline's metric handler for a metric with the type `t`.
   virtual auto metrics(type t) noexcept -> metric_handler = 0;
+
+  /// Returns the metrics receiver actor handle.
+  virtual auto metrics_receiver() const noexcept -> metrics_receiver_actor = 0;
 
   /// Returns whether the pipeline may override its location.
   virtual auto no_location_overrides() const noexcept -> bool = 0;

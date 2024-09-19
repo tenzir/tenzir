@@ -197,6 +197,136 @@ private:
   std::shared_ptr<arrow::DataType> result_arrow_ty_;
 };
 
+class replace : public virtual method_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.replace";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto subject_expr = ast::expression{};
+    auto pattern = std::string{};
+    auto replacement = std::string{};
+    auto max_replacements = std::optional<located<int64_t>>{};
+    TRY(argument_parser2::method(name())
+          .add(subject_expr, "<string>")
+          .add(pattern, "<pattern>")
+          .add(replacement, "<replacement>")
+          .add("max", max_replacements)
+          .parse(inv, ctx));
+    if (max_replacements) {
+      if (max_replacements->inner < 0) {
+        diagnostic::error("`max` must be at least 0, but got {}",
+                          max_replacements->inner)
+          .primary(*max_replacements)
+          .emit(ctx);
+      }
+    }
+    return function_use::make(
+      [this, subject_expr = std::move(subject_expr),
+       pattern = std::move(pattern), replacement = std::move(replacement),
+       max_replacements](evaluator eval, session ctx) -> series {
+        auto result_type = string_type{};
+        auto result_arrow_type
+          = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
+        auto subject = eval(subject_expr);
+        auto f = detail::overload{
+          [&](const arrow::StringArray& array) {
+            auto max = max_replacements ? max_replacements->inner : -1;
+            auto options = arrow::compute::ReplaceSubstringOptions(
+              pattern, replacement, max);
+            auto result = arrow::compute::CallFunction("replace_substring",
+                                                       {array}, &options);
+            if (not result.ok()) {
+              diagnostic::warning("{}", result.status().ToString())
+                .primary(subject_expr)
+                .emit(ctx);
+              return series::null(result_type, subject.length());
+            }
+            return series{result_type, result.MoveValueUnsafe().make_array()};
+          },
+          [&](const arrow::NullArray& array) {
+            return series::null(result_type, array.length());
+          },
+          [&](const auto&) {
+            diagnostic::warning("`{}` expected `string`, but got `{}`", name(),
+                                subject.type.kind())
+              .primary(subject_expr)
+              .emit(ctx);
+            return series::null(result_type, subject.length());
+          },
+        };
+        return caf::visit(f, *subject.array);
+      });
+  }
+};
+
+class slice : public virtual method_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.slice";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto subject_expr = ast::expression{};
+    auto begin = std::optional<located<int64_t>>{};
+    auto end = std::optional<located<int64_t>>{};
+    auto stride = std::optional<located<int64_t>>{};
+    TRY(argument_parser2::method(name())
+          .add(subject_expr, "<string>")
+          .add("begin", begin)
+          .add("end", end)
+          .add("stride", stride)
+          .parse(inv, ctx));
+    if (stride) {
+      if (stride->inner <= 0) {
+        diagnostic::error("`stride` must be greater 0, but got {}",
+                          stride->inner)
+          .primary(*stride)
+          .emit(ctx);
+      }
+    }
+    return function_use::make(
+      [this, subject_expr = std::move(subject_expr), begin = begin, end = end,
+       stride = stride](evaluator eval, session ctx) -> series {
+        auto result_type = string_type{};
+        auto result_arrow_type
+          = std::shared_ptr<arrow::DataType>{result_type.to_arrow_type()};
+        auto subject = eval(subject_expr);
+        auto f = detail::overload{
+          [&](const arrow::StringArray& array) {
+            auto options = arrow::compute::SliceOptions(
+              begin ? begin->inner : 0,
+              end ? end->inner : std::numeric_limits<int64_t>::max(),
+              stride ? stride->inner : 1);
+            auto result = arrow::compute::CallFunction("utf8_slice_codeunits",
+                                                       {array}, &options);
+            if (not result.ok()) {
+              diagnostic::warning("{}", result.status().ToString())
+                .primary(subject_expr)
+                .emit(ctx);
+              return series::null(result_type, subject.length());
+            }
+            return series{result_type, result.MoveValueUnsafe().make_array()};
+          },
+          [&](const arrow::NullArray& array) {
+            return series::null(result_type, array.length());
+          },
+          [&](const auto&) {
+            diagnostic::warning("`{}` expected `string`, but got `{}`", name(),
+                                subject.type.kind())
+              .primary(subject_expr)
+              .emit(ctx);
+            return series::null(result_type, subject.length());
+          },
+        };
+        return caf::visit(f, *subject.array);
+      });
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::string
@@ -232,3 +362,6 @@ TENZIR_REGISTER_PLUGIN(nullary_method{"length_bytes", "binary_length",
                                       int64_type{}});
 TENZIR_REGISTER_PLUGIN(nullary_method{"length_chars", "utf8_length",
                                       int64_type{}});
+
+TENZIR_REGISTER_PLUGIN(replace);
+TENZIR_REGISTER_PLUGIN(slice);

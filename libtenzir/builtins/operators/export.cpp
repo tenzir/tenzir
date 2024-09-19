@@ -64,6 +64,12 @@ struct export_mode {
   }
 };
 
+enum class event_source {
+  unpersisted,
+  live,
+  retro,
+};
+
 struct bridge_state {
   static constexpr auto name = "export-bridge";
 
@@ -79,6 +85,7 @@ struct bridge_state {
   size_t inflight_partitions = {};
   size_t open_partitions = {};
   std::queue<std::pair<partition_info, query_context>> queued_partitions = {};
+  std::optional<std::vector<table_slice>> unpersisted_events = {};
 
   filesystem_actor filesystem = {};
 
@@ -109,9 +116,9 @@ struct bridge_state {
   }
 
   auto is_done() const -> bool {
-    return importer_address == caf::actor_addr{} and buffer.empty()
-           and inflight_partitions == 0 and open_partitions == 0
-           and checked_candidates and queued_partitions.empty();
+    return not mode.live and buffer.empty() and inflight_partitions == 0
+           and open_partitions == 0 and checked_candidates
+           and queued_partitions.empty() and not unpersisted_events;
   }
 
   auto try_pop_partition() -> void {
@@ -176,6 +183,50 @@ struct bridge_state {
     }
   }
 
+  auto add_events(table_slice slice, event_source source) -> void {
+    if (slice.rows() == 0) {
+      return;
+    }
+    // We ignore live events if we're not asked to listen to live events.
+    if (source == event_source::live and not mode.live) {
+      return;
+    }
+    // Live and unpersisted events we still need to filter.
+    if (source != event_source::retro) {
+      const auto* bound_expr = bind_expr(slice.schema(), expr);
+      if (not bound_expr) {
+        // failing to bind is not an error.
+        return;
+      }
+      auto filtered = filter(slice, *bound_expr);
+      if (not filtered) {
+        return;
+      }
+      slice = std::move(*filtered);
+    }
+    if (source == event_source::live) {
+      // We load up to N partitions depending on our parallel level, and then
+      // limit our buffer to N+1 to account for live data.
+      const auto size_threshold
+        = (mode.parallel + 1) * defaults::max_partition_size;
+      if (num_queued_total >= size_threshold) {
+        diagnostic::warning("export failed to keep up and dropped events")
+          .emit(diagnostics_handler);
+        return;
+      }
+    }
+    if (buffer_rp.pending()) {
+      TENZIR_ASSERT(buffer.empty());
+      TENZIR_ASSERT(not is_done());
+      metrics[slice.schema()].emitted += slice.rows();
+      buffer_rp.deliver(std::move(slice));
+      return;
+    }
+    metrics[slice.schema()].queued += slice.rows();
+    num_queued_total += slice.rows();
+    buffer.push(std::move(slice));
+  }
+
   ~bridge_state() noexcept {
     if (not mode.internal) {
       emit_metrics();
@@ -203,26 +254,29 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
       self->state.emit_metrics();
     });
   }
-  // If we're live, then we need to subscribe to the importer.
-  if (mode.live) {
-    const auto importer
-      = self->system().registry().get<importer_actor>("tenzir.importer");
-    TENZIR_ASSERT(importer);
-    self->state.importer_address = importer->address();
-    self
-      ->request(importer, caf::infinite, atom::subscribe_v,
-                caf::actor_cast<receiver_actor<table_slice>>(self),
-                self->state.mode.internal)
-      .then(
-        [self]() {
-          TENZIR_DEBUG("{} subscribed to importer", *self);
-        },
-        [self](const caf::error& err) {
-          self->quit(diagnostic::error(err)
-                       .note("{} failed to subscribe to importer", *self)
-                       .to_error());
-        });
-  }
+  const auto importer
+    = self->system().registry().get<importer_actor>("tenzir.importer");
+  TENZIR_ASSERT(importer);
+  self->state.importer_address = importer->address();
+  self->state.unpersisted_events.emplace();
+  self
+    ->request(importer, caf::infinite, atom::subscribe_v,
+              caf::actor_cast<receiver_actor<table_slice>>(self),
+              self->state.mode.internal)
+    .await(
+      [self, mode](std::vector<table_slice>& unpersisted_events) {
+        TENZIR_DEBUG("{} subscribed to importer", *self);
+        if (mode.retro) {
+          TENZIR_ASSERT(self->state.unpersisted_events);
+          TENZIR_ASSERT(self->state.unpersisted_events->empty());
+          *self->state.unpersisted_events = std::move(unpersisted_events);
+        }
+      },
+      [self](const caf::error& err) {
+        self->quit(diagnostic::error(err)
+                     .note("{} failed to subscribe to importer", *self)
+                     .to_error());
+      });
   // If we're retro, then we can query the catalog immediately.
   if (mode.retro) {
     const auto catalog
@@ -238,6 +292,7 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
       .then(
         [self, query_context](catalog_lookup_result& result) {
           self->state.checked_candidates = true;
+          auto max_import_time = time::min();
           for (auto& [type, info] : result.candidate_infos) {
             if (info.partition_infos.empty()) {
               continue;
@@ -250,6 +305,8 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
             auto ctx = query_context;
             ctx.expr = *bound_expr;
             for (auto& partition_info : info.partition_infos) {
+              max_import_time
+                = std::max(max_import_time, partition_info.max_import_time);
               self->state.queued_partitions.emplace(std::move(partition_info),
                                                     ctx);
             }
@@ -260,6 +317,14 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
               });
             }
           }
+          TENZIR_ASSERT(self->state.unpersisted_events);
+          for (auto& slice : *self->state.unpersisted_events) {
+            if (slice.import_time() > max_import_time) {
+              self->state.add_events(std::move(slice),
+                                     event_source::unpersisted);
+            }
+          }
+          self->state.unpersisted_events.reset();
           // In case we get zero partitions back from the catalog we need to
           // already signal that we're done here.
           if (self->state.buffer_rp.pending() and self->state.is_done()) {
@@ -275,41 +340,10 @@ auto make_bridge(caf::stateful_actor<bridge_state>* self, expression expr,
   }
   return {
     [self](table_slice& slice) -> caf::result<void> {
-      if (slice.rows() == 0) {
-        return {};
-      }
-      if (self->current_sender() == self->state.importer_address) {
-        const auto* bound_expr
-          = self->state.bind_expr(slice.schema(), self->state.expr);
-        if (not bound_expr) {
-          // failing to bind is not an error.
-          return {};
-        }
-        auto filtered = filter(slice, *bound_expr);
-        if (not filtered) {
-          return {};
-        }
-        slice = std::move(*filtered);
-        // We load up to N partitions depending on our parallel level, and then
-        // limit our buffer to N+1 to account for live data.
-        const auto size_threshold
-          = (self->state.mode.parallel + 1) * defaults::max_partition_size;
-        if (self->state.num_queued_total >= size_threshold) {
-          diagnostic::warning("export failed to keep up and dropped events")
-            .emit(self->state.diagnostics_handler);
-          return {};
-        }
-      }
-      if (self->state.buffer_rp.pending()) {
-        TENZIR_ASSERT(self->state.buffer.empty());
-        TENZIR_ASSERT(not self->state.is_done());
-        self->state.metrics[slice.schema()].emitted += slice.rows();
-        self->state.buffer_rp.deliver(std::move(slice));
-        return {};
-      }
-      self->state.metrics[slice.schema()].queued += slice.rows();
-      self->state.num_queued_total += slice.rows();
-      self->state.buffer.push(std::move(slice));
+      self->state.add_events(
+        std::move(slice), self->current_sender() == self->state.importer_address
+                            ? event_source::live
+                            : event_source::retro);
       return {};
     },
     [self](atom::get) -> caf::result<table_slice> {

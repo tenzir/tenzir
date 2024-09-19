@@ -121,32 +121,33 @@ if [ -n "${TENZIR_PACKAGE_URL:-}" ]
 then
   package_url="${TENZIR_PACKAGE_URL}"
 else
+  : "${TENZIR_PACKAGE_TAG:=latest}"
   # Select appropriate package.
   action "Identifying package"
   package_url_base="https://storage.googleapis.com/tenzir-dist-public/packages/main"
   if [ "${platform}" = "RPM" ]
   then
-    package_url="${package_url_base}/rpm/tenzir-static-latest.rpm"
+    package_url="${package_url_base}/rpm/tenzir-static-${TENZIR_PACKAGE_TAG}.rpm"
   elif [ "${platform}" = "Debian" ]
   then
-    package_url="${package_url_base}/debian/tenzir-static-latest.deb"
+    package_url="${package_url_base}/debian/tenzir-static-${TENZIR_PACKAGE_TAG}.deb"
   elif [ "${platform}" = "Linux" ]
   then
-    package_url="${package_url_base}/tarball/tenzir-static-latest.gz"
+    package_url="${package_url_base}/tarball/tenzir-static-${TENZIR_PACKAGE_TAG}.gz"
   elif [ "${platform}" = "NixOS" ]
   then
     echo "Try Tenzir with our ${bold}flake.nix${normal}:"
     echo
-    echo "    ${bold}nix shell github:tenzir/tenzir/latest -c tenzir-node${normal}"
+    echo "    ${bold}nix shell github:tenzir/tenzir/${TENZIR_PACKAGE_TAG} -c tenzir-node${normal}"
     echo
     echo "Install Tenzir by adding" \
-      "${bold}github:tenzir/tenzir/latest${normal} to your"
+      "${bold}github:tenzir/tenzir/${TENZIR_PACKAGE_TAG}${normal} to your"
     echo "flake inputs, or use your preferred method to include third-party"
     echo "modules on classic NixOS."
     exit 0
   elif [ "${platform}" = "macOS" ]
   then
-    package_url="${package_url_base}/macOS/tenzir-static-latest.pkg"
+    package_url="${package_url_base}/macOS/tenzir-static-${TENZIR_PACKAGE_TAG}.pkg"
   else
     echo "We do not offer pre-built packages for ${platform}." \
         "Your options:"

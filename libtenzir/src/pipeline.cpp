@@ -29,6 +29,10 @@ public:
     TENZIR_UNIMPLEMENTED();
   }
 
+  auto operator_index() const noexcept -> uint64_t override {
+    TENZIR_UNIMPLEMENTED();
+  }
+
   auto diagnostics() noexcept -> diagnostic_handler& override {
     struct handler final : public diagnostic_handler {
       handler(local_control_plane& ctrl) : ctrl{ctrl} {
@@ -48,6 +52,10 @@ public:
   }
 
   auto metrics(type) noexcept -> metric_handler override {
+    TENZIR_UNIMPLEMENTED();
+  }
+
+  auto metrics_receiver() const noexcept -> metrics_receiver_actor override {
     TENZIR_UNIMPLEMENTED();
   }
 
