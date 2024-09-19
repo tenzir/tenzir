@@ -26,7 +26,7 @@ constexpr auto docs = "https://docs.tenzir.com/formats/kv";
 
 /// @brief Checks whether the index `idx` in `text` is escaped
 /// TODO the precise-parsers PR contains this in string.hpp
-inline auto is_escaped(size_t idx, std::string_view text) -> bool {
+auto is_escaped(size_t idx, std::string_view text) -> bool {
   if (idx >= text.size()) {
     return false;
   }
@@ -40,27 +40,12 @@ inline auto is_escaped(size_t idx, std::string_view text) -> bool {
   return backslashes % 2 == 1;
 }
 
-inline auto is_quoted(std::string_view text) -> bool {
+auto is_quoted(std::string_view text) -> bool {
   if (text.size() < 2) {
     return false;
   }
   return text.front() == text.back() and text.front() == '\"'
          and not is_escaped(text.size() - 1, text);
-}
-
-[[nodiscard]] auto trim_quotes(std::string_view txt) -> std::string_view {
-  if (txt.size() < 2) {
-    return txt;
-  }
-  if (txt.front() != txt.back()) {
-    return txt;
-  }
-  if (txt.front() == '\"' and not is_escaped(txt.size() - 1, txt)) {
-    txt.remove_prefix(1);
-    txt.remove_suffix(1);
-    return txt;
-  }
-  return txt;
 }
 
 class splitter {
