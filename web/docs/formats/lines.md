@@ -14,7 +14,7 @@ Parses and prints events as lines.
 Parser:
 
 ```
-lines [-s|--skip-empty]
+lines [-s|--skip-empty] [--null]
 ```
 
 Printer:
@@ -48,6 +48,10 @@ as-is.
 Ignores empty lines in the input.
 
 Defaults to `false`.
+
+### `--null`
+
+Splits events at null bytes `\0` instead of newline characters.
 
 ## Examples
 

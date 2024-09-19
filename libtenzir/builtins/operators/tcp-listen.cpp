@@ -42,6 +42,8 @@ struct tcp_listen_args {
   std::optional<std::string> tls_certfile = {};
   std::optional<std::string> tls_keyfile = {};
   operator_box op = {};
+  metrics_receiver_actor metrics_receiver = {};
+  uint64_t operator_index = {};
   bool no_location_overrides = false;
   bool has_terminal = false;
   bool is_hidden = false;
@@ -53,6 +55,8 @@ struct tcp_listen_args {
       f.field("listen_once", x.listen_once),
       f.field("tls_certfile", x.tls_certfile),
       f.field("tls_keyfile", x.tls_keyfile), f.field("op", x.op),
+      f.field("metrics_receiver", x.metrics_receiver),
+      f.field("operator_index", x.operator_index),
       f.field("no_location_overrides", x.no_location_overrides),
       f.field("has_terminal", x.has_terminal),
       f.field("is_hidden", x.is_hidden));
@@ -62,9 +66,12 @@ struct tcp_listen_args {
 class tcp_listen_control_plane final : public operator_control_plane {
 public:
   tcp_listen_control_plane(shared_diagnostic_handler diagnostics,
-                           bool has_terminal, bool no_location_overrides,
-                           bool is_hidden)
+                           metrics_receiver_actor metrics_receiver,
+                           uint64_t operator_index, bool has_terminal,
+                           bool no_location_overrides, bool is_hidden)
     : diagnostics_{std::move(diagnostics)},
+      metrics_receiver_{std::move(metrics_receiver)},
+      operator_index_{operator_index},
       no_location_overrides_{no_location_overrides},
       has_terminal_{has_terminal},
       is_hidden_{is_hidden} {
@@ -78,12 +85,25 @@ public:
     TENZIR_UNIMPLEMENTED();
   }
 
+  auto operator_index() const noexcept -> uint64_t override {
+    return operator_index_;
+  }
+
   auto diagnostics() noexcept -> diagnostic_handler& override {
     return diagnostics_;
   }
 
-  auto metrics(type) noexcept -> metric_handler override {
-    TENZIR_UNIMPLEMENTED();
+  auto metrics(type t) noexcept -> metric_handler override {
+    return metric_handler{
+      metrics_receiver_,
+      operator_index_,
+      metric_index++,
+      t,
+    };
+  }
+
+  auto metrics_receiver() const noexcept -> metrics_receiver_actor override {
+    return metrics_receiver_;
   }
 
   auto no_location_overrides() const noexcept -> bool override {
@@ -105,6 +125,9 @@ public:
 
 private:
   shared_diagnostic_handler diagnostics_;
+  metrics_receiver_actor metrics_receiver_;
+  uint64_t operator_index_ = {};
+  uint64_t metric_index = 0;
   bool no_location_overrides_;
   bool has_terminal_;
   bool is_hidden_;
@@ -135,6 +158,19 @@ struct connection_state {
     }
   }
 
+  auto emit_metrics() -> void {
+    metric_handler.emit({
+      {"port", socket->local_endpoint().port()},
+      {"handle", fmt::to_string(socket->native_handle())},
+      {"reads", reads},
+      {"writes", 0ull},
+      {"bytes_read", length},
+      {"bytes_written", 0ull},
+    });
+    reads = 0;
+    length = 0;
+  }
+
   connection_actor::pointer self = {};
   std::shared_ptr<boost::asio::io_context> io_context = {};
   std::optional<boost::asio::ip::tcp::socket> socket = {};
@@ -145,6 +181,9 @@ struct connection_state {
   tcp_listen_args args;
   std::unique_ptr<operator_control_plane> ctrl;
 
+  class metric_handler metric_handler = {};
+  size_t length = 0;
+  size_t reads = 0;
   generator<table_slice> gen = {};
   generator<table_slice>::iterator it = {};
 };
@@ -155,14 +194,31 @@ auto make_connection(connection_actor::stateful_pointer<connection_state> self,
                      tcp_listen_args args,
                      shared_diagnostic_handler diagnostics)
   -> connection_actor::behavior_type {
+  if (self->getf(caf::scheduled_actor::is_detached_flag)) {
+    thread_local auto thread_name
+      = fmt::format("tcp_fd{}", socket.native_handle());
+    caf::detail::set_thread_name(thread_name.data());
+  }
   self->state.self = self;
   self->state.io_context = std::move(io_context);
   self->state.socket = std::move(socket);
   self->state.bridge = std::move(bridge);
   self->state.args = std::move(args);
   self->state.ctrl = std::make_unique<tcp_listen_control_plane>(
-    std::move(diagnostics), args.no_location_overrides, args.has_terminal,
-    args.is_hidden);
+    std::move(diagnostics), self->state.args.metrics_receiver,
+    self->state.args.operator_index, self->state.args.no_location_overrides,
+    self->state.args.has_terminal, self->state.args.is_hidden);
+  self->state.metric_handler = self->state.ctrl->metrics({
+    "tenzir.metrics.tcp",
+    record_type{
+      {"port", uint64_type{}},
+      {"handle", string_type{}},
+      {"reads", uint64_type{}},
+      {"writes", uint64_type{}},
+      {"bytes_read", uint64_type{}},
+      {"bytes_written", uint64_type{}},
+    },
+  });
   self->set_exception_handler(
     [self](std::exception_ptr exception) -> caf::error {
       try {
@@ -231,11 +287,26 @@ auto make_connection(connection_actor::stateful_pointer<connection_state> self,
         co_return;
       }
       if (ec) {
-        diagnostic::error("{}", ec.message())
+        using namespace std::string_literals;
+        auto remote_endpoint_ec = boost::system::error_code{};
+        auto remote_ip = "unknown address"s;
+        auto remote_endpoint
+          = state.socket->remote_endpoint(remote_endpoint_ec);
+        if (!remote_endpoint_ec) {
+          auto remote_ip_string
+            = remote_endpoint.address().to_string(remote_endpoint_ec);
+          if (!remote_endpoint_ec) {
+            remote_ip = remote_ip_string;
+          }
+        }
+        diagnostic::warning("{}", ec.message())
           .note("failed to read from socket")
+          .note("connection from {} aborted", remote_ip)
           .emit(state.ctrl->diagnostics());
         co_return;
       }
+      state.length += length;
+      state.reads++;
       co_yield chunk::copy(as_bytes(buffer).subspan(0, length));
     }
   }(self->state);
@@ -249,8 +320,12 @@ auto make_connection(connection_actor::stateful_pointer<connection_state> self,
   TENZIR_ASSERT(typed_gen);
   self->state.gen = std::move(*typed_gen);
   self->state.it = self->state.gen.begin();
+  detail::weak_run_delayed_loop(self, std::chrono::seconds{1}, [self] {
+    self->state.emit_metrics();
+  });
   detail::weak_run_delayed_loop(self, duration::zero(), [self] {
     if (self->state.it == self->state.gen.end()) {
+      self->state.emit_metrics();
       self->quit();
       return;
     }
@@ -445,6 +520,8 @@ public:
   auto operator()(operator_control_plane& ctrl) const
     -> generator<table_slice> {
     auto args = args_;
+    args.metrics_receiver = ctrl.metrics_receiver();
+    args.operator_index = ctrl.operator_index();
     args.no_location_overrides = ctrl.no_location_overrides();
     args.has_terminal = ctrl.has_terminal();
     args.is_hidden = ctrl.is_hidden();

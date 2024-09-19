@@ -25,6 +25,7 @@
 #include <tenzir/operator_control_plane.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/si_literals.hpp>
 #include <tenzir/to_lines.hpp>
 #include <tenzir/tql/parser.hpp>
 #include <tenzir/tql2/plugin.hpp>
@@ -42,10 +43,16 @@ namespace tenzir::plugins::json {
 
 namespace {
 
-/// This is the maximum size of a single object/event when *not* using the
-/// NDJSON mode. If this becomes problematic in the future, we can use a dynamic
-/// approach instead.
-constexpr auto max_object_size = size_t{10'000'000};
+using namespace tenzir::si_literals;
+
+/// This is the initial simdjson buffer size when *NOT* using NDJSON.
+constexpr auto initial_simdjson_batch_size = 10_M;
+/// This is the maximum size we increase the simdjson buffer when *NOT* using
+/// NDJSON.
+constexpr auto max_simdjson_batch_size = 2_G;
+static_assert(initial_simdjson_batch_size <= max_simdjson_batch_size);
+static_assert(max_simdjson_batch_size <= 4_G,
+              "simdjson specifies 4G as an upper bound for the batch_size");
 
 inline auto split_at_crlf(generator<chunk_ptr> input)
   -> generator<std::optional<simdjson::padded_string_view>> {
@@ -264,8 +271,8 @@ struct parser_state {
   }
 
   auto add_entry(std::string_view name,
-                 std::optional<std::reference_wrapper<const type>> schema = {})
-    -> size_t {
+                 std::optional<std::reference_wrapper<const type>> schema
+                 = {}) -> size_t {
     return add_entry(std::string{name}, schema);
   }
 
@@ -278,8 +285,8 @@ struct parser_state {
   }
 
   /// Activates an entry after potentially flushing the active one.
-  [[nodiscard]] auto activate(size_t entry)
-    -> std::optional<std::vector<table_slice>> {
+  [[nodiscard]] auto
+  activate(size_t entry) -> std::optional<std::vector<table_slice>> {
     if (entry == active_entry) {
       return std::nullopt;
     }
@@ -315,9 +322,9 @@ public:
       raw_{raw} {
   }
 
-  [[nodiscard]] auto parse_object(simdjson::ondemand::value v,
-                                  record_ref builder, size_t depth = 0u)
-    -> bool {
+  [[nodiscard]] auto
+  parse_object(simdjson::ondemand::value v, record_ref builder,
+               size_t depth = 0u) -> bool {
     auto obj = v.get_object();
     if (obj.error()) {
       report_parse_err(v, "object");
@@ -528,8 +535,8 @@ private:
     TENZIR_UNREACHABLE();
   }
 
-  [[nodiscard]] auto add_value(builder_ref builder, const data_view2& value)
-    -> bool {
+  [[nodiscard]] auto
+  add_value(builder_ref builder, const data_view2& value) -> bool {
     auto result = builder.try_data(value);
     if (not result) {
       diagnostic::warning(result.error()).emit(ctrl_.diagnostics());
@@ -550,11 +557,11 @@ private:
 /// This is used when `--precise` is specified.
 template <class T>
   requires std::same_as<T, simdjson::ondemand::value>
-           || std::same_as<T, simdjson::ondemand::document>
+             || std::same_as<T, simdjson::ondemand::document>
 auto json_to_data(T& value, bool raw) -> simdjson::simdjson_result<data>;
 
-auto json_to_data(simdjson::ondemand::object object, bool raw)
-  -> simdjson::simdjson_result<data> {
+auto json_to_data(simdjson::ondemand::object object,
+                  bool raw) -> simdjson::simdjson_result<data> {
   // The API of `record` is not optimal for this, hence we manually construct it.
   auto result = std::vector<std::pair<std::string, data>>{};
   for (auto maybe_field : object) {
@@ -572,8 +579,8 @@ auto json_to_data(simdjson::ondemand::object object, bool raw)
   return data{record::make_unsafe(std::move(result))};
 }
 
-auto json_to_data(simdjson::ondemand::array array, bool raw)
-  -> simdjson::simdjson_result<data> {
+auto json_to_data(simdjson::ondemand::array array,
+                  bool raw) -> simdjson::simdjson_result<data> {
   auto result = list{};
   for (auto maybe_item : array) {
     TRY(auto item, maybe_item);
@@ -583,8 +590,8 @@ auto json_to_data(simdjson::ondemand::array array, bool raw)
   return data{std::move(result)};
 }
 
-auto json_to_data(simdjson::ondemand::number number, bool raw)
-  -> simdjson::simdjson_result<data> {
+auto json_to_data(simdjson::ondemand::number number,
+                  bool raw) -> simdjson::simdjson_result<data> {
   if (raw) {
     return data{number.as_double()};
   }
@@ -605,8 +612,8 @@ auto json_to_data(simdjson::ondemand::number number, bool raw)
   TENZIR_UNREACHABLE();
 }
 
-auto json_to_data(std::string_view string, bool raw)
-  -> simdjson::simdjson_result<data> {
+auto json_to_data(std::string_view string,
+                  bool raw) -> simdjson::simdjson_result<data> {
   if (not raw) {
     static constexpr auto parser
       = parsers::net | parsers::ip | parsers::time | parsers::duration;
@@ -620,7 +627,7 @@ auto json_to_data(std::string_view string, bool raw)
 
 template <class T>
   requires std::same_as<T, simdjson::ondemand::value>
-           || std::same_as<T, simdjson::ondemand::document>
+             || std::same_as<T, simdjson::ondemand::document>
 auto json_to_data(T& value, bool raw) -> simdjson::simdjson_result<data> {
   TRY(auto type, value.type());
   switch (type) {
@@ -719,8 +726,8 @@ auto get_schemas(bool try_find_schema, bool unflatten) -> std::vector<type> {
   return ret;
 }
 
-auto unflatten_if_needed(std::string_view separator, table_slice slice)
-  -> table_slice {
+auto unflatten_if_needed(std::string_view separator,
+                         table_slice slice) -> table_slice {
   if (separator.empty()) {
     return slice;
   }
@@ -861,8 +868,8 @@ class ndjson_parser final : public parser_base {
 public:
   using parser_base::parser_base;
 
-  auto parse(simdjson::padded_string_view json_line, parser_state& state)
-    -> generator<table_slice> {
+  auto parse(simdjson::padded_string_view json_line,
+             parser_state& state) -> generator<table_slice> {
     ++lines_processed_;
     auto maybe_doc = this->parser_.iterate(json_line);
     auto val = maybe_doc.get_value();
@@ -968,85 +975,128 @@ class default_parser final : public parser_base {
 public:
   using parser_base::parser_base;
 
-  auto parse(const chunk& json_chunk, parser_state& state)
-    -> generator<table_slice> {
+  auto parse(const chunk& json_chunk,
+             parser_state& state) -> generator<table_slice> {
+    // Whether to retry on a capacity error
+    auto retry_capacity_failure = false;
+    // How many documents passed the simdjson batch_size.
+    // Those documents must be skipped in order to not duplicate events.
+    auto completed_documents = size_t{0};
     buffer_.append(
       {reinterpret_cast<const char*>(json_chunk.data()), json_chunk.size()});
     auto view = buffer_.view();
-    auto err
-      = this->parser_.iterate_many(view.data(), view.length(), max_object_size)
-          .get(stream_);
-    if (err) {
-      // For the simdjson 3.1 it seems impossible to have an error
-      // returned here so it is hard to understand if we can recover from
-      // it somehow.
-      buffer_.reset();
-      diagnostic::warning("{}", error_message(err))
-        .note("failed to parse")
-        .emit(this->ctrl_.diagnostics());
-      co_return;
-    }
-    for (auto doc_it = stream_.begin(); doc_it != stream_.end(); ++doc_it) {
-      // doc.error() will inherit all errors from *doc_it and get_value.
-      // No need to check after each operation.
-      auto doc = (*doc_it).get_value();
-      if (auto err = doc.error()) {
-        state.abort_requested = true;
-        diagnostic::error("{}", error_message(err))
-          .note("skips invalid JSON '{}'", view)
+    do {
+      retry_capacity_failure = false;
+      auto err = this->parser_
+                   .iterate_many(view.data(), view.length(), current_batch_size)
+                   .get(stream_);
+      if (err) {
+        // For the simdjson 3.1 it seems impossible to have an error
+        // returned here so it is hard to understand if we can recover from
+        // it somehow.
+        buffer_.reset();
+        diagnostic::warning("{}", error_message(err))
+          .note("failed to parse")
           .emit(this->ctrl_.diagnostics());
         co_return;
       }
-      auto [action, slices]
-        = this->handle_selector(*doc_it, doc_it.source(), state);
-      switch (action) {
-        case parser_action::skip:
+      auto current_document = size_t{};
+      for (auto doc_it = stream_.begin(); doc_it != stream_.end(); ++doc_it) {
+        // Skip documents that passed the simdjson batch_size limits previously
+        if (current_document < completed_documents) {
           continue;
-        case parser_action::parse:
-          break;
-        case parser_action::yield:
-          TENZIR_ASSERT(slices);
-          for (auto& slice : *slices) {
-            co_yield std::move(slice);
+        }
+        ++current_document;
+        // doc.error() will inherit all errors from *doc_it and get_value.
+        // No need to check after each operation.
+        auto doc = (*doc_it).get_value();
+        if (auto err = doc.error()) {
+          if (err == simdjson::CAPACITY) {
+            current_batch_size *= 2;
+            retry_capacity_failure
+              = current_batch_size < max_simdjson_batch_size;
+            if (retry_capacity_failure) {
+              break;
+            }
           }
-      }
-      auto& builder = state.get_active_entry().builder;
-      if (arrays_of_objects_) {
-        auto arr = doc.value_unsafe().get_array();
-        if (arr.error()) {
           state.abort_requested = true;
-          diagnostic::error("expected an array of objects")
-            .note("got: {}", view)
+          diagnostic::error("{}", error_message(err))
+            .note("skips invalid JSON '{}'", view)
             .emit(this->ctrl_.diagnostics());
           co_return;
         }
-        for (auto&& elem : arr.value_unsafe()) {
+        ++completed_documents;
+        TENZIR_ASSERT(not doc.current_location().error());
+        const auto source = std::string_view{
+          doc.current_location().value_unsafe(),
+          view.data() + view.size(),
+        };
+        auto [action, slices] = this->handle_selector(*doc_it, source, state);
+        switch (action) {
+          case parser_action::skip:
+            continue;
+          case parser_action::parse:
+            break;
+          case parser_action::yield:
+            TENZIR_ASSERT(slices);
+            for (auto& slice : *slices) {
+              co_yield std::move(slice);
+            }
+        }
+        auto& builder = state.get_active_entry().builder;
+        if (arrays_of_objects_) {
+          auto arr = doc.value_unsafe().get_array();
+          if (arr.error()) {
+            state.abort_requested = true;
+            diagnostic::error("expected an array of objects")
+              .note("got: {}", view)
+              .emit(this->ctrl_.diagnostics());
+            co_return;
+          }
+          for (auto&& elem : arr.value_unsafe()) {
+            TENZIR_ASSERT(not elem.current_location().error());
+            const auto source = std::string_view{
+              elem.current_location().value_unsafe(),
+              view.data() + view.size(),
+            };
+            auto row = builder.record();
+            auto success
+              = doc_parser{source, this->ctrl_, no_infer_, raw_}.parse_object(
+                elem.value_unsafe(), row);
+            if (not success) {
+              // We already reported the issue.
+              builder.remove_last();
+              continue;
+            }
+            if (auto slices = this->handle_max_rows(state)) {
+              for (auto& slice : *slices) {
+                co_yield std::move(slice);
+              }
+            }
+          }
+        } else {
           auto row = builder.record();
+          TENZIR_ASSERT(not doc.current_location().error());
+          const auto source = std::string_view{
+            doc.current_location().value_unsafe(),
+            view.data() + view.size(),
+          };
           auto success
-            = doc_parser{doc_it.source(), this->ctrl_, no_infer_, raw_}
-                .parse_object(elem.value_unsafe(), row);
+            = doc_parser{source, this->ctrl_, no_infer_, raw_}.parse_object(
+              doc.value_unsafe(), row);
           if (not success) {
             // We already reported the issue.
             builder.remove_last();
             continue;
           }
-        }
-      } else {
-        auto row = builder.record();
-        auto success = doc_parser{doc_it.source(), this->ctrl_, no_infer_, raw_}
-                         .parse_object(doc.value_unsafe(), row);
-        if (not success) {
-          // We already reported the issue.
-          builder.remove_last();
-          continue;
+          if (auto slices = this->handle_max_rows(state)) {
+            for (auto& slice : *slices) {
+              co_yield std::move(slice);
+            }
+          }
         }
       }
-      if (auto slices = this->handle_max_rows(state)) {
-        for (auto& slice : *slices) {
-          co_yield std::move(slice);
-        }
-      }
-    }
+    } while (retry_capacity_failure);
     handle_truncated_bytes(state);
   }
 
@@ -1080,6 +1130,7 @@ private:
   // The simdjson suggests to initialize the padding part to either 0s or
   // spaces.
   detail::padded_buffer<simdjson::SIMDJSON_PADDING, '\0'> buffer_;
+  size_t current_batch_size = initial_simdjson_batch_size;
   simdjson::ondemand::document_stream stream_;
 };
 
@@ -1563,8 +1614,8 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter,
+                event_order order) const -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -1593,8 +1644,8 @@ public:
     return name_;
   }
 
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = args_;
     argument_parser2::operator_(name())
       .add("no_extra_fields", args.no_infer)
@@ -1612,8 +1663,8 @@ private:
 class read_json_plugin final
   : public virtual operator_plugin2<parser_adapter<json_parser>> {
 public:
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto args = parser_args{};
     auto selector = std::optional<located<std::string>>{};
     auto sep = std::optional<located<std::string>>{};
@@ -1672,8 +1723,8 @@ public:
     return "tql2.parse_json";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     // TODO: Consider adding a `many` option to expect multiple json values.
     // TODO: Consider adding a `precise` option (this needs evaluator support).
@@ -1740,8 +1791,8 @@ public:
 
 class write_json_plugin final : public virtual operator_plugin2<write_json> {
 public:
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     // TODO: More options, and consider `null_fields=false` as default.
     auto args = printer_args{};
     TRY(argument_parser2::operator_("write_json")

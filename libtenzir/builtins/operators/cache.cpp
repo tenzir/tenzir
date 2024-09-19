@@ -520,12 +520,12 @@ public:
     return "read_cache";
   }
 
-  auto input_independent() const -> bool override {
+  auto idle_after() const -> duration override {
     // We only send stub events between the two operators to break the back
     // pressure and instead use a side channel for transporting events, hence
     // the need to schedule the reading side independently of receiving input if
     // we're not a source.
-    return not source_;
+    return source_ ? duration::zero() : duration::max();
   }
 
   auto optimize(const expression& filter, event_order order) const

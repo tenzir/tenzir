@@ -789,13 +789,13 @@ public:
     return "summarize";
   }
 
-  auto input_independent() const -> bool override {
-    // Returning false here is technically incorrect when using summarize with
+  auto idle_after() const -> duration override {
+    // Returning zero here is technically incorrect when using summarize with
     // timeouts. However, the handling of input-independent non-source operators
     // in the execution nodes is so bad, that we accept a potential delay here
     // over excess CPU usage.
     // TODO: Fix this properly in the execution nodes.
-    return false;
+    return duration::zero();
   }
 
   auto optimize(expression const& filter, event_order order) const
