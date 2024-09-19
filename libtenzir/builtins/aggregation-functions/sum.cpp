@@ -67,7 +67,7 @@ public:
       diagnostic::warning("expected `{}`, got `{}`", type_, s.type)
         .primary(expr_)
         .emit(ctx);
-      return caf::none_t{};
+      return caf::none;
     };
     auto f = detail::overload{
       [](const arrow::NullArray&) {},
@@ -85,7 +85,7 @@ public:
           [&](std::integral auto& self) -> sum_t {
             if (not std::in_range<Type>(self)) {
               diagnostic::warning("integer overflow").primary(expr_).emit(ctx);
-              return caf::none_t{};
+              return caf::none;
             }
             auto result = detail::narrow_cast<Type>(self);
             for (auto i = int64_t{}; i < array.length(); ++i) {
@@ -95,7 +95,7 @@ public:
                   diagnostic::warning("integer overflow")
                     .primary(expr_)
                     .emit(ctx);
-                  return caf::none_t{};
+                  return caf::none;
                 }
                 result = checked.value();
               }
@@ -138,7 +138,7 @@ public:
                 diagnostic::warning("duration overflow")
                   .primary(expr_)
                   .emit(ctx);
-                return caf::none_t{};
+                return caf::none;
               }
               self += duration{array.Value(i)};
             }
@@ -151,7 +151,7 @@ public:
           "expected `int`, `uint`, `double` or `duration`, got `{}`", s.type)
           .primary(expr_)
           .emit(ctx);
-        sum_ = caf::none_t{};
+        sum_ = caf::none;
       }};
     caf::visit(f, *s.array);
   }
@@ -242,7 +242,7 @@ class plugin : public virtual aggregation_function_plugin,
   auto make_aggregation(invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function("sum").add(expr, "<field>").parse(inv, ctx));
+    TRY(argument_parser2::function("sum").add(expr, "<expr>").parse(inv, ctx));
     return std::make_unique<sum_instance>(std::move(expr));
   }
 };

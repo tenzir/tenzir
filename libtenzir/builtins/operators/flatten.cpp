@@ -78,27 +78,30 @@ public:
                      session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     auto sep = std::optional<std::string>{default_flatten_separator};
-    TRY(argument_parser2::function("tql2.flatten")
-          .add(expr, "<field>")
-          .add(sep, "<string>")
+    TRY(argument_parser2::function("flatten")
+          .add(expr, "<expr>")
+          .add("sep", sep)
           .parse(inv, ctx));
-    return function_use::make([expr = std::move(expr),
-                               sep = std::move(sep.value())](
-                                evaluator eval, session ctx) -> series {
-      auto s = eval(expr);
-      auto seen = std::unordered_set<type>{};
-      auto flattened = tenzir::flatten(
-        s.type, std::static_pointer_cast<arrow::StructArray>(s.array), sep);
-      // We only warn once per schema that we had to rename a set of fields.
-      if (seen.insert(s.type).second && not flattened.renamed_fields.empty()) {
-        diagnostic::warning("renamed fields with conflicting names after "
-                            "flattening: {}",
-                            fmt::join(flattened.renamed_fields, ", "))
-          .primary(expr)
-          .emit(ctx);
-      }
-      return {flattened.schema, flattened.array};
-    });
+    return function_use::make(
+      [expr = std::move(expr),
+       sep = std::move(sep.value())](evaluator eval, session ctx) -> series {
+        auto s = eval(expr);
+        auto ptr = std::dynamic_pointer_cast<arrow::StructArray>(s.array);
+        if (not ptr) {
+          diagnostic::warning("expected `record`, got `{}`", s.type.kind())
+            .primary(expr)
+            .emit(ctx);
+        }
+        auto flattened = tenzir::flatten(s.type, ptr, sep);
+        if (not flattened.renamed_fields.empty()) {
+          diagnostic::warning("renamed fields with conflicting names after "
+                              "flattening: {}",
+                              fmt::join(flattened.renamed_fields, ", "))
+            .primary(expr)
+            .emit(ctx);
+        }
+        return {flattened.schema, flattened.array};
+      });
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {

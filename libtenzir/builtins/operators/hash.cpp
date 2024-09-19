@@ -203,19 +203,19 @@ class plugin2 : public virtual function_plugin {
   auto make_function(invocation inv,
                      session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
-    auto salt = std::optional<std::string>{};
+    auto seed = std::optional<std::string>{};
     TRY(argument_parser2::function("xxhash3")
-          .add(expr, "<field>")
-          .add(salt, "[salt]")
+          .add(expr, "<expr>")
+          .add("seed", seed)
           .parse(inv, ctx));
     return function_use::make(
-      [expr_ = std::move(expr), salt_ = std::move(salt)](evaluator eval,
+      [expr_ = std::move(expr), seed_ = std::move(seed)](evaluator eval,
                                                          session) -> series {
         const auto& s = eval(expr_);
         auto b = string_type::make_arrow_builder(arrow::default_memory_pool());
         for (const auto& value : values(s.type, *s.array)) {
           const auto& hash
-            = salt_ ? tenzir::hash(value, salt_.value()) : tenzir::hash(value);
+            = seed_ ? tenzir::hash(value, seed_.value()) : tenzir::hash(value);
           check(b->Append(fmt::format("{:x}", hash)));
         }
         return {string_type{}, finish(*b)};

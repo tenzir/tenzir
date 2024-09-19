@@ -99,10 +99,8 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
-    (void)order;
-    (void)filter;
+  auto
+  optimize(expression const&, event_order) const -> optimize_result override {
     return do_not_optimize(*this);
   }
 
@@ -120,9 +118,9 @@ public:
     return {.source = true};
   }
 
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    argument_parser2::operator_("openapi").parse(inv, ctx).ignore();
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    TRY(argument_parser2::operator_("openapi").parse(inv, ctx));
     return std::make_unique<openapi_operator>();
   }
 

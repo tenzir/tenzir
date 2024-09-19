@@ -286,7 +286,7 @@ auto decapsulate(const series& s, diagnostic_handler& dh,
   // Get the packet payload.
   if (s.type.kind().is_not<record_type>()) {
     if (s.type.kind().is_not<null_type>()) {
-      diagnostic::warning("cannot decapsulate type `{}`", s.type).emit(dh);
+      diagnostic::warning("expected `record`, got `{}`", s.type.kind()).emit(dh);
     }
     return std::nullopt;
   }
@@ -416,7 +416,7 @@ public:
                      session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::function("tql2.decapsulate")
-          .add(expr, "<field>")
+          .add(expr, "<expr>")
           .parse(inv, ctx));
     return function_use::make(
       [expr = std::move(expr)](evaluator eval, session ctx) -> series {

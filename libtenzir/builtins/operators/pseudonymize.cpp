@@ -213,8 +213,8 @@ class plugin2 : public virtual function_plugin {
     auto expr = ast::expression{};
     auto seed = std::optional<std::string>{};
     TRY(argument_parser2::function(name())
-          .add(expr, "<field>")
-          .add(seed, "<seed>")
+          .add(expr, "<expr>")
+          .add("seed", seed)
           .parse(inv, ctx));
     auto seed_bytes
       = std::array<ip::byte_type,
@@ -243,7 +243,7 @@ class plugin2 : public virtual function_plugin {
         auto ptr = std::dynamic_pointer_cast<ip_type::array_type>(s.array);
         if (not ptr) {
           // XXX: Try coercion?
-          diagnostic::error("expected type `ip`, got `{}`", s.type)
+          diagnostic::warning("expected type `ip`, got `{}`", s.type)
             .primary(expr)
             .emit(ctx);
           return series::null(ip_type{}, s.length());

@@ -381,7 +381,7 @@ public:
       .ignore();
 
     if (max_wait && max_wait->inner < 1s) {
-      diagnostic::error("max_wait too low")
+      diagnostic::error("`max_wait` too low")
         .primary(max_wait->source)
         .hint("value must be great than 1s")
         .emit(ctx);

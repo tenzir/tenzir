@@ -65,7 +65,7 @@ public:
       diagnostic::warning("expected `{}`, got `{}`", type_, arg.type)
         .primary(expr_)
         .emit(ctx);
-      return caf::none_t{};
+      return caf::none;
     };
     auto f = detail::overload{
       [](const arrow::NullArray&) {},
@@ -122,7 +122,7 @@ public:
                             arg.type)
           .primary(expr_)
           .emit(ctx);
-        min_ = caf::none_t{};
+        min_ = caf::none;
       }};
     caf::visit(f, *arg.array);
   }
@@ -174,9 +174,7 @@ class plugin : public virtual aggregation_function_plugin,
   auto make_aggregation(invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function("tql2.min")
-          .add(expr, "<expr>")
-          .parse(inv, ctx));
+    TRY(argument_parser2::function(name()).add(expr, "<expr>").parse(inv, ctx));
     return std::make_unique<min_instance>(std::move(expr));
   }
 

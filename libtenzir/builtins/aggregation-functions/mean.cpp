@@ -119,9 +119,9 @@ public:
         }
       },
       [&](const auto&) {
-        diagnostic::error("expected types `int`, `uint`, "
-                          "`double` or `duration`, got `{}`",
-                          arg.type)
+        diagnostic::warning("expected types `int`, `uint`, "
+                            "`double` or `duration`, got `{}`",
+                            arg.type)
           .primary(expr_)
           .emit(ctx);
         state_ = state::failed;
@@ -184,9 +184,7 @@ class plugin : public virtual aggregation_function_plugin,
   auto make_aggregation(invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function("tql2.mean")
-          .add(expr, "<expr>")
-          .parse(inv, ctx));
+    TRY(argument_parser2::function(name()).add(expr, "<expr>").parse(inv, ctx));
     return std::make_unique<mean_instance>(std::move(expr));
   }
 

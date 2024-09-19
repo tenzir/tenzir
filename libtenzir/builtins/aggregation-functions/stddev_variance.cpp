@@ -83,8 +83,10 @@ private:
 
 class stddev_variance_instance final : public aggregation_instance {
 public:
-  stddev_variance_instance(ast::expression expr) : expr_{std::move(expr)} {
+  stddev_variance_instance(ast::expression expr, mode m)
+    : mode_{m}, expr_{std::move(expr)} {
   }
+
   auto update(const table_slice& input, session ctx) -> void override {
     if (state_ == state::failed) {
       return;
@@ -100,6 +102,13 @@ public:
           if (state_ != state::dur and state_ != state::none) {
             diagnostic::warning("expected `int`, `uint` or `double`, got `{}`",
                                 arg.type)
+              .primary(expr_)
+              .emit(ctx);
+            state_ = state::failed;
+            return;
+          }
+          if (mode_ == mode::variance) {
+            diagnostic::warning("variance does not support type `duration`")
               .primary(expr_)
               .emit(ctx);
             state_ = state::failed;
@@ -163,7 +172,7 @@ private:
   double mean_squared_ = {};
   size_t count_ = {};
   mode mode_ = {};
-  enum class state { none, failed, dur, numeric } state_{};
+  enum class state { none, failed, dur, numeric } state_{state::none};
   ast::expression expr_;
 };
 
@@ -202,11 +211,8 @@ class plugin : public virtual aggregation_function_plugin,
   auto make_aggregation(invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function(Mode == mode::stddev ? "tql2.stddev"
-                                                        : "tql2.variance")
-          .add(expr, "<expr>")
-          .parse(inv, ctx));
-    return std::make_unique<stddev_variance_instance>(std::move(expr));
+    TRY(argument_parser2::function(name()).add(expr, "<expr>").parse(inv, ctx));
+    return std::make_unique<stddev_variance_instance>(std::move(expr), Mode);
   }
 
   auto aggregation_default() const -> data override {

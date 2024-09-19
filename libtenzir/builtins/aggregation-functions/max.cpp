@@ -68,7 +68,7 @@ public:
       diagnostic::warning("expected `{}`, got `{}`", type_, arg.type)
         .primary(expr_)
         .emit(ctx);
-      return caf::none_t{};
+      return caf::none;
     };
     // TODO: Matching on type of max_ might be better to reduce function calls
     auto f = detail::overload{
@@ -126,7 +126,7 @@ public:
                             arg.type)
           .primary(expr_)
           .emit(ctx);
-        max_ = caf::none_t{};
+        max_ = caf::none;
       }};
     caf::visit(f, *arg.array);
   }
@@ -178,9 +178,7 @@ class plugin : public virtual aggregation_function_plugin,
   auto make_aggregation(invocation inv, session ctx) const
     -> failure_or<std::unique_ptr<aggregation_instance>> override {
     auto expr = ast::expression{};
-    TRY(argument_parser2::function("tql2.max")
-          .add(expr, "<expr>")
-          .parse(inv, ctx));
+    TRY(argument_parser2::function(name()).add(expr, "<expr>").parse(inv, ctx));
     return std::make_unique<max_instance>(std::move(expr));
   }
 

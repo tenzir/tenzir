@@ -19,12 +19,6 @@ enumerate [<field>]
 The `enumerate` operator prepends a new column with row numbers to the beginning
 of the input record.
 
-:::note Per-schema Counting
-The operator counts row numbers per schema. We plan to change this behavior with
-a in the future once we have a modifer that toggles "per-schema-ness"
-explicitly.
-:::
-
 ### `<field>`
 
 Sets the name of the output field.

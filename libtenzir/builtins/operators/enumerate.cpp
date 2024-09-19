@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/concept/parseable/tenzir/option_set.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/detail/escapers.hpp>
@@ -17,9 +18,12 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/table_slice_builder.hpp>
+#include <tenzir/tql2/eval.hpp>
 #include <tenzir/tql2/plugin.hpp>
+#include <tenzir/tql2/set.hpp>
 
 #include <arrow/type.h>
+#include <arrow/type_fwd.h>
 
 #include <unordered_set>
 
@@ -27,8 +31,6 @@ namespace tenzir::plugins::enumerate {
 
 namespace {
 
-// TODO: refactor this once we have a modifier that allows for toggling
-// between intra-schema and inter-schema processing.
 class enumerate_operator final : public crtp_operator<enumerate_operator> {
   static constexpr auto default_field_name = "#";
 
@@ -42,8 +44,8 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  operator()(generator<table_slice> input,
+             operator_control_plane& ctrl) const -> generator<table_slice> {
     auto current_type = type{};
     std::unordered_map<type, uint64_t> offsets;
     std::unordered_set<type> skipped_schemas;
@@ -102,9 +104,8 @@ public:
     return "enumerate";
   }
 
-  auto optimize(expression const& filter, event_order) const
-    -> optimize_result override {
-    (void)filter;
+  auto
+  optimize(expression const&, event_order) const -> optimize_result override {
     return optimize_result{std::nullopt, event_order::ordered, copy()};
   }
 
@@ -116,21 +117,54 @@ private:
   std::string field_;
 };
 
-class plugin final : public virtual operator_plugin<enumerate_operator>,
-                     public virtual operator_factory_plugin {
+class enumerate_operator2 final : public crtp_operator<enumerate_operator2> {
+public:
+  enumerate_operator2() = default;
+
+  explicit enumerate_operator2(ast::simple_selector selector)
+    : selector_{std::move(selector)} {
+  }
+
+  auto
+  operator()(generator<table_slice> input,
+             operator_control_plane& ctrl) const -> generator<table_slice> {
+    auto idx = int64_t{};
+    for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield {};
+        continue;
+      }
+      auto b = int64_type::make_arrow_builder(arrow::default_memory_pool());
+      check(b->Reserve(slice.rows()));
+      for (auto i = int64_t{}; i < detail::narrow<int64_t>(slice.rows()); ++i) {
+        check(b->Append(idx++));
+      }
+      co_yield assign(selector_, series{int64_type{}, finish(*b)}, slice,
+                      ctrl.diagnostics());
+    }
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.enumerate";
+  }
+
+  auto
+  optimize(expression const&, event_order) const -> optimize_result override {
+    return optimize_result{std::nullopt, event_order::ordered, copy()};
+  }
+
+private:
+  friend auto inspect(auto& f, enumerate_operator2& x) -> bool {
+    return f.apply(x.selector_);
+  }
+
+  ast::simple_selector selector_;
+};
+
+class plugin final : public virtual operator_plugin<enumerate_operator> {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
-  }
-
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    std::string field;
-    argument_parser2::operator_("enumerate")
-      .add(field, "field")
-      .parse(inv, ctx)
-      .ignore();
-    return std::make_unique<enumerate_operator>(std::move(field));
   }
 
   auto make_operator(std::string_view pipeline) const
@@ -158,8 +192,23 @@ public:
   }
 };
 
+class plugin2 final : public virtual operator_plugin2<enumerate_operator2> {
+public:
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto selector = ast::simple_selector::try_from(
+      ast::root_field{ast::identifier{"#", inv.self.get_location()}});
+    TENZIR_ASSERT(selector.has_value());
+    TRY(argument_parser2::operator_("enumerate")
+          .add(selector, "selector")
+          .parse(inv, ctx));
+    return std::make_unique<enumerate_operator2>(std::move(selector.value()));
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::enumerate
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::enumerate::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::enumerate::plugin2)

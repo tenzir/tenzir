@@ -994,9 +994,6 @@ auto make_rename_transformation(std::string new_name)
 
 auto flatten(type schema, const std::shared_ptr<arrow::StructArray>& array,
              std::string_view separator) -> flatten_array_result {
-  // if (slice.rows() == 0) {
-  //   return {std::move(slice), {}};
-  // }
   // We cannot use arrow::StructArray::Flatten here because that does not
   // work recursively, see apache/arrow#20683. Hence, we roll our own version
   // here.
@@ -1008,11 +1005,8 @@ auto flatten(type schema, const std::shared_ptr<arrow::StructArray>& array,
     transformations.push_back(
       {offset{i}, make_flatten_transformation(separator, "", {})});
   }
-  // slice = transform_columns(slice, transformations);
   const auto& [new_schema, transformed]
     = transform_columns(schema, array, transformations);
-  // Flattening cannot fail.
-  // TENZIR_ASSERT(slice.rows() > 0);
   // The slice may contain duplicate field name here, so we perform an
   // additional transformation to rename them in case we detect any.
   transformations.clear();
@@ -1060,14 +1054,13 @@ auto flatten(type schema, const std::shared_ptr<arrow::StructArray>& array,
   const auto& [sch, arr]
     = transform_columns(new_schema, transformed, transformations);
   return {sch, arr, renamed_fields};
-  // Renaming cannot fail.
-  // TENZIR_ASSERT(slice.rows() > 0);
 }
 
 auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
   if (slice.rows() == 0) {
-    return {};
+    return {std::move(slice), {}};
   }
+  // XXX: Should this assume the schema is a record or return diagnostics?
   if (caf::get<record_type>(slice.schema()).num_fields() == 0) {
     return {std::move(slice), {}};
   }
@@ -1082,6 +1075,8 @@ auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
   auto result = table_slice{batch, std::move(schema)};
   result.offset(slice.offset());
   result.import_time(slice.import_time());
+  // Flattening cannot fail.
+  TENZIR_ASSERT(result.rows() > 0);
   return {result, renamed};
 }
 
