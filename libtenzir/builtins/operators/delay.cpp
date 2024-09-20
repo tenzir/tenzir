@@ -268,9 +268,9 @@ class plugin2 final : public virtual operator_plugin2<delay_operator2> {
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto speed = std::optional<located<double>>{};
     auto start = std::optional<time>{};
-    auto field = ast::expression{};
+    auto expr = ast::expression{};
     argument_parser2::operator_("delay")
-      .add(field, "<field>")
+      .add(expr, "<expr>")
       .add("speed", speed)
       .add("start", speed)
       .parse(inv, ctx)
@@ -281,7 +281,7 @@ class plugin2 final : public virtual operator_plugin2<delay_operator2> {
         .emit(ctx);
       return failure::promise();
     }
-    return std::make_unique<delay_operator2>(std::move(field),
+    return std::make_unique<delay_operator2>(std::move(expr),
                                              speed ? speed->inner : 1.0, start);
   }
 };

@@ -64,7 +64,8 @@ public:
       type_ = s.type;
     }
     const auto warn = [&](const auto&) -> sum_t {
-      diagnostic::warning("expected `{}`, got `{}`", type_, s.type)
+      diagnostic::warning("got incompatible types `{}` and `{}`", type_.kind(),
+                          s.type.kind())
         .primary(expr_)
         .emit(ctx);
       return caf::none;
@@ -83,24 +84,25 @@ public:
         sum_ = sum_->match(
           warn,
           [&](std::integral auto& self) -> sum_t {
-            if (not std::in_range<Type>(self)) {
-              diagnostic::warning("integer overflow").primary(expr_).emit(ctx);
-              return caf::none;
-            }
-            auto result = detail::narrow_cast<Type>(self);
+            auto array_sum = Type{};
             for (auto i = int64_t{}; i < array.length(); ++i) {
               if (array.IsValid(i)) {
-                auto checked = checked_add(result, array.Value(i));
+                auto checked = checked_add(array_sum, array.Value(i));
                 if (not checked) {
                   diagnostic::warning("integer overflow")
                     .primary(expr_)
                     .emit(ctx);
                   return caf::none;
                 }
-                result = checked.value();
+                array_sum = checked.value();
               }
             }
-            return result;
+            auto checked = checked_add(self, array_sum);
+            if (not checked) {
+              diagnostic::warning("integer overflow").primary(expr_).emit(ctx);
+              return caf::none;
+            }
+            return checked.value();
           },
           [&](double self) -> sum_t {
             for (auto i = int64_t{}; i < array.length(); ++i) {
@@ -147,8 +149,9 @@ public:
         });
       },
       [&](const auto&) {
-        diagnostic::warning(
-          "expected `int`, `uint`, `double` or `duration`, got `{}`", s.type)
+        diagnostic::warning("expected `int`, `uint`, `double` or `duration`, "
+                            "got `{}`",
+                            s.type.kind())
           .primary(expr_)
           .emit(ctx);
         sum_ = caf::none;

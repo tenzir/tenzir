@@ -1060,7 +1060,6 @@ auto flatten(table_slice slice, std::string_view separator) -> flatten_result {
   if (slice.rows() == 0) {
     return {std::move(slice), {}};
   }
-  // XXX: Should this assume the schema is a record or return diagnostics?
   if (caf::get<record_type>(slice.schema()).num_fields() == 0) {
     return {std::move(slice), {}};
   }

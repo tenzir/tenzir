@@ -49,7 +49,6 @@ private:
   }
 
   auto finish() && -> caf::expected<data> override {
-    // XXX: Why exchange? Is this same instance reused?
     return data{std::exchange(result_, {})};
   }
 

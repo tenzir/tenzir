@@ -91,6 +91,7 @@ public:
           diagnostic::warning("expected `record`, got `{}`", s.type.kind())
             .primary(expr)
             .emit(ctx);
+          return series::null(null_type{}, s.length());
         }
         auto flattened = tenzir::flatten(s.type, ptr, sep);
         if (not flattened.renamed_fields.empty()) {

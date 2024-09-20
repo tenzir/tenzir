@@ -89,7 +89,7 @@ public:
         if constexpr (std::same_as<T, arrow::DurationArray>) {
           if (state_ != state::dur and state_ != state::none) {
             diagnostic::warning("expected `int`, `uint` or `double`, got `{}`",
-                                arg.type)
+                                arg.type.kind())
               .primary(expr_)
               .emit(ctx);
             state_ = state::failed;
@@ -98,7 +98,8 @@ public:
           state_ = state::dur;
         } else {
           if (state_ != state::numeric and state_ != state::none) {
-            diagnostic::warning("expected `duration`, got `{}`", arg.type)
+            diagnostic::warning("got incompatible types `duration` and `{}`",
+                                arg.type.kind())
               .primary(expr_)
               .emit(ctx);
             state_ = state::failed;
@@ -121,7 +122,7 @@ public:
       [&](const auto&) {
         diagnostic::warning("expected types `int`, `uint`, "
                             "`double` or `duration`, got `{}`",
-                            arg.type)
+                            arg.type.kind())
           .primary(expr_)
           .emit(ctx);
         state_ = state::failed;

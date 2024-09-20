@@ -403,7 +403,7 @@ public:
     }
     if (args.requests.empty()) {
       diagnostic::error("no artifact subscription or VQL expression provided")
-        .hint("specify `subscirbe=<artifact>` for a subscription")
+        .hint("specify `subscribe=<artifact>` for a subscription")
         .hint("specify `query=<vql>` to run a VQL expression")
         .emit(ctx);
       return failure::promise();
@@ -509,7 +509,7 @@ public:
     }
     if (args.requests.empty()) {
       diagnostic::error("no artifact subscription or VQL expression provided")
-        .hint("use -s,--subscirbe <artifact> for a subscription")
+        .hint("use -s,--subscribe <artifact> for a subscription")
         .hint("use -q,--query <vql> to run a VQL expression")
         .throw_();
     }

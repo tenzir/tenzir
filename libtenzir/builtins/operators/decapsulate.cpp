@@ -352,7 +352,6 @@ auto decapsulate(const series& s, diagnostic_handler& dh,
       },
     };
     const auto ptr = std::dynamic_pointer_cast<arrow::StructArray>(new_s.array);
-    // XXX: check or assert
     TENZIR_ASSERT(ptr);
     auto [ty, transformed]
       = transform_columns(new_s.type, ptr, {std::move(transformation)});

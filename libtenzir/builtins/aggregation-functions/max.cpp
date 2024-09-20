@@ -65,7 +65,8 @@ public:
       type_ = arg.type;
     }
     const auto warn = [&](const auto&) -> max_t {
-      diagnostic::warning("expected `{}`, got `{}`", type_, arg.type)
+      diagnostic::warning("got incompatible types `{}` and `{}`", type_.kind(),
+                          arg.type.kind())
         .primary(expr_)
         .emit(ctx);
       return caf::none;
@@ -123,7 +124,7 @@ public:
       [&](const auto&) {
         diagnostic::warning("expected types `int`, `uint`, "
                             "`double` or `duration`, got `{}`",
-                            arg.type)
+                            arg.type.kind())
           .primary(expr_)
           .emit(ctx);
         max_ = caf::none;

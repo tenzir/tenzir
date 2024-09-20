@@ -242,8 +242,7 @@ class plugin2 : public virtual function_plugin {
         }
         auto ptr = std::dynamic_pointer_cast<ip_type::array_type>(s.array);
         if (not ptr) {
-          // XXX: Try coercion?
-          diagnostic::warning("expected type `ip`, got `{}`", s.type)
+          diagnostic::warning("expected type `ip`, got `{}`", s.type.kind())
             .primary(expr)
             .emit(ctx);
           return series::null(ip_type{}, s.length());

@@ -302,7 +302,8 @@ public:
       [&]<concepts::one_of<double_type, int64_type, uint64_type> Type>(
         const Type& ty) {
         if (state_ != state::numeric and state_ != state::none) {
-          diagnostic::warning("expected `number`, got `{}`", arg.type)
+          diagnostic::warning("got incompatible types `number` and `{}`",
+                              arg.type.kind())
             .primary(expr_)
             .emit(ctx);
           state_ = state::failed;
@@ -318,7 +319,8 @@ public:
       },
       [&](const duration_type& ty) {
         if (state_ != state::dur and state_ != state::none) {
-          diagnostic::warning("expected `duration`, got `{}`", arg.type)
+          diagnostic::warning("got incompatible types `duration` and `{}`",
+                              arg.type.kind())
             .primary(expr_)
             .emit(ctx);
           state_ = state::failed;
@@ -336,7 +338,9 @@ public:
         // Silently ignore nulls, like we do above.
       },
       [&](const auto&) {
-        diagnostic::warning("expected `number`, got `{}`", arg.type.kind())
+        diagnostic::warning("expected `int`, `uint`, `double` or `duration`, "
+                            "got `{}`",
+                            arg.type.kind())
           .primary(expr_)
           .emit(ctx);
         state_ = state::failed;

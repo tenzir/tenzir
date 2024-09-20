@@ -643,6 +643,7 @@ public:
         diagnostic::error("expected type string for rule")
           .primary(rules)
           .emit(ctx);
+        return failure::promise();
       }
       args.rules.push_back(std::move(caf::get<std::string>(rule)));
     }
