@@ -1,1 +1,0 @@
-"use strict";(self.webpackChunkdocs=self.webpackChunkdocs||[]).push([[48791],{9722:(e,t,c)=>{c.d(t,{A:()=>r});var s=c(96540);const r=({url:e})=>(s.useEffect((()=>{window.location.replace(e)}),[]),null)},64840:(e,t,c)=>{c.r(t),c.d(t,{default:()=>l});var s=c(9722),r=c(96540);const l=()=>r.createElement(s.A,{url:"https://github.com/orgs/tenzir/projects/8"})}}]);
