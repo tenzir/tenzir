@@ -82,6 +82,33 @@ EOF
   '
 }
 
+@test "replace_regex" {
+  check tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace_regex("[0-9a-f]{2}", "??")
+  '
+  check tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace_regex("[0-9a-f]{2}", "??", max=0)
+  '
+  check tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace_regex("[0-9a-f]{2}", "??", max=4)
+  '
+  check tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace_regex("[0-9a-f]{2}", "??", max=100)
+  '
+  check ! tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace_regex("[0-9a-f]{2}", "??", max=-1)
+  '
+  check ! tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace_regex("[0-9a-f{2}", "??")
+  '
+}
+
 @test "slice" {
   check tenzir '
     from {

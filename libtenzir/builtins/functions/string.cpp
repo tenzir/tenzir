@@ -199,14 +199,18 @@ private:
 
 class replace : public virtual method_plugin {
 public:
+  replace() = default;
+  explicit replace(bool regex) : regex_{regex} {
+  }
+
   auto name() const -> std::string override {
-    return "tql2.replace";
+    return regex_ ? "tql2.replace_regex" : "tql2.replace";
   }
 
   auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
-    auto pattern = std::string{};
+    auto pattern = located<std::string>{};
     auto replacement = std::string{};
     auto max_replacements = std::optional<located<int64_t>>{};
     TRY(argument_parser2::method(name())
@@ -235,12 +239,16 @@ public:
           [&](const arrow::StringArray& array) {
             auto max = max_replacements ? max_replacements->inner : -1;
             auto options = arrow::compute::ReplaceSubstringOptions(
-              pattern, replacement, max);
-            auto result = arrow::compute::CallFunction("replace_substring",
-                                                       {array}, &options);
+              pattern.inner, replacement, max);
+            auto result = arrow::compute::CallFunction(
+              regex_ ? "replace_substring_regex" : "replace_substring", {array},
+              &options);
             if (not result.ok()) {
-              diagnostic::warning("{}", result.status().ToString())
-                .primary(subject_expr)
+              diagnostic::warning("{}",
+                                  result.status().ToStringWithoutContextLines())
+                .severity(result.status().IsInvalid() ? severity::error
+                                                      : severity::warning)
+                .primary(pattern.source)
                 .emit(ctx);
               return series::null(result_type, subject.length());
             }
@@ -260,6 +268,9 @@ public:
         return caf::visit(f, *subject.array);
       });
   }
+
+private:
+  bool regex_ = {};
 };
 
 class slice : public virtual method_plugin {
@@ -282,7 +293,8 @@ public:
           .parse(inv, ctx));
     if (stride) {
       if (stride->inner <= 0) {
-        diagnostic::error("`stride` must be greater 0, but got {}", stride->inner)
+        diagnostic::error("`stride` must be greater 0, but got {}",
+                          stride->inner)
           .primary(*stride)
           .emit(ctx);
       }
@@ -362,5 +374,6 @@ TENZIR_REGISTER_PLUGIN(nullary_method{"length_bytes", "binary_length",
 TENZIR_REGISTER_PLUGIN(nullary_method{"length_chars", "utf8_length",
                                       int64_type{}});
 
-TENZIR_REGISTER_PLUGIN(replace);
+TENZIR_REGISTER_PLUGIN(replace{true});
+TENZIR_REGISTER_PLUGIN(replace{false});
 TENZIR_REGISTER_PLUGIN(slice);
