@@ -50,7 +50,8 @@ Charlie,44
 
 Assuming you have already [created a custom
 table](https://learn.microsoft.com/en-us/azure/azure-monitor/logs/create-custom-table#create-a-custom-table)
-called `Custom-Users`, you can send this file to the table as follows:
+called `Custom-Users`, you can send this file to the table using the
+[`azure-log-analytics`](../operators/azure-log-analytics.md) operator:
 
 ```
 from users.csv
