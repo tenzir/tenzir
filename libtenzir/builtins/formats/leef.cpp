@@ -152,9 +152,9 @@ auto parse_attributes(char delimiter, std::string_view attributes,
     auto key = attribute.substr(0, sep_pos);
     auto value
       = unescape(detail::unquote(detail::trim(attribute.substr(sep_pos + 1))));
-    if constexpr (detail::multi_series_builder::has_unflattend_field<
+    if constexpr (detail::multi_series_builder::has_unflattened_field<
                     decltype(builder)>) {
-      auto field = builder.unflattend_field(key);
+      auto field = builder.unflattened_field(key);
       field.data_unparsed(std::move(value));
     } else {
       auto field = builder.field(key);

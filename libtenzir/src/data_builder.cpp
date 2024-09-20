@@ -1271,6 +1271,24 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
     } else {
       final_index = idx_int;
     }
+    for (auto& e : alive_elements()) {
+      const auto visitor = detail::overload{
+        [](const auto&) {
+          TENZIR_UNREACHABLE();
+        },
+        [&]<numeric_data_type T>(const T& value) {
+          switch (final_index) {
+            case idx_int:
+              return e.data(static_cast<int64_t>(value));
+            case idx_uint:
+              return e.data(static_cast<uint64_t>(value));
+            case idx_double:
+              return e.data(static_cast<double>(value));
+          }
+        },
+      };
+      std::visit(visitor, e.data_);
+    }
     sig.push_back(static_cast<std::byte>(final_index));
   } else {
     ///////////

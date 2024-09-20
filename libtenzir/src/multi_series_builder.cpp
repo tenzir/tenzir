@@ -51,7 +51,7 @@ auto record_generator::field(std::string_view name) -> object_generator {
   return exact_field(name);
 }
 
-auto record_generator::unflattend_field(
+auto record_generator::unflattened_field(
   std::string_view key, std::string_view unflatten) -> object_generator {
   if (unflatten.empty()) {
     return exact_field(key);
@@ -63,12 +63,12 @@ auto record_generator::unflattend_field(
   const auto pre = key.substr(0, i);
   const auto post = key.substr(i + unflatten.size());
 
-  return exact_field(pre).record().unflattend_field(post, unflatten);
+  return exact_field(pre).record().unflattened_field(post, unflatten);
 }
 
-auto record_generator::unflattend_field(std::string_view key)
+auto record_generator::unflattened_field(std::string_view key)
   -> object_generator {
-  return unflattend_field(key, msb_->settings_.unnest_separator);
+  return unflattened_field(key, msb_->settings_.unnest_separator);
 }
 
 auto object_generator::data(const tenzir::data& d) -> void {

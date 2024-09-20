@@ -460,7 +460,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
             .note("line {} has {} values, but should have {} values",
                   line_counter, field_idx, original_field_count)
             .emit(ctrl.diagnostics());
-          r.unflattend_field(fields[field_idx]).null();
+          r.unflattened_field(fields[field_idx]).null();
           continue;
         } else {
           break;
@@ -489,7 +489,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
           break;
         }
       }
-      auto field = r.unflattend_field(fields[field_idx]);
+      auto field = r.unflattened_field(fields[field_idx]);
       const auto field_end
         = detail::find_first_not_in_quotes(*line, args.field_sep);
       auto field_text = line->substr(0, field_end);
@@ -523,7 +523,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
       line->remove_prefix(std::min(field_text.size() + 1, line->size()));
     }
     for (; field_idx < fields.size(); ++field_idx) {
-      r.unflattend_field(fields[field_idx]).null();
+      r.unflattened_field(fields[field_idx]).null();
     }
   }
   for (auto& v : msb.finalize_as_table_slice()) {

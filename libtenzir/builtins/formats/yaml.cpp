@@ -67,7 +67,7 @@ auto parse_node(auto guard, const YAML::Node& node,
       auto record = guard.record();
       for (const auto& element : node) {
         const auto& name = element.first.as<std::string>();
-        parse_node(record.unflattend_field(name), element.second, diag);
+        parse_node(record.unflattened_field(name), element.second, diag);
       }
       return;
     }
@@ -87,7 +87,7 @@ auto load_document(multi_series_builder& msb, std::string&& document,
     added_event = true;
     for (const auto& element : node) {
       const auto& name = element.first.as<std::string>();
-      parse_node(record.unflattend_field(name), element.second, diag);
+      parse_node(record.unflattened_field(name), element.second, diag);
     }
   } catch (const YAML::Exception& err) {
     diagnostic::warning("failed to load YAML document: {}", err.what())

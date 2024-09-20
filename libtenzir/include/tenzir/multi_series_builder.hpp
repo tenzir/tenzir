@@ -64,11 +64,11 @@ public:
 
   /// @brief Creates an explicitly unflattend field. This function does
   /// not respect the builders unflatten setting.
-  auto unflattend_field(std::string_view key,
-                        std::string_view unflatten) -> object_generator;
+  auto unflattened_field(std::string_view key,
+                         std::string_view unflatten) -> object_generator;
   /// @brief Creates an explicitly unflattend field according to the
   /// `multi_series_builder`s unflatten setting.
-  auto unflattend_field(std::string_view key) -> object_generator;
+  auto unflattened_field(std::string_view key) -> object_generator;
 
 private:
   class multi_series_builder* msb_ = nullptr;
@@ -182,15 +182,15 @@ concept has_exact_field
   = requires(T& t, std::string key) { t.exact_field(key); };
 
 template <typename T>
-concept has_unflattend_field
-  = requires(T& t, std::string key) { t.unflattend_field(key); };
+concept has_unflattened_field
+  = requires(T& t, std::string key) { t.unflattened_field(key); };
 
 template <typename T>
 concept has_data_unparsed
   = requires(T& t, std::string_view txt) { t.data_unparsed(txt); };
 
 static_assert(has_exact_field<record_generator>);
-static_assert(has_unflattend_field<record_generator>);
+static_assert(has_unflattened_field<record_generator>);
 static_assert(has_data_unparsed<object_generator>);
 
 auto series_to_table_slice(series array, std::string_view fallback_name
@@ -216,7 +216,7 @@ auto series_to_table_slice(std::vector<series> data,
 /// * data_unparsed( string ) inserts a value that will be parsed later on
 /// * record_generator::field( string ) inserts a field that will be unflattend
 /// * record_generator::exact_field( string ) inserts a field with the exact name
-/// * record_generator::unflattend_field inserts a field that is explicitly
+/// * record_generator::unflattened_field inserts a field that is explicitly
 ///   unflattend
 class multi_series_builder {
 public:

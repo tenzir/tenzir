@@ -62,7 +62,7 @@ to huge schemas filled with nulls and imprecise results. Use with caution.
 
 \*: In selector mode, only events with the same selector are merged.
 
-This option can not be combined with the `--raw --schema`.
+This option can not be combined with `--raw --schema`.
 
 ### `--schema <schema>` (Parsers)
 
@@ -76,7 +76,7 @@ can be used to reject fields that are not in the schema.
 
 If the given schema does not exist, this option instead assigns the output schema name only.
 
-This option can not be combined with `--selector` or the combination `--raw --merge`.
+This option can not be combined with `--selector` or `--raw --merge`.
 
 ### `--selector <field>[:<prefix>]` (Parsers)
 
@@ -143,7 +143,7 @@ JSON however has numeric types, so those would be parsed.
 
 Use with caution.
 
-This option can not be combined with the combination `--merge --schema`.
+This option can not be combined with `--merge --schema`.
 
 ## MIME Types
 

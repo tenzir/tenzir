@@ -1,6 +1,8 @@
-Most parsers now properly adhere to schema of the read data. Previously, parsers
-would merge heterogeneous input into a single, growing schema, inserting nulls
-for fields that did not exist in an event.
+The CEF, CSV, GELF, JSON, LEEF, Suricata, XSV, YAML, Zeek JSON parsers
+now properly adhere to the schema of the read data. Previously, parsers
+would merge heterogeneous input into a single, growing schema,
+inserting nulls for fields that did not exist in some events.
 
-Most parsers now support `--schema`, `--selector` and various other flags
-to parse their data according to some predefined schema.
+These parsers now also support the `--schema`, `--selector` flags to
+parse their data according to some given schema, as well as various other
+flags to more precisely control their output schema.

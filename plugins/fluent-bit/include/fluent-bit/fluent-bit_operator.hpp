@@ -566,7 +566,7 @@ auto add(auto field, const msgpack_object& object, diagnostic_handler& dh,
           return false;
         }
         auto key = msgpack::to_str(kvp.key);
-        auto field = record.unflattend_field(key);
+        auto field = record.unflattened_field(key);
         // TODO: restrict this attempt to decode to the top-level field "log"
         // only. We currently attempt to parse *all* fields named "log" as JSON.
         if (not add(field, kvp.val, dh, key == "log")) {

@@ -99,9 +99,9 @@ auto parse_extension(std::string_view extension,
                        : extension.find_last_of(" \t", kv_sep);
     auto value
       = unescape(detail::unquote(detail::trim(extension.substr(0, value_end))));
-    if constexpr (detail::multi_series_builder::has_unflattend_field<
+    if constexpr (detail::multi_series_builder::has_unflattened_field<
                     decltype(builder)>) {
-      auto field = builder.unflattend_field(key);
+      auto field = builder.unflattened_field(key);
       field.data_unparsed(std::move(value));
     } else {
       auto field = builder.field(key);

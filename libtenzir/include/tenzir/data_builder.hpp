@@ -116,9 +116,13 @@ concept non_structured_type_type
                              map_type>;
 
 template <typename T>
-concept numeric_data_type
+concept numeric_type_type
   = non_structured_data_type<T>
     and detail::is_any_v<T, uint64_type, int64_type, double_type>;
+
+template <typename T>
+concept numeric_data_type = non_structured_data_type<T>
+                            and detail::is_any_v<T, uint64_t, int64_t, double>;
 
 template <typename T>
 concept unsupported_type
@@ -532,12 +536,9 @@ constexpr static std::byte list_error_marker{0xfe};
 /// directly into a `series_builder` instead.
 /// * record() inserts a record
 /// * list() inserts a list
+/// * record.field( name ) inserts a field into a record
 /// * data( value ) inserts a value
 /// * data_unparsed( string ) inserts a value that will be parsed later on
-/// * record_generator::field( string ) inserts a field that will be unflattend
-/// * record_generator::exact_field( string ) inserts a field with the exact name
-/// * record_generator::unflattend_field inserts a field that is explicitly
-///   unflattend
 class data_builder {
   friend class detail::data_builder::node_list;
   friend class detail::data_builder::node_record;

@@ -94,18 +94,18 @@ The XSV parser supports the common [schema inference options](formats.md#parser-
 ### `<field-sep>`
 
 Specifies the string that separates fields.
-This is required for `XSV`and cannot be set for any of the other variations.
+This is required for `XSV` and cannot be set for any of the other variations.
 
 ### `<list-sep>`
 
 Specifies the string that separates list elements *within* a field.
- This is required for `XSV`, but can be explicitly changed from the respective
- default for the other parsers.
+This is required for `XSV`, but can be explicitly changed from the respective
+default for the other parsers.
 
 ### `<null-value>`
 
 Specifies the string that denotes an absent value. This is required for `XSV`,
- but can be explicitly changed from the respective default for the other parsers.
+but can be explicitly changed from the respective default for the other parsers.
 
 ### `--allow-comments` (Parser)
 

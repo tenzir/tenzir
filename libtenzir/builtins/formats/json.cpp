@@ -190,7 +190,7 @@ public:
       if constexpr (std::same_as<detail::multi_series_builder::record_generator,
                                  decltype(builder)>) {
         value_parse_success = parse_value(
-          val.value_unsafe(), builder.unflattend_field(key), depth + 1);
+          val.value_unsafe(), builder.unflattened_field(key), depth + 1);
       } else {
         value_parse_success
           = parse_value(val.value_unsafe(), builder.field(key), depth + 1);
