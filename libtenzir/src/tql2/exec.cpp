@@ -222,8 +222,12 @@ auto validate_utf8(std::string_view content, session ctx) -> failure_or<void> {
 auto parse_and_compile(std::string_view source, session ctx)
   -> failure_or<pipeline> {
   TRY(validate_utf8(source, ctx));
-  TRY(auto tokens, tokenize(source, ctx));
-  TRY(auto ast, parse(tokens, source, ctx));
+  auto source_ref = ctx.source_map().add(source_entry{
+    .text = std::string{source},
+    .path = "TODO",
+  });
+  TRY(auto tokens, tokenize(std::move(source_ref), ctx));
+  TRY(auto ast, parse(std::move(tokens), ctx));
   return compile(std::move(ast), ctx);
 }
 
@@ -233,11 +237,10 @@ auto compile(ast::pipeline&& pipe, session ctx) -> failure_or<pipeline> {
   return compile_resolved(std::move(pipe), ctx);
 }
 
-auto dump_tokens(std::span<token const> tokens, std::string_view source)
-  -> bool {
+auto dump_tokens(const tokens& tokens, std::string_view source) -> bool {
   auto last = size_t{0};
   auto has_error = false;
-  for (auto& token : tokens) {
+  for (auto& token : tokens.items) {
     fmt::print("{:>15} {:?}\n", token.kind,
                source.substr(last, token.end - last));
     last = token.end;
@@ -254,12 +257,16 @@ auto exec2(std::string_view source, diagnostic_handler& dh,
     auto provider = session_provider::make(*dedup);
     auto ctx = provider.as_session();
     TRY(validate_utf8(source, ctx));
-    auto tokens = tokenize_permissive(source);
+    auto source_ref = ctx.source_map().add(source_entry{
+      .text = std::string{source},
+      .path = "TODO",
+    });
+    auto tokens = tokenize_permissive(std::move(source_ref), ctx);
     if (cfg.dump_tokens) {
       return dump_tokens(tokens, source);
     }
     TRY(verify_tokens(tokens, ctx));
-    TRY(auto parsed, parse(tokens, source, ctx));
+    TRY(auto parsed, parse(std::move(tokens), ctx));
     if (cfg.dump_ast) {
       fmt::print("{:#?}\n", parsed);
       return not ctx.has_failure();

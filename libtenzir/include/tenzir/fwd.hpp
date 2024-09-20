@@ -195,6 +195,9 @@ class uuid;
 class value_index;
 class wah_bitmap;
 
+class source_map;
+class source_id;
+
 struct active_partition_state;
 struct attribute;
 struct catalog_lookup_result;

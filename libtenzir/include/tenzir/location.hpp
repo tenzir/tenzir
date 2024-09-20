@@ -29,16 +29,20 @@ struct into_location;
 struct location {
   // TODO: Backwards compatibility. If not set, take source from diagnostic
   // printer.
-  source_ref source;
-  size_t begin{};
-  size_t end{};
+  source_id source;
+  size_t begin;
+  size_t end;
 
-  location(source_ref source, size_t begin, size_t end)
+  location() : source{source_id::unknown}, begin{0}, end{0} {
+  }
+
+  location(source_id source, size_t begin, size_t end)
     : source{source}, begin{begin}, end{end} {
   }
 
-  location(source_ref source, size_t begin, size_t end)
-    : source{source}, begin{begin}, end{end} {
+  // TODO: Remove this.
+  static auto legacy(size_t begin, size_t end) -> location {
+    return location{source_id::unknown, begin, end};
   }
 
   /// The "unknown" location, where `begin` and `end` are 0.
@@ -57,7 +61,7 @@ struct location {
     }
     const auto first = begin + pos;
     const auto last = (count > end - first) ? end : (first + count);
-    return {first, last};
+    return {source, first, last};
   }
 
   auto combine(into_location other) const -> location;
@@ -70,7 +74,8 @@ struct location {
     }
     return f.object(x)
       .pretty_name("location")
-      .fields(f.field("begin", x.begin), f.field("end", x.end));
+      .fields(f.field("source", x.source), f.field("begin", x.begin),
+              f.field("end", x.end));
   }
 };
 
@@ -161,6 +166,8 @@ struct into_location : location {
 };
 
 inline auto location::combine(into_location other) const -> location {
+  // TODO: This is dangerous.
+  TENZIR_ASSERT(source == other.source);
   if (not *this) {
     return other;
   }

@@ -16,15 +16,15 @@
 
 namespace tenzir {
 
-auto tokenize(std::string_view content, session ctx)
-  -> failure_or<std::vector<token>> {
-  auto tokens = tokenize_permissive(content);
+auto tokenize(source_ref source, session ctx) -> failure_or<tokens> {
+  auto tokens = tokenize_permissive(std::move(source), ctx);
   TRY(verify_tokens(tokens, ctx));
   return tokens;
 }
 
-auto tokenize_permissive(std::string_view content) -> std::vector<token> {
+auto tokenize_permissive(source_ref source, session ctx) -> tokens {
   auto result = std::vector<token>{};
+  auto& content = ctx.source_map().get(source.borrow()).text;
   // TODO: The char-class parsers (such as `parsers::alnum`) can cause undefined
   // behavior. We should fix them or use something different here.
   using namespace parsers;
@@ -138,20 +138,19 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
       }
     }
   }
-  return result;
+  return tokens{result, std::move(source)};
 }
 
-auto verify_tokens(std::span<const token> tokens, session ctx)
-  -> failure_or<void> {
+auto verify_tokens(const tokens& tokens, session ctx) -> failure_or<void> {
   auto result = failure_or<void>{};
-  for (auto& token : tokens) {
+  for (auto& token : tokens.items) {
     if (token.kind == token_kind::error) {
       auto begin = size_t{0};
-      if (&token != tokens.data()) {
+      if (&token != tokens.items.data()) {
         begin = (&token - 1)->end;
       }
       diagnostic::error("could not parse token")
-        .primary(location{begin, token.end})
+        .primary(location{tokens.source.borrow(), begin, token.end})
         .emit(ctx);
       result = failure::promise();
     }

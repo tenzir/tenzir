@@ -127,7 +127,7 @@ private:
     auto result = to_parser(p).apply(current_, end_);
     if (result) {
       return std::optional{
-        std::pair{std::move(*result), location{begin, current_pos()}}};
+        std::pair{std::move(*result), location::legacy(begin, current_pos())}};
     }
     return std::optional<
       std::pair<std::remove_reference_t<decltype(*result)>, location>>{};
@@ -251,8 +251,9 @@ public:
           .throw_();
       } else if (auto colon = accept(':')) {
         if (auto type_name = accept("int64")) {
-          path.emplace_back(located<type>{
-            type{int64_type{}}, location{colon->begin, type_name->end}});
+          path.emplace_back(
+            located<type>{type{int64_type{}},
+                          location::legacy(colon->begin, type_name->end)});
         } else {
           throw_at_current("unknown type name after `:`");
         }
@@ -282,7 +283,7 @@ public:
           }
         } else {
           TENZIR_DIAG_ASSERT(!path.empty());
-          auto source = location{start, path.back().source().end};
+          auto source = location::legacy(start, path.back().source().end);
           return extractor{std::move(path), source};
         }
       }
@@ -321,7 +322,7 @@ public:
     if (internal_) {
       return {};
     }
-    return {current_pos(), current_pos() + 1};
+    return location::legacy(current_pos(), current_pos() + 1);
   }
 
 private:
@@ -382,10 +383,7 @@ private:
       if (auto op = plugin->parse_operator(*this)) {
         return {
           std::move(op),
-          location{
-            ident.source.begin,
-            current_pos() // TODO
-          },
+          location::legacy(ident.source.begin, current_pos()),
         };
       }
     } catch (const diagnostic& diag) {
@@ -446,7 +444,7 @@ private:
         while (true) {
           auto closing = accept(")");
           if (closing) {
-            auto source = location{ident.source.begin, closing->end};
+            auto source = location::legacy(ident.source.begin, closing->end);
             return expression{call_expr{std::move(ident), std::move(args)},
                               source};
           }
@@ -535,7 +533,7 @@ private:
         = parse_expr_prec(left_associative(op->first) ? op_prec + 1 : op_prec);
       lhs = expression{binary_expr{std::move(lhs), op->first, op->second,
                                    std::move(rhs)},
-                       location{lhs.source.begin, rhs.source.end}};
+                       location::legacy(lhs.source.begin, rhs.source.end)};
     }
     return lhs;
   }

@@ -14,6 +14,7 @@
 #include "tenzir/concept/parseable/tenzir/subnet.hpp"
 #include "tenzir/concept/parseable/tenzir/time.hpp"
 #include "tenzir/detail/assert.hpp"
+#include "tenzir/session.hpp"
 #include "tenzir/tql2/ast.hpp"
 
 #include <arrow/util/utf8.h>
@@ -67,11 +68,10 @@ class parser {
 public:
   using tk = token_kind;
 
-  static auto parse_file(std::span<token> tokens, std::string_view source,
-                         diagnostic_handler& diag)
-    -> failure_or<ast::pipeline> {
+  static auto parse_file(std::span<const token> tokens, source_ref source,
+                         session ctx) -> failure_or<ast::pipeline> {
     try {
-      auto self = parser{tokens, source, diag};
+      auto self = parser{tokens, std::move(source), ctx};
       auto pipe = self.parse_pipeline();
       if (self.next_ != self.tokens_.size()) {
         self.throw_token("expected EOF");
@@ -79,7 +79,7 @@ public:
       return pipe;
     } catch (diagnostic& d) {
       TENZIR_ASSERT(d.severity == severity::error);
-      diag.emit(std::move(d));
+      ctx.dh().emit(std::move(d));
       return failure::promise();
     }
   }
@@ -778,7 +778,7 @@ private:
     ++next_;
     consume_trivia();
     tries_.clear();
-    return {begin, end};
+    return {source_ref_.borrow(), begin, end};
   }
 
   [[nodiscard]] auto accept(token_kind kind) -> accept_result {
@@ -786,7 +786,8 @@ private:
       if (kind == tokens_[next_].kind) {
         auto loc = advance();
         return accept_result{source_.substr(loc.begin, loc.end - loc.begin),
-                             location{loc.begin, loc.end}};
+                             location{source_ref_.borrow(), loc.begin,
+                                      loc.end}};
       }
     }
     tries_.push_back(kind);
@@ -962,15 +963,18 @@ private:
       describe(last)));
   }
 
-  parser(std::span<token> tokens, std::string_view source,
-         diagnostic_handler& diag)
-    : tokens_{tokens}, source_{source}, diag_{diag} {
+  parser(std::span<const token> tokens, source_ref source, session ctx)
+    : tokens_{tokens},
+      source_{ctx.source_map().get(source.borrow()).text},
+      source_ref_{std::move(source)},
+      ctx_{ctx} {
     consume_trivia();
   }
 
-  std::span<token> tokens_;
+  std::span<const token> tokens_;
   std::string_view source_;
-  diagnostic_handler& diag_;
+  source_ref source_ref_;
+  session ctx_;
   size_t next_ = 0;
   size_t last_ = 0;
   bool ignore_newlines_ = false;
@@ -979,9 +983,8 @@ private:
 
 } // namespace
 
-auto parse(std::span<token> tokens, std::string_view source,
-           diagnostic_handler& diag) -> failure_or<ast::pipeline> {
-  return parser::parse_file(tokens, source, diag);
+auto parse(tokens tokens, session ctx) -> failure_or<ast::pipeline> {
+  return parser::parse_file(tokens.items, std::move(tokens.source), ctx);
 }
 
 } // namespace tenzir

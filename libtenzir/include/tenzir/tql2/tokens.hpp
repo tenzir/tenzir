@@ -48,15 +48,19 @@ struct token {
   size_t end;
 };
 
+// TODO: Reconsider this type, especially as parameter for `parse`.
+struct tokens {
+  std::vector<token> items;
+  source_ref source;
+};
+
 /// Try to tokenize the source.
-auto tokenize(std::string_view content, session ctx)
-  -> failure_or<std::vector<token>>;
+auto tokenize(source_ref source, session ctx) -> failure_or<tokens>;
 
 /// Tokenize without emitting errors for error tokens.
-auto tokenize_permissive(std::string_view content) -> std::vector<token>;
+auto tokenize_permissive(source_ref source, session ctx) -> tokens;
 
 /// Emit errors for error tokens.
-auto verify_tokens(std::span<token const> tokens, session ctx)
-  -> failure_or<void>;
+auto verify_tokens(const tokens& tokens, session ctx) -> failure_or<void>;
 
 } // namespace tenzir

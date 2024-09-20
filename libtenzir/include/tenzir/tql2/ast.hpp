@@ -518,7 +518,7 @@ struct record {
   }
 
   auto get_location() const -> location {
-    return tenzir::location{begin.begin, end.end};
+    return begin.combine(end);
   }
 };
 

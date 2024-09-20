@@ -45,6 +45,7 @@ private:
   diagnostic_ctx dh_;
 };
 
+// TODO: Rename this to `parse_ctx`.
 /// This is meant to be used as a value type.
 class session {
 public:
@@ -67,6 +68,15 @@ public:
 
   operator diagnostic_handler&() {
     return dh();
+  }
+
+  // Not sure about having so many implicit conversions...
+  operator source_map&() {
+    return global_source_map();
+  }
+
+  auto source_map() -> source_map& {
+    return *this;
   }
 
 private:
