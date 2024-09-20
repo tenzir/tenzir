@@ -1,0 +1,6 @@
+error: Invalid: Invalid regular expression: missing ]: [0-9a-f{2})
+ --> <input>:3:25
+  |
+3 |     x = x.replace_regex("[0-9a-f{2}", "??")
+  |                         ^^^^^^^^^^^^ 
+  |
