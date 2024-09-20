@@ -11,6 +11,7 @@
 #include "tenzir/concept/printable/tenzir/pattern.hpp"
 #include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/data.hpp"
+#include "tenzir/diagnostics.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/view.hpp"
 
@@ -31,22 +32,24 @@ auto pattern::make(std::string str, pattern_options options) noexcept
   result.str_ = std::move(str);
   result.options_ = options;
   result.regex_ = std::make_shared<regex_impl>(result.str_, opts);
-  if (!result.regex_->ok())
-    return caf::make_error(ec::syntax_error,
-                           fmt::format("failed to create regex from '{}'",
-                                       result.str_));
+  if (!result.regex_->ok()) {
+    return diagnostic::error("failed to create regex from `{}`", result.str_)
+      .to_error();
+  }
   return result;
 }
 
 bool pattern::match(std::string_view str) const {
-  if (!regex_)
+  if (!regex_) {
     return false;
+  }
   return re2::RE2::FullMatch(str, *regex_);
 }
 
 bool pattern::search(std::string_view str) const {
-  if (!regex_)
+  if (!regex_) {
     return false;
+  }
   return re2::RE2::PartialMatch(str, *regex_);
 }
 

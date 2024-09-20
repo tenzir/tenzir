@@ -55,6 +55,21 @@ EOF
   '
 }
 
+@test "select and drop matching" {
+  check tenzir '
+    from {
+      foo: 1,
+      bar: 2,
+      baz: 3,
+    }
+    let $pattern="^ba"
+    this = {
+      moved: this.select_matching($pattern),
+      ...this.drop_matching($pattern)
+    }
+  '
+}
+
 @test "replace" {
   check tenzir '
     from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
