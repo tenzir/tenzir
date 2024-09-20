@@ -8,6 +8,7 @@
 
 #include <tenzir/arrow_utils.hpp>
 #include <tenzir/detail/heterogeneous_string_hash.hpp>
+#include <tenzir/detail/zip_iterator.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 #include <boost/process/environment.hpp>
@@ -279,6 +280,65 @@ public:
   }
 };
 
+class select_drop_matching final : public method_plugin {
+public:
+  explicit select_drop_matching(bool select) : select_{select} {
+  }
+
+  auto name() const -> std::string override {
+    return select_ ? "select_matching" : "drop_matching";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    auto str = located<std::string>{};
+    TRY(argument_parser2::method(name())
+          .add(expr, "<expr>")
+          .add(str, "<pattern>")
+          .parse(inv, ctx));
+    auto pattern = pattern::make(str.inner);
+    if (not pattern) {
+      diagnostic::error(pattern.error()).primary(str.source).emit(ctx);
+      return failure::promise();
+    }
+    return function_use::make([pattern = std::move(*pattern),
+                               expr = std::move(expr), select = select_](
+                                evaluator eval, session ctx) -> series {
+      auto value = eval(expr);
+      auto f = detail::overload{
+        [&](const arrow::NullArray& array) -> series {
+          return series::null(null_type{}, array.length());
+        },
+        [&](const arrow::StructArray& array) -> series {
+          auto arrays = arrow::ArrayVector{};
+          auto fields = arrow::FieldVector{};
+          for (const auto& [field, array] :
+               detail::zip(array.struct_type()->fields(), array.fields())) {
+            if (pattern.search(field->name()) == select) {
+              fields.push_back(field);
+              arrays.push_back(array);
+            }
+          }
+          auto result = std::make_shared<arrow::StructArray>(
+            arrow::struct_(fields), array.length(), std::move(arrays),
+            array.null_bitmap(), array.null_count(), array.offset());
+          return {type::from_arrow(*result->type()), std::move(result)};
+        },
+        [&](const auto&) -> series {
+          diagnostic::warning("expected `record`, got `{}`", value.type.kind())
+            .primary(expr)
+            .emit(ctx);
+          return series::null(null_type{}, value.length());
+        }};
+      return caf::visit(f, *value.array);
+    });
+  }
+
+private:
+  bool select_ = {};
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::misc
@@ -288,3 +348,5 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::secret)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::env)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::length)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::has)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::select_drop_matching{true})
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::misc::select_drop_matching{false})
