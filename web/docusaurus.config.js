@@ -1,11 +1,24 @@
 // @ts-check
 // Note: type annotations allow type checking and IDEs autocompletion
 
-const lightCodeTheme = require('prism-react-renderer/themes/github');
-const darkCodeTheme = require('prism-react-renderer/themes/vsDark');
 const path = require('node:path');
 
+const tqlGrammar = require('tql/syntaxes/tql.tmLanguage.json');
+
 async function createConfig() {
+  const rehypePrettyCode = (await import('rehype-pretty-code')).default;
+  const shikiHighlighter = (await import('shiki')).createHighlighter;
+
+  const rehypePrettyCodeOptions = {
+    keepBackground: false,
+    theme: 'github-dark-dimmed',
+    getHighlighter: (options) =>
+      shikiHighlighter({
+        ...options,
+        langs: [() => tqlGrammar],
+      }),
+  };
+
   /// BEGIN CUSTOM CODE ///
 
   // This is customized version of
@@ -117,6 +130,7 @@ async function createConfig() {
             showLastUpdateTime: false,
             showLastUpdateAuthor: false,
             beforeDefaultRemarkPlugins: [[inlineSVG, {suffix: '.svg'}]],
+            rehypePlugins: [[rehypePrettyCode, rehypePrettyCodeOptions]],
           },
           blog: {
             blogTitle: 'Blog',
@@ -125,6 +139,7 @@ async function createConfig() {
             blogSidebarTitle: 'Blog Posts',
             postsPerPage: 20,
             beforeDefaultRemarkPlugins: [[inlineSVG, {suffix: '.svg'}]],
+            rehypePlugins: [[rehypePrettyCode, rehypePrettyCodeOptions]],
           },
           pages: {
             beforeDefaultRemarkPlugins: [[inlineSVG, {suffix: '.svg'}]],
@@ -293,11 +308,6 @@ async function createConfig() {
             },
           ],
           copyright: `Copyright © ${new Date().getFullYear()} Tenzir GmbH.`,
-        },
-        prism: {
-          theme: lightCodeTheme,
-          darkTheme: darkCodeTheme,
-          additionalLanguages: ['r'],
         },
       }),
 
