@@ -20,21 +20,17 @@ operator](../operators/package.md):
 
 ```tql
 // tql2
-load_file "package.yaml"
-read_yaml
-package_add
+package_add "package.yaml"
 ```
 
 To set package inputs, set the values in the pipeline:
 
 ```tql
 // tql2
-load_file "package.yaml"
-read_yaml
-// Adjust inputs
-config.inputs.endpoint = "localhost:42000"
-config.inputs.policy = "block"
-package_add
+package_add "package.yaml", inputs={
+  endpoint: "localhost:42000",
+  policy: "block",
+}
 ```
 
 Your package should now show when listing all installed packages:
@@ -83,9 +79,9 @@ The node search path for packages consists of the following locations:
 2. All directories specified in the `tenzir.package-dirs` configuration option.
 
 As an alternative way to specify inputs visually in the app, or setting them
-explicitly prior to calling `package_add`, you can add a `config.yaml` file next
-to the `package.yaml` file. Here is an example that sets the keys
-`config.inputs.endpoint` and `config.inputs.policy`:
+explicitly as part of calling `package_add`, you can add a `config.yaml` file
+next to the `package.yaml` file. Here is an example that sets the inputs
+`endpoint` and `policy`:
 
 ```yaml
 inputs:

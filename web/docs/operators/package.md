@@ -44,18 +44,23 @@ from https://github.com/tenzir/library/raw/main/feodo/package.yaml
 | package add
 ```
 
+Add a package from the [Community Library](https://github.com/tenzir/library):
+
+```
+// tql2
+package_add "suricata-ocsf",
+```
+
 Add a package with required inputs:
 
 ```
-// experimental-tql2
-load "https://github.com/tenzir/library/raw/main/zeek/package.yaml"
-read_yaml
-config.inputs.format = "tsv"
-config.inputs["log-directory"] = "/opt/tenzir/logs"
-package_add
+// tql2
+package_add "https://github.com/tenzir/library/raw/main/zeek/package.yaml",
+  inputs={format: "tsv", "log-directory": "/opt/tenzir/logs"}
 ```
 
 Remove the installed package `zeek`:
+
 ```
 package remove zeek
 ```
