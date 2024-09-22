@@ -34,6 +34,9 @@ x9 = community_id(src_ip=3ffe:507:0:1:260:97ff:fe07:69ea,
                   dst_ip=3ffe:507:0:1:200:86ff:fe05:80da,
                   src_port=3, dst_port=0, proto="icmp6")
 EOF
+  check ! tenzir 'from {} | x0 = community_id( src_ip=null, dst_ip=null )'
+  check ! tenzir 'from {} | x0 = community_id( src_ip=null, proto=null )'
+  check ! tenzir 'from {} | x0 = community_id( dst_ip=null, proto=null )'
 }
 
 @test "has" {
@@ -49,6 +52,21 @@ EOF
     }
     key = key.has("field")
     error = error.has("field")
+  '
+}
+
+@test "select and drop matching" {
+  check tenzir '
+    from {
+      foo: 1,
+      bar: 2,
+      baz: 3,
+    }
+    let $pattern="^ba"
+    this = {
+      moved: this.select_matching($pattern),
+      ...this.drop_matching($pattern)
+    }
   '
 }
 
@@ -76,6 +94,33 @@ EOF
   check ! tenzir '
     from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
     x = x.replace(":", "", max=-100)
+  '
+}
+
+@test "replace_regex" {
+  check tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace_regex("[0-9a-f]{2}", "??")
+  '
+  check tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace_regex("[0-9a-f]{2}", "??", max=0)
+  '
+  check tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace_regex("[0-9a-f]{2}", "??", max=4)
+  '
+  check tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace_regex("[0-9a-f]{2}", "??", max=100)
+  '
+  check ! tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace_regex("[0-9a-f]{2}", "??", max=-1)
+  '
+  check ! tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace_regex("[0-9a-f{2}", "??")
   '
 }
 
