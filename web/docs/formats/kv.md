@@ -41,6 +41,28 @@ that only the content of the capture group shall be used as the separator. This
 means that unsupported regular expressions such as `(?=foo)bar(?<=baz)` can be
 effectively expressed as `foo(bar)baz` instead.
 
+### Quoted Values
+
+The parser is aware of double-quotes (`"`). If the `<field_split>` or
+`<value_split>` are found within enclosing quotes, they are not considered matches.
+
+This means that both the key and the value may be enclosed in double-quotes.
+
+For example, given `\s*,\s*` and `=`, the input
+
+```
+"key"="nested = value",key2="value, and more"
+```
+will parse as
+```json
+{
+  "key" : "nested = value"
+}
+{
+  "key2" : "value, and more"
+}
+```
+
 ### `<field_split>`
 
 The regular expression used to separate individual fields.
