@@ -13,6 +13,7 @@
 #include <tenzir/operator_control_plane.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/to_lines.hpp>
 
 #include <arrow/api.h>
 #include <re2/re2.h>
@@ -23,9 +24,39 @@ namespace {
 
 constexpr auto docs = "https://docs.tenzir.com/formats/kv";
 
+/// @brief Checks whether the index `idx` in `text` is escaped
+/// TODO the precise-parsers PR contains this in string.hpp
+auto is_escaped(size_t idx, std::string_view text) -> bool {
+  if (idx >= text.size()) {
+    return false;
+  }
+  // An odd number of preceding backslashes means it is escaped, for example:
+  // `x\n` => true, `x\\n` => false, `x\\\n` => true, 'x\\\\n' => false.
+  auto backslashes = size_t{0};
+  while (idx > 0 and text[idx - 1] == '\\') {
+    ++backslashes;
+    --idx;
+  }
+  return backslashes % 2 == 1;
+}
+
+auto is_quoted(std::string_view text) -> bool {
+  if (text.size() < 2) {
+    return false;
+  }
+  return text.front() == text.back() and text.front() == '\"'
+         and not is_escaped(text.size() - 1, text);
+}
+
 class splitter {
 public:
   splitter() = default;
+
+  splitter(const splitter& other)
+    : regex_{std::make_unique<re2::RE2>(other.regex_->pattern())} {
+  }
+  splitter(splitter&&) = default;
+  splitter& operator=(splitter&&) = default;
 
   explicit splitter(located<std::string_view> pattern) {
     auto regex = std::make_unique<re2::RE2>(pattern.inner,
@@ -63,11 +94,33 @@ public:
     TENZIR_ASSERT(regex_);
     TENZIR_ASSERT(regex_->NumberOfCapturingGroups() == 1);
     auto group = re2::StringPiece{};
-    if (not re2::RE2::PartialMatch(input, *regex_, &group)) {
-      return {input, {}};
+    auto start_offset = 0;
+    while (true) {
+      if (not re2::RE2::PartialMatch(input.substr(start_offset), *regex_,
+                                     &group)) {
+        return {input, {}};
+      }
+      auto head = std::string_view{input.data(), group.data()};
+      auto tail = std::string_view{group.data() + group.size(),
+                                   input.data() + input.size()};
+      auto quote_count = 0;
+      for (size_t i = 0; i < head.size(); ++i) {
+        if (head[i] == '\"' and not is_escaped(i, head)) {
+          ++quote_count;
+        }
+      }
+      auto is_valid = quote_count == 0 or quote_count == 2
+                      or (quote_count == 4 and head[0] == '"');
+      if (is_valid) {
+        return {head, tail};
+      } else {
+        start_offset = head.size() + group.size();
+      }
+      if (head.size() + group.size() == 0) {
+        return {input, {}};
+      }
     }
-    return {{input.data(), group.data()},
-            {group.data() + group.size(), input.data() + input.size()}};
+    return {input, {}};
   }
 
   template <class Inspector>
@@ -102,19 +155,32 @@ private:
   std::unique_ptr<re2::RE2> regex_;
 };
 
+class kv_parser;
+auto parse_loop(generator<std::optional<std::string_view>> input,
+                operator_control_plane& ctrl,
+                kv_parser parser) -> generator<table_slice>;
+
 class kv_parser final : public plugin_parser {
 public:
   kv_parser() = default;
 
   explicit kv_parser(parser_interface& p) {
     auto parser = argument_parser{"kv", docs};
-    auto field_split = located<std::string>{};
+    auto field_split = std::optional<located<std::string>>{
+      std::in_place,
+      "\\s",
+      location::unknown,
+    };
+    auto value_split = std::optional<located<std::string>>{
+      std::in_place,
+      "=",
+      location::unknown,
+    };
     parser.add(field_split, "<field_split>");
-    auto value_split = located<std::string>{};
     parser.add(value_split, "<value_split>");
     parser.parse(p);
-    field_split_ = splitter{field_split};
-    value_split_ = splitter{value_split};
+    field_split_ = splitter{*field_split};
+    value_split_ = splitter{*value_split};
   }
 
   auto name() const -> std::string override {
@@ -124,43 +190,47 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    (void)input;
-    diagnostic::error("`{}` cannot be used here", name())
-      .emit(ctrl.diagnostics());
-    return {};
+    return parse_loop(to_lines(std::move(input)), ctrl, *this);
+  }
+
+  auto parse_line(series_builder& builder, operator_control_plane& ctrl,
+                  std::string_view line) const -> void {
+    auto event = builder.record();
+    while (not line.empty()) {
+      // TODO: We ignore split failures here. There might be better ways
+      // to handle this.
+      auto [head, tail] = field_split_.split(line);
+      auto [key_view, value_view] = value_split_.split(head);
+      auto key = is_quoted(key_view) ? detail::json_unescape(key_view)
+                                     : std::string{key_view};
+      auto value = is_quoted(value_view) ? detail::json_unescape(value_view)
+                                         : std::string{value_view};
+      if (auto d = data{}; parsers::simple_data(value, d)) {
+        event.field(key, d);
+      } else {
+        event.field(key, value);
+      }
+      if (line == tail) {
+        diagnostic::error("`kv` did not make progress")
+          .note("check your field splitter")
+          .emit(ctrl.diagnostics());
+      }
+      line = tail;
+    }
   }
 
   auto parse_strings(std::shared_ptr<arrow::StringArray> input,
                      operator_control_plane& ctrl) const
     -> std::vector<series> override {
-    auto b = series_builder{type{record_type{}}};
-    for (auto&& string : values(string_type{}, *input)) {
-      if (not string) {
-        b.null();
+    auto builder = series_builder{type{record_type{}}};
+    for (auto&& line : values(string_type{}, *input)) {
+      if (not line) {
+        builder.null();
         continue;
       }
-      auto r = b.record();
-      auto rest = *string;
-      while (not rest.empty()) {
-        // TODO: We ignore split failures here. There might be better ways to
-        // handle this.
-        auto [head, tail] = field_split_.split(rest);
-        auto [key, value] = value_split_.split(head);
-        if (auto d = data{}; parsers::simple_data(value, d)) {
-          r.field(key, d);
-        } else {
-          r.field(key, value);
-        }
-        if (rest == tail) {
-          diagnostic::error("`kv` did not make progress")
-            .note("check your field splitter")
-            .emit(ctrl.diagnostics());
-          return {};
-        }
-        rest = tail;
-      }
+      parse_line(builder, ctrl, *line);
     }
-    return b.finish();
+    return builder.finish();
   }
 
   friend auto inspect(auto& f, kv_parser& x) -> bool {
@@ -170,10 +240,25 @@ public:
               f.field("value_split", x.value_split_));
   }
 
-private:
   splitter field_split_;
   splitter value_split_;
 };
+
+auto parse_loop(generator<std::optional<std::string_view>> input,
+                operator_control_plane& ctrl,
+                kv_parser parser) -> generator<table_slice> {
+  auto builder = series_builder{type{record_type{}}};
+  for (auto&& line : input) {
+    if (not line) {
+      co_yield {};
+      continue;
+    }
+    parser.parse_line(builder, ctrl, *line);
+  }
+  for (auto&& slice : builder.finish_as_table_slice("tenzir.kv")) {
+    co_yield std::move(slice);
+  }
+}
 
 class plugin final : public virtual parser_plugin<kv_parser> {
 public:
