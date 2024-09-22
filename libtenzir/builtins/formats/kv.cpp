@@ -100,9 +100,6 @@ public:
                                      &group)) {
         return {input, {}};
       }
-      if (group.empty()) {
-        return {input, {}};
-      }
       auto head = std::string_view{input.data(), group.data()};
       auto tail = std::string_view{group.data() + group.size(),
                                    input.data() + input.size()};
@@ -118,6 +115,9 @@ public:
         return {head, tail};
       } else {
         start_offset = head.size() + group.size();
+      }
+      if (head.size() + group.size() == 0) {
+        return {input, {}};
       }
     }
     return {input, {}};
@@ -240,7 +240,6 @@ public:
               f.field("value_split", x.value_split_));
   }
 
-protected:
   splitter field_split_;
   splitter value_split_;
 };
@@ -256,7 +255,9 @@ auto parse_loop(generator<std::optional<std::string_view>> input,
     }
     parser.parse_line(builder, ctrl, *line);
   }
-  co_yield builder.finish_assert_one_slice("kv");
+  for (auto&& slice : builder.finish_as_table_slice("tenzir.kv")) {
+    co_yield std::move(slice);
+  }
 }
 
 class plugin final : public virtual parser_plugin<kv_parser> {
