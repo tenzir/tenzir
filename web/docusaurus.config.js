@@ -193,11 +193,6 @@ async function createConfig() {
               position: 'left',
             },
             {
-              to: '/roadmap',
-              label: 'Roadmap',
-              position: 'left',
-            },
-            {
               to: '/discord',
               'aria-label': 'Discord',
               className: 'header-discord-link',

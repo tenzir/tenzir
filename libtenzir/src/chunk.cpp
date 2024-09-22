@@ -493,4 +493,8 @@ auto split(std::vector<chunk_ptr> chunks, size_t partition_point)
   };
 }
 
+auto size(const chunk_ptr& chunk) -> uint64_t {
+  return chunk ? chunk->size() : 0;
+}
+
 } // namespace tenzir
