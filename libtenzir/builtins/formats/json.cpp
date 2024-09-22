@@ -1022,7 +1022,7 @@ public:
         .naming_prefix = std::string{Prefix.str()},
       },
     };
-    msb_parser.add_settings_to_parser(parser, false, false);
+    msb_parser.add_settings_to_parser(parser, false, true);
     std::optional<location> legacy_no_infer;
     parser.add("--no-infer", legacy_no_infer);
     parser.parse(p);

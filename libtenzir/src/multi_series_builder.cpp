@@ -36,9 +36,16 @@ void append_name_to_signature(std::string_view x, signature_type& out) {
 namespace detail::multi_series_builder {
 
 auto record_generator::exact_field(std::string_view name) -> object_generator {
+  if (not msb_) {
+    return object_generator{};
+  }
   const auto visitor = detail::overload{
     [&](tenzir::record_ref b) {
-      return object_generator{msb_, b.field(name)};
+      auto f = b.field(name);
+      if (msb_->settings_.schema_only and not f.is_protected()) {
+        return object_generator{};
+      }
+      return object_generator{msb_, std::move(f)};
     },
     [&](raw_pointer raw) {
       return object_generator{msb_, raw->field(name)};
@@ -48,11 +55,17 @@ auto record_generator::exact_field(std::string_view name) -> object_generator {
 }
 
 auto record_generator::field(std::string_view name) -> object_generator {
+  if (not msb_) {
+    return object_generator{};
+  }
   return exact_field(name);
 }
 
 auto record_generator::unflattened_field(
   std::string_view key, std::string_view unflatten) -> object_generator {
+  if (not msb_) {
+    return object_generator{};
+  }
   if (unflatten.empty()) {
     return exact_field(key);
   }
@@ -68,12 +81,25 @@ auto record_generator::unflattened_field(
 
 auto record_generator::unflattened_field(std::string_view key)
   -> object_generator {
+  if (not msb_) {
+    return object_generator{};
+  }
   return unflattened_field(key, msb_->settings_.unnest_separator);
 }
 
+auto record_generator::writable() -> bool {
+  return msb_;
+}
+
 auto object_generator::data(const tenzir::data& d) -> void {
+  if (not msb_) {
+    return;
+  }
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
+      if (not writable()) {
+        return;
+      }
       b.data(d);
     },
     [&](raw_pointer raw) {
@@ -84,8 +110,14 @@ auto object_generator::data(const tenzir::data& d) -> void {
 }
 
 auto object_generator::data_unparsed(std::string_view s) -> void {
+  if (not msb_) {
+    return;
+  }
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
+      if (not writable()) {
+        return;
+      }
       auto res = msb_->builder_raw_.parser_(s, nullptr);
       auto& [value, diag] = res;
       if (value) {
@@ -102,8 +134,14 @@ auto object_generator::data_unparsed(std::string_view s) -> void {
 }
 
 auto object_generator::data_unparsed(std::string s) -> void {
+  if (not msb_) {
+    return;
+  }
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
+      if (not writable()) {
+        return;
+      }
       auto res = msb_->builder_raw_.parser_(s, nullptr);
       auto& [value, diag] = res;
       if (value) {
@@ -120,8 +158,14 @@ auto object_generator::data_unparsed(std::string s) -> void {
 }
 
 auto object_generator::record() -> record_generator {
+  if (not msb_) {
+    return record_generator{};
+  }
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
+      if (not writable()) {
+        return record_generator{};
+      }
       return record_generator{msb_, b.record()};
     },
     [&](raw_pointer raw) {
@@ -134,6 +178,9 @@ auto object_generator::record() -> record_generator {
 auto object_generator::list() -> list_generator {
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
+      if (not writable()) {
+        return list_generator{};
+      }
       return list_generator{msb_, b.list()};
     },
     [&](raw_pointer raw) {
@@ -143,17 +190,42 @@ auto object_generator::list() -> list_generator {
   return std::visit(visitor, var_);
 }
 
-void object_generator::null() {
+auto object_generator::null() -> void {
+  if (not msb_) {
+    return;
+  }
   return this->data(caf::none);
 }
 
+auto object_generator::writable() -> bool {
+  if (not msb_) {
+    return false;
+  }
+  if (msb_->settings_.schema_only) {
+    if (auto* b = std::get_if<builder_ref>(&var_)) {
+      return b->is_protected();
+    }
+    return true;
+  }
+  return true;
+}
+
 void list_generator::null() {
+  if (not msb_) {
+    return;
+  }
   return this->data(caf::none);
 }
 
 auto list_generator::data(const tenzir::data& d) -> void {
+  if (not msb_) {
+    return;
+  }
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
+      if (not writable()) {
+        return;
+      }
       b.data(d);
     },
     [&](raw_pointer raw) {
@@ -164,8 +236,14 @@ auto list_generator::data(const tenzir::data& d) -> void {
 }
 
 auto list_generator::data_unparsed(std::string_view s) -> void {
+  if (not msb_) {
+    return;
+  }
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
+      if (not writable()) {
+        return;
+      }
       auto res = msb_->builder_raw_.parser_(s, nullptr);
       auto& [value, diag] = res;
       if (value) {
@@ -182,8 +260,14 @@ auto list_generator::data_unparsed(std::string_view s) -> void {
 }
 
 auto list_generator::data_unparsed(std::string s) -> void {
+  if (not msb_) {
+    return;
+  }
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
+      if (not writable()) {
+        return;
+      }
       auto res = msb_->builder_raw_.parser_(s, nullptr);
       auto& [value, diag] = res;
       if (value) {
@@ -200,8 +284,14 @@ auto list_generator::data_unparsed(std::string s) -> void {
 }
 
 auto list_generator::record() -> record_generator {
+  if (not msb_) {
+    return record_generator{};
+  }
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
+      if (not writable()) {
+        return record_generator{};
+      }
       return record_generator{msb_, b.record()};
     },
     [&](raw_pointer raw) {
@@ -212,8 +302,14 @@ auto list_generator::record() -> record_generator {
 }
 
 auto list_generator::list() -> list_generator {
+  if (not msb_) {
+    return list_generator{};
+  }
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
+      if (not writable()) {
+        return list_generator{};
+      }
       return list_generator{msb_, b.list()};
     },
     [&](raw_pointer raw) {
@@ -221,6 +317,10 @@ auto list_generator::list() -> list_generator {
     },
   };
   return std::visit(visitor, var_);
+}
+
+auto list_generator::writable() -> bool {
+  return msb_;
 }
 
 auto series_to_table_slice(series array,
@@ -268,16 +368,23 @@ multi_series_builder::multi_series_builder(
     // if we merge all events, they are necessarily ordered
     settings_.ordered |= settings_.merge;
   } else if (auto p = get_policy<policy_schema>()) {
+    auto seed = type_for_schema(p->seed_schema);
+    TENZIR_ASSERT(settings_.schema_only ? seed != nullptr : true);
+    // If we are in schema_only mode, that means we can also be merging into a
+    // single builder.
+    if (seed and settings_.schema_only) {
+      settings_.merge = true;
+    }
     if (settings_.merge) {
       // if we merge all events, they are necessarily ordered
       settings_.ordered = true;
-      if (auto seed = type_for_schema(p->seed_schema)) {
+      if (seed) {
         merging_builder_ = seed;
       } else {
         merging_builder_ = tenzir::type{p->seed_schema, null_type{}};
       }
     } else {
-      if (auto seed = type_for_schema(p->seed_schema)) {
+      if (seed) {
         naming_sentinel_ = *seed;
         needs_signature_ = not settings_.schema_only;
         builder_schema_ = &naming_sentinel_;
@@ -454,7 +561,7 @@ void multi_series_builder::complete_last_event() {
       // if the user promised that the selector is unique, we can rely on the
       // selectors name
       if (settings_.merge) {
-        needs_signature_ = not schema_name.empty();
+        needs_signature_ = schema_name.empty();
       }
       // if we only want to output a schema, cam also just rely on its name
       if (builder_schema_ and settings_.schema_only) {
@@ -561,7 +668,7 @@ void multi_series_builder::garbage_collect_where(
       TENZIR_ASSERT(entry.builder.length() == 0,
                     "The predicate for garbage collection should be strictly "
                     "wider than the predicate for yielding in call cases. GC "
-                    "should never remove collect builders that still have "
+                    "should never trigger on builders that still have "
                     "events in them.");
       entry.unused = true;
       it = signature_map_.erase(it);

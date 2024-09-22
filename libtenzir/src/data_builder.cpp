@@ -495,17 +495,27 @@ auto node_record::commit_to(tenzir::record_ref r, class data_builder& rb,
                             const tenzir::record_type* seed,
                             bool mark_dead) -> void {
   auto field_map = rb.lookup_record_fields(seed, this);
+  TENZIR_ASSERT(static_cast<bool>(field_map) == static_cast<bool>(seed));
   for (auto& [k, v] : data_) {
     if (not v.is_alive()) {
       continue;
     }
     if (seed) {
       auto it = field_map->find(k);
+      // If the field is in the seed
       if (it != field_map->end()) {
         v.commit_to(r.field(k), rb, &(it->second), mark_dead);
+        // No more work has to be done
         continue;
       }
+      // If the field was not in the seed, but we are on schema-only
       if (rb.schema_only_) {
+        if (mark_dead) {
+          // Explicitly call `node_object::clear` here, in order to also affect
+          // nested structural types. Calling just `v.mark_this_dead()` would
+          // not clear nested records/lists
+          v.clear();
+        }
         continue;
       }
     }
@@ -527,11 +537,20 @@ auto node_record::commit_to(tenzir::record& r, class data_builder& rb,
     const auto [entry_it, success] = r.try_emplace(k);
     if (seed) {
       auto it = field_map->find(k);
+      // If the field is in the seed
       if (it != field_map->end()) {
         v.commit_to(entry_it->second, rb, &(it->second), mark_dead);
+        // No more work has to be done
         continue;
       }
+      // If the field was not in the seed, but we are on schema-only
       if (rb.schema_only_) {
+        if (mark_dead) {
+          // Explicitly call `node_object::clear` here, in order to also affect
+          // nested structural types. Calling just `v.mark_this_dead()` would
+          // not clear nested records/lists
+          v.clear();
+        }
         continue;
       }
     }
@@ -1110,14 +1129,20 @@ auto node_object::clear() -> void {
   std::visit(visitor, data_);
 }
 
-auto node_list::try_resurrect_dead() -> node_object* {
-  if (first_dead_idx_ >= data_.size()) {
-    return nullptr;
+auto node_list::push_back_node() -> node_object* {
+  TENZIR_ASSERT(first_dead_idx_ <= data_.size());
+  if (first_dead_idx_ < data_.size()) {
+    auto& value = data_[first_dead_idx_];
+    TENZIR_ASSERT(not value.is_alive());
+    ++first_dead_idx_;
+    return &value;
   }
-  auto& value = data_[first_dead_idx_];
-  TENZIR_ASSERT(not value.is_alive());
+  TENZIR_ASSERT(std::ranges::all_of(data_, [](const auto& o) {
+    return o.state_ == state::alive;
+  }));
+  TENZIR_ASSERT(data_.size() <= 20'000, "Upper limit on list size reached.");
   ++first_dead_idx_;
-  return &value;
+  return &data_.emplace_back();
 }
 
 auto node_list::reserve(size_t N) -> void {
@@ -1152,13 +1177,7 @@ auto node_list::data(tenzir::data d) -> void {
 auto node_list::data_unparsed(std::string text) -> void {
   mark_this_alive();
   type_index_ = type_index_generic_mismatch;
-  if (auto* free = try_resurrect_dead()) {
-    free->data_unparsed(std::move(text));
-  } else {
-    TENZIR_ASSERT(data_.size() <= 20'000, "Upper limit on list size reached.");
-    ++first_dead_idx_;
-    data_.emplace_back().data_unparsed(std::move(text));
-  }
+  return push_back_node()->data_unparsed(std::move(text));
 }
 
 auto node_list::null() -> void {
@@ -1168,42 +1187,13 @@ auto node_list::null() -> void {
 auto node_list::record() -> node_record* {
   mark_this_alive();
   update_type_index(type_index_, type_index_record);
-  if (auto* free = try_resurrect_dead()) {
-    if (auto* r = free->get_if<node_record>()) {
-      free->mark_this_alive();
-      free->value_state_ = node_object::value_state_type::has_value;
-      r->mark_this_alive();
-      return r;
-    } else {
-      free->value_state_ = node_object::value_state_type::has_value;
-      return &free->data_.emplace<node_record>();
-    }
-  } else {
-    TENZIR_ASSERT(data_.size() <= 20'000,
-                  "Upper limit on record size reached.");
-    ++first_dead_idx_;
-    return data_.emplace_back().record();
-  }
+  return push_back_node()->record();
 }
 
 auto node_list::list() -> node_list* {
   mark_this_alive();
   update_type_index(type_index_, type_index_list);
-  if (auto* free = try_resurrect_dead()) {
-    if (auto* l = free->get_if<node_list>()) {
-      l->mark_this_alive();
-      free->value_state_ = node_object::value_state_type::has_value;
-      free->mark_this_alive();
-      return l;
-    } else {
-      free->value_state_ = node_object::value_state_type::has_value;
-      return &free->data_.emplace<node_list>();
-    }
-  } else {
-    TENZIR_ASSERT(data_.size() <= 20'000, "Upper limit on list size reached.");
-    ++first_dead_idx_;
-    return data_.emplace_back().list();
-  }
+  return push_back_node()->list();
 }
 
 auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
@@ -1221,7 +1211,8 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
   }
   if (type_index_ == seed_index and not is_structural(type_index_)) {
     sig.push_back(static_cast<std::byte>(type_index_));
-  } else if (seed) {
+  } // This also isn't pretty, but aligns with the `series_builder` very well
+  else if (seed) {
     node_object sentinel;
     sentinel.state_ = state::sentinel;
     sentinel.append_to_signature(sig, rb, seed_type_ptr);
@@ -1315,27 +1306,18 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
     auto has_list = false;
     auto has_record = false;
     for (auto& v : alive_elements()) {
-      if (v.current_index() == type_index_list) {
-        if (not has_list) {
-          sig.push_back(list_start_marker);
-          sig.push_back(list_end_marker);
-          has_list = true;
-        }
-        continue;
-      }
-      if (v.current_index() == type_index_record) {
-        if (not has_record) {
-          sig.push_back(record_start_marker);
-          sig.push_back(record_end_marker);
-          has_record = true;
-        }
-        continue;
-      }
-      if (v.current_index() == type_index_null) {
-        continue;
-      }
       auto curr_sig_start_index = sig.size();
-      v.append_to_signature(sig, rb, seed_type_ptr);
+      if (v.current_index() == type_index_list) {
+        sig.push_back(list_start_marker);
+        sig.push_back(list_end_marker);
+      } else if (v.current_index() == type_index_record) {
+        sig.push_back(record_start_marker);
+        sig.push_back(record_end_marker);
+      } else if (v.current_index() == type_index_null) {
+        continue;
+      } else {
+        v.append_to_signature(sig, rb, seed_type_ptr);
+      }
       if (last_sig_start_index == 0) {
         last_sig_start_index = curr_sig_start_index;
         continue;
@@ -1349,8 +1331,7 @@ auto node_list::append_to_signature(signature_type& sig, class data_builder& rb,
         sig.begin() + curr_sig_start_index,
         sig.end(),
       };
-      ///
-      TENZIR_ASSERT(curr_sig.size() == 1);
+      TENZIR_ASSERT(curr_sig.size() == 1 or curr_sig.size() == 2);
       const auto prev_matches_current = std::ranges::equal(prev_sig, curr_sig);
       if (prev_matches_current) {
         // drop the last appended signature
@@ -1378,6 +1359,10 @@ auto node_list::commit_to(builder_ref r, class data_builder& rb,
   for (auto& v : alive_elements()) {
     v.commit_to(r, rb, seed ? &field_seed : nullptr, mark_dead);
   }
+  TENZIR_ASSERT_EXPENSIVE(std::ranges::all_of(data_.begin() + first_dead_idx_,
+                                              data_.end(), [](const auto& o) {
+                                                return o.state_ == state::dead;
+                                              }));
   if (mark_dead) {
     type_index_ = type_index_empty;
     first_dead_idx_ = 0;
@@ -1392,6 +1377,10 @@ auto node_list::commit_to(tenzir::list& l, class data_builder& rb,
     auto& d = l.emplace_back();
     v.commit_to(d, rb, seed ? &field_seed : nullptr, mark_dead);
   }
+  TENZIR_ASSERT_EXPENSIVE(std::ranges::all_of(data_.begin() + first_dead_idx_,
+                                              data_.end(), [](const auto& o) {
+                                                return o.state_ == state::dead;
+                                              }));
   if (mark_dead) {
     type_index_ = type_index_empty;
     first_dead_idx_ = 0;

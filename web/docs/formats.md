@@ -57,7 +57,7 @@ The [Suricata](formats/suricata.md), [Zeek JSON](formats/zeek-json.md) and
 ### `--merge` (Parsers)
 
 Merges all incoming events into a single schema\* that converges over time. This
-option is usually the fastest if the data is highly heterogeneous, but can lead
+option is usually the fastest *for reading* highly heterogeneous data, but can lead
 to huge schemas filled with nulls and imprecise results. Use with caution.
 
 \*: In selector mode, only events with the same selector are merged.

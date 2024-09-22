@@ -47,6 +47,10 @@ class record_generator {
   using raw_pointer = detail::data_builder::node_record*;
 
 public:
+  // Non associated list generator. This is used in merging, schema-only mode if
+  // the parent key does not exist.
+  record_generator() : msb_{nullptr}, var_{nullptr} {
+  }
   explicit record_generator(class multi_series_builder* msb,
                             tenzir::record_ref builder)
     : msb_{msb}, var_{std::in_place_type<tenzir::record_ref>, builder} {
@@ -70,6 +74,9 @@ public:
   /// `multi_series_builder`s unflatten setting.
   auto unflattened_field(std::string_view key) -> object_generator;
 
+  /// Checks whether this is writable, i.e. it would not write into the void.
+  auto writable() -> bool;
+
 private:
   class multi_series_builder* msb_ = nullptr;
   std::variant<tenzir::record_ref, raw_pointer> var_;
@@ -79,7 +86,9 @@ class object_generator {
   using raw_pointer = detail::data_builder::node_object*;
 
 public:
-  /// A non-associated field generator. This is used in the unflatten function.
+  /// A non-associated field generator. This is used in the unflatten function
+  /// and can happen in merging + schema_only mode.
+  /// Whether the generator is usable can be checked via `writable()`
   object_generator() : object_generator(nullptr, nullptr) {
   }
   object_generator(class multi_series_builder* msb, builder_ref builder)
@@ -91,17 +100,7 @@ public:
 
   /// @brief Sets the value of the field to some data
   template <tenzir::detail::data_builder::non_structured_data_type T>
-  auto data(T d) -> void {
-    const auto visitor = detail::overload{
-      [&](tenzir::builder_ref b) {
-        b.data(d);
-      },
-      [&](raw_pointer raw) {
-        raw->data(d);
-      },
-    };
-    return std::visit(visitor, var_);
-  }
+  auto data(T d) -> void;
 
   /// @brief sets the value of the field to the contents of a `tenzir::data`
   auto data(const tenzir::data& d) -> void;
@@ -123,6 +122,8 @@ public:
 
   /// @brief Sets the value of the field to null
   auto null() -> void;
+  /// Checks whether this is writable, i.e. it would not write into the void.
+  auto writable() -> bool;
 
 private:
   class multi_series_builder* msb_;
@@ -133,6 +134,10 @@ class list_generator {
   using raw_pointer = detail::data_builder::node_list*;
 
 public:
+  // Non associated list generator. This is used in merging, schema-only mode if
+  // the parent key does not exist.
+  list_generator() : list_generator{nullptr, nullptr} {
+  }
   list_generator(class multi_series_builder* msb, builder_ref builder)
     : msb_{msb}, var_{builder} {
   }
@@ -171,6 +176,9 @@ public:
 
   /// @brief append a null value to the list
   auto null() -> void;
+
+  /// Checks whether this is writable, i.e. it would not write into the void.
+  auto writable() -> bool;
 
 private:
   class multi_series_builder* msb_;
@@ -471,4 +479,26 @@ private:
   // need to yield on builder switch
   size_t active_index_ = 0;
 };
+
+namespace detail::multi_series_builder {
+
+template <tenzir::detail::data_builder::non_structured_data_type T>
+auto object_generator::data(T d) -> void {
+  if (not msb_) {
+    return;
+  }
+  const auto visitor = detail::overload{
+    [&](tenzir::builder_ref b) {
+      if (not writable()) {
+        return;
+      }
+      b.data(d);
+    },
+    [&](raw_pointer raw) {
+      raw->data(d);
+    },
+  };
+  return std::visit(visitor, var_);
+}
+} // namespace detail::multi_series_builder
 } // namespace tenzir

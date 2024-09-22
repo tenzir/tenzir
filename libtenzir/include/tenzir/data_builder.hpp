@@ -240,11 +240,11 @@ protected:
       state_ = state::sentinel;
     }
   }
-  auto mark_this_dead() -> void {
-    state_ = state::dead;
-  }
   auto mark_this_alive() -> void {
     state_ = state::alive;
+  }
+  auto mark_this_dead() -> void {
+    state_ = state::dead;
   }
   auto is_dead() const -> bool;
   auto is_alive() const -> bool;
@@ -369,9 +369,9 @@ public:
   ~node_list();
 
 private:
-  /// finds an element marked as dead. This is part of the reallocation
-  /// optimization.
-  auto try_resurrect_dead() -> node_object*;
+  /// Appends a node by first trying to resurrect a dead node and only creating
+  /// a new one if necessary
+  auto push_back_node() -> node_object*;
 
   /// @brief writes the list into a series builder
   /// @param r The builder_ref to write to.
@@ -456,8 +456,8 @@ private:
   auto get_if() -> T* {
     return std::get_if<T>(&data_);
   }
-  auto
 
+  auto
   try_resolve_nonstructural_field_mismatch(class data_builder& rb,
                                            const tenzir::type* seed) -> void;
   /// parses any unparsed fields using `parser`, potentially providing a
@@ -663,16 +663,8 @@ auto node_object::data(T data) -> void {
 template <non_structured_data_type T>
 auto node_list::data(T data) -> void {
   mark_this_alive();
-  if (auto* free = try_resurrect_dead()) {
-    free->data(std::move(data));
-    update_type_index(type_index_, free->current_index());
-  } else {
-    TENZIR_ASSERT(data_.size() <= 20'000, "Upper limit on list size reached.");
-    data_.emplace_back(std::move(data));
-    data_.back().value_state_ = node_object::value_state_type::has_value;
-    update_type_index(type_index_, data_.back().current_index());
-    ++first_dead_idx_;
-  }
+  push_back_node()->data(std::move(data));
+  update_type_index(type_index_, data_.back().current_index());
 }
 } // namespace detail::data_builder
 } // namespace tenzir
