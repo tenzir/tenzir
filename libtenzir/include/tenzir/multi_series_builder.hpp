@@ -102,6 +102,11 @@ public:
   template <tenzir::detail::data_builder::non_structured_data_type T>
   auto data(T d) -> void;
 
+  /// @brief Sets the value of the field to some data or null if the optional is
+  /// empty
+  template <tenzir::detail::data_builder::non_structured_data_type T>
+  auto data(std::optional<T> d) -> void;
+
   /// @brief sets the value of the field to the contents of a `tenzir::data`
   auto data(const tenzir::data& d) -> void;
 
@@ -503,6 +508,18 @@ auto object_generator::data(T d) -> void {
     },
   };
   return std::visit(visitor, var_);
+}
+
+template <tenzir::detail::data_builder::non_structured_data_type T>
+auto object_generator::data(std::optional<T> d) -> void {
+  if (not msb_) {
+    return;
+  }
+  if (d) {
+    return data(*d);
+  } else {
+    return null();
+  }
 }
 } // namespace detail::multi_series_builder
 } // namespace tenzir

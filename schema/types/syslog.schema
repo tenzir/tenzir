@@ -1,0 +1,28 @@
+type syslog.rfc5424 = record {
+	facility: uint64,
+	severity: uint64,
+	version: uint64,
+	timestamp: time,
+	hostname: string,
+	app_name: string,
+  // TODO: we may consider being stricter here for the PID so that we can
+  // use number type instead of a string.
+	process_id: string,
+	message_id: string,
+	structured_data: record{},
+	message: string,
+}
+
+// legacy syslog
+type syslog.rfc3164 = record {
+	facility: uint64,
+	severity: uint64,
+	timestamp: string,
+	hostname: string,
+  // This is called TAG in the RFC. We purposefully streamline the field
+  // names with the RFC524 parser.
+	app_name: string,
+  // TODO: consider making an integer; see note above.
+	process_id: string,
+	content: string,
+}
