@@ -420,51 +420,6 @@ struct legacy_message_parser : parser_base<legacy_message_parser> {
   }
 };
 
-inline auto make_syslog_type() -> type {
-  return type{
-    "syslog.rfc5424",
-    record_type{{
-      {"facility", uint64_type{}},
-      {"severity", uint64_type{}},
-      {"version", uint64_type{}},
-      {"timestamp", time_type{}},
-      {"hostname", string_type{}},
-      {"app_name", string_type{}},
-      // TODO: we may consider being stricter here for the PID so that we can
-      // use number type instead of a string.
-      {"process_id", string_type{}},
-      {"message_id", string_type{}},
-      {"structured_data", record_type{}},
-      {"message", string_type{}},
-    }},
-  };
-}
-
-inline auto make_legacy_syslog_type() -> type {
-  return type{
-    "syslog.rfc3164",
-    record_type{{
-      {"facility", uint64_type{}},
-      {"severity", uint64_type{}},
-      {"timestamp", string_type{}},
-      {"hostname", string_type{}},
-      // This is called TAG in the RFC. We purpusefully streamline the field
-      // names with the RFC524 parser.
-      {"app_name", string_type{}},
-      // TODO: consider making an integer; see note above.
-      {"process_id", string_type{}},
-      {"content", string_type{}},
-    }},
-  };
-}
-
-inline auto make_unknown_type() -> type {
-  return type{
-    "syslog.unknown",
-    record_type{{{"syslog_message", string_type{}}}},
-  };
-}
-
 template <typename Message>
 struct syslog_row {
   syslog_row(Message msg, size_t line_no)
@@ -510,10 +465,6 @@ public:
       latest.parsed.msg->append(line);
     }
     ++latest.line_count;
-  }
-
-  auto rows() -> size_t {
-    return rows_.size();
   }
 
   auto finish_all_but_last(multi_series_builder& builder) -> void {
@@ -575,10 +526,6 @@ public:
     ++latest.line_count;
   }
 
-  auto rows() -> size_t {
-    return rows_.size();
-  }
-
   auto finish_all_but_last(multi_series_builder& builder) -> void {
     for (auto& row : std::views::take(rows_, rows_.size() - 1)) {
       if (not finish_single(row, builder)) {
@@ -637,10 +584,6 @@ public:
     TENZIR_UNREACHABLE();
   }
 
-  auto rows() -> size_t {
-    return rows_.size();
-  }
-
   static auto finish_all_but_last(multi_series_builder&) -> void {
     TENZIR_UNREACHABLE();
   }
@@ -650,7 +593,7 @@ public:
       auto r = builder.record();
       // Adding a `syslog.unknown` can never fail,
       // it's just a field containing a string.
-      r.exact_field("message").data(std::move(row));
+      r.exact_field("syslog_message").data(std::move(row));
     }
     rows_.clear();
   }
