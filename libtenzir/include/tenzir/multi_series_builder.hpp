@@ -257,6 +257,10 @@ public:
     }
   }
 
+  auto null() -> void {
+    return data(caf::none);
+  }
+
   /// @brief Drops the last event from active builder.
   void remove_last();
 

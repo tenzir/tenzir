@@ -290,7 +290,7 @@ TEST(signature list records) {
   }
   CHECK(compare_signatures(expected, sig));
 
-  CHECK_EQUAL(dh.warnings, 0);
+  CHECK_EQUAL(dh.warnings, size_t{0});
 }
 
 TEST(signature list with null) {
@@ -377,7 +377,7 @@ TEST(signature list mismatch) {
   b.append_signature_to(sig, nullptr);
   CHECK(compare_signatures(expected, sig));
 
-  CHECK_EQUAL(dh.warnings, 1);
+  CHECK_EQUAL(dh.warnings, size_t{1});
 }
 
 TEST(signature record seeding matching) {
@@ -559,8 +559,8 @@ TEST(signature record seeding nested record) {
     CHECK(compare_signatures(expected, sig));
     b.clear();
   }
-  CHECK_EQUAL(dh.errors, 0);
-  CHECK_EQUAL(dh.warnings, 2);
+  CHECK_EQUAL(dh.errors, size_t{0});
+  CHECK_EQUAL(dh.warnings, size_t{2});
 }
 
 TEST(signature record seeding nested list) {
@@ -613,8 +613,8 @@ TEST(signature record seeding nested list) {
     CHECK(compare_signatures(expected, sig));
     b.clear();
   }
-  CHECK_EQUAL(dh.errors, 0);
-  CHECK_EQUAL(dh.warnings, 3);
+  CHECK_EQUAL(dh.errors, size_t{0});
+  CHECK_EQUAL(dh.warnings, size_t{3});
 }
 
 TEST(signature record seeding field not in data schema_only) {

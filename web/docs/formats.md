@@ -37,14 +37,13 @@ print <field> <format>
 
 Parsers will attempt to infer an event [schema](data-model/schemas.md) from the
 input and potentially data format.
-Some parsers provide options for more specific control over schema inference.
-
-The following builtin parsers support setting a custom schema:
+The following builtin parsers provide options for more specific control over schema inference:
 
 - [CEF](formats/cef.md)
 - [CSV](formats/csv.md)
 - [GELF](formats/gelf.md)
 - [JSON](formats/json.md)
+- [KV](formats/kv.md)
 - [LEEF](formats/leef.md)
 - [Suricata](formats/suricata.md)
 - [XSV](formats/xsv.md)
