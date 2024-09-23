@@ -10,6 +10,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/tql2/plugin.hpp>
 #include <tenzir/uuid.hpp>
 
 #include <grpc/grpc.h>
@@ -133,18 +134,21 @@ auto parse(const proto::VQLResponse& response)
     // should synthesize a schema from that and provide that as hint to
     // the series builder.
     auto json = from_json(response.response());
-    if (not json)
+    if (not json) {
       return caf::make_error(ec::parse_error,
                              "Velociraptor response not in JSON format");
+    }
     const auto* objects = caf::get_if<list>(&*json);
-    if (objects == nullptr)
+    if (objects == nullptr) {
       return caf::make_error(ec::parse_error,
                              "expected JSON array in Velociraptor response");
+    }
     for (const auto& object : *objects) {
       const auto* rec = caf::get_if<record>(&object);
-      if (rec == nullptr)
+      if (rec == nullptr) {
         return caf::make_error(ec::parse_error,
                                "expected objects in Velociraptor response");
+      }
       auto row = builder.record();
       row.field("timestamp").data(timestamp);
       row.field("query_id").data(response.query_id());
@@ -154,8 +158,9 @@ auto parse(const proto::VQLResponse& response)
       });
       row.field("part").data(response.part());
       auto resp = row.field("response").record();
-      for (const auto& [field, value] : *rec)
+      for (const auto& [field, value] : *rec) {
         resp.field(field).data(make_view(value));
+      }
     }
     return builder.finish_as_table_slice("velociraptor.response");
   }
@@ -178,8 +183,8 @@ public:
     : args_{std::move(args)}, config_{std::move(config)} {
   }
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  auto
+  operator()(operator_control_plane& ctrl) const -> generator<table_slice> {
     const auto* ca_certificate
       = get_if<std::string>(&config_, "ca_certificate");
     if (ca_certificate == nullptr) {
@@ -269,8 +274,9 @@ public:
           if (ok) {
             if (output_tag == input_tag) {
               if (auto slices = parse(response)) {
-                for (const auto& slice : *slices)
+                for (const auto& slice : *slices) {
                   co_yield slice;
+                }
               } else {
                 diagnostic::warning(
                   "failed to parse Velociraptor gRPC response")
@@ -303,10 +309,11 @@ public:
     }
     auto status = grpc::Status{};
     reader->Finish(&status, nullptr);
-    if (not status.ok())
+    if (not status.ok()) {
       diagnostic::warning("failed to finish Velociraptor gRPC stream")
         .note("{}", status.error_message())
         .emit(ctrl.diagnostics());
+    }
   }
 
   auto name() const -> std::string override {
@@ -321,8 +328,8 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter,
+                event_order order) const -> optimize_result override {
     (void)order;
     (void)filter;
     return do_not_optimize(*this);
@@ -337,10 +344,11 @@ private:
   record config_;
 };
 
-class plugin final : public operator_plugin<velociraptor_operator> {
+class plugin final : public operator_plugin<velociraptor_operator>,
+                     public virtual operator_factory_plugin {
 public:
-  auto initialize(const record& config, const record& /* global_config */)
-    -> caf::error override {
+  auto initialize(const record& config,
+                  const record& /* global_config */) -> caf::error override {
     config_ = config;
     return caf::none;
   }
@@ -349,6 +357,115 @@ public:
     return {
       .source = true,
     };
+  }
+
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto args = operator_args{};
+    auto org_id = std::optional<located<std::string>>{};
+    auto request_name = std::optional<located<std::string>>{};
+    auto max_rows = std::optional<located<uint64_t>>{};
+    auto subscribe = std::optional<located<std::string>>{};
+    auto max_wait = std::optional<located<duration>>{};
+    auto query = std::optional<located<std::string>>{};
+    auto profile = std::optional<located<std::string>>{};
+    argument_parser2::operator_("velociraptor")
+      .add("request_name", request_name)
+      .add("org_id", org_id)
+      .add("query", query)
+      .add("max_rows", max_rows)
+      .add("subscribe", subscribe)
+      .add("max_wait", max_wait)
+      .add("profile", profile)
+      .parse(inv, ctx)
+      .ignore();
+
+    if (max_wait && max_wait->inner < 1s) {
+      diagnostic::error("`max_wait` too low")
+        .primary(max_wait->source)
+        .hint("value must be great than 1s")
+        .emit(ctx);
+      return failure::promise();
+    }
+    if (query) {
+      args.requests.push_back(request{
+        .name = request_name ? std::move(request_name->inner)
+                             : fmt::to_string(uuid::random()),
+        .vql = std::move(query->inner),
+      });
+    }
+    if (subscribe) {
+      args.requests.push_back(request{
+        .name = request_name ? std::move(request_name->inner)
+                             : fmt::to_string(uuid::random()),
+        .vql = make_subscribe_query(subscribe->inner),
+      });
+    }
+    if (args.requests.empty()) {
+      diagnostic::error("no artifact subscription or VQL expression provided")
+        .hint("specify `subscribe=<artifact>` for a subscription")
+        .hint("specify `query=<vql>` to run a VQL expression")
+        .emit(ctx);
+      return failure::promise();
+    }
+    args.org_id = org_id ? org_id->inner : default_org_id;
+    args.max_rows = max_rows ? max_rows->inner : default_max_rows;
+    args.max_wait = std::chrono::duration_cast<std::chrono::seconds>(
+      max_wait ? max_wait->inner : default_max_wait);
+    const auto available_profiles = [&]() -> std::vector<std::string_view> {
+      const auto* profiles = get_if<record>(&config_, "profiles");
+      if (not profiles) {
+        return {};
+      }
+      auto result = std::vector<std::string_view>{};
+      result.reserve(profiles->size());
+      for (const auto& [key, _] : *profiles) {
+        result.push_back(key);
+      }
+      return result;
+    }();
+    if (profile) {
+      if (available_profiles.empty()) {
+        diagnostic::error("no profiles configured")
+          .primary(profile->source)
+          .emit(ctx);
+        return failure::promise();
+      }
+      auto profile_config = try_get_only<record>(
+        config_, fmt::format("profiles.{}", profile->inner));
+      if (not profile_config) {
+        diagnostic::error("profile `{}` is invalid: {}", profile->inner,
+                          profile_config.error())
+          .primary(profile->source)
+          .hint("available profiles: {}", fmt::join(available_profiles, ", "))
+          .emit(ctx);
+        return failure::promise();
+      }
+      if (not *profile_config) {
+        diagnostic::error("profile `{}` does not exist", profile->inner)
+          .primary(profile->source)
+          .hint("available profiles: {}", fmt::join(available_profiles, ", "))
+          .emit(ctx);
+        return failure::promise();
+      }
+      return std::make_unique<velociraptor_operator>(std::move(args),
+                                                     **profile_config);
+    }
+    if (available_profiles.empty()) {
+      return std::make_unique<velociraptor_operator>(std::move(args), config_);
+    }
+    // If we have profiles configured but no --profile set, we default to the
+    // first configured profile.
+    auto profile_config = try_get_only<record>(
+      config_, fmt::format("profiles.{}", available_profiles.front()));
+    if (not profile_config or not *profile_config) {
+      diagnostic::error("profile `{}` is invalid", available_profiles.front())
+        .note("implicitly used the first configured profile")
+        .emit(ctx);
+      return failure::promise();
+    }
+    return std::make_unique<velociraptor_operator>(std::move(args),
+                                                   **profile_config);
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
@@ -370,11 +487,12 @@ public:
     parser.add("-w,--max-wait", max_wait, "<duration>");
     parser.add("--profile", profile, "<profile>");
     parser.parse(p);
-    if (max_wait && max_wait->inner < 1s)
+    if (max_wait && max_wait->inner < 1s) {
       diagnostic::error("--max-wait too low")
         .primary(max_wait->source)
         .hint("value must be great than 1s")
         .throw_();
+    }
     if (query) {
       args.requests.push_back(request{
         .name = request_name ? std::move(request_name->inner)
@@ -391,7 +509,7 @@ public:
     }
     if (args.requests.empty()) {
       diagnostic::error("no artifact subscription or VQL expression provided")
-        .hint("use -s,--subscirbe <artifact> for a subscription")
+        .hint("use -s,--subscribe <artifact> for a subscription")
         .hint("use -q,--query <vql> to run a VQL expression")
         .throw_();
     }
@@ -400,13 +518,13 @@ public:
     args.max_wait = std::chrono::duration_cast<std::chrono::seconds>(
       max_wait ? max_wait->inner : default_max_wait);
     const auto available_profiles = [&]() -> std::vector<std::string_view> {
-      auto profiles = get_if<record>(&config_, "profiles");
+      const auto* profiles = get_if<record>(&config_, "profiles");
       if (not profiles) {
         return {};
       }
       auto result = std::vector<std::string_view>{};
       result.reserve(profiles->size());
-      for (auto& [key, _] : *profiles) {
+      for (const auto& [key, _] : *profiles) {
         result.push_back(key);
       }
       return result;
@@ -432,8 +550,8 @@ public:
           .hint("available profiles: {}", fmt::join(available_profiles, ", "))
           .throw_();
       }
-      return std::make_unique<velociraptor_operator>(
-        std::move(args), std::move(**profile_config));
+      return std::make_unique<velociraptor_operator>(std::move(args),
+                                                     **profile_config);
     }
     if (available_profiles.empty()) {
       return std::make_unique<velociraptor_operator>(std::move(args), config_);
@@ -448,7 +566,7 @@ public:
         .throw_();
     }
     return std::make_unique<velociraptor_operator>(std::move(args),
-                                                   std::move(**profile_config));
+                                                   **profile_config);
   }
 
   auto name() const -> std::string override {

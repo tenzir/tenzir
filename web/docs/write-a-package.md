@@ -262,9 +262,7 @@ file is easiest with the [`package_add`](operators/package.md) operator, since
 a package is just data:
 
 ```tql
-load_file "/path/to/package.yaml"
-read_yaml
-package_add
+package_add "/path/to/package.yaml"
 ```
 
 This fails with the following error:
@@ -276,18 +274,13 @@ error: failed to add package
 ```
 
 Doh, we didn't substitute the template `{{ inputs.refresh-interval }}`. We can
-do this with one extra statement, though:
+do this by passing one additional argument:
 
 ```tql
-load_file "/path/to/package.yaml"
-read_yaml
-config.inputs["refresh-interval"] = 1h
-package_add
+package_add "/path/to/package.yaml", inputs={
+  "refresh-interval": 1h
+}
 ```
-
-NB: We have to access the field `refresh-interval` in `config.inputs` via `[]`
-because `config.inputs.refresh-interval` would be parsed as a subtraction
-between two fields.
 
 The package should show up in the list of packages after installation:
 

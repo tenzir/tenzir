@@ -27,6 +27,85 @@
 namespace tenzir {
 
 namespace {
+/// Creates a record that maps `path` to `value`.
+///
+/// # Examples
+//
+/// ["foo", "bar"] -> {"foo": {"bar": value}}
+/// [] -> value
+auto consume_path(std::span<const ast::identifier> path,
+                  series value) -> series {
+  if (path.empty()) {
+    return value;
+  }
+  value = consume_path(path.subspan(1), std::move(value));
+  return series{record_type{record_type::field_view{path[0].name, value.type}},
+                make_struct_array(value.length(), nullptr, {path[0].name},
+                                  {value.array})};
+}
+
+auto assign(std::span<const ast::identifier> left, series right, series input,
+            diagnostic_handler& dh) -> series {
+  TENZIR_ASSERT(right.length() == input.length());
+  if (left.empty()) {
+    return right;
+  }
+  if (input.type.kind().is<null_type>()) {
+    // We silently upgrade the null type to a record. We could also warn here,
+    // but then we should perhaps adjust the code below to check for `null`
+    // values assigning to a `record` type.
+    return consume_path(left, std::move(right));
+  }
+  auto rec_ty = caf::get_if<record_type>(&input.type);
+  if (not rec_ty) {
+    diagnostic::warning("implicit record for `{}` field overwrites `{}` value",
+                        left[0].name, input.type.kind())
+      .primary(left[0])
+      .hint("if this is intentional, drop the parent field before")
+      .emit(dh);
+    return consume_path(left, std::move(right));
+  }
+  auto& array = caf::get<arrow::StructArray>(*input.array);
+  auto new_ty_fields = collect(rec_ty->fields());
+  // We flatten the input fields here because the input `{foo: null}` of type
+  // `{foo: {bar: int64}` should become `{foo: {bar: null, qux: 42}}` for the
+  // assignment `foo.qux = 42`. This is consistent with the behavior for when
+  // `foo` is of type `null` or does not exist. Also, simply using `.fields()`
+  // here would not propagate the `null` values from the parent record.
+  auto new_field_arrays = array.Flatten().ValueOrDie();
+  auto index = std::optional<size_t>{};
+  for (auto [i, field] : detail::enumerate(new_ty_fields)) {
+    if (field.name == left[0].name) {
+      index = i;
+      break;
+    }
+  }
+  if (index) {
+    auto& field_ty = new_ty_fields[*index].type;
+    auto& field_array = new_field_arrays[*index];
+    auto new_field = assign(left.subspan(1), std::move(right),
+                            series{field_ty, field_array}, dh);
+    field_ty = std::move(new_field.type);
+    field_array = std::move(new_field.array);
+  } else {
+    auto inner = consume_path(left.subspan(1), std::move(right));
+    new_ty_fields.emplace_back(left[0].name, inner.type);
+    new_field_arrays.push_back(inner.array);
+  }
+  auto new_ty_field_names
+    = new_ty_fields | std::views::transform(&record_type::field_view::name);
+  auto new_array
+    = make_struct_array(array.length(), nullptr,
+                        std::vector<std::string>{new_ty_field_names.begin(),
+                                                 new_ty_field_names.end()},
+                        new_field_arrays);
+  auto new_type = type{record_type{new_ty_fields}};
+  // TODO: What to do with metadata on record?
+  // new_type.assign_metadata(input.type);
+  return series{std::move(new_type), std::move(new_array)};
+}
+
+} // namespace
 
 auto assign(const ast::meta& left, series right, const table_slice& input,
             diagnostic_handler& diag) -> table_slice {
@@ -107,84 +186,6 @@ auto assign(const ast::meta& left, series right, const table_slice& input,
   TENZIR_UNREACHABLE();
 }
 
-/// Creates a record that maps `path` to `value`.
-///
-/// # Examples
-//
-/// ["foo", "bar"] -> {"foo": {"bar": value}}
-/// [] -> value
-auto consume_path(std::span<const ast::identifier> path, series value)
-  -> series {
-  if (path.empty()) {
-    return value;
-  }
-  value = consume_path(path.subspan(1), std::move(value));
-  return series{record_type{record_type::field_view{path[0].name, value.type}},
-                make_struct_array(value.length(), nullptr, {path[0].name},
-                                  {value.array})};
-}
-
-auto assign(std::span<const ast::identifier> left, series right, series input,
-            diagnostic_handler& dh) -> series {
-  TENZIR_ASSERT(right.length() == input.length());
-  if (left.empty()) {
-    return right;
-  }
-  if (input.type.kind().is<null_type>()) {
-    // We silently upgrade the null type to a record. We could also warn here,
-    // but then we should perhaps adjust the code below to check for `null`
-    // values assigning to a `record` type.
-    return consume_path(left, std::move(right));
-  }
-  auto rec_ty = caf::get_if<record_type>(&input.type);
-  if (not rec_ty) {
-    diagnostic::warning("implicit record for `{}` field overwrites `{}` value",
-                        left[0].name, input.type.kind())
-      .primary(left[0])
-      .hint("if this is intentional, drop the parent field before")
-      .emit(dh);
-    return consume_path(left, std::move(right));
-  }
-  auto& array = caf::get<arrow::StructArray>(*input.array);
-  auto new_ty_fields = collect(rec_ty->fields());
-  // We flatten the input fields here because the input `{foo: null}` of type
-  // `{foo: {bar: int64}` should become `{foo: {bar: null, qux: 42}}` for the
-  // assignment `foo.qux = 42`. This is consistent with the behavior for when
-  // `foo` is of type `null` or does not exist. Also, simply using `.fields()`
-  // here would not propagate the `null` values from the parent record.
-  auto new_field_arrays = array.Flatten().ValueOrDie();
-  auto index = std::optional<size_t>{};
-  for (auto [i, field] : detail::enumerate(new_ty_fields)) {
-    if (field.name == left[0].name) {
-      index = i;
-      break;
-    }
-  }
-  if (index) {
-    auto& field_ty = new_ty_fields[*index].type;
-    auto& field_array = new_field_arrays[*index];
-    auto new_field = assign(left.subspan(1), std::move(right),
-                            series{field_ty, field_array}, dh);
-    field_ty = std::move(new_field.type);
-    field_array = std::move(new_field.array);
-  } else {
-    auto inner = consume_path(left.subspan(1), std::move(right));
-    new_ty_fields.emplace_back(left[0].name, inner.type);
-    new_field_arrays.push_back(inner.array);
-  }
-  auto new_ty_field_names
-    = new_ty_fields | std::views::transform(&record_type::field_view::name);
-  auto new_array
-    = make_struct_array(array.length(), nullptr,
-                        std::vector<std::string>{new_ty_field_names.begin(),
-                                                 new_ty_field_names.end()},
-                        new_field_arrays);
-  auto new_type = type{record_type{new_ty_fields}};
-  // TODO: What to do with metadata on record?
-  // new_type.assign_metadata(input.type);
-  return series{std::move(new_type), std::move(new_array)};
-}
-
 auto assign(const ast::simple_selector& left, series right,
             const table_slice& input, diagnostic_handler& dh) -> table_slice {
   auto array = to_record_batch(input)->ToStructArray().ValueOrDie();
@@ -219,8 +220,6 @@ auto assign(const ast::selector& left, series right, const table_slice& input,
       return assign(left, std::move(right), input, dh);
     });
 }
-
-} // namespace
 
 auto set_operator::operator()(generator<table_slice> input,
                               operator_control_plane& ctrl) const

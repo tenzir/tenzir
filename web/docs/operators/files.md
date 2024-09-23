@@ -101,5 +101,5 @@ Find all named pipes in `/tmp`:
 
 ```
 files -r --skip-permission-denied /tmp
-| where type == "symlink"
+| where type == "fifo"
 ```

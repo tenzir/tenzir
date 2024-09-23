@@ -137,8 +137,8 @@ public:
     return "tql2.round";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto value = ast::expression{};
     auto spec = std::optional<located<duration>>{};
     TRY(argument_parser2::function("round")
@@ -161,8 +161,8 @@ public:
     return "tql2.sqrt";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(
       argument_parser2::function("sqrt").add(expr, "<number>").parse(inv, ctx));
@@ -230,8 +230,8 @@ public:
     return "tql2.random";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     argument_parser2::function("random").parse(inv, ctx).ignore();
     return function_use::make([](evaluator eval, session ctx) -> series {
       TENZIR_UNUSED(ctx);
@@ -244,107 +244,6 @@ public:
       }
       return {double_type{}, finish(b)};
     });
-  }
-};
-
-// TODO: This also needs to work with durations, so the default return value
-// should be `null` instead.
-class sum_instance final : public aggregation_instance {
-public:
-  explicit sum_instance(ast::expression expr) : expr_{std::move(expr)} {
-  }
-
-  using sum_t = variant<int64_t, uint64_t, double>;
-
-  void update(const table_slice& input, session ctx) override {
-    auto arg = eval(expr_, input, ctx);
-    auto f = detail::overload{
-      [&](const arrow::Int64Array& array) {
-        // Double => Double
-        // UInt64 => Int64
-        // Int64 => Int64
-        sum_ = sum_.match(
-          [&](double sum) -> sum_t {
-            for (auto row = int64_t{0}; row < array.length(); ++row) {
-              if (array.IsNull(row)) {
-                // TODO: What do we do here?
-              } else {
-                sum += static_cast<double>(array.Value(row));
-              }
-            }
-            return sum;
-          },
-          [&](auto previous) -> sum_t {
-            static_assert(
-              concepts::one_of<decltype(previous), int64_t, uint64_t>);
-            // TODO: Check narrowing.
-            auto sum = static_cast<int64_t>(previous);
-            for (auto row = int64_t{0}; row < array.length(); ++row) {
-              if (array.IsNull(row)) {
-                // TODO: What do we do here?
-              } else {
-                sum += array.Value(row);
-              }
-            }
-            return sum;
-          });
-      },
-      [&](const arrow::UInt64Array& array) {
-        // Double => Double
-        // UInt64 => UInt64Array
-        // Int64 => Int64
-        TENZIR_UNUSED(array);
-        TENZIR_TODO();
-      },
-      [&](const arrow::DoubleArray& array) {
-        // * => Double
-        auto sum = sum_.match([](auto sum) {
-          return static_cast<double>(sum);
-        });
-        for (auto row = int64_t{0}; row < array.length(); ++row) {
-          if (array.IsNull(row)) {
-            // TODO: What do we do here?
-          } else {
-            sum += array.Value(row);
-          }
-        }
-        sum_ = sum;
-      },
-      [&](const arrow::NullArray&) {
-        // do nothing
-      },
-      [&](auto&) {
-        diagnostic::warning("expected integer or double, but got {}",
-                            arg.type.kind())
-          .primary(expr_)
-          .emit(ctx);
-      },
-    };
-    caf::visit(f, *arg.array);
-  }
-
-  auto finish() -> data override {
-    return sum_.match([](auto sum) {
-      return data{sum};
-    });
-  }
-
-private:
-  ast::expression expr_;
-  sum_t sum_ = uint64_t{0};
-};
-
-class sum final : public aggregation_plugin {
-public:
-  auto name() const -> std::string override {
-    return "tql2.sum";
-  }
-
-  auto make_aggregation(invocation inv, session ctx) const
-    -> failure_or<std::unique_ptr<aggregation_instance>> override {
-    auto expr = ast::expression{};
-    TRY(argument_parser2::function("sum").add(expr, "<expr>").parse(inv, ctx));
-    return std::make_unique<sum_instance>(std::move(expr));
   }
 };
 
@@ -395,10 +294,22 @@ public:
   }
 
   void update(const table_slice& input, session ctx) override {
+    if (state_ == state::failed) {
+      return;
+    }
     auto arg = eval(expr_, input, ctx);
     auto f = detail::overload{
       [&]<concepts::one_of<double_type, int64_type, uint64_type> Type>(
         const Type& ty) {
+        if (state_ != state::numeric and state_ != state::none) {
+          diagnostic::warning("got incompatible types `number` and `{}`",
+                              arg.type.kind())
+            .primary(expr_)
+            .emit(ctx);
+          state_ = state::failed;
+          return;
+        }
+        state_ = state::numeric;
         auto& array = caf::get<type_to_arrow_array_t<Type>>(*arg.array);
         for (auto value : values(ty, array)) {
           if (value) {
@@ -406,25 +317,56 @@ public:
           }
         }
       },
+      [&](const duration_type& ty) {
+        if (state_ != state::dur and state_ != state::none) {
+          diagnostic::warning("got incompatible types `duration` and `{}`",
+                              arg.type.kind())
+            .primary(expr_)
+            .emit(ctx);
+          state_ = state::failed;
+          return;
+        }
+        state_ = state::dur;
+        for (auto value :
+             values(ty, caf::get<arrow::DurationArray>(*arg.array))) {
+          if (value) {
+            digest_.Add(value->count());
+          }
+        }
+      },
       [&](const null_type&) {
         // Silently ignore nulls, like we do above.
       },
       [&](const auto&) {
-        diagnostic::warning("expected number, got `{}`", arg.type.kind())
+        diagnostic::warning("expected `int`, `uint`, `double` or `duration`, "
+                            "got `{}`",
+                            arg.type.kind())
           .primary(expr_)
           .emit(ctx);
+        state_ = state::failed;
       },
     };
     caf::visit(f, arg.type);
   }
 
   auto finish() -> data override {
-    return digest_.Quantile(quantile_);
+    switch (state_) {
+      case state::none:
+      case state::failed:
+        return data{};
+      case state::dur:
+        return duration{
+          static_cast<duration::rep>(digest_.Quantile(quantile_))};
+      case state::numeric:
+        return digest_.Quantile(quantile_);
+    }
+    TENZIR_UNREACHABLE();
   }
 
 private:
   ast::expression expr_;
   double quantile_;
+  enum class state { none, failed, dur, numeric } state_{};
   arrow::internal::TDigest digest_;
 };
 
@@ -498,6 +440,5 @@ public:
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::round)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::sqrt)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::random)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::sum)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::count)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::numeric::quantile)

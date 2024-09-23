@@ -8,9 +8,13 @@
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
+#include <tenzir/tql2/set.hpp>
 #include <tenzir/type.hpp>
 
 namespace tenzir::plugins::timeshift {
@@ -32,8 +36,8 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  operator()(generator<table_slice> input,
+             operator_control_plane& ctrl) const -> generator<table_slice> {
     auto resolved_fields = std::unordered_map<type, std::optional<offset>>{};
     auto start = start_;
     auto first_time = std::optional<time>{};
@@ -105,8 +109,8 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter,
+                event_order order) const -> optimize_result override {
     if (speed_ == 1.0 and not start_) {
       // If this operator is a no-op we can just remove it during optimization.
       return optimize_result{filter, order, nullptr};
@@ -125,6 +129,82 @@ private:
   std::string field_ = {};
   double speed_ = 1.0;
   std::optional<time> start_ = {};
+};
+
+class timeshift_operator2 final : public crtp_operator<timeshift_operator2> {
+public:
+  timeshift_operator2() = default;
+
+  explicit timeshift_operator2(ast::simple_selector selector, double speed,
+                               std::optional<time> start) noexcept
+    : speed_{speed}, selector_{std::move(selector)}, start_{start} {
+  }
+
+  auto name() const -> std::string override {
+    return "tql2.timeshift";
+  }
+
+  auto
+  operator()(generator<table_slice> input,
+             operator_control_plane& ctrl) const -> generator<table_slice> {
+    auto first_time = std::optional<time>{};
+    auto start = start_;
+    for (auto&& slice : input) {
+      if (slice.rows() == 0) {
+        co_yield std::move(slice);
+        continue;
+      }
+      auto s = eval(selector_.inner(), slice, ctrl.diagnostics());
+      if (s.type.kind().is_not<time_type>()) {
+        if (s.type.kind().is_not<null_type>()) {
+          diagnostic::warning("expected `time`, got `{}`", s.type.kind())
+            .primary(selector_)
+            .emit(ctrl.diagnostics());
+        }
+        co_yield std::move(slice);
+        continue;
+      }
+      const auto& array = caf::get<arrow::TimestampArray>(*s.array);
+      auto b = time_type::make_arrow_builder(arrow::default_memory_pool());
+      for (const auto& value : values(time_type{}, array)) {
+        if (not value) {
+          check(b->AppendNull());
+          continue;
+        }
+        if (not first_time) [[unlikely]] {
+          first_time = value;
+        }
+        if (not start) [[unlikely]] {
+          start = value;
+        }
+        const auto shifted = *start + (*value - *first_time) / speed_;
+        check(b->Append(shifted.time_since_epoch().count()));
+      }
+      co_yield assign(selector_, {time_type{}, finish(*b)}, slice,
+                      ctrl.diagnostics());
+    }
+  }
+
+  auto optimize(expression const& filter,
+                event_order order) const -> optimize_result override {
+    if (speed_ == 1.0 and not start_) {
+      // If this operator is a no-op we can just remove it during optimization.
+      return optimize_result{filter, order, nullptr};
+    }
+    return do_not_optimize(*this);
+  }
+
+  friend auto inspect(auto& f, timeshift_operator2& x) -> bool {
+    return f.object(x)
+      .pretty_name("tenzir.plugins.timeshift.timeshift_operator2")
+      .fields(f.field("selector", x.selector_), f.field("speed", x.speed_),
+              f.field("start", x.start_));
+  }
+
+private:
+  double speed_{1.0};
+  ast::simple_selector selector_;
+  std::optional<time> start_;
 };
 
 class plugin final : public virtual operator_plugin<timeshift_operator> {
@@ -153,8 +233,32 @@ public:
   }
 };
 
+struct plugin2 : operator_plugin2<timeshift_operator2> {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto speed = std::optional<located<double>>{};
+    auto start = std::optional<time>{};
+    auto selector = ast::simple_selector{};
+    argument_parser2::operator_("timeshift")
+      .add(selector, "<selector>")
+      .add("speed", speed)
+      .add("start", start)
+      .parse(inv, ctx)
+      .ignore();
+    if (speed and speed->inner <= 0.0) {
+      diagnostic::error("`speed` must be greater than 0")
+        .primary(speed.value())
+        .emit(ctx);
+      return failure::promise();
+    }
+    return std::make_unique<timeshift_operator2>(
+      std::move(selector), speed ? speed->inner : 1.0, start);
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::timeshift
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::timeshift::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::timeshift::plugin2)
