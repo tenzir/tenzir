@@ -44,11 +44,9 @@ constexpr T pow(T base);
 
 template <int exp, class T>
 constexpr T pow_impl(T base, uint64_t result = 1) {
-  return exp
-    ? (exp & 1
-       ? pow_impl<(exp >> 1)>(base * base, base * result)
-       : pow_impl<(exp >> 1)>(base * base, result))
-    : result;
+  return exp ? (exp & 1 ? pow_impl<(exp >> 1)>(base * base, base * result)
+                        : pow_impl<(exp >> 1)>(base * base, result))
+             : result;
 }
 
 // Checks if base can be squared without overflow the type.
@@ -57,24 +55,23 @@ constexpr bool can_square(T base) {
   return base <= std::numeric_limits<T>::max() / base;
 }
 
-// Get the largest exponent x such that x is a power of two and pow(base, x) doesn't
-// overflow the type of base.
+// Get the largest exponent x such that x is a power of two and pow(base, x)
+// doesn't overflow the type of base.
 template <class T, T base>
 constexpr int max_pot_exp(int result = 1) {
   // Despite the fact that this can never overflow we still have to check for
   // overflow or the compiler will complain.
-  return can_square(base)
-    ? max_pot_exp<T, can_square(base) ? base * base : 1>(result * 2) : result;
+  return can_square(base)                                  ? max_pot_exp < T,
+         can_square(base) ? base * base : 1 > (result * 2) : result;
 }
 
 template <int base, class T, int i = max_pot_exp<T, base>()>
 constexpr int ilog_helper(T n, int x = 0) {
   // binary search
-  return i
-    ? ilog_helper<base, T, i / 2>(
-        n >= pow<i, T>(base) ? n / pow<i, T>(base) : n,
-        n >= pow<i, T>(base) ? x + i : x)
-    : x;
+  return i ? ilog_helper<base, T, i / 2>(
+               n >= pow<i, T>(base) ? n / pow<i, T>(base) : n,
+               n >= pow<i, T>(base) ? x + i : x)
+           : x;
 }
 
 /// Computes the power function.
@@ -84,15 +81,14 @@ constexpr int ilog_helper(T n, int x = 0) {
 template <int exp, class T>
 constexpr T pow(T base) {
   static_assert(exp < 64, "pow exponents >= 64 can only overflow");
-  return exp < 0
-    ? 1 / pow_impl<-exp>(base) : pow_impl<exp>(base);
+  return exp < 0 ? 1 / pow_impl<-exp>(base) : pow_impl<exp>(base);
 }
 
 /// Computes the integer logarithm as `x > 0 ? floor(log(x, base)) : -1`.
 /// @tparam base The base of the logarithm.
 /// @tparam T The argument type.
 /// @returns The integer logarithm of *x*.
-template <int base, concepts::integral T>
+template <int base, std::integral T>
 constexpr int ilog(T x) {
   static_assert(!(base <= 0), "ilog is not useful for base <= 0");
   static_assert(base != 1, "ilog is not useful for base == 1");

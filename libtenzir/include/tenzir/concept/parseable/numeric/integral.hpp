@@ -44,28 +44,31 @@ struct integral_parser
   using attribute = T;
 
   static bool isdigit(char c) {
-    if constexpr (Radix == 10)
+    if constexpr (Radix == 10) {
       return c >= '0' && c <= '9';
-    else if constexpr (Radix == 16)
+    } else if constexpr (Radix == 16) {
       return std::isxdigit(static_cast<unsigned char>(c)) != 0;
-    else
+    } else {
       static_assert(detail::always_false_v<decltype(Radix)>, "unsupported "
                                                              "radix");
+    }
   }
 
   template <class Iterator, class Attribute, class F>
   static auto accumulate(Iterator& f, const Iterator& l, Attribute& a, F acc) {
-    if (f == l)
+    if (f == l) {
       return false;
+    }
     int digits = 0;
     for (a = 0; isdigit(*f) && f != l && digits < MaxDigits; ++f, ++digits) {
-      if constexpr (Radix == 10)
+      if constexpr (Radix == 10) {
         acc(a, *f - '0');
-      else if constexpr (Radix == 16)
+      } else if constexpr (Radix == 16) {
         acc(a, detail::hex_to_byte(*f));
-      else
+      } else {
         static_assert(detail::always_false_v<decltype(Radix)>, "unsupported "
                                                                "radix");
+      }
     }
     return digits >= MinDigits;
   }
@@ -108,37 +111,36 @@ struct integral_parser
 
   template <class Iterator, class Attribute>
   static bool dispatch(Iterator& f, const Iterator& l, Attribute& a) {
-    if constexpr (std::is_signed_v<T>)
+    if constexpr (std::is_signed_v<T>) {
       return parse_signed(f, l, a);
-    else
+    } else {
       return parse_unsigned(f, l, a);
+    }
   }
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    if (f == l)
+    if (f == l) {
       return false;
+    }
     auto save = f;
-    if (dispatch(f, l, a))
+    if (dispatch(f, l, a)) {
       return true;
+    }
     f = save;
     return false;
   }
 };
 
-template <concepts::integral T>
+template <std::integral T>
 struct parser_registry<T> {
   using type = integral_parser<T>;
 };
 
 namespace parsers {
 
-template <
-  class T,
-  int MaxDigits = std::numeric_limits<T>::digits10 + 1,
-  int MinDigits = 1,
-  int Radix = 10
->
+template <class T, int MaxDigits = std::numeric_limits<T>::digits10 + 1,
+          int MinDigits = 1, int Radix = 10>
 auto const integral = integral_parser<T, MaxDigits, MinDigits, Radix>{};
 
 auto const i8 = integral_parser<int8_t>{};
