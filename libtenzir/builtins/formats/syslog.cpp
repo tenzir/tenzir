@@ -610,7 +610,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
   auto dh = transforming_diagnostic_handler{
     ctrl.diagnostics(), [](auto diag) {
       diag.message = fmt::format("syslog parser: {}", diag.message);
-      return std::move(diag);
+      return diag;
     }};
   auto msb = multi_series_builder{std::move(opts), dh};
   const auto finish_all = [&]() {

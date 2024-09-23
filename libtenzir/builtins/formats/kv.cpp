@@ -205,7 +205,7 @@ public:
     auto dh = transforming_diagnostic_handler{
       ctrl.diagnostics(), [](auto diag) {
         diag.message = fmt::format("parse_kv: {}", diag.message);
-        return std::move(diag);
+        return diag;
       }};
     auto builder = multi_series_builder{args_.msb_opts_, dh};
     for (auto&& line : values(string_type{}, *input)) {
@@ -228,11 +228,13 @@ public:
 auto parse_loop(generator<std::optional<std::string_view>> input,
                 operator_control_plane& ctrl,
                 kv_parser parser) -> generator<table_slice> {
-  auto dh = transforming_diagnostic_handler{ctrl.diagnostics(), [](auto diag) {
-                                              diag.message = fmt::format(
-                                                "read_kv: {}", diag.message);
-                                              return std::move(diag);
-                                            }};
+  auto dh = transforming_diagnostic_handler{
+    ctrl.diagnostics(),
+    [](auto diag) {
+      diag.message = fmt::format("read_kv: {}", diag.message);
+      return diag;
+    },
+  };
   auto builder = multi_series_builder(parser.args_.msb_opts_, dh);
   for (auto&& line : input) {
     if (not line) {
