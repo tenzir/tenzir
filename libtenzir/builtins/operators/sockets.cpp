@@ -9,6 +9,7 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/os.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::sockets {
 
@@ -18,8 +19,8 @@ class sockets_operator final : public crtp_operator<sockets_operator> {
 public:
   sockets_operator() = default;
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  auto
+  operator()(operator_control_plane& ctrl) const -> generator<table_slice> {
     auto system = os::make();
     if (not system) {
       diagnostic::error("failed to create OS shim").emit(ctrl.diagnostics());
@@ -36,10 +37,8 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
-    (void)order;
-    (void)filter;
+  auto
+  optimize(expression const&, event_order) const -> optimize_result override {
     return do_not_optimize(*this);
   }
 
@@ -50,10 +49,17 @@ public:
   }
 };
 
-class plugin final : public virtual operator_plugin<sockets_operator> {
+class plugin final : public virtual operator_plugin<sockets_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.source = true};
+  }
+
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    TRY(argument_parser2::operator_("sockets").parse(inv, ctx));
+    return std::make_unique<sockets_operator>();
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {
