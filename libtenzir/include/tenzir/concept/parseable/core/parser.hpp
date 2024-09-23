@@ -58,8 +58,8 @@ struct parser_base {
   }
 
   template <class... TAttributes>
-  auto operator()(concepts::range auto&& r, TAttributes&... attributes) const
-    -> bool {
+  auto operator()(std::ranges::range auto&& r,
+                  TAttributes&... attributes) const -> bool {
     auto f = std::begin(r);
     auto l = std::end(r);
     if constexpr (sizeof...(TAttributes) == 0) {
@@ -80,17 +80,17 @@ struct parser_base {
     }
   auto operator()(Iterator& first, const Iterator& last,
                   TAttributes&... attributes) const {
-    if constexpr (sizeof...(TAttributes) == 1)
+    if constexpr (sizeof...(TAttributes) == 1) {
       return derived().parse(first, last, attributes...);
-    else {
+    } else {
       auto t = std::tie(attributes...);
       return derived().parse(first, last, t);
     }
   }
 
   template <class Iterator, class D = Derived>
-  auto apply(Iterator& f, const Iterator& l) const
-    -> std::optional<typename D::attribute> {
+  auto apply(Iterator& f,
+             const Iterator& l) const -> std::optional<typename D::attribute> {
     auto result = typename D::attribute{};
     if (!(*this)(f, l, result)) {
       return std::nullopt;

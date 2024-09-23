@@ -95,8 +95,9 @@ template <class... Args>
 // caf::error can be mutated instead of creating a new object
 [[nodiscard]] caf::error
 prepend(caf::error&& in, const char* fstring, Args&&... args) {
-  if (!in)
+  if (!in) {
     return std::move(in);
+  }
   TENZIR_ASSERT(in.category() == caf::type_id_v<tenzir::ec>);
   auto hdl = caf::message_handler{
     [&, f = fmt::format("{}{{}}", fstring)](std::string& s) {
@@ -105,8 +106,9 @@ prepend(caf::error&& in, const char* fstring, Args&&... args) {
     },
   };
   auto ctx = in.context();
-  if (auto new_msg = hdl(ctx))
+  if (auto new_msg = hdl(ctx)) {
     return {static_cast<tenzir::ec>(in.code()), std::move(*new_msg)};
+  }
 
   return caf::make_error(static_cast<tenzir::ec>(in.code()),
                          fmt::format(TENZIR_FMT_RUNTIME(fstring),
@@ -160,7 +162,7 @@ template <has_schema To>
 caf::error convert(const data& src, To& dst);
 
 // Generic overload when `src` and `dst` are of the same type.
-// TODO: remove the `!concepts::integral` constraint once count is a real type.
+// TODO: remove the `!std::integral` constraint once count is a real type.
 template <class Type, class T>
   requires(!std::integral<T> || std::same_as<bool, T>)
 caf::error convert(const T& src, T& dst, const Type&) {
@@ -178,8 +180,9 @@ caf::error convert(const From& src, std::string& dst, const string_type&) {
   // downstream parsers of the resulting string often cannot handle the unary
   // plus correctly.
   if constexpr (std::is_same_v<From, int64_t>) {
-    if (src >= 0)
+    if (src >= 0) {
       return convert(detail::narrow_cast<uint64_t>(src), dst, string_type{});
+    }
   }
   // In order to get consistent formatting as strings we create a data view
   // here. While not as cheap as printing directly, it's at least a bit cheaper
@@ -200,7 +203,7 @@ caf::error convert(const From& src, To& dst, const Type&) {
 // clang-format on
 
 // Overload for reals.
-template <concepts::floating_point To>
+template <std::floating_point To>
 caf::error convert(const int64_t& src, To& dst, const double_type&) {
   dst = src;
   return caf::none;
@@ -208,7 +211,7 @@ caf::error convert(const int64_t& src, To& dst, const double_type&) {
 
 /// Overload for converting any arithmetic type to a floating point type.
 //  We need to exclude `From == To` to disambiguate overloads.
-template <concepts::arithmetic From, concepts::floating_point To>
+template <concepts::arithmetic From, std::floating_point To>
   requires(!std::same_as<From, To>)
 caf::error convert(const From& src, To& dst, const double_type&) {
   dst = src;
@@ -216,56 +219,60 @@ caf::error convert(const From& src, To& dst, const double_type&) {
 }
 
 // Overload for counts.
-template <concepts::unsigned_integral To>
+template <std::unsigned_integral To>
 caf::error convert(const uint64_t& src, To& dst, const uint64_type&) {
   if constexpr (sizeof(To) >= sizeof(uint64_t)) {
     dst = src;
   } else {
     if (src < std::numeric_limits<To>::min()
-        || src > std::numeric_limits<To>::max())
+        || src > std::numeric_limits<To>::max()) {
       return caf::make_error(ec::convert_error,
                              fmt::format(": {} can not be represented by the "
                                          "target variable [{}, {}]",
                                          src, std::numeric_limits<To>::min(),
                                          std::numeric_limits<To>::max()));
+    }
     dst = detail::narrow_cast<To>(src);
   }
   return caf::none;
 }
 
-template <concepts::unsigned_integral To>
+template <std::unsigned_integral To>
 caf::error convert(const int64_t& src, To& dst, const uint64_type&) {
-  if (src < 0)
+  if (src < 0) {
     return caf::make_error(ec::convert_error,
                            fmt::format(": {} can not be negative ({})",
                                        detail::pretty_type_name(dst), src));
+  }
   if constexpr (sizeof(To) >= sizeof(uint64_t)) {
     dst = src;
   } else {
-    if (src > static_cast<int64_t>(std::numeric_limits<To>::max()))
+    if (src > static_cast<int64_t>(std::numeric_limits<To>::max())) {
       return caf::make_error(ec::convert_error,
                              fmt::format(": {} can not be represented by the "
                                          "target variable [{}, {}]",
                                          src, std::numeric_limits<To>::min(),
                                          std::numeric_limits<To>::max()));
+    }
     dst = detail::narrow_cast<To>(src);
   }
   return caf::none;
 }
 
 // Overload for integers.
-template <concepts::signed_integral To>
+template <std::signed_integral To>
 caf::error convert(const int64_t& src, To& dst, const int64_type&) {
   if constexpr (sizeof(To) >= sizeof(int64_t)) {
     dst = src;
   } else {
     if (src < std::numeric_limits<To>::min()
-        || src > std::numeric_limits<To>::max())
+        || src > std::numeric_limits<To>::max()) {
       return caf::make_error(ec::convert_error,
                              fmt::format(": {} can not be represented by the "
                                          "target variable [{}, {}]",
                                          src, std::numeric_limits<To>::min(),
                                          std::numeric_limits<To>::max()));
+    }
     dst = detail::narrow_cast<To>(src);
   }
   return caf::none;
@@ -288,22 +295,26 @@ caf::error convert(const std::string& src, To& dst, const enumeration_type& t) {
 
 template <class From, class To, class Type>
 caf::error convert(const From& src, std::optional<To>& dst, const Type& t) {
-  if (!dst)
+  if (!dst) {
     dst = To{};
-  if constexpr (IS_TYPED_CONVERTIBLE(src, *dst, t))
+  }
+  if constexpr (IS_TYPED_CONVERTIBLE(src, *dst, t)) {
     return convert(src, *dst, t);
-  else
+  } else {
     return convert(src, *dst, type{t});
+  }
 }
 
 template <class From, class To, class Type>
 caf::error convert(const From& src, caf::optional<To>& dst, const Type& t) {
-  if (!dst)
+  if (!dst) {
     dst = To{};
-  if constexpr (IS_TYPED_CONVERTIBLE(src, *dst, t))
+  }
+  if constexpr (IS_TYPED_CONVERTIBLE(src, *dst, t)) {
     return convert(src, *dst, t);
-  else
+  } else {
     return convert(src, *dst, type{t});
+  }
 }
 
 // Overload for lists.
@@ -312,8 +323,9 @@ caf::error convert(const list& src, To& dst, const list_type& t) {
   size_t num = 0;
   for (const auto& element : src) {
     typename To::value_type v{};
-    if (auto err = convert(element, v, t.value_type()))
+    if (auto err = convert(element, v, t.value_type())) {
       return detail::prepend(std::move(err), "[{}]", num);
+    }
     dst.push_back(std::move(v));
     num++;
   }
@@ -335,15 +347,18 @@ caf::error convert(const map& src, To& dst, const map_type& t) {
     auto err = [&] {
       const auto& [data_key, data_value] = x;
       typename To::key_type key{};
-      if (auto err = convert(data_key, key, t.key_type()))
+      if (auto err = convert(data_key, key, t.key_type())) {
         return err;
+      }
       typename To::mapped_type value{};
-      if (auto err = convert(data_value, value, t.value_type()))
+      if (auto err = convert(data_value, value, t.value_type())) {
         return err;
+      }
       return detail::insert_to_map(dst, std::move(key), std::move(value));
     }();
-    if (err)
+    if (err) {
       return detail::prepend(std::move(err), ".{}", x.first);
+    }
   }
   return caf::none;
 }
@@ -359,24 +374,28 @@ caf::error convert(const record& src, To& dst, const map_type& t) {
   // that.
   const auto kt = t.key_type();
   const auto vt = t.value_type();
-  if (auto key = kt.attribute("key"))
+  if (auto key = kt.attribute("key")) {
     return caf::make_error(ec::convert_error,
                            fmt::format("expected a list of records with the "
                                        "key field {}, but received record {}",
                                        *key, src));
+  }
   for (const auto& x : src) {
     auto err = [&] {
       const auto& [data_key, data_value] = x;
       typename To::key_type key{};
-      if (auto err = convert(data_key, key, kt))
+      if (auto err = convert(data_key, key, kt)) {
         return err;
+      }
       typename To::mapped_type value{};
-      if (auto err = convert(data_value, value, vt))
+      if (auto err = convert(data_value, value, vt)) {
         return err;
+      }
       return detail::insert_to_map(dst, std::move(key), std::move(value));
     }();
-    if (err)
+    if (err) {
       return detail::prepend(std::move(err), ".{}", x.first);
+    }
   }
   return caf::none;
 }
@@ -394,21 +413,24 @@ caf::error convert(const list& src, To& dst, const map_type& t) {
   const auto kt = t.key_type();
   const auto vt = t.value_type();
   const auto* rvt = caf::get_if<record_type>(&vt);
-  if (!rvt)
+  if (!rvt) {
     return caf::make_error(ec::convert_error,
                            fmt::format(": expected a record_type, but got {}",
                                        vt));
+  }
   auto key_field_name = kt.attribute("key");
-  if (!key_field_name)
+  if (!key_field_name) {
     return caf::make_error(
       ec::convert_error,
       fmt::format(": record type in list is missing a key field: {}", *rvt));
+  }
   // We now iterate over all elements in src, converting both key from the key
   // field and and value from the pruned record type.
   for (const auto& element : src) {
     const auto* element_rec = caf::get_if<record>(&element);
-    if (!element_rec)
+    if (!element_rec) {
       return caf::make_error(ec::convert_error, ": expected record");
+    }
     auto record_resolve_key
       = [](const auto& self, const record& d,
            std::string_view name) -> const record::value_type* {
@@ -416,67 +438,77 @@ caf::error convert(const list& src, To& dst, const map_type& t) {
         const auto& [k, v] = e;
         auto [key_mismatch, name_mismatch]
           = std::mismatch(k.begin(), k.end(), name.begin(), name.end());
-        if (key_mismatch != k.end())
+        if (key_mismatch != k.end()) {
           continue;
-        if (name_mismatch == name.end())
+        }
+        if (name_mismatch == name.end()) {
           return &e;
-        if (*name_mismatch != '.')
+        }
+        if (*name_mismatch != '.') {
           continue;
+        }
         if (const auto* rv = caf::get_if<record>(&v)) {
           auto remainder = name.substr(1 + name_mismatch - name.begin());
-          if (auto result = self(self, *rv, remainder))
+          if (auto result = self(self, *rv, remainder)) {
             return result;
+          }
         }
       }
       return nullptr;
     };
     auto key
       = record_resolve_key(record_resolve_key, *element_rec, *key_field_name);
-    if (!key)
+    if (!key) {
       continue;
+    }
     typename To::key_type key_dst{};
-    if (auto err = convert(key->second, key_dst, kt))
+    if (auto err = convert(key->second, key_dst, kt)) {
       return caf::make_error(
         ec::convert_error,
         fmt::format("failed to convert map key {} of type "
                     "{} to {}: {}",
                     key->second, kt, detail::pretty_type_name(key_dst), err));
+    }
     typename To::mapped_type value_dst{};
     auto stripped_record_prefix = *key_field_name;
     stripped_record_prefix.remove_suffix(key->first.size() + 1);
     if (stripped_record_prefix.empty()) {
-      if (auto err = convert(*element_rec, value_dst, *rvt))
+      if (auto err = convert(*element_rec, value_dst, *rvt)) {
         return caf::make_error(ec::convert_error,
                                fmt::format("failed to convert map value {} of "
                                            "type {} to {}: {}",
                                            *element_rec, *rvt,
                                            detail::pretty_type_name(value_dst),
                                            err));
+      }
     } else {
       // We need to strip an outer layer before handling the value of the map.
       auto stripped_vt_offset = rvt->resolve_key(stripped_record_prefix);
-      if (!stripped_vt_offset)
+      if (!stripped_vt_offset) {
         return caf::make_error(
           ec::convert_error,
           fmt::format("failed to strip outer record {} from {} for key {}",
                       stripped_record_prefix, *rvt, *key_field_name));
+      }
       auto stripped_vt = rvt->field(*stripped_vt_offset);
       // This cannot fail, we already know we can handle the full name, so we
       // can also handle a prefix to get the record.
       auto value = record_resolve_key(record_resolve_key, *element_rec,
                                       stripped_record_prefix);
       TENZIR_ASSERT(value);
-      if (auto err = convert(value->second, value_dst, stripped_vt.type))
+      if (auto err = convert(value->second, value_dst, stripped_vt.type)) {
         return caf::make_error(ec::convert_error,
                                fmt::format("failed to convert stripped map "
                                            "value {} of type {} to {}: {}",
                                            value->second, stripped_vt.type,
                                            detail::pretty_type_name(value_dst),
                                            err));
+      }
     }
-    if (auto err
-        = detail::insert_to_map(dst, std::move(key_dst), std::move(value_dst)))
+    if (auto err = detail::insert_to_map(dst, std::move(key_dst),
+                                         std::move(value_dst))) {
       return err;
+    }
   }
   return caf::none;
 }
@@ -511,11 +543,12 @@ public:
     // Find the value from the record
     auto it = src.find(field.name);
     const auto& value = it != src.end() ? it->second : data{};
-    if (!field.type && caf::holds_alternative<caf::none_t>(value))
+    if (!field.type && caf::holds_alternative<caf::none_t>(value)) {
       return caf::make_error(ec::convert_error, fmt::format("failed to convert "
                                                             "field {} because "
                                                             "it has no type",
                                                             field));
+    }
     return caf::visit(f, value, field.type);
   }
 
@@ -551,11 +584,12 @@ public:
 caf::error convert(const record& src, concepts::inspectable auto& dst,
                    const record_type& schema) {
   auto ri = record_inspector{schema, src};
-  if (auto result = inspect(ri, dst); !result)
+  if (auto result = inspect(ri, dst); !result) {
     return caf::make_error(ec::convert_error,
                            fmt::format("record inspection failed for record {} "
                                        "with schema {}",
                                        src, schema));
+  }
   return {};
 }
 
@@ -566,8 +600,9 @@ caf::error convert(const record& src, To& dst) {
 
 template <has_schema To>
 caf::error convert(const data& src, To& dst) {
-  if (const auto* r = caf::get_if<record>(&src))
+  if (const auto* r = caf::get_if<record>(&src)) {
     return convert(*r, dst);
+  }
   return caf::make_error(ec::convert_error,
                          fmt::format(": expected record, but got {}", src));
 }
@@ -577,10 +612,11 @@ caf::error convert(const data& src, To& dst) {
 template <registered_parser_type To>
 caf::error convert(std::string_view src, To& dst) {
   const auto* f = src.begin();
-  if (!parse(f, src.end(), dst))
+  if (!parse(f, src.end(), dst)) {
     return caf::make_error(ec::convert_error,
                            fmt::format(": unable to parse \"{}\" into a {}",
                                        src, detail::pretty_type_name(dst)));
+  }
   return caf::none;
 }
 
@@ -607,16 +643,17 @@ template <class To>
 caf::error convert(const data& src, To& dst, const type& t) {
   return caf::visit(
     [&]<class From, class Type>(const From& x, const Type& t) {
-      if constexpr (is_concrete_typed_convertible<From, To, Type>)
+      if constexpr (is_concrete_typed_convertible<From, To, Type>) {
         return convert(x, dst, t);
-      else if constexpr (is_concrete_untyped_convertible<From, To>)
+      } else if constexpr (is_concrete_untyped_convertible<From, To>) {
         return convert(x, dst);
-      else
+      } else {
         return caf::make_error(ec::convert_error,
                                fmt::format("can't convert from {} to {} with "
                                            "type {}",
                                            detail::pretty_type_name(x),
                                            detail::pretty_type_name(dst), t));
+      }
     },
     src, t);
 }

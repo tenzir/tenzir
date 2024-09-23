@@ -26,7 +26,7 @@ namespace tenzir {
 
 /// A fixed-size piece unsigned piece of data that supports various bitwise
 /// operations.
-template <concepts::unsigned_integral T>
+template <std::unsigned_integral T>
 struct word {
   // -- general ---------------------------------------------------------------
 
@@ -147,10 +147,11 @@ struct word {
   /// @pre `i < width`
   template <bool Bit>
   static constexpr value_type set(value_type x, size_type i) {
-    if constexpr (Bit)
+    if constexpr (Bit) {
       return x | mask(i);
-    else
+    } else {
       return x & ~mask(i);
+    }
   }
 
   /// Sets a specific bit in a block to 0 or 1.
@@ -178,10 +179,11 @@ struct word {
   /// @returns The index of the first 1-bit in *x*.
   /// @pre `x > 0`
   static constexpr size_type find_first_set(value_type x) {
-    if constexpr (width <= 32)
+    if constexpr (width <= 32) {
       return __builtin_ffs(x);
-    else
+    } else {
       return __builtin_ffsll(x);
+    }
   }
 
   // -- counting --------------------------------------------------------------
@@ -191,20 +193,22 @@ struct word {
   /// @param x The block value.
   /// @returns The number of set bits in *x*.
   static constexpr size_type popcount(value_type x) {
-    if constexpr (width <= 32)
+    if constexpr (width <= 32) {
       return x == 0 ? 0 : __builtin_popcount(x);
-    else
+    } else {
       return x == 0 ? 0 : __builtin_popcountll(x);
+    }
   }
 
   /// Counts the number of trailing zeros.
   /// @param x The block value.
   /// @returns The number trailing zeros in *x*.
   static constexpr size_type count_trailing_zeros(value_type x) {
-    if constexpr (width <= 32)
+    if constexpr (width <= 32) {
       return x == 0 ? width : __builtin_ctz(x);
-    else
+    } else {
       return x == 0 ? width : __builtin_ctzll(x);
+    }
   }
 
   /// Counts the number of trailing ones.
@@ -218,12 +222,13 @@ struct word {
   /// @param x The block value.
   /// @returns The number leading zeros in *x*.
   static constexpr size_type count_leading_zeros(value_type x) {
-    if constexpr (width <= 32)
+    if constexpr (width <= 32) {
       // The compiler builtin always assumes a width of 32 bits. We have to
       // adapt the return value according to the actual block width.
       return x == 0 ? width : (__builtin_clz(x) - (32 - width));
-    else
+    } else {
       return x == 0 ? width : __builtin_clzll(x);
+    }
   }
 
   /// Counts the number of leading ones.
@@ -238,10 +243,11 @@ struct word {
   /// @returns The parity of *x*.
   /// @pre `x > 0`
   static constexpr size_type parity(value_type x) {
-    if constexpr (width <= 32)
+    if constexpr (width <= 32) {
       return __builtin_parity(x);
-    else
+    } else {
       return __builtin_parityll(x);
+    }
   }
 
   // -- math ------------------------------------------------------------------
@@ -257,12 +263,13 @@ struct word {
 
 // -- counting --------------------------------------------------------------
 
-template <bool Bit = true, concepts::unsigned_integral T>
+template <bool Bit = true, std::unsigned_integral T>
 static constexpr auto rank(T x) {
-  if constexpr (Bit)
+  if constexpr (Bit) {
     return word<T>::popcount(x);
-  else
+  } else {
     return word<T>::popcount(static_cast<T>(~x));
+  }
 }
 
 /// Computes *rank_i* of a block, i.e., the number of 1-bits up to and
@@ -271,14 +278,14 @@ static constexpr auto rank(T x) {
 /// @param i The position up to where to count.
 /// @returns *rank_i(x)*.
 /// @pre `i < width`
-template <bool Bit = true, concepts::unsigned_integral T>
+template <bool Bit = true, std::unsigned_integral T>
   requires(Bit)
 static constexpr auto rank(T x, detail::word_size_type i) {
   T masked = x & word<T>::lsb_fill(i + 1);
   return rank<1>(masked);
 }
 
-template <bool Bit, concepts::unsigned_integral T>
+template <bool Bit, std::unsigned_integral T>
 static constexpr auto rank(T x, detail::word_size_type i) {
   return rank<1>(static_cast<T>(~x), i);
 }
@@ -288,27 +295,27 @@ static constexpr auto rank(T x, detail::word_size_type i) {
 /// Finds the next 1-bit starting at position relative to the LSB.
 /// @param x The block to search.
 /// @param i The position relative to the LSB to start searching.
-template <bool Bit = true, concepts::unsigned_integral T>
+template <bool Bit = true, std::unsigned_integral T>
   requires(Bit)
 static constexpr auto find_first(T x) {
   auto tzs = word<T>::count_trailing_zeros(x);
   return tzs == word<T>::width ? word<T>::npos : tzs;
 }
 
-template <bool Bit, concepts::unsigned_integral T>
+template <bool Bit, std::unsigned_integral T>
   requires(!Bit)
 static constexpr auto find_first(T x) {
   return find_first<1>(static_cast<T>(~x));
 }
 
-template <bool Bit = true, concepts::unsigned_integral T>
+template <bool Bit = true, std::unsigned_integral T>
   requires(Bit)
 static constexpr auto find_last(T x) {
   auto lzs = word<T>::count_leading_zeros(x);
   return lzs == word<T>::width ? word<T>::npos : (word<T>::width - lzs - 1);
 }
 
-template <bool Bit, concepts::unsigned_integral T>
+template <bool Bit, std::unsigned_integral T>
   requires(!Bit)
 static constexpr auto find_last(T x) {
   return find_last<1>(static_cast<T>(~x));
@@ -317,10 +324,11 @@ static constexpr auto find_last(T x) {
 /// Finds the next 1-bit starting at position relative to the LSB.
 /// @param x The block to search.
 /// @param i The position relative to the LSB to start searching.
-template <concepts::unsigned_integral T>
+template <std::unsigned_integral T>
 static constexpr auto find_next(T x, detail::word_size_type i) {
-  if (i == word<T>::width - 1)
+  if (i == word<T>::width - 1) {
     return word<T>::npos;
+  }
   T top = x & (word<T>::all << (i + 1));
   return top == 0 ? word<T>::npos : word<T>::count_trailing_zeros(top);
 }
@@ -329,10 +337,11 @@ static constexpr auto find_next(T x, detail::word_size_type i) {
 /// @param x The block to search.
 /// @param i The position relative to the LSB to start searching.
 /// @pre `i < width`
-template <concepts::unsigned_integral T>
+template <std::unsigned_integral T>
 static constexpr auto find_prev(T x, detail::word_size_type i) {
-  if (i == 0)
+  if (i == 0) {
     return word<T>::npos;
+  }
   T low = x & ~(word<T>::all << i);
   return low == 0 ? word<T>::npos
                   : word<T>::width - word<T>::count_leading_zeros(low) - 1;
@@ -343,22 +352,26 @@ static constexpr auto find_prev(T x, detail::word_size_type i) {
 /// @param x The block to search.
 /// @param i The position of the *i*-th occurrence of *Bit* in *b*.
 /// @pre `i > 0 && i <= width`
-template <bool Bit = true, concepts::unsigned_integral T>
+template <bool Bit = true, std::unsigned_integral T>
 static constexpr detail::word_size_type select(T x, detail::word_size_type i) {
   // TODO: make this efficient and branch-free. There is one implementation
   // that counts from the right for 64-bit here:
   // http://graphics.stanford.edu/~seander/bithacks.html
   const auto pred = [](const auto&... args) {
-    if constexpr (Bit)
+    if constexpr (Bit) {
       return word<T>::test(args...);
-    else
+    } else {
       return !word<T>::test(args...);
+    }
   };
   auto cum = 0u;
-  for (auto j = 0u; j < word<T>::width; ++j)
-    if (pred(x, j))
-      if (++cum == i)
+  for (auto j = 0u; j < word<T>::width; ++j) {
+    if (pred(x, j)) {
+      if (++cum == i) {
         return j;
+      }
+    }
+  }
   return word<T>::npos;
 }
 
