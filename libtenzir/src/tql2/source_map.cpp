@@ -38,4 +38,10 @@ auto source_map::get(source_id id) const -> const source_entry& {
   TENZIR_ASSERT(it != entries_.end());
   return it->second;
 }
+
+auto global_source_map() -> source_map& {
+  static auto map = source_map{};
+  return map;
+}
+
 } // namespace tenzir

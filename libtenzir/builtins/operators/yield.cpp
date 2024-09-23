@@ -54,11 +54,13 @@ public:
       auto last = current;
       if (not field(current, end, unused)) {
         diagnostic::error("expected field name")
-          .primary(tenzir::location{to_offset(current), to_offset(current, 1)})
+          .primary(tenzir::location{extractor.source.source, to_offset(current),
+                                    to_offset(current, 1)})
           .throw_();
       }
       return projection{std::string{last, current},
-                        {to_offset(last), to_offset(current)}};
+                        {extractor.source.source, to_offset(last),
+                         to_offset(current)}};
     };
     path.emplace_back(parse_field());
     while (current != end) {
@@ -69,17 +71,20 @@ public:
         ++current;
         if (*current == ']') {
           ++current;
-          path.emplace_back(unnest{}, tenzir::location{to_offset(current, -2),
+          path.emplace_back(unnest{}, tenzir::location{extractor.source.source,
+                                                       to_offset(current, -2),
                                                        to_offset(current)});
         } else {
           diagnostic::error("expected `]`")
-            .primary(
-              tenzir::location{to_offset(current), to_offset(current, 1)})
+            .primary(tenzir::location{extractor.source.source,
+                                      to_offset(current),
+                                      to_offset(current, 1)})
             .throw_();
         }
       } else {
         diagnostic::error("expected `.<field>` or `[]`")
-          .primary(tenzir::location{to_offset(current), to_offset(current, 1)})
+          .primary(tenzir::location{extractor.source.source, to_offset(current),
+                                    to_offset(current, 1)})
           .throw_();
       }
     }

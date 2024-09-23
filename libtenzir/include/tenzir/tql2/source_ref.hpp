@@ -14,7 +14,9 @@ namespace tenzir {
 
 class source_ref {
 public:
-  ~source_ref();
+  ~source_ref() {
+    reset();
+  }
   source_ref(const source_ref&) = delete;
   auto operator=(const source_ref&) -> source_ref& = delete;
   source_ref(source_ref&& other) noexcept : source_ref() {
