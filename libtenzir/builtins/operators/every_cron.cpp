@@ -6,6 +6,8 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "tenzir/tql2/exec.hpp"
+
 #include <tenzir/concept/parseable/string/char_class.hpp>
 #include <tenzir/concept/parseable/tenzir/pipeline.hpp>
 #include <tenzir/detail/croncpp.hpp>
@@ -68,6 +70,7 @@ public:
 
   auto optimize(expression const& filter,
                 event_order order) const -> optimize_result override {
+    // TODO: Can't optimize non-compiled pipeline!
     auto result = pipe_.optimize(filter, order);
     if (not result.replacement) {
       return result;
@@ -113,6 +116,9 @@ public:
     bool generate_output = Scheduler::immediate;
     while (true) {
       if (generate_output) {
+        // TODO
+        auto foo = ast::pipeline{};
+        auto bar = compile(std::move(foo), *static_cast<session*>(nullptr));
         auto gen = pipe_.instantiate(make_input(), ctrl);
         if (not gen) {
           diagnostic::error(gen.error()).emit(ctrl.diagnostics());
@@ -183,6 +189,7 @@ public:
   }
 
   auto detached() const -> bool override {
+    // TODO
     return pipe_.operators().empty() ? false : pipe_.operators()[0]->detached();
   }
 
@@ -363,7 +370,7 @@ public:
   auto make(invocation inv, session ctx) const
     -> failure_or<operator_ptr> override {
     auto interval = located<duration>{};
-    auto pipe = pipeline{};
+    auto pipe = ast::pipeline{};
     TRY(argument_parser2::operator_("every")
           .add(interval, "<duration>")
           .add(pipe, "{ ... }")
@@ -375,7 +382,12 @@ public:
         .emit(ctx);
       fail = failure::promise();
     }
-    auto location = pipe.infer_location();
+    // We only compile to check for errors and infer the operator location, and
+    // then throw the result away. This is because `let` bindings are currently
+    // evaluated and substituted during compilation, but `let $ts = now()` shall
+    // yield the instantiation time.
+    TRY(auto compiled, compile(ast::pipeline{pipe}, ctx));
+    auto location = compiled.infer_location();
     if (not location) {
       diagnostic::error("pipeline contains both remote and local operators")
         .primary(inv.self)

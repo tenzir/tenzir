@@ -127,6 +127,15 @@ auto argument_parser2::parse(const ast::entity& self,
       [&](setter<ast::expression>& set) {
         set(expr);
       },
+      [&](setter<ast::pipeline>& set) {
+        auto pipe_expr = std::get_if<ast::pipeline_expr>(&*expr.kind);
+        if (not pipe_expr) {
+          emit(
+            diagnostic::error("expected a pipeline expression").primary(expr));
+          return;
+        }
+        set(std::move(pipe_expr->inner));
+      },
       [&](setter<located<pipeline>>& set) {
         auto pipe_expr = std::get_if<ast::pipeline_expr>(&*expr.kind);
         if (not pipe_expr) {
@@ -205,6 +214,15 @@ auto argument_parser2::parse(const ast::entity& self,
       [&](setter<ast::expression>& set) {
         set(expr);
       },
+      [&](setter<ast::pipeline>& set) {
+        auto pipe_expr = std::get_if<ast::pipeline_expr>(&*expr.kind);
+        if (not pipe_expr) {
+          emit(
+            diagnostic::error("expected a pipeline expression").primary(expr));
+          return;
+        }
+        set(std::move(pipe_expr->inner));
+      },
       [&](setter<located<pipeline>>& set) {
         auto pipe_expr = std::get_if<ast::pipeline_expr>(&*expr.kind);
         if (not pipe_expr) {
@@ -273,6 +291,9 @@ auto argument_parser2::usage() const -> std::string {
         },
         [](const setter<ast::expression>&) -> std::string {
           return "<expr>";
+        },
+        [](const setter<ast::pipeline>&) -> std::string {
+          return "{ ... }";
         },
         [](const setter<located<pipeline>>&) -> std::string {
           return "{ ... }";
