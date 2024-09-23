@@ -480,8 +480,7 @@ public:
   explicit yara_operator(operator_args args) : args_{std::move(args)} {
   }
 
-  auto
-  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+  auto operator()(generator<chunk_ptr> input, exec_ctx ctx) const
     -> generator<table_slice> {
     auto rules = caf::expected<class rules>{caf::error{}};
     auto compiler = compiler::make();

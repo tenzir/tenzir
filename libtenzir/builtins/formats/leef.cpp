@@ -239,8 +239,8 @@ void add(const event& e, builder_ref builder) {
   event.field("attributes", e.attributes);
 }
 
-auto impl(generator<std::optional<std::string_view>> lines,
-          operator_control_plane& ctrl) -> generator<table_slice> {
+auto impl(generator<std::optional<std::string_view>> lines, exec_ctx ctx)
+  -> generator<table_slice> {
   auto builder = series_builder{};
   for (auto&& line : lines) {
     if (!line) {
@@ -269,8 +269,7 @@ public:
     return "leef";
   }
 
-  auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+  auto instantiate(generator<chunk_ptr> input, exec_ctx ctx) const
     -> std::optional<generator<table_slice>> override {
     return impl(to_lines(std::move(input)), ctrl);
   }

@@ -13,7 +13,6 @@
 #include "tenzir/collect.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/generator.hpp"
-#include "tenzir/operator_control_plane.hpp"
 #include "tenzir/plugin.hpp"
 #include "tenzir/series_builder.hpp"
 #include "tenzir/table_slice.hpp"
@@ -84,8 +83,7 @@ public:
     }
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
     -> generator<table_slice> {
     for (auto&& slice : input) {
       if (slice.rows() == 0) {

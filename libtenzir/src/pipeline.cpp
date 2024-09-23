@@ -251,8 +251,7 @@ auto pipeline::copy() const -> operator_ptr {
   return copied;
 }
 
-auto pipeline::instantiate(operator_input input,
-                           operator_control_plane& control) const
+auto pipeline::instantiate(operator_input input, exec_ctx ctx) const
   -> caf::expected<operator_output> {
   TENZIR_DEBUG("instantiating '{:?}' for {}", *this, operator_type_name(input));
   if (operators_.empty()) {
@@ -269,7 +268,7 @@ auto pipeline::instantiate(operator_input input,
   auto it = operators_.begin();
   auto end = operators_.end();
   while (true) {
-    auto output = (*it)->instantiate(std::move(input), control);
+    auto output = (*it)->instantiate(std::move(input), ctx);
     if (!output) {
       return output.error();
     }

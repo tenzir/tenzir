@@ -62,7 +62,7 @@ public:
     // nop
   }
 
-  auto initialize(const type& schema, operator_control_plane&) const
+  auto initialize(const type& schema, exec_ctx) const
     -> caf::expected<state_type> override {
     // Determine whether we want to drop the entire batch first.
     const auto drop_schema
@@ -167,8 +167,7 @@ public:
     return "tql2.drop";
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
     -> generator<table_slice> {
     for (auto&& slice : input) {
       if (slice.rows() == 0) {

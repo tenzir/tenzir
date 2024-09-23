@@ -22,7 +22,6 @@
 #include "tenzir/die.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
-#include "tenzir/operator_control_plane.hpp"
 #include "tenzir/store.hpp"
 #include "tenzir/uuid.hpp"
 
@@ -457,8 +456,7 @@ auto aspect_plugin::aspect_name() const -> std::string {
 // -- parser plugin ------------------------------------------------------------
 
 auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
-                                  operator_control_plane& ctrl) const
-  -> std::vector<series> {
+                                  exec_ctx ctx) const -> std::vector<series> {
   // TODO: Collecting finished table slices here is very bad for performance.
   // For example, we have to concatenate new table slices. But there are also
   // many questions with regards to semantics. This should be either completely
@@ -494,7 +492,7 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
       [](chunk_ptr chunk) -> generator<chunk_ptr> {
         co_yield std::move(chunk);
       }(std::move(chunk)),
-      ctrl);
+      ctx);
     if (not instance) {
       append_null();
       continue;

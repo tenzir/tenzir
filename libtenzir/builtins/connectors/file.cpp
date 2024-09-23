@@ -243,7 +243,7 @@ public:
   explicit file_loader(loader_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl) const
+  auto instantiate(exec_ctx ctx) const
     -> std::optional<generator<chunk_ptr>> override {
     auto make = [](std::chrono::milliseconds timeout, fd_wrapper fd,
                    bool following) -> generator<chunk_ptr> {
@@ -367,7 +367,7 @@ public:
     return "file";
   }
 
-  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
+  auto instantiate(exec_ctx ctx, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
     // This should not be a `shared_ptr`, but we have to capture `stream` in
     // the returned `std::function`. Also, we capture it in a guard that calls
@@ -544,7 +544,7 @@ public:
   explicit load_file_operator(loader_args args) : args_{std::move(args)} {
   }
 
-  auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+  auto operator()(exec_ctx ctx) const -> generator<chunk_ptr> {
     auto loader = file_loader{args_};
     auto instance = loader.instantiate(ctrl);
     if (not instance) {
@@ -606,8 +606,7 @@ public:
   explicit save_file_operator(saver_args args) : args_{std::move(args)} {
   }
 
-  auto
-  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+  auto operator()(generator<chunk_ptr> input, exec_ctx ctx) const
     -> generator<std::monostate> {
     auto loader = file_saver{args_};
     auto instance = loader.instantiate(ctrl, {});

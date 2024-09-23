@@ -178,8 +178,7 @@ public:
     : args_{std::move(args)}, config_{std::move(config)} {
   }
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  auto operator()(exec_ctx ctx) const -> generator<table_slice> {
     const auto* ca_certificate
       = get_if<std::string>(&config_, "ca_certificate");
     if (ca_certificate == nullptr) {

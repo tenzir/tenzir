@@ -33,7 +33,7 @@ public:
     return op_->optimize(filter, event_order::unordered);
   }
 
-  auto instantiate(operator_input input, operator_control_plane& ctrl) const
+  auto instantiate(operator_input input, exec_ctx ctx) const
     -> caf::expected<operator_output> override {
     return op_->instantiate(std::move(input), ctrl);
   }

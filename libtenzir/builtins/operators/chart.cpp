@@ -156,8 +156,7 @@ public:
   using previous_values_type
     = detail::flat_map<std::pair<std::string, size_t>, std::unordered_set<data>>;
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
     -> generator<table_slice> {
     // Cache attribute-enriched schemas, to avoid the potentially expensive
     // operation of building a list of attributes by visiting `cfg_` for every
@@ -206,9 +205,9 @@ public:
   }
 
 private:
-  auto
-  verify_values(const table_slice& slice, previous_values_type& previous_values,
-                operator_control_plane& ctrl) const -> bool {
+  auto verify_values(const table_slice& slice,
+                     previous_values_type& previous_values, exec_ctx ctx) const
+    -> bool {
     const auto* record_schema_ptr = caf::get_if<record_type>(&slice.schema());
     if (not record_schema_ptr) {
       diagnostic::error("chart operator expects input to be a record")
@@ -238,9 +237,9 @@ private:
     return true;
   }
 
-  auto make_attributes(const table_slice& slice,
-                       previous_values_type& previous_values,
-                       operator_control_plane& ctrl) const
+  auto
+  make_attributes(const table_slice& slice,
+                  previous_values_type& previous_values, exec_ctx ctx) const
     -> std::optional<std::vector<type::attribute_view>> {
     const auto* record_schema_ptr = caf::get_if<record_type>(&slice.schema());
     if (not record_schema_ptr) {
@@ -277,7 +276,7 @@ private:
                       const record_type& record_schema,
                       std::string_view field_name,
                       previous_values_type& previous_values, size_t index,
-                      operator_control_plane& ctrl) const -> bool {
+                      exec_ctx ctx) const -> bool {
     if (item.req == requirement::none) {
       return true;
     }
@@ -344,7 +343,7 @@ private:
   auto resolve_attribute_value(const configuration_item& item,
                                const record_type& schema,
                                std::string_view schema_name_, size_t index,
-                               operator_control_plane& ctrl) const
+                               exec_ctx ctx) const
     -> std::optional<std::string_view> {
     auto visitor = detail::overload{
       // `nth_field`:

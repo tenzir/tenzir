@@ -80,8 +80,7 @@ public:
   }
 
   template <class Input, class Output>
-  auto run(operator_input input,
-           operator_control_plane& ctrl) const -> generator<Output> {
+  auto run(operator_input input, exec_ctx ctx) const -> generator<Output> {
     auto alarm_clock = ctrl.self().spawn(make_alarm_clock);
     auto next_run = scheduler_.next_after(time::clock::now());
     auto done = false;
@@ -147,7 +146,7 @@ public:
     }
   }
 
-  auto instantiate(operator_input input, operator_control_plane& ctrl) const
+  auto instantiate(operator_input input, exec_ctx ctx) const
     -> caf::expected<operator_output> override {
     auto f = [&]<class Input>(const Input&) -> caf::expected<operator_output> {
       using generator_type

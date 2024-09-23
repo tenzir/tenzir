@@ -168,10 +168,10 @@ public:
   explicit sqs_loader(connector_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl) const
+  auto instantiate(exec_ctx ctx) const
     -> std::optional<generator<chunk_ptr>> override {
-    auto make = [](operator_control_plane& ctrl,
-                   connector_args args) mutable -> generator<chunk_ptr> {
+    auto make
+      = [](exec_ctx ctx, connector_args args) mutable -> generator<chunk_ptr> {
       try {
         auto poll_time
           = args.poll_time ? args.poll_time->inner : default_poll_time;
@@ -227,7 +227,7 @@ public:
   sqs_saver(connector_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
+  auto instantiate(exec_ctx ctx, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
     auto poll_time
       = args_.poll_time ? args_.poll_time->inner : default_poll_time;

@@ -9,7 +9,6 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/collect.hpp>
-#include <tenzir/operator_control_plane.hpp>
 #include <tenzir/plugin.hpp>
 
 #include <arrow/api.h>
@@ -64,8 +63,7 @@ public:
     TENZIR_ASSERT(parser_);
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
     -> generator<table_slice> {
     for (auto&& slice : input) {
       if (slice.rows() == 0) {

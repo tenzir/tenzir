@@ -93,7 +93,7 @@ public:
       config_["group.id"] = "tenzir";
   }
 
-  auto instantiate(operator_control_plane& ctrl) const
+  auto instantiate(exec_ctx ctx) const
     -> std::optional<generator<chunk_ptr>> override {
     auto cfg = configuration::make(config_);
     if (!cfg) {
@@ -232,7 +232,7 @@ public:
     : args_{std::move(args)}, config_{std::move(config)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
+  auto instantiate(exec_ctx ctx, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
     auto cfg = configuration::make(config_);
     if (!cfg) {

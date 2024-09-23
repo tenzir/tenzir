@@ -824,8 +824,7 @@ public:
     : serve_id_{std::move(serve_id)}, buffer_size_{buffer_size} {
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
     -> generator<std::monostate> {
     auto serve_manager
       = ctrl.self().system().registry().get<serve_manager_actor>(
@@ -927,8 +926,7 @@ public:
     return "serves";
   }
 
-  auto show(operator_control_plane& ctrl) const
-    -> generator<table_slice> override {
+  auto show(exec_ctx ctx) const -> generator<table_slice> override {
     auto serve_manager = serve_manager_actor{};
     auto blocking = caf::scoped_actor{ctrl.self().system()};
     blocking

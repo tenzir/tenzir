@@ -10,7 +10,6 @@
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/collect.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
-#include <tenzir/operator_control_plane.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/to_lines.hpp>
@@ -156,8 +155,7 @@ private:
 };
 
 class kv_parser;
-auto parse_loop(generator<std::optional<std::string_view>> input,
-                operator_control_plane& ctrl,
+auto parse_loop(generator<std::optional<std::string_view>> input, exec_ctx ctx,
                 kv_parser parser) -> generator<table_slice>;
 
 class kv_parser final : public plugin_parser {
@@ -187,13 +185,12 @@ public:
     return "kv";
   }
 
-  auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+  auto instantiate(generator<chunk_ptr> input, exec_ctx ctx) const
     -> std::optional<generator<table_slice>> override {
     return parse_loop(to_lines(std::move(input)), ctrl, *this);
   }
 
-  auto parse_line(series_builder& builder, operator_control_plane& ctrl,
+  auto parse_line(series_builder& builder, exec_ctx ctx,
                   std::string_view line) const -> void {
     auto event = builder.record();
     while (not line.empty()) {
@@ -220,8 +217,7 @@ public:
   }
 
   auto parse_strings(std::shared_ptr<arrow::StringArray> input,
-                     operator_control_plane& ctrl) const
-    -> std::vector<series> override {
+                     exec_ctx ctx) const -> std::vector<series> override {
     auto builder = series_builder{type{record_type{}}};
     for (auto&& line : values(string_type{}, *input)) {
       if (not line) {
@@ -244,8 +240,7 @@ public:
   splitter value_split_;
 };
 
-auto parse_loop(generator<std::optional<std::string_view>> input,
-                operator_control_plane& ctrl,
+auto parse_loop(generator<std::optional<std::string_view>> input, exec_ctx ctx,
                 kv_parser parser) -> generator<table_slice> {
   auto builder = series_builder{type{record_type{}}};
   for (auto&& line : input) {

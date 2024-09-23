@@ -27,8 +27,7 @@ public:
     return "operators";
   }
 
-  auto show(operator_control_plane& ctrl) const
-    -> generator<table_slice> override {
+  auto show(exec_ctx ctx) const -> generator<table_slice> override {
     auto builder = series_builder{};
     // Add operator plugins.
     for (const auto* plugin : plugins::get<operator_parser_plugin>()) {

@@ -560,8 +560,7 @@ public:
     : args_{std::move(args)}, config_{std::move(config)} {
   }
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  auto operator()(exec_ctx ctx) const -> generator<table_slice> {
     auto engine = engine::make_source(args_, config_);
     if (not engine) {
       diagnostic::error("failed to create Fluent Bit engine")
@@ -696,8 +695,7 @@ public:
     }
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
     -> generator<std::monostate> {
     auto engine = engine::make_sink(args_, config_);
     if (not engine) {

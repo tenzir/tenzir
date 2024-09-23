@@ -11,7 +11,6 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/detail/posix.hpp>
-#include <tenzir/operator_control_plane.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 
@@ -493,8 +492,7 @@ public:
     return "time";
   }
 
-  auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+  auto instantiate(generator<chunk_ptr> input, exec_ctx ctx) const
     -> std::optional<generator<table_slice>> override {
     (void)input;
     diagnostic::error("`{}` cannot be used here", name())
@@ -503,8 +501,7 @@ public:
   }
 
   auto parse_strings(std::shared_ptr<arrow::StringArray> input,
-                     operator_control_plane& ctrl) const
-    -> std::vector<series> override {
+                     exec_ctx ctx) const -> std::vector<series> override {
     auto b = series_builder{type{record_type{}}};
     for (auto&& string : values(string_type{}, *input)) {
       if (not string) {

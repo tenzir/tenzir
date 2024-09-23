@@ -18,7 +18,6 @@
 #include "tenzir/detail/pp.hpp"
 #include "tenzir/expression.hpp"
 #include "tenzir/http_api.hpp"
-#include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/series.hpp"
 #include "tenzir/type.hpp"
@@ -338,8 +337,9 @@ public:
 
   virtual auto name() const -> std::string = 0;
 
-  virtual auto instantiate(operator_control_plane& ctrl) const
-    -> std::optional<generator<chunk_ptr>> = 0;
+  virtual auto instantiate(exec_ctx ctx) const
+    -> std::optional<generator<chunk_ptr>>
+    = 0;
 
   virtual auto default_parser() const -> std::string {
     return "json";
@@ -377,9 +377,9 @@ public:
 
   virtual auto name() const -> std::string = 0;
 
-  virtual auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
-    -> std::optional<generator<table_slice>> = 0;
+  virtual auto instantiate(generator<chunk_ptr> input, exec_ctx ctx) const
+    -> std::optional<generator<table_slice>>
+    = 0;
 
   /// Apply the parser to an array of strings.
   ///
@@ -387,9 +387,8 @@ public:
   /// for every single string.
   ///
   /// @post `input->length() == result_array->length()`
-  virtual auto
-  parse_strings(std::shared_ptr<arrow::StringArray> input,
-                operator_control_plane& ctrl) const -> std::vector<series>;
+  virtual auto parse_strings(std::shared_ptr<arrow::StringArray> input,
+                             exec_ctx ctx) const -> std::vector<series>;
 
   /// Implement ordering optimization for parsers. See
   /// `operator_base::optimize(...)` for details. The default implementation
@@ -456,9 +455,9 @@ public:
   /// Returns a printer for a specified schema. If `allows_joining()`,
   /// then `input_schema`can also be `type{}`, which means that the printer
   /// should expect a heterogeneous input instead.
-  virtual auto
-  instantiate(type input_schema, operator_control_plane& ctrl) const
-    -> caf::expected<std::unique_ptr<printer_instance>> = 0;
+  virtual auto instantiate(type input_schema, exec_ctx ctx) const
+    -> caf::expected<std::unique_ptr<printer_instance>>
+    = 0;
 
   /// Returns whether the printer allows for joining output streams into a
   /// single saver.
@@ -500,9 +499,9 @@ public:
 
   virtual auto name() const -> std::string = 0;
 
-  virtual auto
-  instantiate(operator_control_plane& ctrl, std::optional<printer_info> info)
-    -> caf::expected<std::function<void(chunk_ptr)>> = 0;
+  virtual auto instantiate(exec_ctx ctx, std::optional<printer_info> info)
+    -> caf::expected<std::function<void(chunk_ptr)>>
+    = 0;
 
   /// Returns true if the saver joins the output from its preceding printer. If
   /// so, `instantiate()` will only be called once.
@@ -786,8 +785,7 @@ public:
   virtual auto aspect_name() const -> std::string;
 
   /// Produces the data to show.
-  virtual auto
-  show(operator_control_plane& ctrl) const -> generator<table_slice> = 0;
+  virtual auto show(exec_ctx ctx) const -> generator<table_slice> = 0;
 };
 
 // -- plugin_ptr ---------------------------------------------------------------

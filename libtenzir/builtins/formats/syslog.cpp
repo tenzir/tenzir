@@ -672,8 +672,8 @@ private:
   std::vector<std::string> rows_;
 };
 
-auto impl(generator<std::optional<std::string_view>> lines,
-          operator_control_plane& ctrl) -> generator<table_slice> {
+auto impl(generator<std::optional<std::string_view>> lines, exec_ctx ctx)
+  -> generator<table_slice> {
   std::variant<syslog_builder, legacy_syslog_builder, unknown_syslog_builder>
     builder{std::in_place_type<unknown_syslog_builder>};
   const auto finish_all = [&]() {
@@ -818,8 +818,7 @@ public:
     return "syslog";
   }
 
-  auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+  auto instantiate(generator<chunk_ptr> input, exec_ctx ctx) const
     -> std::optional<generator<table_slice>> override {
     return impl(to_lines(std::move(input)), ctrl);
   }

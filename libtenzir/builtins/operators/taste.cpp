@@ -30,7 +30,7 @@ public:
   explicit taste_operator(uint64_t limit) : limit_{limit} {
   }
 
-  auto initialize(const type&, operator_control_plane&) const
+  auto initialize(const type&, exec_ctx) const
     -> caf::expected<state_type> override {
     return limit_;
   }

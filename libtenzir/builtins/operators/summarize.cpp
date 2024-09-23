@@ -17,7 +17,6 @@
 #include <tenzir/detail/zip_iterator.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/hash/hash_append.hpp>
-#include <tenzir/operator_control_plane.hpp>
 #include <tenzir/parser_interface.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
@@ -757,8 +756,7 @@ public:
     // nop
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
     -> generator<table_slice> {
     co_yield {};
     auto impl = implementation{};
@@ -1093,8 +1091,7 @@ public:
     return "tql2.summarize";
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
     -> generator<table_slice> {
     // TODO: Do not create a new session here.
     auto provider = session_provider::make(ctrl.diagnostics());

@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "tenzir/operator_control_plane.hpp"
 #include "tenzir/pipeline.hpp"
 #include "tenzir/tql2/ast.hpp"
 
@@ -31,8 +30,8 @@ public:
     return "tql2.set";
   }
 
-  auto operator()(generator<table_slice> input,
-                  operator_control_plane& ctrl) const -> generator<table_slice>;
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
+    -> generator<table_slice>;
 
   auto optimize(expression const& filter, event_order order) const
     -> optimize_result override {

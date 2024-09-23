@@ -30,8 +30,7 @@ public:
   flatten_operator(std::string separator) : separator_{std::move(separator)} {
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
     -> generator<table_slice> {
     auto seen = std::unordered_set<type>{};
     for (auto&& slice : input) {

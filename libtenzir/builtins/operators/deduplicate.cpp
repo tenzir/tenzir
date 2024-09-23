@@ -125,8 +125,7 @@ public:
   deduplicate_operator(configuration cfg) : cfg_(std::move(cfg)) {
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
     -> generator<table_slice> {
     projection_cache cached_projections{};
     match_store matches{};

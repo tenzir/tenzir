@@ -29,8 +29,8 @@ public:
   unflatten_operator(std::string separator) : separator_{std::move(separator)} {
   }
 
-  auto operator()(generator<table_slice> input,
-                  [[maybe_unused]] operator_control_plane& ctrl) const
+  auto
+  operator()(generator<table_slice> input, [[maybe_unused]] exec_ctx ctx) const
     -> generator<table_slice> {
     for (auto&& slice : input) {
       auto result = tenzir::unflatten(slice, separator_);

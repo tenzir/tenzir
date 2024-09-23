@@ -378,8 +378,7 @@ public:
     : expr_{std::move(expr)}, mode_{mode} {
   }
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  auto operator()(exec_ctx ctx) const -> generator<table_slice> {
     auto filesystem = filesystem_actor{};
     ctrl.set_waiting(true);
     ctrl.self()

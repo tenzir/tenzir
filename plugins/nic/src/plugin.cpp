@@ -66,7 +66,7 @@ public:
   explicit nic_loader(loader_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl) const
+  auto instantiate(exec_ctx ctx) const
     -> std::optional<generator<chunk_ptr>> override {
     TENZIR_ASSERT(!args_.iface.inner.empty());
     auto snaplen = args_.snaplen ? args_.snaplen->inner : 262'144;
@@ -226,8 +226,7 @@ class nics_operator final : public crtp_operator<nics_operator> {
 public:
   nics_operator() = default;
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  auto operator()(exec_ctx ctx) const -> generator<table_slice> {
     auto err = std::array<char, PCAP_ERRBUF_SIZE>{};
     pcap_if_t* devices = nullptr;
     auto result = pcap_findalldevs(&devices, err.data());

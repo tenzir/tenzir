@@ -291,7 +291,7 @@ public:
   }
 
   template <class Output>
-  auto run(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto run(generator<table_slice> input, exec_ctx ctx) const
     -> generator<Output> {
     const auto cache_manager
       = ctrl.self().system().registry().get<cache_manager_actor>(
@@ -373,7 +373,7 @@ public:
     }
   }
 
-  auto instantiate(operator_input input, operator_control_plane& ctrl) const
+  auto instantiate(operator_input input, exec_ctx ctx) const
     -> caf::expected<operator_output> override {
     auto* typed_input = std::get_if<generator<table_slice>>(&input);
     TENZIR_ASSERT(typed_input);
@@ -444,8 +444,8 @@ public:
     : id_{std::move(id)}, capacity_{capacity}, ttl_{ttl}, max_ttl_{max_ttl} {
   }
 
-  auto run(std::optional<generator<table_slice>> input,
-           operator_control_plane& ctrl) const -> generator<table_slice> {
+  auto run(std::optional<generator<table_slice>> input, exec_ctx ctx) const
+    -> generator<table_slice> {
     TENZIR_ASSERT(source_ != input.has_value());
     const auto cache_manager
       = ctrl.self().system().registry().get<cache_manager_actor>(
@@ -504,13 +504,11 @@ public:
     TENZIR_UNREACHABLE();
   }
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  auto operator()(exec_ctx ctx) const -> generator<table_slice> {
     return run({}, ctrl);
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
     -> generator<table_slice> {
     input.begin();
     return run(std::move(input), ctrl);

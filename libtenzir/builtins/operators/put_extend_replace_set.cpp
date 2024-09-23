@@ -68,8 +68,8 @@ auto make_drop() {
 
 template <mode Mode>
 auto make_extend(const table_slice& slice, const configuration& config,
-                 operator_control_plane& ctrl,
-                 std::unordered_set<std::string> duplicates, bool override) {
+                 exec_ctx ctx, std::unordered_set<std::string> duplicates,
+                 bool override) {
   return [&, duplicates = std::move(duplicates),
           override](struct record_type::field input_field,
                     std::shared_ptr<arrow::Array> input_array) mutable {
@@ -114,8 +114,7 @@ auto make_extend(const table_slice& slice, const configuration& config,
   };
 }
 
-auto make_replace(const table_slice& slice, const operand& op,
-                  operator_control_plane& ctrl) {
+auto make_replace(const table_slice& slice, const operand& op, exec_ctx ctx) {
   return [&](struct record_type::field input_field,
              std::shared_ptr<arrow::Array>)
            -> std::vector<std::pair<struct record_type::field,
@@ -149,8 +148,7 @@ public:
     return std::string{operator_name(Mode)};
   }
 
-  auto operator()(const table_slice& slice, operator_control_plane& ctrl) const
-    -> table_slice {
+  auto operator()(const table_slice& slice, exec_ctx ctx) const -> table_slice {
     if (slice.rows() == 0)
       return {};
     const auto& layout = caf::get<record_type>(slice.schema());

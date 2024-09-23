@@ -22,7 +22,6 @@
 #include <tenzir/diagnostics.hpp>
 #include <tenzir/generator.hpp>
 #include <tenzir/modules.hpp>
-#include <tenzir/operator_control_plane.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/si_literals.hpp>
@@ -226,11 +225,11 @@ struct entry_data {
 };
 
 struct parser_state {
-  explicit parser_state(operator_control_plane& ctrl, bool preserve_order)
+  explicit parser_state(exec_ctx ctx, bool preserve_order)
     : ctrl_{ctrl}, preserve_order{preserve_order} {
   }
 
-  operator_control_plane& ctrl_;
+  exec_ctx ctx_;
   /// Maps schema names to indices for the `entries` member.
   detail::heterogeneous_string_hashmap<size_t> entry_map;
   /// If `--precise` is set, we use this map instead of `entry_map`. Obviously,
@@ -305,15 +304,15 @@ struct parser_state {
 /// Parses simdjson objects into the given `series_builder` handles.
 class doc_parser {
 public:
-  doc_parser(std::string_view parsed_document, operator_control_plane& ctrl,
-             bool no_infer, bool raw)
+  doc_parser(std::string_view parsed_document, exec_ctx ctx, bool no_infer,
+             bool raw)
     : parsed_document_{parsed_document},
       ctrl_{ctrl},
       no_infer_{no_infer},
       raw_{raw} {
   }
 
-  doc_parser(std::string_view parsed_document, operator_control_plane& ctrl,
+  doc_parser(std::string_view parsed_document, exec_ctx ctx,
              std::size_t parsed_lines, bool no_infer, bool raw)
     : parsed_document_{parsed_document},
       ctrl_{ctrl},
@@ -546,7 +545,7 @@ private:
   }
 
   std::string_view parsed_document_;
-  operator_control_plane& ctrl_;
+  exec_ctx ctx_;
   std::optional<std::size_t> parsed_lines_;
   bool no_infer_;
   bool raw_;
@@ -744,7 +743,7 @@ auto unflatten_if_needed(std::string_view separator,
 
 class parser_base {
 public:
-  parser_base(operator_control_plane& ctrl, std::optional<selector> selector,
+  parser_base(exec_ctx ctx, std::optional<selector> selector,
               std::optional<type> schema, std::vector<type> schemas,
               bool no_infer, bool preserve_order, bool raw,
               bool arrays_of_objects, bool precise)
@@ -850,7 +849,7 @@ protected:
     return state.get_active_entry().flush();
   }
 
-  operator_control_plane& ctrl_;
+  exec_ctx ctx_;
   std::optional<selector> selector_;
   std::optional<type> schema_;
   std::vector<type> schemas_;
@@ -1135,10 +1134,10 @@ private:
 };
 
 template <class GeneratorValue>
-auto make_parser(generator<GeneratorValue> json_chunk_generator,
-                 operator_control_plane& ctrl, std::string separator,
-                 std::optional<type> schema, bool preserve_order,
-                 auto parser_impl) -> generator<table_slice> {
+auto make_parser(generator<GeneratorValue> json_chunk_generator, exec_ctx ctx,
+                 std::string separator, std::optional<type> schema,
+                 bool preserve_order, auto parser_impl)
+  -> generator<table_slice> {
   auto state = parser_state{ctrl, preserve_order};
   if (schema) {
     // TODO: What about `infer_types`?
@@ -1258,8 +1257,7 @@ public:
     return std::make_unique<json_parser>(std::move(args));
   }
 
-  auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+  auto instantiate(generator<chunk_ptr> input, exec_ctx ctx) const
     -> std::optional<generator<table_slice>> override {
     auto schemas
       = get_schemas(args_.schema.has_value() or args_.selector.has_value(),
@@ -1397,7 +1395,7 @@ public:
     return "json";
   }
 
-  auto instantiate(type, operator_control_plane&) const
+  auto instantiate(type, exec_ctx) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
     const auto compact = !!args_.compact_output;
     auto style = default_style();
@@ -1593,8 +1591,8 @@ public:
     return "tql2.write_json";
   }
 
-  auto operator()(generator<table_slice> input,
-                  operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
+    -> generator<chunk_ptr> {
     // TODO: Expose a better API for this.
     auto printer = printer_.instantiate(type{}, ctrl);
     TENZIR_ASSERT(printer);

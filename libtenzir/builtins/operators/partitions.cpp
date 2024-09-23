@@ -36,8 +36,7 @@ public:
       experimental_include_ranges_{experimental_include_ranges} {
   }
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  auto operator()(exec_ctx ctx) const -> generator<table_slice> {
     // TODO: Some of the the requests this operator makes are blocking, so
     // we have to create a scoped actor here; once the operator API uses
     // async we can offer a better mechanism here.

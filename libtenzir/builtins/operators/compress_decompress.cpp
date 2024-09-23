@@ -150,8 +150,8 @@ public:
   explicit compress_operator(operator_args args) : args_{std::move(args)} {
   }
 
-  auto operator()(generator<chunk_ptr> input,
-                  operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+  auto operator()(generator<chunk_ptr> input, exec_ctx ctx) const
+    -> generator<chunk_ptr> {
     auto codec = codec_from_args(args_);
     if (not codec.ok()) {
       diagnostic::error("failed to create codec for compression type `{}`: {}",
@@ -260,8 +260,8 @@ public:
   explicit decompress_operator(operator_args args) : args_{std::move(args)} {
   }
 
-  auto operator()(generator<chunk_ptr> input,
-                  operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+  auto operator()(generator<chunk_ptr> input, exec_ctx ctx) const
+    -> generator<chunk_ptr> {
     auto codec = codec_from_args(args_);
     if (not codec.ok()) {
       diagnostic::error("failed to create codec for compression type `{}`: {}",

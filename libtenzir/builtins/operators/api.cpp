@@ -26,8 +26,7 @@ public:
     : endpoint_{std::move(endpoint)}, request_body_{std::move(request_body)} {
   }
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  auto operator()(exec_ctx ctx) const -> generator<table_slice> {
     const auto request = http_request_description{
       .canonical_path = fmt::format("POST {} (v0)", endpoint_),
       .json_body = request_body_,

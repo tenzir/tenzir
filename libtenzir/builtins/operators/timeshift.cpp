@@ -31,8 +31,7 @@ public:
     return "timeshift";
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
     -> generator<table_slice> {
     auto resolved_fields = std::unordered_map<type, std::optional<offset>>{};
     auto start = start_;

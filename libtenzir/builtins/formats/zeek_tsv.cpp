@@ -497,8 +497,8 @@ struct zeek_document {
   type target_schema = {};
 };
 
-auto parser_impl(generator<std::optional<std::string_view>> lines,
-                 operator_control_plane& ctrl) -> generator<table_slice> {
+auto parser_impl(generator<std::optional<std::string_view>> lines, exec_ctx ctx)
+  -> generator<table_slice> {
   auto document = zeek_document{};
   auto last_finish = std::chrono::steady_clock::now();
   auto line_nr = size_t{0};
@@ -773,8 +773,7 @@ public:
     return "zeek-tsv";
   }
 
-  auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+  auto instantiate(generator<chunk_ptr> input, exec_ctx ctx) const
     -> std::optional<generator<table_slice>> override {
     return parser_impl(to_lines(std::move(input)), ctrl);
   }
@@ -805,8 +804,7 @@ public:
   explicit zeek_tsv_printer(args a) : args_{std::move(a)} {
   }
 
-  auto
-  instantiate([[maybe_unused]] type input_schema, operator_control_plane&) const
+  auto instantiate([[maybe_unused]] type input_schema, exec_ctx) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
     auto printer = zeek_printer{args_.set_sep.value_or(','),
                                 args_.empty_field.value_or("(empty)"),

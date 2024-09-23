@@ -9,8 +9,8 @@
 #pragma once
 
 #include "tenzir/detail/default_formatter.hpp"
+#include "tenzir/exec_ctx.hpp"
 #include "tenzir/expression.hpp"
-#include "tenzir/operator_control_plane.hpp"
 #include "tenzir/table_slice.hpp"
 #include "tenzir/tag.hpp"
 
@@ -275,8 +275,7 @@ public:
   ///   exhausted).
   /// - If the input generator is advanced, then the output generator must yield
   ///   before advancing the input again.
-  virtual auto
-  instantiate(operator_input input, operator_control_plane& ctrl) const
+  virtual auto instantiate(operator_input input, exec_ctx ctx) const
     -> caf::expected<operator_output>
     = 0;
 
@@ -538,7 +537,7 @@ public:
     detail::panic("pipeline::idle_after() must not be called");
   }
 
-  auto instantiate(operator_input input, operator_control_plane& control) const
+  auto instantiate(operator_input input, exec_ctx ctx) const
     -> caf::expected<operator_output> override;
 
   auto copy() const -> operator_ptr override;
@@ -596,28 +595,27 @@ inline auto inspect(auto& f, operator_ptr& x) -> bool {
 /// - Source:    `() -> generator<Output>`
 /// - Stateless: `Input -> Output`
 /// - Stateful:  `generator<Input> -> generator<Output>`
-/// The `operator_control_plane&` can also be appended as a parameter. The
-/// result can optionally be wrapped in `caf::expected`, and `operator_output`
-/// can be used in place of `generator<Output>`.
+/// The `exec_ctx` can also be appended as a parameter. The result can
+/// optionally be wrapped in `caf::expected`, and `operator_output` can be used
+/// in place of `generator<Output>`.
 template <class Self>
 class crtp_operator : public operator_base {
 public:
-  auto instantiate(operator_input input, operator_control_plane& ctrl) const
+  auto instantiate(operator_input input, exec_ctx ctx) const
     -> caf::expected<operator_output> final {
     // We intentionally check for invocability with `Self&` instead of `const
     // Self&` to produce an error if the `const` is missing.
     auto f = detail::overload{
       [&](std::monostate) -> caf::expected<operator_output> {
         constexpr auto source = std::is_invocable_v<Self&>;
-        constexpr auto source_ctrl
-          = std::is_invocable_v<Self&, operator_control_plane&>;
+        constexpr auto source_ctrl = std::is_invocable_v<Self&, exec_ctx>;
         static_assert(source + source_ctrl <= 1,
                       "ambiguous operator definition: callable with both "
                       "`op()` and `op(ctrl)`");
         if constexpr (source) {
           return convert_output(self()());
         } else if constexpr (source_ctrl) {
-          return convert_output(self()(ctrl));
+          return convert_output(self()(ctx));
         } else {
           return caf::make_error(ec::type_clash,
                                  fmt::format("'{}' cannot be used as a source",
@@ -627,11 +625,10 @@ public:
       [&]<class Input>(
         generator<Input> input) -> caf::expected<operator_output> {
         constexpr auto one = std::is_invocable_v<Self&, Input>;
-        constexpr auto one_ctrl
-          = std::is_invocable_v<Self&, Input, operator_control_plane&>;
+        constexpr auto one_ctrl = std::is_invocable_v<Self&, Input, exec_ctx>;
         constexpr auto gen = std::is_invocable_v<Self&, generator<Input>>;
-        constexpr auto gen_ctrl = std::is_invocable_v<Self&, generator<Input>,
-                                                      operator_control_plane&>;
+        constexpr auto gen_ctrl
+          = std::is_invocable_v<Self&, generator<Input>, exec_ctx>;
         static_assert(one + one_ctrl + gen + gen_ctrl <= 1,
                       "ambiguous operator definition: callable with more than "
                       "one of `op(x)`, `op(x, ctrl)`, `op(gen)` and `op(gen, "
@@ -647,19 +644,17 @@ public:
             std::move(input), self());
         } else if constexpr (one_ctrl) {
           return std::invoke(
-            [](generator<Input> input, operator_control_plane& ctrl,
-               const Self& self)
-              -> generator<
-                std::invoke_result_t<Self&, Input, operator_control_plane&>> {
+            [](generator<Input> input, exec_ctx ctx, const Self& self)
+              -> generator<std::invoke_result_t<Self&, Input, exec_ctx>> {
               for (auto&& x : input) {
-                co_yield self(std::move(x), ctrl);
+                co_yield self(std::move(x), ctx);
               }
             },
-            std::move(input), ctrl, self());
+            std::move(input), ctx, self());
         } else if constexpr (gen) {
           return convert_output(self()(std::move(input)));
         } else if constexpr (gen_ctrl) {
-          return convert_output(self()(std::move(input), ctrl));
+          return convert_output(self()(std::move(input), ctx));
         } else {
           return caf::make_error(
             ec::type_clash, fmt::format("'{}' does not accept {} as input",
@@ -728,7 +723,7 @@ public:
   using output_type = Output;
 
   /// Returns the initial state for when a schema is first encountered.
-  virtual auto initialize(const type& schema, operator_control_plane&) const
+  virtual auto initialize(const type& schema, exec_ctx) const
     -> caf::expected<state_type>
     = 0;
 
@@ -737,8 +732,7 @@ public:
     -> output_type
     = 0;
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
     -> generator<remove_generator_t<output_type>> {
     co_yield {};
     auto states = std::unordered_map<type, state_type>{};
@@ -749,9 +743,9 @@ public:
       }
       auto it = states.find(slice.schema());
       if (it == states.end()) {
-        auto state = initialize(slice.schema(), ctrl);
+        auto state = initialize(slice.schema(), ctx);
         if (!state) {
-          diagnostic::error(state.error()).emit(ctrl.diagnostics());
+          diagnostic::error(state.error()).emit(ctx);
           break;
         }
         it = states.try_emplace(it, slice.schema(), std::move(*state));

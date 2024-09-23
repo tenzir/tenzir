@@ -13,7 +13,6 @@
 #include "tenzir/tql2/eval.hpp"
 #include "tenzir/tql2/exec.hpp"
 
-#include <tenzir/operator_control_plane.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::if_ {
@@ -72,8 +71,7 @@ public:
     return do_not_optimize(*this);
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
     -> generator<table_slice> {
     // TODO: All of this is quite bad! Needs to be rewritten.
     auto transpose_gen = [](operator_output gen)

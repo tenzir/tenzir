@@ -27,13 +27,12 @@ public:
     : aspect_plugin_{std::move(aspect_plugin)} {
   }
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  auto operator()(exec_ctx ctx) const -> generator<table_slice> {
     if (auto plugin = get()) {
       return plugin->show(ctrl);
     }
     return
-      [](operator_control_plane& ctrl,
+      [](exec_ctx ctx,
          std::vector<const aspect_plugin*> plugins) -> generator<table_slice> {
         for (const auto* plugin : plugins) {
           for (auto&& slice : plugin->show(ctrl)) {

@@ -61,7 +61,7 @@ public:
     : config_(std::move(configuration)) {
   }
 
-  auto initialize(const type& schema, operator_control_plane&) const
+  auto initialize(const type& schema, exec_ctx) const
     -> caf::expected<state_type> override {
     // Get the target field if it exists.
     auto column_index = schema.resolve_key_or_concept_once(config_.field);

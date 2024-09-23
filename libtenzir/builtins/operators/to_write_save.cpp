@@ -78,8 +78,8 @@ public:
     : printer_{std::move(printer)} {
   }
 
-  auto operator()(generator<table_slice> input,
-                  operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
+    -> generator<chunk_ptr> {
     if (printer_->allows_joining()) {
       auto p = printer_->instantiate(type{}, ctrl);
       if (!p) {
@@ -206,8 +206,7 @@ public:
     : saver_{std::move(saver)} {
   }
 
-  auto
-  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+  auto operator()(generator<chunk_ptr> input, exec_ctx ctx) const
     -> generator<std::monostate> {
     // TODO: Extend API to allow schema-less make_saver().
     auto new_saver = saver_->instantiate(ctrl, std::nullopt);
@@ -310,7 +309,7 @@ public:
     : printer_{std::move(printer)}, saver_{std::move(saver)} {
   }
 
-  auto initialize(const type& schema, operator_control_plane& ctrl) const
+  auto initialize(const type& schema, exec_ctx ctx) const
     -> caf::expected<state_type> override {
     auto p = printer_->instantiate(schema, ctrl);
     if (not p) {

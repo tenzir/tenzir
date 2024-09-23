@@ -58,7 +58,7 @@ public:
   explicit saver(saver_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
+  auto instantiate(exec_ctx ctx, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
     auto tx = transfer{args_.transfer_opts};
     if (auto err = to_error(tx.handle().set(CURLOPT_UPLOAD, 1))) {

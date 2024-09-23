@@ -363,15 +363,15 @@ public:
   zmq_loader(loader_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl) const
+  auto instantiate(exec_ctx ctx) const
     -> std::optional<generator<chunk_ptr>> override {
     auto conn = connection::make_source(context, args_);
     if (not conn) {
       TENZIR_ERROR(conn.error());
       return std::nullopt;
     }
-    auto make = [](operator_control_plane& ctrl,
-                   connection conn) mutable -> generator<chunk_ptr> {
+    auto make
+      = [](exec_ctx ctx, connection conn) mutable -> generator<chunk_ptr> {
       while (true) {
         if (conn.monitored()) {
           // Poll in larger strides if we have no peers. Once we have at least
@@ -425,7 +425,7 @@ public:
   zmq_saver(saver_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
+  auto instantiate(exec_ctx ctx, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
     auto conn = connection::make_sink(context, args_);
     if (not conn) {

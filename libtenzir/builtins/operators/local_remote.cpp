@@ -53,7 +53,7 @@ public:
     return result;
   }
 
-  auto instantiate(operator_input input, operator_control_plane& ctrl) const
+  auto instantiate(operator_input input, exec_ctx ctx) const
     -> caf::expected<operator_output> override {
     if (not ctrl.no_location_overrides()
         || op_->location() == operator_location::anywhere

@@ -29,12 +29,10 @@ public:
     return "bitz";
   }
 
-  auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+  auto instantiate(generator<chunk_ptr> input, exec_ctx ctx) const
     -> std::optional<generator<table_slice>> override {
     return std::invoke(
-      [](auto byte_reader,
-         operator_control_plane& ctrl) -> generator<table_slice> {
+      [](auto byte_reader, exec_ctx ctx) -> generator<table_slice> {
         while (true) {
           auto header = byte_reader(sizeof(uint64_t));
           while (not header) {
@@ -90,7 +88,7 @@ public:
     return "bitz";
   }
 
-  auto instantiate(type input_schema, operator_control_plane& ctrl) const
+  auto instantiate(type input_schema, exec_ctx ctx) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
     (void)input_schema;
     (void)ctrl;

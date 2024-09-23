@@ -285,8 +285,7 @@ public:
   explicit decapsulate_operator(operator_args args) : args_{std::move(args)} {
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
     -> generator<table_slice> {
     for (auto&& slice : input) {
       if (slice.rows() == 0) {

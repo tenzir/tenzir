@@ -517,8 +517,7 @@ public:
     // nop
   }
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  auto operator()(exec_ctx ctx) const -> generator<table_slice> {
     auto args = args_;
     args.metrics_receiver = ctrl.metrics_receiver();
     args.operator_index = ctrl.operator_index();

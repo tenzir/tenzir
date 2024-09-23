@@ -18,8 +18,7 @@ class processes_operator final : public crtp_operator<processes_operator> {
 public:
   processes_operator() = default;
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  auto operator()(exec_ctx ctx) const -> generator<table_slice> {
     auto system = os::make();
     if (not system) {
       diagnostic::error("failed to create OS shim").emit(ctrl.diagnostics());

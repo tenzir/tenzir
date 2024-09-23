@@ -23,7 +23,7 @@ namespace tenzir::plugins::parquet {
 
 namespace {
 
-auto parse_parquet(generator<chunk_ptr> input, operator_control_plane& ctrl)
+auto parse_parquet(generator<chunk_ptr> input, exec_ctx ctx)
   -> generator<table_slice> {
   auto parquet_chunk = chunk_ptr{};
   for (auto&& chunk : drain_bytes(std::move(input))) {
@@ -102,8 +102,7 @@ public:
     return "parquet";
   }
 
-  auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+  auto instantiate(generator<chunk_ptr> input, exec_ctx ctx) const
     -> std::optional<generator<table_slice>> override {
     return parse_parquet(std::move(input), ctrl);
   }
@@ -123,7 +122,7 @@ public:
     return "parquet";
   }
 
-  auto instantiate(type input_schema, operator_control_plane& ctrl) const
+  auto instantiate(type input_schema, exec_ctx ctx) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
     return parquet_printer_instance::make(ctrl, std::move(input_schema),
                                           options_);
@@ -139,8 +138,8 @@ public:
 
   class parquet_printer_instance : public printer_instance {
   public:
-    static auto make(operator_control_plane& ctrl, type input_schema,
-                     const parquet_options& options)
+    static auto
+    make(exec_ctx ctx, type input_schema, const parquet_options& options)
       -> caf::expected<std::unique_ptr<printer_instance>> {
       auto arrow_writer_props
         = ::parquet::ArrowWriterProperties::Builder().store_schema()->build();
@@ -247,7 +246,7 @@ public:
     }
 
     parquet_printer_instance(
-      operator_control_plane& ctrl, type input_schema,
+      exec_ctx ctx, type input_schema,
       std::shared_ptr<chunked_buffer_output_stream> out_buffer,
       std::unique_ptr<::parquet::arrow::FileWriter> writer)
       : ctrl_{ctrl},
@@ -257,7 +256,7 @@ public:
     }
 
   private:
-    operator_control_plane& ctrl_;
+    exec_ctx ctx_;
     std::unique_ptr<::parquet::arrow::FileWriter> writer_;
     std::shared_ptr<chunked_buffer_output_stream> out_buffer_;
     type input_schema_;

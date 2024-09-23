@@ -302,7 +302,7 @@ public:
   /// Consumes frames from broker, simply for the side effect of processing
   /// heartbeats implicitly. Required if otherwise no interaction with the
   /// broker would occur.
-  auto handle_heartbeat(operator_control_plane& ctrl) {
+  auto handle_heartbeat(exec_ctx ctx) {
     amqp_frame_t frame;
     // We impose no timeout, either there is something to read or not. Never
     // block!
@@ -544,9 +544,9 @@ public:
     : args_{std::move(args)}, config_{std::move(config)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl) const
+  auto instantiate(exec_ctx ctx) const
     -> std::optional<generator<chunk_ptr>> override {
-    auto make = [](operator_control_plane& ctrl, loader_args args,
+    auto make = [](exec_ctx ctx, loader_args args,
                    record config) mutable -> generator<chunk_ptr> {
       auto engine = amqp_engine::make(config);
       if (not engine) {
@@ -632,7 +632,7 @@ public:
     : args_{std::move(args)}, config_{std::move(config)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
+  auto instantiate(exec_ctx ctx, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
     auto engine = std::shared_ptr<amqp_engine>{};
     if (auto eng = amqp_engine::make(config_)) {

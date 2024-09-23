@@ -61,8 +61,7 @@ public:
     return "pcap";
   }
 
-  auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+  auto instantiate(generator<chunk_ptr> input, exec_ctx ctx) const
     -> std::optional<generator<table_slice>> override {
     auto make = [](auto& ctrl, generator<chunk_ptr> input,
                    bool emit_file_headers) -> generator<table_slice> {
@@ -417,7 +416,7 @@ public:
     return "pcap";
   }
 
-  auto instantiate(type input_schema, operator_control_plane& ctrl) const
+  auto instantiate(type input_schema, exec_ctx ctx) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
     // When the printer receives table slices, it can be a wild mix of file
     // headers and packet records. We may receive an ordered event stream

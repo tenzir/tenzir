@@ -53,8 +53,7 @@ public:
     return "lines";
   }
 
-  auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+  auto instantiate(generator<chunk_ptr> input, exec_ctx ctx) const
     -> std::optional<generator<table_slice>> override {
     auto make = [](auto& ctrl, generator<chunk_ptr> input, bool skip_empty,
                    bool nulls) -> generator<table_slice> {
@@ -192,7 +191,7 @@ public:
     return "lines";
   }
 
-  auto instantiate(type, operator_control_plane&) const
+  auto instantiate(type, exec_ctx) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
     return printer_instance::make(
       [](table_slice slice) -> generator<chunk_ptr> {

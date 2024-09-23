@@ -49,7 +49,7 @@ public:
     : config_{std::move(config)} {
   }
 
-  auto initialize(const type& schema, operator_control_plane&) const
+  auto initialize(const type& schema, exec_ctx) const
     -> caf::expected<state_type> override {
     std::vector<indexed_transformation> transformations;
     auto transformation = [&](struct record_type::field field,

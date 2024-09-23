@@ -85,7 +85,7 @@ public:
     }
   }
 
-  auto initialize(const type& schema, operator_control_plane& ctrl) const
+  auto initialize(const type& schema, exec_ctx ctx) const
     -> caf::expected<state_type> override {
     auto current = schema;
     auto result = offset{};

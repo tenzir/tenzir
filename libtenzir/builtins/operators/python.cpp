@@ -144,7 +144,7 @@ public:
       code_{std::move(code)} {
   }
 
-  auto execute(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto execute(generator<table_slice> input, exec_ctx ctx) const
     -> generator<table_slice> {
     try {
       // Creating a pipeline through the API waits until a pipeline has started
@@ -423,8 +423,7 @@ public:
     co_return;
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
     -> generator<table_slice> {
     return execute(std::move(input), ctrl);
   }

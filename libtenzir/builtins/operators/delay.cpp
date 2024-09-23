@@ -32,8 +32,7 @@ public:
     return "delay";
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
     -> generator<table_slice> {
     auto alarm_clock = ctrl.self().spawn(detail::make_alarm_clock);
     auto resolved_fields = std::unordered_map<type, std::optional<offset>>{};

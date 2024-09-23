@@ -31,8 +31,7 @@ public:
     : loader_{std::move(loader)} {
   }
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> caf::expected<generator<chunk_ptr>> {
+  auto operator()(exec_ctx ctx) const -> caf::expected<generator<chunk_ptr>> {
     if (auto result = loader_->instantiate(ctrl)) {
       return std::move(*result);
     }
@@ -119,8 +118,7 @@ public:
     return plugin_inspect(f, x.parser_);
   }
 
-  auto
-  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+  auto operator()(generator<chunk_ptr> input, exec_ctx ctx) const
     -> caf::expected<generator<table_slice>> {
     auto parser = parser_->instantiate(std::move(input), ctrl);
     if (not parser) {

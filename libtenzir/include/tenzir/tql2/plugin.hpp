@@ -126,10 +126,9 @@ public:
                                     : NameOverride.str());
   }
 
-  auto
-  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+  auto operator()(generator<chunk_ptr> input, exec_ctx ctx) const
     -> generator<table_slice> {
-    auto gen = parser_.instantiate(std::move(input), ctrl);
+    auto gen = parser_.instantiate(std::move(input), ctx);
     if (not gen) {
       co_return;
     }

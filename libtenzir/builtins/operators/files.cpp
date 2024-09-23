@@ -158,8 +158,7 @@ public:
     co_yield builder.finish_assert_one_slice();
   }
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  auto operator()(exec_ctx ctx) const -> generator<table_slice> {
     try {
       const auto path = args_.path ? std::filesystem::path{*args_.path}
                                    : std::filesystem::current_path();

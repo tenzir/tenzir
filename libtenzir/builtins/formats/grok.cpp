@@ -411,8 +411,7 @@ public:
     return "grok";
   }
 
-  auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+  auto instantiate(generator<chunk_ptr> input, exec_ctx ctx) const
     -> std::optional<generator<table_slice>> override {
     (void)input;
     diagnostic::error("`{}` cannot be used here", name())
@@ -532,8 +531,7 @@ public:
   }
 
   auto parse_strings(std::shared_ptr<arrow::StringArray> input,
-                     operator_control_plane& ctrl) const
-    -> std::vector<series> override {
+                     exec_ctx ctx) const -> std::vector<series> override {
     return parse_strings(*input, ctrl.diagnostics());
   }
 

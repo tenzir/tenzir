@@ -41,8 +41,7 @@ public:
   }
 
   struct monitor_state {
-    auto update(const std::filesystem::path& path, operator_control_plane& ctrl)
-      -> void {
+    auto update(const std::filesystem::path& path, exec_ctx ctx) -> void {
       auto old_rules = std::exchange(rules, {});
       if (std::filesystem::is_directory(path)) {
         for (const auto& entry : std::filesystem::directory_iterator(path)) {
@@ -104,8 +103,7 @@ public:
     std::unordered_map<std::string, std::pair<data, expression>> rules = {};
   };
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
     -> generator<table_slice> {
     auto state = monitor_state{};
     state.path = path_;

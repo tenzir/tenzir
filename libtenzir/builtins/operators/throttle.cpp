@@ -46,8 +46,8 @@ public:
 
   // TODO: Currently the operator only handles byte stream, but in the future
   // we also want to be able to handle events as input.
-  auto operator()(generator<chunk_ptr> input,
-                  operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+  auto operator()(generator<chunk_ptr> input, exec_ctx ctx) const
+    -> generator<chunk_ptr> {
     auto alarm_clock = ctrl.self().spawn(detail::make_alarm_clock);
     auto last_timestamp = std::chrono::steady_clock::now() - window_;
     auto bytes_per_window = bandwidth_per_second_ * window_.count();

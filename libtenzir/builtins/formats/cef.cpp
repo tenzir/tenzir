@@ -177,8 +177,8 @@ void add(const message_view& msg, builder_ref builder) {
   event.field("extension", msg.extension);
 }
 
-auto impl(generator<std::optional<std::string_view>> lines,
-          operator_control_plane& ctrl) -> generator<table_slice> {
+auto impl(generator<std::optional<std::string_view>> lines, exec_ctx ctx)
+  -> generator<table_slice> {
   auto builder = series_builder{};
   for (auto&& line : lines) {
     // TODO: Flush builder if maximum batch size or timeout is reached.
@@ -210,8 +210,7 @@ public:
     return "cef";
   }
 
-  auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+  auto instantiate(generator<chunk_ptr> input, exec_ctx ctx) const
     -> std::optional<generator<table_slice>> override {
     return impl(to_lines(std::move(input)), ctrl);
   }

@@ -164,7 +164,7 @@ public:
   explicit shell_operator(std::string command) : command_{std::move(command)} {
   }
 
-  auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+  auto operator()(exec_ctx ctx) const -> generator<chunk_ptr> {
     auto mode = ctrl.has_terminal() ? stdin_mode::inherit : stdin_mode::none;
     auto child = child::make(command_, mode);
     if (!child) {
@@ -200,8 +200,8 @@ public:
     }
   }
 
-  auto operator()(generator<chunk_ptr> input,
-                  operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+  auto operator()(generator<chunk_ptr> input, exec_ctx ctx) const
+    -> generator<chunk_ptr> {
     // TODO: Handle exceptions from `boost::process`.
     auto child = child::make(command_, stdin_mode::pipe);
     if (!child) {

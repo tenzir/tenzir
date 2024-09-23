@@ -49,8 +49,7 @@ struct saver_args {
   }
 };
 
-auto udp_loader_impl(operator_control_plane& ctrl, loader_args args)
-  -> generator<chunk_ptr> {
+auto udp_loader_impl(exec_ctx ctx, loader_args args) -> generator<chunk_ptr> {
   // A UDP packet contains its length as 16-bit field in the header, giving
   // rise to packets sized up to 65,535 bytes (including the header). When we
   // go over IPv4, we have a limit of 65,507 bytes (65,535 bytes − 8-byte UDP
@@ -155,7 +154,7 @@ public:
     // nop
   }
 
-  auto instantiate(operator_control_plane& ctrl) const
+  auto instantiate(exec_ctx ctx) const
     -> std::optional<generator<chunk_ptr>> override {
     return udp_loader_impl(ctrl, args_);
   }
@@ -179,7 +178,7 @@ public:
   explicit saver(saver_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
+  auto instantiate(exec_ctx ctx, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
     auto endpoint = socket_endpoint::parse(args_.url);
     if (not endpoint) {

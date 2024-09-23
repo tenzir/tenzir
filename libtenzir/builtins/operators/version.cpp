@@ -34,7 +34,7 @@ class version_operator final : public crtp_operator<version_operator> {
 public:
   version_operator() = default;
 
-  auto operator()(operator_control_plane&) const -> generator<table_slice> {
+  auto operator()(exec_ctx) const -> generator<table_slice> {
     auto builder = series_builder{};
     auto event = builder.record();
     event.field("version", tenzir::version::version);

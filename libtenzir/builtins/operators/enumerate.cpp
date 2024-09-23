@@ -39,8 +39,7 @@ public:
       field_ = default_field_name;
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
     -> generator<table_slice> {
     auto current_type = type{};
     std::unordered_map<type, uint64_t> offsets;

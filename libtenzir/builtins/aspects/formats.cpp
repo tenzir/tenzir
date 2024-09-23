@@ -35,8 +35,7 @@ public:
     return "formats";
   }
 
-  auto show(operator_control_plane& ctrl) const
-    -> generator<table_slice> override {
+  auto show(exec_ctx ctx) const -> generator<table_slice> override {
     auto parsers = collect(plugins::get<parser_parser_plugin>());
     auto printers = collect(plugins::get<printer_parser_plugin>());
     auto formats = std::set<std::string>{};

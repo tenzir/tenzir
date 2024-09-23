@@ -243,9 +243,8 @@ struct xsv_printer_impl {
 
 } // namespace
 
-auto parse_impl(generator<std::optional<std::string_view>> lines,
-                operator_control_plane& ctrl, xsv_options args)
-  -> generator<table_slice> {
+auto parse_impl(generator<std::optional<std::string_view>> lines, exec_ctx ctx,
+                xsv_options args) -> generator<table_slice> {
   auto last_finish = std::chrono::steady_clock::now();
   // Parse header.
   auto it = lines.begin();
@@ -414,8 +413,7 @@ public:
     return "xsv";
   }
 
-  auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+  auto instantiate(generator<chunk_ptr> input, exec_ctx ctx) const
     -> std::optional<generator<table_slice>> override {
     return parse_impl(to_lines(std::move(input)), ctrl, args_);
   }
@@ -441,8 +439,7 @@ public:
     return "xsv";
   }
 
-  auto
-  instantiate([[maybe_unused]] type input_schema, operator_control_plane&) const
+  auto instantiate([[maybe_unused]] type input_schema, exec_ctx) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
     auto metadata = chunk_metadata{.content_type = content_type()};
     return printer_instance::make(

@@ -15,7 +15,6 @@
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/diagnostics.hpp"
 #include "tenzir/metric_handler.hpp"
-#include "tenzir/operator_control_plane.hpp"
 #include "tenzir/si_literals.hpp"
 #include "tenzir/table_slice.hpp"
 

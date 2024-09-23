@@ -146,8 +146,7 @@ class fields_operator final : public crtp_operator<fields_operator> {
 public:
   fields_operator() = default;
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  auto operator()(exec_ctx ctx) const -> generator<table_slice> {
     auto catalog
       = ctrl.self().system().registry().get<catalog_actor>("tenzir.catalog");
     TENZIR_ASSERT(catalog);

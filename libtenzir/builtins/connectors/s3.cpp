@@ -76,10 +76,10 @@ public:
 
   s3_loader(s3_args args) : args_{std::move(args)} {
   }
-  auto instantiate(operator_control_plane& ctrl) const
+  auto instantiate(exec_ctx ctx) const
     -> std::optional<generator<chunk_ptr>> override {
     return
-      [](s3_args args, operator_control_plane& ctrl) -> generator<chunk_ptr> {
+      [](s3_args args, exec_ctx ctx) -> generator<chunk_ptr> {
         auto uri = arrow::util::Uri{};
         const auto parse_result = uri.Parse(args.uri.inner);
         if (not parse_result.ok()) {
@@ -161,7 +161,7 @@ public:
   s3_saver(s3_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
+  auto instantiate(exec_ctx ctx, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
     auto uri = arrow::util::Uri{};
     const auto parse_result = uri.Parse(args_.uri.inner);

@@ -20,8 +20,7 @@ class config_operator final : public crtp_operator<config_operator> {
 public:
   config_operator() = default;
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  auto operator()(exec_ctx ctx) const -> generator<table_slice> {
     auto builder = series_builder{};
     auto config = to<record>(content(ctrl.self().system().config()));
     TENZIR_ASSERT(config);

@@ -18,8 +18,7 @@ class sockets_operator final : public crtp_operator<sockets_operator> {
 public:
   sockets_operator() = default;
 
-  auto operator()(operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  auto operator()(exec_ctx ctx) const -> generator<table_slice> {
     auto system = os::make();
     if (not system) {
       diagnostic::error("failed to create OS shim").emit(ctrl.diagnostics());

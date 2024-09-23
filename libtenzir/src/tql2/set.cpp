@@ -222,8 +222,7 @@ auto assign(const ast::selector& left, series right, const table_slice& input,
 
 } // namespace
 
-auto set_operator::operator()(generator<table_slice> input,
-                              operator_control_plane& ctrl) const
+auto set_operator::operator()(generator<table_slice> input, exec_ctx ctx) const
   -> generator<table_slice> {
   for (auto&& slice : input) {
     if (slice.rows() == 0) {
@@ -236,8 +235,8 @@ auto set_operator::operator()(generator<table_slice> input,
     // set foo={bar: 42}, foo.bar=foo.bar+42
     auto result = slice;
     for (auto& assignment : assignments_) {
-      auto right = eval(assignment.right, slice, ctrl.diagnostics());
-      result = assign(assignment.left, right, result, ctrl.diagnostics());
+      auto right = eval(assignment.right, slice, ctx);
+      result = assign(assignment.left, right, result, ctx);
     }
     co_yield result;
   }

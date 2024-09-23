@@ -31,7 +31,7 @@ public:
     : key_{key}, sort_options_{sort_options} {
   }
 
-  auto try_add(table_slice slice, operator_control_plane& ctrl) -> table_slice {
+  auto try_add(table_slice slice, exec_ctx ctx) -> table_slice {
     if (slice.rows() == 0) {
       return slice;
     }
@@ -94,7 +94,7 @@ public:
   }
 
 private:
-  auto find_or_create_path(const type& schema, operator_control_plane& ctrl)
+  auto find_or_create_path(const type& schema, exec_ctx ctx)
     -> const std::optional<offset>& {
     auto key_path = key_field_path_.find(schema);
     if (key_path != key_field_path_.end()) {
@@ -177,8 +177,7 @@ public:
       nulls_first_{nulls_first} {
   }
 
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
     -> generator<table_slice> {
     auto options = arrow::compute::ArraySortOptions::Defaults();
     options.order = descending_ ? arrow::compute::SortOrder::Descending

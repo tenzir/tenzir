@@ -294,7 +294,7 @@ public:
   std::queue<std::shared_ptr<arrow::RecordBatch>> record_batch_buffer;
 };
 
-auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
+auto parse_feather(generator<chunk_ptr> input, exec_ctx ctx)
   -> generator<table_slice> {
   auto byte_reader = make_byte_reader(std::move(input));
   auto listener = std::make_shared<callback_listener>();
@@ -361,7 +361,7 @@ auto parse_feather(generator<chunk_ptr> input, operator_control_plane& ctrl)
 }
 
 auto print_feather(
-  table_slice input, operator_control_plane& ctrl,
+  table_slice input, exec_ctx ctx,
   const std::shared_ptr<arrow::ipc::RecordBatchWriter>& stream_writer,
   const std::shared_ptr<arrow::io::BufferOutputStream>& sink)
   -> generator<chunk_ptr> {
@@ -418,8 +418,7 @@ public:
     return "feather";
   }
 
-  auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+  auto instantiate(generator<chunk_ptr> input, exec_ctx ctx) const
     -> std::optional<generator<table_slice>> override {
     return parse_feather(std::move(input), ctrl);
   }
@@ -441,8 +440,7 @@ public:
     return "feather";
   }
 
-  auto instantiate([[maybe_unused]] type input_schema,
-                   operator_control_plane& ctrl) const
+  auto instantiate([[maybe_unused]] type input_schema, exec_ctx ctx) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
     auto sink = arrow::io::BufferOutputStream::Create();
     if (not sink.ok()) {

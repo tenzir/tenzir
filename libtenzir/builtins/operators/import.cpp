@@ -23,8 +23,7 @@ namespace {
 
 class import_operator final : public crtp_operator<import_operator> {
 public:
-  auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
+  auto operator()(generator<table_slice> input, exec_ctx ctx) const
     -> generator<std::monostate> {
     const auto start_time = std::chrono::steady_clock::now();
     // TODO: Some of the the requests this operator makes are blocking, so we

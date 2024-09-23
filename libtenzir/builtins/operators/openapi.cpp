@@ -84,7 +84,7 @@ class openapi_operator final : public crtp_operator<openapi_operator> {
 public:
   openapi_operator() = default;
 
-  auto operator()(operator_control_plane&) const -> generator<table_slice> {
+  auto operator()(exec_ctx) const -> generator<table_slice> {
     auto builder = series_builder{};
     builder.data(openapi_record());
     co_yield builder.finish_assert_one_slice("tenzir.openapi");

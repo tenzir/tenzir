@@ -91,10 +91,10 @@ public:
   explicit curl_loader(connector_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl) const
+  auto instantiate(exec_ctx ctx) const
     -> std::optional<generator<chunk_ptr>> override {
-    auto make = [](operator_control_plane& ctrl,
-                   connector_args args) mutable -> generator<chunk_ptr> {
+    auto make
+      = [](exec_ctx ctx, connector_args args) mutable -> generator<chunk_ptr> {
       auto tx = transfer{args.transfer_opts};
       auto req = make_request(args);
       if (not req) {
@@ -174,7 +174,7 @@ public:
   explicit curl_saver(connector_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
+  auto instantiate(exec_ctx ctx, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
     auto req = make_request(args_);
     if (not req) {
@@ -193,30 +193,30 @@ public:
         .note("cannot use request body in HTTP saver")
         .note("pipeline input is the only request body")
         .hint("remove arguments that create a request body")
-        .emit(ctrl.diagnostics());
+        .emit(ctx);
       return caf::make_error(ec::invalid_argument, "bogus operator arguments");
     }
     auto tx = std::make_shared<transfer>(args_.transfer_opts);
     if (auto err = tx->prepare(std::move(*req))) {
       diagnostic::error("failed to prepare HTTP request")
         .note("{}", err)
-        .emit(ctrl.diagnostics());
+        .emit(ctx);
       return err;
     }
-    return [&ctrl, args = args_, tx](chunk_ptr chunk) mutable {
+    return [ctx, args = args_, tx](chunk_ptr chunk) mutable {
       if (!chunk || chunk->size() == 0)
         return;
       if (auto err = tx->prepare(chunk)) {
         diagnostic::error("failed to prepare transfer")
           .note("chunk size: {}", chunk->size())
           .note("{}", err)
-          .emit(ctrl.diagnostics());
+          .emit(ctx);
         return;
       }
       if (auto err = tx->perform()) {
         diagnostic::error("failed to upload chunk to {}", args.url)
           .note("{}", err)
-          .emit(ctrl.diagnostics());
+          .emit(ctx);
         return;
       }
     };
@@ -387,10 +387,10 @@ public:
     return "tql2.load_http";
   }
 
-  auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
+  auto operator()(exec_ctx ctx) const -> generator<chunk_ptr> {
     // TODO: Clean this up.
     auto loader = curl_loader<"TODO: not using this">{args_};
-    auto gen = loader.instantiate(ctrl);
+    auto gen = loader.instantiate(ctx);
     TENZIR_ASSERT(gen);
     for (auto chunk : *gen) {
       co_yield std::move(chunk);
@@ -422,14 +422,13 @@ public:
     return "tql2.save_http";
   }
 
-  auto
-  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+  auto operator()(generator<chunk_ptr> input, exec_ctx ctx) const
     -> generator<std::monostate> {
     // TODO: Clean this up.
     auto saver = curl_saver<"TODO: not using this">{args_};
-    auto func = saver.instantiate(ctrl, std::nullopt);
+    auto func = saver.instantiate(ctx, std::nullopt);
     if (not func) {
-      diagnostic::error(func.error()).emit(ctrl.diagnostics());
+      diagnostic::error(func.error()).emit(ctx);
       co_return;
     }
     for (auto chunk : input) {

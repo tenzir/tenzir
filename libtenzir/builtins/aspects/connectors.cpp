@@ -35,8 +35,7 @@ public:
     return "connectors";
   }
 
-  auto show(operator_control_plane& ctrl) const
-    -> generator<table_slice> override {
+  auto show(exec_ctx ctx) const -> generator<table_slice> override {
     auto loaders = collect(plugins::get<loader_parser_plugin>());
     auto savers = collect(plugins::get<saver_parser_plugin>());
     auto connectors = std::set<std::string>{};

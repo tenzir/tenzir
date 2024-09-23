@@ -81,7 +81,7 @@ public:
     // nop
   }
 
-  auto initialize(const type& schema, operator_control_plane&) const
+  auto initialize(const type& schema, exec_ctx) const
     -> caf::expected<state_type> override {
     // Step 1: Adjust field names.
     auto field_transformations = std::vector<indexed_transformation>{};

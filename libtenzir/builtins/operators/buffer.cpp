@@ -172,7 +172,7 @@ public:
 
   template <class Elements>
     requires(detail::is_any_v<Elements, table_slice, chunk_ptr>)
-  auto operator()(generator<Elements> input, operator_control_plane& ctrl) const
+  auto operator()(generator<Elements> input, exec_ctx ctx) const
     -> generator<Elements> {
     // The internal-write-buffer operator is spawned after the
     // internal-read-buffer operator, so we can safely get the buffer actor here
@@ -245,7 +245,7 @@ public:
   }
 
   template <class Elements>
-  auto policy(operator_control_plane& ctrl) const -> buffer_policy {
+  auto policy(exec_ctx ctx) const -> buffer_policy {
     if (std::is_same_v<Elements, table_slice>) {
       if (policy_) {
         return policy_->inner;
@@ -261,7 +261,7 @@ public:
     return buffer_policy::block;
   }
 
-  auto metrics(operator_control_plane& ctrl) const -> metric_handler {
+  auto metrics(exec_ctx ctx) const -> metric_handler {
     return ctrl.metrics(type{
       "tenzir.metrics.buffer",
       record_type{
@@ -274,7 +274,7 @@ public:
 
   template <class Elements>
     requires(detail::is_any_v<Elements, table_slice, chunk_ptr>)
-  auto operator()(generator<Elements> input, operator_control_plane& ctrl) const
+  auto operator()(generator<Elements> input, exec_ctx ctx) const
     -> generator<Elements> {
     // The internal-read-buffer operator is spawned before the
     // internal-write-buffer operator, so we spawn the buffer actor here and

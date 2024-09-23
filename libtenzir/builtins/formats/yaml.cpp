@@ -34,8 +34,7 @@ namespace {
 constexpr auto document_end_marker = "...";
 constexpr auto document_start_marker = "---";
 
-auto parse_node(auto& guard, const YAML::Node& node,
-                operator_control_plane& ctrl) -> void {
+auto parse_node(auto& guard, const YAML::Node& node, exec_ctx ctx) -> void {
   switch (node.Type()) {
     case YAML::NodeType::Undefined:
     case YAML::NodeType::Null: {
@@ -75,7 +74,7 @@ auto parse_node(auto& guard, const YAML::Node& node,
 };
 
 auto load_document(series_builder& builder, std::string&& document,
-                   operator_control_plane& ctrl) -> void {
+                   exec_ctx ctx) -> void {
   auto record = builder.record();
   try {
     auto node = YAML::Load(document);
@@ -153,12 +152,11 @@ public:
     return "yaml";
   }
 
-  auto
-  instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+  auto instantiate(generator<chunk_ptr> input, exec_ctx ctx) const
     -> std::optional<generator<table_slice>> override {
     return std::invoke(
       [](generator<std::optional<std::string_view>> lines,
-         operator_control_plane& ctrl) -> generator<table_slice> {
+         exec_ctx ctx) -> generator<table_slice> {
         auto builder = series_builder{};
         auto document = std::string{};
         for (auto&& line : lines) {
@@ -204,8 +202,7 @@ public:
     return "yaml";
   }
 
-  auto instantiate([[maybe_unused]] type input_schema,
-                   operator_control_plane& ctrl) const
+  auto instantiate([[maybe_unused]] type input_schema, exec_ctx ctx) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
     return printer_instance::make(
       [&ctrl](table_slice slice) -> generator<chunk_ptr> {

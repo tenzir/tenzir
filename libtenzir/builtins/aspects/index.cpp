@@ -24,24 +24,24 @@ public:
     return "index";
   }
 
-  auto show(operator_control_plane& ctrl) const
-    -> generator<table_slice> override {
+  auto show(exec_ctx ctx) const -> generator<table_slice> override {
     // TODO: Some of the the requests this operator makes are blocking, so
     // we have to create a scoped actor here; once the operator API uses
     // async we can offer a better mechanism here.
-    auto blocking_self = caf::scoped_actor(ctrl.self().system());
+    auto blocking_self = caf::scoped_actor(ctx.ctrl().self().system());
     auto components
-      = get_node_components<index_actor>(blocking_self, ctrl.node());
+      = get_node_components<index_actor>(blocking_self, ctx.ctrl().node());
     if (!components) {
       diagnostic::error(components.error())
         .note("failed to get index")
-        .emit(ctrl.diagnostics());
+        .emit(ctx);
       co_return;
     }
     co_yield {};
     auto [index] = std::move(*components);
     auto status = record{};
-    ctrl.self()
+    ctx.ctrl()
+      .self()
       .request(index, caf::infinite, atom::status_v, status_verbosity::debug,
                duration::max())
       .await(
@@ -49,9 +49,7 @@ public:
           status = std::move(result);
         },
         [&](const caf::error& err) {
-          diagnostic::error(err)
-            .note("failed to get index status")
-            .emit(ctrl.diagnostics());
+          diagnostic::error(err).note("failed to get index status").emit(ctx);
         });
     co_yield {};
     auto builder = series_builder{};

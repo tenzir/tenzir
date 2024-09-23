@@ -470,7 +470,7 @@ public:
   explicit loader(loader_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl) const
+  auto instantiate(exec_ctx ctx) const
     -> std::optional<generator<chunk_ptr>> override {
     if (args_.tls and not args_.connect) {
       // Verify that the files actually exist and are readable.
@@ -500,8 +500,7 @@ public:
       }
     }
     auto make
-      = [](loader_args args,
-           operator_control_plane& ctrl) mutable -> generator<chunk_ptr> {
+      = [](loader_args args, exec_ctx ctx) mutable -> generator<chunk_ptr> {
       auto tcp_bridge = ctrl.self().spawn(make_tcp_bridge,
                                           ctrl.metrics({
                                             "tenzir.metrics.tcp",
@@ -589,7 +588,7 @@ public:
   explicit saver(saver_args args) : args_{std::move(args)} {
   }
 
-  auto instantiate(operator_control_plane& ctrl, std::optional<printer_info>)
+  auto instantiate(exec_ctx ctx, std::optional<printer_info>)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
     if (args_.tls and args_.listen) {
       // Verify that the files actually exist and are readable.

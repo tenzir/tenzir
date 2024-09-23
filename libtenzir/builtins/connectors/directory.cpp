@@ -44,8 +44,7 @@ public:
     return "directory";
   }
 
-  auto
-  instantiate(operator_control_plane& ctrl, std::optional<printer_info> info)
+  auto instantiate(exec_ctx ctx, std::optional<printer_info> info)
     -> caf::expected<std::function<void(chunk_ptr)>> override {
     if (!info) {
       return caf::make_error(ec::syntax_error,
