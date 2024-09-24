@@ -94,12 +94,6 @@ struct active_partition_state {
 
   // -- utility functions ------------------------------------------------------
 
-  active_indexer_actor indexer_at(size_t position) const;
-
-  void add_flush_listener(flush_listener_actor listener);
-
-  void notify_flush_listeners();
-
   std::optional<tenzir::record_type> combined_schema() const;
 
   const std::unordered_map<std::string, ids>& type_ids() const;

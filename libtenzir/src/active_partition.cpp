@@ -203,12 +203,6 @@ bool should_skip_index_creation(const type& type,
   return true;
 }
 
-/// Gets the ACTIVE INDEXER at a certain position.
-active_indexer_actor active_partition_state::indexer_at(size_t position) const {
-  TENZIR_ASSERT(position < indexers.size());
-  return as_vector(indexers)[position].second;
-}
-
 std::optional<record_type> active_partition_state::combined_schema() const {
   if (indexers.empty())
     return {};
@@ -255,20 +249,6 @@ void active_partition_state::handle_slice(table_slice x) {
     indexers.emplace(qf, active_indexer_actor{});
   }
   self->send(store_builder, x);
-}
-
-void active_partition_state::add_flush_listener(flush_listener_actor listener) {
-  TENZIR_DEBUG("{} adds a new 'flush' subscriber: {}", *self, listener);
-  flush_listeners.emplace_back(std::move(listener));
-  detail::notify_listeners_if_clean(*this, *stage);
-}
-
-void active_partition_state::notify_flush_listeners() {
-  TENZIR_DEBUG("{} sends 'flush' messages to {} listeners", *self,
-               flush_listeners.size());
-  for (auto& listener : flush_listeners)
-    self->send(listener, atom::flush_v);
-  flush_listeners.clear();
 }
 
 caf::expected<tenzir::chunk_ptr>
@@ -394,81 +374,6 @@ active_partition_actor::behavior_type active_partition(
   self->state.synopsis_index_config = synopsis_opts;
   self->state.store_plugin = store_plugin;
   self->state.taxonomies = taxonomies;
-  auto make_stage = [&] {
-    return detail::attach_notifying_stream_stage(
-      self, false,
-      [=](caf::unit_t&) {
-        // nop
-      },
-      [=](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
-        TENZIR_TRACE_SCOPE("partition {} got table slice {} {}",
-                           self->state.data.id, TENZIR_ARG(out), TENZIR_ARG(x));
-        x.offset(self->state.data.events);
-        // Adjust the import time range iff necessary.
-        auto& mutable_synopsis = self->state.data.synopsis.unshared();
-        mutable_synopsis.min_import_time = std::min(
-          self->state.data.synopsis->min_import_time, x.import_time());
-        mutable_synopsis.max_import_time = std::max(
-          self->state.data.synopsis->max_import_time, x.import_time());
-        // We rely on `invalid_id` actually being the highest possible id
-        // when using `min()` below.
-        static_assert(invalid_id == std::numeric_limits<tenzir::id>::max());
-        auto first = x.offset();
-        auto last = x.offset() + x.rows();
-        const auto& schema = x.schema();
-        TENZIR_ASSERT(!schema.name().empty());
-        auto it = self->state.data.type_ids.emplace(schema.name(), ids{}).first;
-        auto& ids = it->second;
-        TENZIR_ASSERT(first >= ids.size());
-        // Mark the ids of this table slice for the current type.
-        ids.append_bits(false, first - ids.size());
-        ids.append_bits(true, last - first);
-        self->state.data.events += x.rows();
-        self->state.data.synopsis.unshared().add(
-          x, self->state.partition_capacity, self->state.synopsis_index_config);
-        size_t column_idx = -1;
-        for (const auto& [field, offset] :
-             caf::get<record_type>(schema).leaves()) {
-          column_idx++;
-          // TODO: The qualified record field is a leftover from heterogeneous
-          // partitions, the indexers can be indexed by the offset instead.
-          const auto qf = qualified_record_field{schema, offset};
-          auto& idx = self->state.indexers[qf];
-          if (idx)
-            continue;
-          if (should_skip_index_creation(
-                field.type, qf, self->state.synopsis_index_config.rules))
-            continue;
-          auto value_index
-            = factory<tenzir::value_index>::make(field.type, index_opts);
-          if (!value_index) {
-            TENZIR_WARN("{} failed to spawn active indexer with options {} for "
-                        "field {}: value index missing",
-                        *self, index_opts, field);
-            continue;
-          }
-          idx = self->spawn(active_indexer, column_idx, std::move(value_index));
-          auto slot = self->state.stage->add_outbound_path(idx);
-          TENZIR_DEBUG("{} spawned new active indexer for field {} at slot {}",
-                       *self, field.name, slot);
-        }
-        out.push(x);
-      },
-      [=](caf::unit_t&, const caf::error& err) {
-        TENZIR_DEBUG("active partition {} finalized streaming {}", id,
-                     render(err));
-        // We get an 'unreachable' error when the stream becomes unreachable
-        // because the actor was destroyed; in this case the state was already
-        // destroyed during `local_actor::on_exit()`.
-        if (err && err != caf::exit_reason::unreachable
-            && err != ec::end_of_input) {
-          TENZIR_ERROR("{} aborts with error: {}", *self, err);
-          return;
-        }
-      },
-      caf::policy::arg<caf::broadcast_downstream_manager<table_slice>>{});
-  };
-  self->state.stage = make_stage();
   self->state.data.store_id = self->state.store_plugin->name();
   auto builder_and_header = self->state.store_plugin->make_store_builder(
     self->state.filesystem, self->state.data.id);
@@ -481,10 +386,7 @@ active_partition_actor::behavior_type active_partition(
   self->state.data.store_header = chunk::make_empty();
   self->state.data.store_header = header;
   self->state.store_builder = builder;
-  auto slot = self->state.stage->add_outbound_path(builder);
-  dynamic_cast<decltype(make_stage())::pointer>(self->state.stage.get())
-    ->set_notification_slot(slot);
-  TENZIR_DEBUG("{} spawned new active store at slot {}", *self, slot);
+  TENZIR_DEBUG("{} spawned new active store at {}", *self, builder);
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     TENZIR_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
                  msg.reason);
@@ -528,15 +430,8 @@ active_partition_actor::behavior_type active_partition(
       return caf::make_error(ec::logic_error, "can not erase the active "
                                               "partition");
     },
-    [self](caf::stream<table_slice> in) {
-      self->state.streaming_initiated = true;
-      return self->state.stage->add_inbound_path(in);
-    },
     [self](table_slice& slice) {
       self->state.handle_slice(std::move(slice));
-    },
-    [self](atom::subscribe, atom::flush, const flush_listener_actor& listener) {
-      self->state.add_flush_listener(listener);
     },
     [self](atom::persist, const std::filesystem::path& part_path,
            const std::filesystem::path& synopsis_path)
@@ -554,16 +449,8 @@ active_partition_actor::behavior_type active_partition(
           [self](resource& store_file) {
             self->state.data.synopsis.unshared().store_file
               = std::move(store_file);
-            auto& indexers = self->state.indexers;
-            auto valid_count
-              = std::count_if(indexers.begin(), indexers.end(), [](auto& idx) {
-                  return idx.second != nullptr;
-                });
-            if (self->state.persistence_promise.pending()
-                && self->state.persisted_indexers
-                     == detail::narrow_cast<size_t>(valid_count)) {
-              serialize(self);
-            }
+            TENZIR_ASSERT(self->state.persistence_promise.pending());
+            serialize(self);
           },
           [self](caf::error err) {
             TENZIR_ERROR("{} failed to get the store info {}", *self, err);
@@ -571,88 +458,7 @@ active_partition_actor::behavior_type active_partition(
               self->state.persistence_promise.deliver(std::move(err));
             }
           });
-      self->send(self, atom::internal_v, atom::persist_v, atom::resume_v);
       return self->state.persistence_promise;
-    },
-    [self](atom::internal, atom::persist, atom::resume) -> caf::result<void> {
-      TENZIR_TRACE("{} resumes persist atom {}", *self,
-                   self->state.indexers.size());
-      if (self->state.streaming_initiated && self->state.stage) {
-        if (self->state.stage->inbound_paths().empty()) {
-          detail::shutdown_stream_stage(self->state.stage);
-        } else {
-          using namespace std::chrono_literals;
-          auto rp = self->make_response_promise<void>();
-          detail::weak_run_delayed(self, 50ms, [self, rp]() mutable {
-            rp.delegate(static_cast<active_partition_actor>(self),
-                        atom::internal_v, atom::persist_v, atom::resume_v);
-          });
-          return rp;
-        }
-      }
-      return {};
-      if (self->state.indexers.empty()) {
-        self->state.persistence_promise.deliver(
-          caf::make_error(ec::logic_error, "partition has no indexers"));
-        return {};
-      }
-      auto& indexers = self->state.indexers;
-      auto valid_count
-        = std::count_if(indexers.begin(), indexers.end(), [](auto& idx) {
-            return idx.second != nullptr;
-          });
-
-      if (0u == valid_count) {
-        // We call serialize from the response handler of persist request to the
-        // store in this case.
-        return {};
-      }
-      TENZIR_DEBUG("{} sends 'snapshot' to {} indexers", *self, valid_count);
-      for (auto& [field, indexer] : self->state.indexers) {
-        if (indexer == nullptr)
-          continue;
-        self->request(indexer, caf::infinite, atom::snapshot_v)
-          .then(
-            [=](chunk_ptr chunk) {
-              ++self->state.persisted_indexers;
-              if (!self->state.persistence_promise.pending()) {
-                TENZIR_WARN("{} ignores persisted indexer because the "
-                            "persistence promise is already fulfilled",
-                            *self);
-                return;
-              }
-              auto sender = self->current_sender()->id();
-              if (!chunk) {
-                TENZIR_ERROR("{} failed to persist indexer {}", *self, sender);
-                self->state.persistence_promise.deliver(caf::make_error(
-                  ec::unspecified, "failed to persist indexer", sender));
-                return;
-              }
-              TENZIR_DEBUG("{} got chunk from {}", *self, sender);
-              self->state.chunks.emplace(sender, chunk);
-              if (self->state.persisted_indexers
-                  < detail::narrow_cast<size_t>(valid_count)) {
-                TENZIR_DEBUG(
-                  "{} waits for more chunks after receiving {} out of "
-                  "{}",
-                  *self, self->state.persisted_indexers, valid_count);
-                return;
-              }
-              if (self->state.data.synopsis->store_file.url.empty()) {
-                TENZIR_DEBUG("{} waits for the store to persist", *self);
-                return;
-              }
-              serialize(self);
-            },
-            [=, field_ = field](caf::error err) {
-              TENZIR_ERROR("{} failed to persist indexer for {} with error: {}",
-                           *self, field_.name(), err);
-              ++self->state.persisted_indexers;
-              if (!self->state.persistence_promise.pending())
-                self->state.persistence_promise.deliver(std::move(err));
-            });
-      }
-      return {};
     },
     [self](atom::query, query_context query_context) -> caf::result<uint64_t> {
       if (!self->state.data.synopsis->schema)

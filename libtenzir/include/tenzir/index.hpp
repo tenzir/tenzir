@@ -208,6 +208,8 @@ struct index_state {
   void decommission_active_partition(
     const type& schema, std::function<void(const caf::error&)> completion);
 
+  auto flush() -> caf::typed_response_promise<void>;
+
   /// Adds a new partition creation listener.
   void
   add_partition_creation_listener(partition_creation_listener_actor listener);

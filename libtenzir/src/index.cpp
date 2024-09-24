@@ -829,6 +829,40 @@ void index_state::decommission_active_partition(
       });
 }
 
+auto index_state::flush() -> caf::typed_response_promise<void> {
+  // If we've got nothing to flush we can just exit immediately.
+  auto rp = self->make_response_promise<void>();
+  if (active_partitions.empty()) {
+    rp.deliver();
+  }
+  auto counter = detail::make_fanout_counter(
+    active_partitions.size(),
+    [rp]() mutable {
+      rp.deliver();
+    },
+    [rp](caf::error error) mutable {
+      rp.deliver(std::move(error));
+    });
+  // We gather the schemas first before we call decomission active partition
+  // on every active partition to avoid iterator invalidation.
+  auto schemas = std::vector<type>{};
+  schemas.reserve(active_partitions.size());
+  for (const auto& [schema, _] : active_partitions) {
+    schemas.push_back(schema);
+  }
+  for (const auto& schema : schemas) {
+    decommission_active_partition(schema,
+                                  [counter](const caf::error& err) mutable {
+                                    if (err) {
+                                      counter->receive_error(err);
+                                    } else {
+                                      counter->receive_success();
+                                    }
+                                  });
+  }
+  return rp;
+}
+
 void index_state::add_partition_creation_listener(
   partition_creation_listener_actor listener) {
   partition_creation_listeners.push_back(listener);
@@ -1063,11 +1097,20 @@ index(index_actor::stateful_pointer<index_state> self,
     return index_actor::behavior_type::make_empty_behavior();
   }
   self->set_exit_handler([self](const caf::exit_msg& msg) {
-    TENZIR_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
-                 msg.reason);
-    for (auto&& [rp, _] : std::exchange(self->state.delayed_queries, {}))
+    TENZIR_VERBOSE("{} received EXIT from {} with reason: {}", *self,
+                   msg.source, msg.reason);
+    for (auto&& [rp, _] : std::exchange(self->state.delayed_queries, {})) {
       rp.deliver(msg.reason);
+    }
     self->state.shutting_down = true;
+    self->request(static_cast<index_actor>(self), caf::infinite, atom::flush_v)
+      .then(
+        [self]() {
+          self->quit();
+        },
+        [self](caf::error& err) {
+          self->quit(err);
+        });
   });
   // Set up a down handler for monitored exporter actors.
   self->set_down_handler([=](const caf::down_msg& msg) {
@@ -1674,34 +1717,10 @@ index(index_actor::stateful_pointer<index_state> self,
     [self](atom::flush) -> caf::result<void> {
       TENZIR_DEBUG("{} got a flush request from {}", *self,
                    self->current_sender());
-      // If we've got nothing to flush we can just exit immediately.
-      if (self->state.active_partitions.empty())
+      if (self->state.active_partitions.empty()) {
         return {};
-      auto rp = self->make_response_promise<void>();
-      auto counter = detail::make_fanout_counter(
-        self->state.active_partitions.size(),
-        [rp]() mutable {
-          rp.deliver();
-        },
-        [rp](caf::error error) mutable {
-          rp.deliver(std::move(error));
-        });
-      // We gather the schemas first before we call decomission active partition
-      // on every active partition to avoid iterator invalidation.
-      auto schemas = std::vector<type>{};
-      schemas.reserve(self->state.active_partitions.size());
-      for (const auto& [schema, _] : self->state.active_partitions)
-        schemas.push_back(schema);
-      for (const auto& schema : schemas) {
-        self->state.decommission_active_partition(
-          schema, [counter](const caf::error& err) mutable {
-            if (err)
-              counter->receive_error(err);
-            else
-              counter->receive_success();
-          });
       }
-      return rp;
+      return self->state.flush();
     },
     // -- status_client_actor --------------------------------------------------
     [](atom::status, status_verbosity, duration) -> record {

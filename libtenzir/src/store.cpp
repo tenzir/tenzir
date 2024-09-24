@@ -281,11 +281,32 @@ default_active_store_actor::behavior_type default_active_store(
       return num_events;
     },
     [self](atom::persist) -> caf::result<resource> {
-      if (const auto* res = std::get_if<resource>(&self->state.file)) {
-        return *res;
+      if (self->state.erased) {
+        return {};
+      }
+      auto chunk = self->state.store->finish();
+      if (!chunk) {
+        self->quit(std::move(chunk.error()));
+        return {};
       }
       auto rp = self->make_response_promise<resource>();
-      self->state.file = rp;
+      auto res = resource{
+        .url = fmt::format("file://{}", self->state.path),
+        .size = (*chunk)->size(),
+      };
+      self
+        ->request(self->state.filesystem, caf::infinite, atom::write_v,
+                  self->state.path, std::move(*chunk))
+        .then(
+          [self, rp, res](atom::ok) mutable {
+            TENZIR_DEBUG("{} ({}) persisted itself to {}", *self,
+                         self->state.store_type, self->state.path);
+            TENZIR_ASSERT(rp.pending());
+            rp.deliver(res);
+          },
+          [rp](caf::error& error) mutable {
+            rp.deliver(std::move(error));
+          });
       return rp;
     },
     [self](table_slice& slice) {
@@ -296,82 +317,6 @@ default_active_store_actor::behavior_type default_active_store(
       if (auto error = self->state.store->add(std::vector{std::move(slice)})) {
         self->quit(std::move(error));
       }
-    },
-    [self](caf::stream<table_slice> stream)
-      -> caf::result<caf::inbound_stream_slot<table_slice>> {
-      struct stream_state {
-        // We intentionally store a strong reference here: The store lifetime
-        // is ref-counted, it should exit after all currently active queries
-        // for this store have finished, its partition has dropped out of the
-        // cache, and it received all data from the incoming stream. This
-        // pointer serves to keep the ref-count alive for the last part, and
-        // is reset after the data has been written to disk.
-        default_active_store_actor strong_self;
-      };
-      auto attach_sink_result = caf::attach_stream_sink(
-        self, stream,
-        [self](stream_state& stream_state) {
-          stream_state.strong_self = self;
-        },
-        [self]([[maybe_unused]] stream_state& stream_state,
-               std::vector<table_slice>& slices) {
-          // If the store is marked for erasure we don't actually need to
-          // add any further slices.
-          if (self->state.erased)
-            return;
-          if (auto error = self->state.store->add(std::move(slices)))
-            self->quit(std::move(error));
-        },
-        [self](stream_state& stream_state, const caf::error& error) {
-          if (ec::end_of_input == error) {
-            TENZIR_WARN("store encountered unexpected end of input before "
-                        "shutdown");
-          } else if (error) {
-            self->quit(error);
-            return;
-          }
-          // If the store is marked for erasure we don't actually need to
-          // persist anything.
-          if (self->state.erased)
-            return;
-          auto chunk = self->state.store->finish();
-          if (!chunk) {
-            self->quit(std::move(chunk.error()));
-            return;
-          }
-          std::visit(detail::overload(
-                       [&](std::monostate) {
-                         self->state.file = resource{
-                           .url = fmt::format("file://{}", self->state.path),
-                           .size = (*chunk)->size(),
-                         };
-                       },
-                       [&](const resource&) {
-                         TENZIR_ASSERT(false);
-                       },
-                       [&](caf::typed_response_promise<resource>& rp) {
-                         TENZIR_ASSERT(rp.pending());
-                         rp.deliver(resource{
-                           .url = fmt::format("file://{}", self->state.path),
-                           .size = (*chunk)->size(),
-                         });
-                       }),
-                     self->state.file);
-          self
-            ->request(self->state.filesystem, caf::infinite, atom::write_v,
-                      self->state.path, std::move(*chunk))
-            .then(
-              [self, stream_state](atom::ok) {
-                static_cast<void>(stream_state);
-                TENZIR_DEBUG("{} ({}) persisted itself to {}", *self,
-                             self->state.store_type, self->state.path);
-              },
-              [self, stream_state](caf::error& error) {
-                static_cast<void>(stream_state);
-                self->quit(std::move(error));
-              });
-        });
-      return attach_sink_result.inbound_slot();
     },
     [self](atom::status, status_verbosity, duration) {
       return record{

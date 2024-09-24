@@ -88,10 +88,10 @@ public:
             std::chrono::duration<double, std::chrono::seconds::period>>(
             elapsed)
             .count();
-    TENZIR_DEBUG("imported {} events in {}{}", total_events, data{elapsed},
-                 std::isfinite(rate)
-                   ? fmt::format(" at a rate of {:.2f} events/s", rate)
-                   : "");
+    TENZIR_INFO("imported {} events in {}{}", total_events, data{elapsed},
+                std::isfinite(rate)
+                  ? fmt::format(" at a rate of {:.2f} events/s", rate)
+                  : "");
   }
 
   auto name() const -> std::string override {

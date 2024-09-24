@@ -201,8 +201,6 @@ using catalog_actor = typed_actor_fwd<
 
 /// The interface of an IMPORTER actor.
 using importer_actor = typed_actor_fwd<
-  // Add a new sink.
-  auto(stream_sink_actor<table_slice>)->caf::result<void>,
   // Register a subscriber for table slices, returning the currently unpersisted
   // events immediately.
   auto(atom::subscribe, receiver_actor<table_slice>, bool internal)
@@ -211,11 +209,6 @@ using importer_actor = typed_actor_fwd<
   auto(atom::flush)->caf::result<void>,
   // Import a batch of data.
   auto(table_slice)->caf::result<void>>
-  // Conform to the protocol of the STREAM SINK actor for table slices.
-  ::extend_with<stream_sink_actor<table_slice>>
-  // Conform to the protocol of the STREAM SINK actor for table slices with a
-  // description.
-  ::extend_with<stream_sink_actor<table_slice, std::string>>
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
@@ -307,14 +300,9 @@ using partition_transformer_actor = typed_actor_fwd<
 using active_partition_actor = typed_actor_fwd<
   // Append a slice to the partition.
   auto(table_slice)->caf::result<void>,
-  auto(atom::subscribe, atom::flush, flush_listener_actor)->caf::result<void>,
   // Persists the active partition at the specified path.
   auto(atom::persist, std::filesystem::path, std::filesystem::path)
-    ->caf::result<partition_synopsis_ptr>,
-  // INTERNAL: A repeatedly called continuation of the persist request.
-  auto(atom::internal, atom::persist, atom::resume)->caf::result<void>>
-  // Conform to the protocol of the STREAM SINK actor for table slices.
-  ::extend_with<stream_sink_actor<table_slice>>
+    ->caf::result<partition_synopsis_ptr>>
   // Conform to the protocol of the PARTITION actor.
   ::extend_with<partition_actor>::unwrap;
 

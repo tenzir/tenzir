@@ -158,17 +158,11 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       std::filesystem::exists(dir / "current_id_block", ec)) {
     std::filesystem::remove(dir / "current_id_block", ec);
   }
-  namespace defs = defaults;
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    for (auto* inbound : self->state.stage->inbound_paths()) {
-      self->send_exit(inbound->hdl, msg.reason);
-    }
     self->quit(msg.reason);
   });
-  self->state.stage = make_importer_stage(self);
   if (index) {
     self->state.index = std::move(index);
-    self->state.stage->add_outbound_path(self->state.index);
   }
   self->set_down_handler([self](const caf::down_msg& msg) {
     const auto subscriber
@@ -210,7 +204,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       }
       slice.import_time(now);
       self->state.on_process(slice);
-      self->state.stage->out().push(std::move(slice));
+      self->send(self->state.index, slice);
     });
   // Clean up unpersisted events every second.
   const auto active_partition_timeout
@@ -233,29 +227,10 @@ importer(importer_actor::stateful_pointer<importer_state> self,
         self->state.unpersisted_events.begin(), it);
     });
   return {
-    // Add a new sink.
-    [self](stream_sink_actor<table_slice> sink) -> caf::result<void> {
-      TENZIR_DEBUG("{} adds a new sink", *self);
-      self->state.stage->add_outbound_path(sink);
-      return {};
-    },
-    [self](atom::subscribe, receiver_actor<table_slice>& subscriber,
-           bool internal) -> std::vector<table_slice> {
-      self->monitor(subscriber);
-      self->state.subscribers.emplace_back(std::move(subscriber), internal);
-      return self->state.unpersisted_events;
-    },
     // Push buffered slices downstream to make the data available.
     [self](atom::flush) -> caf::result<void> {
       auto rp = self->make_response_promise<void>();
-      self->state.stage->out().fan_out_flush();
-      self->state.stage->out().force_emit_batches();
-      // The stream flushing only takes effect after we've returned to the
-      // scheduler, so we delegate to the index only after doing that with an
-      // immediately scheduled action.
-      detail::weak_run_delayed(self, duration::zero(), [self, rp]() mutable {
-        rp.delegate(self->state.index, atom::flush_v);
-      });
+      rp.delegate(self->state.index, atom::flush_v);
       return rp;
     },
     [self](table_slice& slice) -> caf::result<void> {
@@ -264,27 +239,11 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       self->send(self->state.index, std::move(slice));
       return {};
     },
-    // -- stream_sink_actor<table_slice> ---------------------------------------
-    [self](caf::stream<table_slice> in) {
-      // NOTE: Architecturally it would make more sense to put the transformer
-      // stage *before* the import actor, but that is not possible: The message
-      // sent is originally sent from the other side is a `caf::open_stream_msg`.
-      // This contains a field `msg` with a `caf::stream<>`. The caf streaming
-      // system recognizes this message and only passes the `caf::stream<>` to
-      // the handler. This means we can not delegate() this message, since we
-      // would only create a new message containing a `caf::stream` object but
-      // lose the surrounding `open_stream_msg` which contains the important
-      // parts. Sadly, the current actor is already stored as the "other side"
-      // of the stream in the outbound path, so we can't even hack around this
-      // with `caf::unsafe_send_as()` or similar black magic.
-      TENZIR_DEBUG("{} adds a new source", *self);
-      return self->state.stage->add_inbound_path(in);
-    },
-    // -- stream_sink_actor<table_slice, std::string> --------------------------
-    [self](caf::stream<table_slice> in, std::string desc) {
-      self->state.inbound_description = std::move(desc);
-      TENZIR_DEBUG("{} adds a new {} source", *self, desc);
-      return self->state.stage->add_inbound_path(in);
+    [self](atom::subscribe, receiver_actor<table_slice>& subscriber,
+           bool internal) -> std::vector<table_slice> {
+      self->monitor(subscriber);
+      self->state.subscribers.emplace_back(std::move(subscriber), internal);
+      return self->state.unpersisted_events;
     },
     // -- status_client_actor --------------------------------------------------
     [self](atom::status, status_verbosity v, duration) { //
