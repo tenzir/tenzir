@@ -201,11 +201,7 @@ void partition_transformer_state::update_type_ids_and_indexers(
     auto& typed_indexers = partition_buildup.at(partition_id).indexers;
     auto it = typed_indexers.find(qf);
     if (it == typed_indexers.end()) {
-      const auto skip
-        = should_skip_index_creation(field.type, qf, synopsis_opts.rules);
-      auto idx
-        = skip ? nullptr : factory<value_index>::make(field.type, index_opts);
-      it = typed_indexers.emplace(qf, std::move(idx)).first;
+      it = typed_indexers.emplace(qf, nullptr).first;
     }
     auto& idx = it->second;
     if (idx != nullptr)

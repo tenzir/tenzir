@@ -38,11 +38,6 @@
 
 namespace tenzir {
 
-/// Determines whether the index creation should be skipped for a given field.
-bool should_skip_index_creation(const type& type,
-                                const qualified_record_field& qf,
-                                const std::vector<index_config::rule>& rules);
-
 /// The state of the ACTIVE PARTITION actor.
 struct active_partition_state {
   // -- constructor ------------------------------------------------------------

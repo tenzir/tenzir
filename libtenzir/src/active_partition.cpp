@@ -150,20 +150,6 @@ void serialize(
 
 } // namespace
 
-bool should_skip_index_creation(const type& type,
-                                const qualified_record_field& qf,
-                                const std::vector<index_config::rule>& rules) {
-  // We no longer build dense indexes as of Tenzir v4.3. Over time, they've lost
-  // much of their appeal with partition sizes growing and columnar scanning of
-  // stores becoming more effective.
-  // TODO: Rip out the parts of the code base relating to value indexes, the
-  // value index factory, and active and passive indexer actors.
-  (void)type;
-  (void)qf;
-  (void)rules;
-  return true;
-}
-
 std::optional<record_type> active_partition_state::combined_schema() const {
   if (indexers.empty())
     return {};
