@@ -181,8 +181,8 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  operator()(generator<table_slice> input,
+             operator_control_plane& ctrl) const -> generator<table_slice> {
     auto options = arrow::compute::ArraySortOptions::Defaults();
     options.order = descending_ ? arrow::compute::SortOrder::Descending
                                 : arrow::compute::SortOrder::Ascending;
@@ -227,8 +227,8 @@ public:
     return "sort";
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter,
+                event_order order) const -> optimize_result override {
     return optimize_result{filter, stable_ ? order : event_order::unordered,
                            copy()};
   }
@@ -347,8 +347,8 @@ public:
   }
 
   auto
-  operator()(generator<table_slice> input, operator_control_plane& ctrl) const
-    -> generator<table_slice> {
+  operator()(generator<table_slice> input,
+             operator_control_plane& ctrl) const -> generator<table_slice> {
     auto events = std::vector<table_slice>{};
     auto indices = std::vector<sort_index>{};
     auto sort_keys = std::vector<sort_key>{};
@@ -395,17 +395,28 @@ public:
           // Nulls last, independent of sort order.
           return rhs_null;
         }
-        // FIXME: Properly implement operator<=> for data_view and data in a way
-        // that orders across types. All numeric types should be comparable, and
-        // nulls should always be last.
         const auto& lhs_value
           = value_at(lhs_key.type, *lhs_key.array, lhs.event);
-        const auto rhs_value
+        const auto& rhs_value
           = value_at(rhs_key.type, *rhs_key.array, rhs.event);
-        if (lhs_value < rhs_value) {
+        // TODO: Implement this directly on data and data_view
+        const auto cmp = detail::overload{
+          [](const concepts::integer auto& l, const concepts::integer auto& r) {
+            return std::cmp_less(l, r);
+          },
+          [](const concepts::number auto& l, const concepts::number auto& r) {
+            return l < r;
+          },
+          [&](const auto& l, const auto& r) {
+            if constexpr (std::same_as<decltype(l), decltype(r)>) {
+              return l < r;
+            }
+            return lhs_value.index() < rhs_value.index();
+          }};
+        if (caf::visit(cmp, lhs_value, rhs_value)) {
           return not sort_key.reverse;
         }
-        if (rhs_value < lhs_value) {
+        if (caf::visit(cmp, rhs_value, lhs_value)) {
           return sort_key.reverse;
         }
       }
@@ -430,8 +441,8 @@ public:
     }
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter,
+                event_order order) const -> optimize_result override {
     // Our upstream can always be unordered. If our downstream did already not
     // care about ordering, we can skip sorting entirely.
     return optimize_result{
@@ -451,8 +462,8 @@ private:
 
 class plugin2 final : public virtual operator_plugin2<sort_operator2> {
 public:
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     TENZIR_UNUSED(ctx);
     if (inv.args.empty()) {
       return std::make_unique<sort_operator2>(std::vector<sort_expression>{{
