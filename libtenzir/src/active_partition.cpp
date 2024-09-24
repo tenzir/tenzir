@@ -19,10 +19,8 @@
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/fill_status_map.hpp"
 #include "tenzir/detail/narrow.hpp"
-#include "tenzir/detail/notifying_stream_manager.hpp"
 #include "tenzir/detail/partition_common.hpp"
 #include "tenzir/detail/settings.hpp"
-#include "tenzir/detail/shutdown_stream_stage.hpp"
 #include "tenzir/detail/tracepoint.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/expression_visitors.hpp"
@@ -48,8 +46,6 @@
 #include "tenzir/value_index.hpp"
 #include "tenzir/value_index_factory.hpp"
 
-#include <caf/attach_continuous_stream_stage.hpp>
-#include <caf/broadcast_downstream_manager.hpp>
 #include <caf/deserializer.hpp>
 #include <caf/error.hpp>
 #include <caf/make_copy_on_write.hpp>
@@ -88,38 +84,18 @@ void serialize(
   // TODO: It would probably make more sense if the partition
   // synopsis keeps track of offset/events internally.
   mutable_synopsis.events = self->state.data.events;
-  for (auto& [qf, actor] : self->state.indexers) {
-    if (actor == nullptr) {
-      self->state.data.indexer_chunks.emplace_back(qf.name(), nullptr);
-      continue;
-    }
-    auto actor_id = actor.id();
-    auto chunk_it = self->state.chunks.find(actor_id);
-    if (chunk_it == self->state.chunks.end()) {
-      auto error = caf::make_error(ec::logic_error, "no chunk for for actor id "
-                                                      + to_string(actor_id));
-      TENZIR_ERROR("{} failed to serialize: {}", *self, render(error));
-      self->state.persistence_promise.deliver(error);
-      return;
-    }
-    // TODO: Consider storing indexer chunks by the fully qualified
-    // field instead of just its fully qualified name in a future
-    // partition version. As-is, this breaks if multiple fields with
-    // the same fully qualified name but different types exist in
-    // the same partition.
-    self->state.data.indexer_chunks.emplace_back(
-      std::make_pair(qf.name(), chunk_it->second));
+  const auto& schema = self->state.data.synopsis->schema;
+  auto fields = std::vector<struct record_type::field>{};
+  for (const auto& [field, offset] : caf::get<record_type>(schema).leaves()) {
+    const auto qf = qualified_record_field{schema, offset};
+    // Backwards compat for to comply with the format that supports
+    // value indexes.
+    self->state.data.indexer_chunks.emplace_back(qf.name(), nullptr);
+    fields.emplace_back(std::string{qf.name()}, qf.type());
   }
+  auto combined_schema = record_type{fields};
   // Create the partition flatbuffer.
-  auto combined_schema = self->state.combined_schema();
-  if (!combined_schema) {
-    auto err = caf::make_error(ec::logic_error, "unable to create "
-                                                "combined schema");
-    TENZIR_ERROR("{} failed to serialize {} with error: {}", *self, *self, err);
-    self->state.persistence_promise.deliver(err);
-    return;
-  }
-  auto partition = pack_full(self->state.data, *combined_schema);
+  auto partition = pack_full(self->state.data, combined_schema);
   if (!partition) {
     TENZIR_ERROR("{} failed to serialize {} with error: {}", *self, *self,
                  partition.error());
@@ -242,12 +218,6 @@ void active_partition_state::handle_slice(table_slice x) {
   ids.append_bits(true, last - first);
   data.events += x.rows();
   data.synopsis.unshared().add(x, partition_capacity, synopsis_index_config);
-  for (const auto& [field, offset] : caf::get<record_type>(schema).leaves()) {
-    // TODO: The qualified record field is a leftover from heterogeneous
-    // partitions, the indexers can be indexed by the offset instead.
-    const auto qf = qualified_record_field{schema, offset};
-    indexers.emplace(qf, active_indexer_actor{});
-  }
   self->send(store_builder, x);
 }
 
@@ -364,7 +334,6 @@ active_partition_actor::behavior_type active_partition(
                      TENZIR_ARG(id));
   self->state.self = self;
   self->state.filesystem = std::move(filesystem);
-  self->state.streaming_initiated = false;
   self->state.data.id = id;
   self->state.data.events = 0;
   self->state.data.synopsis = caf::make_copy_on_write<partition_synopsis>();
@@ -390,9 +359,6 @@ active_partition_actor::behavior_type active_partition(
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     TENZIR_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
                  msg.reason);
-    if (self->state.streaming_initiated && self->state.stage) {
-      detail::shutdown_stream_stage(self->state.stage);
-    }
     // Delay shutdown if we're currently in the process of persisting.
     if (self->state.persistence_promise.pending()) {
       std::call_once(self->state.shutdown_once, [=] {

@@ -713,11 +713,6 @@ void index_state::handle_slice(table_slice x) {
 
 // -- partition handling -----------------------------------------------------
 
-bool i_partition_selector::operator()(const type& filter,
-                                      const table_slice& slice) const {
-  return filter == slice.schema();
-}
-
 caf::expected<std::unordered_map<type, active_partition_info>::iterator>
 index_state::create_active_partition(const type& schema) {
   TENZIR_ASSERT(taxonomies);
