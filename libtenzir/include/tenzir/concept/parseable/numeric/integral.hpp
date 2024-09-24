@@ -122,7 +122,7 @@ struct integral_parser
   }
 };
 
-template <concepts::integral T>
+template <std::integral T>
 struct parser_registry<T> {
   using type = integral_parser<T>;
 };

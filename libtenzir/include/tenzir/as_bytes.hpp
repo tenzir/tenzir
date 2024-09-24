@@ -27,24 +27,24 @@ auto as_writeable_bytes(void* data) noexcept {
   return std::span<std::byte, Size>{reinterpret_cast<std::byte*>(data), Size};
 }
 
-inline auto as_bytes(const void* data, size_t size) noexcept
-  -> std::span<const std::byte> {
+inline auto
+as_bytes(const void* data, size_t size) noexcept -> std::span<const std::byte> {
   return {reinterpret_cast<const std::byte*>(data), size};
 }
 
-inline auto as_writeable_bytes(void* data, size_t size) noexcept
-  -> std::span<std::byte> {
+inline auto
+as_writeable_bytes(void* data, size_t size) noexcept -> std::span<std::byte> {
   return {reinterpret_cast<std::byte*>(data), size};
 }
 
-template <concepts::integral T, size_t N>
+template <std::integral T, size_t N>
 constexpr auto as_bytes(const std::array<T, N>& xs) noexcept
   -> std::span<const std::byte, N * sizeof(T)> {
   const auto* const data = reinterpret_cast<const std::byte*>(xs.data());
   return std::span<const std::byte, N * sizeof(T)>{data, N * sizeof(T)};
 }
 
-template <concepts::integral T, size_t N>
+template <std::integral T, size_t N>
 constexpr auto as_writeable_bytes(std::array<T, N>& xs) noexcept
   -> std::span<std::byte, N * sizeof(T)> {
   auto* const data = reinterpret_cast<std::byte*>(xs.data());
@@ -52,8 +52,8 @@ constexpr auto as_writeable_bytes(std::array<T, N>& xs) noexcept
 }
 
 template <concepts::byte_container Buffer>
-constexpr auto as_bytes(const Buffer& xs) noexcept
-  -> std::span<const std::byte> {
+constexpr auto
+as_bytes(const Buffer& xs) noexcept -> std::span<const std::byte> {
   const auto* const data = reinterpret_cast<const std::byte*>(std::data(xs));
   return {data, std::size(xs)};
 }
