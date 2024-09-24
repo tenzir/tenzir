@@ -117,6 +117,85 @@ public:
   }
 };
 
+class year_month_day final : public method_plugin {
+public:
+  enum plugin_subtype {
+    year,
+    month,
+    day,
+  };
+
+  explicit year_month_day(plugin_subtype type) : plugin_subtype_(type) {
+  }
+
+  auto name() const -> std::string override {
+    switch (plugin_subtype_) {
+      case year:
+        return "year";
+      case month:
+        return "month";
+      case day:
+        return "day";
+    }
+    TENZIR_UNREACHABLE();
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function(name()).add(expr, "<time>").parse(inv, ctx));
+    return function_use::make(
+      [expr = std::move(expr), this](evaluator eval, session ctx) -> series {
+        auto arg = eval(expr);
+        auto f = detail::overload{
+          [](const arrow::NullArray& arg) {
+            return series::null(double_type{}, arg.length());
+          },
+          [&](const arrow::TimestampArray& arg) {
+            auto& ty = caf::get<arrow::TimestampType>(*arg.type());
+            TENZIR_ASSERT(ty.timezone().empty());
+            auto b = arrow::Int64Builder{};
+            check(b.Reserve(arg.length()));
+            for (auto i = int64_t{0}; i < arg.length(); ++i) {
+              if (arg.IsNull(i)) {
+                check(b.AppendNull());
+                continue;
+              }
+              auto&& value = value_at(time_type{}, arg, i);
+              const std::chrono::year_month_day ymd{
+                std::chrono::floor<std::chrono::days>(value)};
+              auto result = int64_t{0};
+              switch (plugin_subtype_) {
+                case year:
+                  result = static_cast<int>(ymd.year());
+                  break;
+                case month:
+                  result = static_cast<unsigned>(ymd.month());
+                  break;
+                case day:
+                  result = static_cast<unsigned>(ymd.day());
+                  break;
+              }
+              check(append_builder(int64_type{}, b, result));
+            }
+            return series{int64_type{}, finish(b)};
+          },
+          [&](const auto&) {
+            diagnostic::warning("`{}` expected `time`, but got `{}`", name(),
+                                arg.type.kind())
+              .primary(expr)
+              .emit(ctx);
+            return series::null(double_type{}, arg.length());
+          },
+        };
+        return caf::visit(f, *arg.array);
+      });
+  }
+
+private:
+  plugin_subtype plugin_subtype_;
+};
+
 class as_secs final : public method_plugin {
 public:
   auto name() const -> std::string override {
@@ -192,7 +271,12 @@ public:
 
 } // namespace tenzir::plugins::time_
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::time_::time_)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::time_::since_epoch)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::time_::as_secs)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::time_::now)
+using namespace tenzir::plugins::time_;
+
+TENZIR_REGISTER_PLUGIN(time_)
+TENZIR_REGISTER_PLUGIN(since_epoch)
+TENZIR_REGISTER_PLUGIN(as_secs)
+TENZIR_REGISTER_PLUGIN(year_month_day{year_month_day::year});
+TENZIR_REGISTER_PLUGIN(year_month_day{year_month_day::month});
+TENZIR_REGISTER_PLUGIN(year_month_day{year_month_day::day});
+TENZIR_REGISTER_PLUGIN(now)
