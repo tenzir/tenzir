@@ -46,16 +46,6 @@ struct typed_actor_fwd {
   using unwrap_as_broker = caf::io::typed_broker<Fs...>;
 };
 
-/// The STREAM SINK actor interface.
-/// @tparam Unit The stream unit.
-/// @tparam Args... Additional parameters passed using
-/// `caf::stream_source::add_outbound_path`.
-template <class Unit, class... Args>
-using stream_sink_actor = typename typed_actor_fwd<
-  // Add a new source.
-  auto(caf::stream<Unit>, Args...)
-    ->caf::result<caf::inbound_stream_slot<Unit>>>::unwrap;
-
 /// The FLUSH LISTENER actor interface.
 using flush_listener_actor = typed_actor_fwd<
   // Reacts to the requested flush message.
@@ -152,9 +142,6 @@ using indexer_actor = typed_actor_fwd<
 
 /// The ACTIVE INDEXER actor interface.
 using active_indexer_actor = typed_actor_fwd<
-  // Hooks into the table slice stream.
-  auto(caf::stream<table_slice>)
-    ->caf::result<caf::inbound_stream_slot<table_slice>>,
   // Finalizes the ACTIVE INDEXER into a chunk, which containes an INDEXER.
   auto(atom::snapshot)->caf::result<chunk_ptr>>
   // Conform the the INDEXER ACTOR interface.
@@ -443,9 +430,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_actors, caf::id_block::tenzir_atoms::end)
   TENZIR_ADD_TYPE_ID((tenzir::receiver_actor<tenzir::table_slice>))
   TENZIR_ADD_TYPE_ID((tenzir::rest_handler_actor))
   TENZIR_ADD_TYPE_ID((tenzir::status_client_actor))
-  TENZIR_ADD_TYPE_ID((tenzir::stream_sink_actor<tenzir::table_slice>))
-  TENZIR_ADD_TYPE_ID(
-    (tenzir::stream_sink_actor<tenzir::table_slice, std::string>))
 
 CAF_END_TYPE_ID_BLOCK(tenzir_actors)
 
