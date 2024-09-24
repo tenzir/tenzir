@@ -239,13 +239,6 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       self->state.stage->add_outbound_path(sink);
       return {};
     },
-    // Register a FLUSH LISTENER actor.
-    [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
-      TENZIR_DEBUG("{} adds new subscriber {}", *self, listener);
-      TENZIR_ASSERT(self->state.stage != nullptr);
-      self->send(self->state.index, atom::subscribe_v, atom::flush_v,
-                 std::move(listener));
-    },
     [self](atom::subscribe, receiver_actor<table_slice>& subscriber,
            bool internal) -> std::vector<table_slice> {
       self->monitor(subscriber);

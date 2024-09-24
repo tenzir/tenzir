@@ -9,7 +9,6 @@
 #include "tenzir/partition_transformer.hpp"
 
 #include "tenzir/detail/fanout_counter.hpp"
-#include "tenzir/detail/shutdown_stream_stage.hpp"
 #include "tenzir/fbs/utils.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/partition_synopsis.hpp"
@@ -17,8 +16,6 @@
 #include "tenzir/plugin.hpp"
 #include "tenzir/value_index_factory.hpp"
 
-#include <caf/attach_continuous_stream_stage.hpp>
-#include <caf/attach_stream_stage.hpp>
 #include <caf/make_copy_on_write.hpp>
 #include <flatbuffers/flatbuffers.h>
 
@@ -423,15 +420,6 @@ auto partition_transformer(
         store_or_fulfill(self, std::move(stream_data));
         return {};
       }
-      self->state.stage = caf::attach_continuous_stream_stage(
-        self, [](caf::unit_t&) {},
-        [](caf::unit_t&, caf::downstream<tenzir::table_slice>&,
-           tenzir::table_slice) {
-          // We never get input through a source but push directly
-          // to `out` from external code below.
-          /* nop */
-        },
-        [](caf::unit_t&, const caf::error&) { /* nop */ });
       for (auto& [schema, partition_data] : self->state.data) {
         if (partition_data.events == 0)
           continue;
@@ -449,12 +437,6 @@ auto partition_transformer(
         self->monitor(partition_data.builder);
         ++self->state.stores_launched;
         partition_data.store_header = builder_and_header->header;
-        // Empirically adding the outbound path and pushing data to it
-        // need to be separated by a continuation, although I'm not
-        // completely sure why.
-        self->state.partition_buildup.at(partition_data.id).slot
-          = self->state.stage->add_outbound_path(
-            builder_and_header->store_builder);
       }
       TENZIR_DEBUG("{} received all table slices", *self);
       return self->delegate(static_cast<partition_transformer_actor>(self),
@@ -470,7 +452,6 @@ auto partition_transformer(
         for (auto& slice : buildup.slices) {
           slice.offset(offset);
           offset += slice.rows();
-          // push_to(self->state.stage->out(), slot, slice);
           self->send(data.builder, slice);
           self->state.update_type_ids_and_indexers(data.type_ids, data.id,
                                                    slice);
@@ -494,7 +475,6 @@ auto partition_transformer(
           data.indexer_chunks.emplace_back(qf.name(), chunk);
         }
       }
-      detail::shutdown_stream_stage(self->state.stage);
       auto stream_data = partition_transformer_state::stream_data{
         .partition_chunks
         = std::vector<std::tuple<tenzir::uuid, tenzir::type, chunk_ptr>>{},
