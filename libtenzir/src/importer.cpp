@@ -11,99 +11,20 @@
 #include "tenzir/fwd.hpp"
 
 #include "tenzir/atoms.hpp"
-#include "tenzir/concept/printable/numeric/integral.hpp"
-#include "tenzir/concept/printable/std/chrono.hpp"
-#include "tenzir/concept/printable/tenzir/error.hpp"
-#include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/defaults.hpp"
 #include "tenzir/detail/fill_status_map.hpp"
-#include "tenzir/detail/shutdown_stream_stage.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
-#include "tenzir/error.hpp"
 #include "tenzir/logger.hpp"
-#include "tenzir/plugin.hpp"
 #include "tenzir/series_builder.hpp"
-#include "tenzir/si_literals.hpp"
 #include "tenzir/status.hpp"
 #include "tenzir/table_slice.hpp"
-#include "tenzir/uuid.hpp"
 
 #include <caf/config_value.hpp>
-#include <caf/detail/stream_stage_impl.hpp>
 #include <caf/settings.hpp>
-#include <caf/stream_stage_driver.hpp>
 
 #include <filesystem>
-#include <fstream>
 
 namespace tenzir {
-
-namespace {
-
-class driver : public caf::stream_stage_driver<
-                 table_slice, caf::broadcast_downstream_manager<table_slice>> {
-public:
-  driver(caf::broadcast_downstream_manager<table_slice>& out,
-         importer_state& state)
-    : stream_stage_driver(out), state{state} {
-    // nop
-  }
-
-  void process(caf::downstream<table_slice>& out,
-               std::vector<table_slice>& slices) override {
-    TENZIR_TRACE_SCOPE("{}", TENZIR_ARG(slices));
-    auto now = time::clock::now();
-    for (auto& slice : slices) {
-      slice.import_time(now);
-      state.on_process(slice);
-      out.push(std::move(slice));
-    }
-  }
-
-  void finalize(const caf::error& err) override {
-    TENZIR_DEBUG("{} stopped with message: {}", *state.self, render(err));
-  }
-
-  importer_state& state;
-};
-
-class stream_stage : public caf::detail::stream_stage_impl<driver> {
-public:
-  /// Constructs the import stream stage.
-  /// @note This must explictly initialize the stream_manager because it does
-  /// not provide a default constructor, and for reason unbeknownst to me the
-  /// forwaring in the stream_stage_impl does not suffice.
-  stream_stage(importer_actor::stateful_pointer<importer_state> self)
-    : stream_manager(self), stream_stage_impl(self, self->state) {
-    // nop
-  }
-
-  void register_input_path(caf::inbound_path* ptr) override {
-    driver_.state.inbound_descriptions[ptr]
-      = std::exchange(driver_.state.inbound_description, "anonymous");
-    TENZIR_INFO("{} adds {} source", *driver_.state.self,
-                driver_.state.inbound_descriptions[ptr]);
-    super::register_input_path(ptr);
-  }
-
-  void deregister_input_path(caf::inbound_path* ptr) noexcept override {
-    if ((flags_ & (is_stopped_flag | is_shutting_down_flag)) == 0) {
-      TENZIR_INFO("{} removes {} source", *driver_.state.self,
-                  driver_.state.inbound_descriptions[ptr]);
-      driver_.state.inbound_descriptions.erase(ptr);
-    }
-    super::deregister_input_path(ptr);
-  }
-};
-
-caf::intrusive_ptr<stream_stage>
-make_importer_stage(importer_actor::stateful_pointer<importer_state> self) {
-  auto result = caf::make_counted<stream_stage>(self);
-  result->continuous(true);
-  return result;
-}
-
-} // namespace
 
 importer_state::importer_state(importer_actor::pointer self) : self{self} {
   // nop
@@ -126,7 +47,7 @@ importer_state::status(status_verbosity v) const {
     }
     rs->content["sources"] = std::move(sources_status);
   }
-  // General state such as open streams.
+  // General state.
   if (v >= status_verbosity::debug) {
     detail::fill_status_map(rs->content, self);
   }
@@ -227,7 +148,6 @@ importer(importer_actor::stateful_pointer<importer_state> self,
         self->state.unpersisted_events.begin(), it);
     });
   return {
-    // Push buffered slices downstream to make the data available.
     [self](atom::flush) -> caf::result<void> {
       auto rp = self->make_response_promise<void>();
       rp.delegate(self->state.index, atom::flush_v);

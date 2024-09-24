@@ -46,10 +46,6 @@ struct active_partition_state {
 
   // -- member types -----------------------------------------------------------
 
-  using partition_stream_stage_ptr
-    = caf::stream_stage_ptr<table_slice,
-                            caf::broadcast_downstream_manager<table_slice>>;
-
   /// Contains all the data necessary to create a partition flatbuffer.
   struct serialization_data {
     /// Uniquely identifies this partition.
@@ -100,9 +96,6 @@ struct active_partition_state {
 
   /// The data that will end up on disk in the partition flatbuffer.
   serialization_data data;
-
-  /// The streaming stage.
-  partition_stream_stage_ptr stage = {};
 
   /// Tracks whether we already received at least one table slice.
   bool streaming_initiated = {};

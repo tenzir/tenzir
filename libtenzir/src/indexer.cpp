@@ -20,8 +20,6 @@
 #include "tenzir/value_index.hpp"
 #include "tenzir/view.hpp"
 
-#include <caf/attach_stream_sink.hpp>
-
 namespace tenzir {
 
 active_indexer_actor::behavior_type
@@ -42,17 +40,7 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
     },
     [self](atom::snapshot) {
       // The partition is only allowed to send a single snapshot atom.
-      TENZIR_ASSERT(!self->state.promise.pending());
-      self->state.promise = self->make_response_promise<chunk_ptr>();
-      // Checking 'idle()' is not enough, since we emprically can
-      // have data that was flushed in the upstream stage but is not
-      // yet visible to the sink.
-      if (self->state.stream_initiated
-          && (self->stream_managers().empty()
-              || self->stream_managers().begin()->second->done())) {
-        self->state.promise.deliver(chunkify(self->state.idx));
-      }
-      return self->state.promise;
+      return chunkify(self->state.idx);
     },
     [self](atom::shutdown) {
       self->quit(caf::exit_reason::user_shutdown);

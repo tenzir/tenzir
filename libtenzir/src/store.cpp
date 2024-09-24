@@ -15,7 +15,6 @@
 #include "tenzir/query_context.hpp"
 #include "tenzir/table_slice.hpp"
 
-#include <caf/attach_stream_sink.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 namespace tenzir {

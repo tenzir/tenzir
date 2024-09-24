@@ -27,8 +27,6 @@
 #include "tenzir/type.hpp"
 #include "tenzir/value_index.hpp"
 
-#include <caf/attach_continuous_stream_stage.hpp>
-#include <caf/broadcast_downstream_manager.hpp>
 #include <caf/deserializer.hpp>
 #include <caf/error.hpp>
 #include <caf/sec.hpp>
