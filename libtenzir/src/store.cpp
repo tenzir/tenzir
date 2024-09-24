@@ -288,6 +288,15 @@ default_active_store_actor::behavior_type default_active_store(
       self->state.file = rp;
       return rp;
     },
+    [self](table_slice& slice) {
+      if (self->state.erased) {
+        return;
+      }
+      // TODO: Get rid of the vector.
+      if (auto error = self->state.store->add(std::vector{std::move(slice)})) {
+        self->quit(std::move(error));
+      }
+    },
     [self](caf::stream<table_slice> stream)
       -> caf::result<caf::inbound_stream_slot<table_slice>> {
       struct stream_state {

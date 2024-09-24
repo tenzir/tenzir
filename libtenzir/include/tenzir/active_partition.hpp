@@ -69,6 +69,10 @@ struct active_partition_state {
     /// Opaque blob that is passed to the store backend on reading.
     chunk_ptr store_header = {};
 
+    // A handle to the store builder.
+    // Only used by the partition transformer.
+    store_builder_actor builder = {};
+
     /// Maps type names to IDs. Used the answer #schema queries.
     std::unordered_map<std::string, ids> type_ids = {};
 
@@ -83,6 +87,10 @@ struct active_partition_state {
     /// for each indexer in the partition.
     std::vector<std::pair<std::string, chunk_ptr>> indexer_chunks = {};
   };
+
+  // -- inbound path -----------------------------------------------------------
+
+  void handle_slice(table_slice slice);
 
   // -- utility functions ------------------------------------------------------
 

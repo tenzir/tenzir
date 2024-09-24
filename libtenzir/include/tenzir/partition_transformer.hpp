@@ -114,6 +114,7 @@ struct partition_transformer_state {
     // Note that we don't need to store the builder
     // itself, it will shut itself down automatically.
     caf::outbound_stream_slot<table_slice> slot = {};
+    store_builder_actor builder = {};
 
     /// Cached table slices in this partition.
     std::vector<table_slice> slices = {};

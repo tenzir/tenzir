@@ -664,6 +664,54 @@ void index_state::flush_to_disk() {
       });
 }
 
+// -- inbound path -----------------------------------------------------------
+
+void index_state::handle_slice(table_slice x) {
+  const auto& schema = x.schema();
+  auto active_partition = active_partitions.find(schema);
+  if (active_partition == active_partitions.end()) {
+    auto part = create_active_partition(schema);
+    if (!part) {
+      self->quit(caf::make_error(ec::logic_error,
+                                 fmt::format("{} failed to create active "
+                                             "partition: {}",
+                                             *self, part.error())));
+      return;
+    }
+    active_partition = *part;
+  } else if (x.rows() > active_partition->second.capacity) {
+    TENZIR_DEBUG("{} exceeds active capacity by {} rows", *self,
+                 x.rows() - active_partition->second.capacity);
+    TENZIR_VERBOSE("{} flushes active partition {} with {}/{} events", *self,
+                   schema,
+                   partition_capacity - active_partition->second.capacity,
+                   partition_capacity);
+    decommission_active_partition(schema, {});
+    flush_to_disk();
+    auto part = create_active_partition(schema);
+    if (!part) {
+      self->quit(caf::make_error(ec::logic_error,
+                                 fmt::format("{} failed to create active "
+                                             "partition: {}",
+                                             *self, part.error())));
+      return;
+    }
+    active_partition = *part;
+  }
+  TENZIR_ASSERT(active_partition->second.actor);
+  self->send(active_partition->second.actor, x);
+  if (active_partition->second.capacity == partition_capacity
+      && x.rows() > active_partition->second.capacity) {
+    TENZIR_WARN("{} got table slice with {} rows that exceeds the "
+                "default partition capacity of {} rows",
+                *self, x.rows(), partition_capacity);
+    active_partition->second.capacity = 0;
+  } else {
+    TENZIR_ASSERT(active_partition->second.capacity >= x.rows());
+    active_partition->second.capacity -= x.rows();
+  }
+}
+
 // -- flush handling -----------------------------------------------------------
 
 void index_state::add_flush_listener(flush_listener_actor listener) {
@@ -1206,6 +1254,9 @@ index(index_actor::stateful_pointer<index_state> self,
       caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
       TENZIR_DEBUG("{} got a new stream source", *self);
       return self->state.stage->add_inbound_path(in);
+    },
+    [self](table_slice& slice) {
+      self->state.handle_slice(std::move(slice));
     },
     [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
       TENZIR_DEBUG("{} adds flush listener", *self);

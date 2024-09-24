@@ -189,6 +189,10 @@ struct index_state {
 
   void flush_to_disk();
 
+  // -- inbound path -----------------------------------------------------------
+
+  void handle_slice(table_slice slice);
+
   // -- flush handling ---------------------------------------------------------
 
   /// Adds a new flush listener.

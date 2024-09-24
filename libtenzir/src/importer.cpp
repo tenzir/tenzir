@@ -268,7 +268,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
     [self](table_slice& slice) -> caf::result<void> {
       slice.import_time(time::clock::now());
       self->state.on_process(slice);
-      self->state.stage->out().push(std::move(slice));
+      self->send(self->state.index, std::move(slice));
       return {};
     },
     // -- stream_sink_actor<table_slice> ---------------------------------------

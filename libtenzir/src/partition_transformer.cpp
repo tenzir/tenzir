@@ -445,7 +445,8 @@ auto partition_transformer(
           store_or_fulfill(self, std::move(stream_data));
           return {};
         }
-        self->monitor(builder_and_header->store_builder);
+        partition_data.builder = builder_and_header->store_builder;
+        self->monitor(partition_data.builder);
         ++self->state.stores_launched;
         partition_data.store_header = builder_and_header->header;
         // Empirically adding the outbound path and pushing data to it
@@ -465,12 +466,12 @@ auto partition_transformer(
         auto& mutable_synopsis = data.synopsis.unshared();
         // Push the slices to the store.
         auto& buildup = self->state.partition_buildup.at(data.id);
-        auto slot = buildup.slot;
         auto offset = id{0};
         for (auto& slice : buildup.slices) {
           slice.offset(offset);
           offset += slice.rows();
-          push_to(self->state.stage->out(), slot, slice);
+          // push_to(self->state.stage->out(), slot, slice);
+          self->send(data.builder, slice);
           self->state.update_type_ids_and_indexers(data.type_ids, data.id,
                                                    slice);
           mutable_synopsis.add(slice, self->state.partition_capacity,

@@ -110,8 +110,11 @@ using default_passive_store_actor = typed_actor_fwd<
   ::extend_with<store_actor>::unwrap;
 
 /// The STORE BUILDER actor interface.
-using store_builder_actor
-  = typed_actor_fwd<auto(atom::persist)->caf::result<resource>>
+using store_builder_actor = typed_actor_fwd<
+  // Append a slice to the store.
+  auto(table_slice)->caf::result<void>,
+  // Persist the store.
+  auto(atom::persist)->caf::result<resource>>
   // Conform to the protocol of the STORE actor.
   ::extend_with<store_actor>
   // Conform to the protocol of the STREAM SINK actor for table slices.
@@ -224,6 +227,8 @@ using importer_actor = typed_actor_fwd<
 using index_actor = typed_actor_fwd<
   // Triggered when the INDEX finished querying a PARTITION.
   auto(atom::done, uuid)->caf::result<void>,
+  // Stores a table slice.
+  auto(table_slice)->caf::result<void>,
   // Subscribes a FLUSH LISTENER to the INDEX.
   auto(atom::subscribe, atom::flush, flush_listener_actor)->caf::result<void>,
   // Subscribes a PARTITION CREATION LISTENER to the INDEX.
@@ -308,6 +313,8 @@ using partition_transformer_actor = typed_actor_fwd<
 
 /// The interface of an ACTIVE PARTITION actor.
 using active_partition_actor = typed_actor_fwd<
+  // Append a slice to the partition.
+  auto(table_slice)->caf::result<void>,
   auto(atom::subscribe, atom::flush, flush_listener_actor)->caf::result<void>,
   // Persists the active partition at the specified path.
   auto(atom::persist, std::filesystem::path, std::filesystem::path)

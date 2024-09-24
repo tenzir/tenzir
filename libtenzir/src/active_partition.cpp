@@ -224,6 +224,39 @@ active_partition_state::type_ids() const {
   return data.type_ids;
 }
 
+void active_partition_state::handle_slice(table_slice x) {
+  TENZIR_TRACE_SCOPE("partition {} got table slice {}", data.id, TENZIR_ARG(x));
+  x.offset(data.events);
+  // Adjust the import time range iff necessary.
+  auto& mutable_synopsis = data.synopsis.unshared();
+  mutable_synopsis.min_import_time
+    = std::min(data.synopsis->min_import_time, x.import_time());
+  mutable_synopsis.max_import_time
+    = std::max(data.synopsis->max_import_time, x.import_time());
+  // We rely on `invalid_id` actually being the highest possible id
+  // when using `min()` below.
+  static_assert(invalid_id == std::numeric_limits<tenzir::id>::max());
+  auto first = x.offset();
+  auto last = x.offset() + x.rows();
+  const auto& schema = x.schema();
+  TENZIR_ASSERT(!schema.name().empty());
+  auto it = data.type_ids.emplace(schema.name(), ids{}).first;
+  auto& ids = it->second;
+  TENZIR_ASSERT(first >= ids.size());
+  // Mark the ids of this table slice for the current type.
+  ids.append_bits(false, first - ids.size());
+  ids.append_bits(true, last - first);
+  data.events += x.rows();
+  data.synopsis.unshared().add(x, partition_capacity, synopsis_index_config);
+  for (const auto& [field, offset] : caf::get<record_type>(schema).leaves()) {
+    // TODO: The qualified record field is a leftover from heterogeneous
+    // partitions, the indexers can be indexed by the offset instead.
+    const auto qf = qualified_record_field{schema, offset};
+    indexers.emplace(qf, active_indexer_actor{});
+  }
+  self->send(store_builder, x);
+}
+
 void active_partition_state::add_flush_listener(flush_listener_actor listener) {
   TENZIR_DEBUG("{} adds a new 'flush' subscriber: {}", *self, listener);
   flush_listeners.emplace_back(std::move(listener));
@@ -499,6 +532,9 @@ active_partition_actor::behavior_type active_partition(
       self->state.streaming_initiated = true;
       return self->state.stage->add_inbound_path(in);
     },
+    [self](table_slice& slice) {
+      self->state.handle_slice(std::move(slice));
+    },
     [self](atom::subscribe, atom::flush, const flush_listener_actor& listener) {
       self->state.add_flush_listener(listener);
     },
@@ -554,6 +590,7 @@ active_partition_actor::behavior_type active_partition(
           return rp;
         }
       }
+      return {};
       if (self->state.indexers.empty()) {
         self->state.persistence_promise.deliver(
           caf::make_error(ec::logic_error, "partition has no indexers"));
