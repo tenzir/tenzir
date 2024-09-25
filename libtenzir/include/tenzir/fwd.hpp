@@ -131,13 +131,6 @@ struct inspector_access<std::filesystem::path> {
   }
 };
 
-template <>
-struct inspector_access<std::monostate> {
-  static auto apply(auto&, std::monostate&) -> bool {
-    return true;
-  }
-};
-
 namespace detail {
 
 class stringification_inspector;
@@ -458,7 +451,6 @@ constexpr inline caf::type_id_t first_tenzir_type_id = 800;
 
 CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
 
-  TENZIR_ADD_TYPE_ID((std::monostate))
   TENZIR_ADD_TYPE_ID((tenzir::bitmap))
   TENZIR_ADD_TYPE_ID((tenzir::blob))
   TENZIR_ADD_TYPE_ID((tenzir::chunk_ptr))
