@@ -180,3 +180,20 @@ EOF
     x = x.slice(end=6, stride=-1)
   '
 }
+
+@test "time" {
+  check tenzir '
+    from {}
+    n = time("2024-09-24T20:20:26.168426")
+    y = n.year()
+    m = n.month()
+    d = n.day()
+  '
+  # Expect failure, but only a warning
+  check tenzir '
+    from {
+      x: 1
+    }
+    y = x.year()
+  '
+}
