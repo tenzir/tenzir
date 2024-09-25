@@ -72,7 +72,6 @@ auto argument_parser2::parse(const ast::entity& self,
   };
   auto arg = args.begin();
   auto positional_idx = size_t{0};
-  // for (auto [positional_idx, positional] : detail::enumerate(positional_)) {
   for (auto it = positional_.begin(); it != positional_.end();
        ++it, ++positional_idx) {
     auto& positional = *it;
