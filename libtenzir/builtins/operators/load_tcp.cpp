@@ -27,7 +27,6 @@
 #include <caf/typed_response_promise.hpp>
 
 #include <algorithm>
-#include <exception>
 #include <iterator>
 #include <memory>
 #include <netdb.h>
@@ -283,15 +282,21 @@ struct connection_manager_state {
     std::optional<boost::asio::ssl::stream<boost::asio::ip::tcp::socket&>>
       tls_socket = {};
     pipeline_executor_actor pipeline_executor = {};
-    std::vector<char> read_buffer = {};
     mutable std::mutex mutex = {};
     std::queue<chunk_ptr> chunks = {};
     caf::typed_response_promise<chunk_ptr> rp = {};
 
     auto async_read(connection_manager_actor<Elements>::pointer self,
                     shared_diagnostic_handler diagnostics) -> void {
+      // NOLINTBEGIN(cppcoreguidelines-avoid-c-arrays)
+      auto read_buffer
+        = std::make_unique<chunk::value_type[]>(read_buffer_size);
+      // NOLINTEND(cppcoreguidelines-avoid-c-arrays)
+      auto asio_buffer
+        = boost::asio::buffer(read_buffer.get(), read_buffer_size);
       auto on_read = [connection = this->shared_from_this(), self,
-                      diagnostics = std::move(diagnostics)](
+                      diagnostics = std::move(diagnostics),
+                      read_buffer = std::move(read_buffer)](
                        boost::system::error_code ec, size_t length) mutable {
         if (ec and ec != boost::asio::error::eof) {
           diagnostic::warning("{}", ec.message())
@@ -302,32 +307,36 @@ struct connection_manager_state {
         } else {
           TENZIR_ASSERT(length > 0 or ec == boost::asio::error::eof);
         }
-        connection->read_buffer.resize(length);
-        auto chunk = chunk::make(std::exchange(connection->read_buffer, {}));
+        const auto* data = read_buffer.get();
+        auto chunk = chunk::make(
+          data, length, [read_buffer = std::move(read_buffer)]() noexcept {
+            (void)read_buffer;
+          });
         auto should_read = false;
         {
           auto lock = std::unique_lock{connection->mutex};
           if (connection->rp.pending()) {
             caf::anon_send(caf::actor_cast<caf::actor>(self),
                            caf::make_action(
-                             [connection, chunk = std::move(chunk)]() mutable {
+                             [self, connection, chunk = std::move(chunk),
+                              diagnostics = std::move(diagnostics)]() mutable {
                                auto lock = std::unique_lock{connection->mutex};
+                               TENZIR_ASSERT(connection->rp.pending());
                                connection->rp.deliver(std::move(chunk));
+                               connection->async_read(self,
+                                                      std::move(diagnostics));
                              }));
             TENZIR_ASSERT(connection->chunks.empty());
-            should_read = true;
-          } else {
-            connection->chunks.push(std::move(chunk));
-            TENZIR_ASSERT(connection->chunks.size() <= max_queued_chunks);
-            should_read = connection->chunks.size() < max_queued_chunks;
+            return;
           }
+          connection->chunks.push(std::move(chunk));
+          TENZIR_ASSERT(connection->chunks.size() <= max_queued_chunks);
+          should_read = connection->chunks.size() < max_queued_chunks;
         }
         if (should_read) {
           connection->async_read(self, std::move(diagnostics));
         }
       };
-      read_buffer.resize(read_buffer_size);
-      auto asio_buffer = boost::asio::buffer(read_buffer, read_buffer_size);
       if (tls_socket) {
         tls_socket->async_read_some(asio_buffer, std::move(on_read));
       } else {
