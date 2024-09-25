@@ -415,15 +415,20 @@ struct connection_manager_state {
     return {};
   }
 
-  auto handle_connection(boost::asio::ip::tcp::socket peer)
-    -> caf::expected<void> {
+  auto handle_connection(boost::asio::ip::tcp::socket peer) -> void {
     // FIXME: all diagnostics for peers should be warnings
     // Now, set up the shared connection state.
     TENZIR_ASSERT(not connections.contains(peer.native_handle()));
     auto& connection = connections[peer.native_handle()];
     TENZIR_ASSERT(not connection.socket);
     connection.socket.emplace(std::move(peer));
-    TRY(set_close_on_exec(connection.socket->native_handle()));
+    if (auto ok = set_close_on_exec(connection.socket->native_handle());
+        not ok) {
+      diagnostic::warning(ok.error())
+        .note("handle `{}`", connection.socket->native_handle())
+        .emit(diagnostics);
+      return;
+    }
     if (args.tls) {
       TENZIR_ASSERT(not connection.ssl_ctx);
       connection.ssl_ctx.emplace(boost::asio::ssl::context::tls_server);
@@ -431,37 +436,45 @@ struct connection_manager_state {
       if (args.certfile) {
         if (connection.ssl_ctx->use_certificate_chain_file(args.certfile->inner,
                                                            ec)) {
-          return diagnostic::error("{}", ec.message())
+          diagnostic::warning("{}", ec.message())
             .note("failed to load certificate chain file")
+            .note("handle `{}`", connection.socket->native_handle())
             .primary(args.certfile->source)
-            .to_error();
+            .emit(diagnostics);
+          return;
         }
       }
       if (args.keyfile) {
         if (connection.ssl_ctx->use_private_key_file(
               args.keyfile->inner, boost::asio::ssl::context::pem, ec)) {
-          return diagnostic::error("{}", ec.message())
+          diagnostic::warning("{}", ec.message())
             .note("failed to load private key file")
+            .note("handle `{}`", connection.socket->native_handle())
             .primary(args.certfile->source)
-            .to_error();
+            .emit(diagnostics);
+          return;
         }
       }
       if (connection.ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none,
                                               ec)) {
-        return diagnostic::error("{}", ec.message())
+        diagnostic::warning("{}", ec.message())
           .note("failed to disable peer certificate verification")
+          .note("handle `{}`", connection.socket->native_handle())
           .primary(*args.tls)
-          .to_error();
+          .emit(diagnostics);
+        return;
       }
       TENZIR_ASSERT(not connection.tls_socket);
       connection.tls_socket.emplace(*connection.socket, *connection.ssl_ctx);
       if (connection.tls_socket->handshake(
             boost::asio::ssl::stream<boost::asio::ip::tcp::socket>::server,
             ec)) {
-        return diagnostic::error("{}", ec.message())
+        diagnostic::warning("{}", ec.message())
           .note("failed to perform TLS handshake")
+          .note("handle `{}`", connection.socket->native_handle())
           .primary(*args.tls)
-          .to_error();
+          .emit(diagnostics);
+        return;
       }
     }
     // Set up and spawn the nested pipeline.
@@ -485,11 +498,14 @@ struct connection_manager_state {
           TENZIR_ASSERT(connection != connections.end());
           connection->second.async_read(self, diagnostics);
         },
-        [](const caf::error& err) {
-          // FIXME: Emit a diagnostic
-          TENZIR_WARN("failed to start: {}", err);
+        [this, handle
+               = connection.socket->native_handle()](const caf::error& err) {
+          diagnostic::warning(err)
+            .note("failed to start nested pipeline")
+            .note("handle `{}`", handle)
+            .primary(args.pipeline->source)
+            .emit(diagnostics);
         });
-    return {};
   }
 
   auto async_accept() -> void {
@@ -508,10 +524,7 @@ struct connection_manager_state {
               .emit(diagnostics);
             return;
           }
-          const auto ok = handle_connection(std::move(socket));
-          if (not ok) {
-            diagnostic::warning(ok.error()).emit(diagnostics);
-          }
+          handle_connection(std::move(socket));
         };
         caf::anon_send(handle, caf::make_action(std::move(action)));
       });
