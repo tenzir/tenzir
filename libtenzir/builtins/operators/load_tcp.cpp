@@ -653,11 +653,15 @@ struct connection_manager_state {
     if (not buffer.empty()) {
       auto elements = std::move(buffer.front());
       buffer.pop();
-      while (buffer.size() < max_buffered_batches and not write_rps.empty()) {
-        auto write_rp = std::move(write_rps.front());
-        write_rps.pop();
-        TENZIR_ASSERT(write_rp.pending());
-        write_rp.deliver();
+      if (buffer.size() < max_buffered_batches) {
+        // Unblock all connections as soon as at least one free slot in the
+        // buffer opens up.
+        while (not write_rps.empty()) {
+          auto write_rp = std::move(write_rps.front());
+          write_rps.pop();
+          TENZIR_ASSERT(write_rp.pending());
+          write_rp.deliver();
+        }
       }
       return std::move(elements);
     }
