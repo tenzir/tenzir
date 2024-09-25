@@ -230,6 +230,10 @@ public:
   auto name() const -> std::string override {
     return "azure-blob-storage";
   }
+
+  auto supported_uri_schemes() const -> std::vector<std::string> override {
+    return {"abfs", "abfss"};
+  }
 };
 
 class load_abs_operator final : public crtp_operator<load_abs_operator> {
