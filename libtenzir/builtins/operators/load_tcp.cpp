@@ -257,6 +257,11 @@ struct connection_manager_state {
   connection_manager_actor<Elements>::pointer self = {};
   load_tcp_args args = {};
   shared_diagnostic_handler diagnostics = {};
+  metrics_receiver_actor metrics_receiver = {};
+  detail::stable_map<uint64_t, detail::stable_map<uint64_t, uint64_t>>
+    metrics_id_map = {};
+  uint64_t next_metrics_id = {};
+  uint64_t operator_id = {};
 
   // Everything required for the I/O worker.
   std::vector<std::thread> io_workers = {};
@@ -618,11 +623,14 @@ auto make_connection_manager(
     connection_manager_state<Elements>>
     self,
   const load_tcp_args& args, const shared_diagnostic_handler& diagnostics,
+  const metrics_receiver_actor& metrics_receiver, uint64_t operator_id,
   bool is_hidden, const node_actor& node)
   -> connection_manager_actor<Elements>::behavior_type {
   self->state.self = self;
   self->state.args = args;
   self->state.diagnostics = diagnostics;
+  self->state.metrics_receiver = metrics_receiver;
+  self->state.operator_id = operator_id;
   self->state.is_hidden = is_hidden;
   self->state.node = node;
   if (auto ok = self->state.start(); not ok) {
@@ -645,28 +653,29 @@ auto make_connection_manager(
       return self->state.read_elements();
     },
     [self](uint64_t op_index, uint64_t metric_index,
-           const type& schema) -> caf::result<void> {
-      (void)self;
-      // FIXME: Figure out how we can somehow forward custom metrics from the
-      // nested operator.
-      TENZIR_UNUSED(metric_index, schema);
-      TENZIR_WARN("register metric {}/{}: {}", op_index, metric_index, schema);
-      return {};
+           type& schema) -> caf::result<void> {
+      auto& id = self->state.metrics_id_map[op_index][metric_index];
+      TENZIR_ASSERT(id == 0);
+      id = self->state.next_metrics_id++;
+      return self->delegate(self->state.metrics_receiver,
+                            self->state.operator_id, id, std::move(schema));
     },
     [self](uint64_t op_index, uint64_t metric_index,
-           const record& metric) -> caf::result<void> {
-      (void)self;
-      TENZIR_UNUSED(op_index, metric_index, metric);
-      TENZIR_WARN("deliver metric {}/{}: {}", op_index, metric_index, metric);
-      return {};
+           record& metric) -> caf::result<void> {
+      const auto& id = self->state.metrics_id_map[op_index][metric_index];
+      return self->delegate(self->state.metrics_receiver,
+                            self->state.operator_id, id, std::move(metric));
     },
-    [self](const operator_metric& op_metric) -> caf::result<void> {
-      (void)self;
+    [](const operator_metric& op_metric) -> caf::result<void> {
+      // TODO: We have no mechanism for forwarding operator metrics. That's a
+      // bit annoying, but there also really isn't a good solution to this.
       TENZIR_UNUSED(op_metric);
       return {};
     },
     [self](diagnostic& diagnostic) -> caf::result<void> {
       TENZIR_ASSERT(diagnostic.severity != severity::error);
+      // TODO: The diagnostics and metrics come from the execution nodes
+      // directly, so there's no way to enrich them with a native handle here.
       self->state.diagnostics.emit(std::move(diagnostic));
       return {};
     },
@@ -685,10 +694,11 @@ public:
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<Elements> {
-    const auto connection_manager_actor = scope_linked{
-      ctrl.self().spawn<caf::linked>(make_connection_manager<Elements>, args_,
-                                     ctrl.shared_diagnostics(),
-                                     ctrl.is_hidden(), ctrl.node())};
+    const auto connection_manager_actor
+      = scope_linked{ctrl.self().spawn<caf::linked>(
+        make_connection_manager<Elements>, args_, ctrl.shared_diagnostics(),
+        ctrl.metrics_receiver(), ctrl.operator_index(), ctrl.is_hidden(),
+        ctrl.node())};
     while (true) {
       auto result = Elements{};
       ctrl.set_waiting(true);
