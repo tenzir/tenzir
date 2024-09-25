@@ -14,6 +14,10 @@
 
 namespace tenzir::plugins::time_ {
 
+// TODO: gcc emits a bogus -Wunused-function warning for this macro when used
+// inside an anonymous namespace.
+TENZIR_ENUM(ymd_subtype, year, month, day);
+
 namespace {
 
 class time_ final : public function_plugin {
@@ -119,25 +123,11 @@ public:
 
 class year_month_day final : public method_plugin {
 public:
-  enum plugin_subtype {
-    year,
-    month,
-    day,
-  };
-
-  explicit year_month_day(plugin_subtype type) : plugin_subtype_(type) {
+  explicit year_month_day(ymd_subtype field) : ymd_subtype_(field) {
   }
 
   auto name() const -> std::string override {
-    switch (plugin_subtype_) {
-      case year:
-        return "year";
-      case month:
-        return "month";
-      case day:
-        return "day";
-    }
-    TENZIR_UNREACHABLE();
+    return std::string{to_string(ymd_subtype_)};
   }
 
   auto make_function(invocation inv, session ctx) const
@@ -149,7 +139,7 @@ public:
         auto arg = eval(expr);
         auto f = detail::overload{
           [](const arrow::NullArray& arg) {
-            return series::null(double_type{}, arg.length());
+            return series::null(int64_type{}, arg.length());
           },
           [&](const arrow::TimestampArray& arg) {
             auto& ty = caf::get<arrow::TimestampType>(*arg.type());
@@ -165,14 +155,14 @@ public:
               const std::chrono::year_month_day ymd{
                 std::chrono::floor<std::chrono::days>(value)};
               auto result = int64_t{0};
-              switch (plugin_subtype_) {
-                case year:
+              switch (ymd_subtype_) {
+                case ymd_subtype::year:
                   result = static_cast<int>(ymd.year());
                   break;
-                case month:
+                case ymd_subtype::month:
                   result = static_cast<unsigned>(ymd.month());
                   break;
-                case day:
+                case ymd_subtype::day:
                   result = static_cast<unsigned>(ymd.day());
                   break;
               }
@@ -185,7 +175,7 @@ public:
                                 arg.type.kind())
               .primary(expr)
               .emit(ctx);
-            return series::null(double_type{}, arg.length());
+            return series::null(int64_type{}, arg.length());
           },
         };
         return caf::visit(f, *arg.array);
@@ -193,7 +183,7 @@ public:
   }
 
 private:
-  plugin_subtype plugin_subtype_;
+  ymd_subtype ymd_subtype_;
 };
 
 class as_secs final : public method_plugin {
@@ -276,7 +266,7 @@ using namespace tenzir::plugins::time_;
 TENZIR_REGISTER_PLUGIN(time_)
 TENZIR_REGISTER_PLUGIN(since_epoch)
 TENZIR_REGISTER_PLUGIN(as_secs)
-TENZIR_REGISTER_PLUGIN(year_month_day{year_month_day::year});
-TENZIR_REGISTER_PLUGIN(year_month_day{year_month_day::month});
-TENZIR_REGISTER_PLUGIN(year_month_day{year_month_day::day});
+TENZIR_REGISTER_PLUGIN(year_month_day{ymd_subtype::year});
+TENZIR_REGISTER_PLUGIN(year_month_day{ymd_subtype::month});
+TENZIR_REGISTER_PLUGIN(year_month_day{ymd_subtype::day});
 TENZIR_REGISTER_PLUGIN(now)
