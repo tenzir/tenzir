@@ -663,7 +663,7 @@ struct connection_manager_state {
           write_rp.deliver();
         }
       }
-      return std::move(elements);
+      return elements;
     }
     read_rp = self->template make_response_promise<Elements>();
     return read_rp;
