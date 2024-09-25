@@ -29,6 +29,7 @@
 #include <algorithm>
 #include <exception>
 #include <iterator>
+#include <memory>
 #include <netdb.h>
 #include <queue>
 #include <utility>
@@ -273,7 +274,7 @@ struct connection_manager_state {
   std::queue<caf::typed_response_promise<void>> write_rps = {};
 
   // State we need to keep for each peer.
-  struct connection_state {
+  struct connection_state : std::enable_shared_from_this<connection_state> {
     static constexpr auto max_queued_chunks = size_t{10};
     static constexpr auto read_buffer_size = size_t{65'536};
 
@@ -289,39 +290,40 @@ struct connection_manager_state {
 
     auto async_read(connection_manager_actor<Elements>::pointer self,
                     shared_diagnostic_handler diagnostics) -> void {
-      auto on_read = [this, self, diagnostics = std::move(diagnostics)](
+      auto on_read = [connection = this->shared_from_this(), self,
+                      diagnostics = std::move(diagnostics)](
                        boost::system::error_code ec, size_t length) mutable {
         if (ec and ec != boost::asio::error::eof) {
           diagnostic::warning("{}", ec.message())
             .note("failed to read from TCP connection")
-            .note("handle `{}`", socket->native_handle())
+            .note("handle `{}`", connection->socket->native_handle())
             .emit(diagnostics);
           TENZIR_ASSERT(length == 0);
         } else {
           TENZIR_ASSERT(length > 0 or ec == boost::asio::error::eof);
         }
-        read_buffer.resize(length);
-        auto chunk = chunk::make(std::exchange(read_buffer, {}));
+        connection->read_buffer.resize(length);
+        auto chunk = chunk::make(std::exchange(connection->read_buffer, {}));
         auto should_read = false;
         {
-          auto lock = std::unique_lock{mutex};
-          if (rp.pending()) {
-            caf::anon_send(
-              caf::actor_cast<caf::actor>(self),
-              caf::make_action([this, chunk = std::move(chunk)]() mutable {
-                auto lock = std::unique_lock{mutex};
-                rp.deliver(std::move(chunk));
-              }));
-            TENZIR_ASSERT(chunks.empty());
+          auto lock = std::unique_lock{connection->mutex};
+          if (connection->rp.pending()) {
+            caf::anon_send(caf::actor_cast<caf::actor>(self),
+                           caf::make_action(
+                             [connection, chunk = std::move(chunk)]() mutable {
+                               auto lock = std::unique_lock{connection->mutex};
+                               connection->rp.deliver(std::move(chunk));
+                             }));
+            TENZIR_ASSERT(connection->chunks.empty());
             should_read = true;
           } else {
-            chunks.push(std::move(chunk));
-            TENZIR_ASSERT(chunks.size() <= max_queued_chunks);
-            should_read = chunks.size() < max_queued_chunks;
+            connection->chunks.push(std::move(chunk));
+            TENZIR_ASSERT(connection->chunks.size() <= max_queued_chunks);
+            should_read = connection->chunks.size() < max_queued_chunks;
           }
         }
         if (should_read) {
-          async_read(self, std::move(diagnostics));
+          connection->async_read(self, std::move(diagnostics));
         }
       };
       read_buffer.resize(read_buffer_size);
@@ -334,7 +336,7 @@ struct connection_manager_state {
     }
   };
   std::unordered_map<boost::asio::ip::tcp::socket::native_handle_type,
-                     connection_state>
+                     std::shared_ptr<connection_state>>
     connections = {};
 
   // Everything required for spawning the nested pipeline.
@@ -418,58 +420,59 @@ struct connection_manager_state {
   auto handle_connection(boost::asio::ip::tcp::socket peer) -> void {
     TENZIR_ASSERT(not connections.contains(peer.native_handle()));
     auto& connection = connections[peer.native_handle()];
-    TENZIR_ASSERT(not connection.socket);
-    connection.socket.emplace(std::move(peer));
-    if (auto ok = set_close_on_exec(connection.socket->native_handle());
+    connection = std::make_shared<connection_state>();
+    TENZIR_ASSERT(not connection->socket);
+    connection->socket.emplace(std::move(peer));
+    if (auto ok = set_close_on_exec(connection->socket->native_handle());
         not ok) {
       diagnostic::warning(ok.error())
-        .note("handle `{}`", connection.socket->native_handle())
+        .note("handle `{}`", connection->socket->native_handle())
         .emit(diagnostics);
       return;
     }
     if (args.tls) {
-      TENZIR_ASSERT(not connection.ssl_ctx);
-      connection.ssl_ctx.emplace(boost::asio::ssl::context::tls_server);
+      TENZIR_ASSERT(not connection->ssl_ctx);
+      connection->ssl_ctx.emplace(boost::asio::ssl::context::tls_server);
       auto ec = boost::system::error_code{};
       if (args.certfile) {
-        if (connection.ssl_ctx->use_certificate_chain_file(args.certfile->inner,
-                                                           ec)) {
+        if (connection->ssl_ctx->use_certificate_chain_file(
+              args.certfile->inner, ec)) {
           diagnostic::warning("{}", ec.message())
             .note("failed to load certificate chain file")
-            .note("handle `{}`", connection.socket->native_handle())
+            .note("handle `{}`", connection->socket->native_handle())
             .primary(args.certfile->source)
             .emit(diagnostics);
           return;
         }
       }
       if (args.keyfile) {
-        if (connection.ssl_ctx->use_private_key_file(
+        if (connection->ssl_ctx->use_private_key_file(
               args.keyfile->inner, boost::asio::ssl::context::pem, ec)) {
           diagnostic::warning("{}", ec.message())
             .note("failed to load private key file")
-            .note("handle `{}`", connection.socket->native_handle())
+            .note("handle `{}`", connection->socket->native_handle())
             .primary(args.certfile->source)
             .emit(diagnostics);
           return;
         }
       }
-      if (connection.ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none,
-                                              ec)) {
+      if (connection->ssl_ctx->set_verify_mode(boost::asio::ssl::verify_none,
+                                               ec)) {
         diagnostic::warning("{}", ec.message())
           .note("failed to disable peer certificate verification")
-          .note("handle `{}`", connection.socket->native_handle())
+          .note("handle `{}`", connection->socket->native_handle())
           .primary(*args.tls)
           .emit(diagnostics);
         return;
       }
-      TENZIR_ASSERT(not connection.tls_socket);
-      connection.tls_socket.emplace(*connection.socket, *connection.ssl_ctx);
-      if (connection.tls_socket->handshake(
+      TENZIR_ASSERT(not connection->tls_socket);
+      connection->tls_socket.emplace(*connection->socket, *connection->ssl_ctx);
+      if (connection->tls_socket->handshake(
             boost::asio::ssl::stream<boost::asio::ip::tcp::socket>::server,
             ec)) {
         diagnostic::warning("{}", ec.message())
           .note("failed to perform TLS handshake")
-          .note("handle `{}`", connection.socket->native_handle())
+          .note("handle `{}`", connection->socket->native_handle())
           .primary(*args.tls)
           .emit(diagnostics);
         return;
@@ -478,26 +481,26 @@ struct connection_manager_state {
     // Set up and spawn the nested pipeline.
     auto pipeline = args.pipeline->inner;
     auto source = std::make_unique<load_tcp_source_operator>(
-      connection_actor{self}, connection.socket->native_handle());
+      connection_actor{self}, connection->socket->native_handle());
     pipeline.prepend(std::move(source));
     auto sink = std::make_unique<load_tcp_sink_operator<Elements>>(
       connection_manager_actor<Elements>{self});
     pipeline.append(std::move(sink));
     TENZIR_ASSERT(pipeline.is_closed());
-    TENZIR_ASSERT(not connection.pipeline_executor);
-    connection.pipeline_executor = self->template spawn<caf::monitored>(
+    TENZIR_ASSERT(not connection->pipeline_executor);
+    connection->pipeline_executor = self->template spawn<caf::monitored>(
       pipeline_executor, std::move(pipeline), receiver_actor<diagnostic>{self},
       metrics_receiver_actor{self}, node, has_terminal, is_hidden);
-    self->request(connection.pipeline_executor, caf::infinite, atom::start_v)
+    self->request(connection->pipeline_executor, caf::infinite, atom::start_v)
       .then(
-        [this, handle = connection.socket->native_handle()]() {
+        [this, handle = connection->socket->native_handle()]() {
           // Start the async read loop for this connection.
           auto connection = connections.find(handle);
           TENZIR_ASSERT(connection != connections.end());
-          connection->second.async_read(self, diagnostics);
+          connection->second->async_read(self, diagnostics);
         },
         [this, handle
-               = connection.socket->native_handle()](const caf::error& err) {
+               = connection->socket->native_handle()](const caf::error& err) {
           diagnostic::warning(err)
             .note("failed to start nested pipeline")
             .note("handle `{}`", handle)
@@ -536,20 +539,20 @@ struct connection_manager_state {
     auto chunk = chunk_ptr{};
     auto should_read = false;
     {
-      auto lock = std::unique_lock{connection->second.mutex};
-      if (connection->second.chunks.empty()) {
-        TENZIR_ASSERT(not connection->second.rp.pending());
-        connection->second.rp
+      auto lock = std::unique_lock{connection->second->mutex};
+      if (connection->second->chunks.empty()) {
+        TENZIR_ASSERT(not connection->second->rp.pending());
+        connection->second->rp
           = self->template make_response_promise<chunk_ptr>();
-        return connection->second.rp;
+        return connection->second->rp;
       }
-      should_read = connection->second.chunks.size()
+      should_read = connection->second->chunks.size()
                     == connection_state::max_queued_chunks;
-      chunk = std::move(connection->second.chunks.front());
-      connection->second.chunks.pop();
+      chunk = std::move(connection->second->chunks.front());
+      connection->second->chunks.pop();
     }
     if (should_read) {
-      connection->second.async_read(self, diagnostics);
+      connection->second->async_read(self, diagnostics);
     }
     return chunk;
   }
@@ -586,13 +589,9 @@ struct connection_manager_state {
   auto handle_down_msg(const caf::down_msg& msg) -> void {
     const auto connection
       = std::ranges::find_if(connections, [&](const auto& connection) {
-          return connection.second.pipeline_executor.address() == msg.source;
+          return connection.second->pipeline_executor.address() == msg.source;
         });
     TENZIR_ASSERT(connection != connections.end());
-    // FIXME: It is only safe to erase this connection _after_ there is no more
-    // in-flight async read for it. Otherwise, acquiring the mutex in it can
-    // throw an exception. The connections map likely has to point to shared
-    // pointers because of this.
     if (msg.reason) {
       diagnostic::warning(msg.reason)
         .note("nested pipeline terminated unexpectedly")
