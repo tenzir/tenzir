@@ -354,14 +354,18 @@ struct connection_manager_state {
                        boost::system::error_code ec, size_t length) mutable {
         connection->reads += 1;
         connection->bytes_read += length;
-        if (ec and ec != boost::asio::error::eof) {
-          diagnostic::warning("{}", ec.message())
-            .note("failed to read from TCP connection")
-            .note("handle `{}`", connection->socket->native_handle())
-            .emit(diagnostics);
+        if (ec) {
+          // We intentionally pass the empty chunk to the nested pipeline's
+          // source to let that shut down cleanly.
           TENZIR_ASSERT(length == 0);
+          if (ec != boost::asio::error::eof) {
+            diagnostic::warning("{}", ec.message())
+              .note("failed to read from TCP connection")
+              .note("handle `{}`", connection->socket->native_handle())
+              .emit(diagnostics);
+          }
         } else {
-          TENZIR_ASSERT(length > 0 or ec == boost::asio::error::eof);
+          TENZIR_ASSERT(length > 0);
         }
         const auto* data = read_buffer.get();
         auto chunk = chunk::make(
