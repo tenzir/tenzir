@@ -950,6 +950,8 @@ public:
         return failure::promise();
       },
       [&](tag<chunk_ptr>) -> failure_or<operator_ptr> {
+        // TODO: Consider emitting a warning if there are multiple parallel
+        // connections when the nested pipeline returns bytes.
         return std::make_unique<load_tcp_operator<chunk_ptr>>(std::move(args));
       },
       [&](tag<table_slice>) -> failure_or<operator_ptr> {
