@@ -38,7 +38,7 @@ public:
       auto path = std::string{};
       auto opts = arrow::fs::AzureOptions::FromUri(uri.inner, &path);
       if (not opts.ok()) {
-        diagnostic::error("failed to create Arrow ABS "
+        diagnostic::error("failed to create Arrow Azure Blob Storage "
                           "filesystem: {}",
                           opts.status().ToString())
           .emit(ctrl.diagnostics());
@@ -46,7 +46,7 @@ public:
       }
       auto fs = arrow::fs::AzureFileSystem::Make(*opts);
       if (not fs.ok()) {
-        diagnostic::error("failed to create Arrow ABS "
+        diagnostic::error("failed to create Arrow Azure Blob Storage "
                           "filesystem: {}",
                           fs.status().ToString())
           .emit(ctrl.diagnostics());
@@ -113,14 +113,14 @@ public:
     auto path = std::string{};
     auto opts = arrow::fs::AzureOptions::FromUri(uri_.inner, &path);
     if (not opts.ok()) {
-      return diagnostic::error("failed to create Arrow ABS "
+      return diagnostic::error("failed to create Arrow Azure Blob Storage "
                                "filesystem: {}",
                                opts.status().ToString())
         .to_error();
     }
     auto fs = arrow::fs::AzureFileSystem::Make(*opts);
     if (not fs.ok()) {
-      return diagnostic::error("failed to create Arrow ABS "
+      return diagnostic::error("failed to create Arrow Azure Blob Storage "
                                "filesystem: {}",
                                fs.status().ToString())
         .to_error();
@@ -189,12 +189,6 @@ private:
 class plugin final : public virtual saver_plugin<abs_saver>,
                      public virtual loader_plugin<abs_loader> {
 public:
-  auto initialize([[maybe_unused]] const record& plugin_config,
-                  [[maybe_unused]] const record& global_config)
-    -> caf::error override {
-    return caf::none;
-  }
-
   auto parse_saver(parser_interface& p) const
     -> std::unique_ptr<plugin_saver> override {
     auto parser = argument_parser{
@@ -262,8 +256,8 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -284,8 +278,8 @@ public:
   }
 
   auto
-  operator()(generator<chunk_ptr> input,
-             operator_control_plane& ctrl) const -> generator<std::monostate> {
+  operator()(generator<chunk_ptr> input, operator_control_plane& ctrl) const
+    -> generator<std::monostate> {
     auto saver = abs_saver{uri_};
     auto instance = saver.instantiate(ctrl, {});
     if (not instance) {
@@ -305,8 +299,8 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -321,8 +315,8 @@ private:
 
 class save_abs_plugin final : public operator_plugin2<save_abs_operator> {
 public:
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto uri = located<std::string>{};
     TRY(argument_parser2::operator_("save_azure_blob_storage")
           .add("uri", uri)
@@ -333,8 +327,8 @@ public:
 
 class load_abs_plugin final : public operator_plugin2<load_abs_operator> {
 public:
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto uri = located<std::string>{};
     TRY(argument_parser2::operator_("load_azure_blob_storage")
           .add("uri", uri)
