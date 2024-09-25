@@ -260,7 +260,8 @@ struct connection_manager_state {
   metrics_receiver_actor metrics_receiver = {};
   detail::stable_map<uint64_t, detail::stable_map<uint64_t, uint64_t>>
     metrics_id_map = {};
-  uint64_t next_metrics_id = {};
+  static constexpr auto tcp_metrics_id = uint64_t{0};
+  uint64_t next_metrics_id = tcp_metrics_id + 1;
   uint64_t operator_id = {};
 
   // Everything required for the I/O worker.
@@ -279,6 +280,17 @@ struct connection_manager_state {
 
   // State we need to keep for each peer.
   struct connection_state : std::enable_shared_from_this<connection_state> {
+    connection_state() = default;
+    connection_state(const connection_state&) = delete;
+    connection_state(connection_state&&) = delete;
+    auto operator=(const connection_state&) -> connection_state& = delete;
+    auto operator=(connection_state&&) -> connection_state& = delete;
+
+    ~connection_state() noexcept {
+      next_emit_metrics.dispose();
+      emit_metrics(nullptr);
+    }
+
     static constexpr auto max_queued_chunks = size_t{10};
     static constexpr auto read_buffer_size = size_t{65'536};
 
@@ -290,6 +302,32 @@ struct connection_manager_state {
     mutable std::mutex mutex = {};
     std::queue<chunk_ptr> chunks = {};
     caf::typed_response_promise<chunk_ptr> rp = {};
+
+    metrics_receiver_actor metrics_receiver = {};
+    uint64_t operator_id = {};
+    uint64_t reads = {};
+    uint64_t bytes_read = {};
+    caf::disposable next_emit_metrics = {};
+
+    auto emit_metrics(connection_manager_actor<Elements>::pointer self)
+      -> void {
+      auto metric = record{
+        {"handle", fmt::to_string(socket->native_handle())},
+        {"reads", std::exchange(reads, {})},
+        {"writes", uint64_t{0}},
+        {"bytes_read", std::exchange(bytes_read, {})},
+        {"bytes_written", uint64_t{0}},
+      };
+      caf::anon_send(metrics_receiver, operator_id, tcp_metrics_id,
+                     std::move(metric));
+      if (self) {
+        next_emit_metrics = detail::weak_run_delayed(
+          self, defaults::metrics_interval,
+          [self, connection = this->shared_from_this()] {
+            connection->emit_metrics(self);
+          });
+      }
+    }
 
     auto async_read(connection_manager_actor<Elements>::pointer self,
                     shared_diagnostic_handler diagnostics) -> void {
@@ -303,6 +341,8 @@ struct connection_manager_state {
                       diagnostics = std::move(diagnostics),
                       read_buffer = std::move(read_buffer)](
                        boost::system::error_code ec, size_t length) mutable {
+        connection->reads += 1;
+        connection->bytes_read += length;
         if (ec and ec != boost::asio::error::eof) {
           diagnostic::warning("{}", ec.message())
             .note("failed to read from TCP connection")
@@ -374,6 +414,25 @@ struct connection_manager_state {
   }
 
   auto start() -> caf::expected<void> {
+    auto tcp_metrics_schema = type{
+      "tenzir.metrics.tcp",
+      record_type{
+        {"handle", string_type{}},
+        {"reads", uint64_type{}},
+        {"writes", uint64_type{}},
+        {"bytes_read", uint64_type{}},
+        {"bytes_written", uint64_type{}},
+      },
+    };
+    self
+      ->request(metrics_receiver, caf::infinite, operator_id, tcp_metrics_id,
+                std::move(tcp_metrics_schema))
+      .then([]() {},
+            [this](const caf::error& err) {
+              diagnostic::error(err)
+                .note("failed to register TCP metrics schema")
+                .emit(diagnostics);
+            });
     TENZIR_ASSERT(not io_ctx);
     io_ctx = std::make_shared<boost::asio::io_context>();
     io_workers.reserve(args.parallel.inner);
@@ -444,6 +503,9 @@ struct connection_manager_state {
         .emit(diagnostics);
       return;
     }
+    connection->metrics_receiver = metrics_receiver;
+    connection->operator_id = operator_id;
+    connection->emit_metrics(self);
     if (args.tls) {
       TENZIR_ASSERT(not connection->ssl_ctx);
       connection->ssl_ctx.emplace(boost::asio::ssl::context::tls_server);
