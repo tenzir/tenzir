@@ -149,8 +149,8 @@ public:
           },
           [&](const caf::error& err) {
             diagnostic::error(err)
-              .note("failed to read from TCP connection with handle {}",
-                    handle_)
+              .note("failed to read from TCP connection")
+              .note("handle `{}`", handle_)
               .emit(ctrl.diagnostics());
           });
       co_yield {};
@@ -287,16 +287,19 @@ struct connection_manager_state {
     std::queue<chunk_ptr> chunks = {};
     caf::typed_response_promise<chunk_ptr> rp = {};
 
-    auto async_read(connection_manager_actor<Elements>::pointer self) -> void {
-      auto on_read = [this, self](boost::system::error_code ec, size_t length) {
+    auto async_read(connection_manager_actor<Elements>::pointer self,
+                    shared_diagnostic_handler diagnostics) -> void {
+      auto on_read = [this, self, diagnostics = std::move(diagnostics)](
+                       boost::system::error_code ec, size_t length) mutable {
         if (ec and ec != boost::asio::error::eof) {
+          diagnostic::warning("{}", ec.message())
+            .note("failed to read from TCP connection")
+            .note("handle `{}`", socket->native_handle())
+            .emit(diagnostics);
           TENZIR_ASSERT(length == 0);
-          // FIXME: Handle unexpected connection errors by emitting a
-          // warning diagnostic and then letting the nested pipeline end
-          // naturally to drop as few results as possible.
-          TENZIR_UNIMPLEMENTED();
+        } else {
+          TENZIR_ASSERT(length > 0 or ec == boost::asio::error::eof);
         }
-        TENZIR_ASSERT(length > 0 or ec == boost::asio::error::eof);
         read_buffer.resize(length);
         auto chunk = chunk::make(std::exchange(read_buffer, {}));
         auto should_read = false;
@@ -318,7 +321,7 @@ struct connection_manager_state {
           }
         }
         if (should_read) {
-          async_read(self);
+          async_read(self, std::move(diagnostics));
         }
       };
       read_buffer.resize(read_buffer_size);
@@ -480,7 +483,7 @@ struct connection_manager_state {
           // Start the async read loop for this connection.
           auto connection = connections.find(handle);
           TENZIR_ASSERT(connection != connections.end());
-          connection->second.async_read(self);
+          connection->second.async_read(self, diagnostics);
         },
         [](const caf::error& err) {
           // FIXME: Emit a diagnostic
@@ -535,7 +538,7 @@ struct connection_manager_state {
       connection->second.chunks.pop();
     }
     if (should_read) {
-      connection->second.async_read(self);
+      connection->second.async_read(self, diagnostics);
     }
     return chunk;
   }
