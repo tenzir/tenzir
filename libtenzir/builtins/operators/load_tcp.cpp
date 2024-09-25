@@ -70,7 +70,7 @@ struct endpoint {
 };
 
 struct load_tcp_args {
-  located<endpoint> endpoint = {};
+  located<struct endpoint> endpoint = {};
   located<uint64_t> parallel = {};
   std::optional<location> connect = {};
   std::optional<location> tls = {};
@@ -101,7 +101,7 @@ auto set_close_on_exec(boost::asio::ip::tcp::socket::native_handle_type handle)
 }
 
 auto resolve_endpoint(boost::asio::io_context& io_ctx,
-                      const located<endpoint>& endpoint)
+                      const located<struct endpoint>& endpoint)
   -> caf::expected<boost::asio::ip::tcp::endpoint> {
   auto ec = boost::system::error_code{};
   auto resolver = boost::asio::ip::tcp::resolver{io_ctx};
