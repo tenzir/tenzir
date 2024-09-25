@@ -96,7 +96,7 @@ struct tenzir::tryable<caf::expected<void>> {
   }
 
   static auto get_error(caf::expected<void>&& x) -> caf::error {
-    return std::move(x.error());
+    return x.error();
   }
 };
 
