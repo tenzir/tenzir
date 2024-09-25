@@ -32,12 +32,12 @@ Azure Blob Store.
 By default, authentication is handled by the Azure SDK’s credential chain which
 may read from multiple environment variables, such as:
 
-* `AZURE_TENANT_ID`
-* `AZURE_CLIENT_ID`
-* `AZURE_CLIENT_SECRET`
-* `AZURE_AUTHORITY_HOST`
-* `AZURE_CLIENT_CERTIFICATE_PATH`
-* `AZURE_FEDERATED_TOKEN_FILE`
+- `AZURE_TENANT_ID`
+- `AZURE_CLIENT_ID`
+- `AZURE_CLIENT_SECRET`
+- `AZURE_AUTHORITY_HOST`
+- `AZURE_CLIENT_CERTIFICATE_PATH`
+- `AZURE_FEDERATED_TOKEN_FILE`
 
 ### `<uri>` (Loader, Saver)
 
@@ -48,21 +48,18 @@ they do.
 
 Supported URI formats:
 
-1.     abfs[s]://[:<password>@]<account>.blob.core.windows.net [/<container>[/<path>]]
-
-2.     abfs[s]://<container>[:<password>]@<account>.dfs.core.windows.net[/path]
-
-3.     abfs[s]://[<account[:<password>]@]<host[.domain]>[<:port>] [/<container>[/path]]
-
-4.     abfs[s]://[<account[:<password>]@]<container>[/path]
+1. `abfs[s]://[:<password>@]<account>.blob.core.windows.net[/<container>[/<path>]]`
+2. `abfs[s]://<container>[:<password>]@<account>.dfs.core.windows.net[/path]`
+3. `abfs[s]://[<account[:<password>]@]<host[.domain]>[<:port>][/<container>[/path]]`
+4. `abfs[s]://[<account[:<password>]@]<container>[/path]`
 
 (1) and (2) are compatible with the Azure Data Lake Storage Gen2 URIs 1, (3) is
 for Azure Blob Storage compatible service including Azurite, and (4) is a shorter
 version of (1) and (2).
 
-:::info
-The credentials may be omitted, if the user running `tenzir` is logged in via the
-Azure-CLI `az`
+:::tip Authenticate with the Azure CLI
+Run `az login` on the command-line to authenticate the current user with Azure's
+command-line arguments.
 :::
 
 ## Examples
