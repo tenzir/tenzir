@@ -25,8 +25,9 @@ azure-blob-storage <uri>
 
 ## Description
 
-The `abs` loader connects to an Azure Blob Store to acquire raw bytes from a blob.
-The `abs` saver writes bytes to a blob in an Azure Blob Store.
+The `azure-blob-storage` loader connects to an Azure Blob Store to acquire raw
+bytes from a blob. The `azure-blob-storage` saver writes bytes to a blob in an
+Azure Blob Store.
 
 By default, authentication is handled by the Azure SDK’s credential chain which
 may read from multiple environment variables, such as:
