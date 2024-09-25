@@ -26,9 +26,7 @@
 #include "tenzir/uuid.hpp"
 #include "tenzir/value_index.hpp"
 
-#include <caf/broadcast_downstream_manager.hpp>
 #include <caf/optional.hpp>
-#include <caf/stream_slot.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <filesystem>
@@ -83,12 +81,6 @@ struct active_partition_state {
 
   void handle_slice(table_slice slice);
 
-  // -- utility functions ------------------------------------------------------
-
-  std::optional<tenzir::record_type> combined_schema() const;
-
-  const std::unordered_map<std::string, ids>& type_ids() const;
-
   // -- data members -----------------------------------------------------------
 
   /// Pointer to the parent actor.
@@ -96,9 +88,6 @@ struct active_partition_state {
 
   /// The data that will end up on disk in the partition flatbuffer.
   serialization_data data;
-
-  /// Tracks whether we already received at least one table slice.
-  bool streaming_initiated = {};
 
   /// Options to be used when adding events to the partition_synopsis.
   uint64_t partition_capacity = 0ull;
@@ -119,15 +108,6 @@ struct active_partition_state {
 
   /// Path where the partition synopsis is written.
   std::optional<std::filesystem::path> synopsis_path = {};
-
-  /// Maps qualified fields to indexer actors.
-  //  TODO: Should we use the tsl map here for heterogeneous key lookup?
-  detail::stable_map<qualified_record_field, active_indexer_actor> indexers
-    = {};
-
-  /// Counts how many indexers have already responded to the `snapshot` atom
-  /// with a serialized chunk.
-  size_t persisted_indexers = {};
 
   /// The store backend.
   const store_actor_plugin* store_plugin = {};

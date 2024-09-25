@@ -32,28 +32,6 @@ importer_state::importer_state(importer_actor::pointer self) : self{self} {
 
 importer_state::~importer_state() = default;
 
-caf::typed_response_promise<record>
-importer_state::status(status_verbosity v) const {
-  auto rs = make_status_request_state(self);
-  // Gather general importer status.
-  // TODO: caf::config_value can only represent signed 64 bit integers, which
-  // intermediate workaround, we convert the values to strings.
-  record result;
-  if (v >= status_verbosity::detailed) {
-    auto sources_status = list{};
-    sources_status.reserve(inbound_descriptions.size());
-    for (const auto& kv : inbound_descriptions) {
-      sources_status.emplace_back(kv.second);
-    }
-    rs->content["sources"] = std::move(sources_status);
-  }
-  // General state.
-  if (v >= status_verbosity::debug) {
-    detail::fill_status_map(rs->content, self);
-  }
-  return rs->promise;
-}
-
 void importer_state::on_process(const table_slice& slice) {
   auto t = timer::start(measurement_);
   const auto rows = slice.rows();
@@ -166,8 +144,8 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       return self->state.unpersisted_events;
     },
     // -- status_client_actor --------------------------------------------------
-    [self](atom::status, status_verbosity v, duration) { //
-      return self->state.status(v);
+    [](atom::status, status_verbosity, duration) { //
+      return record{};
     },
   };
 }

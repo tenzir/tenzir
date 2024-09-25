@@ -67,12 +67,12 @@
 
 // clang-format off
 //
-// ### OBSOLETE!!!!
 // # Import
 //
-// The index is implemented as a stream stage that hooks into the table slice
-// stream coming from the importer, and forwards them to the current active
-// partition
+// The index splits the "stream" of incoming table slices by schema and forwards
+// them to active partitions. It rotates the active partition for each schema
+// when the active partition timeout is hit or the partition reached its maximum
+// size.
 //
 //              table slice              table slice                      table slice column
 //   importer ----------------> index ---------------> active partition ------------------------> indexer
@@ -825,6 +825,7 @@ auto index_state::flush() -> caf::typed_response_promise<void> {
   auto rp = self->make_response_promise<void>();
   if (active_partitions.empty()) {
     rp.deliver();
+    return rp;
   }
   auto counter = detail::make_fanout_counter(
     active_partitions.size(),
@@ -1094,7 +1095,9 @@ index(index_actor::stateful_pointer<index_state> self,
       rp.deliver(msg.reason);
     }
     self->state.shutting_down = true;
-    self->request(static_cast<index_actor>(self), caf::infinite, atom::flush_v)
+    self
+      ->request(static_cast<index_actor>(self), std::chrono::seconds{120},
+                atom::flush_v)
       .then(
         [self]() {
           self->quit();

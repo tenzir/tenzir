@@ -78,6 +78,7 @@ void serialize(
     self->state.data.indexer_chunks.emplace_back(qf.name(), nullptr);
     fields.emplace_back(std::string{qf.name()}, qf.type());
   }
+  TENZIR_ASSERT(!fields.empty());
   auto combined_schema = record_type{fields};
   // Create the partition flatbuffer.
   auto partition = pack_full(self->state.data, combined_schema);
@@ -149,21 +150,6 @@ void serialize(
 }
 
 } // namespace
-
-std::optional<record_type> active_partition_state::combined_schema() const {
-  if (indexers.empty())
-    return {};
-  auto fields = std::vector<struct record_type::field>{};
-  fields.reserve(indexers.size());
-  for (const auto& [qf, _] : indexers)
-    fields.push_back({std::string{qf.name()}, qf.type()});
-  return record_type{fields};
-}
-
-const std::unordered_map<std::string, ids>&
-active_partition_state::type_ids() const {
-  return data.type_ids;
-}
 
 void active_partition_state::handle_slice(table_slice x) {
   TENZIR_TRACE_SCOPE("partition {} got table slice {}", data.id, TENZIR_ARG(x));
@@ -347,16 +333,8 @@ active_partition_actor::behavior_type active_partition(
       caf::delayed_anon_send(caf::actor_cast<caf::actor>(self), 100ms, msg);
       return;
     }
-    TENZIR_VERBOSE("{} shuts down after persisting partition state", *self);
-    // TODO: We must actor_cast to caf::actor here because 'shutdown' operates
-    // on 'std::vector<caf::actor>' only. That should probably be generalized
-    // in the future.
-    auto indexers = std::vector<caf::actor>{};
-    indexers.reserve(self->state.indexers.size());
-    auto copy = std::exchange(self->state.indexers, {});
-    for ([[maybe_unused]] auto&& [qf, indexer] : std::move(copy))
-      indexers.push_back(caf::actor_cast<caf::actor>(std::move(indexer)));
-    shutdown<policy::parallel>(self, std::move(indexers));
+    TENZIR_DEBUG("{} shuts down after persisting partition state", *self);
+    self->quit();
   });
   return {
     [self](atom::erase) -> caf::result<atom::done> {
@@ -378,7 +356,6 @@ active_partition_actor::behavior_type active_partition(
       TENZIR_ASSERT(!self->state.persistence_promise.source());
       self->state.persist_path = part_path;
       self->state.synopsis_path = synopsis_path;
-      self->state.persisted_indexers = 0;
       self->state.persistence_promise
         = self->make_response_promise<partition_synopsis_ptr>();
       self->request(self->state.store_builder, caf::infinite, atom::persist_v)
@@ -409,50 +386,8 @@ active_partition_actor::behavior_type active_partition(
       return self->delegate(self->state.store_builder, atom::query_v,
                             std::move(query_context));
     },
-    [self](atom::status, status_verbosity v,
-           duration d) -> caf::typed_response_promise<record> {
-      struct extra_state {
-        size_t memory_usage = 0;
-        void deliver(caf::typed_response_promise<record>&& promise,
-                     record&& content) {
-          content["memory-usage"] = uint64_t{memory_usage};
-          promise.deliver(std::move(content));
-        }
-      };
-      auto rs = make_status_request_state<extra_state>(self);
-      auto indexer_states = list{};
-      // Reservation is necessary to make sure the entries don't get relocated
-      // as the underlying vector grows - `ps` would refer to the wrong memory
-      // otherwise.
-      const auto timeout = d / 10 * 9;
-      indexer_states.reserve(self->state.indexers.size());
-      for (auto& i : self->state.indexers) {
-        if (!i.second)
-          continue;
-        auto& ps = caf::get<record>(indexer_states.emplace_back(record{}));
-        collect_status(
-          rs, timeout, v, i.second,
-          [rs, v, &ps, &field = i.first](record& response) {
-            ps["field"] = field.name();
-            ps["type"] = fmt::to_string(field.type());
-            auto it = response.find("memory-usage");
-            if (it != response.end()) {
-              if (const auto* s = caf::get_if<uint64_t>(&it->second))
-                rs->memory_usage += *s;
-            }
-            if (v >= status_verbosity::debug)
-              merge(response, ps, policy::merge_lists::no);
-          },
-          [rs, &ps, &field = i.first](caf::error& err) {
-            TENZIR_WARN("{} failed to retrieve status from {}: {}", *rs->self,
-                        field.name(), err);
-            ps["error"] = fmt::to_string(err);
-          });
-      }
-      rs->content["indexers"] = std::move(indexer_states);
-      if (v >= status_verbosity::debug)
-        detail::fill_status_map(rs->content, self);
-      return rs->promise;
+    [](atom::status, status_verbosity, duration) {
+      return record{};
     },
   };
 }
