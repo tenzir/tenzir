@@ -161,6 +161,10 @@ public:
     }
   }
 
+  auto location() const -> operator_location {
+    return operator_location::local;
+  }
+
   auto name() const -> std::string override {
     return "internal-load-tcp-source-bytes";
   }
@@ -220,6 +224,10 @@ public:
           });
       co_yield {};
     }
+  }
+
+  auto location() const -> operator_location {
+    return operator_location::anywhere;
   }
 
   auto name() const -> std::string override {
@@ -784,6 +792,10 @@ public:
       co_yield {};
       co_yield std::move(result);
     }
+  }
+
+  auto location() const -> operator_location {
+    return operator_location::local;
   }
 
   auto name() const -> std::string override {
