@@ -161,7 +161,7 @@ public:
     }
   }
 
-  auto location() const -> operator_location {
+  auto location() const -> operator_location override {
     return operator_location::local;
   }
 
@@ -226,7 +226,7 @@ public:
     }
   }
 
-  auto location() const -> operator_location {
+  auto location() const -> operator_location override {
     return operator_location::anywhere;
   }
 
@@ -799,7 +799,7 @@ public:
     }
   }
 
-  auto location() const -> operator_location {
+  auto location() const -> operator_location override {
     return operator_location::local;
   }
 
