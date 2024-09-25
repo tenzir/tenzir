@@ -374,7 +374,7 @@ struct connection_manager_state {
 
   auto connect() -> caf::expected<void> {
     TENZIR_ASSERT(args.connect);
-    // FIXME: Implement support for connect=true.
+    // TODO: Implement support for connect=true.
     TENZIR_UNIMPLEMENTED();
     return {};
   }
@@ -416,8 +416,6 @@ struct connection_manager_state {
   }
 
   auto handle_connection(boost::asio::ip::tcp::socket peer) -> void {
-    // FIXME: all diagnostics for peers should be warnings
-    // Now, set up the shared connection state.
     TENZIR_ASSERT(not connections.contains(peer.native_handle()));
     auto& connection = connections[peer.native_handle()];
     TENZIR_ASSERT(not connection.socket);
