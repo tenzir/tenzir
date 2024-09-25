@@ -49,7 +49,6 @@ struct tcp_metrics {
       return;
     }
     metric_handler.emit({
-      {"port", port},
       {"handle", handle},
       {"reads", reads},
       {"writes", writes},
@@ -506,7 +505,6 @@ public:
                                           ctrl.metrics({
                                             "tenzir.metrics.tcp",
                                             record_type{
-                                              {"port", uint64_type{}},
                                               {"handle", string_type{}},
                                               {"reads", uint64_type{}},
                                               {"writes", uint64_type{}},
@@ -622,7 +620,6 @@ public:
       = ctrl.self().spawn(make_tcp_bridge, ctrl.metrics({
                                              "tenzir.metrics.tcp",
                                              record_type{
-                                               {"port", uint64_type{}},
                                                {"handle", string_type{}},
                                                {"reads", uint64_type{}},
                                                {"writes", uint64_type{}},
