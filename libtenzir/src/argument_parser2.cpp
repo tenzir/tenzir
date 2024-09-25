@@ -87,12 +87,6 @@ auto argument_parser2::parse(const ast::entity& self,
     }
     auto& expr = *arg;
     if (std::holds_alternative<ast::assignment>(*expr.kind)) {
-      // if (first_optional_ && idx >= *first_optional_) {
-      //   break;
-      // }
-      // emit(diagnostic::error("expected positional argument `{}` first",
-      //                        positional.meta)
-      //        .primary(expr));
       break;
     }
     positional.set.match(
