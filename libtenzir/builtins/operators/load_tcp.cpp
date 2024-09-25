@@ -299,6 +299,9 @@ struct connection_manager_state {
     std::optional<boost::asio::ssl::stream<boost::asio::ip::tcp::socket&>>
       tls_socket = {};
     pipeline_executor_actor pipeline_executor = {};
+
+    // The mutex is protecting the queue of chunks and the response promise, as
+    // they're both used from the Asio-managed thread pool.
     mutable std::mutex mutex = {};
     std::queue<chunk_ptr> chunks = {};
     caf::typed_response_promise<chunk_ptr> rp = {};
