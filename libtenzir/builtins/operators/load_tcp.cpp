@@ -582,12 +582,14 @@ struct connection_manager_state {
     // in-flight async read for it. Otherwise, acquiring the mutex in it can
     // throw an exception. The connections map likely has to point to shared
     // pointers because of this.
-    connections.erase(connection);
-    if (not msg.reason) {
-      return;
+    if (msg.reason) {
+      diagnostic::warning(msg.reason)
+        .note("nested pipeline terminated unexpectedly")
+        .note("handle `{}`", connection->first)
+        .primary(args.pipeline->source)
+        .emit(diagnostics);
     }
-    // FIXME: Emit a diagnostic when a nested pipeline shuts down with an
-    // unexpected error.
+    connections.erase(connection);
   }
 };
 
@@ -644,11 +646,9 @@ auto make_connection_manager(
       TENZIR_UNUSED(op_metric);
       return {};
     },
-    [self](const diagnostic& diagnostic) -> caf::result<void> {
-      (void)self;
-      // FIXME: Forward diagnostics from the nested pipeline as warnings.
-      TENZIR_UNUSED(diagnostic);
-      TENZIR_WARN("deliver diagnostic {:?}", diagnostic);
+    [self](diagnostic& diagnostic) -> caf::result<void> {
+      TENZIR_ASSERT(diagnostic.severity != severity::error);
+      self->state.diagnostics.emit(std::move(diagnostic));
       return {};
     },
   };
