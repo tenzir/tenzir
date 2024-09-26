@@ -338,6 +338,42 @@ public:
   }
 };
 
+class str : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.str";
+  }
+
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
+    auto subject_expr = ast::expression{};
+    TRY(argument_parser2::method("string")
+          .add(subject_expr, "<expr>")
+          .parse(inv, ctx));
+    return function_use::make([subject_expr = std::move(subject_expr)](
+                                evaluator eval, session) -> series {
+      auto subject = eval(subject_expr);
+      auto b = arrow::StringBuilder{};
+      for (auto&& value : subject.values()) {
+        auto f = detail::overload{
+          [](int64_t x) {
+            return fmt::to_string(x);
+          },
+          [](const std::string& x) {
+            return x;
+          },
+          [&](auto&) {
+            // TODO: How to stringify everything else?
+            return fmt::to_string(value);
+          },
+        };
+        check(b.Append(caf::visit(f, value)));
+      }
+      return {string_type{}, finish(b)};
+    });
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::string
@@ -377,3 +413,4 @@ TENZIR_REGISTER_PLUGIN(nullary_method{"length_chars", "utf8_length",
 TENZIR_REGISTER_PLUGIN(replace{true});
 TENZIR_REGISTER_PLUGIN(replace{false});
 TENZIR_REGISTER_PLUGIN(slice);
+TENZIR_REGISTER_PLUGIN(str);
