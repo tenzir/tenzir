@@ -481,6 +481,7 @@ struct connection_manager_state {
         .primary(args.endpoint.source)
         .to_error();
     }
+    TRY(set_close_on_exec(acceptor->native_handle()));
     if (acceptor->set_option(boost::asio::socket_base::reuse_address{true},
                              ec)) {
       return diagnostic::error("{}", ec.message())
@@ -494,8 +495,6 @@ struct connection_manager_state {
         .primary(args.endpoint.source)
         .to_error();
     }
-    // TODO: Consider moving this up so that it happens as early as possible.
-    TRY(set_close_on_exec(acceptor->native_handle()));
     if (acceptor->listen(boost::asio::socket_base::max_connections, ec)) {
       return diagnostic::error("{}", ec.message())
         .note("failed to start listening")
@@ -583,6 +582,15 @@ struct connection_manager_state {
     connection->pipeline_executor = self->template spawn<caf::monitored>(
       pipeline_executor, std::move(pipeline), receiver_actor<diagnostic>{self},
       metrics_receiver_actor{self}, node, has_terminal, is_hidden);
+    if (std::is_same_v<Elements, chunk_ptr> and connections.size() > 1) {
+      diagnostic::warning(
+        "potentially interleaved bytes from parallel connections")
+        .hint(args.pipeline->source == location::unknown
+                ? "consider adding a nested pipeline that returns events"
+                : "consider changing the nested pipeline to return events")
+        .primary(args.pipeline->source)
+        .emit(diagnostics);
+    }
     self->request(connection->pipeline_executor, caf::infinite, atom::start_v)
       .then(
         [this, handle = connection->socket->native_handle()]() {
@@ -749,8 +757,8 @@ auto make_connection_manager(
                             self->state.operator_id, id, std::move(metric));
     },
     [](const operator_metric& op_metric) -> caf::result<void> {
-      // TODO: We have no mechanism for forwarding operator metrics. That's a
-      // bit annoying, but there also really isn't a good solution to this.
+      // We have no mechanism for forwarding operator metrics. That's a bit
+      // annoying, but there also really isn't a good solution to this.
       TENZIR_UNUSED(op_metric);
       return {};
     },
@@ -895,7 +903,7 @@ public:
           .emit(ctx);
       }
     } else {
-      args.parallel = {1, inv.self.get_location()};
+      args.parallel = {1, location::unknown};
     }
     if (tls and not tls->inner) {
       if (args.certfile) {
@@ -920,12 +928,12 @@ public:
     if (tls) {
       args.tls.emplace(tls->source);
     } else if (args.certfile or args.keyfile) {
-      args.tls.emplace(inv.self.get_location());
+      args.tls.emplace(location::unknown);
     }
     if (not args.pipeline) {
       // If the user does not provide a pipeline, we fall back to just an empty
       // pipeline, i.e., pass the bytes for all connections through.
-      args.pipeline.emplace(pipeline{}, inv.self.get_location());
+      args.pipeline.emplace(pipeline{}, location::unknown);
     }
     const auto output_type = args.pipeline->inner.infer_type(tag_v<chunk_ptr>);
     if (not output_type) {
@@ -950,8 +958,6 @@ public:
         return failure::promise();
       },
       [&](tag<chunk_ptr>) -> failure_or<operator_ptr> {
-        // TODO: Consider emitting a warning if there are multiple parallel
-        // connections when the nested pipeline returns bytes.
         return std::make_unique<load_tcp_operator<chunk_ptr>>(std::move(args));
       },
       [&](tag<table_slice>) -> failure_or<operator_ptr> {
