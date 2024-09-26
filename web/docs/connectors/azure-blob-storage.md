@@ -43,8 +43,8 @@ may read from multiple environment variables, such as:
 
 A URI identifying the blob to load from or save to.
 
-The saver will create paths and files if they do not exist and overwrite if
-they do.
+The saver will create directories and files if they do not exist and overwrite files if
+they already exist.
 
 Supported URI formats:
 
