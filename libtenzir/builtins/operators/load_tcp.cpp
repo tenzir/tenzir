@@ -758,8 +758,8 @@ auto make_connection_manager(
                             self->state.operator_id, id, std::move(metric));
     },
     [](const operator_metric& op_metric) -> caf::result<void> {
-      // TODO: We have no mechanism for forwarding operator metrics. That's a
-      // bit annoying, but there also really isn't a good solution to this.
+      // We have no mechanism for forwarding operator metrics. That's a bit
+      // annoying, but there also really isn't a good solution to this.
       TENZIR_UNUSED(op_metric);
       return {};
     },
