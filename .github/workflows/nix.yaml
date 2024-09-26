@@ -97,7 +97,7 @@ jobs:
         if: steps.cfg.outputs.needs-ecr == 'true'
         uses: aws-actions/amazon-ecr-login@v2
       - name: Install Nix
-        uses: cachix/install-nix-action@V28
+        uses: cachix/install-nix-action@v29
         with:
           github_access_token: ${{ secrets.GITHUB_TOKEN }}
       - name: Use Magic Nix Cache
