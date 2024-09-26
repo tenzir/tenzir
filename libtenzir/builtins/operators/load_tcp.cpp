@@ -481,6 +481,7 @@ struct connection_manager_state {
         .primary(args.endpoint.source)
         .to_error();
     }
+    TRY(set_close_on_exec(acceptor->native_handle()));
     if (acceptor->set_option(boost::asio::socket_base::reuse_address{true},
                              ec)) {
       return diagnostic::error("{}", ec.message())
@@ -494,8 +495,6 @@ struct connection_manager_state {
         .primary(args.endpoint.source)
         .to_error();
     }
-    // TODO: Consider moving this up so that it happens as early as possible.
-    TRY(set_close_on_exec(acceptor->native_handle()));
     if (acceptor->listen(boost::asio::socket_base::max_connections, ec)) {
       return diagnostic::error("{}", ec.message())
         .note("failed to start listening")
