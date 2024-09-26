@@ -176,6 +176,9 @@ auto object_generator::record() -> record_generator {
 }
 
 auto object_generator::list() -> list_generator {
+  if (not msb_) {
+    return list_generator{};
+  }
   const auto visitor = detail::overload{
     [&](tenzir::builder_ref b) {
       if (not writable()) {
