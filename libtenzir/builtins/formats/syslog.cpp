@@ -647,6 +647,7 @@ auto parse_loop(generator<std::optional<std::string_view>> lines,
     }
     if (not line) {
       co_yield {};
+      continue;
     }
     ++line_nr;
     if (line->empty()) {
