@@ -68,47 +68,12 @@ record retrieve_versions() {
 }
 
 auto tenzir_features() -> std::vector<std::string> {
-  // A list of features that are supported by this version of the node.
-  // This is intended to support the rollout of potentially breaking new
-  // features, so that downstream API consumers can adjust their behavior
-  // depending on the capabilities of the node.
-  return {
-    // The platform plugin understands the `alternate_payload_destination` field
-    // and can send out-of-band responses.
-    "large_responses",
-    // The pipeline manager plugin has a new `/pipeline/launch` endpoint and can
-    // thus unify the workflows of running & deploying pipelines.
-    "launch_endpoint",
-    // The pipeline manager plugin supports pipeline labels that can be modified
-    // using the `/pipeline/update` endpoint.
-    "pipeline_labels",
-    // The pipeline manager can autostart and autodelete pipelines, as per the
-    // user's requests.
-    "extended_pipeline_actions",
-    // The `chart` operator is supported, so that the frontend can conditionally
-    // render results as charts.
-    "chart_operator",
-    // The `/serve` endpoint supports the new `use_simple_format: bool` option.
-    "serve_use_simple_format_option",
-    // The node supports HTTP PUT upload to a platform-provided URL for
-    // downloading Explorer results.
-    "http_put_upload",
-    // The node supports a customizable pipeline retry delay.
-    "retry_delay",
-    // The pipeline manager supports editable definitions.
-    "editable_definitions",
-    // The export, diagnostics, and metrics oeprators support combining live and
-    // retro exports.
-    "export_live_and_retro",
-    // Pipelines can be unstoppable - they can not be paused or stopped manually,
-    // and run & repeat indefinitely.
-    "unstoppable",
-    // There is a `packages` operator can display package information in an
-    // extended format.
-    "extended_package_format",
-    // The `/pipeline/launch` endpoint supports caching in its implicit sink.
-    "cache",
-  };
+  // A list of features that are supported by this version of the node. This is
+  // intended to support the rollout of potentially breaking new features, so
+  // that downstream API consumers can adjust their behavior depending on the
+  // capabilities of the node. We remove entries once they're stabilized in the
+  // Tenzir Platform.
+  return {};
 }
 
 } // namespace tenzir
