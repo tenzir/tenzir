@@ -169,6 +169,16 @@ auto evaluator::eval(const ast::root_field& x) -> series {
 }
 
 auto evaluator::eval(const ast::index_expr& x) -> series {
+  if (auto constant = std::get_if<ast::constant>(&*x.index.kind)) {
+    // TODO: Generalize this and simplify.
+    if (auto string = std::get_if<std::string>(&constant->value)) {
+      return eval(ast::field_access{
+        x.expr,
+        x.lbracket,
+        ast::identifier{*string, constant->source},
+      });
+    }
+  }
   auto value = eval(x.expr);
   if (auto null = value.as<null_type>()) {
     return std::move(*null);
