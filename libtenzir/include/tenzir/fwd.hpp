@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "tenzir/config.hpp" // IWYU pragma: export
-#include "tenzir/tql/fwd.hpp"
+#include "tenzir/config.hpp"  // IWYU pragma: export
+#include "tenzir/tql/fwd.hpp" // IWYU pragma: export
 
 #include <arrow/util/config.h>
 #include <caf/config.hpp>
@@ -108,11 +108,12 @@ namespace caf {
 template <class Slot>
 struct inspector_access<inbound_stream_slot<Slot>> {
   template <class Inspector, class T>
-  static auto apply(Inspector& f, inbound_stream_slot<T>& x) {
+  static auto apply(Inspector& f, inbound_stream_slot<T>& x) -> bool {
     auto val = x.value();
     auto result = f.apply(val);
-    if constexpr (Inspector::is_loading)
+    if constexpr (Inspector::is_loading) {
       x = inbound_stream_slot<T>{val};
+    }
     return result;
   }
 };
@@ -120,11 +121,12 @@ struct inspector_access<inbound_stream_slot<Slot>> {
 template <>
 struct inspector_access<std::filesystem::path> {
   template <class Inspector>
-  static auto apply(Inspector& f, std::filesystem::path& x) {
+  static auto apply(Inspector& f, std::filesystem::path& x) -> bool {
     auto str = x.string();
     auto result = f.apply(str);
-    if constexpr (Inspector::is_loading)
+    if constexpr (Inspector::is_loading) {
       x = {str};
+    }
     return result;
   }
 };
@@ -175,7 +177,6 @@ class parser_interface;
 class passive_store;
 class pattern;
 class pipeline;
-class pipeline;
 class plugin_ptr;
 class plugin;
 class port;
@@ -213,7 +214,6 @@ struct disjunction;
 struct extract_query_context;
 struct field_extractor;
 struct flow;
-struct identifier;
 struct index_state;
 struct invocation;
 struct legacy_address_type;

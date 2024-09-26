@@ -85,6 +85,21 @@ struct tenzir::tryable<caf::expected<T>> {
   }
 };
 
+template <>
+struct tenzir::tryable<caf::expected<void>> {
+  static auto is_success(const caf::expected<void>& x) -> bool {
+    return !!x;
+  }
+
+  static void get_success(caf::expected<void>&& x) {
+    TENZIR_UNUSED(x);
+  }
+
+  static auto get_error(caf::expected<void>&& x) -> caf::error {
+    return x.error();
+  }
+};
+
 template <class V, class E>
 struct tenzir::tryable<tenzir::variant<V, E>> {
   static auto is_success(const tenzir::variant<V, E>& x) -> bool {

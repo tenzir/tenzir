@@ -160,7 +160,6 @@ struct connection_state {
 
   auto emit_metrics() -> void {
     metric_handler.emit({
-      {"port", socket->local_endpoint().port()},
       {"handle", fmt::to_string(socket->native_handle())},
       {"reads", reads},
       {"writes", 0ull},
@@ -211,7 +210,6 @@ auto make_connection(connection_actor::stateful_pointer<connection_state> self,
   self->state.metric_handler = self->state.ctrl->metrics({
     "tenzir.metrics.tcp",
     record_type{
-      {"port", uint64_type{}},
       {"handle", string_type{}},
       {"reads", uint64_type{}},
       {"writes", uint64_type{}},
