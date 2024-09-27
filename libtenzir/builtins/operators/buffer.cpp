@@ -172,8 +172,8 @@ public:
 
   template <class Elements>
     requires(detail::is_any_v<Elements, table_slice, chunk_ptr>)
-  auto operator()(generator<Elements> input, operator_control_plane& ctrl) const
-    -> generator<Elements> {
+  auto operator()(generator<Elements> input,
+                  operator_control_plane& ctrl) const -> generator<Elements> {
     // The internal-write-buffer operator is spawned after the
     // internal-read-buffer operator, so we can safely get the buffer actor here
     // after the first yield and then just remove it from the registry again.
@@ -274,8 +274,8 @@ public:
 
   template <class Elements>
     requires(detail::is_any_v<Elements, table_slice, chunk_ptr>)
-  auto operator()(generator<Elements> input, operator_control_plane& ctrl) const
-    -> generator<Elements> {
+  auto operator()(generator<Elements> input,
+                  operator_control_plane& ctrl) const -> generator<Elements> {
     // The internal-read-buffer operator is spawned before the
     // internal-write-buffer operator, so we spawn the buffer actor here and
     // move it into the registry before the first yield.

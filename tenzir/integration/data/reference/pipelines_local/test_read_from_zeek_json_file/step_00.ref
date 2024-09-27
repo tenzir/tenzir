@@ -24,7 +24,6 @@
   "resp_ip_bytes": 8404
 }
 {
-  "_path": "_0_0_2",
   "_write_ts": "2020-02-11T03:48:57.477193",
   "ts": "2020-02-11T03:48:57.477193",
   "uid": "Cpk0Nl33Zb5ZWLP1tc",
@@ -35,6 +34,7 @@
     "resp_p": 8080
   },
   "proto": "tcp",
+  "_path": "_0_0_2",
   "note": "LongConnection::found",
   "msg": "185.100.59.59 -> 141.9.255.157:8080/tcp remained alive for longer than 19m55s",
   "sub": "1194.62",
@@ -81,8 +81,6 @@
   "resp_l2_addr": "42:10:47:e6:ef:4b"
 }
 {
-  "_path": "conn_long",
-  "_system_name": "sensor_10_0_0_2",
   "_write_ts": "2020-01-17T17:46:28.728717",
   "ts": "2020-01-17T17:26:28.716994",
   "uid": "CmcIAq2mcAPR7zjTQe",
@@ -104,12 +102,15 @@
   "orig_pkts": 81,
   "orig_ip_bytes": 4220,
   "resp_pkts": 80,
-  "resp_ip_bytes": 4168
+  "resp_ip_bytes": 4168,
+  "_path": "conn_long",
+  "_system_name": "sensor_10_0_0_2"
 }
 {
+  "_write_ts": "2020-04-01T16:20:08.000000",
+  "ts": "2020-04-01T16:20:08.000000",
   "_path": "corelight_metrics_bro",
   "_system_name": "sensor_10_0_0_2",
-  "_write_ts": "2020-04-01T16:20:08.000000",
   "cpu": {
     "logger": 76.5,
     "manager": 17.6,
@@ -645,13 +646,13 @@
     "manager": 0.2,
     "proxies": 0.4,
     "workers": 2.12
-  },
-  "ts": "2020-04-01T16:20:08.000000"
+  }
 }
 {
+  "_write_ts": "2020-04-01T16:20:08.000000",
+  "ts": "2020-04-01T16:20:08.000000",
   "_path": "corelight_metrics_cpu",
   "_system_name": "sensor_10_0_0_2",
-  "_write_ts": "2020-04-01T16:20:08.000000",
   "total": {
     "idle": {
       "per-second": 0.5336393434342326
@@ -674,13 +675,13 @@
     "user": {
       "per-second": 0.31068043967122644
     }
-  },
-  "ts": "2020-04-01T16:20:08.000000"
+  }
 }
 {
+  "_write_ts": "2020-04-01T16:20:08.000000",
+  "ts": "2020-04-01T16:20:08.000000",
   "_path": "corelight_metrics_disk",
   "_system_name": "sensor_10_0_0_2",
-  "_write_ts": "2020-04-01T16:20:08.000000",
   "io": {
     "data": {
       "all": {
@@ -761,16 +762,16 @@
       }
     }
   },
-  "ts": "2020-04-01T16:20:08.000000",
   "usage": {
     "data": 5,
     "os": 68
   }
 }
 {
+  "_write_ts": "2020-04-01T16:20:08.000000",
+  "ts": "2020-04-01T16:20:08.000000",
   "_path": "corelight_metrics_iface",
   "_system_name": "sensor_10_0_0_2",
-  "_write_ts": "2020-04-01T16:20:08.000000",
   "mgmt": {
     "in": {
       "bytes": {
@@ -856,26 +857,25 @@
       "mbps": 5.122770202288667,
       "packets": 344148
     }
-  },
-  "ts": "2020-04-01T16:20:08.000000"
+  }
 }
 {
-  "_path": "corelight_metrics_memory",
-  "_system_name": "sensor_10_0_0_2",
   "_write_ts": "2020-04-01T16:20:08.000000",
   "ts": "2020-04-01T16:20:08.000000",
+  "_path": "corelight_metrics_memory",
+  "_system_name": "sensor_10_0_0_2",
   "usage": 17.16
 }
 {
+  "_write_ts": "2020-04-01T16:20:08.000000",
+  "ts": "2020-04-01T16:20:08.000000",
   "_path": "corelight_metrics_system",
   "_system_name": "sensor_10_0_0_2",
-  "_write_ts": "2020-04-01T16:20:08.000000",
   "cpu": {
     "1": {
       "temperature": 43
     }
   },
-  "ts": "2020-04-01T16:20:08.000000",
   "uptime": 9531441
 }
 {
@@ -1093,8 +1093,6 @@
   "_system_name": "sensor_10_0_0_2"
 }
 {
-  "_path": "kerberos",
-  "_system_name": "sensor_10_0_0_2",
   "_write_ts": "2020-04-01T16:24:51.000935",
   "ts": "2020-04-01T16:19:51.010509",
   "uid": "CGQ2SK2rNx5NENjoO5",
@@ -1104,16 +1102,16 @@
     "resp_h": "141.9.100.82",
     "resp_p": 88
   },
+  "_path": "kerberos",
+  "_system_name": "sensor_10_0_0_2",
+  "service": "krbtgt/NM",
   "request_type": "AS",
   "client": "/NM",
-  "service": "krbtgt/NM",
   "till": "1970-01-01T00:00:00.000000",
   "forwardable": true,
   "renewable": true
 }
 {
-  "_path": "modbus",
-  "_system_name": "sensor_10_0_0_2",
   "_write_ts": "2020-01-06T13:57:20.649317",
   "ts": "2020-01-06T13:57:20.649317",
   "uid": "CDblDS2t5fTIupB8Mg",
@@ -1123,6 +1121,8 @@
     "resp_h": "45.136.108.68",
     "resp_p": 502
   },
+  "_path": "modbus",
+  "_system_name": "sensor_10_0_0_2",
   "func": "unknown-0"
 }
 {
@@ -1151,13 +1151,7 @@
   ],
   "suppress_for": "1.0h",
   "dropped": null,
-  "remote_location": {
-    "country_code": null,
-    "region": null,
-    "city": null,
-    "latitude": null,
-    "longitude": null
-  },
+  "remote_location": null,
   "_write_ts": "2020-01-06T15:24:18.583424",
   "_path": "notice",
   "_system_name": "sensor_10_0_0_2"
@@ -1388,8 +1382,6 @@
   "_system_name": "sensor_10_0_0_2"
 }
 {
-  "_path": "syslog",
-  "_system_name": "sensor_10_0_0_2",
   "_write_ts": "2020-04-01T16:19:47.445848",
   "ts": "2020-04-01T16:19:47.445848",
   "uid": "Cr7xn118fZuwuAQEQ1",
@@ -1400,9 +1392,11 @@
     "resp_p": 514
   },
   "proto": "udp",
+  "_path": "syslog",
+  "_system_name": "sensor_10_0_0_2",
+  "message": "2152: AP:f40f.1bbf.bb94: *Apr  1 16:19:45.539: %DOT11-4-CCMP_REPLAY: Client 90e1.7b90.d6e2 had 2 AES-CCMP TSC replays",
   "facility": "LOCAL7",
-  "severity": "WARNING",
-  "message": "2152: AP:f40f.1bbf.bb94: *Apr  1 16:19:45.539: %DOT11-4-CCMP_REPLAY: Client 90e1.7b90.d6e2 had 2 AES-CCMP TSC replays"
+  "severity": "WARNING"
 }
 {
   "ts": "2020-04-01T16:20:34.146738",
@@ -1437,13 +1431,13 @@
   "_system_name": "sensor_10_0_0_2"
 }
 {
-  "_path": "weird.123.190",
   "id": {
     "orig_p": 54481,
     "resp_h": "141.9.20.185",
     "resp_p": 53
   },
   "proto": "udp",
+  "_path": "weird.123.190",
   "trans_id": 32952,
   "query": "researchscan541.eecs.umich.edu",
   "qclass": 1,
@@ -1456,6 +1450,34 @@
   "RA": false,
   "Z": 0,
   "rejected": false
+}
+{
+  "ts": null,
+  "uid": null,
+  "id": {
+    "orig_h": "45.58.146.42",
+    "orig_p": 51472,
+    "resp_h": "141.9.217.210",
+    "resp_p": 161
+  },
+  "proto": null,
+  "service": null,
+  "duration": null,
+  "orig_bytes": null,
+  "resp_bytes": null,
+  "conn_state": null,
+  "local_orig": null,
+  "local_resp": null,
+  "missed_bytes": null,
+  "history": null,
+  "orig_pkts": null,
+  "orig_ip_bytes": null,
+  "resp_pkts": null,
+  "resp_ip_bytes": null,
+  "tunnel_parents": null,
+  "community_id": null,
+  "_write_ts": null,
+  "_path": "conn"
 }
 {
   "ts": null,
@@ -1480,26 +1502,10 @@
   "_write_ts": null,
   "_path": "conn"
 }
-{
-  "ts": null,
-  "uid": null,
-  "id": 0,
-  "proto": null,
-  "service": null,
-  "duration": null,
-  "orig_bytes": null,
-  "resp_bytes": null,
-  "conn_state": null,
-  "local_orig": null,
-  "local_resp": null,
-  "missed_bytes": null,
-  "history": null,
-  "orig_pkts": null,
-  "orig_ip_bytes": null,
-  "resp_pkts": null,
-  "resp_ip_bytes": null,
-  "tunnel_parents": null,
-  "community_id": null,
-  "_write_ts": null,
-  "_path": "conn"
-}
+warning: zeek-json parser: event did not contain selector field
+ = note: selector field `_path` was not found
+
+warning: zeek-json parser: selected schema not found
+ = note: `zeek._0_0_2` does not refer to a known schema
+
+warning: zeek-json parser: parsed field contains `int64`, but the schema expects `record`

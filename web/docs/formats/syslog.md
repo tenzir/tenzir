@@ -11,7 +11,8 @@ Reads syslog messages.
 ## Synopsis
 
 ```
-syslog
+syslog [--schema <schema>] [--selector <selector>] [--schema-only]
+       [--merge] [--raw] [--unnest-separator <nested-key-separator>]
 ```
 
 ## Description
@@ -69,6 +70,10 @@ With this input, the parser will produce the following output, with the schema n
   "content": "Freeform message"
 }
 ```
+
+### Common Options (Parser)
+
+The syslog parser supports the common [schema inference options](formats.md#parser-schema-inference).
 
 ## Examples
 

@@ -14,9 +14,9 @@ Reads and writes JSON.
 Parser:
 
 ```
-json [--schema <schema>] [--selector <field[:prefix]>] [--unnest-separator <string>]
-     [--no-infer] [--ndjson] [--precise] [--raw]
-     [--arrays-of-objects]
+json [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
+     [--schema-only] [--raw] [--unnest-separator <separator>]
+     [--ndjson] [--arrays-of-objects] [--precise] [--no-infer]
 ```
 
 Printer:
@@ -32,68 +32,9 @@ json [-c|--compact-output] [-C|--color-output] [-M|--monochrome-output]
 The `json` format provides a parser and printer for JSON and [line-delimited
 JSON](https://en.wikipedia.org/wiki/JSON_streaming#Line-delimited_JSON) objects.
 
-### `--schema=<schema>` (Parser)
+### Common Options (Parser)
 
-Provide the name of a [schema](../data-model/schemas.md) to be used by the
-parser. If the schema uses the `blob` type, then the JSON parser expects
-base64-encoded strings.
-
-The `--schema` option is incompatible with the `--selector` option.
-
-### `--selector=<field[:prefix]>` (Parser)
-
-Designates a field value as schema name with an optional dot-separated prefix.
-
-For example, the [Suricata EVE JSON](suricata.md) format includes a field
-`event_type` that contains the event type. Setting the selector to
-`event_type:suricata` causes an event with the value `flow` for the field
-`event_type` to map onto the schema `suricata.flow`.
-
-The `--selector` option is incompatible with the `--schema` option.
-
-### `--no-infer` (Parser)
-The JSON parser automatically infers types in the input JSON.
-
-The flag `--no-infer` toggles this behavior, and requires the user to provide an
-input schema for the JSON to explicitly parse into, e.g., using the `--selector`
-option.
-
-Schema inference happens on a best-effort basis, and is constantly being
-improved to match Tenzir's type system.
-
-### `--unnest-separator=<string>` (Parser)
-
-A delimiter that, if present in keys, causes values to be treated as values of
-nested records.
-
-A popular example of this is the [Zeek JSON](zeek-json.md) format. It includes
-the fields `id.orig_h`, `id.orig_p`, `id.resp_h`, and `id.resp_p` at the
-top-level. The data is best modeled as an `id` record with four nested fields
-`orig_h`, `orig_p`, `resp_h`, and `resp_p`.
-
-Without an unnest separator, the data looks like this:
-
-```json
-{
-  "id.orig_h" : "1.1.1.1",
-  "id.orig_p" : 10,
-  "id.resp_h" : "1.1.1.2",
-  "id.resp_p" : 5
-}
-```
-
-With the unnest separator set to `.`, Tenzir reads the events like this:
-
-```json
-{
-  "id" : {
-    "orig_h" : "1.1.1.1",
-    "orig_p" : 10,
-    "resp_h" : "1.1.1.2",
-    "resp_p" : 5
-  }
-}
-```
+The JSON parser supports the common [schema inference options](formats.md#parser-schema-inference).
 
 ### `--ndjson` (Parser)
 
@@ -109,17 +50,11 @@ JSON formats. Tenzir supports [`suricata`](suricata.md) and
 
 ### `--precise` (Parser)
 
-Ensure that only fields that are actually present in the input are contained in
-the returned events. Without this option, the input consisting of `{"a": 1}` and
-`{"b": 2}` can be result in the events `{"a": 1, "b": null}` and
-`{"a": null, "b": 2}`. With it, the output is `{"a": 1}` and `{"b": 2}`. For
-some inputs and queries, this can be significantly more expensive.
+Legacy flag. Has the same effect as *not* providing `--merge`. This option is incompatible with  `--merge`.
 
-### `--raw` (Parser)
+### `--no-infer` (Parser)
 
-Use only the raw JSON types. This means that all strings are parsed as `string`,
-irrespective of whether they are a valid `ip`, `duration`, etc. Also, since JSON
-only has one generic number type, all numbers are parsed with the `double` type.
+Legacy flag. It is equivalent to the new flag `--schema-only`.
 
 ### `--arrays-of-objects` (Parser)
 

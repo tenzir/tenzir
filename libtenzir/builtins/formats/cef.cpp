@@ -3,7 +3,7 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2022 The Tenzir Contributors
+// SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
@@ -18,6 +18,8 @@
 #include <tenzir/detail/string.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/module.hpp>
+#include <tenzir/multi_series_builder.hpp>
+#include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/to_lines.hpp>
@@ -60,146 +62,139 @@ std::string unescape(std::string_view value) {
   return result;
 }
 
-/// A shallow representation a of a CEF message.
-struct message_view {
-  uint16_t cef_version;
-  std::string device_vendor;
-  std::string device_product;
-  std::string device_version;
-  std::string signature_id;
-  std::string name;
-  std::string severity;
-  record extension;
-};
-
-/// Parses the CEF extension field as a sequence of key-value pairs for further
-/// downstream processing.
+/// Parses the CEF extension field as a sequence of key-value pairs.
+/// This works by finding the kv separator ('=') and then using everything
+/// between a (not quoted) whitespace and that separator as the key. The value
+/// is simply the text after the separator before the start of the next key.
 /// @param extension The string value of the extension field.
 /// @returns A vector of key-value pairs with properly unescaped values.
-caf::expected<record> parse_extension(std::string_view extension) {
-  record result;
-  auto splits = detail::split_escaped(extension, "=", "\\");
-  if (splits.size() < 2)
-    return caf::make_error(ec::parse_error, fmt::format("need at least one "
-                                                        "key=value pair: {}",
-                                                        extension));
-  // Process intermediate 'k0=a b c k1=d e f' extensions. The algorithm splits
-  // on '='. The first split is a key and the last split is a value. All
-  // intermediate splits are "reversed" in that they have the pattern 'a b c k1'
-  // where 'a b c' is the value from the previous key and 'k1`' is the key for
-  // the next value.
-  auto key = splits[0];
-  // Strip leading whitespace on first key. The spec says that trailing
-  // whitespace is considered part of the previous value, except for the last
-  // space that is split on.
-  for (size_t i = 0; i < key.size(); ++i)
-    if (key[i] != ' ') {
-      key = key.substr(i);
+auto parse_extension(std::string_view extension,
+                     auto builder) -> std::optional<diagnostic> {
+  if (extension.empty()) {
+    return {};
+  }
+  auto find_next_kv_sep = [](std::string_view extension) {
+    auto kv_sep = detail::find_first_not_in_quotes(extension, '=');
+    while (detail::is_escaped(kv_sep, extension)) {
+      kv_sep = detail::find_first_not_in_quotes(extension, '=', kv_sep + 1);
+    }
+    return kv_sep;
+  };
+  // Find the first not quoted, not escaped kv separator.
+  auto kv_sep = find_next_kv_sep(extension);
+  if (kv_sep == extension.npos) {
+    return diagnostic::warning(
+             "extension field did not contain a key-value separator")
+      .done();
+  }
+  while (not extension.empty()) {
+    auto key = unescape(detail::trim(extension.substr(0, kv_sep)));
+    extension.remove_prefix(kv_sep + 1);
+    // Find the next not quoted, not escaped kv separator.
+    kv_sep = find_next_kv_sep(extension);
+    // Find the last whitespace before the key, determining the end of the value
+    // text.
+    auto value_end = kv_sep == extension.npos
+                       ? extension.npos
+                       : extension.find_last_of(" \t", kv_sep);
+    auto value
+      = unescape(detail::unquote(detail::trim(extension.substr(0, value_end))));
+    if constexpr (detail::multi_series_builder::has_unflattened_field<
+                    decltype(builder)>) {
+      auto field = builder.unflattened_field(key);
+      field.data_unparsed(std::move(value));
+    } else {
+      auto field = builder.field(key);
+      auto res = detail::data_builder::best_effort_parser(value);
+      if (res) {
+        field.data(*res);
+      } else {
+        field.data(std::move(value));
+      }
+    }
+    if (value_end == extension.npos) {
       break;
     }
-  // Converts a raw, unescaped string to a data instance.
-  auto to_data = [](std::string_view str) -> data {
-    auto unescaped = unescape(str);
-    auto parsed = data{};
-    if (not(parsers::data - parsers::pattern)(unescaped, parsed)) {
-      parsed = unescaped;
-    }
-    return parsed;
-  };
-  for (auto i = 1u; i < splits.size() - 1; ++i) {
-    auto split = splits[i];
-    auto j = split.rfind(' ');
-    if (j == std::string_view::npos)
-      return caf::make_error(
-        ec::parse_error,
-        fmt::format("invalid 'key=value=key' extension: {}", split));
-    if (j == 0)
-      return caf::make_error(
-        ec::parse_error,
-        fmt::format("empty value in 'key= value=key' extension: {}", split));
-    auto value = split.substr(0, j);
-    result.emplace(std::string{key}, to_data(value));
-    key = split.substr(j + 1); // next key
+    kv_sep -= value_end + 1;
+    extension.remove_prefix(value_end + 1);
   }
-  auto value = splits[splits.size() - 1];
-  result.emplace(std::string{key}, to_data(value));
-  return result;
+  return {};
 }
 
-/// Converts a string view into a message.
-caf::error convert(std::string_view line, message_view& msg) {
+[[nodiscard]] auto
+parse_line(std::string_view line, auto& msb) -> std::optional<diagnostic> {
   using namespace std::string_view_literals;
-  // Pipes in the extension field do not need escaping.
   auto fields = detail::split_escaped(line, "|", "\\", 8);
-  if (fields.size() != 8)
-    return caf::make_error(ec::parse_error, //
-                           fmt::format("need exactly 8 fields, got '{}'",
-                                       fields.size()));
-  // Field 0: Version
-  auto i = fields[0].find(':');
-  if (i == std::string_view::npos)
-    return caf::make_error(ec::parse_error, //
-                           fmt::format("CEF version requires ':', got '{}'",
-                                       fields[0]));
-  auto cef_version_str
-    = std::string_view{std::next(fields[0].begin(), i + 1), fields[0].end()};
-  if (!parsers::u16(cef_version_str, msg.cef_version))
-    return caf::make_error(ec::parse_error, //
-                           fmt::format("failed to parse CEF version, got '{}'",
-                                       cef_version_str));
-  // Fields 1-6.
-  msg.device_vendor = std::move(fields[1]);
-  msg.device_product = std::move(fields[2]);
-  msg.device_version = std::move(fields[3]);
-  msg.signature_id = std::move(fields[4]);
-  msg.name = std::move(fields[5]);
-  msg.severity = std::move(fields[6]);
-  // Field 7: Extension
-  if (auto kvps = parse_extension(fields[7]))
-    msg.extension = std::move(*kvps);
-  else
-    return kvps.error();
-  return caf::none;
+  if (fields.size() < 7 or fields.size() > 8) {
+    return diagnostic::warning("incorrect field count in CEF event").done();
+  }
+  if (not fields[0].starts_with("CEF:")) {
+    return diagnostic::warning("invalid CEF header")
+      .note("header does not start with `CEF:`")
+      .done();
+  }
+  int64_t version;
+  auto [ptr, ec] = std::from_chars(
+    fields[0].c_str() + 4, fields[0].c_str() + fields[0].size(), version);
+  if (ec != std::errc{}) {
+    return diagnostic::warning("invalid CEF header")
+      .note("failed to parse CEF version")
+      .done();
+  }
+  auto r = msb.record();
+  r.field("cef_version").data(version);
+  r.field("device_vendor").data(std::move(fields[1]));
+  r.field("device_product").data(std::move(fields[2]));
+  r.field("device_version").data(std::move(fields[3]));
+  r.field("signature_id").data(std::move(fields[4]));
+  r.field("name").data(std::move(fields[5]));
+  r.field("severity").data(std::move(fields[6]));
+  if (fields.size() == 8) {
+    auto d = parse_extension(fields[7], r.field("extension").record());
+    if (d) {
+      msb.remove_last();
+      return d;
+    }
+  }
+  return {};
 }
 
-/// Parses a line of ASCII as CEF message.
-/// @param msg The CEF message.
-/// @param builder The table slice builder to add the message to.
-void add(const message_view& msg, builder_ref builder) {
-  auto event = builder.record();
-  event.field("cef_version", uint64_t{msg.cef_version});
-  event.field("device_vendor", msg.device_vendor);
-  event.field("device_product", msg.device_product);
-  event.field("device_version", msg.device_version);
-  event.field("signature_id", msg.signature_id);
-  event.field("name", msg.name);
-  event.field("severity", msg.severity);
-  event.field("extension", msg.extension);
-}
-
-auto impl(generator<std::optional<std::string_view>> lines,
-          operator_control_plane& ctrl) -> generator<table_slice> {
-  auto builder = series_builder{};
+auto parse_loop(generator<std::optional<std::string_view>> lines,
+                diagnostic_handler& diag, multi_series_builder::options options)
+  -> generator<table_slice> {
+  size_t line_counter = 0;
+  auto dh = transforming_diagnostic_handler{
+    diag,
+    [&](diagnostic d) {
+      d.message = fmt::format("cef parser: {}", d.message);
+      d.notes.emplace(d.notes.begin(), diagnostic_note_kind::note,
+                      fmt::format("line {}", line_counter));
+      return d;
+    },
+  };
+  auto msb = multi_series_builder{
+    std::move(options),
+    dh,
+  };
   for (auto&& line : lines) {
-    // TODO: Flush builder if maximum batch size or timeout is reached.
+    for (auto& v : msb.yield_ready_as_table_slice()) {
+      co_yield std::move(v);
+    }
     if (!line) {
       co_yield {};
       continue;
     }
+    ++line_counter;
     if (line->empty()) {
       TENZIR_DEBUG("CEF parser ignored empty line");
       continue;
     }
-    auto msg = to<message_view>(*line);
-    if (!msg) {
-      diagnostic::warning("failed to parse message: {}", msg.error())
-        .note("line: `{}`", *line)
-        .emit(ctrl.diagnostics());
-      continue;
+    auto d = parse_line(*line, msb);
+    if (d) {
+      dh.emit(std::move(*d));
     }
-    add(*msg, builder);
   }
-  for (auto& slice : builder.finish_as_table_slice("cef.event")) {
+  for (auto& slice : msb.finalize_as_table_slice()) {
     co_yield std::move(slice);
   }
 }
@@ -210,22 +205,66 @@ public:
     return "cef";
   }
 
+  cef_parser() = default;
+  explicit cef_parser(multi_series_builder::options options)
+    : options_{std::move(options)} {
+    options_.settings.default_schema_name = "cef.event";
+  }
+
+  auto optimize(event_order order) -> std::unique_ptr<plugin_parser> override {
+    auto opts = options_;
+    opts.settings.ordered = order == event_order::ordered;
+    return std::make_unique<cef_parser>(std::move(opts));
+  }
+
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    return impl(to_lines(std::move(input)), ctrl);
+    return parse_loop(to_lines(std::move(input)), ctrl.diagnostics(), options_);
   }
 
   friend auto inspect(auto& f, cef_parser& x) -> bool {
-    return f.object(x).fields();
+    return f.apply(x.options_);
+  }
+
+private:
+  multi_series_builder::options options_;
+};
+
+class cef_plugin final : public virtual parser_plugin<cef_parser> {
+  auto parse_parser(parser_interface& p) const
+    -> std::unique_ptr<plugin_parser> override {
+    auto parser = argument_parser{"cef", "https://docs.tenzir.com/formats/cef"};
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_all_to_parser(parser);
+    parser.parse(p);
+    auto dh = collecting_diagnostic_handler{};
+    auto opts = msb_parser.get_options(dh);
+    for (auto& d : std::move(dh).collect()) {
+      if (d.severity == severity::error) {
+        throw std::move(d);
+      }
+    }
+    TENZIR_ASSERT(opts);
+    return std::make_unique<cef_parser>(std::move(*opts));
   }
 };
 
-class plugin final : public virtual parser_plugin<cef_parser> {
-  auto parse_parser(parser_interface& p) const
-    -> std::unique_ptr<plugin_parser> override {
-    argument_parser{"cef", "https://docs.tenzir.com/formats/cef"}.parse(p);
-    return std::make_unique<cef_parser>();
+class read_cef : public operator_plugin2<parser_adapter<cef_parser>> {
+public:
+  auto name() const -> std::string override {
+    return "read_cef";
+  }
+
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto parser = argument_parser2::operator_(name());
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_all_to_parser(parser);
+    TRY(parser.parse(inv, ctx));
+    TRY(auto opts, msb_parser.get_options(ctx.dh()));
+    return std::make_unique<parser_adapter<cef_parser>>(
+      cef_parser{std::move(opts)});
   }
 };
 
@@ -235,8 +274,8 @@ public:
     return "parse_cef";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     TRY(argument_parser2::method(name()).add(expr, "<string>").parse(inv, ctx));
     return function_use::make(
@@ -247,25 +286,17 @@ public:
             return arg;
           },
           [&](const arrow::StringArray& arg) {
-            auto warn = false;
             auto b = series_builder{};
             for (auto string : arg) {
               if (not string) {
                 b.null();
                 continue;
               }
-              auto msg = to<message_view>(*string);
-              if (not msg) {
-                warn = true;
+              auto diag = parse_line(*string, b);
+              if (diag) {
+                ctx.dh().emit(std::move(*diag));
                 b.null();
-                continue;
               }
-              add(*msg, b);
-            }
-            if (warn) {
-              diagnostic::warning("failed to parse CEF message")
-                .primary(call)
-                .emit(ctx);
             }
             auto result = b.finish();
             // TODO: Consider whether we need heterogeneous for this. If so,
@@ -292,8 +323,8 @@ public:
 };
 
 } // namespace
-
 } // namespace tenzir::plugins::cef
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::cef::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::cef::cef_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::cef::parse_cef)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::cef::read_cef)

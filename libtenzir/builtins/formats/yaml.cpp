@@ -3,8 +3,10 @@
 //   | |/ / __ |_\ \  / /          Across
 //   |___/_/ |_/___/ /_/       Space and Time
 //
-// SPDX-FileCopyrightText: (c) 2023 The Tenzir Contributors
+// SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
+
+#include "tenzir/multi_series_builder_argument_parser.hpp"
 
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
@@ -34,66 +36,115 @@ namespace {
 constexpr auto document_end_marker = "...";
 constexpr auto document_start_marker = "---";
 
-auto parse_node(auto& guard, const YAML::Node& node,
-                operator_control_plane& ctrl) -> void {
+auto parse_node(auto guard, const YAML::Node& node,
+                diagnostic_handler& diag) -> void {
   switch (node.Type()) {
-    case YAML::NodeType::Undefined:
+    case YAML::NodeType::Undefined: {
+      diagnostic::warning("yaml parser encountered undefined field").emit(diag);
+      [[fallthrough]];
+    }
     case YAML::NodeType::Null: {
       guard.null();
-      break;
+      return;
     }
     case YAML::NodeType::Scalar: {
       if (auto as_bool = bool{}; YAML::convert<bool>::decode(node, as_bool)) {
         guard.data(as_bool);
-        break;
+        return;
       }
-      // TODO: Do not attempt to parse pattern, map, list, and record here.
-      if (auto as_data = data{}; parsers::data(node.Scalar(), as_data)) {
-        guard.data(make_data_view(as_data));
-        break;
-      }
-      guard.data(make_view(node.Scalar()));
-      break;
+      const auto& value_str = node.Scalar();
+      guard.data_unparsed(value_str);
+      return;
     }
     case YAML::NodeType::Sequence: {
       auto list = guard.list();
       for (const auto& element : node) {
-        parse_node(list, element, ctrl);
+        parse_node(list, element, diag);
       }
-      break;
+      return;
     }
     case YAML::NodeType::Map: {
       auto record = guard.record();
       for (const auto& element : node) {
         const auto& name = element.first.as<std::string>();
-        auto field = record.field(name);
-        parse_node(field, element.second, ctrl);
+        parse_node(record.unflattened_field(name), element.second, diag);
       }
-      break;
+      return;
     }
   }
 };
 
-auto load_document(series_builder& builder, std::string&& document,
-                   operator_control_plane& ctrl) -> void {
-  auto record = builder.record();
+auto load_document(multi_series_builder& msb, std::string&& document,
+                   diagnostic_handler& diag) -> void {
+  bool added_event = false;
   try {
     auto node = YAML::Load(document);
     if (not node.IsMap()) {
-      diagnostic::error("document is not a map").emit(ctrl.diagnostics());
+      diagnostic::warning("document is not a map").emit(diag);
       return;
     }
+    auto record = msb.record();
+    added_event = true;
     for (const auto& element : node) {
       const auto& name = element.first.as<std::string>();
-      auto field = record.field(name);
-      parse_node(field, element.second, ctrl);
+      parse_node(record.unflattened_field(name), element.second, diag);
     }
   } catch (const YAML::Exception& err) {
-    diagnostic::error("failed to load YAML document: {}", err.what())
-      .emit(ctrl.diagnostics());
-    builder.remove_last();
+    diagnostic::warning("failed to load YAML document: {}", err.what())
+      .emit(diag);
+    if (added_event) {
+      msb.remove_last();
+    }
   }
 };
+
+auto parse_loop(generator<std::optional<std::string_view>> lines,
+                diagnostic_handler& diag, multi_series_builder::options options)
+  -> generator<table_slice> {
+  auto dh = transforming_diagnostic_handler{
+    diag,
+    [&](diagnostic d) {
+      d.message = fmt::format("yaml parser: {}", d.message);
+      return d;
+    },
+  };
+  auto msb = multi_series_builder{
+    std::move(options),
+    dh,
+    modules::schemas(),
+    detail::data_builder::non_number_parser,
+  };
+  auto document = std::string{};
+  for (auto&& line : lines) {
+    for (auto& v : msb.yield_ready_as_table_slice()) {
+      co_yield std::move(v);
+    }
+    if (not line) {
+      co_yield {};
+      continue;
+    }
+    if (*line == document_end_marker) {
+      if (document.empty()) {
+        continue;
+      }
+      load_document(msb, std::exchange(document, {}), diag);
+      continue;
+    }
+    if (*line == document_start_marker) {
+      if (not document.empty()) {
+        load_document(msb, std::exchange(document, {}), diag);
+      }
+      continue;
+    }
+    fmt::format_to(std::back_inserter(document), "{}\n", *line);
+  }
+  if (not document.empty()) {
+    load_document(msb, std::exchange(document, {}), diag);
+  }
+  for (auto& slice : msb.finalize_as_table_slice()) {
+    co_yield std::move(slice);
+  }
+}
 
 template <class View>
 auto print_node(auto& out, const View& value) -> void {
@@ -149,6 +200,10 @@ class yaml_parser final : public plugin_parser {
 public:
   yaml_parser() = default;
 
+  explicit yaml_parser(multi_series_builder::options options)
+    : options_{std::move(options)} {
+  }
+
   auto name() const -> std::string override {
     return "yaml";
   }
@@ -156,44 +211,14 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    return std::invoke(
-      [](generator<std::optional<std::string_view>> lines,
-         operator_control_plane& ctrl) -> generator<table_slice> {
-        auto builder = series_builder{};
-        auto document = std::string{};
-        for (auto&& line : lines) {
-          if (not line) {
-            co_yield {};
-            continue;
-          }
-          if (*line == document_end_marker) {
-            if (document.empty()) {
-              continue;
-            }
-            load_document(builder, std::exchange(document, {}), ctrl);
-            continue;
-          }
-          if (*line == document_start_marker) {
-            if (not document.empty()) {
-              load_document(builder, std::exchange(document, {}), ctrl);
-            }
-            continue;
-          }
-          fmt::format_to(std::back_inserter(document), "{}\n", *line);
-        }
-        if (not document.empty()) {
-          load_document(builder, std::exchange(document, {}), ctrl);
-        }
-        for (auto&& slice : builder.finish_as_table_slice("tenzir.yaml")) {
-          co_yield std::move(slice);
-        }
-      },
-      to_lines(std::move(input)), ctrl);
+    return parse_loop(to_lines(std::move(input)), ctrl.diagnostics(), options_);
   }
 
   friend auto inspect(auto& f, yaml_parser& x) -> bool {
-    return f.object(x).fields();
+    return f.apply(x.options_);
   }
+
+  multi_series_builder::options options_;
 };
 
 class yaml_printer final : public plugin_printer {
@@ -226,9 +251,9 @@ public:
           TENZIR_ASSERT(row);
           print_document(*out, *row);
         }
-        // If the output failed, then we either failed to allocate memory or had
-        // a mismatch between BeginSeq and EndSeq or BeginMap and EndMap; all of
-        // these we cannot recover from.
+        // If the output failed, then we either failed to allocate memory or
+        // had a mismatch between BeginSeq and EndSeq or BeginMap and EndMap;
+        // all of these we cannot recover from.
         if (not out->good()) {
           diagnostic::error("failed to format YAML document")
             .emit(ctrl.diagnostics());
@@ -257,12 +282,11 @@ public:
 
   friend auto inspect(auto& f, yaml_printer& x) -> bool {
     return f.object(x).fields();
-    return true;
   }
 };
 
-class plugin final : public virtual parser_plugin<yaml_parser>,
-                     public virtual printer_plugin<yaml_printer> {
+class yaml_plugin final : public virtual parser_plugin<yaml_parser>,
+                          public virtual printer_plugin<yaml_printer> {
   auto name() const -> std::string override {
     return "yaml";
   }
@@ -271,8 +295,18 @@ class plugin final : public virtual parser_plugin<yaml_parser>,
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{"yaml", "https://docs.tenzir.com/"
                                           "formats/yaml"};
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_all_to_parser(parser);
     parser.parse(p);
-    return std::make_unique<yaml_parser>();
+    auto dh = collecting_diagnostic_handler{};
+    auto opts = msb_parser.get_options(dh);
+    for (auto& d : std::move(dh).collect()) {
+      if (d.severity == severity::error) {
+        throw std::move(d);
+      }
+    }
+    TENZIR_ASSERT(opts);
+    return std::make_unique<yaml_parser>(std::move(*opts));
   }
 
   auto parse_printer(parser_interface& p) const
@@ -286,15 +320,21 @@ class plugin final : public virtual parser_plugin<yaml_parser>,
 
 class read_yaml final
   : public virtual operator_plugin2<parser_adapter<yaml_parser>> {
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
-    argument_parser2::operator_("read_yaml").parse(inv, ctx).ignore();
-    return std::make_unique<parser_adapter<yaml_parser>>();
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto parser = argument_parser2::operator_("read_yaml");
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_all_to_parser(parser);
+    auto res = parser.parse(inv, ctx);
+    TRY(res);
+    TRY(auto opts, msb_parser.get_options(ctx.dh()));
+    return std::make_unique<parser_adapter<yaml_parser>>(
+      yaml_parser{std::move(opts)});
   }
 };
 
 } // namespace
 } // namespace tenzir::plugins::yaml
 
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::yaml_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::yaml::read_yaml)

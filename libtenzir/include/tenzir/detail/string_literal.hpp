@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <fmt/format.h>
+
 #include <algorithm>
 #include <cstdint>
 #include <string_view>
@@ -29,6 +31,22 @@ struct string_literal {
   [[nodiscard]] constexpr auto str() const noexcept -> std::string_view {
     return {&value[0], &value[N - 1]};
   }
-};
 
+  [[nodiscard]] explicit constexpr operator std::string_view() const noexcept {
+    return str();
+  }
+
+  [[nodiscard]] explicit operator std::string() const noexcept {
+    return std::string{str()};
+  }
+};
 } // namespace tenzir::detail
+
+template <size_t N>
+struct fmt::formatter<tenzir::detail::string_literal<N>>
+  : fmt::formatter<std::string_view> {
+  auto
+  format(tenzir::detail::string_literal<N> s, fmt::format_context& ctx) const {
+    return fmt::formatter<std::string_view>::format(s.str(), ctx);
+  }
+};

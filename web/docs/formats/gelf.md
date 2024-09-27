@@ -9,9 +9,10 @@ sidebar_custom_props:
 Reads Graylog Extended Log Format (GELF) events.
 
 ## Synopsis
-
+Parser:
 ```
-gelf [--raw]
+gelf [--merge] [--schema <schema>] [--selector <fieldname[:prefix]>]
+     [--schema-only] [--raw] [--unnest-separator <separator>]
 ```
 
 ## Description
@@ -73,6 +74,10 @@ configuration.
 Graylog's implementation of GELF does not support boolean values and [drops them
 on ingest](https://github.com/Graylog2/graylog2-server/issues/5504).
 :::
+
+### Common Options (Parser)
+
+The GELF parser supports the common [schema inference options](formats.md#parser-schema-inference).
 
 ## Examples
 

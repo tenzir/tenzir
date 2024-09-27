@@ -12,6 +12,7 @@
 #include "tenzir/detail/coding.hpp"
 
 #include <cctype>
+#include <charconv>
 #include <cstdint>
 
 namespace tenzir {
@@ -36,86 +37,24 @@ template <class T,
           int MinDigits = 1, int Radix = 10>
 struct integral_parser
   : parser_base<integral_parser<T, MaxDigits, MinDigits, Radix>> {
-  static_assert(Radix == 10 || Radix == 16, "unsupported radix");
   static_assert(MinDigits > 0, "need at least one minimum digit");
   static_assert(MaxDigits > 0, "need at least one maximum digit");
+  static_assert(
+    Radix >= 2 and Radix <= 36,
+    "Radix must be in range"); // this follows from the from_chars spec
   static_assert(MinDigits <= MaxDigits, "maximum cannot exceed minimum");
 
   using attribute = T;
 
-  static bool isdigit(char c) {
-    if constexpr (Radix == 10) {
-      return c >= '0' && c <= '9';
-    } else if constexpr (Radix == 16) {
-      return std::isxdigit(static_cast<unsigned char>(c)) != 0;
-    } else {
-      static_assert(detail::always_false_v<decltype(Radix)>, "unsupported "
-                                                             "radix");
-    }
-  }
-
-  template <class Iterator, class Attribute, class F>
-  static auto accumulate(Iterator& f, const Iterator& l, Attribute& a, F acc) {
-    if (f == l) {
-      return false;
-    }
-    int digits = 0;
-    for (a = 0; isdigit(*f) && f != l && digits < MaxDigits; ++f, ++digits) {
-      if constexpr (Radix == 10) {
-        acc(a, *f - '0');
-      } else if constexpr (Radix == 16) {
-        acc(a, detail::hex_to_byte(*f));
-      } else {
-        static_assert(detail::always_false_v<decltype(Radix)>, "unsupported "
-                                                               "radix");
-      }
-    }
-    return digits >= MinDigits;
-  }
-
-  template <class Iterator>
-  static auto parse_pos(Iterator& f, const Iterator& l, unused_type) {
-    return accumulate(f, l, unused, [](auto&, auto) {});
-  }
-
-  template <class Iterator, class Attribute>
-  static auto parse_pos(Iterator& f, const Iterator& l, Attribute& a) {
-    return accumulate(f, l, a, [](auto& n, auto x) {
-      n *= Radix;
-      n += x;
-    });
-  }
-
-  template <class Iterator>
-  static auto parse_neg(Iterator& f, const Iterator& l, unused_type) {
-    return accumulate(f, l, unused, [](auto&, auto) {});
-  }
-
-  template <class Iterator, class Attribute>
-  static auto parse_neg(Iterator& f, const Iterator& l, Attribute& a) {
-    return accumulate(f, l, a, [](auto& n, auto x) {
-      n *= Radix;
-      n -= x;
-    });
-  }
-
-  template <class Iterator, class Attribute>
-  static bool parse_signed(Iterator& f, const Iterator& l, Attribute& a) {
-    return detail::parse_sign(f) ? parse_neg(f, l, a) : parse_pos(f, l, a);
-  }
-
-  template <class Iterator, class Attribute>
-  static bool parse_unsigned(Iterator& f, const Iterator& l, Attribute& a) {
-    return parse_pos(f, l, a);
-  }
-
-  template <class Iterator, class Attribute>
-  static bool dispatch(Iterator& f, const Iterator& l, Attribute& a) {
-    if constexpr (std::is_signed_v<T>) {
-      return parse_signed(f, l, a);
-    } else {
-      return parse_unsigned(f, l, a);
-    }
+  constexpr static auto is_digit(const char c) -> bool {
+    constexpr auto in_range
+      = [](const char c, const char lower, const char upper) {
+          return c >= lower and c <= upper;
+        };
+    return in_range(c, '0', '0' + std::min(Radix, 9))
+           or (Radix > 10
+               and (in_range(c, 'a', 'a' + Radix - 10)
+                    or in_range(c, 'A', 'A' + Radix - 10)));
   }
 
   template <class Iterator, class Attribute>
@@ -123,9 +62,60 @@ struct integral_parser
     if (f == l) {
       return false;
     }
+    constexpr static bool is_signed = std::is_signed_v<attribute>;
+    const auto first_is_sign = *f == '-' or *f == '+';
+    if (first_is_sign and not is_signed) {
+      return false;
+    }
+    // An array large enough to hold a value of the given type
+    // and a potential sign character.
+    // Its a raw array due to better rendering in debuggers.
+    char data[MaxDigits + is_signed]{};
+    auto end = std::begin(data);
+    int take_chars = 0;
     auto save = f;
-    if (dispatch(f, l, a)) {
-      return true;
+    while (true) {
+      auto c = *f;
+      // Take only digits
+      if (not is_digit(c)) {
+        if constexpr (not is_signed) {
+          break;
+        }
+        if (take_chars > 0 or not first_is_sign) {
+          break;
+        }
+      }
+      *end = c;
+      ++take_chars;
+      ++end;
+      ++f;
+      // Take at most MaxDigits chars + a potential minus
+      if (take_chars >= MaxDigits + int{first_is_sign}) {
+        break;
+      }
+      // Take at most as many chars as the array can hold
+      if (end == std::end(data)) {
+        break;
+      }
+      // Take at most as many chars as are in the input
+      if (f == l) {
+        break;
+      }
+    }
+    auto begin = std::begin(data);
+    // From chars doesn't accept leading plus
+    if (*begin == '+') {
+      ++begin;
+    }
+    auto out = attribute{};
+    const auto [ptr, ec] = std::from_chars(begin, end, out, Radix);
+    if (ec == std::errc{}) {
+      const auto read_chars = ptr - std::begin(data);
+      TENZIR_ASSERT(read_chars == take_chars);
+      if (read_chars >= MinDigits + first_is_sign) {
+        a = out;
+        return true;
+      }
     }
     f = save;
     return false;

@@ -207,8 +207,8 @@ public:
     return regex_ ? "tql2.replace_regex" : "tql2.replace";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto pattern = located<std::string>{};
     auto replacement = std::string{};
@@ -279,8 +279,8 @@ public:
     return "tql2.slice";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto begin = std::optional<located<int64_t>>{};
     auto end = std::optional<located<int64_t>>{};

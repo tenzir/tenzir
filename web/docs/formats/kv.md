@@ -11,7 +11,9 @@ Reads key-value pairs by splitting strings based on regular expressions.
 ## Synopsis
 
 ```
-kv <field_split> <value_split>
+kv [<field_split>] [<value_split>]
+   [--schema <schema>] [--selector <selector>] [--schema-only]
+   [--merge] [--raw] [--unnest-separator <nested-key-separator>]
 ```
 
 ## Description
@@ -65,11 +67,15 @@ will parse as
 
 ### `<field_split>`
 
-The regular expression used to separate individual fields.
+The regular expression used to separate individual fields. The default is `\s`.
 
 ### `<value_split>`
 
-The regular expression used to separate a key from its value.
+The regular expression used to separate a key from its value. The default is `=`.
+
+### Common Options (Parser)
+
+The XSV parser supports the common [schema inference options](formats.md#parser-schema-inference).
 
 ## Examples
 
