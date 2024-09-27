@@ -10,5 +10,5 @@ sidebar_custom_props:
 The `csv` format is a configuration of the [`xsv`](xsv.md) format:
 
 - Field separator: `,`
-- List separator: `;`
-- Null value: empty field
+- List separator: `;` (configurable)
+- Null value: empty field (configurable)
