@@ -10,5 +10,5 @@ sidebar_custom_props:
 The `ssv` format is a configuration of the [`xsv`](xsv.md) format:
 
 - Field separator: `<space>`
-- List separator: `,`
-- Null value: `-`
+- List separator: `,` (configurable)
+- Null value: `-` (configurable)

@@ -46,6 +46,7 @@ The following builtin parsers provide options for more specific control over sch
 - [KV](formats/kv.md)
 - [LEEF](formats/leef.md)
 - [Suricata](formats/suricata.md)
+- [Syslog](formats/syslog.md)
 - [XSV](formats/xsv.md)
 - [YAML](formats/json.md)
 - [Zeek JSON](formats/zeek-json.md)
