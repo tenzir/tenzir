@@ -15,35 +15,37 @@
 
 namespace tenzir {
 
-// TODO: Change `entity_def` and everything related to it. We do not necessarily
-// want this to be plugins.
+/// Reference to a single entity definition (currently always a plugin).
 using entity_def
-  = variant<const function_plugin*, const operator_factory_plugin*>;
+  = variant<std::reference_wrapper<const function_plugin>,
+            std::reference_wrapper<const operator_factory_plugin>>;
 
-// TODO: Should this be *effectively* global?
+/// A set of entities, with a most one entity per entity namespace.
+struct entity_set {
+  const function_plugin* fn;
+  const operator_factory_plugin* op;
+};
+
 // TODO: The interface of this class is drastically simplified for now. It
 // must be changed eventually to properly enable modules and use an interned
 // representation of `entity_path`.
 class registry {
 public:
-  auto try_get(const entity_path& path) const -> const entity_def*;
+  auto try_get(const entity_path& path) const -> std::optional<entity_def>;
 
   auto get(const ast::function_call& call) const -> const function_plugin&;
+  auto get(const ast::invocation& call) const -> const operator_factory_plugin&;
+  auto get(const entity_path& path) const -> entity_def;
 
-  auto get(const entity_path& path) const -> const entity_def&;
-
-  // TODO: This cannot stay this way, but for now we use it in error messages.
+  // TODO: Everything below assumes that there are no modules.
   auto operator_names() const -> std::vector<std::string_view>;
   auto function_names() const -> std::vector<std::string_view>;
   auto method_names() const -> std::vector<std::string_view>;
 
-  // TODO: Change signature.
   void add(std::string name, entity_def def);
 
 private:
-  // TODO: Lifetime?
-  // TODO: This should not be either-or, right?
-  detail::heterogeneous_string_hashmap<entity_def> defs_;
+  detail::heterogeneous_string_hashmap<entity_set> defs_;
 };
 
 // TODO: This should be attached to the `session` object. However, because we

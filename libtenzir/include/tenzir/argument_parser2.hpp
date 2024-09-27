@@ -109,6 +109,10 @@ private:
 
   argument_parser2(kind kind, std::string name)
     : kind_{kind}, name_{std::move(name)} {
+    // TODO: Remove this temporary hack once we removed TQL1 plugins.
+    if (name_.starts_with("tql2.")) {
+      name_.erase(0, 5);
+    }
   }
 
   template <class T>

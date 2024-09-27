@@ -391,7 +391,8 @@ TENZIR_REGISTER_PLUGIN(trim{"trim_end", "utf8_rtrim"})
 TENZIR_REGISTER_PLUGIN(nullary_method{"capitalize", "utf8_capitalize",
                                       string_type{}})
 TENZIR_REGISTER_PLUGIN(nullary_method{"to_lower", "utf8_lower", string_type{}})
-TENZIR_REGISTER_PLUGIN(nullary_method{"reverse", "utf8_reverse", string_type{}})
+TENZIR_REGISTER_PLUGIN(nullary_method{"tql2.reverse", "utf8_reverse",
+                                      string_type{}})
 TENZIR_REGISTER_PLUGIN(nullary_method{"to_title", "utf8_title", string_type{}})
 TENZIR_REGISTER_PLUGIN(nullary_method{"to_upper", "utf8_upper", string_type{}})
 

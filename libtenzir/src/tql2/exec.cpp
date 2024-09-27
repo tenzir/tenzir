@@ -111,11 +111,7 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
     stmt.match(
       [&](ast::invocation& x) {
         // TODO: Where do we check that this succeeds?
-        auto def = std::get_if<const operator_factory_plugin*>(
-          &ctx.reg().get(x.op.ref));
-        TENZIR_ASSERT(def);
-        TENZIR_ASSERT(*def);
-        auto op = (*def)->make(
+        auto op = ctx.reg().get(x).make(
           operator_factory_plugin::invocation{
             std::move(x.op),
             std::move(x.args),
