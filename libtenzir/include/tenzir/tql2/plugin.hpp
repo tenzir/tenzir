@@ -86,6 +86,8 @@ public:
   virtual auto make_function(invocation inv, session ctx) const
     -> failure_or<function_ptr>
     = 0;
+
+  virtual auto function_name() const -> std::string;
 };
 
 class method_plugin : public virtual function_plugin {};

@@ -305,6 +305,21 @@ load(const std::vector<std::string>& bundled_plugins,
 
 /// Initialize loaded plugins.
 caf::error initialize(caf::actor_system_config& cfg) {
+  // If everything went well, we should have a strictly-ordered list of plugins.
+  if (auto it = std::ranges::adjacent_find(get(), std::greater_equal{});
+      it != get().end()) {
+    auto name_a = (*it)->name();
+    ++it;
+    auto name_b = (*it)->name();
+    if (name_a == name_b) {
+      TENZIR_ASSERT(false,
+                    fmt::format("found multiple plugins named `{}`", name_a));
+    } else {
+      TENZIR_ASSERT(false, fmt::format("unexpected plugin ordering: found `{}` "
+                                       "before `{}`",
+                                       name_a, name_b));
+    }
+  }
   auto global_config = record{};
   auto global_opts = caf::content(cfg);
   if (auto global_opts_data = to<record>(global_opts)) {

@@ -30,17 +30,17 @@ auto global_registry() -> const registry& {
       // TODO: We prefixed some operators with "tql2." to prevent name clashes
       // with the legacy operators. We should get rid of this eventually.
       if (name.starts_with("tql2.")) {
-        name = name.substr(5);
+        name.erase(0, 5);
       }
-      reg.add(name, op);
+      reg.add(name, *op);
     }
     for (auto fn : plugins::get<function_plugin>()) {
-      auto name = fn->name();
+      auto name = fn->function_name();
       // TODO: Same here.
       if (name.starts_with("tql2.")) {
-        name = name.substr(5);
+        name.erase(0, 5);
       }
-      reg.add(name, fn);
+      reg.add(name, *fn);
     }
     return reg;
   });
@@ -49,28 +49,51 @@ auto global_registry() -> const registry& {
 
 auto registry::get(const ast::function_call& call) const
   -> const function_plugin& {
-  TENZIR_ASSERT(call.fn.ref.resolved());
   auto def = try_get(call.fn.ref);
   TENZIR_ASSERT(def);
-  auto fn = std::get_if<const function_plugin*>(def);
+  auto fn = std::get_if<std::reference_wrapper<const function_plugin>>(&*def);
   TENZIR_ASSERT(fn);
-  TENZIR_ASSERT(*fn);
-  return **fn;
+  return *fn;
 }
 
-auto registry::try_get(const entity_path& path) const -> const entity_def* {
+auto registry::get(const ast::invocation& call) const
+  -> const operator_factory_plugin& {
+  auto def = try_get(call.op.ref);
+  TENZIR_ASSERT(def);
+  auto op
+    = std::get_if<std::reference_wrapper<const operator_factory_plugin>>(&*def);
+  TENZIR_ASSERT(op);
+  return *op;
+}
+
+auto registry::try_get(const entity_path& path) const
+  -> std::optional<entity_def> {
+  TENZIR_ASSERT(path.resolved());
   if (path.segments().size() != 1) {
     // TODO: We pretend here that only single-name paths exist.
-    return nullptr;
+    return std::nullopt;
   }
   auto it = defs_.find(path.segments()[0]);
   if (it == defs_.end()) {
-    return nullptr;
+    return std::nullopt;
   }
-  return &it->second;
+  auto& set = it->second;
+  switch (path.ns()) {
+    case entity_ns::fn:
+      if (set.fn) {
+        return *set.fn;
+      }
+      return std::nullopt;
+    case entity_ns::op:
+      if (set.op) {
+        return *set.op;
+      }
+      return std::nullopt;
+  }
+  TENZIR_UNREACHABLE();
 }
 
-auto registry::get(const entity_path& path) const -> const entity_def& {
+auto registry::get(const entity_path& path) const -> entity_def {
   auto result = try_get(path);
   TENZIR_ASSERT(result);
   return *result;
@@ -80,7 +103,7 @@ auto registry::operator_names() const -> std::vector<std::string_view> {
   // TODO: This cannot stay this way, but for now we use it in error messages.
   auto result = std::vector<std::string_view>{};
   for (auto& [name, def] : defs_) {
-    if (std::holds_alternative<const operator_factory_plugin*>(def)) {
+    if (def.op) {
       result.push_back(name);
     }
   }
@@ -91,10 +114,8 @@ auto registry::operator_names() const -> std::vector<std::string_view> {
 auto registry::function_names() const -> std::vector<std::string_view> {
   auto result = std::vector<std::string_view>{};
   for (auto& [name, def] : defs_) {
-    if (auto function = std::get_if<const function_plugin*>(&def)) {
-      if (not dynamic_cast<const method_plugin*>(*function)) {
-        result.push_back(name);
-      }
+    if (def.fn and not dynamic_cast<const method_plugin*>(def.fn)) {
+      result.push_back(name);
     }
   }
   std::ranges::sort(result);
@@ -104,10 +125,8 @@ auto registry::function_names() const -> std::vector<std::string_view> {
 auto registry::method_names() const -> std::vector<std::string_view> {
   auto result = std::vector<std::string_view>{};
   for (auto& [name, def] : defs_) {
-    if (auto function = std::get_if<const function_plugin*>(&def)) {
-      if (dynamic_cast<const method_plugin*>(*function)) {
-        result.push_back(name);
-      }
+    if (def.fn and dynamic_cast<const method_plugin*>(def.fn)) {
+      result.push_back(name);
     }
   }
   std::ranges::sort(result);
@@ -115,9 +134,16 @@ auto registry::method_names() const -> std::vector<std::string_view> {
 }
 
 void registry::add(std::string name, entity_def def) {
-  auto [it, inserted] = defs_.emplace(std::move(name), def);
-  TENZIR_ASSERT(inserted,
-                fmt::format("found multiple definitions for `{}`", it->first));
+  auto& set = defs_[std::move(name)];
+  def.match(
+    [&](std::reference_wrapper<const function_plugin> plugin) {
+      TENZIR_ASSERT(not set.fn);
+      set.fn = &plugin.get();
+    },
+    [&](std::reference_wrapper<const operator_factory_plugin> plugin) {
+      TENZIR_ASSERT(not set.op);
+      set.op = &plugin.get();
+    });
 }
 
 } // namespace tenzir

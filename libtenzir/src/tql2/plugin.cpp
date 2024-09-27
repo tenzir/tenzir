@@ -49,4 +49,13 @@ auto function_use::make(
   return std::make_unique<result>(std::move(f));
 }
 
+auto function_plugin::function_name() const -> std::string {
+  // TODO: Remove this once we removed TQL1 plugins.
+  auto result = name();
+  if (result.starts_with("tql2.")) {
+    result.erase(0, 5);
+  }
+  return result;
+}
+
 } // namespace tenzir
