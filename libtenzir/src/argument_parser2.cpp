@@ -41,15 +41,15 @@ auto argument_parser2::parse(const function_plugin::invocation& inv,
   return parse(inv.call.fn, inv.call.args, ctx);
 }
 
-auto argument_parser2::parse(const ast::function_call& call, session ctx)
-  -> failure_or<void> {
+auto argument_parser2::parse(const ast::function_call& call,
+                             session ctx) -> failure_or<void> {
   TENZIR_ASSERT(kind_ != kind::op);
   return parse(call.fn, call.args, ctx);
 }
 
 auto argument_parser2::parse(const ast::entity& self,
-                             std::span<ast::expression const> args, session ctx)
-  -> failure_or<void> {
+                             std::span<ast::expression const> args,
+                             session ctx) -> failure_or<void> {
   // TODO: Simplify and deduplicate everything in this function.
   auto result = failure_or<void>{};
   auto emit = [&](diagnostic_builder d) {
@@ -274,63 +274,24 @@ auto argument_parser2::usage() const -> std::string {
     }
     usage_cache_ += name_;
     usage_cache_ += kind_ == kind::op ? ' ' : '(';
+    auto helps = help();
     auto has_previous = false;
-    for (auto [idx, positional] : detail::enumerate(positional_)) {
-      auto first = idx == 0;
-      auto last = idx == positional_.size() - 1;
-      if (first && kind_ == kind::method) {
+    for (const auto& [idx, opt] : detail::enumerate(helps)) {
+      if (idx == 0 and kind_ == kind::method) {
+        usage_cache_ += ' ';
         continue;
       }
-      auto is_pipeline
-        = std::holds_alternative<setter<located<pipeline>>>(positional.set);
-      if (last && is_pipeline) {
-        usage_cache_ += ' ';
-      } else if (std::exchange(has_previous, true)) {
-        usage_cache_ += ", ";
+      if (not opt.name.empty()) {
+        if (std::exchange(has_previous, true)) {
+          usage_cache_ += ", ";
+        }
+        usage_cache_ += opt.name + "=";
       }
-      if (first_optional_ && idx >= *first_optional_) {
-        usage_cache_ += fmt::format("{}?", positional.meta);
-      } else {
-        usage_cache_ += positional.meta;
-      }
-    }
-    const auto append_named_option = [&](const named& opt) {
-      if (opt.name.starts_with("_")) {
-        // This denotes an internal/unstable option.
-        return;
-      }
-      if (std::exchange(has_previous, true)) {
-        usage_cache_ += ", ";
-      }
-      auto meta = opt.set.match(
-        []<data_type T>(const setter<located<T>>&) {
-          return fmt::format("<{}>", type_kind::of<data_to_type_t<T>>);
-        },
-        [](const setter<ast::expression>&) -> std::string {
-          return "<expr>";
-        },
-        [](const setter<ast::simple_selector>&) -> std::string {
-          return "<selector>";
-        },
-        [](const setter<located<pipeline>>&) -> std::string {
-          return "{ ... }";
-        });
-      auto txt = fmt::format("{}={}", opt.name, meta);
-      usage_cache_ += txt;
-      if (not opt.required) {
+      usage_cache_ += opt.meta;
+      if (not opt.name.empty() and not opt.required) {
         usage_cache_ += "?";
       }
     };
-    for (const auto& opt : named_) {
-      if (opt.required) {
-        append_named_option(opt);
-      }
-    }
-    for (const auto& opt : named_) {
-      if (not opt.required) {
-        append_named_option(opt);
-      }
-    }
 
     if (kind_ != kind::op) {
       usage_cache_ += ')';
@@ -354,6 +315,32 @@ auto argument_parser2::docs() const -> std::string {
   return fmt::format("https://docs.tenzir.com/{}/{}", category, name_);
 }
 
+auto argument_parser2::help() const
+  -> std::vector<argument_parser2::help_entry> {
+  auto res = std::vector<help_entry>{};
+
+  for (const auto& positional : positional_) {
+    res.emplace_back("", positional.meta, *positional.docs, true);
+  }
+  for (const auto& named : named_) {
+    auto meta = named.set.match(
+      []<data_type T>(const setter<located<T>>&) {
+        return fmt::format("<{}>", type_kind::of<data_to_type_t<T>>);
+      },
+      [](const setter<ast::expression>&) -> std::string {
+        return "<expr>";
+      },
+      [](const setter<ast::simple_selector>&) -> std::string {
+        return "<selector>";
+      },
+      [](const setter<located<pipeline>>&) -> std::string {
+        return "{ ... }";
+      });
+    res.emplace_back(named.name, std::move(meta), *named.docs, named.required);
+  }
+  return res;
+}
+
 template <argument_parser_type T>
 auto argument_parser2::add(T& x, std::string meta) -> argument_parser2& {
   TENZIR_ASSERT(not first_optional_, "encountered required positional after "
@@ -373,8 +360,8 @@ auto argument_parser2::add(T& x, std::string meta) -> argument_parser2& {
 }
 
 template <argument_parser_type T>
-auto argument_parser2::add(std::optional<T>& x, std::string meta)
-  -> argument_parser2& {
+auto argument_parser2::add(std::optional<T>& x,
+                           std::string meta) -> argument_parser2& {
   if (not first_optional_) {
     first_optional_ = positional_.size();
   }
@@ -409,8 +396,8 @@ auto argument_parser2::add(std::string name, T& x) -> argument_parser2& {
 }
 
 template <argument_parser_type T>
-auto argument_parser2::add(std::string name, std::optional<T>& x)
-  -> argument_parser2& {
+auto argument_parser2::add(std::string name,
+                           std::optional<T>& x) -> argument_parser2& {
   if constexpr (argument_parser_bare_type<T>) {
     named_.emplace_back(std::move(name), setter<located<T>>{[&x](located<T> y) {
                           x = std::move(y.inner);
@@ -423,8 +410,8 @@ auto argument_parser2::add(std::string name, std::optional<T>& x)
   return *this;
 }
 
-auto argument_parser2::add(std::string name, std::optional<location>& x)
-  -> argument_parser2& {
+auto argument_parser2::add(std::string name,
+                           std::optional<location>& x) -> add_sentinel {
   named_.emplace_back(std::move(name),
                       setter<located<bool>>{[&x](located<bool> y) {
                         if (y.inner) {
@@ -433,15 +420,25 @@ auto argument_parser2::add(std::string name, std::optional<location>& x)
                           x = std::nullopt;
                         }
                       }});
-  return *this;
+  return {*this, named_.back()};
 }
 
-auto argument_parser2::add(std::string name, bool& x) -> argument_parser2& {
+auto argument_parser2::add(std::string name,
+                           bool& x) -> argument_parser2::add_sentinel {
   named_.emplace_back(std::move(name),
                       setter<located<bool>>{[&x](located<bool> y) {
                         x = y.inner;
                       }});
-  return *this;
+  return {*this, named_.back()};
+}
+
+argument_parser2::add_sentinel::add_sentinel(argument_parser2& parser,
+                                             argument_parser2::positional& p)
+  : parser_{parser}, doc_string_{*p.docs} {
+}
+argument_parser2::add_sentinel::add_sentinel(argument_parser2& parser,
+                                             argument_parser2::named& n)
+  : parser_{parser}, doc_string_{*n.docs} {
 }
 
 template <std::monostate>

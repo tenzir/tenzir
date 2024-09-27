@@ -64,7 +64,38 @@ public:
   }
 
   // ------------------------------------------------------------------------
+private:
+  struct named;
+  struct positional;
+  class add_sentinel {
+  public:
+    operator argument_parser2&() && {
+      return parser_;
+    }
 
+    auto docs(std::string doc_string) && -> argument_parser2& {
+      doc_string_ = std::move(doc_string);
+      return parser_;
+    }
+    template <class... Ts>
+    auto add(Ts&&... ts) && {
+      return parser_.add(std::forward<Ts>(ts)...);
+    }
+    template <typename... Ts>
+    auto parse(Ts&&... ts) && {
+      return parser_.parse(std::forward<Ts>(ts)...);
+    }
+
+  private:
+    friend class argument_parser2;
+    add_sentinel(argument_parser2& parser, positional&);
+    add_sentinel(argument_parser2& parser, named&);
+    argument_parser2& parser_;
+    std::string& doc_string_;
+  };
+  // ------------------------------------------------------------------------
+
+public:
   /// Adds a required positional argument.
   template <argument_parser_type T>
   auto add(T& x, std::string meta) -> argument_parser2&;
@@ -86,10 +117,10 @@ public:
   auto add(std::string name, std::optional<T>& x) -> argument_parser2&;
 
   /// Adds an optional named argument.
-  auto add(std::string name, std::optional<location>& x) -> argument_parser2&;
+  auto add(std::string name, std::optional<location>& x) -> add_sentinel;
 
   /// Adds an optional named argument.
-  auto add(std::string name, bool& x) -> argument_parser2&;
+  auto add(std::string name, bool& x) -> add_sentinel;
 
   // ------------------------------------------------------------------------
 
@@ -103,6 +134,14 @@ public:
 
   auto usage() const -> std::string;
   auto docs() const -> std::string;
+
+  struct help_entry {
+    std::string name;
+    std::string meta;
+    std::string docs;
+    bool required;
+  };
+  auto help() const -> std::vector<help_entry>;
 
 private:
   enum class kind { op, function, method };
@@ -123,6 +162,7 @@ private:
   struct positional {
     any_setter set;
     std::string meta;
+    std::shared_ptr<std::string> docs = std::make_shared<std::string>();
   };
 
   struct named {
@@ -130,6 +170,7 @@ private:
     any_setter set;
     bool required = false;
     std::optional<location> found = std::nullopt;
+    std::shared_ptr<std::string> docs = std::make_shared<std::string>();
   };
 
   mutable std::string usage_cache_;

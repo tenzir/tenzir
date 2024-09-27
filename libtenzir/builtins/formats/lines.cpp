@@ -276,7 +276,9 @@ class read_lines final
     auto args = parser_args{};
     argument_parser2::operator_(name())
       .add("skip_empty", args.skip_empty)
+      .docs("whether to skip empty lines")
       .add("null", args.null)
+      .docs("whether to split by null bytes instead of line-breaks")
       .parse(inv, ctx)
       .ignore();
     return std::make_unique<parser_adapter<lines_parser>>(
