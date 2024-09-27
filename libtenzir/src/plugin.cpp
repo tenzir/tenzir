@@ -34,7 +34,17 @@
 #include <dlfcn.h>
 #include <memory>
 
-#if defined(__has_include) && __has_include(<sanitizer/lsan_interface.h>)
+#ifndef __has_feature
+#  define __has_feature(x) 0
+#endif
+
+#if __has_feature(address_sanitizer) or defined(__SANITIZE_ADDRESS__)
+#  if __has_include(<sanitizer/lsan_interface.h>)
+#    define TENZIR_HAS_LEAK_SANITIZER
+#  endif
+#endif
+
+#ifdef TENZIR_HAS_LEAK_SANITIZER
 #  include <sanitizer/lsan_interface.h>
 #  define TENZIR_DISABLE_LEAK_SANITIZER()                                      \
     do {                                                                       \
