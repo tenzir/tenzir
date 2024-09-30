@@ -2,8 +2,7 @@
 
 import './operators.css';
 
-## Fundamental
-Basic operations expected everywhere
+## Basic
 
 Operator | Description | Example
 ---------|-------------|--------
@@ -16,8 +15,8 @@ Operator | Description | Example
 [`tail`](operators/tail) | Keep only the last N events | `tail 20`
 [`taste`](operators/taste) | Keep only N events of each type | `taste 1`
 [`where`](operators/where) | Keeps only events matching the predicate| `where name.starts_with("John")`
+
 ## Flow Control
-Changes the data flow through the system
 
 Operator | Description | Example
 ---------|-------------|--------
@@ -27,8 +26,8 @@ Operator | Description | Example
 [`if`](operators/if) | Splits the flow based on a predicate | `if transaction > 0 { ... } else { ... }`
 [`match`](operators/match) | Splits the flow with pattern matching | `match name { "Tenzir" => {...}, _ => {...} }`
 [`timeout`](operators/timeout) | Ends a pipeline after a period without input | `timeout 1s { ... }`
+
 ## Input
-Returns potentially external data without input
 
 Operator | Description | Example
 ---------|-------------|--------
@@ -64,7 +63,7 @@ Operator | Description | Example
 [`load_http`](operators/load_http) | |
 **Parsing** | *...*
 [`read_csv`](operators/) | |
-[`read_json`](operators/) | |
+[`read_json`](operators/read_json) | |
 [`read_lines`](operators/) | |
 [`read_suricata`](operators/) | |
 [`read_syslog`](operators/) | |

@@ -1,12 +1,17 @@
 # drop
 
-Removes columns from the event.
+Removes fields from the event.
 
-```
-drop <selector>, ...
-```
+<pre>
+<span style={{color: "white"}}>
+<span style={{color: "#d2a8ff"}}>drop</span> fields...
+</span>
+</pre>
 
-### Description
+
+### Usage
+
+... If a column does not exist, a warning will be issued instead.
 
 
 ### Examples
@@ -21,24 +26,16 @@ from {
   },
 }
 drop name, info.id
----
-{
-  role: "Admin",
-  info: {
-    rank: 8411
-  },
-}
+// this == {
+//   role: "Admin",
+//   info: {
+//     rank: 8411
+//   },
+// }
 ```
 
 ```
 from { name: "John" }
 drop address
----
-warning: could not find field `address`
- --> <input>:1:16
-  |
-2 | drop address
-  |      ~~~~~~~
-  |
-{ name: "John" }
+// this == { name: "John" }
 ```
