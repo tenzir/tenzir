@@ -24,7 +24,7 @@ TENZIR_ENUM(
   this_, if_, else_, match, not_, and_, or_, underscore, let, in, meta,
   reserved_keyword,
   // literals
-  scalar, true_, false_, null, string, ip, subnet, datetime,
+  scalar, true_, false_, null, raw_string, string, ip, subnet, datetime,
   // punctuation
   dot, plus, minus, slash, star, equal_equal, bang_equal, less, less_equal,
   greater, greater_equal, at, equal, comma, colon, single_quote, fat_arrow,
@@ -49,14 +49,14 @@ struct token {
 };
 
 /// Try to tokenize the source.
-auto tokenize(std::string_view content, session ctx)
-  -> failure_or<std::vector<token>>;
+auto tokenize(std::string_view content,
+              session ctx) -> failure_or<std::vector<token>>;
 
 /// Tokenize without emitting errors for error tokens.
 auto tokenize_permissive(std::string_view content) -> std::vector<token>;
 
 /// Emit errors for error tokens.
-auto verify_tokens(std::span<token const> tokens, session ctx)
-  -> failure_or<void>;
+auto verify_tokens(std::span<token const> tokens,
+                   session ctx) -> failure_or<void>;
 
 } // namespace tenzir
