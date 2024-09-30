@@ -5,26 +5,26 @@ Brief description.
 <pre>
 <span style={{color: "white"}}>
 <span style={{color: "#d2a8ff"}}>metrics </span>
-name<span style={{color: "#ff7b72"}}>:</span><span style={{color: "#ffa657"}}>str</span>,
+name<span style={{color: "#ff7b72"}}>?:</span><span style={{color: "#ffa657"}}>str</span>,
 retro<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>bool</span>,
 live<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>bool</span>,
 parallel<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>int</span>
 </span>
 </pre>
 
+
 <pre>
 <span style={{color: "white"}}>
 <span style={{color: "#d2a8ff"}}>metrics </span>
-name<span style={{color: "#ff7b72"}}>:</span><span style={{color: "#ffa657"}}>&lt;str&gt;</span>,
-retro<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>&lt;bool&gt;</span>,
-live<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>&lt;bool&gt;</span>,
-parallel<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>&lt;int&gt;</span>
+[name<span style={{color: "#ff7b72"}}>:</span><span style={{color: "#ffa657"}}>str</span>,
+retro<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>bool</span>,
+live<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>bool</span>,
+parallel<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>int</span>]
 </span>
 </pre>
 
 
-
-### Usage
+### Description
 
 TODO
 

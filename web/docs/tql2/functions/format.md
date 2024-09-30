@@ -8,7 +8,7 @@ string.format(...args)
 string.format(args...)
 ```
 
-### Usage
+### Description
 
 ...
 

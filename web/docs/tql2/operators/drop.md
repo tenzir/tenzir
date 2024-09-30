@@ -9,7 +9,7 @@ Removes fields from the event.
 </pre>
 
 
-### Usage
+### Description
 
 ... If a column does not exist, a warning will be issued instead.
 

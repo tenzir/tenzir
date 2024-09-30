@@ -5,7 +5,7 @@ Parses an incoming JSON stream into events.
 <pre>
 <span style={{color: "white"}}>
 <span style={{color: "#d2a8ff"}}>read_json </span>
-schema<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>str</span>,
+[schema<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>str</span>,
 selector<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>str</span>,
 schema_only<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>bool</span>,
 merge<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>bool</span>,
@@ -14,11 +14,16 @@ unflatten<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"
 sep<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>str</span>,
 <br/>  ndjson<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>bool</span>,
 gelf<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>bool</span>,
-arrays_of_objects<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>str</span>
+arrays_of_objects<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>str</span>]
 </span>
 </pre>
 
-## Usage
+## Description
+
+- `schema`: ...
+- `selector`: ...
+- `schema_only`: ...
+- ...
 
 TODO: Remove sep?
 TODO: Some general sentences?
@@ -64,38 +69,12 @@ Other options:
 
 ## Examples
 
+```
+load_file "events.json"
+read_json
+
+load_file "events.json"
+read_json schema=...
+
 ...
-
-
-
-
-
-
 ```
-
-read_ndjson <options>
-read_gelf <options>
-read_suricata <options>
-read_zeek_json <options>
-<string>.parse_json(<options>) -> single object?
-
-<string>.parse_json(
-  selector: string = null,
-  schema: string = null,
-
-)
-```
-
-# Options
-
-- `selector=<string>`
-- `schema=<string>`
-- `merge=<bool>`
-- `only_schema=<bool>`
-- `unnest=<string>`
-
-- `gelf=<bool>`
-- `ndjson=<bool>`
-- `arrays_of_objects=<bool>`
-
-- `many=<bool>`
