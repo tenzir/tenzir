@@ -2,17 +2,18 @@
 
 Removes fields from the event.
 
-<pre>
-<span style={{color: "white"}}>
-<span style={{color: "#d2a8ff"}}>drop</span> fields...
-</span>
-</pre>
-
+```
+drop field...
+```
 
 ### Description
 
-... If a column does not exist, a warning will be issued instead.
+Removes the given fields from the events.
 
+### `field`
+
+Field to be discarded from the event. Issues a warning if the field is not
+present.
 
 ### Examples
 
