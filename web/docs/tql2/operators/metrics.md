@@ -5,17 +5,6 @@ Brief description.
 <pre>
 <span style={{color: "white"}}>
 <span style={{color: "#d2a8ff"}}>metrics </span>
-name<span style={{color: "#ff7b72"}}>?:</span><span style={{color: "#ffa657"}}>str</span>,
-retro<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>bool</span>,
-live<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>bool</span>,
-parallel<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>int</span>
-</span>
-</pre>
-
-
-<pre>
-<span style={{color: "white"}}>
-<span style={{color: "#d2a8ff"}}>metrics </span>
 [name<span style={{color: "#ff7b72"}}>:</span><span style={{color: "#ffa657"}}>str</span>,
 retro<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>bool</span>,
 live<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>bool</span>,

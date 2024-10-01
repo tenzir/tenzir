@@ -2,13 +2,6 @@
 
 Computes the [Community ID](https://github.com/corelight/community-id-spec) for a given network flow.
 
-
-<pre>
-<span style={{color: "white"}}>
-<span style={{color: "#d2a8ff"}}>community_id</span>(src_ip<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>ip</span>, src_port<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>int</span>, dst_ip<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>ip</span>, dst_port<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>int</span>, proto<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>str</span>, seed<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>int</span>) <span style={{color: "#ff7b72"}}>-&gt;</span> <span style={{color: "#ffa657"}}>str</span>
-</span>
-</pre>
-
 <pre>
 <span style={{color: "white"}}>
 <span style={{color: "#d2a8ff"}}>community_id</span>(src_ip<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>ip</span>, dst_ip<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>ip</span>, proto<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>str</span>, [src_port<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>int</span>, dst_port<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>int</span>, seed<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>int</span>]) <span style={{color: "#ff7b72"}}>-&gt;</span> <span style={{color: "#ffa657"}}>str</span>
