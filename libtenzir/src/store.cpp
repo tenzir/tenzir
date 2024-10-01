@@ -302,9 +302,11 @@ default_active_store_actor::behavior_type default_active_store(
                          self->state.store_type, self->state.path);
             TENZIR_ASSERT(rp.pending());
             rp.deliver(res);
+            self->quit();
           },
-          [rp](caf::error& error) mutable {
-            rp.deliver(std::move(error));
+          [self, rp](caf::error& error) mutable {
+            rp.deliver(error);
+            self->quit(std::move(error));
           });
       return rp;
     },

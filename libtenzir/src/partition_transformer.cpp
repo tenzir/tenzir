@@ -457,6 +457,16 @@ auto partition_transformer(
           data.indexer_chunks.emplace_back(qf.name(), chunk);
         }
       }
+      for (auto& [_, partition_data] : self->state.data) {
+        self->request(partition_data.builder, caf::infinite, atom::persist_v)
+          .then(
+            [](resource&) {
+              // nop
+            },
+            [](caf::error&) {
+              // nop
+            });
+      }
       auto stream_data = partition_transformer_state::stream_data{
         .partition_chunks
         = std::vector<std::tuple<tenzir::uuid, tenzir::type, chunk_ptr>>{},
