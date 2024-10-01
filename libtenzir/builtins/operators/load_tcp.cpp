@@ -745,8 +745,9 @@ auto make_connection_manager(
     [self](uint64_t op_index, uint64_t metric_index,
            type& schema) -> caf::result<void> {
       auto& id = self->state.metrics_id_map[op_index][metric_index];
-      TENZIR_ASSERT(id == 0);
-      id = self->state.next_metrics_id++;
+      if (id == 0) {
+        id = self->state.next_metrics_id++;
+      }
       return self->delegate(self->state.metrics_receiver,
                             self->state.operator_id, id, std::move(schema));
     },
