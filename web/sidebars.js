@@ -165,7 +165,7 @@ const sidebars = {
     },
     {
       type: 'html',
-      value: '<br><b>Legacy Reference<b/>',
+      value: '<br><b>Previous Reference<b/>',
     },
     {
       type: 'category',

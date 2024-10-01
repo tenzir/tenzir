@@ -8,8 +8,6 @@ Computes the [Community ID](https://github.com/corelight/community-id-spec) for 
 </span>
 </pre>
 
-
-
 <!-- <pre>
 <span style={{color: "white"}}>
 <span style={{color: "#d2a8ff"}}>community_id</span>(src_ip<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>:ip</span>, src_port<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>:int</span>, dst_ip<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>:ip</span>, dst_port<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>:int</span>, port<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>:str</span>, seed<span style={{color: "#ff7b72"}}>=</span><span style={{color: "#ffa657"}}>:int</span>) -&gt; <span style={{color: "#ffa657"}}>str</span>
