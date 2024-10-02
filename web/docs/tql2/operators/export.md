@@ -21,15 +21,15 @@ up. To connect pipelines with back pressure, use the [`publish`](publish.md) and
 
 ### `retro`
 
-Export persistent events at a Tenzir node. Unless `live` is given, this is
-implied.
-
-Combine `retro` and `live` to export past events and live events afterwards.
-
 XXX: Is this warning still correct?
 :::warning Experimental
 There is a gap for live events that happen while past events are being exported.
 :::
+
+Export persistent events at a Tenzir node. Unless `live` is given, this is
+implied.
+
+Combine `retro` and `live` to export past events and live events afterwards.
 
 ### `internal`
 

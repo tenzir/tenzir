@@ -1,5 +1,12 @@
 # cache
 
+:::warning Expert Operator
+We designed the `cache` operator for under-the-hood use of the Tenzir Platform
+on [app.tenzir.com](https://app.tenzir.com). We generally recommend not using
+the operator by yourself, but rather relying on the Tenzir Platform to
+automatically manage caches for you.
+:::
+
 An in-memory cache shared between pipelines.
 
 ```
@@ -7,13 +14,6 @@ cache id:str [mode=str, capacity=uint, ttl=duration, max_ttl=duration]
 ```
 
 ## Description
-
-:::warning Expert Operator
-We designed the `cache` operator for under-the-hood use of the Tenzir Platform
-on [app.tenzir.com](https://app.tenzir.com). We generally recommend not using
-the operator by yourself, but rather relying on the Tenzir Platform to
-automatically manage caches for you.
-:::
 
 The `cache` operator caches events in an in-memory buffer at a node. Caches must
 have a user-provided unique ID.

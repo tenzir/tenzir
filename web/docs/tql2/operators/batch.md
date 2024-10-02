@@ -1,5 +1,11 @@
 # batch
 
+:::warning Expert Operator
+The `batch` operator is a lower-level building block that lets users explicitly
+control batching, which otherwise is controlled automatically by Tenzir's
+underlying pipeline execution engine. Use with caution!
+:::
+
 The `batch` operator controls the batch size of events.
 
 ```
@@ -7,12 +13,6 @@ batch [limit=uint, timeout=duration]
 ```
 
 ## Description
-
-:::warning Expert Operator
-The `batch` operator is a lower-level building block that lets users explicitly
-control batching, which otherwise is controlled automatically by Tenzir's
-underlying pipeline execution engine. Use with caution!
-:::
 
 The `batch` operator takes its input and rewrites it into batches of up to the
 desired size.

@@ -4,7 +4,7 @@ Submits VQL to a Velociraptor server and returns the response as events.
 
 XXX: How do divide args? One per line?
 ```
-velociraptor [request_name=string, org_id=string, max_rows=uint, 
+velociraptor [request_name=str, org_id=str, max_rows=uint, 
               subscribe=str, query=str, max_wait=duration, profile=str]
 ```
 
