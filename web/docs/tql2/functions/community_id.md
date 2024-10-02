@@ -20,7 +20,7 @@ The `src_ip` and `dst_ip` parameters are required. The `proto` string is also re
 
 ### Examples
 
-~~~
+```tql
 from {
   source_ip: 1.2.3.4,
   source_port: 4584,
@@ -36,13 +36,13 @@ cid = community_id(
   proto=protocol,
 )
 // cid == "1:koNcqhFRD5kb254ZrLsdv630jCM="
-~~~
+```
 
-~~~
+```
 from {
   source_ip: 1.2.3.4,
   destination_ip: 43.3.132.3,
 }
 cid = community_id(src_ip=source_ip, dst_ip=destination_ip, proto="udp")
 // cid == "1:7TrrMeH98PrUKC0ySu3RNmpUr48="
-~~~
+```

@@ -23,7 +23,7 @@ sort abs(x)
 
 An assignment statement in TQL is structured as `<place> = <expression>`, where `<place>` typically refers to a field or item of a list. If the specified place already exists, the assignment will overwrite its current value. If it does not exist, a new field will be created.
 
-The `<place>` can also reference a field path. For example, the statement `foo.bar = 42` assigns the value 42 to the field `bar` within the record `foo`. If `foo` is not a record type or does not exist before, it will be set to a record containing just the field `bar`.
+The `<place>` can also reference a field path. For example, the statement `foo.bar = 42` assigns the value 42 to the field `bar` within the record `foo`. If `foo` is not a record or does not exist before, it will be set to a record containing just the field `bar`.
 
 ~~~
 category_name = "Network Activity"
@@ -33,7 +33,7 @@ traffic.bytes_out = event.sent_bytes
 
 ## `if`
 
-The `if` statement is a primitive designed to route data based on a predicate. Its typical usage follows the syntax `if <expression> { ... } else { ... }`, where two subpipelines are specified within the braces. When its expression evaluates to `true`, the first pipeline processes the event. Conversely, when it evaluates to `false`, the event is routed through the second one.
+The `if` statement is a primitive designed to route data based on a predicate. Its typical usage follows the syntax `if <expression> { ... } else { ... }`, where two subpipelines are specified within the braces. When its expression evaluates to `true`, the first pipeline processes the event. Conversely, when it evaluates to `false`, it is routed through the second one.
 
 After the `if` statement the event flow from both pipelines is joined together. The `else` clause can be omitted, resulting in the syntax `if <expression> { ... }`, which has the same behavior as `if <expression> { ... } else {}`. Additionally, the `else` keyword can be followed by another `if` statement, allowing for chained `if` statements. This chaining can be repeated, enabling complex conditional logic to be implemented.
 
@@ -48,7 +48,7 @@ if score < 100 {
 
 ## `let`
 
-The `let` statement binds a constant to a specific name within the pipeline's scope. The syntax for a `let` statement is `let $<identifier> = <expression>`. For instance, `let $meaning = 42` creates a constant `$meaning` that holds the integer value 42.
+The `let` statement binds a constant to a specific name within the pipeline's scope. The syntax for a `let` statement is `let $<identifier> = <expression>`. For instance, `let $meaning = 42` creates a constant `$meaning` that holds the value 42.
 
 More complex expressions can also be assigned, such as `let $start = now() - 1h`, which binds `$start` to a value representing one hour before the pipeline was started. Constants defined with `let` can be referenced in subsequent statements, including other `let` statements. For example, `let $end = $start + 30min` can be used to define `$end` depending on the value of `$start`.
 

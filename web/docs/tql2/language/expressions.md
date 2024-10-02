@@ -33,9 +33,9 @@ r"C:\tmp"
 ~~~
 
 Literals such as `42`, `123.45`, `2.5k` and `2s` are called scalars. Numeric
-scalars can have the power-of-ten suffixes `k` (=1000), `M` (=1000000), `G`,
-`T`, `P` and `E`. The power-of-two suffixes `Ki` (=1024), `Mi` (=1048576), `Gi`,
-`Ti`, `Pi` and `Ei` may also be used. For example, `2k == 2000`. Duration
+scalars can have the power-of-ten suffixes `k` (=1,000), `M` (=1,000,000), `G`,
+`T`, `P` and `E`. The power-of-two suffixes `Ki` (=1,024), `Mi` (=1,048,576),
+`Gi`, `Ti`, `Pi` and `Ei` may also be used. For example, `2k == 2000`. Duration
 scalars can have the suffixes `ns`, `us`, `ms`, `s`, `min`, `h`, `d`, `w` and
 `y`.
 
