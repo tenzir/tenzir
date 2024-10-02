@@ -1196,7 +1196,7 @@ public:
     auto result = parser.parse(inv, ctx);
     TRY(result);
     auto args = parser_args{"gelf"};
-
+    args.split_mode = split_at::null;
     TRY(args.builder_options, msb_parser.get_options(ctx.dh()));
     return std::make_unique<parser_adapter<json_parser>>(
       json_parser{std::move(args)});
