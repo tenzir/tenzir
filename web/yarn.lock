@@ -2325,6 +2325,11 @@
     content-type "^1.0.5"
     tslib "^2.5.0"
 
+"@tenzir/vscode-tql@^0.0.3":
+  version "0.0.3"
+  resolved "https://registry.yarnpkg.com/@tenzir/vscode-tql/-/vscode-tql-0.0.3.tgz#b7966da2d3c6ddd4d8143d43bec85026fee54388"
+  integrity sha512-koicc+Q+dWAOkQM1kAa7JWBLBYhK8XLDshK6onPsgkCPm7C4haJPXjm6WNeTMw+DvOS8amOaHClpWHpza7AGkg==
+
 "@trysound/sax@0.2.0":
   version "0.2.0"
   resolved "https://registry.yarnpkg.com/@trysound/sax/-/sax-0.2.0.tgz#cccaab758af56761eb7bf37af6f03f326dd798ad"
@@ -9211,10 +9216,6 @@ totalist@^1.0.0:
   version "1.1.0"
   resolved "https://registry.yarnpkg.com/totalist/-/totalist-1.1.0.tgz#a4d65a3e546517701e3e5c37a47a70ac97fe56df"
   integrity sha512-gduQwd1rOdDMGxFG1gEvhV88Oirdo2p+KjoYFU7k2g+i7n6AFFbDQ5kMPUsW0pNbfQsB/cwXvT1i4Bue0s9g5g==
-
-"tql@https://pkg.pr.new/tenzir/vscode-tql/tql@3":
-  version "0.0.3"
-  resolved "https://pkg.pr.new/tenzir/vscode-tql/tql@3#0db1937b57ff1ffc9b649ceccebf2a75d94a6e9c"
 
 tr46@~0.0.3:
   version "0.0.3"
