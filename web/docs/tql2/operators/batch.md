@@ -1,0 +1,38 @@
+# batch
+
+The `batch` operator controls the batch size of events.
+
+```
+batch [limit=uint, timeout=duration]
+```
+
+## Description
+
+:::warning Expert Operator
+The `batch` operator is a lower-level building block that lets users explicitly
+control batching, which otherwise is controlled automatically by Tenzir's
+underlying pipeline execution engine. Use with caution!
+:::
+
+The `batch` operator takes its input and rewrites it into batches of up to the
+desired size.
+
+### `limit`
+
+An unsigned integer denoting how many events to put into one batch at most.
+
+Defaults to `65536`.
+
+### `timeout`
+
+Specifies a maximum latency for events passing through the batch operator. When
+unspecified, an infinite duration is used.
+
+## Examples
+
+Write exactly one NDJSON object at a time to a Kafka topic.
+
+XXX: Fix example
+```
+batch 1 | to kafka -t topic write json -c
+```

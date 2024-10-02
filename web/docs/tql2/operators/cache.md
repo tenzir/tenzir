@@ -8,19 +8,19 @@ cache id:str [mode=str, capacity=uint, ttl=duration, max_ttl=duration]
 
 ## Description
 
-The `cache` operator caches events in an in-memory buffer at a node. Caches must
-have a user-provided unique ID.
-
-The first pipeline to use a cache writes into the cache. All further pipelines
-using the same cache will read from the cache instead of executing the operators
-before the `cache` operator in the same pipeline.
-
 :::warning Expert Operator
 We designed the `cache` operator for under-the-hood use of the Tenzir Platform
 on [app.tenzir.com](https://app.tenzir.com). We generally recommend not using
 the operator by yourself, but rather relying on the Tenzir Platform to
 automatically manage caches for you.
 :::
+
+The `cache` operator caches events in an in-memory buffer at a node. Caches must
+have a user-provided unique ID.
+
+The first pipeline to use a cache writes into the cache. All further pipelines
+using the same cache will read from the cache instead of executing the operators
+before the `cache` operator in the same pipeline.
 
 ### `id`
 
