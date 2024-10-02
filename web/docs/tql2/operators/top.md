@@ -3,7 +3,7 @@
 Shows the most common values. The dual to [`rare`](rare.md).
 
 ```
-top field [count_field=field]
+top field, [count_field=field]
 ```
 
 ## Description
@@ -31,5 +31,5 @@ top id.orig_h
 Find the most common values for field `count` and present the value amount in a field `amount`.
 
 ```
-top count count_field=amount
+top count, count_field=amount
 ```

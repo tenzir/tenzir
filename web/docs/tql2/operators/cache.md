@@ -86,7 +86,7 @@ Get the same statistics, but do not recompute the cache if it doesn't exist
 anymore:
 
 ```
-cache "my-cache" mode="read"
+cache "my-cache", mode="read"
 | set schema=#schema
 | summarize count(.) by #schema
 ```

@@ -62,7 +62,7 @@ from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read ze
 Replay the M57 Zeek logs at 10.5 times the original speed.
 ```
 from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read zeek-tsv
-| delay ts speed=10.5
+| delay ts, speed=10.5
 ```
 
 Replay as above, but start delaying only after `ts` exceeds `2021-11-17T16:35`
@@ -70,7 +70,7 @@ and emit all events prior to that timestamp immediately.
 
 ```
 from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read zeek-tsv
-| delay ts start=2021-11-17T16:35 speed=10.0
+| delay ts, start=2021-11-17T16:35, speed=10.0
 ```
 XXX: Parser has to do `int`->`double`
 

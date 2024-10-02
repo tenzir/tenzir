@@ -33,5 +33,5 @@ rare id.orig_h
 Find the least common values for field `count` and present the value amount in a field `amount`.
 
 ```
-rare count count_field=amount
+rare count, count_field=amount
 ```

@@ -55,10 +55,10 @@ Upload `custom.mydata` events to a table `Custom-MyData`:
 export
 | where #schema == "custom.mydata"
 | azure_log_analytics
-  tenant_id="00a00a00-0a00-0a00-00aa-000aa0a0a000"
-  client_id="000a00a0-0aa0-00a0-0000-00a000a000a0"
-  client_secret="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-  dce="https://my-stuff-a0a0.westeurope-1.ingest.monitor.azure.com"
-  dcr="dcr-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  tenant_id="00a00a00-0a00-0a00-00aa-000aa0a0a000",
+  client_id="000a00a0-0aa0-00a0-0000-00a000a000a0",
+  client_secret="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  dce="https://my-stuff-a0a0.westeurope-1.ingest.monitor.azure.com",
+  dcr="dcr-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
   table="Custom-MyData"
 ```

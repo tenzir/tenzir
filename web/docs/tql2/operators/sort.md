@@ -24,7 +24,7 @@ Sort by the `x` field in ascending order and by the `y` field in
 descending order in case two events have an equal `x` field.
 
 ```
-from {}, {x: 1, y: 2ms}, {x: 4}, {x: 1, y: -1ms} | sort x -y
+from {}, {x: 1, y: 2ms}, {x: 4}, {x: 1, y: -1ms} | sort x, -y
 ```
 ```
 // XXX: Add output

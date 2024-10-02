@@ -45,5 +45,5 @@ Buffer up to `10M` events or bytes in a buffer, dropping them if downstream cann
 keep up.
 
 ```
-buffer 10M policy="drop"
+buffer 10M, policy="drop"
 ```

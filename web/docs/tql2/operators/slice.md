@@ -50,23 +50,23 @@ slice end=-10
 Return the last 50 events, except for the last 2:
 
 ```
-slice begin=-50 end=-2
+slice begin=-50, end=-2
 ```
 
 Skip the first and the last event:
 
 ```
-slice begin=1 end=-1
+slice begin=1, end=-1
 ```
 
 Return every second event starting from the tenth:
 
 ```
-slice begin=9 stride=2
+slice begin=9, stride=2
 ```
 
 Return all but the last five events in reverse order:
 
 ```
-slice end=-5 stride=-1
+slice end=-5, stride=-1
 ```

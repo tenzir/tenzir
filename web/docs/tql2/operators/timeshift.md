@@ -3,7 +3,7 @@
 Adjusts timestamps relative to a given start time, with an optional speedup.
 
 ```
-timeshift field [start=time, speed=factor]
+timeshift field, [start=time, speed=factor]
 ```
 
 ## Description
@@ -41,12 +41,12 @@ Set the M57 Zeek logs to begin at Jan 1, 1984:
 
 ```
 from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read zeek-tsv
-| timeshift ts start=1984-01-01
+| timeshift ts, start=1984-01-01
 ```
 
 As above, but also make the time span of the trace 100 times longer:
 
 ```
 from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read zeek-tsv
-| timeshift ts start=1984-01-01 speed=0.01
+| timeshift ts, start=1984-01-01, speed=0.01
 ```
