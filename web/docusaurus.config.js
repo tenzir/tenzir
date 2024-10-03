@@ -11,7 +11,7 @@ async function createConfig() {
 
   const rehypePrettyCodeOptions = {
     keepBackground: false,
-    theme: 'github-dark-dimmed',
+    theme: "github-dark-default",
     getHighlighter: (options) =>
       shikiHighlighter({
         ...options,
