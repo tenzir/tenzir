@@ -22,6 +22,7 @@ WORKDIR /tmp/tenzir
 
 COPY --from=fluent-bit-package /root/fluent-bit_*.deb /root/
 COPY scripts/debian/install-dev-dependencies.sh ./scripts/debian/
+COPY scripts/debian/build-arrow.sh ./scripts/debian/
 RUN ./scripts/debian/install-dev-dependencies.sh && \
     apt-get -y --no-install-recommends install /root/fluent-bit_*.deb && \
     rm /root/fluent-bit_*.deb && \
@@ -74,10 +75,9 @@ RUN cmake -B build -G Ninja \
       -D TENZIR_ENABLE_MANPAGES:BOOL="OFF" \
       -D TENZIR_ENABLE_PYTHON_BINDINGS_DEPENDENCIES:BOOL="ON" \
       ${TENZIR_BUILD_OPTIONS} && \
-    cmake --build build --parallel && \
-    cmake --build build --target integration && \
-    cmake --install build --strip && \
-    rm -rf build
+    cmake --build build --parallel
+RUN cmake --build build --target integration
+RUN cmake --install build --strip
 
 RUN mkdir -p \
       $PREFIX/etc/tenzir \
@@ -110,6 +110,7 @@ COPY --from=development --chown=tenzir:tenzir /var/cache/tenzir/ /var/cache/tenz
 COPY --from=development --chown=tenzir:tenzir /var/lib/tenzir/ /var/lib/tenzir/
 COPY --from=development --chown=tenzir:tenzir /var/log/tenzir/ /var/log/tenzir/
 COPY --from=development /opt/aws-sdk-cpp/lib/ /opt/aws-sdk-cpp/lib/
+COPY --from=dependencies /arrow_*.deb /root/
 COPY --from=fluent-bit-package /root/fluent-bit_*.deb /root/
 
 RUN apt-get update && \
@@ -143,13 +144,9 @@ RUN apt-get update && \
       python3-venv \
       robin-map-dev \
       wget && \
-    wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
-    apt-get -y --no-install-recommends install \
-      ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
-    apt-get update && \
-    apt-get -y --no-install-recommends install libarrow1500=15.0.2-1 libparquet1500=15.0.2-1 && \
+    apt-get -y --no-install-recommends install /root/arrow_*.deb && \
     apt-get -y --no-install-recommends install /root/fluent-bit_*.deb && \
-    rm /root/fluent-bit_*.deb && \
+    rm /root/fluent-bit_*.deb /root/arrow_*.deb && \
     rm -rf /var/lib/apt/lists/* && \
     echo "/opt/aws-sdk-cpp/lib" > /etc/ld.so.conf.d/aws-cpp-sdk.conf && \
     ldconfig
@@ -180,39 +177,36 @@ COPY contrib/tenzir-plugins ./contrib/tenzir-plugins
 
 FROM plugins-source AS azure-log-analytics-plugin
 
-RUN cmake -S contrib/tenzir-plugins/azure-log-analytics -B build-azure-log-analytics -G Ninja \
+RUN cmake -S contrib/tenzir-plugins/azure-log-analytics \
+      -B build-azure-log-analytics -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-      cmake --build build-azure-log-analytics --parallel && \
-      cmake --build build-azure-log-analytics --target integration && \
-      DESTDIR=/plugin/azure-log-analytics cmake --install build-azure-log-analytics --strip --component Runtime && \
-      rm -rf build-build-azure-log-analytics
+    cmake --build build-azure-log-analytics --parallel
+RUN cmake --build build-azure-log-analytics --target integration
+RUN DESTDIR=/plugin/azure-log-analytics cmake --install build-azure-log-analytics --strip --component Runtime
 
 FROM plugins-source AS compaction-plugin
 
 RUN cmake -S contrib/tenzir-plugins/compaction -B build-compaction -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-      cmake --build build-compaction --parallel && \
-      cmake --build build-compaction --target integration && \
-      DESTDIR=/plugin/compaction cmake --install build-compaction --strip --component Runtime && \
-      rm -rf build-compaction
+    cmake --build build-compaction --parallel
+RUN cmake --build build-compaction --target integration
+RUN DESTDIR=/plugin/compaction cmake --install build-compaction --strip --component Runtime
 
 FROM plugins-source AS context-plugin
 
 RUN cmake -S contrib/tenzir-plugins/context -B build-context -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-      cmake --build build-context --parallel && \
-      cmake --build build-context --target integration && \
-      DESTDIR=/plugin/context cmake --install build-context --strip --component Runtime && \
-      rm -rf build-context
+    cmake --build build-context --parallel
+RUN cmake --build build-context --target integration
+RUN DESTDIR=/plugin/context cmake --install build-context --strip --component Runtime
 
 FROM plugins-source AS pipeline-manager-plugin
 
 RUN cmake -S contrib/tenzir-plugins/pipeline-manager -B build-pipeline-manager -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-      cmake --build build-pipeline-manager --parallel && \
-      cmake --build build-pipeline-manager --target integration && \
-      DESTDIR=/plugin/pipeline-manager cmake --install build-pipeline-manager --strip --component Runtime && \
-      rm -rf build-pipeline-manager
+    cmake --build build-pipeline-manager --parallel
+RUN cmake --build build-pipeline-manager --target integration
+RUN DESTDIR=/plugin/pipeline-manager cmake --install build-pipeline-manager --strip --component Runtime
 
 FROM plugins-source AS packages-plugin
 
@@ -220,27 +214,24 @@ FROM plugins-source AS packages-plugin
 # they require the context and pipeline-manager plugins to be available.
 RUN cmake -S contrib/tenzir-plugins/packages -B build-packages -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-      cmake --build build-packages --parallel && \
-      DESTDIR=/plugin/packages cmake --install build-packages --strip --component Runtime && \
-      rm -rf build-packages
+    cmake --build build-packages --parallel
+RUN DESTDIR=/plugin/packages cmake --install build-packages --strip --component Runtime
 
 FROM plugins-source AS platform-plugin
 
 RUN cmake -S contrib/tenzir-plugins/platform -B build-platform -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-      cmake --build build-platform --parallel && \
-      cmake --build build-platform --target integration && \
-      DESTDIR=/plugin/platform cmake --install build-platform --strip --component Runtime && \
-      rm -rf build-platform
+    cmake --build build-platform --parallel
+RUN cmake --build build-platform --target integration
+RUN DESTDIR=/plugin/platform cmake --install build-platform --strip --component Runtime
 
 FROM plugins-source AS vast-plugin
 
 RUN cmake -S contrib/tenzir-plugins/vast -B build-vast -G Ninja \
       -D CMAKE_INSTALL_PREFIX:STRING="$PREFIX" && \
-      cmake --build build-vast --parallel && \
-      cmake --build build-vast --target integration && \
-      DESTDIR=/plugin/vast cmake --install build-vast --strip --component Runtime && \
-      rm -rf build-vast
+    cmake --build build-vast --parallel
+RUN cmake --build build-vast --target integration
+RUN DESTDIR=/plugin/vast cmake --install build-vast --strip --component Runtime
 
 # -- tenzir-ce -------------------------------------------------------------------
 
