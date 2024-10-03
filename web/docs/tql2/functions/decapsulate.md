@@ -13,7 +13,7 @@ decapsulates the payload by extracting fields at the link, network, and
 transport layer. The aim is not completeness, but rather exposing commonly used
 field for analytics.
 
-Emits events of schema `tenzir.packet`
+Emits events of schema `tenzir.packet`.
 
 ### VLAN Tags
 
