@@ -62,6 +62,8 @@ As always, we fixed a bunch of smaller issues on the way:
 
 ## Join Us for Office Hours
 
-Every second Tuesday at 8 AM EST / 11 AM EST / 5 PM CET / 9:30 PM IST, we hold
-office hours on our Discord server. Whether you have ideas for new packages or
-want to discuss upcoming features—join us for a chat!
+Every second Tuesday at 5 PM CET, we hold our office hours on our
+[Discord server][discord]. Whether you have ideas for new packages or want to
+discuss upcoming features—join us for a chat!
+
+[discord]: /discord

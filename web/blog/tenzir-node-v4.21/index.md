@@ -28,6 +28,26 @@ from "fortinet.log" read kv
 | parse rawdata kv "\|" "="
 ```
 
+Using the above pipeline to parse an example file:
+
+```text {0} title="fortinet.log"
+logver=700120523 timestamp=1694183556 devname="HA-Cluster" devid="FG200E4Q1790000" vd="root" date=2023-09-08 time=14:32:36 eventtime=1694176357211540851 tz="+0200" logid="0317013312" type="utm" subtype="webfilter" eventtype="ftgd_allow" level="notice" policyid=2 poluuid="2b9647ee-70cb-51ed-d1c3-8e08a2e5fec0" policytype="proxy-policy" sessionid=2096597111 user="user1" group="group1" authserver="DC20" srcip=192.168.0.1 srcport=57642 srccountry="Reserved" srcintf="port1" srcintfrole="lan" dstip=1.2.3.4 dstport=443 dstcountry="Germany" dstintf="wan1" dstintfrole="wan" proto=6 service="HTTPS" hostname="www.example1.com" profile="REDACTED" action="passthrough" reqtype="referral" url="https://www.example1.com/" referralurl="https://www.example1.com/page" sentbyte=1713 rcvdbyte=238 direction="outgoing" msg="URL belongs to an allowed category in policy" method="domain" cat=75 catdesc="Internet Radio and TV" rawdata="Method=CONNECT|User-Agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36 Edg/116.0.1938.81"
+```
+
+```json {0} title="Output"
+{
+  "logver": 700120523,
+  "timestamp": 1694183556,
+  "devname": "HA-Cluster",
+  // ...
+  "catdesc": "Internet Radio and TV",
+  "rawdata": {
+    "Method": "CONNECT",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36 Edg/116.0.1938.81"
+  }
+}
+```
+
 ## Parsing Improvements
 
 We’ve made significant improvements to the accuracy of all parsers that deal
@@ -47,12 +67,12 @@ from "fortinet.log" read kv --schema=my_schema
 ```
 
 You can find more information about these new options in [our
-documentation](/formats#parser-schema-inference).
+documentation](/next/formats#parser-schema-inference).
 
 ## Azure Blob Storage Integration
 
 Tenzir now has an [integration with Azure Blob
-Storage](/connectors/azure-blob-storage)! This integration enables users to
+Storage](/next/connectors/azure-blob-storage)! This integration enables users to
 securely load log files and export processed data back to Azure Blob Storage,
 all while benefiting from both the flexibility and scalability of cloud storage
 and the efficiency of Tenzir's data pipelines.
@@ -85,9 +105,9 @@ improvements. For a detailed list of changes, be sure to check out the
 
 ## Join Us for Office Hours
 
-Every second Tuesday at 8 AM EST / 11 AM EST / 5 PM CET / 9:30 PM IST, we hold
-office hours on our Discord server. Whether you have ideas for new packages or
-want to discuss upcoming features—join us for a chat!
+Every second Tuesday at 5 PM CET, we hold our office hours on our
+[Discord server][discord]. Whether you have ideas for new packages or want to
+discuss upcoming features—join us for a chat!
 
 [discord]: /discord
 [changelog]: /changelog#v4210
