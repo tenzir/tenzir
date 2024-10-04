@@ -34,6 +34,7 @@ pushd source
 curl -L 'https://github.com/apache/arrow/archive/refs/tags/apache-arrow-17.0.0.tar.gz' | tar -xz --strip-components=1
 cd cpp
 cmake -B build -S . \
+  -G "Unix Makefiles" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INSTALL_PREFIX=/usr \
   -DCMAKE_INSTALL_SYSCONFDIR=/etc \
@@ -54,7 +55,7 @@ cmake --install build
 cd build
 checkinstall \
   --pakdir / \
-  --pkgsource="https://github.com/raboof/nethogs/" \
+  --pkgsource="https://github.com/apache/arrow" \
   --pkglicense="ASL2.0" \
   --deldesc=no \
   --nodoc \
