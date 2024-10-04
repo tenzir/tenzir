@@ -323,6 +323,7 @@ struct connection_manager_state {
     auto emit_metrics(connection_manager_actor<Elements>::pointer self)
       -> void {
       auto metric = record{
+        {"timestamp", time{time::clock::now()}},
         {"handle", fmt::to_string(socket->native_handle())},
         {"reads", std::exchange(reads, {})},
         {"writes", uint64_t{0}},
