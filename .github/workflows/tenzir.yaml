@@ -220,7 +220,7 @@ jobs:
           run_if_changed python "python/"
           run_if_changed docs "web/" "python/"
           run_if_changed changelog "changelog/" "web/" "python/"
-          TENZIR_SOURCES=(cmake/ CMakeLists.txt libtenzir/ libtenzir_test/ schema/ tools/ tenzir/ tenzir.yaml.example version.json)
+          TENZIR_SOURCES=(cmake/ CMakeLists.txt libtenzir/ libtenzir_test/ schema/ scripts/ tenzir/ tenzir.yaml.example version.json)
           run_if_changed tenzir "${TENZIR_SOURCES[@]}"
           run_if_changed_default tenzir-plugins $run_tenzir "plugins/" "contrib/tenzir-plugins/"
           # The tenzir-plugins job downloads the Tenzir artifact from GCS, so we
