@@ -16,9 +16,6 @@
 
 #include <caf/typed_event_based_actor.hpp>
 
-#include <filesystem>
-#include <ranges>
-
 namespace tenzir::plugins::metrics_collector {
 
 namespace {
@@ -31,7 +28,7 @@ using metrics_collector_actor
   = typed_actor_fwd<>::extend_with<component_plugin_actor>::unwrap;
 
 struct metrics_collector_state {
-  static constexpr auto name = "metrics-collector";
+  [[maybe_unused]] static constexpr auto name = "metrics-collector";
 
   struct instance {
     std::string name = {};
@@ -100,15 +97,22 @@ struct metrics_collector_state {
     const auto index = instances.size();
     instances.push_back({
       .name = plugin.name(),
-      .builder = series_builder{std::move(schema)},
+      .builder = series_builder{schema},
       .collector = std::move(*collector),
     });
     detail::weak_run_delayed_loop(
       self, plugin.metric_frequency(), [this, index] {
+        TENZIR_ASSERT(index < instances.size());
         auto& instance = instances[index];
-        if (auto ok = instance.run(); not ok) {
-          TENZIR_VERBOSE("{} failed to collect {} metrics: {}", *self,
-                         instance.name, ok.error());
+        try {
+          if (auto ok = instance.run(); not ok) {
+            TENZIR_WARN("{} failed to collect {} metrics: {}", *self,
+                        instance.name, ok.error());
+          }
+        } catch (const std::exception& err) {
+          self->quit(diagnostic::error("{}", err.what())
+                       .note("unhandle exception in {} metrics", instance.name)
+                       .to_error());
         }
       });
     return {};
