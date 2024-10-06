@@ -65,11 +65,14 @@ auto find_endpoint_plugin(const http_request_description& desc)
   -> const rest_endpoint_plugin* {
   for (auto const& plugin : plugins::get()) {
     auto const* rest_plugin = plugin.as<rest_endpoint_plugin>();
-    if (!rest_plugin)
+    if (!rest_plugin) {
       continue;
-    for (const auto& endpoint : rest_plugin->rest_endpoints())
-      if (endpoint.canonical_path() == desc.canonical_path)
+    }
+    for (const auto& endpoint : rest_plugin->rest_endpoints()) {
+      if (endpoint.canonical_path() == desc.canonical_path) {
         return rest_plugin;
+      }
+    }
   }
   return nullptr;
 }
@@ -117,17 +120,20 @@ auto node_state::get_endpoint_handler(const http_request_description& desc)
   -> const handler_and_endpoint& {
   static const auto empty_response = handler_and_endpoint{};
   auto it = rest_handlers.find(desc.canonical_path);
-  if (it != rest_handlers.end())
+  if (it != rest_handlers.end()) {
     return it->second;
+  }
   // Spawn handler on first usage
   auto const* plugin = find_endpoint_plugin(desc);
-  if (!plugin)
+  if (!plugin) {
     return empty_response;
+  }
   // TODO: Monitor the spawned handler and restart if it goes down.
   auto handler = plugin->handler(self->system(), self);
-  for (auto const& endpoint : plugin->rest_endpoints())
+  for (auto const& endpoint : plugin->rest_endpoints()) {
     rest_handlers[endpoint.canonical_path()]
       = std::make_pair(handler, endpoint);
+  }
   auto result = rest_handlers.find(desc.canonical_path);
   // If no canonical path matches, `find_endpoint_plugin()` should
   // have already returned `nullptr`.
@@ -380,6 +386,20 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       return diagnostic::error("unhandled exception in {}", *self).to_error();
     }
   });
+  auto shutdown_grace_period = std::optional<duration>{};
+  if (const auto* option = caf::get_if<std::string>(
+        &content(self->config()), "tenzir.shutdown-grace-period")) {
+    if (auto period = duration{}; parsers::duration(*option, period)) {
+      TENZIR_INFO("setting shutdown grace period to {}", data{period});
+      shutdown_grace_period.emplace(period);
+    } else {
+      self->quit(diagnostic::error("invalid value for option "
+                                   "`tenzir.shutdown-grace-period`")
+                   .note("got `{}`", *option)
+                   .hint("expected a duration, e.g., '10s'")
+                   .to_error());
+    }
+  }
   // Terminate deterministically on shutdown.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     const auto source_name = [&]() -> std::string {
@@ -397,6 +417,23 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
               .note("node terminates after receiving error from {}",
                     source_name)
               .to_error();
+    if (not self->state.tearing_down) {
+      TENZIR_INFO("node shuts down after receiving an exit message from {}: {}",
+                  source_name, msg.reason);
+      if (shutdown_grace_period) {
+        detail::weak_run_delayed(
+          self, *shutdown_grace_period,
+          [period = *shutdown_grace_period, source_name, reason = msg.reason] {
+            TENZIR_ERROR("node failed to terminate cleanly within {} after "
+                         "receiving an exit message from {} and forces a "
+                         "shutdown: {}",
+                         data{period}, source_name, reason);
+            // Wait for the log message to be written.
+            std::this_thread::sleep_for(std::chrono::seconds{1});
+            std::exit(1); // NOLINT
+          });
+      }
+    }
     self->state.tearing_down = true;
     for (auto&& exec_node :
          std::exchange(self->state.monitored_exec_nodes, {})) {
@@ -427,17 +464,19 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
     caf::actor filesystem_handle;
     for (const char* name : ordered_core_components) {
       if (auto comp = registry.remove(name)) {
-        if (comp->type == "filesystem")
+        if (comp->type == "filesystem") {
           filesystem_handle = comp->actor;
-        else
+        } else {
           core_shutdown_handles.push_back(comp->actor);
+        }
       }
     }
     std::vector<caf::actor> aux_components;
     for (const auto& [_, comp] : registry.components()) {
       // Ignore remote actors.
-      if (comp.actor->node() != self->node())
+      if (comp.actor->node() != self->node()) {
         continue;
+      }
       aux_components.push_back(comp.actor);
     }
     // Drop everything.
@@ -456,8 +495,7 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
       .then(
         [self, core_shutdown_sequence](atom::done) mutable {
           TENZIR_DEBUG("{} terminated auxiliary actors, commencing core "
-                       "shutdown "
-                       "sequence...",
+                       "shutdown sequence...",
                        *self);
           core_shutdown_sequence();
         },
@@ -506,13 +544,15 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
           caf::make_error(ec::logic_error, "failed to spawn endpoint handler"));
       }
       auto unparsed_params = http_parameter_map::from_json(desc.json_body);
-      if (!unparsed_params)
+      if (!unparsed_params) {
         return rest_response::make_error(400, "invalid json",
                                          unparsed_params.error());
+      }
       auto params = parse_endpoint_parameters(endpoint, *unparsed_params);
-      if (!params)
+      if (!params) {
         return rest_response::make_error(400, "invalid parameters",
                                          params.error());
+      }
       auto rp = self->make_response_promise<rest_response>();
       auto deliver = [rp, self, desc, params, endpoint,
                       request_id = std::move(request_id),
