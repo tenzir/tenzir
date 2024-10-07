@@ -15,15 +15,12 @@ For example, deploy the following pipeline to forward all
 [Suricata](suricata.md) alerts arriving at a node to Splunk:
 
 ```
-export --live
-| where #schema == "suricata.alert"
-| fluent-bit
-    splunk
-    host=1.2.3.4
-    port=8088
-    tls=on
-    tls.verify=off
-    splunk_token=TOKEN
+// tql2
+export live=true
+where @name == "suricata.alert"
+splunk "1.2.3.4:8088",
+  token="TOKEN",
+  tls=on
 ```
 
 Replace `1.2.3.4` with the IP address of your splunk host and `TOKEN` with your
@@ -113,12 +110,12 @@ volumes:
 After you spun up the containers, configure Splunk as follows:
 
 1. Go to <http://localhost:8000> and login with `admin`:`tenzir123`
-2. Navigate to *Add data* → *Monitor* → *HTTP Event Collector*
+2. Navigate to _Add data_ → _Monitor_ → _HTTP Event Collector_
 3. Configure the event collector:
    - Name: Tenzir
-   - Click *Next*
+   - Click _Next_
    - Copy the token
-   - Keep *Start searching*
+   - Keep _Start searching_
 
 [fluentbit-splunk-input]: https://docs.fluentbit.io/manual/pipeline/inputs/splunk
 [fluentbit-splunk-output]: https://docs.fluentbit.io/manual/pipeline/outputs/splunk
