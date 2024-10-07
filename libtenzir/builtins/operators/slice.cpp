@@ -394,7 +394,8 @@ public:
   }
 };
 
-struct reverse_plugin final : public virtual operator_factory_plugin {
+class reverse_plugin final : public virtual operator_plugin2<slice_operator> {
+public:
   auto name() const -> std::string override {
     return "tql2.reverse";
   }
@@ -406,9 +407,35 @@ struct reverse_plugin final : public virtual operator_factory_plugin {
   }
 };
 
+enum class mode { head, tail };
+
+template <mode Mode>
+class end_plugin final : public virtual operator_plugin2<slice_operator> {
+public:
+  auto name() const -> std::string override {
+    return Mode == mode::head ? "tql2.head" : "tql2.tail";
+  }
+
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto n = std::optional<int64_t>{10};
+    TRY(argument_parser2::operator_(name()).add(n, "<int>").parse(inv, ctx));
+    if (Mode == mode::head) {
+      return std::make_unique<slice_operator>(std::nullopt, n, std::nullopt);
+    }
+    return std::make_unique<slice_operator>(-n.value(), std::nullopt,
+                                            std::nullopt);
+  }
+};
+
+using head_plugin = end_plugin<mode::head>;
+using tail_plugin = end_plugin<mode::tail>;
+
 } // namespace
 
 } // namespace tenzir::plugins::slice
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::slice::plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::slice::reverse_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::slice::head_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::slice::tail_plugin)
