@@ -15,7 +15,7 @@ class save_operator final : public crtp_operator<save_operator> {
 public:
   save_operator() = default;
 
-  explicit save_operator(args args) : args_{std::move(args)} {
+  explicit save_operator(saver::args args) : args_{std::move(args)} {
   }
 
   auto
@@ -50,14 +50,14 @@ public:
   }
 
 private:
-  args args_;
+  saver::args args_;
 };
 
 class save_plugin final : public operator_plugin2<save_operator> {
 public:
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
-    args args;
+    auto args = saver::args{};
     auto parser = argument_parser2::operator_("save_google_cloud_pubsub");
     args.add_to(parser);
     TRY(parser.parse(inv, ctx));

@@ -16,7 +16,7 @@ class load_operator final : public crtp_operator<load_operator> {
 public:
   load_operator() = default;
 
-  explicit load_operator(args args) : args_{std::move(args)} {
+  explicit load_operator(loader::args args) : args_{std::move(args)} {
   }
 
   auto operator()(operator_control_plane& ctrl) const -> generator<chunk_ptr> {
@@ -48,14 +48,14 @@ public:
   }
 
 private:
-  args args_;
+  loader::args args_;
 };
 
 class load_plugin final : public operator_plugin2<load_operator> {
 public:
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
-    args args;
+    auto args = loader::args{};
     auto parser = argument_parser2::operator_("load_google_cloud_pubsub");
     args.add_to(parser);
     TRY(parser.parse(inv, ctx));
