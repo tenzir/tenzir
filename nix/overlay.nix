@@ -49,6 +49,7 @@ in {
       "-DENABLE_TESTING=OFF"
     ];
   });
+  azure-sdk-for-cpp = prev.callPackage ./azure-sdk-for-cpp { };
   glog = overrideAttrsIf (isDarwin && isStatic) prev.glog (orig: {
     cmakeFlags = orig.cmakeFlags ++ [
       "-DBUILD_TESTING=OFF"
@@ -58,13 +59,40 @@ in {
     arrow-cpp' = prev.arrow-cpp.override {
       aws-sdk-cpp-arrow = final.aws-sdk-cpp-tenzir;
     };
+    arrow-cpp'' = arrow-cpp'.overrideAttrs (orig: {
+      buildInputs = orig.buildInputs ++ [
+        final.azure-sdk-for-cpp
+        final.libxml2
+      ];
+      cmakeFlags = orig.cmakeFlags ++ [
+        "-DARROW_AZURE=ON"
+      ];
+      installCheckPhase =
+        let
+          disabledTests = [
+            # flaky
+            "arrow-flight-test"
+            # requires networking
+            "arrow-azurefs-test"
+            "arrow-gcsfs-test"
+            "arrow-flight-integration-test"
+          ];
+        in
+        ''
+          runHook preInstallCheck
+
+          ctest -L unittest --exclude-regex '^(${lib.concatStringsSep "|" disabledTests})$'
+
+          runHook postInstallCheck
+        '';
+    });
   in
     overrideAttrsIf isStatic
     (
       if !isStatic
-      then arrow-cpp'
+      then arrow-cpp''
       else
-        arrow-cpp'.override {
+        arrow-cpp''.override {
           enableShared = false;
           google-cloud-cpp = final.google-cloud-cpp.override {
             apis = ["storage"];
