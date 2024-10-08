@@ -461,10 +461,24 @@ auto partition_transformer(
         self->request(partition_data.builder, caf::infinite, atom::persist_v)
           .then(
             [](resource&) {
-              // nop
+              // This is handled via the down handler.
+              // TODO: The logic needs to be moved here when updating to CAF
+              // 1.0.
             },
-            [](caf::error&) {
-              // nop
+            [self](caf::error& err) {
+              auto annotated_error = diagnostic::error(err).note("").to_error();
+              std::visit(detail::overload{
+                           [&](partition_transformer_state::path_data& pd) {
+                             pd.promise.deliver(annotated_error);
+                           },
+                           [&](auto&) {
+                             // We should not get here, but let's not abort the
+                             // process if we do.
+                             TENZIR_ERROR("{}", annotated_error);
+                           },
+                         },
+                         self->state.persist);
+              self->quit(annotated_error);
             });
       }
       auto stream_data = partition_transformer_state::stream_data{
