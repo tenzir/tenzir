@@ -285,7 +285,9 @@ default_active_store_actor::behavior_type default_active_store(
       }
       auto chunk = self->state.store->finish();
       if (!chunk) {
-        self->quit(std::move(chunk.error()));
+        self->quit(diagnostic::error(std::move(chunk.error()))
+                     .note("while persisting store to disk")
+                     .to_error());
         return {};
       }
       auto rp = self->make_response_promise<resource>();
@@ -306,7 +308,9 @@ default_active_store_actor::behavior_type default_active_store(
           },
           [self, rp](caf::error& error) mutable {
             rp.deliver(error);
-            self->quit(std::move(error));
+            self->quit(diagnostic::error(std::move(error))
+                         .note("while persisting store to disk")
+                         .to_error());
           });
       return rp;
     },

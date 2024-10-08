@@ -334,6 +334,11 @@ active_partition_actor::behavior_type active_partition(
       return;
     }
     TENZIR_DEBUG("{} shuts down after persisting partition state", *self);
+    if (msg.reason) {
+      self->quit(
+        diagnostic::error(msg.reason).note("via exit handler").to_error());
+      return;
+    }
     self->quit();
   });
   return {

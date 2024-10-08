@@ -1103,7 +1103,12 @@ index(index_actor::stateful_pointer<index_state> self,
           self->quit();
         },
         [self](caf::error& err) {
-          self->quit(err);
+          auto diag
+            = diagnostic::error(std::move(err)).note("while shutting down");
+          if (err == caf::sec::request_timeout) {
+            diag = std::move(diag).note("shutdown timeout: risk of data loss!");
+          }
+          self->quit(std::move(diag).to_error());
         });
   });
   // Set up a down handler for monitored exporter actors.
