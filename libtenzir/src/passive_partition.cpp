@@ -327,8 +327,8 @@ partition_actor::behavior_type passive_partition(
   TENZIR_TRACEPOINT(passive_partition_spawned, id_string.c_str());
   self->set_down_handler([=](const caf::down_msg& msg) {
     if (msg.source != self->state.store.address()) {
-      TENZIR_WARN("{} ignores DOWN from unexpected sender: {}", *self,
-                  msg.reason);
+      TENZIR_DEBUG("{} ignores DOWN from unexpected sender: {}", *self,
+                   msg.reason);
       return;
     }
     TENZIR_ERROR("{} shuts down after DOWN from {} store: {}", *self,
@@ -421,7 +421,9 @@ partition_actor::behavior_type passive_partition(
         delegate_deferred_requests(self->state);
       },
       [=](caf::error err) {
-        TENZIR_ERROR("{} failed to load partition: {}", *self, err);
+        // This error is nicely printed at the export operator as a warning. No
+        // need to print it as an error here already.
+        TENZIR_WARN("{} failed to load partition: {}", *self, err);
         deliver_error_to_deferred_requests(self->state, err);
         // Quit the partition.
         self->quit(std::move(err));
