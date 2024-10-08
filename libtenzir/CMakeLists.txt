@@ -361,11 +361,6 @@ dependency_summary("libmaxminddb" maxminddb::maxminddb "Dependencies")
 
 # Link against Apache Arrow.
 target_link_libraries(libtenzir PUBLIC ${ARROW_LIBRARY})
-if (TENZIR_ENABLE_STATIC_EXECUTABLE)
-  target_link_libraries(
-    libtenzir PUBLIC Azure::azure-identity Azure::azure-storage-blobs
-                     Azure::azure-storage-files-datalake)
-endif ()
 dependency_summary("Apache Arrow" ${ARROW_LIBRARY} "Dependencies")
 
 # Link against Boost.

@@ -60,9 +60,11 @@ in {
       aws-sdk-cpp-arrow = final.aws-sdk-cpp-tenzir;
     };
     arrow-cpp'' = arrow-cpp'.overrideAttrs (orig: {
+      nativeBuildInputs = orig.nativeBuildInputs ++ [
+        prev.buildPackages.pkg-config
+      ];
       buildInputs = orig.buildInputs ++ [
         final.azure-sdk-for-cpp
-        final.libxml2
       ];
       cmakeFlags = orig.cmakeFlags ++ [
         "-DARROW_AZURE=ON"

@@ -5,6 +5,7 @@
   cmake,
   ninja,
   curl,
+  darwin,
   libxml2,
   mbedtls_2,
   openssl
@@ -47,11 +48,17 @@ let
     nativeBuildInputs = [ cmake ninja ];
     buildInputs = [
       azure-macro-utils-c
-      curl
       mbedtls_2
       umock-c
     ] ++ lib.optionals stdenv.hostPlatform.isStatic [
       openssl
+    ] ++ lib.optionals stdenv.hostPlatform.isDarwin [
+      darwin.apple_sdk.frameworks.Foundation
+      darwin.apple_sdk.frameworks.CoreFoundation
+      darwin.apple_sdk.frameworks.SystemConfiguration
+    ];
+    propagatedBuildInputs = [
+      curl
     ];
 
     cmakeFlags = [
@@ -63,7 +70,11 @@ let
 
     env = {
       # From `pkg-config --libs libcurl`.
-      NIX_LDFLAGS = lib.optionalString stdenv.hostPlatform.isStatic "-lnghttp2 -lidn2 -lunistring -lssh2 -lpsl -lssl -lcrypto -lssl -lcrypto -ldl -lzstd -lz -lidn2 -lunistring";
+      NIX_LDFLAGS = ""
+      + lib.optionalString stdenv.hostPlatform.isStatic
+        "-lnghttp2 -lidn2 -lunistring -lssh2 -lpsl -lssl -lcrypto -lssl -lcrypto -lzstd -lz -lidn2 -lunistring"
+      + lib.optionalString (stdenv.hostPlatform.isStatic && stdenv.hostPlatform.isDarwin)
+        " -framework SystemConfiguration";
     };
 
     postInstall = ''
@@ -106,20 +117,16 @@ stdenv.mkDerivation (finalAttrs: {
     hash = "sha256-+drodBren44VLC84gYTjKaAJ2YU1CoUPr0FTVxdVIa4=";
   };
 
-  #postPatch = ''
-  #  substituteInPlace sdk/core/azure-core-amqp/CMakeLists.txt \
-  #    --replace-fail "VENDOR_UAMQP ON" "VENDOR_UAMQP OFF"
-  #'';
-
   nativeBuildInputs = [ cmake ninja ];
 
   buildInputs = [
-    #abseil-cpp
     azure-c-shared-utility
     azure-macro-utils-c
+    umock-c
+  ];
+  propagatedBuildInputs = [
     curl
     libxml2
-    umock-c
   ];
 
   env = {
