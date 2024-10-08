@@ -7,6 +7,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/pipeline.hpp>
@@ -196,22 +197,16 @@ public:
 
   auto positive_stride(generator<table_slice> input,
                        int64_t stride) const -> generator<table_slice> {
-    const auto make_stride_index = [&](const int64_t offset,
-                                       const int64_t rows) {
-      auto stride_builder = arrow::Int64Builder{};
-      const auto reserve_result = stride_builder.Reserve((rows + 1) / stride);
-      TENZIR_ASSERT(reserve_result.ok(), reserve_result.ToString().c_str());
-      for (auto i = offset % stride; i < rows; i += stride) {
-        const auto append_result = stride_builder.Append(i);
-        TENZIR_ASSERT_EXPENSIVE(append_result.ok(),
-                                append_result.ToString().c_str());
-      }
-      auto finish_result = stride_builder.Finish();
-      TENZIR_ASSERT(finish_result.ok(),
-                    finish_result.status().ToString().c_str());
-      return finish_result.MoveValueUnsafe();
-    };
     TENZIR_ASSERT(stride > 0);
+    constexpr auto make_stride_index
+      = [](const int64_t offset, const int64_t rows, const int64_t stride) {
+          auto b = int64_type::make_arrow_builder(arrow::default_memory_pool());
+          check(b->Reserve((rows + 1) / stride));
+          for (auto i = offset % stride; i < rows; i += stride) {
+            check(b->Append(i));
+          }
+          return finish(*b);
+        };
     auto offset = int64_t{0};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
@@ -220,7 +215,7 @@ public:
       }
       auto batch = to_record_batch(slice);
       const auto rows = batch->num_rows();
-      auto stride_index = make_stride_index(offset, rows);
+      auto stride_index = make_stride_index(offset, rows, stride);
       offset += rows;
       auto take_result = arrow::compute::Take(batch, stride_index);
       if (not take_result.ok()) {
