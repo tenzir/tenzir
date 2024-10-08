@@ -1096,7 +1096,7 @@ index(index_actor::stateful_pointer<index_state> self,
     }
     self->state.shutting_down = true;
     self
-      ->request(static_cast<index_actor>(self), std::chrono::seconds{120},
+      ->request(static_cast<index_actor>(self), std::chrono::minutes{10},
                 atom::flush_v)
       .then(
         [self]() {
