@@ -9,6 +9,7 @@
 #include "tenzir/application.hpp"
 #include "tenzir/concept/convertible/to.hpp"
 #include "tenzir/default_configuration.hpp"
+#include "tenzir/detail/posix.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/signal_handlers.hpp"
 #include "tenzir/logger.hpp"
@@ -22,6 +23,7 @@
 #include <arrow/util/compression.h>
 #include <caf/actor_system.hpp>
 #include <caf/fwd.hpp>
+#include <sys/resource.h>
 
 #include <csignal>
 #include <cstdlib>
@@ -96,6 +98,21 @@ auto main(int argc, char** argv) -> int {
   if (!log_context) {
     return EXIT_FAILURE;
   }
+#if TENZIR_POSIX
+  struct rlimit rlimit {};
+  if (::getrlimit(RLIMIT_NOFILE, &rlimit) < 0) {
+    TENZIR_ERROR("failed to get RLIMIT_NOFILE: {}", detail::describe_errno());
+    return -errno;
+  }
+  TENZIR_DEBUG("raising soft limit of open file descriptors from {} to {}",
+               rlimit.rlim_cur, rlimit.rlim_max);
+  rlimit.rlim_cur = rlimit.rlim_max;
+  if (::setrlimit(RLIMIT_NOFILE, &rlimit) < 0) {
+    TENZIR_ERROR("failed to raise soft limit of open file descriptors: {}",
+                 detail::describe_errno());
+    return -errno;
+  }
+#endif
   // Print the configuration file(s) that were loaded.
   if (!cfg.config_file_path.empty()) {
     cfg.config_files.emplace_back(std::move(cfg.config_file_path));
