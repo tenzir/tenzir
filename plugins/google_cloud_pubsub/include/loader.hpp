@@ -23,33 +23,55 @@ namespace tenzir::plugins::google_cloud_pubsub {
 
 namespace pubsub = ::google::cloud::pubsub;
 
-constexpr auto yield_timeout = std::chrono::seconds(1);
-
 class loader final : public plugin_loader {
 public:
   struct args {
     located<std::string> project_id;
     located<std::string> subscription_id;
+    std::optional<located<duration>> timeout
+      = located{duration::zero(), location::unknown};
+    std::optional<located<duration>> yield_timeout
+      = located{defaults::import::batch_timeout, location::unknown};
 
     auto add_to(argument_parser& parser) -> void {
       parser.add(project_id, "<project-id>");
       parser.add(subscription_id, "<subscription-id>");
+      parser.add("--timeout", timeout, "<duration>");
     }
 
     auto add_to(argument_parser2& parser) -> void {
       parser.add("project_id", project_id);
       parser.add("subscription_id", subscription_id);
+      parser.add("timeout", timeout);
+      parser.add("_yield_timeout", timeout);
     }
 
     friend auto inspect(auto& f, args& x) -> bool {
       return f.object(x).fields(f.field("project_id", x.project_id),
-                                f.field("topic_id", x.subscription_id));
+                                f.field("topic_id", x.subscription_id),
+                                f.field("timeout", x.timeout),
+                                f.field("_yield_timeout", x.yield_timeout));
     }
   };
 
   loader() = default;
 
   loader(args args) : args_{std::move(args)} {
+    TENZIR_ASSERT(args_.timeout);
+    TENZIR_ASSERT(args_.yield_timeout);
+    if (args_.timeout->inner < duration::zero()) {
+      diagnostic::error("timeout duration may not be negative")
+        .primary(args_.timeout->source)
+        .throw_();
+    }
+    if (args_.timeout->inner == duration::zero()) {
+      args_.timeout->inner = std::chrono::years{100};
+    }
+    if (args_.yield_timeout->inner <= duration::zero()) {
+      diagnostic::error("_yield_timeout must be larger than zero")
+        .primary(args_.yield_timeout->source)
+        .throw_();
+    }
   }
   auto instantiate(operator_control_plane& ctrl) const
     -> std::optional<generator<chunk_ptr>> override {
@@ -60,8 +82,10 @@ public:
                                args.subscription_id.inner)));
         auto chunks = std::vector<chunk_ptr>{};
         std::mutex chunks_mut;
+        auto last_message_time = std::chrono::system_clock::now();
         auto append_chunk = [&](const std::string& data) {
           std::scoped_lock guard{chunks_mut};
+          last_message_time = std::chrono::system_clock::now();
           chunks.push_back(chunk::copy(data));
         };
         auto session = subscriber.Subscribe(
@@ -73,10 +97,18 @@ public:
           for (auto&& chunk : chunks) {
             co_yield std::move(chunk);
           }
-          auto result = session.wait_for(yield_timeout);
+          auto result = session.wait_for(args.yield_timeout->inner);
           if (result == std::future_status::ready) {
+            // This should never happen
             break;
           }
+          auto now = std::chrono::system_clock::now();
+          if (now - last_message_time > args.timeout->inner) {
+            break;
+          }
+        }
+        if (session.valid()) {
+          session.cancel();
         }
         for (auto&& chunk : chunks) {
           co_yield std::move(chunk);
