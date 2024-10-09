@@ -26,9 +26,7 @@
 #include "tenzir/uuid.hpp"
 #include "tenzir/value_index.hpp"
 
-#include <caf/broadcast_downstream_manager.hpp>
 #include <caf/optional.hpp>
-#include <caf/stream_slot.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <filesystem>
@@ -38,11 +36,6 @@
 
 namespace tenzir {
 
-/// Determines whether the index creation should be skipped for a given field.
-bool should_skip_index_creation(const type& type,
-                                const qualified_record_field& qf,
-                                const std::vector<index_config::rule>& rules);
-
 /// The state of the ACTIVE PARTITION actor.
 struct active_partition_state {
   // -- constructor ------------------------------------------------------------
@@ -50,10 +43,6 @@ struct active_partition_state {
   active_partition_state() = default;
 
   // -- member types -----------------------------------------------------------
-
-  using partition_stream_stage_ptr
-    = caf::stream_stage_ptr<table_slice,
-                            caf::broadcast_downstream_manager<table_slice>>;
 
   /// Contains all the data necessary to create a partition flatbuffer.
   struct serialization_data {
@@ -68,6 +57,10 @@ struct active_partition_state {
 
     /// Opaque blob that is passed to the store backend on reading.
     chunk_ptr store_header = {};
+
+    // A handle to the store builder.
+    // Only used by the partition transformer.
+    store_builder_actor builder = {};
 
     /// Maps type names to IDs. Used the answer #schema queries.
     std::unordered_map<std::string, ids> type_ids = {};
@@ -84,17 +77,9 @@ struct active_partition_state {
     std::vector<std::pair<std::string, chunk_ptr>> indexer_chunks = {};
   };
 
-  // -- utility functions ------------------------------------------------------
+  // -- inbound path -----------------------------------------------------------
 
-  active_indexer_actor indexer_at(size_t position) const;
-
-  void add_flush_listener(flush_listener_actor listener);
-
-  void notify_flush_listeners();
-
-  std::optional<tenzir::record_type> combined_schema() const;
-
-  const std::unordered_map<std::string, ids>& type_ids() const;
+  void handle_slice(table_slice slice);
 
   // -- data members -----------------------------------------------------------
 
@@ -103,12 +88,6 @@ struct active_partition_state {
 
   /// The data that will end up on disk in the partition flatbuffer.
   serialization_data data;
-
-  /// The streaming stage.
-  partition_stream_stage_ptr stage = {};
-
-  /// Tracks whether we already received at least one table slice.
-  bool streaming_initiated = {};
 
   /// Options to be used when adding events to the partition_synopsis.
   uint64_t partition_capacity = 0ull;
@@ -129,15 +108,6 @@ struct active_partition_state {
 
   /// Path where the partition synopsis is written.
   std::optional<std::filesystem::path> synopsis_path = {};
-
-  /// Maps qualified fields to indexer actors.
-  //  TODO: Should we use the tsl map here for heterogeneous key lookup?
-  detail::stable_map<qualified_record_field, active_indexer_actor> indexers
-    = {};
-
-  /// Counts how many indexers have already responded to the `snapshot` atom
-  /// with a serialized chunk.
-  size_t persisted_indexers = {};
 
   /// The store backend.
   const store_actor_plugin* store_plugin = {};

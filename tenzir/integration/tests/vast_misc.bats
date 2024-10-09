@@ -38,7 +38,6 @@ setup() {
   # Verify that the node doesn't deadlock on
   # shutdown when metrics are enabled.
 
-  export TENZIR_ENABLE_METRICS=true
   setup_node
 
   # Random command to ensure the node is up.
