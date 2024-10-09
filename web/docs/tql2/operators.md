@@ -136,7 +136,7 @@ Operator | Description | Example
 ---------|-------------|--------
 [`legacy`](operators/) | |
 [`python`](operators/) | |
-[`shell`](operators/) | |
+[`shell`](operators/) | TODO: This is also a source... |
 
 ## Time
 

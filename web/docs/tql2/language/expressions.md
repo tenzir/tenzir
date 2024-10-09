@@ -102,9 +102,6 @@ Binary:
 
 ### Let Substitution
 
-### Assignment
-
-Probably not.
 
 
 ## Precedence
@@ -121,7 +118,6 @@ unary `+` `-`  |
 `not` |
 `and` | left
 `or` | left
-`=` | right (maybe hide)
 
 
 ## What is a selector?
