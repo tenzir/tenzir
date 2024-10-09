@@ -501,12 +501,6 @@ public:
     return {};
   }
 
-  auto snapshot(parameter_map, const std::vector<std::string>&) const
-    -> caf::expected<expression> override {
-    return caf::make_error(ec::unimplemented,
-                           "geoip context does not support snapshots");
-  }
-
   auto save() const -> caf::expected<save_result> override {
     if (!mapped_mmdb_) {
       return caf::make_error(ec::lookup_error,

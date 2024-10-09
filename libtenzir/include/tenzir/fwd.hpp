@@ -104,20 +104,6 @@ struct Offset;
 
 namespace caf {
 
-// TODO CAF 0.19. Check if this already implemented by CAF itself.
-template <class Slot>
-struct inspector_access<inbound_stream_slot<Slot>> {
-  template <class Inspector, class T>
-  static auto apply(Inspector& f, inbound_stream_slot<T>& x) -> bool {
-    auto val = x.value();
-    auto result = f.apply(val);
-    if constexpr (Inspector::is_loading) {
-      x = inbound_stream_slot<T>{val};
-    }
-    return result;
-  }
-};
-
 template <>
 struct inspector_access<std::filesystem::path> {
   template <class Inspector>
@@ -547,12 +533,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
     (std::unordered_map<std::string, std::optional<std::string>>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::partition_synopsis_pair>))
   TENZIR_ADD_TYPE_ID((std::vector<std::filesystem::path>))
-
-  TENZIR_ADD_TYPE_ID((caf::stream<tenzir::chunk_ptr>))
-  TENZIR_ADD_TYPE_ID((caf::stream<tenzir::table_slice>))
-  TENZIR_ADD_TYPE_ID((caf::inbound_stream_slot<tenzir::chunk_ptr>))
-  TENZIR_ADD_TYPE_ID((caf::inbound_stream_slot<tenzir::table_slice>))
-  TENZIR_ADD_TYPE_ID((caf::outbound_stream_slot<tenzir::table_slice>))
 
 CAF_END_TYPE_ID_BLOCK(tenzir_types)
 

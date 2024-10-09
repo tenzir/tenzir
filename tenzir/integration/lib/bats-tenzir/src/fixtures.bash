@@ -22,7 +22,6 @@ export_default_node_config() {
   export TENZIR_AUTOMATIC_REBUILD=0
   export TENZIR_EXEC__DUMP_DIAGNOSTICS=true
   export TENZIR_EXEC__IMPLICIT_EVENTS_SINK="write json --compact-output | save -"
-  export TENZIR_ENABLE_METRICS=false
 }
 
 bats_tenzir_initialize() {
