@@ -441,7 +441,7 @@ jobs:
           cp -f CHANGELOG.md web/src/pages/changelog.md
       - uses: actions/setup-node@v4
         with:
-          node-version: 16.x
+          node-version: 20.x
           cache-dependency-path: web/yarn.lock
           cache: yarn
       - name: Install dependencies
