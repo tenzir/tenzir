@@ -509,6 +509,16 @@ EOF
   check tenzir 'show version | put line="55.3.244.1 GET /index.html 15824 0.043" | parse line grok "%{IP:client} %{WORD:method} %{URIPATHPARAM:request} %{NUMBER:bytes} %{NUMBER:duration}"'
 }
 
+# bates test_tags=pipelines
+@test "Read Grok" {
+  echo "v4.5.0-71-gae887a0ca3-dirty" | check tenzir 'read grok "%{GREEDYDATA:version}"'
+  echo "v4.5.0-71-gae887a0ca3-dirty" | check tenzir 'read grok "v%{INT:major:int}\.%{INT:minor:int}\.%{INT:patch:int}(-%{INT:tweak:int}-%{DATA:ref}(-%{DATA:extra})?)?"'
+  echo "v4.5.0-71-gae887a0ca3-dirty" | check tenzir 'read grok --indexed-captures "v%{INT:major:int}\.%{INT:minor:int}\.%{INT:patch:int}(-%{INT:tweak}-%{DATA:ref}(-%{DATA:extra})?)?"'
+  echo "https://example.com/test.txt?foo=bar" | check tenzir 'read grok --include-unnamed "%{URI}"'
+  echo "55.3.244.1 GET /index.html 15824 0.043" | check tenzir 'read grok "%{IP:client} %{WORD:method} %{URIPATHPARAM:request} %{NUMBER:bytes} %{NUMBER:duration}"'
+  echo "v4.5.0-71-gae887a0ca3-dirty" | check tenzir 'read grok "%{TIMESTAMP_ISO8601}"'
+}
+
 # bats test_tags=pipelines
 @test "Print JSON in CEF" {
   check tenzir "read cef | slice 1:3 | print extension json | select extension" <${INPUTSDIR}/cef/forcepoint.log
