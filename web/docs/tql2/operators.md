@@ -59,14 +59,14 @@ Operator | Description | Example
 
 Operator | Description | Example
 ---------|-------------|--------
-[`read_csv`](operators/) | |
+[`read_csv`](operators/read_csv) | |
 [`read_json`](operators/read_json) | |
-[`read_lines`](operators/) | |
-[`read_suricata`](operators/) | |
-[`read_syslog`](operators/) | |
-[`read_yaml`](operators/) | |
-[`read_zeek_json`](operators/) | |
-[`read_zeek_tsv`](operators/) | |
+[`read_lines`](operators/read_lines) | |
+[`read_suricata`](operators/read_suricata) | |
+[`read_syslog`](operators/read_syslog) | |
+[`read_yaml`](operators/read_yaml) | |
+[`read_zeek_json`](operators/read_zeek_json) | |
+[`read_zeek_tsv`](operators/read_zeek_tsv) | |
 
 ## Printing
 

@@ -156,3 +156,11 @@ code, pre {
 .hidden {
   display: none !important;
 }
+// TODO: This cannot stay that way. Find a proper solution.
+div:has(a[href="/next/tql2/operators"])+ul {
+  display: none !important;
+}
+
+a[href="/next/tql2/operators"]+button {
+  display: none !important;
+}
