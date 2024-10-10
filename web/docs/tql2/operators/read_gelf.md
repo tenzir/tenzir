@@ -10,7 +10,7 @@ read_gelf [merge=bool, raw=bool, schema=str, selector=str, schema_only=bool, unf
 
 Parses an incoming [GELF](https://go2docs.graylog.org/current/getting_in_log_data/gelf.html) stream into events.
 
-### merge
+### `merge`
 
 Merges all incoming events into a single schema\* that converges over time. This
 option is usually the fastest *for reading* highly heterogeneous data, but can
@@ -21,7 +21,7 @@ to huge schemas filled with nulls and imprecise results. Use with caution.
 
 This option can not be combined with `--raw --schema`.
 
-### raw
+### `raw`
 
 Use only the raw JSON types. This means that all strings are parsed as `string`,
 irrespective of whether they are a valid `ip`, `duration`, etc. Also, since JSON

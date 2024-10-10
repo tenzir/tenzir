@@ -1,18 +1,18 @@
 # tail
 
-Limits the input to the last `N` events.
+Limits the input to the last `n` events.
 
 ```
-tail [N:uint]
+tail [n:uint]
 ```
 
 ## Description
 
-Forwards the last `N` events and discards the rest.
+Forwards the last `n` events and discards the rest.
 
-`tail N` is a shorthand notation for [`slice begin=-N`](slice.md).
+`tail n` is a shorthand notation for [`slice begin=-n`](slice.md).
 
-### `N`
+### `n`
 
 An unsigned integer denoting how many events to keep.
 

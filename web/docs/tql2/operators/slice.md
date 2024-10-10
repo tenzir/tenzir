@@ -3,7 +3,7 @@
 Keep a range of events within the interval `[begin, end)` stepping by `stride`.
 
 ```
-slice [begin=int] [end=uint] [stride=uint]
+slice [begin=int] [end=int] [stride=int]
 ```
 
 ## Description

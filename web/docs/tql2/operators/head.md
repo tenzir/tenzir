@@ -1,20 +1,20 @@
 # head
 
-Limits the input to the first `N` events.
+Limits the input to the first `n` events.
 
 ## Synopsis
 
 ```
-head [N:uint]
+head [n:uint]
 ```
 
 ## Description
 
-Forwards the first `N` events and discards the rest.
+Forwards the first `n` events and discards the rest.
 
-`head N` is a shorthand notation for [`slice end=N`](slice.md).
+`head n` is a shorthand notation for [`slice end=n`](slice.md).
 
-### `N`
+### `n`
 
 An unsigned integer denoting how many events to keep.
 

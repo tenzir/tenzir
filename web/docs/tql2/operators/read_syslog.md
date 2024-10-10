@@ -63,7 +63,7 @@ With this input, the parser will produce the following output, with the schema n
 }
 ```
 
-### merge
+### `merge`
 
 Merges all incoming events into a single schema\* that converges over time. This
 option is usually the fastest *for reading* highly heterogeneous data, but can lead
@@ -73,7 +73,7 @@ to huge schemas filled with nulls and imprecise results. Use with caution.
 
 This option can not be combined with `--raw --schema`.
 
-### raw
+### `raw`
 
 Use only the raw types that are native to the parsed format. Fields that have a type
 specified in the chosen schema will still be parsed according to the schema.
