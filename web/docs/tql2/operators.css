@@ -1,0 +1,19 @@
+table {
+  border: var(--ifm-table-border-width) solid var(--ifm-table-border-color);
+  display: inline-block;
+}
+
+table a code {
+  background-color: transparent;
+  border: none;
+}
+
+table td,
+table th {
+  border: none;
+  padding: 0.5rem;
+}
+
+table tr:nth-child(2n) {
+  background-color: transparent;
+}
