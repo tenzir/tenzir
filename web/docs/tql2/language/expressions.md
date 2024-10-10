@@ -15,7 +15,7 @@ This page still needs to be written. You'll just find some experimentation below
 Literals are the basic building blocks for constructing data. They are
 simple, self-contained constants.
 
-~~~
+```tql
 true
 false
 null
@@ -30,7 +30,7 @@ r"C:\tmp"
 192.168.0.1
 ::ab12:253
 192.0.0.0/8
-~~~
+```
 
 Literals such as `42`, `123.45`, `2.5k` and `2s` are called scalars. Numeric
 scalars can have the power-of-ten suffixes `k` (=1,000), `M` (=1,000,000), `G`,

@@ -1,15 +1,20 @@
 # read_json
 
+:::note
+If you are receiving newline-delimited JSON (NDJSON), use [`read_ndjson`](read_ndjson) instead.
+:::
+
 Parses an incoming JSON stream into events.
 
 ```tql
 read_json [schema=str, selector=str, schema_only=bool, merge=bool, raw=bool,
-           unflatten=str, ndjson=bool, gelf=bool, arrays_of_objects=bool]
+           unflatten=str, arrays_of_objects=bool]
 ```
+
 
 ## Description
 
-Parses an incoming JSON stream into events.
+Parses an incoming JSON byte stream into events.
 
 ### `arrays_of_objects = bool (optional)`
 
@@ -61,7 +66,7 @@ and it does not exist, this has no effect.
 
 This option requires either `schema` or `selector` to be set.
 
-### `unflatten = bool (optional)`
+### `unflatten = str (optional)`
 
 ...
 

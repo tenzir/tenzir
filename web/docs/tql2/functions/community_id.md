@@ -38,7 +38,7 @@ cid = community_id(
 // cid == "1:koNcqhFRD5kb254ZrLsdv630jCM="
 ```
 
-```
+```tql
 from {
   source_ip: 1.2.3.4,
   destination_ip: 43.3.132.3,

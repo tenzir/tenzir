@@ -22,7 +22,7 @@ The first pipeline to use a cache writes into the cache. All further pipelines
 using the same cache will read from the cache instead of executing the operators
 before the `cache` operator in the same pipeline.
 
-### `id: str (required)`
+### `id: str`
 
 An arbitrary string that uniquely identifies the cache.
 
