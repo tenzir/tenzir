@@ -91,7 +91,7 @@ struct pattern_store;
 struct pattern {
   pattern() = default;
 
-  pattern(std::string p, location loc = location::unknown)
+  explicit pattern(std::string p, location loc = location::unknown)
     : raw_pattern(std::move(p)), loc{std::move(loc)} {
   }
   explicit pattern(located<std::string> p)
@@ -435,7 +435,7 @@ public:
   }
 
   auto parse_line(multi_series_builder& builder, diagnostic_handler& dh,
-                  std::string_view line) const -> void {
+                  std::string_view line) const -> bool {
     auto matches = boost::cmatch{};
     try {
       if (not boost::regex_match(line.begin(), line.end(), matches,
@@ -446,20 +446,20 @@ public:
           .primary(input_pattern_.loc)
           .emit(dh);
         builder.null();
-        return;
+        return false;
       }
     } catch (const boost::regex_error& e) {
       if (e.code() != boost::regex_constants::error_complexity) {
         throw;
       }
-      builder.null();
       diagnostic::warning("failed to apply grok pattern due to its complexity")
         .note("example input: {:?}", line)
         .hint("try to simplify or optimize your grok pattern")
         .hint("pattern: `{}`", input_pattern_.resolved_pattern->str())
         .primary(input_pattern_.loc)
         .emit(dh);
-      return;
+      builder.null();
+      return false;
     }
     auto record = builder.record();
     auto add_field = [&](std::string_view name, const boost::csub_match& match,
@@ -535,6 +535,7 @@ public:
         add_field(name, matches[name], type);
       }
     }
+    return true;
   }
 
   auto parse_strings(const arrow::StringArray& input,
@@ -596,7 +597,7 @@ auto parse_loop(generator<std::optional<std::string_view>> input,
   auto tdh = transforming_diagnostic_handler{
     dh,
     [](auto diag) {
-      diag.message = fmt::format("read_grok: {}", diag.message);
+      diag.message = fmt::format("grok parser: {}", diag.message);
       return diag;
     },
   };
@@ -609,7 +610,9 @@ auto parse_loop(generator<std::optional<std::string_view>> input,
     for (auto&& slice : builder.yield_ready_as_table_slice()) {
       co_yield std::move(slice);
     }
-    parser.parse_line(builder, tdh, *line);
+    if (not parser.parse_line(builder, tdh, *line)) {
+      builder.remove_last();
+    }
   }
   for (auto&& slice : builder.finalize_as_table_slice()) {
     co_yield std::move(slice);
