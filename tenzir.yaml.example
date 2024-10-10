@@ -46,6 +46,10 @@ tenzir:
   # checked in that order, and as a last resort "/tmp" is used.
   #cache-directory:
 
+  # The maximum time a node is allowed to take for its shutdown process until it
+  # shuts down uncleanly. If unset, the node will wait indefinitely.
+  #shutdown-grace-period:
+
   # The file system path used for log files.
   # Defaults to one of the following paths, selecting the first that is
   # available:

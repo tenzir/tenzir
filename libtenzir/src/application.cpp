@@ -47,6 +47,9 @@ void add_root_opts(command& cmd) {
   cmd.options.add<std::string>("?tenzir", "console-verbosity",
                                "output verbosity level on the "
                                "console");
+  cmd.options.add<std::string>("?tenzir", "shutdown-grace-period",
+                               "maximum time a clean shutdown may take before "
+                               "a hard kill");
   cmd.options.add<std::string>("?tenzir", "console-format",
                                "format string for logging to the "
                                "console");
