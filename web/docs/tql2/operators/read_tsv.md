@@ -26,8 +26,12 @@ If unspecified, the first line of the input is used as the header.
 ### `list_sep`
 The `string` separating the elements _inside_ a list.
 
+Defaults to `,`.
+
 ### `null_value`
 The `string` denoting an absent value.
+
+Defaults to `-`.
 
 ### `raw`
 Use only the raw types that are native to the parsed format. Fields that have a type

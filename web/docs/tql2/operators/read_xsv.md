@@ -1,6 +1,6 @@
 # read_xsv
 
-Read CSV (Comma-Separated Values) from a byte stream.
+Read XSV (`X`-Separated Values) from a byte stream.
 
 ```
 read_xsv field_sep:str, list_sep:str, null_value:str, 
@@ -11,7 +11,7 @@ read_xsv field_sep:str, list_sep:str, null_value:str,
 ## Description
 
 The `read_xsv` operator transforms a byte stream into a event stream by parsing
-the bytes as [CSV](https://en.wikipedia.org/wiki/Comma-separated_values).
+the bytes as [XSV](https://en.wikipedia.org/wiki/Delimiter-separated_values).
 
 ### `field_sep`
 The `string` separating different fields.
