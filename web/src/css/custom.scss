@@ -156,6 +156,28 @@ code, pre {
 .hidden {
   display: none !important;
 }
+
+figure[data-rehype-pretty-code-figure] {
+  margin: 0;
+}
+
+figure[data-rehype-pretty-code-figure]:has(figcaption) pre {
+  border-top-left-radius: 0px !important;
+  border-top-right-radius: 0px !important;
+}
+
+figure[data-rehype-pretty-code-figure]
+  figcaption[data-rehype-pretty-code-title] {
+  font-family: var(--ifm-font-family-monospace);
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  background-color: hsl(229, 20%, 30%);
+  padding: 0.25rem 1rem;
+  font-weight: 500;
+  color: hsl(229, 20%, 90%);
+  border-radius: 0.5rem 0.5rem 0 0;
+}
+
 // TODO: This cannot stay that way. Find a proper solution.
 div:has(a[href="/next/tql2/operators"])+ul {
   display: none !important;

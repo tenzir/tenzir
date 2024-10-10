@@ -6,20 +6,20 @@
 // SPDX-FileCopyrightText: (c) 2024 The Tenzir Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
-// The BITZ format is a size-prefixed dump of Tenzir's wire format as laid out
-// in the tenzir.fbs.FlatTableSlice FlatBuffers table. The size prefix occupies
-// 64 bit and is stored in network byte order.
-
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/data.hpp>
 #include <tenzir/make_byte_reader.hpp>
+#include <tenzir/parser_interface.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/to_lines.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::bitz {
 namespace {
+
+static constexpr auto BITZ_MAGIC = std::array<char, 4>{'T', 'N', 'Z', '1'};
 
 class bitz_parser final : public plugin_parser {
 public:
@@ -36,6 +36,27 @@ public:
       [](auto byte_reader,
          operator_control_plane& ctrl) -> generator<table_slice> {
         while (true) {
+          auto magic = byte_reader(BITZ_MAGIC.size());
+          while (not magic) {
+            co_yield {};
+            magic = byte_reader(BITZ_MAGIC.size());
+          }
+          if (magic->size() < BITZ_MAGIC.size()) {
+            if (magic->size() != 0) {
+              diagnostic::error("unexpected BITZ magic length {}",
+                                magic->size())
+                .note("expected {}", BITZ_MAGIC.size())
+                .emit(ctrl.diagnostics());
+            }
+            co_return;
+          }
+          if (std::memcmp(magic->data(), BITZ_MAGIC.data(), BITZ_MAGIC.size())
+              != 0) {
+            diagnostic::error("unexpected BITZ magic")
+              .note("expected {}",
+                    std::string_view{BITZ_MAGIC.data(), BITZ_MAGIC.size()})
+              .emit(ctrl.diagnostics());
+          }
           auto header = byte_reader(sizeof(uint64_t));
           while (not header) {
             co_yield {};
@@ -64,17 +85,26 @@ public:
               .emit(ctrl.diagnostics());
             co_return;
           }
-          auto deserializer = caf::binary_deserializer{nullptr, *message};
-          auto result = table_slice{};
-          const auto ok = deserializer.apply(result);
-          if (not ok) [[unlikely]] {
-            diagnostic::warning("failed to deserialize BITZ message")
-              .emit(ctrl.diagnostics());
+          auto parser
+            = check(pipeline::internal_parse_as_operator("read feather"));
+          TENZIR_ASSERT(parser);
+          auto untyped_instance = check(parser->instantiate(
+            [](auto chunk) -> generator<chunk_ptr> {
+              co_yield std::move(chunk);
+            }(std::move(message)),
+            ctrl));
+          auto* instance
+            = std::get_if<generator<table_slice>>(&untyped_instance);
+          TENZIR_ASSERT(instance);
+          while (auto result = instance->next()) {
+            if (size(*result) == 0) {
+              continue;
+            }
+            co_yield std::move(*result);
           }
-          co_yield std::move(result);
         }
       },
-      make_byte_view_reader(std::move(input)), ctrl);
+      make_byte_reader(std::move(input)), ctrl);
   }
 
   friend auto inspect(auto& f, bitz_parser& x) -> bool {
@@ -93,29 +123,41 @@ public:
   auto instantiate(type input_schema, operator_control_plane& ctrl) const
     -> caf::expected<std::unique_ptr<printer_instance>> override {
     (void)input_schema;
-    (void)ctrl;
     return printer_instance::make(
+      // NOLINTNEXTLINE(cppcoreguidelines-avoid-capturing-lambda-coroutines)
       [&ctrl](table_slice slice) -> generator<chunk_ptr> {
         if (slice.rows() == 0) {
           co_yield {};
           co_return;
         }
-        auto buffer = caf::byte_buffer{};
-        buffer.resize(sizeof(uint64_t));
-        auto serializer = caf::binary_serializer{nullptr, buffer};
-        const auto ok = serializer.apply(slice);
-        if (not ok) [[unlikely]] {
-          diagnostic::warning("failed to serialize BITZ message")
-            .note("skipping {} events with schema {}", slice.rows(),
-                  slice.schema())
-            .emit(ctrl.diagnostics());
-          co_return;
+        auto printer
+          = check(pipeline::internal_parse_as_operator("write feather"));
+        TENZIR_ASSERT(printer);
+        auto untyped_instance = check(printer->instantiate(
+          [](auto slice) -> generator<table_slice> {
+            co_yield std::move(slice);
+          }(std::move(slice)),
+          ctrl));
+        auto* instance = std::get_if<generator<chunk_ptr>>(&untyped_instance);
+        TENZIR_ASSERT(instance);
+        auto total_size = uint64_t{0};
+        auto results = std::vector<chunk_ptr>{};
+        while (auto result = instance->next()) {
+          const auto chunk_size = size(*result);
+          if (chunk_size == 0) {
+            continue;
+          }
+          total_size += size(*result);
+          results.push_back(std::move(*result));
         }
-        const auto size = detail::to_network_order(
-          detail::narrow_cast<uint64_t>(buffer.size() - sizeof(uint64_t)));
-        TENZIR_ASSERT(size > 0);
-        std::memcpy(buffer.data(), &size, sizeof(uint64_t));
-        co_yield chunk::make(std::move(buffer));
+        TENZIR_ASSERT(not results.empty());
+        TENZIR_ASSERT(total_size > 0);
+        total_size = detail::to_network_order(total_size);
+        co_yield chunk::copy(BITZ_MAGIC.data(), BITZ_MAGIC.size());
+        co_yield chunk::copy(&total_size, sizeof(total_size));
+        for (auto&& result : results) {
+          co_yield std::move(result);
+        }
       });
   }
 
@@ -155,7 +197,33 @@ class plugin final : public virtual parser_plugin<bitz_parser>,
   }
 };
 
+class read_bitz_plugin final : public virtual operator_factory_plugin {
+  auto name() const -> std::string override {
+    return "read_bitz";
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    TENZIR_UNUSED(inv, ctx);
+    return check(pipeline::internal_parse_as_operator("read bitz"));
+  }
+};
+
+class write_bitz_plugin final : public virtual operator_factory_plugin {
+  auto name() const -> std::string override {
+    return "write_bitz";
+  }
+
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
+    TENZIR_UNUSED(inv, ctx);
+    return check(pipeline::internal_parse_as_operator("write bitz"));
+  }
+};
+
 } // namespace
 } // namespace tenzir::plugins::bitz
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::bitz::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::bitz::read_bitz_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::bitz::write_bitz_plugin)

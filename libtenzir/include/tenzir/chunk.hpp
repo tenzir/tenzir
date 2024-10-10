@@ -129,7 +129,7 @@ public:
 
   /// Construct a chunk from a byte buffer by copying it.
   /// @param buffer The byte buffer.
-  /// @param buffer The metadata associated with the chunk.
+  /// @param metadata The metadata associated with the chunk.
   /// @returns A chunk pointer or `nullptr` on failure.
   template <class Buffer>
     requires requires(const Buffer& buffer) {
@@ -148,6 +148,14 @@ public:
       },
       std::move(metadata));
   }
+
+  /// Construct a chunk from a byte buffer by copying it.
+  /// @param data The pointer to the start of the byte buffer.
+  /// @param size The size of the byte buffer.
+  /// @param metadata The metadata associated with the chunk.
+  /// @returns A chunk pointer or `nullptr` on failure.
+  static auto copy(const void* data, size_t size, chunk_metadata metadata = {})
+    -> chunk_ptr;
 
   /// Memory-maps a chunk from a read-only file.
   /// @param filename The name of the file to memory-map.

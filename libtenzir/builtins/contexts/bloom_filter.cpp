@@ -68,12 +68,6 @@ public:
     return builder.finish();
   }
 
-  auto snapshot(parameter_map, const std::vector<std::string>&) const
-    -> caf::expected<expression> override {
-    return caf::make_error(ec::unimplemented,
-                           "bloom filter doesn't support snapshots");
-  }
-
   /// Inspects the context.
   auto show() const -> record override {
     return record{

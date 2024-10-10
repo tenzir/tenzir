@@ -12,6 +12,20 @@
 
 #include <simdjson.h>
 
+namespace tenzir {
+
+template <class T>
+[[nodiscard]] auto
+check(simdjson::simdjson_result<T> result,
+      std::source_location location = std::source_location::current()) -> T {
+  if (result.error() != simdjson::error_code::SUCCESS) [[unlikely]] {
+    detail::panic_impl(simdjson::error_message(result.error()), location);
+  }
+  return std::move(result).value_unsafe();
+}
+
+} // namespace tenzir
+
 template <class T>
 struct tenzir::tryable<simdjson::simdjson_result<T>> {
   static auto is_success(const simdjson::simdjson_result<T>& x) -> bool {
@@ -24,6 +38,6 @@ struct tenzir::tryable<simdjson::simdjson_result<T>> {
 
   static auto get_error(simdjson::simdjson_result<T>&& x)
     -> simdjson::error_code {
-    return x.error();
+    return std::move(x).error();
   }
 };

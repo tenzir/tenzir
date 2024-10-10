@@ -12,12 +12,10 @@
 
 #include "tenzir/actors.hpp"
 #include "tenzir/aliases.hpp"
-#include "tenzir/data.hpp"
 #include "tenzir/detail/flat_map.hpp"
 #include "tenzir/instrumentation.hpp"
 #include "tenzir/table_slice.hpp"
 
-#include <caf/broadcast_downstream_manager.hpp>
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
 
@@ -57,26 +55,13 @@ struct importer_state {
 
   void send_report();
 
-  /// @returns various status metrics.
-  [[nodiscard]] caf::typed_response_promise<record>
-  status(status_verbosity v) const;
-
   void on_process(const table_slice& slice);
 
   /// The active id block.
   id_block current;
 
-  /// The continous stage that moves data from all sources to all subscribers.
-  caf::stream_stage_ptr<table_slice,
-                        caf::broadcast_downstream_manager<table_slice>>
-    stage;
-
   /// Pointer to the owning actor.
   importer_actor::pointer self;
-
-  std::string inbound_description = "anonymous";
-
-  std::unordered_map<caf::inbound_path*, std::string> inbound_descriptions;
 
   measurement measurement_ = {};
   stopwatch::time_point last_report = {};

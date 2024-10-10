@@ -16,8 +16,8 @@
 
 namespace tenzir {
 
-auto tokenize(std::string_view content, session ctx)
-  -> failure_or<std::vector<token>> {
+auto tokenize(std::string_view content,
+              session ctx) -> failure_or<std::vector<token>> {
   auto tokens = tokenize_permissive(content);
   TRY(verify_tokens(tokens, ctx));
   return tokens;
@@ -52,6 +52,14 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
       ->* [] { return token_kind::string; }
     | ignore('"' >> *(('\\' >> any) | (any - '"')))
       ->* [] { return token_kind::error; } // non-terminated string
+    | ignore("r\"" >> *(any - '"') >> '"')
+      ->* [] { return token_kind::raw_string; }
+    | ignore("r\"" >> *(any - '"'))
+      ->* [] { return token_kind::error; } // non-terminated raw string
+    | ignore("r#\"" >> *(any - "\"#") >> "\"#")
+      ->* [] { return token_kind::raw_string; }
+    | ignore("r#\"" >> *(any - "\"#"))
+      ->* [] { return token_kind::error; } // non-terminated raw string
     | ignore("//" >> *(any - '\n'))
       ->* [] { return token_kind::line_comment; }
     | ignore("/*" >> *(any - "*/") >> "*/")
@@ -141,8 +149,8 @@ auto tokenize_permissive(std::string_view content) -> std::vector<token> {
   return result;
 }
 
-auto verify_tokens(std::span<const token> tokens, session ctx)
-  -> failure_or<void> {
+auto verify_tokens(std::span<const token> tokens,
+                   session ctx) -> failure_or<void> {
   auto result = failure_or<void>{};
   for (auto& token : tokens) {
     if (token.kind == token_kind::error) {
@@ -203,6 +211,7 @@ auto describe(token_kind k) -> std::string_view {
     X(or_, "`or`");
     X(pipe, "`|`");
     X(plus, "`+`");
+    X(raw_string, "raw string");
     X(rbrace, "`}`");
     X(rbracket, "`]`");
     X(reserved_keyword, "reserved keyword");

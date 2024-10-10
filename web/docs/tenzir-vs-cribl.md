@@ -125,7 +125,7 @@ Cribl Stream has the following pipeline
 
 ### Routing
 
-![Cribl vs. Tenzir — Routing](cribl-vs-tenzir-routing.excalidraw.svg)
+![Cribl vs. Tenzir — Routing](cribl-vs-tenzir-routing.svg)
 
 #### Cribl
 

@@ -415,6 +415,25 @@ struct EvalBinOp<ast::binary_op::add, string_type, string_type> {
   }
 };
 
+template <>
+struct EvalBinOp<ast::binary_op::in, string_type, string_type> {
+  static auto eval(const arrow::StringArray& l, const arrow::StringArray& r,
+                   auto&&) -> std::shared_ptr<arrow::BooleanArray> {
+    auto b = arrow::BooleanBuilder{};
+    check(b.Reserve(l.length()));
+    for (auto i = int64_t{0}; i < l.length(); ++i) {
+      if (l.IsNull(i) || r.IsNull(i)) {
+        b.UnsafeAppendNull();
+        continue;
+      }
+      auto lv = l.GetView(i);
+      auto rv = r.GetView(i);
+      check(b.Append(rv.find(lv) != rv.npos));
+    }
+    return finish(b);
+  }
+};
+
 // TODO: We probably don't want this.
 template <ast::binary_op Op>
   requires(Op == ast::binary_op::and_ || Op == ast::binary_op::or_)

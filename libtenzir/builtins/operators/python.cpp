@@ -215,7 +215,7 @@ public:
             auto exists = std::filesystem::exists(*maybe_venv, ec);
             if (ec) {
               // ctrl can already be gone, so we can't emit a diagnostic here.
-              TENZIR_WARN("python operator failed to remove venv at {}: {}",
+              TENZIR_WARN("python operator failed to check for venv at {}: {}",
                           *maybe_venv, ec);
               return;
             }
@@ -317,6 +317,7 @@ public:
                                errpipe.pipe().native_sink()}},
         bp::detail::limit_handles_{}};
       ::close(codepipe.pipe().native_source());
+      codepipe.pipe().assign_source(-1);
       if (code.empty()) {
         // The current implementation always expects a non-empty input.
         // Otherwise, it blocks forever on a `read` call.
@@ -326,12 +327,16 @@ public:
       }
       codepipe.flush();
       // We need to close the file descriptor manually because the `close()`
-      // member function of the codepipe doesn't seem to do this.
+      // member function of the codepipe doesn't do this.
+      // The destructor of `codepipe` will try to close the file descriptors
+      // unless they are set to -1.
       ::close(codepipe.pipe().native_sink());
+      codepipe.pipe().assign_sink(-1);
       // Although we already closed the file descriptors of the codepipe we now
       // also close the wrapper object to make sure we don't leak any resources.
       codepipe.close();
       ::close(errpipe.pipe().native_sink());
+      errpipe.pipe().assign_sink(-1);
       if (!child.running()) {
         auto python_error = drain_pipe(errpipe);
         diagnostic::error("{}", python_error)

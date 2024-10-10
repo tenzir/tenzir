@@ -335,10 +335,9 @@ struct serve_manager_state {
   std::unordered_map<std::string, caf::error> expired_ids = {};
 
   auto handle_down_msg(const caf::down_msg& msg) -> void {
-    const auto found
-      = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
-          return op.source == msg.source;
-        });
+    const auto found = std::ranges::find_if(ops, [&](const auto& op) {
+      return op.source == msg.source;
+    });
     if (found == ops.end()) {
       TENZIR_WARN("{} received unepexted DOWN from {}: {}", *self, msg.source,
                   msg.reason);
@@ -354,10 +353,9 @@ struct serve_manager_state {
     // last set of events again by reusing the last continuation token.
     found->done = true;
     auto delete_serve = [this, source = msg.source, reason = msg.reason]() {
-      const auto found
-        = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
-            return op.source == source;
-          });
+      const auto found = std::ranges::find_if(ops, [&](const auto& op) {
+        return op.source == source;
+      });
       if (found != ops.end()) {
         expired_ids.emplace(found->serve_id, reason);
         if (not found->get_rps.empty()) {
@@ -369,19 +367,14 @@ struct serve_manager_state {
         ops.erase(found);
       }
     };
-    if (msg.reason) {
-      delete_serve();
-    } else {
-      detail::weak_run_delayed(self, defaults::api::serve::retention_time,
-                               delete_serve);
-    }
+    detail::weak_run_delayed(self, defaults::api::serve::retention_time,
+                             delete_serve);
   }
 
   auto start(std::string serve_id, uint64_t buffer_size) -> caf::result<void> {
-    const auto found
-      = std::find_if(ops.begin(), ops.end(), [&](const auto& op) {
-          return op.serve_id == serve_id;
-        });
+    const auto found = std::ranges::find_if(ops, [&](const auto& op) {
+      return op.serve_id == serve_id;
+    });
     if (found != ops.end()) {
       if (not found->done) {
         return caf::make_error(
@@ -512,7 +505,9 @@ struct serve_manager_state {
           TENZIR_DEBUG("unable to find serve request after timeout expired");
           return;
         }
-        TENZIR_ASSERT(not found->done);
+        if (found->done) {
+          return;
+        }
         TENZIR_ASSERT(found->continuation_token == continuation_token);
         TENZIR_ASSERT(not found->get_rps.empty());
         const auto delivered = found->try_deliver_results(true);
@@ -703,18 +698,20 @@ struct serve_handler_state {
     auto seen_schemas = std::unordered_set<type>{};
     bool first = true;
     for (const auto& slice : results) {
-      if (slice.rows() == 0)
+      if (slice.rows() == 0) {
         continue;
+      }
       seen_schemas.insert(slice.schema());
       auto resolved_slice = resolve_enumerations(slice);
       auto type = caf::get<record_type>(resolved_slice.schema());
       auto array
         = to_record_batch(resolved_slice)->ToStructArray().ValueOrDie();
       for (const auto& row : values(type, *array)) {
-        if (first)
+        if (first) {
           out_iter = fmt::format_to(out_iter, "{{");
-        else
+        } else {
           out_iter = fmt::format_to(out_iter, "}},{{");
+        }
         first = false;
         out_iter = fmt::format_to(out_iter, R"("schema_id":"{}","data":)",
                                   slice.schema().make_fingerprint());
@@ -730,10 +727,11 @@ struct serve_handler_state {
     }
     out_iter = fmt::format_to(out_iter, R"(}}],"schemas":[)");
     for (bool first = true; const auto& schema : seen_schemas) {
-      if (first)
+      if (first) {
         out_iter = fmt::format_to(out_iter, "{{");
-      else
+      } else {
         out_iter = fmt::format_to(out_iter, "}},{{");
+      }
       first = false;
       out_iter = fmt::format_to(out_iter, R"("schema_id":"{}","definition":)",
                                 schema.make_fingerprint());
@@ -770,19 +768,19 @@ struct serve_handler_state {
           rp.deliver(rest_response::from_json_string(
             create_response(std::get<0>(result), std::get<1>(result))));
         },
-        [rp](caf::error& err) mutable {
-          // TODO: Use a struct with distinct fields for user-facing
-          // error message and detail here.
-          // TODO: We don't have the source here to print snippets of the
-          // diagnostic! Either `serve` needs to be aware of that (which seems
-          // like a very bad idea), or the diagnostics need to be rendered
-          // somewhere else.
-          auto stream = std::stringstream{};
-          auto printer = make_diagnostic_printer(
-            std::nullopt, color_diagnostics::yes, stream);
-          printer->emit(diagnostic::error(err).done());
-          auto rsp = rest_response::make_error(400, stream.str(), {});
-          rp.deliver(std::move(rsp));
+        [rp](const caf::error& err) mutable {
+          if (err == caf::exit_reason::user_shutdown
+              or err.context().match_elements<diagnostic>()) {
+            // The pipeline has either shut down naturally or we got an error
+            // that's a diagnostic. In either case, do not report the error as
+            // an internal error from the /serve endpoint, but rather report
+            // that we're done. The user must get the diagnostic from the
+            // `diagnostics` operator.
+            rp.deliver(
+              rest_response::from_json_string(create_response({}, {})));
+            return;
+          }
+          rp.deliver(rest_response::make_error(400, fmt::to_string(err), {}));
         });
     return rp;
   }
@@ -978,8 +976,9 @@ public:
   }
 
   auto openapi_endpoints(api_version version) const -> record override {
-    if (version != api_version::v0)
+    if (version != api_version::v0) {
       return tenzir::record{};
+    }
     auto result = from_yaml(SPEC_V0);
     TENZIR_ASSERT(result, fmt::to_string(result.error()).c_str());
     TENZIR_ASSERT(caf::holds_alternative<record>(*result));

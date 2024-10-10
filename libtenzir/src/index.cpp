@@ -27,7 +27,6 @@
 #include "tenzir/detail/fanout_counter.hpp"
 #include "tenzir/detail/fill_status_map.hpp"
 #include "tenzir/detail/narrow.hpp"
-#include "tenzir/detail/notifying_stream_manager.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/error.hpp"
 #include "tenzir/fbs/index.hpp"
@@ -49,7 +48,6 @@
 #include "tenzir/table_slice.hpp"
 #include "tenzir/uuid.hpp"
 
-#include <caf/attach_stream_source.hpp>
 #include <caf/error.hpp>
 #include <caf/make_copy_on_write.hpp>
 #include <caf/response_promise.hpp>
@@ -71,9 +69,10 @@
 //
 // # Import
 //
-// The index is implemented as a stream stage that hooks into the table slice
-// stream coming from the importer, and forwards them to the current active
-// partition
+// The index splits the "stream" of incoming table slices by schema and forwards
+// them to active partitions. It rotates the active partition for each schema
+// when the active partition timeout is hit or the partition reached its maximum
+// size.
 //
 //              table slice              table slice                      table slice column
 //   importer ----------------> index ---------------> active partition ------------------------> indexer
@@ -664,51 +663,55 @@ void index_state::flush_to_disk() {
       });
 }
 
-// -- flush handling -----------------------------------------------------------
+// -- inbound path -----------------------------------------------------------
 
-void index_state::add_flush_listener(flush_listener_actor listener) {
-  TENZIR_DEBUG("{} adds a new 'flush' subscriber: {}", *self, listener);
-  flush_listeners.emplace_back(std::move(listener));
-  // We may need to call `notify_listeners_if_clean` if the subscription
-  // happens after the data has already completely passed the index, but
-  // we must not to call it before any data at all has arrived it would
-  // create a false positive.
-  if (!active_partitions.empty())
-    detail::notify_listeners_if_clean(*this, *stage);
-}
-
-// The whole purpose of the `-b` flag is to somehow block until all imported
-// data is available for querying, so we have to layer hack upon hack here to
-// achieve this most of the time. This is only used for integration tests.
-// Note that there's still a race condition here if the call to
-// `notify_flush_listeners()` arrives when there's still data en route to
-// the unpersisted partitions.
-// TODO(ch19583): Rip out the whole 'notifying_stream_manager' and replace it
-// with some kind of ping/pong protocol.
-void index_state::notify_flush_listeners() {
-  TENZIR_DEBUG("{} sends 'flush' messages to {} listeners", *self,
-               flush_listeners.size());
-  for (auto& listener : flush_listeners) {
-    bool downstream = false;
-    for (const auto& [_, active_partition] : active_partitions) {
-      if (active_partition.actor) {
-        self->send(active_partition.actor, atom::subscribe_v, atom::flush_v,
-                   listener);
-        downstream = true;
-      }
+void index_state::handle_slice(table_slice x) {
+  const auto& schema = x.schema();
+  auto active_partition = active_partitions.find(schema);
+  if (active_partition == active_partitions.end()) {
+    auto part = create_active_partition(schema);
+    if (!part) {
+      self->quit(caf::make_error(ec::logic_error,
+                                 fmt::format("{} failed to create active "
+                                             "partition: {}",
+                                             *self, part.error())));
+      return;
     }
-    if (!downstream)
-      self->send(listener, atom::flush_v);
+    active_partition = *part;
+  } else if (x.rows() > active_partition->second.capacity) {
+    TENZIR_DEBUG("{} exceeds active capacity by {} rows", *self,
+                 x.rows() - active_partition->second.capacity);
+    TENZIR_VERBOSE("{} flushes active partition {} with {}/{} events", *self,
+                   schema,
+                   partition_capacity - active_partition->second.capacity,
+                   partition_capacity);
+    decommission_active_partition(schema, {});
+    flush_to_disk();
+    auto part = create_active_partition(schema);
+    if (!part) {
+      self->quit(caf::make_error(ec::logic_error,
+                                 fmt::format("{} failed to create active "
+                                             "partition: {}",
+                                             *self, part.error())));
+      return;
+    }
+    active_partition = *part;
   }
-  flush_listeners.clear();
+  TENZIR_ASSERT(active_partition->second.actor);
+  self->send(active_partition->second.actor, x);
+  if (active_partition->second.capacity == partition_capacity
+      && x.rows() > active_partition->second.capacity) {
+    TENZIR_WARN("{} got table slice with {} rows that exceeds the "
+                "default partition capacity of {} rows",
+                *self, x.rows(), partition_capacity);
+    active_partition->second.capacity = 0;
+  } else {
+    TENZIR_ASSERT(active_partition->second.capacity >= x.rows());
+    active_partition->second.capacity -= x.rows();
+  }
 }
 
 // -- partition handling -----------------------------------------------------
-
-bool i_partition_selector::operator()(const type& filter,
-                                      const table_slice& slice) const {
-  return filter == slice.schema();
-}
 
 caf::expected<std::unordered_map<type, active_partition_info>::iterator>
 index_state::create_active_partition(const type& schema) {
@@ -722,9 +725,6 @@ index_state::create_active_partition(const type& schema) {
   active_partition->second.actor
     = self->spawn(::tenzir::active_partition, schema, id, filesystem,
                   index_opts, synopsis_opts, store_actor_plugin, taxonomies);
-  active_partition->second.stream_slot
-    = stage->add_outbound_path(active_partition->second.actor);
-  stage->out().set_filter(active_partition->second.stream_slot, schema);
   active_partition->second.capacity = partition_capacity;
   active_partition->second.id = id;
   detail::weak_run_delayed(self, active_partition_timeout, [schema, id, this] {
@@ -763,11 +763,6 @@ void index_state::decommission_active_partition(
   const auto id = active_partition->second.id;
   const auto actor = std::exchange(active_partition->second.actor, {});
   const auto type = active_partition->first;
-  auto stream_slot = active_partition->second.stream_slot;
-  // Send buffered batches and remove active partition from the stream.
-  stage->out().fan_out_flush();
-  stage->out().close(stream_slot);
-  stage->out().force_emit_batches();
   // Move the active partition to the list of unpersisted partitions.
   TENZIR_ASSERT_EXPENSIVE(!unpersisted.contains(id));
   unpersisted[id] = {type, actor};
@@ -796,7 +791,6 @@ void index_state::decommission_active_partition(
                 self->send(listener, atom::update_v,
                            partition_synopsis_pair{id, ps});
               unpersisted.erase(id);
-              self->erase_stream_manager(stream_slot);
               persisted_partitions.emplace(id);
               self->send_exit(actor, caf::exit_reason::normal);
               if (completion)
@@ -809,7 +803,6 @@ void index_state::decommission_active_partition(
                            "queries: {}",
                            *self, schema, id, err);
               unpersisted.erase(id);
-              self->erase_stream_manager(stream_slot);
               self->send_exit(actor, err);
               if (completion)
                 completion(err);
@@ -821,11 +814,45 @@ void index_state::decommission_active_partition(
                      "memory to preserve process integrity: {}",
                      *self, schema, id, err);
         unpersisted.erase(id);
-        self->erase_stream_manager(stream_slot);
         self->send_exit(actor, err);
         if (completion)
           completion(err);
       });
+}
+
+auto index_state::flush() -> caf::typed_response_promise<void> {
+  // If we've got nothing to flush we can just exit immediately.
+  auto rp = self->make_response_promise<void>();
+  if (active_partitions.empty()) {
+    rp.deliver();
+    return rp;
+  }
+  auto counter = detail::make_fanout_counter(
+    active_partitions.size(),
+    [rp]() mutable {
+      rp.deliver();
+    },
+    [rp](caf::error error) mutable {
+      rp.deliver(std::move(error));
+    });
+  // We gather the schemas first before we call decomission active partition
+  // on every active partition to avoid iterator invalidation.
+  auto schemas = std::vector<type>{};
+  schemas.reserve(active_partitions.size());
+  for (const auto& [schema, _] : active_partitions) {
+    schemas.push_back(schema);
+  }
+  for (const auto& schema : schemas) {
+    decommission_active_partition(schema,
+                                  [counter](const caf::error& err) mutable {
+                                    if (err) {
+                                      counter->receive_error(err);
+                                    } else {
+                                      counter->receive_success();
+                                    }
+                                  });
+  }
+  return rp;
 }
 
 void index_state::add_partition_creation_listener(
@@ -1054,111 +1081,6 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.taste_partitions = taste_partitions;
   self->state.inmem_partitions.factory().filesystem() = self->state.filesystem;
   self->state.inmem_partitions.resize(max_inmem_partitions);
-  // Setup stream manager.
-  self->state.stage = detail::attach_notifying_stream_stage(
-    self,
-    /* continuous = */ true,
-    [](caf::unit_t&) {
-      // nop
-    },
-    [self](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
-      TENZIR_ASSERT(x.rows() != 0);
-      if (!self->state.stage->running())
-        return;
-      auto&& schema = x.schema();
-      // TODO: Consider switching schemas to a robin map to take advantage of
-      // transparent key lookup with string views, avoding the copy of the name
-      // here.
-      auto active_partition = self->state.active_partitions.find(schema);
-      if (active_partition == self->state.active_partitions.end()) {
-        auto part = self->state.create_active_partition(schema);
-        if (!part) {
-          self->quit(caf::make_error(ec::logic_error,
-                                     fmt::format("{} failed to create active "
-                                                 "partition: {}",
-                                                 *self, part.error())));
-          return;
-        }
-        active_partition = *part;
-      } else if (x.rows() > active_partition->second.capacity) {
-        TENZIR_DEBUG("{} exceeds active capacity by {} rows", *self,
-                     x.rows() - active_partition->second.capacity);
-        TENZIR_VERBOSE(
-          "{} flushes active partition {} with {}/{} events", *self, schema,
-          self->state.partition_capacity - active_partition->second.capacity,
-          self->state.partition_capacity);
-        self->state.decommission_active_partition(schema, {});
-        self->state.flush_to_disk();
-        auto part = self->state.create_active_partition(schema);
-        if (!part) {
-          self->quit(caf::make_error(ec::logic_error,
-                                     fmt::format("{} failed to create active "
-                                                 "partition: {}",
-                                                 *self, part.error())));
-          return;
-        }
-        active_partition = *part;
-      }
-      TENZIR_ASSERT(active_partition->second.actor);
-      out.push(x);
-      if (active_partition->second.capacity == self->state.partition_capacity
-          && x.rows() > active_partition->second.capacity) {
-        TENZIR_WARN("{} got table slice with {} rows that exceeds the "
-                    "default partition capacity of {} rows",
-                    *self, x.rows(), self->state.partition_capacity);
-        active_partition->second.capacity = 0;
-      } else {
-        TENZIR_ASSERT(active_partition->second.capacity >= x.rows());
-        active_partition->second.capacity -= x.rows();
-      }
-    },
-    [self](caf::unit_t&, const caf::error& err) {
-      // During "normal" shutdown, the node will send an exit message to
-      // the importer which then cuts the stream to the index, and the
-      // index exits afterwards.
-      // We get an 'unreachable' error when the stream becomes unreachable
-      // during actor destruction; in this case we can't use `self->state`
-      // anymore since it will already be destroyed.
-      TENZIR_DEBUG("index finalized streaming with error {}", err);
-      if (err && err != caf::exit_reason::unreachable) {
-        if (err == caf::exit_reason::user_shutdown)
-          TENZIR_DEBUG("{} got a user shutdown error: {}", *self, err);
-        else if (err != ec::end_of_input)
-          TENZIR_ERROR("{} got a stream error: {}", *self, err);
-        // We can shutdown now because we only get a single stream from the
-        // importer.
-        self->send_exit(self, err);
-      }
-      // We gather the schemas first before we call decomission active partition
-      // on every active partition to avoid iterator invalidation.
-      auto schemas = std::vector<type>{};
-      schemas.reserve(self->state.active_partitions.size());
-      for (const auto& [schema, _] : self->state.active_partitions)
-        schemas.push_back(schema);
-      for (const auto& schema : schemas)
-        self->state.decommission_active_partition(schema, {});
-      // Collect partitions for termination.
-      // TODO: We must actor_cast to caf::actor here because 'shutdown' operates
-      // on 'std::vector<caf::actor>' only. That should probably be generalized
-      // in the future.
-      std::vector<caf::actor> partitions;
-      partitions.reserve(self->state.inmem_partitions.size() + 1);
-      for ([[maybe_unused]] auto& [_, part] : self->state.unpersisted)
-        partitions.push_back(caf::actor_cast<caf::actor>(part.second));
-      for ([[maybe_unused]] auto& [_, part] : self->state.inmem_partitions)
-        partitions.push_back(caf::actor_cast<caf::actor>(part));
-      self->state.flush_to_disk();
-      // Receiving an EXIT message does not need to coincide with the state
-      // being destructed, so we explicitly clear the tables to release the
-      // references.
-      self->state.unpersisted.clear();
-      self->state.inmem_partitions.clear();
-      // Terminate partition actors.
-      TENZIR_DEBUG("{} brings down {} partitions", *self, partitions.size());
-      shutdown<policy::parallel>(self, std::move(partitions));
-    },
-    caf::policy::arg<caf::broadcast_downstream_manager<
-      table_slice, tenzir::type, i_partition_selector>>{});
   // Read persistent state.
   if (auto err = self->state.load_from_disk()) {
     TENZIR_ERROR("{} failed to load index state from disk: {}", *self,
@@ -1167,12 +1089,27 @@ index(index_actor::stateful_pointer<index_state> self,
     return index_actor::behavior_type::make_empty_behavior();
   }
   self->set_exit_handler([self](const caf::exit_msg& msg) {
-    TENZIR_DEBUG("{} received EXIT from {} with reason: {}", *self, msg.source,
-                 msg.reason);
-    for (auto&& [rp, _] : std::exchange(self->state.delayed_queries, {}))
+    TENZIR_VERBOSE("{} received EXIT from {} with reason: {}", *self,
+                   msg.source, msg.reason);
+    for (auto&& [rp, _] : std::exchange(self->state.delayed_queries, {})) {
       rp.deliver(msg.reason);
-    // Flush buffered batches and end stream.
-    self->state.stage->stop();
+    }
+    self->state.shutting_down = true;
+    self
+      ->request(static_cast<index_actor>(self), std::chrono::minutes{10},
+                atom::flush_v)
+      .then(
+        [self]() {
+          self->quit();
+        },
+        [self](caf::error& err) {
+          auto diag
+            = diagnostic::error(std::move(err)).note("while shutting down");
+          if (err == caf::sec::request_timeout) {
+            diag = std::move(diag).note("shutdown timeout: risk of data loss!");
+          }
+          self->quit(std::move(diag).to_error());
+        });
   });
   // Set up a down handler for monitored exporter actors.
   self->set_down_handler([=](const caf::down_msg& msg) {
@@ -1202,14 +1139,8 @@ index(index_actor::stateful_pointer<index_state> self,
     [self](atom::done, uuid partition_id) {
       TENZIR_DEBUG("{} queried partition {} successfully", *self, partition_id);
     },
-    [self](
-      caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
-      TENZIR_DEBUG("{} got a new stream source", *self);
-      return self->state.stage->add_inbound_path(in);
-    },
-    [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
-      TENZIR_DEBUG("{} adds flush listener", *self);
-      self->state.add_flush_listener(std::move(listener));
+    [self](table_slice& slice) {
+      self->state.handle_slice(std::move(slice));
     },
     [self](atom::subscribe, atom::create,
            const partition_creation_listener_actor& listener,
@@ -1242,7 +1173,7 @@ index(index_actor::stateful_pointer<index_state> self,
         return caf::sec::invalid_argument;
       }
       // Abort if the index is already shutting down.
-      if (!self->state.stage->running()) {
+      if (self->state.shutting_down) {
         TENZIR_WARN("{} ignores query {} because it is shutting down", *self,
                     query_context);
         return ec::remote_node_down;
@@ -1785,34 +1716,10 @@ index(index_actor::stateful_pointer<index_state> self,
     [self](atom::flush) -> caf::result<void> {
       TENZIR_DEBUG("{} got a flush request from {}", *self,
                    self->current_sender());
-      // If we've got nothing to flush we can just exit immediately.
-      if (self->state.active_partitions.empty())
+      if (self->state.active_partitions.empty()) {
         return {};
-      auto rp = self->make_response_promise<void>();
-      auto counter = detail::make_fanout_counter(
-        self->state.active_partitions.size(),
-        [rp]() mutable {
-          rp.deliver();
-        },
-        [rp](caf::error error) mutable {
-          rp.deliver(std::move(error));
-        });
-      // We gather the schemas first before we call decomission active partition
-      // on every active partition to avoid iterator invalidation.
-      auto schemas = std::vector<type>{};
-      schemas.reserve(self->state.active_partitions.size());
-      for (const auto& [schema, _] : self->state.active_partitions)
-        schemas.push_back(schema);
-      for (const auto& schema : schemas) {
-        self->state.decommission_active_partition(
-          schema, [counter](const caf::error& err) mutable {
-            if (err)
-              counter->receive_error(err);
-            else
-              counter->receive_success();
-          });
       }
-      return rp;
+      return self->state.flush();
     },
     // -- status_client_actor --------------------------------------------------
     [](atom::status, status_verbosity, duration) -> record {

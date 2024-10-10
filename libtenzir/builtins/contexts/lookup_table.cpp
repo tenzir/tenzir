@@ -302,48 +302,6 @@ public:
     return builder.finish();
   }
 
-  auto snapshot(parameter_map, const std::vector<std::string>& fields) const
-    -> caf::expected<expression> override {
-    auto keys = list{};
-    keys.reserve(context_entries.size());
-    const auto now = time::clock::now();
-    auto first_index = std::optional<size_t>{};
-    for (const auto& [k, v] : context_entries) {
-      if (v.is_expired(now)) {
-        continue;
-      }
-      k.populate_snapshot_data(keys);
-      auto current_index = k.original_type_index();
-      if (not first_index) [[unlikely]] {
-        first_index = current_index;
-      } else if (*first_index != current_index) [[unlikely]] {
-        // TODO: With the language revamp, we should get heterogeneous lookups
-        // for free.
-        return caf::make_error(ec::unimplemented,
-                               "lookup-table does not support snapshots for "
-                               "heterogeneous keys");
-      }
-    }
-    for (const auto& [k, v] : subnet_entries.nodes()) {
-      if (v->is_expired(now)) {
-        continue;
-      }
-      keys.emplace_back(k);
-    }
-    auto result = disjunction{};
-    result.reserve(fields.size());
-    for (const auto& field : fields) {
-      auto lhs = to<operand>(field);
-      TENZIR_ASSERT(lhs);
-      result.emplace_back(predicate{
-        *lhs,
-        relational_operator::in,
-        data{keys},
-      });
-    }
-    return result;
-  }
-
   /// Inspects the context.
   auto show() const -> record override {
     // There's no size() function for the PATRICIA trie, so we walk the tree

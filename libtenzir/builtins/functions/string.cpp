@@ -25,8 +25,8 @@ public:
     return starts_with_ ? "starts_with" : "ends_with";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto arg_expr = ast::expression{};
     TRY(argument_parser2::method(name())
@@ -83,8 +83,8 @@ public:
     return name_;
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto characters = std::optional<std::string>{};
     TRY(argument_parser2::method(name())
@@ -150,8 +150,15 @@ public:
     return name_;
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto function_name() const -> std::string override {
+    if (name_.ends_with("()")) {
+      return name_.substr(0, name_.size() - 2);
+    }
+    return name_;
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     TRY(argument_parser2::method(name())
           .add(subject_expr, "<string>")
@@ -344,8 +351,8 @@ public:
     return "tql2.str";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     TRY(argument_parser2::method("string")
           .add(subject_expr, "<expr>")
@@ -391,7 +398,7 @@ TENZIR_REGISTER_PLUGIN(trim{"trim_end", "utf8_rtrim"})
 TENZIR_REGISTER_PLUGIN(nullary_method{"capitalize", "utf8_capitalize",
                                       string_type{}})
 TENZIR_REGISTER_PLUGIN(nullary_method{"to_lower", "utf8_lower", string_type{}})
-TENZIR_REGISTER_PLUGIN(nullary_method{"tql2.reverse", "utf8_reverse",
+TENZIR_REGISTER_PLUGIN(nullary_method{"reverse()", "utf8_reverse",
                                       string_type{}})
 TENZIR_REGISTER_PLUGIN(nullary_method{"to_title", "utf8_title", string_type{}})
 TENZIR_REGISTER_PLUGIN(nullary_method{"to_upper", "utf8_upper", string_type{}})

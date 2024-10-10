@@ -704,11 +704,6 @@ public:
   /// Clears the context state, with optional parameters.
   virtual auto reset() -> caf::expected<void> = 0;
 
-  /// Create a snapshot of the initial expression.
-  virtual auto snapshot(parameter_map parameters,
-                        const std::vector<std::string>& fields) const
-    -> caf::expected<expression> = 0;
-
   /// Serializes a context for persistence.
   virtual auto save() const -> caf::expected<save_result> = 0;
 

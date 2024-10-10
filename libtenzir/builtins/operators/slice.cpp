@@ -7,11 +7,13 @@
 // SPDX-License-Identifier: BSD-3-Clause
 
 #include <tenzir/argument_parser.hpp>
+#include <tenzir/arrow_utils.hpp>
 #include <tenzir/error.hpp>
 #include <tenzir/logger.hpp>
 #include <tenzir/pipeline.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/table_slice.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 #include <arrow/array.h>
 #include <arrow/compute/api.h>
@@ -33,9 +35,9 @@ public:
     : begin_{begin}, end_{end}, stride_{stride} {
   }
 
-  static auto positive_begin_positive_end(generator<table_slice> input,
-                                          int64_t begin, int64_t end)
-    -> generator<table_slice> {
+  static auto
+  positive_begin_positive_end(generator<table_slice> input, int64_t begin,
+                              int64_t end) -> generator<table_slice> {
     TENZIR_ASSERT(begin >= 0);
     TENZIR_ASSERT(end >= 0);
     if (end <= begin) {
@@ -59,9 +61,9 @@ public:
     }
   }
 
-  static auto positive_begin_negative_end(generator<table_slice> input,
-                                          int64_t begin, int64_t end)
-    -> generator<table_slice> {
+  static auto
+  positive_begin_negative_end(generator<table_slice> input, int64_t begin,
+                              int64_t end) -> generator<table_slice> {
     TENZIR_ASSERT(begin >= 0);
     TENZIR_ASSERT(end <= 0);
     co_yield {};
@@ -94,9 +96,9 @@ public:
     TENZIR_ASSERT(num_buffered <= -end);
   }
 
-  static auto negative_begin_positive_end(generator<table_slice> input,
-                                          int64_t begin, int64_t end)
-    -> generator<table_slice> {
+  static auto
+  negative_begin_positive_end(generator<table_slice> input, int64_t begin,
+                              int64_t end) -> generator<table_slice> {
     TENZIR_ASSERT(begin <= 0);
     TENZIR_ASSERT(end >= 0);
     co_yield {};
@@ -135,9 +137,9 @@ public:
     }
   }
 
-  static auto negative_begin_negative_end(generator<table_slice> input,
-                                          int64_t begin, int64_t end)
-    -> generator<table_slice> {
+  static auto
+  negative_begin_negative_end(generator<table_slice> input, int64_t begin,
+                              int64_t end) -> generator<table_slice> {
     TENZIR_ASSERT(begin <= 0);
     TENZIR_ASSERT(end <= 0);
     if (end <= begin) {
@@ -193,24 +195,18 @@ public:
                                        end_.value_or(0));
   }
 
-  auto positive_stride(generator<table_slice> input, int64_t stride) const
-    -> generator<table_slice> {
-    const auto make_stride_index = [&](const int64_t offset,
-                                       const int64_t rows) {
-      auto stride_builder = arrow::Int64Builder{};
-      const auto reserve_result = stride_builder.Reserve((rows + 1) / stride);
-      TENZIR_ASSERT(reserve_result.ok(), reserve_result.ToString().c_str());
-      for (auto i = offset % stride; i < rows; i += stride) {
-        const auto append_result = stride_builder.Append(i);
-        TENZIR_ASSERT_EXPENSIVE(append_result.ok(),
-                                append_result.ToString().c_str());
-      }
-      auto finish_result = stride_builder.Finish();
-      TENZIR_ASSERT(finish_result.ok(),
-                    finish_result.status().ToString().c_str());
-      return finish_result.MoveValueUnsafe();
-    };
+  auto positive_stride(generator<table_slice> input,
+                       int64_t stride) const -> generator<table_slice> {
     TENZIR_ASSERT(stride > 0);
+    constexpr auto make_stride_index
+      = [](const int64_t offset, const int64_t rows, const int64_t stride) {
+          auto b = int64_type::make_arrow_builder(arrow::default_memory_pool());
+          check(b->Reserve((rows + 1) / stride));
+          for (auto i = offset % stride; i < rows; i += stride) {
+            check(b->Append(i));
+          }
+          return finish(*b);
+        };
     auto offset = int64_t{0};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
@@ -219,7 +215,7 @@ public:
       }
       auto batch = to_record_batch(slice);
       const auto rows = batch->num_rows();
-      auto stride_index = make_stride_index(offset, rows);
+      auto stride_index = make_stride_index(offset, rows, stride);
       offset += rows;
       auto take_result = arrow::compute::Take(batch, stride_index);
       if (not take_result.ok()) {
@@ -236,8 +232,8 @@ public:
     }
   }
 
-  auto negative_stride(generator<table_slice> input, int64_t stride) const
-    -> generator<table_slice> {
+  auto negative_stride(generator<table_slice> input,
+                       int64_t stride) const -> generator<table_slice> {
     auto buffer = std::vector<table_slice>{};
     for (auto&& slice : input) {
       if (slice.rows() == 0) {
@@ -297,8 +293,8 @@ public:
     return negative_stride(std::move(input), *stride_);
   }
 
-  auto operator()(generator<table_slice> input) const
-    -> generator<table_slice> {
+  auto
+  operator()(generator<table_slice> input) const -> generator<table_slice> {
     return stride(slice(std::move(input)));
   }
 
@@ -306,8 +302,8 @@ public:
     return "slice";
   }
 
-  auto optimize(const expression& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(const expression& filter,
+                event_order order) const -> optimize_result override {
     const auto nop_slice = begin_.value_or(0) == 0 and not end_;
     const auto reverse = stride_.value_or(1) == -1;
     const auto nop_stride = stride_.value_or(1) == 1
@@ -341,7 +337,8 @@ private:
   std::optional<int64_t> stride_ = {};
 };
 
-class plugin final : public virtual operator_plugin<slice_operator> {
+class plugin final : public virtual operator_plugin<slice_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.transformation = true};
@@ -376,10 +373,64 @@ public:
     stride = parse_int(true);
     return std::make_unique<slice_operator>(begin, end, stride);
   }
+
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto begin = std::optional<int64_t>{};
+    auto end = std::optional<int64_t>{};
+    auto stride = std::optional<int64_t>{};
+    // TODO: Range selector syntax
+    TRY(argument_parser2::operator_(name())
+          .add("begin", begin)
+          .add("end", end)
+          .add("stride", stride)
+          .parse(inv, ctx));
+    return std::make_unique<slice_operator>(begin, end, stride);
+  }
 };
+
+class reverse_plugin final : public virtual operator_plugin2<slice_operator> {
+public:
+  auto name() const -> std::string override {
+    return "tql2.reverse";
+  }
+
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    TRY(argument_parser2::operator_("reverse").parse(inv, ctx));
+    return std::make_unique<slice_operator>(std::nullopt, std::nullopt, -1);
+  }
+};
+
+enum class mode { head, tail };
+
+template <mode Mode>
+class end_plugin final : public virtual operator_plugin2<slice_operator> {
+public:
+  auto name() const -> std::string override {
+    return Mode == mode::head ? "tql2.head" : "tql2.tail";
+  }
+
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto n = std::optional<int64_t>{10};
+    TRY(argument_parser2::operator_(name()).add(n, "<int>").parse(inv, ctx));
+    if (Mode == mode::head) {
+      return std::make_unique<slice_operator>(std::nullopt, n, std::nullopt);
+    }
+    return std::make_unique<slice_operator>(-n.value(), std::nullopt,
+                                            std::nullopt);
+  }
+};
+
+using head_plugin = end_plugin<mode::head>;
+using tail_plugin = end_plugin<mode::tail>;
 
 } // namespace
 
 } // namespace tenzir::plugins::slice
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::slice::plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::slice::reverse_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::slice::head_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::slice::tail_plugin)

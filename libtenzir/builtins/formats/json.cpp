@@ -142,8 +142,8 @@ inline auto split_at_null(generator<chunk_ptr> input, char split)
   }
 }
 
-static auto
-truncate(std::string_view text, const size_t N = 50) -> std::string {
+static auto truncate(std::string_view text, const size_t N = 50)
+  -> std::string {
   return std::string{text.substr(0, N)}
          + (text.size() > N ? " ... (truncated)" : "");
 }
@@ -238,8 +238,8 @@ public:
   }
 
 private:
-  [[nodiscard]] auto
-  parse_number(simdjson::ondemand::value val, auto builder) -> bool {
+  [[nodiscard]] auto parse_number(simdjson::ondemand::value val, auto builder)
+    -> bool {
     auto kind = simdjson::ondemand::number_type{};
     auto result = val.get_number_type();
     if (result.error()) {
@@ -293,8 +293,8 @@ private:
     TENZIR_UNREACHABLE();
   }
 
-  [[nodiscard]] auto
-  parse_string(simdjson::ondemand::value val, auto builder) -> bool {
+  [[nodiscard]] auto parse_string(simdjson::ondemand::value val, auto builder)
+    -> bool {
     auto maybe_str = val.get_string();
     if (maybe_str.error()) {
       report_parse_err(val, "a string");
@@ -396,11 +396,11 @@ public:
   parser_base(std::string name_, diagnostic_handler& dh_,
               multi_series_builder::options options)
     : dh{std::make_unique<transforming_diagnostic_handler>(
-        dh_,
-        [name = std::move(name_)](diagnostic d) {
-          d.message = fmt::format("{} parser: {}", name, d.message);
-          return d;
-        })},
+      dh_,
+      [name = std::move(name_)](diagnostic d) {
+        d.message = fmt::format("{} parser: {}", name, d.message);
+        return d;
+      })},
       builder{std::move(options), *dh, modules::schemas(),
               detail::data_builder::non_number_parser} {
   }
@@ -589,6 +589,17 @@ public:
             doc.current_location().value_unsafe(),
             view.data() + view.size(),
           };
+          const auto type = check(doc.type());
+          if (type != simdjson::ondemand::json_type::object) {
+            auto diag
+              = diagnostic::error("expected an object").note("got: {}", view);
+            if (type == simdjson::ondemand::json_type::array) {
+              diag
+                = std::move(diag).hint("use the `--arrays-of-objects` option");
+            }
+            std::move(diag).emit(*dh);
+            return;
+          }
           auto row = builder.record();
           auto success
             = doc_parser{source, *dh}.parse_object(doc.value_unsafe(), row);
@@ -1085,8 +1096,8 @@ public:
     }
   }
 
-  auto optimize(expression const& filter,
-                event_order order) const -> optimize_result override {
+  auto optimize(expression const& filter, event_order order) const
+    -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -1102,8 +1113,8 @@ private:
 class read_json_plugin final
   : public virtual operator_plugin2<parser_adapter<json_parser>> {
 public:
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
@@ -1188,15 +1199,15 @@ public:
     return "read_gelf";
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
     auto result = parser.parse(inv, ctx);
     TRY(result);
     auto args = parser_args{"gelf"};
-
+    args.split_mode = split_at::null;
     TRY(args.builder_options, msb_parser.get_options(ctx.dh()));
     return std::make_unique<parser_adapter<json_parser>>(
       json_parser{std::move(args)});
@@ -1212,8 +1223,8 @@ public:
     return fmt::format("read_{}", Name);
   }
 
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{
       multi_series_builder::settings_type{
@@ -1248,8 +1259,8 @@ public:
     return "tql2.parse_json";
   }
 
-  auto make_function(invocation inv,
-                     session ctx) const -> failure_or<function_ptr> override {
+  auto make_function(invocation inv, session ctx) const
+    -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     // TODO: Consider adding a `many` option to expect multiple json values.
     // TODO: Consider adding a `precise` option (this needs evaluator support).
@@ -1321,8 +1332,8 @@ public:
 
 class write_json_plugin final : public virtual operator_plugin2<write_json> {
 public:
-  auto
-  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+  auto make(invocation inv, session ctx) const
+    -> failure_or<operator_ptr> override {
     // TODO: More options, and consider `null_fields=false` as default.
     auto args = printer_args{};
     TRY(argument_parser2::operator_("write_json")

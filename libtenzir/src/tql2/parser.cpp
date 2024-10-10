@@ -67,9 +67,9 @@ class parser {
 public:
   using tk = token_kind;
 
-  static auto parse_file(std::span<token> tokens, std::string_view source,
-                         diagnostic_handler& diag)
-    -> failure_or<ast::pipeline> {
+  static auto
+  parse_file(std::span<token> tokens, std::string_view source,
+             diagnostic_handler& diag) -> failure_or<ast::pipeline> {
     try {
       auto self = parser{tokens, source, diag};
       auto pipe = self.parse_pipeline();
@@ -85,6 +85,28 @@ public:
   }
 
 private:
+  struct accept_result {
+    std::string_view text;
+    tenzir::location location;
+
+    explicit operator bool() const {
+      // TODO: Is this okay?
+      return text.data() != nullptr;
+    }
+
+    auto as_identifier() const -> ast::identifier {
+      return ast::identifier{text, location};
+    }
+
+    auto as_string() const -> located<std::string> {
+      return {text, location};
+    }
+
+    auto get_location() const -> tenzir::location {
+      return location;
+    }
+  };
+
   auto parse_pipeline() -> ast::pipeline {
     auto scope = ignore_newlines(false);
     auto body = std::vector<statement>{};
@@ -472,10 +494,10 @@ private:
     auto begin = expect(tk::lbrace);
     auto scope = ignore_newlines(true);
     // TODO: Try to implement this better.
-    auto is_record
-      = silent_peek(tk::rbrace) || silent_peek(tk::dot_dot_dot)
-        || ((silent_peek(tk::string) || silent_peek(tk::identifier))
-            && silent_peek_n(tk::colon, 1));
+    auto is_record = silent_peek(tk::rbrace) || silent_peek(tk::dot_dot_dot)
+                     || ((silent_peek(tk::string) || silent_peek(tk::raw_string)
+                          || silent_peek(tk::identifier))
+                         && silent_peek_n(tk::colon, 1));
     if (is_record) {
       return parse_record(begin.location);
     }
@@ -488,20 +510,89 @@ private:
     };
   }
 
+  auto accept_string() -> std::optional<located<std::string>> {
+    if (const auto token = accept(tk::raw_string)) {
+      const auto begin = token.text.find('"');
+      const auto end = token.text.rfind('"');
+      TENZIR_ASSERT(begin != std::string_view::npos);
+      TENZIR_ASSERT(end != std::string_view::npos);
+      auto result = std::string{token.text.substr(begin + 1, end - begin - 1)};
+      if (not arrow::util::ValidateUTF8(result)) {
+        // TODO: Would be nice to report the actual error location.
+        diagnostic::error("string contains invalid utf-8")
+          .primary(token)
+          .hint("consider using a blob instead: b{}", token.text)
+          .throw_();
+      }
+      return located{std::move(result), token.location};
+    }
+    if (const auto token = accept(tk::string)) {
+      auto result = std::string{};
+      // TODO: Implement this properly.
+      TENZIR_ASSERT(token.text.size() >= 2);
+      TENZIR_ASSERT(token.text.front() == '"');
+      TENZIR_ASSERT(token.text.back() == '"');
+      auto f = token.text.begin() + 1;
+      auto e = token.text.end() - 1;
+      for (auto it = f; it != e; ++it) {
+        auto x = *it;
+        if (x != '\\') {
+          result.push_back(x);
+          continue;
+        }
+        ++it;
+        if (it == e) {
+          // TODO: invalid, but cannot happen
+          TENZIR_UNREACHABLE();
+        }
+        x = *it;
+        if (x == '\\') {
+          result.push_back('\\');
+        } else if (x == '"') {
+          result.push_back('"');
+        } else if (x == 't') {
+          result.push_back('\t');
+        } else if (x == 'n') {
+          result.push_back('\n');
+        } else if (x == '0') {
+          result.push_back('\0');
+        } else {
+          diagnostic::error("found unknown escape sequence `{}`",
+                            token.text.substr(it - f, 2))
+            .primary(token.location.subloc(it - f, 2))
+            .throw_();
+        }
+      }
+      if (not arrow::util::ValidateUTF8(result)) {
+        // TODO: Would be nice to report the actual error location.
+        diagnostic::error("string contains invalid utf-8")
+          .primary(token)
+          .hint("consider using a blob instead: b{}", token.text)
+          .throw_();
+      }
+      return located{std::move(result), token.location};
+    }
+    return std::nullopt;
+  }
+
   auto parse_record_item() -> ast::record::item {
     if (accept(tk::dot_dot_dot)) {
       return ast::record::spread{parse_expression()};
     }
-    auto name = accept(tk::identifier);
-    if (not name) {
-      // TODO: Decide how to represent string fields in the AST.
-      name = expect(tk::string);
-      name.text = name.text.substr(1, name.text.size() - 2);
-    }
+    // TODO: Decide how to represent string fields in the AST.
+    auto ident = [this]() {
+      if (auto result = accept(tk::identifier)) {
+        return result.as_identifier();
+      }
+      if (auto result = accept_string()) {
+        return ast::identifier{std::move(result->inner), result->source};
+      }
+      throw_token();
+    }();
     expect(tk::colon);
     auto expr = parse_expression();
     return ast::record::field{
-      name.as_identifier(),
+      std::move(ident),
       std::move(expr),
     };
   }
@@ -520,52 +611,6 @@ private:
       std::move(content),
       end.location,
     };
-  }
-
-  auto parse_string() -> constant {
-    auto token = expect(tk::string);
-    // TODO: Implement this properly.
-    auto result = std::string{};
-    TENZIR_ASSERT(token.text.size() >= 2);
-    TENZIR_ASSERT(token.text.front() == '"');
-    TENZIR_ASSERT(token.text.back() == '"');
-    auto f = token.text.begin() + 1;
-    auto e = token.text.end() - 1;
-    for (auto it = f; it != e; ++it) {
-      auto x = *it;
-      if (x != '\\') {
-        result.push_back(x);
-        continue;
-      }
-      ++it;
-      if (it == e) {
-        // TODO: invalid, but cannot happen
-        TENZIR_UNREACHABLE();
-      }
-      x = *it;
-      if (x == '\\') {
-        result.push_back('\\');
-      } else if (x == '"') {
-        result.push_back('"');
-      } else if (x == 'n') {
-        result.push_back('\n');
-      } else if (x == '0') {
-        result.push_back('\0');
-      } else {
-        diagnostic::error("found unknown escape sequence `{}`",
-                          token.text.substr(it - f, 2))
-          .primary(token.location.subloc(it - f, 2))
-          .throw_();
-      }
-    }
-    if (not arrow::util::ValidateUTF8(result)) {
-      // TODO: Would be nice to report the actual error location.
-      diagnostic::error("string contains invalid utf-8")
-        .primary(token)
-        .hint("consider using a blob instead: b{}", token.text)
-        .throw_();
-    }
-    return constant{std::move(result), token.location};
   }
 
   static auto try_double_to_integer(double x) -> constant::kind {
@@ -616,8 +661,8 @@ private:
   }
 
   auto accept_constant() -> std::optional<constant> {
-    if (peek(tk::string)) {
-      return parse_string();
+    if (auto result = accept_string()) {
+      return constant{std::move(result->inner), result->source};
     }
     if (peek(tk::scalar)) {
       return parse_scalar();
@@ -747,28 +792,6 @@ private:
   auto accept_stmt_sep() -> bool {
     return accept(tk::newline) || accept(tk::pipe);
   }
-
-  struct accept_result {
-    std::string_view text;
-    tenzir::location location;
-
-    explicit operator bool() const {
-      // TODO: Is this okay?
-      return text.data() != nullptr;
-    }
-
-    auto as_identifier() const -> ast::identifier {
-      return ast::identifier{text, location};
-    }
-
-    auto as_string() const -> located<std::string> {
-      return {text, location};
-    }
-
-    auto get_location() const -> tenzir::location {
-      return location;
-    }
-  };
 
   [[nodiscard]] auto advance() -> location {
     TENZIR_ASSERT(next_ < tokens_.size());

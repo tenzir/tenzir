@@ -14,8 +14,6 @@
 #include <tenzir/flow.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
-#include <caf/fused_downstream_manager.hpp>
-
 namespace tenzir::plugins::community_id {
 
 namespace {
