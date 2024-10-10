@@ -2,7 +2,7 @@
 
 Removes fields from the event.
 
-```
+```tql
 drop field...
 ```
 
@@ -17,7 +17,7 @@ present.
 
 ### Examples
 
-```
+```tql
 from {
   name: "John",
   role: "Admin",
@@ -35,7 +35,7 @@ drop name, info.id
 // }
 ```
 
-```
+```tql
 from { name: "John" }
 drop address
 // this == { name: "John" }

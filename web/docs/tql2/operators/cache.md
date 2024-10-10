@@ -9,8 +9,8 @@ automatically manage caches for you.
 
 An in-memory cache shared between pipelines.
 
-```
-cache id:str [mode=str, capacity=uint, ttl=duration, max_ttl=duration]
+```tql
+cache id:str, [mode=str, capacity=uint, ttl=duration, max_ttl=duration]
 ```
 
 ## Description
@@ -22,13 +22,13 @@ The first pipeline to use a cache writes into the cache. All further pipelines
 using the same cache will read from the cache instead of executing the operators
 before the `cache` operator in the same pipeline.
 
-### `id`
+### `id: str (required)`
 
 An arbitrary string that uniquely identifies the cache.
 
-### `mode`
+### `mode = str (optional)`
 
-Configures whether the operator is used a source, a sink, or a transformation. 
+Configures whether the operator is used a source, a sink, or a transformation.
 The following modes are available currently:
 
 - `"read"`: The operators acts as a source reading from a cache that is requires to
@@ -41,22 +41,22 @@ The following modes are available currently:
 
 Defaults to `"readwrite"`.
 
-### `capacity`
+### `capacity = uint (optional)`
 
 Stores how many events the cache can hold. Caches stop accepting events if the
 capacity is reached and emit a warning.
 
-Defaults to `4 Mi`.
+Defaults to `4Mi`.
 
-### `ttl`
+### `ttl = duration (optional)`
 
 Defines the maximum inactivity time until the cache is evicted from memory. The
 timer starts when writing the cache completes (or runs into the capacity limit),
 and resets whenever the cache is read from.
 
-Defaults to `1 minute`.
+Defaults to `1min`.
 
-### `max_ttl`
+### `max_ttl = duration (optional)`
 
 If set, defines an upper bound for the lifetime of the cache. Unlike the `ttl`
 option, this does not refresh when the cache is accessed.
