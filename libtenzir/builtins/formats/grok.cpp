@@ -9,8 +9,11 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/arrow_table_slice.hpp>
 #include <tenzir/concept/parseable/tenzir/data.hpp>
+#include <tenzir/multi_series_builder.hpp>
+#include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/to_lines.hpp>
 #include <tenzir/tql2/plugin.hpp>
 
 // Both Boost.Regex and RE2 are used:
@@ -37,8 +40,9 @@ struct inspector_access<boost::regex> : inspector_access_base<boost::regex> {
   static auto apply(Inspector& f, boost::regex& x) {
     auto str = x.str();
     auto result = f.apply(str);
-    if constexpr (Inspector::is_loading)
+    if constexpr (Inspector::is_loading) {
       x.assign(str);
+    }
     return result;
   }
 };
@@ -87,7 +91,11 @@ struct pattern_store;
 struct pattern {
   pattern() = default;
 
-  explicit pattern(std::string p) : raw_pattern(std::move(p)) {
+  pattern(std::string p, location loc = location::unknown)
+    : raw_pattern(std::move(p)), loc{std::move(loc)} {
+  }
+  explicit pattern(located<std::string> p)
+    : pattern{std::move(p.inner), std::move(p.source)} {
   }
 
   // Resolve this pattern, using `patterns` pattern store.
@@ -108,6 +116,7 @@ struct pattern {
 
   // The grok pattern itself
   std::string raw_pattern;
+  location loc;
   // Resolved regex
   std::optional<boost::regex> resolved_pattern{std::nullopt};
   // List of all the named captures in `resolved_pattern`
@@ -143,8 +152,9 @@ struct pattern_store : public caf::ref_counted {
 
   void resolve_all() {
     for (auto& [name, pattern] : patterns) {
-      if (pattern.resolved_pattern)
+      if (pattern.resolved_pattern) {
         continue;
+      }
       pattern.resolve(*this, true);
     }
   }
@@ -169,8 +179,9 @@ void pattern::resolve(const pattern_store& patterns, bool allow_recursion) {
     int backslash_count = 0;
     auto end = std::make_reverse_iterator(pattern_begin);
     for (auto it = std::make_reverse_iterator(match_begin); it != end; ++it) {
-      if (*it != '\\')
+      if (*it != '\\') {
         break;
+      }
       ++backslash_count;
     }
     // If the number of backslashes before the pattern is odd
@@ -195,8 +206,9 @@ void pattern::resolve(const pattern_store& patterns, bool allow_recursion) {
     re2::StringPiece str_re2{raw_pattern.data(), raw_pattern.size()};
     re2::StringPiece capture{}, name{};
     while (re2::RE2::FindAndConsume(&str_re2, expr, &capture, &name)) {
-      if (is_escaped(raw_pattern.data(), capture.data()))
+      if (is_escaped(raw_pattern.data(), capture.data())) {
         continue;
+      }
       named_captures.emplace_back(std::string{name}, capture_type::implicit);
     }
   }
@@ -211,38 +223,43 @@ void pattern::resolve(const pattern_store& patterns, bool allow_recursion) {
     const auto* previous_match_end = str_re2.begin();
     re2::StringPiece replacement_field{};
     while (re2::RE2::FindAndConsume(&str_re2, expr, &replacement_field)) {
-      if (is_escaped(raw_pattern.data(), replacement_field.data()))
+      if (is_escaped(raw_pattern.data(), replacement_field.data())) {
         continue;
+      }
       // RE2 is slow with subpattern captures:
       //  -> get the part inside the {braces} manually
       auto replacement_field_inner
         = replacement_field.substr(2, replacement_field.size() - 3);
-      if (replacement_field_inner.empty())
+      if (replacement_field_inner.empty()) {
         diagnostic::error("invalid replacement field")
           .note("empty fields are disallowed")
           .hint("field: `{}`", std::string{replacement_field})
           .throw_();
+      }
       auto elems = detail::split(replacement_field_inner, ":");
       TENZIR_ASSERT(not elems.empty());
-      if (elems.size() > 3)
+      if (elems.size() > 3) {
         diagnostic::error("invalid replacement field")
           .note("up to three :colon-delimited: fields allowed")
           .hint("field: `{}`", std::string{replacement_field})
           .throw_();
-      if (elems[0].empty())
+      }
+      if (elems[0].empty()) {
         diagnostic::error("invalid replacement field")
           .note("SYNTAX-field can't be empty")
           .hint("field: `{}`", std::string{replacement_field})
           .throw_();
+      }
       // Find matching pattern for SYNTAX
       auto syntax = std::string{elems[0]};
       auto subpattern_it = patterns.patterns.find(syntax);
-      if (subpattern_it == patterns.patterns.end())
+      if (subpattern_it == patterns.patterns.end()) {
         diagnostic::error("invalid replacement field")
           .note("SYNTAX not found")
           .hint("field: `{}`, SYNTAX: `{}`", std::string{replacement_field},
                 syntax)
           .throw_();
+      }
       auto& subpattern = subpattern_it->second;
       if (not subpattern.resolved_pattern) {
         // SYNTAX hasn't been resolved, recurse
@@ -275,34 +292,37 @@ void pattern::resolve(const pattern_store& patterns, bool allow_recursion) {
         std::vector<std::string> items;
         auto f = name.begin();
         bool s = parser(f, name.end(), items);
-        if (!s || f != name.end())
+        if (!s || f != name.end()) {
           diagnostic::error("invalid replacement field")
             .note("invalid NAME")
             .hint("field: `{}`, NAME: `{}`", std::string{replacement_field},
                   name)
             .throw_();
+        }
         name = fmt::to_string(fmt::join(items, "."));
       }
       // Handle CONVERSION field, default to `implicit`,
       // which will be turned to `infer` or `string`, based on the `--raw` flag
       capture_type conversion{capture_type::implicit};
       if (elems.size() > 2) {
-        if (elems[2] == "infer")
+        if (elems[2] == "infer") {
           conversion = capture_type::infer;
-        else if (elems[2] == "string")
+        } else if (elems[2] == "string") {
           conversion = capture_type::string;
-        if (elems[2] == "int")
+        }
+        if (elems[2] == "int") {
           conversion = capture_type::integer;
-        else if (elems[2] == "long")
+        } else if (elems[2] == "long") {
           conversion = capture_type::integer;
-        else if (elems[2] == "float")
+        } else if (elems[2] == "float") {
           conversion = capture_type::floating;
-        else
+        } else {
           diagnostic::error("invalid replacement field")
             .note("invalid CONVERSION")
             .hint("field: `{}`, CONVERSION: `{}`",
                   std::string{replacement_field}, elems[2])
             .throw_();
+        }
       }
       const auto get_duplicate_capture_name = [&](const std::string& name) {
         auto&& r = named_captures | std::views::keys;
@@ -317,8 +337,9 @@ void pattern::resolve(const pattern_store& patterns, bool allow_recursion) {
         // Replace any possible previous occurrence with the same name
         // in `named_captures`
         if (auto duplicate_it = get_duplicate_capture_name(name);
-            duplicate_it != named_captures.end())
+            duplicate_it != named_captures.end()) {
           named_captures.erase(duplicate_it);
+        }
         named_captures.emplace_back(name, conversion);
         auto replacement
           = fmt::format("(?<{}>{})", name, subpattern.resolved_pattern->str());
@@ -326,8 +347,9 @@ void pattern::resolve(const pattern_store& patterns, bool allow_recursion) {
       } else {
         // No NAME given, use SYNTAX as the name
         if (auto duplicate_it = get_duplicate_capture_name(syntax);
-            duplicate_it != named_captures.end())
+            duplicate_it != named_captures.end()) {
           named_captures.erase(duplicate_it);
+        }
         named_captures.emplace_back(syntax, capture_type::unnamed);
         auto replacement = fmt::format("(?<{}>{})", syntax,
                                        subpattern.resolved_pattern->str());
@@ -349,18 +371,21 @@ void pattern::resolve(const pattern_store& patterns, bool allow_recursion) {
     }
     result_pattern.append(previous_match_end, str_re2.end());
     resolved_pattern.emplace(result_pattern, boost::regex_constants::no_except);
-    if (resolved_pattern->empty())
+    if (resolved_pattern->empty()) {
       diagnostic::error("invalid regular expression")
         .hint("regex: `{}`", result_pattern)
         .throw_();
+    }
   }
 }
 
 void pattern_store::parse_line(std::string_view line) {
-  if (line.empty())
+  if (line.empty()) {
     return;
-  if (line.starts_with('#'))
+  }
+  if (line.starts_with('#')) {
     return;
+  }
   auto parts = detail::split(line, " ", 1);
   TENZIR_ASSERT(not patterns.contains(std::string{parts[0]}));
   patterns.emplace(std::string{parts[0]}, std::string{parts[1]});
@@ -374,36 +399,28 @@ auto& get_builtin_pattern_store() {
 }
 
 class grok_parser final : public plugin_parser {
+  friend auto parse_loop(generator<std::optional<std::string_view>> input,
+                         diagnostic_handler& dh,
+                         grok_parser parser) -> generator<table_slice>;
+
 public:
   grok_parser() = default;
 
-  explicit grok_parser(parser_interface& p)
-    : patterns_(get_builtin_pattern_store()) {
-    auto parser
-      = argument_parser{"grok", "https://docs.tenzir.com/operators/grok"};
-    parser.add(input_pattern_.raw_pattern, "<input_pattern>");
-    std::optional<std::string> pattern_definitions{};
-    parser.add("--pattern-definitions", pattern_definitions, "<patterns>");
-    parser.add("--indexed-captures", indexed_captures_);
-    parser.add("--include-unnamed", include_unnamed_);
-    parser.add("--raw", raw_);
-    parser.parse(p);
-    if (pattern_definitions)
+  grok_parser(std::optional<std::string> pattern_definitions,
+              located<std::string> pattern, bool indexed_captures,
+              bool include_unnamed, multi_series_builder::options opts)
+    : patterns_{get_builtin_pattern_store()},
+      input_pattern_{std::move(pattern)},
+      indexed_captures_{indexed_captures},
+      include_unnamed_{include_unnamed},
+      opts_{std::move(opts)} {
+    if (pattern_definitions) {
       patterns_.unshared().add(*pattern_definitions);
+    }
     TENZIR_ASSERT_EXPENSIVE(std::ranges::all_of(
       patterns_->patterns | std::views::values, [](const auto& p) -> bool {
         return p.resolved_pattern.has_value();
       }));
-    input_pattern_.resolve(*patterns_, false);
-  }
-
-  grok_parser(std::string pattern, bool indexed_captures, bool include_unnamed,
-              bool raw)
-    : patterns_{get_builtin_pattern_store()},
-      indexed_captures_{indexed_captures},
-      include_unnamed_{include_unnamed},
-      raw_{raw} {
-    input_pattern_.raw_pattern = std::move(pattern);
     input_pattern_.resolve(*patterns_, false);
   }
 
@@ -414,126 +431,134 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    (void)input;
-    diagnostic::error("`{}` cannot be used here", name())
-      .emit(ctrl.diagnostics());
-    return {};
+    return parse_loop(to_lines(std::move(input)), ctrl.diagnostics(), *this);
+  }
+
+  auto parse_line(multi_series_builder& builder, diagnostic_handler& dh,
+                  std::string_view line) const -> void {
+    auto matches = boost::cmatch{};
+    try {
+      if (not boost::regex_match(line.begin(), line.end(), matches,
+                                 *input_pattern_.resolved_pattern)) {
+        diagnostic::warning("pattern could not be matched")
+          .hint("input: `{}`", line)
+          .hint("pattern: `{}`", input_pattern_.resolved_pattern->str())
+          .primary(input_pattern_.loc)
+          .emit(dh);
+        builder.null();
+        return;
+      }
+    } catch (const boost::regex_error& e) {
+      if (e.code() != boost::regex_constants::error_complexity) {
+        throw;
+      }
+      builder.null();
+      diagnostic::warning("failed to apply grok pattern due to its complexity")
+        .note("example input: {:?}", line)
+        .hint("try to simplify or optimize your grok pattern")
+        .hint("pattern: `{}`", input_pattern_.resolved_pattern->str())
+        .primary(input_pattern_.loc)
+        .emit(dh);
+      return;
+    }
+    auto record = builder.record();
+    auto add_field = [&](std::string_view name, const boost::csub_match& match,
+                         capture_type type) {
+      if (!match.matched) {
+        if (type != capture_type::unnamed or include_unnamed_) {
+          record.field(name).null();
+        }
+        return;
+      }
+      switch (type) {
+        case capture_type::unnamed:
+          if (not include_unnamed_) {
+            return;
+          }
+          [[fallthrough]];
+        case capture_type::implicit:
+          record.field(name).data_unparsed(match.str());
+          return;
+        case capture_type::infer:
+          record.field(name).data_unparsed(
+            std::string_view{match.first, match.second});
+          return;
+        case capture_type::string:
+          record.field(name).data(std::string{match.first, match.second});
+          return;
+        case capture_type::integer:
+          if (auto r = to<int64_t>(match.str())) {
+            record.field(name).data(*r);
+            return;
+          }
+          // TODO: Should this be a warning?
+          record.field(name).null();
+          return;
+        case capture_type::floating:
+          if (auto r = to<double>(match.str())) {
+            record.field(name).data(*r);
+            return;
+          }
+          record.field(name).null();
+          return;
+      }
+      TENZIR_UNREACHABLE();
+    };
+    if (indexed_captures_) {
+      for (int i = 0; i < static_cast<int>(
+                        input_pattern_.resolved_pattern->mark_count() + 1);
+           ++i) {
+        const auto& match = matches[i];
+        // Find the same capture as a named capture,
+        // to get the name and conversion type to use.
+        // If there isn't a matching named capture,
+        // use the (stringified) index as the field name
+        if (auto named_capture_it
+            = std::ranges::find_if(input_pattern_.named_captures,
+                                   [&](const auto& elem) {
+                                     const auto& other_match
+                                       = matches[elem.first];
+                                     return match == other_match;
+                                   });
+            named_capture_it != input_pattern_.named_captures.end()) {
+          const auto& [name, type] = *named_capture_it;
+          TENZIR_ASSERT(not name.empty());
+          add_field(name, match, type);
+        } else {
+          const auto type = capture_type::implicit;
+          add_field(std::to_string(i), match, type);
+        }
+      }
+    } else {
+      for (auto&& [name, type] : input_pattern_.named_captures) {
+        TENZIR_ASSERT(not name.empty());
+        add_field(name, matches[name], type);
+      }
+    }
   }
 
   auto parse_strings(const arrow::StringArray& input,
                      diagnostic_handler& dh) const -> std::vector<series> {
-    auto too_complex = std::optional<std::string_view>{};
-    auto builder = series_builder{type{record_type{}}};
-    for (auto&& string : values(string_type{}, input)) {
-      if (not string) {
+    auto tdh = transforming_diagnostic_handler{
+      dh, [](auto diag) {
+        diag.message = fmt::format("grok parser: {}", diag.message);
+        return diag;
+      }};
+    auto builder = multi_series_builder{opts_, tdh};
+    for (auto&& line : values(string_type{}, input)) {
+      if (not line) {
         builder.null();
         continue;
       }
-      boost::cmatch matches{};
-      try {
-        if (not boost::regex_match(string->begin(), string->end(), matches,
-                                   *input_pattern_.resolved_pattern)) {
-          diagnostic::warning("pattern could not be matched")
-            .hint("input: `{}`", *string)
-            .hint("pattern: `{}`", input_pattern_.resolved_pattern->str())
-            .emit(dh);
-          builder.null();
-          continue;
-        }
-      } catch (const boost::regex_error& e) {
-        if (e.code() != boost::regex_constants::error_complexity) {
-          throw;
-        }
-        if (not too_complex) {
-          too_complex = string;
-        }
-        builder.null();
-        continue;
-      }
-      auto record = builder.record();
-      auto infer_match = [&](std::string_view in) -> data {
-        const auto* f = in.begin();
-        const auto* const l = in.end();
-        constexpr auto parser = parsers::simple_data;
-        if (data d{}; parser(f, l, d) && f == l)
-          return d;
-        return data{std::string{in}};
-      };
-      auto convert_match
-        = [&](const boost::csub_match& match, capture_type type) -> data {
-        if (!match.matched)
-          return caf::none;
-        switch (type) {
-          case capture_type::implicit:
-          case capture_type::unnamed:
-            if (not raw_)
-              return infer_match(std::string_view{match.first, match.second});
-            return data{std::string{match.first, match.second}};
-          case capture_type::infer:
-            return infer_match(std::string_view{match.first, match.second});
-          case capture_type::string:
-            return data{std::string{match.first, match.second}};
-          case capture_type::integer:
-            if (auto r = to<int64_t>(match.str()))
-              return data{*r};
-            // TODO: Should this be an error/warning?
-            return caf::none;
-          case capture_type::floating:
-            if (auto r = to<double>(match.str()))
-              return data{*r};
-            return caf::none;
-        }
-        TENZIR_UNREACHABLE();
-      };
-      auto add_field
-        = [&](std::string_view name, data_view2 d, capture_type type) {
-            if (include_unnamed_ || type != capture_type::unnamed)
-              record.field(name, std::move(d));
-          };
-      if (indexed_captures_) {
-        for (int i = 0; i < static_cast<int>(
-                          input_pattern_.resolved_pattern->mark_count() + 1);
-             ++i) {
-          const auto& match = matches[i];
-          // Find the same capture as a named capture,
-          // to get the name and conversion type to use.
-          // If there isn't a matching named capture,
-          // use the (stringified) index as the field name
-          if (auto named_capture_it
-              = std::ranges::find_if(input_pattern_.named_captures,
-                                     [&](const auto& elem) {
-                                       const auto& other_match
-                                         = matches[elem.first];
-                                       return match == other_match;
-                                     });
-              named_capture_it != input_pattern_.named_captures.end()) {
-            const auto& [name, type] = *named_capture_it;
-            TENZIR_ASSERT(not name.empty());
-            add_field(name, convert_match(match, type), type);
-          } else {
-            const auto type = capture_type::implicit;
-            add_field(std::to_string(i), convert_match(match, type), type);
-          }
-        }
-      } else {
-        for (auto&& [name, type] : input_pattern_.named_captures) {
-          TENZIR_ASSERT(not name.empty());
-          add_field(name, convert_match(matches[name], type), type);
-        }
-      }
+      parse_line(builder, tdh, *line);
     }
-    if (too_complex) {
-      diagnostic::warning("failed to apply grok pattern due to its complexity")
-        .note("example input: {:?}", *too_complex)
-        .hint("try to simplify or optimize your grok pattern")
-        .emit(dh);
-    }
-    return builder.finish();
+    return builder.finalize();
   }
 
   auto parse_strings(std::shared_ptr<arrow::StringArray> input,
                      operator_control_plane& ctrl) const
     -> std::vector<series> override {
+    TENZIR_ASSERT(input);
     return parse_strings(*input, ctrl.diagnostics());
   }
 
@@ -551,7 +576,7 @@ public:
               f.field("input_pattern", x.input_pattern_),
               f.field("indexed_captures", x.indexed_captures_),
               f.field("include_unnamed", x.include_unnamed_),
-              f.field("raw", x.raw_));
+              f.field("opts", x.opts_));
   }
 
 private:
@@ -560,42 +585,125 @@ private:
   caf::intrusive_cow_ptr<pattern_store> patterns_{
     caf::make_copy_on_write<pattern_store>()};
   pattern input_pattern_{};
-  bool indexed_captures_{false}, include_unnamed_{false}, raw_{false};
+  bool indexed_captures_{false};
+  bool include_unnamed_{false};
+  multi_series_builder::options opts_;
 };
+
+auto parse_loop(generator<std::optional<std::string_view>> input,
+                diagnostic_handler& dh,
+                grok_parser parser) -> generator<table_slice> {
+  auto tdh = transforming_diagnostic_handler{
+    dh,
+    [](auto diag) {
+      diag.message = fmt::format("read_grok: {}", diag.message);
+      return diag;
+    },
+  };
+  auto builder = multi_series_builder(parser.opts_, tdh);
+  for (auto&& line : input) {
+    if (not line) {
+      co_yield {};
+      continue;
+    }
+    for (auto&& slice : builder.yield_ready_as_table_slice()) {
+      co_yield std::move(slice);
+    }
+    parser.parse_line(builder, tdh, *line);
+  }
+  for (auto&& slice : builder.finalize_as_table_slice()) {
+    co_yield std::move(slice);
+  }
+}
 
 class plugin final : public virtual parser_plugin<grok_parser> {
 public:
   auto parse_parser(parser_interface& p) const
     -> std::unique_ptr<plugin_parser> override {
-    return std::make_unique<grok_parser>(p);
+    auto parser
+      = argument_parser{"grok", "https://docs.tenzir.com/operators/grok"};
+    auto pattern_definitions = std::optional<std::string>{};
+    auto raw_pattern = located<std::string>{};
+    auto indexed_captures = false;
+    auto include_unnamed = false;
+    parser.add(raw_pattern, "<pattern>");
+    parser.add("--pattern-definitions", pattern_definitions, "<patterns>");
+    parser.add("--indexed-captures", indexed_captures);
+    parser.add("--include-unnamed", include_unnamed);
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_all_to_parser(parser);
+    parser.parse(p);
+    auto dh = collecting_diagnostic_handler{};
+    auto msb_opts = msb_parser.get_options(dh);
+    for (auto&& diag : std::move(dh).collect()) {
+      if (diag.severity == severity::error) {
+        throw diag;
+      }
+    }
+    msb_opts->settings.default_schema_name = "tenzir.grok";
+    return std::make_unique<grok_parser>(std::move(pattern_definitions),
+                                         std::move(raw_pattern),
+                                         indexed_captures, include_unnamed,
+                                         std::move(*msb_opts));
   }
 };
 
-class plugin2 final : public virtual method_plugin {
+class read_grok_plugin : public operator_plugin2<parser_adapter<grok_parser>> {
 public:
   auto name() const -> std::string override {
-    return "tql2.grok";
+    return "tql2.read_grok";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
-    auto input = ast::expression{};
-    auto pattern = std::string{};
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto parser = argument_parser2::operator_(name());
+    auto pattern_definitions = std::optional<std::string>{};
+    auto raw_pattern = located<std::string>{};
     auto indexed_captures = false;
     auto include_unnamed = false;
-    auto raw = false;
+    parser.add(raw_pattern, "<pattern>");
+    parser.add("pattern_definitions", pattern_definitions);
+    parser.add("indexed_captures", indexed_captures);
+    parser.add("include_unnamed", include_unnamed);
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_all_to_parser(parser);
+    TRY(parser.parse(inv, ctx));
+    TRY(auto opts, msb_parser.get_options(ctx));
+    opts.settings.default_schema_name = "tenzir.grok";
+    return std::make_unique<parser_adapter<grok_parser>>(grok_parser{
+      std::move(pattern_definitions),
+      std::move(raw_pattern),
+      indexed_captures,
+      include_unnamed,
+      std::move(opts),
+    });
+  }
+};
+
+class parse_grok_plugin final : public virtual method_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.parse_grok";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto input = ast::expression{};
+    auto pattern = located<std::string>{};
+    auto indexed_captures = false;
+    auto include_unnamed = false;
     TRY(argument_parser2::method("grok")
           .add(input, "<input>")
           .add(pattern, "<pattern>")
           .add("indexed_captures", indexed_captures)
           .add("include_unnamed", include_unnamed)
-          .add("raw", raw)
           .parse(inv, ctx));
     auto parser = grok_parser{
+      std::nullopt,
       std::move(pattern),
       indexed_captures,
       include_unnamed,
-      raw,
+      multi_series_builder::options{},
     };
     return function_use::make(
       [input = std::move(input),
@@ -611,7 +719,7 @@ public:
             .emit(ctx);
           return series::null(null_type{}, eval.length());
         }
-        auto output = parser.parse_strings(*strings, ctx);
+        auto output = parser.parse_strings(*strings, ctx.dh());
         // TODO: Evaluator can only handle single type atm.
         if (output.size() != 1) {
           diagnostic::warning("varying type within batch is not yet supported")
@@ -629,4 +737,5 @@ public:
 } // namespace tenzir::plugins::grok
 
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::grok::plugin)
-TENZIR_REGISTER_PLUGIN(tenzir::plugins::grok::plugin2)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::grok::read_grok_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::grok::parse_grok_plugin)
