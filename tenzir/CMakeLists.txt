@@ -117,10 +117,27 @@ endif ()
 # -- integration tests ---------------------------------------------------------
 
 add_custom_target(integration)
-TenzirDefineUpdateIntegrationTarget(integration)
+TenzirDefineUpdateIntegrationTarget(integration OFF)
 add_custom_target(integration-tenzir)
 add_dependencies(integration integration-tenzir)
-TenzirDefineUpdateIntegrationTarget(integration-tenzir)
+TenzirDefineUpdateIntegrationTarget(
+  integration-tenzir "${CMAKE_CURRENT_SOURCE_DIR}/integration/data/reference")
+
+# This needs a custom definition instead of the one from
+# TenzirDefineUpdateIntegrationTarget as it requires two calls to properly diff
+# within the submodule.
+if (Git_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+  add_custom_target(
+    diff-integration
+    COMMAND "${GIT_EXECUTABLE}" "-C" "${CMAKE_SOURCE_DIR}" "diff" "--exit-code"
+            "--" "*.ref"
+    COMMAND
+      "${GIT_EXECUTABLE}" "-C" "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins"
+      "diff" "--exit-code" "--" "*.ref"
+    DEPENDS integration
+    COMMENT "Diffing all integration test results"
+    USES_TERMINAL)
+endif ()
 
 include(ProcessorCount)
 ProcessorCount(parallel_level)
@@ -129,8 +146,8 @@ math(EXPR parallel_level "${parallel_level} + 2")
 file(GLOB_RECURSE _suites CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/integration/tests/*.bats")
 foreach (suite IN LISTS _suites)
-  get_filename_component(suite_name "${suite}" NAME_WE)
-  string(REGEX REPLACE "_" "-" suite_name "${suite_name}")
+  get_filename_component(bats_suite_name "${suite}" NAME_WE)
+  string(REGEX REPLACE "_" "-" suite_name "${bats_suite_name}")
   add_custom_target(
     "integration-tenzir-${suite_name}"
     COMMAND
@@ -141,7 +158,9 @@ foreach (suite IN LISTS _suites)
     USES_TERMINAL)
   add_dependencies(integration-tenzir-${suite_name} tenzir)
   add_dependencies(integration-tenzir integration-tenzir-${suite_name})
-  TenzirDefineUpdateIntegrationTarget(integration-tenzir-${suite_name})
+  TenzirDefineUpdateIntegrationTarget(
+    integration-tenzir-${suite_name}
+    "${CMAKE_CURRENT_SOURCE_DIR}/integration/data/reference/${bats_suite_name}")
 endforeach ()
 
 unset(parallel_level)

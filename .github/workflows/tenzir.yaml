@@ -746,7 +746,7 @@ jobs:
       - name: Run Integration Tests
         id: integration_tests
         run: |
-          VERBOSE=1 cmake --build "$BUILD_DIR" --target integration -j 1
+          VERBOSE=1 cmake --build "$BUILD_DIR" --target diff-integration -j 1
       - name: Publish Integration Test Report
         uses: mikepenz/action-junit-report@v4
         if: always()
