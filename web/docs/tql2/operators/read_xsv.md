@@ -1,16 +1,26 @@
-# read_csv
+# read_xsv
 
 Read CSV (Comma-Separated Values) from a byte stream.
 
 ```
-read_csv [list_sep=str, null_value=str, comments=bool, header=str, auto_expand=bool,
-          schema=str, selector=str, schema_only=bool, raw=bool, unflatten=str]
+read_xsv field_sep:str, list_sep:str, null_value:str, 
+          [comments=bool, header=str, auto_expand=bool, schema=str, selector=str, 
+          schema_only=bool, raw=bool, unflatten=str]
 ```
 
 ## Description
 
-The `read_csv` operator transforms a byte stream into a event stream by parsing
+The `read_xsv` operator transforms a byte stream into a event stream by parsing
 the bytes as [CSV](https://en.wikipedia.org/wiki/Comma-separated_values).
+
+### `field_sep`
+The `string` separating different fields.
+
+### `list_sep`
+The `string` separating different elements in a list.
+
+### `null_value`
+The `string` to be used as a representation of `null` values in the input.
 
 ### `auto_expand`
 Automatically add fields to the schema when encountering events with too many
@@ -30,8 +40,6 @@ The `string` separating the elements _inside_ a list.
 The `string` denoting an absent value.
 
 ### `raw`
-XXX: CSV and native types? :think:
-
 Use only the raw types that are native to the parsed format. Fields that have a type
 specified in the chosen schema will still be parsed according to the schema.
 

@@ -1,22 +1,14 @@
-# read_json
+# read_yaml
 
-Parses an incoming JSON stream into events.
+Parses an incoming [YAML](https://en.wikipedia.org/wiki/YAML) stream into events.
 
 ```
-read_json [arrays_of_objects=bool, merge=bool, sep=str,
-          schema=str, selector=str, schema_only=bool, raw=bool, unflatten=str]
+read_yaml [merge=bool, raw=bool, schema=str, selector=str, schema_only=bool, unflatten=str]
 ```
 
 ## Description
 
-Parses an incoming JSON stream into events.
-
-### arrays_of_objects
-
-Parse arrays of objects, with every object in the outermost arrays resulting in
-one event each. This is particularly useful when interfacing with REST APIs,
-which often yield large arrays of objects instead of newline-delimited JSON
-objects.
+Parses an incoming [YAML](https://en.wikipedia.org/wiki/YAML) stream into events.
 
 ### merge
 
@@ -31,16 +23,13 @@ This option can not be combined with `--raw --schema`.
 
 ### raw
 
-Use only the raw JSON types. This means that all strings are parsed as `string`,
-irrespective of whether they are a valid `ip`, `duration`, etc. Also, since JSON
+Use only the raw YAML types. This means that all strings are parsed as `string`,
+irrespective of whether they are a valid `ip`, `duration`, etc. Also, since YAML
 only has one generic number type, all numbers are parsed with the `double` type.
-
-### sep
-TODO
 
 ### `schema`
 Provide the name of a [schema](../data-model/schemas.md) to be used by the
-parser. If the schema uses the `blob` type, then the JSON parser expects
+parser. If the schema uses the `blob` type, then the YAML parser expects
 base64-encoded strings.
 
 The `schema` option is incompatible with the `selector` option.
@@ -67,11 +56,11 @@ This option requires either `schema` or `selector` to be set.
 ## Examples
 
 ```
-load_file "events.json"
-read_json
+load_file "events.yaml"
+read_yaml
 
-load_file "events.json"
-read_json schema=...
+load_file "config.yaml"
+read_yaml schema=...
 
 ...
 ```
