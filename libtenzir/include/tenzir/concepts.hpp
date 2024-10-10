@@ -18,8 +18,8 @@
 
 namespace tenzir::concepts {
 
-template <class T, class U>
-concept sameish = std::same_as<std::decay_t<T>, std::decay_t<U>>;
+template <class T, class... Us>
+concept sameish = (std::same_as<std::decay_t<T>, std::decay_t<Us>> or ...);
 
 template <class T>
 concept transparent = requires { typename T::is_transparent; };
@@ -66,7 +66,7 @@ concept arithmetic = std::is_arithmetic_v<T>;
 
 template <class T>
 concept integer
-  = std::integral<T> and not sameish<T, char> and not sameish<T, bool>;
+  = std::integral<T> and not sameish<T, bool, char, signed char, unsigned char>;
 
 template <class T>
 concept number = integer<T> or std::floating_point<T>;
