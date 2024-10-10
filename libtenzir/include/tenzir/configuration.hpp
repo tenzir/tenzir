@@ -26,7 +26,7 @@ struct config_file {
 
   auto operator==(const config_file& rhs) const -> bool = default;
   auto operator<=>(const config_file& rhs) const -> std::strong_ordering
-    = default;
+                                                    = default;
 };
 
 /// @returns The config dirs of the application.

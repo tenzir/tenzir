@@ -84,9 +84,9 @@ struct atom_view;
 class series_builder {
 public:
   /// Initializes the builder, optionally with a given type (see above).
-  series_builder(std::optional<std::reference_wrapper<const tenzir::type>> ty
-                 = std::nullopt);
-  series_builder(const tenzir::type& ty) : series_builder(std::optional{ty}) {
+  series_builder(std::optional<std::reference_wrapper<const tenzir::type>> ty);
+  series_builder(const tenzir::type* ty = nullptr);
+  series_builder(const tenzir::type& ty) : series_builder(&ty) {
   }
 
   ~series_builder();
@@ -135,8 +135,8 @@ public:
   /// used for initialization (if it had a name), and `tenzir.json` otherwise.
   ///
   /// @pre all top-level elements must be records
-  auto finish_as_table_slice(std::string_view name = "")
-    -> std::vector<table_slice>;
+  auto
+  finish_as_table_slice(std::string_view name = "") -> std::vector<table_slice>;
 
   /// Same as `finish_as_table_slice(name)`, but asserts that there is only one
   /// result.
@@ -153,7 +153,7 @@ public:
   auto kind() -> type_kind;
 
   /// Returns the number of elements that would be returned by `finish()`.
-  auto length() -> int64_t;
+  auto length() const -> int64_t;
 
   /// Removes the element that is currently being built.
   void remove_last();

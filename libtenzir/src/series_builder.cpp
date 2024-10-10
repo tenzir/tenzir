@@ -334,7 +334,7 @@ public:
     return builder_.list();
   }
 
-  auto total_length() -> int64_t {
+  auto total_length() const -> int64_t {
     auto total = builder_.length();
     for (auto& array : finished_) {
       total += array.length();
@@ -1306,6 +1306,13 @@ series_builder::series_builder(
   }
 }
 
+series_builder::series_builder(const tenzir::type* ty)
+  : impl_{std::make_unique<detail::series_builder_impl>()} {
+  if (ty) {
+    impl_->protect(*ty);
+  }
+}
+
 series_builder::~series_builder() = default;
 
 series_builder::series_builder(series_builder&&) noexcept = default;
@@ -1397,7 +1404,7 @@ auto series_builder::type() -> tenzir::type {
   return impl_->type();
 }
 
-auto series_builder::length() -> int64_t {
+auto series_builder::length() const -> int64_t {
   return impl_->total_length();
 }
 

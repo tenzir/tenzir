@@ -1,7 +1,15 @@
 {"z": null, "x": ["_0_0_2", "conn", "conn_long", "corelight_metrics_bro", "corelight_metrics_cpu", "corelight_metrics_disk", "corelight_metrics_iface", "corelight_metrics_memory", "corelight_metrics_system", "dhcp", "dnp3", "dns", "dpd", "files", "ftp", "http", "irc", "kerberos", "modbus", "notice", "pe", "radius", "rdp", "reporter", "sip", "smtp", "snmp", "software", "ssl", "syslog", "tunnel", "weird", "weird.123.190"]}
-warning: group-by column `z` does not exist for schema `tenzir.json`
+warning: zeek-json parser: event did not contain selector field
+ = note: selector field `_path` was not found
 
-warning: aggregation column `_path` does not exist for schema `tenzir.json`
+warning: zeek-json parser: selected schema not found
+ = note: `zeek._0_0_2` does not refer to a known schema
+
+warning: zeek-json parser: parsed field contains `int64`, but the schema expects `record`
+
+warning: group-by column `z` does not exist for schema `zeek`
+
+warning: aggregation column `_path` does not exist for schema `zeek`
 
 warning: group-by column `z` does not exist for schema `zeek._0_0_2`
 

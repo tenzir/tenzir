@@ -17,10 +17,6 @@
 #include "tenzir/pipeline.hpp"
 
 #include <caf/actor_system_config.hpp>
-#include <caf/attach_stream_sink.hpp>
-#include <caf/attach_stream_source.hpp>
-#include <caf/attach_stream_stage.hpp>
-#include <caf/downstream.hpp>
 #include <caf/error.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/exit_reason.hpp>

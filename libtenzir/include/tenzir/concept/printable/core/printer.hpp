@@ -41,16 +41,17 @@ struct printer_base {
   }
 
   template <class... TAttributes>
-  auto
-  operator()(concepts::range auto&& r, const TAttributes&... attributes) const {
+  auto operator()(std::ranges::range auto&& r,
+                  const TAttributes&... attributes) const {
     if constexpr (sizeof...(TAttributes) == 0) {
       auto out = std::back_inserter(r);
       return derived().print(out, unused);
     } else if constexpr (sizeof...(TAttributes) == 1) {
       auto out = std::back_inserter(r);
       return derived().print(out, attributes...);
-    } else
+    } else {
       return operator()(r, std::tie(attributes...));
+    }
   }
 
   template <class Iterator, class... TAttributes>
@@ -59,12 +60,13 @@ struct printer_base {
       ++out;
     }
   auto operator()(Iterator&& out, const TAttributes&... attributes) const {
-    if constexpr (sizeof...(TAttributes) == 0)
+    if constexpr (sizeof...(TAttributes) == 0) {
       return derived().print(out, unused);
-    else if constexpr (sizeof...(TAttributes) == 1)
+    } else if constexpr (sizeof...(TAttributes) == 1) {
       return derived().print(out, attributes...);
-    else
+    } else {
       return operator()(out, std::tie(attributes...));
+    }
   }
 
 private:
@@ -86,9 +88,7 @@ using make_printer = typename printer_registry<T>::type;
 
 /// Checks whether the printer registry has a given type registered.
 template <class T>
-concept registered_printer = requires {
-  typename printer_registry<T>::type;
-};
+concept registered_printer = requires { typename printer_registry<T>::type; };
 
 /// Checks whether a given type is-a printer, i.e., derived from
 /// ::tenzir::printer.

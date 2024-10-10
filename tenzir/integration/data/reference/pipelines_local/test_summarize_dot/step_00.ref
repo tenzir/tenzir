@@ -1,1 +1,8 @@
 {"x": 36}
+warning: zeek-json parser: event did not contain selector field
+ = note: selector field `_path` was not found
+
+warning: zeek-json parser: selected schema not found
+ = note: `zeek._0_0_2` does not refer to a known schema
+
+warning: zeek-json parser: parsed field contains `int64`, but the schema expects `record`

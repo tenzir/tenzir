@@ -23,7 +23,6 @@ resp_pkts: 191
 resp_ip_bytes: 8404
 ...
 ---
-_path: _0_0_2
 _write_ts: 2020-02-11T03:48:57.477193
 ts: 2020-02-11T03:48:57.477193
 uid: Cpk0Nl33Zb5ZWLP1tc
@@ -33,6 +32,7 @@ id:
   resp_h: 141.9.255.157
   resp_p: 8080
 proto: tcp
+_path: _0_0_2
 note: LongConnection::found
 msg: 185.100.59.59 -> 141.9.255.157:8080/tcp remained alive for longer than 19m55s
 sub: 1194.62
@@ -77,8 +77,6 @@ orig_l2_addr: e8:e7:32:df:62:26
 resp_l2_addr: 42:10:47:e6:ef:4b
 ...
 ---
-_path: conn_long
-_system_name: sensor_10_0_0_2
 _write_ts: 2020-01-17T17:46:28.728717
 ts: 2020-01-17T17:26:28.716994
 uid: CmcIAq2mcAPR7zjTQe
@@ -100,11 +98,14 @@ orig_pkts: 81
 orig_ip_bytes: 4220
 resp_pkts: 80
 resp_ip_bytes: 4168
+_path: conn_long
+_system_name: sensor_10_0_0_2
 ...
 ---
+_write_ts: 2020-04-01T16:20:08.000000
+ts: 2020-04-01T16:20:08.000000
 _path: corelight_metrics_bro
 _system_name: sensor_10_0_0_2
-_write_ts: 2020-04-01T16:20:08.000000
 cpu:
   logger: 76.5
   manager: 17.6
@@ -431,5 +432,11 @@ memory:
   manager: 0.2
   proxies: 0.4
   workers: 2.12
-ts: 2020-04-01T16:20:08.000000
 ...
+warning: zeek-json parser: event did not contain selector field
+ = note: selector field `_path` was not found
+
+warning: zeek-json parser: selected schema not found
+ = note: `zeek._0_0_2` does not refer to a known schema
+
+warning: zeek-json parser: parsed field contains `int64`, but the schema expects `record`

@@ -34,6 +34,31 @@
 #include <dlfcn.h>
 #include <memory>
 
+#ifndef __has_feature
+#  define __has_feature(x) 0
+#endif
+
+#if __has_feature(address_sanitizer) or defined(__SANITIZE_ADDRESS__)
+#  if __has_include(<sanitizer/lsan_interface.h>)
+#    define TENZIR_HAS_LEAK_SANITIZER
+#  endif
+#endif
+
+#ifdef TENZIR_HAS_LEAK_SANITIZER
+#  include <sanitizer/lsan_interface.h>
+#  define TENZIR_DISABLE_LEAK_SANITIZER()                                      \
+    do {                                                                       \
+      __lsan_disable();                                                        \
+    } while (false)
+#  define TENZIR_ENABLE_LEAK_SANITIZER()                                       \
+    do {                                                                       \
+      __lsan_enable();                                                         \
+    } while (false)
+#else
+#  define TENZIR_DISABLE_LEAK_SANITIZER()
+#  define TENZIR_ENABLE_LEAK_SANITIZER()
+#endif
+
 namespace tenzir {
 
 // -- plugin singleton ---------------------------------------------------------
@@ -305,6 +330,21 @@ load(const std::vector<std::string>& bundled_plugins,
 
 /// Initialize loaded plugins.
 caf::error initialize(caf::actor_system_config& cfg) {
+  // If everything went well, we should have a strictly-ordered list of plugins.
+  if (auto it = std::ranges::adjacent_find(get(), std::greater_equal{});
+      it != get().end()) {
+    auto name_a = (*it)->name();
+    ++it;
+    auto name_b = (*it)->name();
+    if (name_a == name_b) {
+      TENZIR_ASSERT(false,
+                    fmt::format("found multiple plugins named `{}`", name_a));
+    } else {
+      TENZIR_ASSERT(false, fmt::format("unexpected plugin ordering: found `{}` "
+                                       "before `{}`",
+                                       name_a, name_b));
+    }
+  }
   auto global_config = record{};
   auto global_opts = caf::content(cfg);
   if (auto global_opts_data = to<record>(global_opts)) {
@@ -533,7 +573,9 @@ auto plugin_parser::parse_strings(std::shared_ptr<arrow::StringArray> input,
 caf::expected<plugin_ptr>
 plugin_ptr::make_dynamic(const char* filename,
                          caf::actor_system_config& cfg) noexcept {
+  TENZIR_DISABLE_LEAK_SANITIZER();
   auto* library = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
+  TENZIR_ENABLE_LEAK_SANITIZER();
   if (!library) {
     return caf::make_error(ec::system_error, "failed to load plugin", filename,
                            dlerror());

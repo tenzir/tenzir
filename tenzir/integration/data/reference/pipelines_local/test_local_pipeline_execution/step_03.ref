@@ -6,10 +6,7 @@
   "id.resp_h": "130.239.18.172",
   "id.resp_p": 6667,
   "command": "NICK",
-  "value": "Pepe202905",
-  "nick": null,
-  "addl": null,
-  "user": null
+  "value": "Pepe202905"
 }
 {
   "ts": "2011-08-12T13:01:02.042699",
@@ -21,8 +18,7 @@
   "command": "USER",
   "value": "snffsgw",
   "nick": "Pepe202905",
-  "addl": "0 0 Pepe202905",
-  "user": null
+  "addl": "0 0 Pepe202905"
 }
 {
   "ts": "2011-08-12T13:01:03.764738",
@@ -84,10 +80,7 @@
   "id.resp_h": "93.152.160.101",
   "id.resp_p": 6667,
   "command": "NICK",
-  "value": "Pepe305632",
-  "nick": null,
-  "addl": null,
-  "user": null
+  "value": "Pepe305632"
 }
 {
   "ts": "2011-08-12T13:07:59.343484",
@@ -99,8 +92,7 @@
   "command": "USER",
   "value": "bfgicdn",
   "nick": "Pepe305632",
-  "addl": "0 0 Pepe305632",
-  "user": null
+  "addl": "0 0 Pepe305632"
 }
 {
   "ts": "2011-08-12T13:08:10.529427",
@@ -162,10 +154,7 @@
   "id.resp_h": "38.229.70.20",
   "id.resp_p": 6667,
   "command": "NICK",
-  "value": "Pepe061664",
-  "nick": null,
-  "addl": null,
-  "user": null
+  "value": "Pepe061664"
 }
 {
   "ts": "2011-08-12T13:09:33.393483",
@@ -177,8 +166,7 @@
   "command": "USER",
   "value": "uyzzmmgi",
   "nick": "Pepe061664",
-  "addl": "0 0 Pepe061664",
-  "user": null
+  "addl": "0 0 Pepe061664"
 }
 {
   "ts": "2011-08-12T13:09:43.028633",

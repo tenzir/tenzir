@@ -16,8 +16,9 @@
 #include <tenzir/concept/parseable/tenzir/time.hpp>
 #include <tenzir/concept/printable/std/chrono.hpp>
 #include <tenzir/concept/printable/to_string.hpp>
+#include <tenzir/multi_series_builder.hpp>
+#include <tenzir/multi_series_builder_argument_parser.hpp>
 #include <tenzir/plugin.hpp>
-#include <tenzir/series_builder.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/to_lines.hpp>
 
@@ -419,51 +420,6 @@ struct legacy_message_parser : parser_base<legacy_message_parser> {
   }
 };
 
-inline auto make_syslog_type() -> type {
-  return type{
-    "syslog.rfc5424",
-    record_type{{
-      {"facility", uint64_type{}},
-      {"severity", uint64_type{}},
-      {"version", uint64_type{}},
-      {"timestamp", time_type{}},
-      {"hostname", string_type{}},
-      {"app_name", string_type{}},
-      // TODO: we may consider being stricter here for the PID so that we can
-      // use number type instead of a string.
-      {"process_id", string_type{}},
-      {"message_id", string_type{}},
-      {"structured_data", record_type{}},
-      {"message", string_type{}},
-    }},
-  };
-}
-
-inline auto make_legacy_syslog_type() -> type {
-  return type{
-    "syslog.rfc3164",
-    record_type{{
-      {"facility", uint64_type{}},
-      {"severity", uint64_type{}},
-      {"timestamp", string_type{}},
-      {"hostname", string_type{}},
-      // This is called TAG in the RFC. We purpusefully streamline the field
-      // names with the RFC524 parser.
-      {"app_name", string_type{}},
-      // TODO: consider making an integer; see note above.
-      {"process_id", string_type{}},
-      {"content", string_type{}},
-    }},
-  };
-}
-
-inline auto make_unknown_type() -> type {
-  return type{
-    "syslog.unknown",
-    record_type{{{"syslog_message", string_type{}}}},
-  };
-}
-
 template <typename Message>
 struct syslog_row {
   syslog_row(Message msg, size_t line_no)
@@ -511,59 +467,43 @@ public:
     ++latest.line_count;
   }
 
-  auto rows() -> size_t {
-    return rows_.size();
-  }
-
-  auto finish_all_but_last(diagnostic_handler& diag)
-    -> std::optional<std::vector<table_slice>> {
-    series_builder builder{make_syslog_type()};
+  auto finish_all_but_last(multi_series_builder& builder) -> void {
     for (auto& row : std::views::take(rows_, rows_.size() - 1)) {
-      if (not finish_single(row, builder, diag)) {
-        return std::nullopt;
+      if (not finish_single(row, builder)) {
+        return;
       }
     }
     if (not rows_.empty()) {
       rows_.erase(rows_.begin(), rows_.end() - 1);
     }
-    return builder.finish_as_table_slice();
   }
 
-  auto finish_all(diagnostic_handler& diag)
-    -> std::optional<std::vector<table_slice>> {
-    series_builder builder{make_syslog_type()};
+  auto finish_all(multi_series_builder& builder) -> void {
     for (auto& row : rows_) {
-      if (not finish_single(row, builder, diag)) {
-        return std::nullopt;
+      if (not finish_single(row, builder)) {
+        return;
       }
     }
     rows_.clear();
-    return builder.finish_as_table_slice();
   }
 
 private:
-  static auto finish_single(const row_type& row, series_builder& builder,
-                            diagnostic_handler& diag) -> bool {
+  static auto
+  finish_single(row_type& row, multi_series_builder& builder) -> bool {
+    auto r = builder.record();
     auto& msg = row.parsed;
-    const record r{
-      {"facility", msg.hdr.facility},
-      {"severity", msg.hdr.severity},
-      {"version", msg.hdr.version},
-      {"timestamp", msg.hdr.ts},
-      {"hostname", std::move(msg.hdr.hostname)},
-      {"app_name", std::move(msg.hdr.app_name)},
-      {"process_id", msg.hdr.process_id},
-      {"message_id", msg.hdr.msg_id},
-      {"structured_data", std::move(msg.data)},
-      {"message", std::move(msg.msg)},
-    };
-    if (not builder.try_data(r)) {
-      row.emit_diag("RFC 5242", diag);
-      return false;
-    }
+    r.exact_field("facility").data(msg.hdr.facility);
+    r.exact_field("severity").data(msg.hdr.severity);
+    r.exact_field("version").data(msg.hdr.version);
+    r.exact_field("timestamp").data(std::move(msg.hdr.ts));
+    r.exact_field("hostname").data(std::move(msg.hdr.hostname));
+    r.exact_field("app_name").data(std::move(msg.hdr.app_name));
+    r.exact_field("process_id").data(std::move(msg.hdr.process_id));
+    r.exact_field("message_id").data(std::move(msg.hdr.msg_id));
+    r.exact_field("structured_data").data(std::move(msg.data));
+    r.exact_field("message").data(std::move(msg.msg));
     return true;
   }
-
   std::vector<row_type> rows_{};
 };
 
@@ -586,45 +526,43 @@ public:
     ++latest.line_count;
   }
 
-  auto rows() -> size_t {
-    return rows_.size();
-  }
-
-  auto finish_all_but_last(diagnostic_handler& diag)
-    -> std::optional<std::vector<table_slice>> {
-    table_slice_builder builder{make_legacy_syslog_type()};
+  auto finish_all_but_last(multi_series_builder& builder) -> void {
     for (auto& row : std::views::take(rows_, rows_.size() - 1)) {
-      if (not finish_single(row, builder, diag)) {
-        return std::nullopt;
+      if (not finish_single(row, builder)) {
+        return;
       }
     }
     if (not rows_.empty()) {
       rows_.erase(rows_.begin(), rows_.end() - 1);
     }
-    return std::vector{builder.finish()};
   }
 
-  auto finish_all(diagnostic_handler& diag)
-    -> std::optional<std::vector<table_slice>> {
-    table_slice_builder builder{make_legacy_syslog_type()};
+  auto finish_all(multi_series_builder& builder) -> void {
     for (auto& row : rows_) {
-      if (not finish_single(row, builder, diag)) {
-        return std::nullopt;
+      if (not finish_single(row, builder)) {
+        return;
       }
     }
     rows_.clear();
-    return std::vector{builder.finish()};
   }
 
 private:
-  static auto finish_single(const row_type& row, table_slice_builder& builder,
-                            diagnostic_handler& diag) -> bool {
+  static auto
+  finish_single(row_type& row, multi_series_builder& builder) -> bool {
     auto& msg = row.parsed;
-    if (not builder.add(msg.facility, msg.severity, msg.timestamp, msg.host,
-                        msg.tag, msg.process_id, msg.content)) {
-      row.emit_diag("RFC 3164", diag);
-      return false;
-    }
+    auto r = builder.record();
+    r.exact_field("facility").data(msg.facility);
+    r.exact_field("severity").data(msg.severity);
+    r.exact_field("timestamp").data_unparsed(std::move(msg.timestamp));
+    r.exact_field("hostname").data(std::move(msg.host));
+    r.exact_field("app_name").data(std::move(msg.tag));
+    r.exact_field("process_id").data(std::move(msg.process_id));
+    r.exact_field("content").data(msg.content);
+    // if (not builder.add(msg.facility, msg.severity, msg.timestamp, msg.host,
+    //                     msg.tag, msg.process_id, msg.content)) {
+    //   row.emit_diag("RFC 3164", diag);
+    //   return false;
+    // }
     return true;
   }
 
@@ -646,47 +584,39 @@ public:
     TENZIR_UNREACHABLE();
   }
 
-  auto rows() -> size_t {
-    return rows_.size();
-  }
-
-  static auto finish_all_but_last(diagnostic_handler&)
-    -> std::optional<std::vector<table_slice>> {
+  static auto finish_all_but_last(multi_series_builder&) -> void {
     TENZIR_UNREACHABLE();
   }
 
-  auto
-  finish_all(diagnostic_handler&) -> std::optional<std::vector<table_slice>> {
-    table_slice_builder builder{make_unknown_type()};
+  auto finish_all(multi_series_builder& builder) -> void {
     for (auto& row : rows_) {
+      auto r = builder.record();
       // Adding a `syslog.unknown` can never fail,
       // it's just a field containing a string.
-      auto r = builder.add(row);
-      TENZIR_ASSERT(r);
+      r.exact_field("syslog_message").data(std::move(row));
     }
     rows_.clear();
-    return std::vector{builder.finish()};
   }
 
 private:
   std::vector<std::string> rows_;
 };
 
-auto impl(generator<std::optional<std::string_view>> lines,
-          operator_control_plane& ctrl) -> generator<table_slice> {
+auto parse_loop(generator<std::optional<std::string_view>> lines,
+                operator_control_plane& ctrl,
+                multi_series_builder::options opts) -> generator<table_slice> {
   std::variant<syslog_builder, legacy_syslog_builder, unknown_syslog_builder>
     builder{std::in_place_type<unknown_syslog_builder>};
+  auto dh = transforming_diagnostic_handler{
+    ctrl.diagnostics(), [](auto diag) {
+      diag.message = fmt::format("syslog parser: {}", diag.message);
+      return diag;
+    }};
+  auto msb = multi_series_builder{std::move(opts), dh};
   const auto finish_all = [&]() {
     return std::visit(
       [&](auto& b) {
-        return b.finish_all(ctrl.diagnostics());
-      },
-      builder);
-  };
-  const auto rows = [&]() {
-    return std::visit(
-      [&](auto& b) {
-        return b.rows();
+        return b.finish_all(msb);
       },
       builder);
   };
@@ -703,51 +633,20 @@ auto impl(generator<std::optional<std::string_view>> lines,
       },
       builder);
   };
-  const auto change_builder
-    = [&]<typename Builder>(
-        tag<Builder>) -> std::optional<std::vector<table_slice>> {
+  const auto change_builder = [&]<typename Builder>(tag<Builder>) {
     if (std::holds_alternative<Builder>(builder)) {
-      return std::vector<table_slice>{};
+      return;
     }
-    auto finished = finish_all();
+    finish_all();
     builder.template emplace<Builder>();
-    return finished;
   };
-  auto last_finish = std::chrono::steady_clock::now();
   auto line_nr = size_t{0};
   for (auto&& line : lines) {
-    const auto now = std::chrono::steady_clock::now();
-    if (rows() >= defaults::import::table_slice_size
-        or last_finish + defaults::import::batch_timeout < now) {
-      last_finish = now;
-      // Don't yield the last row contained in a builder other than
-      // `unknown_syslog_builder`:
-      // It's possible it's a multiline message, that would get cut in half
-      const auto finish_on_periodic_yield = [&]() {
-        return std::visit(detail::overload{
-                            [&](auto& b) {
-                              return b.finish_all_but_last(ctrl.diagnostics());
-                            },
-                            [&](unknown_syslog_builder& b) {
-                              return b.finish_all(ctrl.diagnostics());
-                            },
-                          },
-                          builder);
-      };
-      if (auto slices = finish_on_periodic_yield()) {
-        for (auto&& slice : *slices) {
-          if (slice.rows() > 0) {
-            co_yield std::move(slice);
-          }
-        }
-      } else {
-        co_return;
-      }
+    for (auto&& slice : msb.yield_ready_as_table_slice()) {
+      co_yield std::move(slice);
     }
     if (not line) {
-      if (last_finish != now) {
-        co_yield {};
-      }
+      co_yield {};
       continue;
     }
     ++line_nr;
@@ -761,28 +660,12 @@ auto impl(generator<std::optional<std::string_view>> lines,
     if (auto parser = message_parser{}; parser(f, l, msg)) {
       // This line is a valid new-RFC (5424) syslog message.
       // Store it in the builder
-      if (auto slices = change_builder(tag_v<syslog_builder>)) {
-        for (auto&& slice : *slices) {
-          if (slice.rows() > 0) {
-            co_yield std::move(slice);
-          }
-        }
-      } else {
-        co_return;
-      }
+      change_builder(tag_v<syslog_builder>);
       add_new(std::move(msg), line_nr);
     } else if (auto legacy_parser = legacy_message_parser{};
                legacy_parser(f, l, legacy_msg)) {
       // Same as above, except it's an old-RFC (3164) syslog message.
-      if (auto slices = change_builder(tag_v<legacy_syslog_builder>)) {
-        for (auto&& slice : *slices) {
-          if (slice.rows() > 0) {
-            co_yield std::move(slice);
-          }
-        }
-      } else {
-        co_return;
-      }
+      change_builder(tag_v<legacy_syslog_builder>);
       add_new(std::move(legacy_msg), line_nr);
     } else if (std::holds_alternative<unknown_syslog_builder>(builder)) {
       // This line is not a valid syslog message.
@@ -801,18 +684,18 @@ auto impl(generator<std::optional<std::string_view>> lines,
         builder);
     }
   }
-  if (auto slices = finish_all()) {
-    for (auto&& slice : *slices) {
-      if (slice.rows() > 0) {
-        co_yield std::move(slice);
-      }
-    }
+  finish_all();
+  for (auto&& slice : msb.finalize_as_table_slice()) {
+    co_yield std::move(slice);
   }
 }
 
 class syslog_parser final : public plugin_parser {
 public:
   syslog_parser() = default;
+
+  syslog_parser(multi_series_builder::options opts) : opts_{std::move(opts)} {
+  }
 
   auto name() const -> std::string override {
     return "syslog";
@@ -821,12 +704,15 @@ public:
   auto
   instantiate(generator<chunk_ptr> input, operator_control_plane& ctrl) const
     -> std::optional<generator<table_slice>> override {
-    return impl(to_lines(std::move(input)), ctrl);
+    return parse_loop(to_lines(std::move(input)), ctrl, opts_);
   }
 
   friend auto inspect(auto& f, syslog_parser& x) -> bool {
-    return f.object(x).pretty_name("syslog_parser").fields();
+    return f.apply(x.opts_);
   }
+
+private:
+  multi_series_builder::options opts_;
 };
 
 class plugin final : public virtual parser_plugin<syslog_parser> {
@@ -835,8 +721,18 @@ public:
     -> std::unique_ptr<plugin_parser> override {
     auto parser = argument_parser{
       name(), fmt::format("https://docs.tenzir.com/formats/{}", name())};
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_all_to_parser(parser);
     parser.parse(p);
-    return std::make_unique<syslog_parser>();
+    auto dh = collecting_diagnostic_handler{};
+    auto msb_opts = msb_parser.get_options(dh);
+    msb_opts->settings.default_schema_name = "tenzir.syslog";
+    for (auto&& diag : std::move(dh).collect()) {
+      if (diag.severity == severity::error) {
+        throw diag;
+      }
+    }
+    return std::make_unique<syslog_parser>(std::move(*msb_opts));
   }
 };
 
@@ -844,8 +740,13 @@ class read_syslog final
   : public virtual operator_plugin2<parser_adapter<syslog_parser>> {
   auto
   make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
-    argument_parser2::operator_("read_syslog").parse(inv, ctx).ignore();
-    return std::make_unique<parser_adapter<syslog_parser>>();
+    auto parser = argument_parser2::operator_("read_syslog");
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_all_to_parser(parser);
+    TRY(parser.parse(inv, ctx));
+    TRY(auto opts, msb_parser.get_options(ctx.dh()));
+    return std::make_unique<parser_adapter<syslog_parser>>(
+      syslog_parser{std::move(opts)});
   }
 };
 

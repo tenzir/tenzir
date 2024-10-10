@@ -22,6 +22,7 @@ WORKDIR /tmp/tenzir
 
 COPY --from=fluent-bit-package /root/fluent-bit_*.deb /root/
 COPY scripts/debian/install-dev-dependencies.sh ./scripts/debian/
+COPY scripts/debian/build-arrow.sh ./scripts/debian/
 RUN ./scripts/debian/install-dev-dependencies.sh && \
     apt-get -y --no-install-recommends install /root/fluent-bit_*.deb && \
     rm /root/fluent-bit_*.deb && \
@@ -110,6 +111,7 @@ COPY --from=development --chown=tenzir:tenzir /var/cache/tenzir/ /var/cache/tenz
 COPY --from=development --chown=tenzir:tenzir /var/lib/tenzir/ /var/lib/tenzir/
 COPY --from=development --chown=tenzir:tenzir /var/log/tenzir/ /var/log/tenzir/
 COPY --from=development /opt/aws-sdk-cpp/lib/ /opt/aws-sdk-cpp/lib/
+COPY --from=dependencies /arrow_*.deb /root/
 COPY --from=fluent-bit-package /root/fluent-bit_*.deb /root/
 
 RUN apt-get update && \
@@ -143,13 +145,9 @@ RUN apt-get update && \
       python3-venv \
       robin-map-dev \
       wget && \
-    wget "https://apache.jfrog.io/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb" && \
-    apt-get -y --no-install-recommends install \
-      ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb && \
-    apt-get update && \
-    apt-get -y --no-install-recommends install libarrow1500=15.0.2-1 libparquet1500=15.0.2-1 && \
+    apt-get -y --no-install-recommends install /root/arrow_*.deb && \
     apt-get -y --no-install-recommends install /root/fluent-bit_*.deb && \
-    rm /root/fluent-bit_*.deb && \
+    rm /root/arrow_*.deb /root/fluent-bit_*.deb && \
     rm -rf /var/lib/apt/lists/* && \
     echo "/opt/aws-sdk-cpp/lib" > /etc/ld.so.conf.d/aws-cpp-sdk.conf && \
     ldconfig

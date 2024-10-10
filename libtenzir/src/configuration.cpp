@@ -54,8 +54,8 @@ struct has_extension_type
 /// 1. A '_' translates into '-'
 /// 2. A "__" translates into the record separator '.'
 /// @pre `!prefix.empty()`
-auto to_config_key(std::string_view key, std::string_view prefix)
-  -> std::optional<std::string> {
+auto to_config_key(std::string_view key,
+                   std::string_view prefix) -> std::optional<std::string> {
   TENZIR_ASSERT(!prefix.empty());
   // PREFIX_X is the shortest allowed key.
   if (prefix.size() + 2 > key.size()) {

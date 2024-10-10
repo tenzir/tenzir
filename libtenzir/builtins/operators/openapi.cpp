@@ -9,6 +9,7 @@
 #include <tenzir/argument_parser.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::openapi {
 
@@ -98,10 +99,8 @@ public:
     return operator_location::local;
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
-    (void)order;
-    (void)filter;
+  auto
+  optimize(expression const&, event_order) const -> optimize_result override {
     return do_not_optimize(*this);
   }
 
@@ -112,10 +111,17 @@ public:
   }
 };
 
-class plugin final : public virtual operator_plugin<openapi_operator> {
+class plugin final : public virtual operator_plugin<openapi_operator>,
+                     public virtual operator_factory_plugin {
 public:
   auto signature() const -> operator_signature override {
     return {.source = true};
+  }
+
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    TRY(argument_parser2::operator_("openapi").parse(inv, ctx));
+    return std::make_unique<openapi_operator>();
   }
 
   auto parse_operator(parser_interface& p) const -> operator_ptr override {

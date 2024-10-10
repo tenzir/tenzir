@@ -55,6 +55,21 @@ EOF
   '
 }
 
+@test "select and drop matching" {
+  check tenzir '
+    from {
+      foo: 1,
+      bar: 2,
+      baz: 3,
+    }
+    let $pattern="^ba"
+    this = {
+      moved: this.select_matching($pattern),
+      ...this.drop_matching($pattern)
+    }
+  '
+}
+
 @test "replace" {
   check tenzir '
     from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
@@ -79,6 +94,33 @@ EOF
   check ! tenzir '
     from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
     x = x.replace(":", "", max=-100)
+  '
+}
+
+@test "replace_regex" {
+  check tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace_regex("[0-9a-f]{2}", "??")
+  '
+  check tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace_regex("[0-9a-f]{2}", "??", max=0)
+  '
+  check tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace_regex("[0-9a-f]{2}", "??", max=4)
+  '
+  check tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace_regex("[0-9a-f]{2}", "??", max=100)
+  '
+  check ! tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace_regex("[0-9a-f]{2}", "??", max=-1)
+  '
+  check ! tenzir '
+    from {x: "85:0f:d2:e1:95:02:ab:0f:5a:c3:c8:58:f1:67:21:7d:0b:41:91:e6"}
+    x = x.replace_regex("[0-9a-f{2}", "??")
   '
 }
 
@@ -136,5 +178,22 @@ EOF
       x: "850fd2e19502ab0f5ac3c858f167217d0b4191e6"
     }
     x = x.slice(end=6, stride=-1)
+  '
+}
+
+@test "time" {
+  check tenzir '
+    from {}
+    n = time("2024-09-24T20:20:26.168426")
+    y = n.year()
+    m = n.month()
+    d = n.day()
+  '
+  # Expect failure, but only a warning
+  check tenzir '
+    from {
+      x: 1
+    }
+    y = x.year()
   '
 }

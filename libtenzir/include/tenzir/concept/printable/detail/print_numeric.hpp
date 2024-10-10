@@ -17,7 +17,7 @@
 
 namespace tenzir::detail {
 
-template <class Iterator, concepts::integral T>
+template <class Iterator, std::integral T>
 size_t print_numeric(Iterator& out, T x) {
   if (x == 0) {
     *out++ = '0';

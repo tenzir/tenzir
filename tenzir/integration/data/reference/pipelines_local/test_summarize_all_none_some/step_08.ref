@@ -1,14 +1,16 @@
-{"id.orig_h": null, "x": null}
 {"id.orig_h": "213.32.39.37", "x": ["213.32.39.37"]}
 {"id.orig_h": "141.9.32.104", "x": ["141.9.32.104"]}
 {"id.orig_h": "223.71.167.165", "x": ["223.71.167.165"]}
+{"id.orig_h": "45.231.152.1", "x": ["45.231.152.1"]}
 {"id.orig_h": "152.136.69.32", "x": ["152.136.69.32"]}
+{"id.orig_h": null, "x": []}
 {"id.orig_h": "223.149.205.1", "x": ["223.149.205.1"]}
 {"id.orig_h": "104.206.128.30", "x": ["104.206.128.30"]}
 {"id.orig_h": "147.203.238.18", "x": ["147.203.238.18"]}
 {"id.orig_h": "159.83.123.38", "x": ["159.83.123.38"]}
 {"id.orig_h": "150.164.15.49", "x": ["150.164.15.49"]}
 {"id.orig_h": "71.6.167.142", "x": ["71.6.167.142"]}
+{"id.orig_h": "45.58.146.42", "x": ["45.58.146.42"]}
 {"id.orig_h": "150.107.75.221", "x": ["150.107.75.221"]}
 {"id.orig_h": "101.89.191.10", "x": ["101.89.191.10"]}
 {"id.orig_h": "185.100.59.59", "x": ["185.100.59.59"]}
@@ -19,9 +21,13 @@
 {"id.orig_h": "193.10.255.99", "x": ["193.10.255.99"]}
 {"id.orig_h": "192.88.99.1", "x": ["192.88.99.1"]}
 {"id.orig_h": "106.75.22.216", "x": ["106.75.22.216"]}
-warning: group-by column `id.orig_h` does not exist for schema `zeek.conn`
+warning: zeek-json parser: event did not contain selector field
+ = note: selector field `_path` was not found
 
-warning: aggregation column `id.orig_h` does not exist for schema `zeek.conn`
+warning: zeek-json parser: selected schema not found
+ = note: `zeek._0_0_2` does not refer to a known schema
+
+warning: zeek-json parser: parsed field contains `int64`, but the schema expects `record`
 
 warning: group-by column `id.orig_h` does not exist for schema `zeek.corelight_metrics_bro`
 

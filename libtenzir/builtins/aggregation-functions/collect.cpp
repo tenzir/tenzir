@@ -8,6 +8,8 @@
 
 #include <tenzir/aggregation_function.hpp>
 #include <tenzir/plugin.hpp>
+#include <tenzir/tql2/eval.hpp>
+#include <tenzir/tql2/plugin.hpp>
 
 namespace tenzir::plugins::collect {
 
@@ -53,7 +55,36 @@ private:
   list result_ = {};
 };
 
-class plugin : public virtual aggregation_function_plugin {
+class collect_instance final : public aggregation_instance {
+public:
+  explicit collect_instance(ast::expression expr) : expr_{std::move(expr)} {
+  }
+
+  auto update(const table_slice& input, session ctx) -> void override {
+    auto arg = eval(expr_, input, ctx);
+    if (caf::holds_alternative<null_type>(arg.type)) {
+      return;
+    }
+    // NOTE: Currently, different types end up coerced to strings.
+    for (auto i = int64_t{}; i < arg.array->length(); ++i) {
+      if (arg.array->IsNull(i)) {
+        continue;
+      }
+      result_.push_back(materialize(value_at(arg.type, *arg.array, i)));
+    }
+  }
+
+  auto finish() -> data override {
+    return result_;
+  }
+
+private:
+  ast::expression expr_;
+  list result_;
+};
+
+class plugin : public virtual aggregation_function_plugin,
+               public virtual aggregation_plugin {
   auto name() const -> std::string override {
     return "collect";
   };
@@ -65,6 +96,13 @@ class plugin : public virtual aggregation_function_plugin {
       return std::make_unique<collect_function<Type>>(input_type);
     };
     return caf::visit(f, input_type);
+  }
+
+  auto make_aggregation(invocation inv, session ctx) const
+    -> failure_or<std::unique_ptr<aggregation_instance>> override {
+    auto expr = ast::expression{};
+    TRY(argument_parser2::function(name()).add(expr, "<expr>").parse(inv, ctx));
+    return std::make_unique<collect_instance>(std::move(expr));
   }
 
   auto aggregation_default() const -> data override {

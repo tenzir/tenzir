@@ -25,8 +25,8 @@ public:
     return starts_with_ ? "starts_with" : "ends_with";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto arg_expr = ast::expression{};
     TRY(argument_parser2::method(name())
@@ -83,8 +83,8 @@ public:
     return name_;
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto characters = std::optional<std::string>{};
     TRY(argument_parser2::method(name())
@@ -150,8 +150,15 @@ public:
     return name_;
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto function_name() const -> std::string override {
+    if (name_.ends_with("()")) {
+      return name_.substr(0, name_.size() - 2);
+    }
+    return name_;
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     TRY(argument_parser2::method(name())
           .add(subject_expr, "<string>")
@@ -199,14 +206,18 @@ private:
 
 class replace : public virtual method_plugin {
 public:
-  auto name() const -> std::string override {
-    return "tql2.replace";
+  replace() = default;
+  explicit replace(bool regex) : regex_{regex} {
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto name() const -> std::string override {
+    return regex_ ? "tql2.replace_regex" : "tql2.replace";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
-    auto pattern = std::string{};
+    auto pattern = located<std::string>{};
     auto replacement = std::string{};
     auto max_replacements = std::optional<located<int64_t>>{};
     TRY(argument_parser2::method(name())
@@ -235,12 +246,16 @@ public:
           [&](const arrow::StringArray& array) {
             auto max = max_replacements ? max_replacements->inner : -1;
             auto options = arrow::compute::ReplaceSubstringOptions(
-              pattern, replacement, max);
-            auto result = arrow::compute::CallFunction("replace_substring",
-                                                       {array}, &options);
+              pattern.inner, replacement, max);
+            auto result = arrow::compute::CallFunction(
+              regex_ ? "replace_substring_regex" : "replace_substring", {array},
+              &options);
             if (not result.ok()) {
-              diagnostic::warning("{}", result.status().ToString())
-                .primary(subject_expr)
+              diagnostic::warning("{}",
+                                  result.status().ToStringWithoutContextLines())
+                .severity(result.status().IsInvalid() ? severity::error
+                                                      : severity::warning)
+                .primary(pattern.source)
                 .emit(ctx);
               return series::null(result_type, subject.length());
             }
@@ -260,6 +275,9 @@ public:
         return caf::visit(f, *subject.array);
       });
   }
+
+private:
+  bool regex_ = {};
 };
 
 class slice : public virtual method_plugin {
@@ -268,8 +286,8 @@ public:
     return "tql2.slice";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto subject_expr = ast::expression{};
     auto begin = std::optional<located<int64_t>>{};
     auto end = std::optional<located<int64_t>>{};
@@ -282,7 +300,8 @@ public:
           .parse(inv, ctx));
     if (stride) {
       if (stride->inner <= 0) {
-        diagnostic::error("`stride` must be greater 0, but got {}", stride->inner)
+        diagnostic::error("`stride` must be greater 0, but got {}",
+                          stride->inner)
           .primary(*stride)
           .emit(ctx);
       }
@@ -326,6 +345,42 @@ public:
   }
 };
 
+class str : public virtual function_plugin {
+public:
+  auto name() const -> std::string override {
+    return "tql2.str";
+  }
+
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
+    auto subject_expr = ast::expression{};
+    TRY(argument_parser2::method("string")
+          .add(subject_expr, "<expr>")
+          .parse(inv, ctx));
+    return function_use::make([subject_expr = std::move(subject_expr)](
+                                evaluator eval, session) -> series {
+      auto subject = eval(subject_expr);
+      auto b = arrow::StringBuilder{};
+      for (auto&& value : subject.values()) {
+        auto f = detail::overload{
+          [](int64_t x) {
+            return fmt::to_string(x);
+          },
+          [](const std::string& x) {
+            return x;
+          },
+          [&](auto&) {
+            // TODO: How to stringify everything else?
+            return fmt::to_string(value);
+          },
+        };
+        check(b.Append(caf::visit(f, value)));
+      }
+      return {string_type{}, finish(b)};
+    });
+  }
+};
+
 } // namespace
 
 } // namespace tenzir::plugins::string
@@ -343,7 +398,8 @@ TENZIR_REGISTER_PLUGIN(trim{"trim_end", "utf8_rtrim"})
 TENZIR_REGISTER_PLUGIN(nullary_method{"capitalize", "utf8_capitalize",
                                       string_type{}})
 TENZIR_REGISTER_PLUGIN(nullary_method{"to_lower", "utf8_lower", string_type{}})
-TENZIR_REGISTER_PLUGIN(nullary_method{"reverse", "utf8_reverse", string_type{}})
+TENZIR_REGISTER_PLUGIN(nullary_method{"reverse()", "utf8_reverse",
+                                      string_type{}})
 TENZIR_REGISTER_PLUGIN(nullary_method{"to_title", "utf8_title", string_type{}})
 TENZIR_REGISTER_PLUGIN(nullary_method{"to_upper", "utf8_upper", string_type{}})
 
@@ -362,5 +418,7 @@ TENZIR_REGISTER_PLUGIN(nullary_method{"length_bytes", "binary_length",
 TENZIR_REGISTER_PLUGIN(nullary_method{"length_chars", "utf8_length",
                                       int64_type{}});
 
-TENZIR_REGISTER_PLUGIN(replace);
+TENZIR_REGISTER_PLUGIN(replace{true});
+TENZIR_REGISTER_PLUGIN(replace{false});
 TENZIR_REGISTER_PLUGIN(slice);
+TENZIR_REGISTER_PLUGIN(str);

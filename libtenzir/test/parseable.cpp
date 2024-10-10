@@ -8,7 +8,6 @@
 
 #include "tenzir/concept/parseable/core.hpp"
 #include "tenzir/concept/parseable/numeric.hpp"
-#include "tenzir/concept/parseable/stream.hpp"
 #include "tenzir/concept/parseable/string.hpp"
 #include "tenzir/concept/parseable/tenzir/ip.hpp"
 #include "tenzir/concept/parseable/tenzir/offset.hpp"
@@ -492,6 +491,19 @@ TEST(unsigned integral) {
   CHECK(!p("-1024"));
   CHECK(p("1024", x));
   CHECK_EQUAL(x, 1024u);
+  CHECK(skip_to_eoi(p)("12.34", x));
+  CHECK_EQUAL(x, 12u);
+}
+
+TEST(unsigned int16) {
+  using namespace parsers;
+  auto p = integral_parser<uint16_t>{};
+  unsigned x;
+  CHECK(!p("-1024"));
+  CHECK(p("1024", x));
+  CHECK_EQUAL(x, 1024u);
+  CHECK(p("10000", x));
+  CHECK_EQUAL(x, 10000u);
   CHECK(skip_to_eoi(p)("12.34", x));
   CHECK_EQUAL(x, 12u);
 }
@@ -1047,11 +1059,13 @@ TEST(option set - missing option value) {
 
 // -- API ---------------------------------------------------------------------
 
-TEST(stream) {
-  std::istringstream ss{"1,2,3"};
+TEST(range) {
+  const auto s = "1,2,3"sv;
   offset xs;
-  ss >> xs;
-  CHECK(ss.good());
+  auto begin = s.begin();
+  auto end = s.end();
+  CHECK(parse(begin, end, xs));
+  CHECK(begin == end);
   CHECK_EQUAL(xs, (offset{1, 2, 3}));
 }
 

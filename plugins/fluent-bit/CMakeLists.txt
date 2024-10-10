@@ -16,7 +16,8 @@ TenzirRegisterPlugin(
   TARGET fluent-bit
   ENTRYPOINT src/plugin.cpp
   SOURCES ${fluentbit_sources}
-  INCLUDE_DIRECTORIES include)
+  INCLUDE_DIRECTORIES include
+  BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp")
 
 find_package(fluentbit QUIET)
 if (NOT fluentbit_FOUND)
