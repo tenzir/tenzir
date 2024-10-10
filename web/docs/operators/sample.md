@@ -11,7 +11,7 @@ Dynamically samples events from a event stream.
 ## Synopsis
 
 ```
-sample --period <period> --mode=<mode> --min-events=<uint> --max-rate=<uint>
+sample [--period <period>] [--mode <mode>] [--min-events <uint>] [--max-rate <uint>] [--max-samples <uint>]
 ```
 
 ## Description
@@ -31,7 +31,7 @@ The sampling rate for the first window is `1:1`.
 
 Defaults to `30 seconds`.
 
-### `--mode=<mode>`
+### `--mode <mode>`
 
 The function used to compute the sampling rate:
 
@@ -40,7 +40,7 @@ The function used to compute the sampling rate:
 - `"log10"`
 - `"sqrt"`
 
-### `--min-events=<uint>`
+### `--min-events <uint>`
 
 The minimum number of events that must be received during the previous sampling
 period for the sampling mode to be applied in the current period. If the number
@@ -49,18 +49,29 @@ used instead.
 
 Defaults to `30`.
 
-### `--max-rate=<uint>`
+### `--max-rate <uint>`
 
-The maximum number of events to emit per `period`. The sampling rate is capped to
-this value if the computed rate is higher than this.
+The sampling rate is capped to this value if the computed rate is higher than this.
+
+### `--max-samples <uint>`
+
+The maximum number of events to emit per `period`.
 
 ## Examples
 
 Sample a feed `log-stream` every 30s dynamically, only changing rate when more
-than 30 events (`min-events`) are received. Additionally, cap the `max-rate` to 500 events
-per 30s.
+than 50 events (`min-events`) are received. Additionally, cap the max sampling
+rate to `1:500`, i.e. 1 sample for every 500 events or more (`max-rate`).
 
 ```
 subscribe "log-stream" 
-| sample --period 30s --min-events=30 --max-rate=500
+| sample --period 30s --min-events=50 --max-rate=500
+```
+Sample some `metrics` every hour, limiting the max samples per period to 5000
+samples (`max-samples`) and limiting the overall sample count to 100k samples
+(`head`).
+
+```
+subscribe "metrics" 
+| sample --period 1h --max-samples 5k | head 100k
 ```

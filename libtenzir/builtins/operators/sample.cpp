@@ -26,13 +26,15 @@ struct operator_args {
     located{std::chrono::seconds(30), location::unknown}};
   std::optional<uint64_t> min_events{30};
   std::optional<uint64_t> max_rate{};
+  std::optional<uint64_t> max_samples{};
 
   friend auto inspect(auto& f, operator_args& x) -> bool {
     return f.object(x)
       .pretty_name("operator_args")
       .fields(f.field("fn", x.fn), f.field("period", x.period),
               f.field("min_events", x.min_events),
-              f.field("max_rate", x.max_rate));
+              f.field("max_rate", x.max_rate),
+              f.field("max_samples", x.max_samples));
   }
 };
 
@@ -52,7 +54,7 @@ public:
     // funcitonality.
     auto offset = int64_t{};
     auto stride = int64_t{1};
-    const auto calc = [&]() {
+    const auto compute_rate = [&]() {
       switch (args_.fn) {
         case mode::ln:
           return std::log(count);
@@ -79,16 +81,22 @@ public:
       if (auto now = std::chrono::steady_clock::now();
           now - last > args_.period->inner) {
         if (count > 1) {
-          // `count` is a `uint64_t` > 1 so `logx(count)` or `sqrt(count)` can
-          // never give a negative result.
-          stride = count > args_.min_events.value() ? std::ceil(calc()) : 1;
+          if (count > args_.min_events.value()) {
+            // `count` is a `uint64_t` > 1 so `logx(count)` or `sqrt(count)` can
+            // never give a negative result.
+            const auto rate
+              = detail::narrow_cast<uint64_t>(std::ceil(compute_rate()));
+            stride = std::max(args_.max_rate.value_or(rate), rate);
+          } else {
+            stride = 1;
+          }
         }
         last = now - (now - last) % args_.period->inner;
         offset = 0;
         count = 0;
       }
       if (slice.rows() == 0
-          or (args_.max_rate and args_.max_rate.value() <= count)) {
+          or (args_.max_samples and args_.max_samples.value() <= count)) {
         co_yield {};
         continue;
       }
@@ -153,6 +161,7 @@ public:
           .add("mode", str)
           .add("min_events", args.min_events)
           .add("max_rate", args.max_rate)
+          .add("max_samples", args.max_samples)
           .parse(inv, ctx));
     if (args.period->inner <= duration::zero()) {
       diagnostic::error("`period` must be a positive duration")
@@ -186,6 +195,7 @@ public:
     parser.add("--mode", str, "<string>");
     parser.add("--min-events", args.min_events, "<uint>");
     parser.add("--max-rate", args.max_rate, "<uint>");
+    parser.add("--max-samples", args.max_samples, "<uint>");
     parser.parse(p);
     if (args.period->inner <= duration::zero()) {
       diagnostic::error("`period` must be a positive duration")
