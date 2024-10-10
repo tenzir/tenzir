@@ -9,7 +9,7 @@ read_leef [merge=bool, raw=bool, schema=str, selector=str, schema_only=bool, unf
 ## Description
 
 The [Log Event Extended Format (LEEF)][leef] is an event representation
-popularized by IBM QRadar. Many tools send LEEF over [Syslog](syslog.md).
+popularized by IBM QRadar. Many tools send LEEF over [Syslog](read_syslog.md).
 
 [leef]: https://www.ibm.com/docs/en/dsm?topic=overview-leef-event-components
 
@@ -86,7 +86,7 @@ JSON however has numeric types, so those would be parsed.
 Use with caution.
 
 ### `schema`
-Provide the name of a [schema](../data-model/schemas.md) to be used by the
+Provide the name of a [schema](../../data-model/schemas.md) to be used by the
 parser. If the schema uses the `blob` type, then the Syslog parser expects
 base64-encoded strings.
 
@@ -95,7 +95,7 @@ The `schema` option is incompatible with the `selector` option.
 ### `selector`
 Designates a field value as schema name with an optional dot-separated prefix.
 
-For example, the [Suricata EVE JSON](suricata.md) format includes a field
+For example, the Suricata EVE JSON format includes a field
 `event_type` that contains the event type. Setting the selector to
 `event_type:suricata` causes an event with the value `flow` for the field
 `event_type` to map onto the schema `suricata.flow`.

@@ -39,7 +39,7 @@ only has one generic number type, all numbers are parsed with the `double` type.
 TODO
 
 ### `schema`
-Provide the name of a [schema](../data-model/schemas.md) to be used by the
+Provide the name of a [schema](../../data-model/schemas.md) to be used by the
 parser. If the schema uses the `blob` type, then the JSON parser expects
 base64-encoded strings.
 
@@ -48,7 +48,7 @@ The `schema` option is incompatible with the `selector` option.
 ### `selector`
 Designates a field value as schema name with an optional dot-separated prefix.
 
-For example, the [Suricata EVE JSON](suricata.md) format includes a field
+For example, the Suricata EVE JSON format includes a field
 `event_type` that contains the event type. Setting the selector to
 `event_type:suricata` causes an event with the value `flow` for the field
 `event_type` to map onto the schema `suricata.flow`.
