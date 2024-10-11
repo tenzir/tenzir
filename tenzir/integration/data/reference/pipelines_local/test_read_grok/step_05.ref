@@ -1,4 +1,3 @@
-{"version": null}
 warning: grok parser: pattern could not be matched
   = hint: input: `v4.5.0-71-gae887a0ca3-dirty`
   = hint: pattern: `(?<TIMESTAMP_ISO8601>(?<YEAR>(?>\d\d){1,2})-(?<MONTHNUM>(?:0?[1-9]|1[0-2]))-(?<MONTHDAY>(?:(?:0[1-9])|(?:[12][0-9])|(?:3[01])|[1-9]))[T ](?<HOUR>(?:2[0123]|[01]?[0-9])):?(?<MINUTE>(?:[0-5][0-9]))(?::?(?<SECOND>(?:(?:[0-5]?[0-9]|60)(?:[:.,][0-9]+)?)))?(?<ISO8601_TIMEZONE>(?:Z|[+-](?<HOUR>(?:2[0123]|[01]?[0-9]))(?::?(?<MINUTE>(?:[0-5][0-9])))))?)`
