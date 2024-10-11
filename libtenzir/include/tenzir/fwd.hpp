@@ -533,6 +533,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(tenzir_types, first_tenzir_type_id)
     (std::unordered_map<std::string, std::optional<std::string>>))
   TENZIR_ADD_TYPE_ID((std::vector<tenzir::partition_synopsis_pair>))
   TENZIR_ADD_TYPE_ID((std::vector<std::filesystem::path>))
+  TENZIR_ADD_TYPE_ID((std::vector<tenzir::expression>))
 
 CAF_END_TYPE_ID_BLOCK(tenzir_types)
 
