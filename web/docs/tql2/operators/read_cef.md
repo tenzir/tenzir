@@ -80,7 +80,7 @@ event:
   }
 }
 ```
-### `merge`
+### `merge=bool`
 
 Merges all incoming events into a single schema\* that converges over time. This
 option is usually the fastest *for reading* highly heterogeneous data, but can
@@ -89,9 +89,9 @@ to huge schemas filled with nulls and imprecise results. Use with caution.
 
 \*: In selector mode, only events with the same selector are merged.
 
-This option can not be combined with `--raw --schema`.
+This option can not be combined with `raw=true, schema="<schema>"`.
 
-### `raw`
+### `raw=bool`
 
 Use only the raw types that are native to the parsed format. Fields that have a
 type
@@ -105,14 +105,14 @@ JSON however has numeric types, so those would be parsed.
 
 Use with caution.
 
-### `schema`
+### `schema=str`
 Provide the name of a [schema](../../data-model/schemas.md) to be used by the
 parser. If the schema uses the `blob` type, then the Syslog parser expects
 base64-encoded strings.
 
 The `schema` option is incompatible with the `selector` option.
 
-### `selector`
+### `selector=str`
 Designates a field value as schema name with an optional dot-separated prefix.
 
 For example, the Suricata EVE JSON format includes a field
@@ -122,7 +122,7 @@ For example, the Suricata EVE JSON format includes a field
 
 The `selector` option is incompatible with the `schema` option.
 
-### `schema_only`
+### `schema_only=bpol`
 When working with an existing schema, this option will ensure that the output
 schema has *only* the fields from that schema. If the schema name is obtained
 via a `selector`
@@ -130,6 +130,38 @@ and it does not exist, this has no effect.
 
 This option requires either `schema` or `selector` to be set.
 
-### unflatten
+### `unflatten=str`
+
+A delimiter that, if present in keys, causes values to be treated as values of
+nested records.
+
+A popular example of this is the [Zeek JSON](read_zeek_json.md) format. It includes
+the fields `id.orig_h`, `id.orig_p`, `id.resp_h`, and `id.resp_p` at the
+top-level. The data is best modeled as an `id` record with four nested fields
+`orig_h`, `orig_p`, `resp_h`, and `resp_p`.
+
+Without an unnest separator, the data looks like this:
+
+```json
+{
+  "id.orig_h" : "1.1.1.1",
+  "id.orig_p" : 10,
+  "id.resp_h" : "1.1.1.2",
+  "id.resp_p" : 5
+}
+```
+
+With the unnest separator set to `.`, Tenzir reads the events like this:
+
+```json
+{
+  "id" : {
+    "orig_h" : "1.1.1.1",
+    "orig_p" : 10,
+    "resp_h" : "1.1.1.2",
+    "resp_p" : 5
+  }
+}
+```
 
 ## Examples
