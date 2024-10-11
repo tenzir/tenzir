@@ -230,13 +230,32 @@ auto multi::run(std::chrono::milliseconds timeout) -> caf::expected<size_t> {
   auto* msg = curl_multi_info_read(multi_.get(), &queued);
   if (msg) {
     auto response_code = int64_t{0};
-    curl_easy_getinfo(msg->easy_handle, CURLINFO_RESPONSE_CODE, &response_code);
+    // The return code can only be queried like this for ftp, http, ldap and smtp
+    if (curl_easy_getinfo(msg->easy_handle, CURLINFO_RESPONSE_CODE,
+                          &response_code)
+        != CURLE_OK) {
+      goto done;
+    }
+    // Get the URL to check whether its LDAP. LDAP return codes are different
+    // from the other possible cases.
+    const char* curl_url_ptr = nullptr;
+    if (curl_easy_getinfo(msg->easy_handle, CURLINFO_EFFECTIVE_URL,
+                          &curl_url_ptr)
+        != CURLE_OK) {
+      goto done;
+    }
+    const auto curl_url = std::string_view{curl_url_ptr};
+    if (curl_url.starts_with("ldap://") or curl_url.starts_with("ldaps://")) {
+      goto done;
+    }
+    // For ftp, http and smtp, error codes in [200,299] are "OK"
     if (response_code < 200 or response_code > 299) {
       return caf::make_error(ec::invalid_result,
                              fmt::format("http response code: {}",
                                          response_code));
     }
   }
+done:
   return num_running;
 }
 
