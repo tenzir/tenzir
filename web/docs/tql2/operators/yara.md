@@ -157,7 +157,7 @@ load kafka --topic malware | yara --blockwise /path/to/rules
 
 If you run this pipeline on the command line via `tenzir <pipeline>`, you see
 the matches arriving as JSON. You could also send the matches via the
-[`fluent-bit`](fluent-bit.md) sink to Slack, Splunk, or any other
+[`fluent-bit`](../../operators/fluent-bit.md) sink to Slack, Splunk, or any other
 Fluent Bit output. For example, via Slack:
 
 ```
