@@ -18,6 +18,7 @@ namespace tenzir {
 
 auto tokenize(std::string_view content,
               session ctx) -> failure_or<std::vector<token>> {
+  TRY(validate_utf8(content, ctx));
   auto tokens = tokenize_permissive(content);
   TRY(verify_tokens(tokens, ctx));
   return tokens;
@@ -229,6 +230,17 @@ auto describe(token_kind k) -> std::string_view {
   }
 #undef X
   TENZIR_UNREACHABLE();
+}
+
+auto validate_utf8(std::string_view content, session ctx) -> failure_or<void> {
+  // TODO: Refactor this.
+  arrow::util::InitializeUTF8();
+  if (arrow::util::ValidateUTF8(content)) {
+    return {};
+  }
+  // TODO: Consider reporting offset.
+  diagnostic::error("found invalid UTF8").emit(ctx);
+  return failure::promise();
 }
 
 } // namespace tenzir

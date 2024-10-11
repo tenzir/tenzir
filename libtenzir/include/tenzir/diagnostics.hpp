@@ -421,6 +421,10 @@ public:
     return {};
   }
 
+  friend auto inspect(auto& f, failure& x) -> bool {
+    return f.object(x).fields();
+  }
+
 private:
   failure() = default;
 };
@@ -431,10 +435,13 @@ class [[nodiscard]] failure_or
   : public variant<std::conditional_t<std::same_as<T, void>, std::monostate, T>,
                    failure> {
 public:
+  using super
+    = variant<std::conditional_t<std::same_as<T, void>, std::monostate, T>,
+              failure>;
+
   using reference_type = std::add_lvalue_reference_t<T>;
 
-  using variant<std::conditional_t<std::same_as<T, void>, std::monostate, T>,
-                failure>::variant;
+  using super::super;
 
   void ignore() const {
     // no-op
@@ -471,8 +478,12 @@ public:
     }
   }
 
-  auto
-  operator->() -> T* requires(not std::same_as<T, void>) { return &**this; }
+  auto operator->()
+    -> T* requires(not std::same_as<T, void>) { return &**this; }
+
+  friend auto inspect(auto& f, failure_or& x) -> bool {
+    return f.apply(static_cast<super&>(x));
+  }
 };
 
 template <class T>
