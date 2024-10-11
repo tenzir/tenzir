@@ -226,6 +226,17 @@ auto multi::run(std::chrono::milliseconds timeout) -> caf::expected<size_t> {
   if (result != code::ok) {
     return to_error(result);
   }
+  auto queued = int{};
+  auto* msg = curl_multi_info_read(multi_.get(), &queued);
+  if (msg) {
+    auto response_code = int64_t{0};
+    curl_easy_getinfo(msg->easy_handle, CURLINFO_RESPONSE_CODE, &response_code);
+    if (response_code < 200 or response_code > 299) {
+      return caf::make_error(ec::invalid_result,
+                             fmt::format("http response code: {}",
+                                         response_code));
+    }
+  }
   return num_running;
 }
 
