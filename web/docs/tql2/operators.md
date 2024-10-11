@@ -26,7 +26,7 @@ Operator | Description | Example
 [`taste`](operators/taste) | Keep only N events of each type | `taste 1`
 [`head`](operators/head) | Keep only the first N events | `head 20`
 [`tail`](operators/tail) | Keep only the last N events | `tail 20`
-[`slice`](operators/slice) | ... | `...`
+[`slice`](operators/slice) | Keep a range of events with an optional stride | `slice begin=10, end=30`
 
 <!--
 [`deduplicate`](operators/deduplicate) | ... | `...`
