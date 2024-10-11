@@ -35,8 +35,9 @@ public:
     auto out = std::string{};
     auto opts = arrow::fs::AzureOptions::FromUri(uri.inner, &out);
     if (auto s = opts.status(); s != arrow::Status::OK()) {
-      throw diagnostic::error("Failed to parse URI {}", s.ToString())
-        .primary(uri);
+      diagnostic::error("Failed to parse URI {}", s.ToString())
+        .primary(uri)
+        .throw_();
     }
     return std::make_unique<abs_saver>(std::move(uri));
   }
@@ -51,8 +52,9 @@ public:
     auto out = std::string{};
     auto opts = arrow::fs::AzureOptions::FromUri(uri.inner, &out);
     if (auto s = opts.status(); s != arrow::Status::OK()) {
-      throw diagnostic::error("Failed to parse URI {}", s.ToString())
-        .primary(uri);
+      diagnostic::error("Failed to parse URI {}", s.ToString())
+        .primary(uri)
+        .throw_();
     }
     return std::make_unique<abs_loader>(std::move(uri));
   }
