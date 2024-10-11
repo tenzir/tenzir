@@ -4,7 +4,7 @@ Publishes events to a channel with a topic. The dual to
 [`subscribe`](subscribe.md).
 
 ```
-publish [topic=str]
+publish [topic:str]
 ```
 ## Description
 
@@ -17,16 +17,17 @@ The `publish` operator does not guarantee that events stay in their
 original order.
 :::
 
-### `topic`
+### `topic:str`
 
-An optional topic for publishing events under.
+An optional topic for publishing events under. If unspecified, the operator
+publishes events to a global unnamed feed.
 
 ## Examples
-
-XXX: Fix example
 
 Publish Zeek conn logs under the topic `"zeek-conn"`.
 
 ```
-from file conn.log read zeek-tsv | publish "zeek-conn"
+load_file "conn.log"
+read_zeek_tsv
+publish "zeek-conn"
 ```
