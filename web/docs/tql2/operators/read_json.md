@@ -1,6 +1,6 @@
 # read_json
 
-:::note
+:::tip
 If you are receiving newline-delimited JSON (NDJSON), use [`read_ndjson`](read_ndjson) instead.
 :::
 

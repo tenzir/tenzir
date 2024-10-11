@@ -65,28 +65,28 @@ option, this does not refresh when the cache is accessed.
 
 Cache the results of an expensive query:
 
-```
+```tql
 export
-| where :ip in 192.168.0.0/16
-| cache "my-cache"
+where meta.schema == "suricata.flow"
+summarize total=sum(bytes_toserver), src_ip, dest_ip
+cache "some-unique-identifier"
 ```
 
 Get some high-level statistics about the query, calculating the cache again only
-if it does not exist anymore:
+if it does not exist anymore, deleting the cache if it's unused for more than a
+minute.
 
-```
+```tql
 export
-| where :ip in 192.168.0.0/16
-| cache "my-cache"
-| set schema=#schema
-| summarize count(.) by #schema
+where meta.schema == "suricata.flow"
+summarize src_ip, total=sum(bytes_toserver), dest_ip
+cache "some-unique-identifier", ttl=1min
+summarize src_ip, total=sum(total), destinations=count(dest_ip)
 ```
 
-Get the same statistics, but do not recompute the cache if it doesn't exist
-anymore:
+Get the same statistics, assuming the cache still exists:
 
-```
-cache "my-cache", mode="read"
-| set schema=#schema
-| summarize count(.) by #schema
+```tql
+cache "some-unique-identifier", mode="read"
+summarize src_ip, total=sum(total), destinations=count(dest_ip)
 ```

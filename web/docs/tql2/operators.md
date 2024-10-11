@@ -2,28 +2,35 @@
 
 import './operators.css';
 
-## Shaping
+## Shape
 
 Operator | Description | Example
 ---------|-------------|--------
 [`select`](operators/select) | Selects values and discards the rest | `select name, id=metadata.id`
 [`drop`](operators/drop) | Removes columns from the event | `drop name, metadata.id`
+[`enumerate`](operators/enumerate) | Add a field with the number of the event | `enumerate num`
+
+<!--
+TODO: Do we want to document set, and if so, how?
 [`set`](operators/set) | Explicitly assigns one or multiple values | `set name="Tenzir", id=metadata.id`
-[`enumerate`](operators/enumerate) | ... | `...`
 [`unroll`](operators/unroll) | ... | `...`
 [`yield`](operators/yield) | ... | `...`
+-->
 
-## Filtering
+## Filter
 
 Operator | Description | Example
 ---------|-------------|--------
 [`where`](operators/where) | Keeps only events matching the predicate| `where name.starts_with("John")`
 [`assert`](operators/assert) | ... | `...`
-[`deduplicate`](operators/deduplicate) | ... | `...`
 [`taste`](operators/taste) | Keep only N events of each type | `taste 1`
 [`head`](operators/head) | Keep only the first N events | `head 20`
 [`tail`](operators/tail) | Keep only the last N events | `tail 20`
 [`slice`](operators/slice) | ... | `...`
+
+<!--
+[`deduplicate`](operators/deduplicate) | ... | `...`
+-->
 
 ## Analytics
 
@@ -149,11 +156,12 @@ Operator | Description | Example
 
 Operator | Description | Example
 ---------|-------------|--------
-[`api`](operators/) | |
-[`batch`](operators/) | |
-[`buffer`](operators/) | |
-[`measure`](operators/) | |
-[`throttle`](operators/) | |
+[`api`](operators/api) | |
+[`batch`](operators/batch) | |
+[`buffer`](operators/buffer) | |
+[`measure`](operators/measure) | |
+[`throttle`](operators/throttle) | |
+[`cache`](operators/cache) | In-memory cache shared between pipelines | `cache "w01wyhTZm3", ttl=10min`
 
 ## Introspection
 
