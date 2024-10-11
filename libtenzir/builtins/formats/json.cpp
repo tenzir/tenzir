@@ -142,8 +142,8 @@ inline auto split_at_null(generator<chunk_ptr> input, char split)
   }
 }
 
-static auto truncate(std::string_view text, const size_t N = 50)
-  -> std::string {
+static auto
+truncate(std::string_view text, const size_t N = 50) -> std::string {
   return std::string{text.substr(0, N)}
          + (text.size() > N ? " ... (truncated)" : "");
 }
@@ -238,8 +238,8 @@ public:
   }
 
 private:
-  [[nodiscard]] auto parse_number(simdjson::ondemand::value val, auto builder)
-    -> bool {
+  [[nodiscard]] auto
+  parse_number(simdjson::ondemand::value val, auto builder) -> bool {
     auto kind = simdjson::ondemand::number_type{};
     auto result = val.get_number_type();
     if (result.error()) {
@@ -293,8 +293,8 @@ private:
     TENZIR_UNREACHABLE();
   }
 
-  [[nodiscard]] auto parse_string(simdjson::ondemand::value val, auto builder)
-    -> bool {
+  [[nodiscard]] auto
+  parse_string(simdjson::ondemand::value val, auto builder) -> bool {
     auto maybe_str = val.get_string();
     if (maybe_str.error()) {
       report_parse_err(val, "a string");
@@ -396,11 +396,11 @@ public:
   parser_base(std::string name_, diagnostic_handler& dh_,
               multi_series_builder::options options)
     : dh{std::make_unique<transforming_diagnostic_handler>(
-      dh_,
-      [name = std::move(name_)](diagnostic d) {
-        d.message = fmt::format("{} parser: {}", name, d.message);
-        return d;
-      })},
+        dh_,
+        [name = std::move(name_)](diagnostic d) {
+          d.message = fmt::format("{} parser: {}", name, d.message);
+          return d;
+        })},
       builder{std::move(options), *dh, modules::schemas(),
               detail::data_builder::non_number_parser} {
   }
@@ -558,17 +558,28 @@ public:
             .emit(*dh);
           return;
         }
+        TENZIR_ASSERT(not doc.current_location().error());
+        auto const doc_source = std::string_view{
+          doc.current_location().value_unsafe(),
+          view.data() + view.size(),
+        };
         ++completed_documents;
         if (arrays_of_objects_) {
           auto arr = doc.value_unsafe().get_array();
           if (arr.error()) {
             abort_requested = true;
             diagnostic::error("expected an array of objects")
-              .note("got: {}", view)
+              .note("got: {}", truncate(doc_source))
               .emit(*dh);
             return;
           }
           for (auto&& elem : arr.value_unsafe()) {
+            if (auto err = elem.error()) {
+              diagnostic::error("{}", error_message(err))
+                .note("skips invalid JSON array '{}'", truncate(doc_source))
+                .emit(*dh);
+              return;
+            }
             TENZIR_ASSERT(not elem.current_location().error());
             const auto source = std::string_view{
               elem.current_location().value_unsafe(),
@@ -580,6 +591,9 @@ public:
             if (not success) {
               // We already reported the issue.
               builder.remove_last();
+              // It should be fine to continue here, because at least the array
+              // structure we are iterating is valid. That is ensured by the
+              // elem.error() check above
               continue;
             }
           }
@@ -591,8 +605,8 @@ public:
           };
           const auto type = check(doc.type());
           if (type != simdjson::ondemand::json_type::object) {
-            auto diag
-              = diagnostic::error("expected an object").note("got: {}", view);
+            auto diag = diagnostic::error("expected an object")
+                          .note("got: {}", truncate(view));
             if (type == simdjson::ondemand::json_type::array) {
               diag
                 = std::move(diag).hint("use the `--arrays-of-objects` option");
@@ -606,6 +620,8 @@ public:
           if (not success) {
             // We already reported the issue.
             builder.remove_last();
+            // It should be fine to advance to the next document here, because
+            // the document iterator itself did not give us an error.
             continue;
           }
         }
@@ -1096,8 +1112,8 @@ public:
     }
   }
 
-  auto optimize(expression const& filter, event_order order) const
-    -> optimize_result override {
+  auto optimize(expression const& filter,
+                event_order order) const -> optimize_result override {
     TENZIR_UNUSED(filter, order);
     return do_not_optimize(*this);
   }
@@ -1113,80 +1129,40 @@ private:
 class read_json_plugin final
   : public virtual operator_plugin2<parser_adapter<json_parser>> {
 public:
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
-    auto sep = std::optional<located<std::string>>{};
-    std::optional<location> use_ndjson_mode;
-    std::optional<location> use_gelf_mode;
     std::optional<location> arrays_of_objects;
-    parser.add("sep", sep);
-    parser.add("ndjson", use_ndjson_mode);
-    parser.add("gelf", use_gelf_mode);
     parser.add("arrays_of_objects", arrays_of_objects);
     auto result = parser.parse(inv, ctx);
     auto args = parser_args{"json"};
     TRY(args.builder_options, msb_parser.get_options(ctx.dh()));
-    if (use_ndjson_mode and use_gelf_mode) {
-      diagnostic::error("`ndjson` and `gelf` are incompatible")
-        .primary(*use_ndjson_mode)
-        .primary(*use_gelf_mode)
-        .emit(ctx);
-      result = failure::promise();
-    }
-    if (use_ndjson_mode and arrays_of_objects) {
-      diagnostic::error("`ndjson` and `arrays-of-objects` are incompatible")
-        .primary(*use_ndjson_mode)
-        .primary(*arrays_of_objects)
-        .emit(ctx);
-      result = failure::promise();
-    }
-    if (use_gelf_mode and arrays_of_objects) {
-      diagnostic::error("`gelf` and `arrays-of-objects` are incompatible")
-        .primary(*use_gelf_mode)
-        .primary(*arrays_of_objects)
-        .emit(ctx);
-      result = failure::promise();
-    }
-    if (use_ndjson_mode) {
-      args.split_mode = split_at::newline;
-    } else if (use_gelf_mode) {
-      args.split_mode = split_at::null;
-    }
     args.arrays_of_objects = arrays_of_objects.has_value();
-    if (sep) {
-      auto& str = sep->inner;
-      if (str == "\n") {
-        if (args.split_mode == split_at::null) {
-          diagnostic::error(
-            "gelf mode is incompatible with a separator \"\\n\"")
-            .primary(sep->source)
-            .primary(*use_gelf_mode)
-            .emit(ctx);
-          result = failure::promise();
-        }
-        args.split_mode = split_at::newline;
-      } else if (str.size() == 1 && str[0] == '\0') {
-        if (args.split_mode == split_at::newline) {
-          diagnostic::error(
-            "ndjson mode is incompatible with a separator \"\\0\"")
-            .primary(sep->source)
-            .primary(*use_ndjson_mode)
-            .emit(ctx);
-          result = failure::promise();
-        }
-        args.split_mode = split_at::null;
-      } else {
-        diagnostic::error("unknown separator {:?}", str)
-          .primary(sep->source)
-          .hint(R"(expected "\n" or "\0")")
-          .emit(ctx);
-        result = failure::promise();
-      }
-    }
     TRY(result);
+    return std::make_unique<parser_adapter<json_parser>>(
+      json_parser{std::move(args)});
+  }
+};
+
+class read_ndjson_plugin final
+  : public virtual operator_plugin2<parser_adapter<json_parser>> {
+public:
+  auto name() const -> std::string override {
+    return "read_ndjson";
+  }
+
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
+    auto parser = argument_parser2::operator_(name());
+    auto msb_parser = multi_series_builder_argument_parser{};
+    msb_parser.add_all_to_parser(parser);
+    auto result = parser.parse(inv, ctx);
+    TRY(result);
+    auto args = parser_args{"ndjson"};
+    TRY(args.builder_options, msb_parser.get_options(ctx.dh()));
+    args.split_mode = split_at::newline;
     return std::make_unique<parser_adapter<json_parser>>(
       json_parser{std::move(args)});
   }
@@ -1199,8 +1175,8 @@ public:
     return "read_gelf";
   }
 
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{};
     msb_parser.add_all_to_parser(parser);
@@ -1223,8 +1199,8 @@ public:
     return fmt::format("read_{}", Name);
   }
 
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     auto parser = argument_parser2::operator_(name());
     auto msb_parser = multi_series_builder_argument_parser{
       multi_series_builder::settings_type{
@@ -1259,8 +1235,8 @@ public:
     return "tql2.parse_json";
   }
 
-  auto make_function(invocation inv, session ctx) const
-    -> failure_or<function_ptr> override {
+  auto make_function(invocation inv,
+                     session ctx) const -> failure_or<function_ptr> override {
     auto expr = ast::expression{};
     // TODO: Consider adding a `many` option to expect multiple json values.
     // TODO: Consider adding a `precise` option (this needs evaluator support).
@@ -1332,8 +1308,8 @@ public:
 
 class write_json_plugin final : public virtual operator_plugin2<write_json> {
 public:
-  auto make(invocation inv, session ctx) const
-    -> failure_or<operator_ptr> override {
+  auto
+  make(invocation inv, session ctx) const -> failure_or<operator_ptr> override {
     // TODO: More options, and consider `null_fields=false` as default.
     auto args = printer_args{};
     TRY(argument_parser2::operator_("write_json")
@@ -1354,6 +1330,7 @@ TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::gelf_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::suricata_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::zeek_parser)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_json_plugin)
+TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_ndjson_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_gelf_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_zeek_plugin)
 TENZIR_REGISTER_PLUGIN(tenzir::plugins::json::read_suricata_plugin)
