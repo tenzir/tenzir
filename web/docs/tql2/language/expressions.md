@@ -68,7 +68,7 @@ To reference the whole top-level event, you can use the `this` keyword.
 Events do not only carry data, but also metadata. To refer to metadata, use
 the `meta` keyword. For example, `meta.name` carries the name of the event.
 
-### Binary and Unary
+### Unary and Binary
 
 Unary:
 - `+x`
@@ -94,14 +94,41 @@ Binary:
 
 ### Records
 
+Records are created with a pair of braces. `{}` denotes the empty record.
+Fields are normally specified  by using simple identifiers, followed by a colon
+and then an expression, for example: `{foo: 1, bar: 2}`. If the field name would
+not be valid identifier, use a string literal instead:
+`{"not a valid identifier!": 3}`. The individual fields are separated with
+commas. The final field may have a trailing comma: `{foo: 42,}`. Records can be
+expanded into other records by using `...`. For example, if `foo` is
+`{a: 1, b: 2}`, then `{...foo, c: 3}` is `{a: 1, b: 2, c: 3}`. As fields must be
+unique, having the same fields multiple times will use the last value.
+
 ### Lists
+
+Lists are created with a pair of brackets. `[]` denotes the empty list. The
+items of the list are specified with a comma-delimited list of expressions, such
+as `[1, 2+3, foo()]`. As with records, the final item may have a trailing comma:
+`[foo, bar,]`. Lists can be expanded into other lists by using `...`. For
+example, if `foo` is `[1, 2]`, then `[...foo, 3]` is `[1, 2, 3]`.
 
 ### Functions and Methods
 
+
 ### Pipeline Expression
+
+In some places a pipeline can be given as an argument to an operator. Pipeline
+expressions are written with a pair of braces, for example: `{ head 5 }`. If the
+final argument to an operator is a pipeline expression, then the preceding comma
+may be omitted. For example: `every 10s { head 5 }`. The braces can contain
+multiple statements. The same statement separation rules apply as usual. For
+example, newlines can be used to separate statements.
 
 ### Let Substitution
 
+A previously introduced `let` binding can be used as an expression by using the
+same `$`-prefixed name. For example, `let $foo = 42` followed by
+`where some_field == $foo` is the same as `where some_field == 42`.
 
 
 ## Precedence

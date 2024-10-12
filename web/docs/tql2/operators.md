@@ -2,6 +2,8 @@
 
 import './operators.css';
 
+Tenzir comes with a wide range of built-in operators.
+
 ## Shape
 
 Operator | Description | Example
@@ -37,10 +39,13 @@ Operator | Description | Example
 Operator | Description | Example
 ---------|-------------|--------
 [`summarize`](operators/summarize) | Aggregates events with implicit grouping | `summarize name, sum(transaction)`
-[`top`](operators/top) | ... | `...`
-[`rare`](operators/rare) | ... | `...`
 [`sort`](operators/sort) | Sorts the events by one or more expressions | `sort name, -abs(transaction)`
 [`reverse`](operators/reverse) | ... | `...`
+
+<!--
+[`top`](operators/top) | ... | `...`
+[`rare`](operators/rare) | ... | `...`
+-->
 
 ## Flow Control
 
@@ -48,10 +53,13 @@ Operator | Description | Example
 ---------|-------------|--------
 [`every`](operators/every) | Restarts a pipeline periodically | `every 10s { summarize sum(transaction) }`
 [`fork`](operators/fork) | Forwards a copy of the events to another pipeline | `fork { to "copy.json" }`
-[`group`](operators/group) | Starts a new pipeline for each group | `group path { to $path }`
 [`if`](operators/if) | Splits the flow based on a predicate | `if transaction > 0 { ... } else { ... }`
-[`match`](operators/match) | Splits the flow with pattern matching | `match name { "Tenzir" => {...}, _ => {...} }`
+
+<!--
+[`group`](operators/group) | Starts a new pipeline for each group | `group path { to $path }`
 [`timeout`](operators/timeout) | Ends a pipeline after a period without input | `timeout 1s { ... }`
+[`match`](operators/match) | Splits the flow with pattern matching | `match name { "Tenzir" => {...}, _ => {...} }`
+-->
 
 ## Input
 
@@ -61,16 +69,26 @@ Operator | Description | Example
 [`load`](operators/load) | |
 [`load_file`](operators/load_file) | |
 [`load_http`](operators/load_http) | |
+[`load_tcp`](operators/load_tcp) | |
 
 ## Parsing
 
 Operator | Description | Example
 ---------|-------------|--------
+[`read_bitz`](operators/read_bitz) | |
+[`read_cef`](operators/read_cef) | |
 [`read_csv`](operators/read_csv) | |
+[`read_gelf`](operators/read_gelf) | |
 [`read_json`](operators/read_json) | |
+[`read_kv`](operators/read_kv) | |
+[`read_leef`](operators/read_leef) | |
 [`read_lines`](operators/read_lines) | |
+[`read_ndjson`](operators/read_ndjson) | |
+[`read_ssv`](operators/read_ssv) | |
 [`read_suricata`](operators/read_suricata) | |
 [`read_syslog`](operators/read_syslog) | |
+[`read_tsv`](operators/read_tsv) | |
+[`read_xsv`](operators/read_xsv) | |
 [`read_yaml`](operators/read_yaml) | |
 [`read_zeek_json`](operators/read_zeek_json) | |
 [`read_zeek_tsv`](operators/read_zeek_tsv) | |
@@ -79,6 +97,7 @@ Operator | Description | Example
 
 Operator | Description | Example
 ---------|-------------|--------
+[`write_bitz`](operators/write_bitz) | |
 [`write_json`](operators/write_json) | |
 
 ## Output
@@ -103,6 +122,7 @@ Operator | Description | Example
 [`publish`](operators/) | |
 [`subscribe`](operators/) | |
 
+<!--
 ## Packages
 
 Operator | Description | Example
@@ -127,6 +147,7 @@ Operator | Description | Example
 [`bar_chart`](operators/) | All of this is TBD. |
 [`treemap`](operators/) | |
 [`line_chart`](operators/) | |
+-->
 
 ## Integrations (TODO: Better name?)
 
