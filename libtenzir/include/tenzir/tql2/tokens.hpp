@@ -10,6 +10,7 @@
 
 #include "tenzir/detail/enum.hpp"
 #include "tenzir/diagnostics.hpp"
+#include "tenzir/session.hpp"
 
 #include <string_view>
 
@@ -48,9 +49,15 @@ struct token {
   size_t end;
 };
 
-/// Try to tokenize the source.
+/// Try to tokenize the source. This is a combination of calling:
+/// - validate_utf8
+/// - tokenize_permissive
+/// - verify_tokens
 auto tokenize(std::string_view content,
               session ctx) -> failure_or<std::vector<token>>;
+
+/// Checks that the source is valid UTF-8.
+auto validate_utf8(std::string_view content, session ctx) -> failure_or<void>;
 
 /// Tokenize without emitting errors for error tokens.
 auto tokenize_permissive(std::string_view content) -> std::vector<token>;
