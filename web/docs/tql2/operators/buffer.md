@@ -2,8 +2,8 @@
 
 An in-memory buffer to improve handling of data spikes in upstream operators.
 
-```
-buffer [capacity=uint, policy=str]
+```tql
+buffer [capacity:uint, policy=str]
 ```
 
 ## Description
@@ -19,14 +19,14 @@ operators to run uninterruptedly even in case the downstream operators of the
 buffer are unable to keep up. This allows pipelines to handle data spikes more
 easily.
 
-### `capacity`
+### `capacity:uint (optional)`
 
 The number of events or bytes that may be kept at most in the buffer.
 
 Note that every operator already buffers up to `254Ki` events before it starts
 applying back pressure. Smaller buffers may pessimize performance.
 
-### `policy`
+### `policy=str (optional)`
 
 Specifies what the operator does when the buffer runs full.
 
@@ -44,6 +44,6 @@ When buffering bytes, this option always defaults to `"block"`.
 Buffer up to `10M` events or bytes in a buffer, dropping them if downstream cannot
 keep up.
 
-```
+```tql
 buffer 10M, policy="drop"
 ```

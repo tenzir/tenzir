@@ -56,30 +56,30 @@ binary that we refer to as `velociraptor-binary` here.)
 
 Now you are ready to run VQL queries!
 
-### `request_name`
+### `request_name=str (optional)`
 
 An identifier for the request to the Velociraptor server.
 
 Defaults to a randoum UUID.
 
-### `org_id`
+### `org_id=str (optional)`
 
 The ID of the Velociraptor organization.
 
 Defaults to `root`.
 
-### `query`
+### `query=str (optional)`
 
 The [VQL][vql] query string.
 
-### `max_rows`
+### `max_rows=uint (optional)`
 
 The maxium number of rows to return in a the stream gRPC messages returned by
 the server.
 
 Defaults to `1000`.
 
-### `subscribe`
+### `subscribe=str (optional)`
 
 Subscribes to a flow artifact.
 
@@ -87,13 +87,13 @@ This option generates a larger VQL expression under the hood that creates one
 event per flow and artifact. The response contains a field `HuntResult` that
 contains the result of the hunt.
 
-### `max_wait`
+### `max_wait=duration (optional)`
 
 Controls how long to wait before releasing a partial result set.
 
 Defaults to `1 second`.
 
-### `profile`
+### `profile=str (optional)`
 
 Specifies the configuration profile for the Velociraptor instance. This enables
 connecting to multiple Velociraptor instances from the same Tenzir node.

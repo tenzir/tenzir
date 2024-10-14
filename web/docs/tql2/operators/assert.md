@@ -2,7 +2,7 @@
 
 Asserts that an invariant is held or that a condition is satisfied.
 
-```
+```tql
 assert invariant:expr
 ```
 

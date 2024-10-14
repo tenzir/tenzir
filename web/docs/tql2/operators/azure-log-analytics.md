@@ -6,7 +6,7 @@ Sends events via the [Microsoft Azure Logs Ingestion API][api].
 
 ## Synopsis
 
-```
+```tql
 azure_log_analytics tenant_id=str, client_id=str, client_secret=str, dce=str, dcr=str, table=str
 ```
 
@@ -21,29 +21,29 @@ The `azure_log_analytics` operator makes it possible to upload events to
 The operator handles access token retrievals by itself and updates that token
 automatically, if needed.
 
-### `tenant_id`
+### `tenant_id=str`
 
 The Microsoft Directory (tenant) ID, written as
 `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`.
 
-### `client_id`
+### `client_id=str`
 
 The Microsoft Application (client) ID, written as
 `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`.
 
-### `client_secret`
+### `client_secret=str`
 
 The client secret.
 
-### `dce`
+### `dce=str`
 
 The data collection endpoint URL.
 
-### `dcr`
+### `dcr=str`
 
 The data collection rule ID, written as `dcr-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`.
 
-### `table`
+### `table=str`
 
 The table to upload events to.
 
@@ -51,9 +51,9 @@ The table to upload events to.
 
 Upload `custom.mydata` events to a table `Custom-MyData`:
 
-```
+```tql
 export
-| where #schema == "custom.mydata"
+| where @name == "custom.mydata"
 | azure_log_analytics
   tenant_id="00a00a00-0a00-0a00-00aa-000aa0a0a000",
   client_id="000a00a0-0aa0-00a0-0000-00a000a000a0",

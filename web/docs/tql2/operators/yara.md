@@ -2,7 +2,7 @@
 
 Executes YARA rules on byte streams.
 
-```tql2
+```tql
 yara rule:list<str>, [blockwise=bool, compiled_rules=bool, fast_scan=bool]
 ```
 
