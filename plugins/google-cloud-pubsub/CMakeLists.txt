@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.19...3.28 FATAL_ERROR)
 
 project(
-  google_cloud_pubsub
+  google-cloud-pubsub
    DESCRIPTION "Google Cloud Pub/Sub plugin for Tenzir"
   LANGUAGES CXX)
 
@@ -16,9 +16,9 @@ include(CTest)
 find_package(Tenzir REQUIRED)
 
 TenzirRegisterPlugin(
-  TARGET google_cloud_pubsub
+  TARGET google-cloud-pubsub
   ENTRYPOINT src/plugin.cpp
   INCLUDE_DIRECTORIES include
   BUILTINS GLOB "${CMAKE_CURRENT_SOURCE_DIR}/builtins/*.cpp")
 
-target_link_libraries(google_cloud_pubsub PUBLIC google-cloud-cpp::pubsub)
+target_link_libraries(google-cloud-pubsub PUBLIC google-cloud-cpp::pubsub)
