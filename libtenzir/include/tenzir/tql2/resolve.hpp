@@ -15,4 +15,6 @@ namespace tenzir {
 
 auto resolve_entities(ast::pipeline& pipe, session ctx) -> failure_or<void>;
 
+auto resolve_entities(ast::expression& expr, session ctx) -> failure_or<void>;
+
 } // namespace tenzir

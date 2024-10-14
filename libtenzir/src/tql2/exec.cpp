@@ -184,24 +184,11 @@ auto compile_resolved(ast::pipeline&& pipe, session ctx)
   return tenzir::pipeline{std::move(ops)};
 }
 
-auto validate_utf8(std::string_view content, session ctx) -> failure_or<void> {
-  // TODO: Refactor this.
-  arrow::util::InitializeUTF8();
-  if (arrow::util::ValidateUTF8(content)) {
-    return {};
-  }
-  // TODO: Consider reporting offset.
-  diagnostic::error("found invalid UTF8").emit(ctx);
-  return failure::promise();
-}
-
 } // namespace
 
 auto parse_and_compile(std::string_view source, session ctx)
   -> failure_or<pipeline> {
-  TRY(validate_utf8(source, ctx));
-  TRY(auto tokens, tokenize(source, ctx));
-  TRY(auto ast, parse(tokens, source, ctx));
+  TRY(auto ast, parse(source, ctx));
   return compile(std::move(ast), ctx);
 }
 

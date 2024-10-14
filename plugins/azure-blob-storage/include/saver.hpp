@@ -75,7 +75,7 @@ public:
         = output_stream.ValueUnsafe()->Write(chunk->data(), chunk->size());
       if (not output_stream.ok()) {
         diagnostic::error("{}", status.ToString())
-          .note("failed to write to stream for URI `{}`", uri)
+          .note("failed to write to stream for URI `{}`", uri.inner)
           .emit(ctrl.diagnostics());
         return;
       }

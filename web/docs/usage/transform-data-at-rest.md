@@ -83,10 +83,10 @@ plugins:
       weights:
         - weight: 0.1
           types: [suricata.flow]
-          #pipeline: fancy_flow_compaction
+          #pipeline: …
         - weight: 100
           types: [suricata.alert]
-          #pipeline: fancy_alert_compaction
+          #pipeline: …
 ```
 
 The `pipeline` key for each type is optional. If present, the corresponding
@@ -136,25 +136,6 @@ The pipelines referenced in the compaction configuration must be defined in your
 configuration.
 
 ```yaml
-tenzir:
-  plugins: [compaction]
-  pipelines:
-    anonymize_urls: |
-      replace net.url="xxx"
-    aggregate_flows: |
-       summarize 
-         pkts_toserver=sum(flow.pkts_toserver),
-         pkts_toclient=sum(flow.pkts_toclient),
-         bytes_toserver=sum(flow.bytes_toserver),
-         bytes_toclient=sum(flow.bytes_toclient),
-         start=min(flow.start),
-         end=max(flow.end)
-       by
-         timestamp,
-         src_ip,
-         dest_ip
-       resolution
-         10 mins
 plugins:
   compaction:
     time:
@@ -163,14 +144,28 @@ plugins:
       rules:
         - after: 2 days
           name: uri_scrubbing
-          pipeline: anonymize_urls
+          pipeline: |
+            replace net.url="xxx"
           types:
             - zeek.http
             - suricata.http
         - after: 7 days
           name: flow_reduction
-          pipeline: aggregate_flows
-          keep: true
+          pipeline: |
+            summarize 
+              pkts_toserver=sum(flow.pkts_toserver),
+              pkts_toclient=sum(flow.pkts_toclient),
+              bytes_toserver=sum(flow.bytes_toserver),
+              bytes_toclient=sum(flow.bytes_toclient),
+              start=min(flow.start),
+              end=max(flow.end)
+            by
+              timestamp,
+              src_ip,
+              dest_ip
+            resolution
+              10 mins
+          preserve-input: true
           types:
             - suricata.flow
 ```
@@ -189,11 +184,4 @@ You can then trigger a compaction manually via `run`:
 
 ```bash
 tenzir-ctl compaction run <rule>
-```
-
-Use the `status` subcommand for an overview of the current status of the
-compaction plugin:
-
-```bash
-tenzir-ctl status compaction
 ```

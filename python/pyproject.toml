@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tenzir"
-version = "4.20.3"
+version = "4.21.1"
 description = "A security telemetry engine for detection and response"
 authors = ["Tenzir <engineering@tenzir.com>"]
 maintainers = ["Tenzir <engineering@tenzir.com>"]

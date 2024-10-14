@@ -17,6 +17,7 @@
     libpcap,
     arrow-cpp,
     aws-sdk-cpp-tenzir,
+    azure-sdk-for-cpp,
     fast_float,
     flatbuffers,
     fluent-bit,
@@ -57,6 +58,7 @@
     bundledPlugins =
       [
         "plugins/amqp"
+        "plugins/azure-blob-storage"
         "plugins/gcs"
         "plugins/fluent-bit"
         "plugins/kafka"
@@ -129,6 +131,8 @@
           cppzmq
           re2
           restinio
+        ] ++ lib.optionals isStatic [
+          azure-sdk-for-cpp
         ] ++ lib.optionals stdenv.isLinux [
           pfs
         ] ++ lib.optionals (!(stdenv.isDarwin && isStatic)) [
