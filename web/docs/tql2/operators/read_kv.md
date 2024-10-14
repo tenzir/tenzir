@@ -88,7 +88,6 @@ JSON however has numeric types, so those would be parsed.
 
 Use with caution.
 
-XXX: Do both need to specified to fail?
 This option can not be combined with `merge=true, schema="<schema>"`.
 
 ### `schema = str (optional)`
