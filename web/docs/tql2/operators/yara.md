@@ -2,7 +2,7 @@
 
 Executes YARA rules on byte streams.
 
-```
+```tql2
 yara rule:list<str>, [blockwise=bool, compiled_rules=bool, fast_scan=bool]
 ```
 
@@ -17,7 +17,7 @@ We modeled the operator after the official [`yara` command-line
 utility](https://yara.readthedocs.io/en/stable/commandline.html) to enable a
 familiar experience for the command users. Similar to the official `yara`
 command, the operator compiles the rules by default, unless you provide the
-option `-C,--compiled-rules`. To quote from the above link:
+option `compiled_rules=true`. To quote from the above link:
 
 > This is a security measure to prevent users from inadvertently using compiled
 > rules coming from a third-party. Using compiled rules from untrusted sources
@@ -26,7 +26,7 @@ option `-C,--compiled-rules`. To quote from the above link:
 The operator uses a YARA *scanner* under the hood that buffers blocks of bytes
 incrementally. Even though the input arrives in non-contiguous blocks of
 memories, the YARA scanner engine support matching across block boundaries. For
-continuously running pipelines, use the `--blockwise` option that considers each
+continuously running pipelines, use the `blockwise=true` option that considers each
 block as a separate unit. Otherwise the scanner engine would simply accumulate
 blocks but never trigger a scan.
 
@@ -37,21 +37,21 @@ The path to the YARA rule(s).
 If the path is a directory, the operator attempts to recursively add all
 contained files as YARA rules.
 
-### `blockwise=bool`
+### `blockwise=bool (optional)`
 
 If to match on every byte chunk instead of triggering a scan when the input exhausted.
 
 This option makes sense for never-ending dataflows where each chunk of bytes
 constitutes a self-contained unit, such as a single file.
 
-### `compiled_rules=bool`
+### `compiled_rules=bool (optional)`
 
 Whether to interpret the rules as compiled.
 
 When providing this flag, you must exactly provide one rule path as positional
 argument.
 
-### `fast_scan=bool`
+### `fast_scan=bool (optional)`
 
 Enable fast matching mode.
 
@@ -65,15 +65,15 @@ simple rule scanning service.
 Scan a file with a set of YARA rules:
 
 ```
-load file --mmap evil.exe | yara rule.yara
+load_file "evil.exe" mmap=true | yara "rule.yara"
 ```
 
 :::info Memory Mapping Optimization
-The `--mmap` flag is merely an optimization that constructs a single chunk of
-bytes instead of a contiguous stream. Without `--mmap`, the
+The `mmap` flag is merely an optimization that constructs a single chunk of
+bytes instead of a contiguous stream. Without `mmap=true`, the
 [`file`](TODO) loader generates a stream of byte chunks and
 feeds them incrementally to the `yara` operator. This also works, but
-performance is better due to memory locality when using `--mmap`.
+performance is better due to memory locality when using `mmap`.
 :::
 
 Let's unpack a concrete example:
