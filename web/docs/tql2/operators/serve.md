@@ -17,12 +17,12 @@ The `serve` operator bridges between pipelines and the corresponding `/serve`
 Pipelines ending with the `serve` operator exit when all events have been
 delivered over the corresponding endpoint.
 
-### `id`
+### `id: str`
 
 An identifier that uniquely identifies the operator. The `serve`
 operator errors when receiving a duplicate serve id.
 
-### `buffer_size`
+### `buffer_size = uint (optional)`
 
 The buffer size specifies the maximum number of events to keep in the `serve`
 operator to make them instantly available in the corresponding endpoint before
@@ -32,15 +32,15 @@ Defaults to `1Ki`.
 
 ## Examples
 
-XXX: Fix examples
-
 Read a Zeek conn.log, 100 events at a time:
 
-```bash
-tenzir 'from file path/to/conn.log read zeek-tsv | serve "zeek-conn-logs"'
+```tql {0} title="Parse logs from a file and serve them"
+load_file "path/to/conn.log"
+read_zeek_tsv
+serve "zeek-conn-logs"'
 ```
 
-```bash
+```bash {0} title="Fetch max 100 events from the serve endpoint"
 curl \
   -X POST \
   -H "Content-Type: application/json" \
@@ -55,12 +55,15 @@ Subsequent results for further events must specify a continuation token. The
 token is included in the response under `next_continuation_token` if there are
 further events to be retrieved from the endpoint.
 
-Wait for an initial event
+Wait for an initial event:
 
 This pipeline will produce 10 events after 3 seconds of doing nothing.
 
-```bash
-tenzir "shell \"sleep 3; jq --null-input '{foo: 1}'\" | read json | repeat 10 | serve slow-events"
+```tql
+shell "sleep 3; jq --null-input '{foo: 1}'" 
+read_json 
+repeat 10 
+serve "slow-events"
 ```
 
 ```bash
