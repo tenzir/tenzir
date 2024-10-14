@@ -13,30 +13,30 @@ read_xsv field_sep:str, list_sep:str, null_value:str,
 The `read_xsv` operator transforms a byte stream into a event stream by parsing
 the bytes as [XSV](https://en.wikipedia.org/wiki/Delimiter-separated_values).
 
-### `field_sep=str`
+### `field_sep: str (optional)`
 The `string` separating different fields.
 
-### `list_sep=str`
+### `list_sep: str (optional)`
 The `string` separating different elements in a list.
 
-### `auto_expand=bool`
+### `null_value: str (optional)`
+The `string` denoting an absent value.
+
+### `auto_expand = bool (optional)`
 Automatically add fields to the schema when encountering events with too many
 values instead of dropping the excess values.
 
-### `comments=bool`
+### `comments = bool (optional)`
 Treat lines beginning with "#" as comments.
 
-### `header=str`
+### `header = str (optional)`
 The `string` to be used as a `header` for the parsed values.
 If unspecified, the first line of the input is used as the header.
 
-### `list_sep=str`
+### `list_sep = str (optional)`
 The `string` separating the elements _inside_ a list.
 
-### `null_value=str`
-The `string` denoting an absent value.
-
-### `raw=bool`
+### `raw = bool (optional)`
 Use only the raw types that are native to the parsed format. Fields that have a type
 specified in the chosen schema will still be parsed according to the schema.
 
@@ -48,14 +48,14 @@ Use with caution.
 
 This option can not be combined with `merge=true, schema="<schema>"`.
 
-### `schema=str`
+### `schema = str (optional)`
 Provide the name of a [schema](../../data-model/schemas.md) to be used by the
 parser. If the schema uses the `blob` type, then the JSON parser expects
 base64-encoded strings.
 
 The `schema` option is incompatible with the `selector` option.
 
-### `selector=str`
+### `selector = str (optional)`
 Designates a field value as schema name with an optional dot-separated prefix.
 
 For example, the Suricata EVE JSON format includes a field
@@ -65,14 +65,14 @@ For example, the Suricata EVE JSON format includes a field
 
 The `selector` option is incompatible with the `schema` option.
 
-### `schema_only=bool`
+### `schema_only = bool (optional)`
 When working with an existing schema, this option will ensure that the output
 schema has *only* the fields from that schema. If the schema name is obtained via a `selector`
 and it does not exist, this has no effect.
 
 This option requires either `schema` or `selector` to be set.
 
-### `unflatten=str`
+### `unflatten = str (optional)`
 
 A delimiter that, if present in keys, causes values to be treated as values of
 nested records.
