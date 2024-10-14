@@ -23,8 +23,8 @@ TODO: Do we want to document set, and if so, how?
 
 Operator | Description | Example
 ---------|-------------|--------
-[`where`](operators/where) | Keeps only events matching the predicate| `where name.starts_with("John")`
-[`assert`](operators/assert) | ... | `...`
+[`where`](operators/where) | Keeps only events matching a predicate | `where name.starts_with("John")`
+[`assert`](operators/assert) | Same as `where`, but warns if predicate is `false` | `assert name.starts_with("John")`
 [`taste`](operators/taste) | Keep only N events of each type | `taste 1`
 [`head`](operators/head) | Keep only the first N events | `head 20`
 [`tail`](operators/tail) | Keep only the last N events | `tail 20`
@@ -53,7 +53,7 @@ Operator | Description | Example
 ---------|-------------|--------
 [`every`](operators/every) | Restarts a pipeline periodically | `every 10s { summarize sum(transaction) }`
 [`fork`](operators/fork) | Forwards a copy of the events to another pipeline | `fork { to "copy.json" }`
-[`if`](operators/if) | Splits the flow based on a predicate | `if transaction > 0 { ... } else { ... }`
+[`if`](language/statements.md#if) | Splits the flow based on a predicate | `if transaction > 0 { ... } else { ... }`
 
 <!--
 [`group`](operators/group) | Starts a new pipeline for each group | `group path { to $path }`
@@ -65,11 +65,11 @@ Operator | Description | Example
 
 Operator | Description | Example
 ---------|-------------|--------
-[`from`](operators/from) | |
-[`load`](operators/load) | |
-[`load_file`](operators/load_file) | |
-[`load_http`](operators/load_http) | |
-[`load_tcp`](operators/load_tcp) | |
+[`from`](operators/from) | | `from "file:///tmp/data.json"`
+[`load`](operators/load) | | `load "file:///tmp/data.json"`
+[`load_file`](operators/load_file) | | `load_file "/tmp/data.json"`
+[`load_http`](operators/load_http) |  | `load_http "example.org", params={n: 5}` |
+[`load_tcp`](operators/load_tcp) | Loads bytes from a TCP or TLS connection | `load_tcp "0.0.0.0:8090" { read_json }`
 
 ## Parsing
 

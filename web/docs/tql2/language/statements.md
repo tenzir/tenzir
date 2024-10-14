@@ -33,9 +33,9 @@ traffic.bytes_out = event.sent_bytes
 
 ## `if`
 
-The `if` statement is a primitive designed to route data based on a predicate. Its typical usage follows the syntax `if <expression> { ... } else { ... }`, where two subpipelines are specified within the braces. When its expression evaluates to `true`, the first pipeline processes the event. Conversely, when it evaluates to `false`, it is routed through the second one.
+The `if` statement is a primitive designed to route data based on a predicate. Its typical usage follows the syntax `if <expression> { … } else { … }`, where two subpipelines are specified within the braces. When its expression evaluates to `true`, the first pipeline processes the event. Conversely, when it evaluates to `false`, it is routed through the second one.
 
-After the `if` statement the event flow from both pipelines is joined together. The `else` clause can be omitted, resulting in the syntax `if <expression> { ... }`, which has the same behavior as `if <expression> { ... } else {}`. Additionally, the `else` keyword can be followed by another `if` statement, allowing for chained `if` statements. This chaining can be repeated, enabling complex conditional logic to be implemented.
+After the `if` statement the event flow from both pipelines is joined together. The `else` clause can be omitted, resulting in the syntax `if <expression> { … }`, which has the same behavior as `if <expression> { … } else {}`. Additionally, the `else` keyword can be followed by another `if` statement, allowing for chained `if` statements. This chaining can be repeated, enabling complex conditional logic to be implemented.
 
 ```tql
 if score < 100 {
