@@ -17,3 +17,9 @@ This operator takes a TQL1 pipeline as a string and evaluates it.
 The TQL1 pipeline to evaluate.
 
 ## Examples
+
+```tql
+export
+summarize ts, count(.)
+legacy "chart area"
+```
