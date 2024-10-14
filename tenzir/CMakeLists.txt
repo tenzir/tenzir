@@ -126,7 +126,7 @@ TenzirDefineUpdateIntegrationTarget(
 # This needs a custom definition instead of the one from
 # TenzirDefineUpdateIntegrationTarget as it requires two calls to properly diff
 # within the submodule.
-if (Git_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+if (Git_FOUND AND EXISTS "${PROJECT_SOURCE_DIR}/.git")
   add_custom_target(
     diff-integration
     COMMAND "${GIT_EXECUTABLE}" "-C" "${CMAKE_SOURCE_DIR}" "diff" "--exit-code"
@@ -134,7 +134,7 @@ if (Git_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
     COMMAND
       "${GIT_EXECUTABLE}" "-C" "${CMAKE_SOURCE_DIR}/contrib/tenzir-plugins"
       "diff" "--exit-code" "--" "*.ref"
-    DEPENDS integration
+    DEPENDS update-integration
     COMMENT "Diffing all integration test results"
     USES_TERMINAL)
 endif ()
