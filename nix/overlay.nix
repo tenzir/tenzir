@@ -97,7 +97,7 @@ in {
         arrow-cpp''.override {
           enableShared = false;
           google-cloud-cpp = final.google-cloud-cpp.override {
-            apis = ["storage"];
+            apis = ["pubsub" "storage"];
           };
         }
     )

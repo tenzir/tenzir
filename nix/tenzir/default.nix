@@ -60,6 +60,7 @@
         "plugins/amqp"
         "plugins/azure-blob-storage"
         "plugins/gcs"
+        "plugins/google_cloud_pubsub"
         "plugins/fluent-bit"
         "plugins/kafka"
         "plugins/nic"
