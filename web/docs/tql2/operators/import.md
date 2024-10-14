@@ -2,7 +2,7 @@
 
 Imports events into a Tenzir node. The dual to [`export`](export.md).
 
-```
+```tql
 import
 ```
 
@@ -14,8 +14,8 @@ The `import` operator persists events in a Tenzir node.
 
 Import Zeek conn logs into a Tenzir node.
  
-XXX: Fix example
-
-```
-from file conn.log read zeek-tsv | import
+```tql
+load_file "conn.log" 
+read_zeek_tsv
+import
 ```

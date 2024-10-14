@@ -48,13 +48,16 @@ Defaults to 3.
 
 Expose all persisted events as JSON data.
 
-```
-export | write_json
+```tql
+export
+write_json
 ```
 
 [Apply a filter](where.md) to all persisted events, then [only expose the first
 ten results](head.md).
 
-```
-export | where src_ip == 1.2.3.4 | head 10
+```tql
+export 
+where src_ip == 1.2.3.4 
+head 10
 ```

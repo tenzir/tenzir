@@ -62,12 +62,12 @@ View all diagnostics generated in the past five minutes.
 
 ```
 diagnostics
-| where timestamp > 5 minutes ago
+where timestamp > 5 minutes ago
 ```
 
 Only show diagnostics that contain the `error` severity.
 
 ```
 diagnostics
-| where severity == "error"
+where severity == "error"
 ```

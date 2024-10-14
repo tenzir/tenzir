@@ -17,13 +17,13 @@ batch [limit:uint, timeout=duration]
 The `batch` operator takes its input and rewrites it into batches of up to the
 desired size.
 
-### `limit:uint (optional)`
+### `limit: uint (optional)`
 
 An unsigned integer denoting how many events to put into one batch at most.
 
 Defaults to `65536`.
 
-### `timeout=duration (optional)`
+### `timeout = duration (optional)`
 
 Specifies a maximum latency for events passing through the batch operator. When
 unspecified, an infinite duration is used.

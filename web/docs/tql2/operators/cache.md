@@ -67,7 +67,7 @@ Cache the results of an expensive query:
 
 ```tql
 export
-where meta.schema == "suricata.flow"
+where @name == "suricata.flow"
 summarize total=sum(bytes_toserver), src_ip, dest_ip
 cache "some-unique-identifier"
 ```
@@ -78,7 +78,7 @@ minute.
 
 ```tql
 export
-where meta.schema == "suricata.flow"
+where @name == "suricata.flow"
 summarize src_ip, total=sum(bytes_toserver), dest_ip
 cache "some-unique-identifier", ttl=1min
 summarize src_ip, total=sum(total), destinations=count(dest_ip)

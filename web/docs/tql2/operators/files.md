@@ -11,23 +11,29 @@ files [dir:str, recurse=bool, follow_symlinks=bool, skip_permission_denied=bool]
 The `files` operator shows file information for all files in the given
 directory.
 
-### `dir`
+### `dir: str (optional)`
 
 The directory to list files in.
 
 Defaults to the current working directory.
 
-### `recurse`
+### `recurse = bool (optional)`
 
 Recursively list files in subdirectories.
 
-### `follow_symlinks`
+Defaults to `false`.
+
+### `follow_symlinks = bool (optional)`
 
 Follow directory symlinks.
 
-### `skip_permission_denied`
+Defaults to `false`.
+
+### `skip_permission_denied = bool (optional)`
 
 Skip directories that would otherwise result in permission denied errors.
+
+Defaults to `false`.
 
 ## Schemas
 
@@ -82,14 +88,14 @@ The `owner`, `group`, and `others` records contain the following fields:
 
 Compute the total file size of the current directory:
 
-```
+```tql
 files recurse=true
-| summarize total_size=sum(file_size)
+summarize total_size=sum(file_size)
 ```
 
 Find all named pipes in `/tmp`:
 
-```
+```tql
 files "/tmp", recurse=true, skip_permission_denied=true
-| where type == "fifo"
+where type == "fifo"
 ```

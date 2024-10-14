@@ -1,39 +1,47 @@
 # load_tcp
 
 ```
-load_tcp url:str, pipeline:{ ... }, [connect=bool, parallel=uint, tls=bool, certfile=str, keyfile=str]
+load_tcp url:str, [connect=bool, parallel=uint, tls=bool, certfile=str, keyfile=str, { ... }]
 ```
 
 ## Description
 
-Loads the contents of the `url` as a byte stream.
+Loads the contents of the `url` as a byte stream and evaluates a pipeline
+for each TCP connection, if given.
 
-### `url:str`
+### `url: str`
 
-The `url` to load contents of. Must be of the form `tcp://<hostname>:<port>`.
+The `url` to load contents of. Must be of the form `[tcp://]<hostname>:<port>`.
 
-### `pipeline:{ ... }`
+### `{ ... } (optional)`
 
-The `pipeline` to run for each individual TCP connection.
+The pipeline to run for each individual TCP connection.
 
-### `connect=bool`
+### `connect = bool (optional)`
 
 The HTTP Method to use.
 
-### `parallel=uint`
+### `parallel = uint (optional)`
 
 Maximum number of parallel connections at once.
 
-### `tls=bool`
+### `tls = bool (optional)`
 
 Whether to use TLS.
 
-### `certfile=str`
+### `certfile = str (optional)`
 
 The TLS Certificate File to use.
 
-### `keyfile=str`
+### `keyfile = str (optional)`
 
 The Key file to use.
 
 ## Examples
+
+```tql
+load_tcp "tcp://example.com:10000" {
+  read_syslog
+}
+write_json
+```

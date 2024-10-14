@@ -1,6 +1,6 @@
 # legacy
 
-```
+```tql
 legacy pipeline:str
 ```
 :::caution
@@ -12,7 +12,7 @@ ported over.
 
 This operator takes a TQL1 pipeline as a string and evaluates it.
 
-### `pipeline:str`
+### `pipeline: str`
 
 The TQL1 pipeline to evaluate.
 

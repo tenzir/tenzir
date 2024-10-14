@@ -55,24 +55,26 @@ time *u*, then the `delay` operator will wait time *u - t* between emitting the
 two events. If *t > u* then the operator immediately emits next event.
 
 ```
-from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read zeek-tsv
-| delay ts
+load_http https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst 
+read_zeek_tsv
+delay ts
 ```
 
 Replay the M57 Zeek logs at 10.5 times the original speed.
 ```
-from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read zeek-tsv
-| delay ts, speed=10.5
+load_http https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst 
+read_zeek_tsv
+delay ts, speed=10.5
 ```
 
 Replay as above, but start delaying only after `ts` exceeds `2021-11-17T16:35`
 and emit all events prior to that timestamp immediately.
 
 ```
-from https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst read zeek-tsv
-| delay ts, start=2021-11-17T16:35, speed=10.0
+load_file https://storage.googleapis.com/tenzir-datasets/M57/zeek-all.log.zst 
+read_zeek_tsv
+delay ts, start=2021-11-17T16:35, speed=10.0
 ```
-XXX: Parser has to do `int`->`double`
 
 Adjust the timestamp to the present, and then start replaying in 2 hours from
 now:

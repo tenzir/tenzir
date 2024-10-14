@@ -19,14 +19,14 @@ operators to run uninterruptedly even in case the downstream operators of the
 buffer are unable to keep up. This allows pipelines to handle data spikes more
 easily.
 
-### `capacity:uint (optional)`
+### `capacity: uint (optional)`
 
 The number of events or bytes that may be kept at most in the buffer.
 
 Note that every operator already buffers up to `254Ki` events before it starts
 applying back pressure. Smaller buffers may pessimize performance.
 
-### `policy=str (optional)`
+### `policy = str (optional)`
 
 Specifies what the operator does when the buffer runs full.
 

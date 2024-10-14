@@ -27,16 +27,14 @@ from {
   },
 }
 drop name, info.id
-// this == {
-//   role: "Admin",
-//   info: {
-//     rank: 8411
-//   },
-// }
+write_json
 ```
 
-```tql
-from { name: "John" }
-drop address
-// this == { name: "John" }
+```json title="Output"
+{
+  "role": "Admin",
+  "info": {
+    "rank": 8411
+  }
+}
 ```

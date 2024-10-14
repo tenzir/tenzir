@@ -18,5 +18,6 @@ This operator is mainly used to test or benchmark pipelines.
 Benchmark to see how long it takes to export everything:
 
 ```
-<event stream> | discard
+export 
+discard
 ```

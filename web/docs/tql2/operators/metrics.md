@@ -11,17 +11,17 @@ metrics [name:str, live=bool, retro=bool]
 The `metrics` operator retrieves metrics events from a Tenzir node. Metrics
 events are collected every second. 
 
-### `name`
+### `name: str`
 
 Show only metrics with the specified name. For example, `metrics "cpu"` only shows
 CPU metrics.
 
-### `live`
+### `live = bool (optional)`
 
 Work on all metrics events as they are generated in real-time instead of on
 metrics events persisted at a Tenzir node.
 
-### `retro`
+### `retro = bool (optional)`
 
 Work on persisted diagnostic events (first), even when `live` is given.
 (See [`export` operator](export.md#retro) for more details)
@@ -309,15 +309,14 @@ TCP connection.
 | `bytes_written` | `uint64` | The number of bytes written since the last metrics.           |
 
 ## Examples
-XXX: Redo the examples
 
 Show the CPU usage over the last hour:
 
-```c
+```tql
 metrics
-| where #schema == "tenzir.metrics.cpu"
-| where timestamp > 1 hour ago
-| put timestamp, percent=loadavg_1m
+where @name == "tenzir.metrics.cpu"
+where timestamp > now() - 1h
+select timestamp, percent=loadavg_1m
 ```
 
 <details>
@@ -354,12 +353,12 @@ metrics
 
 Get the current memory usage:
 
-```c
+```tql
 metrics
-| where #schema == "tenzir.metrics.memory"
-| sort timestamp desc
-| tail 1
-| put current_memory_usage
+where @name == "tenzir.metrics.memory"
+sort -timestamp
+tail 1
+select current_memory_usage
 ```
 
 <details>
