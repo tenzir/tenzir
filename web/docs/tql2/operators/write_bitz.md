@@ -20,7 +20,5 @@ but prefixes each message with a 64 bit size prefix to support changing schemas
 between batches—something that Arrow's IPC format does not support on its own.
 
 :::info Did you know?
-BITZ is short for **bi**nary **T**en**z**ir, and a play on the word bits.
+BITZ is short for **Bi**nary **T**en**z**ir, and a play on the word bits.
 :::
-
-## Examples

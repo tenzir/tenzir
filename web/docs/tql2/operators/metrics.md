@@ -11,7 +11,7 @@ metrics [name:str, live=bool, retro=bool]
 The `metrics` operator retrieves metrics events from a Tenzir node. Metrics
 events are collected every second. 
 
-### `name: str`
+### `name: str (optional)`
 
 Show only metrics with the specified name. For example, `metrics "cpu"` only shows
 CPU metrics.
@@ -30,7 +30,7 @@ Work on persisted diagnostic events (first), even when `live` is given.
 
 Tenzir collects metrics with the following schemas.
 
-### `tenzir.metrics.api` (`"api"`)
+### `tenzir.metrics.api`
 
 Contains information about all accessed API endpoints, emitted once per second.
 
@@ -46,9 +46,8 @@ Contains information about all accessed API endpoints, emitted once per second.
 
 The schema of the record `params` depends on the API endpoint used. Refer to the
 [API documentation](/api) to see the available parameters per endpoint. 
-XXX: API Docs?
 
-### `tenzir.metrics.buffer` (`"buffer"`)
+### `tenzir.metrics.buffer`
 
 Contains information about the `buffer` operator's internal buffer.
 
@@ -63,7 +62,7 @@ Contains information about the `buffer` operator's internal buffer.
 | `free`        | `uint64` | The remaining capacity of the buffer.                         |
 | `dropped`     | `uint64` | The number of events dropped by the buffer.                   |
 
-### `tenzir.metrics.cpu` (`"cpu"`)
+### `tenzir.metrics.cpu`
 
 Contains a measurement of CPU utilization.
 
@@ -74,7 +73,7 @@ Contains a measurement of CPU utilization.
 | `loadavg_5m`  | `double` | The load average over the last 5 minutes.   |
 | `loadavg_15m` | `double` | The load average over the last 15 minutes.  |
 
-### `tenzir.metrics.disk` (`"disk"`)
+### `tenzir.metrics.disk`
 
 Contains a measurement of disk space usage.
 
@@ -86,7 +85,7 @@ Contains a measurement of disk space usage.
 | `used_bytes`  | `uint64` | The number of bytes occupied on the volume.                                        |
 | `free_bytes`  | `uint64` | The number of bytes still free on the volume.                                      |
 
-### `tenzir.metrics.enrich` (`"enrich"`)
+### `tenzir.metrics.enrich`
 
 Contains a measurement of the `enrich` operator, emitted once every second.
 
@@ -101,7 +100,7 @@ Contains a measurement of the `enrich` operator, emitted once every second.
 | `events`      | `uint64` | The amount of input events that entered the `enrich` operator since the last metric. |
 | `hits`        | `uint64` | The amount of successfully enriched events since the last metric.                    |
 
-### `tenzir.metrics.export` (`"export"`)
+### `tenzir.metrics.export`
 
 Contains a measurement of the `export` operator, emitted once every second per
 schema. Note that internal events like metrics or diagnostics do not emit
@@ -119,7 +118,7 @@ metrics themselves.
 | `events`        | `uint64` | The amount of events that were imported.                      |
 | `queued_events` | `uint64` | The total amount of events that are enqueued in the export.   |
 
-### `tenzir.metrics.import` (`"import"`)
+### `tenzir.metrics.import`
 
 Contains a measurement the `import` operator, emitted once every second per
 schema. Note that internal events like metrics or diagnostics do not emit
@@ -136,7 +135,7 @@ metrics themselves.
 | `schema_id`   | `string` | The schema ID of the batch.                                   |
 | `events`      | `uint64` | The amount of events that were imported.                      |
 
-### `tenzir.metrics.ingest` (`"ingest"`)
+### `tenzir.metrics.ingest`
 
 Contains a measurement of all data ingested into the database, emitted once per
 second and schema.
@@ -148,7 +147,7 @@ second and schema.
 | `schema_id` | `string` | The schema ID of the batch.                 |
 | `events`    | `uint64` | The amount of events that were ingested.    |
 
-### `tenzir.metrics.lookup` (`"lookup"`)
+### `tenzir.metrics.lookup`
 
 Contains a measurement of the `lookup` operator, emitted once every second.
 
@@ -179,7 +178,7 @@ The record `retro` has the following schema:
 | `hits`          | `uint64` | The amount of lookup matches since the last metric.                   |
 | `queued_events` | `uint64` | The total amount of events that were in the queue for the lookup.     |
 
-### `tenzir.metrics.memory` (`"memory"`)
+### `tenzir.metrics.memory`
 
 Contains a measurement of the available memory on the host.
 
@@ -190,7 +189,7 @@ Contains a measurement of the available memory on the host.
 | `used_bytes`  | `uint64` | The amount of memory used, in bytes.        |
 | `free_bytes`  | `uint64` | The amount of free memory, in bytes.        |
 
-### `tenzir.metrics.operator` (`"operator"`)
+### `tenzir.metrics.operator`
 
 Contains input and output measurements over some amount of time for a single
 operator instantiation.
@@ -223,7 +222,7 @@ The records `input` and `output` have the following schema:
 | `elements`     | `uint64` | Number of elements that were seen during the collection period. |
 | `approx_bytes` | `uint64` | An approximation for the number of bytes transmitted.           |
 
-### `tenzir.metrics.platform` (`"platform"`)
+### `tenzir.metrics.platform`
 
 Signals whether the connection to the Tenzir Platform is working from the node's
 perspective. Emitted once per second.
@@ -233,7 +232,7 @@ perspective. Emitted once per second.
 | `timestamp` | `time` | The time at which this metric was recorded. |
 | `connected` | `bool` | The connection status.                      |
 
-### `tenzir.metrics.process` (`"process"`)
+### `tenzir.metrics.process`
 
 Contains a measurement of the amount of memory used by the `tenzir-node` process.
 
@@ -245,7 +244,7 @@ Contains a measurement of the amount of memory used by the `tenzir-node` process
 | `swap_space_usage`     | `uint64` | The amount of swap space, in bytes. Only available on Linux systems.              |
 | `open_fds`             | `uint64` | The amount of open file descriptors by the node. Only available on Linux systems. |
 
-### `tenzir.metrics.publish` (`"publish"`)
+### `tenzir.metrics.publish`
 
 Contains a measurement of the `publish` operator, emitted once every second per
 schema.
@@ -262,7 +261,7 @@ schema.
 | `schema_id`   | `string` | The schema ID of the batch.                                   |
 | `events`      | `uint64` | The amount of events that were published to the `topic`.      |
 
-### `tenzir.metrics.rebuild` (`"rebuild"`)
+### `tenzir.metrics.rebuild`
 
 Contains a measurement of the partition rebuild process, emitted once every
 second.
@@ -273,7 +272,7 @@ second.
 | `partitions`        | `uint64` | The number of partitions currently being rebuilt.         |
 | `queued_partitions` | `uint64` | The number of partitions currently queued for rebuilding. |
 
-### `tenzir.metrics.subscribe` (`"subscribe"`)
+### `tenzir.metrics.subscribe`
 
 Contains a measurement of the `subscribe` operator, emitted once every second
 per schema.
@@ -290,7 +289,7 @@ per schema.
 | `schema_id`   | `string` | The schema ID of the batch.                                   |
 | `events`      | `uint64` | The amount of events that were retrieved from the `topic`.    |
 
-### `tenzir.metrics.tcp` (`"tcp"`)
+### `tenzir.metrics.tcp`
 
 Contains measurements about the number of read calls and the received bytes per
 TCP connection.
