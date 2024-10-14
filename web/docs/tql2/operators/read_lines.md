@@ -2,7 +2,7 @@
 
 Parses an incoming bytes stream into events.
 
-```
+```tql
 read_lines [skip_empty=bool, split_at_null=bool]
 ```
 
@@ -17,7 +17,7 @@ Newline characters include:
 
 The resulting events have a single field called `line`.
 
-### `skip_empty`
+### `skip_empty = bool (optional)`
 
 Affects parsing of empty lines:
 - `true`: Empty lines are parsed and emitted as `{}`, i.e. events with no
@@ -26,13 +26,13 @@ fields.
 
 Defaults to `false`.
 
-### `split_at_null`
+### `split_at_null = bool (optional)`
 
 Use null byte (`\0`) as the delimiter instead of newline characters.
 
 ## Examples
 
-```
+```tql
 load_file "events.log"
 read_lines
 ```

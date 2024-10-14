@@ -2,7 +2,7 @@
 
 Parse an incoming Zeek JSON stream into events.
 
-```
+```tql
 read_zeek_json [schema_only=bool, raw=bool]
 ```
 

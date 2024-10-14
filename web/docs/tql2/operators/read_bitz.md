@@ -3,7 +3,7 @@
 Parses incoming `BITZ` (Tenzir's internal wire format) byte stream into event
 stream.
 
-```
+```tql
 read_bitz
 ```
 
@@ -25,3 +25,8 @@ BITZ is short for **bi**nary **T**en**z**ir, and a play on the word bits.
 :::
 
 ## Examples
+
+```tql
+load_tcp "localhost:20000"
+read_bitz
+```

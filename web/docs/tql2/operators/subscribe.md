@@ -3,7 +3,7 @@
 Subscribes to events from a channel with a topic. The dual to
 [`publish`](publish.md).
 
-```
+```tql
 subscribe [topic:str]
 ```
 
@@ -19,15 +19,17 @@ avoid data loss. This mechanism is disabled for pipelines that are not visible
 on the overview page on [app.tenzir.com](https://app.tenzir.com), which drop
 data rather than slow down their publishers.
 
-### `topic:str`
+### `topic: str`
 
 An optional channel name to subscribe to. If unspecified, the operator
 subscribes to the global unnamed feed.
 
 ## Examples
 
-Subscribe to the events under the topic `zeek-conn`:
+Subscribe to the events under the topic `zeek-conn` and filter events
+([`where`](where.md)):
 
-```
+```tql
 subscribe "zeek-conn"
+where ts > now() - 1 week
 ```

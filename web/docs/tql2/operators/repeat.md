@@ -2,7 +2,7 @@
 
 Repeats the input a number of times.
 
-```
+```tql
 repeat [count:uint]
 ```
 
@@ -34,7 +34,7 @@ Given the following events as JSON:
 
 The `repeat` operator will repeat them indefinitely, in order:
 
-```
+```tql
 repeat
 ```
 
@@ -50,8 +50,9 @@ repeat
 
 To just repeat the first event 5 times, use:
 
-```
-head 1 | repeat 5
+```tql
+head 1 
+repeat 5
 ```
 
 ```json

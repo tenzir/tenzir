@@ -2,7 +2,7 @@
 
 Read XSV (`X`-Separated Values) from a byte stream.
 
-```
+```tql
 read_xsv field_sep:str, list_sep:str, null_value:str, 
           [comments=bool, header=str, auto_expand=bool, schema=str, selector=str, 
           schema_only=bool, raw=bool, unflatten=str]
@@ -82,7 +82,7 @@ the fields `id.orig_h`, `id.orig_p`, `id.resp_h`, and `id.resp_p` at the
 top-level. The data is best modeled as an `id` record with four nested fields
 `orig_h`, `orig_p`, `resp_h`, and `resp_p`.
 
-Without an unnest separator, the data looks like this:
+Without an unflatten separator, the data looks like this:
 
 ```json
 {
@@ -93,7 +93,7 @@ Without an unnest separator, the data looks like this:
 }
 ```
 
-With the unnest separator set to `.`, Tenzir reads the events like this:
+With the unflatten separator set to `.`, Tenzir reads the events like this:
 
 ```json
 {
@@ -104,6 +104,7 @@ With the unnest separator set to `.`, Tenzir reads the events like this:
     "resp_p" : 5
   }
 }
+```
 
 ## Examples
 

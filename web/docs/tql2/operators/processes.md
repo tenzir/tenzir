@@ -2,7 +2,7 @@
 
 Shows a snapshot of running processes.
 
-```
+```tql
 processes
 ```
 
@@ -42,15 +42,15 @@ Contains detailed information about the process.
 
 Show running processes sorted by how long they've been running:
 
-```
+```tql
 processes
-| sort -startup
+sort -startup
 ```
 
 Show the top five running processes by name:
 
-```
+```tql
 processes
-| top name
-| head 5
+top name
+head 5
 ```

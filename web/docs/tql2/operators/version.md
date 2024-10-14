@@ -2,7 +2,7 @@
 
 Shows the current version.
 
-```
+```tql
 version
 ```
 
@@ -56,7 +56,7 @@ The `dependencies` record contains the following fields:
 
 Use `version` to show the current version of a development build:
 
-```
+```json
 {
   "version": "v4.6.3-36-gbd4c8a058b-dirty",
   "major": 4,
@@ -68,7 +68,7 @@ Use `version` to show the current version of a development build:
 
 Use `version` to show the current version of a release build:
 
-```
+```json
 {
   "version": "v4.7.0",
   "major": 4,

@@ -1,6 +1,6 @@
 # load_tcp
 
-```
+```tql
 load_tcp url:str, [connect=bool, parallel=uint, tls=bool, certfile=str, keyfile=str, { ... }]
 ```
 
@@ -12,10 +12,6 @@ for each TCP connection, if given.
 ### `url: str`
 
 The `url` to load contents of. Must be of the form `[tcp://]<hostname>:<port>`.
-
-### `{ ... } (optional)`
-
-The pipeline to run for each individual TCP connection.
 
 ### `connect = bool (optional)`
 
@@ -36,6 +32,10 @@ The TLS Certificate File to use.
 ### `keyfile = str (optional)`
 
 The Key file to use.
+
+### `{ ... } (optional)`
+
+The pipeline to run for each individual TCP connection.
 
 ## Examples
 

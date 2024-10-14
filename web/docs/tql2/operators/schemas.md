@@ -2,7 +2,7 @@
 
 Retrieves all schemas for events stored at a node.
 
-```
+```tql
 schemas
 ```
 
@@ -18,7 +18,7 @@ time.
 
 See all available schema definitions for the schema `suricata.alert`:
 
-```
+```tql
 schemas
-| where name == "suricata.alert"
+where name == "suricata.alert"
 ```

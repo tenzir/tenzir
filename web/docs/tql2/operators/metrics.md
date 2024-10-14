@@ -2,7 +2,7 @@
 
 Retrieves metrics events from a Tenzir node.
 
-```
+```tql
 metrics [name:str, live=bool, retro=bool]
 ```
 
@@ -313,8 +313,7 @@ TCP connection.
 Show the CPU usage over the last hour:
 
 ```tql
-metrics
-where @name == "tenzir.metrics.cpu"
+metrics "cpu"
 where timestamp > now() - 1h
 select timestamp, percent=loadavg_1m
 ```
@@ -354,8 +353,7 @@ select timestamp, percent=loadavg_1m
 Get the current memory usage:
 
 ```tql
-metrics
-where @name == "tenzir.metrics.memory"
+metrics "memory"
 sort -timestamp
 tail 1
 select current_memory_usage
@@ -375,12 +373,11 @@ select current_memory_usage
 Show the total pipeline ingress in bytes for every day over the last week,
 excluding pipelines run in the Explorer:
 
-```c
-metrics
-| where #schema == "tenzir.metrics.operator"
-| where timestamp > 1 week ago
-| where hidden == false and source == true
-| summarize bytes=sum(output.approx_bytes) by timestamp resolution 1 day
+```tql
+metrics "operator"
+where timestamp > now() - 1 week
+where hidden == false and source == true
+summarize bytes=sum(output.approx_bytes) by timestamp resolution 1 day
 ```
 
 <details>
@@ -422,13 +419,12 @@ metrics
 Show the three operator instantiations that produced the most events in total
 and their pipeline IDs:
 
-```c
-metrics
-| where #schema == "tenzir.metrics.operator"
-| where output.unit == "events"
-| summarize events=max(output.elements) by pipeline_id, operator_id
-| sort events desc
-| head 3
+```tql
+metrics "operator"
+where output.unit == "events"
+summarize pipeline_id, operator_id, events=max(output.elements)
+sort -events
+head 3
 ```
 
 <details>
@@ -456,11 +452,10 @@ metrics
 
 Get the disk usage over time:
 
-```c
-metrics
-| where #schema == "tenzir.metrics.disk"
-| sort timestamp
-| put timestamp, used_bytes
+```tql
+metrics "disk"
+sort timestamp
+select timestamp, used_bytes
 ```
 
 <details>
@@ -489,11 +484,10 @@ metrics
 
 Get the memory usage over time:
 
-```c
-metrics
-| where #schema == "tenzir.metrics.memory"
-| sort timestamp
-| put timestamp, used_bytes
+```tql
+metrics "memory"
+sort timestamp
+select timestamp, used_bytes
 ```
 
 <details>
@@ -526,10 +520,10 @@ metrics
 
 Get inbound TCP traffic over time:
 
-```c
-metrics tcp
-| sort timestamp
-| put timestamp, port, handle, reads, bytes
+```tql
+metrics "tcp"
+sort timestamp
+select timestamp, port, handle, reads, bytes
 ```
 
 <details>

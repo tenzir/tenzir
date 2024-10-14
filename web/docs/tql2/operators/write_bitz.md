@@ -2,7 +2,7 @@
 
 Writes `BITZ` (Tenzir's internal wire format)
 
-```
+```tql
 write_bitz
 ```
 

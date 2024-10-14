@@ -2,7 +2,7 @@
 
 Limits the input to the last `n` events.
 
-```
+```tql
 tail [n:uint]
 ```
 
@@ -12,7 +12,7 @@ Forwards the last `n` events and discards the rest.
 
 `tail n` is a shorthand notation for [`slice begin=-n`](slice.md).
 
-### `n`
+### `n: uint (optional)`
 
 An unsigned integer denoting how many events to keep.
 
@@ -22,12 +22,14 @@ Defaults to 10.
 
 Get the last ten results:
 
-```
-<event stream> | tail
+```tql
+export
+tail
 ```
 
 Get the last five results:
 
-```
-<event stream> | tail 5
+```tql
+export 
+tail 5
 ```

@@ -2,7 +2,7 @@
 
 Shows the node's OpenAPI specification.
 
-```
+```tql
 openapi
 ```
 
@@ -15,6 +15,7 @@ specification](/api) for all available REST endpoint plugins.
 
 Render the OpenAPI specification as YAML:
 
-```
-openapi | write_yaml
+```tql
+openapi
+write_yaml
 ```

@@ -2,7 +2,7 @@
 
 Reverses the event order.
 
-```
+```tql
 reverse
 ```
 
@@ -14,9 +14,19 @@ reverse
 
 Reverse a stream of events:
 
+```tql
+from [ {x: 1}, {x: 2}, {x: 3} ]
+reverse
 ```
-from [ {x: 1}, {x: 2}, {x: 3} ] | reverse
-```
-```
-XXX: Add output here
+
+```json title="Output"
+{
+  "x": 3
+}
+{
+  "x": 2
+}
+{
+  "x": 1
+}
 ```

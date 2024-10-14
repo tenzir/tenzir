@@ -1,6 +1,6 @@
 # load_file
 
-```
+```tql
 load_file path:str, [follow=bool, mmap=bool, timeout=duration]
 ```
 
@@ -18,7 +18,7 @@ Whether to follow symlinks.
 
 ### `mmap = bool (optional)`
 
-Whether to use `[mmap()](https://en.wikipedia.org/wiki/Mmap)`.
+Whether to use [`mmap()`](https://en.wikipedia.org/wiki/Mmap).
 
 ### `timeout = duration (optional)`
 

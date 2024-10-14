@@ -160,7 +160,7 @@ Handle [Splunk](https://docs.fluentbit.io/manual/pipeline/inputs/splunk) HTTP
 HEC requests:
 
 ```tql
-fluentbit "splunk" options = { port: 8088 }
+fluentbit "splunk", options = { port: 8088 }
 ```
 
 Handle [ElasticSearch &
@@ -168,7 +168,7 @@ OpenSearch](https://docs.fluentbit.io/manual/pipeline/inputs/elasticsearch)
 Bulk API requests or ingest from beats (e.g., Filebeat, Metricbeat, Winlogbeat):
 
 ```tql
-fluentbit "elasticsearch" options = { port: 9200 }
+fluentbit "elasticsearch", options = { port: 9200 }
 ```
 
 ### Sink
@@ -176,19 +176,19 @@ fluentbit "elasticsearch" options = { port: 9200 }
 Send events to [Slack](https://docs.fluentbit.io/manual/pipeline/outputs/slack):
 
 ```tql
-fluentbit "slack" options = { webhook: "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX" }
+fluentbit "slack", options = { webhook: "https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXXXXXX" }
 ```
 
 Send events to
 [Splunk](https://docs.fluentbit.io/manual/pipeline/outputs/splunk):
 
 ```tql
-fluentbit "splunk" options = { host=127.0.0.1, port=8088, tls="on", tls.verify="off", splunk_token="11111111-2222-3333-4444-555555555555" }
+fluentbit "splunk", options = { host=127.0.0.1, port: 8088, tls:"on", tls.verify=:off", splunk_token:"11111111-2222-3333-4444-555555555555" }
 ```
 
 Send events to
 [ElasticSearch](https://docs.fluentbit.io/manual/pipeline/outputs/elasticsearch):
 
 ```tql
-fluentbit "es" options = { host: 192.168.2.3, port: 9200, index: "my_index", type: "my_type" }
+fluentbit "es", options = { host: 192.168.2.3, port: 9200, index: "my_index", type: "my_type" }
 ```

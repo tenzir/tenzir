@@ -4,7 +4,7 @@ Filter the input with [Sigma rules][sigma] and output matching events.
 
 [sigma]: https://github.com/SigmaHQ/sigma
 
-```
+```tql
 sigma path:str, [refresh_interval=duration]
 ```
 
@@ -86,7 +86,7 @@ yet implemented but possible, and ❌ not yet supported:
 |`gte`|compare greater than or equal to (`>=`) the value|❌|✅
 |`expand`|expand value to placeholder strings, e.g., `%something%`|❌|❌
 
-### `rule`
+### `path: str`
 
 The rule to match.
 
@@ -96,7 +96,7 @@ If this points to a directory, the operator watches it and attempts to parse eac
 a Sigma rule. The `sigma` operator matches if *any* of the contained rules
 match, effectively creating a disjunction of all rules inside the directory.
 
-### `refresh_interval`
+### `refresh_interval = duration (optional)`
 
 How often the `sigma` operator looks at the specified rule or directory of rules
 to update its internal state.
@@ -114,7 +114,7 @@ evtx_dump -o jsonl file.evtx | tenzir 'read_json | sigma "rule.yaml"'
 
 Apply a Sigma rule over historical data in a node from the last day:
 
-```
+```tql
 export | where :timestamp > 1 day ago | sigma "rule.yaml"
 ```
 

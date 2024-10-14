@@ -2,20 +2,18 @@
 
 Retrieves metadata about events stored at a node.
 
-```
-partitions [predicate:expr, experimental_include_ranges=bool]
+```tql
+partitions [predicate:expr]
 ```
 
 ## Description
 
 The `partitions` operator shows a summary of candidate partitions at a node.
 
-### `predicate`
+### `predicate: expr (optional)`
 
 Show only partitions which would be considered for pipelines of the form
 `export | where <expr>` instead of returning all data.
-
-XXX: Figure out what the second opt does
 
 ## Schemas
 
@@ -52,25 +50,25 @@ The records `store`, `indexes`, and `sketches` have the following schema:
 Get an overview of the memory and disk requirements for all stored data sorted
 by schema:
 
-```
+```tql
 partitions
-| summarize events=sum(events),
-            diskusage=sum(diskusage),
-            memusage=sum(memusage)
-  by schema
-| sort schema
+summarize schema,
+  events=sum(events),
+  diskusage=sum(diskusage),
+  memusage=sum(memusage)
+sort schema
 ```
 
 Get an upper bound for the number of events that could contain the IP address
 127.0.0.1:
 
-```
+```tql
 partitions :ip == 127.0.0.1
 | summarize candidates=sum(events)
 ```
 
 See how many partitions contain a non-null value for the field `hostname`:
 
-```
+```tql
 partitions hostname != null
 ```

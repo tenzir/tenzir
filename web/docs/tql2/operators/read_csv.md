@@ -2,7 +2,7 @@
 
 Read CSV (Comma-Separated Values) from a byte stream.
 
-```
+```tql
 read_csv [list_sep=str, null_value=str, comments=bool, header=str, auto_expand=bool,
           schema=str, selector=str, schema_only=bool, raw=bool, unflatten=str]
 ```
@@ -12,28 +12,28 @@ read_csv [list_sep=str, null_value=str, comments=bool, header=str, auto_expand=b
 The `read_csv` operator transforms a byte stream into a event stream by parsing
 the bytes as [CSV](https://en.wikipedia.org/wiki/Comma-separated_values).
 
-### `auto_expand=bool`
+### `auto_expand = bool (optional)`
 Automatically add fields to the schema when encountering events with too many
 values instead of dropping the excess values.
 
-### `comments=bool`
+### `comments = bool (optional)`
 Treat lines beginning with "#" as comments.
 
-### `header=str`
+### `header = str (optional)`
 The `string` to be used as a `header` for the parsed values.
 If unspecified, the first line of the input is used as the header.
 
-### `list_sep=str`
+### `list_sep = str (optional)`
 The `string` separating the elements _inside_ a list.
 
 Defaults to `;`.
 
-### `null_value=str`
+### `null_value = str (optional)`
 The `string` denoting an absent value.
 
 Defaults to empty string (`""`).
 
-### `raw=bool`
+### `raw = bool (optional)`
 XXX: CSV and native types? :think:
 
 Use only the raw types that are native to the parsed format. Fields that have a type
@@ -47,14 +47,14 @@ Use with caution.
 
 This option can not be combined with `merge=true, schema="<schema>"`.
 
-### `schema=str`
+### `schema = str (optional)`
 Provide the name of a [schema](../../data-model/schemas.md) to be used by the
 parser. If the schema uses the `blob` type, then the JSON parser expects
 base64-encoded strings.
 
 The `schema` option is incompatible with the `selector` option.
 
-### `selector=str`
+### `selector = str (optional)`
 Designates a field value as schema name with an optional dot-separated prefix.
 
 For example, the Suricata EVE JSON format includes a field
@@ -64,14 +64,14 @@ For example, the Suricata EVE JSON format includes a field
 
 The `selector` option is incompatible with the `schema` option.
 
-### `schema_only=bool`
+### `schema_only = bool (optional)`
 When working with an existing schema, this option will ensure that the output
 schema has *only* the fields from that schema. If the schema name is obtained via a `selector`
 and it does not exist, this has no effect.
 
 This option requires either `schema` or `selector` to be set.
 
-### `unflatten=str`
+### `unflatten = str (optional)`
 
 A delimiter that, if present in keys, causes values to be treated as values of
 nested records.
@@ -81,7 +81,7 @@ the fields `id.orig_h`, `id.orig_p`, `id.resp_h`, and `id.resp_p` at the
 top-level. The data is best modeled as an `id` record with four nested fields
 `orig_h`, `orig_p`, `resp_h`, and `resp_p`.
 
-Without an unnest separator, the data looks like this:
+Without an unflatten separator, the data looks like this:
 
 ```json
 {
@@ -92,7 +92,7 @@ Without an unnest separator, the data looks like this:
 }
 ```
 
-With the unnest separator set to `.`, Tenzir reads the events like this:
+With the unflatten separator set to `.`, Tenzir reads the events like this:
 
 ```json
 {
@@ -107,3 +107,7 @@ With the unnest separator set to `.`, Tenzir reads the events like this:
 
 ## Examples
 
+```tql
+export 
+read_csv
+```

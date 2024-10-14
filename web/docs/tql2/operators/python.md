@@ -7,7 +7,7 @@ variable of the `tenzir` or `tenzir-node` process.
 
 Executes Python code against each event of the input.
 
-```
+```tql
 python code:str, [requirements=str]
 python file=str, [requirements=str]
 ```
@@ -30,7 +30,7 @@ values to native Python data types and back to the Tenzir data model after the
 transformation.
 :::
 
-### `<code>`
+### `code: str`
 
 The provided Python code describes an event-for-event transformation, i.e., it
 is executed once for each input event and produces exactly output event.
@@ -43,12 +43,12 @@ new fields are added by assigning to `self.fieldname` and existing fields can be
 removed by deleting them from `self`. When new fields are added, it is required
 that the new field has the same type for every row of the event.
 
-### `file`
+### `file: str`
 
 Instead of providing the code inline, the `file` option allows for passing
 a path to a file containing the code the operator executes per event.
 
-### `requirements`
+### `requirements = str (optional)`
 
 The `requirements` flag can be used to pass additional package dependencies in
 the pip format. When it is used, the argument is passed on to `pip install` in a
@@ -61,14 +61,14 @@ separate them with a space: `requirements="foo bar"`.
 
 Insert or modify the field `x` and set it to `"hello, world"`:
 
-```
+```tql
 python 'self.x = "hello, world"'
 ```
 
 Clear the contents of `self` to remove the implicit input values from the
 output:
 
-```
+```tql
 python '
   self.clear()
   self.x = 23
@@ -78,7 +78,7 @@ python '
 Define a new field `x` as the square root of the field `y`, and remove `y` from
 the output:
 
-```
+```tql
 python '
   import math
   self.x = math.sqrt(self.y)
@@ -88,8 +88,7 @@ python '
 
 Make use of third party packages:
 
-XXX: Ugly, positional can't come after named right?
-```
+```tql
 python '
   import requests
   requests.post("http://imaginary.api/receive", data=self)

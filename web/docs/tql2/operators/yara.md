@@ -64,8 +64,9 @@ simple rule scanning service.
 
 Scan a file with a set of YARA rules:
 
-```
-load_file "evil.exe" mmap=true | yara "rule.yara"
+```tql
+load_file "evil.exe" mmap=true 
+yara "rule.yara"
 ```
 
 :::info Memory Mapping Optimization
@@ -95,12 +96,7 @@ rule test {
 }
 ```
 
-You can produce test matches by feeding bytes into the `yara` operator:
-
-```bash
-echo 'foo bar' | tenzir 'load stdin | yara /tmp/test.yara'
-```
-
+You can produce test matches by feeding bytes into the `yara` operator.
 You will get one `yara.match` per matching rule:
 
 ```json
@@ -151,8 +147,9 @@ over a Kafka topic `malware`.
 
 Launch the processing pipeline as follows:
 
-```
-load kafka --topic malware | yara --blockwise /path/to/rules
+```tql
+load kafka --topic malware 
+yara --blockwise /path/to/rules
 ```
 
 If you run this pipeline on the command line via `tenzir <pipeline>`, you see
@@ -160,7 +157,7 @@ the matches arriving as JSON. You could also send the matches via the
 [`fluent-bit`](../../operators/fluent-bit.md) sink to Slack, Splunk, or any other
 Fluent Bit output. For example, via Slack:
 
-```
+```tql
 load kafka --topic malware
 | yara --blockwise /path/to/rules
 | fluent-bit slack webhook=<url>
@@ -174,7 +171,7 @@ exhausts.
 
 You can now submit a malware sample by sending it to the `malware` Kafka topic:
 
-```
+```tql
 load file --mmap evil.exe | save kafka --topic malware
 ```
 

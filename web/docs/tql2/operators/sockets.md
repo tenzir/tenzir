@@ -2,7 +2,7 @@
 
 Shows a snapshot of open sockets.
 
-```
+```tql
 sockets
 ```
 
@@ -33,7 +33,7 @@ Contains detailed information about the socket.
 
 Show process ID, local, and remote IP address of all sockets:
 
-```
+```tql
 sockets
-| select pid, local_addr, remote_addr 
+select pid, local_addr, remote_addr 
 ```

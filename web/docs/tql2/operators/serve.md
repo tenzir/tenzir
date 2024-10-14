@@ -3,7 +3,7 @@
 Make events available under the [`/serve` REST API
 endpoint](/api#/paths/~1serve/post).
 
-```
+```tql
 serve id:str [buffer_size=uint]
 ```
 
@@ -34,13 +34,13 @@ Defaults to `1Ki`.
 
 Read a Zeek conn.log, 100 events at a time:
 
-```tql {0} title="Parse logs from a file and serve them"
+```tql title="Parse logs from a file and serve them"
 load_file "path/to/conn.log"
 read_zeek_tsv
 serve "zeek-conn-logs"'
 ```
 
-```bash {0} title="Fetch max 100 events from the serve endpoint"
+```bash title="Fetch max 100 events from the serve endpoint"
 curl \
   -X POST \
   -H "Content-Type: application/json" \

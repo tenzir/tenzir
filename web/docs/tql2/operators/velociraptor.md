@@ -2,8 +2,7 @@
 
 Submits VQL to a Velociraptor server and returns the response as events.
 
-XXX: How do divide args? One per line?
-```
+```tql
 velociraptor [request_name=str, org_id=str, max_rows=uint, 
               subscribe=str, query=str, max_wait=duration, profile=str]
 ```
@@ -56,30 +55,30 @@ binary that we refer to as `velociraptor-binary` here.)
 
 Now you are ready to run VQL queries!
 
-### `request_name=str (optional)`
+### `request_name = str (optional)`
 
 An identifier for the request to the Velociraptor server.
 
 Defaults to a randoum UUID.
 
-### `org_id=str (optional)`
+### `org_id = str (optional)`
 
 The ID of the Velociraptor organization.
 
 Defaults to `root`.
 
-### `query=str (optional)`
+### `query = str (optional)`
 
 The [VQL][vql] query string.
 
-### `max_rows=uint (optional)`
+### `max_rows = uint (optional)`
 
 The maxium number of rows to return in a the stream gRPC messages returned by
 the server.
 
 Defaults to `1000`.
 
-### `subscribe=str (optional)`
+### `subscribe = str (optional)`
 
 Subscribes to a flow artifact.
 
@@ -87,13 +86,13 @@ This option generates a larger VQL expression under the hood that creates one
 event per flow and artifact. The response contains a field `HuntResult` that
 contains the result of the hunt.
 
-### `max_wait=duration (optional)`
+### `max_wait = duration (optional)`
 
 Controls how long to wait before releasing a partial result set.
 
 Defaults to `1 second`.
 
-### `profile=str (optional)`
+### `profile = str (optional)`
 
 Specifies the configuration profile for the Velociraptor instance. This enables
 connecting to multiple Velociraptor instances from the same Tenzir node.
@@ -118,12 +117,12 @@ If profiles are defined, the operator defaults to the first profile.
 
 Show all processes:
 
-```
+```tql
 velociraptor query="select * from pslist()"
 ```
 
 Subscribe to a hunt flow that contains the `Windows` artifact:
 
-```
+```tql
 velociraptor subscribe="Windows"
 ```

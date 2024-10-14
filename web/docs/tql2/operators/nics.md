@@ -2,7 +2,7 @@
 
 Shows a snapshot of available network interfaces.
 
-```
+```tql
 nics
 ```
 
@@ -42,7 +42,7 @@ The record `status` has the following schema:
 
 List all connected network interfaces.
 
-```
+```tql
 nics
-| where status.connected == true
+where status.connected == true
 ```

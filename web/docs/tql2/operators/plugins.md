@@ -2,7 +2,7 @@
 
 Shows all available plugins and built-ins.
 
-```
+```tql
 plugins
 ```
 
@@ -35,8 +35,8 @@ Contains detailed information about the available plugins.
 
 Show all functions currently available in TQL2:
 
-```
+```tql
 plugins
-| where "tql2.function" in types
-| summarize functions=collect(name)
+where "tql2.function" in types
+summarize functions=collect(name)
 ```

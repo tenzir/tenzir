@@ -2,7 +2,7 @@
 
 Read Key-Value pairs from a byte stream.
 
-```
+```tql
 read_kv [field_split:str, value_split:str, merge=bool, raw=bool, schema=str, selector=str, schema_only=bool, unflatten=str]
 ```
 
@@ -152,8 +152,8 @@ With the unnest separator set to `.`, Tenzir reads the events like this:
 
 Extract comma-separated key-value pairs from `foo:1, bar:2,baz:3 , qux:4`:
 
-```
-kv "\s*,\s*" ":"
+```tql
+read_kv "\s*,\s*" ":"
 ```
 
 Extract key-value pairs from strings such as `FOO: C:\foo BAR_BAZ: hello world`.
@@ -165,6 +165,6 @@ which yields `FOO: C:\foo` and `BAR_BAZ: hello world`. We then split the key
 from its value with `":\s*"` (only the first match is used to split them). The
 final result is thus `{"FOO": "C:\foo", "BAR_BAZ": "hello world"}`.
 
-```
-kv "(\s+)[A-Z][A-Z_]+:" ":\s*"
+```tql
+read_kv "(\s+)[A-Z][A-Z_]+:" ":\s*"
 ```
