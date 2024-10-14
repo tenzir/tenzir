@@ -16,7 +16,6 @@
 #include <arrow/filesystem/type_fwd.h>
 #include <arrow/io/api.h>
 #include <arrow/util/uri.h>
-#include <fmt/core.h>
 #include <google/cloud/pubsub/subscriber.h>
 
 namespace tenzir::plugins::google_cloud_pubsub {
@@ -75,45 +74,53 @@ public:
   }
   auto instantiate(operator_control_plane& ctrl) const
     -> std::optional<generator<chunk_ptr>> override {
-    return
-      [](operator_control_plane&, args args) mutable -> generator<chunk_ptr> {
-        auto subscriber = pubsub::Subscriber(pubsub::MakeSubscriberConnection(
-          pubsub::Subscription(args.project_id.inner,
-                               args.subscription_id.inner)));
-        auto chunks = std::vector<chunk_ptr>{};
-        std::mutex chunks_mut;
-        auto last_message_time = std::chrono::system_clock::now();
-        auto append_chunk = [&](const std::string& data) {
-          std::scoped_lock guard{chunks_mut};
-          last_message_time = std::chrono::system_clock::now();
-          chunks.push_back(chunk::copy(data));
-        };
-        auto session = subscriber.Subscribe(
-          [&](pubsub::Message const& m, pubsub::AckHandler h) {
-            append_chunk(m.data());
-            std::move(h).ack();
-          });
-        while (session.valid()) {
-          for (auto&& chunk : chunks) {
-            co_yield std::move(chunk);
-          }
-          auto result = session.wait_for(args.yield_timeout->inner);
-          if (result == std::future_status::ready) {
-            // This should never happen
-            break;
-          }
-          auto now = std::chrono::system_clock::now();
-          if (now - last_message_time > args.timeout->inner) {
-            break;
-          }
-        }
-        if (session.valid()) {
-          session.cancel();
-        }
+    return [](operator_control_plane& ctrl,
+              args args) mutable -> generator<chunk_ptr> {
+      auto subscription = pubsub::Subscription(args.project_id.inner,
+                                               args.subscription_id.inner);
+      auto connection
+        = pubsub::MakeSubscriberConnection(std::move(subscription));
+      auto subscriber = pubsub::Subscriber(std::move(connection));
+      auto chunks = std::vector<chunk_ptr>{};
+      std::mutex chunks_mut;
+      auto last_message_time = std::chrono::system_clock::now();
+      auto append_chunk = [&](const std::string& data) {
+        std::scoped_lock guard{chunks_mut};
+        last_message_time = std::chrono::system_clock::now();
+        chunks.push_back(chunk::copy(data));
+      };
+      auto session = subscriber.Subscribe(
+        [&](pubsub::Message const& m, pubsub::AckHandler h) {
+          append_chunk(m.data());
+          std::move(h).ack();
+        });
+      while (session.valid()) {
         for (auto&& chunk : chunks) {
           co_yield std::move(chunk);
         }
-      }(ctrl, args_);
+        auto result = session.wait_for(args.yield_timeout->inner);
+        if (result == std::future_status::ready) {
+          // This should never happen
+          break;
+        }
+        auto now = std::chrono::system_clock::now();
+        if (now - last_message_time > args.timeout->inner) {
+          break;
+        }
+      }
+      if (session.is_ready()) {
+        auto status = session.get();
+        if (not status.ok()) {
+          diagnostic::error("google-cloud-subscriber: {}", status.message())
+            .emit(ctrl.diagnostics());
+        }
+      } else if (session.valid()) {
+        session.cancel();
+      }
+      for (auto&& chunk : chunks) {
+        co_yield std::move(chunk);
+      }
+    }(ctrl, args_);
   }
 
   auto name() const -> std::string override {

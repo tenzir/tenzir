@@ -16,7 +16,6 @@
 #include <arrow/filesystem/type_fwd.h>
 #include <arrow/io/api.h>
 #include <arrow/util/uri.h>
-#include <fmt/core.h>
 #include <google/cloud/pubsub/publisher.h>
 
 namespace tenzir::plugins::google_cloud_pubsub {
@@ -67,7 +66,8 @@ public:
       auto future = publisher.Publish(std::move(message));
       auto id = future.get();
       if (not id) {
-        diagnostic::warning("{}", *id).emit(ctrl.diagnostics());
+        diagnostic::error("google-cloud-publisher: {}", id.status().message())
+          .emit(ctrl.diagnostics());
       }
     };
   }
