@@ -20,7 +20,7 @@ expressions work *across schemas* and thus make it easy to concisely articulate 
 The `predicate` is an [expression](../language/expressions.md) that is evaluated and tested for each event.
 The evaluation must result in a boolean value.
 
-If the result is `true`, execution continues as normal. <br/>
+If the result is `true`, execution continues as normal.
 If the result is `false`, the operator emits a diagnostic and continues.
 
 ## Examples

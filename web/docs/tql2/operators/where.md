@@ -19,46 +19,24 @@ constraints.
 ### `predicate: bool`
 
 The `predicate` is an [expression](../language/expressions.md) that is evaluated and tested for each event.
-The evaluation must result in a boolean value.
 
 ## Examples
 
-// XXX: Figure examples
-
-Select all events that contain a field with the value `1.2.3.4`:
-
-```tql
-where 1.2.3.4
-```
-
-This expression internally completes to `:ip == 1.2.3.4`. The type extractor
-`:ip` describes all fields of type `ip`. Use field extractors to only consider a
-single field:
+Keep only events where `src_ip` is `1.2.3.4`.
 
 ```tql
 where src_ip == 1.2.3.4
 ```
 
-As a slight variation of the above: use a nested field name and a temporal
-constraint of the field with name `ts`:
+Use a nested field name and a temporal constraint of the field with name `ts`:
 
 ```tql
-where id.orig_h == 1.2.3.4 and ts > 1 hour ago
+where id.orig_h == 1.2.3.4 and ts > now() - 1h
 ```
-
-Subnets are first-class values:
-
-```tql
-where 10.10.5.0/25
-```
-
-This expression unfolds to `:ip in 10.10.5.0/25 or :subnet == 10.10.5.0/25`. It
-means "select all events that contain a field of type `ip` in the subnet
-`10.10.5.0/25`, or a field of type `subnet` the exactly matches `10.10.5.0/25`".
 
 Expressions consist of predicates that can be connected with `and`, `or`, and
 `not`:
 
 ```tql
-where 10.10.5.0/25 and (orig_bytes > 1 Mi or duration > 30 min)
+where net == 10.10.5.0/25 and (orig_bytes > 1Mi or duration > 30min)
 ```
