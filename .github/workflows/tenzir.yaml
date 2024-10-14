@@ -834,6 +834,9 @@ jobs:
           - name: Platform
             target: platform
             path: contrib/tenzir-plugins/platform
+          - name: S3
+            target: s3
+            path: plugins/s3
           - name: Sigma
             target: sigma
             path: plugins/sigma
