@@ -10,7 +10,7 @@ export [live=bool, retro=bool, internal=bool, parallel=uint]
 
 The `export` operator retrieves events from a Tenzir node.
 
-### `live`
+### `live = bool (optional)`
 
 Work on all events that are imported with `import` operators in real-time
 instead of on events persisted at a Tenzir node.
@@ -19,7 +19,7 @@ Note that live exports may drop events if the following pipeline fails to keep
 up. To connect pipelines with back pressure, use the [`publish`](publish.md) and
 [`subscribe`](subscribe.md) operators.
 
-### `retro`
+### `retro = bool (optional)`
 
 XXX: Is this warning still correct?
 :::warning Experimental
@@ -31,13 +31,13 @@ implied.
 
 Combine `retro` and `live` to export past events and live events afterwards.
 
-### `internal`
+### `internal = bool (optional)`
 
 Export internal events, such as metrics or diagnostics, instead. By default,
 `export` only returns events that were previously imported with `import`. In
 contrast, `export internal=true` exports internal events such as operator metrics.
 
-### `parallel`
+### `parallel = uint (optional)`
 
 The parallel level controls how many worker threads the operator uses at most
 for querying historical events.

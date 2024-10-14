@@ -2,9 +2,8 @@
 
 Parse an incoming `Zeek TSV` stream into events.
 
-## Synopsis
-```
-zeek-tsv
+```tql
+read_zeek_tsv
 ```
 
 ## Description
@@ -47,7 +46,7 @@ Here's an example of a typical Zeek `conn.log` in TSV form:
 
 Read a Zeek `conn.log` from a file:
 
-```
+```tql
 load_file "/tmp/conn.log" 
 read_zeek_tsv
 ```

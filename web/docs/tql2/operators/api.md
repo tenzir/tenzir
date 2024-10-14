@@ -11,14 +11,14 @@ api endpoint:str [request_body=str]
 The `api` operator interacts with Tenzir's REST API without needing to spin up a
 web server, making all APIs accessible from within pipelines.
 
-### `endpoint:str`
+### `endpoint: str`
 
 The endpoint to request, e.g., `/pipeline/list` to list all pipelines created
 through the `/pipeline/create` endpoint.
 
 Tenzir's [REST API specification](/api) lists all available endpoints.
 
-### `request_body=str (optional)`
+### `request_body = str (optional)`
 
 A single string containing the JSON request body to send with the request.
 

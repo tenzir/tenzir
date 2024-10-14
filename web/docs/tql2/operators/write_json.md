@@ -10,10 +10,10 @@ write_json [ndjson=bool, color=bool]
 
 Transforms the input event stream to JSON byte stream.
 
-### `ndjson=bool (optional)`
+### `ndjson = bool (optional)`
 
 Whether to write Newline-Delimited JSON.
 
-### `color=bool (optional)`
+### `color = bool (optional)`
 
 ## Examples

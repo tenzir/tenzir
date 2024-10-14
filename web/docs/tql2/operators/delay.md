@@ -12,11 +12,11 @@ The `delay` operator replays a dataflow according to a time field by introducing
 sleeping periods proportional to the inter-arrival times of the events.
 
 With the `speed` option, you can adjust the sleep time of the time series induced by
-`field` with a multiplicative factor. This has the effect of making the time
+`by` with a multiplicative factor. This has the effect of making the time
 series "faster" for values great than 1 and "slower" for values less than 1.
 Unless you provide a start time with `start`, the operator will anchor the
-timestamps in `field` to begin with the current wall clock time, as if you
-provided `-start now`.
+timestamps in `by` to begin with the current wall clock time, as if you
+provided `start=now()`.
 
 The diagram below illustrates the effect of applying `delay` to dataflow. If an
 event in the stream has a timestamp the precedes the previous event, `delay`
@@ -29,23 +29,23 @@ scaling effect on the inter-arrival times.
 The options `start` and `speed` work independently, i.e., you can use them
 separately or both together.
 
-### `start`
+### `by: field`
+
+The field in the event containing the timestamp values.
+
+### `start = time (optional)`
 
 The timestamp to anchor the time values around.
 
 Defaults to the first non-null timestamp in `field`.
 
-### `speed`
+### `speed = double (optional)`
 
 A constant factor to be divided by the inter-arrival time. For example, 2.0
 decreases the event gaps by a factor of two, resulting a twice as fast dataflow.
 A value of 0.1 creates dataflow that spans ten times the original time frame.
 
 Defaults to 1.0.
-
-### `by`
-
-The field in the event containing the timestamp values.
 
 ## Examples
 

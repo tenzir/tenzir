@@ -11,14 +11,14 @@ diagnostics [live=bool, retro=bool]
 The `diagnostics` operator retrieves diagnostic events from a Tenzir
 node.
 
-### `live`
+### `live = bool (optional)`
 
 Work on all diagnostic events as they are generated in real-time instead of on
 diagnostic events persisted at a Tenzir node.
 
-### `retro`
+### `retro = bool (optional)`
 
-Work on persisted diagnostic events (first), even when `live` is given.
+Work on persisted diagnostic events (first), even when `live=true` is given.
 
 See [`export` operator](export.md#retro) for more details.
 

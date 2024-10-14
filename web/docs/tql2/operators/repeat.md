@@ -17,7 +17,7 @@ The repeat operator keeps its input in memory. Avoid using it to repeat large
 data sets.
 :::
 
-### `count:uint`
+### `count: uint (optional)`
 
 The number of times to repeat the input data.
 

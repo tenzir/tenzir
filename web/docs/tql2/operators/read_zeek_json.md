@@ -8,7 +8,7 @@ read_zeek_json [schema_only=bool, raw=bool]
 
 ## Description
 
-### `raw=bool`
+### `raw = bool (optional)`
 
 Use only the raw types that are native to the parsed format. Fields that have a type
 specified in the chosen schema will still be parsed according to the schema.
@@ -19,7 +19,7 @@ JSON however has numeric types, so those would be parsed.
 
 Use with caution.
 
-### `schema_only=bool`
+### `schema_only = bool (optional)`
 XXX: this needs to be fixed
 
 When working with an existing schema, this option will ensure that the output
