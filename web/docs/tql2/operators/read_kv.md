@@ -13,13 +13,13 @@ the bytes as Key-Value pairs.
 
 Incoming strings are first split into fields according to `field_split`. This
 can be a regular expression. For example, the input `foo: bar, baz: 42` can be
-split into `foo: bar` and `baz: 42` with the `",\s*"` (a comma, followed by any
+split into `foo: bar` and `baz: 42` with the `r",\s*"` (a comma, followed by any
 amount of whitespace) as the field splitter. Note that the matched separators
 are removed when splitting a string.
 
 Afterwards, the extracted fields are split into their key and value by
 `<value_split>`, which can again be a regular expression. In our example,
-`":\s*"` could be used to split `foo: bar` into the key `foo` and its value
+`r":\s*"` could be used to split `foo: bar` into the key `foo` and its value
 `bar`, and similarly `baz: 42` into `baz` and `42`. The result would thus be
 `{"foo": "bar", "baz": 42}`. If the regex matches multiple substrings, only the
 first match is used.
@@ -37,9 +37,7 @@ effectively expressed as `foo(bar)baz` instead.
 
 The parser is aware of double-quotes (`"`). If the `field_split` or
 `value_split` are found within enclosing quotes, they are not considered
-matches.
-
-This means that both the key and the value may be enclosed in double-quotes.
+matches. This means that both the key and the value may be enclosed in double-quotes.
 
 For example, given `\s*,\s*` and `=`, the input
 
@@ -58,15 +56,15 @@ will parse as
 
 ### `field_split: str (optional)`
 
-The regular expression used to separate individual fields. 
+The regular expression used to separate individual fields.
 
-Defaults to `\s`.
+Defaults to `r"\s"`.
 
 ### `value_split: str (optional)`
 
-The regular expression used to separate a key from its value. 
+The regular expression used to separate a key from its value.
 
-Defaults to `=`
+Defaults to `"="`.
 
 ### `merge = bool (optional)`
 
@@ -157,7 +155,7 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 Extract comma-separated key-value pairs from `foo:1, bar:2,baz:3 , qux:4`:
 
 ```tql
-read_kv "\s*,\s*" ":"
+read_kv r"\s*,\s*", ":"
 ```
 
 Extract key-value pairs from strings such as `FOO: C:\foo BAR_BAZ: hello world`.
@@ -170,5 +168,5 @@ from its value with `":\s*"` (only the first match is used to split them). The
 final result is thus `{"FOO": "C:\foo", "BAR_BAZ": "hello world"}`.
 
 ```tql
-read_kv "(\s+)[A-Z][A-Z_]+:" ":\s*"
+read_kv r"(\s+)[A-Z][A-Z_]+:", r":\s*"
 ```
