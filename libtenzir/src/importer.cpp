@@ -12,7 +12,7 @@
 
 #include "tenzir/atoms.hpp"
 #include "tenzir/defaults.hpp"
-#include "tenzir/detail/fill_status_map.hpp"
+#include "tenzir/detail/actor_metrics.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
 #include "tenzir/logger.hpp"
 #include "tenzir/series_builder.hpp"
@@ -47,6 +47,12 @@ void importer_state::on_process(const table_slice& slice) {
   }
   unpersisted_events.push_back(std::move(slice));
   t.stop(rows);
+}
+
+void importer_state::handle_slice(table_slice&& slice) {
+  slice.import_time(time::clock::now());
+  on_process(slice);
+  self->send(index, std::move(slice));
 }
 
 importer_actor::behavior_type
@@ -87,7 +93,10 @@ importer(importer_actor::stateful_pointer<importer_state> self,
   }};
   detail::weak_run_delayed_loop(
     self, defaults::metrics_interval,
-    [self, builder = std::move(builder)]() mutable {
+    [self, builder = std::move(builder),
+     actor_metrics_builder = detail::make_actor_metrics_builder()]() mutable {
+      self->state.handle_slice(
+        detail::generate_actor_metrics(actor_metrics_builder, self));
       const auto now = time::clock::now();
       for (const auto& [schema, count] : self->state.schema_counters) {
         auto event = builder.record();
@@ -101,9 +110,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       if (slice.rows() == 0) {
         return;
       }
-      slice.import_time(now);
-      self->state.on_process(slice);
-      self->send(self->state.index, slice);
+      self->state.handle_slice(std::move(slice));
     });
   // Clean up unpersisted events every second.
   const auto active_partition_timeout
@@ -132,9 +139,7 @@ importer(importer_actor::stateful_pointer<importer_state> self,
       return rp;
     },
     [self](table_slice& slice) -> caf::result<void> {
-      slice.import_time(time::clock::now());
-      self->state.on_process(slice);
-      self->send(self->state.index, std::move(slice));
+      self->state.handle_slice(std::move(slice));
       return {};
     },
     [self](atom::subscribe, receiver_actor<table_slice>& subscriber,
