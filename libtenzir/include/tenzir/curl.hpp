@@ -254,7 +254,7 @@ public:
     tls_ssl_ptr = CURLINFO_TLS_SSL_PTR,
     http_version = CURLINFO_HTTP_VERSION,
     proxy_ssl_verifyresult = CURLINFO_PROXY_SSL_VERIFYRESULT,
-#if LIBCURL_VERSION_NUM < 0x078500
+#if LIBCURL_VERSION_NUM < 0x078500 && LIBCURL_VERSION_NUM >= 0x075200
     protocol = CURLINFO_PROTOCOL,
 #endif
     scheme = CURLINFO_SCHEME,
@@ -271,8 +271,10 @@ public:
     referer = CURLINFO_REFERER,
     cainfo = CURLINFO_CAINFO,
     capath = CURLINFO_CAPATH,
+#if LIBCURL_VERSION_NUM >= 0x082000
     xfer_id = CURLINFO_XFER_ID,
     conn_id = CURLINFO_CONN_ID,
+#endif
 #if LIBCURL_VERSION_NUM >= 0x086000
     queue_time_t = CURLINFO_QUEUE_TIME_T,
 #endif
@@ -378,7 +380,6 @@ X(easy::info::certinfo, struct curl_certinfo*);
 X(easy::info::condition_unmet, long);
 X(easy::info::connect_time, double);
 X(easy::info::connect_time_t, curl_off_t);
-X(easy::info::conn_id, curl_off_t);
 X(easy::info::content_length_download_t, curl_off_t);
 X(easy::info::content_length_upload_t, curl_off_t);
 X(easy::info::content_type, const char*);
@@ -422,7 +423,6 @@ X(easy::info::starttransfer_time_t, curl_off_t);
 X(easy::info::tls_ssl_ptr, curl_tlssessioninfo*);
 X(easy::info::total_time, double);
 X(easy::info::total_time_t, curl_off_t);
-X(easy::info::xfer_id, curl_off_t);
 #undef X
 
 template <easy::info what>
