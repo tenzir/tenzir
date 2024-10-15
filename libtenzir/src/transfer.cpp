@@ -220,23 +220,27 @@ auto transfer::download_chunks() -> generator<caf::expected<chunk_ptr>> {
   });
   while (true) {
     if (auto still_running = multi.run(options.poll_timeout)) {
-      // Check if the data is valid or whether it represents an error.
-      auto [code, info] = easy_.get(curl::easy::info::response_code);
-      if (code == curl::easy::code::ok) {
-        TENZIR_ASSERT(std::holds_alternative<long>(info));
-        // FTP, HTTP and SMTP, error codes in [200,299] are okay. Augment this
-        // check to support more protocols.
-        auto response_code = std::get<long>(info);
-        if (response_code < 200 or response_code > 299) {
-          co_yield caf::make_error(ec::invalid_result,
-                                   fmt::format("HTTP response code: {}",
-                                               response_code));
-          co_return;
-        }
-      }
-      // In the non-error case, we yield the payload we got.
       if (chunks.empty()) {
         co_yield chunk_ptr{};
+        if (*still_running == 0) {
+          break;
+        }
+        continue;
+      }
+      // Check if the data is valid or whether it represents an error.
+      // This may only be done after there is at least one chunk.
+      auto [code, response_code] = easy_.get<curl::easy::info::response_code>();
+      // The code should only be checked if we actually got one. Curl will
+      // return `unknown_option` if the scheme doesn't have a return code.
+      if (code == curl::easy::code::ok) {
+        // FTP, HTTP and SMTP, error codes in [200,299] are okay.
+        // Technically LDAP will also yield a response code, but we currently
+        // dont support LDAP.
+        if (response_code < 200 or response_code > 299) {
+          co_yield diagnostic::error("HTTP response code: {}", response_code)
+            .to_error();
+          co_return;
+        }
       }
       for (auto&& chunk : chunks) {
         co_yield chunk;

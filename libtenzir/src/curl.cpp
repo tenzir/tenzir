@@ -60,31 +60,6 @@ easy::easy() : easy_{curl_easy_init()} {
   TENZIR_ASSERT(easy_ != nullptr);
 }
 
-auto easy::get(info i) -> std::pair<code, info_data> {
-  // TODO: port missing info enums as you see fit. Do this, for example, with a
-  // `man CURLINFO_X` and check the result type and then adding the missing
-  // case.
-  auto curl_info = static_cast<CURLINFO>(i);
-  switch (i) {
-    default: {
-      // We use curl_last as signal that we haven't implemented a specific info
-      // enum.
-      return {code::curl_last, info_data{}};
-    }
-    case info::effective_url: {
-      char* url = nullptr;
-      auto c = curl_easy_getinfo(easy_.get(), curl_info, &url);
-      return {static_cast<code>(c), std::string_view{url}};
-    }
-    case info::response_code: {
-      long* response_code = nullptr;
-      auto c = curl_easy_getinfo(easy_.get(), curl_info, &response_code);
-      return {static_cast<code>(c), *response_code};
-    }
-  }
-  __builtin_unreachable();
-}
-
 auto easy::unset(CURLoption option) -> code {
   auto curl_code = curl_easy_setopt(easy_.get(), option, nullptr);
   return static_cast<code>(curl_code);
