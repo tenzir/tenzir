@@ -17,6 +17,7 @@
 #include <tenzir/logger.hpp>
 #include <tenzir/plugin.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/session.hpp>
 #include <tenzir/type.hpp>
 #include <tenzir/uuid.hpp>
 #include <tenzir/view.hpp>
@@ -74,6 +75,7 @@ auto cast_128_bit_unsigned_to_64_bit(uint8_t uint128[16]) -> uint64_t {
   std::memcpy(&low, uint128, 8);
   std::memcpy(&high, uint128 + 8, 8);
   if (high != 0) {
+    // FIXME: replace all warnings with diagnostics.
     TENZIR_WARN("casting MDDB 128-bit to 64-bit unsigned will be lossy for "
                 "value [{},{}]",
                 high, low);
@@ -127,7 +129,6 @@ public:
           auto sub_record_key
             = std::string{entry_data_list->entry_data.utf8_string,
                           entry_data_list->entry_data.data_size};
-
           entry_data_list = entry_data_list->next;
           entry_data_list = entry_data_list_to_record(entry_data_list, status,
                                                       sub_r, sub_record_key);
@@ -312,23 +313,23 @@ public:
   }
 
   /// Emits context information for every event in `slice` in order.
-  auto apply(series array, bool replace)
-    -> caf::expected<std::vector<series>> override {
+  auto apply(series array, bool replace, session ctx)
+    -> failure_or<std::vector<series>> override {
     if (!mmdb_) {
-      return caf::make_error(ec::lookup_error,
-                             fmt::format("no GeoIP data currently exists for "
-                                         "this context"));
+      diagnostic::error("context has no valid GeoIP database attached")
+        .emit(ctx);
+      return failure::promise();
     }
     auto status = 0;
     MMDB_entry_data_list_s* entry_data_list = nullptr;
     auto builder = series_builder{};
     if (not caf::holds_alternative<ip_type>(array.type)
         and not caf::holds_alternative<string_type>(array.type)) {
-      return caf::make_error(ec::lookup_error,
-                             fmt::format("error looking up IP address in "
-                                         "GeoIP database: invalid column "
-                                         "type, only IP or string types are "
-                                         "allowed"));
+      diagnostic::error("expected type `{}` or `{}`, but got `{}`",
+                        type{ip_type{}}.kind(), type{string_type{}}.kind(),
+                        array.type.kind())
+        .emit(ctx);
+      return failure::promise();
     }
     const auto is_ip = caf::holds_alternative<ip_type>(array.type);
     for (const auto& value : array.values()) {
@@ -343,17 +344,16 @@ public:
       auto result = MMDB_lookup_string(mmdb_.get(), ip_string.data(),
                                        &address_info_error, &status);
       if (address_info_error != MMDB_SUCCESS) {
-        return caf::make_error(
-          ec::lookup_error,
-          fmt::format("error looking up IP address '{}' in "
-                      "GeoIP database: {}",
-                      ip_string, gai_strerror(address_info_error)));
+        diagnostic::error("{}", gai_strerror(address_info_error))
+          .note("failed to look up `{}` in GeoIP database", ip_string)
+          .emit(ctx);
+        return failure::promise();
       }
       if (status != MMDB_SUCCESS) {
-        return caf::make_error(
-          ec::lookup_error, fmt::format("error looking up IP address '{}' in "
-                                        "GeoIP database: {}",
-                                        ip_string, MMDB_strerror(status)));
+        diagnostic::error("{}", MMDB_strerror(status))
+          .note("failed to look up `{}` in GeoIP database", ip_string)
+          .emit(ctx);
+        return failure::promise();
       }
       if (not result.found_entry) {
         if (replace and not caf::holds_alternative<caf::none_t>(value)) {
@@ -370,20 +370,20 @@ public:
         }
       });
       if (status != MMDB_SUCCESS) {
-        return caf::make_error(
-          ec::lookup_error, fmt::format("error looking up IP address '{}' in "
-                                        "GeoIP database: {}",
-                                        ip_string, MMDB_strerror(status)));
+        diagnostic::error("{}", MMDB_strerror(status))
+          .note("failed to look up `{}` in GeoIP database", ip_string)
+          .emit(ctx);
+        return failure::promise();
       }
       auto* entry_data_list_it = entry_data_list;
       auto output = record{};
       entry_data_list_it
         = entry_data_list_to_record(entry_data_list_it, &status, output);
       if (status != MMDB_SUCCESS) {
-        return caf::make_error(
-          ec::lookup_error, fmt::format("error looking up IP address '{}' in "
-                                        "GeoIP database: {}",
-                                        ip_string, MMDB_strerror(status)));
+        diagnostic::error("{}", MMDB_strerror(status))
+          .note("failed to look up `{}` in GeoIP database", ip_string)
+          .emit(ctx);
+        return failure::promise();
       }
       builder.data(output);
     }

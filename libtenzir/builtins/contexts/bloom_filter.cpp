@@ -21,6 +21,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/series.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/session.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/type.hpp>
@@ -54,15 +55,15 @@ public:
   }
 
   /// Emits context information for every event in `slice` in order.
-  auto apply(series array, bool replace)
-    -> caf::expected<std::vector<series>> override {
-    (void)replace;
+  auto apply(series array, bool replace, session ctx)
+    -> failure_or<std::vector<series>> override {
+    TENZIR_UNUSED(ctx);
     auto builder = series_builder{};
     for (const auto& value : array.values()) {
       if (bloom_filter_.lookup(value)) {
         builder.data(true);
       } else {
-        builder.null();
+        replace ? builder.data(value) : builder.null();
       }
     }
     return builder.finish();

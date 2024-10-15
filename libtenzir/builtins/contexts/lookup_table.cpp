@@ -23,6 +23,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/series.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/session.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/type.hpp>
@@ -266,8 +267,9 @@ public:
     return caf::visit(match, value);
   };
 
-  auto apply(series array, bool replace)
-    -> caf::expected<std::vector<series>> override {
+  auto apply(series array, bool replace, session ctx)
+    -> failure_or<std::vector<series>> override {
+    TENZIR_UNUSED(ctx);
     auto builder = series_builder{};
     const auto now = time::clock::now();
     for (auto value : array.values()) {
