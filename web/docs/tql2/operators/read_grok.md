@@ -65,11 +65,16 @@ This option can not be combined with `raw=true, schema=<schema>`.
 
 ### `raw = bool (optional)`
 
-By default, `grok` attempts to do type inference to the parsed fields.
-This behavior can be accessed explicitly by setting the `CONVERSION` option
-in a replacement field to `infer`.
+Use only the raw types that are native to the parsed format. Fields that have a type
+specified in the chosen schema will still be parsed according to the schema.
 
-To disable type inference, use `--raw`.
+For example, the JSON format has no notion of an IP address, so this will cause all IP addresses
+to be parsed as strings, unless the field is specified to be an IP address by the schema.
+JSON however has numeric types, so those would be parsed.
+
+Use with caution.
+
+This option can not be combined with `merge=true, schema=<schema>`.
 
 ### `schema = str (optional)`
 
@@ -137,7 +142,17 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 Parse a fictional HTTP request log:
 
 ```tql
-# Example input:
-# 55.3.244.1 GET /index.html 15824 0.043
+// Example input:
+// 55.3.244.1 GET /index.html 15824 0.043
 read_grok "%{IP:client} %{WORD:method} %{URIPATHPARAM:request} %{NUMBER:bytes} %{NUMBER:duration}"
+```
+
+```json title="Output"
+{
+  "client": "55.3.244.1",
+  "method": "GET",
+  "request": "/index.html",
+  "bytes": 15824,
+  "duration": 0.043
+}
 ```
