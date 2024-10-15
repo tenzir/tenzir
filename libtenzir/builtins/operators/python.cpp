@@ -468,21 +468,41 @@ public:
 
   auto initialize(const record& plugin_config, const record& global_config)
     -> caf::error override {
+    auto is_node = try_get_or<bool>(global_config, "tenzir.is-node", false);
+    if (!is_node) {
+      return is_node.error();
+    }
     auto create_virtualenv
       = try_get_or<bool>(plugin_config, "create-venvs", true);
     if (!create_virtualenv) {
       return create_virtualenv.error();
     }
+    auto venvs_subdir = is_node ? "venvs" : "client-venvs";
     if (!(*create_virtualenv)) {
       config.venv_base_dir = std::nullopt;
     } else if (const auto* cache_dir = get_if<std::string>(
                  &global_config, "tenzir.cache-directory")) {
       config.venv_base_dir
-        = (std::filesystem::path{*cache_dir} / "python" / "venvs").string();
+        = (std::filesystem::path{*cache_dir} / "python" / venvs_subdir).string();
     } else {
       config.venv_base_dir = (std::filesystem::temp_directory_path() / "tenzir"
-                              / "python" / "venvs")
+                              / "python" / venvs_subdir)
                                .string();
+    }
+    // Cleanup leftover state from older unclean node shutdowns. We know that
+    // `initialize()` is only called once during node startup, so we can remove
+    // the whole directory here without interfering with running pipelines.
+    if (config.venv_base_dir) {
+      auto& dir = *config.venv_base_dir;
+      auto ec = std::error_code{};
+      if (is_node && std::filesystem::exists(dir, ec)) {
+        TENZIR_VERBOSE("python operator removes old state in {}", dir);
+        std::filesystem::remove_all(dir, ec);
+        if (ec) {
+          TENZIR_WARN("python operator failed to clean up old state in {}",
+                      dir);
+        }
+      }
     }
     auto implicit_requirements_default = std::string{
       detail::install_datadir() / "python"
