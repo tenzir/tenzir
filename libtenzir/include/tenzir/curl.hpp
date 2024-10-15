@@ -361,7 +361,7 @@ private:
 
 template <easy::info what>
 struct easy::info_type {
-  static_assert(false,
+  static_assert(what == easy::info::lastone and false,
                 "The trait is not specialized for the requested enum "
                 "value. To make `easy::get` work for this property, you can "
                 "specialize the type trait right below this assertion.");
