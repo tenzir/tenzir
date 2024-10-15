@@ -190,20 +190,6 @@ auto transfer::perform() -> caf::error {
   return {};
 }
 
-auto transfer::download() -> caf::expected<chunk_ptr> {
-  std::vector<std::byte> body;
-  auto on_write = [&body](std::span<const std::byte> buffer) {
-    body.insert(body.end(), buffer.begin(), buffer.end());
-  };
-  auto code = easy_.set(on_write);
-  TENZIR_ASSERT(code == curl::easy::code::ok);
-  code = easy_.perform();
-  if (code != curl::easy::code::ok) {
-    return to_error(code);
-  }
-  return chunk::make(std::move(body));
-}
-
 auto transfer::download_chunks() -> generator<caf::expected<chunk_ptr>> {
   std::vector<chunk_ptr> chunks;
   auto on_write = [&chunks](std::span<const std::byte> buffer) {
@@ -326,15 +312,6 @@ auto transfer::reset() -> caf::error {
 
 auto transfer::handle() -> curl::easy& {
   return easy_;
-}
-
-auto download(http::request req, transfer_options opts)
-  -> caf::expected<chunk_ptr> {
-  auto tx = transfer{std::move(opts)};
-  if (auto err = tx.prepare(std::move(req))) {
-    return err;
-  }
-  return tx.download();
 }
 
 } // namespace tenzir
