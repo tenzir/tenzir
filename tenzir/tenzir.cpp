@@ -93,6 +93,7 @@ auto main(int argc, char** argv) -> int {
                           ? app_path
                           : app_path.substr(last_slash + 1);
   bool is_server = (app_name == "tenzir-node");
+  cfg.content["tenzir.is-node"] = is_server;
   // Create log context as soon as we know the correct configuration.
   auto log_context = create_log_context(is_server, *invocation, cfg.content);
   if (!log_context) {
