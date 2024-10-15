@@ -57,6 +57,9 @@ struct importer_state {
 
   void on_process(const table_slice& slice);
 
+  /// Process a slice and forward it to the index.
+  void handle_slice(table_slice&& slice);
+
   /// The active id block.
   id_block current;
 
