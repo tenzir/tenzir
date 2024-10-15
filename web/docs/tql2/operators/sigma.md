@@ -112,18 +112,25 @@ Apply a Sigma rule to an EVTX file using
 [`evtx_dump`](https://github.com/omerbenamram/evtx):
 
 ```bash
-evtx_dump -o jsonl file.evtx | tenzir 'read_json | sigma "rule.yaml"'
+evtx_dump -o jsonl file.evtx | tenzir --tql2 'read_json | sigma "rule.yaml"'
 ```
 
 Apply a Sigma rule over historical data in a node from the last day:
 
 ```tql
-export | where :timestamp > 1 day ago | sigma "rule.yaml"
+export
+where ts > now() - 1 day
+sigma "rule.yaml"
 ```
 
 Watch a directory of Sigma rules and apply all of them on a continuous stream of
 Suricata events:
 
+```tql
+load_file --follow eve.json 
+read_suricata 
+sigma "/tmp/rules/"
 ```
-from file --follow eve.json read suricata | sigma "/tmp/rules/"
-```
+
+When you add a new file to `/tmp/rules`, the `sigma` operator transpiles it and
+will match it on all subsequent inputs.
