@@ -8,8 +8,8 @@ Tenzir comes with a wide range of built-in operators.
 
 Operator | Description | Example
 ---------|-------------|--------
-[`select`](./operators/select.md) | Selects some values and discards the rest | `select name, id=metadata.id`
-[`drop`](./operators/drop.md) | Removes columns from the event | `drop name, metadata.id`
+[`select`](./operators/select.md) | Select some values and discard the rest | `select name, id=metadata.id`
+[`drop`](./operators/drop.md) | Remove columns from the event | `drop name, metadata.id`
 [`enumerate`](./operators/enumerate.md) | Add a field with the number of the event | `enumerate num`
 
 <!--
@@ -23,7 +23,7 @@ TODO: Do we want to document set, and if so, how?
 
 Operator | Description | Example
 ---------|-------------|--------
-[`where`](./operators/where.md) | Keeps only events matching a predicate | `where name.starts_with("John")`
+[`where`](./operators/where.md) | Keep only events matching a predicate | `where name.starts_with("John")`
 [`assert`](./operators/assert.md) | Same as `where`, but warns if predicate is `false` | `assert name.starts_with("John")`
 [`taste`](./operators/taste.md) | Keep only N events of each type | `taste 1`
 [`head`](./operators/head.md) | Keep only the first N events | `head 20`
@@ -82,6 +82,7 @@ Operator | Description | Example
 [`read_cef`](./operators/read_cef.md) | |
 [`read_csv`](./operators/read_csv.md) | |
 [`read_gelf`](./operators/read_gelf.md) | |
+[`read_grok`](./operators/read_grok.md) | |
 [`read_json`](./operators/read_json.md) | |
 [`read_kv`](./operators/read_kv.md) | |
 [`read_leef`](./operators/read_leef.md) | |
@@ -119,11 +120,11 @@ Operator | Description | Example
 Operator | Description | Example
 ---------|-------------|--------
 [`diagnostics`](./operators/diagnostics.md) | |
-[`export`](./operators/export.md) | |
-[`import`](./operators/import.md) | |
+[`export`](./operators/export.md) | Retrieve events from the node | `export`
+[`import`](./operators/import.md) | Store events at the node | `import`
 [`metrics`](./operators/metrics.md) | |
-[`publish`](./operators/publish.md) | |
-[`subscribe`](./operators/subscribe.md) | |
+[`publish`](./operators/publish.md) | Publish events to a channel with a topic | `publish "topic"`
+[`subscribe`](./operators/subscribe.md) | Subscribe to a channel with a topic | `subscribe "topic"`
 
 <!--
 ## Packages
@@ -191,22 +192,22 @@ Operator | Description | Example
 
 Operator | Description | Example
 ---------|-------------|--------
-[`config`](./operators/config.md) | |
-[`fields`](./operators/fields.md) | |
-[`openapi`](./operators/openapi.md) | |
-[`partitions`](./operators/partitions.md) | |
-[`plugins`](./operators/plugins.md) | |
-[`schemas`](./operators/schemas.md) | |
-[`version`](./operators/version.md) | |
+[`config`](./operators/config.md) | Node's configuration | `config`
+[`fields`](./operators/fields.md) | List all fields stored at the node | `fields`
+[`openapi`](./operators/openapi.md) | Node's OpenAPI specification | `openapi`
+[`partitions`](./operators/partitions.md) | Retrieve metadata about events stored at the node | `partitions src_ip == 1.2.3.4`
+[`plugins`](./operators/plugins.md) | List available plugins | `plugins`
+[`schemas`](./operators/schemas.md) | List schemas for events stored at the node | `schemas`
+[`version`](./operators/version.md) | Version Info | `version`
 
 ## Host System
 
 Operator | Description | Example
 ---------|-------------|--------
-[`files`](./operators/files.md) | |
-[`nics`](./operators/nics.md) | |
-[`processes`](./operators/processes.md) | |
-[`sockets`](./operators/sockets.md) | |
+[`files`](./operators/files.md) | List files in a directory | `files "/var/log/" recurse=true`
+[`nics`](./operators/nics.md) | List available network interfaces | `nics`
+[`processes`](./operators/processes.md) | List running processes | `processes`
+[`sockets`](./operators/sockets.md) | List open sockets | `sockets`
 
 ## UNCATEGORIZED
 Operator | Description | Example
