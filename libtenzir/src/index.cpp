@@ -23,6 +23,7 @@
 #include "tenzir/concept/printable/to_string.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/defaults.hpp"
+#include "tenzir/detail/actor_metrics.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/fanout_counter.hpp"
 #include "tenzir/detail/fill_status_map.hpp"
@@ -1135,6 +1136,16 @@ index(index_actor::stateful_pointer<index_state> self,
     }
     self->state.monitored_queries.erase(it);
   });
+  detail::weak_run_delayed_loop(
+    self, defaults::metrics_interval,
+    [self, actor_metrics_builder
+           = detail::make_actor_metrics_builder()]() mutable {
+      const auto importer
+        = self->system().registry().get<importer_actor>("tenzir.importer");
+      self->send(importer,
+                 detail::generate_actor_metrics(actor_metrics_builder, self));
+    });
+  // Clean up unpersisted events every second.
   return {
     [self](atom::done, uuid partition_id) {
       TENZIR_DEBUG("{} queried partition {} successfully", *self, partition_id);
