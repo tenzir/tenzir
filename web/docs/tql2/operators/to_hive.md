@@ -8,9 +8,12 @@ to_hive uri:str, partition_by=list<field>, format=str, [timeout=duration, max_si
 
 ## Description
 
-Hive partitioning is a partitioning scheme where the values of a set of fields is used to partition events.
-
-[Hive Partitions](https://duckdb.org/docs/data/partitioning/hive_partitioning.html)
+Hive partitioning is a partitioning scheme where a set of fields is used to
+partition events. For each combination of these fields, a directory is derived
+under which all events with the same field values will be stored. For example,
+if the events are partitioned by the fields `year` and `month`, then the files
+in the directory `/year=2024/month=10` will contain all events where
+`year == 2024` and `month == 10`.
 
 ### `uri: str`
 
