@@ -86,6 +86,7 @@ JSON however has numeric types, so those would be parsed.
 Use with caution.
 
 ### `schema = str (optional)`
+
 Provide the name of a [schema](../../data-model/schemas.md) to be used by the
 parser. If the schema uses the `blob` type, then the Syslog parser expects
 base64-encoded strings.
@@ -93,6 +94,7 @@ base64-encoded strings.
 The `schema` option is incompatible with the `selector` option.
 
 ### `selector = str (optional)`
+
 Designates a field value as schema name with an optional dot-separated prefix.
 
 For example, the Suricata EVE JSON format includes a field
@@ -103,6 +105,7 @@ For example, the Suricata EVE JSON format includes a field
 The `selector` option is incompatible with the `schema` option.
 
 ### `schema_only = bool (optional)`
+
 When working with an existing schema, this option will ensure that the output
 schema has *only* the fields from that schema. If the schema name is obtained via a `selector`
 and it does not exist, this has no effect.

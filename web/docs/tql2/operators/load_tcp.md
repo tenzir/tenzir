@@ -8,8 +8,6 @@ load_tcp endpoint:str, [connect=bool, parallel=uint, tls=bool, certfile=str, key
 
 ## Description
 
-
-
 Loads the contents of the `endpoint` as a byte stream and evaluates a pipeline
 for each TCP connection, if given.
 

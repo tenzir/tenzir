@@ -20,6 +20,7 @@ JSON however has numeric types, so those would be parsed.
 Use with caution.
 
 ### `schema_only = bool (optional)`
+
 XXX: this needs to be fixed
 
 When working with an existing schema, this option will ensure that the output
