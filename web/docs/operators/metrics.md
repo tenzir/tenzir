@@ -316,6 +316,17 @@ TCP connection.
 | `bytes_read`    | `uint64` | The number of bytes received since the last metrics.          |
 | `bytes_written` | `uint64` | The number of bytes written since the last metrics.           |
 
+### `tenzir.metrics.actors`
+
+Contains measurements about specific actors.
+
+| Field           | Type     | Description                                                            |
+| :-------------- | :------- | :--------------------------------------------------------------------- |
+| `timestamp`     | `time`   | The time at which this metric was recorded.                            |
+| `actor_id`      | `string` | The internal actor id.                                                 |
+| `actor_name`    | `string` | The name of the actor.                                                 |
+| `num_messages`  | `uint64` | The number of messages in the actor's inbox when the metric was taken. |
+
 ## Examples
 
 Show the CPU usage over the last hour:
@@ -570,6 +581,40 @@ metrics tcp
   "writes": 0,
   "bytes_read": 5148,
   "bytes_written": 0
+}
+```
+
+</details>
+
+Get actor internals:
+
+```c
+metrics actor
+| where timestamp > 1 hour ago
+| sort timestamp
+```
+
+<details>
+<summary>Output</summary>
+
+```json
+{
+  "timestamp": "2024-10-15T12:44:33.234964",
+  "id": "13",
+  "name": "importer",
+  "inbox_size": 1
+}
+{
+  "timestamp": "2024-10-15T12:44:33.234980",
+  "id": "8",
+  "name": "node",
+  "inbox_size": 0
+}
+{
+  "timestamp": "2024-10-15T12:44:33.783078",
+  "id": "12",
+  "name": "index",
+  "inbox_size": 0
 }
 ```
 
