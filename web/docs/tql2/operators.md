@@ -38,9 +38,9 @@ Operator | Description | Example
 
 Operator | Description | Example
 ---------|-------------|--------
-[`summarize`](./operators/summarize.md) | Aggregates events with implicit grouping | `summarize name, sum(transaction)`
-[`sort`](./operators/sort.md) | Sorts the events by one or more expressions | `sort name, -abs(transaction)`
-[`reverse`](./operators/reverse.md) | Reverses the event order | `reverse`
+[`summarize`](./operators/summarize.md) | Aggregate events with implicit grouping | `summarize name, sum(transaction)`
+[`sort`](./operators/sort.md) | Sort the events by one or more expressions | `sort name, -abs(transaction)`
+[`reverse`](./operators/reverse.md) | Reverse the event order | `reverse`
 
 <!--
 [`top`](./operators/top.md) | ... | `...`
@@ -51,9 +51,9 @@ Operator | Description | Example
 
 Operator | Description | Example
 ---------|-------------|--------
-[`every`](./operators/every.md) | Restarts a pipeline periodically | `every 10s { summarize sum(transaction) }`
-[`fork`](./operators/fork.md) | Forwards a copy of the events to another pipeline | `fork { to "copy.json" }`
-[`if`](language/statements.md#if) | Splits the flow based on a predicate | `if transaction > 0 { ... } else { ... }`
+[`every`](./operators/every.md) | Restart a pipeline periodically | `every 10s { summarize sum(transaction) }`
+[`fork`](./operators/fork.md) | Forward a copy of the events to another pipeline | `fork { to "copy.json" }`
+[`if`](language/statements.md#if) | Split the flow based on a predicate | `if transaction > 0 { ... } else { ... }`
 
 <!--
 [`group`]() | Starts a new pipeline for each group | `group path { to $path }`
@@ -68,7 +68,7 @@ Operator | Description | Example
 [`load`](./operators/load.md) | Load bytes according to a URL | `load "https://example.org/api/list"`
 [`load_file`](./operators/load_file.md) | Load bytes from a file | `load_file "/tmp/data.json"`
 [`load_http`](./operators/load_http.md) | Receive bytes from a HTTP request | `load_http "example.org", params={n: 5}` |
-[`load_tcp`](./operators/load_tcp.md) | Loads bytes from a TCP or TLS connection | `load_tcp "0.0.0.0:8090" { read_json }`
+[`load_tcp`](./operators/load_tcp.md) | Load bytes from a TCP or TLS connection | `load_tcp "0.0.0.0:8090" { read_json }`
 
 <!--
 [`from`](./operators/from.md) | | `from "/tmp/data.json"`
