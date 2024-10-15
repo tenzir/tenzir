@@ -4,7 +4,7 @@ Make events available under the [`/serve` REST API
 endpoint](/api#/paths/~1serve/post).
 
 ```tql
-serve id:str [buffer_size=uint]
+serve id:str, [buffer_size=uint]
 ```
 
 ## Description
@@ -60,9 +60,9 @@ Wait for an initial event:
 This pipeline will produce 10 events after 3 seconds of doing nothing.
 
 ```tql
-shell "sleep 3; jq --null-input '{foo: 1}'" 
-read_json 
-repeat 10 
+shell "sleep 3; jq --null-input '{foo: 1}'"
+read_json
+repeat 10
 serve "slow-events"
 ```
 

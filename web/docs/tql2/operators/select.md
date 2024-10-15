@@ -1,6 +1,6 @@
 # select
 
-An in-memory buffer to improve handling of data spikes in upstream operators.
+Selects some values and discards the rest.
 
 ```tql
 select (field|assignment)...

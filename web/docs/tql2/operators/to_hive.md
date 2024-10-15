@@ -3,26 +3,26 @@
 Writes [Hive Partitions](https://duckdb.org/docs/data/partitioning/hive_partitioning.html) to a URI.
 
 ```tql
-to_hive uri:str, [partition_by=expr, format=str, timeout=duration, max_size=uint]
+to_hive uri:str, [partition_by=list<field>, format=str, timeout=duration, max_size=uint]
 ```
 
 ## Description
 
 
-### `uri:str`
+### `uri: str`
 
 The uri to write partitions to.
 
-### `partition_by=expr`
+### `partition_by = list<field> (optional)`
 
 
-### `format=str`
+### `format = str (optional)`
 
 
-### `timeout=duration`
+### `timeout = duration (optional)`
 
 
-### `max_size=uint`
+### `max_size = uint (optional)`
 
 
 ## Examples
