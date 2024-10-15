@@ -125,7 +125,7 @@ public:
                     || std::is_same_v<T, double>) {
         return to_original_data_impl<T>();
       } else {
-        return x;
+        return std::forward<T>(x);
       }
     };
     return caf::visit(visitor, data_);
@@ -486,8 +486,9 @@ public:
       ++context_it;
     }
     TENZIR_ASSERT(context_it == context_values.end());
-    auto query_f = [key_values_list = std::move(key_values_list)](
-                     parameter_map, const std::vector<std::string>& fields)
+    auto query_f
+      = [key_values_list = std::move(key_values_list)](
+          const parameter_map&, const std::vector<std::string>& fields)
       -> caf::expected<std::vector<expression>> {
       auto result = std::vector<expression>{};
       result.reserve(fields.size());
@@ -505,34 +506,6 @@ public:
     return update_result{
       .update_info = show(),
       .make_query = std::move(query_f),
-    };
-  }
-
-  auto make_query() -> make_query_type override {
-    auto key_values_list = list{};
-    key_values_list.reserve(context_entries.size());
-    const auto now = time::clock::now();
-    for (const auto& entry : context_entries) {
-      if (entry.second.is_expired(now)) {
-        continue;
-      }
-      entry.first.populate_snapshot_data(key_values_list);
-    }
-    return [key_values_list = std::move(key_values_list)](
-             parameter_map, const std::vector<std::string>& fields)
-             -> caf::expected<std::vector<expression>> {
-      auto result = std::vector<expression>{};
-      result.reserve(fields.size());
-      for (const auto& field : fields) {
-        auto lhs = to<operand>(field);
-        TENZIR_ASSERT(lhs);
-        result.emplace_back(predicate{
-          *lhs,
-          relational_operator::in,
-          data{key_values_list},
-        });
-      }
-      return result;
     };
   }
 

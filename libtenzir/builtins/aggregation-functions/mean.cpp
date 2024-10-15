@@ -130,7 +130,7 @@ public:
     caf::visit(f, *arg.array);
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     switch (state_) {
       case state::none:
       case state::failed:

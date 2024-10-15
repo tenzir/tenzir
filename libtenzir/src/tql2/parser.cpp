@@ -745,8 +745,8 @@ public:
     }
   }
 
-  auto parse_function_call(std::optional<ast::expression> subject,
-                           entity fn) -> function_call {
+  auto parse_function_call(std::optional<ast::expression> subject, entity fn)
+    -> function_call {
     expect(tk::lpar);
     auto scope = ignore_newlines(true);
     auto args = std::vector<ast::expression>{};

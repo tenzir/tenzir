@@ -160,7 +160,7 @@ public:
     caf::visit(f, *arg.array);
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     if (count_ == 0) {
       return data{};
     }

@@ -74,7 +74,7 @@ public:
     }
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     return result_;
   }
 

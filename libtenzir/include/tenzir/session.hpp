@@ -18,7 +18,8 @@ public:
     return session_provider{dh};
   }
 
-  auto as_session() -> session;
+  auto as_session() & -> session;
+  auto as_session() && -> session = delete;
 
 private:
   friend class session;
@@ -73,7 +74,7 @@ private:
   session_provider& provider_;
 };
 
-inline auto session_provider::as_session() -> session {
+inline auto session_provider::as_session() & -> session {
   return session{*this};
 }
 
