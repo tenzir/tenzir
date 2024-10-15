@@ -1,4 +1,4 @@
-# zeek-tsv
+# read_zeek_tsv
 
 Parse an incoming `Zeek TSV` stream into events.
 
