@@ -19,6 +19,7 @@
 #include "tenzir/concept/parseable/to.hpp"
 #include "tenzir/data.hpp"
 #include "tenzir/defaults.hpp"
+#include "tenzir/detail/actor_metrics.hpp"
 #include "tenzir/detail/assert.hpp"
 #include "tenzir/detail/settings.hpp"
 #include "tenzir/detail/weak_run_delayed.hpp"
@@ -469,18 +470,23 @@ auto node(node_actor::stateful_pointer<node_state> self, std::string /*name*/,
         });
   });
   spawn_components(self);
-  // Emit metrics about called APIs once per second.
-  detail::weak_run_delayed_loop(self, defaults::metrics_interval, [self] {
-    const auto importer
-      = self->system().registry().get<importer_actor>("tenzir.importer");
-    TENZIR_ASSERT(importer);
-    for (auto& [_, builder] : self->state.api_metrics_builders) {
-      if (builder.length() == 0) {
-        continue;
+  // Emit metrics once per second.
+  detail::weak_run_delayed_loop(
+    self, defaults::metrics_interval,
+    [self, actor_metrics_builder
+           = detail::make_actor_metrics_builder()]() mutable {
+      const auto importer
+        = self->system().registry().get<importer_actor>("tenzir.importer");
+      self->send(importer,
+                 detail::generate_actor_metrics(actor_metrics_builder, self));
+      TENZIR_ASSERT(importer);
+      for (auto& [_, builder] : self->state.api_metrics_builders) {
+        if (builder.length() == 0) {
+          continue;
+        }
+        self->send(importer, builder.finish_assert_one_slice());
       }
-      self->send(importer, builder.finish_assert_one_slice());
-    }
-  });
+    });
   return {
     [self](atom::proxy, http_request_description& desc,
            std::string& request_id) -> caf::result<rest_response> {
