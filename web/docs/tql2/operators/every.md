@@ -1,5 +1,7 @@
 # every
 
+Runs a pipeline every time an `interval` elapses.
+
 ```tql
 every interval:duration { … }
 ```

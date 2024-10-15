@@ -15,7 +15,8 @@ its input. If a rule matches, the operator emits a `tenzir.sigma` event that
 wraps the input record into a new record along with the matching rule. The
 operator discards all events that do not match the provided rules.
 
-XXX: Is this necessary to mention?
+<details>
+<summary> Transpilation Process </summary>
 
 For each rule, the operator transpiles the YAML into an
 [expression](../language/expressions.md) and instantiates a
@@ -46,7 +47,7 @@ We translate this rule piece by building a symbol table of all keys (`foo` and
 
 Finally, we combine the expression according to `condition`:
 
-```c
+```tql
 (a == 42 && b == "evil") || ! (c == 1.2.3.4)
 ```
 
@@ -57,6 +58,8 @@ taxonomy](https://github.com/SigmaHQ/sigma-specification/blob/main/Taxonomy_spec
 to standardize field names. The `sigma` operator currently does not normalize
 fields according to this taxonomy but rather takes the field names verbatim from
 the search identifier.
+
+</details>
 
 Sigma uses [value
 modifiers](https://github.com/SigmaHQ/sigma-specification/blob/main/Sigma_specification.md#value-modifiers)
