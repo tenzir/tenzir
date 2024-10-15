@@ -220,6 +220,21 @@ auto transfer::download_chunks() -> generator<caf::expected<chunk_ptr>> {
   });
   while (true) {
     if (auto still_running = multi.run(options.poll_timeout)) {
+      // Check if the data is valid or whether it represents an error.
+      auto [code, info] = easy_.get(curl::easy::info::response_code);
+      if (code == curl::easy::code::ok) {
+        TENZIR_ASSERT(std::holds_alternative<long>(info));
+        // FTP, HTTP and SMTP, error codes in [200,299] are okay. Augment this
+        // check to support more protocols.
+        auto response_code = std::get<long>(info);
+        if (response_code < 200 or response_code > 299) {
+          co_yield caf::make_error(ec::invalid_result,
+                                   fmt::format("HTTP response code: {}",
+                                               response_code));
+          co_return;
+        }
+      }
+      // In the non-error case, we yield the payload we got.
       if (chunks.empty()) {
         co_yield chunk_ptr{};
       }

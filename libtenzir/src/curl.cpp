@@ -60,6 +60,31 @@ easy::easy() : easy_{curl_easy_init()} {
   TENZIR_ASSERT(easy_ != nullptr);
 }
 
+auto easy::get(info i) -> std::pair<code, info_data> {
+  // TODO: port missing info enums as you see fit. Do this, for example, with a
+  // `man CURLINFO_X` and check the result type and then adding the missing
+  // case.
+  auto curl_info = static_cast<CURLINFO>(i);
+  switch (i) {
+    default: {
+      // We use curl_last as signal that we haven't implemented a specific info
+      // enum.
+      return {code::curl_last, info_data{}};
+    }
+    case info::effective_url: {
+      char* url = nullptr;
+      auto c = curl_easy_getinfo(easy_.get(), curl_info, &url);
+      return {static_cast<code>(c), std::string_view{url}};
+    }
+    case info::response_code: {
+      long* response_code = nullptr;
+      auto c = curl_easy_getinfo(easy_.get(), curl_info, &response_code);
+      return {static_cast<code>(c), *response_code};
+    }
+  }
+  __builtin_unreachable();
+}
+
 auto easy::unset(CURLoption option) -> code {
   auto curl_code = curl_easy_setopt(easy_.get(), option, nullptr);
   return static_cast<code>(curl_code);
@@ -226,36 +251,6 @@ auto multi::run(std::chrono::milliseconds timeout) -> caf::expected<size_t> {
   if (result != code::ok) {
     return to_error(result);
   }
-  auto queued = int{};
-  auto* msg = curl_multi_info_read(multi_.get(), &queued);
-  if (msg) {
-    auto response_code = int64_t{0};
-    // The return code can only be queried like this for ftp, http, ldap and smtp
-    if (curl_easy_getinfo(msg->easy_handle, CURLINFO_RESPONSE_CODE,
-                          &response_code)
-        != CURLE_OK) {
-      goto done;
-    }
-    // Get the URL to check whether its LDAP. LDAP return codes are different
-    // from the other possible cases.
-    const char* curl_url_ptr = nullptr;
-    if (curl_easy_getinfo(msg->easy_handle, CURLINFO_EFFECTIVE_URL,
-                          &curl_url_ptr)
-        != CURLE_OK) {
-      goto done;
-    }
-    const auto curl_url = std::string_view{curl_url_ptr};
-    if (curl_url.starts_with("ldap://") or curl_url.starts_with("ldaps://")) {
-      goto done;
-    }
-    // For ftp, http and smtp, error codes in [200,299] are "OK"
-    if (response_code < 200 or response_code > 299) {
-      return caf::make_error(ec::invalid_result,
-                             fmt::format("http response code: {}",
-                                         response_code));
-    }
-  }
-done:
   return num_running;
 }
 
