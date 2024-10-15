@@ -34,7 +34,7 @@ to huge schemas filled with nulls and imprecise results. Use with caution.
 
 \*: In selector mode, only events with the same selector are merged.
 
-This option can not be combined with `raw=true, schema=true`.
+This option can not be combined with `raw=true, schema=<schema>`.
 
 ### `raw = bool (optional)`
 
