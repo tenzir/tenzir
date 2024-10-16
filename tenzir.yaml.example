@@ -25,16 +25,7 @@ tenzir:
   #   - $PWD/tenzir.db
   #state-directory:
 
-  # The file system path used for persistent state.
-  # Defaults to one of the following paths, selecting the first that is
-  # available:
-  #   - $CACHE_DIRECTORY
-  #   - $XDG_CACHE_HOME/tenzir
-  #   - $HOME/.cache/tenzir (Linux)
-  #   - $HOME/Library/Caches/tenzir (macOS)
-  #cache-directory:
-
-  # The file system path used for persistent state.
+  # The file system path used for recoverable state.
   # In a node process, defaults to the first of the following paths that is
   # available:
   #   - $CACHE_DIRECTORY
