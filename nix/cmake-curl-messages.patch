@@ -1,0 +1,24 @@
+diff --git a/Modules/FindCURL.cmake b/Modules/FindCURL.cmake
+index f7361308b7..ae0fda9a53 100644
+--- a/Modules/FindCURL.cmake
++++ b/Modules/FindCURL.cmake
+@@ -239,15 +239,19 @@ if(CURL_FOUND)
+         IMPORTED_LOCATION_DEBUG "${CURL_LIBRARY_DEBUG}")
+     endif()
+ 
++    message(WARNING "CMAKE: Curl found ${PC_CURL_FOUND}")
+     if(PC_CURL_FOUND)
++      message(WARNING "CMAKE: Curl: Setting INTERFACE_LINK_LIBRARIES to ${PC_CURL_LINK_LIBRARIES}")
+       if(PC_CURL_LINK_LIBRARIES)
+         set_property(TARGET CURL::libcurl PROPERTY
+                      INTERFACE_LINK_LIBRARIES "${PC_CURL_LINK_LIBRARIES}")
+       endif()
++      message(WARNING "CMAKE: Curl: Setting INTERFACE_LINK_OPTIONS to ${PC_CURL_LDFLAGS_OTHER}")
+       if(PC_CURL_LDFLAGS_OTHER)
+         set_property(TARGET CURL::libcurl PROPERTY
+                      INTERFACE_LINK_OPTIONS "${PC_CURL_LDFLAGS_OTHER}")
+       endif()
++      message(WARNING "CMAKE: Curl: Setting INTERFACE_COMPILE_OPTIONS to ${PC_CURL_CFLAGS_OTHER}")
+       if(PC_CURL_CFLAGS_OTHER)
+         set_property(TARGET CURL::libcurl PROPERTY
+                      INTERFACE_COMPILE_OPTIONS "${PC_CURL_CFLAGS_OTHER}")
