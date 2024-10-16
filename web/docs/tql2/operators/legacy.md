@@ -1,12 +1,13 @@
 # legacy
 
-```tql
-legacy pipeline:str
-```
-:::caution
+:::warning
 This operator will be removed once TQL2 is stable and all TQL1 functionality is
 ported over.
 :::
+
+```tql
+legacy pipeline:str
+```
 
 ## Description 
 

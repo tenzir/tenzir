@@ -2,7 +2,7 @@
 
 Parses an incoming [Common Event Format (CEF)][cef] stream into events.
 
-```
+```tql
 read_cef [merge=bool, raw=bool, schema=str, selector=str, schema_only=bool, unflatten=str]
 ```
 

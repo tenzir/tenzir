@@ -2,8 +2,6 @@
 
 Shows the least common values. The dual to [`top`](top.md).
 
-## Synopsis
-
 ```tql
 rare field [count_field=field]
 ```

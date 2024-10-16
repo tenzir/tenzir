@@ -2,8 +2,6 @@
 
 Sends and receives events via [Fluent Bit](https://docs.fluentbit.io/).
 
-## Synopsis
-
 ```tql
 fluentbit plugin:str, [options=record, fluent_bit_options=record, schema=str, selector=str, schema_only=bool, merge=bool, raw=bool, unflatten=str]
 ```

@@ -29,5 +29,5 @@ If the result is `false`, the operator emits a diagnostic and continues.
 export
 where @name == "ocsf.dhcp_activity"
 assert this.has("src_ip")
-save_file
+publish "dhcp"
 ```

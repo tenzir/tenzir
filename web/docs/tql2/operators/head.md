@@ -2,8 +2,6 @@
 
 Limits the input to the first `n` events.
 
-## Synopsis
-
 ```tql
 head [n:uint]
 ```

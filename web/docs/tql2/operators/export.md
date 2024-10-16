@@ -2,7 +2,7 @@
 
 Retrieves events from a Tenzir node. The dual to [`import`](import.md).
 
-```
+```tql
 export [live=bool, retro=bool, internal=bool, parallel=uint]
 ```
 

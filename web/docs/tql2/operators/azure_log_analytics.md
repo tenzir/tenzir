@@ -4,8 +4,6 @@ Sends events via the [Microsoft Azure Logs Ingestion API][api].
 
 [api]: https://learn.microsoft.com/en-us/azure/azure-monitor/logs/logs-ingestion-api-overview
 
-## Synopsis
-
 ```tql
 azure_log_analytics tenant_id=str, client_id=str, client_secret=str, dce=str, dcr=str, table=str
 ```
@@ -53,9 +51,8 @@ Upload `custom.mydata` events to a table `Custom-MyData`:
 
 ```tql
 export
-| where @name == "custom.mydata"
-| azure_log_analytics
-  tenant_id="00a00a00-0a00-0a00-00aa-000aa0a0a000",
+where @name == "custom.mydata"
+azure_log_analytics tenant_id="00a00a00-0a00-0a00-00aa-000aa0a0a000",
   client_id="000a00a0-0aa0-00a0-0000-00a000a000a0",
   client_secret="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
   dce="https://my-stuff-a0a0.westeurope-1.ingest.monitor.azure.com",

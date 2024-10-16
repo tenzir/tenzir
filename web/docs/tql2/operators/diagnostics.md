@@ -60,14 +60,14 @@ The records in `annotations` have the following schema:
 
 View all diagnostics generated in the past five minutes.
 
-```
+```tql
 diagnostics
-where timestamp > 5 minutes ago
+where timestamp > now() - 5m
 ```
 
 Only show diagnostics that contain the `error` severity.
 
-```
+```tql
 diagnostics
 where severity == "error"
 ```

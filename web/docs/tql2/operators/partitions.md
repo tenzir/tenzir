@@ -64,7 +64,7 @@ Get an upper bound for the number of events that could contain the IP address
 
 ```tql
 partitions :ip == 127.0.0.1
-| summarize candidates=sum(events)
+summarize candidates=sum(events)
 ```
 
 See how many partitions contain a non-null value for the field `hostname`:

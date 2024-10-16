@@ -2,7 +2,7 @@
 
 Shows the node's configuration.
 
-```
+```tql
 config
 ```
 
@@ -15,7 +15,7 @@ configuration files, command-line options, and environment variables.
 
 Write the entire configuration file as YAML:
 
-```
+```tql
 config
 write_yaml
 ```

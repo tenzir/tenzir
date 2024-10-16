@@ -2,7 +2,7 @@
 
 Discards all incoming events.
 
-```
+```tql
 discard
 ```
 
@@ -17,7 +17,7 @@ This operator is mainly used to test or benchmark pipelines.
 
 Benchmark to see how long it takes to export everything:
 
-```
+```tql
 export 
 discard
 ```

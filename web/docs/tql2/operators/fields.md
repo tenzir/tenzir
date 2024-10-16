@@ -2,9 +2,7 @@
 
 Retrieves all fields stored at a node.
 
-## Synopsis
-
-```
+```tql
 fields
 ```
 
