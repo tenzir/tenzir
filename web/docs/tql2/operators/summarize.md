@@ -17,7 +17,6 @@ applies the aggregation functions over each group. The operator consumes the
 entire input before producing an output.
 
 The order of the output fields follows the sequence of the provided arguments.
-<br/>
 Unspecified fields are dropped.
 
 ### `group`
@@ -119,4 +118,3 @@ pairs:
 ts = round(ts, 1h)
 summarize ts, src_ip, dest_ip, sum(bytes_in), sum(bytes_out)
 ```
-

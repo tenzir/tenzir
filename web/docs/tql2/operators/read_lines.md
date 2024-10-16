@@ -21,7 +21,7 @@ The resulting events have a single field called `line`.
 
 Affects parsing of empty lines:
 - `true`: Empty lines are parsed and emitted as `{}`, i.e. events with no
-fields.
+fields. TODO: Probably a bug. Also, this seems swapped.
 - `false`: Empty lines are skipped.
 
 Defaults to `false`.

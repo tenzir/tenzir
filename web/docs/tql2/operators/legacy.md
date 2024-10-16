@@ -5,15 +5,17 @@ This operator will be removed once TQL2 is stable and all TQL1 functionality is
 ported over.
 :::
 
+Provides a compatibility fallback to TQL1 pipelines.
+
 ```tql
-legacy pipeline:str
+legacy definition:str
 ```
 
-## Description 
+## Description
 
 This operator takes a TQL1 pipeline as a string and evaluates it.
 
-### `pipeline: str`
+### `definition: str`
 
 The TQL1 pipeline to evaluate.
 
