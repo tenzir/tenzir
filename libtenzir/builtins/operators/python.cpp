@@ -94,9 +94,6 @@ private:
   int64_t pos_ = 0;
 };
 
-constexpr auto DEFAULT_IMPLICIT_REQUIREMENTS_TOKEN
-  = std::string_view{"__default_requirements__"};
-
 constexpr auto PYTHON_SCAFFOLD = R"_(
 from tenzir.tools.python_operator_executor import main
 
@@ -105,7 +102,7 @@ main()
 
 struct config {
   // Implicit arguments passed to every invocation of `pip install`.
-  std::string implicit_requirements = {};
+  std::optional<std::string> implicit_requirements = {};
 
   // Whether to create a virtualenv environment for the python
   // operator.
@@ -157,14 +154,13 @@ public:
       // `detail::install_datadir` and the venv base dir may be different
       // between the client and node process.
       auto implicit_requirements = std::string{};
-      if (config_.implicit_requirements
-          == DEFAULT_IMPLICIT_REQUIREMENTS_TOKEN) {
+      if (config_.implicit_requirements) {
+        implicit_requirements = *config_.implicit_requirements;
+      } else {
         implicit_requirements = std::string{
           detail::install_datadir() / "python"
           / fmt::format("tenzir-{}.{}.{}-py3-none-any.whl[operator]",
                         version::major, version::minor, version::patch)};
-      } else {
-        implicit_requirements = config_.implicit_requirements;
       }
       auto venv_base_dir = std::optional<std::filesystem::path>{};
       if (!config_.create_venvs) {
@@ -502,9 +498,10 @@ public:
       return create_virtualenv.error();
     }
     config.create_venvs = *create_virtualenv;
-    config.implicit_requirements
-      = get_or(plugin_config, "implicit-requirements",
-               DEFAULT_IMPLICIT_REQUIREMENTS_TOKEN);
+    if (auto const* implicit_requirements
+        = get_if<std::string>(&plugin_config, "implicit-requirements")) {
+      config.implicit_requirements = *implicit_requirements;
+    }
     return {};
   }
 
