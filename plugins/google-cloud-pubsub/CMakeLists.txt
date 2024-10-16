@@ -5,7 +5,7 @@ project(
    DESCRIPTION "Google Cloud Pub/Sub plugin for Tenzir"
   LANGUAGES CXX)
 
-find_package(google_cloud_cpp_pubsub REQUIRED CONFIG)
+find_package(google_cloud_cpp_pubsub CONFIG)
 if (NOT google_cloud_cpp_pubsub_FOUND)
   message(WARNING "Disabling Google Cloud Pub/Sub plugin because the google-could-cpp library was not found")
   return()
