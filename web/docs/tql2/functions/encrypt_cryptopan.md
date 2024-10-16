@@ -30,8 +30,8 @@ Anonymize all values of the fields `src_ip` and `dst_ip` using the
 
 ```tql
 from { src_ip: 114.13.11.35, dst_ip: 114.56.11.200 }
-src_ip = encrypt_cryptopan(src_ip, seed = "deadbeef")
-dst_ip = encrypt_cryptopan(dst_ip, seed = "deadbeef")
+src_ip = encrypt_cryptopan(src_ip, seed="deadbeef")
+dst_ip = encrypt_cryptopan(dst_ip, seed="deadbeef")
 write_json
 ```
 
