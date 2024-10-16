@@ -78,28 +78,36 @@ This option can not be combined with `raw=true, schema=<schema>`.
 
 ### `raw = bool (optional)`
 
-Use only the raw types that are native to the parsed format. Fields that have a type
-specified in the chosen schema will still be parsed according to the schema.
+Use only the raw types that are native to the parsed format.
+In the case of KV this means that no parsing of data takes place at all
+and every value remains a string.
 
-For example, the JSON format has no notion of an IP address, so this will cause all IP addresses
-to be parsed as strings, unless the field is specified to be an IP address by the schema.
-JSON however has numeric types, so those would be parsed.
+If a known `schema` is given, fields will still be parsed according to the schema.
 
 Use with caution.
 
-This option can not be combined with `merge=true, schema=<schema>`.
-
-### `schema = str (optional)`
+### `schema=str (optional)`
 
 Provide the name of a [schema](../../data-model/schemas.md) to be used by the
-parser. If the schema uses the `blob` type, then the JSON parser expects
-base64-encoded strings.
+parser.
+
+If a schema with a matching name is installed, the result will always have
+all fields from that schema.
+* Fields that are specified in the schema, but did not appear in the input will be null.
+* Fields that appear in the input, but not in the schema will also be kept. `schema_only=true`
+can be used to reject fields that are not in the schema.
+
+If the given schema does not exist, this option instead assigns the output schema name only.
 
 The `schema` option is incompatible with the `selector` option.
 
-### `selector = str (optional)`
+### `selector=str (optional)`
 
-Designates a field value as schema name with an optional dot-separated prefix.
+Designates a field value as [schema](../../data-model/schemas.md) name with an
+optional dot-separated prefix.
+
+The string is parsed as `<filename>[:<prefix>]`. The `prefix` is optional and
+will be prepended to the field value to generate the schema name.
 
 For example, the Suricata EVE JSON format includes a field
 `event_type` that contains the event type. Setting the selector to
@@ -128,7 +136,7 @@ top-level. The data is best modeled as an `id` record with four nested fields
 
 Without an unflatten separator, the data looks like this:
 
-```json
+```json title="Without unflattening"
 {
   "id.orig_h" : "1.1.1.1",
   "id.orig_p" : 10,
@@ -139,7 +147,7 @@ Without an unflatten separator, the data looks like this:
 
 With the unflatten separator set to `.`, Tenzir reads the events like this:
 
-```json
+```json title="With 'unflatten'"
 {
   "id" : {
     "orig_h" : "1.1.1.1",
@@ -152,21 +160,52 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 
 ## Examples
 
-Extract comma-separated key-value pairs from `foo:1, bar:2,baz:3 , qux:4`:
+### Read comma separated key-value pairs
 
-```tql
-read_kv r"\s*,\s*", ":"
+```txt title="Input"
+surname:"John Norman", family_name:Smith, date_of_birth: 1995-05-26
 ```
 
-Extract key-value pairs from strings such as `FOO: C:\foo BAR_BAZ: hello world`.
-This requires lookahead because the fields are separated by whitespace, but not
-every whitespace acts as a field separator. Instead, we only want to split if
-the whitespace is followed by `[A-Z][A-Z_]+:`, i.e., at least two uppercase
-characters followed by a colon. We can express this as `"(\s+)[A-Z][A-Z_]+:"`,
-which yields `FOO: C:\foo` and `BAR_BAZ: hello world`. We then split the key
-from its value with `":\s*"` (only the first match is used to split them). The
-final result is thus `{"FOO": "C:\foo", "BAR_BAZ": "hello world"}`.
+This uses `,` as the field
 
-```tql
+```tql title="Pipeline"
+read_kv r"\s*,\s*", r"\s*:\s*"
+```
+
+```json title="Output"
+{
+  "surname" : "John Norman",
+  "family_name" : "Smith",
+  "date_of_birth" : "1995-05-26T00:00:00.000000"
+}
+```
+
+### Extract key-value pairs from complex strings
+
+Consider the input
+
+```txt title="Input"
+PATH: C:\foo INPUT_MESSAGE: hello world
+```
+
+In this case, whitespace should only be considered a field splitter,
+if its followed by more than one upper case letter and a colon.
+
+This requires lookahead because not every whitespace acts as a field separator.
+Instead, we only want to split if the whitespace is followed by `[A-Z][A-Z_]+:`,
+i.e., at least two uppercase characters followed by a colon.
+We can express this as `"(\s+)[A-Z][A-Z_]+:"`, which yields `PATH: C:\foo` and
+`INPUT_MESSAGE: hello world`. We then split the key from its value with `":\s*"`.
+Since only the first match is used to split key and value, this leaves the path
+intact.
+
+```tql title="Pipeline"
 read_kv r"(\s+)[A-Z][A-Z_]+:", r":\s*"
+```
+
+```json title="Output"
+{
+  "PATH" : "C:\foo",
+  "INPUT_MESSAGE" : "hello world"
+}
 ```

@@ -15,7 +15,7 @@ found [here](https://github.com/logstash-plugins/logstash-patterns-core/tree/mai
 
 In short, `pattern` consists of replacement fields, that look like
 `%{SYNTAX[:SEMANTIC[:CONVERSION]]}`, where:
-- `SYNTAX` is a reference to a pattern, either built-in or user-defined 
+- `SYNTAX` is a reference to a pattern, either built-in or user-defined
     through the `pattern_defintions` option.
 - `SEMANTIC` is an identifier that names the field in the parsed record.
 - `CONVERSION` is either `infer` (default), `string` (default with
@@ -31,7 +31,7 @@ The `grok` pattern used for matching. Must match the input in its entirety.
 
 ### `pattern_definitions = str (optional)`
 
-A user-defined newline-delimited list of patterns, where a line starts 
+A user-defined newline-delimited list of patterns, where a line starts
 with the pattern name, followed by a space, and the `grok`-pattern for that
 pattern. For example, the built-in pattern `INT` is defined as follows:
 
@@ -61,32 +61,36 @@ to huge schemas filled with nulls and imprecise results. Use with caution.
 
 \*: In selector mode, only events with the same selector are merged.
 
-This option can not be combined with `raw=true, schema=<schema>`.
-
 ### `raw = bool (optional)`
 
 Use only the raw types that are native to the parsed format. Fields that have a type
-specified in the chosen schema will still be parsed according to the schema.
+specified in the chosen `schema` will still be parsed according to the schema.
 
-For example, the JSON format has no notion of an IP address, so this will cause all IP addresses
-to be parsed as strings, unless the field is specified to be an IP address by the schema.
-JSON however has numeric types, so those would be parsed.
+Since grok is just textual parsing, this means that no parsing of data takes place at all
+and every value remains a string, unless the field is in the `schema`.
 
-Use with caution.
-
-This option can not be combined with `merge=true, schema=<schema>`.
-
-### `schema = str (optional)`
+### `schema=str (optional)`
 
 Provide the name of a [schema](../../data-model/schemas.md) to be used by the
-parser. If the schema uses the `blob` type, then the JSON parser expects
-base64-encoded strings.
+parser.
+
+If a schema with a matching name is installed, the result will always have
+all fields from that schema.
+* Fields that are specified in the schema, but did not appear in the input will be null.
+* Fields that appear in the input, but not in the schema will also be kept. `schema_only=true`
+can be used to reject fields that are not in the schema.
+
+If the given schema does not exist, this option instead assigns the output schema name only.
 
 The `schema` option is incompatible with the `selector` option.
 
-### `selector = str (optional)`
+### `selector=str (optional)`
 
-Designates a field value as schema name with an optional dot-separated prefix.
+Designates a field value as [schema](../../data-model/schemas.md) name with an
+optional dot-separated prefix.
+
+The string is parsed as `<filename>[:<prefix>]`. The `prefix` is optional and
+will be prepended to the field value to generate the schema name.
 
 For example, the Suricata EVE JSON format includes a field
 `event_type` that contains the event type. Setting the selector to
@@ -115,7 +119,7 @@ top-level. The data is best modeled as an `id` record with four nested fields
 
 Without an unflatten separator, the data looks like this:
 
-```json
+```json title="Without unflattening"
 {
   "id.orig_h" : "1.1.1.1",
   "id.orig_p" : 10,
@@ -126,7 +130,7 @@ Without an unflatten separator, the data looks like this:
 
 With the unflatten separator set to `.`, Tenzir reads the events like this:
 
-```json
+```json title="With 'unflatten'"
 {
   "id" : {
     "orig_h" : "1.1.1.1",
@@ -139,11 +143,13 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 
 ## Examples
 
-Parse a fictional HTTP request log:
+### Parse a fictional HTTP request log:
 
-```tql
-// Example input:
-// 55.3.244.1 GET /index.html 15824 0.043
+```txt title="Input"
+55.3.244.1 GET /index.html 15824 0.043
+```
+
+```tql title="Pipeline"
 read_grok "%{IP:client} %{WORD:method} %{URIPATHPARAM:request} %{NUMBER:bytes} %{NUMBER:duration}"
 ```
 

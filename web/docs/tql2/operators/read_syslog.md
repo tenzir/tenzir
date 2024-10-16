@@ -71,30 +71,36 @@ to huge schemas filled with nulls and imprecise results. Use with caution.
 
 \*: In selector mode, only events with the same selector are merged.
 
-This option can not be combined with `raw=true, schema=<schema>`.
-
 ### `raw = bool (optional)`
 
 Use only the raw types that are native to the parsed format. Fields that have a type
-specified in the chosen schema will still be parsed according to the schema.
+specified in the chosen `schema` will still be parsed according to the schema.
 
-For example, the JSON format has no notion of an IP address, so this will cause all IP addresses
-to be parsed as strings, unless the field is specified to be an IP address by the schema.
-JSON however has numeric types, so those would be parsed.
+In the case of CEF, this means that no parsing of data takes place at all
+and every value remains a string, unless the field is in the `schema`.
 
-Use with caution.
-
-### `schema = str (optional)`
+### `schema=str (optional)`
 
 Provide the name of a [schema](../../data-model/schemas.md) to be used by the
-parser. If the schema uses the `blob` type, then the Syslog parser expects
-base64-encoded strings.
+parser.
+
+If a schema with a matching name is installed, the result will always have
+all fields from that schema.
+* Fields that are specified in the schema, but did not appear in the input will be null.
+* Fields that appear in the input, but not in the schema will also be kept. `schema_only=true`
+can be used to reject fields that are not in the schema.
+
+If the given schema does not exist, this option instead assigns the output schema name only.
 
 The `schema` option is incompatible with the `selector` option.
 
-### `selector = str (optional)`
+### `selector=str (optional)`
 
-Designates a field value as schema name with an optional dot-separated prefix.
+Designates a field value as [schema](../../data-model/schemas.md) name with an
+optional dot-separated prefix.
+
+The string is parsed as `<filename>[:<prefix>]`. The `prefix` is optional and
+will be prepended to the field value to generate the schema name.
 
 For example, the Suricata EVE JSON format includes a field
 `event_type` that contains the event type. Setting the selector to
@@ -123,7 +129,7 @@ top-level. The data is best modeled as an `id` record with four nested fields
 
 Without an unflatten separator, the data looks like this:
 
-```json
+```json title="Without unflattening"
 {
   "id.orig_h" : "1.1.1.1",
   "id.orig_p" : 10,
@@ -134,7 +140,7 @@ Without an unflatten separator, the data looks like this:
 
 With the unflatten separator set to `.`, Tenzir reads the events like this:
 
-```json
+```json title="With 'unflatten'"
 {
   "id" : {
     "orig_h" : "1.1.1.1",
@@ -147,7 +153,29 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 
 ## Examples
 
-```tql
-load_file "events.json"
+### Read in the `auth.log`
+
+```tql title="Pipeline"
+load_file "/var/log/auth.log"
 read_syslog
+```
+```json title="Output"
+{
+  "facility": null,
+  "severity": null,
+  "timestamp": "2024-10-14T07:15:01.348027",
+  "hostname": "tenzirs-magic-machine",
+  "app_name": "CRON",
+  "process_id": "895756",
+  "content": "pam_unix(cron:session): session opened for user root(uid=0) by root(uid=0)"
+}
+{
+  "facility": null,
+  "severity": null,
+  "timestamp": "2024-10-14T07:15:01.349838",
+  "hostname": "tenzirs-magic-machine",
+  "app_name": "CRON",
+  "process_id": "895756",
+  "content": "pam_unix(cron:session): session closed for user root"
+}
 ```
