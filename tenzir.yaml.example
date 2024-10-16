@@ -35,15 +35,17 @@ tenzir:
   #cache-directory:
 
   # The file system path used for persistent state.
-  # Defaults to one of the following paths, selecting the first that is
+  # In a node process, defaults to the first of the following paths that is
   # available:
   #   - $CACHE_DIRECTORY
   #   - $XDG_CACHE_HOME
   #   - $XDG_HOME_DIR/.cache/tenzir (linux) or $XDG_HOME_DIR/Libraries/caches/tenzir (mac)
   #   - $HOME/.cache/tenzir (linux) or $HOME/Libraries/caches/tenzir (mac)
-  #   - $TEMPORARY_DIRECTORY/tenzir/cache
+  #   - $TEMPORARY_DIRECTORY/tenzir/cache/<uid>
   # To determine $TEMPORARY_DIRECTORY, the values of TMPDIR, TMP, TEMP, TEMPDIR are
   # checked in that order, and as a last resort "/tmp" is used.
+  # In a client process, this setting is ignored and `$TEMPORARY_DIRECTORY/tenzir/cache/<uid>`
+  # is used as cache directory.
   #cache-directory:
 
   # The file system path used for log files.

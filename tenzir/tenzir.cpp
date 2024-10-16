@@ -93,7 +93,24 @@ auto main(int argc, char** argv) -> int {
                           ? app_path
                           : app_path.substr(last_slash + 1);
   bool is_server = (app_name == "tenzir-node");
-  cfg.content["tenzir.is-node"] = is_server;
+  if (!is_server) {
+    // Force the use of $TMPDIR as cache directory when running as a client.
+    auto ec = std::error_code{};
+    auto previous_value
+      = get_if<std::string>(&cfg.content, "tenzir.cache-directory");
+    auto tmp = std::filesystem::temp_directory_path(ec);
+    if (ec) {
+      TENZIR_ERROR("failed to determine location of temporary directory");
+      return EXIT_FAILURE;
+    }
+    auto path = tmp / "tenzir" / "client-cache" / fmt::format("{:}", getuid());
+    put(cfg.content, "tenzir.cache-directory", path.string());
+    if (previous_value) {
+      TENZIR_VERBOSE("using {} as cache directory instead of configured value "
+                     "{}",
+                     path, *previous_value);
+    }
+  }
   // Create log context as soon as we know the correct configuration.
   auto log_context = create_log_context(is_server, *invocation, cfg.content);
   if (!log_context) {
