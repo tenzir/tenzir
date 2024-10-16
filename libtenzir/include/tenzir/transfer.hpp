@@ -66,9 +66,6 @@ public:
   /// Runs until the current transfer completed.
   auto perform() -> caf::error;
 
-  /// Retrieves file single chunk.
-  auto download() -> caf::expected<chunk_ptr>;
-
   /// Retrieves the file in chunks.
   auto download_chunks() -> generator<caf::expected<chunk_ptr>>;
 
@@ -83,8 +80,5 @@ public:
 private:
   curl::easy easy_;
 };
-
-auto download(http::request req, transfer_options opts = {})
-  -> caf::expected<chunk_ptr>;
 
 } // namespace tenzir
