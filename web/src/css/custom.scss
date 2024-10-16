@@ -178,11 +178,13 @@ figure[data-rehype-pretty-code-figure]
   border-radius: 0.5rem 0.5rem 0 0;
 }
 
-// TODO: This cannot stay that way. Find a proper solution.
-div:has(a[href="/next/tql2/operators"])+ul {
+// TODO: There might be a better way to do this.
+.menu div:has(a[href$="tql2/operators"])+ul,
+.menu div:has(a[href$="tql2/functions"])+ul {
   display: none !important;
 }
 
-a[href="/next/tql2/operators"]+button {
-  display: none !important;
+.menu a[href$="tql2/operators"]+button,
+.menu a[href$="tql2/functions"]+button {
+  display: none;
 }
