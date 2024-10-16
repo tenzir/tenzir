@@ -2,7 +2,7 @@
 
 Decapsulates packet data at link, network, and transport layer.
 
-```
+```tql
 decapsulate(packet:field)
 ```
 
