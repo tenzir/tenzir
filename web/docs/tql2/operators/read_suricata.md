@@ -22,22 +22,15 @@ names to match the value from the `event_type` field, you need to pass the
 option `selector=event_type:suricata`. The `suricata` parser does this by
 default.
 
-XXX: Is the above selector correct?
-
 ### `raw = bool (optional)`
 
 Use only the raw types that are native to the parsed format. Fields that have a type
-specified in the chosen schema will still be parsed according to the schema.
+specified in the chosen `schema` will still be parsed according to the schema.
 
-For example, the JSON format has no notion of an IP address, so this will cause all IP addresses
-to be parsed as strings, unless the field is specified to be an IP address by the schema.
-JSON however has numeric types, so those would be parsed.
-
-Use with caution.
+Since Suricata is JSON, this means that JSON numbers will be parsed as numbers,
+but every JSON string remains a string, unless the field is in the `schema`.
 
 ### `schema_only = bool (optional)`
-
-XXX: this needs to be fixed
 
 When working with an existing schema, this option will ensure that the output
 schema has *only* the fields from that schema. If the schema name is obtained via a `selector`

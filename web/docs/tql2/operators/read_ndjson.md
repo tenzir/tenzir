@@ -3,7 +3,7 @@
 Parses an incoming NDJSON (Newline-Delimited JSON) stream into events.
 
 ```tql
-read_ndjson [schema=str, selector=str, schema_only=bool, 
+read_ndjson [schema=str, selector=str, schema_only=bool,
             merge=bool, raw=bool, unflatten=str]
 ```
 
@@ -16,30 +16,42 @@ Parses an incoming NDJSON byte stream into events.
 
 Merges all incoming events into a single schema\* that converges over time. This
 option is usually the fastest *for reading* highly heterogeneous data, but can
-lead
-to huge schemas filled with nulls and imprecise results. Use with caution.
+lead to huge schemas filled with nulls and imprecise results. Use with caution.
 
 \*: In selector mode, only events with the same selector are merged.
 
-This option can not be combined with `raw=true, schema=<schema>`.
-
 ### `raw = bool (optional)`
 
-Use only the raw JSON types. This means that all strings are parsed as `string`,
-irrespective of whether they are a valid `ip`, `duration`, etc. Also, since JSON
-only has one generic number type, all numbers are parsed with the `double` type.
+Use only the raw JSON types. This means that JSON numbers will be
+parsed as numbers, but every string will remain a string, even if
+they would be valid `ip`s or `duration`s.
 
-### `schema = str (optional)`
+If a known `schema` is given, fields will still be parsed according to the schema.
+
+Use with caution.
+
+### `schema=str (optional)`
 
 Provide the name of a [schema](../../data-model/schemas.md) to be used by the
-parser. If the schema uses the `blob` type, then the JSON parser expects
-base64-encoded strings.
+parser.
+
+If a schema with a matching name is installed, the result will always have
+all fields from that schema.
+* Fields that are specified in the schema, but did not appear in the input will be null.
+* Fields that appear in the input, but not in the schema will also be kept. `schema_only=true`
+can be used to reject fields that are not in the schema.
+
+If the given schema does not exist, this option instead assigns the output schema name only.
 
 The `schema` option is incompatible with the `selector` option.
 
-### `selector = str (optional)`
+### `selector=str (optional)`
 
-Designates a field value as schema name with an optional dot-separated prefix.
+Designates a field value as [schema](../../data-model/schemas.md) name with an
+optional dot-separated prefix.
+
+The string is parsed as `<filename>[:<prefix>]`. The `prefix` is optional and
+will be prepended to the field value to generate the schema name.
 
 For example, the Suricata EVE JSON format includes a field
 `event_type` that contains the event type. Setting the selector to
@@ -68,7 +80,7 @@ top-level. The data is best modeled as an `id` record with four nested fields
 
 Without an unflatten separator, the data looks like this:
 
-```json
+```json title="Without unflattening"
 {
   "id.orig_h" : "1.1.1.1",
   "id.orig_p" : 10,
@@ -79,7 +91,7 @@ Without an unflatten separator, the data looks like this:
 
 With the unflatten separator set to `.`, Tenzir reads the events like this:
 
-```json
+```json title="With 'unflatten'"
 {
   "id" : {
     "orig_h" : "1.1.1.1",
@@ -92,7 +104,31 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 
 ## Examples
 
-```tql
-load_file "events.json"
-read_ndjson
+### Read in a newline delimited JSON file
+
+```json title="versions.json"
+{ "product" : "Tenzir", "version.major" : 4, "version.minor" : 22 }
+{ "product" : "Tenzir", "version.major" : 4, "version.minor" : 21 }
+```
+
+```tql title="Pipeline"
+load_file "versions.json"
+read_ndjson unflatten="."
+```
+
+```json title="Output"
+{
+  "product": "Tenzir",
+  "version": {
+    "major": 4,
+    "minor": 22
+  }
+}
+{
+  "product": "Tenzir",
+  "version": {
+    "major": 4,
+    "minor": 21
+  }
+}
 ```

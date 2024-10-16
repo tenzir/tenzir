@@ -34,25 +34,36 @@ to huge schemas filled with nulls and imprecise results. Use with caution.
 
 \*: In selector mode, only events with the same selector are merged.
 
-This option can not be combined with `raw=true, schema=<schema>`.
-
 ### `raw = bool (optional)`
 
-Use only the raw JSON types. This means that all strings are parsed as `string`,
-irrespective of whether they are a valid `ip`, `duration`, etc. Also, since JSON
-only has one generic number type, all numbers are parsed with the `double` type.
+Use only the raw types that are native to the parsed format. Fields that have a type
+specified in the chosen `schema` will still be parsed according to the schema.
 
-### `schema = str (optional)`
+This means that JSON numbers will be parsed as numbers,
+but every JSON string remains a string, unless the field is in the `schema`.
+
+### `schema=str (optional)`
 
 Provide the name of a [schema](../../data-model/schemas.md) to be used by the
-parser. If the schema uses the `blob` type, then the JSON parser expects
-base64-encoded strings.
+parser.
+
+If a schema with a matching name is installed, the result will always have
+all fields from that schema.
+* Fields that are specified in the schema, but did not appear in the input will be null.
+* Fields that appear in the input, but not in the schema will also be kept. `schema_only=true`
+can be used to reject fields that are not in the schema.
+
+If the given schema does not exist, this option instead assigns the output schema name only.
 
 The `schema` option is incompatible with the `selector` option.
 
-### `selector = str (optional)`
+### `selector=str (optional)`
 
-Designates a field value as schema name with an optional dot-separated prefix.
+Designates a field value as [schema](../../data-model/schemas.md) name with an
+optional dot-separated prefix.
+
+The string is parsed as `<filename>[:<prefix>]`. The `prefix` is optional and
+will be prepended to the field value to generate the schema name.
 
 For example, the Suricata EVE JSON format includes a field
 `event_type` that contains the event type. Setting the selector to
@@ -81,7 +92,7 @@ top-level. The data is best modeled as an `id` record with four nested fields
 
 Without an unflatten separator, the data looks like this:
 
-```json
+```json title="Without unflattening"
 {
   "id.orig_h" : "1.1.1.1",
   "id.orig_p" : 10,
@@ -92,7 +103,7 @@ Without an unflatten separator, the data looks like this:
 
 With the unflatten separator set to `.`, Tenzir reads the events like this:
 
-```json
+```json title="With 'unflatten'"
 {
   "id" : {
     "orig_h" : "1.1.1.1",
@@ -105,7 +116,141 @@ With the unflatten separator set to `.`, Tenzir reads the events like this:
 
 ## Examples
 
-```tql
+
+### Read in a JSON file
+
+```json title="input.json"
+{
+  "product" : "Tenzir",
+  "version.major" : 4,
+  "version.minor" : 22
+}
+{
+  "product" : "Tenzir",
+  "version.major" : 4,
+  "version.minor" : 21,
+  "version.dirty" : true
+}
+```
+
+```tql title="Pipeline"
 load_file "events.json"
-read_json
+read_json unflatten="."
+```
+
+```json title="Output"
+{
+  "product": "Tenzir",
+  "version": {
+    "major": 4,
+    "minor": 22
+  }
+}
+{
+  "product": "Tenzir",
+  "version": {
+    "major": 4,
+    "minor": 21,
+    "dirty": true
+  }
+}
+```
+
+### Read in a JSON array
+
+[JA4+](https://ja4db.com/) provides fingerprints via a REST API, which returns a single JSON array.
+
+<details>
+<summary>Example Input</summary>
+
+```json
+[
+  {
+    "application": "SemrushBot",
+    "library": null,
+    "device": null,
+    "os": "Other",
+    "user_agent_string": null,
+    "certificate_authority": null,
+    "observation_count": 449,
+    "verified": false,
+    "notes": null,
+    "ja4_fingerprint": "t13d301000_01455d0db58d_5ac7197df9d2",
+    "ja4_fingerprint_string": null,
+    "ja4s_fingerprint": null,
+    "ja4h_fingerprint": "ge11nn100000_c910c42e1704_e3b0c44298fc_e3b0c44298fc",
+    "ja4x_fingerprint": null,
+    "ja4t_fingerprint": null,
+    "ja4ts_fingerprint": null,
+    "ja4tscan_fingerprint": null
+  },
+  {
+    "application": null,
+    "library": null,
+    "device": "Epson Printer",
+    "os": null,
+    "user_agent_string": null,
+    "certificate_authority": null,
+    "observation_count": 1,
+    "verified": true,
+    "notes": null,
+    "ja4_fingerprint": null,
+    "ja4s_fingerprint": null,
+    "ja4h_fingerprint": null,
+    "ja4x_fingerprint": null,
+    "ja4t_fingerprint": null,
+    "ja4ts_fingerprint": null,
+    "ja4tscan_fingerprint": "28960_2-4-8-1-3_1460_3_1-4-8-16"
+  },
+  ...
+]
+```
+
+</details>
+
+You can easily ingest this into Tenzir using
+
+```tql title="Pipeline"
+load "https://ja4db.com/api/read/"
+read_json arrays_of_objects=true
+```
+
+```json title="Example Output"
+{
+  "application": "SemrushBot",
+  "library": null,
+  "device": null,
+  "os": "Other",
+  "user_agent_string": null,
+  "certificate_authority": null,
+  "observation_count": 449,
+  "verified": false,
+  "notes": null,
+  "ja4_fingerprint": "t13d301000_01455d0db58d_5ac7197df9d2",
+  "ja4_fingerprint_string": null,
+  "ja4s_fingerprint": null,
+  "ja4h_fingerprint": "ge11nn100000_c910c42e1704_e3b0c44298fc_e3b0c44298fc",
+  "ja4x_fingerprint": null,
+  "ja4t_fingerprint": null,
+  "ja4ts_fingerprint": null,
+  "ja4tscan_fingerprint": null
+},
+{
+  "application": null,
+  "library": null,
+  "device": "Epson Printer",
+  "os": null,
+  "user_agent_string": null,
+  "certificate_authority": null,
+  "observation_count": 1,
+  "verified": true,
+  "notes": null,
+  "ja4_fingerprint": null,
+  "ja4s_fingerprint": null,
+  "ja4h_fingerprint": null,
+  "ja4x_fingerprint": null,
+  "ja4t_fingerprint": null,
+  "ja4ts_fingerprint": null,
+  "ja4tscan_fingerprint": "28960_2-4-8-1-3_1460_3_1-4-8-16"
+}
 ```

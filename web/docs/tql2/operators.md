@@ -98,31 +98,31 @@ Operator | Description | Example
 
 Operator | Description | Example
 ---------|-------------|--------
-[`read_bitz`](./operators/read_bitz.md) |  |
-[`read_cef`](./operators/read_cef.md) | |
-[`read_csv`](./operators/read_csv.md) | |
-[`read_gelf`](./operators/read_gelf.md) | |
-[`read_grok`](./operators/read_grok.md) | |
-[`read_json`](./operators/read_json.md) | |
-[`read_kv`](./operators/read_kv.md) | |
-[`read_leef`](./operators/read_leef.md) | |
-[`read_lines`](./operators/read_lines.md) | |
-[`read_ndjson`](./operators/read_ndjson.md) | |
-[`read_ssv`](./operators/read_ssv.md) | |
-[`read_suricata`](./operators/read_suricata.md) | |
-[`read_syslog`](./operators/read_syslog.md) | |
-[`read_tsv`](./operators/read_tsv.md) | |
-[`read_xsv`](./operators/read_xsv.md) | |
-[`read_yaml`](./operators/read_yaml.md) | |
-[`read_zeek_json`](./operators/read_zeek_json.md) | |
-[`read_zeek_tsv`](./operators/read_zeek_tsv.md) | |
+[`read_bitz`](./operators/read_bitz.md) | Parses input as Tenzir's internal wire format | `read_bitz`
+[`read_cef`](./operators/read_cef.md) | Parses input as [CEF](https://community.microfocus.com/cfs-file/__key/communityserver-wikis-components-files/00-00-00-00-23/3731.CommonEventFormatV25.pdf) messages | `read_cef`
+[`read_csv`](./operators/read_csv.md) | Parses input as [comma separated values](https://en.wikipedia.org/wiki/Comma-separated_values) | `read_csv`
+[`read_gelf`](./operators/read_gelf.md) | Parses input as [GELF](https://go2docs.graylog.org/current/getting_in_log_data/gelf.html) | `read_gelf`
+[`read_grok`](./operators/read_grok.md) | Parses input into events using a grok pattern | `read_grok`
+[`read_json`](./operators/read_json.md) | Parses input as [JSON](https://en.wikipedia.org/wiki/JSON) | `read_jsom`
+[`read_kv`](./operators/read_kv.md) | Parses input as key-value pairs | `read_kv`
+[`read_leef`](./operators/read_leef.md) | Parses input as [leef](https://www.ibm.com/docs/en/dsm?topic=overview-leef-event-components) | `read_leef`
+[`read_lines`](./operators/read_lines.md) | Parses input as entire lines | `read_lines`
+[`read_ndjson`](./operators/read_ndjson.md) | Reads input as newline delimited [JSON](https://en.wikipedia.org/wiki/JSON) | `read_leef`
+[`read_ssv`](./operators/read_ssv.md) | Parses input as space separated values | `read_csv`
+[`read_suricata`](./operators/read_suricata.md) | Parses input as [suricata eve.json](https://suricata.readthedocs.io/en/latest/output/eve/eve-json-output.html) | `read_suricata`
+[`read_syslog`](./operators/read_syslog.md) | Parses input as [Syslog](https://en.wikipedia.org/wiki/Syslog) | `read_syslog`
+[`read_tsv`](./operators/read_tsv.md) | Parses input as tab separated values | `read_tsv`
+[`read_xsv`](./operators/read_xsv.md) | Parses input as "generic" separated values | `read_xsv "," ";" ""`
+[`read_yaml`](./operators/read_yaml.md) | Parses input as [YAML](https://en.wikipedia.org/wiki/YAML) | `read_yaml`
+[`read_zeek_json`](./operators/read_zeek_json.md) | Parses input as Zeek JSON | `read_zeek_json`
+[`read_zeek_tsv`](./operators/read_zeek_tsv.md) | Parses input as Zeek TSV | `read_zeek_tsv`
 
 ## Printing
 
 Operator | Description | Example
 ---------|-------------|--------
-[`write_bitz`](./operators/write_bitz.md) | |
-[`write_json`](./operators/write_json.md) | |
+[`write_bitz`](./operators/write_bitz.md) | Writes events as Tenzir's internal wire format | `write_bitz`
+[`write_json`](./operators/write_json.md) | Writes events as JSON | `write_json`
 
 <!--
 ## Packages
