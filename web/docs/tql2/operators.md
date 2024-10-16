@@ -34,7 +34,7 @@ Operator | Description | Example
 [`deduplicate`]() | ... | `...`
 -->
 
-## Analytics
+## Analyze
 
 Operator | Description | Example
 ---------|-------------|--------
@@ -65,20 +65,40 @@ Operator | Description | Example
 
 Operator | Description | Example
 ---------|-------------|--------
+[`diagnostics`](./operators/diagnostics.md) | Retrieve diagnostic events of managed pipelines | `diagnostics`
+[`export`](./operators/export.md) | Retrieve events from the node | `export`
 [`load`](./operators/load.md) | Load bytes according to a URL | `load "https://example.org/api/list"`
 [`load_file`](./operators/load_file.md) | Load bytes from a file | `load_file "/tmp/data.json"`
-[`load_http`](./operators/load_http.md) | Receive bytes from a HTTP request | `load_http "example.org", params={n: 5}` |
+[`load_http`](./operators/load_http.md) | Receive bytes from a HTTP request | `load_http "example.org", params={n: 5}`
 [`load_tcp`](./operators/load_tcp.md) | Load bytes from a TCP or TLS connection | `load_tcp "0.0.0.0:8090" { read_json }`
-
+[`velociraptor`](./operators/velociraptor.md) | Returns results from a Velociraptor server | `velociraptor subscribe="Windows"`
+[`metrics`](./operators/metrics.md) | Retrieve metrics events from a Tenzir node | `metrics "cpu"`
+[`subscribe`](./operators/subscribe.md) | Subscribe to a certain topic | `subscribe "topic"`
+[`shell`](./operators/shell.md) | TODO: This is also a transformation |
 <!--
 [`from`](./operators/from.md) | | `from "/tmp/data.json"`
 -->
+
+## Output
+
+Operator | Description | Example
+---------|-------------|--------
+[`azure_log_analytics`](./operators/azure_log_analytics.md) | Send events to Azure Log Analytics | `azure_log_analytics tenant_id=…`
+[`discard`](./operators/discard.md) | Discard incoming bytes or events | `discard`
+[`save_file`](./operators/save_file.md) | Save incoming bytes into a file | `save_file "/tmp/out.json"`
+[`save_http`](./operators/save_http.md) | Send incoming bytes over a HTTP connection | `save_http "example.org/api"`
+[`save`](./operators/save.md) | Save incoming bytes according to a URL | `save "https://example.org/api"`
+[`serve`](./operators/serve.md) | Makes events available at `/serve` | `serve "abcde12345"`
+[`to_hive`](./operators/to_hive.md) | Writes events using hive partitioning | `to_hive "s3://…", partition_by=[x]`
+[`import`](./operators/import.md) | Store events at the node | `import`
+[`publish`](./operators/publish.md) | Publish events to a certain topic | `publish "topic"`
+
 
 ## Parsing
 
 Operator | Description | Example
 ---------|-------------|--------
-[`read_bitz`](./operators/read_bitz.md) | |
+[`read_bitz`](./operators/read_bitz.md) |  |
 [`read_cef`](./operators/read_cef.md) | |
 [`read_csv`](./operators/read_csv.md) | |
 [`read_gelf`](./operators/read_gelf.md) | |
@@ -103,28 +123,6 @@ Operator | Description | Example
 ---------|-------------|--------
 [`write_bitz`](./operators/write_bitz.md) | |
 [`write_json`](./operators/write_json.md) | |
-
-## Output
-
-Operator | Description | Example
----------|-------------|--------
-[`discard`](./operators/discard.md) | Discard incoming bytes or events | `discard`
-[`save`](./operators/save.md) | Save incoming bytes according to a URL | `save "https://example.org/api"`
-[`save_file`](./operators/save_file.md) | Save incoming bytes into a file | `save_file "/tmp/out.json"`
-[`save_http`](./operators/save_http.md) | Send incoming bytes over a HTTP connection | `save_http "example.org/api"`
-[`serve`](./operators/serve.md) | Makes events available at the `/serve` endpoint | `serve "abcde12345"`
-[`to_hive`](./operators/to_hive.md) | Writes events using hive partitioning | `to_hive "s3://my-bucket", partition_by=[field]`
-
-## TODO: NAME?
-
-Operator | Description | Example
----------|-------------|--------
-[`diagnostics`](./operators/diagnostics.md) | Retrieve diagnostic events of managed pipelines | `diagnostics`
-[`export`](./operators/export.md) | Retrieve events from the node | `export`
-[`import`](./operators/import.md) | Store events at the node | `import`
-[`metrics`](./operators/metrics.md) | Retrieve metrics events from a Tenzir node | `metrics "cpu"`
-[`publish`](./operators/publish.md) | Publish events to a certain topic | `publish "topic"`
-[`subscribe`](./operators/subscribe.md) | Subscribe to a certain topic | `subscribe "topic"`
 
 <!--
 ## Packages
@@ -153,30 +151,6 @@ Operator | Description | Example
 [`line_chart`]() | |
 -->
 
-## Integrations (TODO: Better name?)
-
-Operator | Description | Example
----------|-------------|--------
-[`azure_log_analytics`](./operators/azure_log_analytics.md) | |
-[`sigma`](./operators/sigma.md) | |
-[`velociraptor`](./operators/velociraptor.md) | |
-[`yara`](./operators/yara.md) | |
-
-## Escape Hatches (TODO: Better name?)
-
-Operator | Description | Example
----------|-------------|--------
-[`legacy`](./operators/legacy.md) | |
-[`python`](./operators/python.md) | |
-[`shell`](./operators/shell.md) | TODO: This is also a source... |
-
-## Time
-
-Operator | Description | Example
----------|-------------|--------
-[`delay`](./operators/delay.md) | |
-[`timeshift`](./operators/timeshift.md) | |
-
 ## Internals
 
 Operator | Description | Example
@@ -187,8 +161,9 @@ Operator | Description | Example
 [`measure`](./operators/measure.md) | |
 [`throttle`](./operators/throttle.md) | |
 [`cache`](./operators/cache.md) | In-memory cache shared between pipelines | `cache "w01wyhTZm3", ttl=10min`
+[`legacy`](./operators/legacy.md) | |
 
-## Introspection
+## Node Inspection
 
 Operator | Description | Example
 ---------|-------------|--------
@@ -200,7 +175,7 @@ Operator | Description | Example
 [`schemas`](./operators/schemas.md) | List schemas for events stored at the node | `schemas`
 [`version`](./operators/version.md) | Version Info | `version`
 
-## Host System
+## Host Inspection
 
 Operator | Description | Example
 ---------|-------------|--------
@@ -209,10 +184,16 @@ Operator | Description | Example
 [`processes`](./operators/processes.md) | List running processes | `processes`
 [`sockets`](./operators/sockets.md) | List open sockets | `sockets`
 
-## UNCATEGORIZED
+## Uncategorized
+
 Operator | Description | Example
 ---------|-------------|--------
 [`compress`](./operators/compress.md) | |
 [`decompress`](./operators/decompress.md) | |
+[`delay`](./operators/delay.md) | |
 [`pass`](./operators/pass.md) | |
 [`repeat`](./operators/repeat.md) | |
+[`sigma`](./operators/sigma.md) | |
+[`timeshift`](./operators/timeshift.md) | |
+[`yara`](./operators/yara.md) | |
+[`python`](./operators/python.md) |  | `python "self.x ="`

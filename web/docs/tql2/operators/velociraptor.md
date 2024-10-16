@@ -3,7 +3,7 @@
 Submits VQL to a Velociraptor server and returns the response as events.
 
 ```tql
-velociraptor [request_name=str, org_id=str, max_rows=uint, 
+velociraptor [request_name=str, org_id=str, max_rows=uint,
               subscribe=str, query=str, max_wait=duration, profile=str]
 ```
 

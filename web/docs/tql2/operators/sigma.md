@@ -119,7 +119,7 @@ Apply a Sigma rule over historical data in a node from the last day:
 
 ```tql
 export
-where ts > now() - 1 day
+where ts > now() - 1d
 sigma "rule.yaml"
 ```
 
@@ -127,8 +127,8 @@ Watch a directory of Sigma rules and apply all of them on a continuous stream of
 Suricata events:
 
 ```tql
-load_file --follow eve.json 
-read_suricata 
+load_file "eve.json", follow=true
+read_suricata
 sigma "/tmp/rules/"
 ```
 
