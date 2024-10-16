@@ -28,10 +28,17 @@ in {
     ];
   });
   google-cloud-cpp =
+    let
+      google-cloud-cpp' = prev.google-cloud-cpp.overrideAttrs (orig: {
+        meta = orig.meta // {
+          platforms = lib.platforms.linux ++ lib.platforms.darwin;
+        };
+      });
+    in
     if !isStatic
-    then prev.google-cloud-cpp
+    then google-cloud-cpp'
     else
-      prev.google-cloud-cpp.overrideAttrs (orig: {
+      google-cloud-cpp'.overrideAttrs (orig: {
         buildInputs = orig.buildInputs ++ [final.gbenchmark];
         propagatedNativeBuildInputs = (orig.propagatedNativeBuildInputs or [])
         ++ [prev.pkgsBuildBuild.pkg-config];
@@ -80,6 +87,7 @@ in {
   arrow-cpp = let
     arrow-cpp' = prev.arrow-cpp.override {
       aws-sdk-cpp-arrow = final.aws-sdk-cpp-tenzir;
+      enableGcs = true; # Upstream disabled for darwin.
     };
     arrow-cpp'' = arrow-cpp'.overrideAttrs (orig: {
       nativeBuildInputs = orig.nativeBuildInputs ++ [
