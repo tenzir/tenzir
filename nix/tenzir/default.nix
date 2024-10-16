@@ -22,6 +22,7 @@
     flatbuffers,
     fluent-bit,
     protobuf,
+    google-cloud-cpp,
     grpc,
     spdlog,
     libyamlcpp,
@@ -123,6 +124,7 @@
           aws-sdk-cpp-tenzir
           fast_float
           fluent-bit
+          google-cloud-cpp
           grpc
           libpcap
           libunwind
