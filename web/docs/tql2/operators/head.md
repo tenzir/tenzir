@@ -25,11 +25,11 @@ Defaults to `10`.
 Get the first ten events:
 
 ```tql
-<event stream> | head
+head
 ```
 
 Get the first five events:
 
 ```tql
-<event stream> | head 5
+head 5
 ```

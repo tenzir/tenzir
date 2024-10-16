@@ -2,7 +2,7 @@
 
 Shows file information for a given directory.
 
-```
+```tql
 files [dir:str, recurse=bool, follow_symlinks=bool, skip_permission_denied=bool]
 ```
 

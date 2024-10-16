@@ -34,7 +34,7 @@ Literals such as `42`, `123.45`, `2.5k` and `2s` are called scalars. Numeric
 scalars may have power-of-ten suffixes, such as `k` (=1,000), `M` (=1,000,000),
 `G`, `T`, `P` and `E`. Power-of-two suffixes, such as `Ki` (=1,024), `Mi`
 (=1,048,576), `Gi`, `Ti`, `Pi` and `Ei`, may also be used. For example, `2k` is
-equivalent to `2000`. Duration scalars use the suffixes `ns`, `us`, `ms`, `s`,
+equivalent to `2000`. Duration scalars use `ns`, `us`, `ms`, `s`,
 `min`, `h`, `d`, `w` and `y`.
 
 String literals support escape sequences. For instance, `"\n"` is a single

@@ -12,7 +12,7 @@ The `repeat` operator relays the input without any modification, and repeats its
 inputs a specified number of times. It is primarily used for testing and when
 working with generated data.
 
-:::warning Large Memory Usage
+:::warning High Memory Usage
 The repeat operator keeps its input in memory. Avoid using it to repeat large
 data sets.
 :::
@@ -51,7 +51,7 @@ repeat
 To just repeat the first event 5 times, use:
 
 ```tql
-head 1 
+head 1
 repeat 5
 ```
 

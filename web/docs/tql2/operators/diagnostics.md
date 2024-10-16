@@ -2,7 +2,7 @@
 
 Retrieves diagnostic events from a Tenzir node.
 
-```
+```tql
 diagnostics [live=bool, retro=bool]
 ```
 

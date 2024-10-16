@@ -119,12 +119,12 @@ Operator | Description | Example
 
 Operator | Description | Example
 ---------|-------------|--------
-[`diagnostics`](./operators/diagnostics.md) | |
+[`diagnostics`](./operators/diagnostics.md) | Retrieve diagnostic events of managed pipelines | `diagnostics`
 [`export`](./operators/export.md) | Retrieve events from the node | `export`
 [`import`](./operators/import.md) | Store events at the node | `import`
-[`metrics`](./operators/metrics.md) | |
-[`publish`](./operators/publish.md) | Publish events to a channel with a topic | `publish "topic"`
-[`subscribe`](./operators/subscribe.md) | Subscribe to a channel with a topic | `subscribe "topic"`
+[`metrics`](./operators/metrics.md) | Retrieve metrics events from a Tenzir node | `metrics "cpu"`
+[`publish`](./operators/publish.md) | Publish events to a certain topic | `publish "topic"`
+[`subscribe`](./operators/subscribe.md) | Subscribe to a certain topic | `subscribe "topic"`
 
 <!--
 ## Packages
