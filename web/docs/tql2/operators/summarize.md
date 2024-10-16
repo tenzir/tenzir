@@ -6,10 +6,6 @@ Groups events and applies aggregate functions on each group.
 summarize (group|aggeration)...
 ```
 
-:::caution Unbounded Memory Usage
-TODO
-:::
-
 ## Description
 
 The `summarize` operator groups events according to a grouping expression and
@@ -18,6 +14,10 @@ entire input before producing an output.
 
 The order of the output fields follows the sequence of the provided arguments.
 Unspecified fields are dropped.
+
+:::note Potentially High Memory Usage
+Take care when using this operator with large inputs.
+:::
 
 ### `group`
 
