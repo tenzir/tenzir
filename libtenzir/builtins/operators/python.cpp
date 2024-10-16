@@ -218,7 +218,8 @@ public:
       auto venv_cleanup = [&] {
         if (config_.create_venvs) {
           TENZIR_ASSERT(venv_base_dir);
-          std::filesystem::create_directories(*venv_base_dir);
+          auto ec = std::error_code{};
+          std::filesystem::create_directories(*venv_base_dir, ec);
           auto venv = fmt::format("{}/uvenv-XXXXXX", venv_base_dir->string());
           if (mkdtemp(venv.data()) == nullptr) {
             diagnostic::error("{}", detail::describe_errno())

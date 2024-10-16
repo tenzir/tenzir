@@ -35,7 +35,7 @@ tenzir:
   #   - $TEMPORARY_DIRECTORY/tenzir/cache/<uid>
   # To determine $TEMPORARY_DIRECTORY, the values of TMPDIR, TMP, TEMP, TEMPDIR are
   # checked in that order, and as a last resort "/tmp" is used.
-  # In a client process, this setting is ignored and `$TEMPORARY_DIRECTORY/tenzir/cache/<uid>`
+  # In a client process, this setting is ignored and `$TEMPORARY_DIRECTORY/tenzir/client-cache/<uid>`
   # is used as cache directory.
   #cache-directory:
 
