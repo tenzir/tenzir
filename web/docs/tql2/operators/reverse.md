@@ -10,6 +10,10 @@ reverse
 
 `reverse` is a shorthand notation for [`slice stride=-1`](slice.md).
 
+:::note Potentially High Memory Usage
+Take care when using this operator with large inputs.
+:::
+
 ## Examples
 
 Reverse a stream of events:

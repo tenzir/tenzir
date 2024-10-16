@@ -11,6 +11,10 @@ slice [begin=int, end=int, stride=int]
 The `slice` operator selects a range of events from the input. The semantics of
 the operator match Python's array slicing.
 
+:::note Potentially High Memory Usage
+Take care when using this operator with large inputs.
+:::
+
 ### `begin = int (optional)`
 
 The beginning (inclusive) of the range to keep. Use a negative number to count

@@ -13,6 +13,10 @@ Sorts events by the given expressions, putting all `null` values at the end.
 This operator performs a stable sort (preserves relative ordering when all
 expressions evaluate to the same value).
 
+:::note Potentially High Memory Usage
+Take care when using this operator with large inputs.
+:::
+
 ### `<expr>`
 
 An expression that is evaluated for each event. To sort in descending order

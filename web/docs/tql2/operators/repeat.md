@@ -12,9 +12,8 @@ The `repeat` operator relays the input without any modification, and repeats its
 inputs a specified number of times. It is primarily used for testing and when
 working with generated data.
 
-:::warning High Memory Usage
-The repeat operator keeps its input in memory. Avoid using it to repeat large
-data sets.
+:::note Potentially High Memory Usage
+Take care when using this operator with large inputs.
 :::
 
 ### `count: uint (optional)`
