@@ -3,7 +3,7 @@
 Limits the bandwidth of a pipeline.
 
 ```tql
-throttle bandwidth:uint [within=duration]
+throttle bandwidth:uint, [within=duration]
 ```
 
 ## Description
@@ -28,7 +28,7 @@ Read a TCP stream and print the data to stdout at a rate of 1 character per
 second:
 
 ```tql
-load_tcp "tcp://0.0.0.0:4000" 
+load_tcp "tcp://0.0.0.0:4000"
 throttle 1
 ```
 

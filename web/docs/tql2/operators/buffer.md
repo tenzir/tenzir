@@ -36,8 +36,7 @@ Specifies what the operator does when the buffer runs full.
 
 When buffering events, this option defaults to `"block"` for pipelines visible on
 the overview page on [app.tenzir.com](https://app.tenzir.com), and to `"drop"`
-otherwise. <br/>
-When buffering bytes, this option always defaults to `"block"`.
+otherwise. When buffering bytes, this option always defaults to `"block"`.
 
 ## Examples
 

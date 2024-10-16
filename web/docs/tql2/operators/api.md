@@ -3,7 +3,7 @@
 Use Tenzir's REST API directly from a pipeline.
 
 ```tql
-api endpoint:str [request_body=str]
+api endpoint:str, [request_body=str]
 ```
 
 ## Description
@@ -33,5 +33,5 @@ api "/pipeline/list"
 Create a new pipeline and start it immediately.
 
 ```tql
-api "/pipeline/create" request_body=r#"{"name": "Suricata Import", "definition": "from file /tmp/eve.sock read suricata", "autostart": {"created": true}}"#
+api "/pipeline/create", request_body=r#"{"name": "Suricata Import", "definition": "from file /tmp/eve.sock read suricata", "autostart": {"created": true}}"#
 ```
