@@ -118,12 +118,16 @@ auto object_generator::data_unparsed(std::string_view s) -> void {
       if (not writable()) {
         return;
       }
-      auto res = msb_->builder_raw_.parser_(s, nullptr);
-      auto& [value, diag] = res;
-      if (value) {
-        b.data(std::move(*value));
-      } else {
+      if (msb_->settings_.raw) {
         b.data(s);
+      } else {
+        auto res = msb_->builder_raw_.parser_(s, nullptr);
+        auto& [value, diag] = res;
+        if (value) {
+          b.data(std::move(*value));
+        } else {
+          b.data(s);
+        }
       }
     },
     [&](raw_pointer raw) {
@@ -142,12 +146,16 @@ auto object_generator::data_unparsed(std::string s) -> void {
       if (not writable()) {
         return;
       }
-      auto res = msb_->builder_raw_.parser_(s, nullptr);
-      auto& [value, diag] = res;
-      if (value) {
-        b.data(std::move(*value));
-      } else {
+      if (msb_->settings_.raw) {
         b.data(s);
+      } else {
+        auto res = msb_->builder_raw_.parser_(s, nullptr);
+        auto& [value, diag] = res;
+        if (value) {
+          b.data(std::move(*value));
+        } else {
+          b.data(s);
+        }
       }
     },
     [&](raw_pointer raw) {
@@ -247,12 +255,16 @@ auto list_generator::data_unparsed(std::string_view s) -> void {
       if (not writable()) {
         return;
       }
-      auto res = msb_->builder_raw_.parser_(s, nullptr);
-      auto& [value, diag] = res;
-      if (value) {
-        b.data(std::move(*value));
-      } else {
+      if (msb_->settings_.raw) {
         b.data(s);
+      } else {
+        auto res = msb_->builder_raw_.parser_(s, nullptr);
+        auto& [value, diag] = res;
+        if (value) {
+          b.data(std::move(*value));
+        } else {
+          b.data(s);
+        }
       }
     },
     [&](raw_pointer raw) {
@@ -271,12 +283,16 @@ auto list_generator::data_unparsed(std::string s) -> void {
       if (not writable()) {
         return;
       }
-      auto res = msb_->builder_raw_.parser_(s, nullptr);
-      auto& [value, diag] = res;
-      if (value) {
-        b.data(std::move(*value));
-      } else {
+      if (msb_->settings_.raw) {
         b.data(s);
+      } else {
+        auto res = msb_->builder_raw_.parser_(s, nullptr);
+        auto& [value, diag] = res;
+        if (value) {
+          b.data(std::move(*value));
+        } else {
+          b.data(s);
+        }
       }
     },
     [&](raw_pointer raw) {

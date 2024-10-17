@@ -153,21 +153,6 @@ auto multi_series_builder_argument_parser::get_settings(diagnostic_handler& dh)
     }
     settings_.unnest_separator = unnest_->inner;
   }
-  if (raw_ and schema_ and merge_) {
-    // In merging mode, we directly write into a series builder
-    // this means that data needs to be parsed to the correct type before
-    // writing to the builder however, when calling
-    // `field_generator::data_unparsed`, we dont know the schema
-    // TODO technically its only an issue with *known* schemas. For unknown
-    // schemas there is no type issue [ ] This could also be resolved by having
-    // the merging mode keep track of the type at non-trivial cost
-    diagnostic::error("`--merge --schema` and `--raw` are incompatible")
-      .primary(*raw_)
-      .primary(*schema_)
-      .primary(*merge_)
-      .emit(dh);
-    return false;
-  }
   settings_.raw = raw_.has_value();
   return true;
 }
