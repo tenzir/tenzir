@@ -493,7 +493,8 @@ public:
                            "geoip context can not be updated with events");
   }
 
-  auto reset() -> caf::expected<void> override {
+  auto reset(session ctx) -> failure_or<void> override {
+    TENZIR_UNUSED(ctx);
     return {};
   }
 

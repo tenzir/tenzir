@@ -173,7 +173,8 @@ public:
     };
   }
 
-  auto reset() -> caf::expected<void> override {
+  auto reset(session ctx) -> failure_or<void> override {
+    TENZIR_UNUSED(ctx);
     auto params = bloom_filter_.parameters();
     TENZIR_ASSERT(params.n && params.p);
     bloom_filter_ = dcso_bloom_filter{*params.n, *params.p};

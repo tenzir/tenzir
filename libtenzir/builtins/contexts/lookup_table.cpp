@@ -106,7 +106,8 @@ public:
       data_(from_data(std::move(d))) {
   }
 
-  friend auto operator==(const key_data& a, const key_data& b) -> bool {
+  [[maybe_unused]] friend auto operator==(const key_data& a, const key_data& b)
+    -> bool {
     return a.data_ == b.data_;
   }
 
@@ -511,7 +512,8 @@ public:
     };
   }
 
-  auto reset() -> caf::expected<void> override {
+  auto reset(session ctx) -> failure_or<void> override {
+    TENZIR_UNUSED(ctx);
     context_entries.clear();
     subnet_entries.clear();
     return {};

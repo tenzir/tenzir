@@ -713,7 +713,7 @@ public:
     = 0;
 
   /// Clears the context state, with optional parameters.
-  virtual auto reset() -> caf::expected<void> = 0;
+  virtual auto reset(session ctx) -> failure_or<void> = 0;
 
   /// Serializes a context for persistence.
   virtual auto save() const -> caf::expected<save_result> = 0;
@@ -811,26 +811,27 @@ public:
   /// Load a dynamic plugin from the specified library filename.
   /// @param filename The filename that's passed to 'dlopen'.
   /// @param cfg The actor system config to register type IDs with.
-  static caf::expected<plugin_ptr>
-  make_dynamic(const char* filename, caf::actor_system_config& cfg) noexcept;
+  static auto
+  make_dynamic(const char* filename, caf::actor_system_config& cfg) noexcept
+    -> caf::expected<plugin_ptr>;
 
   /// Take ownership of a static plugin.
   /// @param instance The plugin instance.
   /// @param deleter A deleter for the plugin instance.
   /// @param version The version of the plugin.
   /// @param dependencies The plugin's dependencies.
-  static plugin_ptr
+  static auto
   make_static(plugin* instance, void (*deleter)(plugin*), const char* version,
-              std::vector<std::string> dependencies) noexcept;
+              std::vector<std::string> dependencies) noexcept -> plugin_ptr;
 
   /// Take ownership of a builtin.
   /// @param instance The plugin instance.
   /// @param deleter A deleter for the plugin instance.
   /// @param version The version of the plugin.
   /// @param dependencies The plugin's dependencies.
-  static plugin_ptr
+  static auto
   make_builtin(plugin* instance, void (*deleter)(plugin*), const char* version,
-               std::vector<std::string> dependencies) noexcept;
+               std::vector<std::string> dependencies) noexcept -> plugin_ptr;
 
   /// Default-construct an invalid plugin.
   plugin_ptr() noexcept;
@@ -840,24 +841,24 @@ public:
 
   /// Forbid copying of plugins.
   plugin_ptr(const plugin_ptr&) = delete;
-  plugin_ptr& operator=(const plugin_ptr&) = delete;
+  auto operator=(const plugin_ptr&) -> plugin_ptr& = delete;
 
   /// Move-construction and move-assignment.
   plugin_ptr(plugin_ptr&& other) noexcept;
-  plugin_ptr& operator=(plugin_ptr&& rhs) noexcept;
+  auto operator=(plugin_ptr&& rhs) noexcept -> plugin_ptr&;
 
   /// Pointer facade.
   explicit operator bool() const noexcept;
-  const plugin* operator->() const noexcept;
-  plugin* operator->() noexcept;
-  const plugin& operator*() const noexcept;
-  plugin& operator&() noexcept;
+  auto operator->() const noexcept -> const plugin*;
+  auto operator->() noexcept -> plugin*;
+  auto operator*() const noexcept -> const plugin&;
+  auto operator&() noexcept -> plugin&;
 
   /// Downcast a plugin to a more specific plugin type.
   /// @tparam Plugin The specific plugin type to try to downcast to.
   /// @returns A pointer to the downcasted plugin, or 'nullptr' on failure.
   template <class Plugin>
-  [[nodiscard]] const Plugin* as() const {
+  [[nodiscard]] auto as() const -> const Plugin* {
     static_assert(std::is_base_of_v<plugin, Plugin>, "'Plugin' must be derived "
                                                      "from 'tenzir::plugin'");
     return dynamic_cast<const Plugin*>(ctrl_->instance);
@@ -867,33 +868,36 @@ public:
   /// @tparam Plugin The specific plugin type to try to downcast to.
   /// @returns A pointer to the downcasted plugin, or 'nullptr' on failure.
   template <class Plugin>
-  Plugin* as() {
+  auto as() -> Plugin* {
     static_assert(std::is_base_of_v<plugin, Plugin>, "'Plugin' must be derived "
                                                      "from 'tenzir::plugin'");
     return dynamic_cast<Plugin*>(ctrl_->instance);
   }
 
   /// Returns the plugin version.
-  [[nodiscard]] const char* version() const noexcept;
+  [[nodiscard]] auto version() const noexcept -> const char*;
 
   /// Returns the plugin's dependencies.
-  [[nodiscard]] const std::vector<std::string>& dependencies() const noexcept;
+  [[nodiscard]] auto dependencies() const noexcept
+    -> const std::vector<std::string>&;
 
   /// Returns the plugins type.
-  [[nodiscard]] enum type type() const noexcept;
+  [[nodiscard]] auto type() const noexcept -> enum type;
 
   /// Bump the reference count of all dependencies.
   auto reference_dependencies() noexcept -> void;
 
   /// Compare two plugins.
-  friend bool operator==(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept;
-  friend std::strong_ordering
-  operator<=>(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept;
+  friend auto operator==(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept
+    -> bool;
+  friend auto operator<=>(const plugin_ptr& lhs, const plugin_ptr& rhs) noexcept
+    -> std::strong_ordering;
 
   /// Compare a plugin by its name.
-  friend bool operator==(const plugin_ptr& lhs, std::string_view rhs) noexcept;
-  friend std::strong_ordering
-  operator<=>(const plugin_ptr& lhs, std::string_view rhs) noexcept;
+  friend auto operator==(const plugin_ptr& lhs, std::string_view rhs) noexcept
+    -> bool;
+  friend auto operator<=>(const plugin_ptr& lhs, std::string_view rhs) noexcept
+    -> std::strong_ordering;
 
 private:
   struct control_block {
@@ -903,9 +907,9 @@ private:
     ~control_block() noexcept;
 
     control_block(const control_block&) = delete;
-    control_block& operator=(const control_block&) = delete;
+    auto operator=(const control_block&) -> control_block& = delete;
     control_block(control_block&& other) noexcept = delete;
-    control_block& operator=(control_block&& rhs) noexcept = delete;
+    auto operator=(control_block&& rhs) noexcept -> control_block& = delete;
 
     void* library = {};
     plugin* instance = {};
@@ -981,8 +985,8 @@ const Plugin* find(std::string_view name) noexcept {
   return found->template as<Plugin>();
 }
 
-inline const operator_parser_plugin*
-find_operator(std::string_view name) noexcept {
+inline auto find_operator(std::string_view name) noexcept
+  -> const operator_parser_plugin* {
   for (const auto* plugin : get<operator_parser_plugin>()) {
     const auto current_name = plugin->operator_name();
     const auto match
@@ -999,7 +1003,7 @@ find_operator(std::string_view name) noexcept {
 }
 
 template <class Plugin>
-generator<const Plugin*> get() noexcept {
+auto get() noexcept -> generator<const Plugin*> {
   for (auto const& plugin : get()) {
     if (auto const* specific_plugin = plugin.as<Plugin>()) {
       co_yield specific_plugin;
