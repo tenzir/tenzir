@@ -399,12 +399,26 @@ public:
           = value_at(lhs_key.type, *lhs_key.array, lhs.event);
         const auto& rhs_value
           = value_at(rhs_key.type, *rhs_key.array, rhs.event);
-        // TODO: Implement this directly on data and data_view
+        // TODO: Implement this directly on data and data_view. That is
+        // non-trivial however.
+        // TODO: This does not do the correct recursive application of the
+        // comparator to nested structural types. It turns out that is a
+        // non-trivial task as well.
         const auto cmp = detail::overload{
           [](const concepts::integer auto& l, const concepts::integer auto& r) {
             return std::cmp_less(l, r);
           },
-          [](const concepts::number auto& l, const concepts::number auto& r) {
+          []<concepts::number L, concepts::number R>(const L& l, const R& r) {
+            if constexpr (std::same_as<L, double>) {
+              if (std::isnan(l)) {
+                return false;
+              }
+            }
+            if constexpr (std::same_as<R, double>) {
+              if (std::isnan(r)) {
+                return true;
+              }
+            }
             return l < r;
           },
           [&](const auto& l, const auto& r) {
@@ -412,7 +426,8 @@ public:
               return l < r;
             }
             return lhs_value.index() < rhs_value.index();
-          }};
+          },
+        };
         if (caf::visit(cmp, lhs_value, rhs_value)) {
           return not sort_key.reverse;
         }
