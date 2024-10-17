@@ -520,7 +520,14 @@ auto configuration::parse(int argc, char** argv) -> caf::error {
         return caf::make_error(ec::filesystem_error,
                                "failed to determine temp_directory_path");
       }
-      value = tmp / "tenzir" / "cache" / fmt::format("{:}", getuid());
+      auto path = tmp / "tenzir" / "cache" / fmt::format("{:}", getuid());
+      std::filesystem::create_directories(path, ec);
+      if (ec) {
+        return caf::make_error(
+          ec::filesystem_error,
+          fmt::format("failed to create cache directory {}: {}", path, ec));
+      }
+      value = path.string();
     }
   }
   // From here on, we go into CAF land with the goal to put the configuration

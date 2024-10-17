@@ -34,7 +34,9 @@
 #include <boost/asio.hpp>
 #include <boost/interprocess/sync/named_semaphore.hpp>
 #include <boost/process.hpp>
+#include <caf/actor_system_config.hpp>
 #include <caf/detail/scope_guard.hpp>
+#include <caf/settings.hpp>
 
 #include <filesystem>
 
@@ -92,7 +94,7 @@ private:
   int64_t pos_ = 0;
 };
 
-auto PYTHON_SCAFFOLD = R"_(
+constexpr auto PYTHON_SCAFFOLD = R"_(
 from tenzir.tools.python_operator_executor import main
 
 main()
@@ -100,10 +102,11 @@ main()
 
 struct config {
   // Implicit arguments passed to every invocation of `pip install`.
-  std::string implicit_requirements = {};
+  std::optional<std::string> implicit_requirements = {};
 
-  // Base path for virtual environments.
-  std::optional<std::string> venv_base_dir = {};
+  // Whether to create a virtualenv environment for the python
+  // operator.
+  bool create_venvs = true;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, config& x) -> bool {
@@ -112,7 +115,7 @@ struct config {
       = f.object(x)
           .pretty_name("tenzir.plugins.python.config")
           .fields(f.field("implicit-requirements", x.implicit_requirements),
-                  f.field("venv-base-dir", x.venv_base_dir));
+                  f.field("create-venvs", x.create_venvs));
     return result;
   }
 };
@@ -147,6 +150,29 @@ public:
   auto execute(generator<table_slice> input, operator_control_plane& ctrl) const
     -> generator<table_slice> {
     try {
+      // Compute some config values delayed at runtime, because
+      // `detail::install_datadir` and the venv base dir may be different
+      // between the client and node process.
+      auto implicit_requirements = std::string{};
+      if (config_.implicit_requirements) {
+        implicit_requirements = *config_.implicit_requirements;
+      } else {
+        implicit_requirements = std::string{
+          detail::install_datadir() / "python"
+          / fmt::format("tenzir-{}.{}.{}-py3-none-any.whl[operator]",
+                        version::major, version::minor, version::patch)};
+      }
+      auto venv_base_dir = std::optional<std::filesystem::path>{};
+      if (!config_.create_venvs) {
+        venv_base_dir = std::nullopt;
+      } else if (const auto* cache_dir
+                 = get_if<std::string>(&ctrl.self().home_system().config(),
+                                       "tenzir.cache-directory")) {
+        venv_base_dir = std::filesystem::path{*cache_dir} / "python" / "venvs";
+      } else {
+        venv_base_dir = std::filesystem::temp_directory_path() / "tenzir"
+                        / "python" / "venvs";
+      }
       // Creating a pipeline through the API waits until a pipeline has started
       // up succesfully, which requires all individual execution nodes to have
       // started up immediately. This happens once the operator yielded for the
@@ -190,24 +216,23 @@ public:
       // unless disabled by node config.
       auto maybe_venv = std::optional<std::filesystem::path>{};
       auto venv_cleanup = [&] {
-        if (config_.venv_base_dir) {
-          std::filesystem::create_directories(config_.venv_base_dir.value());
-          auto venv
-            = fmt::format("{}/uvenv-XXXXXX", config_.venv_base_dir.value());
+        if (config_.create_venvs) {
+          TENZIR_ASSERT(venv_base_dir);
+          auto ec = std::error_code{};
+          std::filesystem::create_directories(*venv_base_dir, ec);
+          auto venv = fmt::format("{}/uvenv-XXXXXX", venv_base_dir->string());
           if (mkdtemp(venv.data()) == nullptr) {
             diagnostic::error("{}", detail::describe_errno())
               .note("failed to create a unique directory for the python "
                     "virtual environment in {}",
-                    config_.venv_base_dir.value())
+                    *venv_base_dir)
               .throw_();
           }
           auto venv_path = std::filesystem::path{venv};
           maybe_venv = venv_path;
           env["VIRTUAL_ENV"] = venv;
           env["UV_CACHE_DIR"]
-            = (std::filesystem::path{config_.venv_base_dir.value()}.parent_path()
-               / "cache" / "uv")
-                .string();
+            = (venv_base_dir->parent_path() / "cache" / "uv").string();
         }
         return caf::detail::scope_guard([maybe_venv] {
           if (maybe_venv) {
@@ -268,9 +293,9 @@ public:
         };
         // `split` creates an empty token in case the input was entirely
         // empty, but we don't want that so we need an extra guard.
-        if (!config_.implicit_requirements.empty()) {
+        if (!implicit_requirements.empty()) {
           auto implicit_requirements_vec
-            = detail::split_escaped(config_.implicit_requirements, " ", "\\");
+            = detail::split_escaped(implicit_requirements, " ", "\\");
           pip_invocation.insert(pip_invocation.end(),
                                 implicit_requirements_vec.begin(),
                                 implicit_requirements_vec.end());
@@ -466,30 +491,18 @@ class plugin final : public virtual operator_plugin<python_operator>,
 public:
   struct config config = {};
 
-  auto initialize(const record& plugin_config, const record& global_config)
-    -> caf::error override {
+  auto initialize(const record& plugin_config,
+                  const record& /*global_config*/) -> caf::error override {
     auto create_virtualenv
       = try_get_or<bool>(plugin_config, "create-venvs", true);
     if (!create_virtualenv) {
       return create_virtualenv.error();
     }
-    if (!(*create_virtualenv)) {
-      config.venv_base_dir = std::nullopt;
-    } else if (const auto* cache_dir = get_if<std::string>(
-                 &global_config, "tenzir.cache-directory")) {
-      config.venv_base_dir
-        = (std::filesystem::path{*cache_dir} / "python" / "venvs").string();
-    } else {
-      config.venv_base_dir = (std::filesystem::temp_directory_path() / "tenzir"
-                              / "python" / "venvs")
-                               .string();
+    config.create_venvs = *create_virtualenv;
+    if (auto const* implicit_requirements
+        = get_if<std::string>(&plugin_config, "implicit-requirements")) {
+      config.implicit_requirements = *implicit_requirements;
     }
-    auto implicit_requirements_default = std::string{
-      detail::install_datadir() / "python"
-      / fmt::format("tenzir-{}.{}.{}-py3-none-any.whl[operator]",
-                    version::major, version::minor, version::patch)};
-    config.implicit_requirements = get_or(
-      plugin_config, "implicit-requirements", implicit_requirements_default);
     return {};
   }
 

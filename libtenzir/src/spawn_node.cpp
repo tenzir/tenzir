@@ -65,7 +65,6 @@ caf::expected<scope_linked<node_actor>> spawn_node(caf::scoped_actor& self) {
   // Remove old VERSION file if it exists. This can be removed once the minimum
   // partition version is >= 3.
   {
-    auto err = std::error_code{};
     std::filesystem::remove(abs_dir / "VERSION", err);
     if (err)
       TENZIR_WARN("failed to remove outdated VERSION file: {}", err.message());
@@ -74,6 +73,16 @@ caf::expected<scope_linked<node_actor>> spawn_node(caf::scoped_actor& self) {
   auto signal_reflector
     = self->system().registry().get<signal_reflector_actor>("signal-reflector");
   self->send(signal_reflector, atom::subscribe_v);
+  // Wipe the old cache directory.
+  {
+    auto cache_directory = get_if<std::string>(&opts, "tenzir.cache-directory");
+    if (cache_directory && std::filesystem::exists(*cache_directory)) {
+      std::filesystem::remove_all(*cache_directory, err);
+      if (err) {
+        TENZIR_WARN("failed to remove cache at {}: {}", *cache_directory, err);
+      }
+    }
+  }
   // Spawn the node.
   TENZIR_DEBUG("{} spawns local node: {}", __func__, id);
   // Pointer to the root command to node.
