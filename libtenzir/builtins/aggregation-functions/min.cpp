@@ -128,7 +128,7 @@ public:
     caf::visit(f, *arg.array);
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     if (min_) {
       return min_->match([](auto min) {
         return data{min};

@@ -159,7 +159,7 @@ public:
     caf::visit(f, *s.array);
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     if (sum_) {
       return sum_->match([](auto sum) {
         return data{sum};

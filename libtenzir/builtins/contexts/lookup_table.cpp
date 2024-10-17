@@ -23,6 +23,7 @@
 #include <tenzir/plugin.hpp>
 #include <tenzir/series.hpp>
 #include <tenzir/series_builder.hpp>
+#include <tenzir/session.hpp>
 #include <tenzir/table_slice.hpp>
 #include <tenzir/table_slice_builder.hpp>
 #include <tenzir/type.hpp>
@@ -105,7 +106,8 @@ public:
       data_(from_data(std::move(d))) {
   }
 
-  friend auto operator==(const key_data& a, const key_data& b) -> bool {
+  [[maybe_unused]] friend auto operator==(const key_data& a, const key_data& b)
+    -> bool {
     return a.data_ == b.data_;
   }
 
@@ -125,7 +127,7 @@ public:
                     || std::is_same_v<T, double>) {
         return to_original_data_impl<T>();
       } else {
-        return x;
+        return std::forward<T>(x);
       }
     };
     return caf::visit(visitor, data_);
@@ -266,8 +268,9 @@ public:
     return caf::visit(match, value);
   };
 
-  auto apply(series array, bool replace)
-    -> caf::expected<std::vector<series>> override {
+  auto apply(series array, bool replace, session ctx)
+    -> failure_or<std::vector<series>> override {
+    TENZIR_UNUSED(ctx);
     auto builder = series_builder{};
     const auto now = time::clock::now();
     for (auto value : array.values()) {
@@ -486,8 +489,9 @@ public:
       ++context_it;
     }
     TENZIR_ASSERT(context_it == context_values.end());
-    auto query_f = [key_values_list = std::move(key_values_list)](
-                     parameter_map, const std::vector<std::string>& fields)
+    auto query_f
+      = [key_values_list = std::move(key_values_list)](
+          const parameter_map&, const std::vector<std::string>& fields)
       -> caf::expected<std::vector<expression>> {
       auto result = std::vector<expression>{};
       result.reserve(fields.size());
@@ -508,35 +512,8 @@ public:
     };
   }
 
-  auto make_query() -> make_query_type override {
-    auto key_values_list = list{};
-    key_values_list.reserve(context_entries.size());
-    const auto now = time::clock::now();
-    for (const auto& entry : context_entries) {
-      if (entry.second.is_expired(now)) {
-        continue;
-      }
-      entry.first.populate_snapshot_data(key_values_list);
-    }
-    return [key_values_list = std::move(key_values_list)](
-             parameter_map, const std::vector<std::string>& fields)
-             -> caf::expected<std::vector<expression>> {
-      auto result = std::vector<expression>{};
-      result.reserve(fields.size());
-      for (const auto& field : fields) {
-        auto lhs = to<operand>(field);
-        TENZIR_ASSERT(lhs);
-        result.emplace_back(predicate{
-          *lhs,
-          relational_operator::in,
-          data{key_values_list},
-        });
-      }
-      return result;
-    };
-  }
-
-  auto reset() -> caf::expected<void> override {
+  auto reset(session ctx) -> failure_or<void> override {
+    TENZIR_UNUSED(ctx);
     context_entries.clear();
     subnet_entries.clear();
     return {};

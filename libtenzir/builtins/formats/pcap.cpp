@@ -507,8 +507,8 @@ public:
             }
           }
         } else {
-          diagnostic::warning("received unprocessable schema")
-            .note("cannot handle", slice.schema().name())
+          diagnostic::error("event cannot be rendered as PCAP")
+            .note("got `{}`", slice.schema().name())
             .emit(ctrl.diagnostics());
           co_yield {};
           co_return;

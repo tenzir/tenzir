@@ -132,7 +132,7 @@ public:
     caf::visit(f, *arg.array);
   }
 
-  auto finish() -> data override {
+  auto get() const -> data override {
     if (max_) {
       return max_->match([](auto max) {
         return data{max};
