@@ -8,7 +8,7 @@ with section("parse"):
         "tenzirdefineupdateintegrationtarget": {
             "spelling": "TenzirDefineUpdateIntegrationTarget",
             "pargs": {
-                "nargs": 1,
+                "nargs": 2,
             },
         },
         "tenzirexportcompilecommands": {
