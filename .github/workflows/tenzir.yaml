@@ -537,6 +537,7 @@ jobs:
     if: ${{ needs.configure.outputs.run-tenzir-nix == 'true' }}
     uses: ./.github/workflows/nix.yaml
     strategy:
+      fail-fast: false
       matrix:
         config: ${{ fromJSON(needs.configure.outputs.nix-matrix) }}
     with:
